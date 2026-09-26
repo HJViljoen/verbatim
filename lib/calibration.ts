@@ -680,6 +680,6 @@ export const RECHECK_SAME_SEARCHES = 'On the searches both months ran, without m
 export const RECHECK_PENDING = (population: string): string => `${population}: checks pending.`
 /** The buyers-only line (plan WP2.3's done-when; heinrich-fidelity must-fix
  *  3): the market's videos read as neither makers' nor off-topic
- *  (segments_v1), and "too few" under 100 videos in a month. */
+ *  (segments_v1), printed where a month holds under 100 of them. */
 export const RECHECK_BUYERS = 'Buyers only, without makers and off-topic videos'
 export const RECHECK_BUYERS_TOO_FEW = (months: string): string => `${RECHECK_BUYERS}: too few in ${months} to check.`

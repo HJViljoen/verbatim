@@ -524,39 +524,52 @@ describe('the re-check on the searches both months ran (WP2.3)', () => {
 describe('where the re-check prints, and the buyers-only line (WP2.3)', () => {
   const base = { prevMonth: '2026-08-01', month: '2026-09-01', hasPrev: true, changes: CHANGES, pairRows: [ROW], asAt: '2026-10-11T08:30:00.000Z', runFinish: recheckRunFinish() }
 
-  it('prints beside a refused pair whose later month has ended, not beside a month still running or a paused tenant', () => {
+  it('prints beside a refused pair whose later month has ended, not beside a month still running', () => {
     expect(recheckShows(pair('ended'), false)).toBe(true)
     expect(recheckShows(pair('so_far'), false)).toBe(false)
-    expect(recheckShows(pair('ended'), true)).toBe(false)
     expect(recheckShows(null, false)).toBe(false)
+    // Paused: only what was read (no update is coming, so never "pending").
+    expect(recheckShows(pair('ended'), true)).toBe(false)
+    expect(recheckShows(pair('ended'), true, true)).toBe(true)
+  })
+
+  it('prints a paused tenant’s read rows, and a "too few" buyers line, but never "checks pending"', () => {
+    const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: true, recheck: { rows: recheckRows(), buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
+    expect(b.recheck).toBe('read')
+    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question'])
+    const tooFew = { checks: b.checks, recheck: 'read' as const, paused: true, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: null } }
+    expect(recheckLines(tooFew).at(-1)?.sentence).toBe('Buyers only, without makers and off-topic videos: too few in July to check.')
+    expect(recheckLines({ checks: [], recheck: 'pending', paused: true, buyers: null })).toEqual([])
   })
 
   it('reads "checks pending" where no row can be read yet (MF2 before Tue 6 Oct; staging, where the script refuses)', () => {
     const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: null, buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
     expect(b.recheck).toBe('pending')
+    // Staging's buyers, 146 and 381, are 100 or more a side: no buyers line.
     expect(recheckLines(b)).toEqual([
       { key: 'pending', sentence: 'On the searches both months ran, without makers and off-topic videos: checks pending.', tag: null },
-      { key: 'buyers', sentence: 'Buyers only, without makers and off-topic videos: checks pending.', tag: 'read with the 11 Oct update' },
     ])
   })
 
-  it('prints the stored lines for its own pair only, then the buyers line where there is room', () => {
+  it('prints the stored lines for its own pair only', () => {
     const other = recheckRows().map((r) => ({ ...r, prev_month: '2026-07-01', month: '2026-08-01' }))
     const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: [...other, ...recheckRows()], buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
     expect(b.recheck).toBe('read')
     expect(b.checks.length).toBe(2)
-    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question', 'buyers'])
+    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question'])
   })
 
-  it('says "too few" in the month under 100 buyers’ videos (July’s 6 on staging)', () => {
-    const b = { checks: [], recheck: 'pending' as const, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: null } }
-    expect(recheckLines(b)[1]).toEqual({ key: 'buyers', sentence: 'Buyers only, without makers and off-topic videos: too few in July to check.', tag: null })
+  it('says "too few" in the month under 100 buyers’ videos (July’s 6 on staging), where there is room', () => {
+    const b = { checks: [], recheck: 'pending' as const, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: '2026-09-20T08:33:47.358Z' } }
+    expect(recheckLines(b)[1]).toEqual({ key: 'buyers', sentence: 'Buyers only, without makers and off-topic videos: too few in July to check.', tag: 'read with the 20 Sep update' })
+    const full = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: recheckRows(), buyers: { prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august } } })
+    expect(recheckLines(full).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question', 'buyers'])
   })
 
-  it('prints nothing beside a month still running, a paused tenant, or a page built without the re-check', () => {
+  it('prints nothing beside a month still running, a paused tenant with no row, or a page built without the re-check', () => {
     for (const b of [
       buildChangeBlock({ ...base, pair: pair('so_far'), paused: false, recheck: { rows: recheckRows(), buyers: null } }),
-      buildChangeBlock({ ...base, pair: pair('ended'), paused: true, recheck: { rows: recheckRows(), buyers: null } }),
+      buildChangeBlock({ ...base, pair: pair('ended'), paused: true, recheck: { rows: null, buyers: null } }),
       buildChangeBlock({ ...base, pair: pair('ended'), paused: false }),
     ]) {
       expect(b.recheck).toBeNull()

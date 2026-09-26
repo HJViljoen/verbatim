@@ -34,7 +34,7 @@ function withRecheck(state: 'read' | 'pending'): OverviewData {
 }
 
 describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
-  it('prints "Re-checked", its provisional tag and at most three lines, each with its tag, in every mode', () => {
+  it('prints "Re-checked", its provisional tag and its lines, each with its tag, in every mode', () => {
     for (const mode of MODES) {
       const t = read(block.render(withRecheck('read'), mode, ctx))
       expect(t, mode).toContain('Re-checked')
@@ -42,7 +42,8 @@ describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
       expect(t, mode).toContain('Too few videos on the searches both months ran to check.')
       expect(t, mode).toContain('about half makers, about a tenth off-topic, left out · read with the 20 Sep update')
       expect(t, mode).toContain('Asking how it works, Praising it, Pushing back and Leaving for something else: the fall follows how deeply September’s videos have been read, not the market.')
-      expect(t, mode).toContain('Buyers only, without makers and off-topic videos: checks pending.')
+      // 146 and 381 buyers' videos: 100 or more a side, so no buyers line.
+      expect(t, mode).not.toContain('Buyers only')
       assertCopyContract(render(block.render(withRecheck('read'), mode, ctx)))
     }
   })
@@ -69,5 +70,15 @@ describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
 
   it('never says "holds up"', () => {
     for (const mode of MODES) expect(read(block.render(withRecheck('read'), mode, ctx))).not.toMatch(/holds up/i)
+  })
+})
+
+describe('the buyers-only line (WP2.3 done-when)', () => {
+  it('prints "too few in July to check" where July holds 6 buyers’ videos (staging)', () => {
+    const base = withRecheck('read')
+    const data = { ...base, change: { ...base.change!, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: '2026-09-20T08:33:47.358Z' } } }
+    for (const mode of MODES) {
+      expect(read(block.render(data, mode, ctx)), mode).toContain('Buyers only, without makers and off-topic videos: too few in July to check.')
+    }
   })
 })

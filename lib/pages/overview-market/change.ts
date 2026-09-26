@@ -1,5 +1,5 @@
 import {
-  pairSentence, RECHECK_BUYERS, RECHECK_BUYERS_TOO_FEW, RECHECK_FOLLOWS_DEPTH, RECHECK_MOVED, RECHECK_PENDING,
+  pairSentence, RECHECK_BUYERS_TOO_FEW, RECHECK_FOLLOWS_DEPTH, RECHECK_MOVED, RECHECK_PENDING,
   RECHECK_SAME_SEARCHES, RECHECK_TOO_FEW, RECHECK_WITHIN,
 } from '../../calibration'
 import { fmtInt, longMonth, shortDate } from '../../format'
@@ -171,8 +171,8 @@ export function buildChangeBlock(input: {
   })
   const readRun = input.pair.row?.readThroughRun ?? null
   const pair = input.hasPrev ? input.pair : null
-  const shows = input.recheck != null && recheckShows(pair, input.paused)
-  const rows = shows ? (input.recheck?.rows ?? []).filter((r) => monthStartOf(r.prev_month) === monthStartOf(input.prevMonth) && monthStartOf(r.month) === monthStartOf(input.month)) : []
+  const rows = (input.recheck?.rows ?? []).filter((r) => monthStartOf(r.prev_month) === monthStartOf(input.prevMonth) && monthStartOf(r.month) === monthStartOf(input.month))
+  const shows = input.recheck != null && recheckShows(pair, input.paused, rows.length > 0)
   const checks = shows ? buildCheckLines({ rows, month: input.month, runFinish: input.runFinish }) : []
   const counts = input.recheck?.buyers ?? null
   return {
@@ -667,7 +667,8 @@ export function whyNotCompared(block: ChangeBlock): { title: string; body: strin
  *   2. the kinds whose fall across the whole market is gone among well-read
  *      videos: "The fall follows how deeply September's videos have been read,
  *      not the market.";
- *   3. the buyers-only line, where there is room (`recheckLines`).
+ *   3. the buyers-only line, where a month is under 100 buyers' videos and
+ *      there is room (`recheckLines`).
  *
  * A "MOVED" PRINTS ONLY WHERE IT MAY (`mayPrintMoved`): on the searches both
  * months ran and with 100 videos a side, and always "Provisional.". A stored
@@ -675,11 +676,12 @@ export function whyNotCompared(block: ChangeBlock): { title: string; body: strin
  * is never read here (staging's plan holds six).
  *
  * WHEN IT PRINTS (`recheckShows`): beside a pair REFUSED once its later month
- * has ended, and not for a paused tenant (no update is coming to read it). A
- * month still running is refused as "not compared until it has ended", which
- * the block's first line already says; the script refuses to write a month
- * not read past its end, so until the first rows land the re-check reads
- * "checks pending" (real-volume graft 1).
+ * has ended. A month still running is refused as "not compared until it has
+ * ended", which the block's first line already says; the script refuses to
+ * write a month not read past its end, so until the first rows land the
+ * re-check reads "checks pending" (real-volume graft 1). A paused tenant is
+ * never told "pending" (no update is coming): it prints the rows it has, or
+ * nothing.
  */
 
 /** A `comparability_checks` row as the page reads it (MF2). */
@@ -708,10 +710,13 @@ export const RECHECK_CANDIDATES = ['feature_request', 'purchase_intent'] as cons
 const CHECK_KINDS: ReadonlySet<string> = new Set(['subject', 'kind', 'mood', 'theme'])
 const KIND_ORDER = Object.keys(KIND_LABELS)
 
-/** Does the block print a re-check beside this pair? */
-export function recheckShows(pair: Pick<PairComparability, 'mode' | 'reasons'> | null | undefined, paused: boolean): boolean {
-  if (!pair || paused || pair.mode !== 'refuse' || readTheSameWay(pair)) return false
-  return !pair.reasons.some((r) => r.kind === 'incomplete')
+/** Does the block print a re-check beside this pair? A paused tenant prints
+ *  one only where rows were read (`hasRows`): no update is coming to read
+ *  them, so it is never told "checks pending". */
+export function recheckShows(pair: Pick<PairComparability, 'mode' | 'reasons'> | null | undefined, paused: boolean, hasRows = false): boolean {
+  if (!pair || pair.mode !== 'refuse' || readTheSameWay(pair)) return false
+  if (pair.reasons.some((r) => r.kind === 'incomplete')) return false
+  return !paused || hasRows
 }
 
 /** The newest row per population and object (the table is append-only and
@@ -848,12 +853,15 @@ export function checkTag(c: Pick<CheckLine, 'population' | 'populationShares' | 
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
-/** "too few in August to check", naming each month under the floor. */
+const buyersTooFew = (b: BuyersLine | null | undefined): boolean =>
+  b != null && b.prev != null && b.curr != null && (b.prev < CHECK_MIN_VIDEOS || b.curr < CHECK_MIN_VIDEOS)
+
+/** "too few in August to check", naming each month under the floor; null
+ *  where neither is. */
 function buyersSentence(b: BuyersLine | null | undefined): string | null {
   if (!b || b.prev == null || b.curr == null) return null
   const under = [b.prev < CHECK_MIN_VIDEOS ? b.prevMonth : null, b.curr < CHECK_MIN_VIDEOS ? b.month : null].filter((m): m is string => m != null)
-  if (under.length > 0) return RECHECK_BUYERS_TOO_FEW(list(under.map((m) => longMonth(m))))
-  return RECHECK_PENDING(RECHECK_BUYERS)
+  return under.length > 0 ? RECHECK_BUYERS_TOO_FEW(list(under.map((m) => longMonth(m)))) : null
 }
 
 /** One printed line of the re-check: its sentence and its tag. */
@@ -870,12 +878,17 @@ export interface RecheckLine {
  * then the buyers-only line where there is room. Empty where the block prints
  * no re-check.
  */
-export function recheckLines(block: Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers'>>): RecheckLine[] {
+export function recheckLines(block: Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers' | 'paused'>>): RecheckLine[] {
   if (!block.recheck) return []
+  if (block.paused && block.checks.length === 0) return []
   const out: RecheckLine[] = block.checks.length > 0
     ? block.checks.slice(0, CHECK_LINES_MAX).map((c) => ({ key: `${c.population}:${c.objectKind}:${c.objectId}`, sentence: c.sentence, tag: checkTag(c) }))
     : [{ key: 'pending', sentence: RECHECK_PENDING(RECHECK_SAME_SEARCHES), tag: null }]
-  const buyers = buyersSentence(block.buyers)
+  // The buyers-only line says one thing: that a month is too few to check
+  // (the done-when's "too few in August to check"). With 100 or more a side
+  // there is no buyers-only check to report before the Buyers view (WP3.3),
+  // and a second "pending" line would only repeat the first.
+  const buyers = buyersTooFew(block.buyers) ? buyersSentence(block.buyers) : null
   if (buyers && out.length < CHECK_LINES_MAX) {
     out.push({ key: 'buyers', sentence: buyers, tag: block.buyers?.readWith ? `read with the ${shortDate(block.buyers.readWith)} update` : null })
   }

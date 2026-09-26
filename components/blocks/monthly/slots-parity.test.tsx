@@ -40,7 +40,7 @@ describe('the page and the monthly print one sentence each', () => {
   it('the re-check: every line the page prints, the monthly prints, in every mode', () => {
     const data = built()
     const lines = recheckLines(data.overview.change!)
-    expect(lines.length).toBe(3)
+    expect(lines.length).toBe(2)
     const page = read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render(data.overview, 'app', ctx))
     for (const mode of MODES) {
       const monthly = read(MONTHLY_BLOCKS['monthly.change'].render(data, mode, ctx))
