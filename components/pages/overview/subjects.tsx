@@ -17,7 +17,7 @@ import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { isFailed, printsClient } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration-state'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -253,6 +253,23 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
   const failed = isFailed(row.calibration)
   const client = printsClient(row.calibration)
   const withheld = <NoValue mode={mode} label={WITHHELD} />
+  // A FAILED ROW IS ITS NAME AND ITS WORD, AND NOTHING ACROSS (design pass).
+  // It printed a dash in each of the six columns: six marks that say one
+  // thing, the loudest row in a table whose other rows carry figures. One cell
+  // spans the six and carries the words for a screen reader. Nor is the name a
+  // link: the Subjects page opens no pane for a subject being re-described
+  // (it falls back to the first subject), so the link went somewhere else.
+  if (failed) {
+    return (
+      <tr className="border-t border-border/60 first:border-t-0">
+        <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium text-muted-foreground">
+          {row.label}
+          <CalibrationTag calibration={row.calibration} mode={mode} block />
+        </th>
+        <td colSpan={6} className="py-1.5 align-top"><span className="sr-only">{WITHHELD}</span></td>
+      </tr>
+    )
+  }
   return (
     // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
     // its rows and the port dropped it, while the rows themselves are ragged —
@@ -271,9 +288,9 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
         <CalibrationTag calibration={row.calibration} mode={mode} block />
       </th>
       <td className="py-1.5 pr-3 align-top">{client ? <Side side={row.you} mode={mode} /> : withheld}</td>
-      <td className="py-1.5 pr-3 align-top">{failed ? withheld : <Side side={row.rival} mode={mode} />}</td>
+      <td className="py-1.5 pr-3 align-top"><Side side={row.rival} mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top">
-        {failed ? withheld : <Side side={row.category} mode={mode} />}
+        <Side side={row.category} mode={mode} />
         {/* AND, WHILE THE MONTH IS STILL FILLING, THE SAME POINT LAST MONTH —
             on the category side only, because it is the only one of the three
             with the n to make the comparison mean anything (design §3 OV2,
@@ -291,7 +308,10 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
         {!client ? withheld : row.you.verdict ? <BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> : <NoValue mode={mode} label="no change is read for your side" />}
       </td>
       <td className="py-1.5 pr-3 align-top">
-        {failed ? withheld : (
+        {/* A PROVISIONAL ROW EARNS NO CHANGE (decision C), and its cell said
+            so with nothing at all: the one blank in a column whose every other
+            row answers. It carries the withheld mark its "you" cells carry. */}
+        {!earnsVerdict(row.calibration) ? withheld : (
           <span className="flex flex-wrap items-center gap-1.5">
             <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
             <DirectionWord direction={row.direction} mode={mode} />
@@ -304,7 +324,7 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
             same full-amplitude climb — a claim the row has not earned, under a
             column headed "Monthly line". The mock refuses the case in words
             and so does this (lib/pages/overview.ts monthlyLineLabel). */}
-        {failed ? withheld : monthlyLineLabel(row.spark, row.sparkMonths) ? (
+        {monthlyLineLabel(row.spark, row.sparkMonths) ? (
           <span className="font-mono text-[10.5px] text-muted-foreground">{monthlyLineLabel(row.spark, row.sparkMonths)}</span>
         ) : (
           // AND A DRAWN LINE SAYS WHICH MONTHS IT IS OF (Block D wave 3, M16).
