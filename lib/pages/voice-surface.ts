@@ -630,18 +630,46 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const segments: ThemeBoard['segments'] = !makerRuleEnabled(clientId) ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
   const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
 
+  // FOUR THINGS NOW RUN BESIDE EACH OTHER, because none waits on another: the
+  // flags' reads, where each theme's videos came from, the cast, and the lead
+  // with its quotes. The page's wall time is its longest chain, not its sum.
+
+  // THE CAST (C4): its profile was read in wave 3.
+  const castAhead = buildCast({
+    supabase,
+    params,
+    profile: row<{ personas: Partial<Persona>[]; run_date: string; run_id: string; insight_population: number | null; theme_population: number | null }>(profileRes, 'voice.consumerProfile'),
+    newestRunId: row<{ id: string }>(newestRunRes, 'voice.newestRun')?.id ?? null,
+  })
+  castAhead.catch(() => {})
+
   // THE FLAGS (WP2.4). A theme last month's category held is heard before;
   // for the rest, one read for any earlier row in any audience, and the regime
   // rule for those no earlier month holds (WP1.9).
-  const unheard = shownIds.filter((id) => (kById.get(id) ?? 0) >= THEME_FLOOR && !((prevK.get(id) ?? 0) > 0))
-  const heardBefore = await loadHeardBefore(db, clientId, month, unheard)
   let latestOpened: Promise<boolean> | null = null
   const openedByLatest = (): Promise<boolean> =>
     (latestOpened ??= themedRunId ? loadRegimeOpened(supabase, clientId, themedRunId) : Promise.resolve(false))
   const mintedByLatest = new Set(shownIds.filter((id) => obs.get(id)?.matchKind === 'new'))
-  const regrouped = prevN == null
-    ? new Set<string>()
-    : await loadRegrouped(supabase, clientId, unheard.filter((id) => !heardBefore.has(id)), { runId: themedRunId, minted: mintedByLatest, opened: openedByLatest })
+  const unheard = shownIds.filter((id) => (kById.get(id) ?? 0) >= THEME_FLOOR && !((prevK.get(id) ?? 0) > 0))
+  const flagsAhead = (async () => {
+    const heardBefore = await loadHeardBefore(db, clientId, month, unheard)
+    const regrouped = prevN == null
+      ? new Set<string>()
+      : await loadRegrouped(supabase, clientId, unheard.filter((id) => !heardBefore.has(id)), { runId: themedRunId, minted: mintedByLatest, opened: openedByLatest })
+    return { heardBefore, regrouped }
+  })()
+  flagsAhead.catch(() => {})
+
+  // WHERE EACH THEME'S VIDEOS CAME FROM (WP2.4, the 26 Sep ruling). The added
+  // searches first: in a month where none was added every count is 0 and no
+  // video's evidence is read.
+  const provenanceAhead = (async () => {
+    const added = await addedAhead
+    const shownVideos = [...new Set(shownIds.flatMap((id) => refs.get(id) ?? []))]
+    const evidence = added && added.size > 0 && shownVideos.length > 0 ? await loadThemeEvidence(db, clientId, shownVideos) : null
+    return { added, evidence }
+  })()
+  provenanceAhead.catch(() => {})
 
   const build = (regimeOpened: boolean): MarketTheme[] => shownIds.flatMap((id) => {
     const o = obs.get(id)
@@ -659,7 +687,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       makerShare: shares?.maker.get(id) ?? null,
       noiseShare: shares?.noise.get(id) ?? null,
       identityNewThisRun: o.matchKind === 'new' && !regimeOpened,
-      flags: themeFlags({ k, prevK: pk, heardBefore: (pk ?? 0) > 0 || heardBefore.has(id), regrouped: regrouped.has(id) }),
+      // Set below, once the flags' reads are in.
+      flags: [],
       provenance: null,
     }]
   })
@@ -677,7 +706,9 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // else the two lead candidates, since a stripped label moves the lead to the
   // second, and the biggest theme, which the pane opens where nothing may
   // lead), and every label naming a brand, whose evidence decides whether the
-  // name stays (`stripUnevidencedBrand`, §5.3).
+  // name stays (`stripUnevidencedBrand`, §5.3). What people did in the pane's
+  // theme's comments is read beside them, for the theme it will most likely
+  // open.
   const brandNames = [brand, ...rivals.map((r) => r.name)].filter(Boolean)
   const deepSlugs = new Set((params.themes ?? '').split(',').map((s) => s.trim()).filter(Boolean))
   const asked = params.theme && themes.some((t) => t.registryId === params.theme) ? params.theme : null
@@ -690,6 +721,10 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const wanted = new Map<string, string | null>(paneIds.map((id) => [id, kindOf(id)]))
   const branded = themes.filter((t) => namesABrand(t.label, brandNames)).map((t) => t.registryId)
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
+  const likelyOpen = paneIds[0] ?? null
+  const kindsFor = (id: string) => loadThemeKinds(supabase, clientId, themedRunId, id, refs.get(id) ?? [])
+  const likelyKinds = likelyOpen ? kindsFor(likelyOpen) : Promise.resolve(null)
+  likelyKinds.catch(() => {})
   const quotes = await loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(paneIds))
   if (branded.length > 0) {
     themes = themes.map((t) => {
@@ -701,13 +736,13 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const hero = heroLead(buildThemeBoard(atTen(themes), n, month, segments, null), [], excluded)
   const leadId = hero.kind === 'themes' ? hero.lead?.registryId ?? null : null
 
-  // WHERE EACH THEME'S VIDEOS CAME FROM (WP2.4, the 26 Sep ruling). The added
-  // searches first: in a month where none was added every count is 0 and no
-  // video's evidence is read.
-  const added = await addedAhead
-  const shownVideos = [...new Set(themes.flatMap((t) => refs.get(t.registryId) ?? []))]
-  const evidence = added && added.size > 0 && shownVideos.length > 0 ? await loadThemeEvidence(db, clientId, shownVideos) : null
-  themes = themes.map((t) => ({ ...t, provenance: themeProvenance(refs.get(t.registryId) ?? [], evidence, added) }))
+  // THE FLAGS AND THE PROVENANCE, IN.
+  const [{ heardBefore, regrouped }, { added, evidence }] = await Promise.all([flagsAhead, provenanceAhead])
+  themes = themes.map((t) => ({
+    ...t,
+    flags: themeFlags({ k: t.k, prevK: t.prev?.k ?? null, heardBefore: (t.prev?.k ?? 0) > 0 || heardBefore.has(t.registryId), regrouped: regrouped.has(t.registryId) }),
+    provenance: themeProvenance(refs.get(t.registryId) ?? [], evidence, added),
+  }))
 
   // THE CATEGORY'S VIDEOS IN A THEME AT 10+ (C1's second line): the union of
   // their videos, where every one of them was read.
@@ -733,13 +768,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? loadThemeQuotes(supabase, clientId, themedRunId, new Map([[open.registryId, open.kind]]), month, new Set([open.registryId]))
     : Promise.resolve(quotes)
   const [kinds, cast, voicesRead] = await Promise.all([
-    open ? loadThemeKinds(supabase, clientId, themedRunId, open.registryId, refs.get(open.registryId) ?? []) : Promise.resolve(null),
-    buildCast({
-      supabase,
-      params,
-      profile: row<{ personas: Partial<Persona>[]; run_date: string; run_id: string; insight_population: number | null; theme_population: number | null }>(profileRes, 'voice.consumerProfile'),
-      newestRunId: row<{ id: string }>(newestRunRes, 'voice.newestRun')?.id ?? null,
-    }),
+    !open ? Promise.resolve(null) : open.registryId === likelyOpen ? likelyKinds : kindsFor(open.registryId),
+    castAhead,
     openQuotes,
   ])
   // DECISION F ON THE LEAD'S VOICES, AS ON THE FRONT PAGE: the lead may be up
