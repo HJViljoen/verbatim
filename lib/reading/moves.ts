@@ -5,7 +5,7 @@ import { refusedSteps, type PairOn } from './pairs'
 import { monthStartOf, nextMonth } from './month-key'
 import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
 import type { DeclareMoveInput } from '../subjects/moves'
-import { CALIBRATION_WORDS, printsClient, readCalibration, type SubjectCalibration } from '../subjects/calibration-state'
+import { printsClient, readCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote } from '../renderables/types'
 
@@ -605,7 +605,8 @@ export function readMove(input: MoveReadingInput): MoveReading {
   // A MOVE ON A SUBJECT THAT IS NOT READY IS NAMED AND NOT READ (decision C,
   // WP1.1). Its one claim is your own side before against after, which a
   // provisional or failed subject does not show; no line, no control, no
-  // figure. The chart's note carries the subject's word.
+  // figure. `unread` says why, in words that carry the subject's state; there
+  // is no chart note, because both surfaces print one as "too few readings".
   const state = input.move.kind === 'subject' ? readCalibration(input.calibration) : null
   if (state === 'provisional' || state === 'failed') {
     return {
@@ -621,7 +622,7 @@ export function readMove(input: MoveReadingInput): MoveReading {
       months: [],
       window: input.window,
       line: '',
-      chartNote: CALIBRATION_WORDS[state],
+      chartNote: null,
       unread: state === 'failed' ? MOVE_SUBJECT_FAILED : MOVE_SUBJECT_PROVISIONAL,
     }
   }

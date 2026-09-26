@@ -202,7 +202,7 @@ export function cardFixture(): MoveCandidate {
 
 /** One move, read: declared in August, so July is the last clean month before
  *  it and September the latest after it. August is drawn and not compared. */
-export function moveReadingFixture(): MoveReading {
+export function moveReadingFixture(calibration?: 'ready' | 'provisional' | 'failed'): MoveReading {
   const line = (audience: string, label: string, touched: boolean, ks: [number, number][]) => ({
     audience,
     label,
@@ -233,6 +233,9 @@ export function moveReadingFixture(): MoveReading {
       line(rivalKey('Freitag'), 'Freitag', false, [[36, 138], [39, 140], [41, 142]]),
     ],
     window: { kind: 'since', from: '2026-07-01', to: '2026-10-01' },
+    // The target subject's calibration (decision C, WP1.1), where a test sets
+    // one: production's Repair & warranty was 0.36 on 25 labels (failed).
+    ...(calibration ? { calibration } : {}),
   })
 }
 

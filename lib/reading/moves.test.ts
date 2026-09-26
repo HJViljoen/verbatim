@@ -635,7 +635,8 @@ describe('the card and a move under the three calibration states (decision C, WP
     expect(r.control).toEqual([])
     expect(r.series).toEqual([])
     expect(r.figures).toEqual({})
-    expect(r.chartNote).toBe('provisional')
+    // No chart note: both surfaces print one as "too few readings".
+    expect(r.chartNote).toBeNull()
     expect(r.unread).toBe(MOVE_SUBJECT_PROVISIONAL)
     expect(r.on).toBe('on the subject Repair & warranty')
   })
@@ -644,7 +645,7 @@ describe('the card and a move under the three calibration states (decision C, WP
     // Repair & warranty, 0.36 on 25 labels on production.
     const r = reading({ calibration: 'failed' })
     expect(r.verdict).toBeNull()
-    expect(r.chartNote).toBe('being re-described')
+    expect(r.chartNote).toBeNull()
     expect(r.unread).toBe(MOVE_SUBJECT_FAILED)
     for (const line of [MOVE_SUBJECT_FAILED, MOVE_SUBJECT_PROVISIONAL]) expect(line).not.toMatch(/[0-9—]/)
   })

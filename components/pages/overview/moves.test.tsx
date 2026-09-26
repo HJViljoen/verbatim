@@ -7,7 +7,8 @@ import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
 import { overviewRecord } from './record'
-import { overviewFixture, refusedFixture } from './fixture'
+import { moveReadingFixture, overviewFixture, refusedFixture } from './fixture'
+import { MOVE_SUBJECT_FAILED, MOVE_SUBJECT_PROVISIONAL } from '@/lib/reading/moves'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -310,4 +311,22 @@ describe('OV5, ported to the artboard', () => {
     const { verdicts } = blockAnswers(overviewMoves, overviewFixture())
     expect(verdicts.length).toBeGreaterThan(0)
   })
+})
+
+// DECISION C (WP1.1): a move on a subject that is not ready is named and not
+// read; its row says why and never "too few readings".
+describe('OV5 · a move on a subject that is not ready', () => {
+  for (const [state, line] of [['failed', MOVE_SUBJECT_FAILED], ['provisional', MOVE_SUBJECT_PROVISIONAL]] as const) {
+    it(`a ${state} subject's move prints its sentence, and no reading, in every mode`, () => {
+      const base = overviewFixture()
+      const data = { ...base, moves: { ...base.moves, readings: [moveReadingFixture(state)] } }
+      for (const mode of MODES) {
+        assertCopyContract(render(overviewMoves.render(data, mode, ctx)))
+        const text = renderText(overviewMoves.render(data, mode, ctx))
+        expect(text).toContain(line)
+        expect(text).not.toContain('too few readings')
+      }
+      expect(blockAnswers(overviewMoves, data).verdicts.filter((v) => v.objectId === 's3')).toEqual([])
+    })
+  }
 })
