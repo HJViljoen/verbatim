@@ -1,5 +1,6 @@
 import type { ConfigChange } from '../config-log'
 import { fmtInt, longMonth, platformLabel } from '../format'
+import { subredditLabel } from '../gather/subreddits'
 import { activeCommunities, type OurChange } from '../reading/comparability'
 import { monthStartOf } from '../reading/month-key'
 import type { LedgerLine } from '../pages/overview-market/change'
@@ -268,9 +269,16 @@ export function ledgerLines(input: {
       }))
     const own = months.find((m) => m.month === monthStartOf(c.changedAt)) ?? null
     const mine = input.rows.filter((r) => ids.has(r.id))
-    // WHAT THE LINE NAMES BESIDE ITS WORDS: the search terms, or the rivals,
-    // it took in and out.
-    const items = c.surface === 'terms' ? termsMoved(mine) : c.surface === 'rivals' ? rivalsMoved(mine) : null
+    // WHAT THE LINE NAMES BESIDE ITS WORDS: the search terms, the rivals or
+    // the communities it took in and out.
+    const communities = c.surface === 'subreddits' ? communitiesMoved(mine) : null
+    const items = c.surface === 'terms'
+      ? termsMoved(mine)
+      : c.surface === 'rivals'
+        ? rivalsMoved(mine)
+        : communities
+          ? { added: communities.on.map(subredditLabel), removed: communities.off.map(subredditLabel) }
+          : null
     return {
       changeId: c.id,
       date: c.changedAt,

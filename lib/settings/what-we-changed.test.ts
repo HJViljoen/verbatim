@@ -135,4 +135,11 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     const line = ledgerLines({ changes: changesFromLog([rivals]), rows: [rivals], reach: [], runFinish: new Map() })[0]
     expect(line.items).toEqual({ added: ['Rareform'], removed: ['Patagonia', 'Poler', 'Topo Designs'] })
   })
+
+  it('lists the communities a change switched on and off beside its words', () => {
+    const onebag = row({ id: 'sub-0909', changed_at: '2026-09-09T00:00:00.000Z', surface: 'subreddits' as never, before: { name: 'onebag', status: 'candidate' }, after: { name: 'onebag', status: 'active' } })
+    const line = ledgerLines({ changes: changesFromLog([onebag]), rows: [onebag], reach: [], runFinish: new Map() })[0]
+    expect(line.words).toBe('1 community added')
+    expect(line.items).toEqual({ added: ['r/onebag'], removed: [] })
+  })
 })
