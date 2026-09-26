@@ -7,14 +7,15 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth, shortDate } from '@/lib/format'
 import { monthStartOf, nextMonth } from '@/lib/reading/month-key'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { changeLead, nextPairLine, placeInMonth, searchChangesLine, type ChangeBlock } from '@/lib/pages/overview-market'
+import { changeLead, nextPairLine, placeInMonth, recheckLines, searchChangesLine, type ChangeBlock, type RecheckLine } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import { cn } from '@/lib/utils'
 import { isMarketPage, shortMonthName } from './market'
 
 // "What changed, and what is ours" (market-first WP1.6, plan §2.2 block 10):
-// at most two lines at deploy 2, the refusal with its measured reach read with
-// its update, and the first pair of months read the same way. Its footer is
+// the refusal with its measured reach read with its update, and the first pair
+// of months read the same way; from deploy 3 (WP2.3) the re-check under the
+// refusal, "Re-checked · provisional", in at most three lines. Its footer is
 // the link to the dated list of our changes (Settings › What we changed), and
 // nothing else (25 Sep rulings).
 
@@ -208,6 +209,52 @@ function LeadSentence({ body, figures, mode }: { body: string; figures: FigureTa
   )
 }
 
+/**
+ * THE RE-CHECK (WP2.3; the approved preview's inner block under the refusal):
+ * "Re-checked" with its "provisional" tag, then each line as code wrote it
+ * (`recheckLines`), its tag under it in mono: the population's maker and
+ * off-topic shares and the update it was read with. The monthly's change
+ * section draws the same lines through this component, so the page and the
+ * monthly print one sentence each.
+ */
+export function RecheckBox({ lines, mode }: { lines: readonly RecheckLine[]; mode: 'app' | 'print' | 'email' }) {
+  if (lines.length === 0) return null
+  if (mode === 'email') {
+    return (
+      <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', marginTop: 24 }}>
+        <tbody>
+          <tr>
+            <td style={{ padding: 24, borderRadius: 6, background: EMAIL.inner }}>
+              <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '22px', fontWeight: 600, color: EMAIL.ink }}>
+                Re-checked&nbsp;&nbsp;<span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 400, color: EMAIL.muted }}>provisional</span>
+              </div>
+              {lines.map((l) => (
+                <div key={l.key} style={{ marginTop: 8 }}>
+                  <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2 }}>{l.sentence}</div>
+                  {l.tag ? <div style={{ fontFamily: FONT.mono, fontSize: 12, lineHeight: '18px', color: EMAIL.muted, marginTop: 2 }}>{l.tag}</div> : null}
+                </div>
+              ))}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  return (
+    <div className="flex max-w-[76ch] flex-col gap-3 rounded-md bg-inner p-6">
+      <p className="m-0 text-[15px] font-semibold leading-[1.4] text-foreground">
+        Re-checked <span className="ml-1.5 font-mono text-[12px] font-normal text-muted-foreground">provisional</span>
+      </p>
+      {lines.map((l) => (
+        <div key={l.key} className="flex flex-col gap-1">
+          <p className="m-0 text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">{l.sentence}</p>
+          {l.tag ? <p className="m-0 font-mono text-[12px] leading-[1.5] text-muted-foreground">{l.tag}</p> : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export const overviewChange: Block<OverviewData> = {
   key: 'overview.change',
   title: 'What changed, and what is ours',
@@ -222,28 +269,39 @@ export const overviewChange: Block<OverviewData> = {
     }
     const lead = changeLead(block)
     const next = nextPairLine(block)
+    const recheck = recheckLines(block)
     if (mode === 'email') {
       return (
         <BlockFrame title={overviewChange.title} mode={mode} footer={footer}>
           {lead ? <div style={{ fontFamily: FONT.sans, fontSize: 13.5, color: EMAIL.ink }}><TokenProse body={lead.body} figures={lead.figures} mode={mode} /></div> : null}
+          <RecheckBox lines={recheck} mode={mode} />
           {next ? <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, marginTop: 6 }}>{next}</div> : null}
         </BlockFrame>
       )
     }
+    // THE REFUSAL, THEN THE RE-CHECK UNDER IT (the preview's left column).
+    const left = lead || recheck.length > 0
+      ? (
+          <div className="flex min-w-0 flex-col gap-6">
+            {lead ? <LeadSentence body={lead.body} figures={lead.figures} mode={mode} /> : null}
+            <RecheckBox lines={recheck} mode={mode} />
+          </div>
+        )
+      : null
     // ONE COLUMN WHEN THERE IS NOTHING FOR THE SECOND (deploy 2 review): a
     // paused tenant, or no next pair, has the refusal alone, which then keeps
     // its own reading measure rather than half the block beside an empty one.
     if (!next && !drawsStrip(block)) {
       return (
         <BlockFrame title={overviewChange.title} mode={mode} footer={footer} roomy>
-          {lead ? <LeadSentence body={lead.body} figures={lead.figures} mode={mode} /> : null}
+          {left}
         </BlockFrame>
       )
     }
     return (
       <BlockFrame title={overviewChange.title} mode={mode} footer={footer} roomy>
         <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-2" data-print-cols="2">
-          {lead ? <LeadSentence body={lead.body} figures={lead.figures} mode={mode} /> : <span />}
+          {left ?? <span />}
           <div className="flex min-w-0 flex-col gap-6">
             {next ? <p className="m-0 text-[17px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">{next}</p> : null}
             <MonthStrip block={block} />

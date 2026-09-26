@@ -22,8 +22,16 @@ import {
   searchChangesLine,
   whyCells,
   whyNotCompared,
+  buildCheckLines,
+  checkTag,
+  newestChecks,
+  recheckLines,
+  recheckShows,
+  CHECK_LINES_MAX,
   type ChangeBlock,
 } from './change'
+import { RECHECK_BUYERS, RECHECK_COMPUTED_AT, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '../../test/recheck-fixture'
+import { directionHits } from '../../calibration'
 
 // Sealand's real change log around September (GC F2, staging's copy of
 // production to 20 Sep): the 13 Sep term additions and the 17 Sep script.
@@ -446,5 +454,132 @@ describe('the month strip: our search changes and the "as at" mark (the approved
     })
     expect(b.asAt).toBe('2026-09-27T08:30:00.000Z')
     expect(b.searchChanges).toEqual(['2026-09-09T18:17:56.893Z', '2026-09-13T10:00:58.000Z', '2026-09-17T16:02:56.000Z'])
+  })
+})
+
+// ---- WP2.3: the re-check beside a refused pair ---------------------------------------
+
+describe('the re-check on the searches both months ran (WP2.3)', () => {
+  const TOO_FEW = 'Too few videos on the searches both months ran to check.'
+  const DEPTH = 'Asking how it works, Praising it, Pushing back and Leaving for something else: the fall follows how deeply September’s videos have been read, not the market.'
+  const lines = () => buildCheckLines({ rows: recheckRows(), month: '2026-09-01', runFinish: recheckRunFinish() })
+
+  it('on staging’s plan prints the two lines the plan expects: too few on the same searches, and the depth line', () => {
+    const got = lines()
+    expect(got.map((l) => l.sentence)).toEqual([TOO_FEW, DEPTH])
+    // The too-few line speaks for the population through decision D's first
+    // candidate; the depth line names every kind whose fall follows depth.
+    expect(got[0]).toMatchObject({ objectKind: 'kind', objectId: 'feature_request', label: 'Asking for something', population: 'same_searches_clean', readWith: RECHECK_READ_WITH })
+    expect(got[0].populationShares).toEqual({ makers: 0.4889, noise: 0.1106 })
+    expect(got[1]).toMatchObject({ population: 'dense20', objectId: 'question', covers: ['Asking how it works', 'Praising it', 'Pushing back', 'Leaving for something else'] })
+  })
+
+  it('tags each line with its population’s makers and off-topic videos, in words, and the update it was read with', () => {
+    const [same, depth] = lines()
+    expect(checkTag(same)).toBe('about half makers, about a tenth off-topic, left out · read with the 20 Sep update')
+    expect(checkTag(depth)).toBe('with 20 or more comments: about a quarter makers, about a fifth off-topic · read with the 20 Sep update')
+  })
+
+  it('never prints a stored "moved" outside the same searches: six on staging, none reach a line', () => {
+    const text = JSON.stringify(lines().map((l) => l.sentence))
+    expect(text).not.toMatch(/went from|more than the reading/)
+    expect(recheckRows().filter((r) => r.outcome === 'moved' && r.population !== 'same_searches_clean').length).toBeGreaterThan(0)
+  })
+
+  it('prints "moved" only on the same searches with 100 a side, as "Provisional." (dense20’s real figures, set on that population to exercise it)', () => {
+    const moved = recheckRows().filter((r) => r.population === 'dense20' && r.object_id === 'feature_request')
+      .map((r) => ({ ...r, population: 'same_searches_clean' }))
+    const within = recheckRows().filter((r) => r.population === 'all_but_noise' && r.object_id === 'feature_request')
+      .map((r) => ({ ...r, population: 'same_searches_clean', object_id: 'purchase_intent', verdict: { ...r.verdict, objectId: 'purchase_intent', objectLabel: 'Ready to buy' } }))
+    const got = buildCheckLines({ rows: [...moved, ...within], month: '2026-09-01', runFinish: recheckRunFinish() })
+    expect(got.map((l) => l.sentence)).toEqual([
+      'Asking for something went from 19% to 34% on the searches both months ran, without makers and off-topic videos: more than the reading can tell apart. Provisional.',
+      'Ready to buy stayed within what the reading can tell apart on the searches both months ran.',
+    ])
+    // The two levels' bases sit in the tag, beside what was left out.
+    expect(checkTag(got[0])).toBe('about a quarter makers, about a fifth off-topic, left out · August of 200, September of 271 · read with the 20 Sep update')
+  })
+
+  it('reads the newest row per object: a later apply supersedes an earlier one', () => {
+    const early = recheckRows({ computedAt: '2026-10-06T10:00:00.000Z', run: 'run-4oct' })
+    const late = recheckRows({ computedAt: '2026-10-12T10:00:00.000Z', run: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4' })
+    const newest = newestChecks([...late, ...early])
+    expect(newest.every((r) => r.computed_at === '2026-10-12T10:00:00.000Z')).toBe(true)
+    expect(newest.length).toBe(early.length)
+  })
+
+  it('names no update it does not hold, and says no direction word', () => {
+    const got = buildCheckLines({ rows: recheckRows({ run: null }), month: '2026-09-01', runFinish: recheckRunFinish() })
+    expect(got.every((l) => l.readWith === '')).toBe(true)
+    expect(checkTag(got[0])).toBe('about half makers, about a tenth off-topic, left out')
+    for (const l of lines()) expect(directionHits(l.sentence)).toEqual([])
+  })
+
+  it('prints at most three lines', () => {
+    expect(CHECK_LINES_MAX).toBe(3)
+    expect(lines().length).toBeLessThanOrEqual(CHECK_LINES_MAX)
+  })
+})
+
+describe('where the re-check prints, and the buyers-only line (WP2.3)', () => {
+  const base = { prevMonth: '2026-08-01', month: '2026-09-01', hasPrev: true, changes: CHANGES, pairRows: [ROW], asAt: '2026-10-11T08:30:00.000Z', runFinish: recheckRunFinish() }
+
+  it('prints beside a refused pair whose later month has ended, not beside a month still running', () => {
+    expect(recheckShows(pair('ended'), false)).toBe(true)
+    expect(recheckShows(pair('so_far'), false)).toBe(false)
+    expect(recheckShows(null, false)).toBe(false)
+    // Paused: only what was read (no update is coming, so never "pending").
+    expect(recheckShows(pair('ended'), true)).toBe(false)
+    expect(recheckShows(pair('ended'), true, true)).toBe(true)
+  })
+
+  it('prints a paused tenant’s read rows, and a "too few" buyers line, but never "checks pending"', () => {
+    const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: true, recheck: { rows: recheckRows(), buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
+    expect(b.recheck).toBe('read')
+    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question'])
+    const tooFew = { checks: b.checks, recheck: 'read' as const, paused: true, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: null } }
+    expect(recheckLines(tooFew).at(-1)?.sentence).toBe('Buyers only, without makers and off-topic videos: too few in July to check.')
+    expect(recheckLines({ checks: [], recheck: 'pending', paused: true, buyers: null })).toEqual([])
+  })
+
+  it('reads "checks pending" where no row can be read yet (MF2 before Tue 6 Oct; staging, where the script refuses)', () => {
+    const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: null, buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
+    expect(b.recheck).toBe('pending')
+    // Staging's buyers, 146 and 381, are 100 or more a side: no buyers line.
+    expect(recheckLines(b)).toEqual([
+      { key: 'pending', sentence: 'On the searches both months ran, without makers and off-topic videos: checks pending.', tag: null },
+    ])
+  })
+
+  it('prints the stored lines for its own pair only', () => {
+    const other = recheckRows().map((r) => ({ ...r, prev_month: '2026-07-01', month: '2026-08-01' }))
+    const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: [...other, ...recheckRows()], buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
+    expect(b.recheck).toBe('read')
+    expect(b.checks.length).toBe(2)
+    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question'])
+  })
+
+  it('says "too few" in the month under 100 buyers’ videos (July’s 6 on staging), where there is room', () => {
+    const b = { checks: [], recheck: 'pending' as const, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: '2026-09-20T08:33:47.358Z' } }
+    expect(recheckLines(b)[1]).toEqual({ key: 'buyers', sentence: 'Buyers only, without makers and off-topic videos: too few in July to check.', tag: 'read with the 20 Sep update' })
+    const full = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: recheckRows(), buyers: { prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august } } })
+    expect(recheckLines(full).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question', 'buyers'])
+  })
+
+  it('prints nothing beside a month still running, a paused tenant with no row, or a page built without the re-check', () => {
+    for (const b of [
+      buildChangeBlock({ ...base, pair: pair('so_far'), paused: false, recheck: { rows: recheckRows(), buyers: null } }),
+      buildChangeBlock({ ...base, pair: pair('ended'), paused: true, recheck: { rows: null, buyers: null } }),
+      buildChangeBlock({ ...base, pair: pair('ended'), paused: false }),
+    ]) {
+      expect(b.recheck).toBeNull()
+      expect(b.checks).toEqual([])
+      expect(b.buyers).toBeNull()
+      expect(recheckLines(b)).toEqual([])
+    }
+  })
+
+  it('keeps the 26 Sep plan’s computed time on the rows it reads', () => {
+    expect(recheckRows()[0].computed_at).toBe(RECHECK_COMPUTED_AT)
   })
 })

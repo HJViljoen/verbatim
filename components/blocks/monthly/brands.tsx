@@ -1,92 +1,131 @@
 import type { ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
-import { MARKET_BRANDS_TITLE } from '@/components/pages/overview/rivals'
+import { MARKET_BRANDS_TITLE, MarketBrandsBody, brandAxis } from '@/components/pages/overview/rivals'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
+import { nameLineParts, topicNote } from '@/lib/pages/overview-market'
 import type { MonthlyBrands } from '@/lib/reports/monthly-slots'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { Inner, Num, RowLabel, Table } from './email'
+import { Inner, Num } from './email'
+import { T, presentation } from './email-table'
 import { slotSection } from './slot'
 
 /**
  * 8 · Brands in your market (market-first WP2.1; the front page's block 9 in
- * its D3 form, WP2.6's slot). Absent until WP2.6 fills the slot: the front
+ * its D3 form, WP2.6's slot). Absent until the slot is filled: the front
  * page's deploy 2 line ("arrive with the 11 Oct update") is a promise about
  * the page, not something to send a client.
  *
- * FIRST CUT, IN THE PLAN'S WORDS (§2.2 block 9): the name line first ("In
- * September your name came up in none of your market's 655 videos. The 8
- * videos that name you are your own posts."), then each brand counted in
- * every video it comes up in, without our own rival searches and in all, and
- * a brand whose name is mostly another word as "mostly another word · not
- * counted" (WP2.6). WP2.6 moves these words beside its front-page block, and
- * both print them from there.
+ * THE PAGE'S BODY, THE PAGE'S WORDS (WP2.6). In the app and on paper the
+ * section draws the front page's body (`MarketBrandsBody`): the name line
+ * first, then each brand counted in every video it comes up in, without our
+ * rival searches and in all, a brand not counted saying so ("not counted
+ * yet", or "mostly the German word for Friday · not counted"). In an inbox it
+ * draws the email artboard's table from the same words (`nameLineParts`,
+ * `topicNote`), so the two print one sentence each.
  */
 
-const fig = (n: number, mode: RenderMode): ReactNode => (
-  <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono font-semibold tabular-nums text-foreground'} style={mode === 'email' ? { fontFamily: FONT.mono, fontWeight: 600, color: EMAIL.ink } : undefined}>{fmtInt(n)}</span>
-)
+/** The artboard's inks, as hex: the rivals' orange and its 48% step. */
+const ORGANIC_HEX = EMAIL.comp
+const ALL_HEX = '#F8BC99'
+const BAR_WIDTH = 160
 
-/** The name line, or null where it was not measured. */
-function nameLine(b: MonthlyBrands, mode: RenderMode): ReactNode {
-  const l = b.nameLine
-  if (!l) return null
-  const month = longMonth(l.month)
+function nameWords(b: MonthlyBrands): ReactNode {
+  return nameLineParts(b).map((p, i) => (p.t === 'text' ? <span key={i}>{p.s}</span> : <Num key={i} size={15}>{fmtInt(p.value)}</Num>))
+}
+
+/** The two counts as one bar, table-safe: the count without our rival
+ *  searches in orange, the rest of the count in all in its paler step, set
+ *  on the row's middle as the artboard draws it. */
+function EmailBar({ organic, all, axis }: { organic: number; all: number; axis: number }) {
+  const px = (k: number) => Math.round((Math.max(0, k) / axis) * BAR_WIDTH)
+  const a = px(organic)
+  const b = Math.max(0, px(all) - a)
+  const seg = (w: number, bg: string) => (w > 0 ? <td style={{ width: w, height: 8, background: bg, fontSize: 0, lineHeight: 0 }}>&nbsp;</td> : null)
+  return (
+    <table role="presentation" cellPadding={0} cellSpacing={0} aria-hidden style={{ borderCollapse: 'collapse', marginTop: 7 }}>
+      <tbody><tr>{seg(a, ORGANIC_HEX)}{seg(b, ALL_HEX)}</tr></tbody>
+    </table>
+  )
+}
+
+const cellBase = { fontFamily: FONT.sans, verticalAlign: 'top' as const }
+const headCell = (align: 'left' | 'right', width?: number) => ({
+  ...cellBase, padding: '0 0 8px 8px', borderBottom: `1px solid ${EMAIL.border}`, fontSize: 12, lineHeight: '16px',
+  color: EMAIL.muted, textAlign: align, verticalAlign: 'bottom' as const, ...(width ? { width } : {}),
+})
+const rowCell = (last: boolean, align: 'left' | 'right' = 'left', width?: number) => ({
+  ...cellBase, padding: '11px 0 11px 8px', borderBottom: last ? 0 : `1px solid ${EMAIL.hairline}`, fontSize: 15, lineHeight: '22px',
+  color: EMAIL.ink, textAlign: align, ...(width ? { width } : {}),
+})
+
+/**
+ * The artboard's table, drawn by hand rather than with the section `Table`,
+ * because a brand not counted says so ACROSS the bar and the two figures in
+ * one line ("Freitag · mostly the German word for Friday · not counted"), and
+ * that cell must survive a phone, where the bar column leaves (`vb-m-bar`).
+ */
+function EmailTable({ b }: { b: MonthlyBrands }) {
+  const n = b.topics[0]?.n ?? null
+  const axis = brandAxis(b)
+  const counted = b.topics.some((t) => topicNote(t) == null)
+  return (
+    <table width="100%" {...presentation} style={{ ...T, marginTop: 24 }}>
+      <thead>
+        <tr>
+          <th style={{ ...headCell('left'), paddingLeft: 0 }}>Brand</th>
+          <th className="vb-m-bar" style={headCell('left', BAR_WIDTH)}>{''}</th>
+          <th style={headCell('right', 112)}>{counted ? <>{swatch(ORGANIC_HEX)}Without our<br />rival searches</> : null}</th>
+          <th style={headCell('right', 64)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}In all<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {b.topics.map((t, i) => {
+          const last = i === b.topics.length - 1
+          const note = topicNote(t)
+          return (
+            <tr key={t.brandKey}>
+              <td style={{ ...rowCell(last), paddingLeft: 0 }}>{t.label}</td>
+              {note ? (
+                <td colSpan={3} style={{ ...rowCell(last), fontSize: 13, color: EMAIL.muted }}>{note}</td>
+              ) : (
+                <>
+                  <td className="vb-m-bar" style={rowCell(last, 'left', BAR_WIDTH)}><EmailBar organic={t.kOrganic ?? 0} all={t.kAny ?? 0} axis={axis} /></td>
+                  <td style={rowCell(last, 'right', 112)}><Num>{fmtInt(t.kOrganic ?? 0)}</Num></td>
+                  <td style={rowCell(last, 'right', 64)}><Num prev>{fmtInt(t.kAny ?? 0)}</Num></td>
+                </>
+              )}
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+const swatch = (hex: string) => <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: hex, marginRight: 6 }} />
+
+function emailBody(b: MonthlyBrands): ReactNode {
   return (
     <>
-      In {month} your name came up in {l.k === 0 ? 'none' : fig(l.k, mode)} of your market’s {fig(l.n, mode)} videos.
-      {l.ownPosts > 0 ? <> The {fig(l.ownPosts, mode)} {l.ownPosts === 1 ? 'video that names you is your own post' : 'videos that name you are your own posts'}.</> : null}
+      <Inner marginTop={0}>
+        <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
+          <tbody>
+            <tr>
+              <td style={{ width: 20, verticalAlign: 'top', paddingTop: 8 }}><div aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }}>&nbsp;</div></td>
+              <td style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2 }}>{nameWords(b)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </Inner>
+      {b.topics.length > 0 ? <EmailTable b={b} /> : null}
     </>
   )
 }
 
-const NOISE = 'mostly another word · not counted'
-
 function body(b: MonthlyBrands, mode: RenderMode): ReactNode {
-  const n = b.topics[0]?.n ?? null
-  const nOrganic = b.topics[0]?.nOrganic ?? null
-  if (mode === 'email') {
-    return (
-      <>
-        {b.nameLine ? <Inner marginTop={0}><div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2 }}>{nameLine(b, mode)}</div></Inner> : null}
-        {b.topics.length > 0 ? (
-          <Table
-            marginTop={b.nameLine ? 24 : 0}
-            columns={[
-              { head: 'Brand' },
-              { head: <span data-copy="level">Without our rival searches<br />of {nOrganic == null ? '·' : fmtInt(nOrganic)}</span>, align: 'right', width: 132 },
-              { head: <span data-copy="level">In all<br />of {n == null ? '·' : fmtInt(n)}</span>, align: 'right', width: 64 },
-            ]}
-            rows={b.topics.map((t) => t.noise
-              ? [<RowLabel key="l" tag={NOISE}>{t.label}</RowLabel>, null, null]
-              : [<RowLabel key="l">{t.label}</RowLabel>, <Num key="o">{fmtInt(t.kOrganic)}</Num>, <Num key="a" prev>{fmtInt(t.kAny)}</Num>])}
-          />
-        ) : null}
-      </>
-    )
-  }
-  return (
-    <div className="flex flex-col gap-6">
-      {b.nameLine ? <p className="m-0 rounded-md bg-inner px-6 py-4 text-[15px] leading-[1.55] text-secondary-foreground">{nameLine(b, mode)}</p> : null}
-      {b.topics.length > 0 ? (
-        <div role="table" className="flex flex-col">
-          <div role="row" className="grid grid-cols-[minmax(0,1fr)_120px_72px] items-end gap-x-4 border-b border-border pb-2.5 text-[13px] font-medium text-muted-foreground">
-            <span role="columnheader">Brand</span>
-            <span role="columnheader" data-copy="level" className="text-right">Without our rival searches<br /><span className="font-mono text-[12px] font-normal">of {nOrganic == null ? '·' : fmtInt(nOrganic)}</span></span>
-            <span role="columnheader" data-copy="level" className="text-right">In all<br /><span className="font-mono text-[12px] font-normal">of {n == null ? '·' : fmtInt(n)}</span></span>
-          </div>
-          {b.topics.map((t) => (
-            <div key={t.brandKey} role="row" className="grid min-h-11 grid-cols-[minmax(0,1fr)_120px_72px] items-center gap-x-4 border-b border-border/60 py-1.5 text-[15px]">
-              <span role="rowheader">{t.label}{t.noise ? <span className="block font-mono text-[12px] text-muted-foreground">{NOISE}</span> : null}</span>
-              <span className="text-right font-mono font-semibold tabular-nums">{t.noise ? null : <span data-copy="figure">{fmtInt(t.kOrganic)}</span>}</span>
-              <span className="text-right font-mono tabular-nums text-muted-foreground">{t.noise ? null : <span data-copy="figure">{fmtInt(t.kAny)}</span>}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
+  return mode === 'email' ? emailBody(b) : <MarketBrandsBody b={b} mode={mode} />
 }
 
 function figures(b: MonthlyBrands): FigureTable {
@@ -98,7 +137,8 @@ function figures(b: MonthlyBrands): FigureTable {
     out.brands_own_posts = { value: b.nameLine.ownPosts, unit: 'videos', label: `your own posts that name you in ${month}` }
   }
   for (const t of b.topics) {
-    if (t.noise) continue
+    // A brand not counted has no figure: never a 0.
+    if (topicNote(t) || t.kOrganic == null || t.kAny == null) continue
     const id = t.brandKey.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
     out[`brand_${id}_organic`] = { value: t.kOrganic, unit: 'videos', label: `videos naming ${t.label} in ${month}, without our rival searches` }
     out[`brand_${id}_any`] = { value: t.kAny, unit: 'videos', label: `videos naming ${t.label} in ${month}` }

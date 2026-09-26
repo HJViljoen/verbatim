@@ -2,11 +2,14 @@ import type { MonthlyData } from '@/lib/pages/monthly'
 import { headline, sentenceBlockFor, type LedgerRow, type OverviewData } from '@/lib/pages/overview'
 import { monthlySubject, nextMonthlyOf } from '@/lib/reports/monthly'
 import { MONTHLY_SLOT_STUBS, type MonthlySlots } from '@/lib/reports/monthly-slots'
+import { stagingBrandsRead } from '@/lib/test/brands-fixture'
+import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
+import { buildCheckLines } from '@/lib/pages/overview-market'
 import { comparabilityOf, type OurChange, type PairRow } from '@/lib/reading/comparability'
 import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { sealandReading } from '@/lib/test/reading-fixture'
-import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, verdict } from '@/components/pages/overview/fixture'
+import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture } from '@/components/pages/overview/fixture'
 
 // "September in your market"'s fixtures (market-first WP2.1).
 //
@@ -177,39 +180,30 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
 /**
  * Every slot filled, for the filled arms' render tests.
  *
- * - `brands`: BC F35 (staging, September, raw): the market's 662 videos, 563
- *   without our rival searches; Patagonia 47 and 33, The North Face 36 and
- *   11, Cotopaxi 31 and 11, Freitag 12 and 4 (mostly the German word); the 8
- *   videos naming Sealand are its own posts, so the name line reads none.
+ * - `brands`: staging's brands_v1 plan of 26 Sep (lib/test/brands-fixture.ts):
+ *   the market's 654 September videos; Patagonia 26 without our rival
+ *   searches and 45 in all, The North Face 20 and 36, Cotopaxi 7 and 28;
+ *   Freitag, Rareform, Freedom of Movement and Old School not counted yet
+ *   (no measured precision); the 8 videos naming Sealand are its own posts,
+ *   so the name line reads none.
  * - `you`: plan §2.2 row 8 (production): 20 posts in September, 30 in August,
  *   10 drew 5 or more comments, 9 carry a reading over 234 comments; the
  *   followers' three themes, 4, 3 and 2; no move dated. No for-you line: its
  *   sentences are WP2.5's.
- * - `arrivals` and `change`: HYPOTHETICAL, and named so. What the 11 Oct
- *   update brings is not knowable, so the counts are real ones of a different
- *   question, borrowed for their size: 206 (GC F29, September videos first
- *   found by the 13 Sep terms) and 4,923 (WP1.4's staging late capture of
- *   September comments). The check line is the plan's own expected outcome
- *   (WP2.3: "Too few videos on the searches both months ran to check.") on
- *   "Asking for something", 146 of 626 in September (production).
+ * - `arrivals`: HYPOTHETICAL, and named so. What the 11 Oct update brings is
+ *   not knowable, so the counts are real ones of a different question,
+ *   borrowed for their size: 206 (GC F29, September videos first found by the
+ *   13 Sep terms) and 4,923 (WP1.4's staging late capture of September
+ *   comments).
+ * - `change`: staging's re-check plan of 26 Sep (lib/test/recheck-fixture.ts),
+ *   read with the 20 Sep update: too few on the searches both months ran (78
+ *   and 103 videos), the four kinds whose fall follows depth, and the
+ *   buyers-only counts, 146 and 381.
  */
 export function filledSlotsFixture(): MonthlyData {
   const base = monthlyFixture()
   const slots: MonthlySlots = {
-    brands: {
-      state: 'filled',
-      value: {
-        window: SEP,
-        nameLine: { month: SEP, n: 662, k: 0, ownPosts: 8 },
-        topics: [
-          { brandKey: 'patagonia', label: 'Patagonia', kAny: 47, kOrganic: 33, n: 662, nOrganic: 563, noise: false },
-          { brandKey: 'the-north-face', label: 'The North Face', kAny: 36, kOrganic: 11, n: 662, nOrganic: 563, noise: false },
-          { brandKey: 'cotopaxi', label: 'Cotopaxi', kAny: 31, kOrganic: 11, n: 662, nOrganic: 563, noise: false },
-          { brandKey: 'freitag', label: 'Freitag', kAny: 12, kOrganic: 4, n: 662, nOrganic: 563, noise: true },
-        ],
-        ninetyDayNote: 'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
-      },
-    },
+    brands: { state: 'filled', value: stagingBrandsRead() },
     you: {
       state: 'filled',
       value: {
@@ -243,16 +237,9 @@ export function filledSlotsFixture(): MonthlyData {
     change: {
       state: 'filled',
       value: {
-        checks: [{
-          objectKind: 'kind',
-          objectId: 'feature_request',
-          label: 'Asking for something',
-          population: 'same_searches_clean',
-          verdict: verdict({ objectKind: 'kind', objectId: 'feature_request', objectLabel: 'Asking for something', audience: INDUSTRY_AUDIENCE, value: { k: 146, n: 626 }, state: 'too_little_data', changePts: null, bandPts: null }),
-          sentence: 'Too few videos on the searches both months ran to check.',
-          populationShares: null,
-          readWith: '2026-10-11T08:30:00.000Z',
-        }],
+        checks: buildCheckLines({ rows: recheckRows(), month: SEP, runFinish: recheckRunFinish() }),
+        recheck: 'read',
+        buyers: { prevMonth: AUG, month: SEP, prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september, readWith: RECHECK_READ_WITH },
       },
     },
   }

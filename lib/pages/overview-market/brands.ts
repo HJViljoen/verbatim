@@ -1,4 +1,6 @@
-import { shortDate } from '../../format'
+import { brandCountState, BRAND_HAND_CHECKS, NAME_READS, noiseWords, type BrandCountState } from '../../brands/precision'
+import { longMonth, shortDate } from '../../format'
+import { monthStartOf } from '../../reading/month-key'
 
 // "Brands in your market" (market-first WP1.6, plan §2.2 block 9).
 //
@@ -6,7 +8,9 @@ import { shortDate } from '../../format'
 // mention layer, WP2.6) arrive with deploy 3 and are first read with the
 // 11 Oct update; until then the block says so, and points at Competitive,
 // which lists what was filed under each brand the client tracks. The name
-// line and brand topics replace it at deploy 3.
+// line and brand topics replace it at deploy 3 (`buildBrandsBlock`, below);
+// the one line stays for a page stored before them and for a tenant with no
+// brand rules (Össur).
 //
 // THE DATE IS A PROMISE, SO IT EXPIRES. The line names the 11 Oct update only
 // while that update is still ahead of the page's "as at"; after it, a page
@@ -19,7 +23,8 @@ import { shortDate } from '../../format'
  *  Sat 10 Oct, the 11 Oct run). */
 export const BRANDS_ARRIVE_WITH = '2026-10-11T04:00:00.000Z'
 
-export interface BrandsBlock {
+/** Deploy 2's one line. */
+export interface BrandsArriving {
   /** `arriving`: an update ahead reads them. `paused`: the tenant's updates
    *  are paused, so no update is promised. */
   state: 'arriving' | 'paused'
@@ -28,8 +33,14 @@ export interface BrandsBlock {
   arrivesWith: string | null
 }
 
+/** The block: deploy 2's one line, or deploy 3's name line and topics. */
+export type BrandsBlock = BrandsArriving | BrandsRead
+
+/** Is it deploy 3's form? A block stored before WP2.6 is the one line. */
+export const isBrandsRead = (b: BrandsBlock | null | undefined): b is BrandsRead => b?.state === 'read'
+
 /** The block, as at the last update (never the wall clock). */
-export function brandsBlockFor(asAt: string | null, opts: { paused?: boolean; arrives?: string } = {}): BrandsBlock {
+export function brandsBlockFor(asAt: string | null, opts: { paused?: boolean; arrives?: string } = {}): BrandsArriving {
   if (opts.paused) return { state: 'paused', arrivesWith: null }
   const arrives = opts.arrives ?? BRANDS_ARRIVE_WITH
   const at = asAt ? Date.parse(asAt) : Number.NaN
@@ -40,9 +51,160 @@ export function brandsBlockFor(asAt: string | null, opts: { paused?: boolean; ar
 /** The one line, naming the Competitive page by its current sidebar label.
  *  Paused, no update is coming, so the pointer has no "until then" to lean
  *  on (deploy 2 review): it says what Competitive lists, plainly. */
-export function brandsLine(b: BrandsBlock, competitiveLabel: string): string {
+export function brandsLine(b: BrandsArriving, competitiveLabel: string): string {
   const until = `Until then, ${competitiveLabel} lists what was filed under each brand you track.`
   if (b.state === 'paused') return `Brands in your market, counted in every video they come up in, are not read for this workspace yet. ${competitiveLabel} lists what was filed under each brand you track.`
   const when = b.arrivesWith ? `the ${shortDate(b.arrivesWith)} update` : 'a coming update'
   return `Brands in your market, counted in every video they come up in, arrive with ${when}. ${until}`
+}
+
+// ---- Deploy 3: the name line and brand topics (WP2.6) -----------------------------
+
+/**
+ * BRANDS COUNTED IN EVERY VIDEO THEY COME UP IN (decision E; plan WP2.6). A
+ * brand comes up in a market video when the video's content names it, or a
+ * comment dated in the month does (`brand_mentions`, MF2, written by
+ * scripts/brand-mentions.ts), and it is never counted in its own posts. Counts
+ * are videos, not mentions, each "of" the market's videos that month.
+ *
+ * TWO COUNTS A BRAND (§2.2's print): without the videos only that brand's own
+ * searches found ("organic", by the videos' first-found terms), which is the
+ * headline count, and in all, beside it.
+ *
+ * NEVER A 0 FOR A BRAND NOBODY COUNTED (the lead's default of 26 Sep): a brand
+ * prints its counts only where its precision was measured at the floor and the
+ * mention layer holds a row of it; otherwise "not counted yet"; measured under
+ * the floor, "mostly {another word} · not counted" (lib/brands/precision.ts).
+ *
+ * THE NAME LINE FIRST (heinrich-fidelity must-fix 2): "In September your name
+ * came up in none of your market's 654 videos. The 8 videos that name you are
+ * your own posts." It prints only where every match of the client's name
+ * outside its own posts has been read by hand, and says the count the reading
+ * found; else "not counted yet" (plan WP2.6's done-when).
+ *
+ * THE 90-DAY NOTE IS HOW TO READ'S (S17; 25 Sep rulings): it rides on the
+ * block for Settings › How to read and is never printed under it.
+ */
+
+/** S17's line: How to read's text, never a footnote under the block. */
+export const NINETY_DAY_NOTE = 'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.'
+
+/** One brand in the market this month. */
+export interface BrandTopic {
+  /** `competitors.id` (a rename does not split it). */
+  brandKey: string
+  label: string
+  /** Videos it came up in, in all and without the videos only its own
+   *  searches found; null where it is not counted. */
+  kAny: number | null
+  kOrganic: number | null
+  /** The market's videos this month. */
+  n: number
+  /** The market's videos without those only this brand's searches found; null
+   *  where the page did not read it (it reads first-found terms only for the
+   *  videos that name a brand, and prints the market's n as the base). */
+  nOrganic: number | null
+  /** Measured under the precision floor: "mostly … not counted". */
+  noise: boolean
+  /** Additive: counted, mostly another word, or not counted yet. */
+  count?: BrandCountState
+}
+
+/** Deploy 3's form (§4.2's `BrandsBlock`, with `state` to tell it from the
+ *  one line). */
+export interface BrandsRead {
+  state: 'read'
+  /** The month read ('YYYY-MM-01'). */
+  window: string
+  /** Null: not counted yet (a match of your name nobody has read, or no row). */
+  nameLine: { month: string; n: number; k: number; ownPosts: number } | null
+  topics: BrandTopic[]
+  ninetyDayNote: string
+}
+
+/** What the loader counted for one tracked rival this month. */
+export interface BrandCountIn {
+  brandKey: string
+  label: string
+  /** Does the mention layer hold any row of this brand (any month)? */
+  hasRows: boolean
+  kAny: number
+  kOrganic: number
+}
+
+/** What the loader counted for the client's own name this month. */
+export interface NameCountIn {
+  /** Does the mention layer hold any row of the client's name? */
+  hasRows: boolean
+  /** The market's videos naming the client this month, its own posts out. */
+  outside: readonly string[]
+  /** The client's own posts that name it, dated in the month. */
+  ownPosts: number
+}
+
+const ORDER: Record<BrandCountState, number> = { counted: 0, noise: 1, not_yet: 2 }
+
+export function buildBrandsBlock(input: {
+  clientId: string
+  month: string
+  /** The market's videos this month. */
+  n: number
+  rivals: readonly BrandCountIn[]
+  name: NameCountIn
+  checks?: typeof BRAND_HAND_CHECKS
+  nameReads?: typeof NAME_READS
+}): BrandsRead {
+  const month = monthStartOf(input.month)
+  const topics: BrandTopic[] = input.rivals.map((r) => {
+    const measured = brandCountState(input.clientId, r.label, input.checks)
+    const count: BrandCountState = measured === 'counted' && !r.hasRows ? 'not_yet' : measured
+    return {
+      brandKey: r.brandKey,
+      label: r.label,
+      kAny: count === 'counted' ? r.kAny : null,
+      kOrganic: count === 'counted' ? r.kOrganic : null,
+      n: input.n,
+      nOrganic: null,
+      noise: count === 'noise',
+      count,
+    }
+  })
+  topics.sort((a, b) =>
+    ORDER[a.count ?? 'not_yet'] - ORDER[b.count ?? 'not_yet']
+    || (b.kOrganic ?? -1) - (a.kOrganic ?? -1)
+    || (b.kAny ?? -1) - (a.kAny ?? -1)
+    || a.label.localeCompare(b.label))
+
+  // The name line: every match outside its own posts read by hand.
+  const reads = (input.nameReads ?? NAME_READS)[input.clientId] ?? []
+  const read = new Map(reads.filter((r) => monthStartOf(r.month) === month).map((r) => [r.videoId, r.brand]))
+  const unread = input.name.outside.filter((id) => !read.has(id))
+  const nameLine = input.name.hasRows && unread.length === 0
+    ? { month, n: input.n, k: input.name.outside.filter((id) => read.get(id) === true).length, ownPosts: input.name.ownPosts }
+    : null
+  return { state: 'read', window: month, nameLine, topics, ninetyDayNote: NINETY_DAY_NOTE }
+}
+
+/** The name line's words, as parts: figures apart from words, so each is its
+ *  own node. "In September your name came up in none of your market’s 654
+ *  videos. The 8 videos that name you are your own posts." */
+export function nameLineParts(b: BrandsRead): ({ t: 'text'; s: string } | { t: 'figure'; value: number })[] {
+  const l = b.nameLine
+  const month = longMonth(b.window)
+  if (!l) return [{ t: 'text', s: `Your name in your market in ${month}: not counted yet.` }]
+  const parts: ({ t: 'text'; s: string } | { t: 'figure'; value: number })[] = [{ t: 'text', s: `In ${month} your name came up in ` }]
+  if (l.k === 0) parts.push({ t: 'text', s: 'none' })
+  else parts.push({ t: 'figure', value: l.k })
+  parts.push({ t: 'text', s: ' of your market’s ' }, { t: 'figure', value: l.n }, { t: 'text', s: ' videos.' })
+  if (l.ownPosts > 0) {
+    parts.push({ t: 'text', s: ' The ' }, { t: 'figure', value: l.ownPosts },
+      { t: 'text', s: l.ownPosts === 1 ? ' video that names you is your own post.' : ' videos that name you are your own posts.' })
+  }
+  return parts
+}
+
+/** A topic's words where it prints no count. */
+export function topicNote(t: BrandTopic): string | null {
+  if (t.count === 'counted' || (t.count == null && !t.noise && t.kAny != null)) return null
+  return t.noise ? noiseWords(t.label) : 'not counted yet'
 }

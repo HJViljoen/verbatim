@@ -1,0 +1,79 @@
+import { describe, expect, it } from 'vitest'
+
+import { SEALAND_CLIENT_ID } from '../../config'
+import { SEPTEMBER_BRANDS, emptyBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
+import { buildBrandsBlock, isBrandsRead, nameLineParts, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
+
+// Brands in your market in deploy 3's form (WP2.6): the name line first, then
+// the brands counted in every video they come up in, on staging's brands_v1
+// plan of 26 Sep (lib/test/brands-fixture.ts).
+
+const words = (b: ReturnType<typeof stagingBrandsRead>) =>
+  nameLineParts(b).map((p) => (p.t === 'text' ? p.s : String(p.value))).join('')
+
+describe('buildBrandsBlock', () => {
+  it('counts the measured brands, organic first, over the market’s 654 September videos', () => {
+    const b = stagingBrandsRead()
+    expect(isBrandsRead(b)).toBe(true)
+    expect(b.topics.map((t) => [t.label, t.kOrganic, t.kAny, t.n])).toEqual([
+      ['Patagonia', 26, 45, 654],
+      ['The North Face', 20, 36, 654],
+      ['Cotopaxi', 7, 28, 654],
+      ['Freedom of Movement', null, null, 654],
+      ['Freitag', null, null, 654],
+      ['Old School', null, null, 654],
+      ['Rareform', null, null, 654],
+    ])
+    expect(b.ninetyDayNote).toBe(NINETY_DAY_NOTE)
+  })
+
+  it('never prints a 0 or a count for a brand nobody measured: Freitag’s 6 stays unprinted', () => {
+    const b = stagingBrandsRead()
+    for (const label of ['Freitag', 'Rareform', 'Freedom of Movement', 'Old School']) {
+      const t = b.topics.find((x) => x.label === label)!
+      expect(t, label).toMatchObject({ kAny: null, kOrganic: null, noise: false, count: 'not_yet' })
+      expect(topicNote(t)).toBe('not counted yet')
+    }
+    expect(topicNote(b.topics[0])).toBeNull()
+  })
+
+  it('prints "not counted yet" for every brand while the mention layer holds nothing (staging today)', () => {
+    const b = emptyBrandsRead()
+    expect(b.topics.every((t) => t.kAny == null && t.count === 'not_yet')).toBe(true)
+    expect(b.nameLine).toBeNull()
+    expect(words(b)).toBe('Your name in your market in September: not counted yet.')
+  })
+
+  it('prints the name line first, as none, where every match of your name is your own post (staging: 8)', () => {
+    expect(stagingBrandsRead().nameLine).toEqual({ month: '2026-09-01', n: 654, k: 0, ownPosts: 8 })
+    expect(words(stagingBrandsRead())).toBe('In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.')
+    expect(words(stagingBrandsRead('2026-08-01'))).toBe('In August your name came up in none of your market’s 377 videos.')
+  })
+
+  it('holds the name line at "not counted yet" while a match outside your own posts is unread, and prints the reading once read', () => {
+    const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, rivals: SEPTEMBER_BRANDS }
+    const unread = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 } })
+    expect(unread.nameLine).toBeNull()
+    const reads = { [SEALAND_CLIENT_ID]: [{ videoId: 'v1', brand: false, month: '2026-09-01', on: '2026-10-07', where: 'production' as const }] }
+    const read = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads })
+    expect(read.nameLine).toEqual({ month: '2026-09-01', n: 654, k: 0, ownPosts: 8 })
+    const yes = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: { [SEALAND_CLIENT_ID]: [{ ...reads[SEALAND_CLIENT_ID][0], brand: true }] } })
+    expect(words(yes)).toBe('In September your name came up in 1 of your market’s 654 videos. The 8 videos that name you are your own posts.')
+  })
+
+  it('prints a brand measured under the floor as mostly another word, with no count', () => {
+    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-09-24', where: 'staging' as const, of: 'the bare name', source: 'research' } } }
+    const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })
+    const freitag = b.topics.find((t) => t.label === 'Freitag')!
+    expect(freitag).toMatchObject({ noise: true, kAny: null, count: 'noise' })
+    expect(topicNote(freitag)).toBe('mostly the German word for Friday · not counted')
+    // With only Freitag checked, the others are unmeasured: the brand
+    // measured as noise sorts after any counted brand and before the rest.
+    expect(b.topics.map((t) => t.count)).toEqual(['noise', 'not_yet', 'not_yet', 'not_yet', 'not_yet', 'not_yet', 'not_yet'])
+  })
+
+  it('keeps deploy 2’s line as a separate form', () => {
+    expect(isBrandsRead(brandsBlockFor('2026-10-04T08:30:00.000Z'))).toBe(false)
+    expect(isBrandsRead(null)).toBe(false)
+  })
+})

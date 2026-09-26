@@ -81,6 +81,8 @@ import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
 import { updateInstant, type DeliveredRun } from '../reading/reading-view'
 import { loadPairRows } from '../reading/read'
+import { loadRecheck } from './overview-recheck'
+import { loadBrandsBlock } from './overview-brands'
 import type { ScheduleConfig } from '../pipeline/schedule-due'
 import {
   askIds,
@@ -103,6 +105,7 @@ import {
   THEME_FLOOR,
   type AsksBlock,
   type BrandsBlock,
+  type BrandsRead,
   type ChangeBlock,
   type HeroLead,
   type MarketKinds,
@@ -4292,6 +4295,11 @@ interface MarketReads {
   lead: { registryId: string; provenance: { fromNewSearches: number; of: number } | null } | null
   changeRows: ConfigChange[]
   pairRows: PairRow[]
+  /** WP2.3: the re-check's stored rows and buyers-only counts for the pair. */
+  recheck: Awaited<ReturnType<typeof loadRecheck>>
+  /** WP2.6: the name line and brand topics, or null where the page keeps
+   *  deploy 2's one line (no brand rules, or the market not read). */
+  brands: BrandsRead | null
 }
 
 async function loadMarketReads(input: {
@@ -4311,7 +4319,7 @@ async function loadMarketReads(input: {
   const categoryN = (m: string): number | null =>
     input.denominators.find((d) => monthStartOf(d.month) === m && d.audience === INDUSTRY_AUDIENCE)?.videos ?? null
 
-  const [boardRows, excluded, changeRows, pairRows, segmentRows] = await Promise.all([
+  const [boardRows, excluded, changeRows, pairRows, segmentRows, recheck, brandsRead] = await Promise.all([
     loadBoardThemes(client, clientId, month, prevMonth),
     loadLeadExclusions(client, clientId),
     loadChanges(client, clientId),
@@ -4323,6 +4331,15 @@ async function loadMarketReads(input: {
       return []
     }),
     input.segmentRows,
+    // WP2.3's re-check beside a refused pair (the block decides whether it
+    // prints); fails closed, as "checks pending".
+    loadRecheck(client, clientId, prevMonth, month),
+    // WP2.6's brands, counted in every video they come up in. A read that
+    // fails keeps deploy 2's line, never a 0.
+    loadBrandsBlock(client, clientId, month).catch((error: unknown): null => {
+      console.error(`[overview] brands: ${(error as { message?: string })?.message ?? String(error)}; the one line kept`)
+      return null
+    }),
   ])
   const ids = boardRows.map((r) => r.id)
   const obs = await loadBoardObservations(client, clientId, themedRunId, ids)
@@ -4410,6 +4427,8 @@ async function loadMarketReads(input: {
     lead: leadId ? { registryId: leadId, provenance } : null,
     changeRows,
     pairRows,
+    recheck,
+    brands: brandsRead,
   }
 }
 
@@ -4472,6 +4491,7 @@ function marketFrontPage(reads: MarketReads, input: {
     asAt: input.rm.asAt,
     paused: input.rm.paused,
     runFinish: new Map(input.runs.map((r) => [r.id, updateInstant(r)])),
+    recheck: reads.recheck,
   })
   return {
     market: [...counts.values()].filter((c) => c.month === month || c.month === prevMonth),
@@ -4480,7 +4500,7 @@ function marketFrontPage(reads: MarketReads, input: {
     heroVoices,
     asks: buildAsks(themes, month, reads.segments, askQuotes),
     change,
-    brands: brandsBlockFor(input.rm.asAt, { paused: input.rm.paused }),
+    brands: reads.brands ?? brandsBlockFor(input.rm.asAt, { paused: input.rm.paused }),
   }
 }
 
