@@ -174,6 +174,13 @@ category conversation where the brand is not named. It may claim:
     month, the first no earlier than 1 January 2027, applied by the update
     that runs that day. Communities, a rival rename and the report day are
     not queued: they are held, and the client is told to ask.
+  - **What we changed says what is held and what is checked:** the search set
+    held still until January with what is queued, how videos are checked for
+    relevance, marked as makers' and filed to a brand (and when we last changed
+    each), and when the pages can say what: levels now, the first comparison
+    read the same way with the 6 Dec update, the first direction words late in
+    January, the first quarter comparison in April 2027. Say "when", never
+    "trends" or "movement" before those dates.
 - **Units:** say "comments" for the raw count (18,440), "conversations" for
   everything analysed. Never "voices".
 - **In development (label it exactly that, never present tense):** nothing

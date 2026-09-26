@@ -1,6 +1,10 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
+import { HowWeCheck, PagesCanSay, SearchesHeldStill } from '@/components/settings/record/additions'
+import { loadQueue, QUEUE_COLUMNS, queueLines, type QueueColumn } from '@/lib/settings/queue'
+import { checkMethods } from '@/lib/settings/record-additions'
+import { tenantLocked } from '@/lib/tenant-locks'
 import { changesFromLog } from '@/lib/reading/comparability'
 import { otherRows } from '@/lib/settings/what-we-changed'
 import { loadRecordReadingMonth, loadWhatWeChanged } from '@/lib/settings/what-we-changed-load'
@@ -117,6 +121,20 @@ export default async function SettingsRecordPage() {
   const stats = deliveryStats(delivery, inputs.updates)
   const thisMonth = updatesInMonth(inputs.updates, month)
   const changed = await changedAhead
+  // DEPLOY 5'S THREE SECTIONS (WP3.10). "Searches held still until January"
+  // and the timeline are a locked tenant's: they describe the lock and the
+  // clean months it keeps. Before MF3 the queue reads as not there.
+  const locked = tenantLocked(clientId, 'tracking')
+  const [queue, stored] = locked
+    ? await Promise.all([
+      loadQueue(supabase, clientId).catch((error: unknown) => {
+        console.error(`[settings] tracking queue not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+        return null
+      }),
+      supabase.from('tracking_configs').select(QUEUE_COLUMNS.join(', ')).eq('client_id', clientId).maybeSingle()
+        .then((r) => (r.data ?? null) as Partial<Record<QueueColumn, unknown>> | null),
+    ])
+    : [null, null]
   // EACH CHANGE ONCE: the changes of ours print in the dated list above, so
   // the Phase 1 log below keeps every other row (a schedule, a subject, a
   // discovery strike) under its own title.
@@ -170,8 +188,16 @@ export default async function SettingsRecordPage() {
         {changed ? (
           <>
             <WhatWeChangedLead block={changed.block} />
+            {locked ? (
+              <SearchesHeldStill
+                state={queue?.state === 'available' ? 'available' : 'unavailable'}
+                lines={queue?.state === 'available' ? queueLines(queue.rows, stored) : []}
+              />
+            ) : null}
             <TheRecord view={changed.record} />
+            <HowWeCheck methods={checkMethods(clientId, changed.changeRows)} />
             <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
+            {locked ? <PagesCanSay now={nowIso} /> : null}
           </>
         ) : null}
 

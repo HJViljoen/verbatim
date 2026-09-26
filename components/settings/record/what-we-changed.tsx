@@ -20,8 +20,8 @@ import { RecordSection } from './frame'
 // preview groups it ("What we search", "How we check, mark and file videos")
 // with what each change stops (Heinrich's default of 26 Sep, R-a); and the
 // four rules of decision D with how the page's pair stands on each. "Searches
-// held still until January" and "What the pages can say, and when" join with
-// deploy 5 (WP3.10).
+// held still until January", "How we check, mark and file videos" and "What
+// the pages can say, and when" joined with deploy 5 (WP3.10, ./additions.tsx).
 //
 // THE APPROVED PREVIEW'S LOOK (Heinrich's default, 26 Sep; `SettingsRecord`
 // artboard): each section a tile, the pair at 28px, "Why September is not
