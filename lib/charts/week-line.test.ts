@@ -60,6 +60,26 @@ describe('weekLineLayout', () => {
     expect(L.rows[6]).toMatchObject({ label: 'Looks & style', provisional: true, latest: { level: '12% · 38 of 318', verdict: null } })
   })
 
+  it("prints no verdict at the row's end when the week before the latest has no point, never an older pair's", () => {
+    // The week of 12 Oct's capture missed (HYPOTHETICAL): 19 Oct is the latest
+    // point and its pair has no earlier side; 28 Sep → 5 Oct is not the latest pair.
+    const missed: WeekLineBlock = {
+      ...WEEK_LINE_FIXTURE,
+      reads: WEEK_LINE_FIXTURE.reads?.filter((r) => r.week !== '2026-10-12'),
+      rows: WEEK_LINE_FIXTURE.rows.map((r) => ({
+        ...r,
+        points: r.points.filter((p) => p.week !== '2026-10-12'),
+        pairs: r.pairs.map((p) => (p.prevWeek === '2026-10-12' || p.week === '2026-10-12'
+          ? { ...p, mode: 'refuse' as const, reasons: ['not_kept' as const], verdict: null }
+          : p)),
+      })),
+    }
+    const row = weekLineLayout(missed, COLUMNS).rows[0]
+    expect(row.points.map((p) => p.week)).toEqual(['2026-09-28', '2026-10-05', '2026-10-19'])
+    expect(row.latest).toEqual({ level: '61% · 195 of 318', verdict: null })
+    expect(weekLineTable(missed, COLUMNS).rows[0].verdict).toBeNull()
+  })
+
   it('reads a flat row at the middle, with one tick', () => {
     const one = weekLineLayout(WEEK_LINE_FIXTURE_FIRST, COLUMNS)
     expect(one.rows[0].points).toHaveLength(1)

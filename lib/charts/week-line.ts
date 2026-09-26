@@ -225,7 +225,10 @@ export function weekLineLayout(block: WeekLineBlock, columns: readonly WeekLineC
         ? [{ text: pctText(max), y: yOf(max) }]
         : [{ text: pctText(max), y: R.pad }, { text: pctText(min), y: R.height - R.pad }]
     const latestPoint = shown.length ? shown[shown.length - 1] : null
-    const latestPair = [...row.pairs].reverse().find((p) => at.has(p.week) && at.has(p.prevWeek)) ?? null
+    // The latest pair is the one ending on the latest point shown: when the
+    // week before it has no point (not kept), there is no verdict to print,
+    // never an older pair's beside the latest share.
+    const latestPair = last ? row.pairs.find((p) => p.week === last && at.has(p.prevWeek)) ?? null : null
     const provisional = row.objectKind === 'subject' && row.calibration !== 'ready'
     const label = row.label || weekKindLabel(row.objectId)
     return {
@@ -257,7 +260,11 @@ export function weekLineTable(block: WeekLineBlock, columns: readonly WeekLineCo
     head: weeks.map((w) => shortDate(w)),
     rows: block.rows.map((row) => {
       const byWeek = new Map(row.points.map((p) => [p.week, p]))
-      const latestPair = [...row.pairs].reverse().find((p) => byWeek.has(p.week) && byWeek.has(p.prevWeek) && weeks.includes(p.week)) ?? null
+      // As the rows: the pair ending on the row's latest week shown, or none.
+      const last = [...weeks].reverse().find((w) => byWeek.has(w)) ?? null
+      const latestPair = last
+        ? row.pairs.find((p) => p.week === last && byWeek.has(p.prevWeek) && weeks.includes(p.prevWeek)) ?? null
+        : null
       return {
         key: `${row.objectKind}|${row.objectId}`,
         label: row.label,
