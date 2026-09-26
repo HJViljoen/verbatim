@@ -44,18 +44,36 @@ const say = (what: string, error: unknown): void => {
   console.error(`[overview] brands ${what}: ${(error as { message?: string } | null)?.message ?? String(error)}`)
 }
 
-/** The month's market videos (MF1 `market_month_videos`, paged), or null
- *  where they cannot be read. Your market reads it once for the brands block
- *  and the subjects' maker shares (`loadBrandsBlock`'s `market`). */
-export async function marketMonthIds(client: SupabaseClient, clientId: string, month: string): Promise<string[] | null> {
-  return marketIds(client, clientId, monthStartOf(month))
+/**
+ * The month's market videos (MF1 `market_month_videos`, paged), or null where
+ * they cannot be read. Your market reads it once for the brands block and the
+ * subjects' maker shares (`loadBrandsBlock`'s `market`).
+ *
+ * ON THE MARKET'S OWN AUDIENCES (`audiences`: the category and the brands you
+ * track, `marketAudiences`), the ones the page's pooled denominators count
+ * (the deploy-3 review): `market_month_videos` returns every audience but
+ * your own, a RETIRED rival's filed videos included, so without the filter the
+ * brands' "of N" could differ from the market the rest of the page prints
+ * once a retired rival has a full-lane video (none on staging today: Poler
+ * and Topo Designs, retired on 9 Sep, hold none). MF2's `update_arrivals`
+ * counts in SQL with the same reach and is not filtered here (a migration's
+ * change, after 4 Oct); its counts add to the month's comments either way.
+ */
+export async function marketMonthIds(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  audiences?: readonly string[] | null,
+): Promise<string[] | null> {
+  return marketIds(client, clientId, monthStartOf(month), audiences)
 }
 
-async function marketIds(client: SupabaseClient, clientId: string, month: string): Promise<string[] | null> {
+async function marketIds(client: SupabaseClient, clientId: string, month: string, audiences?: readonly string[] | null): Promise<string[] | null> {
   try {
-    const rows = await selectAll<{ video_id: string }>(() =>
+    const rows = await selectAll<{ video_id: string; audience: string }>(() =>
       client.rpc('market_month_videos', { p_client: clientId, p_month: month }).order('video_id'))
-    return rows.map((r) => String(r.video_id))
+    const keep = audiences ? new Set(audiences) : null
+    return rows.filter((r) => !keep || keep.has(String(r.audience))).map((r) => String(r.video_id))
   } catch (error) {
     if (!missing(error, 'market_month_videos')) say('market_month_videos', error)
     return null

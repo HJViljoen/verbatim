@@ -2220,7 +2220,9 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // `market_month_videos`): the brands block counts over them, and the
   // subjects' maker shares are read among them (the deploy-3 review: §2.2
   // block 6's row tag at a fifth or more, as the Subjects rail prints it).
-  const marketIdsAhead = marketFirst ? marketMonthIds(reading.client, clientId, month).catch(() => null) : null
+  const marketIdsAhead = marketFirst
+    ? marketMonthIds(reading.client, clientId, month, marketAudiences(marketRivalAudiences(rivals))).catch(() => null)
+    : null
   // YOUR MARKET'S OWN READS (market-first WP1.6), started here and taken at
   // the end: they need the month and the themed run and nothing below, so
   // they run beside wave 3 rather than after it.
