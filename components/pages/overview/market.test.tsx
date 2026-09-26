@@ -109,6 +109,11 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Buying & delivery no reading yet')
   })
 
+  it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
+    expect(text).toContain('Price provisional 23 4% 5')
+    expect(text).not.toContain('Price provisional 23 4% ·')
+  })
+
   it('prints no page footnote under the blocks (25 Sep rulings)', () => {
     const data = { ...marketFrontFixture(), notes: [{ kind: 'clustering_unrecorded' as const, text: 'We did not record how themes were grouped for Sep 2026.', months: ['2026-09-01'] }] }
     expect(read(<OverviewPage data={data as never} />)).not.toContain('We did not record how themes were grouped')

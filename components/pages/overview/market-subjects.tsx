@@ -23,6 +23,11 @@ const share = (k: number | null | undefined, n: number | null | undefined): stri
   return l?.kind === 'share' ? l.text : '·'
 }
 
+/** The month before's cell: its share, or its count where it is under the
+ *  floor (plan §2.2's print, "Price … 23 (4%)  5": a measured August under 10
+ *  prints as a count with no share), and a dot only where there is no reading. */
+const prevCell = (k: number | null | undefined, n: number | null | undefined): string => marketLevel(k ?? null, n ?? null)?.text ?? '·'
+
 /**
  * A row's tag: its calibration word, or that it has no reading yet.
  *
@@ -55,8 +60,11 @@ export function marketSubjectsFigures(data: OverviewData): FigureTable {
     out[token(r.id, 'k')] = { value: k, unit: 'videos', label: `videos on ${r.label} in your market in ${month}` }
     if (n != null && marketLevel(k, n)?.kind === 'share') out[token(r.id, 'share')] = { value: Math.round((k / n) * 100), unit: 'pct', label: `${r.label}'s share of your market in ${month}` }
     const pk = r.marketPrev?.k ?? null
-    if (pk != null && prevN != null && marketLevel(pk, prevN)?.kind === 'share') {
-      out[token(r.id, 'prev')] = { value: Math.round((pk / prevN) * 100), unit: 'pct', label: `${r.label}'s share of your market the month before` }
+    const prevLevel = pk != null && prevN != null ? marketLevel(pk, prevN) : null
+    if (prevLevel?.kind === 'share') {
+      out[token(r.id, 'prev')] = { value: Math.round(((pk as number) / (prevN as number)) * 100), unit: 'pct', label: `${r.label}'s share of your market the month before` }
+    } else if (prevLevel?.kind === 'count') {
+      out[token(r.id, 'prev')] = { value: pk as number, unit: 'videos', label: `videos on ${r.label} in your market the month before` }
     }
   }
   return out
@@ -113,7 +121,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
                   <td style={c}>{r.label}{tag ? <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}> · {tag}</span> : null}</td>
                   <td style={num}>{figures ? <span data-copy="figure">{fmtInt(r.market?.k as number)}</span> : null}</td>
                   <td style={num}>{figures ? <span data-copy="figure">{share(r.market?.k, n)}</span> : null}</td>
-                  {prev ? <td style={{ ...num, color: EMAIL.muted }}>{figures ? <span data-copy="figure">{share(r.marketPrev?.k, prev.n)}</span> : null}</td> : null}
+                  {prev ? <td style={{ ...num, color: EMAIL.muted }}>{figures ? <span data-copy="figure">{prevCell(r.marketPrev?.k, prev.n)}</span> : null}</td> : null}
                 </tr>
               )
             })}
@@ -156,7 +164,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
                 ) : under ? <span className={`text-[13px] text-muted-foreground ${PHONE_OWN_LINE}`}>under 10, a count only</span> : <span className={PHONE_HIDDEN} />}
                 <span className={`${SCALE.num} font-semibold`}>{figures ? <span data-copy="figure">{fmtInt(k as number)}</span> : null}</span>
                 <span className={SCALE.num}>{figures ? <span data-copy="figure">{share(k, n)}</span> : null}</span>
-                <span className={SCALE.prev}>{figures && prev ? <span data-copy="figure">{share(r.marketPrev?.k, prev.n)}</span> : null}</span>
+                <span className={SCALE.prev}>{figures && prev ? <span data-copy="figure">{prevCell(r.marketPrev?.k, prev.n)}</span> : null}</span>
               </div>
             )
           })}
