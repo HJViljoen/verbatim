@@ -2,10 +2,11 @@ import { PageGrid } from '@/components/shell/page-grid'
 import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
 
 // Mirrors components/pages/overview/index.tsx (OverviewPage), Your market since
-// deploy 2 (market-first WP1.6): the surface bar with How to read and Export
-// and its one line (no horizon row, no "How sound" band), then the page's own
-// order and spans (`FRONT_COLS`, `ROWS`): the month (its size and clause beside
-// the voices) · the theme board · the kinds and mood · the asks · the subjects
+// deploy 2 (market-first WP1.6): the surface bar with Export alone (the
+// preview's bar; How to read is in Settings) and its one line (no horizon
+// row, no "How sound" band), then the page's own order and spans
+// (`FRONT_COLS`, `ROWS`): the month (its size and clause beside the voices) ·
+// the theme board · the kinds and mood · the asks · the subjects
 // (8) beside the brands' one line (4) · what changed. The grid is
 // `xl:auto-rows-auto` there, so it is here: the tiles are as tall as their
 // bones, which are sized to the blocks. No tile carries a meta bone: a block
@@ -19,7 +20,7 @@ const ROOMY = 'gap-6 px-4 py-6 sm:px-8 sm:py-8'
 
 export default function DashboardLoading() {
   return (
-    <SkeletonSurface nav="overview" pills={2}>
+    <SkeletonSurface nav="overview" pills={1}>
       <PageGrid className="gap-6 xl:auto-rows-auto">
         {/* overview.sentence · the month beside its voices */}
         <SkeletonTile col={12} row={3} className={ROOMY}>

@@ -1,9 +1,7 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
-import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { barContext } from '@/lib/shell/bar'
@@ -193,12 +191,6 @@ export function horizonRange(data: OverviewData): string | null {
   return updates > 0 ? `${fmtInt(updates)} ${updates === 1 ? 'update' : 'updates'} · ${span}` : span
 }
 
-/** The words this page's legend explains. THIRTEEN_WORDS plus the two reader
- *  flags, which is the vocabulary every new reading surface draws from
- *  (lib/calibration.ts) — not a hand-picked subset, so the legend and the page
- *  can never come to disagree about which words are in play. */
-export const OVERVIEW_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
-
 export function OverviewPage({
   data,
   params = {},
@@ -240,13 +232,10 @@ export function OverviewPage({
           // sound is this" band: it left every page on 25 Sep.
           context={barContext(data)}
         >
-          {/* THE TWO CONTROLS THE ARTBOARD PUTS AT THE RIGHT-HAND END, and the
-              two `/dashboard` has never had (`main.bar.howtoread`,
-              `main.bar.export`). Both were wired into the five LEGACY pages and
-              neither into the page that replaced them, because `SurfacePageBar`
-              renders its control slot from `children` and this page passed
-              none. */}
-          <HowToRead items={OVERVIEW_LEGEND} basePath="/dashboard" anchor="overview" />
+          {/* EXPORT ALONE AT THE RIGHT-HAND END, as the approved preview
+              draws Your market's bar (Heinrich's default, 26 Sep). The "How to
+              read this page" pill left the bar; How to read stays one click
+              away in Settings, in its rail. */}
           <ExportMenu />
         </SurfacePageBar>
         {/* THE GRID SIZES TO ITS CONTENT ON THIS PAGE, and that is a fix

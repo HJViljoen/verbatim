@@ -5,10 +5,9 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
-import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OVERVIEW_LEGEND, OverviewPage, TILE_BLOCKS, horizonRange } from './index'
+import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OverviewPage, TILE_BLOCKS, horizonRange } from './index'
 import { overviewPage } from './page'
 import { SidebarTenant } from '@/components/sidebar-tenant-loader'
-import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 import { PAGES } from '@/components/pages/registry'
 import { marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture, refusedFixture } from './fixture'
 
@@ -224,10 +223,12 @@ describe('the page bar, ported', () => {
     expect(horizonRange(overviewFixture())).toBe('3 updates · 1 Sep → 30 Sep')
   })
 
-  it('draws the legend pill and Export on the page', () => {
-    const text = renderText(<OverviewPage data={overviewFixture()} />)
-    expect(text).toContain('How to read this page')
-    expect(text).toContain('Export')
+  it('draws Export alone at the end of the bar, as the preview does: How to read stays in Settings', () => {
+    for (const data of [overviewFixture(), marketFrontFixture()]) {
+      const text = renderText(<OverviewPage data={data} />)
+      expect(text).toContain('Export')
+      expect(text).not.toContain('How to read')
+    }
   })
 
   it('carries the month selector and the one line, and no "How sound is this" band (25 Sep rulings)', () => {
@@ -237,10 +238,6 @@ describe('the page bar, ported', () => {
     expect(markup).toContain('href="/dashboard?month=2026-08"')
     expect(text.toLowerCase()).not.toContain('how sound')
     expect(text).not.toContain('your 3rd monthly reading')
-  })
-
-  it('draws its legend from the word list, not from a hand-picked subset', () => {
-    expect(OVERVIEW_LEGEND).toEqual([...THIRTEEN_WORDS, ...READER_FLAGS])
   })
 })
 
