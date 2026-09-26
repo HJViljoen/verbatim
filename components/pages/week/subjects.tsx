@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { Block } from '@/lib/blocks/types'
+import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -7,6 +7,10 @@ import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { monthPhrase, type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { openLink } from '@/components/blocks/open-link'
+import { surface } from '@/lib/nav'
+import { marketLevel } from '@/lib/pages/overview-market/kinds'
+import { RULE, SCALE, shortMonthName } from '@/components/pages/overview/market'
 
 // WK §2 · This week in your subjects (the mock's §3; OV2 at update length).
 //
@@ -41,13 +45,22 @@ import { CalibrationTag } from '@/components/blocks/calibration-tag'
 // exist on production yet. A block that drew an empty table there would be
 // saying this workspace cares about nothing.
 
+/** The block's title on the market (WP2.7): the preview's This week title. A
+ *  copy stored before WP2.7 keeps the Phase 1 title below, over its own rows. */
+export const MARKET_SUBJECTS_WEEK_TITLE = 'Your market’s subjects'
+const LEGACY_TITLE = 'This week in your subjects'
+
 export const weekSubjects: Block<WeekData> = {
   key: 'week.subjects',
-  title: 'This week in your subjects',
-  question: 'What did this update add to what you told us you care about?',
+  title: MARKET_SUBJECTS_WEEK_TITLE,
+  question: 'What did this update add to your market’s subjects?',
 
   render(data, mode = 'app', ctx) {
     const s = data.subjects
+    // BUILT ON THE MARKET (market-first WP2.7): the preview's table. A copy
+    // stored before WP2.7 carries the client's own side and draws the strip
+    // it was sent with, below.
+    if (s.market) return renderMarket(data, mode, ctx.appUrl)
     const email = mode === 'email'
     const empty = weekSubjects.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/subjects`
@@ -70,7 +83,7 @@ export const weekSubjects: Block<WeekData> = {
 
     return (
       <BlockFrame
-        title={weekSubjects.title}
+        title={LEGACY_TITLE}
         question={weekSubjects.question}
         mode={mode}
         // AN ENDED MONTH IS NOT "SO FAR" (deploy 1 review): on 2 Oct the
@@ -135,6 +148,7 @@ export const weekSubjects: Block<WeekData> = {
   },
 
   figures(data): FigureTable {
+    if (data.subjects.market) return marketFigures(data)
     const out: FigureTable = {}
     for (const r of data.subjects.rows) {
       out[`subject_${r.id}_videos`] = { value: r.monthVideos, unit: 'videos', label: `${r.label} — videos this month` } // em-dash-ok: FigureTable label (a record key, never printed)
@@ -321,4 +335,149 @@ function Added({ row }: { row: SubjectWeekRow }) {
   // computed these words", and no Verdict computed this count. "+14 this
   // update" holds no direction word, so checked it passes.
   return <span>+{fmtInt(row.addedVideos)} this update</span>
+}
+
+// ---- On the market (market-first WP2.7) ------------------------------------------
+//
+// THE PREVIEW'S TABLE (ThisWeek.dc.html, "Your market's subjects"): a row per
+// subject with its name and a bar under it, the market's videos in the month
+// so far, its share of the market, and what this update's own days put in. The
+// header is the title alone and the footer a link alone (25 Sep rulings): the
+// base is in the column head ("Share of 654"), the calibration word is a row
+// tag, and nothing explains itself under the table.
+//
+// COUNTS THAT ADD TO THE MONTH (plan §2.7, "Looks & style: {k} in September,
+// +{j} with this update"): "+j" is how many of the month's videos this update's
+// days carried the subject, a count and never a share of a week, and never a
+// direction.
+
+const MARKET_COLS = 'grid-cols-[minmax(0,1fr)_56px_56px_64px] gap-x-3 sm:gap-x-4'
+
+const token = (id: string, suffix: 'videos' | 'added'): string => `subject_${id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${suffix}`
+
+/** The share cell: a share at the floor, a dot under it (the Videos column
+ *  carries the count). */
+const shareCell = (k: number | null, n: number | null): string => {
+  const l = marketLevel(k, n)
+  return l?.kind === 'share' ? l.text : '·'
+}
+
+const plus = (j: number | null): string => (j == null ? '·' : `+${fmtInt(j)}`)
+
+function marketFigures(data: WeekData): FigureTable {
+  const out: FigureTable = {}
+  const month = longMonth(data.subjects.month)
+  for (const r of data.subjects.rows) {
+    const side = r.market?.monthSoFar
+    if (side?.k == null) continue
+    const word = r.calibration === 'provisional' ? ' (provisional)' : ''
+    out[token(r.id, 'videos')] = { value: side.k, unit: 'videos', label: `videos on ${r.label} in your market in ${month}${word}` }
+    if (r.market?.thisUpdate != null) {
+      out[token(r.id, 'added')] = { value: r.market.thisUpdate, unit: 'videos', label: `${month} videos on ${r.label} this update put in${word}` }
+    }
+  }
+  return out
+}
+
+function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
+  const s = data.subjects
+  const n = s.market?.n ?? null
+  const month = shortMonthName(s.market?.month ?? s.month)
+  const nav = surface('subjects')
+  const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
+  const empty = weekSubjects.emptyState(data)
+  const withheld = s.withheld ?? []
+  const max = Math.max(1, ...s.rows.map((r) => r.market?.monthSoFar.k ?? 0))
+
+  if (empty) {
+    return (
+      <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer}>
+        <BlockEmpty mode={mode}>{empty}</BlockEmpty>
+      </BlockFrame>
+    )
+  }
+
+  if (mode === 'email') {
+    const c = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '5px 10px 5px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
+    const num = { ...c, fontFamily: FONT.mono, textAlign: 'right' as const }
+    const head = { ...c, borderTop: 0, color: EMAIL.muted, fontSize: 11 }
+    return (
+      <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer}>
+        <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ ...head, textAlign: 'left' }}>Subject</th>
+              <th style={{ ...head, textAlign: 'right' }}>Videos {month}</th>
+              <th style={{ ...head, textAlign: 'right' }}><span data-copy="level">Share{n != null ? <span style={{ fontFamily: FONT.mono, fontWeight: 400 }}> of {fmtInt(n)}</span> : null}</span></th>
+              <th style={{ ...head, textAlign: 'right' }}>With this update</th>
+            </tr>
+          </thead>
+          <tbody>
+            {s.rows.map((r) => (
+              <tr key={r.id}>
+                <td style={c}>{r.label}{r.calibration === 'provisional' ? <> <CalibrationTag calibration={r.calibration} mode={mode} /></> : null}</td>
+                <td style={num}><span data-copy="figure">{r.market?.monthSoFar.k != null ? fmtInt(r.market.monthSoFar.k) : '·'}</span></td>
+                <td style={num}><span data-copy="figure">{shareCell(r.market?.monthSoFar.k ?? null, n)}</span></td>
+                <td style={{ ...num, color: EMAIL.ink2 }}><span data-copy="figure">{plus(r.market?.thisUpdate ?? null)}</span></td>
+              </tr>
+            ))}
+            {withheld.map((r) => (
+              <tr key={r.id}>
+                <td style={c} colSpan={4}>{r.label} <CalibrationTag calibration={r.calibration} unread={r.unread} mode={mode} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </BlockFrame>
+    )
+  }
+
+  return (
+    <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer}>
+      <div role="table" className="flex flex-col">
+        <div role="row" className={`grid ${MARKET_COLS} items-end ${RULE.head}`}>
+          <span role="columnheader" className={SCALE.head}>Subject</span>
+          <span role="columnheader" className="flex flex-col items-end text-right leading-[1.35]">
+            <span className="text-[13px] font-medium text-muted-foreground">Videos</span>
+            <span className="font-mono text-[12px] text-muted-foreground">{month}</span>
+          </span>
+          <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right leading-[1.35]">
+            <span className="text-[13px] font-medium text-muted-foreground">Share</span>
+            {n != null ? <span className="whitespace-nowrap font-mono text-[12px] text-muted-foreground">of {fmtInt(n)}</span> : null}
+          </span>
+          <span role="columnheader" className="flex flex-col items-end text-right leading-[1.35]">
+            <span className="whitespace-nowrap text-[13px] font-medium text-muted-foreground">With this</span>
+            <span className="font-mono text-[12px] text-muted-foreground">update</span>
+          </span>
+        </div>
+        {s.rows.map((r) => {
+          const k = r.market?.monthSoFar.k ?? null
+          return (
+            <div key={r.id} role="row" className={`grid ${MARKET_COLS} min-h-14 items-center py-2.5 ${RULE.row}`}>
+              <span role="rowheader" className="flex min-w-0 flex-col gap-1.5">
+                <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                  <span className={`[text-wrap:pretty] ${SCALE.row}`}>{r.label}</span>
+                  {r.calibration === 'provisional' ? <CalibrationTag calibration={r.calibration} className="text-[12px]" /> : null}
+                </span>
+                {k != null ? (
+                  <span aria-hidden className="block h-1 w-full max-w-[224px] rounded-[2px] bg-inner">
+                    <span className="block h-full rounded-[2px] bg-foreground" style={{ width: `${Math.max(1, Math.min(100, (k / max) * 100))}%` }} />
+                  </span>
+                ) : null}
+              </span>
+              <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{k != null ? fmtInt(k) : '·'}</span></span>
+              <span className={SCALE.num}><span data-copy="figure">{shareCell(k, n)}</span></span>
+              <span className={SCALE.prev}><span data-copy="figure">{plus(r.market?.thisUpdate ?? null)}</span></span>
+            </div>
+          )
+        })}
+        {withheld.map((r) => (
+          <div key={r.id} role="row" className={`flex min-h-12 flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2.5 ${RULE.row} last:border-b-0`}>
+            <span role="rowheader" className={SCALE.row}>{r.label}</span>
+            <CalibrationTag calibration={r.calibration} unread={r.unread} className="text-[12px]" />
+          </div>
+        ))}
+      </div>
+    </BlockFrame>
+  )
 }

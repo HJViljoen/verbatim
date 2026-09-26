@@ -23,7 +23,7 @@ import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '..
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { loadChanges, loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
-import { marketAudiences } from '../reading/market'
+import { marketAudiences, pooledDenominators, type MarketCount } from '../reading/market'
 import { pairedVerdict } from '../reading/bands'
 import { pairOnVerdict } from '../reading/comparability'
 import type { PairOn } from '../reading/pairs'
@@ -47,6 +47,8 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId, pickThemedRunId, type ThemedRunRow } from './themed-run'
 import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
 import type { FormatMatrix } from '../reading/formats'
+import type { SideReading } from './overview'
+import { marketSubjectSide } from './overview-market/subjects'
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P,
 // the mock's ThisWeek.dc.html).
@@ -341,6 +343,20 @@ export interface SubjectWeekRow {
    *  words, which are a LEVEL against a level and never a direction. */
   tag: string | null
   verdict: Verdict | null
+  /**
+   * THE MARKET'S SIDE (market-first WP2.7, plan §2.7 and §4.2; decision E):
+   * the subject's videos in the month so far over the category and the
+   * tracked brands, of the market's videos (`monthSoFar`, pooled as the front
+   * page pools it), and the videos this update's own days put into that month
+   * (`thisUpdate`, `window_subject_readings` over the window clipped to the
+   * month, pooled the same way; null where the windowed read cannot answer).
+   * Two counts that add to the month, never a share of a week.
+   *
+   * Set on every row the loader builds since WP2.7; OPTIONAL, so a copy stored
+   * before it (the client's own side, "0 of 0 videos" on Sealand, GR F41)
+   * renders as it was sent.
+   */
+  market?: { monthSoFar: SideReading; thisUpdate: number | null }
 }
 
 export interface WeekSubjectsBlock {
@@ -374,6 +390,12 @@ export interface WeekSubjectsBlock {
    * the score this product does not print. Null where no row carries a tag.
    */
   lead: string | null
+  /**
+   * Set when the block was built on the market (WP2.7): the month and the
+   * market's videos in it, the "of N" the share column is a share of. A block
+   * without it is a copy stored before WP2.7 and renders as it was sent.
+   */
+  market?: { month: string; n: number | null }
   /**
    * "six subjects named 19 Aug" — the mock's §3 footer note, off
    * `subjects.named_at`.
@@ -1050,6 +1072,100 @@ export function typicalContribution(input: {
  * it into "of 6" would count a silence as a comparison that came back "not
  * above".
  */
+/** What `marketSubjectsOf` takes: the month's stored subject rows and this
+ *  update's windowed rows (every audience; it pools), the market's
+ *  denominators, and the loader's answers about each subject. */
+export interface MarketSubjectsInput {
+  /** The confirmed subjects (`status = 'active'` are read; others are left out). */
+  subjects: readonly { id: string; name: string; status: string }[]
+  /** Decision C's state per subject (`subjectCalibration`). */
+  calibrationOf: ReadonlyMap<string, SubjectCalibration>
+  /** Subjects the month was not read for (default M-a), and their words. */
+  unread: ReadonlySet<string>
+  unreadWords: string
+  month: string
+  /** `month_subject_readings` for the month, every audience. */
+  stored: readonly { audience: string; subject_id: string; videos: number }[]
+  /** `window_subject_readings` over the update's days inside the month, every
+   *  audience; null where the windowed read cannot answer. */
+  added: readonly { audience: string; subject_id: string; videos: number }[] | null
+  /** The market by month (`pooledDenominators`). */
+  counts: ReadonlyMap<string, MarketCount>
+  /** The tracked rivals' audience keys (`marketRivalAudiences`). */
+  rivalAudiences: readonly string[]
+}
+
+/**
+ * This week's subjects on the market (market-first WP2.7, plan §2.7: "Looks &
+ * style: {k} in September, +{j} with this update").
+ *
+ * EVERY CONFIRMED SUBJECT THAT CAN PRINT A FIGURE IS A ROW (decision C): a
+ * ready subject as read, a provisional one with its market figure marked
+ * "provisional" and no verdict. A subject being re-described, and one the
+ * month was not read for, is named with its words and no figure (`withheld`).
+ * No "you" side: the client's own nine videos a month cannot carry a subject,
+ * and on Sealand they printed "0 of 0 videos" on seven rows (GR F41).
+ *
+ * POOLED AS THE FRONT PAGE POOLS (decision E, `marketSubjectSide`): the
+ * category plus the tracked brands, over the market's videos in the month. The
+ * update's own count is pooled over the same audiences, so the two numbers on
+ * a row are of one market. Ranked by the market's videos, largest first.
+ *
+ * PURE: the loader reads, this decides.
+ */
+export function marketSubjectsOf(input: MarketSubjectsInput): Pick<WeekSubjectsBlock, 'rows' | 'withheld' | 'market'> {
+  const month = monthStartOf(input.month)
+  const audiences = new Set(marketAudiences(input.rivalAudiences))
+  const stored = input.stored.map((r) => ({ month, audience: r.audience, subject_id: r.subject_id, videos: r.videos }))
+  const active = input.subjects.filter((s) => s.status === 'active')
+  const withheldOf = (id: string): boolean => input.calibrationOf.get(id) === 'failed' || input.unread.has(id)
+  const rows: SubjectWeekRow[] = active
+    .filter((s) => !withheldOf(s.id))
+    .map((s) => {
+      // READ, SO ABSENCE IS ZERO: the loader's read-in test has already put
+      // every subject the month was not read for among the withheld.
+      const side = marketSubjectSide(stored, input.counts, s.id, month, input.rivalAudiences, { read: true })
+      const seen = new Set<string>()
+      let thisUpdate: number | null = input.added ? 0 : null
+      for (const r of input.added ?? []) {
+        if (r.subject_id !== s.id || !audiences.has(r.audience) || seen.has(r.audience)) continue
+        seen.add(r.audience)
+        thisUpdate = (thisUpdate ?? 0) + (Number.isFinite(r.videos) ? r.videos : 0)
+      }
+      const calibration: SubjectCalibration = input.calibrationOf.get(s.id) === 'ready' ? 'ready' : 'provisional'
+      return {
+        id: s.id,
+        label: s.name,
+        calibration,
+        // THE LEGACY FIELDS CARRY THE MARKET'S NUMBERS, so a reader of the
+        // shape that predates WP2.7 (a figure table, a slide) reads the same
+        // counts the row prints, never the client's.
+        monthVideos: side.k ?? 0,
+        monthOf: side.n ?? 0,
+        addedVideos: thisUpdate,
+        typical: null,
+        tag: null,
+        verdict: null,
+        market: {
+          monthSoFar: { k: side.k, n: side.n, pct: side.pct, verdict: null, observed: side.k != null },
+          thisUpdate,
+        },
+      }
+    })
+    .sort((a, b) => (b.market?.monthSoFar.k ?? -1) - (a.market?.monthSoFar.k ?? -1) || a.label.localeCompare(b.label))
+  const withheld = active
+    .filter((s) => withheldOf(s.id))
+    .map((s) => {
+      const calibration = input.calibrationOf.get(s.id) ?? 'provisional'
+      // A FAILED SUBJECT SAYS "being re-described" whether or not the month
+      // was read for it; one the month missed says when it will be.
+      return calibration !== 'failed' && input.unread.has(s.id)
+        ? { id: s.id, label: s.name, calibration, unread: input.unreadWords }
+        : { id: s.id, label: s.name, calibration }
+    })
+  return { rows, withheld, market: { month, n: input.counts.get(month)?.videos ?? null } }
+}
+
 export function subjectLead(rows: readonly SubjectWeekRow[], _month: string, named: number = rows.length): string | null {
   const tagged = rows.filter((r) => r.tag != null)
   if (tagged.length === 0) return null
@@ -1354,11 +1470,11 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     }),
     // ── §2 · this week in your subjects ──────────────────────────────────
     buildSubjects({
-      reading, clientId, subjects, month, window, audiences,
-      // The CLIENT audience's own slice of this update, clipped to the month —
-      // the denominator the subject rows are of, and the one half of
-      // `typicalContribution` that is not a stored month row.
-      clientUpdateVideos: contributionRead?.find((d) => d.audience === CLIENT_AUDIENCE)?.videos ?? null,
+      reading, clientId, subjects, month, window,
+      // The market's denominators (decision E), off the month rows this page
+      // already read: no new read.
+      denominators,
+      rivalAudiences: marketRivalAudiences(rivals),
       readIn: {
         writtenAt: monthsWrittenAt(denominators, new Set(marketAudiences(marketRivalAudiences(rivals)))).get(month) ?? null,
         unreadWords: unreadWords({ month, filling: monthStatus === 'filling', nextUpdate: clock.nextUpdate }),
@@ -1720,11 +1836,11 @@ async function buildSubjects(input: {
   subjects: Subject[] | null
   month: string
   window: WeekWindow | null
-  audiences: string[]
-  /** This update's CLIENT-audience videos, clipped to the month — the other
-   *  half of `typicalContribution`, and null where the windowed read cannot
-   *  answer. */
-  clientUpdateVideos: number | null
+  /** Every stored month row the page read (all audiences), for the market's
+   *  denominators (decision E). */
+  denominators: readonly { month: string; audience: string; videos: number; comments: number }[]
+  /** The tracked rivals' audience keys (`marketRivalAudiences`). */
+  rivalAudiences: readonly string[]
   /** When the month's market rows were last written (`monthsWrittenAt`), and
    *  the words a subject the month was not read for prints (`unreadWords`). */
   readIn: { writtenAt: number | null; unreadWords: string }
@@ -1737,8 +1853,12 @@ async function buildSubjects(input: {
   const stored = await readSubjectMonths(reading, clientId, month)
   if (stored == null) return nothing
 
-  const added = window ? await readSubjectWindow(reading, clientId, window) : null
-  const denominator = await readClientMonthVideos(reading, clientId, month)
+  // THIS UPDATE'S DAYS INSIDE THE MONTH (WP2.7): the window clipped to the
+  // month, so "+j with this update" is a count that adds to the month the row
+  // is of, the same clip the contribution line uses. A window wholly before
+  // the month (none today) contributes nothing to it.
+  const clipped = window && window.to > month ? { from: window.from < month ? month : window.from, to: window.to } : null
+  const added = clipped ? await readSubjectWindow(reading, clientId, clipped) : window ? [] : null
   // WAS THE SUBJECT READ IN THE MONTH AT ALL? (WP1.1 review, finding 1, on
   // This week: default M-a.) One named after the month's last update has no
   // row, and its 0 there is no reading: it says "no reading yet", as Your
@@ -1753,55 +1873,33 @@ async function buildSubjects(input: {
     }) === 'unread')
     .map((s) => s.id))
 
-  // DECISION C (WP1.1): these rows are your own side of each subject, which
-  // only a READY subject shows; the others are named, with their word. A
-  // subject the month was not read for is named with "no reading yet" and
-  // no figure (default M-a); a failed one stays "being re-described".
+  // DECISION C (WP1.1) ON THE MARKET (WP2.7): a ready subject prints as read,
+  // a provisional one prints its market figure marked "provisional", and a
+  // failed one is named "being re-described" with no figure.
   const calibrationOf = new Map(subjects.map((s) => [s.id, subjectCalibration(s)]))
-  const unreadOf = (id: string) => calibrationOf.get(id) !== 'failed' && unread.has(id)
-  const withheld = subjects
-    .filter((s) => s.status === 'active' && (calibrationOf.get(s.id) !== 'ready' || unreadOf(s.id)))
-    .map((s) => ({
-      id: s.id,
-      label: s.name,
-      calibration: calibrationOf.get(s.id)!,
-      ...(unreadOf(s.id) ? { unread: input.readIn.unreadWords } : {}),
-    }))
-  const rowsOut: SubjectWeekRow[] = subjects
-    .filter((s) => s.status === 'active' && calibrationOf.get(s.id) === 'ready' && !unreadOf(s.id))
-    .map((s) => {
-      const held = stored.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE)
-      const monthVideos = held.reduce((t, r) => t + (r.videos ?? 0), 0)
-      const addedVideos = added ? added.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE).reduce((t, r) => t + (r.videos ?? 0), 0) : null
-      const typical = typicalContribution({
-        monthVideos,
-        monthOf: denominator,
-        updateVideos: input.clientUpdateVideos,
-      })
-      return {
-        id: s.id,
-        label: s.name,
-        calibration: 'ready' as const,
-        monthVideos,
-        monthOf: denominator,
-        addedVideos,
-        typical,
-        tag: typicalTag(addedVideos, typical),
-        verdict: null,
-      }
-    })
-    .sort((a, b) => b.monthVideos - a.monthVideos)
+  const market = marketSubjectsOf({
+    subjects,
+    calibrationOf,
+    unread,
+    unreadWords: input.readIn.unreadWords,
+    month,
+    stored,
+    added,
+    counts: pooledDenominators(input.denominators, input.rivalAudiences),
+    rivalAudiences: input.rivalAudiences,
+  })
 
   const active = subjects.filter((s) => s.status === 'active')
   return {
-    rows: rowsOut,
-    withheld,
-    unread: rowsOut.length > 0 || withheld.length > 0 ? null : SUBJECTS_UNREAD,
+    ...market,
+    unread: market.rows.length > 0 || (market.withheld?.length ?? 0) > 0 ? null : SUBJECTS_UNREAD,
     month,
-    lead: subjectLead(rowsOut, month, rowsOut.length + withheld.length),
+    // The client-side lead ("two of your three subjects ran above typical")
+    // is not a market reading; the market's rows carry their own counts.
+    lead: null,
     // The rows are the ACTIVE subjects — a proposed subject measures nothing
-    // (`loadActiveSubjects`' own filter) — so the count in the footer is a
-    // count of the rows above it and not of the table.
+    // (`loadActiveSubjects`' own filter). Kept as data; the market block's
+    // footer holds links only (25 Sep rulings).
     namedLine: subjectsNamedLine(active.map((s) => s.named_at)),
   }
 }
@@ -2660,7 +2758,7 @@ async function readSubjectMonths(
 async function readSubjectWindow(
   reading: ReadingHandle,
   clientId: string,
-  window: WeekWindow,
+  window: { from: string; to: string },
 ): Promise<{ audience: string; subject_id: string; videos: number }[] | null> {
   try {
     return await selectAll<{ audience: string; subject_id: string; videos: number }>(() =>
@@ -2670,19 +2768,6 @@ async function readSubjectWindow(
     )
   } catch (error) {
     if (isMissingSubjects(error) || isMissingMonthlyReading(error)) return null
-    throw error
-  }
-}
-
-async function readClientMonthVideos(reading: ReadingHandle, clientId: string, month: string): Promise<number> {
-  try {
-    const held = await selectAll<{ videos: number }>(() =>
-      reading.client.from('month_denominators').select('videos')
-        .eq('client_id', clientId).eq('month', month).eq('audience', CLIENT_AUDIENCE),
-    )
-    return held.reduce((t, r) => t + (r.videos ?? 0), 0)
-  } catch (error) {
-    if (isMissingMonthTable(error)) return 0
     throw error
   }
 }
