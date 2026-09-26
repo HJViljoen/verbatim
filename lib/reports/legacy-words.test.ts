@@ -59,3 +59,23 @@ describe('withCurrentWords', () => {
     expect(cur.translation).toBe(old.translation)
   })
 })
+
+// DECISION C (WP1.1): a stored two-state calibration reads as provisional.
+describe('withCurrentWords, on a stored calibration', () => {
+  it('reads a row stored with "calibrating" as provisional', () => {
+    const stored = { list: { rows: [{ id: 's1', calibration: 'calibrating', note: 'provisional' }, { id: 's2', calibration: 'ready' }] } }
+    const out = withCurrentWords(stored)
+    expect(out.list.rows[0].calibration).toBe('provisional')
+    expect(out.list.rows[1].calibration).toBe('ready')
+  })
+
+  it('leaves a row with no field as it was sent, and the same object where nothing matched', () => {
+    const stored = { rows: [{ id: 's1', label: 'Durability' }] }
+    expect(withCurrentWords(stored)).toBe(stored)
+  })
+
+  it('matches the key and the whole value only', () => {
+    const stored = { note: 'calibrating', calibration: 'calibrating the judge' }
+    expect(withCurrentWords(stored)).toBe(stored)
+  })
+})
