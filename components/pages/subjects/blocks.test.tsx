@@ -599,17 +599,21 @@ describe('SU2 · the kind mix', () => {
   // ON A PHONE EACH KIND STACKS (deploy 2 integration): the column heads are
   // not drawn below `sm`, so every cell names its audience, and a share its
   // base, for the stylesheet to print beside it. Email is untouched.
-  it('names each cell’s audience, and a share’s base, for the phone layout', () => {
+  it('names each cell’s audience, and a share’s base, where its own box is narrow (a container query, not the window)', () => {
     const data = subjectsFixture()
     const markup = render(subjectsKinds.render(data, 'app', ctx))
     const category = data.selected!.sides.find((s) => s.kind === 'category')!
-    expect(markup).toContain('max-sm:before:content-[attr(data-label)]')
+    // Stacked where the table's box is under 520px: at 1024 and 768 the pane
+    // was 464px and the 506px table scrolled inside it (deploy 2 review).
+    expect(markup).toContain('<div class="@container min-w-0 overflow-x-auto">')
+    expect(markup).toContain('@max-[520px]:before:content-[attr(data-label)]')
     expect(markup).toContain('data-label="Category"')
     expect(markup).toContain(`data-base="of ${fmtInt(category.n!)} videos"`)
-    expect(markup).toContain('<thead class="max-sm:hidden">')
+    expect(markup).toContain('<thead class="@max-[520px]:hidden">')
+    expect(markup).not.toContain('max-sm:')
     const email = render(subjectsKinds.render(data, 'email', ctx))
     expect(email).not.toContain('data-label=')
-    expect(email).not.toContain('max-sm:')
+    expect(email).not.toContain('@max-[520px]:')
   })
 
   it('reads the kinds in the client’s words, never the pipeline’s enum', () => {

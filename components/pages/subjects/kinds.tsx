@@ -58,8 +58,10 @@ const columnHead = (side: SubjectSide): string =>
  *
  * ON A PHONE EACH KIND IS A ROW OF ITS OWN (deploy 2 integration). Five
  * audiences' columns are about 507px of table in a 310px tile at 390px, so
- * the reader scrolled sideways to find the category. Below `sm` the same
- * markup stacks: the kind on its own line, then each audience's cell with the
+ * the reader scrolled sideways to find the category. Where the table's own
+ * box is under 520px (a container query: at 1024 and 768 the pane beside the
+ * rail is 464px, and the table's 506px scrolled inside it, deploy 2 review;
+ * it was the window's `sm`) the same markup stacks: the kind on its own line, then each audience's cell with the
  * audience named before it (`data-label`) and, where the cell is a share, its
  * base after it (`data-base`, "of 625 videos"), since the column heads that
  * carry both are not drawn there. CSS only: one tree, so print, email and
@@ -82,9 +84,9 @@ function KindTable({ sides, mode }: { sides: SubjectSide[]; mode: RenderMode }) 
     : undefined
 
   return (
-    <div className={email ? undefined : 'min-w-0 overflow-x-auto'}>
-      <table className={email ? undefined : 'w-full border-collapse max-sm:block'} style={email ? { width: '100%', borderCollapse: 'collapse' } : undefined}>
-        <thead className={email ? undefined : 'max-sm:hidden'}>
+    <div className={email ? undefined : '@container min-w-0 overflow-x-auto'}>
+      <table className={email ? undefined : 'w-full border-collapse @max-[520px]:block'} style={email ? { width: '100%', borderCollapse: 'collapse' } : undefined}>
+        <thead className={email ? undefined : '@max-[520px]:hidden'}>
           <tr>
             <th aria-label="Kind" style={email ? { ...th, textAlign: 'left', padding: '0 0 6px 0' } : undefined} className={email ? undefined : 'pb-1.5'} />
             {sides.map((s) => (
@@ -108,12 +110,12 @@ function KindTable({ sides, mode }: { sides: SubjectSide[]; mode: RenderMode }) 
             ))}
           </tr>
         </thead>
-        <tbody className={email ? undefined : 'max-sm:block'}>
+        <tbody className={email ? undefined : '@max-[520px]:block'}>
           {kinds.map((kind) => (
-            <tr key={kind} className={email ? undefined : 'border-t border-border/70 max-sm:flex max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-0.5 max-sm:py-1.5'}>
+            <tr key={kind} className={email ? undefined : 'border-t border-border/70 @max-[520px]:flex @max-[520px]:flex-wrap @max-[520px]:gap-x-3 @max-[520px]:gap-y-0.5 @max-[520px]:py-1.5'}>
               <th
                 scope="row"
-                className={email ? undefined : 'py-1.5 pr-2 text-left text-[12.5px] font-normal text-foreground max-sm:w-full max-sm:p-0'}
+                className={email ? undefined : 'py-1.5 pr-2 text-left text-[12.5px] font-normal text-foreground @max-[520px]:w-full @max-[520px]:p-0'}
                 style={email ? { ...td, fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, textAlign: 'left', padding: '5px 8px 5px 0', whiteSpace: 'normal' } : undefined}
               >
                 {labelOf.get(kind) ?? kind}
@@ -126,7 +128,7 @@ function KindTable({ sides, mode }: { sides: SubjectSide[]; mode: RenderMode }) 
                     data-copy={cell?.kind === 'count' ? 'level' : cell ? 'figure' : undefined}
                     data-label={email ? undefined : columnHead(s)}
                     data-base={email || cell?.kind !== 'share' ? undefined : `of ${fmtInt(s.n ?? 0)} videos`}
-                    className={email ? undefined : `whitespace-nowrap py-1.5 pl-3 text-right font-mono text-[12px] tabular-nums ${s.kind === 'you' ? 'text-foreground' : 'text-secondary-foreground'} max-sm:p-0 max-sm:text-left max-sm:before:mr-1 max-sm:before:font-sans max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)] max-sm:after:ml-1 max-sm:after:text-muted-foreground max-sm:after:content-[attr(data-base)]`}
+                    className={email ? undefined : `whitespace-nowrap py-1.5 pl-3 text-right font-mono text-[12px] tabular-nums ${s.kind === 'you' ? 'text-foreground' : 'text-secondary-foreground'} @max-[520px]:p-0 @max-[520px]:text-left @max-[520px]:before:mr-1 @max-[520px]:before:font-sans @max-[520px]:before:text-muted-foreground @max-[520px]:before:content-[attr(data-label)] @max-[520px]:after:ml-1 @max-[520px]:after:text-muted-foreground @max-[520px]:after:content-[attr(data-base)]`}
                     style={td}
                   >
                     {cell?.text ?? '—'}
