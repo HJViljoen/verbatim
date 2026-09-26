@@ -5,6 +5,7 @@ import {
   COMPARE_REFUSE_SHARE,
   DEPTH_RATIO_MIN,
   VIEWS_BY_SURFACE,
+  isSearchSurface,
   modeForShare,
   nextComparablePair,
   pairOnVerdict,
@@ -15,6 +16,7 @@ import {
   type PairComparability,
   type PairRow,
 } from '../../reading/comparability'
+import { monthStartOf, nextMonth } from '../../reading/month-key'
 import type { FigureTable, Verdict } from '../../reading/verdicts'
 
 // "What changed, and what is ours" (market-first WP1.6, plan §2.2 block 10),
@@ -77,6 +79,15 @@ export interface ChangeBlock {
   readWith?: string | null
   /** The tenant's updates are paused: no update is promised. */
   paused?: boolean
+  /** The update the page is read as at (the bar's "as at"), which the month
+   *  strip marks where it falls in a month it draws. Additive: a block stored
+   *  before it draws no mark. */
+  asAt?: string | null
+  /** The days we changed what we search (`isSearchSurface`: terms, platforms,
+   *  communities) inside the two months the block reads, oldest first, one
+   *  instant a day: the strip's marks under those months (the preview's "our
+   *  search changes, 9, 13 and 17 Sep"). Additive. */
+  searchChanges?: string[]
 }
 
 /**
@@ -112,7 +123,55 @@ export function buildChangeBlock(input: {
     checks: [],
     readWith: readRun ? input.runFinish.get(readRun) ?? null : null,
     paused: input.paused,
+    asAt: input.asAt,
+    searchChanges: searchChangeDays(input.changes, input.prevMonth, input.month),
   }
+}
+
+/**
+ * One instant a day on which we changed what we search, from the first day of
+ * `from` to the end of `to`, oldest first (the first change of each UTC day).
+ * A change of ours to how we check or file videos is not a search change and
+ * is not marked: the strip's key says "our search changes".
+ */
+export function searchChangeDays(changes: readonly OurChange[], from: string, to: string): string[] {
+  const lo = Date.parse(`${monthStartOf(from)}T00:00:00.000Z`)
+  const hi = Date.parse(`${nextMonth(to)}T00:00:00.000Z`)
+  const byDay = new Map<string, { at: string; ms: number }>()
+  for (const c of changes) {
+    if (!isSearchSurface(c.surface)) continue
+    const ms = Date.parse(c.changedAt)
+    if (Number.isNaN(ms) || ms < lo || ms >= hi) continue
+    const day = new Date(ms).toISOString().slice(0, 10)
+    const had = byDay.get(day)
+    if (!had || ms < had.ms) byDay.set(day, { at: c.changedAt, ms })
+  }
+  return [...byDay.values()].sort((a, b) => a.ms - b.ms).map((d) => d.at)
+}
+
+/**
+ * The strip's key, "our search changes, 9, 13 and 17 Sep": each month named
+ * once, after its last day ("28 Aug and 9 Sep"). Null where there is none.
+ */
+export function searchChangesLine(days: readonly string[]): string | null {
+  if (days.length === 0) return null
+  const dates = days.map((d) => shortDate(d).split(' ') as [string, string])
+  const labels = dates.map(([day, month], i) => (dates[i + 1]?.[1] === month ? day : `${day} ${month}`))
+  const list = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+  return `our search ${days.length === 1 ? 'change' : 'changes'}, ${list}`
+}
+
+/**
+ * Where an instant sits in a month's cell, as a share of its width: the
+ * middle of its UTC day, so the preview's 9 Sep mark stands at 8.5 of
+ * September's 30. Null where the instant is in another month.
+ */
+export function placeInMonth(iso: string, month: string): number | null {
+  const ms = Date.parse(iso)
+  if (Number.isNaN(ms) || monthStartOf(iso) !== monthStartOf(month)) return null
+  const d = new Date(ms)
+  const days = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+  return (d.getUTCDate() - 0.5) / days
 }
 
 export const CHANGE_NEW = 'change_new_search_videos'

@@ -8,8 +8,12 @@ import {
   CHANGE_OF,
   changeLead,
   compareRules,
+  buildChangeBlock,
   nextPairLine,
   nextPairParts,
+  placeInMonth,
+  searchChangeDays,
+  searchChangesLine,
   whyCells,
   whyNotCompared,
   type ChangeBlock,
@@ -187,5 +191,56 @@ describe('Settings › What we changed: the three cells behind the refusal (the 
     const parts = nextPairParts(block())
     expect(parts?.pair).toBe('October against November, from the 6 Dec update')
     expect(`${parts?.lead}${parts?.pair}${parts?.tail}`).toBe(nextPairLine(block()))
+  })
+})
+
+describe('the month strip: our search changes and the "as at" mark (the approved preview)', () => {
+  // Sealand's August and September on staging's log (read 26 Sep, first row
+  // of each surface a day): the 17 Aug own accounts; on 9 Sep a rival swap at
+  // 16:24:15, the re-filing at 18:10, the term swap at 18:17:56 and an account
+  // at 18:21:36; the 13 Sep terms; the 17 Sep script's terms, rival and
+  // accounts at 16:02:56.
+  const FULL = changesFromLog([
+    row({ id: 'own-0817', changed_at: '2026-08-17T07:05:43.716Z', surface: 'handles' }),
+    row({ id: 'rivals-0909', changed_at: '2026-09-09T16:24:15.000Z', surface: 'rivals' }),
+    row({ id: 'retag-0909', changed_at: '2026-09-09T18:10:00.000Z', surface: 'entity_retag' }),
+    row({ id: 'terms-0909', changed_at: '2026-09-09T18:17:56.893Z', surface: 'terms', field: 'industry_keywords' }),
+    row({ id: 'handles-0909', changed_at: '2026-09-09T18:21:36.570Z', surface: 'handles' }),
+    ...LOG,
+    row({ id: 'rivals-0917', changed_at: '2026-09-17T16:02:56.000Z', surface: 'rivals' }),
+  ])
+
+  it('marks the days we changed what we search in the two months read, once a day: 9, 13 and 17 Sep', () => {
+    const days = searchChangeDays(FULL, '2026-08-01', '2026-09-01')
+    expect(days).toEqual(['2026-09-09T18:17:56.893Z', '2026-09-13T10:00:58.000Z', '2026-09-17T16:02:56.000Z'])
+    // Rivals, accounts and a re-filing are changes of ours, not searches.
+    expect(searchChangeDays(FULL, '2026-08-01', '2026-08-01')).toEqual([])
+    // Nothing outside the pair: an October change is not September's.
+    const october = changesFromLog([row({ id: 'terms-1003', changed_at: '2026-10-03T08:00:00.000Z', surface: 'terms' })])
+    expect(searchChangeDays(october, '2026-08-01', '2026-09-01')).toEqual([])
+  })
+
+  it('keys them as the preview does, each month named once', () => {
+    expect(searchChangesLine(searchChangeDays(FULL, '2026-08-01', '2026-09-01'))).toBe('our search changes, 9, 13 and 17 Sep')
+    expect(searchChangesLine(['2026-08-17T07:05:43.716Z', '2026-09-09T18:17:56.893Z'])).toBe('our search changes, 17 Aug and 9 Sep')
+    expect(searchChangesLine(['2026-09-13T10:00:58.000Z'])).toBe('our search change, 13 Sep')
+    expect(searchChangesLine([])).toBeNull()
+  })
+
+  it('places a day at its middle in its month, as the preview draws 9 Sep and the 24 Sep "as at"', () => {
+    expect(placeInMonth('2026-09-09T18:17:56.893Z', '2026-09-01')).toBeCloseTo(8.5 / 30)
+    expect(placeInMonth('2026-09-24T18:00:00.000Z', '2026-09-01')).toBeCloseTo(23.5 / 30)
+    expect(placeInMonth('2026-10-04T06:00:00.000Z', '2026-10-01')).toBeCloseTo(3.5 / 31)
+    expect(placeInMonth('2026-10-04T06:00:00.000Z', '2026-09-01')).toBeNull()
+  })
+
+  it('carries both on the block the page and Settings build', () => {
+    const b = buildChangeBlock({
+      prevMonth: '2026-08-01', month: '2026-09-01', hasPrev: true, pair: pair('ended'), changes: FULL, pairRows: [ROW],
+      nextUpdateAfter: scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' }),
+      asAt: '2026-09-27T08:30:00.000Z', paused: false, runFinish: new Map(),
+    })
+    expect(b.asAt).toBe('2026-09-27T08:30:00.000Z')
+    expect(b.searchChanges).toEqual(['2026-09-09T18:17:56.893Z', '2026-09-13T10:00:58.000Z', '2026-09-17T16:02:56.000Z'])
   })
 })
