@@ -70,6 +70,27 @@ describe('the hero lead (plan §4.2 heroLead)', () => {
     expect(lead.kind === 'themes' && lead.lead?.label).toBe('Admiration for upcycled bag creativity')
   })
 
+  it('never leads with a kind whose evidence is counted, not quoted: Össur’s demographic theme leads nothing (staging, September)', () => {
+    // Staging's Össur September, no maker rule: its biggest theme is a
+    // demographic signal, whose evidence is redacted (a count, never a quote).
+    const ossur = (id: string, label: string, k: number, kind: string): MarketTheme => ({
+      registryId: id, label, labelStripped: false, kind, k, n: 338, prev: { month: AUGUST, k: 0, n: 537 },
+      makerShare: null, noiseShare: null, identityNewThisRun: false, flags: [], provenance: null,
+    })
+    const b = buildThemeBoard([
+      ossur('o-identities', 'Audience identities and amputation types', 44, 'demographic_signal'),
+      ossur('o-resilience', 'Admiration for personal resilience', 34, 'praise'),
+      ossur('o-function', 'Questions about prosthetic function', 28, 'question'),
+    ], 338, SEPTEMBER, 'no_rule', { month: AUGUST, n: 537 })
+    const lead = heroLead(b, [], new Set())
+    // Still named first among the biggest; the voices come from the next.
+    expect(lead.kind === 'themes' && lead.top[0].registryId).toBe('o-identities')
+    expect(lead.kind === 'themes' && lead.lead?.registryId).toBe('o-resilience')
+    // On a measured board too.
+    const measured = septemberThemes().map((t) => (t.registryId === 'th-airline' ? { ...t, kind: 'demographic_signal' } : t))
+    expect(heroLead(board(measured), [], new Set())).toMatchObject({ lead: { registryId: 'th-shipping' } })
+  })
+
   it('with no readable theme leads with a READY subject, and never a provisional or failed one', () => {
     const empty = board([])
     expect(heroLead(empty, SUBJECTS, new Set())).toEqual({ kind: 'subject', subjectId: 'looks', label: 'Looks & style', k: 104, n: 626 })

@@ -17,9 +17,11 @@ import {
 // STRICTEST RULE ON THE PAGE. The largest board row whose maker share is
 // MEASURED at a quarter or less, whose label names no brand its quotes do not,
 // whose identity was not minted by this run, and which Heinrich has not
-// excluded (`front_page_overrides`). A lead or voice over a quarter makers is
-// a stop condition (plan §7.11). A tenant with no maker rule (Össur) has no
-// maker restriction, and the words say "Its biggest conversations".
+// excluded (`front_page_overrides`), and whose kind is ever quoted (a
+// demographic signal is counted, never quoted, so it could print no voice).
+// A lead or voice over a quarter makers is a stop condition (plan §7.11). A
+// tenant with no maker rule (Össur) has no maker restriction, and the words
+// say "Its biggest conversations".
 //
 // ONE DENOMINATOR PER CLAUSE. The size sentence names the market's 655; the
 // themes clause names the category's 626, where themes are grouped (decision
@@ -66,9 +68,20 @@ export function heroLead(
   return { kind: 'size' }
 }
 
+/**
+ * Kinds whose evidence is counted and never quoted: a demographic signal is
+ * verified, then counted (Pass A, 2026-08-22; `insight_evidence.redacted`),
+ * so a theme of that kind can never supply a voice. It stays on the board and
+ * in the three the hero names; it never leads (WP1.6 review: Össur's biggest
+ * September theme on staging, "Audience identities and amputation types", led
+ * a page that could print no voice under it).
+ */
+export const UNQUOTED_KINDS: ReadonlySet<string> = new Set(['demographic_signal'])
+
 /** May this board row supply the page's voices? */
 export function mayLead(t: MarketTheme, segments: ThemeBoard['segments'], excluded: ReadonlySet<string>): boolean {
   if (t.labelStripped || t.identityNewThisRun || excluded.has(t.registryId)) return false
+  if (t.kind != null && UNQUOTED_KINDS.has(t.kind)) return false
   if (segments === 'no_rule') return true
   if (segments !== 'measured') return false
   const s = t.makerShare
