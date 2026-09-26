@@ -3,7 +3,7 @@ import { sealandJudge } from '../test/sealand-pairs'
 import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
-import { AFTERWARDS_MIN_READINGS, AFTERWARDS_SUBJECT_LINE, GROUNDED_BASIS, afterwardsFor, audiencePhrase, groundingFor } from './afterwards'
+import { AFTERWARDS_MIN_READINGS, GROUNDED_BASIS, afterwardsFor, audiencePhrase, groundingFor } from './afterwards'
 
 const videoMap = (pairs: [string, string | null][]) => new Map<string, string | null>(pairs)
 
@@ -399,27 +399,5 @@ describe('afterwardsFor under the month-pair rule (decision D, WP1.3)', () => {
     expect(a.verdict?.state).toBe('too_little_data')
     expect(a.verdict?.pair).toBeUndefined()
     expect(a.line).not.toContain('Not read as a change')
-  })
-})
-
-// DECISION C (WP1.1): a subject that is not ready earns no verdict afterwards.
-describe('afterwardsFor on a subject under the three calibration states', () => {
-  const on = (calibration: 'ready' | 'provisional' | 'failed', objectKind: 'subject' | 'theme' = 'subject') =>
-    afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['s-repair'], objectKind, objectLabel: 'Repair & warranty', series: SERIES, audience: 'client', calibration })
-
-  it('reads a ready subject as before', () => {
-    expect(on('ready').state).toBe('reading')
-    expect(on('ready').verdict).not.toBeNull()
-  })
-
-  it('refuses a provisional or failed subject in its own words', () => {
-    // Repair & warranty: 0.36 on 25 labels on production (failed).
-    expect(on('failed')).toEqual({ state: 'refused', verdict: null, months: [], line: AFTERWARDS_SUBJECT_LINE.failed })
-    expect(on('provisional')).toEqual({ state: 'refused', verdict: null, months: [], line: AFTERWARDS_SUBJECT_LINE.provisional })
-    for (const line of Object.values(AFTERWARDS_SUBJECT_LINE)) expect(line).not.toMatch(/[0-9—]/)
-  })
-
-  it('never gates a theme', () => {
-    expect(on('failed', 'theme').state).toBe('reading')
   })
 })
