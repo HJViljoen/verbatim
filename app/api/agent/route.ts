@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/auth'
 import { createAdminClient, isMissingColumnError, selectAll } from '@/lib/supabase-admin'
 import { answerQuestion } from '@/lib/agent/answer'
+import { parseAskWindow } from '@/lib/agent/scope'
 import { runAsk, clipInput } from '@/lib/ask/engine'
 import { extractPdfText, pageWarning, PdfTooLargeError, PdfUnreadableError } from '@/lib/ask/pdf'
 import { latestRunId } from '@/lib/agent/retrieve'
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
     return handleDocument(request, { clientId, userId })
   }
 
-  let body: { question?: unknown; threadId?: unknown }
+  let body: { question?: unknown; threadId?: unknown; window?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -153,7 +154,9 @@ export async function POST(request: Request) {
 
   try {
     const answer = await answerQuestion(admin, {
-      clientId, companyName, question, history, allowNearest: true,
+      // WP3.9: the market over the last 90 days unless the reader switched
+      // to all time on the page.
+      clientId, companyName, question, history, allowNearest: true, window: parseAskWindow(body.window),
     })
     await admin.from('agent_messages').insert({
       thread_id: thread.id,
@@ -181,6 +184,9 @@ export async function POST(request: Request) {
         retrievedCount: answer.retrievedCount,
         intent: answer.plan.intent,
         timeframe: answer.plan.timeframe,
+        // What it was read over (WP3.9), so the thread says so.
+        window: answer.window,
+        namedRivals: answer.namedRivals,
         // The diagnostics, persisted rather than computed and thrown away.
         // Without these a thin or off-topic answer can only be found by a
         // human reading it; with them you can ask the table which questions

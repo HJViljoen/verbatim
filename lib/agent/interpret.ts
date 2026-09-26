@@ -19,7 +19,8 @@ import type { QuestionPlan } from './types'
 // does not see the corpus, it cannot ground anything, and nothing it returns
 // reaches the client. Its whole job is to widen recall before retrieval.
 
-export const PROMPT_VERSION_INTERPRET = 'agent_interpret_v1'
+/** v2 (WP3.9): the corpus is framed as the company's market. */
+export const PROMPT_VERSION_INTERPRET = 'agent_interpret_v2'
 
 const PlanSchema = z.object({
   intent: z.enum(['about_customers', 'about_our_metrics', 'out_of_scope']),
@@ -29,7 +30,7 @@ const PlanSchema = z.object({
 
 export function buildInterpretPrompt(companyName: string): string {
   return [
-    `You prepare searches over a corpus of public consumer conversation (social comments and video transcripts) relevant to ${companyName}'s category.`,
+    `You prepare searches over a corpus of public consumer conversation (social comments and video transcripts) in ${companyName}'s market: the conversation around its category, and around the brands it tracks.`,
     'You are given a question someone at the company typed. You do NOT answer it. You turn it into search queries.',
     '',
     'Return:',

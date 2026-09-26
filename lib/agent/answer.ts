@@ -6,9 +6,28 @@ import { logAiCall } from '../pipeline/ai-log'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from '../pipeline/prose-rules'
 import { enforceRegisters, type RawAnswer } from './enforce'
 import { interpretQuestion } from './interpret'
-import { retrieveForQueries, latestRunId, embeddedInsightCount, type RetrievedInsight } from './retrieve'
-import { loadMovement, renderMovement, NO_MOVEMENT_BLOCK, type MovementReading } from './movement'
+import { retrieveForQueries, latestRunId, embeddedInsightCount, type RetrievedInsight, type RetrievalScope } from './retrieve'
+import {
+  loadMovement,
+  loadObjectReadings,
+  renderMovement,
+  renderObjects,
+  NO_MOVEMENT_BLOCK,
+  type MarketObjectRef,
+  type MovementReading,
+  type ObjectReading,
+} from './movement'
+import { askWindow, kindsNamedIn, moodAsked, namedIn, parseAskWindow, type AskWindowChoice } from './scope'
 import { OUT_OF_CORPUS_NOTICE, type AgentAnswer, type QuestionPlan } from './types'
+import { kindLabel } from '../reading/kinds'
+import { loadAppPairOn } from '../reading/gather-flags'
+import { refuseEveryPair, type PairOn } from '../reading/pairs'
+import { readingHandle } from '../reading/read'
+import { loadReadingMonth } from '../reading/reading-view'
+import type { ReadingMonth } from '../reading/reading-month'
+import { loadCompetitors, loadTrackedRivals } from '../rivals'
+import { loadActiveSubjects } from '../subjects/membership'
+import { subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 
 // The answering half. Retrieval has already put real insights and real quotes
 // on the table; this asks the model to answer the client's question FROM them,
@@ -22,7 +41,8 @@ import { OUT_OF_CORPUS_NOTICE, type AgentAnswer, type QuestionPlan } from './typ
 // a conversational turn inside a sane latency budget, which two 165-237s
 // synthesis calls would not.
 
-export const PROMPT_VERSION_ANSWER = 'agent_answer_v1'
+/** v2 (WP3.9): the market framing, and the block of what the question names. */
+export const PROMPT_VERSION_ANSWER = 'agent_answer_v2'
 
 const AnswerSchema = z.object({
   answer: z.string(),
@@ -37,7 +57,11 @@ const AnswerSchema = z.object({
 
 export function buildAnswerPrompt(companyName: string, allowNearest: boolean): string {
   return [
-    `You are Verbatim, answering a question for someone at ${companyName} from public consumer conversation their category has already been mined for.`,
+    // THE MARKET, SAID AS THE PRODUCT SAYS IT (WP3.9, decision E): everything
+    // we read except the company's own posts, which are read too and marked as
+    // theirs. A rival's own voices are in the evidence only when the question
+    // names that rival.
+    `You are Verbatim, answering a question for someone at ${companyName} from what their market says in public: the conversation we read around their category, the videos of a brand they track when the question names that brand, and their own posts, which the evidence marks as theirs.`,
     'You are an analyst speaking in your own voice. You are NOT a persona and you never speak as a consumer.',
     '',
     'ANSWER FIRST. `answer` is 1-3 sentences that actually answer what was asked. Not a preamble, not a description of what you found.',
@@ -58,6 +82,14 @@ export function buildAnswerPrompt(companyName: string, allowNearest: boolean): s
   ].join('\n')
 }
 
+/** The evidence line's audience mark: the company's own posts, a named
+ *  brand's filed videos, or nothing for the rest of the market. */
+export function whoseOf(bucket: string): string | null {
+  if (bucket === 'client') return 'whose: the company’s own post'
+  if (bucket.startsWith('competitor:')) return `whose: filed under ${bucket.slice('competitor:'.length)}`
+  return null
+}
+
 function renderEvidence(insights: RetrievedInsight[]): string {
   return insights
     .map((i) => {
@@ -66,6 +98,10 @@ function renderEvidence(insights: RetrievedInsight[]): string {
         `topic: ${i.theme.replace(/_/g, ' ')}`,
         i.emotion ? `mood: ${i.emotion}` : null,
         i.journeyStage ? `stage: ${i.journeyStage}` : null,
+        // WHOSE, SAID (WP3.9; GA F19): the model was never told which evidence
+        // came off the company's own posts, so nothing stopped it calling the
+        // market "your customers". The market is the unmarked default.
+        whoseOf(i.bucket),
       ].filter(Boolean).join(' | ')
       // Up to two real comments per insight so the model reasons from what
       // people said and not from the pipeline's label — the measured
@@ -110,14 +146,96 @@ export interface AnswerArgs {
    *  clean space, never a tangent. */
   allowNearest?: boolean
   persist?: boolean
+  /** WP3.9 (plan §2.8): the last 90 days by default, or all time. */
+  window?: AskWindowChoice
+  /** WP3.9: `market` by default: the category and the company's own posts,
+   *  plus the filed videos of any rival the question names, scoped before the
+   *  cap and read over the window. `client_voices` is the rule before it. */
+  scope?: 'market' | 'client_voices'
+  /** The frame, when the caller already read it (the brief research reads it
+   *  once for every question). */
+  frame?: AskFrame
+  /** The clock, injectable for a test. */
+  now?: Date
+}
+
+// ── The frame a question is answered in (WP3.9) ──────────────────────────────
+
+/**
+ * What a market-scoped answer needs besides the corpus: the reading month (the
+ * window ends where the pages' 90-day windows end), the tracked rivals (a
+ * question that names one reads its filed videos, and its brand topic), the
+ * active subjects with their state (a question that names one gets its own
+ * figure and trail), and the month-pair judge.
+ *
+ * EVERY READ DEGRADES, NONE FAILS THE ANSWER. A reading month that cannot be
+ * read ends the window at the clock and says so in the log; rivals or subjects
+ * that cannot be read name nothing; a judge that cannot be read refuses every
+ * pair (it fails closed, `loadAppPairOn`).
+ */
+export interface AskFrame {
+  reading: ReadingMonth | null
+  rivals: { id: string | null; name: string }[]
+  subjects: { id: string; name: string; calibration: SubjectCalibration }[]
+  pair: PairOn
+}
+
+const warn = (what: string) => (e: unknown) => {
+  console.error(`[agent] ${what}: ${(e as { message?: string })?.message ?? String(e)}`)
+  return null
+}
+
+export async function loadAskFrame(
+  admin: ReturnType<typeof import('../supabase-admin').createAdminClient>,
+  clientId: string,
+  now: Date = new Date(),
+): Promise<AskFrame> {
+  const asOf = now.toISOString()
+  const handle = readingHandle(clientId, admin)
+  const [reading, competitors, tracked, subjects, pair] = await Promise.all([
+    loadReadingMonth(admin, handle, asOf).catch(warn('reading month')),
+    loadCompetitors(admin, clientId).catch(warn('competitors')),
+    loadTrackedRivals(admin, clientId).catch(warn('rivals')),
+    loadActiveSubjects(admin, clientId).catch(warn('subjects')),
+    loadAppPairOn(handle, asOf).catch(() => refuseEveryPair),
+  ])
+  const idOf = new Map((competitors ?? []).map((c) => [c.name.trim().toLowerCase(), c.id]))
+  return {
+    reading: reading ?? null,
+    rivals: (tracked ?? []).filter((r) => r.retiredAt == null).map((r) => ({ name: r.name, id: idOf.get(r.name.trim().toLowerCase()) ?? null })),
+    subjects: (subjects ?? []).map((s) => ({ id: s.id, name: s.name, calibration: subjectCalibration(s) })),
+    pair,
+  }
+}
+
+/** The objects a question names, in the order the reading prints them:
+ *  subjects, brands, kinds, the mood. Pure. */
+export function namedObjects(question: string, frame: Pick<AskFrame, 'rivals' | 'subjects'>): MarketObjectRef[] {
+  const out: MarketObjectRef[] = []
+  for (const s of namedIn(question, frame.subjects)) out.push({ kind: 'subject', id: s.id, label: s.name, calibration: s.calibration })
+  for (const r of namedIn(question, frame.rivals)) if (r.id) out.push({ kind: 'brand', id: r.id, label: r.name })
+  for (const k of kindsNamedIn(question)) out.push({ kind: 'kind', id: k, label: kindLabel(k) })
+  if (moodAsked(question)) out.push({ kind: 'mood', id: 'positive', label: 'Positive' })
+  return out
+}
+
+/** The retrieval scope for one question. Pure. */
+export function retrievalScopeFor(question: string, frame: Pick<AskFrame, 'rivals' | 'reading'>, window: AskWindowChoice, now: Date): RetrievalScope {
+  return {
+    rivals: namedIn(question, frame.rivals).map((r) => r.name),
+    window: askWindow(frame.reading, window, now.toISOString()),
+  }
 }
 
 export async function answerQuestion(
   admin: ReturnType<typeof import('../supabase-admin').createAdminClient>,
   args: AnswerArgs,
-): Promise<AgentAnswer & { plan: QuestionPlan; retrievedCount: number; emptyQueries: string[] }> {
+): Promise<AnsweredQuestion> {
   const persist = args.persist !== false
   const allowNearest = args.allowNearest !== false
+  const now = args.now ?? new Date()
+  const window = parseAskWindow(args.window)
+  const market = args.scope !== 'client_voices'
   let costUsd = 0
 
   const runId = args.runId ?? (await latestRunId(admin, args.clientId))
@@ -127,14 +245,23 @@ export async function answerQuestion(
     throw new Error('No completed run for this workspace yet.')
   }
 
-  const { plan, costUsd: interpretCost } = await interpretQuestion(admin, {
-    clientId: args.clientId, runId, companyName: args.companyName, question: args.question, persist,
-  })
+  // THE FRAME GOES OUT WITH THE INTERPRET CALL: neither waits on the other.
+  const [{ plan, costUsd: interpretCost }, frame] = await Promise.all([
+    interpretQuestion(admin, {
+      clientId: args.clientId, runId, companyName: args.companyName, question: args.question, persist,
+    }),
+    market ? (args.frame ? Promise.resolve(args.frame) : loadAskFrame(admin, args.clientId, now)) : Promise.resolve(null),
+  ])
   costUsd += interpretCost
 
+  // THE MARKET IS THE DEFAULT SCOPE (WP3.9): a rival the question names is
+  // read, the window is 90 days unless the reader asked for all time, and the
+  // scope is applied before the cap. `client_voices` keeps the rule before it.
+  const scope = frame ? retrievalScopeFor(args.question, frame, window, now) : undefined
   const context = await retrieveForQueries(admin, {
-    clientId: args.clientId, runId, queries: plan.retrievalQueries,
+    clientId: args.clientId, runId, queries: plan.retrievalQueries, ...(scope ? { scope } : {}),
   })
+  const framed = { window: market ? window : ('all' as const), namedRivals: [...(scope?.rivals ?? [])] }
 
   if (context.insights.length === 0) {
     // Before calling this silence, prove the index exists. A tenant whose
@@ -150,8 +277,27 @@ export async function answerQuestion(
     // A real silence: the index exists and nothing in it cleared the floor. No
     // synthesis call is made, so silence is also the cheap path.
     const empty = enforceRegisters({}, [], { allowNearest, runId, costUsd })
-    return { ...empty, plan, retrievedCount: 0, emptyQueries: context.emptyQueries }
+    return { ...empty, plan, retrievedCount: 0, emptyQueries: context.emptyQueries, ...framed, about: [] }
   }
+
+  // WHAT THE QUESTION NAMES, READ ON THE MARKET, FOR EVERY TIMEFRAME. "Ask
+  // about this" on a subject asks about that subject, and the answer is given
+  // against the subject's own figure and trail rather than whichever themes
+  // retrieval hit (S7). A read that fails leaves the block out; it never
+  // stands in a wrong figure.
+  const objects = frame ? namedObjects(args.question, frame) : []
+  const about: ObjectReading[] = objects.length && frame
+    ? await loadObjectReadings(admin, {
+        clientId: args.clientId,
+        objects,
+        month: frame.reading?.month ?? now.toISOString(),
+        pair: frame.pair,
+        asOf: now.toISOString(),
+      }).catch((e: unknown) => {
+        console.error(`[agent] named objects: ${(e as { message?: string })?.message ?? String(e)}`)
+        return []
+      })
+    : []
 
   // D1: while the direction words are gated the series is not even read — the
   // block it feeds is the one place the agent is told it may name a direction.
@@ -168,6 +314,7 @@ export async function answerQuestion(
     : null
 
   const movement = movementBlock(readings, plan.timeframe)
+  const named = renderObjects(about)
   const system = buildAnswerPrompt(args.companyName, allowNearest)
   const historyBlock = (args.history ?? [])
     .slice(-AGENT_HISTORY_TURNS)
@@ -180,6 +327,7 @@ export async function answerQuestion(
     '',
     `EVIDENCE — ${context.insights.length} findings drawn from ${context.conversationCount} conversations:`, // em-dash-ok: model prompt
     renderEvidence(context.insights),
+    named ? `\n${named}` : '',
     movement ? `\n${movement}` : '',
   ].filter(Boolean).join('\n')
 
@@ -239,5 +387,19 @@ export async function answerQuestion(
   // emptyQueries is carried out, not discarded: which ANGLE found nothing is
   // the difference between "we do not cover this" and "that phrasing missed",
   // and it is the first thing to look at when an answer reads thin.
-  return { ...answer, plan, retrievedCount: context.insights.length, emptyQueries: context.emptyQueries }
+  return { ...answer, plan, retrievedCount: context.insights.length, emptyQueries: context.emptyQueries, ...framed, about }
+}
+
+/** One answered question, with what it was read over. */
+export type AnsweredQuestion = AgentAnswer & {
+  plan: QuestionPlan
+  retrievedCount: number
+  emptyQueries: string[]
+  /** The window it was read over; `all` under the `client_voices` rule. */
+  window: AskWindowChoice
+  /** The tracked rivals the question named, whose filed videos it read. */
+  namedRivals: string[]
+  /** What the question named, read on the market (empty when it named
+   *  nothing, or the read failed). */
+  about: ObjectReading[]
 }
