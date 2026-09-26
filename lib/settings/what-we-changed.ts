@@ -219,7 +219,10 @@ function outAndIn(added: number, removed: number, one: string, many: string, gon
  * `other` row, `CLIENT_NOTE_OTHER_FIELDS`).
  */
 export function changeWords(change: OurChange, rows: readonly ConfigChange[]): string {
-  if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return change.note.trim()
+  // A market-first change with a client-words note is titled by its surface
+  // (the approved preview: "How we check relevance" in weight, the note under
+  // it); its note is `changeDetail`'s. Without a note, the note stands alone.
+  if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return SURFACE_SENTENCE[change.surface] ?? change.note.trim()
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
   if (change.surface === 'other') {
@@ -252,6 +255,18 @@ export function changeWords(change: OurChange, rows: readonly ConfigChange[]): s
     if (words) return words
   }
   return SURFACE_SENTENCE[change.surface] ?? (SURFACE_WORDS as Record<string, string>)[change.surface] ?? 'A change to how we read'
+}
+
+/**
+ * What a market-first change's own note says, printed under its title in
+ * regular weight (the approved preview's "How we check, mark and file videos"
+ * rows: a short title in weight, a description beneath; deploy 2 review, which
+ * found the notes set as whole bold sentences). Null for every other change,
+ * whose words already say what moved.
+ */
+export function changeDetail(change: OurChange): string | null {
+  if (!CLIENT_NOTE_SURFACES.has(change.surface)) return null
+  return change.note?.trim() || null
 }
 
 /**
@@ -300,6 +315,7 @@ export function ledgerLines(input: {
       date: c.changedAt,
       surface: c.surface,
       words: changeWords(c, input.rows),
+      detail: changeDetail(c),
       reach: own ? { month: own.month, touched: own.touched, of: own.of, readWith: own.readWith as string } : null,
       months,
       items: items && (items.added.length > 0 || items.removed.length > 0) ? items : null,

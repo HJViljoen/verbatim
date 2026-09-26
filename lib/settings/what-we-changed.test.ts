@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
 import { SURFACE_WORDS } from './change-log'
-import { changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
+import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
 
 // Sealand's change log around September (GC F2, staging's copy of production
 // to 20 Sep): the 9 Sep swap (seven terms out, seven in, one reconstructed row
@@ -80,10 +80,15 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     expect(changeWords(c, noted)).toBe('4 search terms added')
   })
 
-  it('uses the note of a row market-first’s own scripts wrote in client words (the gate fix, WP1.4)', () => {
+  it('titles a row market-first’s own scripts wrote by its surface, with its client-words note beneath (the gate fix, WP1.4; the preview’s title and description, deploy 2 review)', () => {
     const gate = row({ id: 'gate-fix', changed_at: '2026-09-26T08:00:00.000Z', surface: 'gate_rule' as never, note: 'We fixed how we check that a video is about bags.' })
     const c = changesFromLog([gate])[0]
-    expect(changeWords(c, [gate])).toBe('We fixed how we check that a video is about bags.')
+    expect(changeWords(c, [gate])).toBe('How we check relevance')
+    expect(changeDetail(c)).toBe('We fixed how we check that a video is about bags.')
+    const [line] = ledgerLines({ changes: [c], rows: [gate], reach: [], runFinish: new Map() })
+    expect([line.words, line.detail]).toEqual(['How we check relevance', 'We fixed how we check that a video is about bags.'])
+    // A change whose words say what moved carries no description.
+    expect(changeDetail(changesFromLog(ROWS).find((x) => x.id === '0913-industry')!)).toBeNull()
   })
 
   it('prints a capped update’s approved note, never "A change to how we read", and no other `other` row’s operator prose (deploy 2 review)', () => {

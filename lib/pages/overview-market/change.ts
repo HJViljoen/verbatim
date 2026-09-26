@@ -45,6 +45,9 @@ export interface LedgerLine {
   surface: OurChangeSurface
   /** The change in client words. */
   words: string
+  /** A description under the words, where the change's own note is client
+   *  words (market-first's gate_rule, attribution and segment rows). Additive. */
+  detail?: string | null
   /** The change's reach in the month it was made, read with its update; null
    *  where nobody has measured it. */
   reach: { month: string; touched: number; of: number; readWith: string } | null

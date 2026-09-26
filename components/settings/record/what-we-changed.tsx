@@ -179,6 +179,7 @@ export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[];
             <span role="cell" className="font-mono text-[15px] font-medium leading-[22px] tabular-nums text-foreground">{shortDate(l.date)}</span>
             <span role="cell" className="flex min-w-0 flex-col gap-1">
               <span className="text-[15px] font-semibold leading-[22px] [text-wrap:pretty]">{l.words}</span>
+              {l.detail ? <span className="text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{l.detail}</span> : null}
               {l.items && (l.items.added.length > 0 || l.items.removed.length > 0) ? <Items items={l.items} /> : null}
             </span>
             {months.map((m) => {
