@@ -360,45 +360,12 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
   }
 }
 
-// ---- The artboard's header meta and the coverage row -------------------------
-
-/**
- * "4 changes since 19 Aug · 1 this month" — the mono meta beside the section's
- * eyebrow.
- *
- * THE RECORD ONLY, for the reason the module's header gives: the prehistory is
- * inference and is never summed with the record. (A reconstructed change of
- * ours dated after the record began is in the record, and is counted: it is
- * a row of the table this meta sits over.) "This month" is the
- * WALL CLOCK, which is what a change is dated by (`ClientChange.on` is
- * `changed_at`, and its doc comment says it is a period key for nothing) — so
- * this counts changes made in the current calendar month and not comments
- * written in it. The two clocks are named where they meet, which is here.
- *
- * "SINCE" IS THE DAY THE RECORD BEGAN, NOT THE FIRST UPDATE (code review
- * finding 5). It was handed `delivery.since` — the first update on record — so
- * on every tenant that predates the change log, which is the reason
- * `changeLogBoundary` exists at all, the meta read as though changes had been
- * recorded since April when the first one was written in August. The date is
- * `view.firstLoggedAt`, which is the same date `changeLogBoundary` puts in the
- * note beside this line; nothing else can honestly follow the word "since"
- * here.
- */
-export function changeLogMeta(view: ChangeLogView, args: { now: string }): string {
-  const total = view.recorded.length
-  const month = args.now.slice(0, 7)
-  const thisMonth = view.recorded.filter((c) => c.on.slice(0, 7) === month).length
-  const parts = [
-    total === 0
-      ? 'no change recorded yet'
-      : `${total} change${total === 1 ? '' : 's'}${view.firstLoggedAt ? ` since ${shortDate(view.firstLoggedAt)}` : ''}`,
-  ]
-  if (thisMonth > 0) parts.push(`${thisMonth} this month`)
-  return parts.join(' · ')
-}
+// ---- The artboard's month flag and the coverage row --------------------------
 
 /** Was this change made inside the current calendar month? The artboard's amber
- *  flag, and the reason the meta above can say "1 this month". */
+ *  flag. "This month" is the WALL CLOCK, which is what a change is dated by
+ *  (`ClientChange.on` is `changed_at`), not the month its comments were
+ *  written in. */
 export function madeThisMonth(change: ClientChange, now: string): boolean {
   return change.on.slice(0, 7) === now.slice(0, 7)
 }
