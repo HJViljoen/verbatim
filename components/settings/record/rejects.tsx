@@ -51,7 +51,9 @@ import { RecordSection } from './frame'
  * minimum; every other track's minimum is 0, so the row can never be wider
  * than the pane.
  */
-const TRACKS = 'lg:grid-cols-[minmax(0,2.8fr)_minmax(0,1.13fr)_minmax(200px,1fr)]'
+// FROM `xl` (fresh design check, 26 Sep): in a tile, at 1024, the 200px floor
+// left the post 148px and the rule 60px, one word to a line.
+const TRACKS = 'xl:grid-cols-[minmax(0,2.8fr)_minmax(0,1.13fr)_minmax(200px,1fr)]'
 
 export function RejectLogBlock({
   rows, summary, unavailable, unjudged, byTerm, byPlatform, lookedAt = 'Looked at', withheld, control,
@@ -85,12 +87,12 @@ export function RejectLogBlock({
       {unjudged ? <p className="m-0 text-[13px] text-muted-foreground">{unjudged}</p> : null}
 
       {withheld ? (
-        <p className="m-0 text-[12px] text-muted-foreground">{withheld}</p>
+        <p className="m-0 text-[15px] text-muted-foreground">{withheld}</p>
       ) : rows.length === 0 ? (
-        <p className="m-0 text-[12.5px] text-muted-foreground">Nothing has been set aside yet.</p>
+        <p className="m-0 text-[15px] text-muted-foreground">Nothing has been set aside yet.</p>
       ) : (
         <div className="flex flex-col">
-          <div className={`hidden gap-x-3 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground lg:grid ${TRACKS}`}>
+          <div className={`hidden gap-x-3 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground xl:grid ${TRACKS}`}>
             <span>Thrown away</span>
             <span>The rule that fired</span>
             <span />
@@ -98,26 +100,26 @@ export function RejectLogBlock({
           {rows.map((r) => (
             <div
               key={`${r.runId}-${r.platform}-${r.videoId}`}
-              className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-b border-border/60 py-3 last:border-b-0 lg:min-h-[60px] lg:py-2 ${TRACKS}`}
+              className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-b border-border/60 py-3 last:border-b-0 xl:min-h-[60px] xl:py-2 ${TRACKS}`}
             >
-              <span className="min-w-0 text-[12.5px]">
+              <span className="min-w-0 text-[13px] leading-[1.5]">
                 {/* The stranger's own words, and rule (c) may not police them
                     (lib/test/copy-contract.ts): a caption can say "growing" and
                     the product has made no direction claim by quoting it. */}
                 <span data-copy="quote">“{r.captionExcerpt ?? 'No caption was stored for this one.'}”</span>
-                <span className="mt-0.5 block font-mono text-[11px] text-muted-foreground">
+                <span className="mt-0.5 block font-mono text-[12px] leading-[1.45] text-muted-foreground">
                   {r.platform}
                   {r.accountName ? ` · ${r.accountName}` : ''}
                   {r.keyword ? ` · found on “${r.keyword}”` : ''}
                 </span>
               </span>
-              <span className="inline-flex min-w-0 items-center gap-1.5 text-[12px] text-secondary-foreground">
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-[1.45] text-secondary-foreground">
                 <span className="h-[7px] w-[7px] flex-none rounded-full bg-border" />
                 <span className="min-w-0">
                   {r.reason ?? (r.source === 'default' ? 'Nobody judged this one.' : 'No reason was recorded.')}
                 </span>
               </span>
-              <span className="lg:justify-self-end">{control?.(r)}</span>
+              <span className="xl:justify-self-end">{control?.(r)}</span>
             </div>
           ))}
         </div>

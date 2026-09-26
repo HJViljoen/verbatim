@@ -53,7 +53,10 @@ import { MonthFlag, RecordSection } from './frame'
 // Each row is padded like the tab's other tables (The record's, above), with
 // its cells on the first line's top, so a three-line note does not press its
 // rules against its words.
-const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border/60 py-3 last:border-b-0 lg:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] lg:items-start lg:py-3.5'
+// AND THE BREAKPOINT IS NOW `xl` (fresh design check, 26 Sep): as a tile the
+// section lost 64px to its inset, so at 1024 the four tracks got 165 │ 87 │
+// 43px and "Verbatim" broke mid-word. From 1280 they get 330 │ 174 │ 87.
+const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border/60 py-3 last:border-b-0 xl:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] xl:items-start xl:py-3.5'
 
 export function ChangeLogBlock({
   log, rows, showing, now, unavailable, title = 'The change log',
@@ -87,7 +90,7 @@ export function ChangeLogBlock({
         <div className="flex flex-col">
           {/* The column heads in the tab's one voice (The record's, above):
               13px, sentence case, over the table's rule. */}
-          <div className="hidden grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] gap-x-3 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground lg:grid">
+          <div className="hidden grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] gap-x-3 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground xl:grid">
             <span>Date</span>
             <span>What changed</span>
             <span>What it breaks</span>

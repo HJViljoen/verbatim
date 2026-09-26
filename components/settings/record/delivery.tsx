@@ -40,7 +40,7 @@ export function DeliveryBlock({
   return (
     <RecordSection title="Delivery">
       {stats.length === 0 ? (
-        <p className="m-0 text-[12.5px] text-muted-foreground">{record.line}</p>
+        <p className="m-0 text-[15px] text-muted-foreground">{record.line}</p>
       ) : (
         /* FOUR ABREAST AT `lg`, NOT `md` (Block D wave 3, RC2). `md` is
            exactly where the app's 224px sidebar and SettingsFrame's own 224px
@@ -50,8 +50,12 @@ export function DeliveryBlock({
            neighbours — a crop showed "22 updates" with the next cell's 24px
            "5" printed on top of the "s". Two-up below `lg` gives every cell
            half the pane, which is 120px at the narrowest width this page is
-           drawn at. */
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+           drawn at.
+           AND NOW AT `xl` (fresh design check, 26 Sep): the section became a
+           tile with a 32px inset and the figure became the tab's 28px (What
+           we changed's cells), so at 1024 four cells would get 96px against
+           the ~100px a 28px mono "28 Jun" needs. From 1280 each gets 160px. */
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           {stats.map((s) => (
             <StatCell key={s.id} figure={s.figure} unit={s.unit} caption={s.caption} />
           ))}
@@ -63,7 +67,7 @@ export function DeliveryBlock({
           bookkeeping cannot tell) are method, and the 25 Sep rulings take
           every such line off the tab. */}
       {record.total > 0 ? (
-        <p className="m-0 text-[13px] text-secondary-foreground">
+        <p className="m-0 text-[15px] leading-[1.5] text-secondary-foreground">
           {fmtInt(record.recentSettled)} of the last {fmtInt(record.recent)} finished.
           {record.scheduledServed
             ? ` ${fmtInt(record.scheduledServed.scheduled)} served a scheduled slot, ${fmtInt(record.scheduledServed.byHand)} were run by hand.`
@@ -73,7 +77,7 @@ export function DeliveryBlock({
 
       <LabelRow label={month} sub={`${fmtInt(updates.length)} ${updates.length === 1 ? 'update' : 'updates'}`}>
         {updates.length === 0 ? (
-          <p className="m-0 pt-1.5 text-[12px] text-muted-foreground">No update has run this month yet.</p>
+          <p className="m-0 text-[15px] leading-[1.5] text-muted-foreground">No update has run this month yet.</p>
         ) : (
           <ul className="flex flex-wrap items-center gap-2">
             {[...updates].reverse().map((u) => (
@@ -96,7 +100,7 @@ export function DeliveryBlock({
         sub={readings.recorded ? `${fmtInt(readings.readings)} so far` : 'not recorded'}
       >
         {!readings.recorded ? (
-          <p className="m-0 text-[12.5px] text-muted-foreground">
+          <p className="m-0 text-[15px] leading-[1.5] text-muted-foreground">
             The month-by-month reading has not been recorded for this workspace yet, so there is nothing to count.
           </p>
         ) : readings.months.length > 0 ? (
@@ -105,12 +109,12 @@ export function DeliveryBlock({
           // lines that followed (what the quarter view needs; which months
           // were read at setup) were method. Which months are under the floor
           // is the coverage row's (copy de-clutter C103).
-          <p className="m-0 text-[12.5px]">
+          <p className="m-0 text-[15px] leading-[1.5]">
             {readings.months.map((m, i) => (
               <span key={m.month}>
                 {i > 0 ? ' · ' : ''}
                 {m.label}{' '}
-                <span data-copy="figure" className="font-mono text-[12px] tabular-nums text-secondary-foreground">
+                <span data-copy="figure" className="font-mono text-[15px] tabular-nums text-secondary-foreground">
                   {fmtInt(m.updates)}
                 </span>{' '}
                 {m.current ? 'so far' : m.updates === 1 ? 'update' : 'updates'}

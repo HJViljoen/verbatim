@@ -66,6 +66,14 @@ describe('The record: the dated list', () => {
     assertCopyContract(render(list))
   })
 
+  it('opens its columns at xl, where the tile has room for the words beside three fixed tracks', () => {
+    // At 1024 the tile's inside is 432px and the fixed tracks take 420: the
+    // words were left 12px, one to a line (fresh design check, 26 Sep).
+    const markup = render(list)
+    expect(markup).toContain('xl:grid-cols-[104px_minmax(0,1fr)_128px_128px]')
+    expect(markup).not.toMatch(/\blg:grid/)
+  })
+
   it('says so plainly when nothing is on record', () => {
     expect(read(<TheRecord lines={[]} month="2026-09-01" prevMonth="2026-08-01" />)).toContain('No change of ours is on record for this workspace yet.')
   })

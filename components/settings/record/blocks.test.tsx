@@ -84,18 +84,20 @@ describe('the delivery block', () => {
     expect(text).toContain('5')
     expect(text).toContain('longest gap, in May')
     expect(text).toContain('27 Sep')
-    // Four 24px mono figures, one per cell.
-    expect(render(delivery).match(/text-\[24px\]/g)).toHaveLength(4)
+    // Four 28px mono figures, one per cell: What we changed's stat scale.
+    expect(render(delivery).match(/text-\[28px\]/g)).toHaveLength(4)
   })
 
-  it('opens its four-abreast grid and its 172px gutter at lg, where the rails have stopped taking the pane', () => {
+  it('opens its four-abreast grid at xl and its 172px gutter at lg, where the rails have stopped taking the pane', () => {
     // RC2. `md` is exactly where the app's 224px sidebar and SettingsFrame's
     // own 224px rail both arrive, so at a 768px viewport the pane is 240px:
     // measured stat-cell widths were 48px at 768 and 61px at 820, against the
     // 82px a 24px mono "27 Sep" needs, and the figures painted over their
-    // neighbours. At `lg` the same cells are 112px and up.
+    // neighbours. In a tile (32px inset) with the tab's 28px figure, four
+    // cells get 96px at 1024 and 160px at 1280, so four abreast waits for xl.
     const markup = render(delivery)
-    expect(markup).toContain('lg:grid-cols-4')
+    expect(markup).toContain('xl:grid-cols-4')
+    expect(markup).not.toContain('lg:grid-cols-4')
     expect(markup).not.toContain('md:grid-cols-4')
     expect(markup).toContain('lg:grid-cols-[172px_minmax(0,1fr)]')
     expect(markup).not.toContain('md:grid-cols-[172px_minmax(0,1fr)]')
@@ -377,16 +379,18 @@ describe('the coverage grid', () => {
     // rows are cells of ONE grid — one container, one closing rule, and each
     // row's label and value are siblings in it rather than a box of their own.
     const markup = render(coverage)
-    // RC10: two-up opens at 1440, the width the artboard is drawn at, and
-    // BOTH steps are arbitrary `min-[…]` variants — Tailwind sorts those ahead
-    // of the named breakpoints, so a `lg:` first step wins the cascade at 1440
-    // and the two-up grid never appears.
-    expect(markup.match(/min-\[1440px\]:grid-cols-\[186px_minmax\(0,1fr\)_186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    // One pair abreast from 1024 and at every wider width (fresh design check,
+    // 26 Sep): in a tile, at the tab's 15px, a two-up value track at 1440 is
+    // about 200px. The step stays an arbitrary `min-[…]` variant (RC10).
     expect(markup.match(/min-\[1024px\]:grid-cols-\[186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    expect(markup).not.toContain('min-[1440px]:grid-cols')
     expect(markup).not.toContain('xl:grid-cols')
     expect(markup.match(/border-b border-border\/70/g)).toHaveLength(1)
-    // One label cell per row, each opening its own hairline.
-    expect(markup.match(/border-t border-border\/70 pt-3 font-mono/g)).toHaveLength(coverageRowsFixture().length)
+    // One label cell per row, each opening its own hairline, in the tab's
+    // 13px sentence-case head voice, not mono capitals.
+    expect(markup.match(/border-t border-border\/70 pt-3 text-\[13px\] font-medium/g)).toHaveLength(coverageRowsFixture().length)
+    // The section's own eyebrow is the one thing set in capitals.
+    expect(markup.match(/uppercase/g)).toHaveLength(1)
   })
 
   it('refuses the artboard’s four dishonest figures and says what it prints instead', () => {

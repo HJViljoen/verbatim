@@ -72,8 +72,8 @@ export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: Rea
   return (
     <div className="grid grid-cols-1 items-start gap-y-1.5 lg:grid-cols-[172px_minmax(0,1fr)] lg:gap-x-6">
       <div className="flex flex-col gap-px pt-px">
-        <span className="text-[12.5px] font-medium">{label}</span>
-        {sub ? <span className="font-mono text-[10.5px] text-muted-foreground">{sub}</span> : null}
+        <span className="text-[15px] font-medium leading-[1.5]">{label}</span>
+        {sub ? <span className="font-mono text-[13px] text-muted-foreground">{sub}</span> : null}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -81,8 +81,10 @@ export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: Rea
 }
 
 /**
- * One of the delivery block's stat cells: a 24px mono figure, an optional unit
- * beside it, a caption under it.
+ * One of the delivery block's stat cells: a 28px mono figure, an optional unit
+ * beside it, a caption under it, on the scale of What we changed's cells
+ * (fresh design check, 26 Sep: this tab set two stat cells at two scales, and
+ * these captions at 11.5px).
  *
  * NOT `FigureCell` (components/blocks/frame.tsx). That primitive is the
  * artboards' TABLE cell — a 13px figure over a mono "of N" — and it stamps
@@ -95,10 +97,10 @@ export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <span className="flex items-baseline gap-1.5">
-        <span data-copy="figure" className="font-mono text-[24px] font-semibold leading-none tracking-[-0.03em] tabular-nums">{figure}</span>
-        {unit ? <span className="text-[12px] font-medium text-muted-foreground">{unit}</span> : null}
+        <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">{figure}</span>
+        {unit ? <span className="text-[15px] text-muted-foreground">{unit}</span> : null}
       </span>
-      <span className="text-[11.5px] text-muted-foreground">{caption}</span>
+      <span className="text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{caption}</span>
     </div>
   )
 }
@@ -118,7 +120,7 @@ export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: 
  */
 export function DatePill({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-inner px-3 py-[5px] font-mono text-[11.5px] text-secondary-foreground">
+    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-inner px-3 py-[5px] font-mono text-[13px] text-secondary-foreground">
       {children}
     </span>
   )
@@ -129,7 +131,7 @@ export function DatePill({ children }: { children: ReactNode }) {
  *  `rgba(230,176,60,.2)`. */
 export function MonthFlag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-block whitespace-nowrap rounded-full bg-warning/20 px-2 py-px text-[10.5px] font-semibold text-foreground">
+    <span className="inline-block whitespace-nowrap rounded-full bg-warning/20 px-2 py-px text-[12px] font-semibold text-foreground">
       {children}
     </span>
   )

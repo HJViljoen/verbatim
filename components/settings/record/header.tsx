@@ -98,8 +98,8 @@ export const NO_EXPORT_WHY =
 export function ScopeStatement({ text, why }: { text: string; why?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      {why ? <p className="m-0 text-[11.5px] text-muted-foreground">{why}</p> : null}
-      <div className="whitespace-pre-wrap rounded-[4px] bg-inner px-3 py-2.5 font-mono text-[11.5px] leading-[1.6] text-secondary-foreground ring-1 ring-border">
+      {why ? <p className="m-0 text-[13px] text-muted-foreground">{why}</p> : null}
+      <div className="whitespace-pre-wrap rounded-[4px] bg-inner px-4 py-3 font-mono text-[13px] leading-[1.6] text-secondary-foreground ring-1 ring-border">
         {text}
       </div>
     </div>

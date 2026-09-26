@@ -154,20 +154,23 @@ export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[];
   const months = ledgerMonths(lines, month, prevMonth)
   // THE PREVIEW'S COLUMNS, as tracks that divide the pane: the settings rail
   // leaves 688px of tile at 1280, so the figure columns are fixed and the
-  // words take the rest.
+  // words take the rest. FROM `xl`, NOT `lg` (fresh design check, 26 Sep):
+  // at 1024 the tile's inside is 432px, the fixed tracks and gaps take 420,
+  // and the words were left 12px, one word to a line. Below `xl` a change
+  // stacks, each month cell under its own head, as on a phone.
   const cols = months.length === 2
-    ? 'lg:grid-cols-[104px_minmax(0,1fr)_128px_128px]'
-    : 'lg:grid-cols-[104px_minmax(0,1fr)_128px]'
+    ? 'xl:grid-cols-[104px_minmax(0,1fr)_128px_128px]'
+    : 'xl:grid-cols-[104px_minmax(0,1fr)_128px]'
   return (
     <RecordSection title="The record" footer={footer}>
       <div role="table" className="flex flex-col">
-        <div role="row" className={cn('hidden items-end gap-x-5 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground lg:grid', cols)}>
+        <div role="row" className={cn('hidden items-end gap-x-5 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground xl:grid', cols)}>
           <span role="columnheader">Date</span>
           <span role="columnheader">What we changed</span>
           {months.map((m) => <span key={m} role="columnheader" className="text-right">{monthHead(m)}</span>)}
         </div>
         {lines.map((l) => (
-          <div key={l.changeId} role="row" className={cn('grid grid-cols-1 gap-x-5 gap-y-1.5 border-b border-border/60 py-5 last:border-b-0 lg:gap-y-0', cols)}>
+          <div key={l.changeId} role="row" className={cn('grid grid-cols-1 gap-x-5 gap-y-1.5 border-b border-border/60 py-5 last:border-b-0 xl:gap-y-0', cols)}>
             <span role="cell" className="font-mono text-[15px] font-medium leading-[22px] tabular-nums text-foreground">{shortDate(l.date)}</span>
             <span role="cell" className="flex min-w-0 flex-col gap-1">
               <span className="text-[15px] font-semibold leading-[22px] [text-wrap:pretty]">{l.words}</span>
@@ -179,10 +182,10 @@ export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[];
               const own = m === l.date.slice(0, 7) + '-01'
               // A month the change did not touch prints a quiet dot under its
               // column head, and nothing on a phone, where there is no head.
-              if (!cell && !own) return <span key={m} role="cell" className="hidden text-right text-[13px] leading-[22px] text-muted-foreground lg:block">·</span>
+              if (!cell && !own) return <span key={m} role="cell" className="hidden text-right text-[13px] leading-[22px] text-muted-foreground xl:block">·</span>
               return (
-                <span key={m} role="cell" className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 lg:flex-col lg:items-end lg:text-right">
-                  <span className="text-[13px] text-muted-foreground lg:hidden">{monthHead(m)}</span>
+                <span key={m} role="cell" className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 xl:flex-col xl:items-end xl:text-right">
+                  <span className="text-[13px] text-muted-foreground xl:hidden">{monthHead(m)}</span>
                   {cell && measure ? (
                     <>
                       <Counted figure={measure.touched} word="of" base={measure.of} size="row" />
