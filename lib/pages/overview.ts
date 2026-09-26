@@ -106,7 +106,6 @@ import {
   type MarketSide,
   type MarketTheme,
   type QuoteCandidate,
-  type SubjectCalibrationWord,
   type ThemeBoard,
 } from './overview-market'
 import type { MarketCount } from '../reading/market'
