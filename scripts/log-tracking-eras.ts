@@ -22,7 +22,9 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //      change moves none and gets no row), and each month asked for, a
 //      `config_change_reach` row per population (market, category): the month's
 //      videos found by the terms that change added or removed and nothing else
-//      (lib/provenance/searches.ts reachOf), out of the month's videos
+//      (lib/provenance/searches.ts reachOf; a reconstructed community row is
+//      read against the gathers, communityDelta, so the 9 Sep change is
+//      +r/travelgear and +r/onebag, never r/backpacks), out of the month's videos
 //      (market_month_videos). It points at the change's id, the one
 //      changesFromLog gives it, so no duplicate change row is ever written. A
 //      reach row identical to the newest one held (same counts, same
@@ -133,7 +135,10 @@ async function main() {
   const reach: { change_id: string; month: string; population: 'market' | 'category'; videos_touched: number; videos_in_month: number }[] = []
   for (const c of ours) {
     const rows = (c.rowIds ?? [c.id]).map((id) => byId.get(id)).filter((r): r is ConfigChange => r != null)
-    const delta = termDelta(rows)
+    // The communities as the gathers show them: the reconstruction's 9 Sep
+    // rows switch on r/backpacks (run since 17 Aug) and log r/onebag only as
+    // proposed (first run that evening); lib/provenance/searches.ts communityDelta.
+    const delta = termDelta(rows, gathers)
     const moved = [...delta.added].map((t) => `+${t}`).concat([...delta.removed].map((t) => `-${t}`))
     if (moved.length === 0) {
       // An exclusions-only terms change (termDelta skips exclude_terms) or a

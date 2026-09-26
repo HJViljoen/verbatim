@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  addedOnlyOf, decidingGathers, evidenceTerms, firstSearched, gatherHealth, gathersOf, isAddedOnly, isOutside, median, monthShareWord,
-  oneReachRowEach, plannedSearches, populations, reachOf, sameJson, searchKey, searchesFirstRunIn, termDelta, unchangedSearches,
+  addedOnlyOf, communityDelta, decidingGathers, evidenceTerms, firstSearched, gatherHealth, gathersOf, isAddedOnly, isOutside, median, monthShareWord,
+  namedCommunities, oneReachRowEach, plannedSearches, populations, reachOf, sameJson, searchKey, searchesFirstRunIn, termDelta, unchangedSearches,
   type KeywordRow, type MonthVideo, type ReachRowPlan,
 } from './searches'
 
@@ -140,6 +140,112 @@ describe('a search change and its reach', () => {
     ])
     expect(reachOf({ added: new Set(ADDED_13), removed: new Set() }, vids, ev).map((x) => x.id)).toEqual(['a', 'c'])
     expect(reachOf({ added: new Set(), removed: new Set() }, vids, ev)).toEqual([])
+  })
+})
+
+// ---- A community change, read against the gathers (the 9 Sep line) ---------------------
+//
+// Staging (a production copy to 20 Sep), read 26 Sep. The change log's 9 Sep
+// community rows are the Phase 0 reconstruction's, stamped at midnight with
+// today's status: r/backpacks and r/travelgear probed, candidate to active;
+// r/minimalism and r/cycling probed, rejected; r/onebag, r/southafrica and
+// r/capetown proposed as candidates, the last two probed, rejected.
+// keyword_performance's Reddit communities by gather (dated by its first row):
+// r/backpacks in all six from 17 Aug 07:04; r/travelgear from 9 Sep 10:30;
+// r/onebag from 9 Sep 18:17. The two July gathers ran none.
+const recon = (at: string, name: string, before: string | null, after: string) => ({
+  surface: 'subreddits' as const, changed_at: at, source: 'reconstructed',
+  before: before ? { name, status: before } : null, after: { name, status: after },
+})
+const sep9 = (name: string, before: string | null, after: string) => recon('2026-09-09T00:00:00+00:00', name, before, after)
+const SEP9_ROWS = [
+  sep9('backpacks', 'candidate', 'active'), sep9('travelgear', 'candidate', 'active'),
+  sep9('minimalism', 'candidate', 'rejected'), sep9('cycling', 'candidate', 'rejected'),
+  sep9('onebag', null, 'candidate'), sep9('southafrica', null, 'candidate'), sep9('southafrica', 'candidate', 'rejected'),
+  sep9('capetown', null, 'candidate'), sep9('capetown', 'candidate', 'rejected'),
+]
+const THREE = ['r/backpacks', 'r/travelgear', 'r/onebag']
+const SEALAND_COMMUNITY_GATHERS = gathersOf([
+  ...rows('g0706', '2026-07-06T04:19:00Z', ['upcycled bag'], ['reddit']),
+  ...rows('g0709', '2026-07-09T13:20:55Z', ['upcycled bag'], ['reddit']),
+  ...rows('g0817a', '2026-08-17T07:04:33Z', ['upcycled bag', 'r/backpacks'], ['reddit']),
+  ...rows('g0817b', '2026-08-17T10:57:31Z', ['upcycled bag', 'r/backpacks'], ['reddit']),
+  ...rows('g0909a', '2026-09-09T10:30:31Z', ['upcycled bag', 'r/backpacks', 'r/travelgear'], ['reddit']),
+  ...rows('g0909b', '2026-09-09T18:17:56Z', ['upcycled bag', ...THREE], ['reddit']),
+  ...rows('g0913', '2026-09-13T10:12:30Z', ['upcycled bag', ...THREE], ['reddit']),
+  ...rows('g0920', '2026-09-20T04:18:34Z', ['upcycled bag', ...THREE], ['reddit']),
+], [])
+const sorted = (xs: Set<string>): string[] => [...xs].sort()
+
+describe('a community change, read against the gathers', () => {
+  it('read as they stand, the 9 Sep rows name r/backpacks and r/travelgear (the Record’s wrong line)', () => {
+    const d = communityDelta(SEP9_ROWS)
+    expect(sorted(d.added)).toEqual(['r/backpacks', 'r/travelgear'])
+    expect(d.removed.size).toBe(0)
+  })
+
+  it('against the gathers, the 9 Sep change added r/onebag and r/travelgear: r/backpacks has run since 17 Aug', () => {
+    const d = communityDelta(SEP9_ROWS, SEALAND_COMMUNITY_GATHERS)
+    expect(sorted(d.added)).toEqual(['r/onebag', 'r/travelgear'])
+    expect(d.removed.size).toBe(0)
+    expect(sorted(termDelta(SEP9_ROWS, SEALAND_COMMUNITY_GATHERS).added)).toEqual(['r/onebag', 'r/travelgear'])
+  })
+
+  it('reaches the videos r/onebag or r/travelgear alone found, never those r/backpacks found', () => {
+    const vids: MonthVideo[] = ['onebag', 'travelgear', 'backpacks', 'both'].map((id) => ({ id, platform: 'reddit', audience: 'industry-other', dated: 1 }))
+    const ev = new Map([
+      ['onebag', evidenceTerms([['r/onebag']])],
+      ['travelgear', evidenceTerms([['r/travelgear']])],
+      ['backpacks', evidenceTerms([['r/backpacks']])],
+      ['both', evidenceTerms([['r/onebag', 'r/backpacks']])],
+    ])
+    expect(reachOf(termDelta(SEP9_ROWS, SEALAND_COMMUNITY_GATHERS), vids, ev).map((v) => v.id)).toEqual(['onebag', 'travelgear'])
+    expect(reachOf(termDelta(SEP9_ROWS), vids, ev).map((v) => v.id)).toEqual(['travelgear', 'backpacks'])
+  })
+
+  it('Össur (staging): 23 Aug added r/amputee and r/prosthetics, not r/bionics (first run 30 Aug); its 13 Sep re-probe moved nothing', () => {
+    const OSSUR_GATHERS = gathersOf([
+      ...rows('o0823', '2026-08-23T04:06:01Z', ['r/amputee', 'r/prosthetics'], ['reddit']),
+      ...rows('o0830a', '2026-08-30T04:11:44Z', ['r/amputee', 'r/prosthetics', 'r/bionics'], ['reddit']),
+      ...rows('o0830b', '2026-08-30T08:27:00Z', ['r/amputee', 'r/prosthetics', 'r/bionics'], ['reddit']),
+      ...rows('o0906', '2026-09-06T04:07:00Z', ['r/amputee', 'r/prosthetics', 'r/bionics'], ['reddit']),
+      ...rows('o0913', '2026-09-13T04:11:00Z', ['r/amputee', 'r/prosthetics', 'r/bionics'], ['reddit']),
+    ], [])
+    const aug23 = [
+      recon('2026-08-23T00:00:00+00:00', 'amputee', 'candidate', 'active'),
+      recon('2026-08-23T00:00:00+00:00', 'prosthetics', 'candidate', 'active'),
+      recon('2026-08-23T00:00:00+00:00', 'bionics', null, 'candidate'),
+    ]
+    expect(sorted(communityDelta(aug23, OSSUR_GATHERS).added)).toEqual(['r/amputee', 'r/prosthetics'])
+    const sep13 = [recon('2026-09-13T00:00:00+00:00', 'bionics', 'candidate', 'active')]
+    expect(sorted(communityDelta(sep13).added)).toEqual(['r/bionics'])
+    expect(communityDelta(sep13, OSSUR_GATHERS)).toEqual({ added: new Set(), removed: new Set() })
+  })
+
+  it('reads a trigger row as it stands, gathers or not: it is the record itself', () => {
+    const trig = { surface: 'subreddits' as const, changed_at: '2026-09-20T04:04:05Z', source: 'trigger',
+      before: [{ name: 'backpacks', status: 'active' }, { name: 'travelbackpacks', status: 'candidate' }],
+      after: [{ name: 'backpacks', status: 'active' }, { name: 'travelbackpacks', status: 'active' }] }
+    expect(sorted(communityDelta([trig], SEALAND_COMMUNITY_GATHERS).added)).toEqual(['r/travelbackpacks'])
+  })
+
+  it('switches a community off on the day it last ran, once a later gather ran without it (a rule check, not a Sealand event)', () => {
+    const off = [recon('2026-09-13T00:00:00+00:00', 'travelgear', 'active', 'rejected')]
+    const without = gathersOf([
+      ...rows('a', '2026-09-09T10:30:31Z', ['r/backpacks', 'r/travelgear'], ['reddit']),
+      ...rows('b', '2026-09-13T10:12:30Z', ['r/backpacks', 'r/travelgear'], ['reddit']),
+      ...rows('c', '2026-09-20T04:18:34Z', ['r/backpacks'], ['reddit']),
+    ], [])
+    expect(communityDelta(off, without)).toEqual({ added: new Set(), removed: new Set(['r/travelgear']) })
+    // No gather after the day yet: nothing shows it stopped.
+    expect(communityDelta(off, without.slice(0, 2)).removed.size).toBe(0)
+  })
+
+  it('names every community a side holds, whatever its status', () => {
+    expect(sorted(namedCommunities({ name: 'OneBag', status: 'candidate' }))).toEqual(['onebag'])
+    expect(sorted(namedCommunities([{ name: 'backpacks', status: 'active' }, { name: 'edc', status: 'rejected' }, 'r/TravelGear']))).toEqual(['backpacks', 'edc', 'travelgear'])
+    expect(sorted(namedCommunities('backpacks, onebag'))).toEqual(['backpacks', 'onebag'])
+    expect(namedCommunities(null).size).toBe(0)
   })
 })
 
