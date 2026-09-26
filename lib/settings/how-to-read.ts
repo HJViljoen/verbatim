@@ -200,6 +200,14 @@ export const DEFINITIONS: readonly Definition[] = [
     body: 'Reddit comments are read to 40 per thread and no deeper. A Reddit post has no views, so it carries no engagement rate and is in no engagement row.',
   },
   {
+    // WEEK BY WEEK (market-first decision M, part 1; WP2.9): the method the
+    // bars do not carry under themselves (25 Sep rulings). Linked from Your
+    // market's "With this update" and This week's "Week by week".
+    id: 'week-by-week',
+    title: 'Week by week',
+    body: 'Week by week counts your market’s videos and comments for each week, Monday to Sunday, by the day each comment was written. Your own posts are not counted. The counts follow our searches as much as the market: a week in which we added a search holds the videos it found, so the chart marks the days we changed our searches or how we check relevance. A video with comments in two weeks counts in both, so the weeks’ videos do not add up to a month. A week still being read says so: so far, or filling until two updates have read it. A weekly reading is read once a week is two updates old, and compared only with weeks read the same way; until a check on real data passes it is pending.',
+  },
+  {
     id: 'new',
     title: 'New',
     body: 'New means there is no earlier month in our record in which the theme behind it was mentioned, in your audience or in the category. It is a fact about the record, not a direction.',

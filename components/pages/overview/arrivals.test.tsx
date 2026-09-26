@@ -7,6 +7,8 @@ import { render, renderText } from '@/lib/test/render'
 import { overviewArrivals } from './arrivals'
 import { marketArrivalsFixture, marketFrontFixture, ossurArrivalsFixture, overviewFixture, SEALAND_20_SEP_ARRIVALS, sealandWeeks } from './fixture'
 import { OVERVIEW_BLOCKS } from '.'
+import { WEEK_BY_WEEK_HREF } from './weeks'
+import { DEFINITIONS } from '@/lib/settings/how-to-read'
 
 // "With this update" (market-first WP2.7, plan §2.2 block 3), on staging's own
 // updates (the fixture's header says which).
@@ -147,6 +149,8 @@ describe('week by week, inside With this update (WP2.9)', () => {
     expect(t).toContain('How to read: Week by week →')
     expect(t).not.toMatch(/follow our searches|counts in both|not counted|two updates old/i)
     expect(render(overviewArrivals.render(oct11(), 'app', ctx))).toContain('/dashboard/settings/how-to-read#week-by-week')
+    // The link lands on a card that exists.
+    expect(DEFINITIONS.map((d) => d.id)).toContain(WEEK_BY_WEEK_HREF.split('#')[1])
   })
 
   it('says no week has comments yet, rather than an empty chart', () => {

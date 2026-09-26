@@ -301,6 +301,46 @@ baseline, and rules drawn behind the lines.
 - **The Subjects chart axis is its own**: trailing twelve months, or from the tenant's first
   readable month (`chartMonths`, lib/reading/horizon.ts), whatever the horizon control says.
 
+### Week bars — the weekly volume bars (`components/charts/week-bars.tsx`; market-first WP2.9, decision M)
+
+The design the next chart built on weeks follows. Drawn as the approved preview draws it
+(WeeklyLine.dc.html on Your market, inside "With this update"; ThisWeek.dc.html's "Week by week").
+
+- **Counts only.** The market's videos and comments per ISO week (Monday to Sunday, UTC, by comment
+  date), two rows on one week axis as small multiples, videos first, each row on its own scale. No
+  share, no percentage, no verdict, no arrow, no direction word, no gridline, no y axis: a count
+  over every bar (13px/600 mono for videos, 12px/500 for comments) on a halo of the ground colour.
+- **Bars** are 55% of their slot, radius 2, in the ink (`--foreground`), on a hairline baseline in
+  `--border`. Rows: 208 px and 60 px on the front page, 128 px and 70 px on This week.
+- **A week still being read** ("so far"; "filling": ended, under two updates since) is drawn
+  OUTLINED (the ground colour, a 1.5 ink stroke), with its word under the axis, so its state never
+  rests on colour alone. (The WP's 40% ink is superseded by the preview.)
+- **A week with nothing gathered** draws no bar and keeps its slot; one 12px mono label spans a run
+  of them: "none gathered".
+- **Our changes** are marks on the day they were made: a filled 9px triangle for our searches, a
+  hollow one for our relevance check. Front page: the mark above the plot with the day beside it and
+  a `2 3` dotted line in `--cat` down through both rows. This week: a row of marks under the axis
+  labelled "Our changes". One key sentence under the chart names them ("We changed our searches on
+  9, 13 and 17 Sep, and how we check relevance on 26 Sep."): a key, not a note. Filing changes are
+  not drawn: the pooled market does not move when a video is re-filed (decision E).
+- **Axis:** the Monday's day in 12px mono under each week, the month under the first week that starts
+  in it, the state words under those.
+- **Responsive without script:** heights in px, every horizontal position a percentage of the plot,
+  rule labels placed at the plot's narrowest width (520 px). Under that the strip scrolls sideways
+  and opens at the latest week (a reversed flex row); the row names stay put.
+- **Hover that answers a question:** a column per week, washed in the other ground, with the week's
+  facts (a card on the front page; This week's panel beside the chart shows the latest week no
+  longer so far until another is hovered): videos, in the category and filed under a brand you
+  track; comments, dated by month; the median comments a video; let in before we checked relevance.
+- **The pending row ("Read at the same age", pending):** a hollow circle in each due week's slot
+  from the line's first week, "due" over it and the update it is due with under it, a `1 3` dotted
+  hairline joining them, "left out" in the excluded week, a bracket over the first pair with "first
+  comparison, with the {date} update", "Kept points" at the left. A circle here is a date, never a
+  value. A tenant with no `WEEK_LINE` entry gets no row.
+- **Inner blocks:** `--inner`, no border, radius 6, 24 px padding, 16 px gap, 24 px between blocks.
+- **Print** draws the SVG and its key without the hover; **email** is a table of week labels and
+  counts. `role="img"` with an `aria-label` reading the latest four weeks.
+
 ### `MovementBadge` — the one badge (`components/delta-badge.tsx`)
 
 - One component, three visual states: a movement that cleared its band (arrowed, coloured, `title`
