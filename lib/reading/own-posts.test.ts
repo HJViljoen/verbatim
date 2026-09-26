@@ -15,8 +15,17 @@ import {
   SUBJECTS_MATCHED_UNCHECKED,
   SUBJECTS_NONE_NAMED,
   SUBJECTS_NOT_ANALYSED,
+  ECHO_MARKET_UNREAD,
+  MARKET_ECHO_AUDIENCE,
+  TOUCH_MIN_WORDS,
   claimEcho,
+  isMissingOwnPostSubjects,
+  marketClaimEcho,
+  marketEchoReading,
   ownCensusWithClaims,
+  ownPostFilings,
+  postsTouching,
+  touchWords,
   ownPostBasis,
   ownPostCensus,
   rivalOwnClaims,
@@ -386,5 +395,101 @@ describe('the absence sentences', () => {
     expect(OWN_POSTS_UNREADABLE).toContain('Settings \u203a Readiness')
     expect(OWN_POSTS_UNREADABLE_OUTSIDE).not.toContain('Settings')
     expect(OWN_POSTS_UNREADABLE_OUTSIDE).not.toContain('Verbatim')
+  })
+})
+
+// ---- WP3.6: touched by your posts, the judge's filing, the market echo ------
+
+// Sealand's own posts on staging, September (topics as stored).
+const SEP_POSTS = [
+  { id: '747f0d6a', topics: ['Heritage Day', 'community event', 'environmental activism', 'yoga', 'coastal clean-up', 'sustainability', 'people and planet'] },
+  { id: '76a8af8e', topics: ['giveaway', 'event', 'crossbody bags', 'trail running', 'collaboration', 'sustainable gear'] },
+  { id: 'df0a32f5', topics: ['event', 'yoga', 'coastal clean-up', 'community', 'sustainability', 'South Africa', 'Heritage Day', 'Sealand gear'] },
+  { id: 'no-topics', topics: null },
+]
+
+describe('postsTouching (WP3.6 Y1, WP2.5 rule)', () => {
+  it('needs two non-generic words from one post, and prints what it checked', () => {
+    const airline = postsTouching('Confusion over airline bag sizes', SEP_POSTS)
+    expect(airline.checked).toEqual(['airline', 'sizes'])
+    expect(airline.matched).toEqual([])
+  })
+
+  it('never calls a one-word label touched', () => {
+    const shipping = postsTouching('Questions about buying and shipping', SEP_POSTS)
+    expect(shipping.checked).toEqual(['shipping'])
+    expect(shipping.checked.length).toBeLessThan(TOUCH_MIN_WORDS)
+    expect(shipping.matched).toEqual([])
+  })
+
+  it('lists each post that shares two or more words, with the words', () => {
+    const r = postsTouching('Questions about coastal clean-up events', SEP_POSTS)
+    expect(r.matched.map((m) => m.id)).toEqual(['747f0d6a', 'df0a32f5'])
+    expect(r.matched[1].words).toEqual(['coastal', 'clean', 'events'])
+  })
+
+  it('drops the generic words and folds a plural', () => {
+    expect(touchWords('Love for handmade bags')).toEqual([])
+    expect(touchWords('Zippers in rain')).toEqual(['zipper', 'rain'])
+  })
+})
+
+describe('ownPostFilings (MF3 own_post_subjects)', () => {
+  const row = (over: Partial<Parameters<typeof ownPostFilings>[0][number]>) => ({
+    video_id: 'p1', claim_id: null, subject_id: 's-water', touches: false, matched_words: [], method: 'judge', judge_version: 'v1', decided_at: '2026-11-22T10:00:00Z', ...over,
+  })
+
+  it('reads the newest row per pair, and an override wins a tie', () => {
+    const f = ownPostFilings([
+      row({ touches: true, matched_words: ['rain'], decided_at: '2026-11-22T10:00:00Z' }),
+      row({ touches: false, decided_at: '2026-11-23T10:00:00Z' }),
+      row({ video_id: 'p2', touches: false }),
+      row({ video_id: 'p2', touches: true, matched_words: ['waterproof'], method: 'override' }),
+    ])
+    expect(f.postFiled.has('p1|s-water')).toBe(true)
+    expect(f.touching.get('s-water')?.has('p1')).toBe(false)
+    expect(f.touching.get('s-water')?.get('p2')).toEqual(['waterproof'])
+  })
+
+  it('files a claim apart from its post, and a touching claim touches its post', () => {
+    const f = ownPostFilings([row({ claim_id: 'c1', touches: true, matched_words: ['recycled', 'sailcloth'] })])
+    expect(f.postFiled.size).toBe(0)
+    expect(f.claimFiled.has('c1|s-water')).toBe(true)
+    expect(f.claimTouches.get('c1')).toEqual(new Set(['s-water']))
+    expect(f.touching.get('s-water')?.get('p1')).toEqual(['recycled', 'sailcloth'])
+  })
+
+  it('knows the missing table by name only', () => {
+    expect(isMissingOwnPostSubjects({ code: 'PGRST205', message: 'Could not find the table public.own_post_subjects in the schema cache' })).toBe(true)
+    expect(isMissingOwnPostSubjects({ code: '42P01', message: 'relation "own_post_subjects" does not exist' })).toBe(true)
+    expect(isMissingOwnPostSubjects({ code: '42501', message: 'permission denied for table own_post_subjects' })).toBe(false)
+    expect(isMissingOwnPostSubjects({ code: 'PGRST205', message: 'Could not find the table public.moves' })).toBe(false)
+  })
+})
+
+describe('the market echo (WP3.6 Y3: market counts, not the client audience)', () => {
+  // Staging, September: 654 market videos; the echoed claim's cited evidence
+  // sits on 152 videos, 89 of them in the month; the pushed-back claim's on
+  // 35, 25 of them in the month.
+  const month = new Set(Array.from({ length: 654 }, (_, i) => `v${i}`))
+  const cited = (inMonth: number, outside: number) => [
+    ...Array.from({ length: inMonth }, (_, i) => `v${i}`),
+    ...Array.from({ length: outside }, (_, i) => `old${i}`),
+  ]
+
+  it('counts the cited videos inside the month, of the month', () => {
+    expect(marketEchoReading(cited(89, 63), month)).toEqual({ k: 89, n: 654 })
+    const echo = marketClaimEcho({ stance: 'echoes', reading: marketEchoReading(cited(89, 63), month) })
+    expect(echo.audience).toBe(MARKET_ECHO_AUDIENCE)
+    expect(echo.state).toBe('echoed')
+    expect(echo.value).toEqual({ k: 89, n: 654 })
+    expect(marketClaimEcho({ stance: 'contradicts', reading: marketEchoReading(cited(25, 10), month) }).state).toBe('pushed_back')
+  })
+
+  it('reads a claim nothing carried as silent, and an unread month as no reading', () => {
+    expect(marketClaimEcho({ stance: 'silent', reading: marketEchoReading([], month) }).state).toBe('silent')
+    const unread = marketClaimEcho({ stance: 'echoes', reading: marketEchoReading(cited(89, 0), null) })
+    expect(unread.state).toBe('not_tracked')
+    expect(unread.why).toBe(ECHO_MARKET_UNREAD)
   })
 })
