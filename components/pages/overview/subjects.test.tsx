@@ -7,7 +7,8 @@ import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { DirectionWord, leadGap, overviewSubjects, sparkDomain, subjectsMeta } from './subjects'
 import { monthlyLineLabel } from '@/lib/pages/overview'
-import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
+import { calibrationOverviewFixture, overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
+import { monthlySubjectsEmail } from '@/components/blocks/monthly/subjects'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -324,5 +325,84 @@ describe('OV2 · a refusal every row shares prints once, as a chip', () => {
 
   it('prints no chip where nothing is refused', () => {
     expect(renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))).not.toContain('not read as a change')
+  })
+})
+
+// ---- decision C, WP1.1: the three calibration states -------------------------
+
+describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oct)', () => {
+  const data = calibrationOverviewFixture()
+  const byId = (id: string) => data.subjects.rows.find((r) => r.id === id)!
+
+  it('the loader marks each row: two ready, one failed, one provisional', () => {
+    expect(data.subjects.rows.map((r) => [r.label, r.calibration])).toEqual([
+      ['Looks & style', 'ready'],
+      ['Repair & warranty', 'failed'],
+      ['Community & purpose', 'provisional'],
+      ['Waterproofing', 'ready'],
+    ])
+  })
+
+  it('renders in all three modes and keeps the copy contract', () => {
+    for (const mode of MODES) assertCopyContract(render(overviewSubjects.render(data, mode, ctx)))
+    assertCopyContract(render(monthlySubjectsEmail(data, ctx)))
+  })
+
+  it('a failed subject prints its name and "being re-described", and none of its figures', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      expect(text).toContain('Repair & warranty')
+      expect(text.match(/being re-described/g)?.length).toBe(1)
+      // Its 33 of 625 category videos never print.
+      expect(text).not.toContain('33 of 625')
+    }
+    expect(byId('repair').category).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+  })
+
+  it('a provisional subject prints its market levels, marked, and no "you" side or change', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      expect(text.match(/provisional/g)?.length).toBe(1)
+      expect(text).toContain('0 of 625')
+    }
+    const row = byId('community')
+    expect(row.you.observed).toBe(false)
+    expect(row.category.verdict).toBeNull()
+    expect(row.direction).toBeNull()
+    expect(data.subjects.gaps.community).toBeNull()
+  })
+
+  it('never says "not tracked" of a side it only withholds', () => {
+    // Staging holds no own-audience month row, so each READY row's "you" cell
+    // is truly not tracked; the provisional and failed rows' cells are
+    // withheld, and say nothing about tracking.
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      const failedRow = text.slice(text.lastIndexOf('Repair & warranty'), text.lastIndexOf('Community & purpose'))
+      const provisionalRow = text.slice(text.lastIndexOf('Community & purpose'), text.lastIndexOf('Waterproofing'))
+      for (const row of [failedRow, provisionalRow]) {
+        expect(row).not.toContain('not tracked')
+        expect(row).not.toContain('no change is read for your side')
+      }
+    }
+  })
+
+  it('declares no verdict and no figure for a subject that is not ready', () => {
+    const answers = blockAnswers(overviewSubjects, data)
+    for (const v of answers.verdicts) expect(['looks', 'water']).toContain(v.objectId)
+    expect(Object.keys(answers.figures).some((k) => k.includes('repair'))).toBe(false)
+  })
+
+  it('the monthly email prints the same states', () => {
+    const text = renderText(monthlySubjectsEmail(data, ctx))
+    expect(text).toContain('being re-described')
+    expect(text).toContain('provisional')
+    expect(text).not.toContain('33 of 625')
+  })
+
+  it('a row stored before WP1.1 carries no state and renders as sent, with no word', () => {
+    const text = renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(text).not.toContain('provisional')
+    expect(text).not.toContain('being re-described')
   })
 })

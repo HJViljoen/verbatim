@@ -11,6 +11,8 @@ import type { SideReading, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import { CONTRIBUTIONS_NOT_RECORDED, subjectsLead } from '@/lib/reports/weekly'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { isFailed, printsClient } from '@/lib/subjects/calibration-state'
 
 // WR2 · Where things stand (design §3 WR section 2).
 //
@@ -115,9 +117,15 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
   mode: RenderMode
   appUrl: string
 }) {
-  const label = mode === 'email'
+  // THE ROW'S CALIBRATION (decision C, WP1.1): the word under the name; a
+  // failed subject prints nothing else, and a provisional one has no "you"
+  // clause. A row stored before WP1.1 carries no state and renders as sent.
+  const failed = isFailed(row.calibration)
+  const client = printsClient(row.calibration)
+  const name = mode === 'email'
     ? <span style={{ fontFamily: FONT.sans, fontSize: 13.5, color: EMAIL.ink }}>{row.label}</span>
     : <Link href={`${appUrl}${row.href}`} className="text-[13.5px] underline-offset-2 hover:underline">{row.label}</Link>
+  const label = <>{name}<CalibrationTag calibration={row.calibration} mode={mode} block /></>
   const figure = (
     <FigureCell
       mode={mode}
@@ -135,17 +143,27 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
   // whispered the four that do, and how loudly depended on the client. The app
   // arm wrapped the identical fragment at `text-[11px]`, which is why only the
   // email was wrong.
+  const you = client ? <>you <Side side={row.you} mode={mode} /> · </> : null
   const sides = mode === 'email'
     ? (
         <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>
-          you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
+          {you}{rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
         </span>
       )
     : (
         <>
-          you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
+          {you}{rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
         </>
       )
+  if (failed) {
+    return mode === 'email'
+      ? (
+        <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 14 }}>
+          <tbody><tr><td style={{ verticalAlign: 'middle' }}>{label}</td></tr></tbody>
+        </table>
+      )
+      : <div className="mt-3.5">{label}</div>
+  }
   // `good="neutral"` — A SHARE OF THE CATEGORY HAS NO FAVOURABLE DIRECTION.
   // The badge coloured by sign, so Price at "−3.1 pts" was painted red and a
   // rise in anything was painted green; fewer people arguing about price is

@@ -4,7 +4,10 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { LevelRow, OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, buildSubjects, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
+import { JUDGE_VERSION, type Subject } from '@/lib/subjects/types'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { kindShares } from '@/lib/reading/kinds'
 import { moodShares } from '@/lib/reading/mood'
 import {
@@ -970,4 +973,62 @@ export function makersMarkedFixture(): OverviewData {
       levels: (base.category.levels ?? []).map((l) => ({ ...l, makerShare: SEPTEMBER_MAKER_SHARES[l.registryId] ?? null })),
     },
   }
+}
+
+/**
+ * OV2 under the three calibration states (decision C, WP1.1), built by the
+ * loader's own `buildSubjects` from staging's real rows: Sealand, August and
+ * September to the 20 Sep data, the category (351 and 625 videos), Cotopaxi
+ * (22 and 12) and Freitag (4 and 6); no own-audience month row in either
+ * month, so the "you" side is not tracked on every row. The calibrations are
+ * staging's, written 24 Sep under this judge on 33 labels: Looks & style 0.857
+ * and Waterproofing 1.0 (ready), Repair & warranty 0.333 (failed), and
+ * Community & purpose never checked (provisional, cited on no video in either
+ * month). Read on 2 Oct, when August against September is refused.
+ */
+export function calibrationOverviewFixture(): OverviewData {
+  const now = '2026-10-02T06:00:00.000Z'
+  const cotopaxi = rivalKey('Cotopaxi')
+  const freitag = rivalKey('Freitag')
+  const at = '2026-09-24T11:53:16.678Z'
+  const subject = (id: string, name: string, precision: number | null): Subject => ({
+    id, client_id: 'sealand', name, description: null, origin: 'client', source_ref: null,
+    named_at: '2026-08-19', status: 'active', superseded_by: null, embedded_at: null, embed_input_version: null,
+    calibrated_at: precision == null ? null : at,
+    calibration_precision: precision,
+    calibration_n: precision == null ? null : 33,
+    calibration_judge_version: precision == null ? null : JUDGE_VERSION,
+  })
+  const row = (month: string, audience: string, subject_id: string, videos: number) => ({ month, audience, subject_id, videos, comments: 0 })
+  const subjects = buildSubjects({
+    subjects: [
+      subject('looks', 'Looks & style', 0.8571428571428571),
+      subject('repair', 'Repair & warranty', 0.3333333333333333),
+      subject('community', 'Community & purpose', null),
+      subject('water', 'Waterproofing', 1),
+    ],
+    months: [
+      row('2026-08-01', INDUSTRY_AUDIENCE, 'looks', 37), row('2026-08-01', cotopaxi, 'looks', 1),
+      row('2026-09-01', INDUSTRY_AUDIENCE, 'looks', 102), row('2026-09-01', freitag, 'looks', 1),
+      row('2026-08-01', INDUSTRY_AUDIENCE, 'repair', 14), row('2026-08-01', cotopaxi, 'repair', 1),
+      row('2026-09-01', INDUSTRY_AUDIENCE, 'repair', 33), row('2026-09-01', cotopaxi, 'repair', 1),
+      row('2026-08-01', INDUSTRY_AUDIENCE, 'water', 13), row('2026-08-01', cotopaxi, 'water', 2),
+      row('2026-09-01', INDUSTRY_AUDIENCE, 'water', 28),
+    ],
+    denominators: new Map(),
+    perAudience: new Map([
+      [`2026-08-01|${INDUSTRY_AUDIENCE}`, 351], [`2026-09-01|${INDUSTRY_AUDIENCE}`, 625],
+      [`2026-08-01|${cotopaxi}`, 22], [`2026-09-01|${cotopaxi}`, 12],
+      [`2026-08-01|${freitag}`, 4], [`2026-09-01|${freitag}`, 6],
+    ]),
+    axis: ['2026-08-01', '2026-09-01'],
+    month: '2026-09-01',
+    prevMonth: '2026-08-01',
+    leadRival: 'Cotopaxi',
+    atLastMonth: null,
+    thin: false,
+    pair: pairOn(sealandJudge(now)),
+    asOf: now,
+  })
+  return { ...overviewFixture(), subjects }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { calibrationOverviewFixture, overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { Gap } from '@/lib/reading/gap'
@@ -539,5 +539,13 @@ describe('the sheet inside the deck', () => {
     }
     const words = markupText(render(<DocumentDeck data={blocked} date="18 Sep 2026" />))
     expect(words).toContain('Name your subjects in Settings — an operator confirms them.')
+  })
+})
+
+describe('the leadership sheet under the three calibration states (decision C, WP1.1)', () => {
+  it('never makes a provisional or failed subject the subject card', () => {
+    const rows = calibrationOverviewFixture().subjects.rows
+    expect(['looks', 'water']).toContain(leadSubject(rows)?.id)
+    expect(leadSubject(rows.filter((r) => r.calibration !== 'ready'))).toBeNull()
   })
 })

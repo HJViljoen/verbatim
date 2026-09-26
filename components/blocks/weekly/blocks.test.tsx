@@ -6,6 +6,8 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, NOTHING_UNUSUAL, WEEKLY_BLOCK_KEYS, WEEKLY_RULE, firstScreenCount } from '@/lib/reports/weekly'
 import { WEEKLY_BLOCKS, forSales, weeklyBlocksFor } from './index'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from './fixture'
+import { calibrationOverviewFixture } from '@/components/pages/overview/fixture'
+import { weeklySubjects as weeklySubjectsBlock } from './subjects'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -894,5 +896,24 @@ describe('WR6 · coverage', () => {
 
   it('is never empty', () => {
     for (const data of STATES) expect(block.emptyState(data)).toBeNull()
+  })
+})
+
+describe('the weekly subjects block under the three calibration states (decision C, WP1.1)', () => {
+  const data = { ...weeklyFixture(), subjects: calibrationOverviewFixture().subjects }
+
+  it('renders in all three modes and keeps the copy contract', () => {
+    for (const mode of MODES) assertCopyContract(render(weeklySubjectsBlock.render(data, mode, ctx)))
+  })
+
+  it('a failed subject prints its name and word and nothing else; a provisional one has no "you" clause', () => {
+    for (const mode of MODES) {
+      const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
+      expect(text.match(/being re-described/g)?.length).toBe(1)
+      expect(text.match(/provisional/g)?.length).toBe(1)
+      expect(text).not.toContain('33 of 625')
+      const provisional = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
+      expect(provisional).not.toMatch(/\byou\b/)
+    }
   })
 })

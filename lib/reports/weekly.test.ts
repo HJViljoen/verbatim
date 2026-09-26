@@ -438,6 +438,18 @@ describe('what the subject table adds up to', () => {
     expect(subjectsLead([])).toBeNull()
   })
 
+  // DECISION C (WP1.1): a provisional or failed subject is neither compared
+  // nor a reading this sentence may speak for.
+  it('counts only the subjects that earn a verdict', () => {
+    const lead = subjectsLead([
+      { ...row('Durability', 'no_clear_change'), calibration: 'ready' },
+      { ...row('Repair & warranty', null), calibration: 'failed' },
+      { ...row('Community & purpose', null), calibration: 'provisional' },
+    ])
+    expect(lead?.level).toBe('0 of 1')
+    expect(subjectsLead([{ ...row('Repair & warranty', null), calibration: 'failed' }])).toBeNull()
+  })
+
   it('prints no direction word', () => {
     const lead = subjectsLead([row('Durability', 'moved')])
     expect(`${lead?.level}${lead?.body}`).not.toMatch(/\b(grew|growing|rose|rising|above|climbed)\b/i)

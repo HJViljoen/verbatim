@@ -6,6 +6,7 @@ import { prevMonth } from '../reading/month-key'
 import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
+import { earnsVerdict } from '../subjects/calibration-state'
 
 /**
  * The weekly report — the arrangement, and the first screen's model
@@ -571,8 +572,13 @@ export interface SubjectsLead {
 }
 
 export function subjectsLead(
-  rows: readonly { label: string; category: { verdict: { state: string } | null } }[],
+  allRows: readonly { label: string; calibration?: string | null; category: { verdict: { state: string } | null } }[],
 ): SubjectsLead | null {
+  // ONLY A SUBJECT THAT EARNS A VERDICT IS COUNTED (decision C, WP1.1): a
+  // provisional or failed one carries none, and is neither compared nor a
+  // reading this sentence may speak for. A row stored before WP1.1 carries no
+  // state and counts as it did.
+  const rows = allRows.filter((r) => earnsVerdict(r.calibration))
   if (rows.length === 0) return null
   // ONLY AN ANSWER IS A COMPARISON (deploy 1 review). `too_little_data` is a
   // side under the band's floor, as much a non-answer as `refused`; since WP1.3

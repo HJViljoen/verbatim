@@ -12,7 +12,7 @@ import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, brokenStepFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture, unmentionedFixture } from './fixture'
+import { afterQuarterFixture, brokenStepFixture, calibratedQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture, unmentionedFixture } from './fixture'
 import { quarterlySubjects } from './subjects'
 import { quarterlyMoves } from './moves'
 
@@ -1130,6 +1130,41 @@ describe('quarterly lines under the month-pair rule', () => {
       const text = renderText(quarterlyMoves.render(broken, mode, ctx))
       expect(text).toContain(WHY)
       expect(renderText(quarterlyMoves.render(q, mode, ctx))).not.toContain(WHY)
+    }
+  })
+})
+
+describe('page 3 under the three calibration states (decision C, WP1.1)', () => {
+  const data = calibratedQuarterFixture()
+  const row = (id: string) => data.subjects.rows.find((r) => r.id === id)!
+
+  it('draws no quarter verdict for a provisional or failed subject, and keeps a ready one', () => {
+    expect(row('s5').calibration).toBe('failed')
+    expect(row('s6').calibration).toBe('provisional')
+    for (const id of ['s5', 's6']) {
+      expect(row(id).youQuarter).toBeNull()
+      expect(row(id).categoryQuarter).toBeNull()
+      expect(row(id).gap).toBeNull()
+    }
+    expect(row('s3').categoryQuarter).not.toBeNull()
+    expect(row('s5').category).toBeNull()
+    expect(row('s6').you).toBeNull()
+    expect(row('s6').category).not.toBeNull()
+  })
+
+  it('says why each is waiting in its own words, never "neither side read"', () => {
+    const waits = data.unsettled.waiting.filter((w) => w.title.startsWith('Repairs and warranty') || w.title.startsWith('Where the material'))
+    expect(waits.map((w) => w.why).sort()).toEqual(['being re-described', 'provisional'])
+    for (const w of waits) expect(w.line).not.toContain('Neither side')
+  })
+
+  it('prints the words on the page, in all three modes, and keeps the copy contract', () => {
+    for (const mode of MODES) {
+      const markup = render(quarterlySubjects.render(data, mode, ctx))
+      assertCopyContract(markup)
+      const text = renderText(quarterlySubjects.render(data, mode, ctx))
+      expect(text).toContain('being re-described')
+      expect(text).toContain('provisional')
     }
   })
 })

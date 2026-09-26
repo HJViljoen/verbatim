@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { isFailed, printsClient } from '@/lib/subjects/calibration-state'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -145,9 +147,12 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             mode={mode}
             template={TEMPLATE}
             cells={[
-              row.label,
-              <Side key="you" side={row.you} mode={mode} />,
-              <Side key="cat" side={row.category} mode={mode} />,
+              // THE ROW'S CALIBRATION (decision C, WP1.1): the word under the
+              // name, no "you" figure on a provisional subject, no figure at
+              // all on a failed one.
+              <span key="name">{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></span>,
+              printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label="not shown until this subject is checked" />,
+              isFailed(row.calibration) ? <NoValue key="cat" mode={mode} label="not shown until this subject is checked" /> : <Side key="cat" side={row.category} mode={mode} />,
               row.categoryQuarter
                 ? <BlockMovement key="catq" verdict={row.categoryQuarter} unit="pts" mode={mode} />
                 : <NotDrawn key="catq" mode={mode} />,

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 
 import { BlockMovement } from '@/components/blocks/movement'
-import { FigureCell } from '@/components/blocks/frame'
+import { FigureCell, NoValue } from '@/components/blocks/frame'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration-state'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
 import { provenanceLine } from '@/components/pages/overview/sentence'
@@ -345,7 +347,11 @@ export function leadGap(gaps: Record<string, Gap | null>): Gap | null {
 
 /** The subject the third card is about: the biggest banded move on the side
  *  that can carry one (the category), else the first row. */
-export function leadSubject(rows: readonly SubjectRow[], exceptId?: string | null): SubjectRow | null {
+export function leadSubject(allRows: readonly SubjectRow[], exceptId?: string | null): SubjectRow | null {
+  // A PROVISIONAL OR FAILED SUBJECT IS NEVER A CARD (decision C, WP1.1): the
+  // card is a headline, and neither earns one. A row stored before WP1.1
+  // carries no state and is eligible as it was.
+  const rows = allRows.filter((r) => earnsVerdict(r.calibration))
   // THREE CARDS ABOUT ONE SUBJECT IS ONE CARD. The artboard leads with the
   // Durability gap and closes with Price, which is the whole point of a
   // three-up row: a reader gets the gap, the category's attention and a second
@@ -612,7 +618,10 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
 /** One side of a subjects row — the share over the count it rests on, or the
  *  honest absence. `FigureCell` stamps its own `figure` / `level` markers, so
  *  the "of N" rule (b) wants cannot fall off the row. */
-function Cell({ side }: { side: SideReading | null }) {
+function Cell({ side, withheld = false }: { side: SideReading | null; withheld?: boolean }) {
+  // A side held back by the subject's calibration (decision C) is not "not
+  // tracked": it prints the empty cell and nothing about tracking.
+  if (withheld) return <NoValue label="not shown until this subject is checked" />
   if (!side || !side.observed || side.pct == null) {
     return <span className="text-[11.5px] text-muted-foreground">&mdash; not tracked</span>
   }
@@ -677,10 +686,12 @@ function SubjectsTable({ data }: { data: OverviewData }) {
           <tbody role="rowgroup" className="block">
             {shown.map((r, i) => (
               <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
-                <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">{r.label}</th>
-                <td role="cell"><Cell side={r.you} /></td>
-                <td role="cell"><Cell side={r.rival} /></td>
-                <td role="cell"><Cell side={r.category} /></td>
+                <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">
+                  {r.label}{r.calibration && r.calibration !== 'ready' ? ' ' : null}<CalibrationTag calibration={r.calibration} mode="print" />
+                </th>
+                <td role="cell"><Cell side={r.you} withheld={!printsClient(r.calibration)} /></td>
+                <td role="cell"><Cell side={r.rival} withheld={isFailed(r.calibration)} /></td>
+                <td role="cell"><Cell side={r.category} withheld={isFailed(r.calibration)} /></td>
                 <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
                   <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
                   <DirectionWord direction={r.direction} />

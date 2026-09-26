@@ -179,6 +179,26 @@ describe('headlineObject', () => {
     } as unknown as Partial<OverviewData>)
     expect(headlineObject(data)).toBeNull()
   })
+
+  // DECISION C (WP1.1): a provisional or failed subject is never a headline.
+  // Staging's September category levels: Looks & style 102 of 625 (ready),
+  // Repair & warranty 33 of 625 (failed, 0.333 on 33), and a provisional row at
+  // the larger share must not lead either.
+  it('never falls back to a provisional or failed subject', () => {
+    const rows = [
+      subject({ id: 'looks', label: 'Looks & style', calibration: 'ready', category: side({ k: 102, n: 625, pct: 16.3 }) }),
+      subject({ id: 'unchecked', label: 'Travel fit', calibration: 'provisional', category: side({ k: 150, n: 625, pct: 24 }) }),
+      subject({ id: 'repair', label: 'Repair & warranty', calibration: 'failed', category: side({ k: 33, n: 625, pct: 5.3 }) }),
+    ]
+    const data = overview({
+      subjects: { state: 'ready', rows, candidates: [], rivalLabel: null, categoryLabel: 'Category', note: null },
+    } as unknown as Partial<OverviewData>)
+    expect(headlineObject(data)?.label).toBe('Looks & style')
+    const none = overview({
+      subjects: { state: 'ready', rows: rows.slice(1), candidates: [], rivalLabel: null, categoryLabel: 'Category', note: null },
+    } as unknown as Partial<OverviewData>)
+    expect(headlineObject(none)).toBeNull()
+  })
 })
 
 // THE PARITY GATE (plan §4.0, §7.4): the weekly preview stays byte for byte

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
-import type { Move, Subject } from '../subjects/types'
+import { JUDGE_VERSION, type Move, type Subject } from '../subjects/types'
 import { actedTally } from '../reading/moves'
 import { gapLine, type Gap } from '../reading/gap'
 import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
@@ -540,7 +540,16 @@ describe('candidateLine', () => {
 
 // ---- the three block builders --------------------------------------------------
 
-const subject = (id: string, name: string, status: Subject['status'] = 'active'): Subject =>
+/** A calibration as production stored them on 25 Sep (n = 25 each), under
+ *  this judge: Durability 0.96 (ready), Community & purpose 0.60 (clearly
+ *  under, failed); and never checked (provisional). */
+const CAL = {
+  ready: { calibrated_at: '2026-09-25T10:00:00.000Z', calibration_precision: 0.96, calibration_n: 25, calibration_judge_version: JUDGE_VERSION },
+  failed: { calibrated_at: '2026-09-25T10:00:00.000Z', calibration_precision: 0.6, calibration_n: 25, calibration_judge_version: JUDGE_VERSION },
+  unchecked: { calibrated_at: null, calibration_precision: null, calibration_n: null, calibration_judge_version: null },
+} as const
+
+const subject = (id: string, name: string, status: Subject['status'] = 'active', cal: keyof typeof CAL = 'ready'): Subject =>
   ({
     id,
     client_id: 'c',
@@ -553,10 +562,7 @@ const subject = (id: string, name: string, status: Subject['status'] = 'active')
     superseded_by: null,
     embedded_at: null,
     embed_input_version: null,
-    calibrated_at: null,
-    calibration_precision: null,
-    calibration_n: null,
-    calibration_judge_version: null,
+    ...CAL[cal],
   }) as Subject
 
 const AXIS = ['2026-07-01', '2026-08-01', '2026-09-01']
@@ -716,6 +722,57 @@ describe('buildSubjects', () => {
 
   it('has no gap where no rival is tracked', () => {
     expect(withGap({ leadRival: null }).gaps.s1).toBeNull()
+  })
+
+  // ---- decision C, WP1.1: the three calibration states -------------------------
+
+  const threeSided = () => {
+    const months = [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 240, comments: 0 },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 0 },
+      ...gapMonths,
+    ]
+    const withRival = gapAudiences()
+    return (cal: keyof typeof CAL) => buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
+      subjects: [subject('s1', 'Durability', 'active', cal)], months, denominators: new Map(), perAudience: withRival,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+  }
+
+  it('a ready subject carries its state and prints as read', () => {
+    const b = threeSided()('ready')
+    expect(b.rows[0].calibration).toBe('ready')
+    expect(b.rows[0].you).toMatchObject({ k: 26, n: 84, observed: true })
+    expect(b.rows[0].category.verdict).not.toBeNull()
+    expect(b.gaps.s1).not.toBeNull()
+  })
+
+  it('a provisional subject keeps its market levels, loses its "you" side, every verdict and its gap', () => {
+    const row = threeSided()('unchecked').rows[0]
+    expect(row.calibration).toBe('provisional')
+    expect(row.category).toMatchObject({ k: 305, n: 1388, observed: true, verdict: null })
+    expect(row.rival).toMatchObject({ k: 62, n: 142, observed: true, verdict: null })
+    expect(row.you).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+    expect(row.direction).toBeNull()
+    expect(row.spark.some((v) => v != null)).toBe(true)
+    expect(threeSided()('unchecked').gaps.s1).toBeNull()
+  })
+
+  it('a failed subject (0.60 on 25) keeps only its name: no side, no line, no gap', () => {
+    const b = threeSided()('failed')
+    const row = b.rows[0]
+    expect(row.calibration).toBe('failed')
+    expect(row.label).toBe('Durability')
+    for (const side of [row.you, row.rival, row.category]) expect(side).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+    expect(row.spark.every((v) => v == null)).toBe(true)
+    expect(row.categoryAtLastMonth).toBeNull()
+    expect(b.gaps.s1).toBeNull()
+  })
+
+  it('the note under the table speaks only of subjects whose own side prints', () => {
+    expect(threeSided()('unchecked').note).toBeNull()
+    expect(threeSided()('failed').note).toBeNull()
   })
 
   it('withholds the gap in a thin month, as it withholds the verdicts', () => {
