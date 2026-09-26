@@ -292,12 +292,16 @@ function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: 
   const n = levels[0].n
   const prev = c.levelsPrev ?? null
   const anyMeasured = levels.some((l) => l.makerShare != null)
+  // NO MAKERS COLUMN WHERE NO RULE MARKS MAKERS (deploy 1 review): Össur has
+  // none by design (§2.13), and "makers not yet marked" over an empty column
+  // promised a mark that never comes.
+  const makers = c.makersApply !== false
   const heads = [
     'Theme',
     'Videos',
     levelHead(month, n),
     ...(prev ? [levelHead(prev.month, prev.n)] : []),
-    makersHead(levels),
+    ...(makers ? [makersHead(levels)] : []),
   ]
   if (mode === 'email') {
     const cell = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '3px 10px 3px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
@@ -314,7 +318,7 @@ function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: 
               <td style={cell}><span data-copy="figure">{fmtInt(l.k)}</span></td>
               <td style={cell}><span data-copy="figure">{levelCell(l.k, l.n)}</span></td>
               {prev ? <td style={{ ...cell, color: EMAIL.muted }}><span data-copy="figure">{levelCell(l.prevK, prev.n)}</span></td> : null}
-              <td style={{ ...cell, color: EMAIL.muted }}>{makersTag(l, anyMeasured) ?? ''}</td>
+              {makers ? <td style={{ ...cell, color: EMAIL.muted }}>{makersTag(l, anyMeasured) ?? ''}</td> : null}
             </tr>
           ))}
         </tbody>
@@ -340,7 +344,7 @@ function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: 
               <td className="py-1.5 pr-3 font-mono tabular-nums"><span data-copy="figure">{fmtInt(l.k)}</span></td>
               <td className="py-1.5 pr-3 font-mono tabular-nums"><span data-copy="figure">{levelCell(l.k, l.n)}</span></td>
               {prev ? <td className="py-1.5 pr-3 font-mono tabular-nums text-muted-foreground"><span data-copy="figure">{levelCell(l.prevK, prev.n)}</span></td> : null}
-              <td className="py-1.5 text-[11.5px] text-secondary-foreground">{makersTag(l, anyMeasured) ?? ''}</td>
+              {makers ? <td className="py-1.5 text-[11.5px] text-secondary-foreground">{makersTag(l, anyMeasured) ?? ''}</td> : null}
             </tr>
           ))}
         </tbody>

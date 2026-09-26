@@ -364,6 +364,11 @@ export interface CategoryBlock {
    *  for the column head "Aug (of 351)". Null where there is no previous
    *  month on the page. */
   levelsPrev?: { month: string; n: number | null } | null
+  /** Whether a maker rule marks this tenant's themes (`makerRuleEnabled`).
+   *  False for Össur, which has none by design (§2.13: no makers line), so
+   *  the list draws no makers column that nothing will ever fill (deploy 1
+   *  review). OPTIONAL: a stored copy without it draws the column as before. */
+  makersApply?: boolean
 }
 
 /** One row of OV3's level list (plan §4.2, `CategoryBlock.levels`). */
@@ -2266,25 +2271,28 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   })
 
   // ── OV3 · what the category is saying ─────────────────────────────────
-  const category = buildCategory({
-    audience: INDUSTRY_AUDIENCE,
-    axis: readAxis,
-    month,
-    prevMonth,
-    series: themeSet.series,
-    kindRows,
-    statsRows,
-    panel,
-    perAudience: audienceMonthVideos(history.denominators),
-    recordFrom: started.from,
-    attentionVerdict: categoryAttentionVerdict(rivalsBlock.rows),
-    dormant,
-    thin: suppress,
-    pair,
-    asOf: readingAt,
-    levelSeries: levelSet?.series ?? [],
-    makerShares,
-  })
+  const category: CategoryBlock = {
+    ...buildCategory({
+      audience: INDUSTRY_AUDIENCE,
+      axis: readAxis,
+      month,
+      prevMonth,
+      series: themeSet.series,
+      kindRows,
+      statsRows,
+      panel,
+      perAudience: audienceMonthVideos(history.denominators),
+      recordFrom: started.from,
+      attentionVerdict: categoryAttentionVerdict(rivalsBlock.rows),
+      dormant,
+      thin: suppress,
+      pair,
+      asOf: readingAt,
+      levelSeries: levelSet?.series ?? [],
+      makerShares,
+    }),
+    makersApply: makerRuleEnabled(clientId),
+  }
 
   // ── OV5 · your moves, the card, and what a move did (Block D · D2) ─────
   //

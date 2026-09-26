@@ -147,6 +147,18 @@ describe('OV3 · the level list', () => {
     expect(makersHead(data.category.levels ?? [])).toBe('makers not yet marked')
   })
 
+  // ÖSSUR HAS NO MAKER RULE (§2.13, deploy 1 review): no makers column, and
+  // no "makers not yet marked" over a column nothing will ever fill.
+  it('draws no makers column for a tenant no maker rule marks', () => {
+    const base = marketSizeFixture()
+    const data = { ...base, category: { ...base.category, makersApply: false } }
+    for (const mode of MODES) {
+      const section = renderText(levelSection(render(overviewCategory.render(data, mode, ctx))))
+      expect(section, mode).not.toMatch(/makers/i)
+      expect(section, mode).toContain('Biggest themes')
+    }
+  })
+
   it('marks the rows at half makers or more as "mostly makers" once MF1 is applied', () => {
     const data = makersMarkedFixture()
     for (const mode of MODES) {
