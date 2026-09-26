@@ -22,6 +22,8 @@ import { sectionSlides } from '../lib/reports/compose'
 import { sectionsSchema } from '../lib/reports/validate'
 import { createAdminClient } from '../lib/supabase-admin'
 import type { ReportSection } from '../lib/reports/types'
+import { subjectsFixture } from '../components/pages/subjects/fixture'
+import { overviewFixture } from '../components/pages/overview/fixture'
 
 interface Check { ok: boolean; what: string; detail?: string }
 const checks: Check[] = []
@@ -106,11 +108,54 @@ async function main() {
   console.log(`\nweekly_reports: ${(weeklies ?? []).length} rows, ${urls.size} distinct dashboard URLs`)
   for (const [u, n] of [...urls].sort()) console.log(`  ${n}x  ${u}`)
 
+  // 4. Subject rows stored before the three calibration states (market-first
+  //    decision C, WP1.1): one carrying the two-state 'calibrating', which must
+  //    read as provisional, and one carrying no calibration field at all, which
+  //    must render as it was sent. No stored artefact carries a subject row in
+  //    either shape today, so both are built from the fixtures in the stored
+  //    shape and rendered through the page modules exactly as a snapshot is.
+  storedCalibrationRows()
+
   const failed = checks.filter((c) => !c.ok)
   console.log('')
   for (const c of checks) console.log(`${c.ok ? 'PASS' : 'FAIL'} ${c.what}${c.detail ? ` — ${c.detail}` : ''}`)
   console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`)
   if (failed.length) process.exit(1)
+}
+
+function storedCalibrationRows() {
+  const base = subjectsFixture()
+  const calibrating = {
+    ...base,
+    list: {
+      ...base.list,
+      // NO NOTE ON THE STORED ROW (WP1.1 review, finding 11). The two-state
+      // rail wrote note 'provisional' on a calibrating row, so a row carrying
+      // it printed the word whether or not `readCalibration` ran; with no
+      // note, the word can only come from reading the stored state.
+      rows: base.list.rows.map((r, i) => (i === 1 ? { ...r, calibration: 'calibrating' as const, level: null, verdict: null, note: null } : r)),
+    },
+    selected: base.selected ? { ...base.selected, calibration: 'calibrating' as const } : null,
+  }
+  const label = 'stored subject rows (WP1.1)'
+  const section = (page: string) => ({ id: 'ref', page, params: {} }) as ReportSection
+  renderSection(`${label}, one carrying "calibrating"`, 'subjects', section('subjects'), calibrating, true)
+  // Printed as a stored artefact prints: on paper.
+  const text = (key: string, data: unknown) => {
+    const r = pageModule('subjects')?.renderables[key]
+    return r ? renderToStaticMarkup(r.render(data as never, 'print') as React.ReactElement) : ''
+  }
+  const noWord = (data: typeof calibrating) => ({ ...data, list: { ...data.list, rows: data.list.rows.map((r) => ({ ...r, calibration: undefined })) }, selected: data.selected ? { ...data.selected, calibration: undefined } : null })
+  check(text('subjects.list', calibrating).includes('provisional') && text('subjects.subject', calibrating).includes('provisional')
+    && !text('subjects.list', noWord(calibrating)).includes('provisional'),
+    `${label} — a stored "calibrating" reads as provisional on the rail and the pane`)
+  // The Overview's subject rows have never carried the field: no word prints.
+  const overview = overviewFixture()
+  renderSection(`${label}, none carrying a field`, 'overview', section('overview'), overview, true)
+  const ov = pageModule('overview')?.renderables['overview.subjects']
+  const markup = ov ? renderToStaticMarkup(ov.render(overview as never, 'app') as React.ReactElement) : ''
+  check(markup.length > 0 && !markup.includes('provisional') && !markup.includes('being re-described'),
+    `${label} — a row with no calibration field renders as sent, with no word`)
 }
 
 function renderSection(label: string, page: string, section: ReportSection, data: unknown, isPage: boolean) {

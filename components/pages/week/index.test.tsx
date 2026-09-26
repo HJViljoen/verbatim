@@ -1278,3 +1278,49 @@ describe('This week on a clock past the update’s month', () => {
     }
   })
 })
+
+// DECISION C (WP1.1): This week's rows are your own side of each subject, which
+// only a READY subject shows; the others are named, with their word.
+describe('WK §2 under the three calibration states', () => {
+  const base = weekFixture()
+  const data: WeekData = {
+    ...base,
+    subjects: {
+      ...base.subjects,
+      withheld: [
+        { id: 's-repair', label: 'Repair & warranty', calibration: 'failed' },
+        { id: 's-community', label: 'Community & purpose', calibration: 'provisional' },
+      ],
+    },
+  }
+
+  it('names the withheld subjects with their word and no figure, in every mode', () => {
+    for (const mode of MODES) {
+      assertCopyContract(render(weekSubjects.render(data, mode, ctx)))
+      const text = renderText(weekSubjects.render(data, mode, ctx))
+      expect(text).toContain('Repair & warranty being re-described')
+      expect(text).toContain('Community & purpose provisional')
+    }
+  })
+
+  it('declares no figure for a withheld subject', () => {
+    const figures = blockAnswers(weekSubjects, data).figures
+    expect(Object.keys(figures).some((k) => k.includes('s-repair') || k.includes('s-community'))).toBe(false)
+  })
+
+  it("on screen the withheld subjects are the strip's next row, above the bar legend", () => {
+    const markup = render(weekSubjects.render(data, 'app', ctx))
+    const legend = markup.indexOf('what this update added')
+    expect(markup.indexOf('Community &amp; purpose')).toBeGreaterThan(0)
+    expect(markup.indexOf('Community &amp; purpose')).toBeLessThan(legend)
+    // On the strip's own columns, with its gutter drawn transparent.
+    expect(markup).toContain('border-transparent xl:border-l xl:pl-4')
+  })
+
+  it('a block with only withheld subjects is not "no subjects recorded"', () => {
+    const only: WeekData = { ...data, subjects: { ...data.subjects, rows: [], unread: null, lead: null } }
+    const text = renderText(weekSubjects.render(only, 'app', ctx))
+    expect(text).toContain('being re-described')
+    expect(text).not.toContain('No subjects are recorded')
+  })
+})

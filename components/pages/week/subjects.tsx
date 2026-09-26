@@ -6,6 +6,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { monthPhrase, type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
 
 // WK §2 · This week in your subjects (the mock's §3; OV2 at update length).
 //
@@ -123,10 +124,12 @@ export const weekSubjects: Block<WeekData> = {
                 <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${STRIP_COLUMNS[Math.min(s.rows.length, 6)] ?? 'xl:grid-cols-6'}`}>
                   {s.rows.map((r) => <Column key={r.id} row={r} top={barTop} when={when} />)}
                 </div>
+                <Withheld rows={s.withheld ?? []} email={false} strip={s.rows.length} />
                 <Legend rows={s.rows} />
               </>
             )
         ) : null}
+        {email || s.rows.length === 0 ? <Withheld rows={s.withheld ?? []} email={email} strip={0} /> : null}
       </BlockFrame>
     )
   },
@@ -220,6 +223,45 @@ function Column({ row, top, when = 'this month' }: { row: SubjectWeekRow; top: n
           {row.tag}
         </span>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The confirmed subjects whose own side is not shown (decision C, WP1.1):
+ * each named once, with its word, and no figure. "provisional": not checked
+ * yet, or not clearly under the floor; "being re-described": clearly under.
+ *
+ * ON SCREEN THEY ARE THE STRIP'S NEXT ROW (design pass). As a loose 12px line
+ * under the bar legend they read as a footnote to the legend, and on a
+ * workspace whose subjects are all unchecked they are the whole block. Laid on
+ * the strip's own columns, with its gutters, each name sits under a name and
+ * at the same x, in the muted ink with its word beneath: the same subject set,
+ * the ones with nothing to show yet. `strip` is how many columns the strip
+ * above has (none: the grid takes the withheld count).
+ */
+function Withheld({ rows, email, strip }: { rows: NonNullable<WeekData['subjects']['withheld']>; email: boolean; strip: number }) {
+  if (rows.length === 0) return null
+  if (email) {
+    return (
+      <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>
+        {rows.map((r, i) => (
+          <span key={r.id}>{i > 0 ? ' · ' : ''}{r.label} <CalibrationTag calibration={r.calibration} mode="email" /></span>
+        ))}
+      </div>
+    )
+  }
+  const cols = STRIP_COLUMNS[Math.min(strip > 0 ? strip : rows.length, 6)] ?? 'xl:grid-cols-6'
+  return (
+    <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${cols}${strip > 0 ? ' mt-1.5' : ''}`}>
+      {rows.map((r) => (
+        // The strip's column rule, drawn transparent: the gutter and the
+        // hairline's pixel stay, so the text lands on the strip's x.
+        <div key={r.id} className="flex min-w-0 flex-col gap-0.5 border-transparent xl:border-l xl:pl-4 xl:first:border-l-0 xl:first:pl-0">
+          <span className="truncate text-[12.5px] font-medium text-muted-foreground" title={r.label}>{r.label}</span>
+          <CalibrationTag calibration={r.calibration} block />
+        </div>
+      ))}
     </div>
   )
 }

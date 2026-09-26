@@ -6,6 +6,8 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, NOTHING_UNUSUAL, WEEKLY_BLOCK_KEYS, WEEKLY_RULE, firstScreenCount } from '@/lib/reports/weekly'
 import { WEEKLY_BLOCKS, forSales, weeklyBlocksFor } from './index'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from './fixture'
+import { calibrationOverviewFixture } from '@/components/pages/overview/fixture'
+import { weeklySubjects as weeklySubjectsBlock } from './subjects'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -894,5 +896,50 @@ describe('WR6 · coverage', () => {
 
   it('is never empty', () => {
     for (const data of STATES) expect(block.emptyState(data)).toBeNull()
+  })
+})
+
+describe('the weekly subjects block under the three calibration states (decision C, WP1.1)', () => {
+  const data = { ...weeklyFixture(), subjects: calibrationOverviewFixture().subjects }
+
+  it('renders in all three modes and keeps the copy contract', () => {
+    for (const mode of MODES) assertCopyContract(render(weeklySubjectsBlock.render(data, mode, ctx)))
+  })
+
+  it('a failed subject prints its name and word and nothing else; a provisional one has no "you" clause', () => {
+    // Waterproofing read as never checked, on the same staging row.
+    const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
+    for (const mode of MODES) {
+      const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
+      expect(text.match(/being re-described/g)?.length).toBe(1)
+      expect(text).not.toContain('33 of 625')
+      const provisional = renderText(weeklySubjectsBlock.render(unchecked, mode, ctx))
+      expect(provisional.match(/provisional/g)?.length).toBe(1)
+      expect(provisional.slice(provisional.indexOf('Waterproofing'))).not.toMatch(/\byou\b/)
+    }
+  })
+
+  it('marks a provisional subject\'s figure in its figure table (WP1.1 review, finding 10)', () => {
+    const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
+    const figures = weeklySubjectsBlock.figures!(unchecked)
+    expect(figures.subject_water_share.label).toContain('(provisional)')
+    expect(figures.subject_looks_share.label).not.toContain('provisional')
+  })
+
+  it('a failed subject\'s name links nowhere: there is no pane to open (WP1.1 review, finding 7)', () => {
+    const markup = render(weeklySubjectsBlock.render(data, 'app', ctx))
+    expect(markup).not.toContain('item=repair')
+    expect(markup).toContain('item=looks')
+    expect(data.subjects.rows.find((r) => r.id === 'repair')?.href).toBe('')
+  })
+
+  it('a subject the month was not read for prints its name and when it will be, and no figure (WP1.1 review, finding 1)', () => {
+    for (const mode of MODES) {
+      const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
+      const row = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
+      expect(row).toContain('first reading with the 4 Oct update')
+      expect(row).not.toMatch(/\d+ of \d+/)
+      expect(row).not.toContain('not tracked')
+    }
   })
 })

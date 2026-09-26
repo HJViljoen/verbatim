@@ -14,7 +14,9 @@ import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
-import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { calibrationWord, printsClient } from '@/lib/subjects/calibration-state'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
 //
@@ -189,20 +191,38 @@ export const subjectsSubject: Block<SubjectsData> = {
     // — the Agent page took no params at all — so the button landed a client on
     // a blank composer. A subject id is not a question either; the question is.
     const href = `${ctx.appUrl}/dashboard/agent?ask=${encodeURIComponent(`How are we seen on ${pane.name}?`)}`
-    const meta = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
+    const named = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
+    // THE CALIBRATION WORD SITS BESIDE THE NAME IT QUALIFIES (design pass):
+    // first in the heading's own mono line, "Community & purpose  provisional
+    // · named 24 Sep 2026 · 7 of 7 subjects", which is the rail's face for the
+    // same word. On a line of its own between the heading row and the cells it
+    // floated 30px from each, a caption belonging to neither. The email arm
+    // has no heading row (its title is the eyebrow), so there it stays at the
+    // top of the body.
+    const word = calibrationWord(pane.calibration)
+    const meta = word && !email
+      ? <><CalibrationTag calibration={pane.calibration} mode={mode} /> · {named}</>
+      : named
     // THE EARLIER GAP PRINTS ONLY WHERE ONE OF THE TWO IS AN ANSWER. Where
     // both refuse, "too few to compare. Too few to compare in August." is the
     // same non-answer twice, and a sentence that repeats itself reads as a
     // rendering fault rather than as a refusal.
+    // DECISION C (WP1.1): a provisional subject has no "you" side, so neither
+    // the gap (you against a rival) nor "the videos behind your figure" prints,
+    // and no side carries a verdict. The loader already builds it that way; a
+    // pane stored with the two-state `'calibrating'` is read the same way here.
+    const client = printsClient(pane.calibration)
+    const sides = paneSides(pane)
+    const gapShown = client ? pane.gap : null
     const answered = (state: string) => state === 'apart' || state === 'level'
-    const basis = pane.gap && (answered(pane.gap.state) || answered(pane.gap.basis?.state ?? ''))
-      ? gapBasisLine(pane.gap)
+    const basis = gapShown && (answered(gapShown.state) || answered(gapShown.basis?.state ?? ''))
+      ? gapBasisLine(gapShown)
       : null
-    const lead = pane.gap ? `${pane.name}: ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
+    const lead = gapShown ? `${pane.name}: ${gapLine(gapShown)}${basis ? `; ${basis}` : ''}.` : null
     // ONE REFUSAL, SAID ONCE (deploy 1 review): the hero's cells each printed
     // the same refusal under their figure. Refused for one pair, each says
     // "not compared" and the chip under the cells says why.
-    const shared = sharedPairNote(pane.sides.filter((s) => s.observed && s.pct != null).map((s) => s.verdict))
+    const shared = sharedPairNote(sides.filter((s) => s.observed && s.pct != null).map((s) => s.verdict))
 
     // THE LINK, IN THE RIGHT MARKUP FOR EACH READER. Print draws none — a PDF
     // and a `/r/<token>` page have no session to open a filtered catalogue
@@ -212,7 +232,7 @@ export const subjectsSubject: Block<SubjectsData> = {
     const behindLabel = (
       <>the <span data-copy="figure">{fmtInt(pane.behind?.videos ?? 0)}</span> videos behind your figure →</>
     )
-    const behind = !pane.behind || mode === 'print'
+    const behind = !pane.behind || !client || mode === 'print'
       ? null
       : email
         ? <a href={`${ctx.appUrl}${pane.behind.href}`} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink }}>{behindLabel}</a>
@@ -248,9 +268,12 @@ export const subjectsSubject: Block<SubjectsData> = {
         // the chart. Levels, dated, in the category's own n.
       >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
+        {/* The row tag, over the cells: "provisional" (decision C). Email
+            only: the app and print arms carry it in the heading line. */}
+        {email ? <CalibrationTag calibration={pane.calibration} mode={mode} block /> : null}
 
         {email ? (
-          <div>{pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
+          <div>{sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
         ) : (
           // THE MOCK'S VERTICAL HAIRLINES, from the primitive that owns them
           // (P0 item 3). Three hand-rolled `grid-cols-3`s is how a product ends
@@ -260,8 +283,16 @@ export const subjectsSubject: Block<SubjectsData> = {
           // "not tracked" — five of ten on Sealand — and the note under the
           // grid then said the same five names again. The note is the one
           // place an absent side is named.
-          <TileColumns of={3} className="gap-x-4 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
-            {pane.sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
+          // EVERY ROW STARTS ON THE SAME EDGE (design pass). The padding keyed
+          // on the first CHILD, so the second row's first cell (The North
+          // Face, on five sides) kept its 16px and stood indented under
+          // Cotopaxi. It keys on the first cell of each ROW now, as
+          // `TileColumns`' own rule does (3n+1), and only at xl, where the
+          // columns are; the stacked column and paper (whose rule CSS pads
+          // the leading edge itself) keep one left edge. The gutter is the
+          // padding at xl, so a hairline has 16px on each side.
+          <TileColumns of={3} className="gap-x-4 xl:gap-x-0 xl:[&>*]:px-4 xl:[&>*:nth-child(3n+1)]:pl-0 xl:[&>*:nth-child(3n)]:pr-0 xl:[&>*:last-child]:pr-0">
+            {sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
           </TileColumns>
         )}
         <PairChip note={shared} mode={mode} className="mt-3" />
@@ -277,7 +308,7 @@ export const subjectsSubject: Block<SubjectsData> = {
   },
 
   verdicts(data): Verdict[] {
-    return (data.selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
+    return (data.selected ? paneSides(data.selected) : []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
   },
 
   emptyState(data) {
@@ -288,6 +319,7 @@ export const subjectsSubject: Block<SubjectsData> = {
     // as a rendering fault rather than as one refusal.
     if (data.list.notRecorded) return 'Until the set can be read, there is no subject to open in full.'
     if (!data.selected) {
+      if (allRedescribed(data)) return SUBJECTS_ALL_REDESCRIBED
       return data.list.proposed.length > 0
         ? 'Confirm a subject and this is where it is read in full.'
         : 'Name a subject and this is where it is read in full.'

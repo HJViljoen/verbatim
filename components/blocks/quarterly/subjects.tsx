@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -144,16 +146,33 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             key={row.id}
             mode={mode}
             template={TEMPLATE}
-            cells={[
-              row.label,
-              <Side key="you" side={row.you} mode={mode} />,
+            cells={isFailed(row.calibration)
+              // A FAILED ROW IS ITS NAME AND ITS WORD (decision C, design
+              // pass): no dash in each column and no "not compared", which is
+              // the refusal's word for a pair and not what happened here.
+              ? [
+                <div key="name" style={email ? { color: EMAIL.muted } : undefined} className={email ? undefined : 'text-muted-foreground'}>{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></div>,
+                <span key="you" />, <span key="cat" />, <span key="catq" />, <span key="youq" />,
+              ]
+              : [
+              // THE ROW'S CALIBRATION (decision C, WP1.1): the word under the
+              // name, no "you" figure on a provisional subject, and no
+              // quarter change on either side: its cells carry the withheld
+              // mark, not the refusal word "not compared".
+              // A div, not a span: the word under the name is a block of its own.
+              <div key="name">{row.label}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></div>,
+              printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label={withheldLabel(row.calibration)} />,
               <Side key="cat" side={row.category} mode={mode} />,
-              row.categoryQuarter
-                ? <BlockMovement key="catq" verdict={row.categoryQuarter} unit="pts" mode={mode} />
-                : <NotDrawn key="catq" mode={mode} />,
-              row.youQuarter
-                ? <BlockMovement key="youq" verdict={row.youQuarter} unit="pts" mode={mode} />
-                : <NotDrawn key="youq" mode={mode} />,
+              !earnsVerdict(row.calibration)
+                ? <NoValue key="catq" mode={mode} label={withheldLabel(row.calibration)} />
+                : row.categoryQuarter
+                  ? <BlockMovement key="catq" verdict={row.categoryQuarter} unit="pts" mode={mode} />
+                  : <NotDrawn key="catq" mode={mode} />,
+              !earnsVerdict(row.calibration)
+                ? <NoValue key="youq" mode={mode} label={withheldLabel(row.calibration)} />
+                : row.youQuarter
+                  ? <BlockMovement key="youq" verdict={row.youQuarter} unit="pts" mode={mode} />
+                  : <NotDrawn key="youq" mode={mode} />,
             ]}
           />
         ))}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { calibrationOverviewFixture, overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { Gap } from '@/lib/reading/gap'
@@ -11,7 +11,7 @@ import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
 import { provenanceLine } from '@/components/pages/overview/sentence'
-import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData, sheetSubjectRows } from './leadership-sheet'
+import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData, sheetRowPx, sheetSubjectRows } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
 //
@@ -265,6 +265,29 @@ describe('the leadership one-pager', () => {
     expect(sheetSubjectRows(6, 3)).toBe(3)
     // It never returns nothing: one row and the count is still a table.
     expect(sheetSubjectRows(6, 12)).toBe(1)
+  })
+
+  // WP1.1 review, finding 3: a failed row's word on a line of its own made
+  // it taller than the flat 41px budget allowed, and the truncation line was
+  // cut in half on staging's own 2 Oct sheet. Measured in Chromium on that
+  // sheet (26 Sep): a refused row (its change a three-line sentence) 54px, a
+  // failed or unread row one line, 21px, a provisional row 37px.
+  it('charges each row what it measures, for a mix of ready, provisional and failed rows', () => {
+    // Looks & style and Waterproofing ready and refused, Repair & warranty
+    // failed, Community & purpose unread.
+    expect(calibrationOverviewFixture().subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 54])
+    // Waterproofing provisional (never checked): its cells hold no sentence.
+    expect(calibrationOverviewFixture({ unchecked: ['water'] }).subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 41])
+    // Staging at 2 Oct: seven rows, a caveat. Charged what they measure, three
+    // rows, the truncation line and the caveat (54 + 21 + 54 + 18 + 18 = 165).
+    expect(sheetSubjectRows(7, 1, [54, 21, 54, 54, 54, 54, 21])).toBe(3)
+    // Charged a flat 41, it showed four and the body cut the last two lines.
+    expect(sheetSubjectRows(7, 1)).toBe(4)
+    // All four fixture rows and the caveat fit, with nothing to truncate.
+    expect(sheetSubjectRows(4, 1, [54, 21, 21, 41])).toBe(4)
+    const words = renderText(sheet(calibrationOverviewFixture({ unchecked: ['water'] })))
+    expect(words).toContain('Waterproofing')
+    expect(words).not.toContain('more subject')
   })
 
   it('says how many moves it did not show, rather than slicing in silence', () => {
@@ -539,5 +562,33 @@ describe('the sheet inside the deck', () => {
     }
     const words = markupText(render(<DocumentDeck data={blocked} date="18 Sep 2026" />))
     expect(words).toContain('Name your subjects in Settings — an operator confirms them.')
+  })
+})
+
+describe('the leadership sheet under the three calibration states (decision C, WP1.1)', () => {
+  it('never makes a provisional or failed subject the subject card', () => {
+    const rows = calibrationOverviewFixture().subjects.rows
+    expect(['looks', 'water']).toContain(leadSubject(rows)?.id)
+    expect(leadSubject(rows.filter((r) => r.calibration !== 'ready'))).toBeNull()
+  })
+
+  it('keeps the calibration word out of the truncating name, so it is never the part cut off', () => {
+    const markup = render(sheet(calibrationOverviewFixture()))
+    // The name truncates on its own line; the word is a sibling, not inside it.
+    expect(markup).toContain('<span class="block truncate">Repair &amp; warranty</span>')
+    expect(markup).toContain('<span class="block truncate">Community &amp; purpose</span>')
+    expect(markupText(markup)).toContain('being re-described')
+    // Community & purpose was never read (WP1.1 review, finding 1): its words
+    // say when it will be, in the word's place.
+    expect(markupText(markup)).toContain('first reading with the 4 Oct update')
+    expect(markupText(render(sheet(calibrationOverviewFixture({ unchecked: ['water'] }))))).toContain('provisional')
+  })
+
+  it('a failed row is its name and its word, with no dash in each column', () => {
+    const markup = render(sheet(calibrationOverviewFixture()))
+    const at = markup.indexOf('Repair &amp; warranty</span>')
+    const row = markup.slice(markup.lastIndexOf('<tr', at), markup.indexOf('</tr>', at))
+    expect(row).not.toContain('—')
+    expect(row).toContain('col-span-4')
   })
 })

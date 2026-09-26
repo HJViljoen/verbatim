@@ -17,6 +17,7 @@ import type { Verdict } from '../reading/verdicts'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock, type WeeklyHeadline } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import { buildSales, loadSubjectQuotes, loadSubjects, workedLabel } from './week'
+import { earnsVerdict } from '../subjects/calibration-state'
 import {
   CONTRIBUTIONS_NOT_RECORDED,
   periodNounFor,
@@ -409,7 +410,10 @@ export function headlineObject(data: OverviewData): {
       atLastMonth: last ? { k: last.k, n: last.n } : null,
     }
   }
+  // NEVER A PROVISIONAL OR FAILED SUBJECT (decision C, WP1.1): neither may be
+  // a headline. A row stored before WP1.1 carries no state and is eligible.
   const best = [...data.subjects.rows]
+    .filter((r) => earnsVerdict(r.calibration))
     .filter((r) => r.category.k != null && r.category.n != null && r.category.n > 0)
     .sort((a, b) => (b.category.pct ?? 0) - (a.category.pct ?? 0))[0]
   if (best) {

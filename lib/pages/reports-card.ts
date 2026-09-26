@@ -9,6 +9,7 @@ import type { DenominatorPoint } from '../reading/series'
 import type { Counted, Verdict } from '../reading/verdicts'
 import { readSubjectWindow } from '../subjects/read'
 import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
+import { earnsVerdict, printsMarket, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { loadActiveSubjects } from '../subjects/membership'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
@@ -58,8 +59,11 @@ export interface QuarterlyCard {
   quarter: { from: string; to: string; label: string }
   /** One row per subject, each a quarter-on-quarter Verdict. */
   rows: { label: string; verdict: Verdict }[]
-  /** The bars' series, from the WINDOW tables — never a sum of month rows. */
-  series: { label: string; value: Counted }[]
+  /** The bars' series, from the WINDOW tables — never a sum of month rows.
+   *  Each carries its subject's calibration (decision C, WP1.1), so a
+   *  provisional subject's bar prints marked (WP1.1 review, finding 2).
+   *  Optional: a series built without one renders with no word. */
+  series: { label: string; value: Counted; calibration?: SubjectCalibration }[]
   readings: number
   /** `quarterGateSentence(readings)` — "your 3rd monthly reading · the quarter
    *  view needs 6". */
@@ -83,7 +87,7 @@ export interface QuarterlyCardInput {
   /** Active subjects, id → the name the client confirmed. A PROPOSED subject
    *  measures nothing and is not here (`loadActiveSubjects` filters on
    *  `status = 'active'`). */
-  subjects: readonly { id: string; name: string }[]
+  subjects: readonly { id: string; name: string; calibration?: SubjectCalibration | null }[]
   thisQuarter: WindowReading
   lastQuarter: WindowReading
   subjectsNow: SubjectWindowReading[] | null
@@ -162,11 +166,17 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
   const n = denomNow.get(CARD_AUDIENCE)
   const priorN = denomBefore.get(CARD_AUDIENCE)
   const rows: { label: string; verdict: Verdict }[] = []
-  const series: { label: string; value: Counted }[] = []
+  const series: QuarterlyCard['series'] = []
   for (const subject of input.subjects) {
     if (!subjectsRead || !n || !priorN) continue
+    // DECISION C (WP1.1): a failed subject is hidden everywhere; a provisional
+    // one prints its level (the bar, which is the category's, a market level)
+    // and earns no verdict row.
+    if (!printsMarket(subject.calibration)) continue
     const value = { videos: nowBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)?.videos ?? 0 }
     const baseline = { videos: beforeBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)?.videos ?? 0 }
+    series.push({ label: subject.name, value: { k: value.videos, n }, ...(subject.calibration ? { calibration: subject.calibration } : {}) })
+    if (!earnsVerdict(subject.calibration)) continue
     rows.push({
       label: subject.name,
       verdict: quarterChange({
@@ -181,8 +191,7 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
     })
     // THE BARS ARE THE LEVEL, NOT THE CHANGE, and they carry the same n the
     // verdict divides by — so a bar and the badge beside it cannot be read off
-    // two different denominators.
-    series.push({ label: subject.name, value: { k: value.videos, n } })
+    // two different denominators (the bar is pushed above, before the gate).
   }
 
   return {
@@ -276,7 +285,7 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
   return buildQuarterlyCard({
     quarter,
     prior,
-    subjects: subjects.map((s) => ({ id: s.id, name: s.name })),
+    subjects: subjects.map((s) => ({ id: s.id, name: s.name, calibration: subjectCalibration(s) })),
     thisQuarter,
     lastQuarter,
     subjectsNow,

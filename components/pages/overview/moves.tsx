@@ -363,15 +363,22 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
               line is a run of banded LEVELS and it printed six bare shares;
               unmarked, the copy contract's denominator rule never looked at
               it. */}
-          <span data-copy="level" className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
-            {seriesLine(reading)}
-          </span>
+          {/* NOTHING WHERE THE READING HOLDS NO LINE: a move on a subject that
+              is not ready is named and not read (decision C, WP1.1), and an
+              empty level node is a level with no "of N". */}
+          {reading.series.length > 0 ? (
+            <span data-copy="level" className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+              {seriesLine(reading)}
+            </span>
+          ) : null}
           {/* D3: A CHART IS A DIRECTION CLAIM TOO. `chartNote` is why a line
               may not be drawn over this reading; where it is null the reading
               has three months in one regime and the line would be honest. */}
-          <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
-            {reading.chartNote ?? reading.line}
-          </span>
+          {reading.chartNote ?? reading.line ? (
+            <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
+              {reading.chartNote ?? reading.line}
+            </span>
+          ) : null}
           {reading.unread ? (
             <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>{reading.unread}</span>
           ) : null}

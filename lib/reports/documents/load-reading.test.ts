@@ -33,3 +33,20 @@ describe('chartLead', () => {
     expect(chartLead([row('Sizing and fit', [null, null])], 'the category')).toBeNull()
   })
 })
+
+// DECISION C (WP1.1): the slide's line never leads with a subject that is not
+// ready; a row stored before WP1.1 carries no state and is eligible.
+describe('chartLead under the three calibration states', () => {
+  it('steps over a provisional or failed subject to the first ready one', () => {
+    const lead = chartLead([
+      { ...row('Community & purpose', [0, 0, 0, 0]), calibration: 'provisional' },
+      { ...row('Repair & warranty', [null, null, null, null]), calibration: 'failed' },
+      { ...row('Looks & style', [null, null, 10.5, 16.3]), calibration: 'ready' },
+    ], 'the category')
+    expect(lead?.label).toBe('Looks & style · the category')
+  })
+
+  it('is null where only provisional or failed subjects carry a series', () => {
+    expect(chartLead([{ ...row('Community & purpose', [0, 0, 0, 0]), calibration: 'provisional' }], 'the category')).toBeNull()
+  })
+})

@@ -5,6 +5,7 @@ import { refusedSteps, type PairOn } from './pairs'
 import { monthStartOf, nextMonth } from './month-key'
 import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
 import type { DeclareMoveInput } from '../subjects/moves'
+import { printsClient, readCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote } from '../renderables/types'
 
@@ -166,7 +167,10 @@ export interface MoveCandidateInput {
   month: string
   clientVideos: readonly { id: string; upload_date: string | null; comments_count: number; hook_style: string | null; classified_type: string | null }[]
   claims: readonly { id: string; source_video_id: string; claim: string; quote: string; entity: string }[]
-  membership: readonly { subjectId: string; label: string; videoIds: readonly string[] }[]
+  /** The subjects your posts matched. `calibration` (decision C, WP1.1): a
+   *  match is your own side of a subject, so only a READY subject's is counted
+   *  or proposed. Absent, the match counts (a caller that applies no gate). */
+  membership: readonly { subjectId: string; label: string; videoIds: readonly string[]; calibration?: SubjectCalibration | null }[]
   yours: Verdict | null
   category: Verdict | null
   commentFloor?: number
@@ -327,6 +331,7 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
   // `analyzed_run_id`, so a matched post is always a read one — but this is a
   // pure function with a public signature and the guard belongs in it.
   const subjects = input.membership
+    .filter((m) => printsClient(m.calibration))
     .map((m) => ({
       subjectId: m.subjectId,
       label: m.label,
@@ -457,7 +462,19 @@ export interface MoveReadingInput {
    *  D, WP1.3)? REQUIRED: the loader's judge on each side's audience. Null
    *  where the caller holds no judge (a fixture), stated at the call site. */
   pair: PairOn | null
+  /** The target subject's calibration, on a move on a subject (decision C,
+   *  WP1.1). A move is read on your own side, which only a READY subject
+   *  shows: a provisional or failed one is named and not read. Omitted, the
+   *  move is read as before (a caller that applies no gate). */
+  calibration?: SubjectCalibration | null
 }
+
+/** Said on a move on a subject whose check has not cleared (decision C). */
+export const MOVE_SUBJECT_PROVISIONAL =
+  'This subject is provisional until its check clears, so this move is not read against it yet.'
+/** Said on a move on a subject whose check clearly failed (decision C). */
+export const MOVE_SUBJECT_FAILED =
+  'This subject is being re-described, so this move is not read against it.'
 
 /** What a move is on, in the reader's words — the shape `moveTargetLabel`
  *  (lib/pages/market-surface.ts) writes for the ledger row, restated here
@@ -585,6 +602,30 @@ export const MOVE_NO_MONTHS_RECORDED =
  * judgement; one number is ours.
  */
 export function readMove(input: MoveReadingInput): MoveReading {
+  // A MOVE ON A SUBJECT THAT IS NOT READY IS NAMED AND NOT READ (decision C,
+  // WP1.1). Its one claim is your own side before against after, which a
+  // provisional or failed subject does not show; no line, no control, no
+  // figure. `unread` says why, in words that carry the subject's state; there
+  // is no chart note, because both surfaces print one as "too few readings".
+  const state = input.move.kind === 'subject' ? readCalibration(input.calibration) : null
+  if (state === 'provisional' || state === 'failed') {
+    return {
+      moveId: input.move.id,
+      title: input.move.title,
+      kind: input.move.kind,
+      on: targetPhrase(input),
+      declaredAt: input.move.declared_at,
+      series: [],
+      verdict: null,
+      control: [],
+      figures: {},
+      months: [],
+      window: input.window,
+      line: '',
+      chartNote: null,
+      unread: state === 'failed' ? MOVE_SUBJECT_FAILED : MOVE_SUBJECT_PROVISIONAL,
+    }
+  }
   const declaredMonth = monthStartOf(input.move.declared_at.slice(0, 10))
   const objectId = input.move.subject_id ?? input.move.registry_ids?.[0] ?? input.move.lineage_id ?? input.move.id
   const objectLabel = input.targetLabel?.trim() || input.move.title

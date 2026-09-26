@@ -4,7 +4,11 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { LevelRow, OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, buildSubjects, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
+import { JUDGE_VERSION, type Subject } from '@/lib/subjects/types'
+import { subjectCountedFrom, unreadWords } from '@/lib/subjects/read-in'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { kindShares } from '@/lib/reading/kinds'
 import { moodShares } from '@/lib/reading/mood'
 import {
@@ -203,7 +207,7 @@ export function cardFixture(): MoveCandidate {
 
 /** One move, read: declared in August, so July is the last clean month before
  *  it and September the latest after it. August is drawn and not compared. */
-export function moveReadingFixture(): MoveReading {
+export function moveReadingFixture(calibration?: 'ready' | 'provisional' | 'failed'): MoveReading {
   const line = (audience: string, label: string, touched: boolean, ks: [number, number][]) => ({
     audience,
     label,
@@ -234,6 +238,9 @@ export function moveReadingFixture(): MoveReading {
       line(rivalKey('Freitag'), 'Freitag', false, [[36, 138], [39, 140], [41, 142]]),
     ],
     window: { kind: 'since', from: '2026-07-01', to: '2026-10-01' },
+    // The target subject's calibration (decision C, WP1.1), where a test sets
+    // one: production's Repair & warranty was 0.36 on 25 labels (failed).
+    ...(calibration ? { calibration } : {}),
   })
 }
 
@@ -1207,4 +1214,87 @@ export function ossurFrontFixture(): OverviewData {
     change: base.change ? { ...base.change, paused: true } : undefined,
     subjects: { ...base.subjects, state: 'none', rows: [], candidates: [], market: { month: REAL_MONTH, n: 362, prev: { month: AUG, n: 585 } } },
   }
+}
+
+/**
+ * OV2 under the three calibration states (decision C, WP1.1), built by the
+ * loader's own `buildSubjects` from staging's real rows: Sealand, August and
+ * September as the 24 Sep update wrote them (read_at 12:15 UTC), the category
+ * (351 and 625 videos), Cotopaxi (22 and 12) and Freitag (4 and 6); no
+ * own-audience month row in either month, so the "you" side is not tracked on
+ * every row. The calibrations are staging's, written 24 Sep under this judge on
+ * 33 labels: Looks & style 0.857 and Waterproofing 1.0 (ready), Repair &
+ * warranty 0.333 (failed). The three were named 23 Sep and confirmed in the
+ * change log at 11:46 on 24 Sep. Community & purpose was named 24 Sep and
+ * confirmed at 12:41, after the update wrote both months, and has no row in
+ * any month: it was never read, so its row prints "first reading with the 4
+ * Oct update" and no figure (WP1.1 review, finding 1), never "0 of 625". Read
+ * on 2 Oct, when August against September is refused.
+ *
+ * `unchecked` reads the named subjects as never checked (no calibration row),
+ * which is production's state before Friday's check (decision C: all eight
+ * unchecked), on the same staging rows: a provisional subject WITH figures.
+ */
+export function calibrationOverviewFixture(opts: { unchecked?: readonly string[] } = {}): OverviewData {
+  const now = '2026-10-02T06:00:00.000Z'
+  const cotopaxi = rivalKey('Cotopaxi')
+  const freitag = rivalKey('Freitag')
+  const at = '2026-09-24T11:53:16.678Z'
+  const written = Date.parse('2026-09-24T12:15:41.468Z')
+  const subject = (id: string, name: string, measured: number | null, namedAt = '2026-09-23'): Subject => {
+    const precision = opts.unchecked?.includes(id) ? null : measured
+    return {
+    id, client_id: 'sealand', name, description: null, origin: 'client', source_ref: null,
+    named_at: namedAt, status: 'active', superseded_by: null, embedded_at: null, embed_input_version: null,
+    calibrated_at: precision == null ? null : at,
+    calibration_precision: precision,
+    calibration_n: precision == null ? null : 33,
+    calibration_judge_version: precision == null ? null : JUDGE_VERSION,
+    }
+  }
+  // Staging's `config_changes` confirmations (surface 'subjects').
+  const confirmed = (id: string, changedAt: string) => ({ changed_at: changedAt, surface: 'subjects', after: { id, status: 'active' } })
+  const changes = [
+    confirmed('looks', '2026-09-24T11:46:16.982Z'),
+    confirmed('repair', '2026-09-24T11:46:16.982Z'),
+    confirmed('water', '2026-09-24T11:46:16.982Z'),
+    confirmed('community', '2026-09-24T12:41:06.517Z'),
+  ]
+  const row = (month: string, audience: string, subject_id: string, videos: number) => ({ month, audience, subject_id, videos, comments: 0 })
+  const subjects = buildSubjects({
+    subjects: [
+      subject('looks', 'Looks & style', 0.8571428571428571),
+      subject('repair', 'Repair & warranty', 0.3333333333333333),
+      subject('community', 'Community & purpose', null, '2026-09-24'),
+      subject('water', 'Waterproofing', 1),
+    ],
+    months: [
+      row('2026-08-01', INDUSTRY_AUDIENCE, 'looks', 37), row('2026-08-01', cotopaxi, 'looks', 1),
+      row('2026-09-01', INDUSTRY_AUDIENCE, 'looks', 102), row('2026-09-01', freitag, 'looks', 1),
+      row('2026-08-01', INDUSTRY_AUDIENCE, 'repair', 14), row('2026-08-01', cotopaxi, 'repair', 1),
+      row('2026-09-01', INDUSTRY_AUDIENCE, 'repair', 33), row('2026-09-01', cotopaxi, 'repair', 1),
+      row('2026-08-01', INDUSTRY_AUDIENCE, 'water', 13), row('2026-08-01', cotopaxi, 'water', 2),
+      row('2026-09-01', INDUSTRY_AUDIENCE, 'water', 28),
+    ],
+    denominators: new Map(),
+    perAudience: new Map([
+      [`2026-08-01|${INDUSTRY_AUDIENCE}`, 351], [`2026-09-01|${INDUSTRY_AUDIENCE}`, 625],
+      [`2026-08-01|${cotopaxi}`, 22], [`2026-09-01|${cotopaxi}`, 12],
+      [`2026-08-01|${freitag}`, 4], [`2026-09-01|${freitag}`, 6],
+    ]),
+    axis: ['2026-08-01', '2026-09-01'],
+    month: '2026-09-01',
+    prevMonth: '2026-08-01',
+    leadRival: 'Cotopaxi',
+    atLastMonth: null,
+    thin: false,
+    pair: pairOn(sealandJudge(now)),
+    asOf: now,
+    read: {
+      writtenAt: new Map([['2026-08-01', written], ['2026-09-01', written]]),
+      countedFrom: new Map(['looks', 'repair', 'water', 'community'].map((id) => [id, subjectCountedFrom({ id, named_at: '2026-09-23' }, changes)])),
+      unreadWords: unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' }),
+    },
+  })
+  return { ...overviewFixture(), subjects }
 }

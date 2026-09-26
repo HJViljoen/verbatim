@@ -19,8 +19,8 @@ import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
-import { axisNote, voiceCite } from '@/lib/pages/subjects'
-import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
+import { axisNote, railNote, voiceCite, type SubjectsData } from '@/lib/pages/subjects'
+import { calibrationFixture, candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -294,6 +294,180 @@ describe('SU2 · the subject in full', () => {
     const provisional = { ...data, selected: { ...data.selected!, calibration: 'calibrating' as const } }
     expect(renderText(subjectsSubject.render(provisional, 'app', ctx)))
       .not.toContain('still checking how often we get this subject right') // removed 2026-09-24
+  })
+})
+
+// ---- the three calibration states (decision C, WP1.1) --------------------------
+
+describe('the Subjects page under the three calibration states (staging, Sealand, September)', () => {
+  it('renders every block in all three modes and keeps the copy contract', () => {
+    const data = calibrationFixture()
+    for (const block of SUBJECT_BLOCKS) {
+      for (const mode of MODES) assertCopyContract(render(block.render(data, mode, ctx)))
+    }
+  })
+
+  it('the rail: Repair & warranty "being re-described", five ready rows with figures and no word, Community & purpose with no figure until its first reading', () => {
+    const data = calibrationFixture()
+    for (const mode of MODES) {
+      const text = renderText(subjectsList.render(data, mode, ctx))
+      expect(text).toContain('Repair & warranty')
+      expect(text).toContain('being re-described')
+      // A failed subject prints no figure: its 36 of 654 never reaches the rail.
+      expect(text).not.toContain('36 of 654')
+      for (const k of [103, 43, 39, 29, 25]) expect(text).toContain(`${k} of 654`)
+      // WP1.1 review, finding 1: named after the 24 Sep update wrote
+      // September, it has no row anywhere, and "0 of 654" was invented.
+      expect(text).toContain('first reading with the 27 Sep update')
+      expect(text).not.toContain('0 of 654')
+      expect(text).not.toContain('provisional')
+      expect(text.match(/being re-described/g)?.length).toBe(1)
+      // The market's base is said on the row, never read as your own videos.
+      expect(text).toContain('in your market')
+      expect(text).not.toContain('of your videos')
+    }
+  })
+
+  it('the rail prints the market share through levelText: a whole percent, never a tenth (WP1.1 review, finding 5)', () => {
+    const app = renderText(subjectsList.render(calibrationFixture(), 'app', ctx))
+    // Looks & style, 103 of 654: 15.7% is "16%", as the preview prints it.
+    expect(app).toContain('16%')
+    expect(app).not.toMatch(/\d+\.\d%/)
+    expect(renderText(subjectsList.render(calibrationFixture(), 'print', ctx))).toContain('16% · 103 of 654 videos in your market')
+  })
+
+  it('under 100 market videos the rail prints the count alone', () => {
+    // Staging's June: a market of 50 videos, Looks & style on 5 of them.
+    const data = calibrationFixture()
+    const small = { ...data, list: { ...data.list, rows: data.list.rows.map((r) => (r.market ? { ...r, market: { k: 5, n: 50, pct: null } } : r)) } }
+    const app = renderText(subjectsList.render(small, 'app', ctx))
+    expect(app).toContain('5 of 50 in your market')
+    expect(app).not.toContain('%')
+  })
+
+  // Waterproofing read as never checked (production's state before Friday's
+  // check) on the same staging row: a provisional subject with its figure.
+  const uncheckedRail = (): SubjectsData => {
+    const data = calibrationFixture()
+    return {
+      ...data,
+      list: {
+        ...data.list,
+        rows: data.list.rows.map((r) =>
+          r.id === 's-water' ? { ...r, calibration: 'provisional' as const, note: railNote('provisional', true, 'active') } : r),
+      },
+    }
+  }
+
+  it('the rail sets a provisional word on its own line, never after a dangling separator', () => {
+    const markup = render(subjectsList.render(uncheckedRail(), 'app', ctx))
+    const at = markup.indexOf('29 of 654 in your market')
+    const word = markup.indexOf('provisional', at)
+    expect(word).toBeGreaterThan(at)
+    // The level's span closes and the word opens a span of its own: no separator between them.
+    expect(markup.slice(at, word)).not.toContain('·')
+    expect(markup.slice(at, word)).toContain('</span><span')
+  })
+
+  it('the rail sets a failed subject\'s name in the muted ink', () => {
+    const markup = render(subjectsList.render(calibrationFixture(), 'app', ctx))
+    expect(markup).toContain('<span class="text-[12.5px] font-medium text-muted-foreground">Repair &amp; warranty</span>')
+  })
+
+  it('on paper every rail row is one grid, with the word under the name', () => {
+    const markup = render(subjectsList.render(uncheckedRail(), 'print', ctx))
+    expect(markup.match(/grid grid-cols-\[minmax\(0,1fr\)_auto_auto\]/g)?.length).toBe(7)
+    const at = markup.indexOf('Waterproofing')
+    expect(markup.slice(at, markup.indexOf('</span>', markup.indexOf('provisional', at)))).not.toContain('in your market')
+  })
+
+  it('the pane carries its word in the heading line, beside the name', () => {
+    const markup = render(subjectsSubject.render(calibrationFixture(), 'app', ctx))
+    const heading = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'))
+    expect(heading).toContain('provisional')
+  })
+
+  it('the rail links no failed subject: there is no pane to open', () => {
+    const markup = render(subjectsList.render(calibrationFixture(), 'app', ctx))
+    expect(markup).not.toContain('item=s-repair')
+    expect(markup).toContain('item=s-community')
+  })
+
+  // WP1.1 review, finding 9. Every named subject failed its check: nothing is
+  // selected (a failed subject opens no pane), and the pane's blocks must not
+  // say "Name a subject" to a tenant whose subjects are named.
+  it('when every subject is being re-described, the pane says so rather than asking for a name', () => {
+    const data = calibrationFixture()
+    const failed = {
+      ...data,
+      list: { ...data.list, rows: data.list.rows.map((r) => ({ ...r, calibration: 'failed' as const, market: null, note: railNote('failed', false), selected: false, href: '' })) },
+      selected: null,
+    }
+    for (const block of [subjectsSubject, subjectsKinds, subjectsVoices, subjectsUnanswered, subjectsLine]) {
+      expect(block.emptyState(failed)).toBe('Your subjects are being re-described; there is none to open in full yet.')
+    }
+    expect(renderText(subjectsSubject.render(failed, 'app', ctx))).not.toContain('Name a subject')
+    // With nothing named, it still asks for one.
+    expect(subjectsSubject.emptyState({ ...failed, list: { ...failed.list, rows: [], proposed: [] } })).toContain('Name a subject')
+  })
+
+  it('the rail carries no change badge (WP1.1 moved it onto the market)', () => {
+    expect(subjectsList.verdicts!(calibrationFixture())).toEqual([])
+  })
+
+  it('a rail row stored before WP1.1 (a client level, no market) renders as sent', () => {
+    const text = renderText(subjectsList.render(subjectsFixture(), 'email', ctx))
+    expect(text).toContain('of your videos')
+    expect(text).not.toContain('provisional')
+  })
+
+  it('a rail row stored with "calibrating" reads as provisional', () => {
+    const base = subjectsFixture()
+    const stored = {
+      ...base,
+      list: {
+        ...base.list,
+        rows: base.list.rows.map((r, i) => (i === 1 ? { ...r, calibration: 'calibrating' as const, level: null, verdict: null, note: 'provisional' } : r)),
+      },
+    }
+    for (const mode of MODES) {
+      const text = renderText(subjectsList.render(stored, mode, ctx))
+      expect(text).toContain('provisional')
+      assertCopyContract(render(subjectsList.render(stored, mode, ctx)))
+    }
+  })
+
+  it('the pane of a provisional subject: marked, no "you" side, no gap line, no verdict', () => {
+    const data = calibrationFixture()
+    for (const mode of MODES) {
+      const text = renderText(subjectsSubject.render(data, mode, ctx))
+      expect(text).toContain('provisional')
+      expect(text).not.toContain('of your videos')
+      expect(text).not.toContain('videos behind your figure')
+    }
+    expect(subjectsSubject.verdicts!(data)).toEqual([])
+    expect(Object.keys(subjectsSubject.figures!(data)).some((k) => k.startsWith('subject_you_'))).toBe(false)
+  })
+
+  it('a pane stored with "calibrating" is read as provisional: its sent "you" side and verdicts do not print', () => {
+    const base = subjectsFixture()
+    const stored = { ...base, selected: { ...base.selected!, calibration: 'calibrating' as const } }
+    expect(base.selected!.sides.some((s) => s.kind === 'you')).toBe(true)
+    const text = renderText(subjectsSubject.render(stored, 'app', ctx))
+    expect(text).toContain('provisional')
+    expect(text).not.toContain('of your videos')
+    expect(subjectsSubject.verdicts!(stored)).toEqual([])
+    // The chart draws no line for your own side either.
+    expect(renderText(subjectsLine.render(stored, 'email', ctx))).not.toContain('You')
+  })
+
+  it('a pane stored with no calibration field renders as sent, with no word', () => {
+    const base = subjectsFixture()
+    const { calibration: _c, ...rest } = base.selected!
+    const stored = { ...base, selected: rest as typeof base.selected }
+    const text = renderText(subjectsSubject.render(stored!, 'app', ctx))
+    expect(text).not.toContain('provisional')
+    expect(text).toContain(renderText(subjectsSubject.render(base, 'app', ctx)).slice(0, 40))
   })
 })
 

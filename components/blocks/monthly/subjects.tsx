@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { BlockContext } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { DirectionWord, overviewSubjects } from '@/components/pages/overview/subjects'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -10,6 +10,8 @@ import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview
 import { sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { presentation, T } from './email-table'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { isFailed, printsClient } from '@/lib/subjects/calibration-state'
 
 /**
  * MR2 · Your subjects, in the EMAIL (Block D wave 2, E-monthly; the artboard's
@@ -169,8 +171,12 @@ function GapLevel({ gap }: { gap: Gap }) {
 }
 
 /** One subject: the name and both change badges, then the three sides in
- *  three aligned columns. */
+ *  three aligned columns. Under its calibration (decision C, WP1.1): a
+ *  provisional subject carries its word and no "you" figure (the loader took
+ *  its verdicts off); a failed one prints its name and "being re-described"
+ *  and nothing else. */
 function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | null }) {
+  const failed = isFailed(row.calibration)
   return (
     <table width="100%" {...presentation} style={{ ...T, borderTop: `1px solid ${EMAIL.hairline}` }}>
       <tbody>
@@ -179,7 +185,10 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
             <table width="100%" {...presentation} style={T}>
               <tbody>
                 <tr>
-                  <td style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink }}>{row.label}</td>
+                  <td style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink }}>
+                    {row.label}
+                    <CalibrationTag calibration={row.calibration} unread={row.unread} mode="email" block />
+                  </td>
                   {/* BOTH SIDES' CHANGE, and each one says whose it is. The
                       artboard prints one badge and leaves the reader to assume
                       which column it is about; the caveat under the table then
@@ -248,12 +257,15 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
             </table>
           </td>
         </tr>
+        {/* A failed row, and one the month was not read for (WP1.1 review,
+            finding 1), is its name and its words. */}
+        {failed || row.unread ? null : (
         <tr>
           <td style={{ paddingBottom: 12 }}>
             <table width="100%" {...presentation} style={{ ...T, tableLayout: 'fixed' }}>
               <tbody>
                 <tr>
-                  <td style={{ verticalAlign: 'top', paddingRight: 12 }}><Side side={row.you} /></td>
+                  <td style={{ verticalAlign: 'top', paddingRight: 12 }}>{printsClient(row.calibration) ? <Side side={row.you} /> : <NoValue mode="email" />}</td>
                   <td style={{ verticalAlign: 'top', paddingRight: 12 }}><Side side={row.rival} /></td>
                   <td style={{ verticalAlign: 'top' }}>
                     <Side side={row.category} />
@@ -272,6 +284,7 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
             </table>
           </td>
         </tr>
+        )}
       </tbody>
     </table>
   )

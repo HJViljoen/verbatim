@@ -10,6 +10,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
+import { carriesShare } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
 import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
@@ -27,7 +28,7 @@ import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/readin
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -36,14 +37,28 @@ import type { MonthStatus } from '../reading/types'
 import type { FigureTable, RefusedReason, Verdict } from '../reading/verdicts'
 import {
   isMissingSubjects,
-  subjectCalibration,
   TABLE_SUBJECTS,
   TABLE_SUBJECT_MEMBERSHIPS,
   TABLE_MOVES,
   type Move,
   type Subject,
-  type SubjectCalibration,
 } from '../subjects/types'
+import {
+  CALIBRATION_WORDS,
+  readCalibration,
+  subjectCalibration,
+  type StoredCalibration,
+} from '../subjects/calibration-state'
+import { marketAudiences, pooledDenominators, pooledSide, type MarketCount } from '../reading/market'
+import {
+  monthsWrittenAt,
+  subjectBackRead,
+  subjectCountedFrom,
+  subjectReadIn,
+  unreadWords,
+  withoutUnreadMonths,
+  type CountedSubject,
+} from '../subjects/read-in'
 import { selectAll } from '../supabase-admin'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
@@ -262,11 +277,25 @@ export interface SubjectRail {
   origin: Subject['origin']
   namedAt: string
   status: Subject['status']
-  calibration: SubjectCalibration
-  /** Your own side this month, as a level. Null while the subject is
-   *  calibrating — a share nobody has measured the precision of is not shown
-   *  to a client (design :891). */
+  /** The three states (decision C, WP1.1). A snapshot stored before them
+   *  carries the two-state `'calibrating'`, which `readCalibration` reads as
+   *  provisional. */
+  calibration: StoredCalibration
+  /** Your own side this month, as a level: what the rail printed before
+   *  WP1.1, and what a snapshot stored before it still carries (rendered as
+   *  sent). Null on every row the loader builds now: the rail prints the
+   *  market (`market`), and your own level is the pane's "you" side, shown
+   *  only for a ready subject (decision C). */
   level: { k: number; n: number; pct: number | null } | null
+  /**
+   * The market's side this month (decision E: the category plus the videos
+   * filed under a brand you track, pooled), as a level: `pct` is null where the
+   * market is under 100 videos, which prints as a count only. Printed on every
+   * row that is neither failed nor proposed, with the word on a provisional
+   * one (decision C: its market level always prints). Null where nothing was
+   * read. Optional: a snapshot stored before WP1.1 has none.
+   */
+  market?: { k: number; n: number; pct: number | null } | null
   /** Why no share is shown, in the reader's words. */
   note: string | null
   /**
@@ -280,7 +309,9 @@ export interface SubjectRail {
    * videos against a 100-video floor — which is the mock's own word for all
    * six of its rows, arrived at by measurement rather than by typing it out.
    * Null where nothing was read, where the subject is still calibrating, or
-   * where the month is too thin to band anything on this page.
+   * where the month is too thin to band anything on this page. Null on every
+   * row since WP1.1, which moved the rail onto the market: a snapshot stored
+   * before it keeps its badge.
    */
   verdict: Verdict | null
   selected: boolean
@@ -382,7 +413,8 @@ export interface SubjectPane {
   description: string | null
   namedAt: string
   origin: Subject['origin']
-  calibration: SubjectCalibration
+  /** As the rail row's: a stored `'calibrating'` reads as provisional. */
+  calibration: StoredCalibration
   index: number
   of: number
   sides: SubjectSide[]
@@ -526,33 +558,118 @@ export function setLine(active: number, proposed: number): string {
   return `${fmtInt(active)} named${tail}`
 }
 
-/** Why this subject's share is not being shown. Null when it is.
+/** Why this subject's share is not being shown, or the word its row carries.
+ *  Null when it prints normally.
  *
  *  THREE DIFFERENT SILENCES AND THEY READ DIFFERENTLY. "Not counted yet" is
  *  about the CONSENT — the subject is named and nobody has confirmed it, so
- *  nothing has ever looked. "Calibrating" is about the MEASUREMENT — nobody
- *  has checked how often the judge is right, so the number exists and may not
- *  be printed. "No reading yet" is about the RECORD — the month holds no row.
- *  Collapsing them into one sentence was how the old product told a client its
- *  data was missing when its method was. */
+ *  nothing has ever looked. "Provisional" and "being re-described" are about
+ *  the MEASUREMENT: nobody has checked how often the judge is right, or the
+ *  check came back clearly under the floor (decision C). "No reading yet" is
+ *  about the RECORD — the month holds no row. Collapsing them into one
+ *  sentence was how the old product told a client its data was missing when
+ *  its method was.
+ *
+ *  A stored `'calibrating'` reads as provisional (`readCalibration`). */
 export function railNote(
-  calibration: SubjectCalibration,
+  calibration: StoredCalibration,
   read: boolean,
   status: Subject['status'] = 'active',
+  unread: string | null = null,
 ): string | null {
   if (status === 'proposed') return 'not counted yet: confirm it and counting starts with the next update'
+  const state = readCalibration(calibration)
+  // Failed first: a subject being re-described prints nothing else, read or not.
+  if (state === 'failed') return CALIBRATION_WORDS.failed
+  // A SUBJECT THE MONTH WAS NOT READ FOR (named after its last update) says
+  // when it will be, in place of a figure and of its word: the preview's
+  // "first reading with the 27 Sep update" (`unreadWords`).
+  if (unread) return unread
   // A67: the pane says it in full; the rail says the one word.
-  if (calibration === 'calibrating') return 'provisional'
+  if (state === 'provisional') return CALIBRATION_WORDS.provisional
   if (!read) return 'no reading yet'
   return null
 }
 
 /** Which subject the page is about: the one asked for, else the first
  *  confirmed one, else nothing. A subject that is not this tenant's, or is
- *  retired, is not selected by a URL — it simply is not in the list. */
+ *  retired, is not selected by a URL — it simply is not in the list. Nor is a
+ *  subject being re-described (decision C: hidden everywhere), which the
+ *  caller leaves out of `rail`. */
 export function selectSubject(rail: readonly { id: string }[], asked: string | undefined): string | null {
   if (asked && rail.some((r) => r.id === asked)) return asked
   return rail[0]?.id ?? null
+}
+
+/**
+ * The pane's sides under the subject's calibration (decision C, WP1.1).
+ *
+ * READY: every side, as read. PROVISIONAL: no "you" side (its client level is
+ * not shown until the check clears the floor), and no side carries a change
+ * verdict or a direction word; the market's sides print as levels. FAILED: no
+ * side at all, the subject is being re-described. A pane stored before WP1.1
+ * reads `'calibrating'` as provisional; one with no field renders as sent.
+ */
+export function calibratedSides<S extends { kind: SubjectSide['kind']; verdict: Verdict | null; direction: Direction | null }>(
+  sides: readonly S[],
+  calibration: string | null | undefined,
+): S[] {
+  const state = readCalibration(calibration)
+  if (state === 'failed') return []
+  if (state === 'provisional') {
+    return sides.filter((s) => s.kind !== 'you').map((s) => ({ ...s, verdict: null, direction: null }))
+  }
+  return [...sides]
+}
+
+/**
+ * EVERY NAMED SUBJECT IS BEING RE-DESCRIBED (WP1.1 review, finding 9): the
+ * set is named and confirmed, and a failed subject opens no pane, so nothing
+ * is selected. The pane's blocks said "Name a subject and this is where it is
+ * read in full." to a tenant whose subjects are named. This is their sentence
+ * in that state.
+ */
+export const SUBJECTS_ALL_REDESCRIBED = 'Your subjects are being re-described; there is none to open in full yet.'
+
+/** Is every confirmed subject on the rail failed? False where none is
+ *  confirmed (the "name one" or "confirm one" state). */
+export function allRedescribed(data: Pick<SubjectsData, 'list'>): boolean {
+  const active = data.list.rows.filter((r) => r.status === 'active')
+  return active.length > 0 && active.every((r) => readCalibration(r.calibration) === 'failed')
+}
+
+/** The selected subject's sides as its blocks print them (`calibratedSides`). */
+export function paneSides(pane: Pick<SubjectPane, 'sides' | 'calibration'>): SubjectSide[] {
+  return calibratedSides(pane.sides, pane.calibration)
+}
+
+/**
+ * A rail row's market side: k pooled over the market's audiences this month,
+ * n the pooled market (decision E), or null where there is nothing to print.
+ *
+ * NULL UNLESS THE SUBJECT WAS READ IN THE MONTH (WP1.1 review, finding 1). A
+ * subject named after the month's last update has no row anywhere, and the
+ * month series' 0s are then no reading, not a zero. `rows` holds every market
+ * audience with a denominator row this month; a null k there is a line the
+ * page did not read, and it makes the whole side unknown (`pooledSide`'s
+ * contract), never a partial sum.
+ */
+export function railMarketSide(input: {
+  read: 'read' | 'unread' | 'no_month'
+  month: string
+  rows: readonly { audience: string; k: number | null }[]
+  counts: ReadonlyMap<string, MarketCount>
+  rivalAudiences: readonly string[]
+}): { k: number; n: number } | null {
+  if (input.read !== 'read') return null
+  const side = pooledSide(
+    input.rows.map((r) => ({ month: input.month, audience: r.audience, k: r.k })),
+    input.counts,
+    input.month,
+    input.rivalAudiences,
+    { read: true },
+  )
+  return side.k != null && side.n != null && side.n > 0 ? { k: side.k, n: side.n } : null
 }
 
 /**
@@ -1384,9 +1501,11 @@ export async function loadOwnPosts(
         held.add(vid)
         bySubject.set(r.subject_id, held)
       }
+      // Each row carries its calibration: the census prints a subject's match
+      // on your own posts only once the subject is ready (decision C).
       membership = (subjects ?? [])
         .filter((s) => bySubject.has(s.id))
-        .map((s) => ({ subjectId: s.id, label: s.name, videoIds: [...(bySubject.get(s.id) ?? [])] }))
+        .map((s) => ({ subjectId: s.id, label: s.name, videoIds: [...(bySubject.get(s.id) ?? [])], calibration: subjectCalibration(s) }))
     }
   }
 
@@ -1476,7 +1595,11 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // overlap wave 2 instead of sitting alone between two waves.
   const active = (subjectRows ?? []).filter((s) => s.status === 'active')
   const proposed = (subjectRows ?? []).filter((s) => s.status === 'proposed')
-  const selectedId = selectSubject(active, params.item)
+  // THE THREE CALIBRATION STATES (decision C, WP1.1), once per subject. A
+  // subject being re-described is hidden everywhere: its rail row says so and
+  // it is never the pane, whatever the URL asks for.
+  const calibrationOf = new Map(active.map((s) => [s.id, subjectCalibration(s)]))
+  const selectedId = selectSubject(active.filter((s) => calibrationOf.get(s.id) !== 'failed'), params.item)
 
   // THE THEMED RUN, STARTED HERE AND TAKEN WHERE IT IS USED (WP23). It waits
   // on the running-run ids and on nothing else, and it used to be read inside
@@ -1616,32 +1739,90 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   ])
 
   const pair = await judgeAhead
-  const seriesFor = (subjectId: string, audience: string): MonthSeries | null =>
-    subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
-  const chartSeriesFor = (subjectId: string, audience: string): MonthSeries | null =>
-    (chartRead ?? subjectSet)?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
+
+  // WAS EACH SUBJECT READ IN EACH MONTH AT ALL? (WP1.1 review, finding 1.)
+  // The month series fills a 0 wherever the audience has a denominator row,
+  // which is true only for a subject the month's update read: one named after
+  // it (Community & purpose on staging, named 24 Sep at 12:41 after the
+  // 12:15 update) printed "0 of 654 in your market", a measurement nobody
+  // made. A month the subject was not read in reads as no reading on every
+  // line, the rail, the pane's sides and its chart (`lib/subjects/read-in.ts`).
+  // The change log is the one `loadMonthSeries` already read (memoised), so
+  // this costs no read.
+  const marketRivals = marketRivalAudiences(rivals)
+  const changes = await loadChanges(reading.client, clientId)
+  const writtenAt = monthsWrittenAt(history.denominators, new Set(marketAudiences(marketRivals)))
+  const countedFrom = new Map(active.map((s) => [s.id, subjectCountedFrom(s as CountedSubject, changes)]))
+  const cited = new Map<string, Set<string>>()
+  for (const line of [...(subjectSet?.series ?? []), ...(chartRead?.series ?? [])]) {
+    if (!line.objectId) continue
+    for (const p of line.points) {
+      if ((p.k ?? 0) <= 0) continue
+      const months = cited.get(line.objectId) ?? new Set<string>()
+      months.add(monthStartOf(p.month))
+      cited.set(line.objectId, months)
+    }
+  }
+  const backRead = new Map(active.map((s) => [s.id, subjectBackRead(countedFrom.get(s.id) ?? null, cited.get(s.id) ?? [], writtenAt)]))
+  const readIn = (subjectId: string, m: string) =>
+    subjectReadIn({
+      countedFrom: countedFrom.get(subjectId) ?? null,
+      writtenAt: writtenAt.get(monthStartOf(m)),
+      cited: cited.get(subjectId)?.has(monthStartOf(m)) ?? false,
+      backRead: backRead.get(subjectId) ?? false,
+    })
+  const unreadIn = (subjectId: string) => (m: string) => readIn(subjectId, m) === 'unread'
+  const seriesFor = (subjectId: string, audience: string): MonthSeries | null => {
+    const line = subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
+    return line ? withoutUnreadMonths(line, unreadIn(subjectId)) : null
+  }
+  const chartSeriesFor = (subjectId: string, audience: string): MonthSeries | null => {
+    const line = (chartRead ?? subjectSet)?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
+    return line ? withoutUnreadMonths(line, unreadIn(subjectId)) : null
+  }
 
   // CONFIRMED FIRST, THEN NAMED-BUT-NOT-CONFIRMED, and both in the ONE list.
   // A proposed subject was kept out of the rail at first and listed underneath
   // as prose, which left the only control that can start it counting — Confirm
   // — on a row a client could not reach. The editor is the whole live set; the
   // row says which of the two it is.
-  const rail: SubjectRail[] = [...active, ...proposed].slice(0, RAIL_MAX).map((s) => {
-    const calibration = subjectCalibration(s)
-    const own = seriesFor(s.id, CLIENT_AUDIENCE)
-    const byMonth = own ? pointsByMonth(own) : new Map()
-    const point = byMonth.get(month) ?? null
-    const before = byMonth.get(prevMonth) ?? null
-    const read = s.status === 'active' && point != null && point.k != null && point.videos != null
-    const railPoint = (m: string, p: { k: number | null } | null): SeriesPoint => ({
-      month: m,
-      videos: perAudience.get(`${m}|${CLIENT_AUDIENCE}`) ?? null,
-      k: p?.k ?? null,
-      audience: CLIENT_AUDIENCE,
-      // A subject's membership is not a clustering artefact — buildSides'
-      // own line, for the same reason.
-      regime: 'n/a',
+  // THE MARKET'S SIDE OF EACH ROW (decision E), pooled over the tracked
+  // brands' audiences and the category from the rows already read: no read of
+  // its own. It is what a provisional row prints (decision C).
+  const marketCounts = pooledDenominators(history.denominators, marketRivals)
+  const marketOf = (subjectId: string) =>
+    railMarketSide({
+      read: readIn(subjectId, month),
+      month,
+      // Every market audience with a denominator row this month: a line the
+      // page did not read (no subject selected) is null, which is unknown and
+      // makes the whole side unknown, never a partial sum.
+      rows: marketAudiences(marketRivals)
+        .filter((audience) => perAudience.has(`${month}|${audience}`))
+        .map((audience) => {
+          const line = seriesFor(subjectId, audience)
+          return { audience, k: line ? pointsByMonth(line).get(month)?.k ?? null : null }
+        }),
+      counts: marketCounts,
+      rivalAudiences: marketRivals,
     })
+  const unreadNote = unreadWords({ month, filling: monthStatus === 'filling', nextUpdate: rm.nextUpdate })
+
+  // THE RAIL READS THE MARKET (decision C with decision E, WP1.1). A
+  // subject's market level always prints unless its check clearly failed, and
+  // its client level only once it is ready; the client level lives in the
+  // pane's "you" side, so the rail prints the market for every row and a word
+  // where one is due. (Staging holds no client-audience month rows for August
+  // or September, so a rail of client levels printed "no reading yet" on
+  // every ready row.) NO CHANGE BADGE on the rail: no month pair is read the
+  // same way before the 6 Dec update, and a refusal on every row is the
+  // sentence the deploy-1 review (R3) took off rows; WP2.2 rebuilds the rail.
+  const rail: SubjectRail[] = [...active, ...proposed].slice(0, RAIL_MAX).map((s) => {
+    // A proposed subject was never checked and measures nothing; its row says
+    // "not counted yet" whatever the state (`railNote`).
+    const calibration = calibrationOf.get(s.id) ?? subjectCalibration(s)
+    const counted = s.status === 'active' && calibration !== 'failed' ? marketOf(s.id) : null
+    const unread = s.status === 'active' && readIn(s.id, month) === 'unread'
     return {
       id: s.id,
       name: s.name,
@@ -1650,21 +1831,15 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       namedAt: s.named_at,
       status: s.status,
       calibration,
-      level: read && calibration === 'ready'
-        ? { k: point!.k!, n: point!.videos!, pct: pctOf(point!.k, point!.videos) }
+      level: null,
+      market: counted
+        ? { k: counted.k, n: counted.n, pct: carriesShare(counted.n) ? pctOf(counted.k, counted.n) : null }
         : null,
-      note: railNote(calibration, read, s.status),
-      verdict: thin || !read || calibration !== 'ready'
-        ? null
-        : monthChange({
-            object: { kind: 'subject', id: s.id, label: s.name },
-            audience: CLIENT_AUDIENCE,
-            curr: railPoint(month, point),
-            prev: railPoint(prevMonth, before),
-            comparability: pair(prevMonth, month, CLIENT_AUDIENCE),
-          }),
+      note: railNote(calibration, counted != null, s.status, unread ? unreadNote : null),
+      verdict: null,
       selected: s.id === selectedId,
-      href: s.status === 'active' ? `/dashboard/subjects?item=${encodeURIComponent(s.id)}` : '',
+      // A subject being re-described opens nothing: there is no pane to show.
+      href: s.status === 'active' && calibration !== 'failed' ? `/dashboard/subjects?item=${encodeURIComponent(s.id)}` : '',
     }
   })
 
@@ -1682,7 +1857,12 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   let selected: SubjectPane | null = null
   const subject = selectedId ? active.find((s) => s.id === selectedId) ?? null : null
   if (subject) {
-    const sides = buildSides({
+    const calibration = calibrationOf.get(subject.id) ?? subjectCalibration(subject)
+    // DECISION C ON THE PANE: a provisional subject has no "you" side and no
+    // side carries a verdict or a direction word (`calibratedSides`). The
+    // series, the chart, the gap and "the videos behind your figure" are all
+    // built from these sides, so none of them reaches the client level either.
+    const sides = calibratedSides(buildSides({
       subject,
       rivals,
       leadRival,
@@ -1695,15 +1875,21 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       thin,
       pair,
       asOf: readingAt,
-    })
+    }), calibration)
     // A REFUSED STEP IS DRAWN BROKEN (decision D, WP1.3): each line carries the
     // steps its audience's month pairs refuse, with the refusal's sentence.
     const judged = (line: MonthSeries): MonthSeries => ({
       ...line,
       refusedSteps: refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, line.audience)),
     })
-    const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged)
-    const chartSeries = sides
+    // A SUBJECT READ IN NO MONTH HAS NO LINE AT ALL (WP1.1 review, finding
+    // 1): every point of every line is no reading, and the chart's key named
+    // each audience "No line yet … (too few videos)", a reason about volume
+    // for a subject nothing has read. With no series the block says "This
+    // subject has no stored months on this axis yet."
+    const neverRead = chartAxis.every((m) => readIn(subject.id, m) !== 'read')
+    const series = neverRead ? [] : sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged)
+    const chartSeries = neverRead ? [] : sides
       .map((side) => chartSeriesFor(subject.id, side.audience))
       .filter((s): s is MonthSeries => s != null)
       .map(onChart)
@@ -1761,7 +1947,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       description: subject.description,
       namedAt: subject.named_at,
       origin: subject.origin,
-      calibration: subjectCalibration(subject),
+      calibration,
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,
@@ -2626,7 +2812,7 @@ async function nameQuestions(
 export function sideFigures(pane: SubjectPane | null): FigureTable {
   const out: FigureTable = {}
   if (!pane) return out
-  for (const s of pane.sides) {
+  for (const s of paneSides(pane)) {
     if (s.pct == null || s.k == null || s.n == null) continue
     const token = `subject_${s.kind}_${s.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`
     const whose = sideWhose(s)

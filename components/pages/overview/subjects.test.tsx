@@ -7,7 +7,8 @@ import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { DirectionWord, leadGap, overviewSubjects, sparkDomain, subjectsMeta } from './subjects'
 import { monthlyLineLabel } from '@/lib/pages/overview'
-import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
+import { calibrationOverviewFixture, overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
+import { monthlySubjectsEmail } from '@/components/blocks/monthly/subjects'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -324,5 +325,153 @@ describe('OV2 · a refusal every row shares prints once, as a chip', () => {
 
   it('prints no chip where nothing is refused', () => {
     expect(renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))).not.toContain('not read as a change')
+  })
+})
+
+// ---- decision C, WP1.1: the three calibration states -------------------------
+
+describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oct)', () => {
+  const data = calibrationOverviewFixture()
+  const byId = (id: string) => data.subjects.rows.find((r) => r.id === id)!
+
+  it('the loader marks each row: two ready, one failed, one provisional', () => {
+    expect(data.subjects.rows.map((r) => [r.label, r.calibration])).toEqual([
+      ['Looks & style', 'ready'],
+      ['Repair & warranty', 'failed'],
+      ['Community & purpose', 'provisional'],
+      ['Waterproofing', 'ready'],
+    ])
+  })
+
+  it('renders in all three modes and keeps the copy contract', () => {
+    for (const mode of MODES) assertCopyContract(render(overviewSubjects.render(data, mode, ctx)))
+    assertCopyContract(render(monthlySubjectsEmail(data, ctx)))
+  })
+
+  it('a failed subject prints its name and "being re-described", and none of its figures', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      expect(text).toContain('Repair & warranty')
+      expect(text.match(/being re-described/g)?.length).toBe(1)
+      // Its 33 of 625 category videos never print.
+      expect(text).not.toContain('33 of 625')
+    }
+    expect(byId('repair').category).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+  })
+
+  // Waterproofing read as never checked (production's state before Friday's
+  // check), on the same staging rows: a provisional subject with figures.
+  const unchecked = calibrationOverviewFixture({ unchecked: ['water'] })
+
+  it('a provisional subject prints its market levels, marked, and no "you" side or change', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(unchecked, mode, ctx))
+      expect(text.match(/provisional/g)?.length).toBe(1)
+      expect(text).toContain('28 of 625')
+    }
+    const row = unchecked.subjects.rows.find((r) => r.id === 'water')!
+    expect(row.calibration).toBe('provisional')
+    expect(row.you.observed).toBe(false)
+    expect(row.category.verdict).toBeNull()
+    expect(row.direction).toBeNull()
+    expect(unchecked.subjects.gaps.water).toBeNull()
+  })
+
+  // WP1.1 review, finding 1: Community & purpose was named 24 Sep, after the
+  // 24 Sep update wrote September, and has no row in any month. The 0 a month
+  // series fills there is no reading: "0 of 625" was invented.
+  it('a subject named after the month was written prints when it will be read, and no figure, never 0', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      expect(text).toContain('first reading with the 4 Oct update')
+      expect(text).not.toContain('0 of 625')
+      // Said once: the row's words are the whole row.
+      expect(text.match(/first reading with the 4 Oct update/g)?.length).toBe(1)
+    }
+    const row = byId('community')
+    expect(row.unread).toBe('first reading with the 4 Oct update')
+    expect(row.category).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+    expect(row.spark.every((v) => v == null)).toBe(true)
+    expect(row.categoryAtLastMonth).toBeNull()
+    expect(data.subjects.gaps.community).toBeNull()
+    const answers = blockAnswers(overviewSubjects, data)
+    expect(Object.keys(answers.figures).some((k) => k.includes('community'))).toBe(false)
+    // A subject that was read keeps its zeros where it came up on no video.
+    expect(byId('water').rival?.k).toBe(0)
+  })
+
+  it('marks a provisional subject\'s figure "(provisional)" in the table a document cites (WP1.1 review, finding 10)', () => {
+    const figures = blockAnswers(overviewSubjects, unchecked).figures
+    expect(figures.subject_water_share.label).toBe('Waterproofing, share of the category this month (provisional)')
+    expect(figures.subject_looks_share.label).toBe('Looks & style, share of the category this month')
+  })
+
+  it('an unread row is its linked name and its words, one cell across', () => {
+    const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
+    expect(row).toContain('first reading with the 4 Oct update')
+    expect(row).toContain('item=community')
+    expect(row).toMatch(/colspan="6"/i)
+    expect(row).not.toContain('provisional')
+  })
+
+  it('never says "not tracked" of a side it only withholds', () => {
+    // Staging holds no own-audience month row, so each READY row's "you" cell
+    // is truly not tracked; the provisional and failed rows' cells are
+    // withheld, and say nothing about tracking.
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      const failedRow = text.slice(text.lastIndexOf('Repair & warranty'), text.lastIndexOf('Community & purpose'))
+      const provisionalRow = text.slice(text.lastIndexOf('Community & purpose'), text.lastIndexOf('Waterproofing'))
+      for (const row of [failedRow, provisionalRow]) {
+        expect(row).not.toContain('not tracked')
+        expect(row).not.toContain('no change is read for your side')
+      }
+    }
+  })
+
+  it('declares no verdict and no figure for a subject that is not ready', () => {
+    const answers = blockAnswers(overviewSubjects, data)
+    for (const v of answers.verdicts) expect(['looks', 'water']).toContain(v.objectId)
+    expect(Object.keys(answers.figures).some((k) => k.includes('repair'))).toBe(false)
+  })
+
+  it('the monthly email prints the same states', () => {
+    const text = renderText(monthlySubjectsEmail(data, ctx))
+    expect(text).toContain('being re-described')
+    expect(text).toContain('first reading with the 4 Oct update')
+    expect(text).not.toContain('33 of 625')
+    expect(text).not.toContain('0 of 625')
+    expect(renderText(monthlySubjectsEmail(unchecked, ctx))).toContain('provisional')
+  })
+
+  it('a row stored before WP1.1 carries no state and renders as sent, with no word', () => {
+    const text = renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(text).not.toContain('provisional')
+    expect(text).not.toContain('being re-described')
+  })
+
+  // The design pass: what the rows LOOK like, not only what they say.
+  const rowOf = (markup: string, label: string) => {
+    const at = markup.indexOf(label)
+    return markup.slice(markup.lastIndexOf('<tr', at), markup.indexOf('</tr>', at))
+  }
+
+  it('a failed row is its name and its word: no link to a pane that does not exist, no dash in each column', () => {
+    for (const mode of ['app', 'print'] as const) {
+      const row = rowOf(render(overviewSubjects.render(data, mode, ctx)), 'Repair &amp; warranty')
+      expect(row).toContain('being re-described')
+      expect(row).not.toContain('<a ')
+      expect(row).not.toContain('—')
+      // One cell across the six; the row's header says why, once, and never
+      // "not shown until … checked": it was checked, and failed.
+      expect(row).toMatch(/colspan="6"/i)
+      expect(row.match(/being re-described/g)?.length).toBe(1)
+      expect(row).not.toContain('not shown until')
+    }
+  })
+
+  it('a provisional row carries the withheld mark in its change cell as in its "you" cells', () => {
+    const row = rowOf(render(overviewSubjects.render(unchecked, 'app', ctx)), 'Waterproofing')
+    expect(row.match(/not shown until its check clears/g)?.length).toBe(3)
   })
 })

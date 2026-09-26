@@ -58,6 +58,7 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { readSubjectWindow } from '../subjects/read'
 import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
+import { earnsVerdict, printsClient, type SubjectCalibration } from '../subjects/calibration-state'
 import { CLIENT_AUDIENCE } from '../rivals'
 import type { PlanCheckCard } from '../ask/plan-cards'
 import type { HeadToHead } from '../reading/head-to-head'
@@ -258,6 +259,15 @@ export interface QuarterQuiet {
 export interface SubjectQuarterRow {
   id: string
   label: string
+  /** The Overview row's calibration (decision C, WP1.1): a provisional
+   *  subject has no "you" column and no quarter column; a failed one prints
+   *  its name and "being re-described" only. Optional: a quarterly stored
+   *  before WP1.1 has none and renders as it was sent. */
+  calibration?: SubjectCalibration
+  /** The Overview row's words for a subject the month was not read for
+   *  (WP1.1 review, finding 1): its month cells print "not read", and these
+   *  words sit under its name. Absent on every row that was read. */
+  unread?: string
   /** The month columns — the tenant's own audience and the category's. */
   you: { k: number; n: number; pct: number | null } | null
   category: { k: number; n: number; pct: number | null } | null
@@ -1422,6 +1432,10 @@ function buildQuarterVerdicts(a: {
     const priorN = denomBefore.get(audience)
     if (!n || !priorN) continue
     for (const row of a.overview.subjects.rows) {
+      // DECISION C (WP1.1): only a ready subject earns a quarter verdict, and
+      // only its own side is "you".
+      if (!earnsVerdict(row.calibration)) continue
+      if (audience === CLIENT_AUDIENCE && !printsClient(row.calibration)) continue
       out.push(
         quarterChange({
           object: { kind: 'subject', id: row.id, label: row.label },
@@ -1854,6 +1868,8 @@ function buildSubjects(a: {
   const rows: SubjectQuarterRow[] = block.rows.map((row) => ({
     id: row.id,
     label: row.label,
+    ...(row.calibration ? { calibration: row.calibration } : {}),
+    ...(row.unread ? { unread: row.unread } : {}),
     // A SIDE WITH NO DENOMINATOR IS NOT A SIDE. Overview's subject row carries
     // nulls where the audience was not read at all; a cell that printed "0 of
     // 0" would be a measurement of a thing nobody measured.
@@ -1897,7 +1913,9 @@ function buildSubjects(a: {
   // row the page opens with — because six overlaid series on a printed sheet
   // is not a reading, and because every one of them divides by the same
   // denominator anyway.
-  const lead = rows.find((r) => r.spark.some((p) => p != null)) ?? null
+  // Never a provisional or failed subject (decision C): the chart leads the
+  // page, and neither may lead.
+  const lead = rows.find((r) => earnsVerdict(r.calibration) && r.spark.some((p) => p != null)) ?? null
   return {
     rows,
     rivalLabel: block.rivalLabel,
@@ -2468,6 +2486,18 @@ function buildUnsettled(a: {
   }
   for (const row of a.subjects.rows) {
     if (row.categoryQuarter || row.youQuarter) continue
+    // A PROVISIONAL OR FAILED SUBJECT IS WAITING ON ITS CHECK, not on its
+    // sides (decision C, WP1.1): "neither side read" would be false of it.
+    if (!earnsVerdict(row.calibration)) {
+      waiting.push({
+        title: `${row.label}, quarter on quarter`,
+        why: row.calibration === 'failed' ? 'being re-described' : 'provisional',
+        line: row.calibration === 'failed'
+          ? 'This subject is being re-described, so no verdict is printed for it.'
+          : 'This subject is provisional until its check clears, so no verdict is printed for it.',
+      })
+      continue
+    }
     waiting.push({
       title: `${row.label}, quarter on quarter`,
       why: 'neither side read on both sides',

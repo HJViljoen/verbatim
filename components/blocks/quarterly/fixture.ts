@@ -1,5 +1,5 @@
 import { blockAnswers } from '@/lib/blocks/types'
-import type { OverviewData } from '@/lib/pages/overview'
+import { calibratedRow, type OverviewData } from '@/lib/pages/overview'
 import type { QuarterChecks, QuarterlyData, QuarterQuiet } from '@/lib/pages/quarterly'
 import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
@@ -277,6 +277,36 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
     }),
     ...over,
   }
+}
+
+/**
+ * The same quarter under the three calibration states (decision C, WP1.1):
+ * `s5` (the mock's "Repairs and warranty") at production's Repair & warranty
+ * calibration, 0.36 on 25 labels, clearly under the floor (failed); `s6` never
+ * checked (provisional); the rest ready. The volumes are still the mock's
+ * (F12); the states are production's.
+ */
+export function calibratedQuarterFixture(): QuarterlyData {
+  const overview = withSixSubjects(overviewFixture())
+  const state = (id: string) => (id === 's5' ? 'failed' as const : id === 's6' ? 'provisional' as const : 'ready' as const)
+  const rows = overview.subjects.rows.map((r) => calibratedRow({ ...r, calibration: state(r.id) }))
+  return composeQuarterly({
+    overview: { ...overview, subjects: { ...overview.subjects, rows }, bar: { ...overview.bar, readings: 8 } },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
+    checks: checksRan,
+    record: record(13),
+    quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
+  })
 }
 
 /**

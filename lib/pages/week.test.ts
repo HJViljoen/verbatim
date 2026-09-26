@@ -245,6 +245,14 @@ describe('the subjects lead', () => {
     expect(lead).toContain('1 of the 2 of your 3 subjects this update could be read against')
   })
 
+  // DECISION C (WP1.1): the rows are the READY subjects; the others are
+  // named without a figure, and still count among the subjects you named.
+  it('counts every confirmed subject in "of your N", the withheld ones too', () => {
+    // Production, 25 Sep: five ready, three failed.
+    const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'about typical')], '2026-09-01', 5)
+    expect(lead).toContain('1 of the 2 of your 5 subjects this update could be read against')
+  })
+
   it('is null where nothing could be compared at all', () => {
     expect(subjectLead([row('Comfort', null)], '2026-09-01')).toBeNull()
     expect(subjectLead([], '2026-09-01')).toBeNull()

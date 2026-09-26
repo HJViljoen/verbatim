@@ -18,6 +18,8 @@ import { marketPlans } from './plans'
 import { marketSayHear } from './sayhear'
 import { marketWays } from './ways'
 import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
+import { moveReadingFixture } from '@/components/pages/overview/fixture'
+import { MOVE_SUBJECT_FAILED } from '@/lib/reading/moves'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -1017,6 +1019,21 @@ describe('MK2 · the current recommendation first (market-first WP1.9)', () => {
   it('keeps the copy contract with the tag on', () => {
     for (const mode of ['app', 'print', 'email'] as const) {
       assertCopyContract(render(marketAdvice.render(marketFixture(), mode, ctx)))
+    }
+  })
+})
+
+// DECISION C (WP1.1): Your moves names a move on a failed subject and does
+// not read it, and never says "too few readings" about it.
+describe('Your moves · a move on a subject being re-described', () => {
+  it('prints the sentence, no chart and no verdict, in every mode', () => {
+    const base = marketFixture()
+    const data = { ...base, moves: { ...base.moves, readings: [moveReadingFixture('failed')] } }
+    for (const mode of MODES) {
+      assertCopyContract(render(marketMoves.render(data, mode, ctx)))
+      const text = renderText(marketMoves.render(data, mode, ctx))
+      expect(text).toContain(MOVE_SUBJECT_FAILED)
+      expect(text).not.toContain('too few readings')
     }
   })
 })

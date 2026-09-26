@@ -11,10 +11,10 @@ import { monthStartOf } from '../../reading/month-key'
 //
 // THE THREE STATES (decision C, WP1.1). `ready` prints normally; `provisional`
 // prints its market figure marked "provisional", with no verdict; `failed` is
-// hidden as "being re-described". WP1.1 widens `SubjectCalibration` to these
-// three in lib/subjects/types.ts; until it merges, `subjectCalibration` answers
-// 'calibrating' or 'ready', and `marketCalibration` reads 'calibrating' as
-// provisional, so this block is right on both sides of the merge.
+// hidden as "being re-described". WP1.1's `subjectCalibration`
+// (lib/subjects/calibration-state.ts) sets them on every row; a stored row
+// may still carry the two-state 'calibrating', which `marketCalibration`
+// reads as provisional.
 //
 // PURE.
 

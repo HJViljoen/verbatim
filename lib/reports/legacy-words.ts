@@ -89,6 +89,18 @@ const isLanguageRow = (x: unknown): boolean =>
   !!x && typeof x === 'object' && !Array.isArray(x) &&
   LANGUAGE_ROW_LABELS.has((x as { label?: unknown }).label as string)
 
+/**
+ * The two-state calibration a snapshot stored before WP1.1 carries.
+ *
+ * `calibration: 'calibrating'` was the word for "not ready" on a Subjects rail
+ * or pane row, sent before the check could tell a subject not checked yet from
+ * one that clearly failed. It reads as `'provisional'` (decision C, the state
+ * that claims neither), matched by its KEY and the whole value, so no other
+ * string can match. A row stored with no field is left alone: it renders as
+ * it was sent.
+ */
+const LEGACY_CALIBRATION: Readonly<Record<string, string>> = { calibrating: 'provisional' }
+
 /** A copy of `data` with the sweep's legacy phrases rewritten; the same object
  *  when nothing in it matched, so a current snapshot costs one walk. */
 export function withCurrentWords<T>(data: T): T {
@@ -112,7 +124,7 @@ export function withCurrentWords<T>(data: T): T {
       let changed = false
       const next: Record<string, unknown> = {}
       for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
-        const y = walk(x)
+        const y = k === 'calibration' && typeof x === 'string' && LEGACY_CALIBRATION[x] ? LEGACY_CALIBRATION[x] : walk(x)
         if (y !== x) changed = true
         next[k] = y
       }

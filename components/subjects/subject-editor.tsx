@@ -15,6 +15,7 @@ import {
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
+import { levelText } from '@/lib/reading/level'
 import { SUBJECTS_UNREADABLE_WHY, SUPERSEDE_RULE } from '@/lib/pages/subjects'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { SUBJECT_WRITE_REFUSED, SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
@@ -54,12 +55,20 @@ export interface SubjectEditorRow {
   because: string
   /** Your own level this month, where there is one to show. */
   level?: { pct: number | null; k: number; n: number } | null
+  /** The market's level this month (decision E), which the Subjects rail
+   *  prints in place of your own since WP1.1; `pct` is null under 100 videos,
+   *  a count only. A provisional row carries its word in `note` (decision C). */
+  market?: { k: number; n: number; pct: number | null } | null
   /** Why no level is shown. */
   note?: string | null
   /** The banded change on your own side, printed as the row's badge. */
   verdict?: Verdict | null
   selected?: boolean
   href?: string
+  /** A subject held back as "being re-described" (decision C, WP1.1): it has
+   *  no figure and no pane to open, so its name is set in the muted ink and
+   *  the row reads as out of play rather than as a link that is missing. */
+  withheld?: boolean
 }
 
 export interface SubjectEditorProps {
@@ -104,9 +113,17 @@ export interface SubjectEditorProps {
 // The mock's rail row: 4px radius, 4px/10px padding, one pixel between its
 // lines, and a 2px green mark down the left of the selected one. Dense — six
 // subjects fit a 380px tile beside the rule and the footer.
+/** The rail's count line: `levelText`'s own "8 of 50" under 100 videos, and
+ *  the count beside the whole percent above it ("103 of 654"). */
+function marketCount(m: { k: number; n: number }): string {
+  const level = levelText(m.k, m.n)
+  return level?.kind === 'count' ? level.text : `${fmtInt(m.k)} of ${fmtInt(m.n)}`
+}
+
 const cls = {
   row: 'relative flex flex-col gap-px rounded-[4px] px-2.5 py-1 text-left transition-colors',
   name: 'text-[12.5px] font-medium text-foreground',
+  nameWithheld: 'text-[12.5px] font-medium text-muted-foreground',
   meta: 'font-mono text-[10.5px] tabular-nums text-muted-foreground',
 }
 
@@ -172,11 +189,18 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 {r.href ? (
                   <Link href={r.href} className={`${cls.name} underline-offset-2 hover:underline`}>{r.name}</Link>
                 ) : (
-                  <span className={cls.name}>{r.name}</span>
+                  <span className={r.withheld ? cls.nameWithheld : cls.name}>{r.name}</span>
                 )}
                 {r.level && r.level.pct != null ? (
                   <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
                     {fmtPct(r.level.pct)}
+                  </span>
+                ) : !r.level && r.status === 'active' && r.market && levelText(r.market.k, r.market.n)?.kind === 'share' ? (
+                  // THROUGH `levelText` (WP1.1 review, finding 5): a whole
+                  // percent at 100 videos or more, as the preview prints
+                  // ("17%"), never a tenth of a point the band cannot see.
+                  <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
+                    {levelText(r.market.k, r.market.n)!.text}
                   </span>
                 ) : null}
               </span>
@@ -207,6 +231,25 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                     </>
                   ) : null}
                 </span>
+              ) : r.status === 'active' && r.market ? (
+                // THE MARKET'S LEVEL, NAMED AS SUCH (decision C with E): a
+                // subject's market level always prints unless it failed, and
+                // the base is said on the row so "103 of 654" is never read as
+                // a share of your own videos.
+                //
+                // A PROVISIONAL ROW'S WORD IS A LINE OF ITS OWN, under the
+                // level (design pass). Beside it, "0 of 654 in your market ·
+                // provisional" is 250px on a 188px rail: the word broke off
+                // and left the separator hanging at the end of the level. On
+                // its own line it sits where "being re-described" sits on a
+                // failed row, so the calibration word has one place on the
+                // rail.
+                <>
+                  <span data-copy="level" className={`${cls.meta} whitespace-nowrap`}>
+                    {marketCount(r.market)} in your market
+                  </span>
+                  {r.note ? <span className={cls.meta}>{r.note}</span> : null}
+                </>
               ) : (
                 // A PROPOSED ROW SAYS WHERE IT CAME FROM, not that it is not
                 // counted: the chip on the line below already says that, and

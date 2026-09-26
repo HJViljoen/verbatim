@@ -18,17 +18,28 @@ import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdic
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { calibrationWord, earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
 // THE CATEGORY COLUMN IS PROMOTED, and that is the block's whole argument: on
 // the paying tenant your own audience carries about 9 videos in a month and the
-// category 625 (September, research F12; the mock's 84 and 1,388 were
-// invented volume), so the only side of the three that can carry a
-// monthly change is the category — and a hero that printed only your own side
-// would print "too few to compare" every month for ever. Your side is still
-// shown, as a LEVEL with its count, because the level is real; what it may not
-// carry is a change.
+// category 626 (September so far, production, 24 Sep; staging read 625 to its
+// 20 Sep data; the mock's 84 and 1,388 were invented volume, F12), so the only
+// side of the three that can carry a monthly change is the category — and a
+// hero that printed only your own side would print "too few to compare" every
+// month for ever. Your side is still shown, as a LEVEL with its count, because
+// the level is real; what it may not carry is a change.
+//
+// AND EACH ROW CARRIES ITS CALIBRATION (decision C, WP1.1). A provisional
+// subject prints its market sides as levels, marked "provisional", with no
+// "you" cell and no change; a failed one prints its name and "being
+// re-described" and nothing else. The loader has already taken the numbers
+// off the row (`calibratedRow`); this file prints the word and never says
+// "not tracked" about a side that is only withheld. A row stored before WP1.1
+// carries no state and renders as it was sent.
+
 
 /**
  * The direction word, and the only node allowed to print one.
@@ -238,6 +249,45 @@ export function sparkDomain(rows: readonly SubjectRow[]): [number, number] | und
 }
 
 function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null; domain?: [number, number]; shared?: VerdictPairNote | null }) {
+  const failed = isFailed(row.calibration)
+  const client = printsClient(row.calibration)
+  // What a withheld cell says to a screen reader: the side exists and is held
+  // back, which is not "not tracked" (`withheldLabel`).
+  const withheld = <NoValue mode={mode} label={withheldLabel(row.calibration)} />
+  // A FAILED ROW IS ITS NAME AND ITS WORD, AND NOTHING ACROSS (design pass).
+  // It printed a dash in each of the six columns: six marks that say one
+  // thing, the loudest row in a table whose other rows carry figures. One
+  // empty cell spans the six; the word is in the row's header. Nor is the name a
+  // link: the Subjects page opens no pane for a subject being re-described
+  // (it falls back to the first subject), so the link went somewhere else.
+  if (failed) {
+    return (
+      <tr className="border-t border-border/60 first:border-t-0">
+        <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium text-muted-foreground">
+          {row.label}
+          <CalibrationTag calibration={row.calibration} mode={mode} block />
+        </th>
+        {/* Its word is in the row's own header cell, which a screen reader
+            reads with the row; said again here it was said twice. */}
+        <td colSpan={6} className="py-1.5 align-top" />
+      </tr>
+    )
+  }
+  // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1) is laid
+  // out as a failed row is: its name, and under it the words it prints in
+  // place of figures ("first reading with the 27 Sep update", the preview's
+  // row). Its name stays a link: the Subjects page opens its pane.
+  if (row.unread) {
+    return (
+      <tr className="border-t border-border/60 first:border-t-0">
+        <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium">
+          <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
+          <CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block />
+        </th>
+        <td colSpan={6} className="py-1.5 align-top" />
+      </tr>
+    )
+  }
   return (
     // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
     // its rows and the port dropped it, while the rows themselves are ragged —
@@ -253,8 +303,9 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
             and this block is rendered into a PDF and an email by the monthly
             report (WP18). The same defect WP17 fixed on the weekly blocks. */}
         <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
+        <CalibrationTag calibration={row.calibration} mode={mode} block />
       </th>
-      <td className="py-1.5 pr-3 align-top"><Side side={row.you} mode={mode} /></td>
+      <td className="py-1.5 pr-3 align-top">{client ? <Side side={row.you} mode={mode} /> : withheld}</td>
       <td className="py-1.5 pr-3 align-top"><Side side={row.rival} mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top">
         <Side side={row.category} mode={mode} />
@@ -272,13 +323,18 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
           nothing — a header over six rows of whitespace. The artboard's own
           mark for a cell with no answer is an em dash. */}
       <td className="py-1.5 pr-3 align-top">
-        {row.you.verdict ? <BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> : <NoValue mode={mode} label="no change is read for your side" />}
+        {!client ? withheld : row.you.verdict ? <BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> : <NoValue mode={mode} label="no change is read for your side" />}
       </td>
       <td className="py-1.5 pr-3 align-top">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
-          <DirectionWord direction={row.direction} mode={mode} />
-        </span>
+        {/* A PROVISIONAL ROW EARNS NO CHANGE (decision C), and its cell said
+            so with nothing at all: the one blank in a column whose every other
+            row answers. It carries the withheld mark its "you" cells carry. */}
+        {!earnsVerdict(row.calibration) ? withheld : (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
+            <DirectionWord direction={row.direction} mode={mode} />
+          </span>
+        )}
       </td>
       <td className="py-1.5 align-top">
         {/* TWO READINGS ARE NOT A TREND. Sparkline normalises to the min and
@@ -392,10 +448,15 @@ export const overviewSubjects: Block<OverviewData> = {
           {hasAt ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{AT_LAST_MONTH_LEGEND}</div> : null}
           {s.rows.map((r) => (
             <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-              <strong>{r.label}</strong>
-              <div style={{ marginTop: 2 }}>
-                you <Side side={r.you} mode={mode} /> · {s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
-              </div>
+              <strong>{r.label}</strong>{r.unread || (r.calibration && r.calibration !== 'ready') ? ' ' : null}<CalibrationTag calibration={r.calibration} unread={r.unread} mode={mode} />
+              {/* A failed subject prints its name and its word and nothing else,
+                  and so does one the month was not read for; a provisional one
+                  has no "you" clause (decision C). */}
+              {isFailed(r.calibration) || r.unread ? null : (
+                <div style={{ marginTop: 2 }}>
+                  {printsClient(r.calibration) ? <>you <Side side={r.you} mode={mode} /> · </> : null}{s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
+                </div>
+              )}
               <AtLastMonth at={r.categoryAtLastMonth} mode={mode} />
               <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
               <div style={{ marginTop: 2 }}>
@@ -452,7 +513,11 @@ export const overviewSubjects: Block<OverviewData> = {
       out[`subject_${r.id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_share`] = {
         value: r.category.pct,
         unit: 'pct',
-        label: `${r.label}, share of the category this month`,
+        // A PROVISIONAL SUBJECT'S FIGURE IS MARKED HERE TOO (decision C;
+        // WP1.1 review, finding 10): this table becomes the prose figures a
+        // model may cite (`blockReading` → `proseFigures`), and an unmarked
+        // label let a document cite it as settled.
+        label: `${r.label}, share of the category this month${calibrationWord(r.calibration) ? ` (${calibrationWord(r.calibration)})` : ''}`,
       }
     }
     return out

@@ -13,6 +13,8 @@ import {
   MOVE_NO_CLIENT_SERIES,
   MOVE_NO_MONTHS_RECORDED,
   MOVE_NO_TARGET_SERIES,
+  MOVE_SUBJECT_FAILED,
+  MOVE_SUBJECT_PROVISIONAL,
   MOVE_TOO_YOUNG,
   moveChartNote,
   readMove,
@@ -596,5 +598,64 @@ describe('readMove under the month-pair rule (decision D, WP1.3)', () => {
 
   it('no judge reads as before', () => {
     expect(reading().series[0].refusedSteps).toBeUndefined()
+  })
+})
+
+// ---- decision C, WP1.1: a subject that is not ready -----------------------------
+
+describe('the card and a move under the three calibration states (decision C, WP1.1)', () => {
+  it('counts and proposes a match on your own posts only for a ready subject', () => {
+    // Production, 25 Sep: Durability 0.96 (ready); Recycled materials here
+    // stands for a subject at 0.60 on 25 labels (failed), and Waterproofing
+    // for one never checked (provisional).
+    const c = card({
+      membership: [
+        { subjectId: 's1', label: 'Durability', videoIds: ['v1', 'v2'], calibration: 'ready' },
+        { subjectId: 's2', label: 'Recycled materials', videoIds: ['v1', 'v2', 'v3', 'v4', 'v5'], calibration: 'failed' },
+        { subjectId: 's3', label: 'Waterproofing', videoIds: ['v1', 'v2', 'v3'], calibration: 'provisional' },
+      ],
+    })
+    expect(c.subjects.map((x) => x.label)).toEqual(['Durability'])
+    expect(c.proposal).toMatchObject({ kind: 'subject', subjectId: 's1' })
+  })
+
+  it('proposes nothing when the only matches are on subjects that are not ready', () => {
+    const c = card({ membership: [{ subjectId: 's2', label: 'Recycled materials', videoIds: ['v1'], calibration: 'failed' }] })
+    expect(c.subjects).toEqual([])
+    expect(c.proposal).toBeNull()
+  })
+
+  it('reads a move on a ready subject as before', () => {
+    expect(reading({ calibration: 'ready' }).verdict).not.toBeNull()
+  })
+
+  it('names a move on a provisional subject and does not read it', () => {
+    const r = reading({ calibration: 'provisional' })
+    expect(r.verdict).toBeNull()
+    expect(r.control).toEqual([])
+    expect(r.series).toEqual([])
+    expect(r.figures).toEqual({})
+    // No chart note: both surfaces print one as "too few readings".
+    expect(r.chartNote).toBeNull()
+    expect(r.unread).toBe(MOVE_SUBJECT_PROVISIONAL)
+    expect(r.on).toBe('on the subject Repair & warranty')
+  })
+
+  it('names a move on a failed subject as being re-described', () => {
+    // Repair & warranty, 0.36 on 25 labels on production.
+    const r = reading({ calibration: 'failed' })
+    expect(r.verdict).toBeNull()
+    expect(r.chartNote).toBeNull()
+    expect(r.unread).toBe(MOVE_SUBJECT_FAILED)
+    for (const line of [MOVE_SUBJECT_FAILED, MOVE_SUBJECT_PROVISIONAL]) expect(line).not.toMatch(/[0-9—]/)
+  })
+
+  it('a stored "calibrating" reads as provisional; a theme move is never gated', () => {
+    expect(reading({ calibration: 'calibrating' as never }).unread).toBe(MOVE_SUBJECT_PROVISIONAL)
+    const theme = reading({
+      calibration: 'failed',
+      move: { id: 'mv2', title: 'x', kind: 'theme', declared_at: '2026-08-12', subject_id: null, registry_ids: ['t1'], lineage_id: null },
+    })
+    expect(theme.unread).not.toBe(MOVE_SUBJECT_FAILED)
   })
 })

@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 
 import { BlockMovement } from '@/components/blocks/movement'
-import { FigureCell } from '@/components/blocks/frame'
+import { FigureCell, NoValue } from '@/components/blocks/frame'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { earnsVerdict, isFailed, printsClient, withheldLabel, WITHHELD_WORDS } from '@/lib/subjects/calibration-state'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
 import { provenanceLine } from '@/components/pages/overview/sentence'
@@ -153,10 +155,30 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
  * block has 201px to spend once the figure cards and the recommendation above
  * it have taken theirs. The worst reachable case — four rows, a caveat and a
  * truncation line — clears the box by 4px measured.
+ *
+ * AND NOT EVERY ROW COSTS 41 (WP1.1 review, finding 3). Measured the same way
+ * on staging's Sealand at 2 Oct (26 Sep): a row whose category change is a
+ * REFUSAL SENTENCE ("Not read as a change: we changed our searches in
+ * September.") wraps to three lines in its 138px column and costs 54px, which
+ * is every ready row while August against September is refused (1 to 15
+ * Oct); a failed or unread row is one line, 21px (its words sit in the cell
+ * across the figure columns); a provisional row with its word under the name
+ * is 37px, inside the 41. Charged at 41 each, three refused rows and a failed
+ * one cut the truncation line in half and the caveat entirely.
+ * `sheetRowPx` says what each row costs.
  */
 const SUBJECT_ROW_PX = 41
+const SUBJECT_ROW_REFUSED_PX = 54
+const SUBJECT_ROW_ONE_LINE_PX = 21
 const SUBJECTS_TRAIL_PX = 18
 const SUBJECTS_BUDGET_PX = 201
+
+/** What one subject row costs on the sheet, measured (see above). */
+export function sheetRowPx(row: Pick<SubjectRow, 'calibration' | 'unread' | 'category'>): number {
+  if (isFailed(row.calibration) || row.unread) return SUBJECT_ROW_ONE_LINE_PX
+  if (earnsVerdict(row.calibration) && row.category.verdict?.state === 'refused') return SUBJECT_ROW_REFUSED_PX
+  return SUBJECT_ROW_PX
+}
 
 /** The artboard's own row count, and the most this will ever show. The
  *  arithmetic decides everything below it. */
@@ -172,11 +194,15 @@ export const SHEET_SUBJECT_ROWS = 6
  * paragraph, its second line is counted here and nowhere else. The truncation
  * line is not passed in, because whether it prints depends on the answer: it
  * is charged only to the counts that cause it.
+ *
+ * `rowPx` is each row's own cost in order (`sheetRowPx`); a row it does not
+ * name costs `SUBJECT_ROW_PX`.
  */
-export function sheetSubjectRows(total: number, trailLines: number): number {
+export function sheetSubjectRows(total: number, trailLines: number, rowPx: readonly number[] = []): number {
+  const cost = (n: number) => Array.from({ length: n }, (_, i) => rowPx[i] ?? SUBJECT_ROW_PX).reduce((a, b) => a + b, 0)
   for (let n = Math.min(total, SHEET_SUBJECT_ROWS); n > 1; n--) {
     const trails = trailLines + (n < total ? 1 : 0)
-    if (SUBJECT_ROW_PX * n + SUBJECTS_TRAIL_PX * trails <= SUBJECTS_BUDGET_PX) return n
+    if (cost(n) + SUBJECTS_TRAIL_PX * trails <= SUBJECTS_BUDGET_PX) return n
   }
   return 1
 }
@@ -345,7 +371,11 @@ export function leadGap(gaps: Record<string, Gap | null>): Gap | null {
 
 /** The subject the third card is about: the biggest banded move on the side
  *  that can carry one (the category), else the first row. */
-export function leadSubject(rows: readonly SubjectRow[], exceptId?: string | null): SubjectRow | null {
+export function leadSubject(allRows: readonly SubjectRow[], exceptId?: string | null): SubjectRow | null {
+  // A PROVISIONAL OR FAILED SUBJECT IS NEVER A CARD (decision C, WP1.1): the
+  // card is a headline, and neither earns one. A row stored before WP1.1
+  // carries no state and is eligible as it was.
+  const rows = allRows.filter((r) => earnsVerdict(r.calibration))
   // THREE CARDS ABOUT ONE SUBJECT IS ONE CARD. The artboard leads with the
   // Durability gap and closes with Price, which is the whole point of a
   // three-up row: a reader gets the gap, the category's attention and a second
@@ -612,7 +642,10 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
 /** One side of a subjects row — the share over the count it rests on, or the
  *  honest absence. `FigureCell` stamps its own `figure` / `level` markers, so
  *  the "of N" rule (b) wants cannot fall off the row. */
-function Cell({ side }: { side: SideReading | null }) {
+function Cell({ side, withheld = false }: { side: SideReading | null; withheld?: boolean }) {
+  // A side held back by the subject's calibration (decision C) is not "not
+  // tracked": it prints the empty cell and nothing about tracking.
+  if (withheld) return <NoValue label={WITHHELD_WORDS.provisional} />
   if (!side || !side.observed || side.pct == null) {
     return <span className="text-[11.5px] text-muted-foreground">&mdash; not tracked</span>
   }
@@ -653,7 +686,7 @@ function Cell({ side }: { side: SideReading | null }) {
  */
 function SubjectsTable({ data }: { data: OverviewData }) {
   const s = data.subjects
-  const shown = s.rows.slice(0, sheetSubjectRows(s.rows.length, s.note ? 1 : 0))
+  const shown = s.rows.slice(0, sheetSubjectRows(s.rows.length, s.note ? 1 : 0, s.rows.map(sheetRowPx)))
   const over = s.rows.length - shown.length
   const COLS = 'grid grid-cols-[minmax(0,112px)_82px_120px_138px_minmax(0,1fr)] items-center gap-x-2'
   return (
@@ -677,14 +710,43 @@ function SubjectsTable({ data }: { data: OverviewData }) {
           <tbody role="rowgroup" className="block">
             {shown.map((r, i) => (
               <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
-                <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">{r.label}</th>
-                <td role="cell"><Cell side={r.you} /></td>
-                <td role="cell"><Cell side={r.rival} /></td>
-                <td role="cell"><Cell side={r.category} /></td>
-                <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
-                  <DirectionWord direction={r.direction} />
-                </td>
+                {/* THE WORD NEVER INSIDE THE TRUNCATING NAME (design pass).
+                    The name cell is 112px and truncates, so "Repair &
+                    warranty being re-described" printed as "Repair &
+                    warranty…": the word that says the row is held back was
+                    the part cut off. A provisional row's word sits under the
+                    name, inside the height its two-line figure cells already
+                    take. A row with no figures (failed, or not read this
+                    month) says its words in the cell across the four figure
+                    columns instead, so it stays ONE line (WP1.1 review,
+                    finding 3): on its own line under the name it was 16px
+                    taller than the budget below allowed, and the sheet's
+                    `overflow: hidden` body cut the truncation line in half. */}
+                <th role="rowheader" scope="row" className={`min-w-0 font-normal${isFailed(r.calibration) ? ' text-muted-foreground' : ''}`}>
+                  <span className="block truncate">{r.label}</span>
+                  {isFailed(r.calibration) || r.unread ? null : <CalibrationTag calibration={r.calibration} mode="print" block />}
+                </th>
+                {isFailed(r.calibration) || r.unread ? (
+                  // One cell across the four, carrying the row's words, not
+                  // a dash in each.
+                  <td role="cell" className="col-span-4 min-w-0 truncate">
+                    <CalibrationTag calibration={r.calibration} unread={r.unread} mode="print" />
+                  </td>
+                ) : (
+                  <>
+                    <td role="cell"><Cell side={r.you} withheld={!printsClient(r.calibration)} /></td>
+                    <td role="cell"><Cell side={r.rival} /></td>
+                    <td role="cell"><Cell side={r.category} /></td>
+                    <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      {earnsVerdict(r.calibration) ? (
+                        <>
+                          <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
+                          <DirectionWord direction={r.direction} />
+                        </>
+                      ) : <NoValue label={withheldLabel(r.calibration)} />}
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>

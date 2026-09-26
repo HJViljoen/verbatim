@@ -26,6 +26,7 @@ import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { subjectCalibration } from '../subjects/calibration-state'
 import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, loadMovesExtras, longMonth, recordWindow } from './overview'
 import type { MoveCandidate, MoveReading } from '../reading/moves'
 import { row } from './read'
@@ -1122,6 +1123,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     month,
     moves,
     subjectNames: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, x.name])),
+    subjectCalibrations: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, subjectCalibration(x)])),
     themeLabels,
     pair,
   })
@@ -1590,15 +1592,18 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
 
 /** The tenant's subjects, for a move's "on what". Null before M4.
  *
- *  NAME AND ID ONLY. A move's row needs the subject's name and nothing else,
- *  and a `select('*')` here would pull the calibration columns into a page
- *  bundle for a string. */
-type SubjectName = Pick<Subject, 'id' | 'name' | 'status'>
+ *  THE NAME, AND THE FOUR CALIBRATION COLUMNS (decision C, WP1.1): the card
+ *  counts a subject's match on your own posts, and a move on a subject is
+ *  read, only when the subject is ready, so the loader needs its state. Still
+ *  no `select('*')`: nothing else on the row is printed here. */
+type SubjectName = Pick<Subject, 'id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
 
 async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectName[] | null> {
   try {
     return await selectAll<SubjectName>(() =>
-      supabase.from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', clientId).order('id', { ascending: true }),
+      supabase.from(TABLE_SUBJECTS)
+        .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+        .eq('client_id', clientId).order('id', { ascending: true }),
     )
   } catch (error) {
     if (isMissingSubjects(error)) return null
