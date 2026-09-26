@@ -79,6 +79,9 @@ describe('the noise rule', () => {
     expect(noiseTerms(['upcycled bag'], ['poler'])).toEqual(['upcycled bag'])
     expect(noiseTerms([], ['poler'])).toEqual(['poler'])
     expect(noiseTerms(null, null)).toEqual([])
+    // first found in a community: no bare name found it, whatever resurfaced it since
+    expect(noiseTerms([], ['poler'], ['r/onebag'])).toEqual(['r/onebag'])
+    expect(segmentReason({ caption: 'daypack', firstTerms: [], firstSubreddits: ['r/onebag'], sourceKeywords: ['poler'] })).toBeNull()
   })
 })
 

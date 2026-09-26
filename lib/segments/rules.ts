@@ -28,9 +28,10 @@ import { SEALAND_CLIENT_ID } from '../config'
 // THE NOISE RULE (CQ F22, F25). A video every one of whose first-found search
 // terms is a bare brand or rival name that today's relevance check keeps 0–4%
 // of. Those names found poker, Ecuador politics, Navy SEAL podcasts and a
-// Friday news briefing (CQ F19). "First-found" is `video_provenance.first_terms`
-// where that row has terms, else the video's stored `source_keywords`. A video
-// found by any other term, or by a community, is not noise.
+// Friday news briefing (CQ F19). "First-found" is `video_provenance`'s
+// first_terms and first_subreddits where that row holds any, else the video's
+// stored `source_keywords`. A video found by any other term, or by a
+// community, is not noise.
 //
 // ENABLED PER TENANT. The word list is Sealand's: its non-buyer content is
 // sewing and craft. Össur's is lived experience, not making (CQ F43), so no
@@ -94,10 +95,17 @@ export function makerWordIn(haystack: string): string | null {
 const fold = (t: string): string => t.replace(/^ +| +$/g, '').toLowerCase()
 const NOISE_SET = new Set(NOISE_TERMS.map(fold))
 
-/** The terms the noise rule reads: the first-found terms when provenance holds
- *  any, else the stored `source_keywords`. */
-export function noiseTerms(firstTerms: readonly string[] | null | undefined, sourceKeywords: readonly string[] | null | undefined): readonly string[] {
-  return firstTerms && firstTerms.length > 0 ? firstTerms : (sourceKeywords ?? [])
+/** The terms the noise rule reads: the first-found terms and communities when
+ *  provenance holds any (a video first found in a community is found by no bare
+ *  name), else the stored `source_keywords`. The SQL side
+ *  (segments_for_videos) passes `first_terms || first_subreddits` the same way. */
+export function noiseTerms(
+  firstTerms: readonly string[] | null | undefined,
+  sourceKeywords: readonly string[] | null | undefined,
+  firstSubreddits: readonly string[] | null | undefined = null,
+): readonly string[] {
+  const first = [...(firstTerms ?? []), ...(firstSubreddits ?? [])]
+  return first.length > 0 ? first : (sourceKeywords ?? [])
 }
 
 /** The first term, folded, when EVERY term is a bare name; else null. An empty
@@ -114,6 +122,7 @@ export interface SegmentInput {
   hashtags?: readonly string[] | null
   topics?: readonly string[] | null
   firstTerms?: readonly string[] | null
+  firstSubreddits?: readonly string[] | null
   sourceKeywords?: readonly string[] | null
 }
 
@@ -125,7 +134,7 @@ export interface SegmentInput {
 export function segmentReason(v: SegmentInput): string | null {
   const word = makerWordIn(makerHaystack(v))
   if (word) return `maker_regex:${word}`
-  const name = bareNameOnly(noiseTerms(v.firstTerms, v.sourceKeywords))
+  const name = bareNameOnly(noiseTerms(v.firstTerms, v.sourceKeywords, v.firstSubreddits))
   return name ? `bare_name_only:${name}` : null
 }
 

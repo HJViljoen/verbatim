@@ -223,10 +223,17 @@ begin
     from public.theme_maker_shares('00000000-0000-4000-8000-00000000c001', '2026-09-01', null) t
    where t.registry_id = '00000000-0000-4000-8000-0000000000d1';
   if got is distinct from '3/2/0' then raise exception 'theme_maker_shares FAILED (first-found terms): got %', got; end if;
+  -- first found in a community: no bare name found it
+  update public.video_provenance set first_terms = '{}', first_subreddits = '{r/onebag}'
+   where video_id = '00000000-0000-4000-8000-0000000000b2';
+  select string_agg(t.videos || '/' || t.maker || '/' || t.noise, ' ') into got
+    from public.theme_maker_shares('00000000-0000-4000-8000-00000000c001', '2026-09-01', null) t
+   where t.registry_id = '00000000-0000-4000-8000-0000000000d1';
+  if got is distinct from '3/2/0' then raise exception 'theme_maker_shares FAILED (first-found community): got %', got; end if;
   -- no stored refs and no run: nothing, never an error
   select count(*)::text into got from public.theme_maker_shares('00000000-0000-4000-8000-00000000c001', '2026-07-01', null);
   if got <> '0' then raise exception 'theme_maker_shares FAILED (empty month): got % rows', got; end if;
-  raise notice 'ok  first-found terms decide the noise rule where provenance holds them';
+  raise notice 'ok  first-found terms and communities decide the noise rule where provenance holds them';
 end $$;
 
 -- 6. The change log takes the three new surfaces and nothing else -----------------------
