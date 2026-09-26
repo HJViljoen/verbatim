@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { recordDate, recordRows, datesLine } from '../reading/record'
 import type { DenominatorPoint } from '../reading/series'
-import { changeNote, readChangeLog } from './change-log'
+import { changeLogMeta, changeNote, readChangeLog } from './change-log'
 import { deliveryRecord, deliveryStats, gapFigure, gapMonth } from './delivery'
 import { monthsLine, readingsRecord } from './readings'
 import {
@@ -149,10 +149,24 @@ describe('the monthly readings strip', () => {
 describe('the change log’s header meta and its coverage clause', () => {
   const log = () => readChangeLog({ rows: changeRowsFixture(), viewerUserId: 'u1' })
 
-  it('keeps the recorded rows apart from the reconstructed ones', () => {
-    // A reconstructed row is inference and is never summed with the record.
+  it('counts recorded rows only, and dates them from the day the record began', () => {
+    // "Since" is `firstLoggedAt`, not the first update: the fixture's oldest
+    // RECORDED change is 6 Apr and its reconstructed one is 2 Mar, and on a
+    // tenant that predates the log — the reason changeLogBoundary exists —
+    // anchoring to the first update claims a record we did not keep (code
+    // review finding 5).
+    expect(changeLogMeta(log(), { now: '2026-09-28T09:00:00.000Z' }))
+      .toBe('4 changes since 6 Apr · 1 this month')
+    const late = readChangeLog({ rows: changeRowsFixture().filter((c) => c.changed_at >= '2026-08-01'), viewerUserId: 'u1' })
+    expect(changeLogMeta(late, { now: '2026-09-28T09:00:00.000Z' })).toBe('3 changes since 11 Aug · 1 this month')
+    // The reconstructed row is never summed with the record.
     expect(log().recorded).toHaveLength(4)
     expect(log().prehistory).toHaveLength(1)
+  })
+
+  it('drops the "this month" half rather than printing a zero', () => {
+    expect(changeLogMeta(log(), { now: '2026-10-05T09:00:00.000Z' }))
+      .toBe('4 changes since 6 Apr')
   })
 
   it('names the change inside the window, so the coverage row can say which', () => {
