@@ -8,7 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
-import { sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { paneSides, sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the kinds of thing said, per audience (design §3 SU2, the mock's (b)).
 //
@@ -206,7 +206,7 @@ export const subjectsKinds: Block<SubjectsData> = {
       )
     }
 
-    const withKinds = pane.sides.filter((s) => s.kinds.length > 0)
+    const withKinds = paneSides(pane).filter((s) => s.kinds.length > 0)
     // THE CATEGORY'S Reddit share, not the first side's. Reddit is where the
     // questions are and the category is where Reddit is; naming your own
     // audience's figure here would answer a question nobody asked about a
@@ -255,7 +255,7 @@ export const subjectsKinds: Block<SubjectsData> = {
   // strip the block never draws. The strip is the category's (or the first side
   // that has kinds), and so is this.
   verdicts(data) {
-    const withKinds = (data.selected?.sides ?? []).filter((s) => s.kinds.length > 0)
+    const withKinds = (data.selected ? paneSides(data.selected) : []).filter((s) => s.kinds.length > 0)
     const drawn = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
     return drawn ? Object.values(drawn.kindVerdicts).filter((v) => v != null) : []
   },
@@ -271,7 +271,7 @@ export const subjectsKinds: Block<SubjectsData> = {
         ? 'Confirm a subject and this is what the audiences are saying around it.'
         : 'Name a subject and this is what the audiences are saying around it.'
     }
-    if (pane.sides.every((s) => s.kinds.length === 0)) {
+    if (paneSides(pane).every((s) => s.kinds.length === 0)) {
       // TWO CAUSES, TWO SENTENCES (market-first WP1.2, GR F57). Only a missing
       // kind table is "not recorded month by month"; a month with no kind
       // read yet is the month's own fact, and the first days of every month

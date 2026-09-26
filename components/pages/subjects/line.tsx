@@ -6,7 +6,7 @@ import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/char
 import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtPct, monthName } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
-import { endReadings, sideLegend, type SubjectsData } from '@/lib/pages/subjects'
+import { endReadings, paneSides, sideLegend, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -51,13 +51,16 @@ export const subjectsLine: Block<SubjectsData> = {
     // 1,388" does not fit the plot's right-hand gutter and lost its
     // denominator to the clip, which is the one part of an end label that may
     // not go missing.
-    const legendOf = new Map(pane.sides.map((s) => [s.audience, sideLegend(s, data.brand)]))
+    // The pane's sides under its calibration (decision C): a provisional
+    // subject draws no line for your own side.
+    const sides = paneSides(pane)
+    const legendOf = new Map(sides.map((s) => [s.audience, sideLegend(s, data.brand)]))
     // THE CHART'S OWN AXIS AND LINES (2026-09-24): the trailing twelve months
     // whatever the horizon (`chartMonths`, lib/reading/horizon.ts). A snapshot
     // frozen before that carries neither and draws what it always drew.
     const axis = data.chartAxis ?? data.axis
     const chartSeries = pane.chartSeries ?? pane.series
-    const lines: CalendarSeries[] = pane.sides
+    const lines: CalendarSeries[] = sides
       .map((side) => {
         const series = chartSeries.find((s) => s.audience === side.audience)
         if (!series) return null
@@ -109,8 +112,8 @@ export const subjectsLine: Block<SubjectsData> = {
     // D1 · the bracket. `apart` is the only state that carries a magnitude —
     // `gapLine` prints one only there and so does this, for the same reason.
     const gap = pane.gap
-    const you = pane.sides.find((s) => s.kind === 'you')
-    const rival = pane.sides.find((s) => s.audience === gap?.b.audience)
+    const you = sides.find((s) => s.kind === 'you')
+    const rival = sides.find((s) => s.audience === gap?.b.audience)
     const annotate = gap && gap.state === 'apart' && gap.gapPts != null && you && rival
       ? {
           from: you.label,
@@ -120,7 +123,7 @@ export const subjectsLine: Block<SubjectsData> = {
       : null
 
     // What the chart's end labels say, for the print arm that turns them off.
-    const ends = endReadings(pane.sides, chartSeries)
+    const ends = endReadings(sides, chartSeries)
 
     return (
       <BlockFrame

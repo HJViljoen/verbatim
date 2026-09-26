@@ -4,12 +4,14 @@ import { describe, expect, it } from 'vitest'
 import {
   answeredBy,
   axisNote,
+  calibratedSides,
   endReadings,
   buildSides,
   gapSideOf,
   matchWords,
   originLine,
   paneGap,
+  paneSides,
   periodPhrase,
   railNote,
   selectSubject,
@@ -68,6 +70,63 @@ describe('railNote', () => {
 
   it('puts the measurement’s silence first — a calibrating subject shows no share even when it has one', () => {
     expect(railNote('calibrating', true)).not.toBe('no reading yet')
+  })
+})
+
+describe('railNote, under the three calibration states (decision C, WP1.1)', () => {
+  it('says "provisional" on a subject not checked yet, or not clearly under the floor', () => {
+    expect(railNote('provisional', true)).toBe('provisional')
+    expect(railNote('provisional', false)).toBe('provisional')
+  })
+
+  it('says "being re-described" on a failed subject, read or not', () => {
+    expect(railNote('failed', true)).toBe('being re-described')
+    expect(railNote('failed', false)).toBe('being re-described')
+  })
+
+  it('carries no word on a ready subject that was read', () => {
+    expect(railNote('ready', true)).toBeNull()
+  })
+
+  it('reads a stored "calibrating" as provisional', () => {
+    expect(railNote('calibrating', true)).toBe(railNote('provisional', true))
+  })
+
+  it('a proposed subject is not counted yet, whatever its state', () => {
+    expect(railNote('failed', false, 'proposed')).toContain('not counted yet')
+  })
+})
+
+describe('calibratedSides (decision C on the pane)', () => {
+  const side = (kind: SubjectSide['kind'], audience: string) => ({
+    kind,
+    audience,
+    verdict: { state: 'no_clear_change' } as unknown as SubjectSide['verdict'],
+    direction: 'growing' as const,
+  })
+  const sides = [side('you', CLIENT_AUDIENCE), side('rival', rivalKey('Cotopaxi')), side('category', INDUSTRY_AUDIENCE)]
+
+  it('a ready subject keeps every side as read', () => {
+    expect(calibratedSides(sides, 'ready')).toEqual(sides)
+  })
+
+  it('a provisional subject has no "you" side, and no verdict or direction word on any side', () => {
+    const out = calibratedSides(sides, 'provisional')
+    expect(out.map((s) => s.kind)).toEqual(['rival', 'category'])
+    expect(out.every((s) => s.verdict == null && s.direction == null)).toBe(true)
+  })
+
+  it('a stored "calibrating" pane reads as provisional', () => {
+    expect(calibratedSides(sides, 'calibrating')).toEqual(calibratedSides(sides, 'provisional'))
+  })
+
+  it('a failed subject has no side at all', () => {
+    expect(calibratedSides(sides, 'failed')).toEqual([])
+  })
+
+  it('a pane stored with no field renders as sent', () => {
+    expect(calibratedSides(sides, undefined)).toEqual(sides)
+    expect(paneSides({ sides: sides as unknown as SubjectSide[], calibration: undefined as unknown as 'ready' })).toEqual(sides)
   })
 })
 

@@ -41,6 +41,10 @@ import { JUDGE_VERSION, SUBJECT_PRECISION_FLOOR, wilsonUpper, type Subject } fro
 
 export type SubjectCalibration = 'ready' | 'provisional' | 'failed'
 
+/** What a Subjects rail or pane row may carry once stored: the three states,
+ *  or the two-state word a snapshot sent before WP1.1 holds. */
+export type StoredCalibration = SubjectCalibration | 'calibrating'
+
 /** The words a subject row carries for the two states that carry one. A ready
  *  subject carries none: it prints normally. */
 export const CALIBRATION_WORDS: Record<'provisional' | 'failed', string> = {

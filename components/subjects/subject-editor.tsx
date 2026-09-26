@@ -54,6 +54,10 @@ export interface SubjectEditorRow {
   because: string
   /** Your own level this month, where there is one to show. */
   level?: { pct: number | null; k: number; n: number } | null
+  /** The market's level this month (decision E), which the Subjects rail
+   *  prints in place of your own since WP1.1; `pct` is null under 100 videos,
+   *  a count only. A provisional row carries its word in `note` (decision C). */
+  market?: { k: number; n: number; pct: number | null } | null
   /** Why no level is shown. */
   note?: string | null
   /** The banded change on your own side, printed as the row's badge. */
@@ -178,6 +182,10 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
                     {fmtPct(r.level.pct)}
                   </span>
+                ) : !r.level && r.status === 'active' && r.market && r.market.pct != null ? (
+                  <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
+                    {fmtPct(r.market.pct)}
+                  </span>
                 ) : null}
               </span>
 
@@ -204,6 +212,22 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                       <span data-copy="verdict" className="min-w-0 truncate">
                         <MovementBadge verdict={r.verdict} unit="pts" />
                       </span>
+                    </>
+                  ) : null}
+                </span>
+              ) : r.status === 'active' && r.market ? (
+                // THE MARKET'S LEVEL, NAMED AS SUCH (decision C with E): a
+                // subject's market level always prints unless it failed, and
+                // the base is said on the row so "103 of 654" is never read as
+                // a share of your own videos. A provisional row adds its word.
+                <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+                  <span data-copy="level" className={`${cls.meta} whitespace-nowrap`}>
+                    {fmtInt(r.market.k)} of {fmtInt(r.market.n)} in your market
+                  </span>
+                  {r.note ? (
+                    <>
+                      <span aria-hidden className={cls.meta}>·</span>
+                      <span className={cls.meta}>{r.note}</span>
                     </>
                   ) : null}
                 </span>

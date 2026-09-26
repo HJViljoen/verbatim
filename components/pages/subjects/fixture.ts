@@ -5,6 +5,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { kindShares, redditRead } from '@/lib/reading/kinds'
 import {
   axisNote,
+  calibratedSides,
   railNote,
   setLine,
   SUPERSEDE_RULE,
@@ -381,7 +382,11 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
         level: { k: r.k, n: 84, pct: r.pct },
         note: null,
         // 84 videos against a 100-video floor: the mock's own "too few to
-        // compare" on every rail row, measured rather than typed.
+        // compare" on every rail row. The 84 is the mock's invented volume
+        // (F12): Sealand's own audience carries about 9 videos a month, and
+        // staging holds no own-audience month row for August or September.
+        // This row is the rail as stored before WP1.1 (a client level and its
+        // badge); `calibrationFixture` is the rail WP1.1 builds.
         verdict: railVerdict(r.id, r.name, r.k),
         selected: i === 0,
         href: `/dashboard/subjects?item=${r.id}`,
@@ -551,5 +556,66 @@ export function retiredRivalFixture(): SubjectsData {
           axisNote: axisNote(sides, 100, series),
         }
       : null,
+  }
+}
+
+/**
+ * The rail and pane under the three calibration states (decision C, WP1.1),
+ * on staging's real figures: Sealand, September to the 20 Sep update, the
+ * pooled market of 654 videos (625 in the category, and 12 Cotopaxi, 6 Freitag,
+ * 5 Patagonia and 6 The North Face filed under a tracked brand), and each
+ * subject's September rows summed over those audiences. The calibrations are
+ * staging's, written 24 Sep: five ready (Looks & style 0.857, Comfort 0.917,
+ * Durability, Price and Waterproofing 1.0, all on 33 labels), Repair &
+ * warranty failed (0.333 on 33), Community & purpose never checked
+ * (provisional), cited on no September video in any market audience.
+ *
+ * The pane is the base fixture's (Durability, on the mock's invented volumes,
+ * F12) read as a PROVISIONAL subject: `calibratedSides` takes its "you" side
+ * and every verdict off, as the loader does.
+ */
+export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsData {
+  const base = subjectsFixture()
+  const N = 654
+  const row = (id: string, name: string, calibration: 'ready' | 'provisional' | 'failed', k: number | null, selected = false) => ({
+    id,
+    name,
+    description: null,
+    origin: 'category_theme' as const,
+    namedAt: '2026-08-19',
+    status: 'active' as const,
+    calibration,
+    level: null,
+    market: calibration === 'failed' || k == null ? null : { k, n: N, pct: Math.round((k / N) * 1000) / 10 },
+    note: railNote(calibration, k != null, 'active'),
+    verdict: null,
+    selected,
+    href: calibration === 'failed' ? '' : `/dashboard/subjects?item=${id}`,
+  })
+  const rows = [
+    row('s-looks', 'Looks & style', 'ready', 103),
+    row('s-comfort', 'Comfort', 'ready', 43),
+    row('s-durability', 'Durability', 'ready', 39),
+    row('s-repair', 'Repair & warranty', 'failed', 36),
+    row('s-water', 'Waterproofing', 'ready', 29),
+    row('s-price', 'Price', 'ready', 25),
+    row('s-community', 'Community & purpose', 'provisional', 0, true),
+  ]
+  return {
+    ...base,
+    list: { ...base.list, rows, setLine: setLine(rows.length, 0) },
+    selected: base.selected
+      ? {
+          ...base.selected,
+          calibration: 'provisional',
+          sides: calibratedSides(base.selected.sides, 'provisional'),
+          // The loader builds the lines from the sides, so no line of your own.
+          series: base.selected.series.filter((x) => x.audience !== CLIENT_AUDIENCE),
+          ...(base.selected.chartSeries ? { chartSeries: base.selected.chartSeries.filter((x) => x.audience !== CLIENT_AUDIENCE) } : {}),
+          gap: null,
+          behind: null,
+        }
+      : null,
+    ...over,
   }
 }

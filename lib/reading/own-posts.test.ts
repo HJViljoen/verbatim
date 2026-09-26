@@ -12,6 +12,7 @@ import {
   RIVAL_CLAIMS_WITHHELD,
   SAID_ABOUT_EMPTY,
   SUBJECTS_MATCHED_NONE,
+  SUBJECTS_MATCHED_UNCHECKED,
   SUBJECTS_NONE_NAMED,
   SUBJECTS_NOT_ANALYSED,
   claimEcho,
@@ -110,6 +111,36 @@ describe('ownPostCensus', () => {
     // v4 is last month's post: Durability keeps two, and a subject whose only
     // post is outside the month is not a row of nothing.
     expect(c.subjects).toEqual([{ subjectId: 's1', label: 'Durability', value: { k: 2, n: 3 } }])
+  })
+
+  it('prints a match on your own posts only for a READY subject (decision C, WP1.1)', () => {
+    // Production, 25 Sep: Community & purpose (0.60 on 25 labels) failed its
+    // check, and it is your followers' one subject. Its match on your own posts
+    // is your side of it, which a failed or provisional subject does not show.
+    const c = ownPostCensus(
+      input({
+        membership: [
+          { subjectId: 's1', label: 'Durability', videoIds: ['v1', 'v2'], calibration: 'ready' },
+          { subjectId: 's2', label: 'Community & purpose', videoIds: ['v1', 'v2', 'v3'], calibration: 'failed' },
+          { subjectId: 's3', label: 'Travel fit', videoIds: ['v3'], calibration: 'provisional' },
+        ],
+        subjectScope: { named: 3, analysedPosts: 3 },
+      }),
+    )
+    expect(c.subjects).toEqual([{ subjectId: 's1', label: 'Durability', value: { k: 2, n: 3 } }])
+    expect(c.subjectsNote).toBeNull()
+  })
+
+  it('never says no post was about a subject when the only matches are held back', () => {
+    const c = ownPostCensus(
+      input({
+        membership: [{ subjectId: 's2', label: 'Community & purpose', videoIds: ['v1'], calibration: 'failed' }],
+        subjectScope: { named: 3, analysedPosts: 3 },
+      }),
+    )
+    expect(c.subjects).toEqual([])
+    expect(c.subjectsNote).toBe(SUBJECTS_MATCHED_UNCHECKED)
+    expect(SUBJECTS_MATCHED_UNCHECKED).not.toMatch(/[0-9—]/)
   })
 
   it('says WHY the subject half is empty, which is the half that is empty today', () => {

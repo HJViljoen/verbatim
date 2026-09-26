@@ -75,6 +75,7 @@ export const subjectsList: Block<SubjectsData> = {
               status: r.status,
               because: originLine(r.origin),
               level: r.level,
+              market: r.market ?? null,
               note: r.note,
               verdict: r.verdict,
               selected: r.selected,
@@ -117,6 +118,22 @@ export const subjectsList: Block<SubjectsData> = {
                       <span data-copy="verdict" className={email ? undefined : 'font-mono text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}>
                         {verdictWords(r.verdict)}
                       </span>
+                    ) : null}
+                  </>
+                ) : r.status === 'active' && r.market ? (
+                  // The market's level, named (decision C with E), and the
+                  // word on a provisional row. Never your own level.
+                  <>
+                    <span data-copy="level" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'} style={email ? { fontFamily: FONT.mono, color: EMAIL.muted } : undefined}>
+                      {r.market.pct != null ? `${fmtPct(r.market.pct)} · ` : ''}{fmtInt(r.market.k)} of {fmtInt(r.market.n)} videos in your market
+                    </span>
+                    {r.note ? (
+                      <>
+                        {' '}
+                        <span className={email ? undefined : 'text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>
+                          {r.note}
+                        </span>
+                      </>
                     ) : null}
                   </>
                 ) : (

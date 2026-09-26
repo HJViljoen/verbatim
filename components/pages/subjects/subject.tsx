@@ -14,7 +14,9 @@ import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
-import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { paneSides, sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { printsClient } from '@/lib/subjects/calibration-state'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
 //
@@ -194,15 +196,22 @@ export const subjectsSubject: Block<SubjectsData> = {
     // both refuse, "too few to compare. Too few to compare in August." is the
     // same non-answer twice, and a sentence that repeats itself reads as a
     // rendering fault rather than as a refusal.
+    // DECISION C (WP1.1): a provisional subject has no "you" side, so neither
+    // the gap (you against a rival) nor "the videos behind your figure" prints,
+    // and no side carries a verdict. The loader already builds it that way; a
+    // pane stored with the two-state `'calibrating'` is read the same way here.
+    const client = printsClient(pane.calibration)
+    const sides = paneSides(pane)
+    const gapShown = client ? pane.gap : null
     const answered = (state: string) => state === 'apart' || state === 'level'
-    const basis = pane.gap && (answered(pane.gap.state) || answered(pane.gap.basis?.state ?? ''))
-      ? gapBasisLine(pane.gap)
+    const basis = gapShown && (answered(gapShown.state) || answered(gapShown.basis?.state ?? ''))
+      ? gapBasisLine(gapShown)
       : null
-    const lead = pane.gap ? `${pane.name}: ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
+    const lead = gapShown ? `${pane.name}: ${gapLine(gapShown)}${basis ? `; ${basis}` : ''}.` : null
     // ONE REFUSAL, SAID ONCE (deploy 1 review): the hero's cells each printed
     // the same refusal under their figure. Refused for one pair, each says
     // "not compared" and the chip under the cells says why.
-    const shared = sharedPairNote(pane.sides.filter((s) => s.observed && s.pct != null).map((s) => s.verdict))
+    const shared = sharedPairNote(sides.filter((s) => s.observed && s.pct != null).map((s) => s.verdict))
 
     // THE LINK, IN THE RIGHT MARKUP FOR EACH READER. Print draws none — a PDF
     // and a `/r/<token>` page have no session to open a filtered catalogue
@@ -212,7 +221,7 @@ export const subjectsSubject: Block<SubjectsData> = {
     const behindLabel = (
       <>the <span data-copy="figure">{fmtInt(pane.behind?.videos ?? 0)}</span> videos behind your figure →</>
     )
-    const behind = !pane.behind || mode === 'print'
+    const behind = !pane.behind || !client || mode === 'print'
       ? null
       : email
         ? <a href={`${ctx.appUrl}${pane.behind.href}`} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink }}>{behindLabel}</a>
@@ -248,9 +257,11 @@ export const subjectsSubject: Block<SubjectsData> = {
         // the chart. Levels, dated, in the category's own n.
       >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
+        {/* The row tag, over the cells: "provisional" (decision C). */}
+        <CalibrationTag calibration={pane.calibration} mode={mode} block className="mb-2" />
 
         {email ? (
-          <div>{pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
+          <div>{sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
         ) : (
           // THE MOCK'S VERTICAL HAIRLINES, from the primitive that owns them
           // (P0 item 3). Three hand-rolled `grid-cols-3`s is how a product ends
@@ -261,7 +272,7 @@ export const subjectsSubject: Block<SubjectsData> = {
           // grid then said the same five names again. The note is the one
           // place an absent side is named.
           <TileColumns of={3} className="gap-x-4 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
-            {pane.sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
+            {sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
           </TileColumns>
         )}
         <PairChip note={shared} mode={mode} className="mt-3" />
@@ -277,7 +288,7 @@ export const subjectsSubject: Block<SubjectsData> = {
   },
 
   verdicts(data): Verdict[] {
-    return (data.selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
+    return (data.selected ? paneSides(data.selected) : []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
   },
 
   emptyState(data) {

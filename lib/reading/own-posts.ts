@@ -1,4 +1,5 @@
 import { longMonth } from '../format'
+import { printsClient, type SubjectCalibration } from '../subjects/calibration-state'
 import { claimVerdict } from '../market-tiles'
 import { PASS_A_MIN_COMMENTS_DEFAULT } from '../config'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -157,7 +158,11 @@ export interface OwnPostInput {
     classified_type: string | null
   }[]
   claims: readonly { id: string; source_video_id: string; entity: string; claim: string; quote: string }[]
-  membership: readonly { subjectId: string; label: string; videoIds: readonly string[] }[]
+  /** The subjects these posts matched. `calibration` is the subject's state
+   *  (decision C, WP1.1): a match is printed only for a READY subject, because
+   *  your own posts are your side of it, which a provisional or failed subject
+   *  does not show. Absent, the match prints (a caller that applies no gate). */
+  membership: readonly { subjectId: string; label: string; videoIds: readonly string[]; calibration?: SubjectCalibration | null }[]
   /** One per RETURNED claim row, in the returned rows' own order — which is
    *  first-appearance order of `claims` after the month filter and the
    *  normalised-text dedupe. A shorter array leaves the remaining rows with
@@ -295,6 +300,11 @@ export const SUBJECTS_NOT_ANALYSED =
 /** Read, matched, and none of them was about a named subject. A reading. */
 export const SUBJECTS_MATCHED_NONE =
   'These posts were read and none of them was about a subject you have named.'
+
+/** Read and matched, but only to subjects whose matches are not shown yet
+ *  (decision C): "none was about a subject" would be false. */
+export const SUBJECTS_MATCHED_UNCHECKED =
+  'These posts were read, and the only subjects they matched are provisional or being re-described, so no match is shown.'
 
 /** Why an echo counted the audience and found nobody. A reading, not a gap. */
 export const ECHO_SILENT = 'The audience was read this month and nobody carried what this claim rests on.'
@@ -462,14 +472,20 @@ export function ownPostCensus(input: OwnPostInput): OwnPostCensus {
     echo: input.echoes[i] ?? claimEcho({ audience: input.audience, audienceLabel: input.audienceLabel, reading: null }),
   }))
 
-  const subjects = input.membership
+  const matched = input.membership
     .map((m) => ({
       subjectId: m.subjectId,
       label: m.label,
       value: { k: m.videoIds.filter((id) => inMonth.has(id)).length, n: published.k },
+      shown: printsClient(m.calibration),
     }))
     .filter((s) => s.value.k > 0)
     .sort((a, b) => b.value.k - a.value.k || a.label.localeCompare(b.label))
+  // DECISION C: a match on your own posts is your side of the subject, and only
+  // a ready subject shows it. The ones held back are counted, so the note
+  // below never says "none was about a subject" when one was.
+  const subjects = matched.filter((s) => s.shown).map(({ shown: _shown, ...s }) => s)
+  const withheld = matched.length - subjects.length
 
   const unread = noAccounts ? OWN_POSTS_NO_ACCOUNTS : published.k === 0 ? CENSUS_EMPTY(basis) : null
   const scope = input.subjectScope
@@ -480,7 +496,9 @@ export function ownPostCensus(input: OwnPostInput): OwnPostCensus {
         ? SUBJECTS_NONE_NAMED
         : scope.analysedPosts === 0
           ? SUBJECTS_NOT_ANALYSED
-          : SUBJECTS_MATCHED_NONE
+          : withheld > 0
+            ? SUBJECTS_MATCHED_UNCHECKED
+            : SUBJECTS_MATCHED_NONE
 
   return {
     month,
