@@ -14,6 +14,22 @@ import { DEFINITIONS } from '@/lib/settings/how-to-read'
 // updates (the fixture's header says which).
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
+/** The list the loader read on staging before the deploy-3 review's
+ *  heard-before rule (26 Sep): six named and three led by makers. Four of the
+ *  six hold August rows, so the page no longer names them; the list stays
+ *  here, real figures, only to exercise the five at most and the counted rest. */
+const BEFORE_THE_RULE: typeof SEALAND_20_SEP_ARRIVALS = {
+  ...SEALAND_20_SEP_ARRIVALS,
+  newThemes: [
+    { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: 8 },
+    { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: 9 },
+    { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: 11 },
+    { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: 6 },
+    { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: 8 },
+    { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
+  ],
+  grouped: { makers: 3, setAside: 0 },
+}
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 const text = (data: ReturnType<typeof marketArrivalsFixture>, mode: RenderMode = 'app') => renderText(overviewArrivals.render(data, mode, ctx))
 
@@ -42,11 +58,22 @@ describe('With this update (WP2.7)', () => {
     expect(t).not.toContain('October so far')
   })
 
-  it('names the themes heard first at 10+ in the month, five at most, and counts the rest', () => {
+  it('names the themes heard first at 10+ in the month (staging: the two Conversation flags New)', () => {
     for (const mode of MODES) {
       const t = text(marketArrivalsFixture(), mode)
       expect(t).toContain('Heard for the first time')
       expect(t).toContain('With 10+ videos in September:')
+      expect(t).toMatch(/“\s*Laundry planning for travel\s*”: 8 of its 10 videos came from searches we added in September/)
+      expect(t).toMatch(/“\s*Preference for secondhand fashion\s*”: 8 of its 10 videos/)
+      // Minted by the update but held by August: not heard for the first time.
+      expect(t).not.toContain('Interest in shipping and locations')
+      expect(t).not.toContain('more.')
+    }
+  })
+
+  it('names five at most, and counts the rest', () => {
+    for (const mode of MODES) {
+      const t = text({ ...marketArrivalsFixture(), arrivals: BEFORE_THE_RULE }, mode)
       expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
       expect(t).toMatch(/“\s*Laundry planning for travel\s*”: 8 of its 10 videos/)
       expect(t).not.toContain('Preference for secondhand fashion')
@@ -59,9 +86,9 @@ describe('With this update (WP2.7)', () => {
 
   it('says how many of a theme’s videos came from searches added in the month, one denominator a line', () => {
     const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: [
-      SEALAND_20_SEP_ARRIVALS.newThemes[0],
-      { ...SEALAND_20_SEP_ARRIVALS.newThemes[2], fromNewSearches: 0 },
-      SEALAND_20_SEP_ARRIVALS.newThemes[5],
+      BEFORE_THE_RULE.newThemes[0],
+      { ...BEFORE_THE_RULE.newThemes[2], fromNewSearches: 0 },
+      BEFORE_THE_RULE.newThemes[5],
     ] }
     const t = text({ ...marketArrivalsFixture(), arrivals: a })
     expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
@@ -71,7 +98,7 @@ describe('With this update (WP2.7)', () => {
   })
 
   it('counts the themes led by makers or set aside, never names them (decision F)', () => {
-    const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: SEALAND_20_SEP_ARRIVALS.newThemes.slice(0, 2), grouped: { makers: 2, setAside: 1 } }
+    const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: BEFORE_THE_RULE.newThemes.slice(0, 2), grouped: { makers: 2, setAside: 1 } }
     const t = text({ ...marketArrivalsFixture(), arrivals: a })
     expect(t).toContain('2 more are led by makers.')
     expect(t).toContain('1 more is set aside as off-topic.')
@@ -116,9 +143,13 @@ describe('With this update (WP2.7)', () => {
     const f = overviewArrivals.figures!(marketArrivalsFixture())
     expect(f.arrivals_videos_first_read.value).toBe(395)
     expect(f.arrivals_comments_captured.value).toBe(11999)
-    // The five named themes: their videos, and those from searches added in the month.
-    expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_') && k.endsWith('_videos'))).toHaveLength(5)
-    expect(Object.keys(f).filter((k) => k.endsWith('_new_searches'))).toHaveLength(5)
+    // The named themes: their videos, and those from searches added in the month.
+    expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_') && k.endsWith('_videos'))).toHaveLength(2)
+    expect(Object.keys(f).filter((k) => k.endsWith('_new_searches'))).toHaveLength(2)
+    // Five at most.
+    const five = overviewArrivals.figures!({ ...marketArrivalsFixture(), arrivals: BEFORE_THE_RULE })
+    expect(Object.keys(five).filter((k) => k.startsWith('arrival_theme_') && k.endsWith('_videos'))).toHaveLength(5)
+    expect(Object.keys(five).filter((k) => k.endsWith('_new_searches'))).toHaveLength(5)
   })
 })
 

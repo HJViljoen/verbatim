@@ -535,7 +535,7 @@ function recordingClient(answer: (table: string, ops: Op[]) => unknown[]) {
       const call = { table, ops: [] as Op[] }
       calls.push(call)
       const chain: Record<string, unknown> = {}
-      for (const method of ['select', 'eq', 'neq', 'not', 'lt', 'in', 'order', 'limit', 'range']) {
+      for (const method of ['select', 'eq', 'neq', 'not', 'lt', 'lte', 'gt', 'in', 'order', 'limit', 'range']) {
         chain[method] = (...args: unknown[]) => {
           call.ops.push([method, args])
           return chain
@@ -569,18 +569,18 @@ describe('loadNewThemes — the reads behind the re-grouped rule (market-first W
     { registry_id: 'reg-c', label: 'Theme c' },
   ]
   const READINGS = [
-    { theme_id: 'reg-a', videos: NEW_THEME_FLOOR },
-    { theme_id: 'reg-b', videos: NEW_THEME_FLOOR + 1 },
-    { theme_id: 'reg-c', videos: NEW_THEME_FLOOR - 1 },
+    { theme_id: 'reg-a', videos: NEW_THEME_FLOOR, month: MONTH, audience: 'industry-other' },
+    { theme_id: 'reg-b', videos: NEW_THEME_FLOOR + 1, month: MONTH, audience: 'industry-other' },
+    { theme_id: 'reg-c', videos: NEW_THEME_FLOOR - 1, month: MONTH, audience: 'industry-other' },
   ]
   const has = (ops: Op[], method: string, ...args: unknown[]) =>
     ops.some(([m, a]) => m === method && JSON.stringify(a) === JSON.stringify(args))
 
-  const world = (opts: { fresh?: unknown[]; before?: unknown[]; run?: unknown[] }) =>
+  const world = (opts: { fresh?: unknown[]; before?: unknown[]; run?: unknown[]; readings?: unknown[] }) =>
     recordingClient((table, ops) => {
       if (table === 'themes') return has(ops, 'eq', 'first_seen', true) ? opts.fresh ?? FRESH : opts.before ?? []
       if (table === 'pipeline_runs') return opts.run ?? []
-      if (table === 'month_theme_readings') return READINGS
+      if (table === 'month_theme_readings') return opts.readings ?? READINGS
       return []
     })
 
@@ -629,6 +629,33 @@ describe('loadNewThemes — the reads behind the re-grouped rule (market-first W
     expect(out.seen).toBe(3)
     expect(out.shown.map((t) => t.id)).toEqual(['reg-b', 'reg-a'])
     expect(calls.map((c) => c.table)).toEqual(['themes', 'themes', 'pipeline_runs', 'month_theme_readings'])
+  })
+
+  it('reads the month and every month before it, in every audience, in one request', async () => {
+    const { client, calls } = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE, clustering_key: K2 }] })
+    await loadNewThemes(client, CLIENT, NOW, MONTH, regime(K2), { audience: 'industry-other' })
+    const reads = calls.filter((c) => c.table === 'month_theme_readings')
+    expect(reads).toHaveLength(1)
+    expect(has(reads[0].ops, 'lte', 'month', MONTH)).toBe(true)
+    expect(has(reads[0].ops, 'gt', 'videos', 0)).toBe(true)
+    expect(reads[0].ops.some(([m, a]) => m === 'eq' && (a as unknown[])[0] === 'audience')).toBe(false)
+  })
+
+  it('leaves out a minted identity an earlier month holds, in any audience (staging: the 20 Sep update gave August rows to four of the six it minted)', async () => {
+    const readings = [
+      ...READINGS,
+      { theme_id: 'reg-b', videos: 3, month: '2026-08-01', audience: 'competitor:cotopaxi' },
+      { theme_id: 'reg-a', videos: 4, month: '2026-09-01', audience: 'client' },
+    ]
+    const { client } = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE, clustering_key: K2 }], readings })
+    const out = await loadNewThemes(client, CLIENT, NOW, MONTH, regime(K2), { audience: 'industry-other' })
+    // reg-b held August rows: not first heard. reg-a's client row is this
+    // month's, another audience's: not counted on the category, not "before".
+    expect(out.seen).toBe(2)
+    expect(out.shown).toEqual([{ id: 'reg-a', label: 'Theme a', videos: NEW_THEME_FLOOR }])
+    // Every audience's rows count where none is asked.
+    const all = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE, clustering_key: K2 }], readings })
+    expect((await loadNewThemes(all.client, CLIENT, NOW, MONTH, regime(K2))).shown).toEqual([{ id: 'reg-a', label: 'Theme a', videos: NEW_THEME_FLOOR + 4 }])
   })
 
   it('keeps it on a tenant’s first themed update, and reads nothing more when nothing was minted', async () => {

@@ -45,10 +45,11 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // changed and which changes were ours. Levels with the month before beside
     // them; no direction word (none can be earned before late January).
     tells: 'Your market in the month the page reads: how big it was, what it talked about biggest first, what people did and asked for in the comments, how it read on each of your subjects, and what changed, including the changes that were ours.',
-    read: ['market', 'month', 'video', 'theme', 'kind', 'level', 'change'],
+    read: ['market', 'month', 'video', 'theme', 'kind', 'level', 'change', 'new'],
     cannot: [
       'It is a reading of a calendar month. The page bar names the month; its tooltip says whether it is still filling.',
       'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count and are marked.',
+      'Under With this update, “heard for the first time” names a theme no earlier month holds, the rule Conversation’s “New” follows. A theme an update only named again is not listed.',
       'Two months sit side by side as levels. They are compared only when both were read the same way; until then the page says why not.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
     ],

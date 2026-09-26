@@ -2921,6 +2921,14 @@ export async function previousThemedRegime(
  * TIME (market-first WP1.9). Its minted identities are the corpus re-grouped,
  * so they leave the list and are counted as `regrouped` instead. Exported for
  * its test, which runs it against a stubbed client (lib/pages/week.test.ts).
+ *
+ * AND A THEME AN EARLIER MONTH HOLDS WAS NOT HEARD FOR THE FIRST TIME (the
+ * deploy-3 review). An update can mint an identity and stamp earlier months
+ * under it (staging's 20 Sep update gave four of its six minted themes August
+ * rows), so "minted by this update" is not "first heard". The rule is
+ * Conversation's New (plan WP2.4: no row for the registry id in any earlier
+ * month, in any audience), read in the same request as the month's counts:
+ * one read, as before.
  */
 export async function loadNewThemes(
   supabase: SupabaseClient,
@@ -2943,18 +2951,21 @@ export async function loadNewThemes(
   const regrouped = regroupedFor(ids, regime, await previousThemedRegime(supabase, clientId, runId, regime.startedAt))
   if (regrouped) return { seen: 0, shown: [], regrouped }
 
-  let readings: { theme_id: string; videos: number }[] = []
+  const m = monthStartOf(month)
+  let readings: { theme_id: string; videos: number; month?: string | null; audience?: string | null }[] = []
   try {
-    readings = await inChunks<{ theme_id: string; videos: number }>(ids, (part) => () => {
-      const q = supabase.from('month_theme_readings').select('theme_id, videos')
-        .eq('client_id', clientId).eq('month', month)
-      return (opts.audience ? q.eq('audience', opts.audience) : q).in('theme_id', part)
-        .order('theme_id', { ascending: true })
-    },
+    // Every audience and every month to this one, with videos: the month's
+    // rows are the counts (one audience's, where asked), the earlier months'
+    // say which identities were heard before.
+    readings = await inChunks<{ theme_id: string; videos: number; month?: string | null; audience?: string | null }>(ids, (part) => () =>
+      supabase.from('month_theme_readings').select('theme_id, videos, month, audience')
+        .eq('client_id', clientId).lte('month', m).gt('videos', 0)
+        .in('theme_id', part)
+        .order('theme_id', { ascending: true }).order('month', { ascending: true }).order('audience', { ascending: true }),
       // ONE THEME IS NOT ONE ROW HERE. `month_theme_readings` is keyed
-      // (client_id, month, audience, theme_id) and this read names no audience,
-      // so one month gives a row per theme PER AUDIENCE — the client, the
-      // industry and every rival. What binds a chunk of this shape is the ROW
+      // (client_id, month, audience, theme_id) and this read names no audience
+      // and every month to this one, so it gives a row per theme PER AUDIENCE
+      // PER MONTH — the client, the industry and every rival. What binds a chunk of this shape is the ROW
       // cap, not the URL cap: PostgREST answers 1,000 rows at a time and
       // `selectAll` pages the rest SERIALLY, inside a chunk that was going to be
       // one of several concurrent requests. lib/chunk.ts MULTI_ROW_IN_CHUNK has
@@ -2971,15 +2982,26 @@ export async function loadNewThemes(
   }
 
   const videosById = new Map<string, number>()
-  for (const r of readings) videosById.set(r.theme_id, (videosById.get(r.theme_id) ?? 0) + (r.videos ?? 0))
+  const heardBefore = new Set<string>()
+  for (const r of readings) {
+    // A row with no month is the month read (the reads name it).
+    const rm = r.month ? monthStartOf(r.month) : m
+    if (rm < m) {
+      if ((r.videos ?? 0) > 0) heardBefore.add(r.theme_id)
+      continue
+    }
+    if (rm !== m || (opts.audience && r.audience && r.audience !== opts.audience)) continue
+    videosById.set(r.theme_id, (videosById.get(r.theme_id) ?? 0) + (r.videos ?? 0))
+  }
   const labelById = new Map<string, string>()
   for (const t of fresh) if (t.registry_id && t.label) labelById.set(t.registry_id, t.label)
 
-  const shown = ids
+  const firstHeard = ids.filter((id) => !heardBefore.has(id))
+  const shown = firstHeard
     .map((id) => ({ id, label: labelById.get(id) ?? 'An unnamed theme', videos: videosById.get(id) ?? 0 }))
     .filter((t) => t.videos >= NEW_THEME_FLOOR)
     .sort((a, b) => b.videos - a.videos)
-  return { seen: ids.length, shown, regrouped: null }
+  return { seen: firstHeard.length, shown, regrouped: null }
 }
 
 /** The citations behind one theme, as quotes with their cite line. */

@@ -194,14 +194,14 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  *   over 234 comments; the followers' three themes, 4, 3 and 2; no move dated.
  * - `arrivals`: staging's 20 Sep update as `update_arrivals` counts it (MF2,
  *   read-only, 26 Sep): 395 September videos read for the first time and
- *   11,999 September comments (1 and 99 of August), with the nine themes it
+ *   11,999 September comments (1 and 99 of August), with the two themes it
  *   heard first at 10+ category videos in September as the loader read them
- *   on staging: three led by makers counted, six named, the first five with
- *   their videos from searches first run in September (8 of 13, 9 of 12, 11
- *   of 12, 6 of 11, 8 of 10). What the 11 Oct update brings is not knowable.
+ *   on staging (no earlier month holds them: the two Conversation flags New),
+ *   each with 8 of its 10 videos from searches first run in September. What
+ *   the 11 Oct update brings is not knowable.
  * - `change`: staging's re-check plan of 26 Sep (lib/test/recheck-fixture.ts),
  *   read with the 20 Sep update: too few on the searches both months ran (78
- *   and 103 videos), the four kinds whose fall follows depth, and the
+ *   and 103 videos), the two kinds whose fall follows depth (recheck_v2), and the
  *   buyers-only counts, 146 and 381.
  */
 export function filledSlotsFixture(): MonthlyData {
@@ -222,16 +222,12 @@ export function filledSlotsFixture(): MonthlyData {
           { month: SEP, videosFirstRead: 395, commentsCaptured: 11999 },
         ],
         current: { month: SEP, videos: 654, updates: 3 },
-      newThemes: [
-          { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: 8 },
-          { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: 9 },
-          { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: 11 },
-          { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: 6 },
+        newThemes: [
           { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: 8 },
-          { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
+          { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: 8 },
         ],
         regrouped: null,
-        grouped: { makers: 3, setAside: 0 },
+        grouped: { makers: 0, setAside: 0 },
       },
     },
     change: {
