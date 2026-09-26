@@ -16,7 +16,7 @@ import { septemberThemes } from '@/lib/test/market-fixture'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OverviewPage } from './index'
 import { overviewSentence } from './sentence'
 import { overviewThemes } from './themes'
-import { WHAT_WE_CHANGED_HREF, stripMonths } from './change'
+import { WHAT_WE_CHANGED_HREF, drawsStrip, stripMonths } from './change'
 import { OCTOBER_ENDED_AT, OCTOBER_LEADS_AT, marketBeforeMakersFixture, marketFrontFixture, octoberLeadsFixture, ossurFrontFixture, overviewFixture } from './fixture'
 
 // Your market (market-first WP1.6): the done-when checks that a render can
@@ -64,6 +64,22 @@ describe('the change strip once October leads: each month once', () => {
       months: [{ month: '2026-10-01', read: true }, { month: '2026-11-01', read: true }],
       from: 0, span: 2,
     })
+  })
+
+  it('draws the strip only where its months touch: never "Jul | Aug | Oct Nov" on an earlier month (deploy 2 review)', () => {
+    const sep = marketFrontFixture().change!
+    expect(drawsStrip(sep)).toBe(true)
+    expect(drawsStrip(octoberLeadsFixture(OCTOBER_LEADS_AT).change!)).toBe(true)
+    expect(drawsStrip(octoberLeadsFixture(OCTOBER_ENDED_AT).change!)).toBe(true)
+    // The August page, one click away through the month menu: the pair read
+    // is July against August, the next pair October against November.
+    const aug = { ...sep, prevMonth: '2026-07-01', month: '2026-08-01' }
+    expect(drawsStrip(aug)).toBe(false)
+    const markup = change({ ...marketFrontFixture(), change: aug })
+    expect(markup).not.toContain('>Jul</span>')
+    expect(markup).not.toContain('the first comparison read the same way</span>')
+    expect(read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...marketFrontFixture(), change: aug }, 'app', ctx)))
+      .toContain('The first comparison read the same way: October against November')
   })
 
   it('18 Oct: the bar reads October, as at the 18 Oct update', () => {

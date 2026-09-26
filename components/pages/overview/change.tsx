@@ -5,7 +5,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth, shortDate } from '@/lib/format'
-import { monthStartOf } from '@/lib/reading/month-key'
+import { monthStartOf, nextMonth } from '@/lib/reading/month-key'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { changeLead, nextPairLine, placeInMonth, searchChangesLine, type ChangeBlock } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
@@ -79,12 +79,23 @@ export function stripMonths(read: readonly [string, string], next: readonly [str
 }
 
 /** Does the block draw its month strip? No update is promised to a paused
- *  tenant, in words or in the strip, and with no next pair there is none. */
-const drawsStrip = (block: ChangeBlock): boolean => block.next != null && block.prevMonth != null && !block.paused
+ *  tenant, in words or in the strip, and with no next pair there is none.
+ *  NOR WHERE ITS MONTHS WOULD NOT TOUCH (deploy 2 review): read through M-d's
+ *  menu on an earlier month, the August page drew "Jul | Aug | Oct Nov" and the
+ *  March page "Feb | Mar | Oct Nov", joining months a gap apart with nothing
+ *  to say so. The strip is the approved preview's, for the months the page
+ *  reads by default, where the pair read and the next pair are one run of
+ *  months; elsewhere the next pair is said in its sentence alone. */
+export function drawsStrip(block: ChangeBlock): boolean {
+  const next = block.next
+  if (!next || block.prevMonth == null || block.paused) return false
+  const months = stripMonths([block.prevMonth, block.month], [next.prevMonth, next.month]).months.map((m) => m.month)
+  return months.every((m, i) => i === 0 || m === nextMonth(months[i - 1]))
+}
 
 function MonthStrip({ block }: { block: ChangeBlock }) {
   const next = block.next
-  if (!next || !block.prevMonth || block.paused) return null
+  if (!next || !block.prevMonth || !drawsStrip(block)) return null
   const asAt = block.asAt ?? null
   const ours = block.searchChanges ?? []
   const key = searchChangesLine(ours)
