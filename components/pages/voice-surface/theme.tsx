@@ -646,7 +646,10 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               <Link href={t.askHref} className="inline-flex h-9 items-center rounded-full bg-tile px-4 text-[12.5px] font-medium text-foreground ring-1 ring-border transition-colors hover:bg-inner">
                 Ask about this
               </Link>
-              <span className="ml-auto flex min-w-0 flex-1 justify-end">{searchBox}</span>
+              {/* AT LEAST 256px, SO IT WRAPS RATHER THAN SQUEEZES (deploy 2
+                  review): at `min-w-0` the row never broke, and at 390 the
+                  label "Have we seen this before?" ran 21px past the page. */}
+              <span className="ml-auto flex min-w-64 flex-1 justify-end">{searchBox}</span>
             </div>
           )}
 
