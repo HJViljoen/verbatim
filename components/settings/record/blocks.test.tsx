@@ -6,7 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { deliveryRecord } from '@/lib/settings/delivery'
 
-import { ChangeLogBlock, sameRows } from './change-log'
+import { ChangeLogBlock, PREHISTORY_LINE, sameRows } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
 import { NO_EXPORT_WHY, SaveStrip, ScopeStatement } from './header'
@@ -225,6 +225,16 @@ describe('the change log', () => {
     const text = renderText(changeLog)
     expect(text).toContain('Before the record began · 1 entry')
     expect(text).toContain('Reconstructed, not recorded')
+  })
+
+  it('says "Reconstructed, not recorded" and "Not known" once, under the heading, not on every row (WP3.10)', () => {
+    const log = changeLogFixture()
+    const [p] = log.prehistory
+    const many = { ...log, prehistory: [p, { ...p, id: `${p.id}-b`, on: '2026-07-01', dateShort: '1 Jul', said: 'Search terms changed' }, { ...p, id: `${p.id}-c`, on: '2026-06-01', dateShort: '1 Jun', said: 'Rivals changed' }] }
+    const text = renderText(<ChangeLogBlock log={many} rows={20} now="2026-09-28T09:00:00.000Z" />)
+    expect(text.match(/Reconstructed, not recorded/g)).toHaveLength(1)
+    expect(text.match(/Not known: this change was worked out afterwards/g)).toBeNull()
+    expect(text).toContain(PREHISTORY_LINE)
   })
 
   it('says the log is not recorded rather than drawing an empty table', () => {
