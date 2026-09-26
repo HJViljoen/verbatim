@@ -26,7 +26,8 @@ import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { comparabilitySummary, keepWeeksInRun, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
-import { planSegmentVideos, runSegmentBatch, segmentSummary } from '@/lib/pipeline/segment-videos'
+import { planSegmentVideos, runSegmentBatch, segmentSummary, stepSegmentJudge } from '@/lib/pipeline/segment-videos'
+import { openai } from '@/lib/openai'
 import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
 import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
 import { openAiConfirmJudge } from '@/lib/brands/confirm'
@@ -1590,9 +1591,11 @@ export const runPipeline = inngest.createFunction(
     //    the freeze-months precedent) and a no-op until its tables exist.
     //
     // The segment-videos step (WP3.2): a segments_v1 rule row for every video
-    // still missing one (the run's new videos), at $0. The judge (segments_v2)
-    // runs only where SEGMENT_JUDGE_ENABLED is on for the tenant, and it is off
-    // for every tenant until Heinrich's yes. One batch of videos a step.
+    // still missing one (the run's new videos), at $0. The judge (segments_v2,
+    // mf/s3-segments' judgeSegmentBatch) is built and called only where
+    // SEGMENT_JUDGE_ENABLED is on for the tenant, and it is off for every
+    // tenant until Heinrich's yes. One batch of videos a step (100 with the
+    // judge on, so its calls finish inside the 300 s).
     const segmentPlan = await step
       .run('plan-segment-videos', async () => {
         const r = await planSegmentVideos(createAdminClient(), clientId)
@@ -1608,7 +1611,10 @@ export const runPipeline = inngest.createFunction(
       const ids = segmentBatches[i]
       await step
         .run(`segment-videos:${i + 1}-of-${segmentBatches.length}`, async () => {
-          const r = await runSegmentBatch(createAdminClient(), { clientId, runId, ids, judge: null })
+          const admin = createAdminClient()
+          // The judge is built only where SEGMENT_JUDGE_ENABLED is on for the tenant.
+          const judge = await stepSegmentJudge(admin, clientId, runId, openai)
+          const r = await runSegmentBatch(admin, { clientId, runId, ids, judge })
           console.log(`[segment-videos] ${segmentSummary(r)}`)
           return r
         })

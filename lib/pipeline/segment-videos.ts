@@ -6,6 +6,12 @@ import { segmentJudgeEnabled } from '../config'
 import { heuristicVerdict } from '../gather/relevance'
 import { isMissingObject, type StoredProvenance } from '../provenance/load'
 import { SEGMENT_RULE_VERSION, segmentOfReason, segmentReason, segmentRulesEnabled, type Segment } from '../segments/rules'
+import {
+  judgeSegmentBatch, SEGMENT_JUDGE_BATCH, SEGMENT_JUDGE_BATCHES_PER_STEP, SEGMENT_JUDGE_VERSION, segmentJudgeBatches,
+  type SegmentJudgeClient,
+} from '../segments/judge'
+import { judgeLogArgs } from '../segments/v2'
+import { logAiCall } from './ai-log'
 import { selectAll } from '../supabase-admin'
 
 // The `segment-videos` step (market-first decision F; plan WP3.2, deploy 4),
@@ -33,8 +39,10 @@ import { selectAll } from '../supabase-admin'
 // experience, not making: CQ F43).
 
 export const SEGMENT_BATCH = 500
-/** The judge's rule version (plan §4.1: 'segments_v2' = judge). */
-export const JUDGE_RULE_VERSION = 'segments_v2'
+/** The judge's rule version (plan §4.1: 'segments_v2' = judge; lib/segments/judge.ts). */
+export const JUDGE_RULE_VERSION = SEGMENT_JUDGE_VERSION
+/** Videos a step judges at most: the judge's batches a step can finish in its 300 s. */
+export const SEGMENT_JUDGED_BATCH = SEGMENT_JUDGE_BATCH * SEGMENT_JUDGE_BATCHES_PER_STEP
 
 export interface SegmentVideo {
   id: string
@@ -99,7 +107,9 @@ export async function planSegmentVideos(admin: SupabaseClient, clientId: string)
   const labelled = new Set(held.map((h) => h.video_id))
   const ids = await selectAll<{ id: string }>(() => admin.from('videos').select('id').eq('client_id', clientId).order('id'))
   const missing = ids.map((r) => r.id).filter((id) => !labelled.has(id))
-  return { batches: chunk(missing, SEGMENT_BATCH), note: `${missing.length} videos without a ${SEGMENT_RULE_VERSION} label (${labelled.size} held)` }
+  // With the judge on, a step holds only what the judge can finish in 300 s.
+  const size = segmentJudgeEnabled(clientId) ? SEGMENT_JUDGED_BATCH : SEGMENT_BATCH
+  return { batches: chunk(missing, size), note: `${missing.length} videos without a ${SEGMENT_RULE_VERSION} label (${labelled.size} held)${size !== SEGMENT_BATCH ? `; the judge is on: ${size} a step` : ''}` }
 }
 
 export interface SegmentBatchResult {
@@ -205,3 +215,47 @@ export async function runSegmentBatch(admin: SupabaseClient, args: {
 
 export const segmentSummary = (r: SegmentBatchResult): string =>
   `${r.written} ${SEGMENT_RULE_VERSION} rule rows (maker ${r.maker}, noise ${r.noise}, market ${r.market}; ${r.unjudged} admitted unjudged) · judge ${r.judge}${r.judge === 'on' ? `: ${r.judged} judged, $${r.costUsd.toFixed(4)}` : ''}`
+
+/**
+ * The judge as the step calls it: mf/s3-segments' pinned per-batch function
+ * (lib/segments/judge.ts judgeSegmentBatch), a batch of at most
+ * SEGMENT_JUDGE_BATCH videos a call, each call logged to ai_call_log. A batch
+ * that fails labels nothing (never fail open) and its videos are judged again
+ * next run. Built by the pipeline only where SEGMENT_JUDGE_ENABLED is on for
+ * the tenant; the client is handed in, so a test passes a mock.
+ */
+export function segmentJudgeFor(admin: SupabaseClient, args: {
+  clientId: string
+  runId: string
+  client: SegmentJudgeClient
+  excludeTerms?: readonly string[] | null
+  marketDescription?: string | null
+}): SegmentJudgeBatch {
+  let call = 0
+  return async (videos) => {
+    const rows: Awaited<ReturnType<SegmentJudgeBatch>>['rows'] = []
+    let costUsd = 0
+    const candidates = videos.map((v) => ({ id: v.id, platform: v.platform, account_name: v.account_name, caption: v.caption, hashtags: v.hashtags }))
+    for (const batch of segmentJudgeBatches(candidates)) {
+      const r = await judgeSegmentBatch({ clientId: args.clientId, candidates: batch, client: args.client, excludeTerms: args.excludeTerms, marketDescription: args.marketDescription })
+      call++
+      await logAiCall(admin, judgeLogArgs(r, { clientId: args.clientId, runId: args.runId, callIndex: call }))
+      costUsd += r.costUsd
+      rows.push(...r.judgements.map((j) => ({ video_id: j.videoId, segment: j.segment, reason: j.reason, rule_version: SEGMENT_JUDGE_VERSION })))
+    }
+    return { rows, costUsd }
+  }
+}
+
+/** The step's judge, or null: built only where SEGMENT_JUDGE_ENABLED is on for
+ *  the tenant (off for every tenant until Heinrich's yes). It reads the
+ *  tenant's exclusions and, once MF3 holds it, its market description. */
+export async function stepSegmentJudge(admin: SupabaseClient, clientId: string, runId: string, client: SegmentJudgeClient): Promise<SegmentJudgeBatch | null> {
+  if (!segmentJudgeEnabled(clientId)) return null
+  const withDescription = await admin.from('tracking_configs').select('exclude_terms, market_description').eq('client_id', clientId).maybeSingle()
+  const tc = (withDescription.error
+    ? (await admin.from('tracking_configs').select('exclude_terms').eq('client_id', clientId).maybeSingle()).data
+    : withDescription.data) as { exclude_terms?: string[] | null; market_description?: string | null } | null
+  return segmentJudgeFor(admin, { clientId, runId, client, excludeTerms: tc?.exclude_terms ?? null, marketDescription: tc?.market_description ?? null })
+}
+
