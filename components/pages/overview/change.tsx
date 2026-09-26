@@ -60,7 +60,10 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
             kind === 'next' ? 'border border-dashed border-neutral-seg font-medium text-muted-foreground' : 'bg-inner font-semibold text-foreground',
           )}
         >
-          {shortMonthName(month)}
+          {/* The name on its cell's own ground, above the "as at" rule, so a
+              rule that falls on it passes behind the letters, not through
+              them (a phone's 68px month, or a day early in a dashed one). */}
+          <span className={cn('relative z-[1] -mx-1 px-1', kind === 'next' ? 'bg-tile' : 'bg-inner')}>{shortMonthName(month)}</span>
         </span>
         {marks.map((x, i) => (
           // 7px on a phone, where a month is some 70px wide and the 9, 13
@@ -87,7 +90,10 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
   // the bracket's words sit ABOVE the bracket, the bracket over the dashed
   // pair, and the date it is read from under it, all centred on it. The rows
   // share one two-column grid, so each mark and the "as at" rule land on the
-  // day they name.
+  // day they name. Where the "as at" falls in the dashed pair (from the first
+  // update of the month after the one read), its rule and words stand under
+  // the bracket, so the months drop 6px further to keep them off its line.
+  const asAtUnderBracket = asAt != null && [next.prevMonth, next.month].some((m) => placeInMonth(asAt, m) != null)
   return (
     <div className="flex min-w-0 flex-col">
       <div aria-hidden className="flex min-w-0 flex-col">
@@ -97,7 +103,7 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
             <span className="mt-1.5 h-2 border-x border-t border-secondary-foreground" />
           </div>
         </div>
-        <div className="mt-2.5 grid grid-cols-2 gap-x-3">
+        <div className={cn('grid grid-cols-2 gap-x-3', asAtUnderBracket ? 'mt-4' : 'mt-2.5')}>
           <div className="flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'read')}</div>
           <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
         </div>

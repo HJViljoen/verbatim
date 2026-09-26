@@ -146,6 +146,23 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(markup).toMatch(/whitespace-nowrap[^"]*">from the <span class="whitespace-nowrap">6 Dec update<\/span>/)
   })
 
+  it('what changed: an "as at" in the dashed October clears the bracket, and its rule passes behind the month names', () => {
+    // From the 4 Oct update to the switch, September is read as at a day in
+    // October, which the strip marks in the dashed pair, under the bracket.
+    const data = marketFrontFixture()
+    const at = (asAt: string) => render(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...data, change: { ...data.change!, asAt } }, 'app', ctx))
+    const oct = at('2026-10-11T08:30:00.000Z')
+    expect(oct.match(/as at 11 Oct/g)?.length).toBe(1)
+    expect(oct).toContain('left:33.87%')
+    expect(oct).toMatch(/class="grid grid-cols-2 gap-x-3 mt-4"/)
+    // Every month's name stands on its cell's ground, above the rule.
+    for (const [name, ground] of [['Aug', 'bg-inner'], ['Sep', 'bg-inner'], ['Oct', 'bg-tile'], ['Nov', 'bg-tile']]) {
+      expect(oct).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)
+    }
+    // The preview's state, an "as at" in the month read, keeps its spacing.
+    expect(render(overviewChangeRender())).toMatch(/class="grid grid-cols-2 gap-x-3 mt-2\.5"/)
+  })
+
   it('what changed: a stored block without the strip’s fields draws the months and no mark', () => {
     const data = marketFrontFixture()
     const bare = { ...data, change: { ...data.change!, asAt: undefined, searchChanges: undefined } }
