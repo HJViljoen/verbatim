@@ -25,6 +25,7 @@ import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
+import { comparabilitySummary, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -1560,6 +1561,51 @@ export const runPipeline = inngest.createFunction(
     const themedSummary = {
       ...themed.summary,
       newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
+    }
+
+    // ── Deploy 4 (market-first, plan §4.2 "Pipeline ids"): four additive ids
+    //    immediately before freeze-months, in this order: segment-videos ·
+    //    comparability · lens-readings · brand-readings. Each fans out as
+    //    `plan-x` + `x:${i}-of-${n}`, is non-fatal (logged, never noteError'd:
+    //    the freeze-months precedent) and a no-op until its tables exist.
+    //
+    // The comparability step (WP3.4): month_pair_comparability and
+    // config_change_reach for every pair with a filling side, read through THIS
+    // run; comparability_checks for a pair whose later month has ended; and the
+    // weekly keep (WP3.13, no id of its own). One task a step, so none nears the
+    // 300 s limit. The plan's clock is memoised with it, so every task of this
+    // run measures at one instant, the same on a replay.
+    const comparabilityPlan = await step
+      .run('plan-comparability', async () => {
+        const admin = createAdminClient()
+        const now = new Date().toISOString()
+        let filling: string[] = []
+        try {
+          filling = await fillingMonths(admin, clientId)
+        } catch (e) {
+          if (!isMissingMonthlyReading(e)) throw e
+        }
+        return { now, tasks: planComparability(now, filling) }
+      })
+      .catch((e) => {
+        console.error(`[comparability] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const comparabilityTasks = comparabilityPlan?.tasks ?? []
+    for (let i = 0; i < comparabilityTasks.length; i++) {
+      const task = comparabilityTasks[i]
+      await step
+        .run(`comparability:${i + 1}-of-${comparabilityTasks.length}`, async () => {
+          const r = await runComparabilityTask(createAdminClient(), {
+            clientId, runId, now: comparabilityPlan!.now, task, keepWeeks: null,
+          })
+          console.log(`[comparability] ${comparabilitySummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[comparability] ${taskLabel(task)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
     }
 
     // The comment-dated monthly reading (Phase 0, design items 1–2). Here,
