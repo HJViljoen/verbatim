@@ -95,7 +95,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
   },
   {
     key: 'week',
-    tells: 'What needs attention this week: anything unusual against the last three complete months, what came in, what is worth a reply, and what worked.',
+    tells: 'What needs attention this week: anything unusual against the last three ended months, what came in, what is worth a reply, and what worked.',
     read: ['week', 'update'],
     cannot: [
       'A week is seven days inside a month and is never a period of its own. Every number on it is the month so far, against the three months before it; the week is how much of that arrived since the last update.',

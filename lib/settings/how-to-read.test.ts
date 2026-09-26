@@ -45,6 +45,12 @@ describe('how to read', () => {
     expect(words).toContain('Your search terms are yours')
   })
 
+  it('never calls a month "complete" (plan §4.0: ended or final, never complete; deploy 2 review)', () => {
+    for (const card of READING_CARDS) {
+      expect([card.tells, ...card.cannot].join(' ')).not.toMatch(/\bcomplete months?\b/i)
+    }
+  })
+
   it('reads on three clocks, in the order a month is actually read', () => {
     expect(READING_PATH.map((p) => p.when)).toEqual([
       'Each week', 'Each month, once the month is done', 'Each quarter',
