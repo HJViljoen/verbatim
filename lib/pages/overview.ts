@@ -4254,7 +4254,13 @@ async function loadMarketReads(input: {
     loadBoardThemes(client, clientId, month, prevMonth),
     loadLeadExclusions(client, clientId),
     loadChanges(client, clientId),
-    loadPairRows(client, clientId, null),
+    // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadPairOn`): a read error
+    // on the pair rows leaves the change block unmeasured, never the page down
+    // (a missing table is already an empty list).
+    loadPairRows(client, clientId, null).catch((error: unknown): PairRow[] => {
+      console.error(`[overview] month pair rows: ${(error as { message?: string })?.message ?? String(error)}; read as unmeasured`)
+      return []
+    }),
     input.segmentRows,
   ])
   const ids = boardRows.map((r) => r.id)
