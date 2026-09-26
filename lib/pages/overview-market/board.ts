@@ -94,6 +94,9 @@ export interface ThemeBoard {
   /** The previous month the rows print beside, and its category n, for the
    *  column head "Aug (of 351)". Null where the page has none. */
   prev: { month: string; n: number | null } | null
+  /** The month pair's one chip for the board (R3): the themes view's refusal,
+   *  set by the loader. Additive to the pinned shape. */
+  chip?: string | null
 }
 
 const finiteShare = (s: number | null | undefined): number | null =>

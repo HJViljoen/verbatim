@@ -65,13 +65,48 @@ import { pooledDenominators } from '../reading/market'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
-import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, subjectCalibration, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
-import { monthPhrase, refsOf } from './week'
+import { monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
+import type { ConfigChange } from '../config-log'
+import { changesFromLog, nextComparablePair } from '../reading/comparability'
+import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
+import { scheduledUpdateAfter } from '../reading/reading-month'
+import { updateInstant, type DeliveredRun } from '../reading/reading-view'
+import { loadChanges, loadPairRows } from '../reading/read'
+import type { ScheduleConfig } from '../pipeline/schedule-due'
+import {
+  askIds,
+  brandsBlockFor,
+  buildAsks,
+  buildMarketKinds,
+  buildThemeBoard,
+  fromNewSearches,
+  heroLead,
+  marketCalibration,
+  marketSubjectSide,
+  mayLead as mayLeadTheme,
+  namesABrand,
+  pickQuotes,
+  searchesAddedIn,
+  stripUnevidencedBrand,
+  THEME_FLOOR,
+  type AsksBlock,
+  type BrandsBlock,
+  type ChangeBlock,
+  type HeroLead,
+  type MarketKinds,
+  type MarketSide,
+  type MarketTheme,
+  type QuoteCandidate,
+  type SubjectCalibrationWord,
+  type ThemeBoard,
+} from './overview-market'
+import type { MarketCount } from '../reading/market'
 
 export { monthPhrase }
 
@@ -177,6 +212,15 @@ export interface SubjectRow {
    *  when the month is complete, or when M4/M3 cannot answer the window. */
   categoryAtLastMonth: { k: number; n: number; pct: number | null } | null
   href: string
+  /** The market side (market-first WP1.6, decision E): the subject's videos
+   *  over the category and the tracked brands, of the market's videos. Set on
+   *  the front page only; a stored row without it renders as it was sent. */
+  market?: SideReading
+  /** The same, in the month before, as a level beside it (never compared). */
+  marketPrev?: MarketSide | null
+  /** Decision C's three states (WP1.1 pins the type as
+   *  `SubjectCalibration`; `marketCalibration` reads either vocabulary). */
+  calibration?: SubjectCalibrationWord
 }
 
 export interface SubjectCandidate {
@@ -226,6 +270,9 @@ export interface SubjectsBlock {
    * its own band, printed beside the first.
    */
   gaps: Record<string, Gap | null>
+  /** The market's videos in the reading month and the month before, for the
+   *  front page's column heads (WP1.6). Optional, as the rows' `market`. */
+  market?: { month: string; n: number | null; prev: { month: string; n: number | null } | null }
 }
 
 export interface Mover {
@@ -369,6 +416,10 @@ export interface CategoryBlock {
    *  the list draws no makers column that nothing will ever fill (deploy 1
    *  review). OPTIONAL: a stored copy without it draws the column as before. */
   makersApply?: boolean
+  /** Every kind and the four moods on the market's base (WP1.6, the front
+   *  page's "What people did in the comments"). OPTIONAL: a stored copy
+   *  without it renders the Phase 1 block. */
+  market?: MarketKinds
 }
 
 /** One row of OV3's level list (plan §4.2, `CategoryBlock.levels`). */
@@ -761,6 +812,22 @@ export interface OverviewData {
    * and neither prints anything, so the page is exactly as it is today.
    */
   sent: SentMonth | null
+  // THE NEW FRONT PAGE (market-first WP1.6, plan §4.2). The loader sets all of
+  // these or none: `market` marks a page built as "Your market", and the
+  // reworked blocks read the new fields only where it is present, so a stored
+  // snapshot from before WP1.6 renders as it was sent. The weekly
+  // (`pinCalendarMonth`) never gets them, which keeps its preview byte for
+  // byte (the parity gate for deploys 1 and 2).
+  /** The pooled market by month: the reading month and the one before. */
+  market?: MarketCount[]
+  themes?: ThemeBoard
+  hero?: HeroLead
+  /** The lead theme's voices: evidence quotes of its own insights, of its
+   *  kind, dated in the reading month, never from the video's own account. */
+  heroVoices?: Voice[]
+  asks?: AsksBlock
+  change?: ChangeBlock
+  brands?: BrandsBlock
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -2057,7 +2124,13 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // THE LEVEL LIST'S POOL (market-first WP1.5): the month's largest category
   // themes by videos, one small read that needs the month and nothing else,
   // taken in wave 3.
-  const levelPoolAhead = loadLevelPool(reading.client, clientId, month)
+  //
+  // NOT ON THE NEW FRONT PAGE (market-first WP1.6): its theme board replaces
+  // the level list and reads its own rows (`loadMarketFrontPage`), so the list
+  // is read only where the page is not built as "Your market" (the weekly,
+  // which never prints it).
+  const marketFirst = !pinned
+  const levelPoolAhead = marketFirst ? Promise.resolve([] as string[]) : loadLevelPool(reading.client, clientId, month)
   levelPoolAhead.catch(() => {})
 
   // ── wave 3: the readings ───────────────────────────────────────────────
@@ -2084,7 +2157,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     : []
 
   const levelIds = await levelPoolAhead
-  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, makerShares] =
+  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, segmentRows] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
@@ -2127,9 +2200,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       // MF1's maker shares, one read for the list and the headline. Null until
       // MF1 is applied, and always for a tenant without a maker rule (Össur);
       // every level then reads "not yet marked" and no theme may lead the
-      // headline (`mayLead`).
-      loadMakerShares(reading.client, clientId, month, themedRunId),
+      // headline (`mayLead`). Read as rows, because the front page's board
+      // groups noise-led themes on the same read (WP1.6).
+      loadThemeSegmentRows(reading.client, clientId, month, themedRunId),
     ])
+  const makerShares = segmentRows ? makerSharesOf(segmentRows) : null
 
   const pair = await judgeAhead
 
@@ -2255,6 +2330,12 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     pair,
     asOf: readingAt,
   })
+  // THE MARKET SIDE AND THE CALIBRATION WORD (market-first WP1.6, decisions C
+  // and E), on the front page only: the weekly's rows stay as they were.
+  const pooledCounts = pooledDenominators(history.denominators, marketRivals)
+  if (marketFirst) {
+    withMarketSides(subjects, { months: subjectMonths ?? [], subjects: subjectRows ?? [], counts: pooledCounts, month, prevMonth, marketRivals })
+  }
 
   // ── OV4 · rivals ───────────────────────────────────────────────────────
   //
@@ -2299,6 +2380,21 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       makerShares,
     }),
     makersApply: makerRuleEnabled(clientId),
+    // Every kind and the four moods, pooled over the market (WP1.6), off the
+    // rows this block already read; the market view's chip, said once.
+    ...(marketFirst
+      ? {
+          market: buildMarketKinds({
+            kindRows,
+            statsRows,
+            counts: pooledCounts,
+            month,
+            prevMonth,
+            rivalAudiences: marketRivals,
+            chip: pairChip(pair(prevMonth, month, 'market')),
+          }),
+        }
+      : {}),
   }
 
   // ── OV5 · your moves, the card, and what a move did (Block D · D2) ─────
@@ -2400,7 +2496,30 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
 
   const sent = sentMonthOf(await sentAhead)
 
+  // ── Your market (market-first WP1.6) ───────────────────────────────────
+  const front = marketFirst
+    ? await loadMarketFrontPage({
+        supabase,
+        reading,
+        clientId,
+        brand,
+        rivals,
+        marketRivals,
+        month,
+        prevMonth,
+        themedRunId,
+        segmentRows,
+        subjects,
+        pair,
+        runs: runsRaw,
+        schedule,
+        rm,
+        denominators: history.denominators,
+      })
+    : {}
+
   return {
+    ...front,
     brand,
     month,
     monthStatus,
@@ -3081,13 +3200,25 @@ export async function loadMakerShares(
   month: string,
   runId: string | null,
 ): Promise<Map<string, number | null> | null> {
+  const segmentRows = await loadThemeSegmentRows(client, clientId, month, runId)
+  return segmentRows ? makerSharesOf(segmentRows) : null
+}
+
+/** `theme_maker_shares` as its rows (maker AND noise, market-first WP1.6), on
+ *  the same terms as `loadMakerShares`: null where it was not measured. */
+export async function loadThemeSegmentRows(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  runId: string | null,
+): Promise<ThemeMakerShareRow[] | null> {
   if (!runId || !makerRuleEnabled(clientId)) return null
   const res = await client.rpc('theme_maker_shares', { p_client: clientId, p_month: month, p_run: runId })
   if (res.error) {
     if (!isMissingThemeMakerShares(res.error)) console.error(`[pages] overview.makerShares: ${res.error.message}`)
     return null
   }
-  return makerSharesOf(Array.isArray(res.data) ? (res.data as ThemeMakerShareRow[]) : [])
+  return Array.isArray(res.data) ? (res.data as ThemeMakerShareRow[]) : []
 }
 
 /**
@@ -3622,6 +3753,484 @@ async function loadVoices(
     }
   })
   return { voices, from: pool.length }
+}
+
+// ---- the new front page's reads (market-first WP1.6) ----------------------------
+//
+// AT MOST TWELVE ADDED READS, and most of them conditional (plan WP1.6
+// "Budget", §5.4). Always: the reading month's category themes at the floor,
+// the previous month's rows for those themes, the latest themed run's kinds
+// and match kinds for them, and Heinrich's lead overrides (MF1). Only when
+// there is something to read for: the regime check (a theme minted this run),
+// the quotes (a lead, asks, or a label naming a brand: the theme's insights,
+// their kinds, their evidence and its translations, the comments and the
+// videos behind them), and the lead's provenance (MF1). WP1.5's level list
+// reads are not made on this page any more (its board replaces them), and
+// `theme_maker_shares` is the one read the two share.
+
+/** Is `table` (or function) missing here: MF1 not applied yet? The
+ *  `isMissing*` shape, narrowed to the name so any other failure still
+ *  speaks. */
+export function isMissingRelation(error: unknown, name: string): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes(name)) return false
+  if (code && ['PGRST205', 'PGRST204', 'PGRST202', '42P01', '42703', '42883'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
+}
+
+/** `rows`, silent where the relation is not there yet (MF1): an absent table
+ *  is a state, not an error, and it would otherwise log on every page load
+ *  until Wed 30 Sep. */
+function quietRows<T>(res: { data: unknown; error: unknown }, label: string, name: string): T[] {
+  if (res.error && isMissingRelation(res.error, name)) return []
+  return rows<T>(res as never, label)
+}
+
+export const TABLE_FRONT_PAGE_OVERRIDES = 'front_page_overrides'
+export const TABLE_VIDEO_PROVENANCE = 'video_provenance'
+
+/** The reading month's category themes at the floor, and the previous month's
+ *  k for each (0 where that month has rows and the theme is not in them). Two
+ *  small reads, the second over the first's ids. */
+async function loadBoardThemes(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  prevMonth: string,
+): Promise<{ id: string; k: number; prevK: number }[]> {
+  const res = await client
+    .from(TABLE_THEME_READINGS)
+    .select('theme_id, videos')
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .eq('audience', INDUSTRY_AUDIENCE)
+    .gte('videos', THEME_FLOOR)
+    .order('videos', { ascending: false })
+    .order('theme_id', { ascending: true })
+    .limit(200)
+  if (res.error && isMissingMonthlyReading(res.error)) return []
+  const now = rows<{ theme_id: string; videos: number }>(res, 'overview.boardThemes')
+  if (now.length === 0) return []
+  const ids = now.map((r) => String(r.theme_id))
+  const prevRes = await client
+    .from(TABLE_THEME_READINGS)
+    .select('theme_id, videos')
+    .eq('client_id', clientId)
+    .eq('month', prevMonth)
+    .eq('audience', INDUSTRY_AUDIENCE)
+    .in('theme_id', ids)
+  const prev = new Map(rows<{ theme_id: string; videos: number }>(prevRes, 'overview.boardThemesPrev').map((r) => [String(r.theme_id), Number(r.videos)]))
+  return now.map((r) => ({ id: String(r.theme_id), k: Number(r.videos), prevK: prev.get(String(r.theme_id)) ?? 0 }))
+}
+
+/** The latest themed run's label, kind and match kind for each theme, and
+ *  the registry's own label where the run did not observe one. */
+async function loadBoardObservations(
+  client: SupabaseClient,
+  clientId: string,
+  themedRunId: string | null,
+  ids: readonly string[],
+): Promise<Map<string, { label: string | null; kind: string | null; matchKind: string | null }>> {
+  const out = new Map<string, { label: string | null; kind: string | null; matchKind: string | null }>()
+  if (ids.length === 0) return out
+  if (themedRunId) {
+    const res = await client
+      .from('theme_observations')
+      .select('theme_id, label, category, match_kind')
+      .eq('client_id', clientId)
+      .eq('run_id', themedRunId)
+      .in('theme_id', [...ids])
+    for (const r of rows<{ theme_id: string; label: string | null; category: string | null; match_kind: string | null }>(res, 'overview.boardObservations')) {
+      out.set(String(r.theme_id), { label: r.label?.trim() || null, kind: r.category ?? null, matchKind: r.match_kind ?? null })
+    }
+  }
+  const missing = ids.filter((id) => !out.get(id)?.label)
+  if (missing.length > 0) {
+    const res = await client.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', missing)
+    for (const r of rows<{ id: string; canonical_label: string | null }>(res, 'overview.boardLabels')) {
+      const held = out.get(String(r.id))
+      out.set(String(r.id), { label: r.canonical_label?.trim() || null, kind: held?.kind ?? null, matchKind: held?.matchKind ?? null })
+    }
+  }
+  return out
+}
+
+/** Heinrich's "never lead with this theme" (MF1 `front_page_overrides`): the
+ *  newest row per theme wins. Empty until MF1 is applied. */
+async function loadLeadExclusions(client: SupabaseClient, clientId: string): Promise<Set<string>> {
+  const res = await client
+    .from(TABLE_FRONT_PAGE_OVERRIDES)
+    .select('registry_id, action, set_at')
+    .eq('client_id', clientId)
+    .order('set_at', { ascending: false })
+  const newest = new Map<string, string>()
+  for (const r of quietRows<{ registry_id: string; action: string }>(res, 'overview.overrides', TABLE_FRONT_PAGE_OVERRIDES)) {
+    if (!newest.has(String(r.registry_id))) newest.set(String(r.registry_id), r.action)
+  }
+  return new Set([...newest].filter(([, action]) => action === 'exclude_lead').map(([id]) => id))
+}
+
+/** Did the latest themed run open a new clustering regime? Read only when a
+ *  theme on the page was minted by it (`match_kind` 'new'): two reads through
+ *  WP1.9's rule (`opensClusteringRegime`, lib/pages/week.ts). */
+async function loadRegimeOpened(supabase: SupabaseClient, clientId: string, themedRunId: string): Promise<boolean> {
+  const runRes = await supabase.from('pipeline_runs').select('*').eq('client_id', clientId).eq('id', themedRunId).maybeSingle()
+  const run = row<{ started_at: string | null; clustering_key?: string | null }>(runRes, 'overview.themedRegime')
+  if (!run) return false
+  const previous = await previousThemedRegime(supabase, clientId, themedRunId, run.started_at)
+  return opensClusteringRegime(run.clustering_key ?? null, previous)
+}
+
+/** The quotes the page may print for these themes, as candidates the pure
+ *  rule chooses from (lib/pages/overview-market/voices.ts), plus every
+ *  evidence text per theme for the brand check. */
+async function loadThemeQuotes(
+  supabase: SupabaseClient,
+  clientId: string,
+  themedRunId: string | null,
+  ids: readonly string[],
+): Promise<Map<string, { candidates: (QuoteCandidate & { platform: string | null; nativeCommentId: string | null; video: VideoCite | null })[]; texts: string[] }>> {
+  const out = new Map<string, { candidates: (QuoteCandidate & { platform: string | null; nativeCommentId: string | null; video: VideoCite | null })[]; texts: string[] }>()
+  if (!themedRunId || ids.length === 0) return out
+  const themeRes = await supabase
+    .from('themes')
+    .select('registry_id, supporting_insight_ids')
+    .eq('client_id', clientId)
+    .eq('run_id', themedRunId)
+    .in('registry_id', [...ids])
+  const insightsByTheme = new Map<string, string[]>()
+  for (const t of rows<{ registry_id: string; supporting_insight_ids: string[] | null }>(themeRes, 'overview.quoteThemes')) {
+    insightsByTheme.set(String(t.registry_id), (t.supporting_insight_ids ?? []).slice(0, QUOTE_INSIGHTS_PER_THEME))
+  }
+  const insightIds = [...new Set([...insightsByTheme.values()].flat())]
+  if (insightIds.length === 0) return out
+  const [kinds, citations] = await Promise.all([
+    (async () => {
+      const m = new Map<string, string | null>()
+      for (const part of chunk(insightIds, UUID_IN_CHUNK)) {
+        const res = await supabase.from('audience_insights').select('id, category').eq('client_id', clientId).in('id', part)
+        for (const r of rows<{ id: string; category: string | null }>(res, 'overview.quoteKinds')) m.set(String(r.id), r.category ?? null)
+      }
+      return m
+    })(),
+    fetchQuoteCitationsByAudience(supabase, insightIds),
+  ])
+  const commentIds = [...new Set([...citations.values()].flat().map((c) => c.commentId).filter((id): id is string => Boolean(id)))]
+  type CommentMeta = { id: string; platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null; author: string | null }
+  const comments = new Map<string, CommentMeta>()
+  for (const part of chunk(commentIds, UUID_IN_CHUNK)) {
+    const res = await supabase.from('comments').select('id, platform, comment_date, video_id, comment_id, author').eq('client_id', clientId).in('id', part)
+    for (const c of rows<CommentMeta>(res, 'overview.quoteComments')) comments.set(String(c.id), c)
+  }
+  const nativeIds = [...new Set([...comments.values()].map((c) => c.video_id).filter((v): v is string => Boolean(v)))]
+  const videos = new Map<string, VideoCite>()
+  for (const part of chunk(nativeIds, UUID_IN_CHUNK)) {
+    const res = await supabase
+      .from('videos')
+      .select('id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name')
+      .eq('client_id', clientId)
+      .in('video_id', part)
+    for (const v of rows<VideoCite & { platform: string | null; video_id: string | null }>(res, 'overview.quoteVideos')) {
+      if (v.video_id) videos.set(`${v.platform}::${v.video_id}`, v)
+    }
+  }
+  for (const [themeId, insights] of insightsByTheme) {
+    const candidates: (QuoteCandidate & { platform: string | null; nativeCommentId: string | null; video: VideoCite | null })[] = []
+    const texts: string[] = []
+    for (const insightId of insights) {
+      for (const c of citations.get(insightId) ?? []) {
+        texts.push(c.quote)
+        const meta = c.commentId ? comments.get(c.commentId) ?? null : null
+        const video = meta?.platform && meta.video_id ? videos.get(`${meta.platform}::${meta.video_id}`) ?? null : null
+        candidates.push({
+          evidenceId: c.evidenceId,
+          quote: cleanQuote(c.quote),
+          rank: c.rank,
+          lang: c.lang ?? null,
+          english: c.english ?? null,
+          insightKind: kinds.get(insightId) ?? null,
+          commentId: c.commentId,
+          commentDate: meta?.comment_date ?? null,
+          author: meta?.author ?? null,
+          videoAccount: video?.account_name ?? null,
+          platform: meta?.platform ?? null,
+          nativeCommentId: meta?.comment_id ?? null,
+          video,
+        })
+      }
+    }
+    out.set(themeId, { candidates, texts })
+  }
+  return out
+}
+
+/** The video behind a quote, for its cite and link. */
+interface VideoCite {
+  id?: string | null
+  video_url: string | null
+  account_name: string | null
+  is_client?: boolean | null
+  is_competitor?: boolean | null
+  competitor_name?: string | null
+}
+
+/** How many of a theme's insights the quote read looks at: the same bound the
+ *  Phase 1 voices read kept (40), so a large theme cannot make it heavy. */
+const QUOTE_INSIGHTS_PER_THEME = 40
+
+/** The lead's reading-month videos (`month_evidence_refs`) and their
+ *  provenance (MF1 `video_provenance`): two reads, only for the lead. Null
+ *  where either is not there. */
+async function loadLeadProvenance(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  registryId: string,
+  changeRows: readonly ConfigChange[],
+): Promise<{ fromNewSearches: number; of: number } | null> {
+  const refRes = await client
+    .from(TABLE_EVIDENCE_REFS)
+    .select('video_ids')
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .eq('audience', INDUSTRY_AUDIENCE)
+    .eq('object_kind', 'theme')
+    .eq('object_id', registryId)
+    .maybeSingle()
+  if (refRes.error) return null
+  const videoIds = ((refRes.data as { video_ids?: string[] | null } | null)?.video_ids ?? []).map(String)
+  if (videoIds.length === 0) return null
+  const provenance: { video_id: string; first_terms: string[] | null; first_subreddits: string[] | null }[] = []
+  for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+    const res = await client
+      .from(TABLE_VIDEO_PROVENANCE)
+      .select('video_id, first_terms, first_subreddits')
+      .eq('client_id', clientId)
+      .in('video_id', part)
+    if (res.error) {
+      if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
+      return null
+    }
+    provenance.push(...((res.data ?? []) as typeof provenance))
+  }
+  return fromNewSearches(videoIds, provenance, searchesAddedIn(month, changeRows))
+}
+
+/** A candidate as a printed voice: the quote by its evidence ref, and the
+ *  cite and link the Phase 1 voices carried. */
+function voiceOf(c: QuoteCandidate & { platform: string | null; nativeCommentId: string | null; video: VideoCite | null }): Voice {
+  const cite = [
+    c.platform ? platformLabel(c.platform) : null,
+    c.commentDate ? shortDate(c.commentDate) : null,
+    c.video ? citeWhere(c.video) : 'under a video we read',
+  ].filter(Boolean).join(' · ')
+  return {
+    quote: {
+      ref: quoteRef.evidence(c.evidenceId),
+      text: c.quote,
+      ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
+    },
+    cite,
+    onScreen: null,
+    href: citationLink(c.platform, c.video?.video_url ?? null, c.nativeCommentId).href,
+  }
+}
+
+/** A candidate as an ask's quote (the list prints the words and the month). */
+function askQuoteOf(c: QuoteCandidate): Quote {
+  return { ref: quoteRef.evidence(c.evidenceId), text: c.quote, ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}) }
+}
+
+/** Each theme's maker and noise share, off the one `theme_maker_shares` read
+ *  (MF1). Null maps where it was not measured. */
+export function themeSegmentsOf(rowsIn: readonly ThemeMakerShareRow[]): { maker: Map<string, number | null>; noise: Map<string, number | null> } {
+  const maker = makerSharesOf(rowsIn)
+  const noise = new Map<string, number | null>()
+  for (const r of rowsIn) {
+    const videos = Number(r.videos)
+    const n = Number(r.noise)
+    const ok = Number.isFinite(videos) && Number.isFinite(n) && videos > 0 && n >= 0 && n <= videos
+    noise.set(String(r.registry_id), ok ? n / videos : null)
+  }
+  return { maker, noise }
+}
+
+/**
+ * The new front page's data (market-first WP1.6), built from what the loader
+ * already holds plus the reads above. Everything it returns is optional on
+ * `OverviewData`, and the loader sets all of it or none of it (`market`
+ * marks a page built this way).
+ */
+async function loadMarketFrontPage(input: {
+  supabase: SupabaseClient
+  reading: ReadingHandle
+  clientId: string
+  brand: string
+  rivals: readonly { name: string }[]
+  marketRivals: readonly string[]
+  month: string
+  prevMonth: string
+  themedRunId: string | null
+  segmentRows: readonly ThemeMakerShareRow[] | null
+  subjects: SubjectsBlock
+  pair: PairOn
+  runs: readonly DeliveredRun[]
+  schedule: ScheduleConfig | null
+  rm: ReadingMonth
+  denominators: readonly { month: string; audience: string; videos: number; comments: number }[]
+}): Promise<Pick<OverviewData, 'market' | 'themes' | 'hero' | 'heroVoices' | 'asks' | 'change' | 'brands'>> {
+  const { supabase, reading, clientId, month, prevMonth, themedRunId } = input
+  const client = reading.client
+  const counts = pooledDenominators(input.denominators, input.marketRivals)
+  const categoryN = (m: string): number | null =>
+    input.denominators.find((d) => monthStartOf(d.month) === m && d.audience === INDUSTRY_AUDIENCE)?.videos ?? null
+
+  const [boardRows, excluded, changeRows, pairRows] = await Promise.all([
+    loadBoardThemes(client, clientId, month, prevMonth),
+    loadLeadExclusions(client, clientId),
+    loadChanges(client, clientId),
+    loadPairRows(client, clientId, null),
+  ])
+  const ids = boardRows.map((r) => r.id)
+  const obs = await loadBoardObservations(client, clientId, themedRunId, ids)
+  const segments: ThemeBoard['segments'] = !makerRuleEnabled(clientId) ? 'no_rule' : input.segmentRows ? 'measured' : 'unknown'
+  const shares = input.segmentRows ? themeSegmentsOf(input.segmentRows) : null
+  const needsRegime = themedRunId != null && ids.some((id) => obs.get(id)?.matchKind === 'new')
+  const regimeOpened = needsRegime && themedRunId ? await loadRegimeOpened(supabase, clientId, themedRunId) : false
+
+  const n = categoryN(month) ?? 0
+  const prevN = categoryN(prevMonth)
+  const brandNames = [input.brand, ...input.rivals.map((r) => r.name)].filter(Boolean)
+  let themes: MarketTheme[] = boardRows.flatMap((r) => {
+    const o = obs.get(r.id)
+    if (!o?.label) return []
+    return [{
+      registryId: r.id,
+      label: o.label,
+      labelStripped: false,
+      kind: o.kind,
+      k: r.k,
+      n,
+      prev: prevN != null ? { month: prevMonth, k: r.prevK, n: prevN } : null,
+      makerShare: shares?.maker.get(r.id) ?? null,
+      noiseShare: shares?.noise.get(r.id) ?? null,
+      identityNewThisRun: o.matchKind === 'new' && !regimeOpened,
+      flags: [],
+      provenance: null,
+    }]
+  })
+
+  // THE QUOTES, ONE READ SET FOR EVERYTHING THAT PRINTS ONE: the lead's
+  // candidates (the largest board rows that may lead, a few, since a candidate
+  // with no quotable voice still leads), the asks, and any label naming a
+  // brand (whose evidence decides whether the name stays).
+  const draft = buildThemeBoard(themes, n, month, segments, prevN != null ? { month: prevMonth, n: prevN } : null)
+  const leadCandidates = draft.rows.filter((t) => mayLeadTheme(t, segments, excluded)).slice(0, 2).map((t) => t.registryId)
+  const branded = themes.filter((t) => namesABrand(t.label, brandNames)).map((t) => t.registryId)
+  const asked = askIds(themes, segments)
+  const quotes = await loadThemeQuotes(supabase, clientId, themedRunId, [...new Set([...leadCandidates, ...asked, ...branded])])
+  if (branded.length > 0) {
+    themes = themes.map((t) => {
+      if (!branded.includes(t.registryId)) return t
+      const s = stripUnevidencedBrand(t.label, brandNames, quotes.get(t.registryId)?.texts ?? [])
+      return s.stripped ? { ...t, label: s.label, labelStripped: true } : t
+    })
+  }
+  const board: ThemeBoard = {
+    ...buildThemeBoard(themes, n, month, segments, prevN != null ? { month: prevMonth, n: prevN } : null),
+    // THEMES ARE THE CATEGORY'S, SO THEIR PAIR IS THE THEMES VIEW (decision E,
+    // `viewForAudience`): a re-filing moves them, as it does not the market.
+    chip: pairChip(input.pair(prevMonth, month, INDUSTRY_AUDIENCE)),
+  }
+
+  const subjects = input.subjects.rows.map((r) => ({
+    id: r.id,
+    name: r.label,
+    k: r.market?.k ?? null,
+    n: r.market?.n ?? null,
+    calibration: r.calibration ?? 'provisional',
+  }))
+  let hero = heroLead(board, subjects, excluded)
+  let heroVoices: Voice[] = []
+  if (hero.kind === 'themes' && hero.lead) {
+    const lead = hero.lead
+    const [provenance] = await Promise.all([loadLeadProvenance(client, clientId, month, lead.registryId, changeRows)])
+    const withProvenance = { ...lead, provenance }
+    hero = { ...hero, lead: withProvenance, top: hero.top.map((t) => (t.registryId === lead.registryId ? withProvenance : t)) }
+    const picked = pickQuotes(quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN })
+    heroVoices = picked.map((c) => voiceOf(c as never))
+  }
+
+  const askQuotes = new Map<string, Quote | null>()
+  for (const id of asked) {
+    const t = themes.find((x) => x.registryId === id)
+    const q = pickQuotes(quotes.get(id)?.candidates ?? [], { month, kind: t?.kind ?? null, count: 1 })[0]
+    askQuotes.set(id, q ? askQuoteOf(q) : null)
+  }
+  const asks = buildAsks(themes, month, segments, askQuotes)
+
+  const marketPair = input.pair(prevMonth, month, 'market')
+  const after = input.schedule ? scheduledUpdateAfter(input.schedule) : undefined
+  const next = nextComparablePair(input.rm.asAt ?? `${month}T12:00:00.000Z`, changesFromLog(changeRows), pairRows, {
+    view: 'market',
+    readingMonth: month,
+    ...(after ? { nextUpdateAfter: after } : {}),
+  })
+  const readRun = marketPair.row?.readThroughRun ?? null
+  const readWith = readRun ? input.runs.find((r) => r.id === readRun) : null
+  const change: ChangeBlock = {
+    prevMonth: counts.has(prevMonth) ? prevMonth : null,
+    month,
+    pair: counts.has(prevMonth) ? marketPair : null,
+    next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom, inFullExpected: next.inFullExpected } : null,
+    checks: [],
+    readWith: readWith ? updateInstant(readWith) : null,
+    paused: input.rm.paused,
+  }
+
+  return {
+    market: [...counts.values()].filter((c) => c.month === month || c.month === prevMonth),
+    themes: board,
+    hero,
+    heroVoices,
+    asks,
+    change,
+    brands: brandsBlockFor(input.rm.asAt, { paused: input.rm.paused }),
+  }
+}
+
+
+/**
+ * The market side of each subject row, the month before beside it, and the
+ * calibration word (market-first WP1.6; decisions C and E). Sets the rows'
+ * optional fields in place on a block `buildSubjects` has just made; nothing
+ * else on the block changes, so every reader of the Phase 1 fields reads what
+ * it read before.
+ */
+export function withMarketSides(block: SubjectsBlock, input: {
+  months: readonly StoredSubjectRow[]
+  subjects: readonly Subject[]
+  counts: ReadonlyMap<string, MarketCount>
+  month: string
+  prevMonth: string
+  marketRivals: readonly string[]
+}): void {
+  const byId = new Map(input.subjects.map((x) => [x.id, x]))
+  for (const r of block.rows) {
+    const side = marketSubjectSide(input.months, input.counts, r.id, input.month, input.marketRivals)
+    const prev = marketSubjectSide(input.months, input.counts, r.id, input.prevMonth, input.marketRivals)
+    const subject = byId.get(r.id)
+    r.market = { k: side.k, n: side.n, pct: side.pct, verdict: null, observed: side.k != null }
+    r.marketPrev = prev.n != null ? prev : null
+    r.calibration = marketCalibration(subject ? subjectCalibration(subject) : null)
+  }
+  block.market = {
+    month: input.month,
+    n: input.counts.get(input.month)?.videos ?? null,
+    prev: input.counts.has(input.prevMonth) ? { month: input.prevMonth, n: input.counts.get(input.prevMonth)?.videos ?? null } : null,
+  }
 }
 
 // ---- the blocks' own shaping ---------------------------------------------------

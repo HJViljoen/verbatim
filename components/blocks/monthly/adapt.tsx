@@ -76,7 +76,7 @@ export function fromOverview(
     title: block.title,
     ...(block.question ? { question: block.question } : {}),
     render(data, mode, ctx) {
-      const projected = project(data.overview)
+      const projected = project(phaseOneOverview(data.overview))
       if (mode === 'email' && email) return email(projected, ctx, data)
       return block.render(projected, mode, ctx)
     },
@@ -93,4 +93,23 @@ export function fromOverview(
       return block.emptyState(project(data.overview))
     },
   }
+}
+
+/**
+ * The Overview as the monthly reads it until WP2.1 rebuilds the monthly
+ * (market-first WP1.6; plan §4.0: the monthly keeps its Phase 1 sections until
+ * deploy 3, and none is built before it).
+ *
+ * The front page's own fields (`market`, the board, the hero, the asks, the
+ * change block, the brands line) are what switch the reworked Overview blocks
+ * to their "Your market" form (`isMarketPage`). The monthly borrows three of
+ * those blocks, and a monthly built after deploy 2 would otherwise print the
+ * front page's market rows under its own Phase 1 sections, beside email arms
+ * that print the Phase 1 ones. Taking the fields off here keeps each borrowed
+ * section what it was; everything the Phase 1 blocks read is left alone.
+ */
+export function phaseOneOverview(overview: OverviewData): OverviewData {
+  if (overview.market == null) return overview
+  const { market: _market, themes: _themes, hero: _hero, heroVoices: _voices, asks: _asks, change: _change, brands: _brands, ...rest } = overview
+  return rest
 }
