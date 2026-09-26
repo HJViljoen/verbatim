@@ -52,6 +52,7 @@ import {
 import { marketAudiences, pooledDenominators, pooledSide, type MarketCount } from '../reading/market'
 import {
   monthsWrittenAt,
+  subjectBackRead,
   subjectCountedFrom,
   subjectReadIn,
   unreadWords,
@@ -1762,11 +1763,13 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       cited.set(line.objectId, months)
     }
   }
+  const backRead = new Map(active.map((s) => [s.id, subjectBackRead(countedFrom.get(s.id) ?? null, cited.get(s.id) ?? [], writtenAt)]))
   const readIn = (subjectId: string, m: string) =>
     subjectReadIn({
       countedFrom: countedFrom.get(subjectId) ?? null,
       writtenAt: writtenAt.get(monthStartOf(m)),
       cited: cited.get(subjectId)?.has(monthStartOf(m)) ?? false,
+      backRead: backRead.get(subjectId) ?? false,
     })
   const unreadIn = (subjectId: string) => (m: string) => readIn(subjectId, m) === 'unread'
   const seriesFor = (subjectId: string, audience: string): MonthSeries | null => {
@@ -1879,8 +1882,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       ...line,
       refusedSteps: refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, line.audience)),
     })
-    const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged)
-    const chartSeries = sides
+    // A SUBJECT READ IN NO MONTH HAS NO LINE AT ALL (WP1.1 review, finding
+    // 1): every point of every line is no reading, and the chart's key named
+    // each audience "No line yet … (too few videos)", a reason about volume
+    // for a subject nothing has read. With no series the block says "This
+    // subject has no stored months on this axis yet."
+    const neverRead = chartAxis.every((m) => readIn(subject.id, m) !== 'read')
+    const series = neverRead ? [] : sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged)
+    const chartSeries = neverRead ? [] : sides
       .map((side) => chartSeriesFor(subject.id, side.audience))
       .filter((s): s is MonthSeries => s != null)
       .map(onChart)

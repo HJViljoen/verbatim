@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { MonthSeries } from '../reading/series'
-import { monthsWrittenAt, subjectCountedFrom, subjectReadIn, unreadWords, withoutUnreadMonths } from './read-in'
+import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, withoutUnreadMonths } from './read-in'
 
 // Staging (zfmxrrugaihxpubunleu, read 26 Sep): Sealand's 24 Sep update wrote
 // August and September at 12:15:41.468 UTC. Six subjects were created 23 Sep at
@@ -70,6 +70,40 @@ describe('subjectReadIn', () => {
 
   it('a month with no denominator row was read for nobody', () => {
     expect(subjectReadIn({ countedFrom: 0, writtenAt: undefined, cited: false })).toBe('no_month')
+  })
+})
+
+describe('subjectBackRead (the one-shot back-read, decision K)', () => {
+  // Staging: months to July were frozen and written on 15 Sep; the six
+  // subjects' rows in them (Looks & style in 2021-08, 2025-09, 2026-06 …) were
+  // written on 24 Sep, after they were counted.
+  const writtenAt = new Map([
+    ['2021-08-01', Date.parse('2026-09-15T07:20:13.202Z')],
+    ['2025-10-01', Date.parse('2026-09-15T07:20:13.202Z')],
+    ['2026-09-01', Date.parse(WRITTEN)],
+  ])
+  const looksFrom = subjectCountedFrom(looks, changes)
+
+  it('a subject cited in a month written before it was counted took part in the back-read', () => {
+    expect(subjectBackRead(looksFrom, ['2021-08-01', '2026-09-01'], writtenAt)).toBe(true)
+  })
+
+  it('so its zeros in the closed months it was not cited in are zeros, not gaps', () => {
+    const backRead = subjectBackRead(looksFrom, ['2021-08-01'], writtenAt)
+    expect(subjectReadIn({ countedFrom: looksFrom, writtenAt: writtenAt.get('2025-10-01'), cited: false, backRead })).toBe('read')
+  })
+
+  it('a subject cited only in months written after it was counted was not back-read', () => {
+    // Confirmed 5 Oct and read in September until it froze: August, frozen on
+    // 1 Oct before it was counted, was never read for it.
+    const from = Date.parse('2026-10-05T08:00:00.000Z')
+    const at = new Map([['2026-08-01', Date.parse('2026-10-01T05:00:00.000Z')], ['2026-09-01', Date.parse('2026-11-01T05:00:00.000Z')]])
+    expect(subjectBackRead(from, ['2026-09-01'], at)).toBe(false)
+    expect(subjectReadIn({ countedFrom: from, writtenAt: at.get('2026-08-01'), cited: false, backRead: false })).toBe('unread')
+  })
+
+  it('Community & purpose, cited nowhere, was not back-read', () => {
+    expect(subjectBackRead(subjectCountedFrom(community, changes), [], writtenAt)).toBe(false)
   })
 })
 

@@ -67,7 +67,7 @@ import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
-import { monthsWrittenAt, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
+import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
@@ -3778,12 +3778,22 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   // nothing about a subject named after it was, which has no row anywhere
   // and whose "0 of 625" was invented (`lib/subjects/read-in.ts`).
   const citedIn = new Set(input.months.map((r) => `${monthStartOf(r.month)}|${r.subject_id}`))
+  const backRead = new Map<string, boolean>()
+  const backReadOf = (subjectId: string): boolean => {
+    if (!input.read) return false
+    if (!backRead.has(subjectId)) {
+      const months = (input.months ?? []).filter((r) => r.subject_id === subjectId).map((r) => monthStartOf(r.month))
+      backRead.set(subjectId, subjectBackRead(input.read.countedFrom.get(subjectId) ?? null, months, input.read.writtenAt))
+    }
+    return backRead.get(subjectId)!
+  }
   const readIn = (subjectId: string, month: string) =>
     input.read
       ? subjectReadIn({
           countedFrom: input.read.countedFrom.get(subjectId) ?? null,
           writtenAt: input.read.writtenAt.get(month),
           cited: citedIn.has(`${month}|${subjectId}`),
+          backRead: backReadOf(subjectId),
         })
       : 'read'
   const kOf = (subjectId: string, audience: string, month: string): number | null => {

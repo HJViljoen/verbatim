@@ -22,6 +22,17 @@ import type { MonthSeries } from '../reading/series'
 // whatever the clocks say. A month with no denominator row was read for nobody,
 // and every side is already null there, so it is not this test's case.
 //
+// AND A BACK-READ SUBJECT WAS READ IN THE CLOSED MONTHS TOO. A frozen month's
+// denominators are never rewritten, but its subject rows can be written once
+// afterwards, by the one-shot back-read (decision K; `monthly-reading.ts
+// --write`): staging's six subjects carry rows in months from 2021 written on
+// 24 Sep, into months whose denominators were written on 15 Sep. A row in a
+// month written BEFORE the subject was counted can only have come from that
+// back-read (the insert guard admits no other new row behind a closed month),
+// and the back-read reads every closed month, so such a subject was read in
+// all of them, and its zeros there are zeros (`subjectBackRead`). A subject
+// named after the back-read has no such row, and no history.
+//
 // WHY THE CHANGE LOG. `subjects.named_at` is a date, and a subject named on the
 // day of an update cannot be placed before or after it; and a subject is named
 // PROPOSED and counted only once somebody confirms it (`activateSubject`), so
@@ -113,21 +124,43 @@ export function monthsWrittenAt(
 }
 
 /**
+ * Did the one-shot back-read include this subject? True when it is cited in a
+ * month whose rows were last written before it was counted: a row there can
+ * only be the back-read's. `citedMonths` are the months it has a row in, as far
+ * as the caller read them; a back-read subject cited in none of them reads
+ * false, which leaves its closed months as no reading rather than inventing a
+ * zero.
+ */
+export function subjectBackRead(
+  countedFrom: number | null,
+  citedMonths: Iterable<string>,
+  writtenAt: ReadonlyMap<string, number>,
+): boolean {
+  if (countedFrom == null) return false
+  for (const m of citedMonths) {
+    const at = writtenAt.get(monthStartOf(m))
+    if (at != null && at < countedFrom) return true
+  }
+  return false
+}
+
+/**
  * Was the subject read in the month?
  *
  * `'no_month'`: the month has no denominator row, so nobody was read in it
  * (every side is already null there). `'read'`: the subject has a row in the
- * month (`cited`), or it was counted before the month was last written.
- * `'unread'`: the month was written before the subject was counted, so its
- * zeros are not a reading.
+ * month (`cited`), or it was counted before the month was last written, or the
+ * back-read included it (`backRead`, `subjectBackRead`). `'unread'`: the month
+ * was written before the subject was counted, so its zeros are not a reading.
  */
 export function subjectReadIn(input: {
   countedFrom: number | null
   writtenAt: number | null | undefined
   cited: boolean
+  backRead?: boolean
 }): 'read' | 'unread' | 'no_month' {
   if (input.writtenAt == null) return 'no_month'
-  if (input.cited) return 'read'
+  if (input.cited || input.backRead) return 'read'
   if (input.countedFrom == null) return 'unread'
   return input.countedFrom < input.writtenAt ? 'read' : 'unread'
 }
