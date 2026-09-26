@@ -15,6 +15,7 @@ import {
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
+import { levelText } from '@/lib/reading/level'
 import { SUBJECTS_UNREADABLE_WHY, SUPERSEDE_RULE } from '@/lib/pages/subjects'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { SUBJECT_WRITE_REFUSED, SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
@@ -112,6 +113,13 @@ export interface SubjectEditorProps {
 // The mock's rail row: 4px radius, 4px/10px padding, one pixel between its
 // lines, and a 2px green mark down the left of the selected one. Dense — six
 // subjects fit a 380px tile beside the rule and the footer.
+/** The rail's count line: `levelText`'s own "8 of 50" under 100 videos, and
+ *  the count beside the whole percent above it ("103 of 654"). */
+function marketCount(m: { k: number; n: number }): string {
+  const level = levelText(m.k, m.n)
+  return level?.kind === 'count' ? level.text : `${fmtInt(m.k)} of ${fmtInt(m.n)}`
+}
+
 const cls = {
   row: 'relative flex flex-col gap-px rounded-[4px] px-2.5 py-1 text-left transition-colors',
   name: 'text-[12.5px] font-medium text-foreground',
@@ -187,9 +195,12 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
                     {fmtPct(r.level.pct)}
                   </span>
-                ) : !r.level && r.status === 'active' && r.market && r.market.pct != null ? (
+                ) : !r.level && r.status === 'active' && r.market && levelText(r.market.k, r.market.n)?.kind === 'share' ? (
+                  // THROUGH `levelText` (WP1.1 review, finding 5): a whole
+                  // percent at 100 videos or more, as the preview prints
+                  // ("17%"), never a tenth of a point the band cannot see.
                   <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
-                    {fmtPct(r.market.pct)}
+                    {levelText(r.market.k, r.market.n)!.text}
                   </span>
                 ) : null}
               </span>
@@ -235,7 +246,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 // rail.
                 <>
                   <span data-copy="level" className={`${cls.meta} whitespace-nowrap`}>
-                    {fmtInt(r.market.k)} of {fmtInt(r.market.n)} in your market
+                    {marketCount(r.market)} in your market
                   </span>
                   {r.note ? <span className={cls.meta}>{r.note}</span> : null}
                 </>

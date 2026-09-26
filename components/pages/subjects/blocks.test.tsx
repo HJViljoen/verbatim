@@ -328,6 +328,23 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
   })
 
+  it('the rail prints the market share through levelText: a whole percent, never a tenth (WP1.1 review, finding 5)', () => {
+    const app = renderText(subjectsList.render(calibrationFixture(), 'app', ctx))
+    // Looks & style, 103 of 654: 15.7% is "16%", as the preview prints it.
+    expect(app).toContain('16%')
+    expect(app).not.toMatch(/\d+\.\d%/)
+    expect(renderText(subjectsList.render(calibrationFixture(), 'print', ctx))).toContain('16% · 103 of 654 videos in your market')
+  })
+
+  it('under 100 market videos the rail prints the count alone', () => {
+    // Staging's June: a market of 50 videos, Looks & style on 5 of them.
+    const data = calibrationFixture()
+    const small = { ...data, list: { ...data.list, rows: data.list.rows.map((r) => (r.market ? { ...r, market: { k: 5, n: 50, pct: null } } : r)) } }
+    const app = renderText(subjectsList.render(small, 'app', ctx))
+    expect(app).toContain('5 of 50 in your market')
+    expect(app).not.toContain('%')
+  })
+
   // Waterproofing read as never checked (production's state before Friday's
   // check) on the same staging row: a provisional subject with its figure.
   const uncheckedRail = (): SubjectsData => {

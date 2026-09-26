@@ -8,6 +8,7 @@ import type { Verdict } from '@/lib/reading/verdicts'
 import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { calibrationWord, isFailed } from '@/lib/subjects/calibration-state'
+import { levelText } from '@/lib/reading/level'
 
 // SU1 · The subjects, and editing them (design §3 SU1; the mock's first rail
 // tile).
@@ -39,6 +40,14 @@ function verdictWords(verdict: SubjectsData['list']['rows'][number]['verdict']):
     return `${verdict.changePts > 0 ? '▲' : '▼'} ${Math.abs(verdict.changePts)} pts${band}`
   }
   return verdict.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[verdict.state]
+}
+
+/** The market's level on a paper or email rail row: "16% · 103 of 654" at 100
+ *  videos or more, `levelText`'s "8 of 50" under it. */
+function marketLevel(m: { k: number; n: number }): string {
+  const level = levelText(m.k, m.n)
+  if (!level) return `${fmtInt(m.k)} of ${fmtInt(m.n)}`
+  return level.kind === 'share' ? `${level.text} · ${fmtInt(m.k)} of ${fmtInt(m.n)}` : level.text
 }
 
 export const subjectsList: Block<SubjectsData> = {
@@ -139,8 +148,11 @@ export const subjectsList: Block<SubjectsData> = {
               ) : r.status === 'active' && r.market ? (
                 // The market's level, named (decision C with E). Never your
                 // own level.
+                // Through `levelText` (WP1.1 review, finding 5): a whole
+                // percent over its count at 100 videos or more, the count
+                // alone under it.
                 <span data-copy="level" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'} style={email ? { fontFamily: FONT.mono, color: EMAIL.muted } : undefined}>
-                  {r.market.pct != null ? `${fmtPct(r.market.pct)} · ` : ''}{fmtInt(r.market.k)} of {fmtInt(r.market.n)} videos in your market
+                  {marketLevel(r.market)} videos in your market
                 </span>
               ) : note || !word ? (
                 <span className={email ? undefined : 'text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>
