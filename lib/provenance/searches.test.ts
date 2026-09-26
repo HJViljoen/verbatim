@@ -100,6 +100,15 @@ describe('a search change and its reach', () => {
     expect([...trig.removed]).toEqual(['a'])
   })
 
+  it('skips exclusions: the 17 Sep script’s exclude_terms row names no search', () => {
+    const d = termDelta([
+      { surface: 'terms', field: 'competitor_keywords', before: ['frtg'], after: ['frtg', 'north face backpack'] },
+      { surface: 'terms', field: 'exclude_terms', before: [], after: ['volcano', 'friday'] },
+    ])
+    expect([...d.added]).toEqual(['north face backpack'])
+    expect(d.removed.size).toBe(0)
+  })
+
   it('reads a community change through the active set only', () => {
     const d = termDelta([{ surface: 'subreddits', before: [{ name: 'backpacks', status: 'active' }], after: [{ name: 'backpacks', status: 'active' }, { name: 'onebag', status: 'active' }, { name: 'travelgear', status: 'candidate' }] }])
     expect([...d.added]).toEqual(['r/onebag'])

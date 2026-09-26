@@ -140,9 +140,10 @@ export function isOutside(v: Pick<MonthVideo, 'platform'>, evidence: ReadonlySet
 /** A search change's added and removed terms, from its config_changes rows.
  *  Three shapes reach the log (GC F2): the trigger's whole arrays before and
  *  after; the reconstruction's one term a row, one side null; the 13 Sep hand
- *  SQL's added list with a null before. Communities are read through
+ *  SQL's added list with a null before. Exclusions are not searches and are
+ *  skipped. Communities are read through
  *  `activeCommunities` (only an ACTIVE community is searched) as `r/<name>`. */
-export function termDelta(rows: readonly Pick<ConfigChange, 'surface' | 'before' | 'after'>[]): { added: Set<string>; removed: Set<string> } {
+export function termDelta(rows: readonly (Pick<ConfigChange, 'surface' | 'before' | 'after'> & { field?: string | null })[]): { added: Set<string>; removed: Set<string> } {
   const added = new Set<string>()
   const removed = new Set<string>()
   const list = (v: unknown): string[] =>
@@ -155,7 +156,9 @@ export function termDelta(rows: readonly Pick<ConfigChange, 'surface' | 'before'
     if (r.surface === 'subreddits') {
       before = norm([...(activeCommunities(r.before) ?? [])].map((n) => `r/${n}`))
       after = norm([...(activeCommunities(r.after) ?? [])].map((n) => `r/${n}`))
-    } else if (r.surface === 'terms') {
+    } else if (r.surface === 'terms' && r.field !== 'exclude_terms') {
+      // `exclude_terms` is on the terms surface, but an exclusion is not a
+      // search: it names the wrong senses of a name for the relevance check.
       before = norm(list(r.before))
       after = norm(list(r.after))
     } else continue
