@@ -185,11 +185,13 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  *   10 drew 5 or more comments, 9 carry a reading over 234 comments; the
  *   followers' three themes, 4, 3 and 2; no move dated. No for-you line: its
  *   sentences are WP2.5's.
- * - `arrivals` and `change`: HYPOTHETICAL, and named so. What the 11 Oct
- *   update brings is not knowable, so the counts are real ones of a different
- *   question, borrowed for their size: 206 (GC F29, September videos first
- *   found by the 13 Sep terms) and 4,923 (WP1.4's staging late capture of
- *   September comments). The check line is the plan's own expected outcome
+ * - `arrivals`: staging's 20 Sep update as `update_arrivals` counts it (MF2,
+ *   read-only, 26 Sep): 395 September videos read for the first time and
+ *   11,999 September comments (1 and 99 of August), with the nine themes it
+ *   heard first at 10+ category videos in September, the first five named
+ *   (65, 25, 14, 13, 12; provenance not measured here). What the 11 Oct
+ *   update brings is not knowable.
+ * - `change`: HYPOTHETICAL, and named so. The check line is the plan's own expected outcome
  *   (WP2.3: "Too few videos on the searches both months ran to check.") on
  *   "Asking for something", 146 of 626 in September (production).
  */
@@ -233,11 +235,25 @@ export function filledSlotsFixture(): MonthlyData {
     arrivals: {
       state: 'filled',
       value: {
-        run: { id: 'run-2026-10-11', date: '2026-10-11T08:30:00.000Z' },
-        months: [{ month: SEP, videosFirstRead: 206, commentsCaptured: 4923 }],
-        current: { month: '2026-10-01', videos: null, updates: 2 },
-        newThemes: [],
+        run: { id: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4', date: '2026-09-20T08:33:47.358Z' },
+        months: [
+          { month: '2026-08-01', videosFirstRead: 1, commentsCaptured: 99 },
+          { month: SEP, videosFirstRead: 395, commentsCaptured: 11999 },
+        ],
+        current: { month: SEP, videos: 654, updates: 3 },
+        newThemes: [
+          { registryId: '184e2461-8604-4bd6-b056-b92e7f913c2f', label: 'Admiration for handmade craftsmanship', k: 65, fromNewSearches: null },
+          { registryId: 'fb4361bb-7490-4395-8ba2-b7d94bbf8e07', label: 'Questions about materials and tools', k: 25, fromNewSearches: null },
+          { registryId: 'daf78e91-fffb-452b-87e4-453d89eaa83c', label: 'Tutorial praised as easy to follow', k: 14, fromNewSearches: null },
+          { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: null },
+          { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: null },
+          { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: null },
+          { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: null },
+          { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: null },
+          { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
+        ],
         regrouped: null,
+        grouped: { makers: 0, setAside: 0 },
       },
     },
     change: {

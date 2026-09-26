@@ -26,6 +26,7 @@ import { AUGUST_CATEGORY_N, SEPTEMBER_CATEGORY_N, septemberThemes } from '@/lib/
 import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, marketKindLabel, searchChangeDays, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import { readingMonthFor, scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { comparabilityOf } from '@/lib/reading/comparability'
+import type { ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
 
 /** The two refusals the page's own verdicts carry, as TOKENS. */
 const OV_RECORD_INPUTS = () =>
@@ -1354,4 +1355,62 @@ export function calibrationOverviewFixture(opts: { unchecked?: readonly string[]
     },
   })
   return { ...overviewFixture(), subjects }
+}
+
+// ---- "With this update" (market-first WP2.7) ------------------------------------
+//
+// STAGING'S OWN UPDATES, AS `update_arrivals` COUNTS THEM (MF2, read-only, 26
+// Sep). Sealand's 20 Sep update: 395 September videos read for the first time
+// and 11,999 September comments (1 and 99 of August); the nine themes it heard
+// first with 10+ category videos in September (65, 25, 14, 13, 12, 12, 11, 10,
+// 10), with provenance not measured here. Össur's 13 Sep update: 139 September
+// videos and 4,722 comments, and nothing in October (paused).
+//
+// ON THE FRONT PAGE FIXTURES AS THEY ARE: `marketFrontFixture` is production's
+// 24 Sep figures, whose own update's arrivals were not read (no production
+// read by an agent), so the Sealand block carries staging's 20 Sep update, as
+// the block itself says ("With the 20 Sep update").
+
+export const SEALAND_20_SEP_ARRIVALS: ArrivalsBlock = {
+  run: { id: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4', date: '2026-09-20T08:33:47.358Z' },
+  months: [
+    { month: '2026-08-01', videosFirstRead: 1, commentsCaptured: 99 },
+    { month: '2026-09-01', videosFirstRead: 395, commentsCaptured: 11999 },
+  ],
+  current: { month: '2026-09-01', videos: 654, updates: 3 },
+  newThemes: [
+    { registryId: '184e2461-8604-4bd6-b056-b92e7f913c2f', label: 'Admiration for handmade craftsmanship', k: 65, fromNewSearches: null },
+    { registryId: 'fb4361bb-7490-4395-8ba2-b7d94bbf8e07', label: 'Questions about materials and tools', k: 25, fromNewSearches: null },
+    { registryId: 'daf78e91-fffb-452b-87e4-453d89eaa83c', label: 'Tutorial praised as easy to follow', k: 14, fromNewSearches: null },
+    { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: null },
+    { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: null },
+    { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: null },
+    { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: null },
+    { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: null },
+    { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
+  ],
+  regrouped: null,
+  grouped: { makers: 0, setAside: 0 },
+}
+
+export const OSSUR_13_SEP_ARRIVALS: ArrivalsBlock = {
+  run: { id: 'd346b0f7-5b2b-4b46-a60c-db0c83ecfda7', date: '2026-09-13T06:26:49.308Z' },
+  months: [
+    { month: '2026-09-01', videosFirstRead: 139, commentsCaptured: 4722 },
+    { month: '2026-10-01', videosFirstRead: 0, commentsCaptured: 0 },
+  ],
+  current: { month: '2026-10-01', videos: null, updates: 0 },
+  newThemes: [],
+  regrouped: null,
+  grouped: { makers: 0, setAside: 0 },
+}
+
+/** Your market with "With this update" (Sealand, staging's 20 Sep update). */
+export function marketArrivalsFixture(): OverviewData {
+  return { ...marketFrontFixture(), arrivals: SEALAND_20_SEP_ARRIVALS }
+}
+
+/** Össur's front page with its last update's arrivals (paused, §2.13). */
+export function ossurArrivalsFixture(): OverviewData {
+  return { ...ossurFrontFixture(), arrivals: OSSUR_13_SEP_ARRIVALS }
 }

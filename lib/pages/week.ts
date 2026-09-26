@@ -2893,6 +2893,9 @@ export async function loadNewThemes(
   runId: string,
   month: string,
   regime: { clusteringKey: string | null | undefined; startedAt: string | null; date: string },
+  /** One audience's videos only (the front page's arrivals read the category,
+   *  where themes are grouped: decision E); every audience's by default. */
+  opts: { audience?: string } = {},
 ): Promise<{ seen: number; shown: NewTheme[]; regrouped: Regrouped | null }> {
   const fresh = await selectAll<{ registry_id: string | null; label: string | null }>(() =>
     supabase.from('themes').select('registry_id, label')
@@ -2907,10 +2910,12 @@ export async function loadNewThemes(
 
   let readings: { theme_id: string; videos: number }[] = []
   try {
-    readings = await inChunks<{ theme_id: string; videos: number }>(ids, (part) => () =>
-      supabase.from('month_theme_readings').select('theme_id, videos')
-        .eq('client_id', clientId).eq('month', month).in('theme_id', part)
-        .order('theme_id', { ascending: true }),
+    readings = await inChunks<{ theme_id: string; videos: number }>(ids, (part) => () => {
+      const q = supabase.from('month_theme_readings').select('theme_id, videos')
+        .eq('client_id', clientId).eq('month', month)
+      return (opts.audience ? q.eq('audience', opts.audience) : q).in('theme_id', part)
+        .order('theme_id', { ascending: true })
+    },
       // ONE THEME IS NOT ONE ROW HERE. `month_theme_readings` is keyed
       // (client_id, month, audience, theme_id) and this read names no audience,
       // so one month gives a row per theme PER AUDIENCE — the client, the

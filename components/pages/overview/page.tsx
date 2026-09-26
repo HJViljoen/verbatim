@@ -65,6 +65,9 @@ function overviewSlides(data: OverviewData, _variant: PrintVariant): Slide[] {
   if (isMarketPage(data)) {
     return [
       { title: `The ${longMonth(data.month)} reading`, keys: ['overview.bar', 'overview.sentence', 'overview.themes'], layout: 'grid' },
+      // "With this update" and its weekly bars (WP2.7, WP2.9), on a sheet of
+      // their own: the bars need the sheet's width.
+      { title: 'With this update', keys: ['overview.arrivals'], layout: 'grid' },
       { title: 'What your market did and asked', keys: ['overview.category', 'overview.asks'], layout: 'grid' },
       { title: 'Subjects, brands and what changed', keys: ['overview.subjects', 'overview.rivals', 'overview.change'], layout: 'grid' },
     ]

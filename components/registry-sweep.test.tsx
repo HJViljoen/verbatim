@@ -16,7 +16,7 @@ import { MARKET_BLOCKS } from '@/components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '@/components/pages/competitive-surface'
 import { WEEK_BLOCKS } from '@/components/pages/week'
 
-import { makersMarkedFixture, marketBeforeMakersFixture, marketFrontFixture, marketSizeFixture, ossurFrontFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
+import { makersMarkedFixture, marketArrivalsFixture, marketBeforeMakersFixture, marketFrontFixture, marketSizeFixture, ossurArrivalsFixture, ossurFrontFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
 import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview'
 import { BlockFrame } from '@/components/blocks/frame'
 import { subjectsFixture, refusedFixture as subjectsRefused } from '@/components/pages/subjects/fixture'
@@ -67,6 +67,8 @@ const PAGE_STATES: Record<string, unknown[]> = {
     overviewFixture(), overviewRefused(), marketSizeFixture(), makersMarkedFixture(),
     // Your market (market-first WP1.6): the front page as deploy 2 builds it.
     marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture(),
+    // "With this update" (WP2.7, deploy 3).
+    marketArrivalsFixture(), ossurArrivalsFixture(),
   ],
   subjects: [subjectsFixture(), subjectsRefused()],
 }
@@ -145,7 +147,7 @@ describe('the registry sweep', () => {
 // rebuilt at deploy 2; Subjects, Conversation and the monthly join it at
 // deploy 3 (§5.12), and are added here by the package that rebuilds each.
 const REBUILT: [string, readonly { key: string; render: (d: never, m: RenderMode, c: typeof ctx) => ReactNode }[], unknown[]][] = [
-  ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture()]],
+  ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture(), marketArrivalsFixture(), ossurArrivalsFixture()]],
   // "September in your market" (market-first WP2.1, deploy 3).
   ['the monthly', ALL_MONTHLY_BLOCKS as never, [monthlyFixture(), unmeasuredMonthlyFixture(), ossurMonthlyFixture(), filledSlotsFixture()]],
   // This week's blocks rebuilt on the market at deploy 3 (WP2.7); the rest of

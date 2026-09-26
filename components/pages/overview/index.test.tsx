@@ -48,10 +48,13 @@ function fullHouse(): OverviewData {
 }
 
 describe('the Overview’s blocks', () => {
-  it('are the registry’s nine, keyed stably: Phase 1’s six and the front page’s three new ones, and OV6 is not among them (25 Sep rulings)', () => {
+  it('are the registry’s ten, keyed stably: Phase 1’s six and the front page’s four new ones, and OV6 is not among them (25 Sep rulings)', () => {
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).toEqual([
       'overview.bar', 'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
       'overview.subjects', 'overview.rivals', 'overview.change', 'overview.moves',
+      // "With this update" (market-first WP2.7), which holds the weekly bars
+      // (WP2.9): the front page adds no other key.
+      'overview.arrivals',
     ])
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.record')
   })
@@ -155,12 +158,13 @@ describe('the Overview page', () => {
   // it keeps its place in `OVERVIEW_BLOCKS` for the print slide and the email,
   // which carry no bar. "What you published" (OV5) leaves the page until
   // deploy 3 brings it back reworked (WP2.5).
-  it('draws the page bar, Your market’s seven tiles and nothing else', () => {
+  // EIGHT FROM DEPLOY 3: "With this update" (block 3, WP2.7) after the board.
+  it('draws the page bar, Your market’s eight tiles and nothing else', () => {
     const markup = render(<OverviewPage data={marketFrontFixture()} />)
     expect(markup).toContain('Your market')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(7)
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(8)
     expect(TILE_BLOCKS.map((b) => b.key)).toEqual([
-      'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
+      'overview.sentence', 'overview.themes', 'overview.arrivals', 'overview.category', 'overview.asks',
       'overview.subjects', 'overview.rivals', 'overview.change',
     ])
     expect(markup).not.toContain('This month so far')

@@ -1,3 +1,4 @@
+import type { ArrivalsBlock } from '../pages/overview-market/arrivals'
 import type { CheckLine } from '../pages/overview-market/change'
 import type { FigureTable } from '../reading/verdicts'
 
@@ -48,15 +49,10 @@ export interface MonthlyChecks {
   checks: CheckLine[]
 }
 
-/** `monthly.arrivals`'s slot (WP2.7): §4.2's `ArrivalsBlock`, verbatim. The
- *  monthly prints the came-in lines only; it carries no weekly volume bars. */
-export interface MonthlyArrivals {
-  run: { id: string; date: string }
-  months: { month: string; videosFirstRead: number; commentsCaptured: number }[]
-  current: { month: string; videos: number | null; updates: number }
-  newThemes: { registryId: string; label: string; k: number; fromNewSearches: number }[]
-  regrouped: number | null
-}
+/** `monthly.arrivals`'s slot (WP2.7): the front page's `ArrivalsBlock`, now
+ *  that WP2.7 exports it. The monthly prints the came-in lines only; it
+ *  carries no weekly volume bars. */
+export type MonthlyArrivals = ArrivalsBlock
 
 /** §4.2's `ForYouBlock`, verbatim (WP2.5): counted line-ups in sentences code
  *  writes, each listing the posts it matched and on which words. */
@@ -138,6 +134,14 @@ export function isFilled<T>(slot: MonthlySlot<T> | null | undefined): slot is { 
  * `OverviewData.foryou` and the posts census; WP2.6 `brands` from
  * `OverviewData.brands` in its D3 form.
  */
-export function monthlySlotsFrom(_overview: unknown): MonthlySlots {
-  return { ...MONTHLY_SLOT_STUBS }
+export function monthlySlotsFrom(overview: unknown): MonthlySlots {
+  // WP2.7: "With this update" from the front page's own block. The monthly
+  // is built on the page's loader, so its arrivals are the latest update's
+  // into the month the report reads; a page with none (MF2 not readable, or
+  // no update yet) leaves the slot a stub and the section absent.
+  const arrivals = (overview as { arrivals?: MonthlyArrivals } | null | undefined)?.arrivals
+  return {
+    ...MONTHLY_SLOT_STUBS,
+    ...(arrivals ? { arrivals: { state: 'filled' as const, value: arrivals } } : {}),
+  }
 }
