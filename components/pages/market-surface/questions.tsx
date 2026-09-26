@@ -82,13 +82,15 @@ function TouchCell({ touch, mode }: { touch: QuestionTouch; mode: RenderMode }) 
     ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{children}</div>
     : <span className={`mt-0.5 block ${SCALE.tag}`}>{children}</span>
   if (touch.state === 'unread' || touch.posts == null) return <>{lead('your posts could not be read')}</>
+  // BELOW 720PX THE COLUMN HEAD IS GONE, so the cell names its own base.
+  const whose = email ? null : <span className="@min-[720px]:hidden">your posts: </span>
   const { words, more } = wordsOf(touch)
   if (touch.state === 'touched') {
     const listed = touch.matched.slice(0, POSTS_LISTED)
     const rest = touch.matched.length - listed.length
     return (
       <>
-        {lead(<span data-copy="level">{fmtInt(touch.matched.length)} of {fmtInt(touch.posts)}</span>)}
+        {lead(<>{whose}<span data-copy="level">{fmtInt(touch.matched.length)} of {fmtInt(touch.posts)}</span></>)}
         {tail(<>
           {listed.map((p) => <PostLine key={p.id} post={p} mode={mode} />)}
           {rest > 0 ? <span className="block">and <span data-copy="figure">{fmtInt(rest)}</span> more</span> : null}
@@ -99,7 +101,7 @@ function TouchCell({ touch, mode }: { touch: QuestionTouch; mode: RenderMode }) 
   if (touch.state === 'unchecked') {
     return (
       <>
-        {lead(JUDGE_NOT_CHECKED)}
+        {lead(<>{whose}{JUDGE_NOT_CHECKED}</>)}
         {tail(<>
           <span data-copy="level">none of {fmtInt(touch.posts)}</span> shared two of its words
           {words.length > 0 ? <>{WORD_SEP}checked: <Words words={words} more={more} /></> : null}
@@ -109,7 +111,7 @@ function TouchCell({ touch, mode }: { touch: QuestionTouch; mode: RenderMode }) 
   }
   return (
     <>
-      {lead(<span data-copy="level">none of {fmtInt(touch.posts)}</span>)}
+      {lead(<>{whose}<span data-copy="level">none of {fmtInt(touch.posts)}</span></>)}
       {words.length > 0 ? tail(<>checked: <Words words={words} more={more} /></>) : null}
     </>
   )

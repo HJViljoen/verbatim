@@ -356,7 +356,12 @@ export const marketMoves: Block<MarketSurfaceData> = {
     if (m.market) {
       return (
         <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} footer={footer}>
-          {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+          {/* The one-line answer, at the preview's weight: "No move dated yet." */}
+          {empty
+            ? email
+              ? <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink }}>{empty}</div>
+              : <p className="m-0 text-[16px] font-semibold text-foreground">{empty}</p>
+            : null}
           {m.recorded && m.market.length === 0 ? <EmptyMoves mode={mode} /> : null}
           {m.market.length > 0 ? (
             <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>

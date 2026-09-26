@@ -255,7 +255,7 @@ describe('MK1 · what we concluded', () => {
     expect(app).toContain('Early signal')
     expect(app).toContain('Below the evidence bar')
     expect(app).toContain('1 below the bar this update')
-    expect(app).toContain('2 above the bar · of 9 concluded')
+    expect(app).toContain('2 of 9 above the evidence bar')
     expect(app).not.toMatch(/\bconfirmed\b/)
     const print = renderText(marketConclusions.render(marketFixture(), 'print', ctx))
     expect(print).toContain('Below the evidence bar')

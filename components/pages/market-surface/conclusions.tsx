@@ -4,7 +4,7 @@ import { openLink } from '@/components/blocks/open-link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { TileBlock } from '@/components/shell/tile'
-import { TierChip, tierMetaLine } from './tier'
+import { TierChip } from './tier'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -182,7 +182,10 @@ export const marketConclusions: Block<MarketSurfaceData> = {
     const email = mode === 'email'
     const app = mode === 'app'
     const empty = marketConclusions.emptyState(data)
-    const meta = tierMetaLine({ confirmed: c.counts.confirmed, early: c.counts.early, archive: c.belowBar }, c.total)
+    // The tier counts as the row tag's first clause (plan §2.6 Y5): how many
+    // of the update's conclusions clear the evidence bar, of all it reached.
+    const aboveBar = c.counts.confirmed + c.counts.early
+    const meta = c.total > 0 ? `${fmtInt(aboveBar)} of ${fmtInt(c.total)} above the evidence bar` : null
     const above = c.rows.filter((r) => r.tier !== 'archive')
     const below = c.rows.filter((r) => r.tier === 'archive')
     const row = (r: ConclusionRow) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} corpus={c.corpusVideos} />
