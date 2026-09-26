@@ -45,8 +45,17 @@
 #         use, and it asks that question before it applies. Not additive: after
 #         it, a rollback behind deploy 2 breaks those saves (its file header
 #         says how to undo it).
-# A later work package adds its set here (mf2 and mf4 on Tue 6 Oct, mf3 on Tue
-# 3 Nov), with its files, labels and verify_* functions.
+#   mf2 = 20261005090000_market_first_s2.sql (WP2.1, WP2.3, WP2.6, WP2.7; Tue
+#         6 Oct). Additive: two tables, three functions, the sent_figures
+#         object_kind CHECK widened. Needs MF1.
+#   mf4 = 20261005091000_market_first_weeks.sql (WP2.9, WP3.13; Tue 6 Oct, in
+#         the same Terminal session, right after mf2). Additive: two functions,
+#         two append-only tables. Needs MF2.
+# mf2 and mf4 run from the tag the lead names for them, one tag ahead of
+# production as mf1 was: both are additive and nothing deployed reads them
+# until deploy 3. They change no grant, so R12 may or may not be applied.
+# A later work package adds its set here (mf3 on Tue 3 Nov), with its files,
+# labels and verify_* functions.
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -92,8 +101,18 @@ case "$SET" in
     LABELS=(R12)
     PREREQ_VERSION="20260928090000"; PREREQ_NAME="MF1"
     ;;
-  "") echo "ABORT: --set is required (mf1 | r12)."; exit 2 ;;
-  *) echo "ABORT: unknown set '$SET' (mf1 | r12)."; exit 2 ;;
+  mf2)
+    EXPECTED_FILES=(20261005090000_market_first_s2.sql)
+    LABELS=(MF2)
+    PREREQ_VERSION="20260928090000"; PREREQ_NAME="MF1"
+    ;;
+  mf4)
+    EXPECTED_FILES=(20261005091000_market_first_weeks.sql)
+    LABELS=(MF4)
+    PREREQ_VERSION="20261005090000"; PREREQ_NAME="MF2"
+    ;;
+  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4)."; exit 2 ;;
+  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4)."; exit 2 ;;
 esac
 N=${#EXPECTED_FILES[@]}
 for f in "${EXPECTED_FILES[@]}"; do
@@ -347,6 +366,148 @@ verify_R12() {
   finish_verify "$CURRENT"
 }
 
+# MF2 and MF4 (plan §4.1): the MF1 conventions, read back table by table and
+# function by function, plus each file's own reading. verify_MF1 above is left
+# exactly as it was applied on Wed 30 Sep.
+MF2_TABLES="'comparability_checks','brand_mentions'"
+MF2_FUNCS="'lens_readings','brand_mention_candidates','update_arrivals'"
+MF4_TABLES="'week_line_reads','week_line_points'"
+MF4_FUNCS="'market_week_volumes','market_week_readings'"
+
+# $1 tables, $2 functions, $3 expected tables|pol|tenant|rewr|sel+ins|cols, $4 expected funcs|definer|leaked|service.
+# select_policies counts only a get_my_client_id() SELECT policy for
+# authenticated; hidden_columns counts columns a tenant cannot read (both
+# files grant every column: neither holds operator words).
+verify_conventions() {
+  local sql
+  read -r -d '' sql <<SQL
+select
+  (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname in ($1) and c.relrowsecurity)                        as tables_rls,
+  (select count(*) from pg_policies where schemaname = 'public' and tablename in ($1)
+      and cmd = 'SELECT' and roles = '{authenticated}' and qual = '(client_id = get_my_client_id())') as select_policies,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($1) and grantee in ('anon','authenticated'))                                 as tenant_table_grants,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($1) and grantee = 'service_role'
+    and privilege_type in ('UPDATE','DELETE','TRUNCATE'))                                          as service_rewrites,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($1) and grantee = 'service_role'
+    and privilege_type in ('SELECT','INSERT'))                                                     as service_select_insert,
+  (select count(*) from information_schema.columns c where c.table_schema = 'public' and c.table_name in ($1)
+    and not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'SELECT')) as hidden_columns,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ($2))                                              as funcs,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ($2) and p.prosecdef
+      and p.proconfig = '{"search_path=public, pg_temp"}')                                          as definer_pinned,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ($2)
+      and (has_function_privilege('anon', p.oid, 'EXECUTE')
+           or has_function_privilege('authenticated', p.oid, 'EXECUTE')))                            as leaked_execute,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ($2)
+      and has_function_privilege('service_role', p.oid, 'EXECUTE'))                                  as service_execute;
+SQL
+  show "$sql"
+  echo "  expect: tables|pol|tenant|rewr|sel+ins|hidden = $3 and funcs|definer|leaked|service = $4"
+  check "tables|pol|tenant|rewr|sel+ins|hid" "$(sed "s/$FS/|/g" <<<"$OUT" | cut -d'|' -f1-6)" "$3"
+  check "funcs|definer|leaked|service" "$(sed "s/$FS/|/g" <<<"$OUT" | cut -d'|' -f7-10)" "$4"
+
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: this file changes no grant, so the list read before it"
+  check "tenant UPDATE columns kept" "$OUT" "$PRE_TENANT_UPDATE"
+}
+
+verify_MF2() {
+  local sql
+  verify_conventions "$MF2_TABLES" "$MF2_FUNCS" "2|2|0|0|4|0" "3|3|0|3"
+  read -r -d '' sql <<'SQL'
+select pg_get_constraintdef(oid) from pg_constraint where conname = 'sent_figures_object_kind_check';
+SQL
+  show "$sql"
+  [[ "$OUT" == *"'mood'"* && "$OUT" == *"'brand'"* && "$OUT" == *"'denominator'"* && "$OUT" == *"'figure'"* && "$OUT" == *"'rival'"* ]]
+  check_true "sent_figures object_kind" "$?" "has mood, brand, denominator (and figure, rival)" "missing one: $OUT"
+
+  # lens_readings' denominators against MF1's market_month_videos, for the
+  # previous and the current month: two reads of the same rows now, so they
+  # agree to the video and the comment, or lens_readings is wrong.
+  read -r -d '' sql <<SQL
+with m as (
+  select (date_trunc('month', now() at time zone 'UTC') - interval '1 month')::date as m0
+  union all select date_trunc('month', now() at time zone 'UTC')::date
+),
+l as (
+  select m.m0, sum(x.k) filter (where x.object_id = 'videos') as videos, sum(x.k) filter (where x.object_id = 'comments') as comments
+  from m, public.lens_readings('$SEALAND', m.m0, null) x
+  where x.object_kind = 'denominator' and x.audience <> 'client' group by m.m0
+),
+v as (
+  select m.m0, count(*) as videos, sum(x.dated_comments) as comments
+  from m, public.market_month_videos('$SEALAND', m.m0) x group by m.m0
+)
+select m.m0, coalesce(l.videos, 0), coalesce(v.videos, 0), coalesce(l.comments, 0), coalesce(v.comments, 0)
+from m left join l using (m0) left join v using (m0) order by m.m0;
+SQL
+  show "$sql"
+  echo "  expect: per month, lens videos = market_month_videos videos, and the comments likewise"
+  awk -F"$FS" '$2 != $3 || $4 != $5 {bad=1} END {exit bad}' <<<"$OUT"
+  check_true "lens = market_month_videos" "$?" "both months agree" "lens_readings' denominators differ from market_month_videos"
+  finish_verify "$CURRENT"
+
+  echo
+  echo "  == MF2 READING (human read): what came in with the latest update, by month =="
+  read -r -d '' sql <<SQL
+with r as (
+  select id, completed_at from public.pipeline_runs
+  where client_id = '$SEALAND' and status in ('completed', 'partial') and completed_at is not null
+  order by completed_at desc limit 1
+)
+select r.completed_at, a.month, a.videos_first_read, a.comments_captured
+from r, public.update_arrivals('$SEALAND', r.id,
+  array[(date_trunc('month', now() at time zone 'UTC') - interval '1 month')::date,
+        date_trunc('month', now() at time zone 'UTC')::date]) a
+order by a.month;
+SQL
+  show "$sql"
+}
+
+verify_MF4() {
+  local sql
+  verify_conventions "$MF4_TABLES" "$MF4_FUNCS" "2|2|0|0|4|0" "2|2|0|2"
+
+  # The same-age cut and the bars read the same videos: for the week two weeks
+  # back, at 14 days, market_week_readings' n (per audience and band) sums to
+  # market_week_volumes' videos at that cut.
+  read -r -d '' sql <<SQL
+with w as (select (date_trunc('week', now() at time zone 'UTC') - interval '14 days')::date as w0),
+c as (select w0, (w0 + 21)::timestamp at time zone 'UTC' as cut from w),
+r as (
+  select sum(x.n) as n from (
+    select distinct r.audience, r.depth_band, r.n from c, public.market_week_readings('$SEALAND', c.w0, 14) r) x
+),
+v as (select sum(x.videos) as videos from c, public.market_week_volumes('$SEALAND', c.w0, c.w0 + 7, c.cut) x)
+select (select w0 from w), coalesce(r.n, 0), coalesce(v.videos, 0) from r, v;
+SQL
+  show "$sql"
+  echo "  expect: the week's n summed over audiences and bands = its market videos at the same cut"
+  awk -F"$FS" '$2 != $3 {bad=1} END {exit bad}' <<<"$OUT"
+  check_true "readings n = volumes videos" "$?" "they agree" "market_week_readings' n differs from market_week_volumes' videos"
+  finish_verify "$CURRENT"
+
+  echo
+  echo "  == MF4 READING (human read): the market's last six weeks, as counts =="
+  read -r -d '' sql <<SQL
+select w.week, sum(w.videos) as videos, sum(w.comments) as comments, max(w.median_dated) as median_dated,
+       sum(w.unchecked) as unchecked
+from public.market_week_volumes('$SEALAND',
+       (date_trunc('week', now() at time zone 'UTC') - interval '35 days')::date,
+       (date_trunc('week', now() at time zone 'UTC') + interval '7 days')::date) w
+group by w.week order by w.week;
+SQL
+  show "$sql"
+}
+
 # ------------------------------------------------------------ pre-checks ----
 echo "== plan: $N file(s), filename order, one psql + one transaction each =="
 for i in "${!EXPECTED_FILES[@]}"; do printf '  %-5s %s\n' "${LABELS[$i]}" "${EXPECTED_FILES[$i]}"; done
@@ -378,7 +539,7 @@ elif [[ "$SET" == "r12" ]]; then
   echo "ABORT: this database holds a tenant UPDATE grant staging does not (or lacks one it has). R12's revoke would leave it"
   echo "       and its check would fail after the commit. Show Claude the list above. Nothing applied."; exit 1
 else
-  echo "  NOTE: differs from staging. MF1 changes no grant, so this does not stop MF1; show Claude the list before the r12 set."
+  echo "  NOTE: differs from staging. ${LABELS[0]} changes no grant, so this does not stop ${LABELS[0]}; show Claude the list before the r12 set."
 fi
 
 HCOLS=""
@@ -468,12 +629,21 @@ if ! psql "$DB_URL" -X -v ON_ERROR_STOP=1 --single-transaction -c "$HIST_INSERT"
 fi
 inspect_history "(after the insert)"
 echo
-if [[ "$SET" == "mf1" ]]; then
+case "$SET" in
+  mf1)
   echo "DONE: $SET applied, verified and recorded. Next (plan §3.6): the four --apply pastes, in order:"
   echo "  reconstruct-provenance → log-tracking-eras → measure-comparability → label-segments."
   echo "  R12 (--set r12) waits for deploy 2."
-else
+  ;;
+  r12)
   echo "DONE: $SET applied, verified and recorded. A tenant session can no longer change the search set or the cadence."
   echo "  From now on a rollback behind deploy 2 breaks tenant settings saves (the file header says how to undo it)."
-fi
+  ;;
+  mf2)
+  echo "DONE: $SET applied, verified and recorded. Next, in this same Terminal session: --set mf4 (plan §4.1)."
+  ;;
+  mf4)
+  echo "DONE: $SET applied, verified and recorded. MF2 and MF4 are in; nothing deployed reads them until deploy 3."
+  ;;
+esac
 echo "Log: $LOG"

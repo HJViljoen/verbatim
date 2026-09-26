@@ -2,7 +2,7 @@
 # The test of scripts/apply-market-first-migrations.sh (plan §4.0: "a tested
 # runner"). Run it before handing Heinrich a set:
 #
-#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default) or r12
+#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2 or mf4
 #
 # 1. The refusal guards, with no connection at all: no set, an unknown set,
 #    another project's URL, the transaction pooler, and a --test-target that is
@@ -14,7 +14,8 @@
 #    a dry run applies nothing; "n" at the prompt applies nothing; "y" applies,
 #    verifies and records the history; a second apply is idempotent and says the
 #    set is already recorded; the catalogue after it equals the catalogue after
-#    the first.
+#    the first. And a set whose prerequisite is not in the history stops before
+#    anything applies.
 # Exits non-zero on the first failed expectation. Fake URLs only; nothing
 # leaves the machine.
 set -euo pipefail
@@ -27,9 +28,14 @@ mkdir -p "$DIR"
 DIR="$(cd "$DIR" && pwd)"
 export MF_LOG_DIR="$DIR/logs"
 # YES: what the operator types to apply (r12 first asks whether deploy 2 is live).
+# PREREQ: the history row the set needs (the runner's PREREQ_VERSION).
+# mf2 and mf4 are brought up with R12 applied (`up --before` applies every file
+# before them), so their dry run reads R12's grants, not staging's.
 case "$SET" in
-  mf1) FIRST=20260928090000; HISTORY="('20260924093000', 'steps_completed_dead')"; YES='y\n' ;;
-  r12) FIRST=20260928091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1')"; YES='y\ny\n' ;;
+  mf1) FIRST=20260928090000; HISTORY="('20260924093000', 'steps_completed_dead')"; YES='y\n'; PREREQ=20260924093000 ;;
+  r12) FIRST=20260928091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1')"; YES='y\ny\n'; PREREQ=20260928090000 ;;
+  mf2) FIRST=20261005090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants')"; YES='y\n'; PREREQ=20260928090000 ;;
+  mf4) FIRST=20261005091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2')"; YES='y\n'; PREREQ=20261005090000 ;;
   *) echo "test-runner: unknown set $SET"; exit 2 ;;
 esac
 
@@ -63,9 +69,16 @@ bash "$TW" psql "$DIR/pg" -q -c "create schema supabase_migrations; create table
 export MF_TEST_DB_URL="postgresql://$(whoami)@127.0.0.1:${THROWAWAY_PORT:-54917}/verbatim"
 applied() { bash "$TW" psql "$DIR/pg" -At -c "select count(*) from supabase_migrations.schema_migrations where version >= '$FIRST'"; }
 
+prereq_row="$(bash "$TW" psql "$DIR/pg" -At -c "select format('(%L, %L)', version, name) from supabase_migrations.schema_migrations where version = '$PREREQ'")"
+bash "$TW" psql "$DIR/pg" -q -c "delete from supabase_migrations.schema_migrations where version = '$PREREQ'"
+expect "a set whose prerequisite is not in the history stops before anything applies" "$(run --set "$SET" --test-target --dry-run)" "^ABORT: .*[(]$PREREQ[)] is not in the history"
+bash "$TW" psql "$DIR/pg" -q -c "insert into supabase_migrations.schema_migrations (version, name) values $prereq_row"
 out="$(run --set "$SET" --test-target --dry-run)"
 expect "dry run applies nothing" "$out" '^DRY RUN complete: nothing applied'
-expect "the dry run reads the tenant's tracking_configs grants as staging holds them" "$out" '^  ok    as staging holds them'
+case "$SET" in
+  mf1|r12) expect "the dry run reads the tenant's tracking_configs grants as staging holds them" "$out" '^  ok    as staging holds them' ;;
+  *) expect "the dry run reads the tenant's tracking_configs grants with R12 applied" "$out" '^  NOTE: R12 is already applied here' ;;
+esac
 [[ "$(applied)" == "0" ]] || fail "the dry run recorded history"
 expect "'n' at the prompt applies nothing" "$(printf 'n\n' | run --set "$SET" --test-target)" '^STOPPED by operator'
 [[ "$(applied)" == "0" ]] || fail "a refused prompt recorded history"
