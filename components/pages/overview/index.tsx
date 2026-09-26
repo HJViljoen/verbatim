@@ -21,7 +21,7 @@ import { overviewAsks } from './asks'
 import { overviewChange } from './change'
 import { MARKET_SENTENCE_TITLE } from './sentence'
 import { MARKET_KINDS_TITLE } from './market-kinds'
-import { MARKET_SUBJECTS_TITLE } from './market-subjects'
+import { MARKET_SUBJECTS_TITLE, marketSubjectsLine } from './market-subjects'
 import { MARKET_BRANDS_TITLE } from './rivals'
 import { isMarketPage } from './market'
 
@@ -84,12 +84,29 @@ export const MARKET_TITLES: Readonly<Record<string, string>> = {
   'overview.change': overviewChange.title,
 }
 
-/** The front page's spans: every block the width of the page, except the
- *  subjects and the brands' one line, which share a row (the preview's
- *  8 : 4 split). */
-const FRONT_COLS: Record<string, 4 | 8 | 12> = {
-  'overview.subjects': 8,
-  'overview.rivals': 4,
+/**
+ * The front page's spans: at deploy 2, every block the width of the page.
+ *
+ * NOT THE PREVIEW'S 8 : 4 FOR SUBJECTS AND BRANDS (design pass). The preview
+ * pairs "The market by subject" with "What it means for you", a column of
+ * line-ups as tall as the subjects; that block arrives with deploy 3. Paired
+ * with the brands' one line instead, the right-hand tile was one sentence over
+ * 300px of white. Full width, the subjects' figure columns also line up with
+ * the board's above them. Deploy 3 restores the 8 : 4 with the block it was
+ * drawn for.
+ */
+const FRONT_COLS: Record<string, 4 | 6 | 8 | 12> = {}
+
+/** Where the subjects are one line too (no subject named yet, Össur), the two
+ *  one-line blocks share a row, half and half, rather than stacking two slim
+ *  tiles. Both take one row, so the pair is one height. */
+const ONE_LINE_COLS: Record<string, 4 | 6 | 8 | 12> = {
+  'overview.subjects': 6,
+  'overview.rivals': 6,
+}
+const ONE_LINE_ROWS: Record<string, number> = {
+  'overview.subjects': 1,
+  'overview.rivals': 1,
 }
 
 /**
@@ -109,7 +126,9 @@ const ROWS: Record<string, number> = {
   // block lost its absence-only column, so the old floors left a tile of white
   // under it below xl.
   'overview.category': 3,
-  'overview.rivals': 3,
+  // One line inside a drawn block at deploy 2: a floor of one row, so the
+  // stacked page does not hold 380px of white under it.
+  'overview.rivals': 1,
   'overview.moves': 3,
   'overview.themes': 4,
   'overview.asks': 3,
@@ -203,13 +222,16 @@ export function OverviewPage({
   }
 
   const ctx = overviewContext(params)
+  const market = isMarketPage(data)
+  const oneLine = market && marketSubjectsLine(data) != null
+  const cols = oneLine ? ONE_LINE_COLS : FRONT_COLS
   return (
     <ExportScope
       page="overview"
       params={params}
       tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: MARKET_TITLES[b.key] ?? b.title }))}
     >
-      <PageFrame>
+      <PageFrame className={market ? 'gap-6' : undefined}>
         <SurfacePageBar
           nav="overview"
           params={params}
@@ -241,12 +263,18 @@ export function OverviewPage({
             Every tile on Overview is `col={12}` and alone in its row, so a
             content-sized track costs the page nothing and the spans below stay
             meaningful under `xl`, where `Tile`'s own `min-h` is the floor. */}
-        <PageGrid className="xl:auto-rows-auto">
+        {/* THE PREVIEW'S RHYTHM (design pass): 24px between tiles, and each
+            block draws its own 32px inset (`flush` here, `roomy` on the
+            block's frame). */}
+        <PageGrid className={market ? 'gap-6 xl:auto-rows-auto' : 'xl:auto-rows-auto'}>
           {TILE_BLOCKS.map((block) => (
             <Tile
               key={block.key}
-              col={FRONT_COLS[block.key] ?? 12}
-              row={ROWS[block.key] ?? 2}
+              col={cols[block.key] ?? 12}
+              row={(oneLine ? ONE_LINE_ROWS[block.key] : undefined) ?? ROWS[block.key] ?? 2}
+              // Only the market page's blocks draw their own insets; a page
+              // built without the market reads keeps the tile's.
+              flush={market}
               // NOT THE INVERTED HERO (market-first WP1.6): the approved
               // preview sets "The month" on the same white as every block.
               variant="default"
@@ -274,7 +302,7 @@ export function OverviewPage({
         {/* NO FOOTNOTE UNDER YOUR MARKET (25 Sep rulings): its blocks print
             levels and each block's one chip says why nothing is compared, so
             the reading's caveats print only under a stored Phase 1 copy. */}
-        {data.notes.length > 0 && !isMarketPage(data) ? (
+        {data.notes.length > 0 && !market ? (
           <p className="m-0 text-[11px] text-muted-foreground">
             {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading
                 layer merges the series' notes by the union of their months and

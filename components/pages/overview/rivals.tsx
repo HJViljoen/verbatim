@@ -384,7 +384,7 @@ function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string
   const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
   const b = data.brands ?? brandsBlockFor(data.reading?.asAt ?? null, { paused: data.reading?.paused ?? false })
   return (
-    <BlockFrame title={MARKET_BRANDS_TITLE} mode={mode} footer={footer}>
+    <BlockFrame title={MARKET_BRANDS_TITLE} mode={mode} footer={footer} roomy>
       <InnerLine mode={mode}>{brandsLine(b, nav.label)}</InnerLine>
     </BlockFrame>
   )

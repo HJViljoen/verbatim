@@ -20,6 +20,27 @@ import { cn } from '@/lib/utils'
 /** Was this page built as "Your market"? */
 export const isMarketPage = (data: Pick<OverviewData, 'market'>): boolean => data.market != null
 
+/**
+ * YOUR MARKET'S ONE TYPE SCALE (the approved preview, 25 Sep; design pass).
+ * Three sizes carry every table on the page: a row's words and figures at
+ * 15px, a column head at 13px, and the apparatus (a base, a row tag, a cite)
+ * in mono at 12px. Figures are always Plex Mono with tabular digits, so a
+ * column of them aligns; this month's in ink, the month before in grey.
+ */
+export const SCALE = {
+  head: 'text-[13px] font-medium leading-[1.35] text-muted-foreground',
+  row: 'text-[15px] leading-[1.4] text-foreground',
+  num: 'text-right font-mono text-[15px] tabular-nums text-foreground',
+  prev: 'text-right font-mono text-[15px] tabular-nums text-muted-foreground',
+  tag: 'font-mono text-[12px] leading-[1.4] text-muted-foreground',
+} as const
+
+/** A table's rules: ink-grey under the head, a lighter hairline between rows. */
+export const RULE = {
+  head: 'border-b border-border pb-2.5',
+  row: 'border-b border-border/60',
+} as const
+
 /** "Sep" off a month key, for a column head. */
 export const shortMonthName = (month: string): string => monthName(month).split(' ')[0]
 
@@ -29,7 +50,7 @@ export const shortMonthName = (month: string): string => monthName(month).split(
  * figure is code's number and its own `figure` node. Nothing is parsed out of
  * a finished string.
  */
-export function Parts({ parts, figures, mode, labelClassName }: { parts: readonly HeroPart[]; figures: FigureTable; mode: RenderMode; labelClassName?: string }) {
+export function Parts({ parts, figures, mode, labelClassName, figureClassName = 'font-mono font-semibold tabular-nums text-foreground' }: { parts: readonly HeroPart[]; figures: FigureTable; mode: RenderMode; labelClassName?: string; figureClassName?: string }) {
   const email = mode === 'email'
   return (
     <>
@@ -46,7 +67,7 @@ export function Parts({ parts, figures, mode, labelClassName }: { parts: readonl
           <span
             key={i}
             data-copy="figure"
-            className={email ? undefined : 'font-mono font-semibold tabular-nums text-foreground'}
+            className={email ? undefined : figureClassName}
             style={email ? { fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink } : undefined}
           >
             {figureText(figures[p.key])}
@@ -70,8 +91,8 @@ export function BaseHead({ month, n, mode, align = 'right' }: { month: string; n
   }
   return (
     <span data-copy="level" className={cn('flex flex-col leading-[1.35]', align === 'right' ? 'items-end text-right' : 'items-start')}>
-      <span className="text-[12px] font-medium text-muted-foreground">{name}</span>
-      {n != null ? <span className="font-mono text-[11px] font-normal text-muted-foreground">of {fmtInt(n)}</span> : null}
+      <span className="text-[13px] font-medium text-muted-foreground">{name}</span>
+      {n != null ? <span className="whitespace-nowrap font-mono text-[12px] font-normal text-muted-foreground">of {fmtInt(n)}</span> : null}
     </span>
   )
 }
@@ -104,7 +125,7 @@ export function LevelBar({ share, prevShare, axis, tone = 'ink' }: { share: numb
 /** The legend over a bar column: "▬ September | August". */
 export function BarLegend({ month, prevMonth }: { month: string; prevMonth: string | null }) {
   return (
-    <span aria-hidden className="flex items-center gap-4 whitespace-nowrap text-[12px] font-medium text-muted-foreground">
+    <span aria-hidden className="flex items-center gap-4 whitespace-nowrap text-[13px] font-medium text-muted-foreground">
       <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-[2px] bg-foreground" />{longMonth(month)}</span>
       {prevMonth ? <span className="inline-flex items-center gap-1.5"><span className="h-3.5 w-[2px] rounded-[1px] bg-cat" />{longMonth(prevMonth)}</span> : null}
     </span>
@@ -127,5 +148,6 @@ export function InnerLine({ children, mode }: { children: ReactNode; mode: Rende
   if (mode === 'email') {
     return <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, background: EMAIL.inner, borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>{children}</div>
   }
-  return <p className="m-0 rounded-md bg-inner px-4 py-3 text-[13px] leading-[1.5] text-secondary-foreground">{children}</p>
+  // The box takes the block's width; the words keep a reading measure.
+  return <p className="m-0 rounded-md bg-inner px-4 py-4 text-[15px] leading-[1.55] text-secondary-foreground sm:px-6"><span className="block max-w-[76ch] [text-wrap:pretty]">{children}</span></p>
 }

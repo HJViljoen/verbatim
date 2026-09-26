@@ -13,12 +13,16 @@ import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/comp
 //
 // `lib/dashboard-loading.test.ts` fails a page that has no loader of its own
 // or a named shared one.
+/** The front page's frame: each block draws a 32px inset and 24px between
+ *  its title and body (`BlockFrame`'s `roomy`), so the skeleton does too. */
+const ROOMY = 'gap-6 px-4 py-6 sm:px-8 sm:py-8'
+
 export default function DashboardLoading() {
   return (
     <SkeletonSurface nav="overview" pills={2}>
-      <PageGrid className="xl:auto-rows-auto">
+      <PageGrid className="gap-6 xl:auto-rows-auto">
         {/* overview.sentence · the month beside its voices */}
-        <SkeletonTile col={12} row={3}>
+        <SkeletonTile col={12} row={3} className={ROOMY}>
           <div className="grid grid-cols-1 gap-x-16 gap-y-6 xl:grid-cols-[minmax(0,1fr)_304px]">
             <div className="flex flex-col gap-3">
               <Bone className="h-7 w-3/4" />
@@ -33,13 +37,13 @@ export default function DashboardLoading() {
         </SkeletonTile>
 
         {/* overview.themes · ten board rows and the makers line */}
-        <SkeletonTile col={12} row={4}>
+        <SkeletonTile col={12} row={4} className={ROOMY}>
           <BoneBars rows={10} />
           <Bone className="h-10 w-full rounded-[6px]" />
         </SkeletonTile>
 
         {/* overview.category · the kinds beside the mood */}
-        <SkeletonTile col={12} row={3}>
+        <SkeletonTile col={12} row={3} className={ROOMY}>
           <div className="grid grid-cols-1 gap-x-16 gap-y-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
             <BoneBars rows={8} />
             <BoneBars rows={4} />
@@ -47,22 +51,23 @@ export default function DashboardLoading() {
         </SkeletonTile>
 
         {/* overview.asks · three short lists */}
-        <SkeletonTile col={12} row={3}>
+        <SkeletonTile col={12} row={3} className={ROOMY}>
           <div className="grid grid-cols-1 gap-x-12 gap-y-6 xl:grid-cols-3">
             {Array.from({ length: 3 }, (_, i) => <BoneLines key={i} lines={4} />)}
           </div>
         </SkeletonTile>
 
-        {/* overview.subjects (8) · overview.rivals, one line (4) */}
-        <SkeletonTile col={8} row={3}>
+        {/* overview.subjects · overview.rivals, one line (full width at
+            deploy 2, as the page draws them) */}
+        <SkeletonTile col={12} row={3} className={ROOMY}>
           <BoneBars rows={8} />
         </SkeletonTile>
-        <SkeletonTile col={4} row={3}>
-          <BoneLines lines={3} />
+        <SkeletonTile col={12} row={1} className={ROOMY}>
+          <BoneLines lines={2} />
         </SkeletonTile>
 
         {/* overview.change · two lines and the month strip */}
-        <SkeletonTile col={12} row={2}>
+        <SkeletonTile col={12} row={2} className={ROOMY}>
           <BoneLines lines={3} />
         </SkeletonTile>
       </PageGrid>

@@ -9,7 +9,7 @@ import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { makerWords, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
-import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, barAxis, isMarketPage } from './market'
+import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, RULE, SCALE, barAxis, isMarketPage } from './market'
 
 // "What your market talked about" (market-first WP1.6, plan §2.2 block 2):
 // the ten biggest themes not led by makers, the previous month beside each as
@@ -89,36 +89,40 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
     )
   }
 
+  // THE PREVIEW'S COLUMNS: the rank, the theme at its natural width, the bar
+  // taking what is left, three figure columns of one width, and the makers tag.
+  // Every figure column is the same 64px, so "Videos", "Sep" and "Aug" line up
+  // with the same columns on "The market by subject" further down.
   const cols = makersColumn
-    ? 'grid-cols-[24px_minmax(0,1.6fr)_minmax(64px,1fr)_56px_56px_56px_minmax(120px,0.9fr)]'
-    : 'grid-cols-[24px_minmax(0,1.6fr)_minmax(64px,1fr)_56px_56px_56px]'
+    ? 'grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px_minmax(150px,0.7fr)]'
+    : 'grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]'
   return (
-    <div className="flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-6">
       <div className="-mx-1 overflow-x-auto px-1">
-        <div className="min-w-[640px]" role="table">
-          <div role="row" className={`grid ${cols} items-end gap-x-4 border-b border-border pb-2.5`}>
+        <div className="min-w-[680px]" role="table">
+          <div role="row" className={`grid ${cols} items-end gap-x-4 ${RULE.head}`}>
             <span role="columnheader" />
-            <span role="columnheader" className="text-[12px] font-medium text-muted-foreground">Theme</span>
+            <span role="columnheader" className={SCALE.head}>Theme</span>
             <span role="columnheader"><BarLegend month={board.month} prevMonth={prev?.month ?? null} /></span>
-            <span role="columnheader" className="text-right text-[12px] font-medium text-muted-foreground">Videos</span>
+            <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
             <span role="columnheader"><BaseHead month={board.month} n={board.n} mode={mode} /></span>
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
-            {makersColumn ? <span role="columnheader" className="text-[12px] font-medium text-muted-foreground">Makers</span> : null}
+            {makersColumn ? <span role="columnheader" className={SCALE.head}>Makers</span> : null}
           </div>
           {board.rows.map((t, i) => {
             const words = makerWords(t.makerShare)
             return (
-              <div key={t.registryId} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 border-b border-border/60 py-1.5`}>
-                <span className="font-mono text-[12px] tabular-nums text-muted-foreground">{i + 1}</span>
-                <span role="rowheader" className="min-w-0 truncate text-[14px]" title={t.label}>
+              <div key={t.registryId} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 py-1.5 ${RULE.row}`}>
+                <span className="font-mono text-[13px] tabular-nums text-muted-foreground">{i + 1}</span>
+                <span role="rowheader" className={`min-w-0 truncate ${SCALE.row}`} title={t.label}>
                   <span data-copy="subject" data-slot="pass_b_theme">{t.label}</span>
                 </span>
                 <LevelBar share={t.k / t.n} prevShare={prev && t.prev ? t.prev.k / (prev.n as number) : null} axis={axis} />
-                <span className="text-right font-mono text-[14px] font-semibold tabular-nums"><span data-copy="figure">{fmtInt(t.k)}</span></span>
-                <span className="text-right font-mono text-[14px] tabular-nums"><span data-copy="figure">{levelCell(t.k, t.n)}</span></span>
-                <span className="text-right font-mono text-[14px] tabular-nums text-muted-foreground">{prev ? <span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span> : null}</span>
+                <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(t.k)}</span></span>
+                <span className={SCALE.num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></span>
+                <span className={SCALE.prev}>{prev ? <span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span> : null}</span>
                 {makersColumn ? (
-                  <span className="inline-flex min-w-0 items-center gap-2 text-[12.5px] text-secondary-foreground">
+                  <span className="inline-flex min-w-0 items-center gap-2 text-[13px] text-secondary-foreground">
                     {words ? <><MakerMark /><span className="truncate">{words}</span></> : null}
                   </span>
                 ) : null}
@@ -127,9 +131,13 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
           })}
         </div>
       </div>
-      {board.makers ? <GroupLine words="Makers and DIY, grouped" group={board.makers} mode={mode} /> : null}
-      {board.setAside ? <GroupLine words="Set aside as off-topic" group={board.setAside} mode={mode} /> : null}
-      {board.segments === 'unknown' ? <InnerLine mode={mode}>Makers’ videos are not marked yet; this list groups them once they are.</InnerLine> : null}
+      {board.makers || board.setAside || board.segments === 'unknown' ? (
+        <div className="flex flex-col gap-2">
+          {board.makers ? <GroupLine words="Makers and DIY, grouped" group={board.makers} mode={mode} /> : null}
+          {board.setAside ? <GroupLine words="Set aside as off-topic" group={board.setAside} mode={mode} /> : null}
+          {board.segments === 'unknown' ? <InnerLine mode={mode}>Makers’ videos are not marked yet; this list groups them once they are.</InnerLine> : null}
+        </div>
+      ) : null}
       <PairChip words={chip} mode={mode} />
     </div>
   )
@@ -146,7 +154,7 @@ export const overviewThemes: Block<OverviewData> = {
     const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)
     const empty = overviewThemes.emptyState(data)
     return (
-      <BlockFrame title={overviewThemes.title} mode={mode} footer={footer}>
+      <BlockFrame title={overviewThemes.title} mode={mode} footer={footer} roomy>
         {empty || !board ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Board board={board} mode={mode} chip={board.chip ?? null} />}
       </BlockFrame>
     )

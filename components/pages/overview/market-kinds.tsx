@@ -8,7 +8,7 @@ import { surface } from '@/lib/nav'
 import { marketLevel, type MarketKinds } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { BarLegend, BaseHead, LevelBar, barAxis } from './market'
+import { BarLegend, BaseHead, LevelBar, RULE, SCALE, barAxis } from './market'
 
 // "What people did in the comments" (market-first WP1.6, plan §2.2 block 4):
 // every kind and the four moods as levels on the market's base, the month
@@ -98,30 +98,30 @@ function KindsTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
       </table>
     )
   }
-  const cols = 'grid-cols-[minmax(140px,1.2fr)_minmax(64px,1fr)_52px_52px_52px]'
+  const cols = 'grid-cols-[minmax(150px,1.1fr)_minmax(96px,1fr)_64px_64px_64px]'
   return (
     <div className="-mx-1 overflow-x-auto px-1">
-      <div className="min-w-[480px]" role="table">
-        <div role="row" className={`grid ${cols} items-end gap-x-4 border-b border-border pb-2.5`}>
-          <span role="columnheader" className="text-[12px] font-medium text-muted-foreground">Kind</span>
+      <div className="min-w-[520px]" role="table">
+        <div role="row" className={`grid ${cols} items-end gap-x-4 ${RULE.head}`}>
+          <span role="columnheader" className={SCALE.head}>Kind</span>
           <span role="columnheader"><BarLegend month={m.month} prevMonth={prev?.month ?? null} /></span>
-          <span role="columnheader" className="text-right text-[12px] font-medium text-muted-foreground">Videos</span>
+          <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
           <span role="columnheader"><BaseHead month={m.month} n={m.n} mode={mode} /></span>
           <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
         </div>
         {m.kinds.map((r) => (
-          <div key={r.kind} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 border-b border-border/60 py-1.5`}>
-            <span role="rowheader" className="text-[14px]">{r.label}</span>
+          <div key={r.kind} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 py-1.5 ${RULE.row}`}>
+            <span role="rowheader" className={SCALE.row}>{r.label}</span>
             {underFloor(r.k, m.n) ? (
-              <span className="text-[12px] text-muted-foreground">
-                under 10, a count only{prev && r.prevK != null ? <> · {longMonth(prev.month)} <span data-copy="figure" className="font-mono font-semibold text-secondary-foreground">{fmtInt(r.prevK)}</span></> : null}
+              <span className="text-[13px] text-muted-foreground">
+                under 10, a count only{prev && r.prevK != null ? <> · {longMonth(prev.month)} <span data-copy="figure" className="font-mono font-semibold tabular-nums text-secondary-foreground">{fmtInt(r.prevK)}</span></> : null}
               </span>
             ) : (
               <LevelBar share={r.k != null && m.n ? r.k / m.n : null} prevShare={prev && r.prevK != null && prev.n ? r.prevK / prev.n : null} axis={axis} />
             )}
-            <span className="text-right font-mono text-[14px] font-semibold tabular-nums"><span data-copy="figure">{r.k == null ? '·' : fmtInt(r.k)}</span></span>
-            <span className="text-right font-mono text-[14px] tabular-nums"><span data-copy="figure">{cell(r.k, m.n)}</span></span>
-            <span className="text-right font-mono text-[14px] tabular-nums text-muted-foreground">{prev ? <span data-copy="figure">{cell(r.prevK, prev.n)}</span> : null}</span>
+            <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{r.k == null ? '·' : fmtInt(r.k)}</span></span>
+            <span className={SCALE.num}><span data-copy="figure">{cell(r.k, m.n)}</span></span>
+            <span className={SCALE.prev}>{prev ? <span data-copy="figure">{cell(r.prevK, prev.n)}</span> : null}</span>
           </div>
         ))}
       </div>
@@ -143,27 +143,27 @@ function MoodTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
     )
   }
   const total = m.mood.reduce((n, r) => n + (r.k ?? 0), 0)
-  const cols = 'grid-cols-[minmax(96px,1fr)_52px_52px_52px]'
+  const cols = 'grid-cols-[minmax(104px,1fr)_64px_64px_64px]'
   return (
-    <div className="flex min-w-0 flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-6">
       <div role="table">
-        <div role="row" className={`grid ${cols} items-end gap-x-4 border-b border-border pb-2.5`}>
-          <span role="columnheader" className="text-[12px] font-medium text-muted-foreground">Mood</span>
-          <span role="columnheader" className="text-right text-[12px] font-medium text-muted-foreground">Videos</span>
+        <div role="row" className={`grid ${cols} items-end gap-x-4 ${RULE.head}`}>
+          <span role="columnheader" className={SCALE.head}>Mood</span>
+          <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
           <span role="columnheader"><BaseHead month={m.month} n={m.judged} mode={mode} /></span>
           <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.judged} mode={mode} /> : null}</span>
         </div>
         {m.mood.map((r) => (
-          <div key={r.mood} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 border-b border-border/60 py-1.5`}>
-            <span role="rowheader" className="inline-flex items-center gap-2 text-[14px]"><span aria-hidden className={`size-2 rounded-[2px] ${MOOD_DOT[r.mood] ?? 'bg-cat'}`} />{r.label}</span>
-            <span className="text-right font-mono text-[14px] font-semibold tabular-nums"><span data-copy="figure">{r.k == null ? '·' : fmtInt(r.k)}</span></span>
-            <span className="text-right font-mono text-[14px] tabular-nums"><span data-copy="figure">{cell(r.k, m.judged)}</span></span>
-            <span className="text-right font-mono text-[14px] tabular-nums text-muted-foreground">{prev ? <span data-copy="figure">{cell(r.prevK, prev.judged)}</span> : null}</span>
+          <div key={r.mood} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 py-1.5 ${RULE.row}`}>
+            <span role="rowheader" className={`inline-flex items-center gap-2.5 ${SCALE.row}`}><span aria-hidden className={`size-2 flex-none rounded-[2px] ${MOOD_DOT[r.mood] ?? 'bg-cat'}`} />{r.label}</span>
+            <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{r.k == null ? '·' : fmtInt(r.k)}</span></span>
+            <span className={SCALE.num}><span data-copy="figure">{cell(r.k, m.judged)}</span></span>
+            <span className={SCALE.prev}>{prev ? <span data-copy="figure">{cell(r.prevK, prev.judged)}</span> : null}</span>
           </div>
         ))}
       </div>
       {total > 0 ? (
-        <div aria-hidden className="flex h-1.5 w-full overflow-hidden rounded-[2px]">
+        <div aria-hidden className="flex h-2 w-full gap-px overflow-hidden rounded-[2px]">
           {m.mood.map((r) => <span key={r.mood} className={MOOD_DOT[r.mood] ?? 'bg-cat'} style={{ width: `${((r.k ?? 0) / total) * 100}%` }} />)}
         </div>
       ) : null}
@@ -178,17 +178,17 @@ export function renderMarketKinds(data: OverviewData, mode: RenderMode, appUrl: 
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   if (!m || (m.kinds.length === 0 && m.mood.length === 0)) {
     return (
-      <BlockFrame title={MARKET_KINDS_TITLE} mode={mode} footer={footer}>
+      <BlockFrame title={MARKET_KINDS_TITLE} mode={mode} footer={footer} roomy>
         <BlockEmpty mode={mode}>{marketKindsEmpty(data)}</BlockEmpty>
       </BlockFrame>
     )
   }
   return (
-    <BlockFrame title={MARKET_KINDS_TITLE} mode={mode} footer={footer}>
+    <BlockFrame title={MARKET_KINDS_TITLE} mode={mode} footer={footer} roomy>
       {mode === 'email' ? (
         <div><KindsTable m={m} mode={mode} /><MoodTable m={m} mode={mode} /></div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-16 gap-y-8 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]" data-print-cols="2">
+        <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]" data-print-cols="2">
           <KindsTable m={m} mode={mode} />
           <MoodTable m={m} mode={mode} />
         </div>
