@@ -1,7 +1,8 @@
 import { RUN_STALE_AFTER_HOURS } from '../pipeline/run-guard'
 import { INDUSTRY_AUDIENCE, audienceOf } from '../rivals'
 import { JUDGE_VERSION, SUBJECT_PRECISION_FLOOR, subjectCalibration, wilsonUpper } from '../subjects/types'
-import { segmentReason, segmentOfReason } from '../segments/rules'
+import { segmentReason, segmentOfReason, type Segment } from '../segments/rules'
+import { offerSignal, type OfferSignal } from './offers'
 import { evidenceTerms, normTerm, type GatherRun } from '../provenance/searches'
 
 // The pure halves of scripts/monday-reads.ts: Heinrich's one read-only Monday
@@ -281,6 +282,13 @@ export interface TextVideo extends AudienceVideo {
 
 export interface ThemeSegments { refs: number; known: number; maker: number; noise: number; makerShare: number | null; noiseShare: number | null }
 
+/** The v1 reason for one stored video before MF1: no provenance row exists,
+ *  so the noise rule reads `source_keywords`, as `segments_for_videos` does
+ *  for a video with no stored label and no provenance row. */
+export function videoSegmentReason(v: TextVideo): string | null {
+  return segmentReason({ caption: v.caption, hashtags: v.hashtags, topics: v.topics, sourceKeywords: v.source_keywords })
+}
+
 /**
  * The v1 rule (lib/segments/rules.ts) over a theme's month videos. Before MF1 no
  * provenance row exists, so the noise rule reads `source_keywords`, as MF1's
@@ -298,7 +306,7 @@ export function themeSegments(videoIds: readonly string[], byId: ReadonlyMap<str
     const v = byId.get(id)
     if (!v) continue
     known++
-    const seg = segmentOfReason(segmentReason({ caption: v.caption, hashtags: v.hashtags, topics: v.topics, sourceKeywords: v.source_keywords }))
+    const seg = segmentOfReason(videoSegmentReason(v))
     if (seg === 'maker') maker++
     else if (seg === 'noise') noise++
   }
@@ -363,6 +371,61 @@ export function boardOf(themes: readonly BoardTheme[], newRegime: boolean): {
     return s != null && s <= LEAD_MAX_MAKER_SHARE
   }) ?? null
   return { atFloor: atFloor.length, rows, makers, noise, lead }
+}
+
+// ---- The headline's voices: a maker's video, and a sale offer ----------------------------------
+
+/**
+ * What the brief (brief/fill-brief.py) needs to know of one quote candidate
+ * before it may print it as one of the headline's voices:
+ *
+ *   - decision F: makers never supply the headline's quotes. The app takes a
+ *     voice only from a video its reader precedence marks 'market' (MF1
+ *     `segments_for_videos`), and none whose segment was not read. Production
+ *     holds no `video_segments` or `video_provenance` before MF1, so the
+ *     segment here is what that function gives a video with no stored label:
+ *     the v1 rule computed inline (`videoSegmentReason`, as `themeSegments`
+ *     counts a theme). Null where the video behind the quote was not read or
+ *     the tenant has no rule: not measured, never 'market';
+ *   - the sale-offer rule (default M-c): "300rs pair + shipping . DM for
+ *     order." is someone selling to the market, not the market talking.
+ *     `offerSignal` (./offers.ts, a byte-identical copy of mf/d2-int's
+ *     lib/pages/overview-market/offers.ts, 531ffc2d) over the quote's own
+ *     words, whole.
+ */
+export interface QuoteMarks {
+  segment: Segment | null
+  segmentReason: string | null
+  /** Is the video a maker's? Null where its segment was not measured. */
+  maker: boolean | null
+  offer: OfferSignal | null
+}
+
+export function quoteMarks(quote: string | null | undefined, video: TextVideo | null | undefined, ruleOn: boolean): QuoteMarks {
+  const reason = video && ruleOn ? videoSegmentReason(video) : null
+  const segment = video && ruleOn ? segmentOfReason(reason) : null
+  return { segment, segmentReason: reason, maker: segment == null ? null : segment === 'maker', offer: offerSignal(quote) }
+}
+
+/** May the headline print it, by those two rules: a 'market' video's quote
+ *  (fail closed), and not a sale offer? */
+export const headlineMay = (m: Pick<QuoteMarks, 'segment' | 'offer'>): boolean => m.segment === 'market' && m.offer == null
+
+/**
+ * The first `n` of `ranked` that `counts`, with the others before them kept
+ * in place (the app's `pastOffers`, widened to makers): a quote the headline
+ * may not print stays listed, marked, and is not counted, so a theme's list
+ * still holds `n` it may print wherever its candidates do.
+ */
+export function firstCounting<T>(ranked: readonly T[], n: number, counts: (t: T) => boolean): T[] {
+  const out: T[] = []
+  let counted = 0
+  for (const t of ranked) {
+    if (counted >= n) break
+    out.push(t)
+    if (counts(t)) counted++
+  }
+  return out
 }
 
 // ---- The name line ---------------------------------------------------------------------------

@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { gathersOf } from '../provenance/searches'
 import { JUDGE_VERSION } from '../subjects/types'
 import {
-  AFTER_CLOSE_MINUTES, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, evidenceByVideo, excerpt, freshPath, groupOf, inMarket, isFinalRun,
-  matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, readAfterGate, runsOnDays, schedulesVerdict, searchSetDiff, searchesPerPlatform,
+  AFTER_CLOSE_MINUTES, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, evidenceByVideo, excerpt, firstCounting, freshPath, groupOf,
+  headlineMay, inMarket, isFinalRun, matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, quoteMarks, readAfterGate, runsOnDays, schedulesVerdict,
+  searchSetDiff, searchesPerPlatform,
   termsFirstSearchedSince, themeSegments, threeStateCalibration, videoNameHits, videosNamed, type BoardTheme, type RunLite, type TextVideo, type ThemeSegments,
 } from './monday-reads'
 
@@ -235,6 +236,39 @@ describe('makers and noise on a theme, and the board', () => {
   })
   it('lets a "new" identity lead when the run opened a new clustering regime', () => {
     expect(boardOf([theme('new-this-run', 60, 0.1, { matchKind: 'new' })], true).lead?.id).toBe('new-this-run')
+  })
+})
+
+describe('the headline\'s voices: a maker\'s video, and a sale offer', () => {
+  const vid = (caption: string, keywords: string[] = ['eco backpack']): TextVideo => ({
+    id: 'v', caption, hashtags: [], topics: [], source_keywords: keywords, is_client: false, is_competitor: false, competitor_name: null,
+  })
+  // The quotes are staging's real lead-theme evidence ("Price and sale questions", Sep).
+  it('marks a maker\'s video, fail closed where the video or the rule is missing', () => {
+    expect(quoteMarks('How much do they cost', vid('crochet bag tutorial'), true)).toEqual({ segment: 'maker', segmentReason: 'maker_regex:crochet', maker: true, offer: null })
+    expect(quoteMarks('How much do they cost', vid('My daily carry'), true)).toEqual({ segment: 'market', segmentReason: null, maker: false, offer: null })
+    expect(quoteMarks('price?', vid('Packing for a week', ['poler']), true)).toMatchObject({ segment: 'noise', maker: false })
+    expect(quoteMarks('price?', undefined, true)).toMatchObject({ segment: null, maker: null })
+    expect(quoteMarks('price?', vid('My daily carry'), false)).toMatchObject({ segment: null, maker: null })
+  })
+  it('marks the sale offer by its own words, a buyer on price stays', () => {
+    expect(quoteMarks('300rs pair + shipping . DM for order.', vid('My daily carry'), true).offer).toBe('price_shipping')
+    expect(quoteMarks('Prices would be nice', vid('My daily carry'), true).offer).toBeNull()
+  })
+  it('the headline takes a market video\'s quote that is no offer, nothing else', () => {
+    expect(headlineMay({ segment: 'market', offer: null })).toBe(true)
+    expect(headlineMay({ segment: 'maker', offer: null })).toBe(false)
+    expect(headlineMay({ segment: 'noise', offer: null })).toBe(false)
+    expect(headlineMay({ segment: null, offer: null })).toBe(false)
+    expect(headlineMay({ segment: 'market', offer: 'dm_order' })).toBe(false)
+  })
+  it('lists the ones it may not print in place and counts only the rest', () => {
+    const ranked = ['a', 'ad', 'b', 'maker', 'c', 'd']
+    const ok = (x: string) => x.length === 1
+    expect(firstCounting(ranked, 2, ok)).toEqual(['a', 'ad', 'b'])
+    expect(firstCounting(ranked, 4, ok)).toEqual(ranked)
+    expect(firstCounting(ranked, 9, ok)).toEqual(ranked)
+    expect(firstCounting(ranked, 0, ok)).toEqual([])
   })
 })
 

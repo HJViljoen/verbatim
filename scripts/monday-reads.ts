@@ -5,16 +5,17 @@ import { dirname } from 'node:path'
 import { SEALAND_CLIENT_ID, SUBREDDIT_MAX_KNOWN } from '../lib/config'
 import { MARKET_FIRST_PROJECTS, assertProject, parseScriptArgs, type ScriptArgs } from '../lib/ops/market-first-args'
 import {
-  SEALAND_NAME, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, dayOf, evidenceByVideo, excerpt,
-  freshPath, inCategory, inMarket, isFinalRun, matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, readAfterGate, runsOnDays,
+  SEALAND_NAME, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, dayOf, evidenceByVideo, excerpt, firstCounting,
+  freshPath, headlineMay, inCategory, inMarket, isFinalRun, matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, quoteMarks, readAfterGate, runsOnDays,
   schedulesVerdict, searchSetDiff, searchesPerPlatform, termsFirstSearchedSince, themeSegments, videoNameHits, videosNamed,
-  type BoardTheme, type TextVideo, type ThemeSegments,
+  type BoardTheme, type QuoteMarks, type TextVideo, type ThemeSegments,
 } from '../lib/ops/monday-reads'
 import { firstSearched, gathersOf, isAddedOnly, monthShareWord, searchesFirstRunIn, termDelta, type KeywordRow } from '../lib/provenance/searches'
 import { activeCommunities } from '../lib/reading/comparability'
 import { pooledDenominators } from '../lib/reading/market'
 import { marketRivalAudiences } from '../lib/reading/reading-view'
 import { INDUSTRY_AUDIENCE, audienceOf } from '../lib/rivals'
+import { SEGMENT_RULE_VERSION, segmentRulesEnabled } from '../lib/segments/rules'
 import { createAdminClient } from '../lib/supabase-admin'
 import type { ProvenanceExport } from './export-provenance'
 
@@ -39,7 +40,9 @@ import type { ProvenanceExport } from './export-provenance'
 //      kinds: how many identities it minted), subjects and calibration,
 //      attention panels, config_changes since 1 Sep, the search set and the
 //      communities, the tracked rivals, and the evidence quotes of the top five
-//      themes not led by makers, with each comment's account;
+//      themes not led by makers, with each comment's account, and per quote
+//      whether its video is a maker's (decision F: makers never supply the
+//      headline's quotes) and whether it reads as a sale offer (default M-c);
 //   b  WP1.8's production measures: makers and noise on the top September
 //      themes under production ids (the v1 rule computed here, as MF1 would),
 //      the themes at 10+ not led by makers, the lead and its new-search share,
@@ -826,6 +829,12 @@ async function main(): Promise<void> {
         // Up to 20 candidates a theme by relevance (ties by evidence id, so how the requests
         // were cut never changes the pick; 100 comments, embedded above), then per theme
         // the quotes dated in the month and not from the video's own account first.
+        // Each carries its video's segment (the v1 rule computed inline: production has
+        // no video_segments before MF1) and the sale-offer signal of its own words, and
+        // one the headline may not print (a maker's, noise or unread video; an offer) is
+        // listed but not counted toward the eight (firstCounting), so the brief's voices
+        // still have eight to choose from where the candidates hold them.
+        const ruleOn = segmentRulesEnabled(clientId)
         const candidates = new Map<string, typeof evidenceRows>()
         for (const e of [...evidenceRows].filter((e) => e.comment_id && !e.redacted && e.quote).sort((a, b) => (a.relevance_rank ?? 99) - (b.relevance_rank ?? 99) || a.id.localeCompare(b.id))) {
           const theme = insightTheme.get(e.audience_insight_id) as string
@@ -843,17 +852,26 @@ async function main(): Promise<void> {
             const v = (c ? vidByKey.get(`${c.platform}\u0000${c.video_id}`) : undefined) ?? (e.source_video_id ? byId.get(e.source_video_id) : undefined)
             const datedInMonth = c?.comment_date ? c.comment_date.startsWith(MONTH.slice(0, 7)) : null
             const ownAccount = c && v ? fold(c.author) !== '' && fold(c.author) === fold(v.account_name) : null
+            const marks = quoteMarks(e.quote, v, ruleOn)
             return {
               quote: (e.quote ?? '').slice(0, 400), rank: e.relevance_rank, author: c?.author ?? null, date: c?.comment_date ?? null,
               datedInMonth, platform: c?.platform ?? null, likes: c?.likes ?? null, videoAccount: v?.account_name ?? null,
               videoAudience: v ? audienceOf(v) : null, ownAccount,
+              segment: marks.segment, segmentReason: marks.segmentReason, maker: marks.maker, offer: marks.offer,
             }
-          }).sort((a, b) => Number(b.datedInMonth === true && b.ownAccount === false) - Number(a.datedInMonth === true && a.ownAccount === false) || (a.rank ?? 99) - (b.rank ?? 99))
-            .slice(0, QUOTES_PER_THEME),
-        }))
-        const quoteList = out.quotes as { quotes: { datedInMonth: boolean | null; ownAccount: boolean | null }[] }[]
-        const usable = quoteList.map((q) => q.quotes.filter((x) => x.datedInMonth && x.ownAccount === false).length)
-        detail(`quotes (top five not led by makers): ${quoteList.map((q, i) => `${five[i].label.slice(0, 32)} ${usable[i]}`).join(' · ')} usable (dated in Sep, not the video's own account)`)
+          }).sort((a, b) => Number(b.datedInMonth === true && b.ownAccount === false) - Number(a.datedInMonth === true && a.ownAccount === false) || (a.rank ?? 99) - (b.rank ?? 99)),
+        })).map((t) => ({ ...t, quotes: firstCounting(t.quotes, QUOTES_PER_THEME, headlineMay) }))
+        out.quoteRules = {
+          segment: ruleOn
+            ? `${SEGMENT_RULE_VERSION} computed inline over the video's caption, hashtags, topics and source_keywords (no video_segments or video_provenance before MF1), as MF1 segments_for_videos gives a video with no stored label; null where the video was not read`
+            : 'no segment rule for this tenant: every segment is null (not measured)',
+          maker: 'segment is maker (decision F: makers never supply the headline\'s quotes; the app prints a voice only from a market video, and none whose segment was not read)',
+          offer: 'the first sale-offer signal in the quote\'s own words (default M-c, offerSignal: price_shipping, dm_order, link, phone, order_now), or null',
+          list: `per theme, dated-in-month and not-own-account quotes first, then relevance; a quote from a video not read as market, or one that reads as an offer, is listed but not counted toward the ${QUOTES_PER_THEME}`,
+        }
+        const quoteList = out.quotes as { quotes: ({ datedInMonth: boolean | null; ownAccount: boolean | null } & Pick<QuoteMarks, 'segment' | 'offer'>)[] }[]
+        const usable = quoteList.map((q) => q.quotes.filter((x) => x.datedInMonth && x.ownAccount === false))
+        detail(`quotes (top five not led by makers): ${quoteList.map((q, i) => `${five[i].label.slice(0, 32)} ${usable[i].length} (${usable[i].filter(headlineMay).length} for the headline)`).join(' · ')} usable (dated in Sep, not the video's own account; for the headline: a market video's, not a sale offer)`)
       }
     }
 
