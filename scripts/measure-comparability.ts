@@ -33,7 +33,10 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //     month's videos a gate verdict admitted unjudged, source 'default') and
 //     attribution v3 (the month's videos first stored after it, whose filing it
 //     decided). Any other change of ours in the span has no measure here; it
-//     is printed, and the judge counts it as 10% (it refuses). A capped update
+//     is printed, and the judge counts it as 10% on each view it moves (it
+//     refuses them). A change that moves no view (`affects` empty: a segment
+//     rule, VIEWS_BY_SURFACE.segment, or an attention-panel freeze) never
+//     enters the judge's span, so it is printed as refusing nothing. A capped update
 //     (log-tracking-eras --capped-run, an `other` row with field
 //     'gather_capped') is not a change of ours at all: it is run health, a
 //     gather flag that flags a pair and never refuses it (decision D rule 6;
@@ -231,7 +234,9 @@ async function main() {
       if (!touchedBy) {
         console.log(isGatherFlag(c)
           ? `  change ${c.id} · ${c.changedAt.slice(0, 16)} · a capped update: run health, not a change of ours (decision D rule 6, R-c); it flags the pair and never refuses it (the judge from deploy 2; deploy 1's still counts it as a tenth), and there is nothing to measure`
-          : `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: not measured here (the judge counts it as a tenth: refused)`)
+          : c.affects.length === 0
+            ? `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: moves no view the judge reads, so it refuses nothing; nothing to measure`
+            : `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: not measured here (the judge counts it as a tenth on ${c.affects.join(', ')}: refused)`)
         continue
       }
       for (const pop of ['market', 'category'] as const) {
