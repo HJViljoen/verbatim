@@ -306,11 +306,14 @@ export const runPipeline = inngest.createFunction(
       // applied; each is one UPDATE with an actor naming who asked, and
       // applied_at is stamped once. Inert until January. Never fatal: a
       // failure is logged and the run opens on the config as it stands.
-      try {
-        const queued = await applyQueuedEdits(admin, { clientId, runId: options.runId ?? newRunId, now: new Date().toISOString() })
-        if (queued.status !== 'nothing_due') console.log(`[open-run] queued tracking edits: ${queued.status} · ${queued.note}`)
-      } catch (e) {
-        console.error(`[open-run] queued tracking edits not applied: ${e instanceof Error ? e.message : String(e)}`)
+      // A resume re-reads the run it resumes and applies nothing.
+      if (!options.runId) {
+        try {
+          const queued = await applyQueuedEdits(admin, { clientId, runId: newRunId, now: new Date().toISOString() })
+          if (queued.status !== 'nothing_due') console.log(`[open-run] queued tracking edits: ${queued.status} · ${queued.note}`)
+        } catch (e) {
+          console.error(`[open-run] queued tracking edits not applied: ${e instanceof Error ? e.message : String(e)}`)
+        }
       }
       // Frozen here, inside the memoised step: every later step replays these
       // values instead of re-reading an environment (or a tenant config) that

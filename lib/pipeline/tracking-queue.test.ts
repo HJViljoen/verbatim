@@ -55,7 +55,7 @@ describe('the apply', () => {
     const cfg = f.tables.tracking_configs[0]
     expect(cfg.industry_keywords).toEqual(['handmade bag', 'travel gear'])
     expect(cfg.competitor_names).toEqual(['Cotopaxi'])
-    expect(cfg.last_actor).toMatchObject({ kind: 'pipeline', run_id: 'run-2027-01-03', label: 'queued tracking edit · asked by Daniela (owner) on 2026-10-20' })
+    expect(cfg.last_actor).toMatchObject({ kind: 'pipeline', run_id: null, label: 'queued tracking edit · run run-2027-01-03 · asked by Daniela (owner) on 2026-10-20' })
     expect(f.tables.tracking_config_queue.filter((e) => e.applied_at).map((e) => e.id).sort()).toEqual(['e1', 'e2'])
     const again = await applyQueuedEdits(f.client, { clientId: SEALAND_CLIENT_ID, runId: 'run-2027-01-10', now: '2027-01-10T04:00:00Z' })
     expect(again.status).toBe('nothing_due')

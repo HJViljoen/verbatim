@@ -90,7 +90,10 @@ export async function applyQueuedEdits(admin: SupabaseClient, args: { clientId: 
     const { error } = await updateWithActor(
       (payload) => admin.from('tracking_configs').update(payload).eq('client_id', args.clientId),
       { [e.field]: e.after },
-      pipelineActor(args.runId, `queued tracking edit · asked by ${e.queued_label} on ${e.queued_at.slice(0, 10)}`),
+      // run_id null: open-run applies the edit before this run's own row is
+      // inserted, and config_changes.run_id references pipeline_runs; the
+      // label names the run instead.
+      { ...pipelineActor(args.runId, `queued tracking edit · run ${args.runId} · asked by ${e.queued_label} on ${e.queued_at.slice(0, 10)}`), run_id: null },
     )
     if (error) throw new Error(`queued ${e.field} (${e.id}) not applied: ${(error as { message?: string }).message ?? String(error)}`)
     const ids = [e.id, ...superseded.filter((s) => s.field === e.field).map((s) => s.id)]
