@@ -72,4 +72,19 @@ describe('the quote rule (plan §4.0 Quotes)', () => {
     ], { month: '2026-09-01', kind: null, count: 2 })
     expect(picked.map((p) => p.evidenceId)).toEqual(['ev-1', 'ev-3'])
   })
+
+  it('never takes the headline’s voices from a maker’s or an off-topic video, and refuses one whose segment was not read (decision F)', () => {
+    // Staging's 2 Oct lead, "Price and sale questions" (a fifth makers): its
+    // best-ranked comment, "That first bag is how much in black", sits under
+    // a video segments_for_videos marks 'maker' (a handmade-bag account).
+    const candidates = [
+      c({ evidenceId: 'ev-maker', rank: 1, quote: 'That first bag is how much in black', segment: 'maker' }),
+      c({ evidenceId: 'ev-noise', rank: 2, quote: PINK, segment: 'noise' }),
+      c({ evidenceId: 'ev-unread', rank: 3, quote: 'Does it fit under the seat on a budget airline', segment: null }),
+      c({ evidenceId: 'ev-market', rank: 4, segment: 'market' }),
+    ]
+    expect(pickQuotes(candidates, { month: '2026-09-01', kind: null, count: 2, marketVideosOnly: true }).map((p) => p.evidenceId)).toEqual(['ev-market'])
+    // The asks, and a tenant with no segment rule, keep the four rules alone.
+    expect(pickQuotes(candidates, { month: '2026-09-01', kind: null, count: 2 }).map((p) => p.evidenceId)).toEqual(['ev-maker', 'ev-noise'])
+  })
 })

@@ -4104,6 +4104,27 @@ async function loadThemeQuotes(
   return out
 }
 
+export const RPC_SEGMENTS_FOR_VIDEOS = 'segments_for_videos'
+
+/**
+ * Sets each candidate's `segment` off MF1's `segments_for_videos` (the reader
+ * precedence: override, judge, rule, else the segments_v1 rule inline) for the
+ * videos behind them, in place. FAILS CLOSED: on any read error the segments
+ * stay unread, and the headline prints no voice from those videos rather than
+ * one that may be a maker's (decision F). Never rejects.
+ */
+async function markVideoSegments(client: SupabaseClient, clientId: string, candidates: readonly CiteCandidate[]): Promise<void> {
+  const ids = [...new Set(candidates.map((c) => c.video?.id).filter((id): id is string => Boolean(id)))]
+  if (ids.length === 0) return
+  const res = await client.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: ids })
+  if (res.error) {
+    console.error(`[overview] ${RPC_SEGMENTS_FOR_VIDEOS}: ${res.error.message}; the headline prints no voice`)
+    return
+  }
+  const byVideo = new Map(((res.data ?? []) as { video_id: string; segment: string | null }[]).map((r) => [String(r.video_id), r.segment ?? null]))
+  for (const c of candidates) c.segment = c.video?.id ? byVideo.get(c.video.id) ?? null : null
+}
+
 /** The video behind a quote, for its cite and link. */
 interface VideoCite {
   id?: string | null
@@ -4292,6 +4313,13 @@ async function loadMarketReads(input: {
     loadThemeQuotes(supabase, clientId, themedRunId, wanted, month),
     firstLead ? loadLeadProvenance(client, clientId, month, firstLead, changeRows) : Promise.resolve(null),
   ])
+  // DECISION F: MAKERS NEVER SUPPLY THE HEADLINE'S QUOTES. The lead may be up
+  // to a quarter makers, so the videos behind its candidates are read for
+  // their segment (one call, the lead candidates only), and the voices take
+  // only a 'market' video's comment (`pickQuotes` `marketVideosOnly`).
+  if (segments === 'measured') {
+    await markVideoSegments(client, clientId, leadCandidates.flatMap((t) => quotes.get(t.registryId)?.candidates ?? []))
+  }
   if (branded.length > 0) {
     themes = themes.map((t) => {
       if (!branded.includes(t.registryId)) return t
@@ -4353,7 +4381,7 @@ function marketFrontPage(reads: MarketReads, input: {
   const hero = heroLead(board, subjects, reads.excluded)
   const lead = hero.kind === 'themes' ? hero.lead : null
   const heroVoices = lead
-    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN }).map((c) => voiceOf(c as CiteCandidate))
+    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured' }).map((c) => voiceOf(c as CiteCandidate))
     : []
   const askQuotes = new Map<string, Quote | null>()
   for (const id of askIds(themes, reads.segments)) {

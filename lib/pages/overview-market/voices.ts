@@ -20,6 +20,14 @@ import { monthStartOf, nextMonth } from '../../reading/month-key'
 //   - not the video's own account: a creator answering under their own post is
 //     the video talking, not the market.
 //
+// AND, FOR THE HEADLINE'S VOICES, NEVER FROM A MAKER'S VIDEO (decision F:
+// makers stay in every count and "never supply the headline's quotes"). The
+// lead theme may be up to a quarter makers, so its own evidence can sit under
+// a maker's post; where the tenant has a segment rule, a voice is printed only
+// from a video the reader precedence marks 'market' (MF1 `segments_for_videos`),
+// and a video whose segment was not read is not printed (fail closed). The
+// asks keep the four rules above.
+//
 // "Most-liked" is never the rule. The order is the evidence's own relevance
 // rank, then its id, so the choice does not depend on how the rows came back.
 // A quote a reader cannot read (another language with no English yet, or out
@@ -43,6 +51,10 @@ export interface QuoteCandidate {
   /** The video's own account (`videos.account_name`), for the own-account
    *  rule. */
   videoAccount: string | null
+  /** The segment of the video behind the quote (MF1 `segments_for_videos`:
+   *  'maker', 'noise' or 'market'), where it was read. Absent or null where it
+   *  was not; `marketVideosOnly` then refuses it. */
+  segment?: string | null
 }
 
 /**
@@ -78,13 +90,16 @@ export function quotable(c: QuoteCandidate, month: string, kind: string | null):
 }
 
 /** Up to `count` quotes, by the evidence's own rank then its id, one per
- *  wording (the same comment quoted twice prints once). */
-export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month: string; kind: string | null; count: number }): QuoteCandidate[] {
+ *  wording (the same comment quoted twice prints once). `marketVideosOnly`
+ *  (the headline's voices where a segment rule applies, decision F) takes a
+ *  quote only from a video whose segment was read as 'market'. */
+export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month: string; kind: string | null; count: number; marketVideosOnly?: boolean }): QuoteCandidate[] {
   const seen = new Set<string>()
   const out: QuoteCandidate[] = []
   const ordered = [...candidates].sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
   for (const c of ordered) {
     if (out.length >= opts.count) break
+    if (opts.marketVideosOnly && c.segment !== 'market') continue
     if (!quotable(c, opts.month, opts.kind)) continue
     const key = cleanQuote(c.quote).toLowerCase()
     if (seen.has(key)) continue
