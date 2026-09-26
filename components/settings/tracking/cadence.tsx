@@ -54,21 +54,17 @@ export interface CadenceSectionProps {
 }
 
 export function CadenceSection({
-  period, day, storedPeriod, onPeriod, onDay, canEdit, updatesThisMonth, month, lastUpdate, showStudio,
+  period, day, storedPeriod, onPeriod, onDay, canEdit, updatesThisMonth, month, showStudio,
 }: CadenceSectionProps) {
   const paused = storedPeriod === 'paused'
-  // The hour belongs to the row that sets the day, and it is said ONCE: the
-  // head carried the whole of SLOT_NOTE as well, which is the same sentence
-  // twice on one screen.
-  const meta = [
-    paused ? 'paused' : period,
-    cap(day),
-    lastUpdate ? `last ${shortDate(`${lastUpdate}T00:00:00.000Z`)}` : 'no update on record',
-  ].join(' · ')
+  // THE HEAD IS THE TITLE ALONE (the 25 Sep rulings, WP3.10): its meta
+  // repeated the controls below ("weekly · Monday · last 20 Sep"), and the
+  // last update is the bar's line on every Settings page, so `lastUpdate` is
+  // no longer drawn here.
 
   return (
     <Section>
-      <SectionHead title="Cadence" meta={meta} />
+      <SectionHead title="Cadence" />
 
       <LabelRow label="How often" top="control">
         {paused ? (

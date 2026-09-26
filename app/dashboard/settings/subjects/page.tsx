@@ -88,7 +88,6 @@ export default async function SettingsSubjectsPage() {
       bar={bar}
       context={`${tenant}${!canEdit ? ' · read-only' : ''}`}
       contentTitle="Subjects"
-      contentMeta={available ? verdict.line : undefined}
       counts={available ? { subjects: { value: String(active), unit: `subject${active === 1 ? '' : 's'} being measured` } } : undefined}
     >
       <div className="flex flex-col gap-3">
@@ -132,13 +131,6 @@ export default async function SettingsSubjectsPage() {
               )}
             </SettingsCard>
 
-            {verdict.state !== 'ready' && (
-              <p className="text-[12px] text-muted-foreground">
-                {verdict.state === 'short'
-                  ? 'Below five, a month’s reading rests on too little to compare one subject against another. We would rather you named a few more before we start drawing them.'
-                  : `Above ${SUBJECTS_MAX}, no single subject gets enough of the conversation for a change in it to mean anything.`}
-              </p>
-            )}
           </>
         )}
       </div>

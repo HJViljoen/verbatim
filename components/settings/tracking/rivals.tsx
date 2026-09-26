@@ -7,7 +7,7 @@ import { RivalRename } from '@/app/dashboard/settings/rival-rename'
 import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, ICON_TARGET, MonoNote, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { monthName, platformLabel, shortDate } from '@/lib/format'
 import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
-import { isNewRival, rivalRefusalNote, rivalState, rivalsMeta, RIVAL_BREAK_RULE, RIVAL_REMOVED_PENDING, type RivalRow } from '@/lib/settings/rivals-view'
+import { isNewRival, rivalRefusalNote, rivalState, RIVAL_REMOVED_PENDING, type RivalRow } from '@/lib/settings/rivals-view'
 import { cn } from '@/lib/utils'
 
 // `settings.rivals.*` — the rivals table at the artboard's five columns, and
@@ -80,7 +80,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
 
   return (
     <Section>
-      <SectionHead title="Rivals" meta={rivalsMeta(rows, { names, added: added.length })} rule={RIVAL_BREAK_RULE} />
+      <SectionHead title="Rivals" />
 
       {/* "This POST carried the rival list." Outside the table on purpose: the
           state that most needs it is the empty one, where there is no table and

@@ -60,7 +60,6 @@ export default async function SettingsReportsPage() {
 
   const rows = recipientRows(inputs.schedules, inputs.period)
   const unnamed = unnamedSchedules(inputs.schedules)
-  const sending = rows.filter((r) => r.sending).length
 
   return (
     <SettingsFrame
@@ -69,7 +68,6 @@ export default async function SettingsReportsPage() {
       title="Settings"
       context={`${tenant}${!canEdit ? ' · read-only' : ''}`}
       contentTitle="Reports and recipients"
-      contentMeta={`${sending} of ${rows.length} being sent`}
     >
       <div className="flex flex-col gap-3">
 

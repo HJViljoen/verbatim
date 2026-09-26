@@ -7,7 +7,7 @@ import { PlatformsSection } from './platforms'
 import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
 import { renameNotice } from '@/app/dashboard/settings/rival-rename'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
-import { NEW_TERM_RULE, REVIEW_KEEP_NOTE, TermsSection } from './terms'
+import { TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
 import { gridIntrinsic, ICON_TARGET, ROW_CONTROL } from '@/components/settings/chrome'
 import { render, renderText } from '@/lib/test/render'
@@ -72,8 +72,8 @@ const termsSection = (
 describe('the search terms section', () => {
   const words = renderText(termsSection)
 
-  it('prints every bucket with its own count, the fourth one included', () => {
-    expect(words).toContain('4 terms · brand 2 · competitor 1 · category 1 · 1 excluded, not searched')
+  it('heads the section with its title alone, and prints every bucket, the fourth one included (the 25 Sep rulings, WP3.10)', () => {
+    expect(words).not.toContain('4 terms · brand 2')
     expect(words).toContain('Not this')
   })
 
@@ -113,8 +113,9 @@ describe('the search terms section', () => {
     expect(remove.slice(0, 400)).toContain('after:-inset-[14px]')
   })
 
-  it('states what adding one does, beside the field that does it', () => {
-    expect(words).toContain(NEW_TERM_RULE)
+  it('puts no explanatory note beside the field (the 25 Sep rulings, WP3.10)', () => {
+    expect(words).not.toContain('a new term starts a new line')
+    expect(words).not.toContain('keeping it needs nothing')
   })
 
   it('puts the review strip’s control at the strip’s own edge, and drops the strip with the term', () => {
@@ -128,11 +129,8 @@ describe('the search terms section', () => {
     // 716px row while the evidence beside it got 146. It prints ONCE now, under
     // the list — after the last strip's control, not between a strip's evidence
     // and its own.
-    const markup = render(termsSection)
-    const strip = markup.slice(markup.indexOf('Worth reviewing'))
-    expect(strip.split(REVIEW_KEEP_NOTE).length - 1).toBe(1)
-    expect(strip.indexOf('Remove it')).toBeLessThan(strip.indexOf(REVIEW_KEEP_NOTE))
-    // Two flagged terms, still one note.
+    // WP3.10: the keep-note went with the 25 Sep rulings (no explanatory
+    // footnote under a block); each strip keeps its own control.
     const two = render(
       <TermsSection
         terms={{ ...TERMS }} dates={{}} review={[term(), term({ key: 'freitag', keyword: 'Freitag', bucket: 'competitor' })]}
@@ -140,7 +138,6 @@ describe('the search terms section', () => {
       />,
     )
     expect(two.split('Remove it').length - 1).toBe(2)
-    expect(two.split(REVIEW_KEEP_NOTE).length - 1).toBe(1)
     const gone = renderText(
       <TermsSection
         terms={{ ...TERMS, industry_keywords: [] }}
@@ -182,7 +179,6 @@ describe('the communities section', () => {
   const words = renderText(section)
 
   it('says ALL TIME on the counts rather than printing them under a month', () => {
-    expect(words).toContain('stored, all time')
     expect(words).toContain('Posts · all time')
     expect(words).toContain('Comments · all time')
     expect(words).not.toContain('this month')
@@ -352,7 +348,8 @@ describe('the rivals section', () => {
     expect(words).toContain('28 captured, 0 read')
     // A hover on the "Tracked since" head (copy de-clutter C91).
     expect(render(section)).toContain('earliest evidence in our own data')
-    expect(words).toContain('removing one is a break, not a zero')
+    // The head's right-hand rule went with the 25 Sep rulings (WP3.10).
+    expect(words).not.toContain('removing one is a break, not a zero')
   })
 
   it('keeps a rival’s Rename control after its own click, and spends a refusal with the row', () => {
@@ -387,9 +384,8 @@ describe('the rivals section', () => {
     )
     expect(dropped).toContain(RIVAL_REMOVED_PENDING)
     expect(dropped).toContain('Put it back')
-    // And the head counts the form, not the load.
-    expect(dropped).toContain('1 tracked')
-    expect(dropped).toContain('1 waiting to be taken off')
+    // The head is its title alone now (the 25 Sep rulings, WP3.10).
+    expect(dropped).not.toContain('1 waiting to be taken off')
   })
 
   it('keeps the copy contract', () => {
@@ -413,10 +409,10 @@ describe('the platforms section', () => {
   )
   const words = renderText(section)
 
-  it('prints no share without the population it is a share of', () => {
-    expect(words).toContain('35%')
-    expect(words).toContain('share of Your own brand’s 1,000 videos in September')
-    expect(words).toContain('still filling')
+  it('prints no share of the client\'s own videos: the market\'s mix is "Where we read it" (WP3.10, GS F31)', () => {
+    expect(words).not.toMatch(/\d+%/)
+    expect(words).not.toContain('share of Your own brand')
+    expect(words).toContain('Your accounts: TikTok @sealandgear')
   })
 
   it('keeps a word where the artboard draws a switch nothing can switch', () => {
@@ -424,15 +420,11 @@ describe('the platforms section', () => {
     expect(words).toContain('Not connected')
   })
 
-  it('draws a share of nothing as a dash', () => {
+  it('says where no account of the client\'s is configured, in two words', () => {
     const blank = renderText(
-      <PlatformsSection
-        rows={platformRows({ platforms: ['tiktok'], communities: 12, mix: null, videos: null })}
-        basis={platformShareBasis({ month: '2026-09-01', status: 'filling', videos: null, audience: 'Your own brand' })}
-        ownAccounts={{}}
-      />,
+      <PlatformsSection rows={platformRows({ platforms: ['tiktok'], communities: 12, mix: null, videos: null })} ownAccounts={{}} />,
     )
-    expect(blank).toContain('the month has not been read')
+    expect(blank).toContain('Your accounts: none configured')
     expect(blank).not.toMatch(/\d+%/)
   })
 
@@ -471,7 +463,8 @@ describe('the cadence section', () => {
 
   it('evidences the cadence with the updates that actually landed', () => {
     expect(words).toContain('4 updates in September: 27 Sep, 20 Sep, 13 Sep, 6 Sep')
-    expect(words).toContain('last 27 Sep')
+    // The head is its title alone (the 25 Sep rulings, WP3.10).
+    expect(words).not.toContain('last 27 Sep')
   })
 
   it('renders a paused workspace as a sentence, never as a select', () => {

@@ -64,13 +64,12 @@ export default async function SettingsReadinessPage() {
       context={inputs.tenant}
       bar={bar}
       contentTitle="Readiness"
-      contentMeta={view.summary.label}
     >
       <div className="flex flex-col gap-3">
         <ReadinessTable
           rows={view.rows}
           title="What each part of the product needs from this workspace"
-          description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos, the same floor the product compares on.`}
+          description={`Read ${fullDate(now.toISOString())}.`}
         />
         <section className="rounded-md bg-inner px-4 py-3.5">
           <h3 className="text-[14px] font-semibold">Not built yet on the reading pages</h3>

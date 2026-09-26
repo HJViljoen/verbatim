@@ -7,10 +7,9 @@ import { redditDiscoveryEnabled } from '@/lib/config'
 import { PlatformsSection } from '@/components/settings/tracking/platforms'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { shortDate } from '@/lib/format'
-import { audienceLabel } from '@/lib/readiness/types'
 import { readingHandle } from '@/lib/reading/read'
 import { communityRows, tableRows, unconfiguredShare } from '@/lib/settings/communities'
-import { platformRows, platformShareBasis } from '@/lib/settings/connections'
+import { platformRows } from '@/lib/settings/connections'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
 import { rivalRows } from '@/lib/settings/rivals-view'
 import { heldStillLine, loadQueue, queueLines, queueSummary, type QueueColumn } from '@/lib/settings/queue'
@@ -129,13 +128,6 @@ export default async function SettingsTrackingPage() {
       context={context}
       bar={oneLineBar(inputs.tenant, inputs.reading)}
       contentTitle="Tracking"
-      contentMeta={c ? [
-        `${termCount} search term${termCount === 1 ? '' : 's'}`,
-        `${configured} communit${configured === 1 ? 'y' : 'ies'}`,
-        `${names.length} rival${names.length === 1 ? '' : 's'}`,
-        `${platforms.length} platform${platforms.length === 1 ? '' : 's'}`,
-        period,
-      ].join(' · ') : undefined}
       counts={{
         tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
         ...(inputs.railCounts.subjects != null
@@ -206,13 +198,6 @@ export default async function SettingsTrackingPage() {
           platforms={
             <PlatformsSection
               rows={platformRows({ platforms, communities: configured, mix: inputs.platformMix, videos: inputs.monthVideos })}
-              basis={platformShareBasis({
-                month: inputs.censusMonth,
-                status: inputs.monthStatus,
-                videos: inputs.monthVideos,
-                unread: inputs.monthUnread,
-                audience: audienceLabel('client'),
-              })}
               ownAccounts={ownHandles}
             />
           }
