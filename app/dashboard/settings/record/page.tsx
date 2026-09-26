@@ -15,7 +15,7 @@ import { fullDate, longMonth, monthName, shortDate } from '@/lib/format'
 import { recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
 import { recordLines, recordRows } from '@/lib/reading/record'
-import { CHANGE_LOG_ROWS, changeNote, readChangeLog, showingLine } from '@/lib/settings/change-log'
+import { changeNote, readChangeLog } from '@/lib/settings/change-log'
 import { deliveryRecord, deliveryStats, updatesInMonth } from '@/lib/settings/delivery'
 import { loadReadings } from '@/lib/settings/readings'
 import { loadRailCounts, loadRecordPage } from '@/lib/settings/record-load'
@@ -186,8 +186,6 @@ export default async function SettingsRecordPage() {
         <ChangeLogBlock
           title={changed ? 'Other settings changes' : undefined}
           log={log}
-          rows={CHANGE_LOG_ROWS}
-          showing={showingLine(CHANGE_LOG_ROWS, log.recorded.length)}
           now={nowIso}
           unavailable={
             inputs.changes.available
