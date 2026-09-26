@@ -618,10 +618,23 @@ export function moversCoda(input: {
   /** Whether anything at all is on the list. Nothing at all is the block's own
    *  empty state, which says it in its own words. */
   any: boolean
+  /** The month the page reads, named rather than "this month" (the lead's
+   *  R6): on 1 to 15 Oct the page reads an ended September. */
+  month?: string
 }): string | null {
   if (!input.any) return null
   if (input.growing > input.shown || input.fading > input.shown) return null
-  return 'Nothing else moved clearly this month.'
+  return `Nothing else moved clearly ${whenOf(input.month)}.`
+}
+
+/** "in September", or "this month" where no month is given (the lead's R6). */
+function whenOf(month: string | null | undefined): string {
+  return month ? `in ${longMonth(month)}` : 'this month'
+}
+
+/** "September", or "this month" where no month is given. */
+function monthOf(month: string | null | undefined): string {
+  return month ? longMonth(month) : 'this month'
 }
 
 /**
@@ -739,12 +752,14 @@ export function moversNote(input: {
    *  not read the same way (decision D, WP1.3): nothing was compared, and "no
    *  theme carried enough" would blame the month for our own change. */
   refused?: string | null
+  /** The month the page reads, named (the lead's R6). */
+  month?: string
 }): string | null {
   if (input.narrowed) return DEEP_LINK_EMPTY
-  if (input.thin) return 'Too little conversation this month to say what moved.'
+  if (input.thin) return `Too little conversation ${whenOf(input.month)} to say what moved.`
   if (!input.read && input.refused) return input.refused
-  if (!input.read) return 'No theme carried enough of this month to be compared.'
-  return input.any ? null : 'Nothing moved clearly this month.'
+  if (!input.read) return `No theme carried enough of ${monthOf(input.month)} to be compared.`
+  return input.any ? null : `Nothing moved clearly ${whenOf(input.month)}.`
 }
 
 /**
@@ -909,8 +924,8 @@ export function searchRegistry<T extends { id: string; canonical_label: string |
  * to the point of being wrong, so when the counts show the instrument's limit
  * the line says it out loud instead.
  */
-export function repliesNote(replies: RepliesRead | null): string {
-  if (!replies) return 'How much of this month was argued rather than said once is not readable here.'
+export function repliesNote(replies: RepliesRead | null, month?: string): string {
+  if (!replies) return `How much of ${monthOf(month)} was argued rather than said once is not readable here.`
   if (replies.reddit != null && replies.replies > 0 && replies.reddit === replies.replies) {
     return 'Every reply we can see is a Reddit reply: Reddit is the only source that records one, so this counts arguing on Reddit and nothing else. Counted across every audience, since a comment carries no audience of its own.'
   }
@@ -1241,7 +1256,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     // The full ladder, in reading order (KIND_ORDER) — this is the page that
     // shows all ten, where OV3 shows three.
     kinds = [...all].sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
-    if (kinds.length === 0) kindsNote = 'Nothing was read into this month’s kinds yet.'
+    if (kinds.length === 0) kindsNote = `Nothing was read into ${longMonth(month)}’s kinds yet.`
     for (const k of kinds) {
       const prev = last.find((r) => r.kind === k.kind)
       const prevN = denominatorFor(history, prevMonth, selected)
@@ -1269,7 +1284,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     kindsNote,
     reddit,
     replies,
-    repliesNote: repliesNote(replies),
+    repliesNote: repliesNote(replies, month),
   }
 
   // ── the movers ──────────────────────────────────────────────────────────
@@ -1357,6 +1372,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       any: growing.length + fading.length + flat.length + newcomers.length > 0,
       narrowed,
       refused: monthPair?.mode === 'refuse' ? pairSentence(monthPair) : null,
+      month,
     }),
     // `theme_observations.reread_share` lands with M2. Until then the page
     // cannot tell a theme whose members were re-read this month from one whose
@@ -1507,15 +1523,17 @@ export function openRefusal(
     narrowed?: boolean
   },
   audienceLabel: string,
+  /** The month the page reads, named (the lead's R6). */
+  month?: string,
 ): string {
   const asked = input.asked
   if (!asked) {
     return input.narrowed
       ? `${DEEP_LINK_EMPTY} Nothing is open until it is cleared.`
-      : 'No theme in this audience carried enough of this month to be opened.'
+      : `No theme in this audience carried enough of ${monthOf(month)} to be opened.`
   }
-  if (!asked.label) return 'The theme this link asks for is not in this workspace’s register. Clear it from the link to see what this month did carry.'
-  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open. Clear it from the link to see what was.`
+  if (!asked.label) return `The theme this link asks for is not in this workspace’s register. Clear it from the link to see what ${monthOf(month)} did carry.`
+  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} ${whenOf(month)}, so there is nothing to open. Clear it from the link to see what was.`
 }
 
 /**
@@ -1631,7 +1649,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     notes: [],
   }
   if (!input.openId || !input.series) {
-    return { ...empty, notes: [openRefusal({ asked: input.asked, narrowed: input.narrowed }, audienceLabel(audience))] }
+    return { ...empty, notes: [openRefusal({ asked: input.asked, narrowed: input.narrowed }, audienceLabel(audience), month)] }
   }
 
   const label = input.registry?.canonical_label ?? input.series.objectLabel ?? input.openId
@@ -1657,8 +1675,8 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   } else {
     const curr = input.statsRows.find((r) => monthStartOf(r.month) === month && r.audience === audience) ?? null
     const prev = input.statsRows.find((r) => monthStartOf(r.month) === input.prevMonth && r.audience === audience) ?? null
-    if (!curr) toneNote = 'Nothing in this month has been judged yet.'
-    else if (curr.judged < TONE_FLOOR) toneNote = `Too few videos judged this month to read a tone: ${fmtInt(curr.judged)} of the ${fmtInt(TONE_FLOOR)} a point needs.`
+    if (!curr) toneNote = `Nothing in ${longMonth(month)} has been judged yet.`
+    else if (curr.judged < TONE_FLOOR) toneNote = `Too few videos judged in ${longMonth(month)} to read a tone: ${fmtInt(curr.judged)} of the ${fmtInt(TONE_FLOOR)} a point needs.`
     else {
       const counts = {
         judged: curr.judged, positive: curr.positive, negative: curr.negative,
@@ -1881,7 +1899,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   }
 
   const notes: string[] = []
-  if (!input.themedRunId) notes.push('No update has grouped this month’s conversation into themes yet, so the evidence behind this theme cannot be shown.')
+  if (!input.themedRunId) notes.push(`No update has grouped ${longMonth(month)}’s conversation into themes yet, so the evidence behind this theme cannot be shown.`)
   if (!spoken && !onScreen && input.themedRunId) notes.push('No video behind this theme carries readable speech or on-screen text.')
   // The on-camera count only. The month's speech-readable reach ("read from
   // 118 of 130 videos, Reddit carries no speech") was a third Reddit-mechanics

@@ -78,7 +78,7 @@ describe('voiceMovers', () => {
 
   it('says "nothing else moved" beside a populated list, and only while it is true', () => {
     const base = voiceFixture()
-    expect(draw()).toContain('Nothing else moved clearly this month.')
+    expect(draw()).toContain('Nothing else moved clearly in September.')
     const many = Array.from({ length: 9 }, (_, i) =>
       mover({ id: `g${i}`, label: `Growing ${i}`, verdict: { changePts: 3 - i / 10 } }))
     // Three rows below the cut DID move, and the expander one line to the

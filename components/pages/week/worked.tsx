@@ -4,7 +4,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, listNames } from '@/lib/format'
-import { type WeekData, type WorkedRow } from '@/lib/pages/week'
+import { monthPhrase, type WeekData, type WorkedRow } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 // WK §6 · What worked (the mock's §6; the weekly report's WR5 content half).
@@ -92,7 +92,8 @@ export const weekWorked: Block<WeekData> = {
         {w.hooks.length > 0 ? (
           <Group title="Hooks this update" rows={w.hooks} rated={w.rated} mode={mode} />
         ) : null}
-        <OwnSide sides={w.sides} mode={mode} />
+        {/* The update's month by name once it has ended (the lead's R6). */}
+        <OwnSide sides={w.sides} mode={mode} when={monthPhrase(data.month, data.readingAt)} />
       </BlockFrame>
     )
   },
@@ -206,7 +207,7 @@ function Group({
  * at all, it says so. `FormatMatrixSide.unread` is what tells them apart, and a
  * panel printing 0 for both would claim a measurement nobody made.
  */
-function OwnSide({ sides, mode }: { sides: WeekData['worked']['sides']; mode: 'app' | 'print' | 'email' }) {
+function OwnSide({ sides, mode, when = 'this month' }: { sides: WeekData['worked']['sides']; mode: 'app' | 'print' | 'email'; when?: string }) {
   const email = mode === 'email'
   if (!sides) {
     return (
@@ -225,7 +226,7 @@ function OwnSide({ sides, mode }: { sides: WeekData['worked']['sides']; mode: 'a
   const body = side.unread
     ? side.unread
     : cells.length === 0
-      ? `None of the ${fmtInt(side.of)} you published this month carries a hook we could read.`
+      ? `None of the ${fmtInt(side.of)} you published ${when} carries a hook we could read.`
       : null
 
   if (email) {

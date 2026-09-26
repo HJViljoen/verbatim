@@ -97,7 +97,7 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
     if (!c || empty) {
       return (
         <BlockFrame title={subjectsOwnPosts.title} question={subjectsOwnPosts.question} mode={mode} footer={footer}>
-          <BlockEmpty mode={mode}>{empty ?? 'Nothing has been published in this month.'}</BlockEmpty>
+          <BlockEmpty mode={mode}>{empty ?? `Nothing has been published in ${longMonth(data.month)}.`}</BlockEmpty>
         </BlockFrame>
       )
     }

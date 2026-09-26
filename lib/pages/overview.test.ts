@@ -817,6 +817,18 @@ describe('buildCategory', () => {
     })
     expect(c.growing).toEqual([])
     expect(c.fading).toEqual([])
+    // The month by name once the clock has passed it (the lead's R6).
+    expect(c.moversNote).toBe('Too little conversation in September to say what moved.')
+  })
+
+  // THE WEEKLY'S WORDS STAY (the lead's R1): pinned to the calendar month,
+  // its movers note says "this month" while the clock is inside the month.
+  it('keeps "this month" while the clock is inside the month read', () => {
+    const c = buildCategory({
+      pair: null, asOf: '2026-09-24T12:00:00.000Z',
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: true,
+    })
     expect(c.moversNote).toBe('Too little conversation this month to say what moved.')
   })
 

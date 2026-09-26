@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { FormatMatrix, FormatMatrixSide, FormatRow } from '@/lib/reading/formats'
 import type { PlaybookBlock } from '@/lib/pages/playbook'
 import { playbookFigures } from '@/lib/pages/playbook'
@@ -281,8 +281,10 @@ function Legend({ sides, mode }: { sides: readonly FormatMatrixSide[]; mode: Ren
   )
 }
 
-export const PLAYBOOK_NO_READING =
-  'Nothing published this month has been read for its format yet, so there is no playbook to draw.'
+/** The month by name, never "this month" (the lead's R6): on 1 to 15 Oct the
+ *  page reads an ended September. */
+export const playbookNoReading = (month: string): string =>
+  `Nothing published in ${longMonth(month)} has been read for its format yet, so there is no playbook to draw.`
 
 export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
   key: 'competitive.playbook',
@@ -347,7 +349,7 @@ export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
   },
 
   emptyState(data) {
-    if (!data.playbook) return PLAYBOOK_NO_READING
+    if (!data.playbook) return playbookNoReading(data.month)
     return data.playbook.unread
   },
 }

@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { TileColumns } from '@/components/shell/page-grid'
 import { DirectionWord } from '@/components/pages/overview/subjects'
-import { fmtInt, fmtPct, monthName } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { Mover } from '@/lib/pages/overview'
@@ -218,7 +218,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
     const empty = voiceMovers.emptyState(data)
     const banded = m.growing.length + m.fading.length
     const both = m.growing.length > 0 && m.fading.length > 0
-    const coda = moversCoda({ growing: m.growing.length, fading: m.fading.length, shown: m.shown, any: banded > 0 })
+    const coda = moversCoda({ growing: m.growing.length, fading: m.fading.length, shown: m.shown, any: banded > 0, month: data.month })
     // The month pair only: the denominator is the Audience row's note one
     // block above (copy de-clutter B23).
     const of = data.audience.videos != null
@@ -342,7 +342,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                     // observations, not an absence this page noticed.
                     chip={<span data-copy="verdict">Gone quiet</span>}
                     label={g.label}
-                    note={<span data-copy="verdict">{g.lastHeard ? `last heard ${monthName(g.lastHeard)}` : 'not heard this month'}</span>}
+                    note={<span data-copy="verdict">{g.lastHeard ? `last heard ${monthName(g.lastHeard)}` : `not heard in ${longMonth(data.month)}`}</span>}
                   />
                 ))}
               </div>
@@ -386,7 +386,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
   emptyState(data) {
     const m = data.movers
     const any = m.growing.length + m.fading.length + m.flat.length + m.newcomers.length + m.goneQuiet.length
-    return any === 0 ? m.note ?? 'Nothing moved clearly this month.' : null
+    return any === 0 ? m.note ?? `Nothing moved clearly in ${longMonth(data.month)}.` : null
   },
 }
 

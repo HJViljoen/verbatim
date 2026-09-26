@@ -6,8 +6,8 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, longMonth } from '@/lib/format'
-import { type Riser, type WeekData } from '@/lib/pages/week'
+import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
+import { monthPhrase, type Riser, type WeekData } from '@/lib/pages/week'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 
 // WK §3 · Moving now (design §3 WK4 "Rising now"; the mock's §9).
@@ -63,12 +63,15 @@ export const weekRising: Block<WeekData> = {
     const href = `${ctx.appUrl}/dashboard/voice`
 
     const max = Math.max(1, ...r.rows.map((row) => (row.month.n > 0 ? row.month.k / row.month.n : 0)))
+    // AN ENDED MONTH IS NOT "SO FAR" (deploy 1 review, the lead's R6): on 2 Oct
+    // the latest update's September has ended; it is read to that update.
+    const when = monthPhrase(r.month, data.readingAt)
     return (
       <BlockFrame
         title={weekRising.title}
         question={weekRising.question}
         mode={mode}
-        meta={`${longMonth(r.month)} so far · of ${fmtInt(r.monthOf)} category videos`}
+        meta={`${when === 'this month' ? `${longMonth(r.month)} so far` : `${longMonth(r.month)} to the ${shortDate(data.update.date)} update`} · of ${fmtInt(r.monthOf)} category videos`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a>
           : <Link href={href} className="hover:underline">Open Voice →</Link>}
@@ -81,7 +84,7 @@ export const weekRising: Block<WeekData> = {
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {r.rows.length > 0 ? (
           email
-            ? <>{r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}</>
+            ? <>{r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} when={when} />)}</>
             : (
               // THE ARTBOARD'S THREE-ACROSS STRIP, AT THE WIDTH IT HAS ROWS FOR
               // (design review F12). `RISING_SHOWN` is three and has been since
@@ -92,10 +95,10 @@ export const weekRising: Block<WeekData> = {
               // page already picks its column count from its rows
               // (`subjects.tsx`); a single riser takes the tile.
               r.rows.length === 1
-                ? <Row riser={r.rows[0]} mode={mode} month={r.month} max={max} />
+                ? <Row riser={r.rows[0]} mode={mode} month={r.month} max={max} when={when} />
                 : (
                   <TileColumns of={r.rows.length === 2 ? 2 : 3}>
-                    {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}
+                    {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} when={when} />)}
                   </TileColumns>
                 )
             )
@@ -117,7 +120,7 @@ export const weekRising: Block<WeekData> = {
                 counting, in VO2's own words ("a larger share"). */}
             {r.moved > r.rows.length
               ? `${fmtInt(r.rows.length)} of ${fmtInt(r.moved)} with a larger share shown, the largest first`
-              : `Nothing else of the ${fmtInt(r.pooled)} themes moved clearly this month.`}
+              : `Nothing else of the ${fmtInt(r.pooled)} themes moved clearly ${when}.`}
           </Note>
         ) : null}
       </BlockFrame>
@@ -149,7 +152,9 @@ export const weekRising: Block<WeekData> = {
     // THE DESIGN'S OWN ANSWER. "Nothing moved clearly" is a legitimate reading
     // and reads differently from "we could not look": the comparisons were
     // drawn and came back inside their bands.
-    return `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading so far.`
+    return monthPhrase(data.rising.month, data.readingAt) === 'this month'
+      ? `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading so far.`
+      : `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading to the ${shortDate(data.update.date)} update.`
   },
 }
 
@@ -169,7 +174,7 @@ export const weekRising: Block<WeekData> = {
  * a surface whose own flag is true. `voice.movers` is false, and the badge says
  * points with its band instead.
  */
-function Row({ riser, mode, month, max }: { riser: Riser; mode: 'app' | 'print' | 'email'; month: string; max: number }) {
+function Row({ riser, mode, month, max, when = 'this month' }: { riser: Riser; mode: 'app' | 'print' | 'email'; month: string; max: number; when?: string }) {
   const email = mode === 'email'
   const share = riser.month.n > 0 ? riser.month.k / riser.month.n : 0
   if (email) {
@@ -205,7 +210,7 @@ function Row({ riser, mode, month, max }: { riser: Riser; mode: 'app' | 'print' 
         <span data-copy="figure" className="font-mono text-[18px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
           {fmtInt(riser.month.k)}
         </span>
-        <span className="text-[12px] font-medium text-muted-foreground">videos this month</span>
+        <span className="text-[12px] font-medium text-muted-foreground">videos {when}</span>
       </span>
       <span className="block h-1.5 w-full overflow-hidden rounded-full bg-inner">
         <span className="block h-full rounded-full" style={{ width: `${Math.max(1, (share / max) * 100)}%`, background: 'var(--cat)' }} />

@@ -7,7 +7,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { Sparkline } from '@/components/charts/sparkline'
-import { fmtInt, fmtPct, shortDate } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { concludedBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
@@ -462,6 +462,6 @@ export const overviewSubjects: Block<OverviewData> = {
     const s = data.subjects
     if (s.state === 'not_recorded') return 'Your subjects are not recorded for this workspace yet.'
     if (s.state === 'candidates' || s.state === 'none') return candidateLine(s.candidates)
-    return s.rows.length === 0 ? 'No subject carried a reading this month.' : null
+    return s.rows.length === 0 ? `No subject carried a reading in ${longMonth(data.month)}.` : null
   },
 }

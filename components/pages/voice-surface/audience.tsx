@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
-import { fmtInt, fullDate, monthName } from '@/lib/format'
+import { fmtInt, fullDate, longMonth, monthName } from '@/lib/format'
 import { carriesShare, levelText } from '@/lib/reading/level'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -209,7 +209,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
       <PairChip note={shared} mode={mode} className="mt-2" />
       </>
     ) : (
-      <BlockEmpty mode={mode}>{a.kindsNote ?? 'No kind carried a reading this month.'}</BlockEmpty>
+      <BlockEmpty mode={mode}>{a.kindsNote ?? `No kind carried a reading in ${longMonth(data.month)}.`}</BlockEmpty>
     )
 
     // WHERE IT WAS SAID, AT ITS REAL SIZE. One platform is just its name
@@ -287,7 +287,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
   emptyState(data) {
     const a = data.audience
     if (a.videos == null && a.kinds.length === 0 && !a.replies) {
-      return 'Nothing has been read into this month for any audience yet.'
+      return `Nothing has been read into ${longMonth(data.month)} for any audience yet.`
     }
     return null
   },

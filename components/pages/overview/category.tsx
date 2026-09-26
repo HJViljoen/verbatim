@@ -65,7 +65,7 @@ function moversBasis(c: OverviewData['category']): string | null {
   return null
 }
 
-function MoverRow({ mover, mode, shared = null }: { mover: Mover; mode: RenderMode; shared?: VerdictPairNote | null }) {
+function MoverRow({ mover, mode, shared = null, month }: { mover: Mover; mode: RenderMode; shared?: VerdictPairNote | null; month: string }) {
   const body = (
     <>
       {/* THE THEME'S OWN NAME, so `subject` and not bare markup: PROSE_POLICY
@@ -97,7 +97,7 @@ function MoverRow({ mover, mode, shared = null }: { mover: Mover; mode: RenderMo
       {mover.isNew ? (
         // "New" is a FLAG on a row, not a direction claim, and it is stated
         // only where the row's own months support it (design §3 VO2).
-        <span data-copy="verdict" className={mode === 'email' ? undefined : 'text-[11px] text-muted-foreground'}>first heard this month</span>
+        <span data-copy="verdict" className={mode === 'email' ? undefined : 'text-[11px] text-muted-foreground'}>first heard in {longMonth(month)}</span>
       ) : null}
     </>
   )
@@ -501,7 +501,7 @@ export const overviewCategory: Block<OverviewData> = {
         {openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'more · one click down →')}
       </>
     ) : (
-      <BlockEmpty mode={mode}>{c.kindsNote ?? 'No kind carried a reading this month.'}</BlockEmpty>
+      <BlockEmpty mode={mode}>{c.kindsNote ?? `No kind carried a reading in ${longMonth(data.month)}.`}</BlockEmpty>
     )
 
     // THE ARTBOARD'S TWO ARMS, WITH THE BUILD'S HEADINGS (`main.category
@@ -519,7 +519,7 @@ export const overviewCategory: Block<OverviewData> = {
         >
           {label}
         </span>
-        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} shared={shared} />)}
+        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} shared={shared} month={data.month} />)}
       </div>
     )
     const movers = c.growing.length > 0 || c.fading.length > 0 ? (
@@ -530,7 +530,7 @@ export const overviewCategory: Block<OverviewData> = {
     ) : (
       // The movers' own refusal is the block's: it says "not compared" and the
       // chip says why, once.
-      <BlockEmpty mode={mode}>{shared && c.moversNote === pairSentence(shared) ? PAIR_NOT_COMPARED : c.moversNote ?? 'Nothing moved clearly this month.'}</BlockEmpty>
+      <BlockEmpty mode={mode}>{shared && c.moversNote === pairSentence(shared) ? PAIR_NOT_COMPARED : c.moversNote ?? `Nothing moved clearly in ${longMonth(data.month)}.`}</BlockEmpty>
     )
 
     const mood = c.mood ? (
@@ -560,7 +560,7 @@ export const overviewCategory: Block<OverviewData> = {
         </p>
       </div>
     ) : (
-      <BlockEmpty mode={mode}>{c.moodNote ?? 'Nothing in this month has been judged yet.'}</BlockEmpty>
+      <BlockEmpty mode={mode}>{c.moodNote ?? `Nothing in ${longMonth(data.month)} has been judged yet.`}</BlockEmpty>
     )
 
     // GONE QUIET IS A FLAG, NOT A DIRECTION. One of the two READER_FLAGS
@@ -708,7 +708,7 @@ export const overviewCategory: Block<OverviewData> = {
         // under a populated list. It used to be `moversNote ?? …`, so a loader
         // that supplied a note while both arms were empty printed the same
         // sentence in the body and again in the footer.
-        footerNote={c.growing.length + c.fading.length > 0 ? c.moversNote ?? 'Nothing else moved clearly this month.' : undefined}
+        footerNote={c.growing.length + c.fading.length > 0 ? c.moversNote ?? `Nothing else moved clearly in ${longMonth(data.month)}.` : undefined}
       >
         {email ? (
           <div>
@@ -893,6 +893,6 @@ export const overviewCategory: Block<OverviewData> = {
     const c = data.category
     const nothing = c.kinds.length === 0 && c.growing.length === 0 && c.fading.length === 0 && !c.mood && !c.attention
       && (c.levels ?? []).length === 0
-    return nothing ? 'Nothing about this category has been read into this month yet.' : null
+    return nothing ? `Nothing about this category has been read into ${longMonth(data.month)} yet.` : null
   },
 }

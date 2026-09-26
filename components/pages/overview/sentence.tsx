@@ -8,7 +8,7 @@ import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
-import { fmtInt, shortDate } from '@/lib/format'
+import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { onScreenText } from '@/lib/pages/overview'
@@ -100,7 +100,7 @@ export function decisionStamp(l: LedgerRow): string {
  *  this is the last of them and never a second date formatter. */
 export function lastUpdateMeta(data: OverviewData): string {
   const dates = data.bar.updateDates
-  return dates.length > 0 ? `update of ${dates[dates.length - 1]}` : 'no update yet this month'
+  return dates.length > 0 ? `update of ${dates[dates.length - 1]}` : `no update yet in ${longMonth(data.bar.month)}`
 }
 
 /**
@@ -399,7 +399,7 @@ export const overviewSentence: Block<OverviewData> = {
     if (s.lead || s.anomaly || s.ledger || s.voices.length > 0) return null
     // A size sentence with its figures is a reading of the month (WP1.5).
     if (Object.keys(s.figures ?? {}).length > 0) return null
-    return 'There is nothing to report on this month yet.'
+    return `There is nothing to report on ${longMonth(data.month)} yet.`
   },
 }
 

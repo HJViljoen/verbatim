@@ -721,7 +721,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
   emptyState(data) {
     const t = data.theme
     if (t.state === 'none') {
-      return t.notes[0] ?? 'No theme in this audience carried enough of this month to be opened.'
+      return t.notes[0] ?? `No theme in this audience carried enough of ${longMonth(data.month)} to be opened.`
     }
     return null
   },

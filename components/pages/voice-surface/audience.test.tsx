@@ -162,7 +162,7 @@ describe('voiceAudience', () => {
   it('has one honest sentence when nothing at all was read', () => {
     const data = voiceFixture()
     const bare = { ...data, audience: { ...data.audience, videos: null, kinds: [], replies: null } }
-    expect(voiceAudience.emptyState(bare)).toBe('Nothing has been read into this month for any audience yet.')
+    expect(voiceAudience.emptyState(bare)).toBe('Nothing has been read into September for any audience yet.')
   })
 
   it('keeps its key, which is a stored contract', () => {

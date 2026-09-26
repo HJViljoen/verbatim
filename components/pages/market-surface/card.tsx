@@ -376,7 +376,7 @@ export const marketCard: Block<MarketSurfaceData> = {
   emptyState(data) {
     return data.moves.card
       ? null
-      : 'The card is filled in from your own posts, and none have been read for this month yet.'
+      : `The card is filled in from your own posts, and none have been read for ${longMonth(data.month)} yet.`
   },
 }
 

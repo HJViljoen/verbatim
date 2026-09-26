@@ -316,7 +316,7 @@ describe('OV3, ported to the artboard', () => {
 
   it('puts "nothing else moved" in the footer note', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('font-normal text-muted-foreground">Nothing else moved clearly this month.')
+    expect(markup).toContain('font-normal text-muted-foreground">Nothing else moved clearly in September.')
   })
 })
 

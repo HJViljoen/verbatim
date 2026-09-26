@@ -3983,7 +3983,7 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
     )
     kinds = all.slice(0, 3)
     reddit = redditRead(thisMonth.map((r) => ({ kind: r.kind, videos: r.videos, platform_mix: r.platform_mix ?? {} })))
-    if (all.length === 0) kindsNote = 'Nothing was read into this month’s kinds yet.'
+    if (all.length === 0) kindsNote = `Nothing was read into ${longMonth(input.month)}’s kinds yet.`
     for (const k of kinds) {
       const prev = lastMonth.find((r) => r.kind === k.kind)
       const prevN = input.prevMonth ? input.perAudience.get(`${input.prevMonth}|${input.audience}`) ?? null : null
@@ -4004,8 +4004,13 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
   const movers: Mover[] = []
   let moversNote: string | null = null
   const audienceSeries = input.series.filter((s) => s.audience === input.audience && s.objectId)
+  // THE MONTH BY NAME ONCE IT HAS ENDED (the lead's R6); the weekly, pinned to
+  // the calendar month, keeps "this month" (`monthPhrase`), byte for byte.
+  const when = monthPhrase(input.month, input.asOf)
   if (audienceSeries.length === 0) {
-    moversNote = 'No theme carried enough of this month to be compared.'
+    moversNote = when === 'this month'
+      ? 'No theme carried enough of this month to be compared.'
+      : `No theme carried enough of ${longMonth(input.month)} to be compared.`
   }
   for (const s of audienceSeries) {
     const byMonth = pointsByMonth(s)
@@ -4058,10 +4063,10 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
   const monthPair = input.prevMonth ? pairOnVerdict(pairFor(input.prevMonth, input.month, input.audience)).note : null
   if (!moversNote && growing.length === 0 && fading.length === 0) {
     moversNote = input.thin
-      ? 'Too little conversation this month to say what moved.'
+      ? `Too little conversation ${when} to say what moved.`
       : monthPair?.mode === 'refuse'
         ? pairSentence(monthPair)
-        : 'Nothing moved clearly this month.'
+        : `Nothing moved clearly ${when}.`
   }
 
   // (c) mood and (d) attention
@@ -4077,7 +4082,7 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
     const prev = input.prevMonth
       ? input.statsRows.find((r) => monthStartOf(r.month) === input.prevMonth && r.audience === input.audience) ?? null
       : null
-    if (!curr) moodNote = 'Nothing in this month has been judged yet.'
+    if (!curr) moodNote = `Nothing in ${longMonth(input.month)} has been judged yet.`
     else {
       const counts = {
         judged: curr.judged,

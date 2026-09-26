@@ -187,7 +187,7 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
         {card.subjectsUnread ? (
           <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>{card.subjectsUnread}</span>
         ) : card.subjects.length === 0 ? (
-          <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>none of your posts matched a subject this month</span>
+          <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>none of your posts matched a subject in {longMonth(card.month)}</span>
         ) : (
           card.subjects.map((s) => (
             <span

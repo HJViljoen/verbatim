@@ -10,7 +10,7 @@ import { Tile } from '@/components/shell/tile'
 import { H2H_NO_RIVAL, competitiveHeadToHead } from './head-to-head'
 import { OWN_CLAIMS_OWNER, competitiveOwnClaims, trackedLine } from './own-claims'
 import { competitiveSaidAbout } from './said-about'
-import { PLAYBOOK_NO_READING, competitivePlaybook } from './playbook'
+import { competitivePlaybook, playbookNoReading } from './playbook'
 import { LEAD_MIN_RATED } from '@/lib/pages/content-brief'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
@@ -708,7 +708,7 @@ describe('CO7 · how the category makes content', () => {
   })
 
   it('refuses rather than drawing an empty matrix', () => {
-    expect(competitivePlaybook.emptyState(unreadMonthsFixture())).toBe(PLAYBOOK_NO_READING)
+    expect(competitivePlaybook.emptyState(unreadMonthsFixture())).toBe(playbookNoReading(unreadMonthsFixture().month))
   })
 })
 
