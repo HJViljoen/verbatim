@@ -301,7 +301,7 @@ describe('OV3, ported to the artboard', () => {
     // pinned that rather than catching it. A control under N rows either
     // belongs on each row or belongs to none of them.
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('more · one click down →')
+    expect(markup).toContain('more · one click down</span> <span aria-hidden="true">→</span>')
     expect(markup).not.toContain('/dashboard/voice?type=')
   })
 

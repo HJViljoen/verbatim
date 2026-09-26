@@ -29,7 +29,26 @@ export function openLink(mode: RenderMode, href: string, label: ReactNode): Reac
   // is `EMAIL.link` with no underline. The artboards have exactly one
   // navigation link style; their only underlines are the dotted evidence
   // underlines under figures, which mean something else entirely.
-  return mode === 'email'
-    ? <a href={href} style={{ color: EMAIL.link, textDecoration: 'none' }}>{label}</a>
-    : <Link href={href} className="hover:underline">{label}</Link>
+  if (mode === 'email') return <a href={href} style={{ color: EMAIL.link, textDecoration: 'none' }}>{label}</a>
+  // THE UNDERLINE IS UNDER THE WORDS, NEVER THE ARROW (the preview's footer
+  // link: the words in one underlined span, the arrow in its own aria-hidden
+  // span beside it). A decoration on the anchor itself propagates to every
+  // child, the arrow included, so the anchor carries none: the words' span
+  // (`data-link-text`) takes the hover underline here, and a roomy frame's
+  // at-rest hairline (components/blocks/frame.tsx) targets that span too.
+  const { text, arrow } = splitArrow(label)
+  return (
+    <Link href={href} className="group/open">
+      <span data-link-text="" className="group-hover/open:underline">{text}</span>
+      {arrow ? <>{' '}<span aria-hidden="true">{arrow}</span></> : null}
+    </Link>
+  )
+}
+
+/** A label "Open Voice →" as its words and its arrow; any other label (no
+ *  trailing arrow, or not a string) is all words. */
+export function splitArrow(label: ReactNode): { text: ReactNode; arrow: string | null } {
+  if (typeof label !== 'string') return { text: label, arrow: null }
+  const m = /^([\s\S]*\S)\s*(→)\s*$/u.exec(label)
+  return m ? { text: m[1], arrow: m[2] } : { text: label, arrow: null }
 }

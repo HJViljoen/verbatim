@@ -253,7 +253,11 @@ describe('the 25 Sep rulings on Your market (§5.12)', () => {
           expect(root?.props.title, `${name} ${block.key} title`).toBe(MARKET_TITLES[block.key])
           const footer = root?.props.footer
           if (mode === 'print') expect(footer, `${name} ${block.key} print footer`).toBeNull()
-          else expect(render(<>{footer as never}</>), `${name} ${block.key} footer`).toMatch(/^<a [^>]*href="[^"]+"[^>]*>[^<]+<\/a>$/)
+          else expect(render(<>{footer as never}</>), `${name} ${block.key} footer`).toMatch(mode === 'email'
+            ? /^<a [^>]*href="[^"]+"[^>]*>[^<]+<\/a>$/
+            // The app's link: its words in one span, its arrow in another
+            // (`openLink`), and nothing else.
+            : /^<a [^>]*href="[^"]+"[^>]*><span data-link-text=""[^>]*>[^<]+<\/span>(?: <span aria-hidden="true">→<\/span>)?<\/a>$/)
         }
       }
     }

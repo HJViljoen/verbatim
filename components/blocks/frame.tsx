@@ -262,8 +262,9 @@ export function BlockFrame({
         {footer || footerNote ? (
           <footer className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border/60 px-4 py-2 text-[14px] font-medium text-foreground sm:px-8">
             {/* THE LINK READS AS A LINK AT REST: a hairline underline that
-                darkens on hover, the preview's footer link. */}
-            <span className={cn('min-w-0 [&_a]:underline [&_a]:decoration-border [&_a]:decoration-1 [&_a]:underline-offset-[5px] [&_a]:transition-colors [&_a:hover]:decoration-foreground', truncateFooter && 'truncate')}>{footer}</span>
+                darkens on hover, the preview's footer link, under the link's
+                words and not its arrow (`openLink`'s `data-link-text` span). */}
+            <span className={cn('min-w-0 [&_[data-link-text]]:underline [&_[data-link-text]]:decoration-border [&_[data-link-text]]:decoration-1 [&_[data-link-text]]:underline-offset-[5px] [&_[data-link-text]]:transition-colors [&_a:hover_[data-link-text]]:decoration-foreground', truncateFooter && 'truncate')}>{footer}</span>
             {footerNote ? <span className="min-w-0 font-mono text-[12px] font-normal text-muted-foreground">{footerNote}</span> : null}
           </footer>
         ) : null}

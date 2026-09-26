@@ -54,7 +54,7 @@ describe('OV6 · how sound is this month', () => {
     // puts the header's slot before the block's body and the footer's after it,
     // so the link's position in the markup is the fact to pin.
     const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
-    const link = markup.indexOf('the record →')
+    const link = markup.indexOf('the record</span> <span aria-hidden="true">→</span>')
     const body = markup.indexOf('comments read')
     expect(link).toBeGreaterThan(-1)
     expect(body).toBeGreaterThan(-1)
@@ -62,9 +62,9 @@ describe('OV6 · how sound is this month', () => {
     // It really is in the header element, and the tile draws no footer rail at
     // all on this block — which was the thing the old assertion could not tell
     // apart, because the link was in the footer the whole time.
-    expect(markup.slice(0, markup.indexOf('</header>'))).toContain('the record →')
+    expect(markup.slice(0, markup.indexOf('</header>'))).toContain('the record</span> <span aria-hidden="true">→</span>')
     // And a reader who cannot click it does not get it.
-    expect(render(overviewRecord.render(overviewFixture(), 'print', ctx))).not.toContain('the record →')
+    expect(render(overviewRecord.render(overviewFixture(), 'print', ctx))).not.toContain('the record</span>')
   })
 
   it('declares no figures, because every number in it is printed by the block it rests on', () => {
