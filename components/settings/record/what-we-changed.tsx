@@ -42,12 +42,12 @@ export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
     <RecordSection title="What we changed" className="scroll-mt-6">
       <div id={WHAT_WE_CHANGED_ID} className="flex max-w-[720px] flex-col gap-3">
         {head ? <p className="m-0 text-[22px] font-medium leading-[1.3] tracking-[-0.01em] [text-wrap:balance]">{head}</p> : null}
-        {next ? <p className="m-0 text-[14.5px] leading-[1.6] text-secondary-foreground">{next}</p> : null}
+        {next ? <p className="m-0 text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">{next}</p> : null}
       </div>
       {why ? (
         <div className="flex max-w-[720px] flex-col gap-1.5 border-t border-border/70 pt-4">
           <h4 className="m-0 text-[13px] font-semibold">{why.title}</h4>
-          <TokenProse body={why.body} figures={why.figures} mode="app" figureFace="inherit" className="m-0 text-[14px] leading-[1.6]" />
+          <TokenProse body={why.body} figures={why.figures} mode="app" figureFace="mono" figureClassName="font-semibold text-foreground" className="m-0 text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]" />
         </div>
       ) : null}
     </RecordSection>
@@ -71,18 +71,18 @@ export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[];
   return (
     <RecordSection title="The record">
       <div role="table" className="flex flex-col">
-        <div role="row" className={cn('hidden gap-x-4 pb-2 text-[11.5px] font-medium text-muted-foreground lg:grid', cols)}>
+        <div role="row" className={cn('hidden gap-x-6 pb-2 text-[12px] font-medium text-muted-foreground lg:grid', cols)}>
           <span role="columnheader">Date</span>
           <span role="columnheader">What we changed</span>
           {months.map((m) => <span key={m} role="columnheader" className="text-right">{monthHead(m)}</span>)}
         </div>
         {lines.map((l) => (
-          <div key={l.changeId} role="row" className={cn('grid grid-cols-1 gap-x-4 gap-y-1 border-t border-border/70 py-3', cols)}>
-            <span className="font-mono text-[12px] tabular-nums">{shortDate(l.date)}</span>
+          <div key={l.changeId} role="row" className={cn('grid grid-cols-1 gap-x-6 gap-y-1 border-t border-border/70 py-3', cols)}>
+            <span className="font-mono text-[12px] leading-[1.6] tabular-nums text-secondary-foreground">{shortDate(l.date)}</span>
             <span className="flex min-w-0 flex-col gap-1">
-              <span className="text-[13px] font-medium">{l.words}</span>
+              <span className="text-[13px] font-medium leading-[1.5]">{l.words}</span>
               {l.terms && (l.terms.added.length > 0 || l.terms.removed.length > 0) ? (
-                <span className="font-mono text-[11.5px] leading-[1.5] text-secondary-foreground">
+                <span className="font-mono text-[12px] leading-[1.6] text-secondary-foreground">
                   {l.terms.added.length > 0 ? <>in: {l.terms.added.join(', ')}</> : null}
                   {l.terms.added.length > 0 && l.terms.removed.length > 0 ? ' · ' : null}
                   {l.terms.removed.length > 0 ? <>out: {l.terms.removed.join(', ')}</> : null}
@@ -93,14 +93,14 @@ export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[];
               const cell = reachCell(l, m)
               const measure = (l.months ?? []).find((x) => x.month === m)
               return (
-                <span key={m} className="flex flex-col lg:items-end lg:text-right">
+                <span key={m} className="flex flex-col gap-0.5 lg:items-end lg:text-right">
                   {cell ? (
                     <>
-                      <span data-copy="level" className="font-mono text-[12.5px] font-semibold tabular-nums">{cell}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">of {monthHead(m)}’s videos, read with the {shortDate(measure?.readWith ?? '')} update</span>
+                      <span data-copy="level" className="font-mono text-[13px] font-semibold leading-[1.5] tabular-nums">{cell}</span>
+                      <span className="text-[12px] leading-[1.45] text-muted-foreground [text-wrap:balance]">of {monthHead(m)}’s videos, read with the {shortDate(measure?.readWith ?? '')} update</span>
                     </>
                   ) : (
-                    <span className="font-mono text-[11.5px] text-muted-foreground">{m === l.date.slice(0, 7) + '-01' ? 'not measured yet' : '·'}</span>
+                    <span className="text-[12px] leading-[1.6] text-muted-foreground">{m === l.date.slice(0, 7) + '-01' ? 'not measured yet' : '·'}</span>
                   )}
                 </span>
               )
@@ -121,14 +121,14 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
     <RecordSection title="When two months are compared">
       <p className="m-0 text-[15px] font-medium">Only when both were read the same way. All four must hold.</p>
       <div role="table" className="flex flex-col">
-        <div role="row" className="hidden gap-x-4 pb-2 text-[11.5px] font-medium text-muted-foreground lg:grid lg:grid-cols-[24px_minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div role="row" className="hidden gap-x-6 pb-2 text-[12px] font-medium text-muted-foreground lg:grid lg:grid-cols-[24px_minmax(0,1.6fr)_minmax(0,1fr)]">
           <span role="columnheader" />
           <span role="columnheader">The rule</span>
           <span role="columnheader">{column}</span>
         </div>
         {rules.map((r) => (
-          <div key={r.n} role="row" className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-4 gap-y-1 border-t border-border/70 py-3 lg:grid-cols-[24px_minmax(0,1.6fr)_minmax(0,1fr)]">
-            <span className="font-mono text-[13px] font-semibold text-muted-foreground">{fmtInt(r.n)}</span>
+          <div key={r.n} role="row" className="grid grid-cols-[24px_minmax(0,1fr)] gap-x-6 gap-y-1 border-t border-border/70 py-3 lg:grid-cols-[24px_minmax(0,1.6fr)_minmax(0,1fr)]">
+            <span className="font-mono text-[13px] font-semibold leading-[1.5] text-muted-foreground">{fmtInt(r.n)}</span>
             <span className="text-[13px] leading-[1.5]">{r.rule}</span>
             {pair ? (
               <span className="col-start-2 inline-flex items-baseline gap-2 text-[13px] lg:col-start-auto">
