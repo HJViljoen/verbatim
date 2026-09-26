@@ -3,7 +3,7 @@ import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { BaseHead, MakerMark, RULE, SCALE } from '@/components/pages/overview/market'
+import { BaseHead, InnerLine, MakerMark, RULE, SCALE } from '@/components/pages/overview/market'
 import { prevCell } from '@/components/pages/overview/market-subjects'
 import { surface } from '@/lib/nav'
 import { makerWords } from '@/lib/pages/overview-market/board'
@@ -198,11 +198,14 @@ export const subjectsList: Block<SubjectsData> = {
     if (l.base) {
       const voice = surface('voice')
       const footer = empty ? null : openLink(mode, `${ctx?.appUrl ?? ''}${voice.href}`, `The rest is on ${voice.label} →`)
-      // NO SUBJECT NAMED (Össur): one line (§2.13), in the plan's words.
-      const line = empty && !l.notRecorded && l.proposed.length === 0 ? NO_SUBJECTS_LINE : empty
+      // NO SUBJECT NAMED (Össur): one line (§2.13), in the plan's words, inside
+      // a drawn block as the front page draws it (decision B 2: a waiting
+      // state prints as one line inside a drawn block; the deploy-3 review).
+      const none = empty && !l.notRecorded && l.proposed.length === 0
+      const line = none ? NO_SUBJECTS_LINE : empty
       return (
         <BlockFrame title={subjectsList.title} question={subjectsList.question} mode={mode} footer={footer} roomy>
-          {line ? <BlockEmpty mode={mode}>{line}</BlockEmpty> : <MarketRail data={data} mode={mode} />}
+          {none ? <InnerLine mode={mode}>{NO_SUBJECTS_LINE}</InnerLine> : line ? <BlockEmpty mode={mode}>{line}</BlockEmpty> : <MarketRail data={data} mode={mode} />}
         </BlockFrame>
       )
     }

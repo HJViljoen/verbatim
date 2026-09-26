@@ -123,6 +123,8 @@ describe('S1 · the rail reads the market', () => {
   it('Össur prints one line: "No subjects named yet." (§2.13), and the page draws no pane', () => {
     const data = ossurMarketFixture()
     expect(text(subjectsList.render(data, 'app', ctx))).toContain(NO_SUBJECTS_LINE)
+    // Inside a drawn block, as the front page draws a waiting line (decision B 2).
+    expect(render(subjectsList.render(data, 'app', ctx))).toMatch(/<p class="[^"]*bg-inner[^"]*"><span[^>]*>No subjects named yet\.<\/span><\/p>/)
     expect(layoutFor(data).map((l) => l.block.key)).toEqual(['subjects.list', 'subjects.ownposts', 'subjects.sayhear'])
     const page = text(<SubjectsPage data={data} />)
     expect(page).toContain(NO_SUBJECTS_LINE)
