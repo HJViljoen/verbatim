@@ -194,8 +194,9 @@ describe('what a delivered artefact writes down', () => {
     expect(rows.map((r) => r.value)).toEqual([22, 31])
   })
 
-  it('refuses a verdict about something sent_figures has no kind for', () => {
+  it('records a verdict under subject, theme, rival or kind only: a mood verdict is not written from the verdicts (MF2 admits the kind; nothing writes it yet)', () => {
     expect(sentFigureRows({ ...base, verdicts: [verdict({ objectKind: 'mood' })], figures: {} })).toEqual([])
+    expect(sentFigureRows({ ...base, verdicts: [verdict({ objectKind: 'audience' })], figures: {} })).toEqual([])
   })
 
   it('carries a frozen month through as frozen', () => {

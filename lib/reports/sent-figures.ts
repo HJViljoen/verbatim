@@ -39,8 +39,17 @@ export const SENT_FIGURES_TABLE = 'sent_figures'
 
 /** What `object_kind` may be. The fifth is the escape for the artefact-level
  *  numbers that are about no object at all — a month's own denominator — and it
- *  is marked as what it is so a reader joining on objects never picks one up. */
-export type SentObjectKind = 'subject' | 'theme' | 'rival' | 'kind' | 'figure'
+ *  is marked as what it is so a reader joining on objects never picks one up.
+ *
+ *  The last three are market-first's (WP2.1), admitted by MF2's widened
+ *  `sent_figures_object_kind_check` (20261005090000_market_first_s2.sql):
+ *  'mood' a mood share of the judged videos, 'brand' a `brand_mentions`
+ *  brand_key, 'denominator' a count the month's market is read over. This union
+ *  and that CHECK hold the same eight (lib/market-first-migrations.test.ts): a
+ *  kind the CHECK refuses fails the whole batch in `writeSentFigures`, and the
+ *  send's record with it, silently (the write is non-fatal). One line, because
+ *  that test reads it as text. */
+export type SentObjectKind = 'subject' | 'theme' | 'rival' | 'kind' | 'figure' | 'mood' | 'brand' | 'denominator'
 
 export type SentUnit = 'pct' | 'videos' | 'comments' | 'pts'
 
@@ -348,8 +357,13 @@ function verdictsWorthRecording(verdicts: readonly Verdict[]): Verdict[] {
   return verdicts.filter((v) => v.value.n > 0 && Boolean(v.objectId) && Boolean(v.audience))
 }
 
-/** The union `sent_figures.object_kind` takes. A verdict about something else
- *  is not written rather than being filed under a kind that does not fit. */
+/** The kinds a VERDICT is recorded under: subject, theme, rival and kind. A
+ *  verdict about something else is not written rather than being filed under a
+ *  kind that does not fit. A mood verdict stays unwritten here although MF2
+ *  admits 'mood': the monthly's v2 sections write `figure` rows only, and a
+ *  mood row sent before MF2 is applied would be refused and take the send's
+ *  whole batch with it. WP2.1's filled sections decide who writes 'mood',
+ *  'brand' and 'denominator' rows. */
 function objectKindOf(kind: Verdict['objectKind']): SentObjectKind | null {
   return kind === 'subject' || kind === 'theme' || kind === 'rival' || kind === 'kind' ? kind : null
 }

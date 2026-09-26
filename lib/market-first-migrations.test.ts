@@ -183,13 +183,24 @@ describe('sent_figures.object_kind (WP2.1)', () => {
     expect(kindsIn(code(MF2))).toEqual([...original, 'mood', 'brand', 'denominator'])
   })
 
-  it('admits every kind lib/reports/sent-figures.ts can write (recordSend is non-fatal: a refused kind is a lost row)', () => {
+  const declaredKinds = () => {
     const source = readFileSync(new URL('./reports/sent-figures.ts', import.meta.url), 'utf8')
     const declared = source.match(/export type SentObjectKind =([^\n]+)/)?.[1]
     expect(declared, 'SentObjectKind is no longer where this test looks for it').toBeTruthy()
-    const kinds = [...declared!.matchAll(/'([^']+)'/g)].map((m) => m[1])
+    return [...declared!.matchAll(/'([^']+)'/g)].map((m) => m[1])
+  }
+
+  it('admits every kind lib/reports/sent-figures.ts can write (recordSend is non-fatal: a refused kind is a lost row)', () => {
+    const kinds = declaredKinds()
     expect(kinds.length).toBeGreaterThan(0)
-    for (const kind of kinds) expect(kindsIn(code(MF2))).toContain(kind)
+    for (const kind of kinds) expect(kindsIn(code(MF2)), `sent_figures' CHECK refuses '${kind}'`).toContain(kind)
+  })
+
+  it('and SentObjectKind is the CHECK\u2019s eight exactly: mood, brand and denominator are writable kinds (WP2.1)', () => {
+    const kinds = declaredKinds()
+    expect(new Set(kinds).size).toBe(kinds.length)
+    expect([...kinds].sort()).toEqual([...kindsIn(code(MF2))].sort())
+    for (const kind of ['mood', 'brand', 'denominator']) expect(kinds).toContain(kind)
   })
 })
 
