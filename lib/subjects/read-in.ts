@@ -1,4 +1,4 @@
-import { longMonth, shortDate } from '../format'
+import { longMonth } from '../format'
 import { monthStartOf } from '../reading/month-key'
 import type { MonthSeries } from '../reading/series'
 
@@ -165,15 +165,28 @@ export function subjectReadIn(input: {
   return input.countedFrom < input.writtenAt ? 'read' : 'unread'
 }
 
+/** The one wording for a subject the month was not read for, while the
+ *  updates to come still read the month (market page default M-a). */
+export const NO_READING_YET = 'no reading yet'
+
 /**
  * What a row prints for a subject the month was not read for, in place of its
- * figures: the preview's "first reading with the 27 Sep update" while the
- * updates to come still read the month (it is filling: `freezeStateFor`), and
- * "not read in {Month}" once none will (it has frozen), or while no update is
- * scheduled (paused).
+ * figures: "no reading yet" while the updates to come still read the month (it
+ * is filling: `freezeStateFor`), and "not read in {Month}" once none will (it
+ * has frozen), or while no update is scheduled (paused).
+ *
+ * ONE WORDING ON EVERY SURFACE (market page default M-a, 26 Sep): Your market,
+ * the Subjects rail and pane, This week and the artefacts built from them
+ * print this, and "provisional" stays the calibration word alone (decision
+ * C). It was the preview's "first reading with the 27 Sep update", which
+ * promised a date the page cannot see: a subject named after the back-read
+ * with no judged membership is read by no update, so no date is kept.
+ *
+ * "NOT READ IN {MONTH}" STAYS FOR A MONTH NO UPDATE WILL READ AGAIN: "yet"
+ * there would promise a reading that cannot come.
  */
 export function unreadWords(r: { month: string; filling: boolean; nextUpdate: string | null }): string {
-  if (r.filling && r.nextUpdate) return `first reading with the ${shortDate(r.nextUpdate)} update`
+  if (r.filling && r.nextUpdate) return NO_READING_YET
   return `not read in ${longMonth(r.month)}`
 }
 

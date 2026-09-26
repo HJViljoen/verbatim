@@ -8,6 +8,7 @@ import { SALES_GROUPS_SHOWN } from '@/lib/blocks/for-sales'
 import { OWN_POSTS_UNREAD, OWN_POSTS_UNREAD_OUTSIDE } from '@/lib/reading/own-posts'
 import { OWNER_LABEL } from '@/lib/readiness/types'
 import { FIRST_SCREEN_BUDGET, RIVAL_POSTS_CONSIDERED, RIVAL_POSTS_SHOWN, type WeekData } from '@/lib/pages/week'
+import { unreadWords } from '@/lib/subjects/read-in'
 import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } from '.'
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
@@ -1322,5 +1323,29 @@ describe('WK §2 under the three calibration states', () => {
     const text = renderText(weekSubjects.render(only, 'app', ctx))
     expect(text).toContain('being re-described')
     expect(text).not.toContain('No subjects are recorded')
+  })
+
+  // Default M-a: Community & purpose was named 24 Sep, after the update wrote
+  // September (staging), so the month was not read for it. It says "no
+  // reading yet", as Your market and the Subjects rail do, and never
+  // "provisional", which is the calibration word alone.
+  it('a subject the month was not read for says "no reading yet", not its calibration word, in every mode', () => {
+    const unread: WeekData = {
+      ...data,
+      subjects: {
+        ...data.subjects,
+        withheld: [
+          { id: 's-repair', label: 'Repair & warranty', calibration: 'failed' },
+          { id: 's-community', label: 'Community & purpose', calibration: 'provisional', unread: unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' }) },
+        ],
+      },
+    }
+    for (const mode of MODES) {
+      assertCopyContract(render(weekSubjects.render(unread, mode, ctx)))
+      const text = renderText(weekSubjects.render(unread, mode, ctx))
+      expect(text).toContain('Community & purpose no reading yet')
+      expect(text).not.toContain('provisional')
+      expect(text).toContain('Repair & warranty being re-described')
+    }
   })
 })

@@ -126,8 +126,8 @@ export const subjectsList: Block<SubjectsData> = {
               const failed = isFailed(r.calibration)
               const note = r.note && r.note !== word ? r.note : null
               // A ROW WITH NO FIGURE AND ITS OWN SENTENCE (a subject the
-              // month was not read for, "first reading with the 27 Sep
-              // update", or one not confirmed yet) says that sentence and no
+              // month was not read for, "no reading yet", or one not
+              // confirmed yet) says that sentence and no
               // word under its name, as the app's rail does: one line saying
               // why there is no figure, not two.
               const tagged = failed || r.market != null || r.level != null || note == null

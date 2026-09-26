@@ -230,7 +230,9 @@ function Column({ row, top, when = 'this month' }: { row: SubjectWeekRow; top: n
 /**
  * The confirmed subjects whose own side is not shown (decision C, WP1.1):
  * each named once, with its word, and no figure. "provisional": not checked
- * yet, or not clearly under the floor; "being re-described": clearly under.
+ * yet, or not clearly under the floor; "being re-described": clearly under;
+ * "no reading yet": the month was not read for it (`unread`, default M-a),
+ * in place of the calibration word, as on every other surface.
  *
  * ON SCREEN THEY ARE THE STRIP'S NEXT ROW (design pass). As a loose 12px line
  * under the bar legend they read as a footnote to the legend, and on a
@@ -246,7 +248,7 @@ function Withheld({ rows, email, strip }: { rows: NonNullable<WeekData['subjects
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>
         {rows.map((r, i) => (
-          <span key={r.id}>{i > 0 ? ' · ' : ''}{r.label} <CalibrationTag calibration={r.calibration} mode="email" /></span>
+          <span key={r.id}>{i > 0 ? ' · ' : ''}{r.label} <CalibrationTag calibration={r.calibration} unread={r.unread} mode="email" /></span>
         ))}
       </div>
     )
@@ -259,7 +261,7 @@ function Withheld({ rows, email, strip }: { rows: NonNullable<WeekData['subjects
         // hairline's pixel stay, so the text lands on the strip's x.
         <div key={r.id} className="flex min-w-0 flex-col gap-0.5 border-transparent xl:border-l xl:pl-4 xl:first:border-l-0 xl:first:pl-0">
           <span className="truncate text-[12.5px] font-medium text-muted-foreground" title={r.label}>{r.label}</span>
-          <CalibrationTag calibration={r.calibration} block />
+          <CalibrationTag calibration={r.calibration} unread={r.unread} block />
         </div>
       ))}
     </div>

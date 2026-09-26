@@ -275,8 +275,8 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
   }
   // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1) is laid
   // out as a failed row is: its name, and under it the words it prints in
-  // place of figures ("first reading with the 27 Sep update", the preview's
-  // row). Its name stays a link: the Subjects page opens its pane.
+  // place of figures ("no reading yet", `unreadWords`, default M-a). Its
+  // name stays a link: the Subjects page opens its pane.
   if (row.unread) {
     return (
       <tr className="border-t border-border/60 first:border-t-0">

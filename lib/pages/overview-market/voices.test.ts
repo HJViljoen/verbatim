@@ -87,4 +87,26 @@ describe('the quote rule (plan §4.0 Quotes)', () => {
     // The asks, and a tenant with no segment rule, keep the four rules alone.
     expect(pickQuotes(candidates, { month: '2026-09-01', kind: null, count: 2 }).map((p) => p.evidenceId)).toEqual(['ev-maker', 'ev-noise'])
   })
+
+  // Default M-c. Staging's 2 Oct headline on "Price and sale questions"
+  // printed "300rs pair + shipping . DM for order." (Instagram, 15 Sep, under
+  // a category video) beside "Wow so your bags cost K363 in Zambia? …"
+  // (TikTok, 18 Sep): the first is a seller's offer, not the market talking.
+  it('the headline\'s voices skip a sale offer or an ad and take the next eligible voice (default M-c)', () => {
+    const ZAMBIA = 'Wow so your bags cost K363 in Zambia? Definitely adding this to my future purchases'
+    const candidates = [
+      c({ evidenceId: 'ev-ad', rank: 1, quote: '300rs pair + shipping . DM for order.', segment: 'market' }),
+      c({ evidenceId: 'ev-zambia', rank: 2, quote: ZAMBIA, segment: 'market' }),
+      c({ evidenceId: 'ev-link', rank: 3, quote: 'Link da minha loja https://br.shp.ee/NZZK9LGT', lang: 'pt', english: 'My shop link https://br.shp.ee/NZZK9LGT', segment: 'market' }),
+      c({ evidenceId: 'ev-maker', rank: 4, quote: 'That first bag is how much in black', segment: 'maker' }),
+      c({ evidenceId: 'ev-market', rank: 5, segment: 'market' }),
+    ]
+    const opts = { month: '2026-09-01', kind: null, count: 2 }
+    expect(pickQuotes(candidates, { ...opts, marketVideosOnly: true, skipOffers: true }).map((p) => p.evidenceId)).toEqual(['ev-zambia', 'ev-market'])
+    // Makers stay excluded (decision F) with the offer rule on, and without a
+    // segment rule the offer rule alone still skips the ad.
+    expect(pickQuotes(candidates, { ...opts, skipOffers: true }).map((p) => p.evidenceId)).toEqual(['ev-zambia', 'ev-maker'])
+    // The asks do not take the rule: their four rules alone.
+    expect(pickQuotes(candidates, opts).map((p) => p.evidenceId)).toEqual(['ev-ad', 'ev-zambia'])
+  })
 })

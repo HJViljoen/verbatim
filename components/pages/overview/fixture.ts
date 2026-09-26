@@ -1227,8 +1227,8 @@ export function ossurFrontFixture(): OverviewData {
  * warranty 0.333 (failed). The three were named 23 Sep and confirmed in the
  * change log at 11:46 on 24 Sep. Community & purpose was named 24 Sep and
  * confirmed at 12:41, after the update wrote both months, and has no row in
- * any month: it was never read, so its row prints "first reading with the 4
- * Oct update" and no figure (WP1.1 review, finding 1), never "0 of 625". Read
+ * any month: it was never read, so its row prints "no reading yet" and no
+ * figure (WP1.1 review, finding 1; default M-a), never "0 of 625". Read
  * on 2 Oct, when August against September is refused.
  *
  * `unchecked` reads the named subjects as never checked (no calibration row),

@@ -1,5 +1,6 @@
 import { cleanQuote, readsAsHeroQuote } from '../../quotes'
 import { monthStartOf, nextMonth } from '../../reading/month-key'
+import { readsAsOffer } from './offers'
 
 // Which quotes the front page may print (market-first WP1.6; plan §4.0
 // "Quotes", §7.11).
@@ -19,6 +20,10 @@ import { monthStartOf, nextMonth } from '../../reading/month-key'
 //     F10);
 //   - not the video's own account: a creator answering under their own post is
 //     the video talking, not the market.
+//
+// AND, FOR THE HEADLINE'S VOICES, NEVER A SALE OFFER OR AN AD (default M-c,
+// `./offers.ts`): "300rs pair + shipping . DM for order." is someone selling
+// to the market, not the market talking. The next eligible voice is used.
 //
 // AND, FOR THE HEADLINE'S VOICES, NEVER FROM A MAKER'S VIDEO (decision F:
 // makers stay in every count and "never supply the headline's quotes"). The
@@ -92,14 +97,18 @@ export function quotable(c: QuoteCandidate, month: string, kind: string | null):
 /** Up to `count` quotes, by the evidence's own rank then its id, one per
  *  wording (the same comment quoted twice prints once). `marketVideosOnly`
  *  (the headline's voices where a segment rule applies, decision F) takes a
- *  quote only from a video whose segment was read as 'market'. */
-export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month: string; kind: string | null; count: number; marketVideosOnly?: boolean }): QuoteCandidate[] {
+ *  quote only from a video whose segment was read as 'market'. `skipOffers`
+ *  (the headline's voices, default M-c) skips a quote that reads as a sale
+ *  offer or an ad, in its own words or its English (`readsAsOffer`), and the
+ *  next eligible one is used. */
+export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month: string; kind: string | null; count: number; marketVideosOnly?: boolean; skipOffers?: boolean }): QuoteCandidate[] {
   const seen = new Set<string>()
   const out: QuoteCandidate[] = []
   const ordered = [...candidates].sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
   for (const c of ordered) {
     if (out.length >= opts.count) break
     if (opts.marketVideosOnly && c.segment !== 'market') continue
+    if (opts.skipOffers && (readsAsOffer(c.quote) || readsAsOffer(c.english))) continue
     if (!quotable(c, opts.month, opts.kind)) continue
     const key = cleanQuote(c.quote).toLowerCase()
     if (seen.has(key)) continue
