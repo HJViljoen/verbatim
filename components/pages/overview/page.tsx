@@ -82,7 +82,9 @@ export const overviewPage: PageModule<OverviewData> = {
   key: 'overview',
   // The sidebar's name for the page since deploy 2 (decision K, lib/nav.ts).
   title: 'Your market',
-  load: loadOverview,
+  // The export route, a report's page sections and `render-page.ts` draw the
+  // front page, so they build it as "Your market" (WP1.6).
+  load: (scope) => loadOverview(scope, { marketFront: true }),
   slides: overviewSlides,
   renderables,
   snapshotTitle: (d) => `Your market · ${d.brand} · ${longMonth(d.month)}`,

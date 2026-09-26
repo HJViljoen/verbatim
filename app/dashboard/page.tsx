@@ -24,6 +24,8 @@ export default async function Page({
 }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  const data = await loadOverview({ supabase, clientId, reading: readingHandle(clientId), params: sp })
+  // YOUR MARKET (market-first WP1.6): the one caller, with its export, that
+  // builds the page's market blocks and pays for their reads.
+  const data = await loadOverview({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { marketFront: true })
   return <OverviewPage data={data} params={sp} />
 }

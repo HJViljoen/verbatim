@@ -1972,6 +1972,18 @@ export type StoredSubjectRow = {
  */
 export interface LoadOverviewOptions {
   pinCalendarMonth?: boolean
+  /**
+   * Build the page as "Your market" (market-first WP1.6): the board, the hero
+   * and its voices, the asks, the change block and the brands line, with
+   * their own reads (about 8 to 11 PostgREST pages).
+   *
+   * ONLY WHERE THE FRONT PAGE IS DRAWN: the route, its export and snapshots
+   * (`overviewPage.load`), and the loader scripts that measure the page. The
+   * monthly (until WP2.1), the quarterly and the briefs (until WP3.11) print
+   * the Phase 1 blocks and never pass it, so they pay for none of those
+   * reads. Ignored when `pinCalendarMonth` is set (the weekly).
+   */
+  marketFront?: boolean
 }
 
 /**
@@ -2128,10 +2140,10 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // taken in wave 3.
   //
   // NOT ON THE NEW FRONT PAGE (market-first WP1.6): its theme board replaces
-  // the level list and reads its own rows (`loadMarketFrontPage`), so the list
-  // is read only where the page is not built as "Your market" (the weekly,
-  // which never prints it).
-  const marketFirst = !pinned
+  // the level list and reads its own rows (`loadMarketReads`), so the list is
+  // read only where the page is not built as "Your market": the monthly, the
+  // quarterly and the briefs, which print the Phase 1 blocks, and the weekly.
+  const marketFirst = !pinned && options.marketFront === true
   const levelPoolAhead = marketFirst ? Promise.resolve([] as string[]) : loadLevelPool(reading.client, clientId, month)
   levelPoolAhead.catch(() => {})
 
