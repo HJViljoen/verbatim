@@ -1113,6 +1113,13 @@ export function pooledSubjectCounts(
  * "+N videos since the last update"; This week's rows read the same days
  * (`clipToMonth`) and pool the same way (`pooledSubjectCounts`). Null where the windowed read cannot answer (M4 not
  * applied, or no window), never zeros.
+ *
+ * AND NULL WHERE NO DAY OF THE WINDOW FALLS IN THE MONTH (the deploy-3
+ * review): the weekly reads the calendar month, so on 1-3 Oct, after the 27
+ * Sep update, the window lies wholly in September and "+0 videos since the
+ * last update" on every October row would say the market was silent while that
+ * update brought September dozens. The row then prints no count, and the
+ * weekly says the arrivals are not recorded for it.
  */
 export async function marketSubjectArrivals(
   reading: ReadingHandle,
@@ -1123,7 +1130,7 @@ export async function marketSubjectArrivals(
 ): Promise<Map<string, number> | null> {
   if (!window) return null
   const days = clipToMonth(window, month)
-  if (!days) return new Map()
+  if (!days) return null
   const rowsIn = await readSubjectWindow(reading, clientId, days)
   return rowsIn ? pooledSubjectCounts(rowsIn, rivalAudiences) : null
 }

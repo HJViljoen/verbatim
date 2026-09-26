@@ -19,6 +19,7 @@ import {
   opensClusteringRegime,
   loadNewThemes,
   marketSubjectsOf,
+  marketSubjectArrivals,
   clipToMonth,
   pooledSubjectCounts,
   previousThemedRegime,
@@ -761,6 +762,14 @@ describe('the update’s days in a month, pooled on the market (WP2.7, the weekl
       .toEqual({ from: '2026-09-10T07:02:10.201Z', to: '2026-09-20T04:02:57.874Z' })
     // A window that ends before the month puts nothing into it.
     expect(clipToMonth({ from: '2026-08-11', to: '2026-09-01' }, '2026-09-01')).toBeNull()
+  })
+
+  it('gives the weekly no count, never "+0" on every row, where the update\'s days all fall before its month', async () => {
+    // The weekly on 2 Oct reads October; the 20 Sep update (staging) covered
+    // 10 to 20 Sep, so it put nothing into October and nothing is read.
+    const reading = new Proxy({}, { get: () => { throw new Error('no read expected') } }) as never
+    expect(await marketSubjectArrivals(reading, 'c', { from: '2026-09-10T07:02:10.201Z', to: '2026-09-20T04:02:57.874Z' }, '2026-10-01', [])).toBeNull()
+    expect(await marketSubjectArrivals(reading, 'c', null, '2026-10-01', [])).toBeNull()
   })
 
   it('sums the category and the tracked brands, never the client’s own posts or an untracked rival', () => {
