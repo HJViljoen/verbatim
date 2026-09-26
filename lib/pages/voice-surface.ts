@@ -25,7 +25,8 @@ import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingVi
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
-import { loadMonthSeries, loadPairOn, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { pairOnVerdict } from '../reading/comparability'
 import { comparableOn, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
@@ -1152,7 +1153,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   recordAhead.catch(() => {})
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
   const themedRunId = await themedRunAhead

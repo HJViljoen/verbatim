@@ -11,7 +11,8 @@ import { saveState, type SaveState } from '@/lib/settings/save-state'
 import { changesFromLog, comparabilityOf, type PairRow } from '@/lib/reading/comparability'
 import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { buildChangeBlock, compareRules } from '@/lib/pages/overview-market/change'
-import { ledgerLines, type ReachRow } from '@/lib/settings/what-we-changed'
+import { ledgerLines, recordView, type ReachRow } from '@/lib/settings/what-we-changed'
+import { pairJudge, pairOn } from '@/lib/reading/pairs'
 
 /**
  * The fixture behind the record page's blocks (block E wave 2).
@@ -337,10 +338,10 @@ export function unrecordedSaveStateFixture(): SaveState {
 // Sealand's September as the section reads it on 2 Oct, September ended and
 // read to the 27 Sep update. The change log is GC F2's (staging's copy of
 // production to 20 Sep): the 13 Sep additions and the 17 Sep script. The pair
-// row is a measured August against September: September's search-outside
-// count is staging's measured 206 of 625 (GC F29, the subset WP1.4's strict
-// count must reproduce), August's CQ F25's "about 115 of 351", depth DR F39's
-// medians 23 and 15. The 13 Sep reach is CQ F27's 187 (by last surfacing).
+// row is a measured August against September, staging's (Aug, Sep) row after
+// the 26 Sep MF1 rehearsal: the strict search-outside counts 148 of 351 and
+// 376 of 625 (category) and WP1.8's one figure, 356 of 654 (market), depth
+// DR F39's medians 23 and 15. The 13 Sep reach is CQ F27's 187 (by last surfacing).
 // The gate fix's reach is WP1.4's read-only staging dry run of 26 Sep
 // (`exec/logs/wp1-4-confirm-dry-measure-comparability-staging.txt`): 65 of
 // September's 654 market videos and 64 of its 625 category videos were let in
@@ -352,6 +353,23 @@ export function unrecordedSaveStateFixture(): SaveState {
 const WWC_ROWS: ConfigChange[] = [
   wwcChange({ id: 'wwc-0913', at: '2026-09-13T10:00:58.000Z', surface: 'terms', before: ['upcycled bag'], after: ['upcycled bag', 'handmade bag', 'sustainable fashion', 'travel gear'] }),
   wwcChange({ id: 'wwc-0917', at: '2026-09-17T16:02:56.000Z', surface: 'terms', before: ['upcycled bag'], after: ['upcycled bag', 'north face backpack', 'patagonia black hole', 'fombrand', 'made from waste', 'locally made south africa'] }),
+]
+
+// THE RECORD'S OTHER CHANGES (R-a, the grouped record): the 17 Sep rivals
+// (GC F2), and WP1.4's three logged rows with their approved notes, as
+// staging holds them after the 26 Sep rehearsal: the gate fix and attribution
+// v3 at the stand-in fix instant 26 Sep 12:00Z (the production deploy instant
+// is Heinrich's to give), and the capped update at the stand-in 20 Sep partial
+// run. Their reach is staging's `config_change_reach` (the gate fix 65 of 654
+// in September and none of 377 in August; attribution none in either).
+const WWC_MORE_ROWS: ConfigChange[] = [
+  { ...wwcChange({ id: 'wwc-rivals-0917', at: '2026-09-17T16:02:56.000Z', surface: 'rivals', before: ['Rareform'], after: ['Rareform', 'Freedom of Movement', 'Old School', 'Patagonia', 'The North Face'] }), field: 'competitor_names' },
+  { ...wwcChange({ id: 'wwc-capped', at: '2026-09-20T04:18:34.000Z', surface: 'other', before: null, after: null }), field: 'gather_capped', run_id: 'run-20sep', note: 'An update gathered less than usual because a spending cap was reached.' },
+  { ...wwcChange({ id: 'wwc-gate-fix', at: '2026-09-26T12:00:00.000Z', surface: 'gate_rule' as never, before: null, after: null }), field: 'relevance_gate', note: 'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts.' },
+  { ...wwcChange({ id: 'wwc-attribution', at: '2026-09-26T12:00:00.000Z', surface: 'attribution' as never, before: null, after: null }), field: 'attribution_v3', // NOT THE STORED NOTE (R-a): WP1.4's ATTRIBUTION_NOTE, "We improved how
+  // we tell…", trips the copy contract's direction-word rule (D1); this is
+  // the wording proposed for Heinrich's Mon 28 note read.
+  note: 'We changed how we tell which brand a post is about, so fewer posts are filed under the wrong brand.' },
 ]
 
 function wwcChange(o: { id: string; at: string; surface: ConfigChange['surface']; before: unknown; after: unknown }): ConfigChange {
@@ -399,5 +417,46 @@ export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
     rules: compareRules(block.pair),
     lines: ledgerLines({ changes, rows: WWC_ROWS, reach, runFinish }),
     asAt: '2026-09-27T08:30:00.000Z',
+  }
+}
+
+/**
+ * The grouped record (R-a) on the same September, with the record's other
+ * changes and a judge: `pairJudge` at 2 Oct over every change of ours except
+ * the capped update (a gather flag, not a change of ours: the page's judge,
+ * lib/reading/gather-flags.ts), the pair row above, and the 27 Sep update.
+ */
+export function recordFixture(opts: { measured?: boolean; judged?: boolean } = {}) {
+  const measured = opts.measured ?? true
+  const base = whatWeChangedFixture({ measured })
+  const rows = [...WWC_ROWS, ...WWC_MORE_ROWS]
+  const changes = changesFromLog(rows)
+  const judged = changesFromLog(rows.filter((r) => r.field !== 'gather_capped'))
+  const row = base.block.pair?.row ?? null
+  const runFinish = new Map([['run-27sep', '2026-09-27T08:30:00.000Z']])
+  const reach: ReachRow[] = measured
+    ? [
+        { changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 187, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-gate-fix', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-gate-fix', month: '2026-09-01', population: 'market', touched: 65, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-attribution', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-attribution', month: '2026-09-01', population: 'market', touched: 0, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+      ]
+    : []
+  const lines = ledgerLines({ changes, rows, reach, runFinish })
+  const judge = pairJudge({
+    now: '2026-10-02T06:00:00.000Z',
+    changes: judged,
+    rows: row ? [row] : [],
+    updates: [{ id: 'run-27sep', finishedAt: '2026-09-27T08:30:00.000Z' }],
+    nextUpdateAfter: scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' }),
+  })
+  return {
+    ...base,
+    lines,
+    view: recordView({
+      lines, changes, rows, pair: opts.judged === false ? null : pairOn(judge),
+      readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: base.block,
+    }),
   }
 }

@@ -1,8 +1,9 @@
 import { fmtInt } from '@/lib/format'
 import type { ChangeLogView, ClientChange } from '@/lib/settings/change-log'
-import { madeThisMonth, showingLine } from '@/lib/settings/change-log'
+import { madeThisMonth } from '@/lib/settings/change-log'
 
 import { MonthFlag, RecordSection } from './frame'
+import { LOG_LINES_SHOWN, ShowAll } from './show-all'
 
 /**
  * THE CHANGE LOG — the artboard's 4-column table (`record.changelog.*`).
@@ -59,16 +60,18 @@ import { MonthFlag, RecordSection } from './frame'
 const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border/60 py-3 last:border-b-0 xl:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] xl:items-start xl:py-3.5'
 
 export function ChangeLogBlock({
-  log, rows, showing, now, unavailable, title = 'The change log',
+  log, rows = LOG_LINES_SHOWN, now, unavailable, title = 'The change log',
 }: {
   /** The section's title. Settings › What we changed (market-first WP1.6)
    *  prints the changes of ours in its own dated list, and this block the
    *  rest, as "Other settings changes", so no change prints twice. */
   title?: string
   log: ChangeLogView
-  /** How many recorded rows the table draws. */
-  rows: number
-  showing: string | null
+  /** How many lines each list draws before its "Show all N" (the latest
+   *  five, Heinrich's default of 26 Sep, R-b). Every row is behind the
+   *  control, and every row prints: no row is capped away any more, so the
+   *  "Showing the 20 most recent of 33" line went with the cap. */
+  rows?: number
   now: string
   /** The sentence to print instead of a table where `config_changes` is not
    *  applied here. A missing table is not an empty log. */
@@ -81,10 +84,9 @@ export function ChangeLogBlock({
       </RecordSection>
     )
   }
-  const shown = log.recorded.slice(0, rows)
   return (
     <RecordSection title={title}>
-      {shown.length === 0 ? (
+      {log.recorded.length === 0 ? (
         <p className="m-0 text-[15px] text-muted-foreground">No change has been recorded yet.</p>
       ) : (
         <div className="flex flex-col">
@@ -96,12 +98,14 @@ export function ChangeLogBlock({
             <span>What it breaks</span>
             <span>Made by</span>
           </div>
-          {sameRows(shown).map(({ change, count }) => (
-            <ChangeRow key={change.id} change={change} count={count} now={now} />
-          ))}
+          <ShowAll
+            items={sameRows(log.recorded)}
+            count={log.recorded.length}
+            shown={rows}
+            render={({ change, count }) => <ChangeRow key={change.id} change={change} count={count} now={now} />}
+          />
         </div>
       )}
-      {showing ? <p className="m-0 text-[13px] text-muted-foreground">{showing}</p> : null}
       {log.prehistory.length > 0 ? <Prehistory log={log} rows={rows} now={now} /> : null}
     </RecordSection>
   )
@@ -178,7 +182,6 @@ function ChangeRow({ change, count = 1, now }: { change: ClientChange; count?: n
  * summed with the record. Kept, under their own heading, saying what they are.
  */
 function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now: string }) {
-  const showing = showingLine(rows, log.prehistory.length)
   return (
     <div className="flex flex-col gap-2 pt-2">
       {/* A sub-heading with its count, as the preview heads a group of rows
@@ -187,11 +190,13 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
         Before the record began · {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
       </h3>
       <div className="flex flex-col">
-        {sameRows(log.prehistory.slice(0, rows)).map(({ change, count }) => (
-          <ChangeRow key={change.id} change={change} count={count} now={now} />
-        ))}
+        <ShowAll
+          items={sameRows(log.prehistory)}
+          count={log.prehistory.length}
+          shown={rows}
+          render={({ change, count }) => <ChangeRow key={change.id} change={change} count={count} now={now} />}
+        />
       </div>
-      {showing ? <p className="m-0 text-[13px] text-muted-foreground">{showing}</p> : null}
     </div>
   )
 }

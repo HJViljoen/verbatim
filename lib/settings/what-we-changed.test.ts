@@ -4,6 +4,10 @@ import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
 import { SURFACE_WORDS } from './change-log'
 import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
+import { cellReadWith, mergeStops, recordGroupOf, recordPairs, recordView, stopLines, stopsOf, type StopEntry } from './what-we-changed'
+import { pairOn, type PairOn } from '../reading/pairs'
+import { CHANGES, SEALAND_LOG, sealandJudge } from '../test/sealand-pairs'
+import type { PairRow } from '../reading/comparability'
 
 // Sealand's change log around September (GC F2, staging's copy of production
 // to 20 Sep): the 9 Sep swap (seven terms out, seven in, one reconstructed row
@@ -166,5 +170,118 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     const line = ledgerLines({ changes: changesFromLog([onebag]), rows: [onebag], reach: [], runFinish: new Map() })[0]
     expect(line.words).toBe('1 community added')
     expect(line.items).toEqual({ added: ['r/onebag'], removed: [] })
+  })
+})
+
+
+// ---- The record, grouped (R-a) ---------------------------------------------------------
+
+describe('the record, grouped as the preview groups it', () => {
+  it('files the searches, communities, rivals and accounts under "What we search", the rest under "How we check, mark and file videos"', () => {
+    for (const s of ['terms', 'platforms', 'subreddits', 'rivals', 'handles']) expect(recordGroupOf(s)).toBe('search')
+    for (const s of ['gate_rule', 'attribution', 'segment', 'entity_retag', 'regate', 'prompt_version', 'knobs', 'rival_rename', 'other']) expect(recordGroupOf(s)).toBe('check')
+  })
+
+  it('asks about the pairs the page can show: each column month against the one before, and the reading month against the next', () => {
+    expect(recordPairs(['2026-08-01', '2026-09-01'], '2026-09-01')).toEqual([
+      { prevMonth: '2026-07-01', month: '2026-08-01' },
+      { prevMonth: '2026-08-01', month: '2026-09-01' },
+      { prevMonth: '2026-09-01', month: '2026-10-01' },
+    ])
+  })
+
+  // Sealand's real log (GC F2) judged at 2 Oct, with staging's measured
+  // (Aug, Sep) row after the 26 Sep rehearsal (exec/logs/staging-mf1-
+  // rehearsal-2026-09-26.md): 148 of 351 and 376 of 625 outside the unchanged
+  // searches, depth 21 against 14, read through the 20 Sep update.
+  const ROW: PairRow = {
+    prevMonth: '2026-08-01', month: '2026-09-01',
+    searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } },
+    codeChanges: [], depth: { prevMedian: 21, currMedian: 14 }, gather: [], lateCapture: null,
+    readThroughRun: 'run-2026-09-20', methodVersion: 'mf1_v1', computedAt: '2026-09-26T14:10:00.000Z',
+  }
+  const judge: PairOn = pairOn(sealandJudge('2026-10-02T06:00:00.000Z', [ROW]))
+  const pairs = recordPairs(['2026-08-01', '2026-09-01'], '2026-09-01')
+  const byId = new Map(CHANGES.map((c) => [c.id, c]))
+
+  it('a search change stops the pairs the searches reason refuses, measured where the row measured it', () => {
+    const stops = stopsOf(byId.get('terms-0913')!, judge, pairs)
+    expect(stops.map((e) => [e.pair.month, e.views, e.unmeasured])).toEqual([
+      ['2026-08-01', ['market', 'themes', 'brands'], true],
+      ['2026-09-01', ['market', 'themes', 'brands'], false],
+      ['2026-10-01', ['market', 'themes', 'brands'], true],
+    ])
+  })
+
+  it('a filing change stops brands and themes only, and never the market (decision E)', () => {
+    const stops = stopsOf(byId.get('retag-0909')!, judge, pairs)
+    expect(stops.every((e) => !e.views.includes('market'))).toBe(true)
+    expect(stopLines(stops, true)).toEqual(['Pairs with August or September, for brands and themes, until measured'])
+  })
+
+  it('merges a group’s stops a pair at a time, measured where any change’s refusal was', () => {
+    const merged = mergeStops([stopsOf(byId.get('terms-0913')!, judge, pairs), stopsOf(byId.get('rivals-0909')!, judge, pairs)])
+    expect(stopLines(merged)).toEqual([
+      'July against August, until measured',
+      'August against September',
+      'September against October, until measured',
+    ])
+  })
+
+  it('compresses only what reads true: "Pairs with September" is exactly August against September and September against October', () => {
+    const e = (prevMonth: string, month: string, views: StopEntry['views'] = ['themes'], unmeasured = false): StopEntry => ({ pair: { prevMonth, month }, views, unmeasured })
+    expect(stopLines([e('2026-08-01', '2026-09-01'), e('2026-09-01', '2026-10-01')], true)).toEqual(['Pairs with September, for themes'])
+    // Not every pair with August: listed one by one.
+    expect(stopLines([e('2026-07-01', '2026-08-01'), e('2026-09-01', '2026-10-01')], true)).toEqual([
+      'July against August, for themes',
+      'September against October, for themes',
+    ])
+    // Different states are never merged into one line.
+    expect(stopLines([e('2026-08-01', '2026-09-01', ['themes'], false), e('2026-09-01', '2026-10-01', ['themes'], true)], true)).toEqual([
+      'August against September, for themes',
+      'September against October, for themes, until measured',
+    ])
+    expect(stopLines([e('2026-08-01', '2026-09-01', ['brands', 'themes'])])).toEqual(['August against September, for brands and themes'])
+    expect(stopLines([e('2026-08-01', '2026-09-01', ['market', 'themes'])])).toEqual(['August against September'])
+  })
+
+  it('prints nothing awaiting a measure for a change that moves no view (an attention-panel freeze)', () => {
+    const panel = row({ id: 'panel', changed_at: '2026-09-24T12:16:36.000Z', surface: 'other', field: 'attention_panel' })
+    const changes = changesFromLog([panel])
+    const lines = ledgerLines({ changes, rows: [panel], reach: [], runFinish: new Map() })
+    const view = recordView({ lines, changes, rows: [panel], pair: judge, readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: null })
+    expect(view.groups.map((g) => g.key)).toEqual(['check'])
+    expect(view.groups[0].lines[0].cells.map((c) => c.state)).toEqual(['blank', 'blank'])
+    expect(view.groups[0].lines[0].stops).toEqual([])
+    expect(view.aside).toBeNull()
+  })
+
+  it('builds the view: groups, cells, the aside and "read with" said once', () => {
+    const reach: ReachRow[] = [
+      { changeId: 'terms-0913', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-2026-09-20', computedAt: '2026-09-26T14:08:00.000Z' },
+      { changeId: 'terms-0913', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-2026-09-20', computedAt: '2026-09-26T14:08:00.000Z' },
+    ]
+    const runFinish = new Map([['run-2026-09-20', '2026-09-20T12:00:00.000Z']])
+    const lines = ledgerLines({ changes: CHANGES, rows: SEALAND_LOG, reach, runFinish })
+    const view = recordView({ lines, changes: CHANGES, rows: SEALAND_LOG, pair: judge, readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: null })
+    expect(view.months).toEqual(['2026-08-01', '2026-09-01'])
+    expect(view.groups.map((g) => g.key)).toEqual(['search', 'check'])
+    expect(view.groups[1].lines.map((l) => l.line.surface)).toEqual(['entity_retag'])
+    const t13 = view.groups[0].lines.find((l) => l.line.changeId === 'terms-0913')!
+    expect(t13.cells).toEqual([
+      { month: '2026-08-01', state: 'none', readWith: '2026-09-20T12:00:00.000Z' },
+      { month: '2026-09-01', state: 'measured', touched: 182, of: 654, readWith: '2026-09-20T12:00:00.000Z' },
+    ])
+    // No figure in the aside here (no change block), so the one update is
+    // said beside the group's heading, and not in the cells.
+    expect(view.groups[0].readWith).toBe('2026-09-20T12:00:00.000Z')
+    expect(cellReadWith(t13.cells[1], view.groups[0], view.aside, 'search')).toBeNull()
+    expect(cellReadWith({ ...t13.cells[1], readWith: '2026-09-27T08:30:00.000Z' } as never, view.groups[0], view.aside, 'search')).toBe('2026-09-27T08:30:00.000Z')
+    expect(view.aside?.since).toBe('2026-09-17T16:02:56.000Z')
+    expect(view.aside?.stops).toEqual([
+      'July against August, until measured',
+      'August against September',
+      'September against October, until measured',
+    ])
   })
 })

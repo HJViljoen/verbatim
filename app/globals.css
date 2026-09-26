@@ -437,6 +437,14 @@
 }
 @media print { .crowd-bg { display: none; } }
 
+/* A long log's "Show all N" (Settings › The record, components/settings/record/
+   show-all.tsx): on paper every row prints, so a printed record is the whole
+   record. The closed disclosure's content is made visible and its control goes. */
+@media print {
+  details[data-print-all]::details-content { content-visibility: visible; display: block; }
+  details[data-print-all] > summary { display: none; }
+}
+
 /* ── Print mode (Reports & Exports, 2026-08-29) ─────────────────────────────
    The export renderer serves dashboard tiles under a `.vb-print` root and
    headless Chrome prints it: landscape, slide-shaped, one section per page.

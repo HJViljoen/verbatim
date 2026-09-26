@@ -1,9 +1,10 @@
 import type { ConfigChange } from '../config-log'
 import { fmtInt, longMonth, platformLabel } from '../format'
 import { subredditLabel } from '../gather/subreddits'
-import { activeCommunities, type OurChange } from '../reading/comparability'
-import { monthStartOf } from '../reading/month-key'
-import type { LedgerLine } from '../pages/overview-market/change'
+import { activeCommunities, changeInSpan, isSearchSurface, modeForShare, type OurChange } from '../reading/comparability'
+import { monthStartOf, nextMonth, prevMonth as monthBefore } from '../reading/month-key'
+import { BRANDS_PANEL, CATEGORY_AUDIENCE, type PairOn } from '../reading/pairs'
+import { whyCells, type ChangeBlock, type LedgerLine } from '../pages/overview-market/change'
 import { SURFACE_WORDS } from './change-log'
 
 // Settings › What we changed: the dated list of our own changes (market-first
@@ -348,4 +349,307 @@ export const monthHead = (month: string): string => longMonth(month)
 export function otherRows(rows: readonly ConfigChange[], changes: readonly OurChange[]): ConfigChange[] {
   const ours = new Set(changes.flatMap((c) => c.rowIds ?? [c.id]))
   return rows.filter((r) => !ours.has(r.id))
+}
+
+// ---- The record, grouped (Heinrich's default, 26 Sep, R-a) ---------------------------
+//
+// THE APPROVED PREVIEW'S RECORD (`SettingsRecord` artboard): the dated list in
+// two groups, "What we search" (the searches, communities, rivals and accounts
+// we read, the 9, 13 and 17 Sep changes) and "How we check, mark and file
+// videos" (everything else), with a "Comparisons it stops" column; the search
+// group's column is one aside for the whole group ("Together, these stop"),
+// because a search change's reach is measured for the month's searches
+// together, not per change (the pair row's search-outside count). It replaces
+// the thirteen flat rows. §4.2 pins one line per change, and each group keeps
+// one line per change.
+//
+// "READ WITH …" ONCE, where the preview states it once: a group whose measured
+// cells were all read with one update says so beside its heading (the
+// preview's "How we check, mark and file videos · due, not made yet" slot), or
+// in the aside's figure sentence for the search group; a cell read with
+// another update still says which.
+//
+// WHAT A CHANGE STOPS IS THE JUDGE'S, never recomputed: for each pair of
+// months the page can show (the months in the list's columns against the month
+// before each, and the reading month against the next), a change stops the
+// pair on a view when the page's own judge refuses it for that change, a
+// refusal at 10% or more, or unmeasured, which counts as 10% (decision D).
+// Search changes stop a pair together, through its searches reason.
+
+export type RecordGroupKey = 'search' | 'check'
+
+/** The two groups' headings, the preview's words. */
+export const RECORD_GROUP_TITLE: Readonly<Record<RecordGroupKey, string>> = {
+  search: 'What we search',
+  check: 'How we check, mark and file videos',
+}
+
+/** What we search: the searches, the communities, the rivals and the
+ *  accounts we read (the preview files the 17 Sep rivals with the 17 Sep
+ *  terms, and the footer's "What we search now →" opens the page that lists
+ *  all four). Every other surface is how we check, mark and file videos. */
+export const SEARCH_GROUP_SURFACES: readonly string[] = ['terms', 'platforms', 'subreddits', 'rivals', 'handles']
+
+export const recordGroupOf = (surface: string): RecordGroupKey => (SEARCH_GROUP_SURFACES.includes(surface) ? 'search' : 'check')
+
+/** The views a client reads, each with the audience its judge is asked on
+ *  (`viewForAudience`, lib/reading/pairs.ts). The lens view has no page yet. */
+const STOP_VIEWS = [
+  { view: 'market', audience: 'market' },
+  { view: 'themes', audience: CATEGORY_AUDIENCE },
+  { view: 'brands', audience: BRANDS_PANEL },
+] as const
+type StopView = (typeof STOP_VIEWS)[number]['view']
+
+export interface MonthPair { prevMonth: string; month: string }
+
+/** One pair a change (or the search group) stops, on the views it stops it
+ *  for; `unmeasured` when every refusal behind it is an unmeasured change. */
+export interface StopEntry { pair: MonthPair; views: StopView[]; unmeasured: boolean }
+
+/** The pairs the page can show, oldest first: each column month against the
+ *  month before it, and the reading month against the next. */
+export function recordPairs(months: readonly string[], readingMonth: string): MonthPair[] {
+  const later = new Set([...months.map(monthStartOf), nextMonth(readingMonth)])
+  return [...later].sort().map((m) => ({ prevMonth: monthBefore(m), month: m }))
+}
+
+/** The pairs one change stops, per the judge. A search change stops a pair
+ *  through the pair's searches reason (the searches are measured together);
+ *  any other change through a reason that names it. */
+export function stopsOf(change: OurChange, pair: PairOn, pairs: readonly MonthPair[]): StopEntry[] {
+  const ids = new Set(change.rowIds && change.rowIds.length > 0 ? change.rowIds : [change.id])
+  const search = isSearchSurface(change.surface)
+  const out: StopEntry[] = []
+  for (const p of pairs) {
+    if (!changeInSpan(change, p.prevMonth, p.month)) continue
+    const views: StopView[] = []
+    let measured = false
+    for (const { view, audience } of STOP_VIEWS) {
+      if (!change.affects.includes(view)) continue
+      const refusing = pair(p.prevMonth, p.month, audience).reasons.filter((r) =>
+        (search ? r.kind === 'searches' : (r.kind === 'code_change' || r.kind === 'searches') && r.changeId != null && ids.has(r.changeId))
+        && modeForShare(r.share) === 'refuse')
+      if (refusing.length === 0) continue
+      views.push(view)
+      if (refusing.some((r) => r.share != null)) measured = true
+    }
+    if (views.length > 0) out.push({ pair: p, views, unmeasured: !measured })
+  }
+  return out
+}
+
+/** Several changes' stops as one list, a pair once: its views together, and
+ *  unmeasured only where every change's refusal of it is. */
+export function mergeStops(lists: readonly (readonly StopEntry[])[]): StopEntry[] {
+  const byPair = new Map<string, StopEntry>()
+  for (const e of lists.flat()) {
+    const key = `${e.pair.prevMonth}|${e.pair.month}`
+    const held = byPair.get(key)
+    if (!held) {
+      byPair.set(key, { pair: e.pair, views: [...e.views], unmeasured: e.unmeasured })
+      continue
+    }
+    for (const v of e.views) if (!held.views.includes(v)) held.views.push(v)
+    held.unmeasured = held.unmeasured && e.unmeasured
+  }
+  return [...byPair.values()].sort((a, b) => (a.pair.month < b.pair.month ? -1 : 1))
+}
+
+const orList = (names: readonly string[]): string =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`
+
+/** ", for themes", ", for brands and themes", or nothing where the market
+ *  view is stopped (a pair stopped for the market is stopped for everything
+ *  read inside it). */
+function viewWords(views: readonly StopView[]): string {
+  if (views.includes('market')) return ''
+  const named = (['brands', 'themes'] as const).filter((v) => views.includes(v))
+  return named.length > 0 ? `, for ${andList(named)}` : ''
+}
+
+const pairWords = (p: MonthPair): string => `${longMonth(p.prevMonth)} against ${longMonth(p.month)}`
+
+/**
+ * A list of stops in words, one line each: "August against September", "…,
+ * for themes", "…, until measured". Where `compress` is set (the narrow
+ * column), pairs with the same views and state that are exactly every pair
+ * with some months read as "Pairs with September" (the preview's words) or
+ * "Pairs with August or September".
+ */
+export function stopLines(stops: readonly StopEntry[], compress = false): string[] {
+  const tail = (e: Pick<StopEntry, 'views' | 'unmeasured'>): string => `${viewWords(e.views)}${e.unmeasured ? ', until measured' : ''}`
+  if (!compress) return stops.map((e) => `${pairWords(e.pair)}${tail(e)}`)
+  const groups = new Map<string, StopEntry[]>()
+  for (const e of stops) {
+    const key = `${[...e.views].sort().join('+')}|${e.unmeasured}`
+    groups.set(key, [...(groups.get(key) ?? []), e])
+  }
+  const out: { at: string; words: string }[] = []
+  for (const entries of groups.values()) {
+    const held = new Set(entries.map((e) => `${e.pair.prevMonth}|${e.pair.month}`))
+    const has = (a: string, b: string): boolean => held.has(`${a}|${b}`)
+    const months = [...new Set(entries.flatMap((e) => [e.pair.prevMonth, e.pair.month]))].sort()
+    const hubs = months.filter((m) => has(monthBefore(m), m) && has(m, nextMonth(m)))
+    const covered = new Set(hubs.flatMap((m) => [`${monthBefore(m)}|${m}`, `${m}|${nextMonth(m)}`]))
+    if (entries.length > 1 && hubs.length > 0 && covered.size === held.size && [...held].every((k) => covered.has(k))) {
+      out.push({ at: entries[0].pair.month, words: `Pairs with ${orList(hubs.map(longMonth))}${tail(entries[0])}` })
+    } else {
+      for (const e of entries) out.push({ at: e.pair.month, words: `${pairWords(e.pair)}${tail(e)}` })
+    }
+  }
+  return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).map((o) => o.words)
+}
+
+/** What a month cell of the record prints. */
+export type RecordCell =
+  | { month: string; state: 'measured'; touched: number; of: number; readWith: string | null }
+  | { month: string; state: 'none'; readWith: string | null }
+  | { month: string; state: 'unmeasured' | 'untouched' | 'blank' }
+
+export interface RecordLine {
+  line: Line
+  cells: RecordCell[]
+  /** What it stops, in words (the narrow column's compressed form); null
+   *  where no judge was handed in (a stored or fixture render). */
+  stops: string[] | null
+  /** Under "none", what that means, where it needs saying (the preview's
+   *  "nothing leaves a count" under the makers' marks). */
+  noneNote: string | null
+}
+
+export interface RecordGroup {
+  key: RecordGroupKey
+  title: string
+  lines: RecordLine[]
+  /** The one update every measured cell in the group was read with, said
+   *  once beside the heading; null where it is said in the aside, or where the
+   *  cells were read with different updates (each cell says its own). */
+  readWith: string | null
+}
+
+export interface SearchAside {
+  /** "Together, these stop": each pair once, in words. Null without a judge. */
+  stops: string[] | null
+  /** The month's one figure (the front page's sentence, `whyCells`), with the
+   *  update it was read with: where the preview states it once. */
+  figure: { k: number; n: number; words: string; readWith: string | null } | null
+  /** The day of the latest change in the group: "Since 17 Sep nothing we
+   *  search has changed." */
+  since: string | null
+}
+
+export interface RecordView {
+  /** The columns: the last two months the list touches (`ledgerMonths`). */
+  months: string[]
+  groups: RecordGroup[]
+  aside: SearchAside | null
+}
+
+type Line = ReturnType<typeof ledgerLines>[number]
+
+/** The capped update is a gather event: nothing is moved into or out of a
+ *  month by it, so it has no reach to measure and its cells print nothing. */
+const isGatherEvent = (change: OurChange | undefined, rows: readonly ConfigChange[]): boolean => {
+  if (!change || change.surface !== 'other') return false
+  const ids = new Set(change.rowIds ?? [change.id])
+  const mine = rows.filter((r) => ids.has(r.id))
+  return mine.length > 0 && mine.every((r) => CLIENT_NOTE_OTHER_FIELDS.has(r.field ?? ''))
+}
+
+/** "none" needs a word only where a reader would ask why. */
+const NONE_NOTE: Partial<Record<string, string>> = {
+  segment: 'nothing leaves a count',
+}
+const GATHER_NONE_NOTE = 'no pair is refused for it'
+
+/**
+ * The record as the preview draws it: the two groups (an empty one is left
+ * out), each line's cells and what it stops, and the search group's aside.
+ * `pair` is the page's judge (`loadAppPairOn`); without one nothing is said
+ * about what a change stops.
+ */
+export function recordView(input: {
+  lines: readonly Line[]
+  changes: readonly OurChange[]
+  rows: readonly ConfigChange[]
+  pair: PairOn | null
+  readingMonth: string
+  prevMonth: string | null
+  block: ChangeBlock | null
+}): RecordView {
+  const months = ledgerMonths(input.lines, input.readingMonth, input.prevMonth)
+  const pairs = recordPairs(months, input.readingMonth)
+  const byId = new Map(input.changes.map((c) => [c.id, c]))
+  const rawStops = new Map<string, StopEntry[]>()
+
+  const lineOf = (l: Line): RecordLine => {
+    const change = byId.get(l.changeId)
+    const gather = isGatherEvent(change, input.rows)
+    const cells: RecordCell[] = months.map((m) => {
+      if (gather) return { month: m, state: 'blank' }
+      const measure = (l.months ?? []).find((x) => x.month === m)
+      if (measure) {
+        return measure.touched === 0
+          ? { month: m, state: 'none', readWith: measure.readWith }
+          : { month: m, state: 'measured', touched: measure.touched, of: measure.of, readWith: measure.readWith }
+      }
+      // A change that moves no view (an attention-panel freeze; a makers'
+      // mark with no count stored) has nothing awaiting a measure: its cells
+      // print nothing, never "not measured yet".
+      if (change && change.affects.length === 0) return { month: m, state: 'blank' }
+      return { month: m, state: monthStartOf(l.date) === m ? 'unmeasured' : 'untouched' }
+    })
+    const stops = input.pair && change ? stopsOf(change, input.pair, pairs) : null
+    if (stops) rawStops.set(l.changeId, stops)
+    return {
+      line: l,
+      cells,
+      stops: stops ? stopLines(stops, true) : null,
+      noneNote: stops && stops.length === 0 ? (gather ? GATHER_NONE_NOTE : NONE_NOTE[l.surface] ?? null) : null,
+    }
+  }
+
+  const grouped: Record<RecordGroupKey, RecordLine[]> = { search: [], check: [] }
+  for (const l of input.lines) grouped[recordGroupOf(l.surface)].push(lineOf(l))
+
+  // The search group's aside: what its changes stop together, the month's one
+  // figure with its update, and since when nothing we search has changed.
+  const searchLines = grouped.search
+  const why = input.block ? whyCells(input.block).find((c) => c.key === 'searches') ?? null : null
+  const figure = why ? { k: why.figure, n: why.base.value, words: why.caption, readWith: why.readWith } : null
+  const latest = searchLines.map((r) => r.line.date).filter((d) => !Number.isNaN(Date.parse(d))).sort().at(-1) ?? null
+  const aside: SearchAside | null = searchLines.length > 0
+    ? {
+        stops: input.pair ? stopLines(mergeStops(searchLines.map((r) => rawStops.get(r.line.changeId) ?? []))) : null,
+        figure,
+        since: latest,
+      }
+    : null
+
+  /** The update every measured cell in a group was read with, or null. */
+  const oneUpdate = (lines: readonly RecordLine[]): string | null => {
+    const dates = new Set<string>()
+    for (const r of lines) for (const c of r.cells) if ((c.state === 'measured' || c.state === 'none') && c.readWith) dates.add(c.readWith.slice(0, 10))
+    return dates.size === 1 ? lines.flatMap((r) => r.cells).map((c) => ('readWith' in c ? c.readWith : null)).find((d): d is string => !!d) ?? null : null
+  }
+  const groups: RecordGroup[] = []
+  if (searchLines.length > 0) {
+    const once = oneUpdate(searchLines)
+    // Said in the aside's figure sentence where it is the same update.
+    const inAside = once != null && figure?.readWith != null && figure.readWith.slice(0, 10) === once.slice(0, 10)
+    groups.push({ key: 'search', title: RECORD_GROUP_TITLE.search, lines: searchLines, readWith: inAside ? null : once })
+  }
+  if (grouped.check.length > 0) {
+    groups.push({ key: 'check', title: RECORD_GROUP_TITLE.check, lines: grouped.check, readWith: oneUpdate(grouped.check) })
+  }
+  return { months, groups, aside }
+}
+
+/** The update a cell was read with, where its group does not say it once:
+ *  null where the group (or the aside) already says the same update. */
+export function cellReadWith(cell: RecordCell, group: Pick<RecordGroup, 'readWith'>, aside: Pick<SearchAside, 'figure'> | null, key: RecordGroupKey): string | null {
+  if (!('readWith' in cell) || !cell.readWith) return null
+  const said = group.readWith ?? (key === 'search' ? aside?.figure?.readWith ?? null : null)
+  return said && said.slice(0, 10) === cell.readWith.slice(0, 10) ? null : cell.readWith
 }

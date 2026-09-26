@@ -28,7 +28,8 @@ import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/readin
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { loadChanges, loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -1670,7 +1671,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   recordAhead.catch(() => {})
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
 
   const perAudience = new Map<string, number>()
   const denominatorByMonth = new Map<string, number>()
