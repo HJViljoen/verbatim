@@ -903,6 +903,66 @@ export function matchWords(text: string): string[] {
 }
 
 /**
+ * THE GENERIC WORDS (market-first WP2.5): words every post and every question
+ * in this category shares, so sharing one says nothing about whether a post
+ * touched a question. "bag" is in nearly every question label and every post's
+ * topics; "handmade", "love" and "buy" are the market's own framing; and the
+ * label words a clustering puts at the front of a group ("Questions about",
+ * "Demand for", "Worries about", "Confusion over") name the KIND of thing
+ * said, not its subject. A post touches a question only on two words that are
+ * none of these. Stemmed as `matchWords` stems (a trailing s dropped).
+ */
+export const GENERIC_WORDS: ReadonlySet<string> = new Set([
+  'bag', 'backpack', 'pack', 'handmade', 'love', 'buy', 'buying', 'want', 'like', 'need', 'make', 'made',
+  'good', 'great', 'nice', 'best', 'new', 'product', 'video', 'post', 'brand', 'people', 'thing', 'one', 'get',
+  'question', 'demand', 'worrie', 'worry', 'concern', 'confusion', 'interest', 'frustration', 'praise',
+  'request', 'desire', 'wish', 'curiosity', 'comment', 'feedback', 'appreciation', 'admiration', 'excitement',
+  'over', 'into', 'onto', 'than', 'then', 'just', 'very', 'more', 'most', 'some', 'such', 'only', 'also',
+  'after', 'before', 'their', 'there', 'other', 'every', 'much', 'many', 'way', 'real',
+])
+
+/** A text's non-generic words (`matchWords` without `GENERIC_WORDS`). */
+export function contentWords(text: string): string[] {
+  return matchWords(text).filter((w) => !GENERIC_WORDS.has(w))
+}
+
+/** Each matched stem as the label wrote it ("canva" is printed "canvas"):
+ *  the first word in the text that stems to it. */
+function spelledAs(text: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const folded = text.normalize('NFD').replace(COMBINING, '').toLowerCase()
+  for (const w of folded.split(/[^a-z0-9]+/)) {
+    if (w.length < 3) continue
+    const stem = w.length >= 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w
+    if (!out.has(stem)) out.set(stem, w)
+  }
+  return out
+}
+
+/**
+ * Which of your posts share two or more of a label's non-generic words, and on
+ * which words (WP2.5: a "none" can be checked). Each POST is matched on its
+ * own: two words from two different posts are not one post touching the
+ * question. `checked` is the label's words a post had to share.
+ */
+export function postsSharing(
+  label: string,
+  posts: readonly { id: string; topics: readonly string[] | null }[],
+): { checked: string[]; matched: { id: string; words: string[] }[] } {
+  const stems = contentWords(label)
+  const spelling = spelledAs(label)
+  const spell = (w: string) => spelling.get(w) ?? w
+  const checked = stems.map(spell)
+  if (stems.length < 2) return { checked, matched: [] }
+  const matched = posts.flatMap((p) => {
+    const pool = new Set((p.topics ?? []).flatMap(contentWords))
+    const words = stems.filter((w) => pool.has(w))
+    return words.length >= 2 ? [{ id: p.id, words: words.map(spell) }] : []
+  })
+  return { checked, matched }
+}
+
+/**
  * Did any of your own posts touch this question?
  *
  * TWO CONTENT WORDS IN COMMON, ALWAYS. One shared word is "bag", and one
@@ -918,9 +978,10 @@ export function matchWords(text: string): string[] {
  * CLAIM is unreadable until M8 — see UNANSWERED_CLAIMS_UNREADABLE.
  */
 export function answeredBy(label: string, haystack: readonly string[]): boolean {
-  const want = matchWords(label)
+  // Two NON-GENERIC words (WP2.5): "bag" and "love" touch every question.
+  const want = contentWords(label)
   if (want.length < 2) return false
-  const pool = new Set(haystack.flatMap(matchWords))
+  const pool = new Set(haystack.flatMap(contentWords))
   const hits = want.filter((w) => pool.has(w)).length
   return hits >= 2
 }
@@ -2964,7 +3025,6 @@ async function loadUnanswered(
   // would work and is refused: `reading.client` is the month tables' client,
   // and "one careless `reading.client.from('<not a month table>')` away from an
   // RLS bypass" is the rule that file states about itself.
-  const haystack = ownVideos.flatMap((v) => v.topics ?? [])
 
   const nonOwned = new Set<string>()
   const questionInsights: InsightRow[] = []
@@ -3025,7 +3085,9 @@ async function loadUnanswered(
       label: g.label,
       videos: g.videos.size,
       reddit: g.reddit.size,
-      answered: answeredBy(g.label, haystack),
+      // PER POST (WP2.5): one of your posts shares two or more of the
+      // question's non-generic words; two words from two posts are not one.
+      answered: postsSharing(g.label, ownVideos).matched.length > 0,
       // NO ONWARD LINK. The obvious one is Voice's `?themes=`, and that
       // parameter matches on `themes.member_themes` SLUGS, not on a registry
       // id — a link that would silently filter to nothing. VO3 (WP13) is where
@@ -3060,7 +3122,7 @@ async function loadUnanswered(
  * registry's canonical label is the words; the run's own label is the fallback,
  * because a registry row can be newer than its canonical label.
  */
-async function nameQuestions(
+export async function nameQuestions(
   supabase: SupabaseClient,
   clientId: string,
   themedRunId: string | null,
@@ -3376,6 +3438,67 @@ export function monthCardState(input: {
   const day = Math.ceil(days * READING_SWITCH_FRACTION)
   const from = `${m.slice(0, 8)}${String(day).padStart(2, '0')}`
   return `so far from ${shortDate(from)} · ended from ${shortDate(nextMonth(m))}`
+}
+
+// ---- WP2.5 · the questions each subject was asked, for the front page -------------
+
+/** One subject's questions over a window: the videos that asked (not your
+ *  own), and the question insights behind them. */
+export interface SubjectQuestions {
+  subjectId: string
+  questionVideos: number
+  insights: { id: string; videoId: string }[]
+}
+
+/**
+ * Every subject's question videos over a window, in ONE paged read (WP2.5):
+ * the members that are question insights, embedded with their video's
+ * upload day and whose audience it is. The same count SU3 prints on the
+ * Subjects page (`loadUnanswered`: non-owned videos, placed by the day they
+ * were posted), for all subjects at once, so the front page can name the one
+ * asked about most. Null where M4 is not applied.
+ */
+export async function loadQuestionsBySubject(
+  supabase: SupabaseClient,
+  clientId: string,
+  subjectIds: readonly string[],
+  window: { from: string; to: string },
+): Promise<SubjectQuestions[] | null> {
+  if (subjectIds.length === 0) return []
+  type Row = {
+    subject_id: string
+    audience_insight_id: string
+    audience_insights: { source_video_id: string | null; videos: { is_client: boolean | null; upload_date: string | null } | { is_client: boolean | null; upload_date: string | null }[] | null } | null
+  }
+  try {
+    const rows = await selectAll<Row>(() =>
+      supabase
+        .from(TABLE_SUBJECT_MEMBERSHIPS)
+        .select('subject_id, audience_insight_id, audience_insights!inner(source_video_id, videos(is_client, upload_date))')
+        .eq('client_id', clientId)
+        .in('subject_id', [...subjectIds])
+        .eq('member', true)
+        .eq('audience_insights.category', 'question')
+        .order('audience_insight_id', { ascending: true }) as never,
+    )
+    const from = window.from.slice(0, 10)
+    const to = window.to.slice(0, 10)
+    const out = new Map<string, { videos: Set<string>; insights: { id: string; videoId: string }[] }>(subjectIds.map((id) => [id, { videos: new Set(), insights: [] }]))
+    for (const r of rows) {
+      const ai = r.audience_insights
+      const v = Array.isArray(ai?.videos) ? ai?.videos[0] ?? null : ai?.videos ?? null
+      const day = v?.upload_date?.slice(0, 10) ?? null
+      if (!ai?.source_video_id || !v || v.is_client || !day || day < from || day >= to) continue
+      const held = out.get(r.subject_id)
+      if (!held) continue
+      held.videos.add(ai.source_video_id)
+      held.insights.push({ id: r.audience_insight_id, videoId: ai.source_video_id })
+    }
+    return [...out.entries()].map(([subjectId, h]) => ({ subjectId, questionVideos: h.videos.size, insights: h.insights }))
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
 }
 
 // ---- what the blocks declare ----------------------------------------------------

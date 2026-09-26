@@ -66,6 +66,9 @@ import { marketAudiences, pooledDenominators } from '../reading/market'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
+import { buildForYou, buildPublished, type ForYouBlock, type PublishedCensus } from './overview-market/foryou'
+import type { SubjectCalibrationWord } from './overview-market/subjects'
+import { loadQuestionsBySubject, nameQuestions, postsSharing, UNANSWERED_SHOWN } from './subjects'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
@@ -810,6 +813,12 @@ export interface OverviewData {
   category: CategoryBlock
   rivals: RivalsBlock
   moves: MovesBlock
+  /** What it means for you (market-first WP2.5, §4.2 `ForYouBlock`): counted
+   *  line-ups, set on the market page only. Absent on a stored page. */
+  foryou?: ForYouBlock
+  /** What you published (WP2.5, §2.2 block 8): the posts census, set on the
+   *  market page only. Absent on a stored page, which prints OV5 as sent. */
+  published?: PublishedCensus
   record: RecordBlock
   /**
    * The method footnote, composed once for every surface (block D, D9).
@@ -2170,6 +2179,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // read only where the page is not built as "Your market": the monthly, the
   // quarterly and the briefs, which print the Phase 1 blocks, and the weekly.
   const marketFirst = !pinned && options.marketFront === true
+  // WHAT IT MEANS FOR YOU (market-first WP2.5): your posts over the last three
+  // months, with what they are about; one read that also gives the census its
+  // month before. Started here, taken at the end.
+  const postsAhead = marketFirst ? loadRecentOwnPosts(supabase, clientId, month) : Promise.resolve(null)
+  postsAhead.catch(() => {})
   const levelPoolAhead = marketFirst ? Promise.resolve([] as string[]) : loadLevelPool(reading.client, clientId, month)
   levelPoolAhead.catch(() => {})
 
@@ -2267,6 +2281,14 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       segmentRowsAhead,
     ])
   const makerShares = segmentRows ? makerSharesOf(segmentRows) : null
+  // WP2.5's questions line, beside the rest of the page (its reads need the
+  // subjects, read just above, and nothing below).
+  const questionsAhead: Promise<ForYouQuestions> = marketFirst
+    ? loadForYouQuestions({ supabase, clientId, month, themedRunId, subjectRows, posts: postsAhead }).catch((error: unknown) => {
+        console.error(`[pages] overview.foryou questions: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      })
+    : Promise.resolve(null)
 
   const pair = await judgeAhead
 
@@ -2584,8 +2606,26 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       })
     : {}
 
+  // ── What it means for you, and what you published (WP2.5) ─────────────
+  const you = marketFirst
+    ? await buildForYouAndPublished({
+        month,
+        subjectRows,
+        questions: questionsAhead,
+        lead: 'hero' in front && front.hero?.kind === 'themes' && front.hero.lead
+          ? { label: front.hero.lead.label, fewMakers: 'themes' in front && front.themes?.segments === 'measured' }
+          : null,
+        posts: await postsAhead,
+        card: await cardAhead,
+        audience: history.denominators.find((d) => monthStartOf(d.month) === monthStartOf(month) && d.audience === CLIENT_AUDIENCE) ?? null,
+        themes: themeSet.series,
+        movesDated: moves.rows.length,
+      })
+    : {}
+
   return {
     ...front,
+    ...you,
     brand,
     month,
     monthStatus,
@@ -2764,6 +2804,176 @@ export type ClientPost = {
   /** The run whose analysis is this post's current one. Null means we have not
    *  read it — the subject rows denominate on the ones we have. */
   analyzed_run_id: string | null
+}
+
+/** One of your posts over the last three months, with what it is about
+ *  (`videos.topics`), for WP2.5's line-ups and census. */
+interface RecentPost { id: string; upload_date: string | null; comments_count: number | null; topics: string[] | null; analyzed_run_id: string | null }
+
+/**
+ * Your posts over the three months ending with the reading month, dated by the
+ * post (`upload_date`), as the Subjects page's questions read them
+ * (`is_client`): the questions line's "your 56 posts", the lead line's posts
+ * of the month, and the census's month before. One read. Null where it failed.
+ */
+async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<RecentPost[] | null> {
+  const from = previousMonthOf(previousMonthOf(monthStartOf(month)))
+  try {
+    return await selectAll<RecentPost>(() =>
+      supabase
+        .from('videos')
+        .select('id, upload_date, comments_count, topics, analyzed_run_id')
+        .eq('client_id', clientId)
+        .eq('is_client', true)
+        .gte('upload_date', from)
+        .lt('upload_date', nextMonth(month))
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    console.error(`[pages] overview.recentPosts: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  }
+}
+
+/** The questions line's input (`buildForYou`'s `questions`). */
+type ForYouQuestions = Parameters<typeof buildForYou>[0]['questions']
+
+/**
+ * The subject the market asked about most over the three months ending with
+ * the reading month, its question groups and which of your posts share two
+ * or more words with them: one read for every subject's question videos, then
+ * the top subject's groups (the themed run's themes and the registry's
+ * labels). Started as soon as the subjects are read, so its three serial reads
+ * run beside the rest of the page. Null where no subject was asked about or a
+ * read failed (the page then prints no questions line).
+ */
+async function loadForYouQuestions(input: {
+  supabase: SupabaseClient
+  clientId: string
+  month: string
+  themedRunId: string | null
+  subjectRows: readonly Subject[] | null
+  posts: Promise<RecentPost[] | null>
+}): Promise<ForYouQuestions> {
+  const m = monthStartOf(input.month)
+  const prev = previousMonthOf(m)
+  const active = (input.subjectRows ?? []).filter((x) => x.status === 'active')
+  const calibrationOf = new Map(active.map((x) => [x.id, subjectCalibration(x) as SubjectCalibrationWord]))
+  // The subject the market asked about most, over three months.
+  let questions: ForYouQuestions = null
+  // Your posts could not be read: no line, rather than "none of your 0 posts".
+  const recent = await input.posts
+  if (!recent) return null
+  const posts = recent
+  const askable = active.filter((x) => calibrationOf.get(x.id) !== 'failed')
+  if (askable.length > 0) {
+    const window = { from: `${previousMonthOf(prev)}T00:00:00.000Z`, to: `${nextMonth(m)}T00:00:00.000Z` }
+    const asked = await loadQuestionsBySubject(input.supabase, input.clientId, askable.map((x) => x.id), window).catch((error: unknown) => {
+      console.error(`[pages] overview.foryou questions: ${(error as { message?: string })?.message ?? String(error)}`)
+      return null
+    })
+    const top = (asked ?? [])
+      .filter((a) => a.questionVideos > 0)
+      .sort((a, b) => b.questionVideos - a.questionVideos || (askable.find((x) => x.id === a.subjectId)?.name ?? '').localeCompare(askable.find((x) => x.id === b.subjectId)?.name ?? ''))[0]
+    if (top) {
+      const named = await nameQuestions(input.supabase, input.clientId, input.themedRunId, top.insights.map((i) => i.id)).catch(() => new Map<string, { registryId: string; label: string }>())
+      const groups = new Map<string, { label: string; videos: Set<string> }>()
+      for (const i of top.insights) {
+        const at = named.get(i.id)
+        if (!at) continue
+        const g = groups.get(at.registryId) ?? { label: at.label, videos: new Set<string>() }
+        g.videos.add(i.videoId)
+        groups.set(at.registryId, g)
+      }
+      const shown = [...groups.values()].sort((a, b) => b.videos.size - a.videos.size || a.label.localeCompare(b.label)).slice(0, UNANSWERED_SHOWN)
+      const byPost = new Map<string, Set<string>>()
+      const checked: string[] = []
+      for (const g of shown) {
+        const sharing = postsSharing(g.label, posts)
+        for (const w of sharing.checked) if (!checked.includes(w)) checked.push(w)
+        for (const mp of sharing.matched) byPost.set(mp.id, new Set([...(byPost.get(mp.id) ?? []), ...mp.words]))
+      }
+      const subject = askable.find((x) => x.id === top.subjectId)!
+      questions = {
+        subject: { id: subject.id, name: subject.name, calibration: calibrationOf.get(subject.id) ?? 'provisional' },
+        asked: top.questionVideos,
+        posts: posts.length,
+        sharing: { checked, matched: [...byPost.entries()].map(([id, words]) => ({ id, words: [...words] })) },
+      }
+    }
+  }
+
+  return questions
+}
+
+/**
+ * WP2.5's two blocks, from what the page read: the line-ups (`buildForYou`)
+ * and the posts census (`buildPublished`).
+ *
+ * THE QUESTIONS LINE IS THE SUBJECTS PAGE'S S4 OVER THE LAST THREE MONTHS, for
+ * the subject asked about most: its question videos (one read for every
+ * subject, `loadQuestionsBySubject`), its question groups as that page lists
+ * them (`nameQuestions`, the top three by videos), and which of your posts in
+ * the same months share two or more non-generic words with any of them. A
+ * subject being re-described has no line. Three reads, and none where no
+ * subject is named.
+ */
+async function buildForYouAndPublished(input: {
+  month: string
+  subjectRows: readonly Subject[] | null
+  /** The questions line's input, read beside the page (`loadForYouQuestions`). */
+  questions: Promise<ForYouQuestions>
+  lead: { label: string; fewMakers: boolean } | null
+  posts: RecentPost[] | null
+  card: CardInputs
+  audience: { videos: number; comments: number } | null
+  themes: readonly MonthSeries[]
+  movesDated: number
+}): Promise<{ foryou: ForYouBlock; published: PublishedCensus | undefined }> {
+  const m = monthStartOf(input.month)
+  const prev = previousMonthOf(m)
+  const inMonth = (p: RecentPost, month: string) => (p.upload_date ?? '').slice(0, 7) === month.slice(0, 7)
+  const posts = input.posts ?? []
+  const monthPosts = posts.filter((p) => inMonth(p, m))
+  const active = (input.subjectRows ?? []).filter((x) => x.status === 'active')
+  const calibrationOf = new Map(active.map((x) => [x.id, subjectCalibration(x) as SubjectCalibrationWord]))
+
+  const questions = await input.questions
+
+  // The lead theme against your posts of the month.
+  const lead = input.lead && input.posts
+    ? { label: input.lead.label, posts: monthPosts.length, sharing: postsSharing(input.lead.label, monthPosts), fewMakers: input.lead.fewMakers }
+    : null
+
+  // The subject your posts' comments matched most (a ready subject prints).
+  let followers: Parameters<typeof buildForYou>[0]['followers'] = null
+  const read = (input.card.videos ?? []).filter((v) => v.analyzed_run_id != null)
+  if (input.card.matches && read.length > 0) {
+    const bySubject = new Map<string, number>()
+    for (const v of read) for (const id of input.card.matches.get(v.id) ?? []) bySubject.set(id, (bySubject.get(id) ?? 0) + 1)
+    const best = [...bySubject.entries()]
+      .filter(([id]) => calibrationOf.has(id))
+      .sort((a, b) => b[1] - a[1] || (active.find((x) => x.id === a[0])?.name ?? '').localeCompare(active.find((x) => x.id === b[0])?.name ?? ''))[0]
+    if (best) {
+      const subject = active.find((x) => x.id === best[0])!
+      followers = { subject: { id: subject.id, name: subject.name, calibration: calibrationOf.get(subject.id) ?? 'provisional' }, k: best[1], n: read.length }
+    }
+  }
+
+  const foryou = buildForYou({ month: m, questions, lead, followers })
+  const published = input.posts
+    ? buildPublished({
+        month: m,
+        posts: monthPosts.map((p) => ({ uploadDate: p.upload_date, commentsCount: p.comments_count })),
+        prevPosts: posts.filter((p) => inMonth(p, prev)).length,
+        audience: input.audience ? { videos: input.audience.videos, comments: input.audience.comments } : null,
+        themes: input.themes
+          .filter((l) => l.audience === CLIENT_AUDIENCE && l.objectLabel)
+          .map((l) => ({ label: l.objectLabel as string, k: pointsByMonth(l).get(m)?.k ?? 0 })),
+        movesDated: input.movesDated,
+      })
+    : undefined
+  return { foryou, published }
 }
 
 /**

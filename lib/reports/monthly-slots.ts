@@ -1,5 +1,5 @@
 import type { CheckLine } from '../pages/overview-market/change'
-import type { FigureTable } from '../reading/verdicts'
+import type { ForYouBlock, PublishedCensus } from '../pages/overview-market/foryou'
 
 /**
  * The monthly's four slots (market-first WP2.1, the skeleton).
@@ -58,35 +58,14 @@ export interface MonthlyArrivals {
   regrouped: number | null
 }
 
-/** §4.2's `ForYouBlock`, verbatim (WP2.5): counted line-ups in sentences code
- *  writes, each listing the posts it matched and on which words. */
-export interface MonthlyForYou {
-  month: string
-  lines: {
-    kind: 'followers' | 'unanswered' | 'lead_touch'
-    figures: FigureTable
-    sentenceKey: string
-    matchedPosts: { id: string; words: string[] }[]
-  }[]
-}
+/** §4.2's `ForYouBlock` (WP2.5): counted line-ups in sentences code writes,
+ *  each listing the posts it matched and on which words. WP2.5 has landed, so
+ *  the slot's type is the package's own (`lib/pages/overview-market/foryou.ts`). */
+export type MonthlyForYou = ForYouBlock
 
-/**
- * What you published (plan §2.2 block 8, WP2.5): the posts census. NOT PINNED
- * in §4.2, so this is the monthly's reading of §2.2's print ("20 posts in
- * September (30 in August) · 10 drew 5 or more comments · 9 carry a reading,
- * 234 comments · your followers talked most about … · Moves: none dated yet");
- * WP2.5 settles the shape and this follows it.
- */
-export interface MonthlyPublished {
-  month: string
-  posts: number
-  prevPosts: number | null
-  drewFive: number
-  withReading: number
-  readingComments: number
-  followers: { label: string; k: number }[]
-  movesDated: number
-}
+/** What you published (plan §2.2 block 8, WP2.5): the posts census, the
+ *  package's own shape (`PublishedCensus`). */
+export type MonthlyPublished = PublishedCensus
 
 /** `monthly.you`'s slot (WP2.5): both halves in one section, the for-you
  *  lines first (plan §2.9). Either half may be missing. */
@@ -138,6 +117,12 @@ export function isFilled<T>(slot: MonthlySlot<T> | null | undefined): slot is { 
  * `OverviewData.foryou` and the posts census; WP2.6 `brands` from
  * `OverviewData.brands` in its D3 form.
  */
-export function monthlySlotsFrom(_overview: unknown): MonthlySlots {
-  return { ...MONTHLY_SLOT_STUBS }
+export function monthlySlotsFrom(overview: unknown): MonthlySlots {
+  const slots: MonthlySlots = { ...MONTHLY_SLOT_STUBS }
+  // WP2.5: what it means for you and what you published, off the front page's
+  // two blocks (`OverviewData.foryou`, `.published`). A page built without the
+  // market (no field) keeps the stub, and the section stays absent.
+  const o = (overview ?? {}) as { foryou?: ForYouBlock | null; published?: PublishedCensus | null }
+  if (o.foryou || o.published) slots.you = { state: 'filled', value: { foryou: o.foryou ?? null, published: o.published ?? null } }
+  return slots
 }

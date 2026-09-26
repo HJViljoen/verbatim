@@ -5,6 +5,8 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import type { MonthlyForYou, MonthlyPublished, MonthlyYou } from '@/lib/reports/monthly-slots'
+import { FOR_YOU_SENTENCES as SENTENCES, forYouWords } from '@/lib/pages/overview-market/foryou'
+import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { T, presentation } from './email-table'
 import { Num, SubHead, Table } from './email'
@@ -17,33 +19,43 @@ import { slotSection } from './slot'
  *
  * THE FOR-YOU LINES ARE WP2.5's SENTENCES. §4.2's `ForYouBlock` carries each
  * line's `sentenceKey` and its figures, never its words: every sentence is
- * code-written in WP2.5's table (`FOR_YOU_SENTENCES`, `[[token]]` bodies), and
- * a line whose key the table does not hold prints nothing. The table is empty
- * until WP2.5 fills it. Each printed line lists the words it matched on, so a
- * "none" can be checked (plan WP2.5).
+ * code-written in WP2.5's table (`FOR_YOU_SENTENCES`, `[[token]]` bodies, the
+ * front page's own), and a line whose key the table does not hold prints
+ * nothing. Each printed line lists the words its posts matched on, or the
+ * words checked where none did, so a "none" can be checked (plan WP2.5).
  *
- * WHAT YOU PUBLISHED IS A FIRST CUT from §2.2 row 8's print: the posts
- * census, the followers' own themes and the moves count. WP2.5 settles the
- * shape (`MonthlyPublished`) and the words beside its front-page block.
+ * WHAT YOU PUBLISHED is the front page's census (`PublishedCensus`): the
+ * posts, the followers' own themes and the moves count.
  */
 
-/** WP2.5's sentences, by `sentenceKey`, with `[[token]]` figures. Empty in
- *  the skeleton. */
-export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = {}
+/** WP2.5's sentences, by `sentenceKey`, with `[[token]]` figures: the front
+ *  page's own table (`lib/pages/overview-market/foryou.ts`), so the monthly
+ *  and the page print one sentence. */
+export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = SENTENCES
 
 function ForYou({ f, mode }: { f: MonthlyForYou; mode: RenderMode }) {
   const lines = f.lines.filter((l) => FOR_YOU_SENTENCES[l.sentenceKey])
   if (lines.length === 0) return null
+  const email = mode === 'email'
   return (
     <>
       {lines.map((l, i) => {
-        const words = [...new Set(l.matchedPosts.flatMap((p) => p.words))]
+        // The words each matching post shared, or the words checked where
+        // none matched, so a "none" can be checked (plan WP2.5).
+        const w = forYouWords(l)
+        const word = l.calibration ? CALIBRATION_TAG[l.calibration] : null
         return (
-          <div key={`${l.kind}-${i}`} style={mode === 'email' ? { marginTop: i === 0 ? 0 : 16 } : undefined} className={mode === 'email' ? undefined : 'flex flex-col gap-1'}>
-            <TokenProse body={FOR_YOU_SENTENCES[l.sentenceKey]} figures={l.figures} mode={mode} size={mode === 'email' ? 15 : 'body'} />
-            {words.length > 0 ? (
-              <div style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.muted, marginTop: 4 } : undefined} className={mode === 'email' ? undefined : 'text-[13px] text-muted-foreground'}>
-                Checked: {words.join(' · ')}
+          <div key={`${l.kind}-${i}`} style={email ? { marginTop: i === 0 ? 0 : 16 } : undefined} className={email ? undefined : 'flex flex-col gap-1'}>
+            {l.label ? (
+              <div style={email ? { fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink } : undefined} className={email ? undefined : 'text-[15px] font-semibold'}>
+                {l.labelKind === 'theme' ? <>“<span data-copy="subject" data-slot="pass_b_theme">{l.label}</span>”</> : l.label}
+                {word ? <span style={email ? { fontFamily: FONT.mono, fontSize: 12, fontWeight: 400, color: EMAIL.muted } : undefined} className={email ? undefined : 'font-mono text-[12px] font-normal text-muted-foreground'}> · {word}</span> : null}
+              </div>
+            ) : null}
+            <TokenProse body={FOR_YOU_SENTENCES[l.sentenceKey]} figures={l.figures} mode={mode} size={email ? 15 : 'body'} />
+            {w.words.length > 0 ? (
+              <div style={email ? { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.muted, marginTop: 4 } : undefined} className={email ? undefined : 'text-[13px] text-muted-foreground'}>
+                {w.matched ? `${fmtInt(l.matchedPosts.length)} ${l.matchedPosts.length === 1 ? 'post' : 'posts'} on` : 'Checked:'} {w.words.join(' · ')}{w.more ? ' · …' : ''}
               </div>
             ) : null}
           </div>
@@ -78,7 +90,7 @@ function Published({ p, mode }: { p: MonthlyPublished; mode: RenderMode }) {
   const cells = [
     <Cell key="posts" mode={mode} figure={p.posts} words="posts" under={<>in {month}{p.prevPosts != null ? <> · <span data-copy="figure">{fmtInt(p.prevPosts)}</span> the month before</> : null}</>} />,
     <Cell key="five" mode={mode} figure={p.drewFive} words="drew 5+" under="comments each" />,
-    <Cell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments)}</span> comments</>} />,
+    ...(p.withReading != null ? [<Cell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments ?? 0)}</span> comments</>} />] : []),
   ]
   const moves = p.movesDated === 0 ? 'none dated yet' : <><span data-copy="figure">{fmtInt(p.movesDated)}</span> dated</>
   if (mode === 'email') {
@@ -141,14 +153,18 @@ function body(v: MonthlyYou, mode: RenderMode): ReactNode {
 
 function figures(v: MonthlyYou): FigureTable {
   const out: FigureTable = {}
-  for (const l of v.foryou?.lines ?? []) Object.assign(out, l.figures)
+  // Each line's figures under its own keys: two lines both hold a
+  // `foryou_posts`, and they are different numbers (three months, one month).
+  for (const [i, l] of (v.foryou?.lines ?? []).entries()) {
+    for (const [k, f] of Object.entries(l.figures)) out[`${l.kind}_${i}_${k}`] = f
+  }
   const p = v.published
   if (p) {
     const month = longMonth(p.month)
     out.you_posts = { value: p.posts, unit: 'videos', label: `your posts in ${month}` }
     out.you_drew_five = { value: p.drewFive, unit: 'videos', label: `your posts in ${month} that drew 5 or more comments` }
-    out.you_with_reading = { value: p.withReading, unit: 'videos', label: `your posts in ${month} that carry a reading` }
-    out.you_reading_comments = { value: p.readingComments, unit: 'comments', label: `comments on your posts in ${month} that carry a reading` }
+    if (p.withReading != null) out.you_with_reading = { value: p.withReading, unit: 'videos', label: `your posts in ${month} that carry a reading` }
+    if (p.readingComments != null) out.you_reading_comments = { value: p.readingComments, unit: 'comments', label: `comments on your posts in ${month} that carry a reading` }
   }
   return out
 }

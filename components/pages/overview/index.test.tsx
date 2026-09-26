@@ -48,10 +48,10 @@ function fullHouse(): OverviewData {
 }
 
 describe('the Overview’s blocks', () => {
-  it('are the registry’s nine, keyed stably: Phase 1’s six and the front page’s three new ones, and OV6 is not among them (25 Sep rulings)', () => {
+  it('are the registry’s ten, keyed stably: Phase 1’s six and the front page’s four new ones, and OV6 is not among them (25 Sep rulings)', () => {
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).toEqual([
       'overview.bar', 'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
-      'overview.subjects', 'overview.rivals', 'overview.change', 'overview.moves',
+      'overview.subjects', 'overview.rivals', 'overview.change', 'overview.moves', 'overview.foryou',
     ])
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.record')
   })
@@ -149,22 +149,24 @@ describe('the 30-number budget', () => {
 })
 
 describe('the Overview page', () => {
-  // SEVEN TILES, YOUR MARKET'S (market-first WP1.6, deploy 2's column of
-  // §2.2): the month, the themes, the kinds, the asks, the subjects, the
-  // brands' one line and what changed. OV0 is not a tile (Block D wave 3, M7);
-  // it keeps its place in `OVERVIEW_BLOCKS` for the print slide and the email,
-  // which carry no bar. "What you published" (OV5) leaves the page until
-  // deploy 3 brings it back reworked (WP2.5).
-  it('draws the page bar, Your market’s seven tiles and nothing else', () => {
+  // NINE TILES, YOUR MARKET'S (market-first WP1.6, deploy 2's column of
+  // §2.2, and WP2.5's two for deploy 3): the month, the themes, the kinds, the
+  // asks, the subjects beside what it means for you, what you published beside
+  // the brands, and what changed. OV0 is not a tile (Block D wave 3, M7); it
+  // keeps its place in `OVERVIEW_BLOCKS` for the print slide and the email,
+  // which carry no bar. OV5 comes back reworked as "What you published".
+  it('draws the page bar, Your market’s nine tiles and nothing else', () => {
     const markup = render(<OverviewPage data={marketFrontFixture()} />)
     expect(markup).toContain('Your market')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(7)
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(9)
     expect(TILE_BLOCKS.map((b) => b.key)).toEqual([
       'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
-      'overview.subjects', 'overview.rivals', 'overview.change',
+      'overview.subjects', 'overview.foryou', 'overview.moves', 'overview.rivals', 'overview.change',
     ])
     expect(markup).not.toContain('This month so far')
-    expect(renderText(<OverviewPage data={marketFrontFixture()} />)).not.toContain('Your moves →')
+    const text = renderText(<OverviewPage data={marketFrontFixture()} />)
+    expect(text).toContain('What you published')
+    expect(text).toContain('What it means for you')
     assertCopyContract(markup)
   })
 

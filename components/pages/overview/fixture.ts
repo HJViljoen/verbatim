@@ -1,3 +1,4 @@
+import { buildForYou, buildPublished } from '@/lib/pages/overview-market/foryou'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
@@ -1136,6 +1137,38 @@ export function marketFrontFixture(opts: { measured?: boolean; subjectsCalibrati
       rows: subjects,
       market: { month: REAL_MONTH, n: 626, prev: { month: AUG, n: 351 } },
     },
+    // What it means for you (WP2.5): the subject asked about most over three
+    // months, Waterproofing, on staging's measure (GR F24: 16 question videos,
+    // none of Sealand's 56 posts from July to September sharing two or more
+    // words with its three question groups, "Demand for real waterproofing",
+    // "Worries about zippers in rain", "Coated canvas cracking concerns"). The
+    // lead line's count on production is not knowable until the matcher runs,
+    // so this page carries no lead line (`forYouStagingFixture` in the tests
+    // has staging's). No followers line: Community & purpose is provisional.
+    foryou: buildForYou({
+      month: REAL_MONTH,
+      questions: {
+        subject: { id: 's-waterproofing', name: 'Waterproofing', calibration: staging ? 'ready' : 'provisional' },
+        asked: 16,
+        posts: 56,
+        sharing: { checked: ['waterproofing', 'zippers', 'rain', 'coated', 'canvas', 'cracking'], matched: [] },
+      },
+      lead: null,
+      followers: null,
+    }),
+    // What you published (§2.2 block 8, production's September, 24 Sep).
+    published: buildPublished({
+      month: REAL_MONTH,
+      posts: [...Array.from({ length: 10 }, () => ({ uploadDate: '2026-09-10', commentsCount: 5 })), ...Array.from({ length: 10 }, () => ({ uploadDate: '2026-09-10', commentsCount: 0 }))],
+      prevPosts: 30,
+      audience: { videos: 9, comments: 234 },
+      themes: [
+        { label: 'Respect for Sealand’s mission', k: 4 },
+        { label: 'Support for clean-up initiatives', k: 3 },
+        { label: 'Keen to join events', k: 2 },
+      ],
+      movesDated: 0,
+    }),
   }
 }
 
@@ -1270,6 +1303,26 @@ export function ossurFrontFixture(): OverviewData {
     asks: buildAsks(themes, REAL_MONTH, 'no_rule'),
     change: base.change ? { ...base.change, paused: true } : undefined,
     subjects: { ...base.subjects, state: 'none', rows: [], candidates: [], market: { month: REAL_MONTH, n: 362, prev: { month: AUG, n: 585 } } },
+    // No subject named; the lead is the biggest conversation (no maker rule),
+    // against Össur's 109 September posts on staging, none sharing two of
+    // its words (WP2.5; staging render, 11 Oct clock).
+    foryou: buildForYou({
+      month: REAL_MONTH,
+      questions: null,
+      lead: { label: 'Admiration for personal resilience', posts: 109, sharing: { checked: ['personal', 'resilience'], matched: [] }, fewMakers: false },
+      followers: null,
+    }),
+    // Össur's own posts on staging: 109 in September (13 with five comments
+    // or more), 112 in August; its audience read on 7 videos with 123
+    // comments; its themes each on one video, none "talked about most".
+    published: buildPublished({
+      month: REAL_MONTH,
+      posts: [...Array.from({ length: 13 }, () => ({ uploadDate: '2026-09-05', commentsCount: 5 })), ...Array.from({ length: 96 }, () => ({ uploadDate: '2026-09-05', commentsCount: 0 }))],
+      prevPosts: 112,
+      audience: { videos: 7, comments: 123 },
+      themes: [{ label: 'Grief and emotional pain', k: 1 }, { label: 'Enjoyment of the music', k: 1 }],
+      movesDated: 0,
+    }),
   }
 }
 
