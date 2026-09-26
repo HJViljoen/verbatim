@@ -17,11 +17,24 @@ describe('the slots', () => {
     })
   })
 
-  it('are all stubs from the loader until a package wires its own', () => {
+  it('are all stubs from a page that has none of the packages’ blocks', () => {
     expect(monthlySlotsFrom({})).toEqual(MONTHLY_SLOT_STUBS)
     // A copy, never the shared constant: a build that fills one slot must not
     // fill it for every build after it.
     expect(monthlySlotsFrom({})).not.toBe(MONTHLY_SLOT_STUBS)
+  })
+
+  it('fill "With this update" from the front page’s own block (WP2.7), and leave it a stub without one', () => {
+    // Staging's 20 Sep update, as `update_arrivals` counts it (26 Sep).
+    const arrivals = {
+      run: { id: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4', date: '2026-09-20T08:33:47.358Z' },
+      months: [{ month: '2026-09-01', videosFirstRead: 395, commentsCaptured: 11999 }],
+      current: { month: '2026-09-01', videos: 654, updates: 3 },
+      newThemes: [],
+      regrouped: null,
+    }
+    expect(monthlySlotsFrom({ arrivals })).toEqual({ ...MONTHLY_SLOT_STUBS, arrivals: { state: 'filled', value: arrivals } })
+    expect(monthlySlotsFrom({ arrivals: undefined })).toEqual(MONTHLY_SLOT_STUBS)
   })
 
   it('tell a filled slot from a stub, and read a missing one as a stub', () => {

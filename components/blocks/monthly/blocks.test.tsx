@@ -155,8 +155,12 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
 
   it('arrivals print the came-in counts, adding to months, and no weekly bars', () => {
     const t = text('monthly.arrivals', filledSlotsFixture())
-    expect(t).toContain('With the 11 Oct update: 206 videos read in your market for the first time, and 4,923 more September comments came in.')
-    expect(t).toContain('No theme was heard for the first time with 10+ videos in September.')
+    // Staging's 20 Sep update (update_arrivals, 26 Sep): the front page's words.
+    expect(t).toContain('With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more September comments came in.')
+    expect(t).toContain('With 10+ videos in September:')
+    expect(t).toMatch(/Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
+    expect(t).toContain('And 1 more.')
+    expect(t).toContain('3 more are led by makers.')
     expect(t).not.toMatch(/week by week/i)
     expect(t).toContain('Open This week')
   })

@@ -190,11 +190,13 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  *   10 drew 5 or more comments, 9 carry a reading over 234 comments; the
  *   followers' three themes, 4, 3 and 2; no move dated. No for-you line: its
  *   sentences are WP2.5's.
- * - `arrivals`: HYPOTHETICAL, and named so. What the 11 Oct update brings is
- *   not knowable, so the counts are real ones of a different question,
- *   borrowed for their size: 206 (GC F29, September videos first found by the
- *   13 Sep terms) and 4,923 (WP1.4's staging late capture of September
- *   comments).
+ * - `arrivals`: staging's 20 Sep update as `update_arrivals` counts it (MF2,
+ *   read-only, 26 Sep): 395 September videos read for the first time and
+ *   11,999 September comments (1 and 99 of August), with the nine themes it
+ *   heard first at 10+ category videos in September as the loader read them
+ *   on staging: three led by makers counted, six named, the first five with
+ *   their videos from searches first run in September (8 of 13, 9 of 12, 11
+ *   of 12, 6 of 11, 8 of 10). What the 11 Oct update brings is not knowable.
  * - `change`: staging's re-check plan of 26 Sep (lib/test/recheck-fixture.ts),
  *   read with the 20 Sep update: too few on the searches both months ran (78
  *   and 103 videos), the four kinds whose fall follows depth, and the
@@ -227,11 +229,22 @@ export function filledSlotsFixture(): MonthlyData {
     arrivals: {
       state: 'filled',
       value: {
-        run: { id: 'run-2026-10-11', date: '2026-10-11T08:30:00.000Z' },
-        months: [{ month: SEP, videosFirstRead: 206, commentsCaptured: 4923 }],
-        current: { month: '2026-10-01', videos: null, updates: 2 },
-        newThemes: [],
+        run: { id: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4', date: '2026-09-20T08:33:47.358Z' },
+        months: [
+          { month: '2026-08-01', videosFirstRead: 1, commentsCaptured: 99 },
+          { month: SEP, videosFirstRead: 395, commentsCaptured: 11999 },
+        ],
+        current: { month: SEP, videos: 654, updates: 3 },
+      newThemes: [
+          { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: 8 },
+          { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: 9 },
+          { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: 11 },
+          { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: 6 },
+          { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: 8 },
+          { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
+        ],
         regrouped: null,
+        grouped: { makers: 3, setAside: 0 },
       },
     },
     change: {

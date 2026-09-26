@@ -78,7 +78,9 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
-import { monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
+import { loadNewThemes, loadWeekVolumes, monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
+import type { WeekVolumesBlock } from '../reading/weeks'
+import { ARRIVAL_THEMES_SHOWN, arrivalThemes, buildArrivals, latestUpdate, type ArrivalsBlock, type UpdateArrivalsRow } from './overview-market/arrivals'
 import type { ConfigChange } from '../config-log'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
@@ -864,6 +866,15 @@ export interface OverviewData {
   asks?: AsksBlock
   change?: ChangeBlock
   brands?: BrandsBlock
+  /** "With this update" (market-first WP2.7, §2.2 block 3): what came in with
+   *  the latest update. Absent on a copy stored before it, and where
+   *  `update_arrivals` (MF2) cannot be read. */
+  arrivals?: ArrivalsBlock
+  /** Week by week (market-first decision M, part 1; WP2.9): the market's
+   *  videos and comments per week, and the same-age line's pending state,
+   *  drawn inside "With this update" with no key of its own. Absent on a copy
+   *  stored before it, and where MF4 cannot be read. */
+  weeks?: WeekVolumesBlock
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -2214,6 +2225,28 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       })
     : null
   marketReadsAhead?.catch(() => {})
+  // "WITH THIS UPDATE" (market-first WP2.7), on the front page only: the
+  // latest update's arrivals and the themes it heard for the first time. Its
+  // reads need the month, the runs and the segment rows, and nothing below.
+  const arrivalsAhead = marketFirst
+    ? loadArrivals({ supabase, reading, clientId, runs: runsRaw, rm, month, now: readingAt, segmentRows: segmentRowsAhead })
+    : null
+  arrivalsAhead?.catch(() => {})
+  // WEEK BY WEEK (WP2.9), inside "With this update": one read of MF4 over the
+  // weeks of the month read and the month before, through the current week.
+  const weeksAhead = marketFirst
+    ? loadChanges(reading.client, clientId).then((changeRows) => loadWeekVolumes({
+        client: reading.client,
+        clientId,
+        reading: rm,
+        now: readingAt,
+        updates: runsRaw.map(updateInstant),
+        rivalAudiences: marketRivalAudiences(rivals),
+        changeRows,
+        schedule,
+      }))
+    : null
+  weeksAhead?.catch(() => {})
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
   // THE MARKET'S RIVALS ARE THE TRACKED ONES (§4.2, `marketRivalAudiences`):
   // a retired rival's rows are read for its own lines, never pooled into the
@@ -2626,9 +2659,20 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       })
     : {}
 
+  const arrivals = arrivalsAhead ? await arrivalsAhead.catch((error: unknown) => {
+    console.error(`[overview] with this update: ${(error as { message?: string })?.message ?? String(error)}; not counted`)
+    return null
+  }) : null
+  const weeks = weeksAhead ? await weeksAhead.catch((error: unknown) => {
+    console.error(`[overview] week by week: ${(error as { message?: string })?.message ?? String(error)}; not drawn`)
+    return null
+  }) : null
+
   return {
     ...front,
     ...you,
+    ...(arrivals ? { arrivals } : {}),
+    ...(weeks ? { weeks } : {}),
     brand,
     month,
     monthStatus,
@@ -4390,23 +4434,46 @@ async function loadLeadProvenance(
   registryId: string,
   addedSearches: () => Promise<Set<string> | null>,
 ): Promise<{ fromNewSearches: number; of: number } | null> {
+  return (await loadThemesProvenance(client, clientId, month, [registryId], addedSearches)).get(registryId) ?? null
+}
+
+/**
+ * `loadLeadProvenance` for several themes at once (market-first WP2.7: the
+ * themes "With this update" names, each with how many of its videos came from
+ * searches added in the month). One refs read over all of them, then the same
+ * three reads over the union of their videos, so a theme's answer is exactly
+ * the one `loadLeadProvenance` gives it alone. Each theme maps to null where
+ * any read is not there (not measured, never a zero).
+ */
+async function loadThemesProvenance(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  registryIds: readonly string[],
+  addedSearches: () => Promise<Set<string> | null>,
+): Promise<Map<string, { fromNewSearches: number; of: number } | null>> {
+  const out = new Map<string, { fromNewSearches: number; of: number } | null>(registryIds.map((id) => [id, null]))
+  if (registryIds.length === 0) return out
   const refRes = await client
     .from(TABLE_EVIDENCE_REFS)
-    .select('video_ids')
+    .select('object_id, video_ids')
     .eq('client_id', clientId)
     .eq('month', month)
     .eq('audience', INDUSTRY_AUDIENCE)
     .eq('object_kind', 'theme')
-    .eq('object_id', registryId)
-    .maybeSingle()
-  if (refRes.error) return null
-  const videoIds = ((refRes.data as { video_ids?: string[] | null } | null)?.video_ids ?? []).map(String)
-  if (videoIds.length === 0) return null
+    .in('object_id', [...registryIds])
+  if (refRes.error) return out
+  const videosOf = new Map<string, string[]>()
+  for (const r of (refRes.data ?? []) as { object_id: string; video_ids?: string[] | null }[]) {
+    videosOf.set(String(r.object_id), (r.video_ids ?? []).map(String))
+  }
+  const videoIds = [...new Set([...videosOf.values()].flat())]
+  if (videoIds.length === 0) return out
   type Prov = ThemeEvidence['provenance'][number]
   type Vid = ThemeEvidence['videos'][number]
   type Verdict = ThemeEvidence['verdicts'][number]
   const readProvenance = async (): Promise<Prov[] | null> => {
-    const out: Prov[] = []
+    const held: Prov[] = []
     for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
       const res = await client
         .from(TABLE_VIDEO_PROVENANCE)
@@ -4417,24 +4484,24 @@ async function loadLeadProvenance(
         if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
         return null
       }
-      out.push(...((res.data ?? []) as Prov[]))
+      held.push(...((res.data ?? []) as Prov[]))
     }
-    return out
+    return held
   }
   const readVideos = async (): Promise<Vid[] | null> => {
-    const out: Vid[] = []
+    const held: Vid[] = []
     for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
       const res = await client.from('videos').select('id, platform, video_id, source_keywords').eq('client_id', clientId).in('id', part)
       if (res.error) {
         rows(res as never, 'overview.leadProvenance videos')
         return null
       }
-      out.push(...((res.data ?? []) as Vid[]))
+      held.push(...((res.data ?? []) as Vid[]))
     }
-    return out
+    return held
   }
   const [provenance, videos, added] = await Promise.all([readProvenance(), readVideos(), addedSearches()])
-  if (!provenance || !videos || !added) return null
+  if (!provenance || !videos || !added) return out
   // Every gate verdict's keyword for these videos (by the platform's own id).
   const verdicts: Verdict[] = []
   const platformIds = [...new Set(videos.map((v) => v.video_id))]
@@ -4446,9 +4513,13 @@ async function loadLeadProvenance(
     }
   } catch (error) {
     console.error(`[overview] leadProvenance gate_verdicts: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
-    return null
+    return out
   }
-  return fromNewSearches(videoIds, { provenance, videos, verdicts }, added)
+  for (const id of registryIds) {
+    const ids = videosOf.get(id) ?? []
+    out.set(id, ids.length > 0 ? fromNewSearches(ids, { provenance, videos, verdicts }, added) : null)
+  }
+  return out
 }
 
 /** A candidate as a printed voice: the quote by its evidence ref, and the
@@ -4640,6 +4711,70 @@ async function loadMarketReads(input: {
     recheck,
     brands: brandsRead,
   }
+}
+
+export const RPC_UPDATE_ARRIVALS = 'update_arrivals'
+
+/**
+ * "With this update" (market-first WP2.7): the latest update's arrivals into
+ * the reading month (and the month in progress, where that is another), the
+ * themes it heard for the first time on the category at the floor, their
+ * segment shares (the board's read) and, for the ones the block names, how
+ * many of their videos came from searches first run in the month.
+ *
+ * NULL, AND THE BLOCK SAYS SO, where there is no update yet or MF2's
+ * `update_arrivals` cannot be read (not applied, or an error): no count is
+ * printed that nothing counted. A failed read of the new themes leaves the
+ * came-in counts and names no theme.
+ */
+async function loadArrivals(input: {
+  supabase: SupabaseClient
+  reading: ReadingHandle
+  clientId: string
+  runs: readonly DeliveredRun[]
+  rm: ReadingMonth
+  month: string
+  now: string
+  segmentRows: Promise<ThemeMakerShareRow[] | null>
+}): Promise<ArrivalsBlock | null> {
+  const { supabase, clientId, rm } = input
+  const client = input.reading.client
+  const run = latestUpdate(input.runs, rm.asAt ?? input.now)
+  if (!run) return null
+  const month = monthStartOf(input.month)
+  const months = [...new Set([month, monthStartOf(rm.current.month)])]
+  const [arrived, runRes, segmentRows] = await Promise.all([
+    client.rpc(RPC_UPDATE_ARRIVALS, { p_client: clientId, p_run: run.id, p_months: months }),
+    // `*`, for the reason This week reads its anchor that way: an absent
+    // column (clustering_key) arrives as an absent key, never a 42703.
+    supabase.from('pipeline_runs').select('*').eq('client_id', clientId).eq('id', run.id).maybeSingle(),
+    input.segmentRows.catch(() => null),
+  ])
+  if (arrived.error) {
+    console.error(`[overview] ${RPC_UPDATE_ARRIVALS}: ${arrived.error.message}; "With this update" is not counted`)
+    return null
+  }
+  const date = updateInstant(run)
+  const regime = {
+    clusteringKey: (runRes.data as { clustering_key?: string | null } | null)?.clustering_key ?? null,
+    startedAt: run.started_at,
+    date,
+  }
+  const fresh = await loadNewThemes(supabase, clientId, run.id, month, regime, { audience: INDUSTRY_AUDIENCE }).catch((error: unknown) => {
+    console.error(`[overview] arrivals new themes: ${(error as { message?: string })?.message ?? String(error)}; none named`)
+    return { seen: 0, shown: [], regrouped: null }
+  })
+  const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
+  const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes.slice(0, ARRIVAL_THEMES_SHOWN)
+  const provenance = await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), addedSearchesRead(client, clientId, month))
+  return buildArrivals({
+    run: { id: run.id, date },
+    rows: (arrived.data ?? []) as UpdateArrivalsRow[],
+    current: { month: monthStartOf(rm.current.month), videos: rm.current.videos, updates: rm.current.updates },
+    themes: { shown: fresh.shown, regrouped: fresh.regrouped },
+    shares,
+    provenance,
+  })
 }
 
 /**

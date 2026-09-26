@@ -1,4 +1,5 @@
 import { isBrandsRead, type BrandsBlock, type BrandsRead } from '../pages/overview-market/brands'
+import type { ArrivalsBlock } from '../pages/overview-market/arrivals'
 import type { ChangeBlock } from '../pages/overview-market/change'
 import type { ForYouBlock, PublishedCensus } from '../pages/overview-market/foryou'
 
@@ -51,15 +52,10 @@ export type MonthlySlot<T> =
  *  page does, so the two print one sentence each. */
 export type MonthlyChecks = Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers'>>
 
-/** `monthly.arrivals`'s slot (WP2.7): §4.2's `ArrivalsBlock`, verbatim. The
- *  monthly prints the came-in lines only; it carries no weekly volume bars. */
-export interface MonthlyArrivals {
-  run: { id: string; date: string }
-  months: { month: string; videosFirstRead: number; commentsCaptured: number }[]
-  current: { month: string; videos: number | null; updates: number }
-  newThemes: { registryId: string; label: string; k: number; fromNewSearches: number }[]
-  regrouped: number | null
-}
+/** `monthly.arrivals`'s slot (WP2.7): the front page's `ArrivalsBlock`, now
+ *  that WP2.7 exports it. The monthly prints the came-in lines only; it
+ *  carries no weekly volume bars. */
+export type MonthlyArrivals = ArrivalsBlock
 
 /** §4.2's `ForYouBlock` (WP2.5): counted line-ups in sentences code writes,
  *  each listing the posts it matched and on which words. WP2.5 has landed, so
@@ -109,6 +105,7 @@ export function isFilled<T>(slot: MonthlySlot<T> | null | undefined): slot is { 
 /** What `monthlySlotsFrom` reads off the Overview it is handed. */
 export interface SlotSources {
   change?: (Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers'>>) | null
+  arrivals?: ArrivalsBlock | null
   brands?: BrandsBlock | null
   foryou?: ForYouBlock | null
   published?: PublishedCensus | null
@@ -135,6 +132,12 @@ export function monthlySlotsFrom(overview: SlotSources | null | undefined): Mont
   if (change) {
     slots.change = { state: 'filled', value: { checks: change.checks ?? [], recheck: change.recheck ?? null, buyers: change.buyers ?? null } }
   }
+  // WP2.7: "With this update" from the front page's own block. The monthly
+  // is built on the page's loader, so its arrivals are the latest update's
+  // into the month the report reads; a page with none (MF2 not readable, or
+  // no update yet) leaves the slot a stub and the section absent.
+  const arrivals = overview?.arrivals
+  if (arrivals) slots.arrivals = { state: 'filled', value: arrivals }
   const brands = overview?.brands
   if (isBrandsRead(brands)) slots.brands = { state: 'filled', value: brands }
   // WP2.5: what it means for you and what you published, off the front page's

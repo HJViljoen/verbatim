@@ -13,6 +13,7 @@ import { weekReply } from './reply'
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
 import { weekCameIn } from './came-in'
+import { weekWeeks } from './weeks'
 import { weekRivalPosts } from './rival-posts'
 import { isFlaggedQuiet, weekFlagged } from './flagged'
 import { weekSales } from './sales'
@@ -42,6 +43,9 @@ export const WEEK_BLOCKS: readonly Block<WeekData>[] = [
   weekReply,
   weekSubjects,
   weekCameIn,
+  // Week by week (market-first WP2.9, `week.weeks`), after what came in: the
+  // preview's order, the weekly rhythm beside the update it came in with.
+  weekWeeks,
   weekRivalPosts,
   weekWorked,
   weekSales,

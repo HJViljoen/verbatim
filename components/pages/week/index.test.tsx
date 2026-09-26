@@ -20,7 +20,8 @@ import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
 import { weekPage } from './module'
-import { absentReadingFixture, regroupedFixture, thinFixture, weekFixture } from './fixture'
+import { absentReadingFixture, marketWeekFixture, ossurWeeksFixture, regroupedFixture, thinFixture, weekFixture } from './fixture'
+import { weekWeeks } from './weeks'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -30,7 +31,9 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 // both paying accounts.
 // And a fourth since market-first WP1.9: an update that opened a new
 // clustering regime, whose minted identities are counted as re-grouped.
-const FIXTURES: (() => WeekData)[] = [weekFixture, thinFixture, absentReadingFixture, regroupedFixture]
+// And a fifth since market-first WP2.7: Sealand's 20 Sep update with its
+// subjects read on the market.
+const FIXTURES: (() => WeekData)[] = [weekFixture, thinFixture, absentReadingFixture, regroupedFixture, marketWeekFixture, ossurWeeksFixture]
 
 describe('every block on This week', () => {
   it('renders in all three modes on both tenants and keeps the copy contract', () => {
@@ -91,6 +94,104 @@ describe('every block on This week', () => {
     // Nine on the flagged fixture: a flag's six numbers, the two shares its
     // interpretation cites, and the update's own n.
     expect(weekFigureCount(weekFixture(), FIRST_SCREEN)).toBe(9)
+  })
+})
+
+describe('week by week (market-first WP2.9, week.weeks)', () => {
+  it('draws the market’s videos and comments for each week, as counts, with its facts panel', () => {
+    for (const mode of MODES) {
+      const t = renderText(weekWeeks.render(marketWeekFixture(), mode, ctx))
+      for (const n of ['244', '226', '187', '229', '404', '318', '5,809', '7,851', '5,462']) expect(t).toContain(n)
+      expect(t).not.toMatch(/%|▲|▼/)
+    }
+    const app = renderText(weekWeeks.render(marketWeekFixture(), 'app', ctx))
+    // The preview's panel: the latest week no longer so far.
+    expect(app).toContain('Week of 7 Sep')
+    expect(app).toContain('of them 389 in the category and 15 filed under a brand you track')
+    expect(app).toContain('all dated in September')
+    expect(app).toContain('filling')
+    expect(app).toContain('so far')
+    expect(app).toContain('Our changes')
+  })
+
+  it('is headed by its title alone and footed by links alone, one of them to the same-age reading', () => {
+    const el = weekWeeks.render(marketWeekFixture(), 'app', ctx) as { props: { title: string; meta?: unknown; footerNote?: unknown } }
+    expect(el.props.title).toBe('Week by week')
+    expect(el.props.meta).toBeUndefined()
+    expect(el.props.footerNote).toBeUndefined()
+    const t = renderText(weekWeeks.render(marketWeekFixture(), 'app', ctx))
+    expect(t).toContain('How to read: Week by week →')
+    expect(t).toContain('Read at the same age, on Your market →')
+    // No same-age reading to link to where the tenant keeps none (Össur).
+    expect(renderText(weekWeeks.render(ossurWeeksFixture(), 'app', ctx))).not.toContain('Read at the same age')
+  })
+
+  it('says so, rather than drawing an empty chart, where nothing is counted', () => {
+    expect(weekWeeks.emptyState(weekFixture())).toBe('Week by week is not counted for this update yet.')
+    const d = marketWeekFixture()
+    const none = { ...d, weeks: { ...d.weeks!, weeks: d.weeks!.weeks.map((w) => ({ ...w, state: 'none_gathered' as const, videos: 0, comments: 0 })) } }
+    expect(weekWeeks.emptyState(none)).toBe('No week has comments yet.')
+    expect(renderText(weekWeeks.render(none, 'app', ctx))).toContain('No week has comments yet.')
+  })
+
+  it('declares the counts it draws, one token a week and a row', () => {
+    const f = weekWeeks.figures!(marketWeekFixture())
+    expect(f.week_2026_09_07_videos.value).toBe(404)
+    expect(f.week_2026_09_07_comments.value).toBe(7851)
+    expect(f.week_2026_07_27_videos).toBeUndefined()
+  })
+})
+
+describe('WK §2 · your market’s subjects (market-first WP2.7)', () => {
+  it('prints each subject on the market, with what this update put in, and never "0 of 0"', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekSubjects.render(marketWeekFixture(), mode, ctx))
+      // Staging, 20 Sep update: Looks & style 103 of the market's 654 (102 in
+      // the category, 1 filed under Freitag), 73 of them carried by this
+      // update's days; Comfort 43 and 28.
+      expect(text).toContain('Looks & style')
+      expect(text).toContain('103')
+      expect(text).toContain('16%')
+      expect(text).toContain('+73')
+      expect(text).toContain('+28')
+      expect(text).toContain('of 654')
+      expect(text).not.toMatch(/0 of 0/)
+      expect(text).not.toContain('this update added')
+    }
+  })
+
+  it('names a subject being re-described and one the month was not read for, with no figure', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekSubjects.render(marketWeekFixture(), mode, ctx))
+      expect(text).toMatch(/Repair & warranty\s*being re-described/)
+      expect(text).toMatch(/Community & purpose\s*no reading yet/)
+      // Repair & warranty's 36 market videos and Community & purpose's window
+      // rows print nowhere.
+      expect(text).not.toContain('36')
+      expect(text).not.toContain('+8')
+    }
+  })
+
+  it('is headed by its title alone and footed by a link alone (25 Sep rulings)', () => {
+    const el = weekSubjects.render(marketWeekFixture(), 'app', ctx) as { props: { title: string; meta?: unknown; footerNote?: unknown; question?: unknown } }
+    expect(el.props.title).toBe('Your market’s subjects')
+    expect(el.props.meta).toBeUndefined()
+    expect(el.props.footerNote).toBeUndefined()
+    expect(el.props.question).toBeUndefined()
+    expect(renderText(weekSubjects.render(marketWeekFixture(), 'app', ctx))).toContain('Open Subjects →')
+  })
+
+  it('ranks by the market’s videos, largest first', () => {
+    const text = renderText(weekSubjects.render(marketWeekFixture(), 'app', ctx))
+    const order = ['Looks & style', 'Comfort', 'Durability', 'Waterproofing', 'Price'].map((l) => text.indexOf(l))
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+  })
+
+  it('declares the market’s counts as its figures, one per number it prints', () => {
+    const figures = weekSubjects.figures!(marketWeekFixture())
+    const looks = Object.entries(figures).filter(([k]) => k.startsWith('subject_723d1389'))
+    expect(looks.map(([, f]) => f.value).sort((a, b) => a - b)).toEqual([73, 103])
+    expect(Object.values(figures).some((f) => f.value === 36)).toBe(false)
   })
 })
 
@@ -1081,6 +1182,14 @@ describe('the page', () => {
     // nits). Its two lines are there; its heading is not, on screen.
     for (const block of WEEK_BLOCKS) {
       if (block.key === weekCoverage.key) continue
+      // A copy stored before WP2.7 carries the client's own subject rows and
+      // keeps the Phase 1 title over them; one built on the market carries
+      // the preview's (market-first WP2.7).
+      if (block.key === weekSubjects.key) {
+        expect(text).toContain('This week in your subjects')
+        expect(renderText(<WeekPage data={marketWeekFixture()} />)).toContain(block.title)
+        continue
+      }
       expect(text, block.key).toContain(block.title)
     }
     expect(text).not.toContain('What this reading rests on')
@@ -1102,10 +1211,11 @@ describe('the page', () => {
       const markup = render(<WeekPage data={data} />)
       return [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => `${m[1]}x${m[2]}`)
     }
-    const shape = ['12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1', '12x1']
+    // "Week by week" (WP2.9) is a full-width tile after what came in.
+    const shape = ['12x1', '12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1', '12x1']
     // An empty "Flagged for awareness" draws no tile: it is a line inside
     // "Worth a reply" (sweep 2026-09-24).
-    const quiet = ['12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1']
+    const quiet = ['12x1', '12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1']
     expect(spans(weekFixture())).toEqual(shape)
     expect(spans(thinFixture())).toEqual(quiet)
     expect(spans(absentReadingFixture())).toEqual(absentReadingFixture().replies.unread ? shape : quiet)

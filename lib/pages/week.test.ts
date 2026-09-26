@@ -18,6 +18,9 @@ import {
   NEW_THEME_FLOOR,
   opensClusteringRegime,
   loadNewThemes,
+  marketSubjectsOf,
+  clipToMonth,
+  pooledSubjectCounts,
   previousThemedRegime,
   regroupedFor,
   regroupedLine,
@@ -634,5 +637,116 @@ describe('loadNewThemes — the reads behind the re-grouped rule (market-first W
     const none = world({ fresh: [] })
     expect(await loadNewThemes(none.client, CLIENT, NOW, MONTH, regime(K2))).toEqual({ seen: 0, shown: [], regrouped: null })
     expect(none.calls.map((c) => c.table)).toEqual(['themes'])
+  })
+})
+
+// ---- market-first WP2.7 · the subjects on the market ---------------------------
+
+describe('marketSubjectsOf (market-first WP2.7)', () => {
+  // Staging, Sealand, 26 Sep: September's rows, the 20 Sep update's window rows
+  // and the month's denominators (654 in the market).
+  const RIVALS = ['competitor:Cotopaxi', 'competitor:Freitag', 'competitor:Patagonia', 'competitor:The North Face']
+  const counts = new Map([['2026-09-01', { month: '2026-09-01', videos: 654, comments: 16204, category: 625, rivalFiled: 29 }]])
+  const base = {
+    subjects: [
+      { id: 'looks', name: 'Looks & style', status: 'active' },
+      { id: 'repair', name: 'Repair & warranty', status: 'active' },
+      { id: 'community', name: 'Community & purpose', status: 'active' },
+      { id: 'price', name: 'Price', status: 'active' },
+      { id: 'old', name: 'A proposed subject', status: 'proposed' },
+    ],
+    calibrationOf: new Map([['looks', 'ready' as const], ['repair', 'failed' as const], ['community', 'provisional' as const], ['price', 'provisional' as const]]),
+    unread: new Set(['community']),
+    unreadWords: 'no reading yet',
+    month: '2026-09-01',
+    stored: [
+      { subject_id: 'looks', audience: 'competitor:Freitag', videos: 1 },
+      { subject_id: 'looks', audience: 'industry-other', videos: 102 },
+      { subject_id: 'looks', audience: 'client', videos: 2 },
+      { subject_id: 'repair', audience: 'industry-other', videos: 33 },
+      { subject_id: 'price', audience: 'competitor:Cotopaxi', videos: 1 },
+      { subject_id: 'price', audience: 'competitor:Freitag', videos: 1 },
+      { subject_id: 'price', audience: 'industry-other', videos: 23 },
+    ],
+    added: [
+      { subject_id: 'looks', audience: 'competitor:Freitag', videos: 1 },
+      { subject_id: 'looks', audience: 'industry-other', videos: 72 },
+      { subject_id: 'price', audience: 'competitor:Freitag', videos: 1 },
+      { subject_id: 'price', audience: 'industry-other', videos: 12 },
+      { subject_id: 'community', audience: 'client', videos: 4 },
+      { subject_id: 'community', audience: 'industry-other', videos: 3 },
+    ],
+    counts,
+    rivalAudiences: RIVALS,
+  }
+
+  it('pools the category and the tracked brands, never the client’s own posts', () => {
+    const b = marketSubjectsOf(base)
+    const looks = b.rows.find((r) => r.id === 'looks')!
+    expect(looks.market).toEqual({ monthSoFar: { k: 103, n: 654, pct: 15.7, verdict: null, observed: true }, thisUpdate: 73 })
+    expect(b.market).toEqual({ month: '2026-09-01', n: 654 })
+  })
+
+  it('prints a provisional subject’s market figure, marked, and never a verdict', () => {
+    const price = marketSubjectsOf(base).rows.find((r) => r.id === 'price')!
+    expect(price.calibration).toBe('provisional')
+    expect(price.market?.monthSoFar.k).toBe(25)
+    expect(price.market?.thisUpdate).toBe(13)
+    expect(price.verdict).toBeNull()
+    expect(price.market?.monthSoFar.verdict).toBeNull()
+  })
+
+  it('withholds a failed subject and one the month was not read for, with their words', () => {
+    const b = marketSubjectsOf(base)
+    expect(b.rows.map((r) => r.id)).toEqual(['looks', 'price'])
+    expect(b.withheld).toEqual([
+      { id: 'repair', label: 'Repair & warranty', calibration: 'failed' },
+      { id: 'community', label: 'Community & purpose', calibration: 'provisional', unread: 'no reading yet' },
+    ])
+  })
+
+  it('says "not recorded" (null) for this update where the windowed read cannot answer, never 0', () => {
+    const b = marketSubjectsOf({ ...base, added: null })
+    expect(b.rows.every((r) => r.market?.thisUpdate === null)).toBe(true)
+    expect(b.rows.every((r) => r.addedVideos === null)).toBe(true)
+  })
+
+  it('reads 0 for a read subject no market video cited this update', () => {
+    const b = marketSubjectsOf({ ...base, added: [] })
+    expect(b.rows.map((r) => r.market?.thisUpdate)).toEqual([0, 0])
+  })
+
+  it('leaves a rival that is no longer tracked out of both counts', () => {
+    const b = marketSubjectsOf({ ...base, rivalAudiences: RIVALS.filter((a) => a !== 'competitor:Freitag') })
+    const looks = b.rows.find((r) => r.id === 'looks')!
+    expect(looks.market?.monthSoFar.k).toBe(102)
+    expect(looks.market?.thisUpdate).toBe(72)
+  })
+})
+
+describe('the update’s days in a month, pooled on the market (WP2.7, the weekly’s WR2 too)', () => {
+  it('clips a window that reaches back into the month before to the month’s first day', () => {
+    // Sealand's 10 Sep update covered 11 Aug to 10 Sep.
+    expect(clipToMonth({ from: '2026-08-11T07:02:10.201Z', to: '2026-09-10T07:02:10.201Z' }, '2026-09-01'))
+      .toEqual({ from: '2026-09-01', to: '2026-09-10T07:02:10.201Z' })
+    // The 20 Sep update's days are all September's.
+    expect(clipToMonth({ from: '2026-09-10T07:02:10.201Z', to: '2026-09-20T04:02:57.874Z' }, '2026-09-01'))
+      .toEqual({ from: '2026-09-10T07:02:10.201Z', to: '2026-09-20T04:02:57.874Z' })
+    // A window that ends before the month puts nothing into it.
+    expect(clipToMonth({ from: '2026-08-11', to: '2026-09-01' }, '2026-09-01')).toBeNull()
+  })
+
+  it('sums the category and the tracked brands, never the client’s own posts or an untracked rival', () => {
+    // Staging, the 20 Sep update's window: Community & purpose carried 4 of
+    // the client's own videos, 1 filed under The North Face and 3 in the
+    // category.
+    const pooled = pooledSubjectCounts([
+      { subject_id: 'community', audience: 'client', videos: 4 },
+      { subject_id: 'community', audience: 'competitor:The North Face', videos: 1 },
+      { subject_id: 'community', audience: 'industry-other', videos: 3 },
+      { subject_id: 'community', audience: 'competitor:Poler', videos: 2 },
+      { subject_id: 'community', audience: 'industry-other', videos: 3 },
+    ], ['competitor:The North Face'])
+    expect(pooled.get('community')).toBe(4)
   })
 })

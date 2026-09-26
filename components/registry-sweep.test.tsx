@@ -16,14 +16,16 @@ import { MARKET_BLOCKS } from '@/components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '@/components/pages/competitive-surface'
 import { WEEK_BLOCKS } from '@/components/pages/week'
 
-import { makersMarkedFixture, marketBeforeMakersFixture, marketFrontFixture, marketSizeFixture, ossurFrontFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
+import { makersMarkedFixture, marketArrivalsFixture, marketBeforeMakersFixture, marketFrontFixture, marketSizeFixture, ossurArrivalsFixture, ossurFrontFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
 import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview'
 import { BlockFrame } from '@/components/blocks/frame'
 import { subjectsFixture, refusedFixture as subjectsRefused } from '@/components/pages/subjects/fixture'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture, quietRivalFixture } from '@/components/pages/competitive-surface/fixture'
-import { weekFixture } from '@/components/pages/week/fixture'
+import { marketWeekFixture, ossurWeeksFixture, weekFixture } from '@/components/pages/week/fixture'
+import { weekSubjects } from '@/components/pages/week/subjects'
+import { weekWeeks } from '@/components/pages/week/weeks'
 import { weeklyFixture } from '@/components/blocks/weekly/fixture'
 import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from '@/components/blocks/monthly/fixture'
 import { quarterlyFixture } from '@/components/blocks/quarterly/fixture'
@@ -66,6 +68,8 @@ const PAGE_STATES: Record<string, unknown[]> = {
     overviewFixture(), overviewRefused(), marketSizeFixture(), makersMarkedFixture(),
     // Your market (market-first WP1.6): the front page as deploy 2 builds it.
     marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture(),
+    // "With this update" (WP2.7, deploy 3).
+    marketArrivalsFixture(), ossurArrivalsFixture(),
   ],
   subjects: [subjectsFixture(), subjectsRefused()],
 }
@@ -79,7 +83,7 @@ const GROUPS: [string, Record<string, Renderish> | readonly (Renderish & { key: 
   ['voice-surface', VOICE_BLOCKS as never, [voiceFixture()]],
   ['market-surface', MARKET_BLOCKS as never, [marketFixture(), deepLinkFixture(), unrecordedFixture()]],
   ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture()]],
-  ['week', WEEK_BLOCKS as never, [weekFixture()]],
+  ['week', WEEK_BLOCKS as never, [weekFixture(), marketWeekFixture(), ossurWeeksFixture()]],
   ['weekly', WEEKLY_BLOCKS as never, [weeklyFixture()]],
   // Two states here (the stubbed skeleton and every slot filled); the monthly's
   // own test sweeps all four through the contract (components/blocks/monthly).
@@ -144,9 +148,12 @@ describe('the registry sweep', () => {
 // rebuilt at deploy 2; Subjects, Conversation and the monthly join it at
 // deploy 3 (§5.12), and are added here by the package that rebuilds each.
 const REBUILT: [string, readonly { key: string; render: (d: never, m: RenderMode, c: typeof ctx) => ReactNode }[], unknown[]][] = [
-  ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture()]],
+  ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture(), marketArrivalsFixture(), ossurArrivalsFixture()]],
   // "September in your market" (market-first WP2.1, deploy 3).
   ['the monthly', ALL_MONTHLY_BLOCKS as never, [monthlyFixture(), unmeasuredMonthlyFixture(), ossurMonthlyFixture(), filledSlotsFixture()]],
+  // This week's blocks rebuilt on the market at deploy 3 (WP2.7, WP2.9); the rest of
+  // the page is rebuilt at deploy 5 (WP3.7).
+  ['this week', [weekSubjects, weekWeeks] as never, [marketWeekFixture(), ossurWeeksFixture()]],
 ]
 
 describe('the 25 Sep rulings on rebuilt pages', () => {

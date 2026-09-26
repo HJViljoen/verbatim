@@ -19,6 +19,7 @@ import { overviewAsks } from './asks'
 import { overviewChange } from './change'
 import { FOR_YOU_TITLE, overviewForYou } from './foryou'
 import { PUBLISHED_TITLE } from './moves'
+import { overviewArrivals } from './arrivals'
 import { MARKET_SENTENCE_TITLE } from './sentence'
 import { MARKET_KINDS_TITLE } from './market-kinds'
 import { MARKET_SUBJECTS_TITLE, marketSubjectsLine } from './market-subjects'
@@ -48,20 +49,24 @@ export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewChange,
   overviewMoves,
   overviewForYou,
+  // "With this update" (market-first WP2.7), with the weekly volume bars
+  // inside it from WP2.9.
+  overviewArrivals,
 ]
 
 /**
  * YOUR MARKET, IN ITS ORDER (market-first WP1.6, plan §2.2; deploy 2's
  * column: blocks 0 to 2, 4 to 6, 9 as one line, and 10). The order is the
  * argument: the market in full, then brands, then what changed and what is
- * ours. "With this update", "What it means for you" and "What you published"
- * join with deploy 3 (WP2.7, WP2.5); "How sound is this month" is gone (25 Sep
- * rulings). `overview.moves` stays in the registry above, because stored
+ * ours. "With this update" (block 3) joins with deploy 3 (WP2.7), after the
+ * board; "What it means for you" and "What you published" join with WP2.5;
+ * "How sound is this month" is gone (25 Sep rulings). `overview.moves` stays in the registry above, because stored
  * exports and the briefs name it, and is not on the page.
  */
 export const FRONT_PAGE_BLOCKS: readonly Block<OverviewData>[] = [
   overviewSentence,
   overviewThemes,
+  overviewArrivals,
   overviewCategory,
   overviewAsks,
   overviewSubjects,
@@ -88,6 +93,7 @@ export const MARKET_TITLES: Readonly<Record<string, string>> = {
   'overview.change': overviewChange.title,
   'overview.foryou': FOR_YOU_TITLE,
   'overview.moves': PUBLISHED_TITLE,
+  'overview.arrivals': overviewArrivals.title,
 }
 
 /**
@@ -149,6 +155,7 @@ const ROWS: Record<string, number> = {
   'overview.asks': 3,
   'overview.change': 2,
   'overview.foryou': 3,
+  'overview.arrivals': 3,
 }
 
 

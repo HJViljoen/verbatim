@@ -394,3 +394,286 @@ export const pendingBlankLabel = (firstWeek: string): string =>
 /** The one waiting line above the pending row (decision B). */
 export const pendingWaitingLine = (firstComparisonDate: string): string =>
   `Pending: the first comparison is due with the ${shortDay(firstComparisonDate)} update, if a check on real data passes.`
+
+// ---- The responsive layout (the component step, WP2.9) ---------------------------
+//
+// THE PREVIEW IS DRAWN AT ONE WIDTH; THE PAGE IS NOT. `weekBarsGeometry` above
+// places everything in pixels for a known width. The component draws at every
+// width without JavaScript, so this layout keeps the heights in pixels (the
+// rows do not change height with the width) and every horizontal position as a
+// FRACTION of the plot (0 to 1), which the SVG prints as a percentage. The one
+// thing that depends on pixels is where the rule labels go, so they are placed
+// at the plot's narrowest width (`WEEK_PLOT_MIN`, where the strip starts to
+// scroll): anything that does not collide there does not collide wider.
+//
+// FOLLOWING THE APPROVED PREVIEW (WeeklyLine.dc.html, the front page; and
+// ThisWeek.dc.html's "Week by week"), where it differs from the WP's words on
+// looks: bars 55% of their slot in the ink, a filling or so-far week drawn
+// OUTLINED rather than at 40% ink, every comments bar labelled, the rule ticks
+// as triangles (filled: our searches; hollow: how we check or file videos)
+// with a dotted line down through both rows. The marks are our searches
+// (filled) and our relevance check (hollow); a filing change is not drawn,
+// since the pooled market does not move when a video is re-filed.
+
+/** The narrowest plot the chart draws at; under it the strip scrolls. */
+export const WEEK_PLOT_MIN = 520
+
+/** The narrowest a week's slot may be (its day label and a due date fit). */
+export const WEEK_SLOT_MIN = 48
+
+/** The plot's narrowest width for this many weeks: never under
+ *  `WEEK_PLOT_MIN`, and never so narrow a slot cannot hold its labels. */
+export const weekPlotMin = (weeks: number): number => Math.max(WEEK_PLOT_MIN, weeks * WEEK_SLOT_MIN)
+
+export type WeekBarsSize = 'large' | 'medium'
+
+/** The rows' heights, per size: the front page's (the preview's Week by week,
+ *  videos to 208 px) and This week's (its preview, videos to 128 px). */
+export const WEEK_BARS_SIZES: Record<WeekBarsSize, { videosH: number; commentsH: number; rowGap: number }> = {
+  large: { videosH: 208, commentsH: 60, rowGap: 56 },
+  medium: { videosH: 128, commentsH: 70, rowGap: 44 },
+}
+
+const TICK_ROW = 20
+const TICK_LABEL_CHAR = 7.4
+const TICK_PAD = 22
+const f4 = (n: number): number => Math.round(n * 10000) / 10000
+
+export interface WeekTick {
+  date: string
+  /** The tick's x, as a fraction of the plot. */
+  x: number
+  row: number
+  /** Which side of its mark the day sits: 'end' is left of it. */
+  side: 'start' | 'end'
+  label: string
+  /** Filled for a change to our searches; hollow for how we check relevance. */
+  mark: 'search' | 'other'
+}
+
+export interface WeekBarsLayout {
+  n: number
+  height: number
+  /** The rows' tops and baselines, px. */
+  videos: { top: number; base: number }
+  comments: { top: number; base: number }
+  axis: { dayY: number; monthY: number; stateY: number; marksY: number | null }
+  ticks: WeekTick[]
+  columns: {
+    week: string
+    /** Slot left edge and centre, as fractions of the plot. */
+    x: number
+    cx: number
+    w: number
+    outlined: boolean
+    stateWord: 'so far' | 'filling' | null
+    videos: { y: number; h: number; label: string } | null
+    comments: { y: number; h: number; label: string } | null
+    dayLabel: string
+    monthLabel: string | null
+  }[]
+  gaps: { cx: number; label: string }[]
+  /** 'row' ticks (This week): our changes as marks under the axis, per week. */
+  marks: { cx: number; items: { day: string; mark: 'search' | 'other' }[] }[]
+}
+
+/**
+ * Place the rule labels so none collides with another label, with another
+ * rule's mark on its row, or with a rule's dotted line from a row above:
+ * rows from the top, and on each row the label's right side first unless a
+ * later rule sits within reach there, then its left.
+ */
+export function placeTicks(ticks: readonly { x: number; label: string }[], plotPx: number = WEEK_PLOT_MIN): { row: number; side: 'start' | 'end' }[] {
+  const px = ticks.map((t) => t.x * plotPx)
+  const widths = ticks.map((t) => t.label.length * TICK_LABEL_CHAR)
+  const placed: { x: number; row: number; from: number; to: number }[] = []
+  return ticks.map((_, i) => {
+    const x = px[i]
+    for (let row = 0; row < 6; row++) {
+      const crowdedRight = px.some((o, j) => j > i && o > x && o - x < widths[i] + TICK_PAD + 6)
+      const sides: ('start' | 'end')[] = crowdedRight ? ['end', 'start'] : ['start', 'end']
+      for (const side of sides) {
+        const from = side === 'start' ? x - 6 : x - widths[i] - TICK_PAD + 4
+        const to = side === 'start' ? x + widths[i] + TICK_PAD - 4 : x + 6
+        const clash = placed.some((p) =>
+          (p.row === row && from < p.to && to > p.from)
+          // A rule placed on a row above draws its line down through this one.
+          || (p.row < row && p.x > from - 2 && p.x < to + 2))
+          // Another rule's own mark, if it lands on this row later, would sit
+          // under this label: keep clear of every mark on the first row.
+          || (row === 0 && px.some((o, j) => j > i && o > from - 6 && o < to + 6))
+        if (!clash) {
+          placed.push({ x, row, from, to })
+          return { row, side }
+        }
+      }
+    }
+    placed.push({ x, row: 6, from: x - 6, to: x + 6 })
+    return { row: 6, side: 'start' as const }
+  })
+}
+
+/**
+ * The chart's layout for these weeks (axis order) and our changes. `ticks`:
+ * 'top' draws each change as a mark above the plot with a dotted line down
+ * through both rows (the front page); 'row' draws them as marks in a row under
+ * the axis (This week).
+ */
+export function weekBarsLayout(
+  weeks: readonly WeekVolume[],
+  rules: readonly WeekRule[],
+  opts: { size: WeekBarsSize; ticks: 'top' | 'row'; plotPx?: number },
+): WeekBarsLayout {
+  const S = WEEK_BARS_SIZES[opts.size]
+  const n = Math.max(1, weeks.length)
+  const index = new Map(weeks.map((w, i) => [isoWeekOf(w.week), i]))
+
+  // Our changes, one per day, on their week; the mark is filled when any
+  // change that day was to our searches.
+  const byDay = new Map<string, { date: string; x: number; search: boolean }>()
+  for (const r of rules) {
+    const i = index.get(isoWeekOf(r.week))
+    const g = weekRuleGroupOf(r.surface)
+    // FILING IS NOT DRAWN ON THE MARKET'S BARS (the preview draws our searches
+    // and our relevance check only): the market pools the category with the
+    // brands you track, so a video re-filed between them moves no bar
+    // (decision E).
+    if (i == null || !g || g === 'filing') continue
+    const dayIndex = Math.min(Math.max(Math.round((msOfInstant(r.date) - msOfInstant(isoWeekOf(r.week))) / 86_400_000), 0), 6)
+    const x = (i + (dayIndex + 0.5) / 7) / n
+    const held = byDay.get(r.date) ?? { date: r.date, x, search: false }
+    held.search = held.search || g === 'search'
+    byDay.set(r.date, held)
+  }
+  const days = [...byDay.values()].sort((a, b) => a.x - b.x || (a.date < b.date ? -1 : 1))
+  const spots = opts.ticks === 'top' ? placeTicks(days.map((d) => ({ x: d.x, label: shortDay(d.date) })), opts.plotPx ?? weekPlotMin(n)) : []
+  const tickRows = opts.ticks === 'top' && days.length > 0 ? Math.max(...spots.map((s) => s.row)) + 1 : 0
+  const ticks: WeekTick[] = opts.ticks === 'top'
+    ? days.map((d, i) => ({ date: d.date, x: f4(d.x), row: spots[i].row, side: spots[i].side, label: shortDay(d.date), mark: d.search ? 'search' : 'other' }))
+    : []
+
+  const top = tickRows * TICK_ROW + (tickRows > 0 ? 28 : 8) + 16
+  const vBase = top + S.videosH
+  const cTop = vBase + S.rowGap
+  const cBase = cTop + S.commentsH
+  const dayY = cBase + 22
+  const monthY = dayY + 18
+  const stateY = monthY + 22
+  const marksY = opts.ticks === 'row' && days.length > 0 ? stateY + 30 : null
+  const height = (marksY ?? stateY) + 10
+
+  const drawn = weeks.filter((w) => w.state !== 'none_gathered' && w.videos > 0)
+  const vMax = Math.max(1, ...drawn.map((w) => w.videos))
+  const cMax = Math.max(1, ...drawn.map((w) => w.comments))
+  const columns = weeks.map((w, i) => {
+    const week = isoWeekOf(w.week)
+    const has = w.state !== 'none_gathered' && w.videos > 0
+    const vh = has ? Math.max(1, r1((w.videos / vMax) * S.videosH)) : 0
+    const ch = has && w.comments > 0 ? Math.max(1, r1((w.comments / cMax) * S.commentsH)) : 0
+    const prev = i > 0 ? dayMonth(isoWeekOf(weeks[i - 1].week)) : null
+    const here = dayMonth(week)
+    return {
+      week,
+      x: f4(i / n),
+      cx: f4((i + 0.5) / n),
+      w: f4(0.55 / n),
+      outlined: w.state === 'so_far' || w.state === 'filling',
+      stateWord: (w.state === 'so_far' ? 'so far' : w.state === 'filling' ? 'filling' : null) as 'so far' | 'filling' | null,
+      videos: has ? { y: r1(vBase - vh), h: vh, label: fmtInt(w.videos) } : null,
+      comments: has ? { y: r1(cBase - ch), h: ch, label: fmtInt(w.comments) } : null,
+      dayLabel: String(here.d),
+      monthLabel: prev == null || prev.mi !== here.mi ? here.m : null,
+    }
+  })
+
+  const gaps: WeekBarsLayout['gaps'] = []
+  for (let i = 0; i < weeks.length; i++) {
+    if (columns[i].videos) continue
+    let j = i
+    while (j + 1 < weeks.length && !columns[j + 1].videos) j++
+    gaps.push({ cx: f4((i + j + 1) / 2 / n), label: 'none gathered' })
+    i = j
+  }
+
+  const marks: WeekBarsLayout['marks'] = []
+  if (opts.ticks === 'row') {
+    for (const c of columns) {
+      const items = days.filter((d) => isoWeekOf(d.date) === c.week)
+        .map((d) => ({ day: String(dayMonth(d.date).d), mark: (d.search ? 'search' : 'other') as 'search' | 'other' }))
+      if (items.length > 0) marks.push({ cx: c.cx, items })
+    }
+  }
+
+  return {
+    n,
+    height,
+    videos: { top, base: vBase },
+    comments: { top: cTop, base: cBase },
+    axis: { dayY, monthY, stateY, marksY },
+    ticks,
+    columns,
+    gaps,
+    marks,
+  }
+}
+
+/**
+ * The chart's key as one sentence (the preview's): "We changed our searches on
+ * 9, 13 and 17 Sep, and how we check relevance on 26 Sep." Empty when no
+ * change is on the chart. Filing changes are not on it (`weekBarsLayout`).
+ */
+export function weekChangeSentence(rules: readonly WeekRule[]): string {
+  const of = (g: WeekRuleGroup): string[] => rules.filter((r) => weekRuleGroupOf(r.surface) === g).map((r) => r.date)
+  const parts: string[] = []
+  const search = of('search')
+  const relevance = of('relevance')
+  if (search.length) parts.push(`our searches on ${dayList(search)}`)
+  if (relevance.length) parts.push(`how we check relevance on ${dayList(relevance)}`)
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return `We changed ${parts[0]}.`
+  return `We changed ${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`
+}
+
+/** A week's facts for its hover card (`lines`, the front page's preview) and
+ *  for This week's side panel (`panel`, its preview): each a figure and its
+ *  words; `gap` starts a new group of the card. One count, one base, per line. */
+export interface WeekDetail {
+  week: string
+  title: string
+  lines: { value: string; words: string; strong: boolean; gap: boolean }[]
+  panel: { value: string; words: string; sub: string }[]
+}
+
+export function weekDetail(v: WeekVolume): WeekDetail {
+  const title = `Week of ${weekName(v.week)}`
+  if (v.state === 'none_gathered' || v.videos === 0) {
+    return { week: v.week, title, lines: [{ value: '', words: 'none gathered', strong: false, gap: false }], panel: [] }
+  }
+  const lines: WeekDetail['lines'] = [{ value: fmtInt(v.videos), words: 'videos', strong: true, gap: false }]
+  const panel: WeekDetail['panel'] = []
+  if (v.rivalFiled > 0) {
+    lines.push({ value: fmtInt(v.category), words: 'in the category', strong: false, gap: false })
+    lines.push({ value: fmtInt(v.rivalFiled), words: 'filed under a brand you track', strong: false, gap: false })
+    panel.push({ value: fmtInt(v.videos), words: 'videos', sub: `of them ${fmtInt(v.category)} in the category and ${fmtInt(v.rivalFiled)} filed under a brand you track` })
+  } else {
+    panel.push({ value: fmtInt(v.videos), words: 'videos', sub: 'all in the category' })
+  }
+  const monday = isoWeekOf(v.week)
+  const firstMonth = longMonth(`${monday.slice(0, 7)}-01`)
+  const lastMonth = longMonth(`${addDays(monday, 6).slice(0, 7)}-01`)
+  const split = v.commentsNextMonth > 0 && v.commentsNextMonth < v.comments && firstMonth !== lastMonth
+  const dated = split
+    ? `${fmtInt(v.comments - v.commentsNextMonth)} dated in ${firstMonth} and ${fmtInt(v.commentsNextMonth)} in ${lastMonth}`
+    : `all dated in ${v.commentsNextMonth > 0 ? lastMonth : firstMonth}`
+  lines.push({ value: fmtInt(v.comments), words: `comments, ${dated}`, strong: true, gap: true })
+  panel.push({ value: fmtInt(v.comments), words: 'comments', sub: dated })
+  if (v.medianDated != null) {
+    lines.push({ value: fmtMedian(v.medianDated), words: 'median comments a video', strong: false, gap: false })
+    panel.push({ value: fmtMedian(v.medianDated), words: 'comments a video', sub: 'the median' })
+  }
+  if (v.unchecked > 0) {
+    lines.push({ value: fmtInt(v.unchecked), words: 'let in before we checked relevance', strong: false, gap: true })
+    panel.push({ value: fmtInt(v.unchecked), words: v.unchecked === 1 ? 'video let in' : 'videos let in', sub: 'before we checked relevance' })
+  }
+  return { week: v.week, title, lines, panel }
+}

@@ -1,4 +1,11 @@
-import { PRIVACY_LINE, coverageLine, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { PRIVACY_LINE, coverageLine, marketSubjectsOf, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { pooledDenominators } from '@/lib/reading/market'
+import { subjectCalibration } from '@/lib/subjects/calibration-state'
+import { weekVolumesBlock } from '@/lib/pages/overview-market/weeks'
+import { ourChangesWithoutGatherFlags } from '@/lib/reading/gather-flags'
+import { OSSUR_RIVALS, OSSUR_UPDATES, OSSUR_WEEK_VOLUMES, SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
+import { WEEK_LINE } from '@/lib/week-line-config'
+import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { intentCounts } from '@/lib/content-tiles'
 import { ownSides, type PlaybookVideo } from '@/lib/pages/playbook'
 import { bandVerdict } from '@/lib/reading/verdicts'
@@ -850,5 +857,180 @@ export function regroupedFixture(): WeekData {
       newThemesSeen: 0,
       regrouped: { update: d.update.date, themes: 592 },
     },
+  }
+}
+
+// ---- Sealand's subjects on the market (market-first WP2.7) ----------------------
+//
+// STAGING, SEALAND, READ ON 26 SEP (read-only, MCP): the seven subjects as
+// stored (name, `calibrated_at`, precision, n and judge version), September's
+// `month_subject_readings` by audience, `window_subject_readings` over the 20
+// Sep update's own days (10 Sep 07:02 to 20 Sep 04:02, all inside September),
+// and September's `month_denominators` (625 in the category, 29 filed under
+// Cotopaxi 12, Freitag 6, Patagonia 5 and The North Face 6: 654 in the market,
+// 16,204 comments). Repair & warranty measured 0.33 on 33 labels, so it is
+// being re-described; Community & purpose was named on 24 Sep, after
+// September's rows were written, so it has no September row and reads "no
+// reading yet" (its window row, 4 of them the client's own posts, prints
+// nothing).
+
+export const SEALAND_WEEK_20_SEP: WeekWindow = {
+  from: '2026-09-10T07:02:10.201Z',
+  to: '2026-09-20T04:02:57.874Z',
+  basis: 'reconstructed',
+}
+
+export const SEALAND_RIVAL_AUDIENCES = [
+  'competitor:Cotopaxi', 'competitor:Freitag', 'competitor:Rareform', 'competitor:The North Face',
+  'competitor:Patagonia', 'competitor:Freedom of Movement', 'competitor:Old School',
+]
+
+const JUDGE = 'subject_judge_v1·gpt-4.1-mini·0.6/0.4·subject_embed_v2'
+const SEALAND_SUBJECTS = [
+  { id: '723d1389-4eb0-47f1-b6e1-f368d990fb2a', name: 'Looks & style', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.071Z', calibration_precision: 0.8571428571428571, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '98349b72-6783-424d-8397-8b43bf06741b', name: 'Durability', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.462Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: 'cf7bd22c-9a38-47c6-80dd-e8d3c5b3852d', name: 'Price', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.858Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: 'fba00f77-4720-4f8e-b48f-3d4c53222e9f', name: 'Comfort', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:18.256Z', calibration_precision: 0.9166666666666666, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '27ac98cd-57e5-4322-922d-df90fa0ab859', name: 'Waterproofing', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:16.277Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '3f6d49f4-cedd-492d-a957-1c840c1258a1', name: 'Repair & warranty', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:16.678Z', calibration_precision: 0.3333333333333333, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '1db58231-9327-4815-9898-ed3008bb353c', name: 'Community & purpose', status: 'active', named_at: '2026-09-24', calibrated_at: null, calibration_precision: null, calibration_n: null, calibration_judge_version: null },
+]
+const S = Object.fromEntries(SEALAND_SUBJECTS.map((x) => [x.name, x.id]))
+
+/** September's `month_subject_readings`, every audience (staging, 26 Sep). */
+export const SEALAND_SEP_SUBJECT_ROWS = [
+  { subject_id: S['Looks & style'], audience: 'competitor:Freitag', videos: 1 },
+  { subject_id: S['Looks & style'], audience: 'industry-other', videos: 102 },
+  { subject_id: S.Durability, audience: 'competitor:Cotopaxi', videos: 3 },
+  { subject_id: S.Durability, audience: 'competitor:Patagonia', videos: 2 },
+  { subject_id: S.Durability, audience: 'industry-other', videos: 34 },
+  { subject_id: S.Price, audience: 'competitor:Cotopaxi', videos: 1 },
+  { subject_id: S.Price, audience: 'competitor:Freitag', videos: 1 },
+  { subject_id: S.Price, audience: 'industry-other', videos: 23 },
+  { subject_id: S.Comfort, audience: 'competitor:Cotopaxi', videos: 2 },
+  { subject_id: S.Comfort, audience: 'competitor:Patagonia', videos: 2 },
+  { subject_id: S.Comfort, audience: 'competitor:The North Face', videos: 2 },
+  { subject_id: S.Comfort, audience: 'industry-other', videos: 37 },
+  { subject_id: S.Waterproofing, audience: 'competitor:Patagonia', videos: 1 },
+  { subject_id: S.Waterproofing, audience: 'industry-other', videos: 28 },
+  { subject_id: S['Repair & warranty'], audience: 'competitor:Cotopaxi', videos: 1 },
+  { subject_id: S['Repair & warranty'], audience: 'competitor:Patagonia', videos: 2 },
+  { subject_id: S['Repair & warranty'], audience: 'industry-other', videos: 33 },
+]
+
+/** `window_subject_readings` over the 20 Sep update's days (staging, 26 Sep). */
+export const SEALAND_20_SEP_SUBJECT_WINDOW = [
+  { subject_id: S['Looks & style'], audience: 'competitor:Freitag', videos: 1 },
+  { subject_id: S['Looks & style'], audience: 'industry-other', videos: 72 },
+  { subject_id: S.Durability, audience: 'competitor:Patagonia', videos: 2 },
+  { subject_id: S.Durability, audience: 'industry-other', videos: 18 },
+  { subject_id: S.Price, audience: 'competitor:Freitag', videos: 1 },
+  { subject_id: S.Price, audience: 'industry-other', videos: 12 },
+  { subject_id: S.Comfort, audience: 'competitor:Patagonia', videos: 2 },
+  { subject_id: S.Comfort, audience: 'competitor:The North Face', videos: 2 },
+  { subject_id: S.Comfort, audience: 'industry-other', videos: 24 },
+  { subject_id: S.Waterproofing, audience: 'competitor:Patagonia', videos: 1 },
+  { subject_id: S.Waterproofing, audience: 'industry-other', videos: 15 },
+  { subject_id: S['Repair & warranty'], audience: 'competitor:Patagonia', videos: 2 },
+  { subject_id: S['Repair & warranty'], audience: 'industry-other', videos: 18 },
+  { subject_id: S['Community & purpose'], audience: 'client', videos: 4 },
+  { subject_id: S['Community & purpose'], audience: 'competitor:The North Face', videos: 1 },
+  { subject_id: S['Community & purpose'], audience: 'industry-other', videos: 3 },
+]
+
+/** September's `month_denominators` by audience (staging, 26 Sep): the market is 654. */
+export const SEALAND_SEP_DENOMINATORS = [
+  { month: '2026-09-01', audience: 'competitor:Cotopaxi', videos: 12, comments: 206 },
+  { month: '2026-09-01', audience: 'competitor:Freitag', videos: 6, comments: 40 },
+  { month: '2026-09-01', audience: 'competitor:Patagonia', videos: 5, comments: 122 },
+  { month: '2026-09-01', audience: 'competitor:The North Face', videos: 6, comments: 44 },
+  { month: '2026-09-01', audience: 'industry-other', videos: 625, comments: 15792 },
+]
+
+/** The seven subjects' states, as `subjectCalibration` reads their stored columns. */
+export const sealandSubjectStates = (): Map<string, ReturnType<typeof subjectCalibration>> =>
+  new Map(SEALAND_SUBJECTS.map((x) => [x.id, subjectCalibration(x)]))
+
+/** Sealand's subjects on the market, as the loader builds them for the 20 Sep update. */
+export function sealandMarketSubjects(): WeekData['subjects'] {
+  const market = marketSubjectsOf({
+    subjects: SEALAND_SUBJECTS,
+    calibrationOf: sealandSubjectStates(),
+    unread: new Set([S['Community & purpose']]),
+    unreadWords: 'no reading yet',
+    month: '2026-09-01',
+    stored: SEALAND_SEP_SUBJECT_ROWS,
+    added: SEALAND_20_SEP_SUBJECT_WINDOW,
+    counts: pooledDenominators(SEALAND_SEP_DENOMINATORS, SEALAND_RIVAL_AUDIENCES),
+    rivalAudiences: SEALAND_RIVAL_AUDIENCES,
+  })
+  return {
+    ...market,
+    unread: null,
+    month: '2026-09-01',
+    lead: null,
+    namedLine: subjectsNamedLine(SEALAND_SUBJECTS.map((x) => x.named_at)),
+  }
+}
+
+/**
+ * This week on Sealand's 20 Sep update, as deploy 3 builds its market blocks
+ * (WP2.7). The subjects are the 20 Sep update's (above). The other blocks are
+ * `thinFixture`'s, measured on the 10 Sep update, so only the blocks WP2.7 and
+ * WP2.9 rebuilt read this fixture's update.
+ */
+export function marketWeekFixture(): WeekData {
+  const d = thinFixture()
+  return {
+    ...d,
+    update: {
+      id: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4',
+      date: '2026-09-20T08:33:47.358Z',
+      previous: '2026-09-10T07:17:02.291Z',
+      status: 'partial',
+    },
+    window: SEALAND_WEEK_20_SEP,
+    readingAt: '2026-09-20T12:00:00.000Z',
+    subjects: sealandMarketSubjects(),
+    // Week by week (WP2.9) on staging's weeks at the page's clock: the weeks
+    // of 27 Jul to 14 Sep, the preview's own (7 Sep filling, 14 Sep so far).
+    weeks: weekVolumesBlock({
+      reading: { month: '2026-09-01' },
+      now: '2026-09-20T12:00:00.000Z',
+      updates: STAGING_UPDATES,
+      rows: STAGING_WEEK_VOLUMES,
+      rivalAudiences: STAGING_RIVALS,
+      changes: ourChangesWithoutGatherFlags(STAGING_CHANGES),
+      cfg: WEEK_LINE[SEALAND_CLIENT_ID],
+      nextUpdateAfter: SEALAND_NEXT_UPDATE,
+    }),
+  }
+}
+
+/** Össur on This week as deploy 3 builds it: its weeks at its last update
+ *  (13 Sep, paused), the weeks of 27 Jul to 7 Sep and no same-age line (no
+ *  WEEK_LINE entry), and no subject named. The other blocks are
+ *  `weekFixture`'s, Össur's 13 Sep update. */
+export function ossurWeeksFixture(): WeekData {
+  return {
+    ...weekFixture(),
+    // Össur names no subject on staging (§2.13): the market block's one line.
+    subjects: {
+      rows: [],
+      unread: 'No subjects are recorded for this workspace yet. Name what you care about in Settings and this update’s videos are counted against them from the next reading.',
+      month: '2026-09-01',
+      lead: null,
+      namedLine: null,
+      market: { month: '2026-09-01', n: null },
+    },
+    weeks: weekVolumesBlock({
+      reading: { month: '2026-09-01' },
+      now: '2026-09-16T09:00:00.000Z',
+      updates: OSSUR_UPDATES,
+      rows: OSSUR_WEEK_VOLUMES,
+      rivalAudiences: OSSUR_RIVALS,
+      changes: [],
+      cfg: null,
+    }),
   }
 }

@@ -27,6 +27,12 @@ import { AUGUST_CATEGORY_N, SEPTEMBER_CATEGORY_N, septemberThemes } from '@/lib/
 import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, marketKindLabel, searchChangeDays, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import { readingMonthFor, scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { comparabilityOf } from '@/lib/reading/comparability'
+import type { ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
+import { weekVolumesBlock } from '@/lib/pages/overview-market/weeks'
+import { ourChangesWithoutGatherFlags } from '@/lib/reading/gather-flags'
+import { OSSUR_RIVALS, OSSUR_UPDATES, OSSUR_WEEK_VOLUMES, SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
+import { WEEK_LINE } from '@/lib/week-line-config'
+import { SEALAND_CLIENT_ID } from '@/lib/config'
 
 /** The two refusals the page's own verdicts carry, as TOKENS. */
 const OV_RECORD_INPUTS = () =>
@@ -1407,4 +1413,94 @@ export function calibrationOverviewFixture(opts: { unchecked?: readonly string[]
     },
   })
   return { ...overviewFixture(), subjects }
+}
+
+// ---- "With this update" (market-first WP2.7) ------------------------------------
+//
+// STAGING'S OWN UPDATES, AS `update_arrivals` COUNTS THEM (MF2, read-only, 26
+// Sep). Sealand's 20 Sep update: 395 September videos read for the first time
+// and 11,999 September comments (1 and 99 of August); the nine themes it heard
+// first with 10+ category videos in September, as the loader read them on
+// staging (26 Sep): three led by makers (65, 25, 14) counted, six named, the
+// first five with how many of their videos came from searches first run in
+// September (8 of 13, 9 of 12, 11 of 12, 6 of 11, 8 of 10). Össur's 13 Sep update: 139 September
+// videos and 4,722 comments, and nothing in October (paused).
+//
+// ON THE FRONT PAGE FIXTURES AS THEY ARE: `marketFrontFixture` is production's
+// 24 Sep figures, whose own update's arrivals were not read (no production
+// read by an agent), so the Sealand block carries staging's 20 Sep update, as
+// the block itself says ("With the 20 Sep update").
+
+export const SEALAND_20_SEP_ARRIVALS: ArrivalsBlock = {
+  run: { id: 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4', date: '2026-09-20T08:33:47.358Z' },
+  months: [
+    { month: '2026-08-01', videosFirstRead: 1, commentsCaptured: 99 },
+    { month: '2026-09-01', videosFirstRead: 395, commentsCaptured: 11999 },
+  ],
+  current: { month: '2026-09-01', videos: 654, updates: 3 },
+  newThemes: [
+    { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: 8 },
+    { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: 9 },
+    { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: 11 },
+    { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: 6 },
+    { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: 8 },
+    { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
+  ],
+  regrouped: null,
+  grouped: { makers: 3, setAside: 0 },
+}
+
+export const OSSUR_13_SEP_ARRIVALS: ArrivalsBlock = {
+  run: { id: 'd346b0f7-5b2b-4b46-a60c-db0c83ecfda7', date: '2026-09-13T06:26:49.308Z' },
+  months: [
+    { month: '2026-09-01', videosFirstRead: 139, commentsCaptured: 4722 },
+    { month: '2026-10-01', videosFirstRead: 0, commentsCaptured: 0 },
+  ],
+  current: { month: '2026-10-01', videos: null, updates: 0 },
+  newThemes: [],
+  regrouped: null,
+  grouped: { makers: 0, setAside: 0 },
+}
+
+/**
+ * Week by week (WP2.9) on staging's own weeks (lib/test/week-fixture.ts, read
+ * 26 Sep), at the fixture's clock: Sealand's September at 24 Sep, the weeks
+ * of 27 Jul to 21 Sep, with the same-age line pending; Össur's at 2 Oct, the
+ * weeks of 27 Jul to 28 Sep, with no line (no WEEK_LINE entry).
+ */
+export function sealandWeeks(now: string = MARKET_AT) {
+  return weekVolumesBlock({
+    reading: { month: REAL_MONTH },
+    now,
+    updates: STAGING_UPDATES,
+    rows: STAGING_WEEK_VOLUMES,
+    rivalAudiences: STAGING_RIVALS,
+    changes: ourChangesWithoutGatherFlags(STAGING_CHANGES),
+    cfg: WEEK_LINE[SEALAND_CLIENT_ID],
+    nextUpdateAfter: SEALAND_NEXT_UPDATE,
+  })
+}
+
+export function ossurWeeks(now = '2026-10-02T06:00:00.000Z') {
+  return weekVolumesBlock({
+    reading: { month: REAL_MONTH },
+    now,
+    updates: OSSUR_UPDATES,
+    rows: OSSUR_WEEK_VOLUMES,
+    rivalAudiences: OSSUR_RIVALS,
+    changes: [],
+    cfg: null,
+  })
+}
+
+/** Your market with "With this update" (Sealand, staging's 20 Sep update) and
+ *  its week by week. */
+export function marketArrivalsFixture(): OverviewData {
+  return { ...marketFrontFixture(), arrivals: SEALAND_20_SEP_ARRIVALS, weeks: sealandWeeks() }
+}
+
+/** Össur's front page with its last update's arrivals and its weeks (paused,
+ *  §2.13; no same-age row). */
+export function ossurArrivalsFixture(): OverviewData {
+  return { ...ossurFrontFixture(), arrivals: OSSUR_13_SEP_ARRIVALS, weeks: ossurWeeks() }
 }

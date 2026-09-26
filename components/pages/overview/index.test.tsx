@@ -48,10 +48,13 @@ function fullHouse(): OverviewData {
 }
 
 describe('the Overview’s blocks', () => {
-  it('are the registry’s ten, keyed stably: Phase 1’s six and the front page’s four new ones, and OV6 is not among them (25 Sep rulings)', () => {
+  it('are the registry’s eleven, keyed stably: Phase 1’s six and the front page’s five new ones, and OV6 is not among them (25 Sep rulings)', () => {
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).toEqual([
       'overview.bar', 'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
       'overview.subjects', 'overview.rivals', 'overview.change', 'overview.moves', 'overview.foryou',
+      // "With this update" (market-first WP2.7), which holds the weekly bars
+      // (WP2.9): the front page adds no other key.
+      'overview.arrivals',
     ])
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.record')
   })
@@ -149,18 +152,19 @@ describe('the 30-number budget', () => {
 })
 
 describe('the Overview page', () => {
-  // NINE TILES, YOUR MARKET'S (market-first WP1.6, deploy 2's column of
-  // §2.2, and WP2.5's two for deploy 3): the month, the themes, the kinds, the
-  // asks, the subjects beside what it means for you, what you published beside
-  // the brands, and what changed. OV0 is not a tile (Block D wave 3, M7); it
-  // keeps its place in `OVERVIEW_BLOCKS` for the print slide and the email,
-  // which carry no bar. OV5 comes back reworked as "What you published".
-  it('draws the page bar, Your market’s nine tiles and nothing else', () => {
+  // TEN TILES, YOUR MARKET'S (market-first WP1.6, deploy 2's column of §2.2,
+  // and deploy 3's three): the month, the themes, "With this update" (block 3,
+  // WP2.7) after the board, the kinds, the asks, the subjects beside what it
+  // means for you (WP2.5), what you published beside the brands, and what
+  // changed. OV0 is not a tile (Block D wave 3, M7); it keeps its place in
+  // `OVERVIEW_BLOCKS` for the print slide and the email, which carry no bar.
+  // OV5 comes back reworked as "What you published".
+  it('draws the page bar, Your market’s ten tiles and nothing else', () => {
     const markup = render(<OverviewPage data={marketFrontFixture()} />)
     expect(markup).toContain('Your market')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(9)
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(10)
     expect(TILE_BLOCKS.map((b) => b.key)).toEqual([
-      'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
+      'overview.sentence', 'overview.themes', 'overview.arrivals', 'overview.category', 'overview.asks',
       'overview.subjects', 'overview.foryou', 'overview.moves', 'overview.rivals', 'overview.change',
     ])
     expect(markup).not.toContain('This month so far')

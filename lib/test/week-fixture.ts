@@ -313,3 +313,33 @@ export function readFromStaging(stagingWeek: string, over: Partial<WeekRead> = {
     ...over,
   }
 }
+
+// ---- Össur (paused; no WEEK_LINE entry) ----------------------------------------------
+
+/** Össur's `market_week_volumes`, 27 Jul to 12 Oct, as MF4 returns them on
+ *  staging (read-only, MCP, 26 Sep; market-first WP2.9's component step). Its
+ *  one tracked rival is Ottobock. Nothing after the week of 7 Sep: its last
+ *  update was 13 Sep. */
+export const OSSUR_RIVALS: readonly string[] = ['competitor:Ottobock']
+export const OSSUR_WEEK_VOLUMES: readonly MarketWeekRow[] = [
+  v('2026-07-27', 'competitor:Ottobock', 1, 2, 2, 1, 3, 10.0588235294117647, 0, 0),
+  v('2026-07-27', 'industry-other', 16, 169, 117, 11, 3, 10.0588235294117647, 6, 0),
+  v('2026-08-03', 'competitor:Ottobock', 5, 42, 0, 1, 19, 33.0852713178294574, 0, 0),
+  v('2026-08-03', 'industry-other', 124, 4226, 0, 10, 19, 33.0852713178294574, 6, 0),
+  v('2026-08-10', 'competitor:Ottobock', 15, 402, 0, 1, 20.5, 34.6708860759493671, 0, 0),
+  v('2026-08-10', 'industry-other', 143, 5076, 0, 15, 20.5, 34.6708860759493671, 6, 0),
+  v('2026-08-17', 'competitor:Ottobock', 21, 380, 0, 2, 18, 32.274390243902439, 0, 0),
+  v('2026-08-17', 'industry-other', 143, 4913, 0, 21, 18, 32.274390243902439, 13, 0),
+  v('2026-08-24', 'competitor:Ottobock', 15, 301, 0, 0, 16, 32.7254901960784314, 1, 0),
+  v('2026-08-24', 'industry-other', 240, 8044, 0, 43, 16, 32.7254901960784314, 22, 0),
+  v('2026-08-31', 'competitor:Ottobock', 18, 458, 421, 0, 19, 29.8382978723404255, 1, 3),
+  v('2026-08-31', 'industry-other', 217, 6554, 6008, 28, 19, 29.8382978723404255, 20, 29),
+  v('2026-09-07', 'competitor:Ottobock', 8, 180, 0, 1, 14.5, 25.5773809523809524, 0, 0),
+  v('2026-09-07', 'industry-other', 160, 4117, 0, 23, 14.5, 25.5773809523809524, 14, 0),
+]
+
+/** Össur's updates on staging, by finish (six, 9 Aug to 13 Sep). */
+export const OSSUR_UPDATES: readonly string[] = [
+  '2026-08-09T14:54:00.907Z', '2026-08-16T07:07:55.837Z', '2026-08-23T05:05:27.554Z',
+  '2026-08-30T09:38:53.882Z', '2026-09-06T12:41:40.114Z', '2026-09-13T06:26:49.308Z',
+]

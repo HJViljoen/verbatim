@@ -9,6 +9,7 @@ import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, 
 import { WEEK_LINE } from '../week-line-config'
 import { SEALAND_CLIENT_ID } from '../config'
 import {
+  placeTicks, weekBarsLayout, weekChangeSentence, weekDetail, WEEK_PLOT_MIN,
   dayList, pendingBlankLabel, pendingRowGeometry, pendingWaitingLine, WEEK_BARS, weekBarsAriaLabel, weekBarsGeometry,
   weekBarsTable, weekHover, weekRuleKey,
 } from './week-bars'
@@ -162,5 +163,79 @@ describe('counts only', () => {
       expect(s).not.toMatch(directionRe())
       for (const word of Object.values(MOVEMENT_WORDS)) expect(s.toLowerCase()).not.toContain(word)
     }
+  })
+})
+
+// ---- The responsive layout (WP2.9's component step) ------------------------------
+
+describe('weekBarsLayout', () => {
+  const L = weekBarsLayout(WEEKS, RULES, { size: 'large', ticks: 'top' })
+
+  it('places every column as a fraction of the plot, bars 55% of their slot', () => {
+    expect(L.n).toBe(8)
+    expect(L.columns.map((c) => c.cx)).toEqual([0.0625, 0.1875, 0.3125, 0.4375, 0.5625, 0.6875, 0.8125, 0.9375])
+    expect(L.columns.every((c) => c.w === 0.0688)).toBe(true)
+  })
+
+  it('draws videos to 208 px and comments to 60 px on the front page, each on its own scale, and labels every bar', () => {
+    const w7 = L.columns.find((c) => c.week === '2026-09-07')!
+    expect(w7.videos).toEqual({ y: L.videos.base - 208, h: 208, label: '404' })
+    expect(w7.comments).toEqual({ y: L.comments.base - 60, h: 60, label: '7,851' })
+    expect(L.columns.map((c) => c.comments?.label ?? null)).toEqual([null, null, '5,809', '2,646', '1,831', '3,275', '7,851', '5,462'])
+  })
+
+  it('outlines a week still being read and says which, and spans a run of empty weeks with one label', () => {
+    expect(L.columns.filter((c) => c.outlined).map((c) => [c.week, c.stateWord])).toEqual([['2026-09-07', 'filling'], ['2026-09-14', 'so far']])
+    expect(L.gaps).toEqual([{ cx: 0.125, label: 'none gathered' }])
+  })
+
+  it('marks our changes on their days, filled for our searches, and never lets two labels collide at the narrowest plot', () => {
+    expect(L.ticks.map((t) => [t.date, t.mark])).toEqual([['2026-09-09', 'search'], ['2026-09-13', 'search'], ['2026-09-17', 'search']])
+    const spans = L.ticks.map((t) => {
+      const x = t.x * WEEK_PLOT_MIN
+      const w = t.label.length * 7.4 + 10
+      return { row: t.row, from: t.side === 'start' ? x : x - w, to: t.side === 'start' ? x + w : x }
+    })
+    for (const a of spans) for (const b of spans) if (a !== b && a.row === b.row) expect(a.to <= b.from || b.to <= a.from).toBe(true)
+  })
+
+  it('puts This week’s marks in a row under the axis, grouped by week', () => {
+    const W = weekBarsLayout(WEEKS, RULES, { size: 'medium', ticks: 'row' })
+    expect(W.ticks).toEqual([])
+    expect(W.marks).toEqual([
+      { cx: 0.8125, items: [{ day: '9', mark: 'search' }, { day: '13', mark: 'search' }] },
+      { cx: 0.9375, items: [{ day: '17', mark: 'search' }] },
+    ])
+    expect(W.videos.base - W.videos.top).toBe(128)
+  })
+
+  it('places a lone label to the right of its mark, and a crowded one to the left', () => {
+    expect(placeTicks([{ x: 0.1, label: '9 Sep' }])).toEqual([{ row: 0, side: 'start' }])
+    const two = placeTicks([{ x: 0.5, label: '9 Sep' }, { x: 0.53, label: '13 Sep' }])
+    expect(two[0].side).toBe('end')
+  })
+})
+
+describe('the chart’s words', () => {
+  it('names our changes in one sentence, the key', () => {
+    expect(weekChangeSentence(RULES)).toBe('We changed our searches on 9, 13 and 17 Sep.')
+    expect(weekChangeSentence([])).toBe('')
+  })
+
+  it('gives a week’s facts one count and one base a line, and a panel of its own', () => {
+    const d = weekDetail(WEEKS.find((w) => w.week === '2026-09-07')!)
+    expect(d.title).toBe('Week of 7 Sep')
+    expect(d.lines.map((l) => `${l.value} ${l.words}`)).toEqual([
+      '404 videos', '389 in the category', '15 filed under a brand you track',
+      '7,851 comments, all dated in September', '10 median comments a video', '27 let in before we checked relevance',
+    ])
+    expect(d.panel).toEqual([
+      { value: '404', words: 'videos', sub: 'of them 389 in the category and 15 filed under a brand you track' },
+      { value: '7,851', words: 'comments', sub: 'all dated in September' },
+      { value: '10', words: 'comments a video', sub: 'the median' },
+      { value: '27', words: 'videos let in', sub: 'before we checked relevance' },
+    ])
+    // The week of 31 Aug spans two months: its comments by month.
+    expect(weekDetail(WEEKS.find((w) => w.week === '2026-08-31')!).panel[1].sub).toBe('384 dated in August and 2,891 in September')
   })
 })

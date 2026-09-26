@@ -197,6 +197,10 @@ export interface PendingWeekLine {
   firstWeek: string
   ageDays: number
   due: { week: string; date: string }[]
+  /** The weeks already kept at their age (`week_line_reads`), not shown until
+   *  the line prints (WP2.9's component step). Absent where none is kept or
+   *  nothing was read. */
+  kept?: string[]
 }
 
 /** A run as the cadence rule reads it. `startedAt` places a run in the week it

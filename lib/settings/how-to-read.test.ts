@@ -82,6 +82,17 @@ describe('how to read', () => {
     for (const c of READING_CARDS) expect(JSON.stringify(c).toLowerCase()).not.toContain('how sound')
   })
 
+  it('holds the method week by week does not print under its chart (WP2.9; 25 Sep rulings)', () => {
+    const w = DEFINITIONS.find((d) => d.id === 'week-by-week')!
+    expect(w.title).toBe('Week by week')
+    expect(w.body).toContain('follow our searches as much as the market')
+    expect(w.body).toContain('counts in both')
+    expect(w.body).toContain('Your own posts are not counted')
+    expect(w.body).toContain('two updates old')
+    expect(w.body).toContain('compared only with weeks read the same way')
+    expect(w.body).not.toContain('—')
+  })
+
   it('carries exactly one definition of New, and the glossary agrees with it', () => {
     const nw = DEFINITIONS.filter((d) => d.id === 'new')
     expect(nw).toHaveLength(1)
