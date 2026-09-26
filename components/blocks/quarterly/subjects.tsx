@@ -3,7 +3,10 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { isFailed, printsClient } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration-state'
+
+/** What a withheld cell says to a screen reader (decision C). */
+const WITHHELD = 'not shown until this subject is checked'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -146,19 +149,32 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             key={row.id}
             mode={mode}
             template={TEMPLATE}
-            cells={[
+            cells={isFailed(row.calibration)
+              // A FAILED ROW IS ITS NAME AND ITS WORD (decision C, design
+              // pass): no dash in each column and no "not compared", which is
+              // the refusal's word for a pair and not what happened here.
+              ? [
+                <span key="name" style={email ? { color: EMAIL.muted } : undefined} className={email ? undefined : 'text-muted-foreground'}>{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></span>,
+                <span key="you" />, <span key="cat" />, <span key="catq" />, <span key="youq" />,
+              ]
+              : [
               // THE ROW'S CALIBRATION (decision C, WP1.1): the word under the
-              // name, no "you" figure on a provisional subject, no figure at
-              // all on a failed one.
+              // name, no "you" figure on a provisional subject, and no
+              // quarter change on either side: its cells carry the withheld
+              // mark, not the refusal word "not compared".
               <span key="name">{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></span>,
-              printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label="not shown until this subject is checked" />,
-              isFailed(row.calibration) ? <NoValue key="cat" mode={mode} label="not shown until this subject is checked" /> : <Side key="cat" side={row.category} mode={mode} />,
-              row.categoryQuarter
-                ? <BlockMovement key="catq" verdict={row.categoryQuarter} unit="pts" mode={mode} />
-                : <NotDrawn key="catq" mode={mode} />,
-              row.youQuarter
-                ? <BlockMovement key="youq" verdict={row.youQuarter} unit="pts" mode={mode} />
-                : <NotDrawn key="youq" mode={mode} />,
+              printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label={WITHHELD} />,
+              <Side key="cat" side={row.category} mode={mode} />,
+              !earnsVerdict(row.calibration)
+                ? <NoValue key="catq" mode={mode} label={WITHHELD} />
+                : row.categoryQuarter
+                  ? <BlockMovement key="catq" verdict={row.categoryQuarter} unit="pts" mode={mode} />
+                  : <NotDrawn key="catq" mode={mode} />,
+              !earnsVerdict(row.calibration)
+                ? <NoValue key="youq" mode={mode} label={WITHHELD} />
+                : row.youQuarter
+                  ? <BlockMovement key="youq" verdict={row.youQuarter} unit="pts" mode={mode} />
+                  : <NotDrawn key="youq" mode={mode} />,
             ]}
           />
         ))}
