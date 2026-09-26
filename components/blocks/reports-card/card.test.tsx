@@ -299,3 +299,52 @@ describe('the quarterly card under the three calibration states', () => {
     assertCopyContract(<QuarterlyCardTile card={card} />)
   })
 })
+
+// ── WP3.11: Q3's levels with one line ────────────────────────────────────────
+
+import { quarterLevels } from '@/lib/pages/reports-card'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
+import { sealandReading } from '@/lib/test/reading-fixture'
+
+describe('the quarterly card draws the quarter’s levels with one line (WP3.11)', () => {
+  // Sealand's market by month (decision E): July 36, August 377 (DR F11),
+  // September 655 (prod); read on 25 Sep, September so far.
+  const ON = '2026-09-25T09:00:00.000Z'
+  const den = (month: string, audience: string, videos: number) => ({ month, audience, videos, comments: 0 })
+  const levels = quarterLevels({
+    reading: sealandReading(ON),
+    readingAt: ON,
+    denominators: [
+      den('2026-07-01', 'industry-other', 35), den('2026-07-01', 'competitor:Cotopaxi', 1),
+      den('2026-08-01', 'industry-other', 351), den('2026-08-01', 'competitor:Cotopaxi', 22), den('2026-08-01', 'competitor:Freitag', 4),
+      den('2026-09-01', 'industry-other', 626), den('2026-09-01', 'competitor:Cotopaxi', 29),
+    ],
+    rivalAudiences: ['competitor:Cotopaxi', 'competitor:Freitag'],
+    pair: pairOn(sealandJudge(ON)),
+    readings: 2,
+  })
+  const card = { ...formingCardFixture(), readings: 2, levels }
+
+  it('draws the market’s videos month by month, with their states, and one line', () => {
+    const text = renderText(<QuarterlyCardTile card={card} />)
+    expect(text).toContain('Your market’s videos in Q3 2026, by month')
+    for (const figure of ['36', '377', '655']) expect(text).toContain(figure)
+    expect(text).toContain('too few to read')
+    expect(text).toContain('so far')
+    expect(text).toContain('read from 100 videos')
+    expect(text).toContain('Q4 2026 against Q3 2026 is not read as a change: we changed our searches in September.')
+    // One line, and no "not enough months yet" row under it.
+    expect(text).not.toContain(MOVEMENT_WORDS.baseline_forming)
+  })
+
+  it('carries its title alone: no quarter meta beside it, no gate note under it', () => {
+    const text = renderText(<QuarterlyCardTile card={card} />)
+    expect(text).not.toContain('Quarter against quarter needs six months')
+    expect(text).not.toMatch(/Q2 2026 · Apr/)
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(<QuarterlyCardTile card={card} />)
+  })
+})

@@ -5,7 +5,7 @@ import { FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { Tile } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
-import type { QuarterlyCard } from '@/lib/pages/reports-card'
+import type { QuarterlyCard, QuarterLevels } from '@/lib/pages/reports-card'
 import { quarterUnlocked } from '@/lib/reports/quarterly'
 
 /**
@@ -99,7 +99,11 @@ export function QuarterlyCardTile({
       // the card, and the footnote states it where the gate bites, so a third
       // printing bought nothing and left the eyebrow no air (it truncated to
       // "THE …" on a phone).
-      meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
+      // TITLE ALONE WHERE THE LEVELS ARE DRAWN (WP3.11; 25 Sep rulings): the
+      // chart names its own quarter, and a header meta naming the quarter
+      // under review beside a chart of the quarter the pages read would name
+      // two quarters on one card.
+      meta={card.levels ? undefined : `${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
       distribute="between"
       className="xl:min-h-[248px]"
       // 32px OF TARGET (M7's floor for this page): this was a 15px line, the
@@ -112,9 +116,16 @@ export function QuarterlyCardTile({
       // have 9", and a card held up by an unapplied migration blame the
       // reading count for it. A refusal under a card that is not refusing
       // teaches a reader to stop reading the footnote.
-      footerNote={drawn && !unlocked && !formingOnly ? card.gate : undefined}
+      footerNote={!card.levels && drawn && !unlocked && !formingOnly ? card.gate : undefined}
     >
-      {formingOnly ? (
+      {/* BELOW THE GATE, THE QUARTER'S LEVELS AND ONE LINE (WP3.11, plan
+          §2.9). The single line that stood in for the rows was the pattern
+          Heinrich objected to (current state traded for a "not yet"), so the
+          card draws the market's videos in each month of the quarter the pages
+          read, and says the one thing about comparing it under them. */}
+      {!unlocked && card.levels ? (
+        <QuarterLevelsChart levels={card.levels} />
+      ) : formingOnly ? (
         <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">{card.firstComparison ?? card.gate}</p>
       ) : (
       <>
@@ -226,6 +237,65 @@ export function QuarterlyCardTile({
       </>
       )}
     </Tile>
+  )
+}
+
+/** "Jul", "Aug": the month's own three letters. */
+const monthAbbr = (month: string): string => longMonth(month).slice(0, 3)
+
+/** The word under a month's bar, where it owes one. */
+const LEVEL_WORD: Record<QuarterLevels['months'][number]['state'], string | null> = {
+  read: null,
+  too_few: 'too few to read',
+  so_far: 'so far',
+  none: 'not read',
+}
+
+/**
+ * The quarter the pages read, month by month, as the approved preview draws
+ * it: one bar per month in the market's ink, its videos above it, its month
+ * and state under it, a dashed rule at the floor a month is read from, and
+ * ONE line under the chart. Counts only: no share, no verdict, nothing
+ * joined across months (a chart is a direction claim too, AGENTS.md).
+ */
+export function QuarterLevelsChart({ levels }: { levels: QuarterLevels }) {
+  const top = Math.max(levels.floor, ...levels.months.map((m) => m.videos ?? 0))
+  const scale = (v: number): number => Math.max(2, Math.round((v / (top * 1.08)) * 100))
+  const floorAt = scale(levels.floor)
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="m-0 text-[13px] font-semibold text-foreground">Your market&rsquo;s videos in {levels.quarter.label}, by month</p>
+      <div className="relative flex h-[132px] items-end gap-5 border-b border-border pl-1 pr-24" aria-hidden>
+        <span className="absolute right-0 left-0 border-t border-dashed border-muted-foreground/60" style={{ bottom: `${floorAt}%` }} />
+        <span className="absolute right-0 font-mono text-[10.5px] leading-[1.2] text-muted-foreground" style={{ bottom: `calc(${floorAt}% + 2px)` }}>
+          read from {fmtInt(levels.floor)} videos
+        </span>
+        {levels.months.map((m) => (
+          <span key={m.month} className="relative flex h-full w-11 flex-col items-center justify-end">
+            {m.videos != null && (
+              <>
+                <span className="mb-1 font-mono text-[12px] font-semibold tabular-nums text-foreground">{fmtInt(m.videos)}</span>
+                <span className="block w-full rounded-t-[2px]" style={{ height: `${scale(m.videos)}%`, background: 'var(--foreground)' }} />
+              </>
+            )}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-5 pl-1">
+        {levels.months.map((m) => (
+          <span key={m.month} className="flex w-11 flex-col items-center text-center font-mono text-[11px] leading-[1.3] text-muted-foreground">
+            <span>{monthAbbr(m.month)}</span>
+            {LEVEL_WORD[m.state] ? <span className="whitespace-nowrap">{LEVEL_WORD[m.state]}</span> : null}
+          </span>
+        ))}
+      </div>
+      {/* The bars' own numbers, for a reader who cannot see them: one level a
+          month, each with its month. */}
+      <p className="sr-only">
+        {levels.months.map((m) => `${monthAbbr(m.month)} ${m.videos == null ? 'not read' : `${fmtInt(m.videos)} videos`}`).join(', ')}
+      </p>
+      {levels.line ? <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">{levels.line}</p> : null}
+    </div>
   )
 }
 
