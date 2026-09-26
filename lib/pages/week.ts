@@ -2988,6 +2988,9 @@ export async function loadNewThemes(
       // in one month (staging's 20 Sep update: 468 minted, 541 rows), so the
       // URL cap binds first (UUID_IN_CHUNK: two reads there, not five; the
       // deploy-3 read budget). A chunk that does run past 1,000 rows pages.
+      // (lib/chunk.ts's table still lists this reader at 100: that file is on
+      // the freeze-months path and does not change before the 4 Oct run; the
+      // fold-back after it corrects the row.)
       UUID_IN_CHUNK,
     )
   } catch (error) {

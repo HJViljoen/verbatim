@@ -91,14 +91,9 @@ export const MULTI_ROW_IN_CHUNK = 100
  *                                     reads the order (it builds a Map by id).
  *                                     Pages through `selectAll`, so raising
  *                                     the constant past 1,000 loses no label.
- *   lib/reading/read.ts numerators    MULTI_ROW_IN_CHUNK   a NON-key column:
- *                                     (100)                months × audiences
+ *   lib/reading/read.ts numerators,   MULTI_ROW_IN_CHUNK   a NON-key column:
+ *   lib/pages/week.ts   new themes    (100)                months × audiences
  *                                     rows per id, so the row cap binds first.
- *   lib/pages/week.ts   new themes    UUID_IN_CHUNK (250)  months × audiences
- *                                     too, but only rows with videos, and a
- *                                     minted identity holds about one (468 ids,
- *                                     541 rows on staging), so the URL cap
- *                                     binds first; the output is a Map by id.
  *
  * The rule the four follow: size by rows per id, and where the caller's output
  * order is part of what a page prints, freeze the size and say so.
