@@ -16,7 +16,7 @@ import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
 import { subjectsSayHear } from './say-hear'
 import { subjectsSubject } from './subject'
-import { subjectsLine } from './line'
+import { subjectLineDrawsChart, subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
 import { subjectsVoices } from './voices'
 import { subjectsUnanswered } from './unanswered'
@@ -206,12 +206,16 @@ export function SubjectsPage({
   // The rail-and-column composition is the SELECTED reading's; with nothing
   // selected there is no detail to sit beside, and `layoutFor` has already
   // said which four tiles survive and how wide each one is.
-  const tile = (block: Block<SubjectsData>, className?: string) => {
+  const tile = (block: Block<SubjectsData>, className?: string, minH = true) => {
     const at = drawn.get(block.key)
     return at
-      ? <BlockTile block={block} data={data} ctx={ctx} col={LAYOUT[block.key]?.col ?? at.col} row={LAYOUT[block.key]?.row ?? at.row} className={className} />
+      ? <BlockTile block={block} data={data} ctx={ctx} col={LAYOUT[block.key]?.col ?? at.col} row={LAYOUT[block.key]?.row ?? at.row} className={className} minH={minH} />
       : null
   }
+  // THE CHART'S HEIGHT ONLY UNDER A CHART (deploy 2 review): under three
+  // months the tile prints a few figures, and the mock's floors (340px from
+  // `lg`, the row's 512px stacked) left an empty band about 250px tall.
+  const lineChart = subjectLineDrawsChart(data)
 
   return (
     <ExportScope
@@ -250,7 +254,7 @@ export function SubjectsPage({
             </div>
             <div className="flex min-w-0 flex-col gap-4">
               {tile(subjectsSubject)}
-              {tile(subjectsLine)}
+              {tile(subjectsLine, lineChart ? undefined : 'min-h-0', lineChart)}
               {/* THE KIND MIX TAKES THE MAIN COLUMN; ITS AUDIENCES FLOW INTO
                   TWO COLUMNS where the tile is wide enough (a container query
                   in the block). The mock's 1.35 : 1 pair with the questions

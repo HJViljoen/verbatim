@@ -31,6 +31,53 @@ import { allRedescribed, endReadings, paneSides, sideLegend, SUBJECTS_ALL_REDESC
 // gap is `too_little_data` and the bracket does not appear, which is the same
 // answer the hero's own lead gives.
 
+/**
+ * The chart's lines for the selected subject, or null with nothing selected.
+ *
+ * THE KEY IS QUALIFIED; THE END LABEL IS NOT. "Category — no brand 24.5% of
+ * 1,388" does not fit the plot's right-hand gutter and lost its denominator to
+ * the clip, which is the one part of an end label that may not go missing.
+ * The pane's sides under its calibration (decision C): a provisional subject
+ * draws no line for your own side.
+ *
+ * THE CHART'S OWN AXIS AND LINES (2026-09-24): the trailing twelve months
+ * whatever the horizon (`chartMonths`, lib/reading/horizon.ts). A snapshot
+ * frozen before that carries neither and draws what it always drew.
+ */
+function lineSeriesOf(data: SubjectsData): CalendarSeries[] | null {
+  const pane = data.selected
+  if (!pane) return null
+  const sides = paneSides(pane)
+  const legendOf = new Map(sides.map((s) => [s.audience, sideLegend(s, data.brand)]))
+  const chartSeries = pane.chartSeries ?? pane.series
+  return sides
+    .map((side) => {
+      const series = chartSeries.find((s) => s.audience === side.audience)
+      if (!series) return null
+      return {
+        ...seriesToCalendar(series, {
+          color: side.color,
+          label: side.label,
+          legendLabel: legendOf.get(side.audience) ?? side.label,
+        }),
+        // A stopped rival with no line is not news; it is left out rather
+        // than listed under "No line yet" (lib/charts/calendar.ts).
+        ...(side.label.endsWith(' · stopped') ? { omitWhenUndrawn: true } : {}),
+      }
+    })
+    .filter((s): s is CalendarSeries => s != null)
+}
+
+/** Does the tile draw its chart (a line with enough months), rather than the
+ *  few figures it prints under too few? The page gives the tile the mock's
+ *  height only when it does (deploy 2 review: under three months the 340px
+ *  and stacked 512px floors left an empty band about 250px tall). */
+export function subjectLineDrawsChart(data: SubjectsData): boolean {
+  if (subjectsLine.emptyState(data)) return false
+  const lines = lineSeriesOf(data)
+  return lines != null && lines.length > 0 && chartReady(lines)
+}
+
 export const subjectsLine: Block<SubjectsData> = {
   key: 'subjects.line',
   title: 'Month by month',
@@ -47,35 +94,10 @@ export const subjectsLine: Block<SubjectsData> = {
       )
     }
 
-    // THE KEY IS QUALIFIED; THE END LABEL IS NOT. "Category — no brand 24.5% of
-    // 1,388" does not fit the plot's right-hand gutter and lost its
-    // denominator to the clip, which is the one part of an end label that may
-    // not go missing.
-    // The pane's sides under its calibration (decision C): a provisional
-    // subject draws no line for your own side.
     const sides = paneSides(pane)
-    const legendOf = new Map(sides.map((s) => [s.audience, sideLegend(s, data.brand)]))
-    // THE CHART'S OWN AXIS AND LINES (2026-09-24): the trailing twelve months
-    // whatever the horizon (`chartMonths`, lib/reading/horizon.ts). A snapshot
-    // frozen before that carries neither and draws what it always drew.
     const axis = data.chartAxis ?? data.axis
     const chartSeries = pane.chartSeries ?? pane.series
-    const lines: CalendarSeries[] = sides
-      .map((side) => {
-        const series = chartSeries.find((s) => s.audience === side.audience)
-        if (!series) return null
-        return {
-          ...seriesToCalendar(series, {
-            color: side.color,
-            label: side.label,
-            legendLabel: legendOf.get(side.audience) ?? side.label,
-          }),
-          // A stopped rival with no line is not news; it is left out rather
-          // than listed under "No line yet" (lib/charts/calendar.ts).
-          ...(side.label.endsWith(' · stopped') ? { omitWhenUndrawn: true } : {}),
-        }
-      })
-      .filter((s): s is CalendarSeries => s != null)
+    const lines = lineSeriesOf(data) ?? []
 
     // THROUGH `openLink`, LIKE EVERY OTHER BLOCK ON THE PAGE — which is also
     // E-marketing's fix, arrived at from the other side: the marketing brief
