@@ -393,6 +393,24 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     expect(markup).toContain('item=s-community')
   })
 
+  // WP1.1 review, finding 9. Every named subject failed its check: nothing is
+  // selected (a failed subject opens no pane), and the pane's blocks must not
+  // say "Name a subject" to a tenant whose subjects are named.
+  it('when every subject is being re-described, the pane says so rather than asking for a name', () => {
+    const data = calibrationFixture()
+    const failed = {
+      ...data,
+      list: { ...data.list, rows: data.list.rows.map((r) => ({ ...r, calibration: 'failed' as const, market: null, note: railNote('failed', false), selected: false, href: '' })) },
+      selected: null,
+    }
+    for (const block of [subjectsSubject, subjectsKinds, subjectsVoices, subjectsUnanswered, subjectsLine]) {
+      expect(block.emptyState(failed)).toBe('Your subjects are being re-described; there is none to open in full yet.')
+    }
+    expect(renderText(subjectsSubject.render(failed, 'app', ctx))).not.toContain('Name a subject')
+    // With nothing named, it still asks for one.
+    expect(subjectsSubject.emptyState({ ...failed, list: { ...failed.list, rows: [], proposed: [] } })).toContain('Name a subject')
+  })
+
   it('the rail carries no change badge (WP1.1 moved it onto the market)', () => {
     expect(subjectsList.verdicts!(calibrationFixture())).toEqual([])
   })

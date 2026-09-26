@@ -14,7 +14,7 @@ import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
-import { paneSides, sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { calibrationWord, printsClient } from '@/lib/subjects/calibration-state'
 
@@ -319,6 +319,7 @@ export const subjectsSubject: Block<SubjectsData> = {
     // as a rendering fault rather than as one refusal.
     if (data.list.notRecorded) return 'Until the set can be read, there is no subject to open in full.'
     if (!data.selected) {
+      if (allRedescribed(data)) return SUBJECTS_ALL_REDESCRIBED
       return data.list.proposed.length > 0
         ? 'Confirm a subject and this is where it is read in full.'
         : 'Name a subject and this is where it is read in full.'

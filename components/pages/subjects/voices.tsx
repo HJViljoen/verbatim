@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote, BlockQuotes } from '@/components/blocks/quote'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { voiceCite, voicesMeta, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
+import { allRedescribed, SUBJECTS_ALL_REDESCRIBED, voiceCite, voicesMeta, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
 //
@@ -199,6 +199,7 @@ export const subjectsVoices: Block<SubjectsData> = {
     if (data.list.notRecorded) return data.list.notRecorded
     const pane = data.selected
     if (!pane) {
+      if (allRedescribed(data)) return SUBJECTS_ALL_REDESCRIBED
       return data.list.proposed.length > 0
         ? 'Confirm a subject and this is where we quote what was said about it.'
         : 'Name a subject and this is where we quote what was said about it.'

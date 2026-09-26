@@ -8,7 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
-import { paneSides, sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, paneSides, sideEyebrow, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the kinds of thing said, per audience (design §3 SU2, the mock's (b)).
 //
@@ -267,6 +267,7 @@ export const subjectsKinds: Block<SubjectsData> = {
     if (data.list.notRecorded) return data.list.notRecorded
     const pane = data.selected
     if (!pane) {
+      if (allRedescribed(data)) return SUBJECTS_ALL_REDESCRIBED
       return data.list.proposed.length > 0
         ? 'Confirm a subject and this is what the audiences are saying around it.'
         : 'Name a subject and this is what the audiences are saying around it.'

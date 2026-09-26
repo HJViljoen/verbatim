@@ -6,7 +6,7 @@ import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/char
 import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtPct, monthName } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
-import { endReadings, paneSides, sideLegend, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, endReadings, paneSides, sideLegend, SUBJECTS_ALL_REDESCRIBED, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -182,7 +182,7 @@ export const subjectsLine: Block<SubjectsData> = {
 
   emptyState(data) {
     if (data.list.notRecorded) return data.list.notRecorded
-    if (!data.selected) return 'Nothing is selected, so there is no line to draw.'
+    if (!data.selected) return allRedescribed(data) ? SUBJECTS_ALL_REDESCRIBED : 'Nothing is selected, so there is no line to draw.'
     if (data.selected.notRecorded) return data.selected.notRecorded
     if (data.selected.series.length === 0) {
       return 'This subject has no stored months on this axis yet.'

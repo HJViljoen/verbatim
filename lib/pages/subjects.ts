@@ -621,6 +621,22 @@ export function calibratedSides<S extends { kind: SubjectSide['kind']; verdict: 
   return [...sides]
 }
 
+/**
+ * EVERY NAMED SUBJECT IS BEING RE-DESCRIBED (WP1.1 review, finding 9): the
+ * set is named and confirmed, and a failed subject opens no pane, so nothing
+ * is selected. The pane's blocks said "Name a subject and this is where it is
+ * read in full." to a tenant whose subjects are named. This is their sentence
+ * in that state.
+ */
+export const SUBJECTS_ALL_REDESCRIBED = 'Your subjects are being re-described; there is none to open in full yet.'
+
+/** Is every confirmed subject on the rail failed? False where none is
+ *  confirmed (the "name one" or "confirm one" state). */
+export function allRedescribed(data: Pick<SubjectsData, 'list'>): boolean {
+  const active = data.list.rows.filter((r) => r.status === 'active')
+  return active.length > 0 && active.every((r) => readCalibration(r.calibration) === 'failed')
+}
+
 /** The selected subject's sides as its blocks print them (`calibratedSides`). */
 export function paneSides(pane: Pick<SubjectPane, 'sides' | 'calibration'>): SubjectSide[] {
   return calibratedSides(pane.sides, pane.calibration)
