@@ -40,16 +40,38 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
       {shortMonthName(month)}
     </span>
   )
+  // ONE ROW OF FOUR MONTHS, AND THE PAIR'S WORDS ABOVE AND BELOW IT (design
+  // pass): a three-row grid, so the read pair and the first comparable pair
+  // share one baseline, the bracket's label sits over the dashed pair and its
+  // date under it, both centred on it.
   return (
-    <div aria-hidden className="flex min-w-0 flex-col gap-2">
-      <div className="flex items-end gap-3">
-        <div className="flex flex-1 gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'current')}</div>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <span className="border-x border-t border-foreground/60 pt-1 text-center text-[12px] font-semibold text-foreground">the first comparison read the same way</span>
-          <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
-        </div>
-      </div>
-      <span className="self-end font-mono text-[12px] text-secondary-foreground">from the {shortDate(next.sameAgeFrom)} update</span>
+    <div aria-hidden className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2">
+      <span className="col-start-2 rounded-t-[2px] border-x border-t border-foreground/50 px-2 pt-1.5 text-center text-[12px] font-semibold leading-[1.3] text-foreground">the first comparison read the same way</span>
+      <div className="col-start-1 flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'current')}</div>
+      <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
+      <span className="col-start-2 text-center font-mono text-[12px] text-secondary-foreground">from the {shortDate(next.sameAgeFrom)} update</span>
+    </div>
+  )
+}
+
+/**
+ * The block's answer, led by its verdict (design pass; the preview's bold
+ * lead-in). The words are the calibrated sentence, untouched: where it opens
+ * with a clause and a colon ("Not read as a change: we changed our searches
+ * in September"), the clause is set in ink at weight 600 and the rest follows
+ * in the sentence's own ink, so the answer is read first.
+ */
+function LeadSentence({ body, figures, mode }: { body: string; figures: FigureTable; mode: 'app' | 'print' }) {
+  const cut = body.indexOf(': ')
+  const className = 'm-0 max-w-[60ch] text-[17px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]'
+  const figure = 'font-semibold text-foreground'
+  if (cut < 0 || body.slice(0, cut).includes('[[')) {
+    return <TokenProse body={body} figures={figures} mode={mode} figureFace="mono" figureClassName={figure} className={className} />
+  }
+  return (
+    <div className={`${className} [&>p]:inline`}>
+      <strong className="font-semibold text-foreground">{body.slice(0, cut + 1)}</strong>{' '}
+      <TokenProse body={body.slice(cut + 2)} figures={figures} mode={mode} figureFace="mono" figureClassName={figure} className="m-0" />
     </div>
   )
 }
@@ -77,13 +99,11 @@ export const overviewChange: Block<OverviewData> = {
       )
     }
     return (
-      <BlockFrame title={overviewChange.title} mode={mode} footer={footer}>
-        <div className="grid grid-cols-1 gap-x-12 gap-y-6 xl:grid-cols-2" data-print-cols="2">
-          {lead ? (
-            <TokenProse body={lead.body} figures={lead.figures} mode={mode} figureFace="inherit" className="m-0 max-w-[60ch] text-[16px] leading-[1.6] [text-wrap:pretty]" />
-          ) : <span />}
-          <div className="flex min-w-0 flex-col gap-5">
-            {next ? <p className="m-0 text-[16px] leading-[1.6] text-foreground [text-wrap:pretty]">{next}</p> : null}
+      <BlockFrame title={overviewChange.title} mode={mode} footer={footer} roomy>
+        <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-2" data-print-cols="2">
+          {lead ? <LeadSentence body={lead.body} figures={lead.figures} mode={mode} /> : <span />}
+          <div className="flex min-w-0 flex-col gap-6">
+            {next ? <p className="m-0 text-[17px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">{next}</p> : null}
             <MonthStrip block={block} />
           </div>
         </div>
