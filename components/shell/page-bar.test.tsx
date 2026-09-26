@@ -47,6 +47,22 @@ describe('SurfacePageBar', () => {
     expect(markup).not.toContain('month=')
   })
 
+  it('draws the preview\'s selector: a 32px chip, with the chevron only where it changes month', () => {
+    const linked = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    expect(linked).toMatch(/<a [^>]*class="[^"]*h-8[^"]*rounded-lg[^"]*bg-inner[^"]*"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
+    // Nothing to change to (1 to 3 Oct, decision A): the month's name and its
+    // tooltip, and no chevron promising a menu.
+    const alone = render(<SurfacePageBar nav="overview" context={{ ...CONTEXT, other: null }} />)
+    expect(alone).toMatch(/<span title="[^"]*" class="[^"]*h-8[^"]*bg-inner[^"]*">September 2026<\/span>/)
+    expect(alone).not.toContain('lucide-chevron-down')
+  })
+
+  it('breaks the one line at its " · " on a phone, never inside a date', () => {
+    const markup = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    expect(markup).toContain('<span class="whitespace-nowrap">as at the 24 Sep update</span> · <span class="whitespace-nowrap">next update Sun 27 Sep</span>')
+    expect(renderText(<SurfacePageBar nav="overview" context={CONTEXT} />)).toContain('as at the 24 Sep update · next update Sun 27 Sep')
+  })
+
   it('dates This week by its update and its comment window, and offers no horizon', () => {
     const text = renderText(<SurfacePageBar nav="week" brand="Sealand" updates={UPDATE} />)
     expect(text).toContain('The 20 Sep update')

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { BarPill, PageBar } from '@/components/shell/page-grid'
 import { hasHorizon, surface, type NavKey } from '@/lib/nav'
 import {
@@ -15,6 +15,7 @@ import {
   type UpdateLineInput,
 } from '@/lib/shell/bar'
 import { parseHorizon } from '@/lib/reading/horizon'
+import { cn } from '@/lib/utils'
 
 /**
  * The page bar every Phase 1 surface wears (item 42, the mock's §3.2; the 25
@@ -59,6 +60,24 @@ export interface PageBarProps {
   children?: ReactNode
 }
 
+/** The selector's chip, and This week's update slot in the same place. */
+const SELECTOR_CHIP = '-my-1 inline-flex h-8 items-center gap-1 rounded-lg bg-inner px-2 font-semibold text-foreground'
+/** The bar's one quiet line, in the preview's mono. */
+const LINE_MONO = 'font-mono text-[13px] leading-[1.5] text-muted-foreground'
+
+/** The line with each of its clauses kept whole, so a phone breaks it at the
+ *  " · " and never inside a date ("next update Sun 4 / Oct"). The words are
+ *  the line's own. */
+function LineClauses({ line }: { line: string }) {
+  return (
+    <span className={LINE_MONO}>
+      {line.split(' · ').map((clause, i) => (
+        <Fragment key={i}>{i > 0 ? ' · ' : null}<span className="whitespace-nowrap">{clause}</span></Fragment>
+      ))}
+    </span>
+  )
+}
+
 /** "Sealand · September 2026 ▾  as at the 24 Sep update · next update Sun 27 Sep". */
 export function ReadingContext({
   context, basePath, params,
@@ -70,23 +89,29 @@ export function ReadingContext({
     <>
       <span>{context.brand}</span>
       <span aria-hidden className="text-muted-foreground">·</span>
+      {/* THE PREVIEW'S SELECTOR (WP1.6 design check): a 32px tinted chip, the
+          chevron at 14px, set into the 24px line without growing it. The
+          chevron is drawn only where the chip changes month: with no other
+          month to offer (1 to 3 Oct, before October has a row, decision A)
+          the chip is the month's name and its tooltip, not a control. */}
       {other ? (
         <Link
           href={monthHref(basePath, params, other)}
           title={title}
           aria-label={`${label}, ${title}. Change month to ${monthLabel(other.month)}`}
-          className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-inner px-2 py-0.5 font-semibold text-foreground hover:bg-muted"
+          className={cn(SELECTOR_CHIP, 'cursor-pointer hover:bg-muted')}
         >
           {label}
-          <ChevronDown aria-hidden className="size-3.5 text-secondary-foreground" data-print-hide />
+          <ChevronDown aria-hidden className="size-3.5 shrink-0 text-secondary-foreground" strokeWidth={2} data-print-hide />
         </Link>
       ) : (
-        <span title={title} className="rounded-md bg-inner px-2 py-0.5 font-semibold text-foreground">{label}</span>
+        <span title={title} className={SELECTOR_CHIP}>{label}</span>
       )}
-      <span className="font-mono text-[12px] text-muted-foreground">{contextLine(context)}</span>
+      <LineClauses line={contextLine(context)} />
     </>
   )
 }
+
 
 /** "Sealand · The 20 Sep update  comments written 10 to 20 Sep · next update Sun 27 Sep". */
 export function UpdateContext({ brand, updates }: { brand?: string | null; updates: UpdateLineInput }) {
@@ -98,8 +123,8 @@ export function UpdateContext({ brand, updates }: { brand?: string | null; updat
           <span aria-hidden className="text-muted-foreground">·</span>
         </>
       ) : null}
-      <span className="font-semibold text-foreground">{updateLabel(updates.update)}</span>
-      <span className="font-mono text-[12px] text-muted-foreground">{updateLine(updates)}</span>
+      <span className={SELECTOR_CHIP}>{updateLabel(updates.update)}</span>
+      <LineClauses line={updateLine(updates)} />
     </>
   )
 }
