@@ -86,6 +86,18 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     expect(changeWords(c, [gate])).toBe('We fixed how we check that a video is about bags.')
   })
 
+  it('prints a capped update’s approved note, never "A change to how we read", and no other `other` row’s operator prose (deploy 2 review)', () => {
+    // log-tracking-eras --capped-run's row (WP1.4): surface 'other', field
+    // 'gather_capped', CAPPED_NOTE. Staging's stand-in sits on the 20 Sep
+    // partial run.
+    const capped = row({ id: 'capped-0920', changed_at: '2026-09-20T09:38:00.000Z', surface: 'other', field: 'gather_capped', actor_kind: 'script', source: 'reconstructed', note: 'An update gathered less than usual because a spending cap was reached.' })
+    const c = changesFromLog([capped])[0]
+    expect(changeWords(c, [capped])).toBe('An update gathered less than usual because a spending cap was reached.')
+    // An operator's `other` row keeps the surface's words: its note is prose.
+    const panel = row({ id: 'panel-0924', changed_at: '2026-09-24T08:20:00.000Z', surface: 'other', field: 'attention_panel', actor_kind: 'pipeline', note: 'attention panel frozen: 251 accounts first seen before 2026-06-01' })
+    expect(changeWords(changesFromLog([panel])[0], [panel])).toBe('A change to how we read')
+  })
+
   it('names the relevance check as The record does, "How we check relevance", when its row carries no note (deploy 2 integration)', () => {
     const gate = row({ id: 'gate-fix', changed_at: '2026-09-26T08:00:00.000Z', surface: 'gate_rule' as never })
     const c = changesFromLog([gate])[0]

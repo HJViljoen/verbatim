@@ -59,6 +59,14 @@ const SURFACE_SENTENCE: Record<string, string> = {
  *  is never printed here. */
 const CLIENT_NOTE_SURFACES: ReadonlySet<string> = new Set(['gate_rule', 'attribution', 'segment'])
 
+/** `other` rows whose stored note is client words: the capped update
+ *  `log-tracking-eras --capped-run` writes (field 'gather_capped', WP1.4's
+ *  CAPPED_NOTE, "An update gathered less than usual because a spending cap
+ *  was reached.", approved with the other notes). Every other `other` row (an
+ *  attention-panel freeze, an operator's edit) carries operator prose and is
+ *  never printed here. */
+const CLIENT_NOTE_OTHER_FIELDS: ReadonlySet<string> = new Set(['gather_capped'])
+
 const listOf = (side: unknown): string[] =>
   Array.isArray(side) ? side.filter((v): v is string => typeof v === 'string') : []
 
@@ -207,12 +215,17 @@ function outAndIn(added: number, removed: number, one: string, many: string, gon
  * A change in client words, composed from what its rows moved: search terms
  * and exclusions counted apart, communities switched on or off, rivals in and
  * out; else the surface's own sentence. A stored note is used only where it
- * was written in client words (`CLIENT_NOTE_SURFACES`).
+ * was written in client words (`CLIENT_NOTE_SURFACES`, and a capped update's
+ * `other` row, `CLIENT_NOTE_OTHER_FIELDS`).
  */
 export function changeWords(change: OurChange, rows: readonly ConfigChange[]): string {
   if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return change.note.trim()
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
+  if (change.surface === 'other') {
+    const noted = mine.find((r) => CLIENT_NOTE_OTHER_FIELDS.has(r.field ?? '') && r.note?.trim())
+    if (noted) return (noted.note as string).trim()
+  }
   if (change.surface === 'terms') {
     const terms = termsMoved(mine)
     const excl = moved(mine.filter(isExclusions))
