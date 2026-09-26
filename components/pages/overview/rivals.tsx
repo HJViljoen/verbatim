@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { isMarketPage, InnerLine } from './market'
-import { brandsBlockFor, brandsLine } from '@/lib/pages/overview-market'
+import { brandsBlockFor, brandsLine, isBrandsRead, nameLineParts, topicNote, type BrandsRead } from '@/lib/pages/overview-market'
 import { surface } from '@/lib/nav'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
@@ -13,6 +13,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { isRivalAudience } from '@/lib/rivals'
+import { cn } from '@/lib/utils'
 import { OWN_POSTS_UNREADABLE, OWN_POSTS_UNREADABLE_OUTSIDE, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow } from '@/lib/pages/overview'
 
 // OV4 · Rivals (design §3 OV4).
@@ -375,17 +376,162 @@ export const overviewRivals: Block<OverviewData> = {
 /** The front page's brands block title (market-first WP1.6). */
 export const MARKET_BRANDS_TITLE = 'Brands in your market'
 
-/** "Brands in your market, counted in every video they come up in, arrive
- *  with the 11 Oct update. Until then, Competitive lists …" as one line inside
- *  a drawn block (decision B 2), and the link to Competitive by its current
- *  sidebar label. */
+/** The block's inks (the approved preview): a brand's count without our rival
+ *  searches in the rivals' orange, in all in the same orange at 48% over the
+ *  tile (`RIVAL_INKS`' third step, #F8BC99 on white), your name's mark in
+ *  green. */
+const ORGANIC_INK = 'var(--comp)'
+const ALL_INK = 'color-mix(in srgb, var(--comp) 48%, var(--tile))'
+
+/** The bars' axis: a little above the largest "in all" count, so the longest
+ *  bar never touches the column's edge (the preview's 47 on 50). */
+export function brandAxis(b: BrandsRead): number {
+  const max = Math.max(0, ...b.topics.map((t) => t.kAny ?? 0))
+  return Math.max(1, Math.ceil(max * 1.06))
+}
+
+/** The name line's words and figures, each figure its own node. */
+function NameWords({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
+  return (
+    <>
+      {nameLineParts(b).map((p, i) => p.t === 'text'
+        ? <span key={i}>{p.s}</span>
+        : (
+            <span
+              key={i}
+              data-copy="figure"
+              className={mode === 'email' ? undefined : 'font-mono font-semibold tabular-nums text-foreground'}
+              style={mode === 'email' ? { fontFamily: FONT.mono, fontWeight: 600, color: EMAIL.ink } : undefined}
+            >
+              {fmtInt(p.value)}
+            </span>
+          ))}
+    </>
+  )
+}
+
+/** The name line, first (heinrich-fidelity must-fix 2): the preview's inner
+ *  block with your green mark. */
+export function BrandsNameLine({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
+  if (mode === 'email') {
+    return <div style={{ fontFamily: FONT.sans, fontSize: 13.5, lineHeight: '21px', color: EMAIL.ink, background: EMAIL.inner, borderRadius: 6, padding: '12px 16px' }}><NameWords b={b} mode={mode} /></div>
+  }
+  return (
+    <div className="flex items-baseline gap-3 rounded-md bg-inner px-4 py-4 sm:px-6">
+      <span aria-hidden className="relative -top-px size-2 flex-none rounded-[2px] bg-you" />
+      <p className="m-0 max-w-[76ch] text-[15px] leading-[1.6] text-foreground [text-wrap:pretty]"><NameWords b={b} mode={mode} /></p>
+    </div>
+  )
+}
+
+/** A legend square before a column head. */
+function Swatch({ ink }: { ink: string }) {
+  return <span aria-hidden className="mr-1.5 inline-block size-2 rounded-[2px] align-[1px]" style={{ background: ink }} />
+}
+
+/**
+ * The topics (the approved preview's table): each brand, a bar of its count
+ * in all with its count without our rival searches over it, then the two
+ * counts; a brand not counted prints why in one line across the figures. The
+ * base, the market's videos, sits under "In all". In a narrow block the bar
+ * leaves, as the page's other tables' do (`PHONE_HIDDEN`'s rule, at this
+ * table's own width).
+ */
+export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
+  if (b.topics.length === 0) return null
+  const n = b.topics[0].n
+  const axis = brandAxis(b)
+  if (mode === 'email') {
+    const cell = { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink, padding: '6px 10px 6px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
+    const head = { fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.muted, padding: '0 10px 4px 0', textAlign: 'left' as const, verticalAlign: 'bottom' as const }
+    return (
+      <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%', marginTop: 12 }}>
+        <thead>
+          <tr>
+            <th style={head}>Brand</th>
+            <th style={{ ...head, textAlign: 'right' }}>Without our rival searches</th>
+            <th style={{ ...head, textAlign: 'right' }}><span data-copy="level">In all · of {fmtInt(n)}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {b.topics.map((t) => {
+            const note = topicNote(t)
+            return (
+              <tr key={t.brandKey}>
+                <td style={cell}>{t.label}{note ? <div style={{ fontSize: 12, color: EMAIL.muted }}>{note}</div> : null}</td>
+                <td style={{ ...cell, textAlign: 'right' }}>{note || t.kOrganic == null ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600 }}>{fmtInt(t.kOrganic)}</span>}</td>
+                <td style={{ ...cell, textAlign: 'right' }}>{note || t.kAny == null ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(t.kAny)}</span>}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    )
+  }
+  const cols = 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[480px]:grid-cols-[7.5rem_minmax(0,1fr)_7rem_3.5rem]'
+  const bar = '@max-[480px]:hidden'
+  const pct = (k: number | null) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
+  return (
+    <div className="@container min-w-0">
+      <div role="table" aria-label="Brands in your market" className="flex flex-col">
+        <div role="row" className={cn('grid items-end gap-x-4 border-b border-border pb-2.5 text-[13px] font-medium leading-[1.35] text-muted-foreground', cols)}>
+          <span role="columnheader" className="whitespace-nowrap">Brand</span>
+          <span aria-hidden className={bar} />
+          <span role="columnheader" className="text-right"><Swatch ink={ORGANIC_INK} />Without our<br />rival searches</span>
+          <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right">
+            <span className="whitespace-nowrap"><Swatch ink={ALL_INK} />In all</span>
+            <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(n)}</span>
+          </span>
+        </div>
+        {b.topics.map((t, i) => {
+          const note = topicNote(t)
+          const last = i === b.topics.length - 1
+          return (
+            <div key={t.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4 py-1.5', cols, last ? null : 'border-b border-border/60')}>
+              <span role="rowheader" className="min-w-0 truncate text-[15px] text-foreground">{t.label}</span>
+              {note ? (
+                <span role="cell" className="col-span-2 text-[13px] leading-[1.4] text-muted-foreground @min-[480px]:col-span-3">{note}</span>
+              ) : (
+                <>
+                  <span aria-hidden className={cn('relative block h-2', bar)}>
+                    <span className="absolute inset-y-0 left-0 rounded-[2px]" style={{ width: pct(t.kAny), background: ALL_INK }} />
+                    <span className="absolute inset-y-0 left-0 rounded-l-[2px]" style={{ width: pct(t.kOrganic), background: ORGANIC_INK }} />
+                  </span>
+                  <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(t.kOrganic ?? 0)}</span>
+                  <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] tabular-nums text-muted-foreground">{fmtInt(t.kAny ?? 0)}</span>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/** Deploy 3's body: the name line first, then the topics. */
+export function MarketBrandsBody({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
+  if (mode === 'email') return <><BrandsNameLine b={b} mode={mode} /><BrandsTable b={b} mode={mode} /></>
+  return (
+    <div className="flex min-w-0 flex-col gap-6">
+      <BrandsNameLine b={b} mode={mode} />
+      <BrandsTable b={b} mode={mode} />
+    </div>
+  )
+}
+
+/** The front page's brands block: deploy 3's name line and topics where the
+ *  page read them (WP2.6); else deploy 2's one line ("Brands in your market,
+ *  counted in every video they come up in, arrive with the 11 Oct update.
+ *  Until then, Competitive lists …") inside a drawn block (decision B 2). The
+ *  footer links Competitive by its current sidebar label. */
 function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string) {
   const nav = surface('competitive')
   const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
   const b = data.brands ?? brandsBlockFor(data.reading?.asAt ?? null, { paused: data.reading?.paused ?? false })
   return (
     <BlockFrame title={MARKET_BRANDS_TITLE} mode={mode} footer={footer} roomy>
-      <InnerLine mode={mode}>{brandsLine(b, nav.label)}</InnerLine>
+      {isBrandsRead(b) ? <MarketBrandsBody b={b} mode={mode} /> : <InnerLine mode={mode}>{brandsLine(b, nav.label)}</InnerLine>}
     </BlockFrame>
   )
 }

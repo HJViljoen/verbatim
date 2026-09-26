@@ -1,0 +1,65 @@
+import { SEALAND_CLIENT_ID } from '../config'
+import { buildBrandsBlock, type BrandCountIn, type BrandsRead } from '../pages/overview-market/brands'
+
+// Sealand's brands, as scripts/brand-mentions.ts planned them on staging on
+// 26 Sep (exec/logs/stg-mf2-brand-plan-2026-09-26.json: rules brands_v1, 427
+// rows, window 1 Aug to 1 Oct, market_month_videos' 377 August and 654
+// September videos). Staging's brand_mentions is still empty (the rehearsal
+// stopped before the apply), so these counts exist only in that plan; every
+// figure below is copied from it. The 8 videos naming Sealand are all its own
+// posts, uploaded in September (2 to 16 Sep); none outside them.
+
+export const BRAND_KEYS = {
+  cotopaxi: '6f9ef2d5-23f7-41bf-a1c7-41caf257623e',
+  freitag: '73e961c9-1587-4673-9337-df7bcaa3e11c',
+  rareform: 'ad0df44d-4264-4414-a59a-09622ff78545',
+  theNorthFace: '0eebb75e-b6e1-4fbf-b2bd-25d0e284a691',
+  patagonia: '60a459fe-84b6-4336-b4dd-25ccc8f91277',
+  freedomOfMovement: 'f275101a-983b-454b-8971-265c57e5a175',
+  oldSchool: '33465c12-8e47-4a95-9ba4-5058ee3476c6',
+} as const
+
+/** September (market 654): came up in, and without its own searches. */
+export const SEPTEMBER_BRANDS: readonly BrandCountIn[] = [
+  { brandKey: BRAND_KEYS.cotopaxi, label: 'Cotopaxi', hasRows: true, kAny: 28, kOrganic: 7 },
+  { brandKey: BRAND_KEYS.freitag, label: 'Freitag', hasRows: true, kAny: 6, kOrganic: 1 },
+  { brandKey: BRAND_KEYS.rareform, label: 'Rareform', hasRows: false, kAny: 0, kOrganic: 0 },
+  { brandKey: BRAND_KEYS.theNorthFace, label: 'The North Face', hasRows: true, kAny: 36, kOrganic: 20 },
+  { brandKey: BRAND_KEYS.patagonia, label: 'Patagonia', hasRows: true, kAny: 45, kOrganic: 26 },
+  { brandKey: BRAND_KEYS.freedomOfMovement, label: 'Freedom of Movement', hasRows: false, kAny: 0, kOrganic: 0 },
+  { brandKey: BRAND_KEYS.oldSchool, label: 'Old School', hasRows: false, kAny: 0, kOrganic: 0 },
+]
+
+/** August (market 377). */
+export const AUGUST_BRANDS: readonly BrandCountIn[] = [
+  { brandKey: BRAND_KEYS.cotopaxi, label: 'Cotopaxi', hasRows: true, kAny: 32, kOrganic: 3 },
+  { brandKey: BRAND_KEYS.freitag, label: 'Freitag', hasRows: true, kAny: 3, kOrganic: 1 },
+  { brandKey: BRAND_KEYS.rareform, label: 'Rareform', hasRows: false, kAny: 0, kOrganic: 0 },
+  { brandKey: BRAND_KEYS.theNorthFace, label: 'The North Face', hasRows: true, kAny: 15, kOrganic: 15 },
+  { brandKey: BRAND_KEYS.patagonia, label: 'Patagonia', hasRows: true, kAny: 24, kOrganic: 14 },
+  { brandKey: BRAND_KEYS.freedomOfMovement, label: 'Freedom of Movement', hasRows: false, kAny: 0, kOrganic: 0 },
+  { brandKey: BRAND_KEYS.oldSchool, label: 'Old School', hasRows: false, kAny: 0, kOrganic: 0 },
+]
+
+/** Staging's September block, as the page builds it. */
+export function stagingBrandsRead(month: '2026-09-01' | '2026-08-01' = '2026-09-01'): BrandsRead {
+  const september = month === '2026-09-01'
+  return buildBrandsBlock({
+    clientId: SEALAND_CLIENT_ID,
+    month,
+    n: september ? 654 : 377,
+    rivals: september ? SEPTEMBER_BRANDS : AUGUST_BRANDS,
+    name: { hasRows: true, outside: [], ownPosts: september ? 8 : 0 },
+  })
+}
+
+/** The same month with nothing in the mention layer yet (staging today). */
+export function emptyBrandsRead(): BrandsRead {
+  return buildBrandsBlock({
+    clientId: SEALAND_CLIENT_ID,
+    month: '2026-09-01',
+    n: 654,
+    rivals: SEPTEMBER_BRANDS.map((r) => ({ ...r, hasRows: false, kAny: 0, kOrganic: 0 })),
+    name: { hasRows: false, outside: [], ownPosts: 0 },
+  })
+}

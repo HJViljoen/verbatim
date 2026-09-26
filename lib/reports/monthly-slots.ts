@@ -1,3 +1,4 @@
+import type { BrandsRead } from '../pages/overview-market/brands'
 import type { ChangeBlock } from '../pages/overview-market/change'
 import type { FigureTable } from '../reading/verdicts'
 
@@ -29,7 +30,8 @@ import type { FigureTable } from '../reading/verdicts'
  * collide with theirs, so the pinned shapes are restated below under monthly
  * names. When a package lands, its slot's type becomes an import of the
  * package's own and the copy here is deleted. The change slot is WP2.3's
- * `ChangeBlock` fields, imported, not copied.
+ * `ChangeBlock` fields and the brands slot WP2.6's `BrandsRead`, imported,
+ * not copied.
  *
  * PURE.
  */
@@ -96,15 +98,11 @@ export interface MonthlyYou {
   published: MonthlyPublished | null
 }
 
-/** `monthly.brands`'s slot (WP2.6): §4.2's `BrandsBlock` in its D3 form,
- *  verbatim. `window` is the month the topics are read in; the 90-day note is
- *  How to read's text, never printed under the section (25 Sep rulings). */
-export interface MonthlyBrands {
-  window: string
-  nameLine: { month: string; n: number; k: number; ownPosts: number } | null
-  topics: { brandKey: string; label: string; kAny: number; kOrganic: number; n: number; nOrganic: number; noise: boolean }[]
-  ninetyDayNote: string
-}
+/** `monthly.brands`'s slot (WP2.6): the front page's block in its D3 form,
+ *  imported (`BrandsRead`). `window` is the month the topics are read in; the
+ *  90-day note is How to read's text, never printed under the section (25 Sep
+ *  rulings). */
+export type MonthlyBrands = BrandsRead
 
 export interface MonthlySlots {
   change: MonthlySlot<MonthlyChecks>
