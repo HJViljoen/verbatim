@@ -27,9 +27,17 @@
 # CONCURRENTLY (plan §4.0), and each is idempotent, so re-running a file once
 # after an error is safe.
 #
-# SETS. mf1 = 20260928090000_market_first_s1.sql (WP1.4, Wed 30 Sep). A later
-# work package adds its set here (mf2 and mf4 on Tue 6 Oct, mf3 on Tue 3 Nov),
-# with its files, labels and verify_* functions.
+# SETS.
+#   mf1 = 20260928090000_market_first_s1.sql (WP1.4, Wed 30 Sep). Additive: it
+#         changes no existing grant, so deploy 1's code keeps working on it.
+#   r12 = 20260928091000_market_first_r12_grants.sql (WP1.4, the deploy-1
+#         review's R12). ONLY ONCE DEPLOY 2 IS LIVE: it revokes the tenant's
+#         column UPDATE on tracking_configs that deploy 1's settings saves still
+#         use, and it asks that question before it applies. Not additive: after
+#         it, a rollback behind deploy 2 breaks those saves (its file header
+#         says how to undo it).
+# A later work package adds its set here (mf2 and mf4 on Tue 6 Oct, mf3 on Tue
+# 3 Nov), with its files, labels and verify_* functions.
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -45,7 +53,6 @@ ENV_FILE="${MF_ENV_FILE:-$WORKTREE/.env.dbdump}"   # MF_ENV_FILE only for the ru
 MIG_DIR="$WORKTREE/supabase/migrations"
 EXPECTED_REF="mkwjlckescdveosvrvaq"
 SEALAND="ac16988e-c4f3-4baf-b388-73895852a554"
-PREREQ_VERSION="20260924093000"   # Phase 1's last migration (M16) must be in the history first
 FS=$'\x1f'
 DRY_RUN=0
 PRINT_TARGET=0
@@ -64,13 +71,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ------------------------------------------------------------------- sets ----
+# PREREQ_VERSION must already be in the history before the set applies.
 case "$SET" in
   mf1)
     EXPECTED_FILES=(20260928090000_market_first_s1.sql)
     LABELS=(MF1)
+    PREREQ_VERSION="20260924093000"; PREREQ_NAME="Phase 1's last migration (M16)"
     ;;
-  "") echo "ABORT: --set is required (mf1)."; exit 2 ;;
-  *) echo "ABORT: unknown set '$SET' (mf1)."; exit 2 ;;
+  r12)
+    EXPECTED_FILES=(20260928091000_market_first_r12_grants.sql)
+    LABELS=(R12)
+    PREREQ_VERSION="20260928090000"; PREREQ_NAME="MF1"
+    ;;
+  "") echo "ABORT: --set is required (mf1 | r12)."; exit 2 ;;
+  *) echo "ABORT: unknown set '$SET' (mf1 | r12)."; exit 2 ;;
 esac
 N=${#EXPECTED_FILES[@]}
 for f in "${EXPECTED_FILES[@]}"; do
@@ -228,6 +242,13 @@ field() { local IFS="$FS" arr; read -r -a arr <<<"$2"; echo "${arr[$(( $1 - 1 ))
 # ------------------------------------------------------------ verifications ----
 MF1_TABLES="'video_segments','video_provenance','config_change_reach','month_pair_comparability','front_page_overrides'"
 MF1_FUNCS="'segments_v1_reason','segments_for_videos','market_month_videos','market_month_depth','theme_maker_shares','market_segment_counts'"
+# The tenant's column UPDATE on tracking_configs (the R12 grants). Before R12:
+# the eight staging holds (read 26 Sep); after it, the three that move no
+# search and no send.
+TENANT_UPDATE_SQL="select string_agg(column_name, ', ' order by column_name) from information_schema.role_column_grants where table_schema = 'public' and table_name = 'tracking_configs' and grantee = 'authenticated' and privilege_type = 'UPDATE';"
+TENANT_UPDATE_BEFORE="competitor_names, exclude_terms, last_actor, report_day, report_emails, report_period, subreddits, updated_at"
+TENANT_UPDATE_AFTER="last_actor, report_emails, updated_at"
+PRE_TENANT_UPDATE=""
 
 verify_MF1() {
   local sql
@@ -271,15 +292,9 @@ SQL
   [[ "$OUT" == *"'segment'"* && "$OUT" == *"'gate_rule'"* && "$OUT" == *"'attribution'"* && "$OUT" == *"'rival_rename'"* ]]
   check_true "surface_check" "$?" "has segment, gate_rule, attribution (and rival_rename)" "missing one: $OUT"
 
-  read -r -d '' sql <<'SQL'
-select string_agg(column_name, ', ' order by column_name)
-  from information_schema.role_column_grants
- where table_schema = 'public' and table_name = 'tracking_configs'
-   and grantee = 'authenticated' and privilege_type = 'UPDATE';
-SQL
-  show "$sql"
-  echo "  expect (R12): authenticated keeps UPDATE on last_actor, report_emails, updated_at only"
-  check "R12 tenant UPDATE columns" "$OUT" "last_actor, report_emails, updated_at"
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: MF1 changes no grant, so the list read before it (deploy 1 saves through these)"
+  check "tenant UPDATE columns kept" "$OUT" "$PRE_TENANT_UPDATE"
   finish_verify "$CURRENT"
 
   echo
@@ -302,6 +317,13 @@ SQL
   fi
 }
 
+verify_R12() {
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: authenticated keeps UPDATE on $TENANT_UPDATE_AFTER only"
+  check "R12 tenant UPDATE columns" "$OUT" "$TENANT_UPDATE_AFTER"
+  finish_verify "$CURRENT"
+}
+
 # ------------------------------------------------------------ pre-checks ----
 echo "== plan: $N file(s), filename order, one psql + one transaction each =="
 for i in "${!EXPECTED_FILES[@]}"; do printf '  %-5s %s\n' "${LABELS[$i]}" "${EXPECTED_FILES[$i]}"; done
@@ -320,6 +342,22 @@ fi
 echo "  open runs = $n_open"
 if [[ "$n_open" != "0" ]]; then echo "ABORT: $n_open pipeline run(s) in flight. Wait for them to finish. Nothing applied."; exit 1; fi
 
+echo "== pre-check 3: the tenant's column UPDATE on tracking_configs (the R12 grants) =="
+if ! PRE_TENANT_UPDATE="$(q "$TENANT_UPDATE_SQL")"; then echo "ABORT: grant query failed. Nothing applied."; exit 1; fi
+echo "  authenticated UPDATE: ${PRE_TENANT_UPDATE:-(none)}"
+echo "  expect before R12:    $TENANT_UPDATE_BEFORE"
+echo "  expect after R12:     $TENANT_UPDATE_AFTER"
+if [[ "$PRE_TENANT_UPDATE" == "$TENANT_UPDATE_BEFORE" ]]; then
+  echo "  ok    as staging holds them (R12 not applied yet)"
+elif [[ "$PRE_TENANT_UPDATE" == "$TENANT_UPDATE_AFTER" ]]; then
+  echo "  NOTE: R12 is already applied here."
+elif [[ "$SET" == "r12" ]]; then
+  echo "ABORT: this database holds a tenant UPDATE grant staging does not (or lacks one it has). R12's revoke would leave it"
+  echo "       and its check would fail after the commit. Show Claude the list above. Nothing applied."; exit 1
+else
+  echo "  NOTE: differs from staging. MF1 changes no grant, so this does not stop MF1; show Claude the list before the r12 set."
+fi
+
 HCOLS=""
 inspect_history() {
   echo "== supabase_migrations.schema_migrations =="
@@ -331,14 +369,14 @@ inspect_history() {
   local list r; list="$(printf "'%s'," "${EXPECTED_FILES[@]%%_*}")"; list="${list%,}"
   r="$(q "select count(*), (select count(*) from supabase_migrations.schema_migrations where version in ($list)), (select count(*) from supabase_migrations.schema_migrations where version = '$PREREQ_VERSION') from supabase_migrations.schema_migrations;")" \
     || stop_psql_error "history count" "${1:-$(next_after "")}"
-  echo "  total rows = $(field 1 "$r") · this set's versions already present = $(field 2 "$r") of $N · Phase 1's $PREREQ_VERSION present = $(field 3 "$r")"
+  echo "  total rows = $(field 1 "$r") · this set's versions already present = $(field 2 "$r") of $N · $PREREQ_NAME ($PREREQ_VERSION) present = $(field 3 "$r")"
   HIST_PREREQ="$(field 3 "$r")"
   HIST_PRESENT="$(field 2 "$r")"
 }
 HIST_PREREQ=""; HIST_PRESENT=""
 inspect_history "${EXPECTED_FILES[0]}"
 if [[ -n "$HCOLS" && "$HIST_PREREQ" != "1" ]]; then
-  echo "ABORT: Phase 1's last migration ($PREREQ_VERSION) is not in the history. MF1 assumes it. Nothing applied."; exit 1
+  echo "ABORT: $PREREQ_NAME ($PREREQ_VERSION) is not in the history. This set assumes it. Nothing applied."; exit 1
 fi
 if [[ "$HIST_PRESENT" == "$N" ]]; then
   echo "  NOTE: every file of this set is already in the history. Re-applying is safe (idempotent) and re-verifies it."
@@ -350,6 +388,12 @@ if (( DRY_RUN )); then
   exit 0
 fi
 
+if [[ "$SET" == "r12" ]]; then
+  echo
+  echo "== R12 takes away the grants deploy 1's settings saves use (rivals, cadence, exclusions, communities) =="
+  echo "   Apply it only once deploy 2 (mf-d2) is live on production and a settings save has been checked there."
+  pause_human "Is deploy 2 live on production?"
+fi
 echo
 pause_human "Apply the $N file(s) above to $( (( TEST_TARGET )) && echo 'the TEST cluster' || echo 'PRODUCTION') ($DB_HOST, $DB_USER)?"
 
@@ -401,6 +445,12 @@ if ! psql "$DB_URL" -X -v ON_ERROR_STOP=1 --single-transaction -c "$HIST_INSERT"
 fi
 inspect_history "(after the insert)"
 echo
-echo "DONE: $SET applied, verified and recorded. Next (plan §3.6): the four --apply pastes, in order:"
-echo "  reconstruct-provenance → log-tracking-eras → measure-comparability → label-segments."
+if [[ "$SET" == "mf1" ]]; then
+  echo "DONE: $SET applied, verified and recorded. Next (plan §3.6): the four --apply pastes, in order:"
+  echo "  reconstruct-provenance → log-tracking-eras → measure-comparability → label-segments."
+  echo "  R12 (--set r12) waits for deploy 2."
+else
+  echo "DONE: $SET applied, verified and recorded. A tenant session can no longer change the search set or the cadence."
+  echo "  From now on a rollback behind deploy 2 breaks tenant settings saves (the file header says how to undo it)."
+fi
 echo "Log: $LOG"

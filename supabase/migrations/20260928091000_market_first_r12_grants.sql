@@ -1,0 +1,43 @@
+-- R12 · a tenant cannot change the search set or the sending cadence around
+-- the app (the deploy-1 review's R12, market-first plan WP1.4; applied by
+-- Heinrich through scripts/apply-market-first-migrations.sh --set r12).
+--
+-- WHEN. Only after deploy 2 is live on production, never with MF1 on Wed 30
+-- Sep. Deploy 1's code (mf-d1) still saves three things through these grants,
+-- on the tenant's own session: updateTrackingConfig's rivals and cadence
+-- update, updateSearchTerms' exclude_terms update and updateCommunity's update
+-- (app/dashboard/settings/actions.ts). Deploy 2 carries the change that sends
+-- those three out on the admin client after their role and lock checks
+-- (WP1.4's R12 commit), so from deploy 2 nothing in the app needs the grants.
+-- Applied before deploy 2, an unlocked tenant's owner or admin (Össur) would
+-- read "Could not save: permission denied for table tracking_configs" on
+-- rivals, cadence and communities, and their exclusions would not save.
+--
+-- NOT ADDITIVE, SO ROLLBACK RULE 3 HAS AN EXCEPTION. Plan §4.0's rule 3 says
+-- migrations stay because old code does not need what they change. This file
+-- takes grants away that deploy 1 and earlier use: once it is applied, a Vercel
+-- rollback to mf-d1 or earlier breaks those saves again for an unlocked tenant.
+-- Undoing it, if a rollback ever has to go behind deploy 2, is the one grant
+-- below re-given (`grant update (competitor_names, exclude_terms, subreddits,
+-- report_period, report_day) on public.tracking_configs to authenticated;`),
+-- by Heinrich, in the SQL editor.
+--
+-- WHAT IT CLOSES. The tenant lock (lib/tenant-locks.ts) is enforced in the
+-- server actions, and `authenticated` held column UPDATE on these
+-- tracking_configs columns under the "Owners and admins update config" policy,
+-- so a Sealand owner or admin holding their session token could PATCH rivals,
+-- exclusions, communities or cadence through PostgREST and never meet
+-- assertTenantMay (the audit trigger would still log it to config_changes).
+-- The term columns were already revoked by 20260820120000 (T0-2); naming them
+-- again keeps this list whole if a later migration ever re-grants one.
+-- last_actor, updated_at and report_emails keep their grants: none of them
+-- moves a search or a send.
+--
+-- IDEMPOTENT (revoking a privilege not held is a no-op); applied twice on a
+-- throwaway PG 17.11 cluster with an empty catalogue diff, and checked by
+-- scripts/pg-shim/r12-checks.sql. No BEGIN/COMMIT: the runner wraps the file
+-- in one transaction.
+
+revoke update (competitor_names, exclude_terms, subreddits, report_period, report_day,
+               brand_keywords, competitor_keywords, industry_keywords)
+  on public.tracking_configs from authenticated;

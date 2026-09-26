@@ -5,30 +5,35 @@
 --
 --   bash scripts/pg-shim/throwaway.sh check <dir> scripts/pg-shim/mf1-checks.sql
 --
+-- Run it BEFORE the R12 file (20260928091000_market_first_r12_grants.sql):
+-- section 1 checks that MF1 alone leaves the tenant's tracking_configs grants
+-- as deploy 1's code needs them. The R12 revoke has its own checks,
+-- scripts/pg-shim/r12-checks.sql.
+--
 -- The synthetic month is September 2026 with made-up ids. Its counts are the
 -- test's own arithmetic (four videos, a handful of comments), not a claim about
 -- any tenant.
 \set ON_ERROR_STOP 1
 begin;
 
--- 1. R12: authenticated holds no UPDATE on the search-set and sending columns --
+-- 1. MF1 changes no tracking_configs grant ---------------------------------------------
+-- Deploy 1's settings saves (rivals and cadence, exclusions, communities) still
+-- go out on the tenant's session and need these five; the R12 file takes them
+-- away once deploy 2 is live. The term columns were revoked by T0-2 already.
 do $$
 declare col text;
 begin
-  foreach col in array array['competitor_names', 'exclude_terms', 'subreddits', 'report_period', 'report_day',
-                             'brand_keywords', 'competitor_keywords', 'industry_keywords',
-                             'platforms', 'own_handles', 'competitor_handles', 'max_videos', 'max_comments', 'comment_depth'] loop
-    if has_column_privilege('authenticated', 'public.tracking_configs', col, 'UPDATE') then
-      raise exception 'R12 FAILED: authenticated holds UPDATE on tracking_configs.%', col;
-    end if;
-    if not has_column_privilege('service_role', 'public.tracking_configs', col, 'UPDATE') then
-      raise exception 'R12 FAILED: service_role lost UPDATE on tracking_configs.%', col;
+  foreach col in array array['competitor_names', 'exclude_terms', 'subreddits', 'report_period', 'report_day'] loop
+    if not has_column_privilege('authenticated', 'public.tracking_configs', col, 'UPDATE') then
+      raise exception 'MF1 FAILED: authenticated lost UPDATE on tracking_configs.% (deploy 1 saves through it)', col;
     end if;
   end loop;
-  if has_table_privilege('authenticated', 'public.tracking_configs', 'UPDATE') then
-    raise exception 'R12 FAILED: authenticated holds table-level UPDATE on tracking_configs';
-  end if;
-  raise notice 'ok  R12: authenticated holds no UPDATE on the fourteen search, sending and cost columns';
+  foreach col in array array['brand_keywords', 'competitor_keywords', 'industry_keywords'] loop
+    if has_column_privilege('authenticated', 'public.tracking_configs', col, 'UPDATE') then
+      raise exception 'MF1 FAILED: authenticated holds UPDATE on tracking_configs.%', col;
+    end if;
+  end loop;
+  raise notice 'ok  MF1 leaves the tenant''s tracking_configs grants as deploy 1 needs them';
 end $$;
 
 -- 2. The five tables: RLS on, tenant SELECT only, service role append-only --------
@@ -251,20 +256,24 @@ begin
 end $$;
 
 -- 7. Behaviour, not only the catalogue ---------------------------------------------------
--- A tenant owner's session: the own-row policy passes it, the grant does not.
+-- A tenant owner's session still saves the five columns deploy 1 writes
+-- through it (the grant is there; the lock is the app's), so MF1 on Wed 30 Sep
+-- breaks no save before deploy 2.
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "00000000-0000-4000-8000-0000000000e1", "role": "authenticated"}';
 do $$
-declare col text;
+declare col text; n int;
 begin
   foreach col in array array['competitor_names', 'exclude_terms', 'subreddits', 'report_period', 'report_day'] loop
     begin
       execute format('update public.tracking_configs set %I = %I where client_id = %L', col, col, '00000000-0000-4000-8000-00000000c001');
-      raise exception 'R12 FAILED: a tenant owner''s session updated tracking_configs.%', col;
-    exception when insufficient_privilege then null;
+      get diagnostics n = row_count;
+    exception when insufficient_privilege then
+      raise exception 'MF1 FAILED: a tenant owner''s session was refused on tracking_configs.% before deploy 2', col;
     end;
+    if n <> 1 then raise exception 'MF1 FAILED: a tenant owner''s session saved % rows of tracking_configs.%, not 1', n, col; end if;
   end loop;
-  raise notice 'ok  R12: a tenant owner''s session is refused on every search-set and sending column';
+  raise notice 'ok  MF1: a tenant owner''s session still saves every column deploy 1 writes through it';
 end $$;
 reset role;
 

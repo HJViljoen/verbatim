@@ -357,11 +357,13 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
   })
 })
 
-// ---- R12 (deploy-1 review, MF1): the tracking writes go out on the admin client ----
+// ---- R12 (deploy-1 review): the tracking writes go out on the admin client ----
 //
-// MF1 revokes `authenticated`'s column UPDATE on the search-set and sending
-// columns, so a tenant's session token cannot PATCH them around the lock. The
-// three actions that wrote them through the session client now write through
+// The R12 file (20260928091000_market_first_r12_grants.sql, applied once
+// deploy 2 is live) revokes `authenticated`'s column UPDATE on the search-set
+// and sending columns, so a tenant's session token cannot PATCH them around
+// the lock. MF1 leaves them alone: deploy 1's code still saves through them.
+// The three actions that wrote them through the session client now write through
 // the admin client, AFTER their role and lock checks: an operator's and an
 // unlocked tenant admin's saves still land, a locked tenant's never reach
 // either client, and no tracking_configs write is left on a session client.
@@ -407,17 +409,27 @@ describe('R12: the three tracking writes use the admin client, after the checks'
     expect([...admin.writes, ...session.writes]).toEqual([])
   })
 
-  it('MF1 revokes exactly the search-set and sending columns from authenticated, and grants none back', () => {
-    const mf1 = readFileSync(join(ROOT, 'supabase/migrations/20260928090000_market_first_s1.sql'), 'utf8')
-    const revoked = mf1.match(/revoke update \(([^)]*)\)\s+on public\.tracking_configs from authenticated;/)?.[1]
+  // The SQL without its comments: the R12 file's header names the grant that
+  // would undo it, and a comment grants nothing.
+  const sqlOf = (file: string) => readFileSync(join(ROOT, 'supabase/migrations', file), 'utf8').replace(/--[^\n]*/g, '')
+
+  it('the R12 file revokes exactly the search-set and sending columns from authenticated, and grants none back', () => {
+    const r12 = sqlOf('20260928091000_market_first_r12_grants.sql')
+    const revoked = r12.match(/revoke update \(([^)]*)\)\s+on public\.tracking_configs from authenticated;/)?.[1]
     expect(revoked, 'the R12 revoke is no longer where this test looks for it').toBeTruthy()
     expect(revoked!.split(',').map((c) => c.trim()).sort()).toEqual([
       'brand_keywords', 'competitor_keywords', 'competitor_names', 'exclude_terms', 'industry_keywords',
       'report_day', 'report_period', 'subreddits',
     ])
-    expect(mf1).not.toMatch(/grant update[^;]*on public\.tracking_configs/i)
+    expect(r12).not.toMatch(/grant update[^;]*on public\.tracking_configs/i)
     // The runtime proof is on the throwaway cluster (has_column_privilege, and a
-    // tenant owner's session refused): scripts/pg-shim/mf1-checks.sql.
+    // tenant owner's session refused): scripts/pg-shim/r12-checks.sql.
+  })
+
+  it('MF1 changes no tracking_configs grant: deploy 1 still saves through them after it (rollback rule 3)', () => {
+    const mf1 = sqlOf('20260928090000_market_first_s1.sql')
+    expect(mf1).not.toMatch(/(revoke|grant)[^;]*on public\.tracking_configs/i)
+    // At runtime: scripts/pg-shim/mf1-checks.sql, sections 1 and 7.
   })
 
   it('no server action writes tracking_configs through a session client', () => {

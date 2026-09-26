@@ -12,8 +12,13 @@
 --              segments_for_videos (the reader precedence, once)
 --   CHECK      config_changes_surface_check gains 'segment', 'gate_rule' and
 --              'attribution' (lib/config-log.ts CONFIG_SURFACES mirrors it)
---   grants     R12 of the deploy-1 review: `authenticated` loses column UPDATE
---              on tracking_configs' search-set and sending columns (section 5)
+--
+-- NOT HERE: R12 of the deploy-1 review (the tenant's column UPDATE on
+-- tracking_configs). Its revoke is its own file,
+-- 20260928091000_market_first_r12_grants.sql, applied only once deploy 2 is
+-- live: production at deploy 1 still saves rivals, cadence, exclusions and
+-- communities through those grants, so MF1 leaves every existing grant as it
+-- is and stays additive (plan §4.0 rollback rule 3: old code keeps working).
 --
 -- THE CONVENTIONS (Phase 1 plan §2). Every table: RLS on, a get_my_client_id()
 -- select policy, every privilege revoked from anon and authenticated and then
@@ -416,21 +421,3 @@ alter table public.config_changes add constraint config_changes_surface_check
     'terms','rivals','handles','platforms','subreddits','cadence','knobs',
     'schedule','subjects','entity_retag','regate','prompt_version','rival_rename','other',
     'segment','gate_rule','attribution'));
-
--- 5. R12: a tenant cannot change the search set or the sending cadence around
--- the app --------------------------------------------------------------------
--- The tenant lock (lib/tenant-locks.ts) is enforced in the server actions, and
--- until now `authenticated` held column UPDATE on these tracking_configs
--- columns under the "Owners and admins update config" policy, so a Sealand
--- owner or admin holding their session token could PATCH rivals, exclusions,
--- communities or cadence through PostgREST and never meet assertTenantMay (the
--- audit trigger would still log it). The three settings writes that used these
--- grants (updateTrackingConfig's first update, updateSearchTerms' exclude_terms
--- update, updateCommunity's update) now go out on the admin client after their
--- role and lock checks, so nothing in the app needs them. The term columns were
--- already revoked by 20260820120000 (T0-2); naming them again keeps this list
--- whole if a later migration ever re-grants one. last_actor, updated_at and
--- report_emails keep their grants: none of them moves a search or a send.
-revoke update (competitor_names, exclude_terms, subreddits, report_period, report_day,
-               brand_keywords, competitor_keywords, industry_keywords)
-  on public.tracking_configs from authenticated;
