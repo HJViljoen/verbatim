@@ -277,7 +277,12 @@ describe('the record, grouped as the preview groups it', () => {
     expect(view.groups[0].readWith).toBe('2026-09-20T12:00:00.000Z')
     expect(cellReadWith(t13.cells[1], view.groups[0])).toBeNull()
     expect(cellReadWith({ ...t13.cells[1], readWith: '2026-09-27T08:30:00.000Z' } as never, view.groups[0])).toBe('2026-09-27T08:30:00.000Z')
+    // No update handed in: the latest change's own date.
     expect(view.aside?.since).toBe('2026-09-17T16:02:56.000Z')
+    // The first update after it, which first searched it: the artboard's 20 Sep.
+    const dated = recordView({ lines, changes: CHANGES, rows: SEALAND_LOG, pair: judge, readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: null,
+      updates: ['2026-09-27T08:30:00.000Z', '2026-09-20T12:00:00.000Z', '2026-09-10T12:00:00.000Z'] })
+    expect(dated.aside?.since).toBe('2026-09-20T12:00:00.000Z')
     expect(view.aside?.stops).toEqual([
       'July against August, until measured',
       'August against September',

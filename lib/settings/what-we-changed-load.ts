@@ -132,7 +132,7 @@ export async function loadWhatWeChanged(supabase: SupabaseClient, reading: Readi
     lines,
     // WHAT EACH CHANGE STOPS IS THE PAGE'S OWN JUDGE'S (the one every reading
     // page holds), asked of the pairs this list can show.
-    record: recordView({ lines, changes, rows: changeRows, pair: pairOn, readingMonth: month, prevMonth: block.prevMonth, block }),
+    record: recordView({ lines, changes, rows: changeRows, pair: pairOn, readingMonth: month, prevMonth: block.prevMonth, block, updates: [...runFinish.values()] }),
     changeRows: [...changeRows],
   }
 }

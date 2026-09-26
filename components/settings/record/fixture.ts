@@ -459,6 +459,9 @@ export function recordFixture(opts: { measured?: boolean; judged?: boolean } = {
     view: recordView({
       lines, changes, rows, pair: opts.judged === false ? null : pairOn(judge),
       readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: base.block,
+      // Sealand's updates in September (lib/test/reading-fixture.ts, DR F21):
+      // the 20 Sep update first searched the 17 Sep additions.
+      updates: ['2026-09-09T12:00:00.000Z', '2026-09-10T12:00:00.000Z', '2026-09-20T12:00:00.000Z', '2026-09-24T12:00:00.000Z', '2026-09-27T08:30:00.000Z'],
     }),
   }
 }

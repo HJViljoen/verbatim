@@ -115,7 +115,7 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     const t = read(list)
     expect(t).toContain('Together, these stop')
     expect(t).toContain('Stops August against September')
-    expect(t).toContain('Since 17 Sep nothing we search has changed.')
+    expect(t).toContain('Since 20 Sep nothing we search has changed.')
     expect(t).toContain('Stops August against September, for themes')
     expect(t).toContain('Stops Pairs with August or September, for brands and themes, until measured')
     // The capped update is a gather flag: it stops nothing, and says so.
@@ -135,7 +135,7 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     const t = read(<TheRecord view={recordFixture({ judged: false }).view} />)
     expect(t).not.toContain('Together, these stop')
     expect(t).not.toContain('Stops ')
-    expect(t).toContain('Since 17 Sep nothing we search has changed.')
+    expect(t).toContain('Since 20 Sep nothing we search has changed.')
   })
 
   it('without a measure prints every cell as not measured, never a zero', () => {

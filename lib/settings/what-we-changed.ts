@@ -538,8 +538,10 @@ export interface SearchAside {
    *  measured on 26 Sep." Its figures are tokens. Null where the front page
    *  prints no figure either. */
   figure: { body: string; figures: FigureTable } | null
-  /** The day of the latest change in the group: "Since 17 Sep nothing we
-   *  search has changed." */
+  /** Since when the searches have run unchanged: the first update after the
+   *  group's latest change, which first searched it ("Since 20 Sep nothing we
+   *  search has changed.", the artboard's and decision I's date for the 17 Sep
+   *  change); the change's own date while no update has run since. */
   since: string | null
 }
 
@@ -581,6 +583,9 @@ export function recordView(input: {
   readingMonth: string
   prevMonth: string | null
   block: ChangeBlock | null
+  /** The delivered updates' instants (any order): "since" is the first one
+   *  after the group's latest change. Additive. */
+  updates?: readonly string[]
 }): RecordView {
   const months = ledgerMonths(input.lines, input.readingMonth, input.prevMonth)
   const pairs = recordPairs(months, input.readingMonth)
@@ -623,11 +628,17 @@ export function recordView(input: {
   const searchLines = grouped.search
   const figure = input.block ? addedOnlyRecordSentence(input.block) : null
   const latest = searchLines.map((r) => r.line.date).filter((d) => !Number.isNaN(Date.parse(d))).sort().at(-1) ?? null
+  // THE FIRST UPDATE THAT SEARCHED IT (deploy 2 review): the 17 Sep additions
+  // were first searched by the 20 Sep update, and the searches have run
+  // unchanged since then, which is the artboard's "Since 20 Sep".
+  const firstRun = latest
+    ? (input.updates ?? []).filter((u) => Date.parse(u) > Date.parse(latest)).sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null
+    : null
   const aside: SearchAside | null = searchLines.length > 0
     ? {
         stops: input.pair ? stopLines(mergeStops(searchLines.map((r) => rawStops.get(r.line.changeId) ?? []))) : null,
         figure,
-        since: latest,
+        since: firstRun ?? latest,
       }
     : null
 
