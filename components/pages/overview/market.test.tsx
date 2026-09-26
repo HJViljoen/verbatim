@@ -72,6 +72,12 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     }
   })
 
+  it('wraps a long theme rather than cutting it with "…" (at 1024 the theme track is about 210px)', () => {
+    const board = render(overviewThemes.render(marketFrontFixture(), 'app', ctx))
+    expect(board).toContain('role="rowheader"')
+    expect(board).not.toMatch(/role="rowheader" class="[^"]*truncate/)
+  })
+
   it('declares every video count the makers line prints, on the board’s own theme tokens', () => {
     const data = marketFrontFixture()
     const figures = overviewThemes.figures?.(data) ?? {}

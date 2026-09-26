@@ -146,7 +146,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
             return (
               <div key={r.id} role="row" className={`grid ${cols} min-h-12 items-center py-2 ${RULE.row}`}>
                 <span role="rowheader" className="flex min-w-0 flex-col gap-0.5">
-                  <span className={`sm:truncate ${SCALE.row}`}>{r.label}</span>
+                  <span className={`[text-wrap:pretty] ${SCALE.row}`}>{r.label}</span>
                   {tag ? <span className={SCALE.tag}>{tag}</span> : null}
                 </span>
                 {figures && !under ? (

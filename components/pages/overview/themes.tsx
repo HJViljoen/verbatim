@@ -98,6 +98,10 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
   // sideways scroll, so the first screen carries the board's figures: the
   // rank and the bar go, the theme wraps instead of truncating, and the
   // makers tag takes a line of its own under its row (`PHONE_COLS`).
+  //
+  // THE THEME WRAPS AT EVERY WIDTH, NEVER TRUNCATES (fresh design check, 26
+  // Sep): at 1024 its track is about 210px and seven of Sealand's ten labels
+  // ended in "…", the one cell a reader came for. At 1440 they fit on a line.
   const cols = makersColumn
     ? `${PHONE_COLS} sm:grid-cols-[28px_minmax(200px,1.5fr)_minmax(96px,1fr)_64px_64px_64px_minmax(140px,0.7fr)]`
     : `${PHONE_COLS} sm:grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
@@ -120,7 +124,7 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
             return (
               <div key={t.registryId} role="row" className={`grid ${cols} min-h-11 items-center py-1.5 ${RULE.row}`}>
                 <span className={`${PHONE_HIDDEN} font-mono text-[13px] tabular-nums text-muted-foreground`}>{i + 1}</span>
-                <span role="rowheader" className={`min-w-0 sm:truncate ${SCALE.row}`} title={t.label}>
+                <span role="rowheader" className={`min-w-0 [text-wrap:pretty] ${SCALE.row}`} title={t.label}>
                   <span data-copy="subject" data-slot="pass_b_theme">{t.label}</span>
                 </span>
                 <span className={`block ${PHONE_HIDDEN}`}>
