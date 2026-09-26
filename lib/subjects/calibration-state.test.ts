@@ -9,6 +9,7 @@ import {
   printsMarket,
   readCalibration,
   subjectCalibration,
+  withheldLabel,
 } from './calibration-state'
 import { JUDGE_VERSION } from './types'
 
@@ -154,5 +155,16 @@ describe('what each state prints', () => {
 
   it('the words carry no digit and no dash', () => {
     for (const w of Object.values(CALIBRATION_WORDS)) expect(w).not.toMatch(/[0-9—–]/)
+  })
+})
+
+describe('withheldLabel (WP1.1 review, finding 6)', () => {
+  it('a failed subject was checked and failed: it is being re-described, never "until it is checked"', () => {
+    expect(withheldLabel('failed')).toBe('being re-described')
+  })
+
+  it('a provisional subject is not shown until its check clears, in the product\'s own words', () => {
+    expect(withheldLabel('provisional')).toBe('not shown until its check clears')
+    expect(withheldLabel('calibrating')).toBe('not shown until its check clears')
   })
 })

@@ -17,7 +17,7 @@ import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -38,9 +38,6 @@ import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration
 // "not tracked" about a side that is only withheld. A row stored before WP1.1
 // carries no state and renders as it was sent.
 
-/** What a withheld cell says to a screen reader: the side exists and is held
- *  back, which is not "not tracked". */
-const WITHHELD = 'not shown until this subject is checked'
 
 /**
  * The direction word, and the only node allowed to print one.
@@ -252,11 +249,13 @@ export function sparkDomain(rows: readonly SubjectRow[]): [number, number] | und
 function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null; domain?: [number, number]; shared?: VerdictPairNote | null }) {
   const failed = isFailed(row.calibration)
   const client = printsClient(row.calibration)
-  const withheld = <NoValue mode={mode} label={WITHHELD} />
+  // What a withheld cell says to a screen reader: the side exists and is held
+  // back, which is not "not tracked" (`withheldLabel`).
+  const withheld = <NoValue mode={mode} label={withheldLabel(row.calibration)} />
   // A FAILED ROW IS ITS NAME AND ITS WORD, AND NOTHING ACROSS (design pass).
   // It printed a dash in each of the six columns: six marks that say one
-  // thing, the loudest row in a table whose other rows carry figures. One cell
-  // spans the six and carries the words for a screen reader. Nor is the name a
+  // thing, the loudest row in a table whose other rows carry figures. One
+  // empty cell spans the six; the word is in the row's header. Nor is the name a
   // link: the Subjects page opens no pane for a subject being re-described
   // (it falls back to the first subject), so the link went somewhere else.
   if (failed) {
@@ -266,7 +265,9 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
           {row.label}
           <CalibrationTag calibration={row.calibration} mode={mode} block />
         </th>
-        <td colSpan={6} className="py-1.5 align-top"><span className="sr-only">{WITHHELD}</span></td>
+        {/* Its word is in the row's own header cell, which a screen reader
+            reads with the row; said again here it was said twice. */}
+        <td colSpan={6} className="py-1.5 align-top" />
       </tr>
     )
   }

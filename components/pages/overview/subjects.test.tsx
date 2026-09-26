@@ -456,14 +456,16 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
       expect(row).toContain('being re-described')
       expect(row).not.toContain('<a ')
       expect(row).not.toContain('—')
-      // One cell across the six, which still says why to a screen reader.
+      // One cell across the six; the row's header says why, once, and never
+      // "not shown until … checked": it was checked, and failed.
       expect(row).toMatch(/colspan="6"/i)
-      expect(row).toContain('not shown until this subject is checked')
+      expect(row.match(/being re-described/g)?.length).toBe(1)
+      expect(row).not.toContain('not shown until')
     }
   })
 
   it('a provisional row carries the withheld mark in its change cell as in its "you" cells', () => {
     const row = rowOf(render(overviewSubjects.render(unchecked, 'app', ctx)), 'Waterproofing')
-    expect(row.match(/not shown until this subject is checked/g)?.length).toBe(3)
+    expect(row.match(/not shown until its check clears/g)?.length).toBe(3)
   })
 })

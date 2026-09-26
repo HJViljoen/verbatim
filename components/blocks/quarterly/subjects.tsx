@@ -3,10 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration-state'
-
-/** What a withheld cell says to a screen reader (decision C). */
-const WITHHELD = 'not shown until this subject is checked'
+import { earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -163,15 +160,15 @@ export const quarterlySubjects: Block<QuarterlyData> = {
               // quarter change on either side: its cells carry the withheld
               // mark, not the refusal word "not compared".
               <span key="name">{row.label}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></span>,
-              printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label={WITHHELD} />,
+              printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label={withheldLabel(row.calibration)} />,
               <Side key="cat" side={row.category} mode={mode} />,
               !earnsVerdict(row.calibration)
-                ? <NoValue key="catq" mode={mode} label={WITHHELD} />
+                ? <NoValue key="catq" mode={mode} label={withheldLabel(row.calibration)} />
                 : row.categoryQuarter
                   ? <BlockMovement key="catq" verdict={row.categoryQuarter} unit="pts" mode={mode} />
                   : <NotDrawn key="catq" mode={mode} />,
               !earnsVerdict(row.calibration)
-                ? <NoValue key="youq" mode={mode} label={WITHHELD} />
+                ? <NoValue key="youq" mode={mode} label={withheldLabel(row.calibration)} />
                 : row.youQuarter
                   ? <BlockMovement key="youq" verdict={row.youQuarter} unit="pts" mode={mode} />
                   : <NotDrawn key="youq" mode={mode} />,

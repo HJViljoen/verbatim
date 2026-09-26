@@ -53,6 +53,23 @@ export const CALIBRATION_WORDS: Record<'provisional' | 'failed', string> = {
 }
 
 /**
+ * What a withheld cell says to a screen reader (WP1.1 review, finding 6),
+ * one table for every surface: a provisional subject's "you" side and change
+ * are not shown until its check clears the floor; a failed one was checked and
+ * is being re-described. Neither is "not tracked", which is about an audience.
+ */
+export const WITHHELD_WORDS: Record<'provisional' | 'failed', string> = {
+  provisional: 'not shown until its check clears',
+  failed: CALIBRATION_WORDS.failed,
+}
+
+/** The withheld cell's words for a row in this state (provisional's for any
+ *  state that is not failed: a ready row withholds nothing by calibration). */
+export function withheldLabel(v: string | null | undefined): string {
+  return readCalibration(v) === 'failed' ? WITHHELD_WORDS.failed : WITHHELD_WORDS.provisional
+}
+
+/**
  * A stored or live value, read as a state.
  *
  * `'calibrating'` is the two-state vocabulary's word for "not ready" and reads

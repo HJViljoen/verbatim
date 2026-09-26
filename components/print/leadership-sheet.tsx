@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { BlockMovement } from '@/components/blocks/movement'
 import { FigureCell, NoValue } from '@/components/blocks/frame'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient, withheldLabel, WITHHELD_WORDS } from '@/lib/subjects/calibration-state'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
 import { provenanceLine } from '@/components/pages/overview/sentence'
@@ -645,7 +645,7 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
 function Cell({ side, withheld = false }: { side: SideReading | null; withheld?: boolean }) {
   // A side held back by the subject's calibration (decision C) is not "not
   // tracked": it prints the empty cell and nothing about tracking.
-  if (withheld) return <NoValue label="not shown until this subject is checked" />
+  if (withheld) return <NoValue label={WITHHELD_WORDS.provisional} />
   if (!side || !side.observed || side.pct == null) {
     return <span className="text-[11.5px] text-muted-foreground">&mdash; not tracked</span>
   }
@@ -743,7 +743,7 @@ function SubjectsTable({ data }: { data: OverviewData }) {
                           <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
                           <DirectionWord direction={r.direction} />
                         </>
-                      ) : <NoValue label="not shown until this subject is checked" />}
+                      ) : <NoValue label={withheldLabel(r.calibration)} />}
                     </td>
                   </>
                 )}
