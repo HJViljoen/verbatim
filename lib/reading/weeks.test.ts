@@ -99,10 +99,8 @@ describe('pooledWeekVolumes', () => {
     expect(measured.map((w) => by(w).rivalFiled)).toEqual([11, 16, 13, 14, 15, 12])
   })
 
-  it('takes the median from the rollup (the market), never a mix of audience medians', () => {
+  it("takes the market's median as MF4 repeats it on the week's rows, never a mix of audience medians", () => {
     expect(measured.map((w) => by(w).medianDated)).toEqual([17, 6.5, 5, 6, 10, 9.5])
-    // The category alone reads 7 in the week of 31 Aug; the market reads 6.
-    expect(STAGING_WEEK_VOLUMES.find((r) => r.week === '2026-08-31' && r.audience === 'industry-other')?.medianDated).toBe(7)
   })
 
   it('carries videos under 5 dated comments (9 · 35 · 47 · 40 · 29 · 29% of each week) and the unchecked admissions', () => {
@@ -143,12 +141,11 @@ describe('pooledWeekVolumes', () => {
     expect(w.medianDated).toBeNull()
   })
 
-  it('prints no median without a rollup when two audiences hold videos, and the one audience median when one holds them all', () => {
-    const noRollup = STAGING_WEEK_VOLUMES.filter((r) => r.audience != null)
-    const w = pooledWeekVolumes(noRollup, STAGING_RIVALS, ['2026-08-31'], { now: AT_STAGING_END, updates: STAGING_UPDATES })[0]
+  it("prints no median when the week's rows disagree on it", () => {
+    const split = STAGING_WEEK_VOLUMES.map((r) => (r.week === '2026-08-31' && r.audience === 'industry-other' ? { ...r, medianDated: 7 } : r))
+    const w = pooledWeekVolumes(split, STAGING_RIVALS, ['2026-08-31'], { now: AT_STAGING_END, updates: STAGING_UPDATES })[0]
     expect(w.medianDated).toBeNull()
-    const categoryOnly = noRollup.filter((r) => r.week === '2026-08-10' && r.audience === 'industry-other')
-    expect(pooledWeekVolumes(categoryOnly, [], ['2026-08-10'], { now: AT_STAGING_END, updates: STAGING_UPDATES })[0].medianDated).toBe(17)
+    expect(w.videos).toBe(229)
   })
 
   it('counts a repeated audience row once', () => {
@@ -163,11 +160,11 @@ describe('pooledWeekVolumes', () => {
 
   it('reads PostgREST rows, numeric strings included', () => {
     expect(marketWeekRowOf({
-      week: '2026-09-14', audience: null, videos: 318, comments: 5462, comments_next_month: 0, under_5: 91,
-      median_dated: '9.5', mean_dated: '17.18', older_videos: 39, unchecked: 54,
+      week: '2026-09-14', audience: 'industry-other', videos: 306, comments: 5309, comments_next_month: 0, under_5: 88,
+      median_dated: '9.5', mean_dated: '17.18', older_videos: 38, unchecked: 53,
     })).toEqual({
-      week: '2026-09-14', audience: null, videos: 318, comments: 5462, commentsNextMonth: 0, under5: 91,
-      medianDated: 9.5, meanDated: 17.18, olderVideos: 39, unchecked: 54,
+      week: '2026-09-14', audience: 'industry-other', videos: 306, comments: 5309, commentsNextMonth: 0, under5: 88,
+      medianDated: 9.5, meanDated: 17.18, olderVideos: 38, unchecked: 53,
     })
   })
 })

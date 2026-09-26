@@ -37,19 +37,21 @@ import { addDays, dayOf, isoWeekOf, msOfInstant, weekEndInstant, type MarketWeek
 // the big kinds). It reopens "nothing computed over a week alone" (AGENTS.md;
 // research H11) for this line only.
 //
-// THE CONTRACT WITH MF4 (`market_week_readings`, `week_line_reads`,
-// `week_line_points`, not yet written). Three things the pure side relies on,
-// for the SQL's author:
+// THE CONTRACT WITH MF4 (`market_week_readings`, `market_week_volumes`,
+// `week_line_reads`, `week_line_points`: supabase/migrations/
+// 20261005091000_market_first_weeks.sql, written by the MF2/MF4 package). The
+// pure side relies on three things:
 //   1. `market_week_readings` returns a row for every (audience, object, band)
-//      with n > 0, k possibly 0. A band's n is then the same for every object,
-//      which is how a read's depth bands are taken (`keepWeekPoints`).
-//   2. `market_week_volumes` returns, beside its per-audience rows, one row per
-//      week with audience null over the same videos (a `grouping sets` rollup):
-//      a median does not pool (lib/reading/weeks.ts).
-//   3. The kept conditions jsonb carries the optional fields `WeekRead` adds
-//      below (off_cadence, read_through_at, comments, unchecked_left_out).
-// Each was checked on staging (read-only SELECTs, 26 Sep): the SELECT forms
-// reproduce decision M's figures, and the tests hold those rows.
+//      with videos, k = 0 included. A band's n is then the same for every
+//      object, which is how a read's depth bands are taken (`keepWeekPoints`).
+//   2. `market_week_volumes` repeats the whole market's median and mean dated
+//      comments a video on each of the week's rows: a median does not pool
+//      (lib/reading/weeks.ts).
+//   3. The kept conditions jsonb may carry the optional fields `WeekRead` adds
+//      below (off_cadence, read_through_at, comments, unchecked_left_out)
+//      beside the plan's.
+// The SELECT forms of the two functions were run read-only on staging (26 Sep)
+// and reproduce decision M's figures; the tests hold those rows.
 //
 // PURE. The script (scripts/week-points.ts) and, from deploy 4, the run's
 // `comparability` step read the rows and hand them in.
@@ -669,15 +671,16 @@ const intOf = (v: number | string): number => (typeof v === 'number' ? v : Numbe
 
 /**
  * One week kept at its age, from what the capture read: `market_week_volumes`
- * over the week at the cutoff (every audience the SQL returns, and its rollup),
- * `market_week_readings` for the week and age, and the runs.
+ * over the week at the cutoff, `market_week_readings` for the week and age,
+ * and the runs.
  *
  * The read's depth figures are the whole market the SQL returns (the category
  * and every rival audience, the client arm dropped): mean = comments ÷ videos,
- * the median from the rollup row when it covers exactly those videos (else NaN,
- * which refuses every pair on depth), and the bands from the readings (a band's
- * n is the same for every object; the largest is taken per audience). The
- * point rows are kept per audience, as `week_line_points` holds them.
+ * the market's median as the SQL repeats it on the week's rows (NaN when the
+ * rows disagree or carry none, which refuses every pair on depth), and the
+ * bands from the readings (a band's n is the same for every object; the
+ * largest is taken per audience). The point rows are kept per audience, as
+ * `week_line_points` holds them.
  *
  * Refuses (throws) a row that is not a count, a k over its n, or an unknown
  * band or object kind: nothing malformed is kept, because a kept point is never
@@ -697,8 +700,7 @@ export function keepWeekPoints(input: {
 }): { read: WeekRead; rows: WeekPointRow[] } {
   const { candidate } = input
   const week = isoWeekOf(candidate.week)
-  const parts = input.volumes.filter((r) => r.audience != null && isoWeekOf(r.week) === week)
-  const rollup = input.volumes.find((r) => r.audience == null && isoWeekOf(r.week) === week) ?? null
+  const parts = input.volumes.filter((r) => isoWeekOf(r.week) === week)
   const isInt = (v: number): boolean => Number.isInteger(v) && v >= 0
   for (const r of parts) {
     for (const k of ['videos', 'comments', 'unchecked', 'olderVideos'] as const) {
@@ -707,10 +709,8 @@ export function keepWeekPoints(input: {
   }
   const videos = parts.reduce((a, r) => a + r.videos, 0)
   const comments = parts.reduce((a, r) => a + r.comments, 0)
-  const holders = parts.filter((r) => r.videos > 0)
-  const medianDated = rollup && rollup.videos === videos && rollup.comments === comments && rollup.medianDated != null
-    ? rollup.medianDated
-    : holders.length === 1 && holders[0].medianDated != null ? holders[0].medianDated : Number.NaN
+  const medians = [...new Set(parts.map((r) => r.medianDated))]
+  const medianDated = medians.length === 1 && typeof medians[0] === 'number' && Number.isFinite(medians[0]) ? medians[0] : Number.NaN
 
   const rows: WeekPointRow[] = input.readings.map((raw) => {
     const k = intOf(raw.k)

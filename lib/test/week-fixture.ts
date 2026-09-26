@@ -25,43 +25,50 @@ export const STAGING_RIVALS: readonly string[] = [
 ]
 
 // ---- market_week_volumes, 27 Jul to 21 Sep, no capture cut -----------------------
-// Per audience and the week's rollup (audience null). No row for the weeks of
-// 27 Jul and 3 Aug: nothing was gathered in them.
+// Per week and market audience, as MF4 returns them: the median and the mean
+// dated comments a video are the WHOLE market's for the week, repeated on each
+// of its rows (the category alone reads a median of 7 in the week of 31 Aug;
+// the market reads 6). No row for the weeks of 27 Jul and 3 Aug: nothing was
+// gathered in them.
 
-const v = (week: string, audience: string | null, videos: number, comments: number, commentsNextMonth: number,
+const v = (week: string, audience: string, videos: number, comments: number, commentsNextMonth: number,
   under5: number, medianDated: number, meanDated: number, olderVideos: number, unchecked: number): MarketWeekRow =>
   ({ week, audience, videos, comments, commentsNextMonth, under5, medianDated, meanDated, olderVideos, unchecked })
 
 export const STAGING_WEEK_VOLUMES: readonly MarketWeekRow[] = [
-  v('2026-08-10', null, 244, 5809, 0, 23, 17, 23.81, 0, 0),
-  v('2026-08-10', 'competitor:Cotopaxi', 10, 147, 0, 2, 13.5, 14.7, 0, 0),
-  v('2026-08-10', 'competitor:Freitag', 1, 45, 0, 0, 45, 45, 0, 0),
-  v('2026-08-10', 'industry-other', 233, 5617, 0, 21, 17, 24.11, 0, 0),
-  v('2026-08-17', null, 226, 2646, 0, 78, 6.5, 11.71, 0, 0),
-  v('2026-08-17', 'competitor:Cotopaxi', 14, 125, 0, 7, 5, 8.93, 0, 0),
-  v('2026-08-17', 'competitor:Freitag', 2, 23, 0, 1, 11.5, 11.5, 0, 0),
-  v('2026-08-17', 'industry-other', 210, 2498, 0, 70, 7, 11.9, 0, 0),
-  v('2026-08-24', null, 187, 1831, 0, 88, 5, 9.79, 80, 0),
-  v('2026-08-24', 'competitor:Cotopaxi', 11, 110, 0, 7, 3, 10, 2, 0),
-  v('2026-08-24', 'competitor:Freitag', 2, 24, 0, 1, 12, 12, 0, 0),
-  v('2026-08-24', 'industry-other', 174, 1697, 0, 80, 5, 9.75, 78, 0),
-  v('2026-08-31', null, 229, 3275, 2891, 91, 6, 14.3, 89, 4),
-  v('2026-08-31', 'competitor:Cotopaxi', 11, 111, 104, 7, 3, 10.09, 4, 0),
-  v('2026-08-31', 'competitor:Freitag', 3, 17, 16, 1, 5, 5.67, 1, 0),
-  v('2026-08-31', 'industry-other', 215, 3147, 2771, 83, 7, 14.64, 84, 4),
-  v('2026-09-07', null, 404, 7851, 0, 116, 10, 19.43, 74, 27),
-  v('2026-09-07', 'competitor:Cotopaxi', 7, 54, 0, 3, 5, 7.71, 3, 0),
-  v('2026-09-07', 'competitor:Freitag', 3, 16, 0, 2, 3, 5.33, 1, 0),
-  v('2026-09-07', 'competitor:Patagonia', 2, 56, 0, 0, 28, 28, 0, 0),
-  v('2026-09-07', 'competitor:The North Face', 3, 13, 0, 1, 5, 4.33, 0, 0),
-  v('2026-09-07', 'industry-other', 389, 7712, 0, 110, 10, 19.83, 70, 27),
-  v('2026-09-14', null, 318, 5462, 0, 91, 9.5, 17.18, 39, 54),
-  v('2026-09-14', 'competitor:Cotopaxi', 1, 48, 0, 0, 48, 48, 0, 0),
-  v('2026-09-14', 'competitor:Freitag', 3, 8, 0, 2, 2, 2.67, 1, 1),
-  v('2026-09-14', 'competitor:Patagonia', 4, 66, 0, 1, 21, 16.5, 0, 0),
-  v('2026-09-14', 'competitor:The North Face', 4, 31, 0, 0, 7.5, 7.75, 0, 0),
-  v('2026-09-14', 'industry-other', 306, 5309, 0, 88, 9.5, 17.35, 38, 53),
+  v('2026-08-10', 'competitor:Cotopaxi', 10, 147, 0, 2, 17, 23.81, 0, 0),
+  v('2026-08-10', 'competitor:Freitag', 1, 45, 0, 0, 17, 23.81, 0, 0),
+  v('2026-08-10', 'industry-other', 233, 5617, 0, 21, 17, 23.81, 0, 0),
+  v('2026-08-17', 'competitor:Cotopaxi', 14, 125, 0, 7, 6.5, 11.71, 0, 0),
+  v('2026-08-17', 'competitor:Freitag', 2, 23, 0, 1, 6.5, 11.71, 0, 0),
+  v('2026-08-17', 'industry-other', 210, 2498, 0, 70, 6.5, 11.71, 0, 0),
+  v('2026-08-24', 'competitor:Cotopaxi', 11, 110, 0, 7, 5, 9.79, 2, 0),
+  v('2026-08-24', 'competitor:Freitag', 2, 24, 0, 1, 5, 9.79, 0, 0),
+  v('2026-08-24', 'industry-other', 174, 1697, 0, 80, 5, 9.79, 78, 0),
+  v('2026-08-31', 'competitor:Cotopaxi', 11, 111, 104, 7, 6, 14.3, 4, 0),
+  v('2026-08-31', 'competitor:Freitag', 3, 17, 16, 1, 6, 14.3, 1, 0),
+  v('2026-08-31', 'industry-other', 215, 3147, 2771, 83, 6, 14.3, 84, 4),
+  v('2026-09-07', 'competitor:Cotopaxi', 7, 54, 0, 3, 10, 19.43, 3, 0),
+  v('2026-09-07', 'competitor:Freitag', 3, 16, 0, 2, 10, 19.43, 1, 0),
+  v('2026-09-07', 'competitor:Patagonia', 2, 56, 0, 0, 10, 19.43, 0, 0),
+  v('2026-09-07', 'competitor:The North Face', 3, 13, 0, 1, 10, 19.43, 0, 0),
+  v('2026-09-07', 'industry-other', 389, 7712, 0, 110, 10, 19.43, 70, 27),
+  v('2026-09-14', 'competitor:Cotopaxi', 1, 48, 0, 0, 9.5, 17.18, 0, 0),
+  v('2026-09-14', 'competitor:Freitag', 3, 8, 0, 2, 9.5, 17.18, 1, 1),
+  v('2026-09-14', 'competitor:Patagonia', 4, 66, 0, 1, 9.5, 17.18, 0, 0),
+  v('2026-09-14', 'competitor:The North Face', 4, 31, 0, 0, 9.5, 17.18, 0, 0),
+  v('2026-09-14', 'industry-other', 306, 5309, 0, 88, 9.5, 17.18, 38, 53),
 ]
+
+/** The market's own figures per week (the SELECT's whole-market row). */
+export const STAGING_MARKET_WEEKS: Readonly<Record<string, { videos: number; comments: number; medianDated: number; meanDated: number; under5: number; olderVideos: number; unchecked: number }>> = {
+  '2026-08-10': { videos: 244, comments: 5809, medianDated: 17, meanDated: 23.81, under5: 23, olderVideos: 0, unchecked: 0 },
+  '2026-08-17': { videos: 226, comments: 2646, medianDated: 6.5, meanDated: 11.71, under5: 78, olderVideos: 0, unchecked: 0 },
+  '2026-08-24': { videos: 187, comments: 1831, medianDated: 5, meanDated: 9.79, under5: 88, olderVideos: 80, unchecked: 0 },
+  '2026-08-31': { videos: 229, comments: 3275, medianDated: 6, meanDated: 14.3, under5: 91, olderVideos: 89, unchecked: 4 },
+  '2026-09-07': { videos: 404, comments: 7851, medianDated: 10, meanDated: 19.43, under5: 116, olderVideos: 74, unchecked: 27 },
+  '2026-09-14': { videos: 318, comments: 5462, medianDated: 9.5, meanDated: 17.18, under5: 91, olderVideos: 39, unchecked: 54 },
+}
 
 /** Sealand's own posts in the same weeks (staging, the client arm the SQL drops):
  *  2, 4 and 3 full-lane videos. Their unchecked and next-month columns were not
@@ -272,7 +279,7 @@ export const STAGING_CHANGES: readonly ConfigChange[] = [
  *  the run and the dates are the caller's, because staging never ran one update
  *  a week. */
 export function readFromStaging(stagingWeek: string, over: Partial<WeekRead> = {}): WeekRead {
-  const row = STAGING_WEEK_VOLUMES.find((r) => r.week === stagingWeek && r.audience == null)
+  const row = STAGING_MARKET_WEEKS[stagingWeek]
   if (!row) throw new Error(`no staging week ${stagingWeek}`)
   return {
     week: stagingWeek,
@@ -284,7 +291,7 @@ export function readFromStaging(stagingWeek: string, over: Partial<WeekRead> = {
     lateRun: false,
     videos: row.videos,
     meanDated: row.comments / row.videos,
-    medianDated: row.medianDated as number,
+    medianDated: row.medianDated,
     bands: STAGING_BAND_N[stagingWeek],
     unchecked: row.unchecked,
     olderVideos: row.olderVideos,

@@ -1,4 +1,4 @@
-import { INDUSTRY_AUDIENCE } from '../rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import type { OurChange, OurChangeSurface } from './comparability'
 import { marketAudiences } from './market'
 import { prevMonth } from './month-key'
@@ -26,13 +26,14 @@ import type { PendingWeekLine, WeekLineBlock } from './week-line'
 // are not in it. Audiences are disjoint (a video is in exactly one), so counts
 // add across them. A MEDIAN DOES NOT: the market's median dated comments a
 // video is not any sum or mix of the audiences' medians (staging, the week of
-// 31 Aug: the category's median is 7, the market's 6). So the market's median
-// comes only from a row that already covers the whole market: MF4's
-// `market_week_volumes` returns, beside its per-audience rows, one row per
-// week with `audience` null (a `grouping sets` rollup over the same videos).
-// That row is used only when its counts equal the pooled ones, so a rollup
-// that took in an audience the page does not pool (a rival no longer tracked)
-// gives no median rather than a wrong one.
+// 31 Aug: the category's median is 7, the market's 6). So MF4's
+// `market_week_volumes` computes the median and the mean over the WHOLE market
+// of the week (every audience it returns) and repeats them on each of the
+// week's rows (supabase/migrations/20261005091000_market_first_weeks.sql, the
+// MF2/MF4 package). The pooled median is that value, used only when every
+// audience the SQL counted is in the pool and the rows agree: when the page
+// pools fewer audiences (a rival no longer tracked), the week prints no median
+// rather than a wrong one.
 //
 // PURE. The loader reads `market_week_volumes`, the runs and the change log
 // and hands them in; nothing here reads a table.
@@ -104,11 +105,12 @@ export interface WeekVolumesBlock {
   line: WeekLineBlock | PendingWeekLine | null
 }
 
-/** One row of MF4's `market_week_volumes`, camel-cased. `audience` null is the
- *  whole market in one row (the rollup; see the header). */
+/** One row of MF4's `market_week_volumes`, camel-cased: one week, one market
+ *  audience. `medianDated` and `meanDated` are the WHOLE market's for the week,
+ *  repeated on each of its rows (see the header). */
 export interface MarketWeekRow {
   week: string
-  audience: string | null
+  audience: string
   videos: number
   comments: number
   commentsNextMonth: number
@@ -221,9 +223,9 @@ const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isI
  *
  * Counts add across the market's audiences (tracked rivals and the category;
  * `marketAudiences`): the client's rows and any audience not tracked are left
- * out, and a repeated audience in a week is counted once. The median comes
- * from the week's rollup row only when it covers exactly the pooled videos and
- * comments, or from the one audience that holds every video; otherwise null.
+ * out, and a repeated audience in a week is counted once. The median is the
+ * market's, repeated on the week's rows, when every non-client audience the
+ * rows hold is pooled and the rows agree; otherwise null.
  *
  * A week with no market row comes back `none_gathered`, never dropped, so the
  * axis keeps its slots. A count that is not a whole number at or above zero is
@@ -240,19 +242,22 @@ export function pooledWeekVolumes(
   clock: { now: string; updates: readonly string[] },
 ): WeekVolume[] {
   const market = new Set(marketAudiences(rivalAudiences))
-  const byWeek = new Map<string, { parts: Map<string, MarketWeekRow>; rollup: MarketWeekRow | null }>()
+  const byWeek = new Map<string, { parts: Map<string, MarketWeekRow>; medians: Set<number | null>; unpooled: boolean }>()
   for (const r of rows) {
     const week = isoWeekOf(r.week)
-    const slot = byWeek.get(week) ?? { parts: new Map<string, MarketWeekRow>(), rollup: null }
-    if (r.audience == null) {
-      if (!slot.rollup) slot.rollup = r
-    } else if (market.has(r.audience) && !slot.parts.has(r.audience)) {
-      for (const k of ['videos', 'comments', 'commentsNextMonth', 'under5', 'olderVideos', 'unchecked'] as const) {
-        if (!isCount(r[k])) throw new Error(`pooledWeekVolumes: ${k} is not a count for ${r.audience} in the week of ${week}: ${String(r[k])}`)
-      }
-      slot.parts.set(r.audience, r)
-    }
+    const slot = byWeek.get(week) ?? { parts: new Map<string, MarketWeekRow>(), medians: new Set<number | null>(), unpooled: false }
     byWeek.set(week, slot)
+    if (r.audience === CLIENT_AUDIENCE) continue
+    if (!market.has(r.audience)) {
+      slot.unpooled = true
+      continue
+    }
+    if (slot.parts.has(r.audience)) continue
+    for (const k of ['videos', 'comments', 'commentsNextMonth', 'under5', 'olderVideos', 'unchecked'] as const) {
+      if (!isCount(r[k])) throw new Error(`pooledWeekVolumes: ${k} is not a count for ${r.audience} in the week of ${week}: ${String(r[k])}`)
+    }
+    slot.parts.set(r.audience, r)
+    slot.medians.add(typeof r.medianDated === 'number' && Number.isFinite(r.medianDated) && r.medianDated >= 0 ? r.medianDated : null)
   }
 
   return axis.map((w) => {
@@ -272,12 +277,8 @@ export function pooledWeekVolumes(
     }
     const comments = sum('comments')
     const category = parts.filter((r) => r.audience === INDUSTRY_AUDIENCE).reduce((a, r) => a + r.videos, 0)
-    const holders = parts.filter((r) => r.videos > 0)
-    const rollup = slot?.rollup ?? null
-    const median = (v: number | null | undefined): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
-    const medianDated = rollup && rollup.videos === videos && rollup.comments === comments
-      ? median(rollup.medianDated)
-      : holders.length === 1 ? median(holders[0].medianDated) : null
+    const medians = slot ? [...slot.medians] : []
+    const medianDated = slot && !slot.unpooled && medians.length === 1 ? medians[0] : null
     return {
       week,
       state: weekStateOf(week, clock.now, clock.updates),
@@ -299,7 +300,7 @@ export function pooledWeekVolumes(
  *  `numeric` may arrive as a string). */
 export interface MarketWeekRowRaw {
   week: string
-  audience: string | null
+  audience: string
   videos: number | string
   comments: number | string
   comments_next_month: number | string
@@ -318,7 +319,7 @@ const numOrNull = (v: number | string | null | undefined): number | null => (v =
 export function marketWeekRowOf(raw: MarketWeekRowRaw): MarketWeekRow {
   return {
     week: isoWeekOf(raw.week),
-    audience: raw.audience ?? null,
+    audience: raw.audience,
     videos: num(raw.videos),
     comments: num(raw.comments),
     commentsNextMonth: num(raw.comments_next_month),
