@@ -197,9 +197,10 @@ describe('9 · what changed, and what is ours', () => {
     expect(t).toContain('What we changed, and when')
   })
 
-  it('promises no next pair to a paused tenant', () => {
+  it('promises no next pair to a paused tenant, and keys its own search changes', () => {
     const t = text('monthly.change', ossurMonthlyFixture())
     expect(t).not.toContain('The first comparison read the same way')
+    expect(t).toContain('Our search changes, 23 Aug and 13 Sep')
   })
 })
 
@@ -289,16 +290,21 @@ describe('10 · what to decide', () => {
   it('prints the current recommendation and the next monthly, decision J’s dates', () => {
     const t = text('monthly.decide')
     expect(t).toContain('The current recommendation')
-    expect(t).toContain('Lead with repairability, not recycling, in the next campaign')
-    expect(t).toContain('You marked it Working on it on 2 Sep')
+    expect(t).toContain('Add a "fit and facts" layer to every Sealand bag page and shopping touchpoint')
+    expect(t).toContain('Repeated across 3 updates · 253 videos behind it')
+    expect(t).toContain('You marked it Working on it on 15 Sep')
     expect(t).toMatch(/Next: “October in your market”\s*, read to the 8 Nov update, on Mon 9 Nov\./)
     expect(t).not.toContain('Interpretation')
   })
 
   it('names no next monthly for a paused tenant, and says so where nothing stands', () => {
-    const t = text('monthly.decide', ossurMonthlyFixture())
+    const ossur = ossurMonthlyFixture()
+    const t = text('monthly.decide', ossur)
     expect(t).not.toContain('Next:')
-    expect(t).toContain('No recommendation stands for September.')
+    expect(t).toContain('Launch an access navigator')
+    expect(t).toContain('No decision recorded; it stands at New')
+    const none = text('monthly.decide', ossurMonthlyFixture({ decide: { ...ossur.decide, ledger: null } }))
+    expect(none).toContain('No recommendation stands for September.')
   })
 })
 

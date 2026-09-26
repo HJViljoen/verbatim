@@ -1,12 +1,12 @@
 import type { MonthlyData } from '@/lib/pages/monthly'
-import { headline, sentenceBlockFor, type OverviewData } from '@/lib/pages/overview'
+import { headline, sentenceBlockFor, type LedgerRow, type OverviewData } from '@/lib/pages/overview'
 import { monthlySubject, nextMonthlyOf } from '@/lib/reports/monthly'
 import { MONTHLY_SLOT_STUBS, type MonthlySlots } from '@/lib/reports/monthly-slots'
 import { comparabilityOf, type OurChange, type PairRow } from '@/lib/reading/comparability'
 import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { sealandReading } from '@/lib/test/reading-fixture'
-import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture, verdict } from '@/components/pages/overview/fixture'
+import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, verdict } from '@/components/pages/overview/fixture'
 
 // "September in your market"'s fixtures (market-first WP2.1).
 //
@@ -27,8 +27,10 @@ import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFro
 //   update): 148 of 351 and 376 of 625 outside the searches both months ran,
 //   and DR F39's depth medians, 23 and 15. So the change section prints the
 //   front page's measured sentence, read with the 20 Sep update.
-// - THE STANDING ADVICE. `overviewFixture`'s ledger row, the one every Phase 1
-//   Overview test carries.
+// - THE STANDING ADVICE. Staging's current recommendation for each tenant, as
+//   the front page's ledger reads it (`loadMonthly` at the 11 Oct clock,
+//   read-only, WP2.1 fresh check, 26 Sep): `STAGING_LEDGER` and
+//   `OSSUR_STAGING_LEDGER` below.
 // - THE SIZE SENTENCE OF AN ENDED MONTH. The front page's builders
 //   (`headline`, `sentenceBlockFor`) on the same 655 videos and 16,233
 //   comments, read as September ended rather than "so far".
@@ -65,6 +67,42 @@ const SEARCH_CHANGES: OurChange[] = [
   { id: 'terms-0917', surface: 'terms', changedAt: '2026-09-17T16:02:56.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] },
 ]
 
+/** Sealand's current recommendation on staging (8196074b, the row WP1.9's
+ *  ledger order puts first): made on 3 updates, 253 videos behind it, marked
+ *  "Working on it" on 15 Sep. `monthsOld` is null there (no "first on record"
+ *  clause). */
+export const STAGING_LEDGER: LedgerRow = {
+  id: '8196074b-1a28-4eb2-b0bd-06248bf1a4ff',
+  title: 'Add a "fit and facts" layer to every Sealand bag page and shopping touchpoint',
+  monthsOld: null,
+  timesMade: 3,
+  grounding: { videos: 253, themes: 204, audience: INDUSTRY_AUDIENCE, pruned: false, line: '253 videos behind it' },
+  status: 'in_progress',
+  statusLabel: 'Working on it',
+  decidedAt: '2026-09-15T12:20:21.531616+00:00',
+  href: '/dashboard/market',
+}
+
+/** Össur's current recommendation on staging (85dd4fde): made once, 72 videos
+ *  behind it, no decision recorded. */
+export const OSSUR_STAGING_LEDGER: LedgerRow = {
+  id: '85dd4fde-14ef-47c9-876b-6fa86c7cf169',
+  title: 'Launch an access navigator that covers price, coverage, denials, and where to get seen',
+  monthsOld: null,
+  timesMade: 1,
+  grounding: { videos: 72, themes: 76, audience: INDUSTRY_AUDIENCE, pruned: false, line: '72 videos behind it' },
+  status: 'new',
+  statusLabel: 'New',
+  decidedAt: null,
+  href: '/dashboard/market',
+}
+
+/** Össur's own search-change days inside the pair on staging, as the front
+ *  page's loader lists them (`ChangeBlock.searchChanges`): 23 Aug and 13 Sep.
+ *  `ossurFrontFixture` inherits Sealand's change block, whose strip a paused
+ *  page never draws; the monthly draws the refused pair, so it needs Össur's. */
+const OSSUR_SEARCH_CHANGES = ['2026-08-23T00:00:00+00:00', '2026-09-13T00:00:00+00:00']
+
 /** The front page's reading, read as the monthly reads it. */
 function asEnded(base: OverviewData, over: { measured?: boolean } = {}): OverviewData {
   const reading = sealandReading(MONTHLY_AT, SEP)
@@ -76,7 +114,7 @@ function asEnded(base: OverviewData, over: { measured?: boolean } = {}): Overvie
   })
   const size = base.market?.find((c) => c.month === SEP)
   const head = headline({ verdicts: [], size: { month: SEP, soFar: false, videos: size?.videos ?? null, comments: size?.comments ?? null }, makerShares: null, chip: SEPTEMBER_CHIP })
-  const ledger = overviewFixture().sentence.ledger
+  const ledger = STAGING_LEDGER
   return {
     ...base,
     reading,
@@ -121,10 +159,15 @@ export function unmeasuredMonthlyFixture(over: Partial<MonthlyData> = {}): Month
 }
 
 /** Össur's September (§2.13): paused, no subjects, no maker rule, no next
- *  monthly promised. Staging's rows, as `ossurFrontFixture` holds them. */
+ *  monthly promised. Staging's rows, as `ossurFrontFixture` holds them, with
+ *  Össur's own recommendation and search-change days (staging). */
 export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
   const base = ossurFrontFixture()
-  return monthly({ ...base, sentence: { ...base.sentence, ledger: null } }, over)
+  return monthly({
+    ...base,
+    sentence: { ...base.sentence, ledger: OSSUR_STAGING_LEDGER },
+    change: base.change ? { ...base.change, searchChanges: OSSUR_SEARCH_CHANGES } : base.change,
+  }, over)
 }
 
 /**
