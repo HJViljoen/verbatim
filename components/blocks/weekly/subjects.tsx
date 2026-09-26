@@ -12,7 +12,7 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import { CONTRIBUTIONS_NOT_RECORDED, subjectsLead } from '@/lib/reports/weekly'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { isFailed, printsClient } from '@/lib/subjects/calibration-state'
+import { calibrationWord, isFailed, printsClient } from '@/lib/subjects/calibration-state'
 
 // WR2 · Where things stand (design §3 WR section 2).
 //
@@ -312,7 +312,11 @@ export const weeklySubjects: Block<WeeklyData> = {
       out[`subject_${r.id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_share`] = {
         value: r.category.pct,
         unit: 'pct',
-        label: `${r.label}, share of the category this month`,
+        // A PROVISIONAL SUBJECT'S FIGURE IS MARKED HERE TOO (decision C;
+        // WP1.1 review, finding 10): this table becomes the prose figures a
+        // model may cite (`blockReading` → `proseFigures`), and an unmarked
+        // label let a document cite it as settled.
+        label: `${r.label}, share of the category this month${calibrationWord(r.calibration) ? ` (${calibrationWord(r.calibration)})` : ''}`,
       }
     }
     return out

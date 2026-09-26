@@ -919,6 +919,13 @@ describe('the weekly subjects block under the three calibration states (decision
     }
   })
 
+  it('marks a provisional subject\'s figure in its figure table (WP1.1 review, finding 10)', () => {
+    const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
+    const figures = weeklySubjectsBlock.figures!(unchecked)
+    expect(figures.subject_water_share.label).toContain('(provisional)')
+    expect(figures.subject_looks_share.label).not.toContain('provisional')
+  })
+
   it('a failed subject\'s name links nowhere: there is no pane to open (WP1.1 review, finding 7)', () => {
     const markup = render(weeklySubjectsBlock.render(data, 'app', ctx))
     expect(markup).not.toContain('item=repair')

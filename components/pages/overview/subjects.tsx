@@ -17,7 +17,7 @@ import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
+import { calibrationWord, earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -507,7 +507,11 @@ export const overviewSubjects: Block<OverviewData> = {
       out[`subject_${r.id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_share`] = {
         value: r.category.pct,
         unit: 'pct',
-        label: `${r.label}, share of the category this month`,
+        // A PROVISIONAL SUBJECT'S FIGURE IS MARKED HERE TOO (decision C;
+        // WP1.1 review, finding 10): this table becomes the prose figures a
+        // model may cite (`blockReading` → `proseFigures`), and an unmarked
+        // label let a document cite it as settled.
+        label: `${r.label}, share of the category this month${calibrationWord(r.calibration) ? ` (${calibrationWord(r.calibration)})` : ''}`,
       }
     }
     return out

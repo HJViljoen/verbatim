@@ -400,6 +400,12 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     expect(byId('water').rival?.k).toBe(0)
   })
 
+  it('marks a provisional subject\'s figure "(provisional)" in the table a document cites (WP1.1 review, finding 10)', () => {
+    const figures = blockAnswers(overviewSubjects, unchecked).figures
+    expect(figures.subject_water_share.label).toBe('Waterproofing, share of the category this month (provisional)')
+    expect(figures.subject_looks_share.label).toBe('Looks & style, share of the category this month')
+  })
+
   it('an unread row is its linked name and its words, one cell across', () => {
     const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
     expect(row).toContain('first reading with the 4 Oct update')
