@@ -59,13 +59,18 @@ const TRACKS = 'xl:grid-cols-[minmax(0,2.8fr)_minmax(0,1.13fr)_minmax(200px,1fr)
 /**
  * One precision for a set of kept rates (deploy 2 review): a decimal share is
  * never printed on a base under 100 (GR F25), so where any rate in the set
- * rests on fewer than 100 looked at, every rate in it is a whole percent
- * ("53%", not "52.7%"), and one column keeps one precision. Exported for the
- * test.
+ * rests on fewer than 100 looked at, every share in it is a whole percent
+ * ("38%", not "38.0%"), and one column keeps one precision. A rate on fewer
+ * than 100 looked at is no share at all: it prints as its count, "48 of 91"
+ * (market-first WP3.10, a copy debt found after deploy 1; `levelText`'s floor).
+ * Exported for the test.
  */
-export function keptRateText(rates: readonly Pick<KeptRate, 'found' | 'keptPct'>[]): (r: Pick<KeptRate, 'keptPct'>) => string {
+export function keptRateText(rates: readonly Pick<KeptRate, 'found' | 'keptPct'>[]): (r: Pick<KeptRate, 'found' | 'kept' | 'keptPct'>) => string {
   const whole = rates.some((r) => r.found < 100)
-  return (r) => (whole ? `${Math.round(r.keptPct)}%` : `${r.keptPct.toFixed(1)}%`)
+  return (r) => {
+    if (r.found < 100) return `${fmtInt(r.kept)} of ${fmtInt(r.found)}`
+    return whole ? `${Math.round(r.keptPct)}%` : `${r.keptPct.toFixed(1)}%`
+  }
 }
 
 export function RejectLogBlock({

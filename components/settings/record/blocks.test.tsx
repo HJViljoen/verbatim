@@ -529,16 +529,17 @@ describe('the page’s own chrome', () => {
 })
 
 describe('the reject log’s kept rates (deploy 2 review)', () => {
-  it('prints no decimal share on a base under 100: the column goes to whole percents', () => {
+  it('prints a rate under 100 looked at as its count, and the column\'s shares as whole percents (WP3.10)', () => {
     // Staging's 2 Oct rows, "of the last 1,000": made from waste 38 of 100,
     // north face backpack 48 of 91, sustainable fashion 87 of 87.
-    const rate = keptRateText([
-      { found: 100, keptPct: 38 },
-      { found: 91, keptPct: 52.747 },
-      { found: 87, keptPct: 100 },
-    ])
-    expect([rate({ keptPct: 38 }), rate({ keptPct: 52.747 }), rate({ keptPct: 100 })]).toEqual(['38%', '53%', '100%'])
+    const set = [
+      { found: 100, kept: 38, keptPct: 38 },
+      { found: 91, kept: 48, keptPct: 52.747 },
+      { found: 87, kept: 87, keptPct: 100 },
+    ]
+    const rate = keptRateText(set)
+    expect(set.map(rate)).toEqual(['38%', '48 of 91', '87 of 87'])
     // Every base at 100 or more keeps its decimal.
-    expect(keptRateText([{ found: 1840, keptPct: 76.2 }])({ keptPct: 76.2 })).toBe('76.2%')
+    expect(keptRateText([{ found: 1840, keptPct: 76.2 }])({ found: 1840, kept: 1402, keptPct: 76.2 })).toBe('76.2%')
   })
 })
