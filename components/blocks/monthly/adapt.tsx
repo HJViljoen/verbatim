@@ -31,7 +31,8 @@ import type { MonthlyData } from '@/lib/pages/monthly'
  * `figures`, `verdicts`, `quotes` and `emptyState` are forwarded untouched for
  * a different reason: those are the READING, and a report that declared
  * different figures from the page it is made of would be a second reading of
- * one month.
+ * one month. All five go through the same `phaseOneOverview` view (below), so
+ * what the record declares is what the section prints.
  *
  * AND `project` IS FOR WORDS, NEVER FOR NUMBERS. A page may carry a sentence
  * that only makes sense on the page — a control the reader can press, a page
@@ -80,17 +81,21 @@ export function fromOverview(
       if (mode === 'email' && email) return email(projected, ctx, data)
       return block.render(projected, mode, ctx)
     },
+    // THE RECORD READS WHAT THE RENDER READS (WP1.6 review): the same Phase 1
+    // view of the Overview, so a monthly built on a "Your market" overview
+    // never declares the front page's figures under a section that prints
+    // the Phase 1 ones.
     figures(data) {
-      return block.figures?.(data.overview) ?? {}
+      return block.figures?.(phaseOneOverview(data.overview)) ?? {}
     },
     verdicts(data) {
-      return block.verdicts?.(data.overview) ?? []
+      return block.verdicts?.(phaseOneOverview(data.overview)) ?? []
     },
     quotes(data) {
-      return block.quotes?.(data.overview) ?? []
+      return block.quotes?.(phaseOneOverview(data.overview)) ?? []
     },
     emptyState(data) {
-      return block.emptyState(project(data.overview))
+      return block.emptyState(project(phaseOneOverview(data.overview)))
     },
   }
 }
