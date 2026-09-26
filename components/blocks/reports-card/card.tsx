@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { Tile } from '@/components/shell/tile'
@@ -188,6 +189,12 @@ export function QuarterlyCardTile({
                     </span>
                   </span>
                 </div>
+                {/* A PROVISIONAL SUBJECT'S BAR IS MARKED (decision C; WP1.1
+                    review, finding 2): its market level prints, with its
+                    word on a line of its own under the label, as on every
+                    other subjects table, so the truncating label never cuts
+                    it. A ready subject carries none. */}
+                <CalibrationTag calibration={s.calibration} block className="pl-3.5" />
                 {base && (
                   <p className="m-0 pl-3.5 font-mono text-[10.5px] text-muted-foreground">
                     the quarter before · {fmtPct(share(base.k, base.n), 1)} · {fmtInt(base.k)} of {fmtInt(base.n)}

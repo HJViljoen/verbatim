@@ -6,6 +6,8 @@ import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { QuarterlyAbsentTile, QuarterlyCardTile, barCeiling, monthSpan, pillWord, readingWord } from './card'
 import { formingCardFixture, quarterlyCardFixture, unreadCardFixture } from './fixture'
+import { buildQuarterlyCard } from '@/lib/pages/reports-card'
+import { previousQuarter, quarterFor } from '@/lib/reports/quarterly'
 
 // The render tier for the quarterly card (Block D wave 2, package E-reports).
 // One static render per state, asserted against the copy contract — and three
@@ -245,5 +247,55 @@ describe('barCeiling', () => {
     expect(barCeiling([27.1, 14])).toBe(30)
     expect(barCeiling([99])).toBe(100)
     expect(barCeiling([Number.NaN, 3])).toBe(25)
+  })
+})
+
+// DECISION C ON THE CARD (WP1.1 review, finding 2). Staging's real windows for
+// Sealand (read 26 Sep): Q3 875 category videos, Q2 49; Looks & style 136 and
+// 5, Community & purpose 12 and 1, Repair & warranty 46 and 6. Staging has
+// four readings, where the card prints only its gate line, so the gate is held
+// open here at six, as it is from the November reading.
+describe('the quarterly card under the three calibration states', () => {
+  const window = (videos: number) => ({
+    denominators: [{ audience: INDUSTRY_AUDIENCE, videos, comments: 0, platform_mix: {}, dual_mention: 0, excluded_undated: 0 }],
+    themes: [],
+  })
+  const subjectRows = (videos: Record<string, number>) =>
+    Object.entries(videos).map(([subject_id, v]) => ({
+      audience: INDUSTRY_AUDIENCE, subject_id, videos: v, comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0,
+    }))
+  const quarter = quarterFor(2026, 3)
+  const card = buildQuarterlyCard({
+    quarter,
+    prior: previousQuarter(quarter),
+    subjects: [
+      { id: 'looks', name: 'Looks & style', calibration: 'ready' },
+      { id: 'community', name: 'Community & purpose', calibration: 'provisional' },
+      { id: 'repair', name: 'Repair & warranty', calibration: 'failed' },
+    ],
+    thisQuarter: window(875),
+    lastQuarter: window(49),
+    subjectsNow: subjectRows({ looks: 136, community: 12, repair: 46 }),
+    subjectsBefore: subjectRows({ looks: 5, community: 1, repair: 6 }),
+    monthsInQuarter: [
+      { month: '2026-07-01', videos: 35, backRead: true },
+      { month: '2026-08-01', videos: 351, backRead: false },
+      { month: '2026-09-01', videos: 625, backRead: false },
+    ],
+    readings: 6,
+  })!
+
+  it('prints a provisional subject\'s bar marked "provisional", a ready one unmarked, and no failed one', () => {
+    const markup = render(<QuarterlyCardTile card={card} />)
+    const text = renderText(<QuarterlyCardTile card={card} />)
+    expect(text).toContain('12 of 875')
+    expect(text.match(/provisional/g)?.length).toBe(1)
+    const at = text.indexOf('Community & purpose')
+    expect(text.slice(at, text.indexOf('provisional', at))).not.toContain('Looks & style')
+    expect(text).not.toContain('Repair & warranty')
+    expect(text).not.toContain('46 of 875')
+    // The word is a line of its own, never inside the truncating label.
+    expect(markup).toContain('<span class="min-w-0 truncate text-[12.5px]">Community &amp; purpose · the category</span>')
+    assertCopyContract(<QuarterlyCardTile card={card} />)
   })
 })
