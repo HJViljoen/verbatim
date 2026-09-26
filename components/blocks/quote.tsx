@@ -30,13 +30,15 @@ import type { Quote } from '@/lib/renderables/types'
  * a share-link render.
  */
 export function BlockQuote({
-  quote, cite, mode = 'app', gone = 'counted, not quotable: this comment has since been removed',
+  quote, cite, mode = 'app', gone = 'counted, not quotable: this comment has since been removed', ground,
 }: {
   quote: (Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>) | null
   cite?: ReactNode
   mode?: RenderMode
   /** What to say when the words did not resolve. */
   gone?: string
+  /** The quote sits on an inner block (`QuoteBlock`'s `ground`). */
+  ground?: 'tile' | 'inner'
 }) {
   if (!quote || !quote.text.trim()) {
     return mode === 'email'
@@ -50,7 +52,7 @@ export function BlockQuote({
       ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{gone}</div>
       : <p className="m-0 font-mono text-[10.5px] text-muted-foreground">{gone}</p>
   }
-  return <QuoteBlock quote={quote} cite={cite} mode={mode} />
+  return <QuoteBlock quote={quote} cite={cite} mode={mode} ground={ground} />
 }
 
 /** Several quotes, in order. The block decides how many; this decides nothing

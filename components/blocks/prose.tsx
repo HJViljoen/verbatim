@@ -22,7 +22,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 // missing figure can never reach a reader as an empty gap.
 
 export function TokenProse({
-  body, figures, mode = 'app', model = false, figureFace, className, size = 'body',
+  body, figures, mode = 'app', model = false, figureFace, className, size = 'body', figureClassName,
 }: {
   /** The sentence(s), with `[[key]]` placeholders. */
   body: string
@@ -94,6 +94,10 @@ export function TokenProse({
    * they already did.
    */
   size?: 'body' | 'hero' | number
+  /** Extra classes on each substituted figure, in the app and print (the
+   *  weight and tracking a caller's type ramp gives its numbers). ADDITIVE:
+   *  a caller that passes none renders what it always did. */
+  figureClassName?: string
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
@@ -123,7 +127,7 @@ export function TokenProse({
               // sentence is the serif hero, the sans otherwise.
               : { fontFamily: size === 'hero' ? FONT.serif : FONT.sans, fontWeight: 600, color: EMAIL.ink })
             : undefined}
-          className={mode === 'email' ? undefined : (face === 'mono' ? 'font-mono tabular-nums' : 'font-semibold tabular-nums')}
+          className={mode === 'email' ? undefined : `${face === 'mono' ? 'font-mono tabular-nums' : 'font-semibold tabular-nums'}${figureClassName ? ` ${figureClassName}` : ''}`}
         >
           {p.figure}
         </span>
