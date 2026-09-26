@@ -121,7 +121,7 @@ function RefusalChip({ chip, mode }: { chip: string; mode: RenderMode }) {
 
 /** One voice: the quote behind its green-tinted rule, the video's own on-screen
  *  text where the OCR pass read any, and the cite tail. */
-function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
+function VoiceRow({ voice, mode, ground }: { voice: Voice; mode: RenderMode; ground?: 'tile' | 'inner' }) {
   const cite = voice.href
     ? <a href={voice.href} rel="noreferrer" target="_blank" style={mode === 'email' ? { color: EMAIL.muted } : undefined}>{voice.cite}</a>
     : voice.cite
@@ -156,7 +156,7 @@ function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
   }
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <BlockQuote quote={voice.quote} cite={cite} mode={mode} />
+      <BlockQuote quote={voice.quote} cite={cite} mode={mode} ground={ground} />
       {onScreen}
     </div>
   )
@@ -182,24 +182,34 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const lead = data.hero?.kind === 'themes' ? data.hero.lead : null
   const voice = surface('voice')
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
-  const size = (
-    <TokenProse
-      body={s.body}
-      figures={s.figures}
-      mode={mode}
-      figureFace="inherit"
-      className={email ? undefined : 'm-0 max-w-[700px] text-[26px] font-medium leading-[1.3] tracking-[-0.02em] [text-wrap:balance]'}
-    />
+  // THE HEADLINE BREAKS AT ITS COLON (design pass): "Your market in
+  // September:" over "654 videos and 16,204 comments.", never "654" at the end
+  // of one line and "videos" at the start of the next. The words are the
+  // sentence's own; the app sets the clause before the colon as its own line,
+  // and a sentence with no such clause stays one paragraph.
+  const headClass = 'm-0 text-[28px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground'
+  const headFigure = 'font-semibold tracking-[-0.04em]'
+  const colon = s.body.indexOf(': ')
+  const split = !email && colon > 0 && !s.body.slice(0, colon).includes('[[')
+  const size = email ? (
+    <TokenProse body={s.body} figures={s.figures} mode={mode} figureFace="inherit" />
+  ) : split ? (
+    <div className="flex max-w-[700px] flex-col">
+      <p className={headClass}>{s.body.slice(0, colon + 1)}</p>
+      <TokenProse body={s.body.slice(colon + 2)} figures={s.figures} mode={mode} figureFace="mono" figureClassName={headFigure} className={`${headClass} [text-wrap:balance]`} />
+    </div>
+  ) : (
+    <TokenProse body={s.body} figures={s.figures} mode={mode} figureFace="mono" figureClassName={headFigure} className={`${headClass} max-w-[700px] [text-wrap:balance]`} />
   )
   const clause = view.parts.length > 0 ? (
     email
       ? <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2, marginTop: 8 }}><Parts parts={view.parts} figures={view.figures} mode={mode} /></div>
-      : <p className="m-0 max-w-[620px] text-[16px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><Parts parts={view.parts} figures={view.figures} mode={mode} labelClassName="font-semibold text-foreground" /></p>
+      : <p className="m-0 max-w-[620px] text-[17px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><Parts parts={view.parts} figures={view.figures} mode={mode} labelClassName="font-semibold text-foreground" /></p>
   ) : null
   const prev = view.prev ? (
     email
       ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><Parts parts={view.prev} figures={view.figures} mode={mode} /></div>
-      : <span data-copy="level" className="font-mono text-[13px] tabular-nums text-muted-foreground"><Parts parts={view.prev} figures={view.figures} mode={mode} /></span>
+      : <span data-copy="level" className="font-mono text-[13px] tabular-nums text-muted-foreground"><Parts parts={view.prev} figures={view.figures} mode={mode} figureClassName="font-mono font-medium tabular-nums text-secondary-foreground" /></span>
   ) : null
   const chip = s.chip ? <PairChip words={s.chip} mode={mode} /> : null
   const aside = lead && voices.length > 0 ? (
@@ -212,14 +222,14 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
         {view.newSearch ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 }}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></div> : null}
       </div>
     ) : (
-      <aside className="flex min-w-0 flex-col gap-4 rounded-md bg-inner p-6">
+      <aside className="flex min-w-0 flex-col gap-4 self-start rounded-md bg-inner p-6">
         <div className="flex flex-col gap-1">
-          <h3 className="m-0 text-[15px] font-semibold">
+          <h3 className="m-0 text-[15px] font-semibold leading-[1.4] [text-wrap:balance]">
             {voicesHeading(voices.length)} on “<span data-copy="subject" data-slot="pass_b_theme">{lead.label}</span>”
           </h3>
           <span className="font-mono text-[12px] text-muted-foreground">from that theme’s own comments</span>
         </div>
-        {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} />)}
+        {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} ground="inner" />)}
         {view.newSearch ? <p className="m-0 text-[13px] leading-[1.5] text-secondary-foreground"><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></p> : null}
       </aside>
     )
@@ -241,13 +251,13 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const main = (
     <div className="flex min-w-0 flex-col gap-6 pt-1">
       <div className="flex flex-col gap-4">{size}{clause}</div>
-      {prev || chip ? <div className="flex flex-wrap items-center gap-4">{prev}{chip}</div> : null}
+      {prev || chip ? <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{prev}{chip}</div> : null}
     </div>
   )
   return (
-    <BlockFrame title={MARKET_SENTENCE_TITLE} mode={mode} footer={footer}>
+    <BlockFrame title={MARKET_SENTENCE_TITLE} mode={mode} footer={footer} roomy>
       {aside ? (
-        <div className="grid grid-cols-1 gap-x-16 gap-y-6 xl:grid-cols-[minmax(0,1fr)_304px]" data-print-cols="2">
+        <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-[minmax(0,1fr)_304px]" data-print-cols="2">
           {main}
           {aside}
         </div>
