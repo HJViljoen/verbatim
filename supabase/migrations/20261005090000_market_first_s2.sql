@@ -82,8 +82,10 @@
 --                n = judged + judged_framing (lib/reading/mood.ts
 --                framingShare). Over monthly_audience_stats' own video set
 --                (analysed videos) and its provenance CASE.
--- An object row exists only where k > 0, as a stored month row does; a
--- missing object reads 0 over the audience's denominator row.
+-- A subject, kind or theme row exists only where k > 0, as a stored month row
+-- does; a missing one reads 0 over the audience's denominator row. Mood rows
+-- come five to an audience with an analysed video that carries a mood, zeros
+-- included, as a stored month_audience_stats row holds all five columns.
 create or replace function public.lens_readings(
   p_client             uuid,
   p_month              date,
@@ -244,7 +246,7 @@ as $$
 $$;
 
 comment on function public.lens_readings(uuid, date, uuid, uuid[], int, timestamptz) is
-  'One month''s denominator, subject, kind, theme (category, p_run) and mood readings per audience, over only p_video_ids, only videos with p_min_dated_comments dated comments, and only comments first captured before p_captured_before. With the defaults: the stored month rows. Denominator rows are counts (k = n); an object row exists where k > 0.';
+  'One month''s denominator, subject, kind, theme (category, p_run) and mood readings per audience, over only p_video_ids, only videos with p_min_dated_comments dated comments, and only comments first captured before p_captured_before. With the defaults: the stored month rows. Denominator rows are counts (k = n); a subject, kind or theme row exists where k > 0; mood rows come five to an audience, zeros included.';
 
 -- The re-check's results (decision D's secondary line, WP2.3): one row per
 -- object per population per computation. Derived and recomputable; the newest

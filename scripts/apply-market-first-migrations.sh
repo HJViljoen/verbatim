@@ -539,7 +539,7 @@ elif [[ "$SET" == "r12" ]]; then
   echo "ABORT: this database holds a tenant UPDATE grant staging does not (or lacks one it has). R12's revoke would leave it"
   echo "       and its check would fail after the commit. Show Claude the list above. Nothing applied."; exit 1
 else
-  echo "  NOTE: differs from staging. MF1 changes no grant, so this does not stop MF1; show Claude the list before the r12 set."
+  echo "  NOTE: differs from staging. ${LABELS[0]} changes no grant, so this does not stop ${LABELS[0]}; show Claude the list before the r12 set."
 fi
 
 HCOLS=""
