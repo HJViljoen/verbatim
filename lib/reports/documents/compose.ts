@@ -609,6 +609,8 @@ export function documentReading(r: BriefReading): DocumentReading {
     // artefact and never from a live loader.
     ...(r.gaps.length ? { gaps: r.gaps.map((g) => ({ ...g })) } : {}),
     ...(r.verdicts.length ? { verdicts: r.verdicts.map((v) => ({ ...v })) } : {}),
+    // WP3.11: the market's lead level, frozen for the first In short tile.
+    ...(r.lead ? { lead: { ...r.lead } } : {}),
   }
 }
 

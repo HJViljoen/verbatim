@@ -22,10 +22,15 @@ import { marketingDeckFixture, refusedDeckFixture } from './fixture'
 const sheets = (data = marketingDeckFixture()) => documentSlides(data)
 
 describe('the sheets', () => {
+  // WP3.11: the map opens on the market (`mk.themes`, `mk.asks`). This
+  // fixture's Overview predates the market blocks, so both are unfilled and
+  // share the one "Not read this month" sheet, which is what a build on it
+  // would print.
   it('cuts the one sheet the blocks fit on, and leaves the rest as they were', () => {
     const titles = sheets().map((s) => `${s.layout}:${s.title}`)
     expect(titles).toEqual([
       'single:In short',
+      'grid:Not read this month',
       'grid:Your subjects',
       'single:The month',
       'single:What changed this month',
@@ -83,7 +88,7 @@ describe('the sheets', () => {
     // own two numbers, and the ratio that gives the sheet a focal point.
     expect(64.5 * 0.902).toBeCloseTo(58, 0)
     expect(42 * 0.902).toBeCloseTo(38, 0)
-    expect(markupText(first)).toContain('September 2026 \u00b7 Sealand \u00b7 as at 28 Sep \u00b7 9 pages')
+    expect(markupText(first)).toContain('September 2026 \u00b7 Sealand \u00b7 as at 28 Sep \u00b7 10 pages')
     expect(markupText(first)).not.toContain('still filling until 30 Oct 2026 \u00b7 Sealand')
   })
 
@@ -123,7 +128,7 @@ describe('the sheets', () => {
     const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
     expect(html).not.toContain('data-sheet="cover"')
     expect(html).toContain('Marketing brief')
-    expect(html).toContain('1 / 9')
+    expect(html).toContain('1 / 10')
   })
 
   // THE CLIENT-FACING HEADER SAYS WHAT THE DECK UNDER IT SAYS (fix pass).
@@ -133,7 +138,7 @@ describe('the sheets', () => {
   it('counts the same sheets on the share link, the viewer and the deck', () => {
     const data = marketingDeckFixture()
     const n = documentSheetCount(data)
-    expect(n).toBe(9)
+    expect(n).toBe(10)
     expect(documentViewerPages(data)).toBe(n)
     const shared = markupText(render(<DocumentShareShell data={data} appUrl="https://app.example.com" />))
     expect(shared).toContain(`${n} pages`)
@@ -152,7 +157,7 @@ describe('the sheets', () => {
     expect(titles).toContain('Not read this month')
     expect(titles.filter((t) => t === 'Not read this month')).toHaveLength(1)
     const unfilled = sheets(data).find((s) => s.title === 'Not read this month')!
-    expect(unfilled.keys).toEqual(['section:mk.subjects', 'section:mk.moves'])
+    expect(unfilled.keys).toEqual(['section:mk.themes', 'section:mk.asks', 'section:mk.subjects', 'section:mk.moves'])
     const text = markupText(render(<DocumentDeck data={data} date="28 Sep 2026" />))
     // Each one still says which section it is and what it was waiting on.
     expect(text).toContain('not recorded')
@@ -172,8 +177,12 @@ describe('the sheets', () => {
   // A stored brief re-renders the sheets it printed: pagination is the
   // artefact's, not today's map's.
   it('leaves a brief built before the shared sheet exactly as it paginated', () => {
+    // Every section on a sheet of its own, the unfilled ones included, as the
+    // brief was built.
     const data = refusedDeckFixture({ unfilledSheet: undefined })
-    expect(sheets(data).map((s) => s.title)).toEqual(sheets().map((s) => s.title))
+    const titles = sheets(data).map((s) => s.title)
+    expect(titles).not.toContain('Not read this month')
+    for (const t of ['What your market talked about', 'Asked, complained about, wished for', 'Your subjects', 'Your moves']) expect(titles).toContain(t)
   })
 })
 
@@ -551,7 +560,9 @@ describe('the sheet’s chrome', () => {
   // styles across one 1123px line.
   it('does not repeat a sheet’s title in its context line', () => {
     const text = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />))
-    const sheet = text.split('2 / 9')[0].split('1 / 9')[1]
+    // The subjects sheet is the third since WP3.11 (the market's unfilled
+    // sections share the second).
+    const sheet = text.split('3 / 10')[0].split('2 / 10')[1]
     expect(sheet).toContain('Your subjects')
     expect(sheet).not.toContain('Your subjects · September 2026')
     // And a WRITTEN page whose slide title is its page name, for the same
