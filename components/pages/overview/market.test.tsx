@@ -80,10 +80,15 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('If you made it in pink and a bigger size I would buy it immediately')
   })
 
-  it('the subjects on the market, each with its calibration word, and a subject never read says when it is', () => {
+  it('the subjects on the market, each with its calibration word, and a subject never read says so and promises no date', () => {
     expect(text).toContain('The market by subject')
     expect(text).toContain('Looks & style provisional')
-    expect(text).toContain('Buying & delivery first reading with the 27 Sep update')
+    expect(text).toContain('Buying & delivery no reading yet')
+  })
+
+  it('prints no page footnote under the blocks (25 Sep rulings)', () => {
+    const data = { ...marketFrontFixture(), notes: [{ kind: 'clustering_unrecorded' as const, text: 'We did not record how themes were grouped for Sep 2026.', months: ['2026-09-01'] }] }
+    expect(read(<OverviewPage data={data as never} />)).not.toContain('We did not record how themes were grouped')
   })
 
   it('brands in one line, naming Competitive by its current label', () => {

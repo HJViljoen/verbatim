@@ -2,7 +2,7 @@ import type { RenderMode } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { byMarketSize, CALIBRATION_TAG, marketLevel } from '@/lib/pages/overview-market'
 import type { OverviewData, SubjectRow } from '@/lib/pages/overview'
@@ -23,10 +23,19 @@ const share = (k: number | null | undefined, n: number | null | undefined): stri
   return l?.kind === 'share' ? l.text : '·'
 }
 
-/** A row's tag: its calibration word, or when it is first read. */
-function rowTag(r: SubjectRow, nextUpdate: string | null): string | null {
+/**
+ * A row's tag: its calibration word, or that it has no reading yet.
+ *
+ * NOT "FIRST READING WITH THE {DATE} UPDATE". §2.2's print says that of
+ * Buying & delivery because its membership was judged on Fri 25 and the 27 Sep
+ * run writes its first rows; the page cannot see whether a subject's
+ * membership has been judged, and a subject named after the back-read with no
+ * membership is read by no update. So the row says what is true of every such
+ * subject, and promises no date.
+ */
+function rowTag(r: SubjectRow): string | null {
   if (r.calibration === 'failed') return CALIBRATION_TAG.failed
-  if (r.market?.k == null) return nextUpdate ? `first reading with the ${shortDate(nextUpdate)} update` : 'not read yet'
+  if (r.market?.k == null) return 'no reading yet'
   return CALIBRATION_TAG[r.calibration ?? 'provisional']
 }
 
@@ -76,7 +85,6 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
   const rows = [...b.rows].sort(byMarketSize)
   const n = b.market?.n ?? null
   const prev = b.market?.prev ?? null
-  const next = data.reading?.nextUpdate ?? null
   const axis = barAxis(rows.flatMap((r) => [
     printsFigures(r) && n ? (r.market?.k as number) / n : null,
     printsFigures(r) && prev?.n && r.marketPrev?.k != null ? r.marketPrev.k / prev.n : null,
@@ -98,7 +106,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
           </thead>
           <tbody>
             {rows.map((r) => {
-              const tag = rowTag(r, next)
+              const tag = rowTag(r)
               const figures = printsFigures(r)
               return (
                 <tr key={r.id}>
@@ -127,7 +135,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
           </div>
           {rows.map((r) => {
-            const tag = rowTag(r, next)
+            const tag = rowTag(r)
             const figures = printsFigures(r)
             const k = r.market?.k ?? null
             const under = figures && k != null && marketLevel(k, n)?.kind === 'count'

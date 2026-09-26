@@ -23,6 +23,7 @@ import { MARKET_SENTENCE_TITLE } from './sentence'
 import { MARKET_KINDS_TITLE } from './market-kinds'
 import { MARKET_SUBJECTS_TITLE } from './market-subjects'
 import { MARKET_BRANDS_TITLE } from './rivals'
+import { isMarketPage } from './market'
 
 // Overview — the page (Phase 1 WP11, design §3 OV0–OV5; ported to the artboard
 // in Block D wave 2, `mock-sealand/artboards/Main.dc.html`).
@@ -270,7 +271,10 @@ export function OverviewPage({
             </Tile>
           ))}
         </PageGrid>
-        {data.notes.length > 0 ? (
+        {/* NO FOOTNOTE UNDER YOUR MARKET (25 Sep rulings): its blocks print
+            levels and each block's one chip says why nothing is compared, so
+            the reading's caveats print only under a stored Phase 1 copy. */}
+        {data.notes.length > 0 && !isMarketPage(data) ? (
           <p className="m-0 text-[11px] text-muted-foreground">
             {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading
                 layer merges the series' notes by the union of their months and
