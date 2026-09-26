@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
-import { changeWords, ledgerLines, ledgerMonths, otherRows, reachCell, termsMoved, type ReachRow } from './what-we-changed'
+import { changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
 
 // Sealand's change log around September (GC F2, staging's copy of production
 // to 20 Sep): the 9 Sep swap (seven terms out, seven in, one reconstructed row
@@ -48,8 +48,8 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
   })
 
   it('lists the terms each change moved', () => {
-    expect(lines[0].terms).toEqual({ added: ['frtg', 'handmade bag', 'sustainable fashion', 'travel gear'], removed: [] })
-    expect(lines[1].terms?.removed).toEqual(OUT)
+    expect(lines[0].items).toEqual({ added: ['frtg', 'handmade bag', 'sustainable fashion', 'travel gear'], removed: [] })
+    expect(lines[1].items?.removed).toEqual(OUT)
   })
 
   it('carries each month it touched, on the market’s population, the newest measure, read with its update', () => {
@@ -97,5 +97,42 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
 
   it('reads a swap written as one before and one after list', () => {
     expect(termsMoved([{ surface: 'terms', field: null, before: ['a', 'b'], after: ['b', 'c'] }])).toEqual({ added: ['c'], removed: ['a'] })
+  })
+
+  // Staging's 17 Sep rows (read 26 Sep): the script's 16:02 row gave four new
+  // rivals their accounts, and a 16:24 row added The North Face's TikTok. Both
+  // printed "The accounts we read changed" before (WP1.6 review).
+  const H1 = { Freitag: { tiktok: 'freitaglab', youtube: 'UCHyhAHfoZOUw0zRCn1JSAMg', instagram: 'freitaglab' }, Cotopaxi: { tiktok: 'cotopaxiofficial', youtube: 'UCjGWYNy7xrGOJ72AeMBb-hA', instagram: 'cotopaxi' }, Rareform: { tiktok: 'rareform', instagram: 'rareform' } }
+  const H2 = { ...H1, Patagonia: { tiktok: 'patagonia', youtube: 'UCl3xZ-f3cQhOHvH6f-7-ssQ', instagram: 'patagonia' }, 'Old School': { tiktok: 'oldschool_ltd', instagram: 'oldschool_ltd' }, 'The North Face': { youtube: 'UCNfWDbERpf34FsSWIpqGD0Q', instagram: 'thenorthface' }, 'Freedom of Movement': { tiktok: 'fombrand', instagram: 'fombrand' } }
+  const H3 = { ...H2, 'The North Face': { tiktok: 'thenorthface', youtube: 'UCNfWDbERpf34FsSWIpqGD0Q', instagram: 'thenorthface' } }
+  const HANDLES = [
+    row({ id: 'h-1602', changed_at: '2026-09-17T16:02:56.854Z', surface: 'handles' as never, field: 'competitor_handles', before: H1, after: H2, actor_kind: 'script', source: 'trigger' }),
+    row({ id: 'h-1624', changed_at: '2026-09-17T16:24:22.289Z', surface: 'handles' as never, field: 'competitor_handles', before: H2, after: H3, actor_kind: 'script', source: 'trigger' }),
+  ]
+
+  it('names whose accounts moved, so two changes on one day read apart (17 Sep, staging)', () => {
+    const changes = changesFromLog(HANDLES)
+    expect(changes).toHaveLength(2)
+    const words = new Map(changes.map((c) => [c.id, changeWords(c, HANDLES)]))
+    expect(words.get('h-1602')).toBe('Accounts added for Freedom of Movement, Old School, Patagonia and The North Face')
+    expect(words.get('h-1624')).toBe('A TikTok account added for The North Face')
+  })
+
+  it('names your own accounts by platform, and a changed or dropped handle', () => {
+    const own = row({ id: 'own', changed_at: '2026-08-17T07:05:43.716Z', surface: 'handles' as never, field: 'own_handles', before: null, after: { tiktok: 'sealandgear', youtube: 'UCCthtmYgmon7h0meZaC1FEQ', instagram: 'sealandgear' } })
+    expect(handlesWords([own])).toBe('Your Instagram, TikTok and YouTube accounts added')
+    const moved = row({ id: 'nf', changed_at: '2026-09-18T00:00:00.000Z', surface: 'handles' as never, field: 'competitor_handles', before: H3, after: { ...H1, 'The North Face': { tiktok: 'tnf', youtube: 'UCNfWDbERpf34FsSWIpqGD0Q' } } })
+    expect(handlesWords([moved])).toBe(
+      'Accounts dropped for Freedom of Movement, Old School and Patagonia; The North Face’s TikTok account changed; The North Face’s Instagram account taken out',
+    )
+    expect(handlesWords([row({ id: 'same', changed_at: '2026-09-18T00:00:00.000Z', surface: 'handles' as never, field: 'competitor_handles', before: H1, after: H1 })])).toBeNull()
+  })
+
+  it('counts the rivals in and out, and lists them beside the words (9 Sep, staging)', () => {
+    const rivals = row({ id: 'r-0909', changed_at: '2026-09-09T16:24:15.000Z', surface: 'rivals' as never, field: 'competitor_names', before: ['Cotopaxi', 'Freitag', 'Patagonia', 'Poler', 'Topo Designs'], after: ['Cotopaxi', 'Freitag', 'Rareform'] })
+    expect(changeWords(changesFromLog([rivals])[0], [rivals])).toBe('3 rivals out and 1 in')
+    expect(rivalsMoved([rivals])).toEqual({ added: ['Rareform'], removed: ['Patagonia', 'Poler', 'Topo Designs'] })
+    const line = ledgerLines({ changes: changesFromLog([rivals]), rows: [rivals], reach: [], runFinish: new Map() })[0]
+    expect(line.items).toEqual({ added: ['Rareform'], removed: ['Patagonia', 'Poler', 'Topo Designs'] })
   })
 })

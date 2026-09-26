@@ -54,7 +54,7 @@ export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
   )
 }
 
-type Line = LedgerLine & { terms?: { added: string[]; removed: string[] } | null }
+type Line = LedgerLine & { items?: { added: string[]; removed: string[] } | null }
 
 export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[]; month: string; prevMonth: string | null }) {
   if (lines.length === 0) {
@@ -81,11 +81,11 @@ export function TheRecord({ lines, month, prevMonth }: { lines: readonly Line[];
             <span className="font-mono text-[12px] leading-[1.6] tabular-nums text-secondary-foreground">{shortDate(l.date)}</span>
             <span className="flex min-w-0 flex-col gap-1">
               <span className="text-[13px] font-medium leading-[1.5]">{l.words}</span>
-              {l.terms && (l.terms.added.length > 0 || l.terms.removed.length > 0) ? (
+              {l.items && (l.items.added.length > 0 || l.items.removed.length > 0) ? (
                 <span className="font-mono text-[12px] leading-[1.6] text-secondary-foreground">
-                  {l.terms.added.length > 0 ? <>in: {l.terms.added.join(', ')}</> : null}
-                  {l.terms.added.length > 0 && l.terms.removed.length > 0 ? ' · ' : null}
-                  {l.terms.removed.length > 0 ? <>out: {l.terms.removed.join(', ')}</> : null}
+                  {l.items.added.length > 0 ? <>in: {l.items.added.join(', ')}</> : null}
+                  {l.items.added.length > 0 && l.items.removed.length > 0 ? ' · ' : null}
+                  {l.items.removed.length > 0 ? <>out: {l.items.removed.join(', ')}</> : null}
                 </span>
               ) : null}
             </span>

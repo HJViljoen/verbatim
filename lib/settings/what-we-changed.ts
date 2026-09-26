@@ -1,5 +1,5 @@
 import type { ConfigChange } from '../config-log'
-import { fmtInt, longMonth } from '../format'
+import { fmtInt, longMonth, platformLabel } from '../format'
 import { activeCommunities, type OurChange } from '../reading/comparability'
 import { monthStartOf } from '../reading/month-key'
 import type { LedgerLine } from '../pages/overview-market/change'
@@ -100,6 +100,97 @@ function communitiesMoved(rows: readonly Pick<ConfigChange, 'surface' | 'before'
 
 const plural = (n: number, one: string, many: string): string => `${fmtInt(n)} ${n === 1 ? one : many}`
 
+/** "a", "a and b", "a, b and c". */
+const andList = (names: readonly string[]): string =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+
+/** A platform → handle map off a stored side; anything else is empty. */
+function handleMap(side: unknown): Map<string, string> {
+  const out = new Map<string, string>()
+  if (!side || typeof side !== 'object' || Array.isArray(side)) return out
+  for (const [platform, handle] of Object.entries(side as Record<string, unknown>)) {
+    if (typeof handle === 'string' && handle.trim()) out.set(platform, handle.trim())
+  }
+  return out
+}
+
+/** A brand → (platform → handle) map off a stored `competitor_handles` side. */
+function brandHandles(side: unknown): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>()
+  if (!side || typeof side !== 'object' || Array.isArray(side)) return out
+  for (const [brand, handles] of Object.entries(side as Record<string, unknown>)) {
+    const m = handleMap(handles)
+    if (brand.trim() && m.size > 0) out.set(brand.trim(), m)
+  }
+  return out
+}
+
+/** The platforms two maps disagree on: added, taken out, and changed. */
+function platformsMoved(before: Map<string, string>, after: Map<string, string>): { added: string[]; removed: string[]; changed: string[] } {
+  const order = (ps: string[]) => ps.sort((a, b) => platformLabel(a).localeCompare(platformLabel(b)))
+  return {
+    added: order([...after.keys()].filter((p) => !before.has(p))),
+    removed: order([...before.keys()].filter((p) => !after.has(p))),
+    changed: order([...after.keys()].filter((p) => before.has(p) && before.get(p) !== after.get(p))),
+  }
+}
+
+/** "a TikTok account", "TikTok and YouTube accounts". */
+const accountsWord = (platforms: readonly string[]): string =>
+  platforms.length === 1 ? `a ${platformLabel(platforms[0])} account` : `${andList(platforms.map(platformLabel))} accounts`
+
+/** One field's first `before` and last `after` in a group of rows. */
+function span(rows: readonly ConfigChange[]): { before: unknown; after: unknown } | null {
+  if (rows.length === 0) return null
+  const sorted = [...rows].sort((a, b) => Date.parse(a.changed_at) - Date.parse(b.changed_at) || a.id.localeCompare(b.id))
+  return { before: sorted[0].before, after: sorted[sorted.length - 1].after }
+}
+
+/**
+ * A `handles` change in client words, naming what moved (WP1.6 review: two
+ * changes on 17 Sep both read "The accounts we read changed"). Your own
+ * accounts by platform; a tracked brand's by the brand and, where the brand
+ * was already tracked, the platform: "Accounts added for Freedom of Movement,
+ * Old School, Patagonia and The North Face", "A TikTok account added for The
+ * North Face". Null where nothing readable moved.
+ */
+export function handlesWords(rows: readonly ConfigChange[]): string | null {
+  const parts: { s: string; proper: boolean }[] = []
+  const own = span(rows.filter((r) => r.field === 'own_handles'))
+  if (own) {
+    const m = platformsMoved(handleMap(own.before), handleMap(own.after))
+    const yours = (ps: string[]) => `your ${andList(ps.map(platformLabel))} ${ps.length === 1 ? 'account' : 'accounts'}`
+    if (m.added.length > 0) parts.push({ s: `${yours(m.added)} added`, proper: false })
+    if (m.changed.length > 0) parts.push({ s: `${yours(m.changed)} changed`, proper: false })
+    if (m.removed.length > 0) parts.push({ s: `${yours(m.removed)} taken out`, proper: false })
+  }
+  const theirs = span(rows.filter((r) => r.field !== 'own_handles'))
+  if (theirs) {
+    const before = brandHandles(theirs.before)
+    const after = brandHandles(theirs.after)
+    const sort = (xs: string[]) => xs.sort((a, b) => a.localeCompare(b))
+    const added = sort([...after.keys()].filter((b) => !before.has(b)))
+    const dropped = sort([...before.keys()].filter((b) => !after.has(b)))
+    if (added.length > 0) parts.push({ s: `accounts added for ${andList(added)}`, proper: false })
+    if (dropped.length > 0) parts.push({ s: `accounts dropped for ${andList(dropped)}`, proper: false })
+    for (const brand of sort([...after.keys()].filter((b) => before.has(b)))) {
+      const m = platformsMoved(before.get(brand) as Map<string, string>, after.get(brand) as Map<string, string>)
+      if (m.added.length > 0) parts.push({ s: `${accountsWord(m.added)} added for ${brand}`, proper: false })
+      if (m.changed.length > 0) parts.push({ s: `${brand}’s ${andList(m.changed.map(platformLabel))} ${m.changed.length === 1 ? 'account' : 'accounts'} changed`, proper: true })
+      if (m.removed.length > 0) parts.push({ s: `${brand}’s ${andList(m.removed.map(platformLabel))} ${m.removed.length === 1 ? 'account' : 'accounts'} taken out`, proper: true })
+    }
+  }
+  if (parts.length === 0) return null
+  const [first, ...rest] = parts
+  const lead = first.proper ? first.s : `${first.s.charAt(0).toUpperCase()}${first.s.slice(1)}`
+  return [lead, ...rest.map((p) => p.s)].join('; ')
+}
+
+/** The rivals a group of `rivals` rows added and dropped, each once. */
+export function rivalsMoved(rows: readonly Pick<ConfigChange, 'surface' | 'before' | 'after'>[]): { added: string[]; removed: string[] } {
+  return moved(rows.filter((r) => r.surface === 'rivals'))
+}
+
 /** "7 search terms out and 7 in", "5 search terms added", from the counts. */
 function outAndIn(added: number, removed: number, one: string, many: string, gone = 'taken out'): string | null {
   if (added > 0 && removed > 0) return `${plural(removed, one, many)} out and ${fmtInt(added)} in`
@@ -133,7 +224,14 @@ export function changeWords(change: OurChange, rows: readonly ConfigChange[]): s
     if (words) return words
   }
   if (change.surface === 'rivals') {
-    const words = outAndIn(moved(mine).added.length, moved(mine).removed.length, 'rival', 'rivals')
+    // The count here, the names on the line's own "in: … · out: …" beside it
+    // (`ledgerLines` `items`), as the search terms print.
+    const { added, removed } = rivalsMoved(mine)
+    const words = outAndIn(added.length, removed.length, 'rival', 'rivals', 'dropped')
+    if (words) return words
+  }
+  if (change.surface === 'handles') {
+    const words = handlesWords(mine)
     if (words) return words
   }
   return SURFACE_SENTENCE[change.surface] ?? (SURFACE_WORDS as Record<string, string>)[change.surface] ?? 'A change to how we read'
@@ -150,7 +248,7 @@ export function ledgerLines(input: {
   rows: readonly ConfigChange[]
   reach: readonly ReachRow[]
   runFinish: ReadonlyMap<string, string>
-}): (LedgerLine & { terms: { added: string[]; removed: string[] } | null })[] {
+}): (LedgerLine & { items: { added: string[]; removed: string[] } | null })[] {
   const out = input.changes.map((c) => {
     const ids = new Set(c.rowIds ?? [c.id])
     const newest = new Map<string, ReachRow>()
@@ -170,7 +268,9 @@ export function ledgerLines(input: {
       }))
     const own = months.find((m) => m.month === monthStartOf(c.changedAt)) ?? null
     const mine = input.rows.filter((r) => ids.has(r.id))
-    const terms = c.surface === 'terms' ? termsMoved(mine) : null
+    // WHAT THE LINE NAMES BESIDE ITS WORDS: the search terms, or the rivals,
+    // it took in and out.
+    const items = c.surface === 'terms' ? termsMoved(mine) : c.surface === 'rivals' ? rivalsMoved(mine) : null
     return {
       changeId: c.id,
       date: c.changedAt,
@@ -178,7 +278,7 @@ export function ledgerLines(input: {
       words: changeWords(c, input.rows),
       reach: own ? { month: own.month, touched: own.touched, of: own.of, readWith: own.readWith as string } : null,
       months,
-      terms: terms && (terms.added.length > 0 || terms.removed.length > 0) ? terms : null,
+      items: items && (items.added.length > 0 || items.removed.length > 0) ? items : null,
     }
   })
   return out.sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.changeId.localeCompare(b.changeId))
