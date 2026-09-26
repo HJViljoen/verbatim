@@ -532,8 +532,9 @@ export interface RecordLine {
    *  that stops it, on the category's base: "64 of 625 September category
    *  videos" (deploy 2 review: the line's own cell prints the market's 65 of
    *  654, under a tenth, beside "Stops August against September, for themes",
-   *  the artboard's sub-caption). Null elsewhere. Additive. */
-  stopNote?: string | null
+   *  the artboard's sub-caption). `line` is the stop line (one of `stops`) it
+   *  sits under. Null elsewhere. Additive. */
+  stopNote?: { line: string; text: string } | null
 }
 
 export interface RecordGroup {
@@ -614,12 +615,17 @@ export function reachCaption(line: Pick<Line, 'surface' | 'items'>): string | nu
 /** The category count behind the first measured stop that holds for themes
  *  and not for the market: the larger share of the pair's two months, as
  *  rule 3 reads it. Null where there is none, or no category measure. */
-function themesStopNote(stops: readonly StopEntry[], category: NonNullable<LedgerLine['months']>): string | null {
+function themesStopNote(stops: readonly StopEntry[], lines: readonly string[], category: NonNullable<LedgerLine['months']>): { line: string; text: string } | null {
   const stop = stops.find((e) => !e.unmeasured && e.views.includes('themes') && !e.views.includes('market'))
   if (!stop) return null
   const sides = category.filter((m) => (m.month === stop.pair.prevMonth || m.month === stop.pair.month) && m.of > 0)
   const side = sides.sort((a, b) => b.touched / b.of - a.touched / a.of)[0]
-  return side && side.touched > 0 ? `${fmtInt(side.touched)} of ${fmtInt(side.of)} ${longMonth(side.month)} category videos` : null
+  if (!side || !(side.touched > 0)) return null
+  // Under its own stop line: the pair's words, or the compressed line that
+  // holds it ("Pairs with September, for themes").
+  const own = stopLines([stop])[0]
+  const line = lines.find((x) => x === own) ?? lines.find((x) => x.includes(', for themes') && !x.includes('until measured')) ?? null
+  return line ? { line, text: `${fmtInt(side.touched)} of ${fmtInt(side.of)} ${longMonth(side.month)} category videos` } : null
 }
 
 /** "none" needs a word only where a reader would ask why. */
@@ -670,13 +676,14 @@ export function recordView(input: {
     })
     const stops = input.pair && change ? stopsOf(change, input.pair, pairs) : null
     if (stops) rawStops.set(l.changeId, stops)
+    const lines = stops ? stopLines(stops, true) : null
     return {
       line: l,
       cells,
       caption: cells.some((c) => c.state === 'measured') ? reachCaption(l) : null,
-      stops: stops ? stopLines(stops, true) : null,
+      stops: lines,
       noneNote: stops && stops.length === 0 ? (gather ? GATHER_NONE_NOTE : NONE_NOTE[l.surface] ?? null) : null,
-      stopNote: stops ? themesStopNote(stops, l.categoryMonths) : null,
+      stopNote: stops && lines ? themesStopNote(stops, lines, l.categoryMonths) : null,
     }
   }
 

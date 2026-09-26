@@ -209,7 +209,7 @@ function StopMark() {
 /** What a change stops, each comparison on its own line with the ⊘; "none"
  *  (and why, where a reader would ask) where it stops none; and under a stop
  *  for themes alone, the category count that stops it. */
-function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; noneNote: string | null; note?: string | null }) {
+function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; noneNote: string | null; note?: { line: string; text: string } | null }) {
   if (stops.length === 0) {
     return (
       <span className="flex flex-col gap-1">
@@ -221,13 +221,16 @@ function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; non
   return (
     <span className="flex flex-col gap-1">
       {stops.map((s) => (
-        <span key={s} className="flex items-start gap-2 text-[15px] leading-[22px] [text-wrap:pretty]">
-          <StopMark />
-          <span className="sr-only">Stops </span>
-          <span>{s}</span>
+        <span key={s} className="flex flex-col gap-0.5">
+          <span className="flex items-start gap-2 text-[15px] leading-[22px] [text-wrap:pretty]">
+            <StopMark />
+            <span className="sr-only">Stops </span>
+            <span>{s}</span>
+          </span>
+          {/* The category count that stops it, under its own line. */}
+          {note && note.line === s ? <span data-copy="level" className="pl-[22px] text-[13px] leading-[1.45] text-muted-foreground [text-wrap:pretty]">{note.text}</span> : null}
         </span>
       ))}
-      {note ? <span data-copy="level" className="pl-[22px] font-mono text-[13px] leading-[1.45] tabular-nums text-muted-foreground [text-wrap:pretty]">{note}</span> : null}
     </span>
   )
 }
@@ -403,7 +406,7 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
                 <RuleMark state={r.state} />
                 <span className="sr-only">{STATE_WORDS[r.state]}: </span>
                 {r.counts ? (
-                  <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                  <span className="inline-flex flex-wrap items-baseline">
                     <Counted figure={r.counts.figure} word={r.counts.word} base={r.counts.base} size="row" />
                     {r.view === 'themes' ? <span className="text-[15px] text-secondary-foreground">, for themes</span> : null}
                   </span>

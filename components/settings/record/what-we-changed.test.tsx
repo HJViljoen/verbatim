@@ -133,7 +133,9 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     // carries the category count that makes it (the artboard's sub-caption).
     expect(t).toContain('64 of 625 September category videos')
     const gate = f.view.groups[1].lines.find((l) => l.line.surface === 'gate_rule')!
-    expect(gate.stopNote).toBe('64 of 625 September category videos')
+    expect(gate.stopNote).toEqual({ line: 'August against September, for themes', text: '64 of 625 September category videos' })
+    // Under its own stop line, not after the last one.
+    expect(t).toContain('Stops August against September, for themes 64 of 625 September category videos Stops September against October')
     expect(f.view.groups.flatMap((g) => g.lines).filter((l) => l.stopNote).length).toBe(1)
     expect(t).toContain('Stops Pairs with August or September, for brands and themes, until measured')
     // The capped update is a gather flag: it stops nothing, and says so.
