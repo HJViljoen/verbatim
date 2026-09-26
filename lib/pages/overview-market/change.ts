@@ -214,15 +214,34 @@ export function changeLead(block: ChangeBlock): { body: string; figures: FigureT
 }
 
 /** The pair's measured added-only figure (`PairRow.addedOnly`) with its share
- *  word, where one was measured and is above none: a zero is never printed as
- *  "none of September came from…" (the pair then refused on the searches we
- *  removed, which the sentence does not name). */
-export function measuredAddedOnly(block: ChangeBlock): { k: number; n: number; word: string } | null {
+ *  word and its share, where one was measured and is above none: a zero is
+ *  never printed as "none of September came from…" (the pair then refused on
+ *  the searches we removed, which the sentence does not name). */
+export function measuredAddedOnly(block: ChangeBlock): { k: number; n: number; word: string; share: number } | null {
   const added = block.pair?.row?.addedOnly
-  if (!added || shareOf(added) == null || !(added.k > 0)) return null
+  const share = added ? shareOf(added) : null
+  if (!added || share == null || !(added.k > 0)) return null
   const word = monthShareWord(added.k, added.n)
-  return word ? { k: added.k, n: added.n, word } : null
+  return word ? { k: added.k, n: added.n, word, share } : null
 }
+
+/**
+ * THE FIGURE PRINTS AS A REASON ONLY WHERE IT IS ONE (deploy 2 review). The
+ * strict count decides whether the pair is refused on what we search; the
+ * added-only figure is another population (only the searches first run in the
+ * later month), and it can be tiny where the strict count is large: July
+ * against August is refused on searches at 170 of 351 (the September terms read
+ * back into August), while August's added-only figure is 2 of 377. Printed as
+ * the refusal's reason, "under a tenth of August came from searches we added in
+ * August (2 of 377)" gave a cause that could never refuse a pair, beside a chip
+ * that names September. So the figure is the reason only where it reaches the
+ * judge's own line itself: the refuse line (a tenth) for the sentence that says
+ * why the pair is not compared, the flag line (1%) for a stat cell, which
+ * prints a measure that does not hold. Below its line the block prints the
+ * pair's refusal with no figure.
+ */
+const addedOnlyAtLine = (added: { share: number }, line: 'refuse' | 'flag'): boolean =>
+  line === 'refuse' ? modeForShare(added.share) === 'refuse' : modeForShare(added.share) !== 'comparable'
 
 /** The figures of the one sentence, as tokens. */
 function addedOnlyFigures(month: string, added: { k: number; n: number }): FigureTable {
@@ -238,8 +257,9 @@ function addedOnlyFigures(month: string, added: { k: number; n: number }): Figur
  * (the approved preview's sentence, the 26 Sep ruling's staging figure).
  *
  * Only where the pair is REFUSED ON WHAT WE SEARCH (the strict count's rule 2
- * decides) and the row measured WP1.8's figure (`PairRow.addedOnly`); null
- * otherwise, and the block then prints the pair's refusal with no figure,
+ * decides) and the row measured WP1.8's figure (`PairRow.addedOnly`) at a
+ * tenth or more (`addedOnlyAtLine`); null otherwise, and the block then prints
+ * the pair's refusal with no figure,
  * never the strict count. One denominator: the later month's market videos.
  * The share word comes from `monthShareWord`'s ladder.
  */
@@ -250,7 +270,7 @@ export function measuredSearchSentence(block: ChangeBlock): { body: string; figu
   const searches = pair.reasons.find((r) => r.kind === 'searches' && modeForShare(r.share) === 'refuse')
   if (!searches) return null
   const added = measuredAddedOnly(block)
-  if (!added) return null
+  if (!added || !addedOnlyAtLine(added, 'refuse')) return null
   const month = longMonth(pair.month)
   const read = block.readWith ? `, read with the ${shortDate(block.readWith)} update` : ''
   return {
@@ -450,11 +470,12 @@ export function whyCells(block: ChangeBlock): WhyCell[] {
 
   // Rule 2's strict share decides WHETHER the cell prints (a flag or worse);
   // WP1.8's one figure is WHAT it prints (the 26 Sep ruling): "356 of 654
-  // September videos came from searches we added in September". The strict
+  // September videos came from searches we added in September", and only where
+  // that figure itself reaches the flag line (`addedOnlyAtLine`). The strict
   // count is never printed here, and with no measured figure there is no cell.
   const searchShare = pairShare(row.searchOutside.prev, row.searchOutside.curr)
   const added = measuredAddedOnly(block)
-  if (searchShare != null && searchShare >= COMPARE_FLAG_SHARE && added) {
+  if (searchShare != null && searchShare >= COMPARE_FLAG_SHARE && added && addedOnlyAtLine(added, 'flag')) {
     cells.push({
       key: 'searches',
       figure: added.k,

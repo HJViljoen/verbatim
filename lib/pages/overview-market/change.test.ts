@@ -117,6 +117,44 @@ describe('what changed, and what is ours (plan §2.2 block 10)', () => {
     expect(measuredSearchSentence(block({ pair: pair('ended', flagged) }))).toBeNull()
   })
 
+  it('never gives a figure under the line as the refusal’s reason: July against August at 2 of 377 (deploy 2 review)', () => {
+    // Staging's (Jul, Aug) row: refused on searches at 170 of 351 strict (the
+    // September terms read back into August), with August's added-only figure
+    // 2 of 377. The figure is not why the pair is refused, so it is not printed
+    // as the reason, in the sentence or in a cell; the refusal names its change.
+    const JUL_AUG: PairRow = {
+      ...ROW,
+      prevMonth: '2026-07-01',
+      month: '2026-08-01',
+      searchOutside: { prev: { k: 20, n: 36 }, curr: { k: 170, n: 351 } },
+      addedOnly: { k: 2, n: 377 },
+      depth: { prevMedian: 20, currMedian: 21 },
+    }
+    const julAug = comparabilityOf('2026-07-01', '2026-08-01', {
+      row: JUL_AUG,
+      changes: CHANGES,
+      view: 'market',
+      later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'run-27sep' },
+    })
+    expect(julAug.mode).toBe('refuse')
+    const b = block({ prevMonth: '2026-07-01', month: '2026-08-01', pair: julAug })
+    expect(measuredSearchSentence(b)).toBeNull()
+    expect(changeLead(b)?.body).toBe('Not read as a change: we changed our searches in September.')
+    expect(changeLead(b)?.figures).toEqual({})
+    expect(whyCells(b).map((c) => c.key)).not.toContain('searches')
+    expect(JSON.stringify(whyNotCompared(b))).not.toMatch(/377|under a tenth/)
+  })
+
+  it('prints the sentence only at a tenth or more; a smaller figure is a cell at the flag line, never the reason', () => {
+    const small: PairRow = { ...ROW, addedOnly: { k: 40, n: 654 } } // 6.1%
+    const b = block({ pair: pair('ended', small) })
+    expect(measuredSearchSentence(b)).toBeNull()
+    expect(changeLead(b)?.body).toBe('Not read as a change: we changed our searches in September.')
+    expect(whyCells(b)[0]).toMatchObject({ key: 'searches', figure: 40, base: { word: 'of', value: 654 } })
+    const atLine: PairRow = { ...ROW, addedOnly: { k: 66, n: 654 } } // 10.1%
+    expect(measuredSearchSentence(block({ pair: pair('ended', atLine) }))?.body).toContain(': about a tenth of September came from searches we added in September (')
+  })
+
   it('without a measured row (MF1 not applied) prints the refusal in its own words', () => {
     const b = block({ pair: pair('ended', null), readWith: null })
     expect(changeLead(b)).toEqual({ body: 'Not read as a change: we changed our searches in September.', figures: {} })
