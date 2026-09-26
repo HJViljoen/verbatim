@@ -7,7 +7,7 @@ import { surface } from '@/lib/nav'
 import { byMarketSize, CALIBRATION_TAG, marketLevel } from '@/lib/pages/overview-market'
 import type { OverviewData, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { BarLegend, BaseHead, InnerLine, LevelBar, RULE, SCALE, barAxis } from './market'
+import { BarLegend, BaseHead, InnerLine, LevelBar, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
 
 // "The market by subject" (market-first WP1.6, plan §2.2 block 6): each
 // subject's market rows (the pooled side, decision E), ranked by size, with
@@ -125,14 +125,15 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
   // THE BOARD'S COLUMNS, WITHOUT ITS RANK: the figure columns are the same
   // three 64px columns, so on the full-width page they line up with the
   // board's "Videos", "Sep" and "Aug" above.
-  const cols = 'grid-cols-[minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]'
+  // On a phone the label and the three figure columns only (`PHONE_COLS`).
+  const cols = `${PHONE_COLS} sm:grid-cols-[minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
   return (
     <BlockFrame title={MARKET_SUBJECTS_TITLE} mode={mode} footer={footer} roomy>
       <div className="-mx-1 overflow-x-auto px-1">
-        <div className="min-w-[560px]" role="table">
-          <div role="row" className={`grid ${cols} items-end gap-x-4 ${RULE.head}`}>
+        <div className="sm:min-w-[560px]" role="table">
+          <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
             <span role="columnheader" className={SCALE.head}>Subject</span>
-            <span role="columnheader"><BarLegend month={data.month} prevMonth={prev?.month ?? null} /></span>
+            <span role="columnheader" className={PHONE_HIDDEN}><BarLegend month={data.month} prevMonth={prev?.month ?? null} /></span>
             <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
             <span role="columnheader"><BaseHead month={data.month} n={n} mode={mode} /></span>
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
@@ -143,14 +144,16 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
             const k = r.market?.k ?? null
             const under = figures && k != null && marketLevel(k, n)?.kind === 'count'
             return (
-              <div key={r.id} role="row" className={`grid ${cols} min-h-12 items-center gap-x-4 py-2 ${RULE.row}`}>
+              <div key={r.id} role="row" className={`grid ${cols} min-h-12 items-center py-2 ${RULE.row}`}>
                 <span role="rowheader" className="flex min-w-0 flex-col gap-0.5">
-                  <span className={`truncate ${SCALE.row}`}>{r.label}</span>
+                  <span className={`sm:truncate ${SCALE.row}`}>{r.label}</span>
                   {tag ? <span className={SCALE.tag}>{tag}</span> : null}
                 </span>
                 {figures && !under ? (
-                  <LevelBar share={n ? (k as number) / n : null} prevShare={prev?.n && r.marketPrev?.k != null ? r.marketPrev.k / prev.n : null} axis={axis} />
-                ) : under ? <span className="text-[13px] text-muted-foreground">under 10, a count only</span> : <span />}
+                  <span className={`block ${PHONE_HIDDEN}`}>
+                    <LevelBar share={n ? (k as number) / n : null} prevShare={prev?.n && r.marketPrev?.k != null ? r.marketPrev.k / prev.n : null} axis={axis} />
+                  </span>
+                ) : under ? <span className={`text-[13px] text-muted-foreground ${PHONE_OWN_LINE}`}>under 10, a count only</span> : <span className={PHONE_HIDDEN} />}
                 <span className={`${SCALE.num} font-semibold`}>{figures ? <span data-copy="figure">{fmtInt(k as number)}</span> : null}</span>
                 <span className={SCALE.num}>{figures ? <span data-copy="figure">{share(k, n)}</span> : null}</span>
                 <span className={SCALE.prev}>{figures && prev ? <span data-copy="figure">{share(r.marketPrev?.k, prev.n)}</span> : null}</span>

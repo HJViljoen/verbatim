@@ -35,6 +35,19 @@ export const SCALE = {
   tag: 'font-mono text-[12px] leading-[1.4] text-muted-foreground',
 } as const
 
+/**
+ * A table ON A PHONE (below `sm`; WP1.6 review). At 390px the preview's
+ * columns scrolled sideways, and the first screen showed truncated labels and
+ * bars and none of the figures. Below `sm` a market table is the label and
+ * its three figure columns (Videos, this month, the month before), which fit
+ * the tile's width: the rank and the bar leave (`PHONE_HIDDEN`), and a row's
+ * tag or "under 10, a count only" takes a line of its own under the row
+ * (`PHONE_OWN_LINE`). From `sm` up each table keeps its own columns.
+ */
+export const PHONE_COLS = 'grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 sm:gap-x-4'
+export const PHONE_HIDDEN = 'max-sm:hidden'
+export const PHONE_OWN_LINE = 'max-sm:order-last max-sm:col-span-full'
+
 /** A table's rules: ink-grey under the head, a lighter hairline between rows. */
 export const RULE = {
   head: 'border-b border-border pb-2.5',

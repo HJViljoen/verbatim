@@ -8,7 +8,7 @@ import { surface } from '@/lib/nav'
 import { marketLevel, type MarketKinds } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { BarLegend, BaseHead, LevelBar, RULE, SCALE, barAxis } from './market'
+import { BarLegend, BaseHead, LevelBar, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
 
 // "What people did in the comments" (market-first WP1.6, plan §2.2 block 4):
 // every kind and the four moods as levels on the market's base, the month
@@ -98,26 +98,29 @@ function KindsTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
       </table>
     )
   }
-  const cols = 'grid-cols-[minmax(150px,1.1fr)_minmax(96px,1fr)_64px_64px_64px]'
+  // On a phone the label and the three figure columns only (`PHONE_COLS`).
+  const cols = `${PHONE_COLS} sm:grid-cols-[minmax(150px,1.1fr)_minmax(96px,1fr)_64px_64px_64px]`
   return (
     <div className="-mx-1 overflow-x-auto px-1">
-      <div className="min-w-[520px]" role="table">
-        <div role="row" className={`grid ${cols} items-end gap-x-4 ${RULE.head}`}>
+      <div className="sm:min-w-[520px]" role="table">
+        <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
           <span role="columnheader" className={SCALE.head}>Kind</span>
-          <span role="columnheader"><BarLegend month={m.month} prevMonth={prev?.month ?? null} /></span>
+          <span role="columnheader" className={PHONE_HIDDEN}><BarLegend month={m.month} prevMonth={prev?.month ?? null} /></span>
           <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
           <span role="columnheader"><BaseHead month={m.month} n={m.n} mode={mode} /></span>
           <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
         </div>
         {m.kinds.map((r) => (
-          <div key={r.kind} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 py-1.5 ${RULE.row}`}>
+          <div key={r.kind} role="row" className={`grid ${cols} min-h-11 items-center py-1.5 ${RULE.row}`}>
             <span role="rowheader" className={SCALE.row}>{r.label}</span>
             {underFloor(r.k, m.n) ? (
-              <span className="text-[13px] text-muted-foreground">
+              <span className={`text-[13px] text-muted-foreground ${PHONE_OWN_LINE}`}>
                 under 10, a count only{prev && r.prevK != null ? <> · {longMonth(prev.month)} <span data-copy="figure" className="font-mono font-semibold tabular-nums text-secondary-foreground">{fmtInt(r.prevK)}</span></> : null}
               </span>
             ) : (
-              <LevelBar share={r.k != null && m.n ? r.k / m.n : null} prevShare={prev && r.prevK != null && prev.n ? r.prevK / prev.n : null} axis={axis} />
+              <span className={`block ${PHONE_HIDDEN}`}>
+                <LevelBar share={r.k != null && m.n ? r.k / m.n : null} prevShare={prev && r.prevK != null && prev.n ? r.prevK / prev.n : null} axis={axis} />
+              </span>
             )}
             <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{r.k == null ? '·' : fmtInt(r.k)}</span></span>
             <span className={SCALE.num}><span data-copy="figure">{cell(r.k, m.n)}</span></span>
