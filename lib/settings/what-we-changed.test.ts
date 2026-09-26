@@ -7,6 +7,7 @@ import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, oth
 import { cellReadWith, mergeStops, reachCaption, recordGroupOf, recordPairs, recordView, stopLines, stopsOf, type StopEntry } from './what-we-changed'
 import { pairOn, type PairOn } from '../reading/pairs'
 import { CHANGES, SEALAND_LOG, sealandJudge } from '../test/sealand-pairs'
+import { gathersOf } from '../provenance/searches'
 import type { PairRow } from '../reading/comparability'
 
 // Sealand's change log around September (GC F2, staging's copy of production
@@ -164,6 +165,51 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     expect(rivalsMoved([rivals])).toEqual({ added: ['Rareform'], removed: ['Patagonia', 'Poler', 'Topo Designs'] })
     const line = ledgerLines({ changes: changesFromLog([rivals]), rows: [rivals], reach: [], runFinish: new Map() })[0]
     expect(line.items).toEqual({ added: ['Rareform'], removed: ['Patagonia', 'Poler', 'Topo Designs'] })
+  })
+
+  // Staging (a production copy to 20 Sep): the reconstruction's 9 Sep rows,
+  // stamped at midnight with today's status, and keyword_performance's Reddit
+  // communities by gather: r/backpacks from 17 Aug 07:04, r/travelgear from 9
+  // Sep 10:30, r/onebag from 9 Sep 18:17 (the other 9 Sep rows name
+  // communities never searched: r/minimalism, r/cycling, r/southafrica and
+  // r/capetown, all rejected).
+  it('names the 9 Sep communities the gathers ran: r/onebag and r/travelgear, not the re-probed r/backpacks (staging)', () => {
+    const sep9 = (id: string, name: string, before: string | null, after: string) => row({ id, changed_at: '2026-09-09T00:00:00+00:00', surface: 'subreddits' as never,
+      field: 'subreddits', before: before ? { name, status: before } : null, after: { name, status: after } })
+    const rows = [
+      sep9('s-backpacks', 'backpacks', 'candidate', 'active'), sep9('s-travelgear', 'travelgear', 'candidate', 'active'),
+      sep9('s-minimalism', 'minimalism', 'candidate', 'rejected'), sep9('s-cycling', 'cycling', 'candidate', 'rejected'),
+      sep9('s-onebag', 'onebag', null, 'candidate'), sep9('s-capetown', 'capetown', null, 'candidate'), sep9('s-capetown-probe', 'capetown', 'candidate', 'rejected'),
+    ]
+    const kp = (run: string, at: string, terms: string[]) => terms.map((keyword) => ({ run_id: run, platform: 'reddit', keyword, created_at: at }))
+    const three = ['r/backpacks', 'r/travelgear', 'r/onebag']
+    const gathers = gathersOf([
+      ...kp('g0709', '2026-07-09T13:20:55Z', ['upcycled bag']),
+      ...kp('g0817', '2026-08-17T07:04:33Z', ['upcycled bag', 'r/backpacks']),
+      ...kp('g0909a', '2026-09-09T10:30:31Z', ['upcycled bag', 'r/backpacks', 'r/travelgear']),
+      ...kp('g0909b', '2026-09-09T18:17:56Z', ['upcycled bag', ...three]),
+      ...kp('g0913', '2026-09-13T10:12:30Z', ['upcycled bag', ...three]),
+      ...kp('g0920', '2026-09-20T04:18:34Z', ['upcycled bag', ...three]),
+    ], [])
+    const changes = changesFromLog(rows)
+    expect(changes).toHaveLength(1)
+    // Read as the rows stand: the line the record printed on staging.
+    const [asStored] = ledgerLines({ changes, rows, reach: [], runFinish: new Map() })
+    expect([asStored.words, asStored.items]).toEqual(['2 communities added', { added: ['r/backpacks', 'r/travelgear'], removed: [] }])
+    const [line] = ledgerLines({ changes, rows, reach: [], runFinish: new Map(), gathers })
+    expect([line.words, line.items]).toEqual(['2 communities added', { added: ['r/onebag', 'r/travelgear'], removed: [] }])
+    expect(changeWords(changes[0], rows, gathers)).toBe('2 communities added')
+  })
+
+  it('Össur’s 13 Sep re-probe of r/bionics (run since 30 Aug) names no community against the gathers (staging)', () => {
+    const bionics = row({ id: 'o-bionics', changed_at: '2026-09-13T00:00:00+00:00', surface: 'subreddits' as never, field: 'subreddits',
+      before: { name: 'bionics', status: 'candidate' }, after: { name: 'bionics', status: 'active' } })
+    const kp = (run: string, at: string) => ['r/amputee', 'r/prosthetics', 'r/bionics'].map((keyword) => ({ run_id: run, platform: 'reddit', keyword, created_at: at }))
+    const gathers = gathersOf([...kp('o0830', '2026-08-30T04:11:44Z'), ...kp('o0906', '2026-09-06T04:07:00Z'), ...kp('o0913', '2026-09-13T04:11:00Z')], [])
+    const changes = changesFromLog([bionics])
+    expect(ledgerLines({ changes, rows: [bionics], reach: [], runFinish: new Map() })[0].items).toEqual({ added: ['r/bionics'], removed: [] })
+    const [line] = ledgerLines({ changes, rows: [bionics], reach: [], runFinish: new Map(), gathers })
+    expect([line.words, line.items]).toEqual([SURFACE_WORDS.subreddits, null])
   })
 
   it('lists the communities a change switched on and off beside its words', () => {

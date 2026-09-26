@@ -1,7 +1,7 @@
 import type { ConfigChange } from '../config-log'
 import { fmtInt, longMonth, platformLabel } from '../format'
-import { subredditLabel } from '../gather/subreddits'
-import { activeCommunities, changeInSpan, isSearchSurface, modeForShare, type OurChange } from '../reading/comparability'
+import { changeInSpan, isSearchSurface, modeForShare, type OurChange } from '../reading/comparability'
+import { communityDelta, type GatherRun } from '../provenance/searches'
 import { monthStartOf, nextMonth, prevMonth as monthBefore } from '../reading/month-key'
 import { BRANDS_PANEL, CATEGORY_AUDIENCE, type PairOn } from '../reading/pairs'
 import { addedOnlyRecordSentence, type ChangeBlock, type LedgerLine } from '../pages/overview-market/change'
@@ -98,18 +98,24 @@ export function termsMoved(rows: readonly Pick<ConfigChange, 'surface' | 'field'
   return moved(rows.filter((r) => r.surface === 'terms' && !isExclusions(r)))
 }
 
-/** The communities a group of `subreddits` rows switched on and off. */
-function communitiesMoved(rows: readonly Pick<ConfigChange, 'surface' | 'before' | 'after'>[]): { on: string[]; off: string[] } {
-  const on = new Set<string>()
-  const off = new Set<string>()
-  for (const r of rows) {
-    if (r.surface !== 'subreddits') continue
-    const before = activeCommunities(r.before) ?? new Set<string>()
-    const after = activeCommunities(r.after) ?? new Set<string>()
-    for (const s of after) if (!before.has(s)) on.add(s)
-    for (const s of before) if (!after.has(s)) off.add(s)
-  }
-  return { on: [...on].sort(), off: [...off].sort() }
+/** The gathers a community line is read against: when each community was
+ *  searched (keyword_performance, `gathersOf`). Null where they were not read. */
+export type CommunityGathers = readonly Pick<GatherRun, 'at' | 'terms'>[] | null
+
+/**
+ * The communities a group of `subreddits` rows switched on and off, as
+ * `r/<name>` labels (lib/gather/subreddits.ts `subredditLabel`'s form).
+ * THE RECONSTRUCTION'S ROWS ARE READ AGAINST THE GATHERS
+ * (lib/provenance/searches.ts communityDelta, the reading log-tracking-eras'
+ * reach uses): they carry a day and today's status, so Sealand's 9 Sep rows
+ * switch on r/backpacks, which has run in every gather since 17 Aug, and log
+ * r/onebag only as proposed, though it first ran that evening. Read against
+ * the gathers the line is "r/onebag and r/travelgear". Where no gather was
+ * read, every row is read as it stands.
+ */
+function communitiesMoved(rows: readonly ConfigChange[], gathers: CommunityGathers): { on: string[]; off: string[] } {
+  const { added, removed } = communityDelta(rows, gathers)
+  return { on: [...added].sort(), off: [...removed].sort() }
 }
 
 const plural = (n: number, one: string, many: string): string => `${fmtInt(n)} ${n === 1 ? one : many}`
@@ -220,7 +226,7 @@ function outAndIn(added: number, removed: number, one: string, many: string, gon
  * was written in client words (`CLIENT_NOTE_SURFACES`, and a capped update's
  * `other` row, `CLIENT_NOTE_OTHER_FIELDS`).
  */
-export function changeWords(change: OurChange, rows: readonly ConfigChange[]): string {
+export function changeWords(change: OurChange, rows: readonly ConfigChange[], gathers: CommunityGathers = null): string {
   // A market-first change with a client-words note is titled by its surface
   // (the approved preview: "How we check relevance" in weight, the note under
   // it); its note is `changeDetail`'s. Without a note, the note stands alone.
@@ -241,7 +247,7 @@ export function changeWords(change: OurChange, rows: readonly ConfigChange[]): s
     if (parts.length > 0) return parts.join('; ')
   }
   if (change.surface === 'subreddits') {
-    const { on, off } = communitiesMoved(mine)
+    const { on, off } = communitiesMoved(mine, gathers)
     const words = outAndIn(on.length, off.length, 'community', 'communities', 'dropped')
     if (words) return words
   }
@@ -275,13 +281,16 @@ export function changeDetail(change: OurChange): string | null {
  * The dated list: one line per change of ours, newest first, each with the
  * months it touched. `runFinish` maps a run id to its finish instant, for
  * "read with the {date} update"; a reach row read through a run the map does
- * not hold is dated by its own computation.
+ * not hold is dated by its own computation. `gathers` are what a community
+ * line is read against (`communitiesMoved`); without them its rows are read as
+ * they stand.
  */
 export function ledgerLines(input: {
   changes: readonly OurChange[]
   rows: readonly ConfigChange[]
   reach: readonly ReachRow[]
   runFinish: ReadonlyMap<string, string>
+  gathers?: CommunityGathers
 }): (LedgerLine & { items: { added: string[]; removed: string[] } | null; categoryMonths: NonNullable<LedgerLine['months']> })[] {
   const out = input.changes.map((c) => {
     const ids = new Set(c.rowIds ?? [c.id])
@@ -307,19 +316,19 @@ export function ledgerLines(input: {
     const mine = input.rows.filter((r) => ids.has(r.id))
     // WHAT THE LINE NAMES BESIDE ITS WORDS: the search terms, the rivals or
     // the communities it took in and out.
-    const communities = c.surface === 'subreddits' ? communitiesMoved(mine) : null
+    const communities = c.surface === 'subreddits' ? communitiesMoved(mine, input.gathers ?? null) : null
     const items = c.surface === 'terms'
       ? termsMoved(mine)
       : c.surface === 'rivals'
         ? rivalsMoved(mine)
         : communities
-          ? { added: communities.on.map(subredditLabel), removed: communities.off.map(subredditLabel) }
+          ? { added: communities.on, removed: communities.off }
           : null
     return {
       changeId: c.id,
       date: c.changedAt,
       surface: c.surface,
-      words: changeWords(c, input.rows),
+      words: changeWords(c, input.rows, input.gathers ?? null),
       detail: changeDetail(c),
       reach: own ? { month: own.month, touched: own.touched, of: own.of, readWith: own.readWith as string } : null,
       months,
