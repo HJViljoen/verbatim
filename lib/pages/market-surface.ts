@@ -35,7 +35,7 @@ import { levelText } from '../reading/level'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
 import {
-  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, marketClaimEcho, marketEchoReading, ownPostFilings, postsTouching,
+  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, marketClaimEcho, marketEchoReading, ownPostFilings, postsTouching, touchWords,
   type ClaimEcho, type OwnPostFilings, type OwnPostSubjectRow, type TouchPost,
 } from '../reading/own-posts'
 import { INDUSTRY_AUDIENCE } from '../rivals'
@@ -993,12 +993,22 @@ export function questionTouch(input: {
    *  applied, so nothing is filed). Absent on a theme row. */
   judge?: { subjectId: string; filings: OwnPostFilings | null }
 }): QuestionTouch {
-  const checked: string[] = []
+  // ONE WORD ONCE ACROSS THE LABELS: "Price and sale questions" and a group
+  // naming "prices" check one word, and it prints once, as the first label
+  // spelled it (the rule's own stem, `touchWords`).
+  const stem = (w: string): string => touchWords(w)[0] ?? w
+  const merge = (held: readonly string[], more: readonly string[]): string[] => {
+    const out = [...held]
+    const seen = new Set(out.map(stem))
+    for (const w of more) if (!seen.has(stem(w))) { seen.add(stem(w)); out.push(w) }
+    return out
+  }
+  let checked: string[] = []
   const byPost = new Map<string, string[]>()
   for (const label of input.labels) {
     const r = postsTouching(label, input.posts ?? [])
-    for (const w of r.checked) if (!checked.includes(w)) checked.push(w)
-    for (const m of r.matched) byPost.set(m.id, [...new Set([...(byPost.get(m.id) ?? []), ...m.words])])
+    checked = merge(checked, r.checked)
+    for (const m of r.matched) byPost.set(m.id, merge(byPost.get(m.id) ?? [], m.words))
   }
   if (input.posts == null) return { posts: null, matched: [], checked, state: 'unread' }
   const posts = input.posts
@@ -1131,7 +1141,9 @@ export function buildClaimSubjects(input: {
   let unfiled = 0
   const k = new Map(active.map((x) => [x.id, 0]))
   for (const ids of groups.values()) {
-    if (!f || active.some((x) => !ids.some((id) => f.claimFiled.has(`${id}|${x.id}`)))) unfiled++
+    // NO SUBJECT, NOTHING TO FILE: the judge files a claim against subjects,
+    // and with none named (Össur) a claim is never "not checked yet".
+    if (active.length > 0 && (!f || active.some((x) => !ids.some((id) => f.claimFiled.has(`${id}|${x.id}`))))) unfiled++
     if (!f) continue
     for (const x of active) if (ids.some((id) => f.claimTouches.get(id)?.has(x.id))) k.set(x.id, (k.get(x.id) ?? 0) + 1)
   }

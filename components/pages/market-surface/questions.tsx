@@ -13,6 +13,7 @@ import {
   QUESTION_CHECKED_SHOWN, QUESTION_WINDOW_MONTHS,
   type MarketSurfaceData, type QuestionsBlock, type QuestionTouch,
 } from '@/lib/pages/market-surface'
+import { THEME_FLOOR } from '@/lib/pages/overview-market/board'
 import { LevelBar, MakerMark, RULE, SCALE } from '@/components/pages/overview/market'
 
 // Y1 · Questions to answer (market-first WP3.6, plan §2.6; the approved
@@ -241,7 +242,7 @@ function Questions({ q, mode }: { q: QuestionsBlock; mode: RenderMode }) {
           mode={mode}
         />
       ) : (
-        <BlockEmpty mode={mode}>No question theme reached 10 videos in {longMonth(q.month)}.</BlockEmpty>
+        <BlockEmpty mode={mode}>No question theme reached {fmtInt(THEME_FLOOR)} videos in {longMonth(q.month)}.</BlockEmpty>
       )}
       {subjectRows.length > 0 ? (
         <Table
@@ -268,7 +269,7 @@ export const marketQuestions: Block<MarketSurfaceData> = {
     const footer = openLink(mode, `${ctx.appUrl}${subjects.href}`, `Open ${subjects.label} →`)
     const empty = marketQuestions.emptyState(data)
     return (
-      <BlockFrame title={marketQuestions.title} mode={mode} footer={q && !q.empty ? footer : undefined} roomy>
+      <BlockFrame title={marketQuestions.title} mode={mode} footer={q && !q.empty ? footer : undefined}>
         {empty || !q ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Questions q={q} mode={mode} />}
       </BlockFrame>
     )

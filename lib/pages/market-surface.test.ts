@@ -754,6 +754,11 @@ describe('questionTouch (WP3.6 Y1: words, and the judge for a subject)', () => {
     expect(touched.state).toBe('touched')
     expect(touched.matched).toEqual([{ id: 'b', postedOn: '2026-09-02', href: null, words: ['rain'], by: 'judge' }])
   })
+  it('prints a word checked under two labels once, as the first label spelled it', () => {
+    // Staging's Price row printed "price · sale · ordering · prices" before this.
+    const r = questionTouch({ labels: ['Price and sale questions', 'Buying interest and ordering questions', 'Confusion over sale prices'], posts })
+    expect(r.checked).toEqual(['price', 'sale', 'ordering'])
+  })
   it('your posts unread is unread, claiming nothing', () => {
     expect(questionTouch({ labels: ['Worries about zippers in rain'], posts: null, judge: { subjectId: 's', filings: null } }).state).toBe('unread')
   })
@@ -776,6 +781,10 @@ describe('buildClaimSubjects (WP3.6 Y3)', () => {
   it('counts a claim once across its re-reads, and is unchecked before MF3', () => {
     expect(buildClaimSubjects({ claims, subjects, filings: null })).toMatchObject({ claims: 2, unfiled: 2, state: 'unchecked' })
     expect(buildClaimSubjects({ claims: null, subjects, filings: null })).toBeNull()
+  })
+
+  it('with no subject named (Össur), counts the claims and leaves nothing "not checked yet"', () => {
+    expect(buildClaimSubjects({ claims, subjects: [], filings: null })).toEqual({ claims: 2, subjects: [], unfiled: 0, state: 'checked' })
   })
 
   it('counts subjects once every claim is filed for every subject not being re-described', () => {

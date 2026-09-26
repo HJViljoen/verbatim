@@ -308,14 +308,6 @@ export function expandedLineage(rows: readonly AdviceRow[], highlight: string | 
   return rows.find(hasBody)?.lineageId ?? null
 }
 
-/**
- * THE CURRENT RECOMMENDATION LEADS, AS ITS OWN CARD (WP3.6 Y2; the preview's
- * "1 · current recommendation"). Its number, its words, how many updates have
- * raised it and the videos behind it, and on the right what you decided and
- * when. The ledger's table below it starts at row 2. The rest of the row's
- * reading (the afterwards sentence) rides under it, so nothing the table
- * printed for this row is lost by leading with it.
- */
 /** The lead card's row (the current recommendation, when it is the first
  *  row) and the table's rows under it. One split, read by the render and by
  *  `quotes()`, so the block declares the quote it draws. */
@@ -324,6 +316,14 @@ export function splitLead(a: Pick<MarketSurfaceData['advice'], 'rows' | 'current
   return { lead, tableRows: lead ? a.rows.slice(1) : [...a.rows] }
 }
 
+/**
+ * THE CURRENT RECOMMENDATION LEADS, AS ITS OWN CARD (WP3.6 Y2; the preview's
+ * "1 · current recommendation"). Its number, its words, how many updates have
+ * raised it and the videos behind it, and on the right what you decided and
+ * when. The ledger's table below it starts at row 2. The rest of the row's
+ * reading (the afterwards sentence) rides under it, so nothing the table
+ * printed for this row is lost by leading with it.
+ */
 function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode: RenderMode; hrefFor: (lineageId: string) => string; shared: VerdictPairNote | null; folded: boolean }) {
   const email = mode === 'email'
   const repeated = row.timesMade > 1 ? `repeated across ${fmtInt(row.timesMade)} updates` : 'raised by one update'
@@ -382,7 +382,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // draws its table as it was sent.
     const { lead, tableRows } = splitLead(a)
     const expanded = expandedLineage(tableRows, a.highlight)
-    const repeat = repeatColumn(splitLead(a).tableRows)
+    const repeat = repeatColumn(tableRows)
     const tracks = repeat.shown ? TRACKS : TRACKS.filter((_, i) => i !== REPEAT_TRACK)
     // THE COLUMN'S UNLOCK IS GONE WHERE THE COLUMN ANSWERS. `ADVICE_UNLOCK`
     // named the absence of an Afterwards column; the column exists now, so the

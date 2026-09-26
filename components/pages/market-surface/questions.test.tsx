@@ -12,7 +12,7 @@ import { MARKET_BLOCKS, MarketSurfacePage } from './index'
 import { marketQuestions } from './questions'
 import { marketAdvice } from './advice'
 import { marketMoves } from './moves'
-import { marketSayHear } from './sayhear'
+import { claimsHead, marketSayHear } from './sayhear'
 import {
   deepLinkFixture, firstUpdateFixture, marketFixture, ossurMovesFixture, sealandMovesFixture, sealandQuestionsFiled, unrecordedFixture,
 } from './fixture'
@@ -157,6 +157,19 @@ describe('Y3 · what you say, counted in your market', () => {
     expect(text).toContain('Of your 98 claims read to date')
     expect(text).toContain(`which subject each is about: ${JUDGE_NOT_CHECKED}`)
     expect(text).not.toMatch(/\b0 waterproofing/)
+  })
+
+  it('counts the claims it draws in the table head, and points back only to a count it printed', () => {
+    const text = renderText(marketSayHear.render(sealandMovesFixture(), 'app', ctx))
+    expect(text).toContain('Three of them, with what your market said back')
+    // Up to five claims are drawn (CLAIM_ROWS): the head counts them all.
+    expect(claimsHead(5, true)).toBe('Five of them, with what your market said back')
+    expect(claimsHead(4, true)).toBe('Four of them, with what your market said back')
+    // No "Of your N claims" line above it: "them" would point at nothing.
+    const base = sealandMovesFixture()
+    const unread = renderText(marketSayHear.render({ ...base, ways: { ...base.ways, claimSubjects: null } }, 'app', ctx))
+    expect(unread).toContain('Your claims, with what your market said back')
+    expect(unread).not.toContain('of them')
   })
 })
 

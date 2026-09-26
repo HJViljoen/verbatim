@@ -103,6 +103,18 @@ function SubjectsLine({ c, mode }: { c: ClaimSubjects; mode: RenderMode }) {
   )
 }
 
+/** Words for the claims this block can draw (`CLAIM_ROWS`, five). */
+const COUNT_WORDS = ['One', 'Two', 'Three', 'Four', 'Five'] as const
+
+/** The claims table's head: "Three of them, …" under the line counting your
+ *  claims (the preview's words), and with no such line above it, nothing for
+ *  "them" to point back to, so it names the claims itself. */
+export function claimsHead(claims: number, underCount: boolean): string {
+  const said = 'with what your market said back'
+  if (!underCount) return `Your claims, ${said}`
+  return `${COUNT_WORDS[claims - 1] ?? 'Some'} of them, ${said}`
+}
+
 function Claim({ claim, month, mode }: { claim: ClaimRow; month: string; mode: RenderMode }) {
   const state = stateOf(claim)
   const label = claim.echo?.label ?? claim.verdictLabel
@@ -148,7 +160,7 @@ export const marketSayHear: Block<MarketSurfaceData> = {
     const subjects = w.claimSubjects ?? null
 
     return (
-      <BlockFrame title={marketSayHear.title} question={marketSayHear.question} mode={mode} footer={footer} roomy>
+      <BlockFrame title={marketSayHear.title} question={marketSayHear.question} mode={mode} footer={footer}>
         {subjects && subjects.claims > 0 ? <SubjectsLine c={subjects} mode={mode} /> : null}
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {w.claims.length > 0 ? (
@@ -157,7 +169,7 @@ export const marketSayHear: Block<MarketSurfaceData> = {
           ) : (
             <div role="table" className="flex min-w-0 flex-col">
               <span className="text-[15px] font-semibold text-foreground">
-                {w.claims.length === 1 ? 'One of them' : `${w.claims.length === 2 ? 'Two' : 'Three'} of them`}, with what your market said back
+                {claimsHead(w.claims.length, Boolean(subjects && subjects.claims > 0))}
               </span>
               <div role="row" className={`mt-3 hidden grid-cols-[minmax(0,1.3fr)_150px_minmax(0,1.3fr)] gap-6 md:grid ${RULE.head}`}>
                 <span role="columnheader" className={SCALE.head}>You say</span>
