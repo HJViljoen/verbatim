@@ -7,7 +7,7 @@ import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { makerWords, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { MAKERS_NOT_MEASURED, makerCell, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, RULE, SCALE, barAxis, isMarketPage } from './market'
 
@@ -76,7 +76,7 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
                 <td style={num}><span data-copy="figure">{fmtInt(t.k)}</span></td>
                 <td style={num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></td>
                 {prev ? <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span></td> : null}
-                {makersColumn ? <td style={{ ...cell, color: EMAIL.ink2 }}>{makerWords(t.makerShare) ?? ''}</td> : null}
+                {makersColumn ? <td style={{ ...cell, color: makerCell(t.makerShare) === MAKERS_NOT_MEASURED ? EMAIL.muted : EMAIL.ink2 }}>{makerCell(t.makerShare) ?? ''}</td> : null}
               </tr>
             ))}
           </tbody>
@@ -110,7 +110,8 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
             {makersColumn ? <span role="columnheader" className={SCALE.head}>Makers</span> : null}
           </div>
           {board.rows.map((t, i) => {
-            const words = makerWords(t.makerShare)
+            const words = makerCell(t.makerShare)
+            const unmeasured = words === MAKERS_NOT_MEASURED
             return (
               <div key={t.registryId} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 py-1.5 ${RULE.row}`}>
                 <span className="font-mono text-[13px] tabular-nums text-muted-foreground">{i + 1}</span>
@@ -123,7 +124,7 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
                 <span className={SCALE.prev}>{prev ? <span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span> : null}</span>
                 {makersColumn ? (
                   <span className="inline-flex min-w-0 items-center gap-2 text-[13px] text-secondary-foreground">
-                    {words ? <><MakerMark /><span className="truncate">{words}</span></> : null}
+                    {unmeasured ? <span className={SCALE.tag}>{words}</span> : words ? <><MakerMark /><span className="truncate">{words}</span></> : null}
                   </span>
                 ) : null}
               </div>

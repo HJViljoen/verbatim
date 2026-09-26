@@ -64,6 +64,12 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Makers and DIY, grouped: 7 themes at 10+, led by Admiration for upcycled bag creativity (71) and Respect for handmade craftsmanship (64)')
     expect(text).toContain('about a third makers')
     expect(text).toContain('a fifth makers')
+    // A row `theme_maker_shares` did not answer for says so in its Makers cell.
+    for (const mode of ['app', 'email'] as const) {
+      const board = renderText(overviewThemes.render(marketFrontFixture(), mode, ctx))
+      expect(board).toContain('Backpack brand and model comparisons')
+      expect(board.split('not measured').length - 1).toBe(3)
+    }
   })
 
   it('the kinds and the mood as levels, "Praising it" for praise, one chip', () => {

@@ -5,6 +5,7 @@ import {
   askIds,
   buildAsks,
   buildThemeBoard,
+  makerCell,
   makerFraction,
   makerWords,
   namesABrand,
@@ -105,6 +106,16 @@ describe('maker words', () => {
     expect(makerWords(null)).toBeNull()
     expect(makerWords(Number.NaN)).toBeNull()
     expect(makerFraction(112 / 138)).toBe('mostly')
+  })
+
+  it('in the Makers cell, say "not measured" where no share came back, never an empty cell that reads "under a fifth"', () => {
+    expect(makerCell(null)).toBe('not measured')
+    expect(makerCell(Number.NaN)).toBe('not measured')
+    expect(makerCell(3 / 17)).toBeNull()
+    expect(makerCell(50 / 140)).toBe('about a third makers')
+    // Four of September's board rows have no staging twin in CQ F29.
+    expect(board().rows.filter((t) => makerCell(t.makerShare) === 'not measured').map((t) => t.registryId))
+      .toEqual(['th-brand-comparisons', 'th-featured', 'th-materials'])
   })
 })
 

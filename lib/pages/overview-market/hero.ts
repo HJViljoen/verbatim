@@ -5,6 +5,7 @@ import {
   LEAD_MAX_MAKER_SHARE,
   LEAD_NEW_SEARCH_NOTE,
   THEME_FLOOR,
+  isMeasuredShare,
   makerFraction,
   type MarketTheme,
   type ThemeBoard,
@@ -108,11 +109,13 @@ export const THEME_PREV_N = 'theme_prev_n'
 
 const COUNT_WORDS: Record<number, string> = { 1: '', 2: 'two ', 3: 'three ' }
 
-/** "Its three biggest conversations not led by makers" and its kin. */
-function introWords(count: number, segments: ThemeBoard['segments']): string {
+/** "Its three biggest conversations not led by makers" and its kin. "Not led
+ *  by makers" is said only where every conversation it names had its maker
+ *  share measured: a row `theme_maker_shares` did not answer for may be. */
+function introWords(count: number, measured: boolean): string {
   const plural = count !== 1
   const noun = plural ? 'conversations' : 'conversation'
-  if (segments === 'measured') return `Its ${COUNT_WORDS[count] ?? ''}biggest ${noun} not led by makers`
+  if (measured) return `Its ${COUNT_WORDS[count] ?? ''}biggest ${noun} not led by makers`
   return `Its biggest ${noun}`
 }
 
@@ -136,8 +139,9 @@ const fmtCount = (n: number): string => (n === 2 ? 'two' : n === 3 ? 'three' : f
 export function heroThemeParts(hero: Extract<HeroLead, { kind: 'themes' }>, board: ThemeBoard): HeroPart[] {
   const top = hero.top
   if (top.length === 0) return []
+  const measured = board.segments === 'measured' && top.every((t) => isMeasuredShare(t.makerShare))
   const parts: HeroPart[] = [
-    { t: 'text', s: `${introWords(top.length, board.segments)}, of the ` },
+    { t: 'text', s: `${introWords(top.length, measured)}, of the ` },
     { t: 'figure', key: THEME_N },
     { t: 'text', s: ' category videos: ' },
   ]

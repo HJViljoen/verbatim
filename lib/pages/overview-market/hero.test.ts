@@ -124,6 +124,19 @@ describe('the hero’s words', () => {
     expect(view.figures[themeToken('th-airline', 'prev')]).toMatchObject({ value: 3, unit: 'pct' })
   })
 
+  it('say "not led by makers" only where every conversation named had its maker share measured', () => {
+    // "Love for stylish bag design" comes back without a `theme_maker_shares`
+    // row: the board still ranks it second, but nothing says it is not
+    // makers'. The measured rows keep their own maker sentence.
+    const themes = septemberThemes().map((t) => (t.registryId === 'th-bag-design' ? { ...t, makerShare: null, noiseShare: null } : t))
+    const b = board(themes)
+    const view = heroView(heroLead(b, [], new Set()), b, SEPTEMBER)
+    const said = text(view.parts, view.figures)
+    expect(said.startsWith('Its biggest conversations, of the 626 category videos: “Ready to buy handmade bags” 69, “Love for stylish bag design” 60')).toBe(true)
+    expect(said).not.toContain('not led by makers')
+    expect(said).toContain('About a third of “Ready to buy handmade bags” sits under makers’ own posts.')
+  })
+
   it('say "Its biggest conversations" where no maker rule applies, and claim nothing about makers', () => {
     const b = board(septemberThemes({ measured: false }), 'no_rule')
     const view = heroView(heroLead(b, [], new Set()), b, SEPTEMBER)

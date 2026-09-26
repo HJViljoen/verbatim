@@ -186,6 +186,22 @@ export function makerWords(share: number | null | undefined): string | null {
   return f ? `${f} makers` : null
 }
 
+/** Did `theme_maker_shares` measure this share (a proportion, 0 to 1)? */
+export const isMeasuredShare = (share: number | null | undefined): boolean => finiteShare(share) != null
+
+/** The Makers cell's words where a theme came back with no share. */
+export const MAKERS_NOT_MEASURED = 'not measured'
+
+/**
+ * A board row's Makers cell, on a board whose segments were measured: its
+ * maker words at a fifth or more, "not measured" where `theme_maker_shares`
+ * returned no row for the theme (WP1.6 review: an empty cell read as "under a
+ * fifth makers" when nothing was measured), and null under a fifth.
+ */
+export function makerCell(share: number | null | undefined): string | null {
+  return isMeasuredShare(share) ? makerWords(share) : MAKERS_NOT_MEASURED
+}
+
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
