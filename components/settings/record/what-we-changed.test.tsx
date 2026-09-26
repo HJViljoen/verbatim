@@ -34,7 +34,9 @@ describe('What we changed', () => {
   it('says why September is not compared in the preview’s three cells: each figure with its base, what it counts and its update', () => {
     const t = read(lead)
     expect(t).toContain('Why September is not compared')
-    expect(t).toContain('206 of 625 September videos came from searches we added in September read with the 27 Sep update')
+    // WP1.8's one figure over the market (the 26 Sep ruling), never the strict count (376 of 625).
+    expect(t).toContain('356 of 654 September videos came from searches we added in September read with the 27 Sep update')
+    expect(t).not.toContain('376')
     expect(t).toContain('65 of 654 September videos had been let in without our relevance check read with the 27 Sep update')
     expect(t).toContain('15 against 23 Dated comments a video: September’s median, against August’s read with the 27 Sep update')
     // Three cells, not the one sentence the front page prints.
@@ -88,7 +90,9 @@ describe('When two months are compared', () => {
     expect(t).toContain('Only when both were read the same way. All four must hold.')
     expect(t).toContain('August against September, as at 27 Sep')
     expect(t).toContain('September has ended and was read past it')
-    expect(t).toContain('206 of 625')
+    // Rule 2 keeps the strict count in its own words, on the category (the 26 Sep ruling), never the added-only figure.
+    expect(t).toContain('does not hold: 376 of 625')
+    expect(t).not.toContain('356')
     expect(t).toContain('65 of 654')
     expect(t).toContain('15 against 23')
     assertCopyContract(render(rules))

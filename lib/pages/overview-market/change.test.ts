@@ -6,9 +6,11 @@ import { scheduledUpdateAfter } from '../../reading/reading-month'
 import {
   CHANGE_NEW,
   CHANGE_OF,
+  addedOnlyRecordSentence,
   changeLead,
   compareRules,
   buildChangeBlock,
+  measuredSearchSentence,
   nextPairLine,
   nextPairParts,
   placeInMonth,
@@ -32,16 +34,18 @@ const LOG = [
 const CHANGES = changesFromLog(LOG)
 
 /**
- * A measured August against September row. September's search-outside count
- * is staging's measured 206 of 625 (GC F29: the videos found only by the 13 to
- * 17 Sep terms, the subset WP1.4's strict count must reproduce); August's is
- * CQ F25's "about 115 of 351" (the bare-name terms removed on 9 Sep); depth is
- * DR F39's medians, 23 and 15.
+ * A measured August against September row: staging's (Aug, Sep) row as
+ * measure-comparability wrote it on 26 Sep (the MF1 rehearsal): the strict
+ * search-outside counts, 148 of 351 and 376 of 625 (category), and WP1.8's
+ * one figure, 356 of September's 654 market videos found only by searches
+ * first run in September (the 26 Sep ruling). Depth is DR F39's medians, 23
+ * and 15.
  */
 const ROW: PairRow = {
   prevMonth: '2026-08-01',
   month: '2026-09-01',
-  searchOutside: { prev: { k: 115, n: 351 }, curr: { k: 206, n: 625 } },
+  searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } },
+  addedOnly: { k: 356, n: 654 },
   codeChanges: [],
   depth: { prevMedian: 23, currMedian: 15 },
   gather: [],
@@ -74,13 +78,43 @@ const block = (over: Partial<ChangeBlock> = {}): ChangeBlock => ({
 })
 
 describe('what changed, and what is ours (plan §2.2 block 10)', () => {
-  it('prints the measured count from the pair row, read with its update, one denominator', () => {
+  it('prints WP1.8’s one figure from the pair row in the preview’s sentence, read with its update, over the market', () => {
     const lead = changeLead(block())
     expect(lead?.body).toBe(
-      `Not a change we can stand behind yet: [[${CHANGE_NEW}]] of September’s [[${CHANGE_OF}]] videos came from searches we added in September (read with the 27 Sep update).`,
+      `Not a change we can stand behind yet: about half of September came from searches we added in September ([[${CHANGE_NEW}]] of [[${CHANGE_OF}]], read with the 27 Sep update).`,
     )
-    expect(lead?.figures[CHANGE_NEW]).toMatchObject({ value: 206, unit: 'videos' })
-    expect(lead?.figures[CHANGE_OF]).toMatchObject({ value: 625, unit: 'videos' })
+    expect(lead?.figures[CHANGE_NEW]).toMatchObject({ value: 356, unit: 'videos' })
+    expect(lead?.figures[CHANGE_OF]).toMatchObject({ value: 654, unit: 'videos' })
+  })
+
+  it('takes the share word from the ladder, never from the copy', () => {
+    const third: PairRow = { ...ROW, addedOnly: { k: 206, n: 626 } }
+    expect(changeLead(block({ pair: pair('ended', third) }))?.body).toContain(': about a third of September came from searches we added in September (')
+    const most: PairRow = { ...ROW, addedOnly: { k: 480, n: 654 } }
+    expect(changeLead(block({ pair: pair('ended', most) }))?.body).toContain(': about three quarters of September came')
+  })
+
+  it('reads with no update named when the row’s update is unknown', () => {
+    expect(changeLead(block({ readWith: null }))?.body).toBe(
+      `Not a change we can stand behind yet: about half of September came from searches we added in September ([[${CHANGE_NEW}]] of [[${CHANGE_OF}]]).`,
+    )
+  })
+
+  it('never prints the strict count: a row without the figure prints the refusal with no figure', () => {
+    for (const addedOnly of [null, undefined, { k: 0, n: 654 }]) {
+      const r: PairRow = { ...ROW, addedOnly }
+      const b = block({ pair: pair('ended', r) })
+      expect(measuredSearchSentence(b)).toBeNull()
+      expect(changeLead(b)).toEqual({ body: 'Not read as a change: we changed our searches in September.', figures: {} })
+      expect(JSON.stringify(whyNotCompared(b))).not.toMatch(/376|625/)
+    }
+  })
+
+  it('prints only where the strict count refuses the pair on what we search', () => {
+    // Rule 2 under a tenth on both sides: the pair is not refused on searches,
+    // so the sentence does not print, whatever the added-only figure says.
+    const flagged: PairRow = { ...ROW, searchOutside: { prev: { k: 2, n: 351 }, curr: { k: 30, n: 625 } }, depth: { prevMedian: 20, currMedian: 19 } }
+    expect(measuredSearchSentence(block({ pair: pair('ended', flagged) }))).toBeNull()
   })
 
   it('without a measured row (MF1 not applied) prints the refusal in its own words', () => {
@@ -118,7 +152,7 @@ describe('Settings › What we changed: the rules and why September is not compa
   it('reads the four rules off the pair (the preview’s August against September column)', () => {
     expect(compareRules(pair('ended')).map((r) => [r.n, r.state, r.answer])).toEqual([
       [1, 'held', 'September has ended and was read past it'],
-      [2, 'not_held', '206 of 625'],
+      [2, 'not_held', '376 of 625'],
       [3, 'held', 'none touched a tenth'],
       [4, 'not_held', '15 against 23'],
     ])
@@ -130,10 +164,18 @@ describe('Settings › What we changed: the rules and why September is not compa
     expect(rules.slice(1).map((r) => r.state)).toEqual(['unmeasured', 'unmeasured', 'unmeasured'])
   })
 
-  it('titles the section by the month and prints the same sentence as the front page', () => {
+  it('rule 2 keeps the strict count, on the category, even with the added-only figure measured', () => {
+    const r2 = compareRules(pair('ended'))[1]
+    expect(r2).toMatchObject({ state: 'not_held', answer: '376 of 625', counts: { figure: 376, word: 'of', base: 625 } })
+    expect(compareRules(pair('ended', { ...ROW, addedOnly: null }))[1]).toEqual(r2)
+  })
+
+  it('titles the section by the month and prints the one figure in Settings’ form (the SettingsRecord artboard)', () => {
     const why = whyNotCompared(block())
     expect(why?.title).toBe('Why September is not compared')
-    expect(why?.body).toBe(changeLead(block())?.body)
+    expect(why?.body).toBe(`About half of September came from searches we added in September: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]], measured on 30 Sep.`)
+    expect(why?.figures).toEqual(changeLead(block())?.figures)
+    expect(addedOnlyRecordSentence(block())?.body).toBe(why?.body)
   })
 })
 
@@ -153,7 +195,7 @@ const withGate: PairRow = { ...ROW, codeChanges: GATE_FIX }
 describe('Settings › What we changed: the three cells behind the refusal (the approved preview)', () => {
   it('prints what came from the new searches and how shallow the threads are, each with its base and its update', () => {
     expect(whyCells(block()).map((c) => [c.key, c.figure, c.base.word, c.base.value, c.caption, c.readWith])).toEqual([
-      ['searches', 206, 'of', 625, 'September videos came from searches we added in September', '2026-09-27T08:30:00.000Z'],
+      ['searches', 356, 'of', 654, 'September videos came from searches we added in September', '2026-09-27T08:30:00.000Z'],
       ['depth', 15, 'against', 23, 'Dated comments a video: September’s median, against August’s', '2026-09-27T08:30:00.000Z'],
     ])
   })
@@ -169,6 +211,12 @@ describe('Settings › What we changed: the three cells behind the refusal (the 
     expect(whyCells(block({ pair: pair('ended', shallowNot) })).map((c) => c.key)).toEqual(['searches'])
     const refiled: PairRow = { ...ROW, codeChanges: [{ changeId: 'attr', surface: 'attribution', prev: { k: 20, n: 377 }, curr: { k: 90, n: 654 }, population: 'market' }] }
     expect(whyCells(block({ pair: pair('ended', refiled) })).map((c) => c.key)).toEqual(['searches', 'depth'])
+  })
+
+  it('prints the added-only figure where the strict share only flags, and no searches cell without it', () => {
+    const flagged: PairRow = { ...ROW, searchOutside: { prev: { k: 2, n: 351 }, curr: { k: 30, n: 625 } }, addedOnly: { k: 12, n: 654 } }
+    expect(whyCells(block({ pair: pair('ended', flagged) }))[0]).toMatchObject({ key: 'searches', figure: 12, base: { word: 'of', value: 654 } })
+    expect(whyCells(block({ pair: pair('ended', { ...ROW, addedOnly: null }) })).map((c) => c.key)).toEqual(['depth'])
   })
 
   it('on a month still running, still says why from its row, and calls the median so far', () => {
