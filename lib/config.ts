@@ -922,28 +922,6 @@ export const RUN_MODEL_BUDGET_USD = Number(process.env.RUN_MODEL_BUDGET_USD ?? 6
 export const COMPETITIVE_MIN_VIDEOS = 10
 
 /**
- * Tracked rival names that are also another word, and what that word is
- * (market-first WP1.9). The Competitive page prints the note beside every row
- * and count filed under the name, so a reader does not take the word for the
- * brand.
- *
- * Freitag is German for Friday. On staging (to 20 Sep) 9 of the 39 sampled
- * comments that name it are about the brand, and all four of the August videos
- * filed under it (93 comments) are German "Friday" posts (research F7, BC F10).
- * SEPTEMBER IS NOT MOSTLY FRIDAY (deploy 1 review): of the six September videos
- * filed under it (40 comments), two are German "Friday" posts and four are the
- * brand's (27 of the 40 comments). WP1.9's "mostly the German word for Friday,
- * not the brand" was false beside the month the page reads on 1–15 Oct, so the
- * note says only what holds for every row it sits beside (wording for
- * Heinrich's approval). Not on a rival's own posts, which are theirs by handle.
- * An entry leaves this list when WP2.6 measures the name's precision at 0.8 or
- * more.
- */
-export const HOMONYM_NOTES: Readonly<Record<string, string>> = {
-  Freitag: 'the name is also German for Friday, so some videos filed here are not the brand',
-}
-
-/**
  * The feature flags a run's behaviour depends on, captured once (Tier 1,
  * 2026-08-18).
  *

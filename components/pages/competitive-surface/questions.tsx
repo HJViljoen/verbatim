@@ -6,8 +6,7 @@ import { fmtInt, platformLabel } from '@/lib/format'
 import { horizonHref } from '@/lib/shell/bar'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { SAID_ABOUT_UNREAD_LINE, homonymOf, mixLine, saidAboutUnread, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pages/competitive-surface'
-import { rivalKey } from '@/lib/rivals'
+import { SAID_ABOUT_UNREAD_LINE, mixLine, saidAboutUnread, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pages/competitive-surface'
 
 // CO5 · What the category asks under their content (design §3 CO5).
 //
@@ -111,10 +110,6 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
     const email = mode === 'email'
     const empty = competitiveQuestions.emptyState(data)
     const more = q.insights - q.rows.length
-    // A NAME THAT IS ALSO ANOTHER WORD SAYS SO BESIDE ITS COUNT
-    // (market-first WP1.9): some of the videos Freitag's questions sit under
-    // are the German word for Friday.
-    const note = q.rival ? homonymOf(data, rivalKey(q.rival)) : null
 
     return (
       <BlockFrame
@@ -154,7 +149,7 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
             style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink } : undefined}
           >
             <span data-copy="figure">{fmtInt(q.insights)}</span> {q.insights === 1 ? 'question' : 'questions'} under{' '}
-            <span data-copy="figure">{fmtInt(q.videos)}</span> of {q.rival}’s videos{note ? <span data-homonym=""> ({note})</span> : null},{' '}
+            <span data-copy="figure">{fmtInt(q.videos)}</span> of {q.rival}’s videos,{' '}
             <span data-copy="figure">{fmtInt(q.quotes)}</span> {q.quotes === 1 ? 'comment' : 'comments'}
             {Object.keys(q.platformMix).length > 0 ? <> · {mixLine(q.platformMix)}</> : null}.
             {empty ? <> {empty}</> : null}

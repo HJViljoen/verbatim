@@ -136,11 +136,6 @@ function Census({ census, mode, basisInMeta = false }: { census: OwnPostCensus; 
       <span className={email ? undefined : 'text-[12.5px] font-semibold'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink } : undefined}>
         {census.audienceLabel}
       </span>
-      {/* NO HOMONYM NOTE ON A RIVAL'S OWN POSTS (deploy 1 review). Freitag's
-          note says some videos filed under the name are not the brand; these
-          are posts from the brand's own accounts, found by handle, so the note
-          would be false here. The approved preview's "Their own accounts" list
-          carries none either. */}
       {/* THE BASIS, ON EVERY CENSUS THAT HAS FIGURES. Every figure under this
           heading is dated by the POST and the rest of this page is dated by the
           comment; the two must not be read as one clock (D9). It is dropped on

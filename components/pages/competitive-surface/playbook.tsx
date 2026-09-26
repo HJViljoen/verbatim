@@ -8,8 +8,7 @@ import type { PlaybookBlock } from '@/lib/pages/playbook'
 import { playbookFigures } from '@/lib/pages/playbook'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { homonymOf, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
-import { HomonymTag } from './homonym'
+import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 
 // CO7 · How the category makes content (the artboard's full-width
 // `grid-column: span 12` — three tables abreast at 410 · 336 · 1fr).
@@ -129,13 +128,11 @@ function Cell({ side, formatKey, mode }: { side: FormatMatrixSide; formatKey: st
 /** Formats or hooks: the key down the left, the widest side drawn as a bar, the
  *  remaining sides as their own counts over their own denominators. */
 function Matrix({
-  matrix, label, mode, noteOf = () => null,
+  matrix, label, mode,
 }: {
   matrix: FormatMatrix
   label: string
   mode: RenderMode
-  /** A side's note when its name is mostly another word (market-first WP1.9). */
-  noteOf?: (audience: string) => string | null
 }) {
   const email = mode === 'email'
   const [lead, ...rest] = matrix.sides
@@ -161,7 +158,7 @@ function Matrix({
             ))}
           </div>
         ))}
-        <Legend sides={matrix.sides} mode={mode} noteOf={noteOf} />
+        <Legend sides={matrix.sides} mode={mode} />
       </div>
     )
   }
@@ -205,7 +202,7 @@ function Matrix({
           647 · 81 · 118. A legend that names a bigger population than the
           table under it is the defect (D6) this tile exists to end. */}
       <div className="flex min-w-0 flex-col gap-1.5 xl:mt-auto xl:pt-1.5">
-        <Legend sides={matrix.sides} mode={mode} noteOf={noteOf} />
+        <Legend sides={matrix.sides} mode={mode} />
         {/* A COLUMN NEVER READ PRINTS A SENTENCE, NOT A ZERO. */}
         {matrix.sides.filter((s) => s.unread).map((s) => (
           <p key={s.audience} className="m-0 font-mono text-[10px] leading-[1.35] text-muted-foreground">{s.unread}</p>
@@ -263,15 +260,12 @@ function Medians({ rows, mode }: { rows: readonly FormatRow[]; mode: RenderMode 
 
 /** The legend the mock draws over the three tables — each side with its own
  *  CLASSIFIED n, which is the denominator its shares are shares of. */
-function Legend({ sides, mode, noteOf = () => null }: { sides: readonly FormatMatrixSide[]; mode: RenderMode; noteOf?: (audience: string) => string | null }) {
+function Legend({ sides, mode }: { sides: readonly FormatMatrixSide[]; mode: RenderMode }) {
   const email = mode === 'email'
   if (email) {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>
-        {sides.map((s) => {
-          const note = noteOf(s.audience)
-          return `${s.label}${note ? ` (${note})` : ''}, n ${fmtInt(s.of)}`
-        }).join(' · ')}
+        {sides.map((s) => `${s.label}, n ${fmtInt(s.of)}`).join(' · ')}
       </div>
     )
   }
@@ -281,7 +275,6 @@ function Legend({ sides, mode, noteOf = () => null }: { sides: readonly FormatMa
         <span key={s.audience} data-copy="level" className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="size-2 shrink-0 rounded-[2px]" style={{ background: sideColor(s.audience) }} aria-hidden />
           {s.label}, <span data-copy="figure" className="font-mono tabular-nums">{fmtInt(s.of)} of {fmtInt(s.published)}</span> classified
-          <HomonymTag note={noteOf(s.audience)} mode={mode} />
         </span>
       ))}
     </div>
@@ -332,8 +325,8 @@ export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
         {p && !p.unread ? (
           <>
             <div className={email ? undefined : COLUMNS}>
-              <Matrix matrix={p.formats} label="Format" mode={mode} noteOf={(a) => homonymOf(data, a)} />
-              <Matrix matrix={p.hooks} label="Hook" mode={mode} noteOf={(a) => homonymOf(data, a)} />
+              <Matrix matrix={p.formats} label="Format" mode={mode} />
+              <Matrix matrix={p.hooks} label="Hook" mode={mode} />
               <Medians rows={p.engagement} mode={mode} />
             </div>
             {/* ONE COVERAGE SENTENCE PER KEY. The single line under all three

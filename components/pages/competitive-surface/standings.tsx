@@ -17,8 +17,7 @@ import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
 import { horizonHref } from '@/lib/shell/bar'
-import { changeNote, homonymOf, mixLine, type CompetitiveSurfaceData, type StandingsBlock, type StandingsSeries } from '@/lib/pages/competitive-surface'
-import { HomonymTag } from './homonym'
+import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsBlock, type StandingsSeries } from '@/lib/pages/competitive-surface'
 
 // CO2 · Standings over the months (design §3 CO2).
 //
@@ -536,7 +535,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             <div>
               {s.rows.map((row) => (
                 <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-                  <strong>{row.label}</strong><HomonymTag note={homonymOf(data, row.audience)} mode={mode} />
+                  <strong>{row.label}</strong>
                   <div style={{ marginTop: 2 }}>
                     comments <Share share={row.attention} role={row.role} top={topAttention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} />
                     {' · '}videos <Share share={row.content} role={row.role} top={topContent} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} />
@@ -576,12 +575,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                     const months = monthsRead(s.series.find((x) => x.audience === row.audience) ?? null)
                     return (
                       <tr key={row.audience}>
-                        <td className="py-1.5 pr-3 text-[12.5px] font-medium">
-                          {row.label}
-                          {/* Under the name, where the cell is narrow
-                              (market-first WP1.9). */}
-                          <HomonymTag note={homonymOf(data, row.audience)} mode={mode} stacked />
-                        </td>
+                        <td className="py-1.5 pr-3 text-[12.5px] font-medium">{row.label}</td>
                         <td className="py-1.5 pr-3"><Share share={row.attention} role={row.role} top={topAttention} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><Share share={row.content} role={row.role} top={topContent} mode={mode} /></td>
                         <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(months)} of {fmtInt(s.months.length)}</td>

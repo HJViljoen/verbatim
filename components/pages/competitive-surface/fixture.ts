@@ -2,7 +2,7 @@ import { horizonWindow } from '@/lib/reading/horizon'
 import {
   CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   QUESTIONS_SUBJECTS_NOTE, STANDINGS_UNREAD, buildStandingsBlock, competitiveSurfaceHref,
-  buildSaidAbout, homonymsFor, questionsEmpty,
+  buildSaidAbout, questionsEmpty,
   type CompetitiveSurfaceData, type RivalOption,
 } from '@/lib/pages/competitive-surface'
 import { methodRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
@@ -644,18 +644,19 @@ export function claimsReadFixture(): CompetitiveSurfaceData {
   }
 }
 
-// ---- a rival name that is mostly another word (market-first WP1.9) -------------
+// ---- Sealand's rivals (market-first WP1.9) -------------------------------------
 //
 // SEALAND'S FOUR OBSERVED RIVALS, to 20 Sep on staging (research F2, F4 and
-// data-reality F13; GR F36 for the selector's counts). Freitag is German for
-// Friday: all four of its August videos (93 comments) are the day, not the
-// brand (research F7, BC F10), which is why the page carries its note.
+// data-reality F13; GR F36 for the selector's counts). Freitag's counts print
+// plainly, like any rival's: the 25 Sep production re-tag moved its German
+// "Friday" videos to the category, so no note sits beside the name (the
+// lead's R2, deploy 1 review).
 //
 // ONLY CO1 AND CO2 ARE SEALAND'S. The other fields are the base fixture's
 // (Össur's), because the research does not hold Sealand's per-post or
 // per-question counts and a fixture does not invent them. Tests do render
 // those blocks from this fixture, and the whole page, but only for the copy
-// contract and the count of notes: CO3 to CO7 then draw Össur's figures (the
+// contract and Freitag's plain counts: CO3 to CO7 then draw Össur's figures (the
 // Ottobock head-to-head) under the brand 'Sealand', a composite no test reads
 // as Sealand's, and no test asserts anything Sealand-specific of them.
 
@@ -686,7 +687,7 @@ const SEALAND = [
 /** The analysed videos per rival that the selector printed on 20 Sep (GR F36). */
 const SEALAND_ANALYSED: [string, number][] = [['Cotopaxi', 216], ['Freitag', 34], ['Patagonia', 17], ['The North Face', 24]]
 
-export function homonymRivalFixture(): CompetitiveSurfaceData {
+export function sealandRivalFixture(): CompetitiveSurfaceData {
   const base = competitiveFixture()
   const names = SEALAND_ANALYSED.map(([name]) => name)
   const options: RivalOption[] = SEALAND_ANALYSED.map(([name, analysed], i) => ({
@@ -712,6 +713,5 @@ export function homonymRivalFixture(): CompetitiveSurfaceData {
       changes: [],
       pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
     }),
-    homonyms: homonymsFor(names),
   }
 }
