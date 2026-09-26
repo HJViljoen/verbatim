@@ -16,7 +16,7 @@ import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import { paneSides, sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { printsClient } from '@/lib/subjects/calibration-state'
+import { calibrationWord, printsClient } from '@/lib/subjects/calibration-state'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
 //
@@ -191,7 +191,18 @@ export const subjectsSubject: Block<SubjectsData> = {
     // — the Agent page took no params at all — so the button landed a client on
     // a blank composer. A subject id is not a question either; the question is.
     const href = `${ctx.appUrl}/dashboard/agent?ask=${encodeURIComponent(`How are we seen on ${pane.name}?`)}`
-    const meta = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
+    const named = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
+    // THE CALIBRATION WORD SITS BESIDE THE NAME IT QUALIFIES (design pass):
+    // first in the heading's own mono line, "Community & purpose  provisional
+    // · named 24 Sep 2026 · 7 of 7 subjects", which is the rail's face for the
+    // same word. On a line of its own between the heading row and the cells it
+    // floated 30px from each, a caption belonging to neither. The email arm
+    // has no heading row (its title is the eyebrow), so there it stays at the
+    // top of the body.
+    const word = calibrationWord(pane.calibration)
+    const meta = word && !email
+      ? <><CalibrationTag calibration={pane.calibration} mode={mode} /> · {named}</>
+      : named
     // THE EARLIER GAP PRINTS ONLY WHERE ONE OF THE TWO IS AN ANSWER. Where
     // both refuse, "too few to compare. Too few to compare in August." is the
     // same non-answer twice, and a sentence that repeats itself reads as a
@@ -257,8 +268,9 @@ export const subjectsSubject: Block<SubjectsData> = {
         // the chart. Levels, dated, in the category's own n.
       >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
-        {/* The row tag, over the cells: "provisional" (decision C). */}
-        <CalibrationTag calibration={pane.calibration} mode={mode} block className="mb-2" />
+        {/* The row tag, over the cells: "provisional" (decision C). Email
+            only: the app and print arms carry it in the heading line. */}
+        {email ? <CalibrationTag calibration={pane.calibration} mode={mode} block /> : null}
 
         {email ? (
           <div>{sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
