@@ -59,8 +59,10 @@ const listOf = (side: unknown): string[] =>
   Array.isArray(side) ? side.filter((v): v is string => typeof v === 'string') : []
 
 /** Is this `terms` row the exclusions list (words a video must not carry),
- *  not a search term? */
-const isExclusions = (r: Pick<ConfigChange, 'field'>): boolean => r.field === 'exclude_terms'
+ *  not a search term? Shared with the lead's new-search count
+ *  (lib/pages/overview-market/provenance.ts), so the two agree on what "terms
+ *  added" means. */
+export const isExclusions = (r: Pick<ConfigChange, 'field'>): boolean => r.field === 'exclude_terms'
 
 /** What a group of rows added and removed from one list, each once. */
 function moved(rows: readonly Pick<ConfigChange, 'before' | 'after'>[]): { added: string[]; removed: string[] } {

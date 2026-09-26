@@ -2,6 +2,7 @@ import type { ConfigChange } from '../../config-log'
 import { subredditKey } from '../../gather/subreddits'
 import { activeCommunities } from '../../reading/comparability'
 import { monthStartOf, nextMonth } from '../../reading/month-key'
+import { isExclusions } from '../../settings/what-we-changed'
 
 // The lead theme's "{x} of its {n} videos came from searches we added in
 // September" (market-first WP1.6; the hero rule in the WP, `MarketTheme.
@@ -12,8 +13,10 @@ import { monthStartOf, nextMonth } from '../../reading/month-key'
 // MF1) is one we added in the reading month. A video first found by an older
 // search as well does not count, nor does one with no provenance row. The
 // terms added in the month come off the change log's `terms` rows dated in it
-// (`after` minus `before`); the communities off its `subreddits` rows (the
-// active set after, minus the active set before).
+// (`after` minus `before`), leaving out the exclusions list, which is not a
+// search (`isExclusions`, as Settings › What we changed counts them); the
+// communities off its `subreddits` rows (the active set after, minus the
+// active set before).
 //
 // PURE. Null where there is nothing to measure against (no provenance rows:
 // MF1 not applied), never a zero.
@@ -24,7 +27,7 @@ const listOf = (side: unknown): string[] =>
   Array.isArray(side) ? side.filter((v): v is string => typeof v === 'string').map(fold) : typeof side === 'string' && side.trim() ? [fold(side)] : []
 
 /** The searches added in `month`, from the change log. */
-export function searchesAddedIn(month: string, rows: readonly Pick<ConfigChange, 'surface' | 'changed_at' | 'before' | 'after'>[]): { terms: Set<string>; subreddits: Set<string> } {
+export function searchesAddedIn(month: string, rows: readonly (Pick<ConfigChange, 'surface' | 'changed_at' | 'before' | 'after'> & Partial<Pick<ConfigChange, 'field'>>)[]): { terms: Set<string>; subreddits: Set<string> } {
   const from = monthStartOf(month)
   const to = nextMonth(from)
   const terms = new Set<string>()
@@ -32,7 +35,7 @@ export function searchesAddedIn(month: string, rows: readonly Pick<ConfigChange,
   for (const r of rows) {
     const day = (r.changed_at ?? '').slice(0, 10)
     if (!(day >= from && day < to)) continue
-    if (r.surface === 'terms') {
+    if (r.surface === 'terms' && !isExclusions({ field: r.field ?? null })) {
       const before = new Set(listOf(r.before))
       for (const t of listOf(r.after)) if (!before.has(t)) terms.add(t)
     } else if (r.surface === 'subreddits') {

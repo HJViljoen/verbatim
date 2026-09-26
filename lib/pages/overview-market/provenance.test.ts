@@ -21,6 +21,14 @@ describe('the searches added in a month', () => {
     expect([...added.terms].sort()).toEqual(['frtg', 'handmade bag', 'sailcloth bag', 'sustainable fashion', 'travel gear'])
     expect([...added.subreddits]).toEqual(['onebag'])
   })
+
+  it('leaves out the exclusions list, as Settings › What we changed does (the 17 Sep script touched both)', () => {
+    const script = [
+      { surface: 'terms', field: 'industry_keywords', changed_at: '2026-09-17T16:02:56.000Z', before: [], after: ['made from waste'] },
+      { surface: 'terms', field: 'exclude_terms', changed_at: '2026-09-17T16:02:56.000Z', before: [], after: ['volcano', 'hip hop'] },
+    ]
+    expect([...searchesAddedIn('2026-09-01', script as never).terms]).toEqual(['made from waste'])
+  })
 })
 
 describe('a theme’s videos found only by searches added in the month', () => {
