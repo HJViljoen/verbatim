@@ -259,6 +259,26 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Buying & delivery no reading yet')
   })
 
+  // THE MAKER TAG (§2.2 block 6, the approved Main artboard's "provisional ·
+  // ▨ over a third makers"), at a fifth or more, as the Subjects rail prints
+  // it: staging at the 11 Oct clock read Looks & style at 35 of 103 market
+  // videos makers' (0.34), Durability 9 of 39 (0.23) and Price 3 of 25 (0.12).
+  it('a subject a fifth or more makers carries the rail\'s maker tag; under a fifth, or not measured, none', () => {
+    const base = marketFrontFixture()
+    const share: Record<string, number> = { 's-looks': 35 / 103, 's-durability': 9 / 39, 's-price': 3 / 25 }
+    const rows = base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id] } : r))
+    const data = { ...base, subjects: { ...base.subjects, rows } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
+    for (const mode of MODES) {
+      const t = read(block.render(data, mode, ctx))
+      expect(t, mode).toMatch(/Looks & style (· )?provisional (· )?about a third makers/)
+      expect(t, mode).toMatch(/Durability (· )?provisional (· )?about a quarter makers/)
+      expect(t, mode).not.toMatch(/Price[^\n]*makers/)
+    }
+    // A stored copy with no maker share draws no tag.
+    expect(read(block.render(base, 'app', ctx))).not.toContain('makers')
+  })
+
   // Default M-a: one wording for a subject the month was not read for on every
   // surface, which is the row's `unread` (`unreadWords`): "no reading yet"
   // while an update will still read the month, and "not read in August" once

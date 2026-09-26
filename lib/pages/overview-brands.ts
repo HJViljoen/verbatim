@@ -44,6 +44,13 @@ const say = (what: string, error: unknown): void => {
   console.error(`[overview] brands ${what}: ${(error as { message?: string } | null)?.message ?? String(error)}`)
 }
 
+/** The month's market videos (MF1 `market_month_videos`, paged), or null
+ *  where they cannot be read. Your market reads it once for the brands block
+ *  and the subjects' maker shares (`loadBrandsBlock`'s `market`). */
+export async function marketMonthIds(client: SupabaseClient, clientId: string, month: string): Promise<string[] | null> {
+  return marketIds(client, clientId, monthStartOf(month))
+}
+
 async function marketIds(client: SupabaseClient, clientId: string, month: string): Promise<string[] | null> {
   try {
     const rows = await selectAll<{ video_id: string }>(() =>
@@ -102,12 +109,18 @@ async function firstTerms(client: SupabaseClient, clientId: string, ids: readonl
  * The block for the reading month, or null where the page keeps deploy 2's
  * line: a tenant with no brand rules, or a month whose market cannot be read.
  */
-export async function loadBrandsBlock(client: SupabaseClient, clientId: string, month: string): Promise<BrandsRead | null> {
+export async function loadBrandsBlock(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  /** The month's market videos, where the page has read them already. */
+  opts: { market?: Promise<string[] | null> | null } = {},
+): Promise<BrandsRead | null> {
   const rules = brandRulesFor(clientId)
   if (rules.length === 0) return null
   const m = monthStartOf(month)
   const [market, mentions, tcRes, compRes, owned] = await Promise.all([
-    marketIds(client, clientId, m),
+    opts.market ?? marketIds(client, clientId, m),
     mentionRows(client, clientId),
     client.from('tracking_configs').select('competitor_names, own_handles, competitor_handles').eq('client_id', clientId).maybeSingle(),
     client.from('competitors').select('id, name, retired_at').eq('client_id', clientId),

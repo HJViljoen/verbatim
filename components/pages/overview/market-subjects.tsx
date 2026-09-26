@@ -4,11 +4,11 @@ import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { byMarketSize, CALIBRATION_TAG, marketLevel } from '@/lib/pages/overview-market'
+import { byMarketSize, CALIBRATION_TAG, makerWords, marketLevel } from '@/lib/pages/overview-market'
 import type { OverviewData, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { NO_READING_YET } from '@/lib/subjects/read-in'
-import { BarLegend, BaseHead, InnerLine, LevelBar, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
+import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
 
 // "The market by subject" (market-first WP1.6, plan §2.2 block 6): each
 // subject's market rows (the pooled side, decision E), ranked by size, with
@@ -53,6 +53,11 @@ export function rowTag(r: SubjectRow): string | null {
 
 /** Whether a row prints figures at all. */
 export const printsFigures = (r: SubjectRow): boolean => r.calibration !== 'failed' && r.market?.k != null
+
+/** A row's maker tag, as the Subjects rail prints it (plan §2.2 block 6: at a
+ *  fifth or more, "over a third makers" in the approved preview), or null
+ *  under a fifth, not measured, or with no figure. */
+export const rowMakers = (r: SubjectRow): string | null => (printsFigures(r) ? makerWords(r.makerShare ?? null) : null)
 
 const token = (id: string, suffix: 'k' | 'share' | 'prev'): string => `market_subject_${id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${suffix}`
 
@@ -121,7 +126,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
           </thead>
           <tbody>
             {rows.map((r) => {
-              const tag = rowTag(r)
+              const tag = [rowTag(r), rowMakers(r)].filter(Boolean).join(' · ')
               const figures = printsFigures(r)
               return (
                 <tr key={r.id}>
@@ -157,6 +162,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
           </div>
           {rows.map((r) => {
             const tag = rowTag(r)
+            const makers = rowMakers(r)
             const figures = printsFigures(r)
             const k = r.market?.k ?? null
             const under = figures && k != null && marketLevel(k, n)?.kind === 'count'
@@ -164,7 +170,13 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
               <div key={r.id} role="row" className={`grid ${cols} min-h-12 items-center py-2 ${RULE.row}`}>
                 <span role="rowheader" className="flex min-w-0 flex-col gap-0.5">
                   <span className={`[text-wrap:pretty] ${SCALE.row}`}>{r.label}</span>
-                  {tag ? <span className={SCALE.tag}>{tag}</span> : null}
+                  {tag || makers ? (
+                    <span className={`flex flex-wrap items-center gap-x-2 ${SCALE.tag}`}>
+                      {tag ? <span>{tag}</span> : null}
+                      {tag && makers ? <span aria-hidden className="max-sm:hidden">·</span> : null}
+                      {makers ? <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><MakerMark />{makers}</span> : null}
+                    </span>
+                  ) : null}
                 </span>
                 {figures && !under ? (
                   <span className={`block ${hidden}`}>

@@ -68,7 +68,7 @@ import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
 import { buildForYou, buildPublished, type ForYouBlock, type PublishedCensus } from './overview-market/foryou'
 import type { SubjectCalibrationWord } from './overview-market/subjects'
-import { loadQuestionsBySubject, nameQuestions, postsSharing, UNANSWERED_SHOWN } from './subjects'
+import { loadMarketMakers, loadQuestionsBySubject, makerKOf, nameQuestions, postsSharing, UNANSWERED_SHOWN, type MarketMakers } from './subjects'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
@@ -87,7 +87,7 @@ import { scheduledUpdateAfter } from '../reading/reading-month'
 import { updateInstant, type DeliveredRun } from '../reading/reading-view'
 import { loadPairRows } from '../reading/read'
 import { loadRecheck } from './overview-recheck'
-import { loadBrandsBlock } from './overview-brands'
+import { loadBrandsBlock, marketMonthIds } from './overview-brands'
 import type { ScheduleConfig } from '../pipeline/schedule-due'
 import {
   askIds,
@@ -244,6 +244,10 @@ export interface SubjectRow {
   market?: SideReading
   /** The same, in the month before, as a level beside it (never compared). */
   marketPrev?: MarketSide | null
+  /** The share of its market videos this month that are makers' (Your market
+   *  only, `withMakerShares`); null where not measured. OPTIONAL: a stored
+   *  copy without it draws no maker tag. */
+  makerShare?: number | null
   /**
    * Set only on a subject the month was NOT READ for (WP1.1 review, finding
    * 1): one counted after the month's last update wrote its rows, which has no
@@ -2212,6 +2216,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // provenance and "With this update"'s both count against them (one paged
   // `keyword_performance` read, memoised; the deploy-3 read budget).
   const addedSearches = marketFirst ? addedSearchesRead(reading.client, clientId, monthStartOf(month)) : null
+  // THE MONTH'S MARKET VIDEOS, read once for the page (MF1
+  // `market_month_videos`): the brands block counts over them, and the
+  // subjects' maker shares are read among them (the deploy-3 review: §2.2
+  // block 6's row tag at a fifth or more, as the Subjects rail prints it).
+  const marketIdsAhead = marketFirst ? marketMonthIds(reading.client, clientId, month).catch(() => null) : null
   // YOUR MARKET'S OWN READS (market-first WP1.6), started here and taken at
   // the end: they need the month and the themed run and nothing below, so
   // they run beside wave 3 rather than after it.
@@ -2221,6 +2230,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         reading,
         clientId,
         addedSearches,
+        marketIds: marketIdsAhead,
         brand,
         rivals,
         month,
@@ -2323,6 +2333,16 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       segmentRowsAhead,
     ])
   const makerShares = segmentRows ? makerSharesOf(segmentRows) : null
+  // THE SUBJECTS' MAKER SHARES (§2.2 block 6), among the month's market
+  // videos read once above: two more reads (segments, lens), and none where no
+  // subject is named or the tenant has no maker rule.
+  const subjectMakersAhead = marketFirst && (subjectRows?.length ?? 0) > 0
+    ? loadMarketMakers(reading.client, clientId, month, { ids: marketIdsAhead }).catch((error: unknown) => {
+        console.error(`[overview] subject maker shares: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+        return null
+      })
+    : null
+  subjectMakersAhead?.catch(() => {})
   // WP2.5's questions line, beside the rest of the page (its reads need the
   // subjects, read just above, and nothing below).
   const questionsAhead: Promise<ForYouQuestions> = marketFirst
@@ -2471,6 +2491,8 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   const pooledCounts = pooledDenominators(history.denominators, marketRivals)
   if (marketFirst) {
     withMarketSides(subjects, { months: subjectMonths ?? [], subjects: subjectRows ?? [], counts: pooledCounts, month, prevMonth, marketRivals, read: subjectsRead })
+    const makers = subjectMakersAhead ? await subjectMakersAhead : null
+    if (makers) withMakerShares(subjects, makers.lens, marketRivals)
   }
 
   // ── OV4 · rivals ───────────────────────────────────────────────────────
@@ -4619,6 +4641,8 @@ async function loadMarketReads(input: {
   clientId: string
   /** The page's one read of the searches first run in the month. */
   addedSearches?: (() => Promise<Set<string> | null>) | null
+  /** The page's one read of the month's market videos. */
+  marketIds?: Promise<string[] | null> | null
   brand: string
   rivals: readonly { name: string }[]
   month: string
@@ -4649,7 +4673,7 @@ async function loadMarketReads(input: {
     loadRecheck(client, clientId, prevMonth, month),
     // WP2.6's brands, counted in every video they come up in. A read that
     // fails keeps deploy 2's line, never a 0.
-    loadBrandsBlock(client, clientId, month).catch((error: unknown): null => {
+    loadBrandsBlock(client, clientId, month, { market: input.marketIds }).catch((error: unknown): null => {
       console.error(`[overview] brands: ${(error as { message?: string })?.message ?? String(error)}; the one line kept`)
       return null
     }),
@@ -4890,6 +4914,23 @@ function marketFrontPage(reads: MarketReads, input: {
  * else on the block changes, so every reader of the Phase 1 fields reads what
  * it read before.
  */
+/**
+ * Each subject row's maker share on the market (the deploy-3 review: §2.2
+ * block 6, "from deploy 3 a row carries its maker share at a fifth or more as
+ * a row tag", as the Subjects rail computes it, `fillMakerShares`): the share
+ * of its market videos this month that are makers', from MF2 `lens_readings`
+ * over the month's maker videos. Only a row with a market figure (not being
+ * re-described, read this month); null where the maker read did not happen,
+ * never 0.
+ */
+export function withMakerShares(block: SubjectsBlock, lens: MarketMakers['lens'], marketRivals: readonly string[]): void {
+  for (const r of block.rows) {
+    const k = r.market?.k ?? 0
+    const makerK = lens && k > 0 && r.calibration !== 'failed' && !r.unread ? makerKOf(lens, r.id, marketRivals) : null
+    r.makerShare = makerK != null ? makerK / k : null
+  }
+}
+
 export function withMarketSides(block: SubjectsBlock, input: {
   months: readonly StoredSubjectRow[]
   subjects: readonly Subject[]

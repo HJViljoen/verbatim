@@ -1541,14 +1541,28 @@ const rpcMissing = (error: { code?: string | null } | null | undefined): boolean
  * never as 0. A tenant with no maker rule (`segmentRulesEnabled`, Össur) reads
  * the month's videos only.
  */
-export async function loadMarketMakers(client: SupabaseClient, clientId: string, month: string): Promise<MarketMakers> {
+export async function loadMarketMakers(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  /** The month's market videos, where the caller has read them already (Your
+   *  market reads them once for its brands block too). */
+  opts: { ids?: Promise<string[] | null> | null } = {},
+): Promise<MarketMakers> {
   const out: MarketMakers = { occupies: null, makers: null, lens: null }
   const log = (what: string, error: { message?: string; code?: string | null }) => {
     if (!rpcMissing(error)) console.error(`[subjects] ${what}: ${error.message ?? String(error)}; not measured`)
   }
-  const mv = await client.rpc('market_month_videos', { p_client: clientId, p_month: monthStartOf(month) })
-  if (mv.error) { log('market_month_videos', mv.error); return out }
-  const ids = [...new Set(((mv.data ?? []) as { video_id: string }[]).map((r) => String(r.video_id)))]
+  let ids: string[]
+  if (opts.ids) {
+    const held = await opts.ids
+    if (held == null) return out
+    ids = [...new Set(held)]
+  } else {
+    const mv = await client.rpc('market_month_videos', { p_client: clientId, p_month: monthStartOf(month) })
+    if (mv.error) { log('market_month_videos', mv.error); return out }
+    ids = [...new Set(((mv.data ?? []) as { video_id: string }[]).map((r) => String(r.video_id)))]
+  }
   out.occupies = new Set(ids)
   if (!segmentRulesEnabled(clientId)) return out
   if (ids.length === 0) return { ...out, makers: new Set(), lens: [] }
