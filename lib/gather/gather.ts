@@ -12,6 +12,7 @@ import { classifyRelevance, type ClassifyResult, type RelevanceMethod } from './
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
 import { attributeVideos, ATTRIBUTION_JUDGE, ATTRIBUTION_PROMPT_VERSION, type AttributionMethod, type AttributionResult } from './attribution'
 import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
+import { recordGatherSurfacings } from './surfacings'
 import type { RunWindow } from '../pipeline/window'
 import type {
   GatherConfig,
@@ -751,6 +752,23 @@ export async function gatePlatform(opts: {
       .from('videos')
       .upsert(toUpsert, { onConflict: 'client_id,platform,video_id' })
     if (error) errors.push(`videos upsert: ${error.message}`)
+    // Gather-time provenance and surfacings (market-first WP3.4, deploy 4):
+    // `exact` first finds for the fresh kept videos, and one surfacing row for
+    // every stored video this run surfaced. A record kept beside the gather:
+    // a failure is counted on `errors` and never loses the gather, and a table
+    // not applied yet (MF1, MF3) is a quiet no-op (lib/gather/surfacings.ts).
+    else {
+      try {
+        const rec = await recordGatherSurfacings(admin, {
+          clientId: opts.clientId, runId: opts.runId ?? null, platform: adapter.platform, storedAt: stampedAt,
+          fresh: kept, surfaced: toUpsert,
+        })
+        errors.push(...rec.errors)
+        console.log(`[${adapter.platform}] provenance ${rec.provenance === 'not_applied' ? 'not recorded (MF1 not applied)' : `${rec.provenance} first finds`} · surfacings ${rec.surfacings === 'not_applied' ? 'not recorded (MF3 not applied)' : rec.surfacings}`)
+      } catch (e) {
+        errors.push(`provenance and surfacings not recorded: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
   }
 
   // Step 1 capture: persist the raw actor item for each kept video, so the
