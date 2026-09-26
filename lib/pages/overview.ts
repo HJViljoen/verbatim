@@ -2208,6 +2208,10 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // front page's board share (below).
   const segmentRowsAhead = loadThemeSegmentRows(reading.client, clientId, month, themedRunId)
   segmentRowsAhead.catch(() => {})
+  // THE SEARCHES FIRST RUN IN THE MONTH, read once for the page: the lead's
+  // provenance and "With this update"'s both count against them (one paged
+  // `keyword_performance` read, memoised; the deploy-3 read budget).
+  const addedSearches = marketFirst ? addedSearchesRead(reading.client, clientId, monthStartOf(month)) : null
   // YOUR MARKET'S OWN READS (market-first WP1.6), started here and taken at
   // the end: they need the month and the themed run and nothing below, so
   // they run beside wave 3 rather than after it.
@@ -2216,6 +2220,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         supabase,
         reading,
         clientId,
+        addedSearches,
         brand,
         rivals,
         month,
@@ -2230,7 +2235,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // latest update's arrivals and the themes it heard for the first time. Its
   // reads need the month, the runs and the segment rows, and nothing below.
   const arrivalsAhead = marketFirst
-    ? loadArrivals({ supabase, reading, clientId, runs: runsRaw, rm, month, now: readingAt, segmentRows: segmentRowsAhead })
+    ? loadArrivals({ supabase, reading, clientId, runs: runsRaw, rm, month, now: readingAt, segmentRows: segmentRowsAhead, addedSearches })
     : null
   arrivalsAhead?.catch(() => {})
   // WEEK BY WEEK (WP2.9), inside "With this update": one read of MF4 over the
@@ -4612,6 +4617,8 @@ async function loadMarketReads(input: {
   supabase: SupabaseClient
   reading: ReadingHandle
   clientId: string
+  /** The page's one read of the searches first run in the month. */
+  addedSearches?: (() => Promise<Set<string> | null>) | null
   brand: string
   rivals: readonly { name: string }[]
   month: string
@@ -4699,7 +4706,7 @@ async function loadMarketReads(input: {
   for (const id of asked) wanted.set(id, themes.find((t) => t.registryId === id)?.kind ?? null)
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
   const firstLead = leadCandidates[0]?.registryId ?? null
-  const addedSearches = addedSearchesRead(client, clientId, month)
+  const addedSearches = input.addedSearches ?? addedSearchesRead(client, clientId, month)
   const [quotes, firstProvenance] = await Promise.all([
     loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(leadCandidates.map((t) => t.registryId))),
     firstLead ? loadLeadProvenance(client, clientId, month, firstLead, addedSearches) : Promise.resolve(null),
@@ -4761,6 +4768,8 @@ async function loadArrivals(input: {
   month: string
   now: string
   segmentRows: Promise<ThemeMakerShareRow[] | null>
+  /** The page's one read of the searches first run in the month. */
+  addedSearches?: (() => Promise<Set<string> | null>) | null
 }): Promise<ArrivalsBlock | null> {
   const { supabase, clientId, rm } = input
   const client = input.reading.client
@@ -4791,7 +4800,7 @@ async function loadArrivals(input: {
   })
   const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
   const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes.slice(0, ARRIVAL_THEMES_SHOWN)
-  const provenance = await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), addedSearchesRead(client, clientId, month))
+  const provenance = await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), input.addedSearches ?? addedSearchesRead(client, clientId, month))
   return buildArrivals({
     run: { id: run.id, date },
     rows: (arrived.data ?? []) as UpdateArrivalsRow[],

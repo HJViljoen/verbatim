@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { SEALAND_CLIENT_ID } from '../config'
-import { noiseComments, noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
+import { noiseComments, noiseCommentsOf, noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
 
 // This week's noise filter (market-first WP2.7). The reads are stubbed: what
 // is tested is which quotes skip, for whom, and what a failed read does.
@@ -69,6 +69,19 @@ describe('the noise filter on This week’s quotes', () => {
     }, [{ video_id: 'v1', segment: 'noise' }, { video_id: 'v2', segment: 'market' }, { video_id: 'v3', segment: 'maker' }])
     // The same native id on two platforms is two videos: only YouTube's is noise.
     expect(await noiseComments(client, SEALAND_CLIENT_ID, ['c1', 'c2', 'c3'])).toEqual(new Set(['c1']))
+  })
+
+  it('places comments the caller already read without reading them again (This week\'s new quotes)', async () => {
+    const { client, calls } = stub({
+      videos: [
+        { id: 'v1', client_id: SEALAND_CLIENT_ID, platform: 'youtube', video_id: 'yt1' },
+        { id: 'v3', client_id: SEALAND_CLIENT_ID, platform: 'youtube', video_id: 'yt2' },
+      ],
+    }, [{ video_id: 'v1', segment: 'noise' }, { video_id: 'v3', segment: 'maker' }])
+    const read = [{ id: 'c1', platform: 'youtube', video_id: 'yt1' }, { id: 'c3', platform: 'youtube', video_id: 'yt2' }]
+    expect(await noiseCommentsOf(client, SEALAND_CLIENT_ID, read)).toEqual(new Set(['c1']))
+    expect(calls.map((c) => c.name)).toEqual(['videos', RPC_SEGMENTS_FOR_VIDEOS])
+    expect(await noiseCommentsOf(client, OSSUR, read)).toEqual(new Set())
   })
 
   it('fails open: a read that errors skips no quote, rather than emptying the block', async () => {

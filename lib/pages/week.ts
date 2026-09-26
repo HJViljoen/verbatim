@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
-import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
 import {
   handleKey, intentCounts, perfVsMedian, pretty, roleByAccount, shapeInbox,
@@ -49,7 +49,7 @@ import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook
 import type { FormatMatrix } from '../reading/formats'
 import type { SideReading } from './overview'
 import { marketSubjectSide } from './overview-market/subjects'
-import { noiseComments, noiseVideos, skipNoise } from './noise'
+import { noiseComments, noiseCommentsOf, noiseVideos, skipNoise } from './noise'
 import type { ConfigChange } from '../config-log'
 import type { ScheduleConfig } from '../pipeline/schedule-due'
 import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
@@ -2449,10 +2449,12 @@ export async function loadSubjectQuotes(
   // insight this update wrote out of a comment written in March is March's
   // comment, and "new quotes this update" means quotes written inside the days
   // this update covered.
-  const dated = await inChunks<{ id: string }>(
+  // With each comment's platform and video, so the noise filter below needs
+  // no second read of the same comments (`noiseCommentsOf`).
+  const dated = await inChunks<{ id: string; platform: string; video_id: string }>(
     pool.map((p) => p.citation.commentId as string),
     (part) => () =>
-      supabase.from('comments').select('id')
+      supabase.from('comments').select('id, platform, video_id')
         .eq('client_id', clientId)
         .in('id', part)
         .gte('comment_date', window.from).lt('comment_date', window.to)
@@ -2462,7 +2464,8 @@ export async function loadSubjectQuotes(
   const dayOk = pool.filter((p) => p.citation.commentId && fresh.has(p.citation.commentId))
   // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7), and the
   // count beside the list is of the quotes it could have shown.
-  const noise = await noiseComments(supabase, clientId, dayOk.map((p) => p.citation.commentId as string))
+  const okIds = new Set(dayOk.map((p) => p.citation.commentId as string))
+  const noise = await noiseCommentsOf(supabase, clientId, dated.filter((c) => okIds.has(c.id)))
   const kept = skipNoise(dayOk, (p) => p.citation.commentId, noise)
   const shown = kept.slice(0, NEW_QUOTES_SHOWN)
   const cited = await citeQuotes(supabase, clientId, shown.map((s) => s.citation))
@@ -2972,9 +2975,12 @@ export async function loadNewThemes(
       // the arithmetic — and `mapWithLimit` beside it has the other half: the
       // chunks go out together, so the `isMissingMonthTable` guard below learns
       // a missing table after up to min(chunks, READ_CONCURRENCY) requests
-      // rather than after one. Bounded here: the themes first heard in one
-      // update are tens of ids, which is a single chunk.
-      MULTI_ROW_IN_CHUNK,
+      // rather than after one. AND HERE THE ROWS PER ID ARE FEW: only rows
+      // with videos, and an identity an update mints is mostly one audience
+      // in one month (staging's 20 Sep update: 468 minted, 541 rows), so the
+      // URL cap binds first (UUID_IN_CHUNK: two reads there, not five; the
+      // deploy-3 read budget). A chunk that does run past 1,000 rows pages.
+      UUID_IN_CHUNK,
     )
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error

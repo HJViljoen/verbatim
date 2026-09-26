@@ -54,12 +54,33 @@ export async function noiseVideos(client: SupabaseClient, clientId: string, vide
 export async function noiseComments(client: SupabaseClient, clientId: string, commentIds: readonly string[]): Promise<Set<string>> {
   const ids = [...new Set(commentIds.filter(Boolean))]
   if (!segmentRulesEnabled(clientId) || ids.length === 0) return new Set()
+  let comments: NoiseComment[]
   try {
-    const comments = (await Promise.all(chunk(ids, UUID_IN_CHUNK).map(async (part) => {
+    comments = (await Promise.all(chunk(ids, UUID_IN_CHUNK).map(async (part) => {
       const res = await client.from('comments').select('id, platform, video_id').eq('client_id', clientId).in('id', part)
       if (res.error) throw res.error
-      return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
+      return (res.data ?? []) as NoiseComment[]
     }))).flat()
+  } catch (error) {
+    warn('comments', error)
+    return new Set()
+  }
+  return noiseCommentsOf(client, clientId, comments)
+}
+
+/** A comment as the filter places it: its id, and its video by the platform's
+ *  own id. */
+export interface NoiseComment { id: string; platform: string; video_id: string }
+
+/**
+ * `noiseComments` for comments the caller has already read with their video
+ * (This week's new quotes read each comment's date, and take its platform and
+ * video in the same request): no comments read here, so the filter costs the
+ * videos read and `noiseVideos` (the deploy-3 read budget).
+ */
+export async function noiseCommentsOf(client: SupabaseClient, clientId: string, comments: readonly NoiseComment[]): Promise<Set<string>> {
+  if (!segmentRulesEnabled(clientId) || comments.length === 0) return new Set()
+  try {
     const native = [...new Set(comments.map((c) => c.video_id).filter(Boolean))]
     const videos = (await Promise.all(chunk(native, UUID_IN_CHUNK).map(async (part) => {
       const res = await client.from('videos').select('id, platform, video_id').eq('client_id', clientId).in('video_id', part)
@@ -73,7 +94,7 @@ export async function noiseComments(client: SupabaseClient, clientId: string, co
       .filter((c) => noise.has(uuidOf.get(`${c.platform}::${c.video_id}`) ?? ''))
       .map((c) => c.id))
   } catch (error) {
-    warn('comments', error)
+    warn('videos', error)
     return new Set()
   }
 }
