@@ -73,7 +73,7 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
 import type { ConfigChange } from '../config-log'
-import { changesFromLog, nextComparablePair } from '../reading/comparability'
+import { changesFromLog } from '../reading/comparability'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
 import { updateInstant, type DeliveredRun } from '../reading/reading-view'
@@ -83,6 +83,7 @@ import {
   askIds,
   brandsBlockFor,
   buildAsks,
+  buildChangeBlock,
   buildMarketKinds,
   buildThemeBoard,
   fromNewSearches,
@@ -4171,24 +4172,18 @@ async function loadMarketFrontPage(input: {
   }
   const asks = buildAsks(themes, month, segments, askQuotes)
 
-  const marketPair = input.pair(prevMonth, month, 'market')
-  const after = input.schedule ? scheduledUpdateAfter(input.schedule) : undefined
-  const next = nextComparablePair(input.rm.asAt ?? `${month}T12:00:00.000Z`, changesFromLog(changeRows), pairRows, {
-    view: 'market',
-    readingMonth: month,
-    ...(after ? { nextUpdateAfter: after } : {}),
-  })
-  const readRun = marketPair.row?.readThroughRun ?? null
-  const readWith = readRun ? input.runs.find((r) => r.id === readRun) : null
-  const change: ChangeBlock = {
-    prevMonth: counts.has(prevMonth) ? prevMonth : null,
+  const change = buildChangeBlock({
+    prevMonth,
     month,
-    pair: counts.has(prevMonth) ? marketPair : null,
-    next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom, inFullExpected: next.inFullExpected } : null,
-    checks: [],
-    readWith: readWith ? updateInstant(readWith) : null,
+    hasPrev: counts.has(prevMonth),
+    pair: input.pair(prevMonth, month, 'market'),
+    changes: changesFromLog(changeRows),
+    pairRows,
+    nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : null,
+    asAt: input.rm.asAt,
     paused: input.rm.paused,
-  }
+    runFinish: new Map(input.runs.map((r) => [r.id, updateInstant(r)])),
+  })
 
   return {
     market: [...counts.values()].filter((c) => c.month === month || c.month === prevMonth),

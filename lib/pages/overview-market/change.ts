@@ -4,11 +4,14 @@ import {
   COMPARE_REFUSE_SHARE,
   DEPTH_RATIO_MIN,
   modeForShare,
+  nextComparablePair,
   pairOnVerdict,
   pairShare,
   shareOf,
+  type OurChange,
   type OurChangeSurface,
   type PairComparability,
+  type PairRow,
 } from '../../reading/comparability'
 import type { FigureTable, Verdict } from '../../reading/verdicts'
 
@@ -72,6 +75,42 @@ export interface ChangeBlock {
   readWith?: string | null
   /** The tenant's updates are paused: no update is promised. */
   paused?: boolean
+}
+
+/**
+ * The block, from the page's judge and what it read (one builder for the front
+ * page and Settings › What we changed, so the two print one sentence). The
+ * next pair assumes nothing further changes, and says so in its words.
+ */
+export function buildChangeBlock(input: {
+  prevMonth: string
+  month: string
+  /** The previous month has a row: without one there is no pair. */
+  hasPrev: boolean
+  pair: PairComparability
+  changes: readonly OurChange[]
+  pairRows: readonly PairRow[]
+  nextUpdateAfter?: ((instant: string) => string | null) | null
+  asAt: string | null
+  paused: boolean
+  /** Run id to finish instant, for "read with the {date} update". */
+  runFinish: ReadonlyMap<string, string>
+}): ChangeBlock {
+  const next = nextComparablePair(input.asAt ?? `${input.month}T12:00:00.000Z`, input.changes, input.pairRows, {
+    view: 'market',
+    readingMonth: input.month,
+    ...(input.nextUpdateAfter ? { nextUpdateAfter: input.nextUpdateAfter } : {}),
+  })
+  const readRun = input.pair.row?.readThroughRun ?? null
+  return {
+    prevMonth: input.hasPrev ? input.prevMonth : null,
+    month: input.month,
+    pair: input.hasPrev ? input.pair : null,
+    next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom, inFullExpected: next.inFullExpected } : null,
+    checks: [],
+    readWith: readRun ? input.runFinish.get(readRun) ?? null : null,
+    paused: input.paused,
+  }
 }
 
 export const CHANGE_NEW = 'change_new_search_videos'
