@@ -36,6 +36,23 @@ describe('the quote rule (plan §4.0 Quotes)', () => {
     expect(accountKey(' @PackingLight ')).toBe('packinglight')
   })
 
+  it('refuses a YouTube channel answering under its own video: the handle against the channel’s title', () => {
+    // Staging's shape: the comment's author is "@azsewing", the video's
+    // account is the channel title "A-Z Sewing".
+    expect(accountKey('@azsewing')).toBe(accountKey('A-Z Sewing'))
+    expect(quotable(c({ author: '@azsewing', videoAccount: 'A-Z Sewing' }), '2026-09-01', 'question')).toBe(false)
+    // Letters in any script count, and full-width forms fold (NFKC).
+    expect(accountKey('@Zoë_Näh-Studio')).toBe(accountKey('Zoë Näh Studio'))
+    expect(accountKey('ＡＢＣ bags')).toBe('abcbags')
+  })
+
+  it('still quotes someone else, and never matches on an empty name', () => {
+    expect(quotable(c({ author: '@traveller_amy', videoAccount: 'A-Z Sewing' }), '2026-09-01', 'question')).toBe(true)
+    // An author of punctuation only folds to nothing: never "the same account".
+    expect(quotable(c({ author: '@__', videoAccount: '--' }), '2026-09-01', 'question')).toBe(true)
+    expect(quotable(c({ author: null, videoAccount: null }), '2026-09-01', 'question')).toBe(true)
+  })
+
   it('refuses the wrong kind, and anything with no comment behind it', () => {
     expect(quotable(c({ insightKind: 'praise' }), '2026-09-01', 'question')).toBe(false)
     expect(quotable(c({ commentId: null }), '2026-09-01', 'question')).toBe(false)

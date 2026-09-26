@@ -45,10 +45,25 @@ export interface QuoteCandidate {
   videoAccount: string | null
 }
 
-/** An account name as two spellings of it compare: no "@", no case, no
- *  surrounding space. */
+/**
+ * An account name as two spellings of it compare: its letters and digits
+ * only, in one case (Unicode-aware, after NFKC folding).
+ *
+ * NOT JUST THE "@" AND THE CASE (WP1.6 review). On YouTube the comment's
+ * author is the channel's handle ("@azsewing") while `videos.account_name` is
+ * the channel's title ("A-Z Sewing"); stripping the "@" alone matched 7 of
+ * September's 7,517 YouTube comments on staging against the channel's own
+ * videos, letters and digits 77. A handle that is not its title's letters
+ * (a title "The Bag Lady" over "@baglady123") still escapes: the videos store
+ * no handle beside the title.
+ *
+ * REDDIT CANNOT BE CAUGHT HERE: its `account_name` is the subreddit
+ * ("r/onebag"), and the videos store no post author, so the post's own author
+ * replying in its thread is not recognisable (recorded for WP1.8 and the copy
+ * read).
+ */
 export const accountKey = (s: string | null | undefined): string =>
-  (s ?? '').trim().replace(/^@+/, '').toLowerCase()
+  (s ?? '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 
 /** Is this candidate one the page may print for this month and kind? */
 export function quotable(c: QuoteCandidate, month: string, kind: string | null): boolean {
