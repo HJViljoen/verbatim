@@ -92,7 +92,7 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
     const c = data.ownPosts
     const empty = subjectsOwnPosts.emptyState(data)
     const email = mode === 'email'
-    const footer = openLink(mode, `${ctx.appUrl}/dashboard/market`, 'Open your moves →')
+    const footer = openLink(mode, `${ctx.appUrl}/dashboard/market`, 'Open Market →')
 
     if (!c || empty) {
       return (
