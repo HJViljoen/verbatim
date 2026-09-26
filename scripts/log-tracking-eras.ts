@@ -18,7 +18,8 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // WHAT IT WRITES, with --apply --project <ref>:
 //   1. REACH ON THE EXISTING CHANGE ROWS. Every search change of ours (terms and
 //      communities: the 9, 13 and 17 Sep changes on Sealand) already has trigger
-//      or reconstructed rows. For each, and each month asked for, a
+//      or reconstructed rows. For each that moved a search (an exclusions-only
+//      change moves none and gets no row), and each month asked for, a
 //      `config_change_reach` row per population (market, category): the month's
 //      videos found by the terms that change added or removed and nothing else
 //      (lib/provenance/searches.ts reachOf), out of the month's videos
@@ -52,8 +53,12 @@ const NAME = 'log-tracking-eras'
 export const REACH_METHOD = 'search_terms_v1'
 
 /** The notes, in client words (no digit, no em dash, no pipeline word). */
+// The gate note says the unjudged videos stay in the counts, and no more: the
+// only mark they get is `unjudged_admission` in video_segments.reason, which
+// nothing displays and a tenant cannot select, so "and are marked" would claim
+// what the product does not do (plan §7.11).
 export const GATE_RULE_NOTE =
-  'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts and are marked.'
+  'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts.'
 export const ATTRIBUTION_NOTE =
   'We improved how we tell which brand a post is about, so fewer posts are filed under the wrong brand.'
 export const CAPPED_NOTE = 'An update gathered less than usual because a spending cap was reached.'
@@ -125,7 +130,14 @@ async function main() {
     const rows = (c.rowIds ?? [c.id]).map((id) => byId.get(id)).filter((r): r is ConfigChange => r != null)
     const delta = termDelta(rows)
     const moved = [...delta.added].map((t) => `+${t}`).concat([...delta.removed].map((t) => `-${t}`))
-    console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface} · ${moved.length > 0 ? moved.join(', ') : '(no search moved)'}`)
+    if (moved.length === 0) {
+      // An exclusions-only terms change (termDelta skips exclude_terms) or a
+      // community change that moved no active community: no search moved, so
+      // there is nothing to measure. No row, rather than "brought in 0".
+      console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface} · (no search moved: no reach row)`)
+      continue
+    }
+    console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface} · ${moved.join(', ')}`)
     for (const m of months) {
       const pops = populations(monthSets.get(m)!)
       for (const population of ['market', 'category'] as const) {
