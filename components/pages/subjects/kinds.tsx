@@ -9,6 +9,7 @@ import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
 import { allRedescribed, paneSides, sideEyebrow, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { surface } from '@/lib/nav'
 
 // SU2 · the kinds of thing said, per audience (design §3 SU2, the mock's (b)).
 //
@@ -208,8 +209,10 @@ export const subjectsKinds: Block<SubjectsData> = {
     const email = mode === 'email'
     // `openLink`, not a hand-rolled pair: print draws no in-app control, which
     // matters now that this page exports (a PDF and a share page have no
-    // session to open Voice with).
-    const footer = openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'Open Voice →')
+    // session to open Conversation with). The page's CURRENT sidebar label
+    // (plan §4.0): Voice became Conversation with deploy 3 (WP2.4).
+    const conversation = surface('voice')
+    const footer = openLink(mode, `${ctx.appUrl}${conversation.href}`, `Open ${conversation.label} →`)
 
     if (!pane || empty) {
       return (

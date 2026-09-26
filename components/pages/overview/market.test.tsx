@@ -217,6 +217,14 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     }
   })
 
+  it('its footer names every theme at 10+ on Conversation (WP2.4), under the current label', () => {
+    const data = marketFrontFixture()
+    expect(data.themes?.atTen).toBe(21)
+    expect(renderText(overviewThemes.render(data, 'app', ctx))).toContain('All 21 on Conversation →')
+    expect(renderText(overviewThemes.render(data, 'email', ctx))).toContain('All 21 on Conversation →')
+    expect(renderText(overviewThemes.render(data, 'app', ctx))).not.toContain('Voice')
+  })
+
   it('wraps a long theme rather than cutting it with "…" (at 1024 the theme track is about 210px)', () => {
     const board = render(overviewThemes.render(marketFrontFixture(), 'app', ctx))
     expect(board).toContain('role="rowheader"')

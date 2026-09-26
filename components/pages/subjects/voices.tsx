@@ -6,6 +6,7 @@ import { BlockQuote, BlockQuotes } from '@/components/blocks/quote'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { allRedescribed, SUBJECTS_ALL_REDESCRIBED, voiceCite, voicesMeta, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
+import { surface } from '@/lib/nav'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
 //
@@ -105,8 +106,10 @@ export const subjectsVoices: Block<SubjectsData> = {
   render(data, mode = 'app', ctx) {
     const pane = data.selected
     const empty = subjectsVoices.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/voice`
-    const footer = openLink(mode, href, 'Hear these voices in Voice →')
+    // The page's CURRENT sidebar label (plan §4.0; Conversation from WP2.4).
+    const conversation = surface('voice')
+    const href = `${ctx.appUrl}${conversation.href}`
+    const footer = openLink(mode, href, `Hear these voices in ${conversation.label} →`)
     // THE SUBJECT IS IN THE TITLE. "Voices on this subject" is a caption on a
     // tile whose subject is named two tiles away and, in an export, on another
     // slide entirely.

@@ -14,12 +14,15 @@ describe('the nine surfaces', () => {
     ])
   })
 
-  it('carry deploy 2’s labels: "Your market" and "Your moves", never "Your market" beside "Market" (§2.1)', () => {
+  it('carry deploy 3’s labels: "Your market", "Conversation" and "Your moves", never "Your market" beside "Market" (§2.1)', () => {
     expect(SURFACES.map((s) => s.label)).toEqual([
-      'Your market', 'Subjects', 'Voice', 'Competitive', 'Your moves', 'This week', 'Ask', 'Reports', 'Settings',
+      'Your market', 'Subjects', 'Conversation', 'Competitive', 'Your moves', 'This week', 'Ask', 'Reports', 'Settings',
     ])
     expect(surface('overview').question).toBe('What is your market saying this month, and what changed?')
+    // WP2.4: the page is every theme at 10+, read on the market (§2.1).
+    expect(surface('voice').question).toBe('Everything your market talked about, in full')
     expect(SURFACES.map((s) => s.label)).not.toContain('Market')
+    expect(SURFACES.map((s) => s.label)).not.toContain('Voice')
   })
 
   it('every address is unique and under /dashboard', () => {
@@ -63,7 +66,7 @@ describe('the nine surfaces', () => {
   })
 
   it('looks one up by key and refuses an unknown one', () => {
-    expect(surface('voice').label).toBe('Voice')
+    expect(surface('voice').label).toBe('Conversation')
     // @ts-expect-error not a nav key
     expect(() => surface('videos')).toThrow()
   })

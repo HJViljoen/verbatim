@@ -185,8 +185,13 @@ export const overviewThemes: Block<OverviewData> = {
 
   render(data, mode = 'app', ctx) {
     const board = data.themes ?? null
+    // "ALL 23 ON CONVERSATION →" ONCE WP2.4 HAS SHIPPED (plan §3.3, WP1.6's
+    // board rule): Conversation lists every theme at 10 or more, so the link
+    // names how many it holds, under the page's CURRENT sidebar label
+    // (plan §4.0). With nothing at 10 it is a plain link to the page.
     const voice = surface('voice')
-    const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)
+    const atTen = board?.atTen ?? 0
+    const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, atTen > 0 ? `All ${fmtInt(atTen)} on ${voice.label} →` : `Open ${voice.label} →`)
     const empty = overviewThemes.emptyState(data)
     return (
       <BlockFrame title={overviewThemes.title} mode={mode} footer={footer} roomy>

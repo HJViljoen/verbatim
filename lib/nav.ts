@@ -65,8 +65,8 @@ export interface Surface {
  * (WP1.6) renames two: "Overview" becomes "Your market", the new front page,
  * and "Market" becomes "Your moves", because its content is already the
  * decision page and the sidebar must never show "Your market" beside
- * "Market". Voice becomes Conversation with deploy 3, Competitive becomes
- * Brands with deploy 5. Keys and page keys do not change, so no stored report
+ * "Market". Voice became Conversation with deploy 3 (WP2.4); Competitive
+ * becomes Brands with deploy 5. Keys and page keys do not change, so no stored report
  * breaks. Your moves keeps its question until deploy 5 rebuilds the page.
  */
 export const SURFACES: readonly Surface[] = [
@@ -75,7 +75,11 @@ export const SURFACES: readonly Surface[] = [
   // page, and the approved preview's bar is the month selector and one line.
   { key: 'overview', href: '/dashboard', label: 'Your market', question: 'What is your market saying this month, and what changed?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'overview' },
   { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How are we seen on this subject?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
-  { key: 'voice', href: '/dashboard/voice', label: 'Voice', question: 'Who is saying what in this category?', group: 'Intelligence', bar: 'reading', page: 'voice' },
+  // CONVERSATION WITH DEPLOY 3 (WP2.4, plan §2.1): the page is rebuilt as
+  // every theme at 10 videos or more, so the label changes with it. The key,
+  // the address and the page key stay `voice`, so no stored link or report
+  // breaks.
+  { key: 'voice', href: '/dashboard/voice', label: 'Conversation', question: 'Everything your market talked about, in full', group: 'Intelligence', bar: 'reading', page: 'voice' },
   { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and how much of it do they hold?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
   { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
