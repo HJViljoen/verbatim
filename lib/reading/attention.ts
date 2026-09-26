@@ -242,6 +242,8 @@ export function panelStale(
  */
 export const PANEL_STALING_SURFACES: readonly string[] = [
   'terms', 'rivals', 'handles', 'platforms', 'rival_rename', 'entity_retag', 'regate',
+  // A change to the filing judge re-files accounts as a re-tag does (deploy 4, WP3.4).
+  'attribution',
 ]
 
 /**
