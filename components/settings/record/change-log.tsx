@@ -53,8 +53,12 @@ import { MonthFlag, RecordSection } from './frame'
 const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border/70 py-3 lg:min-h-[52px] lg:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] lg:items-center lg:py-0'
 
 export function ChangeLogBlock({
-  log, rows, meta, boundary, showing, now, unavailable,
+  log, rows, meta, boundary, showing, now, unavailable, title = 'The change log',
 }: {
+  /** The section's title. Settings › What we changed (market-first WP1.6)
+   *  prints the changes of ours in its own dated list, and this block the
+   *  rest, as "Other settings changes", so no change prints twice. */
+  title?: string
   log: ChangeLogView
   /** How many recorded rows the table draws. */
   rows: number
@@ -70,14 +74,14 @@ export function ChangeLogBlock({
 }) {
   if (unavailable) {
     return (
-      <RecordSection title="The change log" meta="not recorded yet">
+      <RecordSection title={title} meta="not recorded yet">
         <p className="m-0 text-[12.5px] text-muted-foreground">{unavailable}</p>
       </RecordSection>
     )
   }
   const shown = log.recorded.slice(0, rows)
   return (
-    <RecordSection title="The change log" meta={meta} note={boundary}>
+    <RecordSection title={title} meta={meta} note={boundary}>
       {shown.length === 0 ? (
         <p className="m-0 text-[12.5px] text-muted-foreground">No change has been recorded yet.</p>
       ) : (

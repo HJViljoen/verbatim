@@ -1,5 +1,9 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
+import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
+import { changesFromLog } from '@/lib/reading/comparability'
+import { otherRows } from '@/lib/settings/what-we-changed'
+import { loadWhatWeChanged } from '@/lib/settings/what-we-changed-load'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
 import { RecordFooter, RecordSection } from '@/components/settings/record/frame'
@@ -61,6 +65,12 @@ export default async function SettingsRecordPage() {
   const window = recordWindow(`${month}-01`, nowIso)
   const reading = readingHandle(clientId)
 
+  // WHAT WE CHANGED (market-first WP1.6): the front page's "What we changed,
+  // and when →" opens here. Started beside the record's own reads.
+  const changedAhead = loadWhatWeChanged(supabase, reading, nowIso).catch((error: unknown) => {
+    console.error(`[settings] what we changed: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  })
   const inputs = await loadRecordPage({
     client: supabase,
     admin: canSeeExcerpt ? createAdminClient() : null,
@@ -90,7 +100,12 @@ export default async function SettingsRecordPage() {
 
   const stats = deliveryStats(delivery, inputs.updates)
   const thisMonth = updatesInMonth(inputs.updates, month)
-  const log = readChangeLog({ rows: inputs.changes.rows, viewerUserId: userId, emails: inputs.emails })
+  const changed = await changedAhead
+  // EACH CHANGE ONCE: the changes of ours print in the dated list above, so
+  // the Phase 1 log below keeps every other row (a schedule, a subject, a
+  // discovery strike) under its own title.
+  const logRows = changed ? otherRows(inputs.changes.rows, changesFromLog(changed.changeRows)) : inputs.changes.rows
+  const log = readChangeLog({ rows: logRows, viewerUserId: userId, emails: inputs.emails })
   const save = saveState({
     lastChange: inputs.changes.rows[0] ?? null,
     affectsRecorded: inputs.changes.affectsRecorded,
@@ -147,6 +162,14 @@ export default async function SettingsRecordPage() {
           What was delivered, what changed, what was thrown away, and how much was read.
         </RecordHeader>
 
+        {changed ? (
+          <>
+            <WhatWeChangedLead block={changed.block} />
+            <TheRecord lines={changed.lines} month={changed.reading.month} prevMonth={changed.block.prevMonth} />
+            <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
+          </>
+        ) : null}
+
         <DeliveryBlock
           record={delivery}
           stats={stats}
@@ -156,6 +179,7 @@ export default async function SettingsRecordPage() {
         />
 
         <ChangeLogBlock
+          title={changed ? 'Other settings changes' : undefined}
           log={log}
           rows={CHANGE_LOG_ROWS}
           meta={changeLogMeta(log, { now: nowIso })}

@@ -8,6 +8,10 @@ import { readingsRecord, type ReadingsRecord } from '@/lib/settings/readings'
 import type { KeptRate, RejectRow } from '@/lib/settings/reject-log'
 import { gateSummary, gateTotalsFrom, sampleNote } from '@/lib/settings/reject-log'
 import { saveState, type SaveState } from '@/lib/settings/save-state'
+import { changesFromLog, comparabilityOf, type PairRow } from '@/lib/reading/comparability'
+import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
+import { buildChangeBlock, compareRules } from '@/lib/pages/overview-market/change'
+import { ledgerLines, type ReachRow } from '@/lib/settings/what-we-changed'
 
 /**
  * The fixture behind the record page's blocks (block E wave 2).
@@ -330,4 +334,62 @@ export function unrecordedSaveStateFixture(): SaveState {
     lastChange: { changed_at: '2026-09-03T11:02:00.000Z', affects_audiences: null, affects_months: null, source: 'logged' },
     affectsRecorded: false,
   })
+}
+
+// ---- What we changed (market-first WP1.6) -------------------------------------------
+//
+// Sealand's September as the section reads it on 2 Oct, September ended and
+// read to the 27 Sep update. The change log is GC F2's (staging's copy of
+// production to 20 Sep): the 13 Sep additions and the 17 Sep script. The pair
+// row is a measured August against September: September's search-outside
+// count is staging's measured 206 of 625 (GC F29, the subset WP1.4's strict
+// count must reproduce), August's CQ F25's "about 115 of 351", depth DR F39's
+// medians 23 and 15. The 13 Sep reach is CQ F27's 187 (by last surfacing).
+// None of these is the production figure WP1.8 measures; the section prints
+// whatever the rows hold.
+
+const WWC_ROWS: ConfigChange[] = [
+  wwcChange({ id: 'wwc-0913', at: '2026-09-13T10:00:58.000Z', surface: 'terms', before: ['upcycled bag'], after: ['upcycled bag', 'handmade bag', 'sustainable fashion', 'travel gear'] }),
+  wwcChange({ id: 'wwc-0917', at: '2026-09-17T16:02:56.000Z', surface: 'terms', before: ['upcycled bag'], after: ['upcycled bag', 'north face backpack', 'patagonia black hole', 'fombrand', 'made from waste', 'locally made south africa'] }),
+]
+
+function wwcChange(o: { id: string; at: string; surface: ConfigChange['surface']; before: unknown; after: unknown }): ConfigChange {
+  return {
+    id: o.id, client_id: CLIENT, changed_at: o.at, surface: o.surface, field: 'industry_keywords', before: o.before, after: o.after,
+    actor_kind: 'script', actor_user_id: null, actor_label: null, run_id: null, source: 'trigger', rows_affected: null, note: null,
+    affects_audiences: null, affects_months: null,
+  }
+}
+
+export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
+  const measured = opts.measured ?? true
+  const changes = changesFromLog(WWC_ROWS)
+  const row: PairRow | null = measured
+    ? {
+        prevMonth: '2026-08-01', month: '2026-09-01',
+        searchOutside: { prev: { k: 115, n: 351 }, curr: { k: 206, n: 625 } },
+        codeChanges: [], depth: { prevMedian: 23, currMedian: 15 }, gather: [], lateCapture: null,
+        readThroughRun: 'run-27sep', methodVersion: 'mf1', computedAt: '2026-09-30T10:00:00.000Z',
+      }
+    : null
+  const pair = comparabilityOf('2026-08-01', '2026-09-01', {
+    row, changes, view: 'market',
+    later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'run-27sep' },
+  })
+  const runFinish = new Map([['run-27sep', '2026-09-27T08:30:00.000Z']])
+  const block = buildChangeBlock({
+    prevMonth: '2026-08-01', month: '2026-09-01', hasPrev: true, pair, changes,
+    pairRows: row ? [row] : [],
+    nextUpdateAfter: scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' }),
+    asAt: '2026-09-27T08:30:00.000Z', paused: false, runFinish,
+  })
+  const reach: ReachRow[] = measured
+    ? [{ changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 187, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' }]
+    : []
+  return {
+    block,
+    rules: compareRules(block.pair),
+    lines: ledgerLines({ changes, rows: WWC_ROWS, reach, runFinish }),
+    asAt: '2026-09-27T08:30:00.000Z',
+  }
 }
