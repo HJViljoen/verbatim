@@ -12,9 +12,10 @@ import type { PairRow } from '../reading/comparability'
 // Sealand's change log around September (GC F2, staging's copy of production
 // to 20 Sep): the 9 Sep swap (seven terms out, seven in, one reconstructed row
 // each), the 13 Sep additions (two trigger rows a second apart), and a cadence
-// row that is not a change of ours. Reach: CQ F27's 187 for the 13 Sep change
-// (by last surfacing, over staging's 625 September category videos) and CQ
-// F25's "about 115 of 351" for the 9 Sep names in August. Ids are labels.
+// row that is not a change of ours. Reach: staging's config_change_reach rows
+// (26 Sep): the 13 Sep change 182 of September's 654 market videos, and the
+// 9 Sep swap 167 of August's 377 market videos (141 of 351 in the category, a
+// population the list does not print). Ids are labels.
 const row = (over: Partial<ConfigChange> & Pick<ConfigChange, 'id' | 'changed_at' | 'surface'>): ConfigChange => ({
   client_id: 'sealand', field: null, before: null, after: null, actor_kind: 'reconstructed', actor_user_id: null, actor_label: null,
   run_id: null, source: 'reconstructed', rows_affected: null, note: null, affects_audiences: null, affects_months: null, ...over,
@@ -32,12 +33,12 @@ const ROWS: ConfigChange[] = [
   row({ id: 'cadence', changed_at: '2026-09-17T16:10:00.000Z', surface: 'cadence', field: 'report_day' }),
 ]
 const REACH: ReachRow[] = [
-  { changeId: '0913-industry', month: '2026-09-01', population: 'market', touched: 187, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+  { changeId: '0913-industry', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
   // An older computation of the same measure: the newest wins.
   { changeId: '0913-industry', month: '2026-09-01', population: 'market', touched: 180, inMonth: 610, readThroughRun: null, computedAt: '2026-09-29T10:00:00.000Z' },
-  { changeId: '0909-out-0', month: '2026-08-01', population: 'market', touched: 115, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+  { changeId: '0909-out-0', month: '2026-08-01', population: 'market', touched: 167, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
   // The category population is not what the list prints.
-  { changeId: '0909-out-0', month: '2026-08-01', population: 'category', touched: 112, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+  { changeId: '0909-out-0', month: '2026-08-01', population: 'category', touched: 141, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
 ]
 const RUNS = new Map([['run-27sep', '2026-09-27T08:30:00.000Z']])
 
@@ -58,16 +59,16 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
   })
 
   it('carries each month it touched, on the market’s population, the newest measure, read with its update', () => {
-    expect(lines[0].months).toEqual([{ month: '2026-09-01', touched: 187, of: 625, readWith: '2026-09-27T08:30:00.000Z' }])
-    expect(lines[0].reach).toEqual({ month: '2026-09-01', touched: 187, of: 625, readWith: '2026-09-27T08:30:00.000Z' })
+    expect(lines[0].months).toEqual([{ month: '2026-09-01', touched: 182, of: 654, readWith: '2026-09-27T08:30:00.000Z' }])
+    expect(lines[0].reach).toEqual({ month: '2026-09-01', touched: 182, of: 654, readWith: '2026-09-27T08:30:00.000Z' })
     // A change made on 9 Sep that is measured in August: its own month has no
     // measure, so `reach` is null and August is still listed.
     expect(lines[1].reach).toBeNull()
-    expect(lines[1].months).toEqual([{ month: '2026-08-01', touched: 115, of: 351, readWith: '2026-09-27T08:30:00.000Z' }])
+    expect(lines[1].months).toEqual([{ month: '2026-08-01', touched: 167, of: 377, readWith: '2026-09-27T08:30:00.000Z' }])
   })
 
   it('prints a cell as "k of n", and nothing for a month it did not measure', () => {
-    expect(reachCell(lines[0], '2026-09-01')).toBe('187 of 625')
+    expect(reachCell(lines[0], '2026-09-01')).toBe('182 of 654')
     expect(reachCell(lines[0], '2026-08-01')).toBeNull()
     expect(ledgerMonths(lines, '2026-09-01', '2026-08-01')).toEqual(['2026-08-01', '2026-09-01'])
   })

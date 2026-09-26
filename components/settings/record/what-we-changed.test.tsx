@@ -94,7 +94,7 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     expect(t).toContain('356 of 654 September videos came from searches we added in September, read with the 27 Sep update.')
     expect(t).not.toContain('376 of 625')
     expect(t).toContain('How we check, mark and file videos read with the 27 Sep update')
-    expect(t).toContain('187 of 625')
+    expect(t).toContain('182 of 654')
   })
 
   it('prints a measured zero as "none", an unmeasured month as "not measured yet", and nothing for the capped update, which moves no video', () => {

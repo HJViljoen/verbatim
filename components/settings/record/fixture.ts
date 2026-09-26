@@ -341,7 +341,9 @@ export function unrecordedSaveStateFixture(): SaveState {
 // row is a measured August against September, staging's (Aug, Sep) row after
 // the 26 Sep MF1 rehearsal: the strict search-outside counts 148 of 351 and
 // 376 of 625 (category) and WP1.8's one figure, 356 of 654 (market), depth
-// DR F39's medians 23 and 15. The 13 Sep reach is CQ F27's 187 (by last surfacing).
+// DR F39's medians 23 and 15. The 13 Sep reach is staging's config_change_reach
+// row for that change (1bf52851, 26 Sep): 182 of September's 654 market videos
+// (its category row, not printed here, is 181 of 625).
 // The gate fix's reach is WP1.4's read-only staging dry run of 26 Sep
 // (`exec/logs/wp1-4-confirm-dry-measure-comparability-staging.txt`): 65 of
 // September's 654 market videos and 64 of its 625 category videos were let in
@@ -410,7 +412,7 @@ export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
     asAt: '2026-09-27T08:30:00.000Z', paused: false, runFinish,
   })
   const reach: ReachRow[] = measured
-    ? [{ changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 187, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' }]
+    ? [{ changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' }]
     : []
   return {
     block,
@@ -436,7 +438,7 @@ export function recordFixture(opts: { measured?: boolean; judged?: boolean } = {
   const runFinish = new Map([['run-27sep', '2026-09-27T08:30:00.000Z']])
   const reach: ReachRow[] = measured
     ? [
-        { changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 187, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-gate-fix', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-gate-fix', month: '2026-09-01', population: 'market', touched: 65, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-attribution', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
