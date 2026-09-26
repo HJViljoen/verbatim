@@ -283,7 +283,15 @@ export const subjectsSubject: Block<SubjectsData> = {
           // "not tracked" — five of ten on Sealand — and the note under the
           // grid then said the same five names again. The note is the one
           // place an absent side is named.
-          <TileColumns of={3} className="gap-x-4 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
+          // EVERY ROW STARTS ON THE SAME EDGE (design pass). The padding keyed
+          // on the first CHILD, so the second row's first cell (The North
+          // Face, on five sides) kept its 16px and stood indented under
+          // Cotopaxi. It keys on the first cell of each ROW now, as
+          // `TileColumns`' own rule does (3n+1), and only at xl, where the
+          // columns are; the stacked column and paper (whose rule CSS pads
+          // the leading edge itself) keep one left edge. The gutter is the
+          // padding at xl, so a hairline has 16px on each side.
+          <TileColumns of={3} className="gap-x-4 xl:gap-x-0 xl:[&>*]:px-4 xl:[&>*:nth-child(3n+1)]:pl-0 xl:[&>*:nth-child(3n)]:pr-0 xl:[&>*:last-child]:pr-0">
             {sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
           </TileColumns>
         )}
