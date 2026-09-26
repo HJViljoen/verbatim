@@ -91,13 +91,30 @@ describe('monthOptions: the selector\'s menu', () => {
     expect(options[0].href).toBe('/dashboard/subjects?item=s1')
   })
 
-  it('prints month names only: no state word, so none reaches the bar', () => {
+  it('labels months by name only: no "so far" and no "still filling", so none reaches the bar', () => {
     const options = monthOptions('/dashboard', {}, sealandReading('2026-10-11T12:00:00.000Z'), [{ month: '2026-10-01', isDefault: false }, ...EARLIER])
     for (const o of options) {
       expect(o.label).toMatch(/^[A-Z][a-z]+ \d{4}$/)
       expect(o.label).not.toContain('so far')
       expect(o.label).not.toContain('still filling')
     }
+  })
+
+  it('says under a month too few to read that it is, with its count, and nothing under a month that reads', () => {
+    const others = [
+      { month: '2026-08-01', isDefault: false, tooFew: false, videos: 377 },
+      { month: '2026-07-01', isDefault: false, tooFew: true, videos: 36 },
+      { month: '2026-06-01', isDefault: false, tooFew: true, videos: 50 },
+    ]
+    const options = monthOptions('/dashboard', {}, sealandReading('2026-10-02T06:00:00.000Z'), others)
+    expect(options.map((o) => [o.label, o.note])).toEqual([
+      ['September 2026', null],
+      ['August 2026', null],
+      ['July 2026', '36 videos · too few to read'],
+      ['June 2026', '50 videos · too few to read'],
+    ])
+    // The label stays the month's name alone.
+    for (const o of options) expect(o.label).toMatch(/^[A-Z][a-z]+ \d{4}$/)
   })
 
   it('is empty where there is no other month, so the chip is not a control', () => {

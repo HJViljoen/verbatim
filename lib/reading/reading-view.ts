@@ -7,7 +7,7 @@ import { marketAudiences, pooledDenominators } from './market'
 import { memoRead } from './memo'
 import { loadMonthSeries, type ReadingHandle } from './read'
 import { monthStartOf } from './month-key'
-import { closedMonthFor, parseMonthParam, readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from './reading-month'
+import { closedMonthFor, monthStateOf, parseMonthParam, readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from './reading-month'
 import type { MonthOrigin, MonthStatus } from './types'
 
 // The reading month, from what a page loader holds (market-first WP1.2).
@@ -55,6 +55,12 @@ export interface ReadingDenominator {
 export interface OtherMonth {
   month: string
   isDefault: boolean
+  /** The month's state is "too few to read" (`monthStateOf`): under 100
+   *  market videos, settled. The selector says so beside its name (deploy 2
+   *  review). Additive. */
+  tooFew?: boolean
+  /** The month's market videos, where it has a row. Additive. */
+  videos?: number | null
 }
 
 /** The most months the selector lists, the month read among them: a year.
@@ -160,10 +166,19 @@ export function readingViewFrom(input: ReadingViewInput): ReadingView {
   const offered = new Set([...videosByMonth.keys()].map(monthStartOf).filter((m) => m <= current))
   offered.add(rule.month)
   offered.delete(reading.month)
+  // EACH MONTH'S STATE WHERE IT IS "too few to read" (deploy 2 review): ten of
+  // Sealand's twelve months are under 100 videos, and a name alone gave no
+  // warning before the click. The same state the chip's tooltip prints.
   const others = [...offered]
     .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
     .slice(0, MONTH_MENU_MAX - 1)
-    .map((month) => ({ month, isDefault: month === rule.month }))
+    .map((month) => {
+      const videos = videosByMonth.get(month) ?? null
+      const row = rows.get(month)
+      const tooFew = videos != null
+        && monthStateOf(month, input.now, { status: row?.status ?? 'filling', origin: row?.origin ?? 'live', videos }) === 'too_few'
+      return { month, isDefault: month === rule.month, tooFew, videos }
+    })
   return { reading, others }
 }
 

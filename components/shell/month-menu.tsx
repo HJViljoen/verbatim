@@ -30,11 +30,16 @@ export function MonthMenu({
         {label}
         <ChevronDown aria-hidden className="size-3.5 shrink-0 text-secondary-foreground" strokeWidth={2} data-print-hide />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
+      <DropdownMenuContent align="start" className="w-56">
         {options.map((o) => (
           <DropdownMenuItem key={o.month} asChild className="cursor-pointer gap-3 text-[12.5px]">
             <Link href={o.href} aria-current={o.current ? 'page' : undefined} className={o.current ? 'font-semibold text-foreground' : undefined}>
-              <span className="min-w-0 truncate">{o.label}</span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate">{o.label}</span>
+                {/* A MONTH TOO FEW TO READ SAYS SO BEFORE THE CLICK (deploy 2
+                    review): its state, muted, under its name. */}
+                {o.note ? <span className="truncate font-mono text-[11.5px] font-normal text-muted-foreground">{o.note}</span> : null}
+              </span>
               {o.current ? <Check aria-hidden className="ml-auto size-3.5 shrink-0 text-foreground" /> : null}
             </Link>
           </DropdownMenuItem>

@@ -1,4 +1,4 @@
-import { longMonth, shortDate, weekdayDate } from '../format'
+import { fmtInt, longMonth, shortDate, weekdayDate } from '../format'
 import { DEFAULT_HORIZON, HORIZONS, HORIZON_LABEL, HORIZON_PARAM, type Horizon } from '../reading/horizon'
 import { barLine, MONTH_PARAM, monthWords, type ReadingMonth } from '../reading/reading-month'
 import type { OtherMonth } from '../reading/reading-view'
@@ -82,12 +82,19 @@ export interface MonthOption {
   href: string
   /** The month the page reads. */
   current: boolean
+  /** The month's state where a reader should know it before the click: "36
+   *  videos · too few to read" (the plan's month-state words, §2). Null
+   *  otherwise. Additive. */
+  note?: string | null
 }
 
 /**
  * The selector's menu, newest first: the month read, marked, among the others
  * the reading view offers (`readingViewFrom`), each carrying the page's own
- * params. Month names only: the state words are the tooltip's, and the bar
+ * params. Month names, and under a month too few to read, its state in the
+ * plan's words ("36 videos · too few to read", §2's month-state table: the
+ * state words live in the selector and its tooltip), so ten thin months are
+ * not offered as if they read like September (deploy 2 review). The bar line
  * prints no "so far" and no "still filling" (25 Sep rulings, §5.1). Empty
  * where there is no other month, so the chip is then not a control.
  */
@@ -99,10 +106,14 @@ export function monthOptions(
 ): MonthOption[] {
   if (others.length === 0) return []
   // The month read is the default unless another month is.
-  const read: OtherMonth = { month: reading.month, isDefault: !others.some((o) => o.isDefault) }
+  const read: OtherMonth = { month: reading.month, isDefault: !others.some((o) => o.isDefault), tooFew: reading.state === 'too_few', videos: null }
+  const note = (o: OtherMonth): string | null => {
+    if (!o.tooFew) return null
+    return o.videos != null && Number.isFinite(o.videos) ? `${fmtInt(o.videos)} ${o.videos === 1 ? 'video' : 'videos'} · too few to read` : 'too few to read'
+  }
   return [read, ...others.filter((o) => o.month !== reading.month)]
     .sort((a, b) => (a.month < b.month ? 1 : a.month > b.month ? -1 : 0))
-    .map((o) => ({ month: o.month, label: monthLabel(o.month), href: monthHref(basePath, params, o), current: o.month === reading.month }))
+    .map((o) => ({ month: o.month, label: monthLabel(o.month), href: monthHref(basePath, params, o), current: o.month === reading.month, note: note(o) }))
 }
 
 /** This week's bar input: dated by the update, not by the month. */
