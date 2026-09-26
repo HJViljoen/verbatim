@@ -27,9 +27,12 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // where the rule guards it (the homonym test, lib/brands/mentions.ts), and
 // plans one `content` row per video and one `comment` row per matching
 // comment, method 'rule', rule version BRAND_RULE_VERSION. Heinrich runs it
-// with --apply on Tue 6 Oct (after MF2) and again after each run; he reads the
-// hand-check list on Wed 7 Oct. No model call (the GPT confirm is Stage 3,
-// decision L).
+// with --apply on Mon 5 Oct (after MF2, plan §3.7) and again after each run,
+// and reads the hand-check list that morning: it covers all eight (your name
+// and every tracked rival, a brand with no match included), and its results
+// become lib/brands/precision.ts's production entries. Until a brand has one,
+// the page prints it "not counted yet". No model call (the GPT confirm is
+// Stage 3, decision L).
 //
 // READ-ONLY BY DEFAULT, and it never prompts (it runs through `!`).
 //   --project <ref>      required; one of the two allow-listed refs, and the
@@ -183,11 +186,17 @@ function candidateDigests(perBrand: readonly BrandCandidates[]) {
   return Object.fromEntries(perBrand.map((b) => [b.rule.brand, { hits: digest(b.hits), bare: b.bare ? digest(b.bare) : null }]))
 }
 
-function handCheckMarkdown(entries: readonly HandCheckEntry[], header: string): string {
+/** The list, one section per brand in `brands` (all eight, so the check
+ *  covers every brand the page prints), a brand with no match saying so. */
+function handCheckMarkdown(entries: readonly HandCheckEntry[], brands: readonly string[], header: string): string {
   const clean = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').replace(/\|/g, '/').trim()
   const lines = [header, '']
-  for (const brand of [...new Set(entries.map((e) => e.brand))]) {
+  for (const brand of brands) {
     const mine = entries.filter((e) => e.brand === brand)
+    if (mine.length === 0) {
+      lines.push(`## ${brand}`, '', 'No match in the window: nothing to read. It stays "not counted yet" (a precision needs a match).', '')
+      continue
+    }
     lines.push(`## ${brand}`, '', '| # | video | month | where | own post | excerpt | the brand? |', '|---|---|---|---|---|---|---|')
     mine.forEach((e, i) => lines.push(
       `| ${i + 1} | ${e.videoId.slice(0, 8)} | ${e.month?.slice(0, 7) ?? ''} | ${e.source === 'content' ? e.field : 'comment'} | ${e.ownPost ? 'yes' : ''} | ${clean(e.excerpt)} | |`,
@@ -358,9 +367,10 @@ async function main() {
   }
   if (args.values['hand-check']) {
     const entries = handCheckList(plan.mentions, { sample, all: new Set(['client']), ownerOf })
-    writeNew(args.values['hand-check'], handCheckMarkdown(entries,
+    writeNew(args.values['hand-check'], handCheckMarkdown(entries, brands.map((b) => b.rule.brand),
       `# Brand mentions: the hand check (${args.project === PRODUCTION ? 'production' : 'staging'}, ${BRAND_RULE_VERSION}, window ${from} to ${to}, read ${now.toISOString().slice(0, 16)}Z)\n\n` +
-      `Every match of your name outside your own posts, and ${sample} matches per other brand. Mark each "the brand?" yes or no. Excerpts are for this check only.`))
+      `All ${brands.length} brands: every match of your name, and ${sample} matches per other brand. Mark each "the brand?" yes or no. ` +
+      'Each brand read becomes one production entry in lib/brands/precision.ts (read, yes, the date); only a production entry lets the page count a brand. Excerpts are for this check only.'))
     console.log(`  hand-check list written: ${args.values['hand-check']} (${entries.length} matches)`)
   }
 

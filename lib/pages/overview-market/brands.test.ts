@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../../config'
-import { SEPTEMBER_BRANDS, emptyBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
+import { SEPTEMBER_BRANDS, STAND_IN_CHECKS, emptyBrandsRead, shippedBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
 import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, buildBrandsBlock, isBrandsRead, nameLineParts, organicBase, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
 
 // Brands in your market in deploy 3's form (WP2.6): the name line first, then
@@ -46,6 +46,24 @@ describe('buildBrandsBlock', () => {
     expect(topicNote(b.topics[0])).toBeNull()
   })
 
+  it('prints every brand and your name "not counted yet" as deploy 3 ships: no production hand check yet, the mention layer full', () => {
+    const b = shippedBrandsRead()
+    expect(b.topics.map((t) => [t.label, t.count, t.kAny, t.kOrganic])).toEqual([
+      ['Cotopaxi', 'not_yet', null, null],
+      ['Freedom of Movement', 'not_yet', null, null],
+      ['Freitag', 'not_yet', null, null],
+      ['Old School', 'not_yet', null, null],
+      ['Patagonia', 'not_yet', null, null],
+      ['Rareform', 'not_yet', null, null],
+      ['The North Face', 'not_yet', null, null],
+    ])
+    expect(b.topics.every((t) => topicNote(t) === 'not counted yet')).toBe(true)
+    // Your name too: the 8 own posts are known, and still nothing prints
+    // until production has checked the name.
+    expect(b.nameLine).toBeNull()
+    expect(words(b)).toBe('Your name in your market in September: not counted yet.')
+  })
+
   it('prints "not counted yet" for every brand while the mention layer holds nothing (staging today)', () => {
     const b = emptyBrandsRead()
     expect(b.topics.every((t) => t.kAny == null && t.count === 'not_yet')).toBe(true)
@@ -60,10 +78,12 @@ describe('buildBrandsBlock', () => {
   })
 
   it('holds the name line at "not counted yet" while a match outside your own posts is unread, and prints the reading once read', () => {
-    const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS }
+    const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, checks: STAND_IN_CHECKS }
     const unread = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 } })
     expect(unread.nameLine).toBeNull()
-    const reads = { [SEALAND_CLIENT_ID]: [{ videoId: 'v1', brand: false, month: '2026-09-01', on: '2026-10-07', where: 'production' as const }] }
+    const reads = { [SEALAND_CLIENT_ID]: [{ videoId: 'v1', brand: false, month: '2026-09-01', on: '2026-10-05', where: 'production' as const }] }
+    // Every match read, but the name itself not checked on production: held.
+    expect(buildBrandsBlock({ ...base, checks: undefined, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads }).nameLine).toBeNull()
     const read = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads })
     expect(read.nameLine).toEqual({ month: '2026-09-01', n: 654, k: 0, ownPosts: 8 })
     const yes = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: { [SEALAND_CLIENT_ID]: [{ ...reads[SEALAND_CLIENT_ID][0], brand: true }] } })
@@ -71,7 +91,7 @@ describe('buildBrandsBlock', () => {
   })
 
   it('prints a brand measured under the floor as mostly another word, with no count', () => {
-    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-09-24', where: 'staging' as const, of: 'the bare name', source: 'research' } } }
+    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-10-05', where: 'production' as const, of: 'brands_v1, September', source: 'a test check' } } }
     const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })
     const freitag = b.topics.find((t) => t.label === 'Freitag')!
     expect(freitag).toMatchObject({ noise: true, kAny: null, count: 'noise' })

@@ -1,3 +1,4 @@
+import type { BRAND_HAND_CHECKS } from '../brands/precision'
 import { SEALAND_CLIENT_ID } from '../config'
 import { buildBrandsBlock, type BrandCountIn, type BrandsRead } from '../pages/overview-market/brands'
 
@@ -54,7 +55,23 @@ export const AUGUST_BRANDS: readonly BrandCountIn[] = [
   { brandKey: BRAND_KEYS.oldSchool, label: 'Old School', hasRows: false, kAny: 0, kOrganic: 0 },
 ]
 
-/** Staging's September block, as the page builds it. */
+/**
+ * A STAND-IN FOR THE MON 5 OCT PRODUCTION HAND CHECK, for the render tests of
+ * the counted state only. No production check exists yet, so
+ * `BRAND_HAND_CHECKS` ships empty and deploy 3 prints every brand "not counted
+ * yet" (`shippedBrandsRead`). These entries borrow the research's staging
+ * ratios (brand-counting.md fact 8: Cotopaxi 14 of 16, Patagonia 14 of 16,
+ * The North Face 15 of 15) and a check of Sealand's 9 matches (its 8 own posts
+ * and 1 comment, every one the brand), so a test can draw what the block
+ * prints once production has checked them. They never reach the page.
+ */
+export const STAND_IN_CHECKS: typeof BRAND_HAND_CHECKS = {
+  [SEALAND_CLIENT_ID]: Object.fromEntries(([['Cotopaxi', 16, 14], ['Patagonia', 16, 14], ['The North Face', 15, 15], ['Sealand', 9, 9]] as const)
+    .map(([brand, read, yes]) => [brand, { read, brand: yes, on: '2026-10-05', where: 'production' as const, of: 'test stand-in', source: 'lib/test/brands-fixture.ts' }])),
+}
+
+/** Staging's September block, as the page builds it once production's hand
+ *  check holds the three brands and your name (`STAND_IN_CHECKS`). */
 export function stagingBrandsRead(month: '2026-09-01' | '2026-08-01' = '2026-09-01'): BrandsRead {
   const september = month === '2026-09-01'
   return buildBrandsBlock({
@@ -64,6 +81,20 @@ export function stagingBrandsRead(month: '2026-09-01' | '2026-08-01' = '2026-09-
     nOrganic: september ? 516 : 249,
     rivals: september ? SEPTEMBER_BRANDS : AUGUST_BRANDS,
     name: { hasRows: true, outside: [], ownPosts: september ? 8 : 0 },
+    checks: STAND_IN_CHECKS,
+  })
+}
+
+/** The same September as deploy 3 ships it: no production hand check yet, so
+ *  every brand and your name print "not counted yet". */
+export function shippedBrandsRead(): BrandsRead {
+  return buildBrandsBlock({
+    clientId: SEALAND_CLIENT_ID,
+    month: '2026-09-01',
+    n: 654,
+    nOrganic: 516,
+    rivals: SEPTEMBER_BRANDS,
+    name: { hasRows: true, outside: [], ownPosts: 8 },
   })
 }
 

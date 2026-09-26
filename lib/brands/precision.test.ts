@@ -2,41 +2,55 @@ import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../config'
 import { BRAND_PRECISION_FLOOR } from './aliases'
-import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, noiseWords } from './precision'
+import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameChecked, noiseWords, type BrandHandCheck } from './precision'
 
-// Which brands the page may count (WP2.6): a measured precision at the floor
-// counts, under it is "mostly another word", unmeasured is "not counted yet"
-// (the lead's default of 26 Sep).
+// Which brands the page may count (WP2.6; the lead's rulings of 26 and 27
+// Sep): a production hand check at the floor counts, under it is "mostly
+// another word", and anything else, a research or staging sample included,
+// is "not counted yet" until the Mon 5 Oct production check.
+
+const EIGHT = ['Sealand', 'Cotopaxi', 'Freitag', 'Rareform', 'The North Face', 'Patagonia', 'Freedom of Movement', 'Old School']
+const prod = (read: number, brand: number): BrandHandCheck =>
+  ({ read, brand, on: '2026-10-05', where: 'production', of: 'brands_v1, September', source: 'the Mon 5 Oct hand check' })
 
 describe('brandCountState', () => {
-  it('counts the three brands the research measured at the floor (brand-counting.md fact 8)', () => {
-    for (const brand of ['Patagonia', 'The North Face', 'Cotopaxi']) {
-      expect(brandCountState(SEALAND_CLIENT_ID, brand), brand).toBe('counted')
-    }
-    expect(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID].Cotopaxi).toMatchObject({ read: 16, brand: 14 })
+  it('counts no brand as shipped: all eight wait for the Mon 5 Oct production check, the research sample’s three included', () => {
+    for (const brand of EIGHT) expect(brandCountState(SEALAND_CLIENT_ID, brand), brand).toBe('not_yet')
+    expect(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID]).toEqual({})
+    expect(nameChecked(SEALAND_CLIENT_ID)).toBe(false)
   })
 
-  it('leaves Freitag, Rareform, Freedom of Movement and Old School "not counted yet" until the Wed 7 Oct hand check', () => {
-    for (const brand of ['Freitag', 'Rareform', 'Freedom of Movement', 'Old School']) {
-      expect(brandCountState(SEALAND_CLIENT_ID, brand), brand).toBe('not_yet')
-    }
+  it('never counts on a check from anywhere but production (the research’s staging pool: Cotopaxi 14 of 16)', () => {
+    const staging = { [SEALAND_CLIENT_ID]: { Cotopaxi: { ...prod(16, 14), where: 'staging' } as unknown as BrandHandCheck } }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', staging)).toBe('not_yet')
   })
 
-  it('reads a check under the floor as mostly another word (Freitag’s bare name, 9 of 39, research fact 8)', () => {
-    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-09-24', where: 'staging' as const, of: 'the bare name', source: 'research' } } }
-    expect(9 / 39).toBeLessThan(BRAND_PRECISION_FLOOR)
+  it('counts a production check at the floor, and reads one under it as mostly another word', () => {
+    const checks = { [SEALAND_CLIENT_ID]: { Cotopaxi: prod(20, 17), Freitag: prod(20, 3) } }
+    expect(17 / 20).toBeGreaterThanOrEqual(BRAND_PRECISION_FLOOR)
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', checks)).toBe('counted')
     expect(brandCountState(SEALAND_CLIENT_ID, 'Freitag', checks)).toBe('noise')
     expect(noiseWords('Freitag')).toBe('mostly the German word for Friday · not counted')
     expect(noiseWords('Old School')).toBe('mostly another word · not counted')
   })
 
   it('never counts on a malformed check, or for another tenant', () => {
-    const bad = { [SEALAND_CLIENT_ID]: { Patagonia: { read: 0, brand: 0, on: '', where: 'staging' as const, of: '', source: '' } } }
+    const bad = { [SEALAND_CLIENT_ID]: { Patagonia: prod(0, 0) } }
     expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', bad)).toBe('not_yet')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', { [SEALAND_CLIENT_ID]: { Patagonia: prod(10, 11) } })).toBe('not_yet')
     expect(brandCountState('ossur', 'Ottobock')).toBe('not_yet')
   })
+})
 
-  it('holds no name read yet: staging’s September has no match outside your own posts', () => {
+describe('the name line’s check', () => {
+  it('is the client’s own name, checked on production at any precision', () => {
+    expect(clientBrandName(SEALAND_CLIENT_ID)).toBe('Sealand')
+    expect(clientBrandName('ossur')).toBeNull()
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: prod(9, 9) } })).toBe(true)
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Patagonia: prod(9, 9) } })).toBe(false)
+  })
+
+  it('holds no name read yet', () => {
     expect(NAME_READS[SEALAND_CLIENT_ID]).toEqual([])
   })
 })

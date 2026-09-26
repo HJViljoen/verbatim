@@ -444,6 +444,10 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   const n = b.topics[0].n
   const nOrganic = organicBase(b)
   const axis = brandAxis(b)
+  // No figure heads over a table that prints no figure (every brand not
+  // counted yet, as deploy 3 ships): the heads and their bases would stand
+  // over nothing. The same in every mode.
+  const counted = b.topics.some((t) => topicNote(t) == null)
   if (mode === 'email') {
     const cell = { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink, padding: '6px 10px 6px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
     const head = { fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.muted, padding: '0 10px 4px 0', textAlign: 'left' as const, verticalAlign: 'bottom' as const }
@@ -452,8 +456,8 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
         <thead>
           <tr>
             <th style={head}>Brand</th>
-            <th style={{ ...head, textAlign: 'right' }}>{nOrganic == null ? BRANDS_HEAD_ORGANIC : <span data-copy="level">{BRANDS_HEAD_ORGANIC} · of {fmtInt(nOrganic)}</span>}</th>
-            <th style={{ ...head, textAlign: 'right' }}><span data-copy="level">{BRANDS_HEAD_ALL} · of {fmtInt(n)}</span></th>
+            <th style={{ ...head, textAlign: 'right' }}>{!counted ? null : nOrganic == null ? BRANDS_HEAD_ORGANIC : <span data-copy="level">{BRANDS_HEAD_ORGANIC} · of {fmtInt(nOrganic)}</span>}</th>
+            <th style={{ ...head, textAlign: 'right' }}>{counted ? <span data-copy="level">{BRANDS_HEAD_ALL} · of {fmtInt(n)}</span> : null}</th>
           </tr>
         </thead>
         <tbody>
@@ -479,9 +483,6 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   const cols = 'grid-cols-[minmax(0,1fr)_7.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(96px,1fr)_9rem_3.5rem]'
   const bar = '@max-[480px]:hidden'
   const pct = (k: number | null) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
-  // No figure heads over a table that prints no figure (every brand not
-  // counted yet): the heads and the base would stand over nothing.
-  const counted = b.topics.some((t) => topicNote(t) == null)
   return (
     <div className="@container min-w-0">
       <div role="table" aria-label="Brands in your market" className="flex flex-col">

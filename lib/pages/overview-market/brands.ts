@@ -1,4 +1,4 @@
-import { brandCountState, BRAND_HAND_CHECKS, NAME_READS, noiseWords, type BrandCountState } from '../../brands/precision'
+import { brandCountState, BRAND_HAND_CHECKS, NAME_READS, nameChecked, noiseWords, type BrandCountState } from '../../brands/precision'
 import { longMonth, shortDate } from '../../format'
 import { monthStartOf } from '../../reading/month-key'
 
@@ -73,16 +73,19 @@ export function brandsLine(b: BrandsArriving, competitiveLabel: string): string 
  * lib/brands/rival-searches.ts); in all, over the market, beside it. The
  * table's column heads carry the two bases.
  *
- * NEVER A 0 FOR A BRAND NOBODY COUNTED (the lead's default of 26 Sep): a brand
- * prints its counts only where its precision was measured at the floor and the
- * mention layer holds a row of it; otherwise "not counted yet"; measured under
- * the floor, "mostly {another word} · not counted" (lib/brands/precision.ts).
+ * NEVER A 0 FOR A BRAND NOBODY COUNTED (the lead's defaults of 26 and 27 Sep):
+ * a brand prints its counts only where production's hand check measured its
+ * precision at the floor and the mention layer holds a row of it; otherwise
+ * "not counted yet"; measured under the floor, "mostly {another word} · not
+ * counted" (lib/brands/precision.ts). A research or staging sample counts no
+ * brand.
  *
  * THE NAME LINE FIRST (heinrich-fidelity must-fix 2): "In September your name
  * came up in none of your market's 654 videos. The 8 videos that name you are
- * your own posts." It prints only where every match of the client's name
- * outside its own posts has been read by hand, and says the count the reading
- * found; else "not counted yet" (plan WP2.6's done-when).
+ * your own posts." It prints only once production's hand check holds the
+ * client's own name and every match of it outside its own posts has been read
+ * by hand on production, and says the count the reading found; else "not
+ * counted yet" (plan WP2.6's done-when; §3.7 step 9).
  *
  * THE 90-DAY NOTE IS HOW TO READ'S (S17; 25 Sep rulings): it rides on the
  * block for Settings › How to read and is never printed under it.
@@ -190,11 +193,12 @@ export function buildBrandsBlock(input: {
     || (b.kAny ?? -1) - (a.kAny ?? -1)
     || a.label.localeCompare(b.label))
 
-  // The name line: every match outside its own posts read by hand.
+  // The name line: the name checked on production, and every match outside
+  // its own posts read by hand there.
   const reads = (input.nameReads ?? NAME_READS)[input.clientId] ?? []
-  const read = new Map(reads.filter((r) => monthStartOf(r.month) === month).map((r) => [r.videoId, r.brand]))
+  const read = new Map(reads.filter((r) => r.where === 'production' && monthStartOf(r.month) === month).map((r) => [r.videoId, r.brand]))
   const unread = input.name.outside.filter((id) => !read.has(id))
-  const nameLine = input.name.hasRows && unread.length === 0
+  const nameLine = input.name.hasRows && nameChecked(input.clientId, input.checks) && unread.length === 0
     ? { month, n: input.n, k: input.name.outside.filter((id) => read.get(id) === true).length, ownPosts: input.name.ownPosts }
     : null
   return { state: 'read', window: month, nameLine, topics, ninetyDayNote: NINETY_DAY_NOTE }

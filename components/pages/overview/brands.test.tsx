@@ -4,7 +4,7 @@ import { blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { emptyBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
+import { emptyBrandsRead, shippedBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
 import type { OverviewData } from '@/lib/pages/overview'
 import { brandAxis, overviewRivals } from './rivals'
 import { marketFrontFixture, ossurFrontFixture } from './fixture'
@@ -46,6 +46,20 @@ describe('Brands in your market (WP2.6)', () => {
       }
       // Freitag's planned 6 and 1 are not printed.
       expect(t, mode).not.toMatch(/Freitag\s*[0-9]/)
+    }
+  })
+
+  it('prints all eight "not counted yet" as deploy 3 ships, until production’s hand check holds each (the 27 Sep ruling)', () => {
+    for (const mode of MODES) {
+      const t = read(overviewRivals.render(withBrands(shippedBrandsRead()), mode, ctx))
+      expect(t, mode).toContain('Your name in your market in September: not counted yet.')
+      for (const brand of ['Cotopaxi', 'Patagonia', 'The North Face', 'Freitag', 'Rareform', 'Freedom of Movement', 'Old School']) {
+        expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))
+      }
+      expect((t.match(/not counted yet/g) ?? []).length, mode).toBe(8)
+      // No figure heads over a table that prints no figure.
+      expect(t, mode).not.toMatch(/\b(13|45|516)\b/)
+      assertCopyContract(render(overviewRivals.render(withBrands(shippedBrandsRead()), mode, ctx)))
     }
   })
 
