@@ -1,5 +1,6 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
+import { surface } from '@/lib/nav'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BrandClaim } from '@/components/blocks/brand-claim'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -72,12 +73,13 @@ export const subjectsSayHear: Block<SubjectsData> = {
   render(data, mode = 'app', ctx) {
     const empty = subjectsSayHear.emptyState(data)
     const email = mode === 'email'
-    const footer = openLink(mode, `${ctx.appUrl}/dashboard/market`, 'Open Your moves →')
+    const moves = surface('market')
+    const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `Open ${moves.label} →`)
     const rows = data.sayHearClaims.slice(0, SAY_HEAR_SHOWN)
 
     if (empty) {
       return (
-        <BlockFrame title={subjectsSayHear.title} question={subjectsSayHear.question} mode={mode} footer={footer}>
+        <BlockFrame title={subjectsSayHear.title} question={subjectsSayHear.question} mode={mode} footer={footer} roomy>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
@@ -88,10 +90,10 @@ export const subjectsSayHear: Block<SubjectsData> = {
         title={subjectsSayHear.title}
         question={subjectsSayHear.question}
         mode={mode}
-        meta="your claims"
+        // Title alone, links alone (25 Sep rulings; Subjects from deploy 3).
         footer={footer}
         truncateFooter
-        footerNote="latest update"
+        roomy
       >
         {rows.map((r, i) => <ClaimRow key={`${i}:${r.claim}`} row={r} mode={mode} />)}
         {data.sayHear && data.sayHear.total > rows.length ? (

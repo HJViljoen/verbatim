@@ -1,5 +1,6 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
+import { surface } from '@/lib/nav'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -92,11 +93,12 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
     const c = data.ownPosts
     const empty = subjectsOwnPosts.emptyState(data)
     const email = mode === 'email'
-    const footer = openLink(mode, `${ctx.appUrl}/dashboard/market`, 'Open Your moves →')
+    const moves = surface('market')
+    const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `Open ${moves.label} →`)
 
     if (!c || empty) {
       return (
-        <BlockFrame title={subjectsOwnPosts.title} question={subjectsOwnPosts.question} mode={mode} footer={footer}>
+        <BlockFrame title={subjectsOwnPosts.title} question={subjectsOwnPosts.question} mode={mode} footer={footer} roomy>
           <BlockEmpty mode={mode}>{empty ?? `Nothing has been published in ${longMonth(data.month)}.`}</BlockEmpty>
         </BlockFrame>
       )
@@ -108,12 +110,12 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
         title={subjectsOwnPosts.title}
         question={subjectsOwnPosts.question}
         mode={mode}
-        meta={longMonth(c.month)}
+        // A HEADER IS ITS TITLE ALONE AND A FOOTER ITS LINKS ALONE (25 Sep
+        // rulings; Subjects from deploy 3, §5.12): the month is the page bar's,
+        // and "n = {posts}" is the figure the tile opens with.
         footer={footer}
         truncateFooter
-        // "n = 9" — the mock's own footer note, and the denominator every
-        // figure in this tile is a share of.
-        footerNote={`n = ${fmtInt(c.published.k)}`}
+        roomy
       >
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
           <span className={email ? undefined : 'inline-flex items-baseline gap-1.5'}>
@@ -127,11 +129,10 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
           <span data-copy="level" className={email ? undefined : 'text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, display: 'block' } : undefined}>
             {fmtInt(c.overFloor.k)} of {fmtInt(c.overFloor.n)} cleared the {fmtInt(c.commentFloor)}-comment floor
           </span>
-          {/* THE CLOCK, BESIDE THE FIGURE (D9). Not in the header: a header
-              note reads as a caption on the month, and the thing that needs
-              saying is what the COUNT is dated by. */}
-          <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint, display: 'block' } : undefined}>
-            dated by the day you posted · {c.basis}
+          {/* THE CLOCK THE COUNT IS DATED BY is How to read's (25 Sep rulings:
+              no method note under a block); the tile names its month. */}
+          <span className={email ? undefined : 'text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, display: 'block' } : undefined}>
+            in {longMonth(c.month)}
           </span>
         </div>
 

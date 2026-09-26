@@ -908,16 +908,16 @@ describe('SU3 · questions your posts did not answer', () => {
 // ---- the two rail tiles the mock draws and the build had never had ----------
 
 describe('SU4 · your own posts', () => {
-  it('counts what you published, says what cleared the floor, and NAMES THE CLOCK', () => {
+  it('counts what you published, says what cleared the floor, and names its month', () => {
     const text = renderText(subjectsOwnPosts.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('9 posts published')
     expect(text).toContain('3 of 9 cleared the 5-comment floor')
-    // D9. Every other figure on this page is comment-dated; a census of what
-    // you published is dated by `videos.upload_date`, and an upload-dated count
-    // under a comment-dated month heading is the mixing UNANSWERED_BASIS exists
-    // to name one tile down.
-    expect(text).toContain('dated by the day you posted')
-    expect(text).toContain('posts published in September')
+    expect(text).toContain('in September')
+    // D9's clock (a census is dated by the day each post went up, every other
+    // figure by the comment) is How to read's since WP2.2: no method note
+    // under a block (25 Sep rulings), and no "n = 9" footer note.
+    expect(text).not.toContain('dated by the day you posted')
+    expect(text).not.toContain('n = ')
   })
 
   it('draws the hooks as independent shares, each with its own "of N" — never a partition', () => {
@@ -1011,12 +1011,14 @@ describe('SU5 · say vs hear', () => {
     expect(markup).not.toContain('font-serif')
   })
 
-  it('dates itself by the update, never by the month heading above it', () => {
+  it('stamps itself with no month, and carries no header meta or footer note (25 Sep rulings)', () => {
     // D9. The ledger is Pass D-a's resolution on ONE completed update; the
-    // month at the top of this page means comment-dated. The mock stamps this
-    // tile "Sep".
+    // month at the top of this page means comment-dated, so the tile is never
+    // stamped "Sep". Its "your claims" and "latest update" notes left with the
+    // rulings (Subjects from deploy 3, §5.12).
     const text = renderText(subjectsSayHear.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('latest update')
+    expect(text).not.toContain('latest update')
+    expect(text).not.toContain('your claims')
     expect(text).not.toContain('Sep ·')
   })
 

@@ -74,7 +74,10 @@ export const SURFACES: readonly Surface[] = [
   // and its month before, so the four pills would return a byte-identical
   // page, and the approved preview's bar is the month selector and one line.
   { key: 'overview', href: '/dashboard', label: 'Your market', question: 'What is your market saying this month, and what changed?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'overview' },
-  { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How are we seen on this subject?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
+  // SUBJECTS ON THE MARKET (WP2.2, deploy 3; §2.1): the question is the
+  // market's. The horizon stays: the questions asked on a subject are read
+  // over the period the reader picks (§2.3 S4).
+  { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How big is each subject in your market, month by month?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
   { key: 'voice', href: '/dashboard/voice', label: 'Voice', question: 'Who is saying what in this category?', group: 'Intelligence', bar: 'reading', page: 'voice' },
   { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and how much of it do they hold?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
   { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },

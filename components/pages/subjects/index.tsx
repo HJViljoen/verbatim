@@ -99,6 +99,16 @@ const MIN_H: Record<string, string> = {
  * height of what they have to say.
  */
 export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col: number; row: number }[] {
+  // THE MARKET PAGE (WP2.2, the approved preview): with nothing selected (no
+  // subject named, Össur) the rail says so in one line, and the pane, which
+  // would only repeat it, is not drawn.
+  if (isMarketSubjects(data) && !data.selected) {
+    return [
+      { block: subjectsList, col: 12, row: 2 },
+      { block: subjectsOwnPosts, col: 6, row: 3 },
+      { block: subjectsSayHear, col: 6, row: 2 },
+    ]
+  }
   if (data.selected) {
     return SUBJECT_BLOCKS.map((block) => ({ block, ...(LAYOUT[block.key] ?? { col: 12, row: 2 }) }))
   }
@@ -175,6 +185,58 @@ function BlockTile({ block, data, ctx, col, row, minH = true, className }: {
   )
 }
 
+/** Was this page built on the market (WP2.2)? The loader sets the rail's
+ *  base on every page since; a stored page has none. */
+export const isMarketSubjects = (data: SubjectsData): boolean => data.list.base !== undefined
+
+/**
+ * THE MARKET PAGE'S COMPOSITION (WP2.2; the approved preview's Subjects
+ * artboard): the rail beside the subject in your market, then what people say
+ * about it beside the questions asked on it, the voices across the page, the
+ * months across the page, and your own posts beside say vs hear. From 1280 the
+ * pairs sit side by side in the preview's thirds; under it every tile takes the
+ * column. Each block draws its own insets (`roomy`), as Your market's do.
+ */
+function MarketSubjectsPage({ data, params }: { data: SubjectsData; params: Record<string, string | undefined> }) {
+  const ctx = subjectsContext(params)
+  const tile = (block: Block<SubjectsData>) => (
+    <Tile
+      col={12}
+      // THE CONTENT SETS THE HEIGHT: one row's floor (116px), so a tile that
+      // says one line ("No subjects named yet.") is not a 248px box on a phone.
+      row={1}
+      flush
+      exportKey={block.key}
+      distribute="between"
+      bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
+      className="min-w-0"
+    >
+      {block.render(data, 'app', ctx)}
+    </Tile>
+  )
+  const row = (cols: string, ...blocks: Block<SubjectsData>[]) => (
+    <div className={`grid grid-cols-1 items-stretch gap-6 ${cols}`}>{blocks.map((b) => <div key={b.key} className="flex min-w-0 [&>*]:flex-1">{tile(b)}</div>)}</div>
+  )
+  return (
+    <div className="flex flex-col gap-6">
+      {data.selected ? (
+        <>
+          {row('xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]', subjectsList, subjectsSubject)}
+          {row('xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]', subjectsKinds, subjectsUnanswered)}
+          {row('', subjectsVoices)}
+          {row('', subjectsLine)}
+          {row('lg:grid-cols-2', subjectsOwnPosts, subjectsSayHear)}
+        </>
+      ) : (
+        <>
+          {row('', subjectsList)}
+          {row('lg:grid-cols-2', subjectsOwnPosts, subjectsSayHear)}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function SubjectsPage({
   data,
   params = {},
@@ -197,6 +259,27 @@ export function SubjectsPage({
           </Tile>
         </PageGrid>
       </PageFrame>
+    )
+  }
+
+  if (isMarketSubjects(data)) {
+    return (
+      <ExportScope
+        page="subjects"
+        params={params}
+        tiles={layoutFor(data).map((l) => ({ key: l.block.key, title: l.block.title }))}
+      >
+        <PageFrame className="gap-6">
+          {/* EXPORT ALONE AT THE RIGHT-HAND END, as Your market's bar (the
+              approved preview; §2.3 S8: no "Market or us?" before deploy 5).
+              How to read stays one click away in Settings. */}
+          <SurfacePageBar nav="subjects" params={params} context={barContext(data)}>
+            <ExportMenu variant="button" />
+          </SurfacePageBar>
+          <MarketSubjectsPage data={data} params={params} />
+          {/* No footnote under the page (25 Sep rulings). */}
+        </PageFrame>
+      </ExportScope>
     )
   }
 

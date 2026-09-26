@@ -10,11 +10,13 @@ import { sharedPairNote } from '@/lib/calibration'
 import { TileColumns } from '@/components/shell/page-grid'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
+import { fmtInt, fmtPct, fullDate, longMonth, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
-import { allRedescribed, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, marketTrail, monthsReadOf, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { openLink } from '@/components/blocks/open-link'
+import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { calibrationWord, printsClient } from '@/lib/subjects/calibration-state'
 
@@ -179,6 +181,11 @@ export const subjectsSubject: Block<SubjectsData> = {
     const pane = data.selected
     const email = mode === 'email'
     const empty = subjectsSubject.emptyState(data)
+    // THE MARKET'S PANE (WP2.2): every pane the loader builds; a pane stored
+    // before it renders its Phase 1 brand comparison, as sent (below).
+    if (data.list.base !== undefined && (!pane || isMarketPane(pane))) {
+      return <MarketPane data={data} mode={mode} appUrl={ctx.appUrl} empty={empty} />
+    }
     if (!pane || empty) {
       return (
         <BlockFrame title={subjectsSubject.title} question={subjectsSubject.question} mode={mode}>
@@ -333,10 +340,14 @@ export const subjectsSubject: Block<SubjectsData> = {
   },
 
   figures(data): FigureTable {
-    return sideFigures(data.selected)
+    const pane = data.selected
+    if (pane && isMarketPane(pane)) return marketPaneFigures(pane)
+    return sideFigures(pane)
   },
 
   verdicts(data): Verdict[] {
+    // The market's pane prints no verdict: its one refusal is a chip.
+    if (data.selected && isMarketPane(data.selected)) return []
     return (data.selected ? paneSides(data.selected) : []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
   },
 
@@ -369,5 +380,145 @@ function PaneHeadline({ text }: { text: string }) {
         ? <span key={i} className="font-mono font-semibold tabular-nums tracking-[-0.04em]">{p}</span>
         : p))}
     </p>
+  )
+}
+
+// ---- WP2.2 · the pane on the market ---------------------------------------------
+
+/** Was this pane built on the market (WP2.2)? The loader sets `monthStates` on
+ *  every pane since; a stored pane has none. */
+export const isMarketPane = (pane: SubjectPane): boolean => pane.monthStates !== undefined
+
+/** The pane's title (the preview's "This subject in your market"). */
+export const MARKET_PANE_TITLE = 'This subject in your market'
+
+/** The figures the market's pane prints, under their own keys. */
+export function marketPaneFigures(pane: SubjectPane): FigureTable {
+  const out = sideFigures({ ...pane, sides: [] })
+  for (const p of monthsReadOf(pane.marketLine)) {
+    if (p.k == null || p.videos == null) continue
+    const month = monthName(p.month).split(' ')[0].toLowerCase()
+    out[`subject_market_${month}_videos`] = { value: p.k, unit: 'videos', label: `${pane.name}, videos in your market in ${monthName(p.month)}` }
+  }
+  if (pane.makers) out.subject_makers_videos = { value: pane.makers.k, unit: 'videos', label: `${pane.name}, makers' videos in your market this month` }
+  return out
+}
+
+/** "Who posted them": the makers' part and everyone else's, each a level on
+ *  the subject's own videos (a share where it carries one, else a count). */
+function WhoPosted({ makers, mode }: { makers: { k: number; of: number }; mode: RenderMode }) {
+  const rest = Math.max(0, makers.of - makers.k)
+  const label = (k: number) => {
+    const l = marketLevel(k, makers.of)
+    return l ?? { text: fmtInt(k), kind: 'count' as const }
+  }
+  const m = label(makers.k)
+  const r = label(rest)
+  if (mode === 'email') {
+    return (
+      <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 }}>
+        Who posted them: <span data-copy="figure">{m.text}</span> makers’ videos · <span data-copy="figure">{r.text}</span> everyone else
+      </div>
+    )
+  }
+  const w = makers.of > 0 ? (makers.k / makers.of) * 100 : 0
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-[14px] text-secondary-foreground">Who posted them</span>
+      <span aria-hidden className="flex h-3.5 w-full gap-[3px]">
+        {makers.k > 0 ? (
+          <span
+            className="block h-full rounded-[2px] border border-muted-foreground/60"
+            style={{ width: `${w}%`, backgroundImage: 'repeating-linear-gradient(135deg, var(--muted-foreground) 0 1.5px, transparent 1.5px 6px)', opacity: 0.75 }}
+          />
+        ) : null}
+        {rest > 0 ? <span className="block h-full flex-1 rounded-[2px] bg-foreground" /> : null}
+      </span>
+      <span className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-[14px] text-secondary-foreground">
+        <span><span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{m.text}</span> makers’ videos</span>
+        <span><span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{r.text}</span> everyone else</span>
+      </span>
+    </div>
+  )
+}
+
+/**
+ * THE SUBJECT IN YOUR MARKET (WP2.2, §2.3 S2; the approved preview's pane).
+ * The headline on the rail's own base (default M-b), then one mono line: the
+ * calibration word and the months read as levels, side by side, never a
+ * direction ("provisional · Aug 11% · Sep 16%"); the pair's one chip; then
+ * two inner blocks, who posted its videos (makers against everyone else,
+ * decision F) and how many months have been read. No gap line and no brand
+ * cells: the brand comparison left the hero (WP2.2).
+ */
+function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: RenderMode; appUrl: string; empty: string | null }) {
+  const pane = data.selected
+  const email = mode === 'email'
+  if (!pane || empty) {
+    return (
+      <BlockFrame title={MARKET_PANE_TITLE} question={subjectsSubject.question} mode={mode} roomy>
+        <BlockEmpty mode={mode}>{empty ?? 'Nothing is selected.'}</BlockEmpty>
+      </BlockFrame>
+    )
+  }
+  const ask = `${appUrl}/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${pane.name}?`)}`
+  const footer = openLink(mode, ask, 'Ask about this →')
+  const lead = paneMarketLead(pane, data.month)
+  const trail = marketTrail(pane.marketLine)
+  const read = monthsReadOf(pane.marketLine).length
+  const word = pane.unread || calibrationWord(pane.calibration)
+  const current = trail.length > 0 ? trail[trail.length - 1].month : null
+  const trailLine = word || trail.length > 0 ? (
+    email ? (
+      <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 4 }}>
+        {[word, ...trail.map((t) => `${monthName(t.month).split(' ')[0]} ${t.text} ${t.of}`)].filter(Boolean).join(' · ')}
+      </div>
+    ) : (
+      <span data-copy="level" className="flex flex-wrap items-baseline gap-x-2 font-mono text-[13px] tabular-nums text-muted-foreground">
+        {word ? <CalibrationTag calibration={pane.calibration} unread={pane.unread} mode={mode} className="text-[13px] text-secondary-foreground" /> : null}
+        {trail.map((t, i) => (
+          <span key={t.month} className="inline-flex items-baseline gap-2">
+            {i > 0 || word ? <span aria-hidden>·</span> : null}
+            <span>{monthName(t.month).split(' ')[0]} <span className={t.month === current ? 'font-semibold text-foreground' : undefined}>{t.text}</span> {t.of}</span>
+          </span>
+        ))}
+      </span>
+    )
+  ) : null
+  const k = pane.market?.k ?? null
+  const inner = (children: ReactNode) => (email
+    ? <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>{children}</div>
+    : <div className="flex flex-col gap-5 rounded-md bg-inner p-6">{children}</div>)
+  const itsVideos = pane.makers && k != null && k > 0 ? inner(
+    <>
+      <span className={email ? undefined : 'text-[15px] font-semibold text-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink } : undefined}>
+        Its <span data-copy="figure">{fmtInt(k)}</span> {longMonth(data.month)} videos
+      </span>
+      <WhoPosted makers={pane.makers} mode={mode} />
+    </>,
+  ) : null
+  const monthsRead = read > 0 ? inner(
+    <span className={email ? undefined : 'flex items-baseline gap-3'} style={email ? { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2 } : undefined}>
+      <span data-copy="figure" className={email ? undefined : 'font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground'}>{fmtInt(read)}</span>
+      <span className={email ? undefined : 'text-[15px] text-secondary-foreground'}>{read === 1 ? ' month read' : ' months read'}</span>
+    </span>,
+  ) : null
+
+  return (
+    <BlockFrame title={MARKET_PANE_TITLE} question={subjectsSubject.question} mode={mode} footer={footer} roomy>
+      <div className="flex flex-col gap-4">
+        {email ? (
+          lead ? <p data-copy="level" style={{ fontFamily: FONT.sans, fontSize: 15, color: EMAIL.ink, margin: '4px 0' }}>{lead}</p>
+            : <p style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink, margin: '4px 0' }}>{pane.name}</p>
+        ) : lead ? <PaneHeadline text={lead} /> : (
+          <p className="m-0 text-[22px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground sm:text-[28px]">{pane.name}</p>
+        )}
+        {trailLine}
+      </div>
+      {pane.chip ? <PairChip words={pane.chip} mode={mode} /> : null}
+      {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
+      {itsVideos}
+      {monthsRead}
+    </BlockFrame>
   )
 }

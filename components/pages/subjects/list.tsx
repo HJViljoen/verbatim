@@ -1,11 +1,21 @@
-import type { Block } from '@/lib/blocks/types'
+import Link from 'next/link'
+
+import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { openLink } from '@/components/blocks/open-link'
+import { BaseHead, MakerMark, RULE, SCALE } from '@/components/pages/overview/market'
+import { prevCell } from '@/components/pages/overview/market-subjects'
+import { surface } from '@/lib/nav'
+import { makerWords } from '@/lib/pages/overview-market/board'
+import { marketLevel as marketLevelOf } from '@/lib/pages/overview-market/kinds'
+import { NO_READING_YET } from '@/lib/subjects/read-in'
+
 import { AddSubjectFooter, SubjectEditor } from '@/components/subjects/subject-editor'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, fullDate, shortDate } from '@/lib/format'
+import { fmtInt, fmtPct, fullDate, longMonth, shortDate } from '@/lib/format'
 import type { Verdict } from '@/lib/reading/verdicts'
-import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectsData } from '@/lib/pages/subjects'
+import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectRail, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { calibrationWord, isFailed } from '@/lib/subjects/calibration-state'
 import { levelText } from '@/lib/reading/level'
@@ -50,14 +60,152 @@ function marketLevel(m: { k: number; n: number }): string {
   return level.kind === 'share' ? `${level.text} · ${fmtInt(m.k)} of ${fmtInt(m.n)}` : level.text
 }
 
+/**
+ * A rail row's tag line (WP2.2, the preview's second line under the name): the
+ * calibration word, the maker share at a fifth or more (decision F), "under
+ * 10, a count" where the month's k cannot carry a share (§2.12), or the
+ * sentence a row with no figure says instead ("no reading yet", "being
+ * re-described", "not counted yet"). Null for a ready row with nothing to say.
+ */
+export function railTags(r: SubjectRail, n: number | null): { word: string | null; maker: string | null; count: boolean } {
+  const failed = isFailed(r.calibration)
+  const figure = !failed && r.status === 'active' && r.market != null
+  const word = failed ? calibrationWord(r.calibration) : figure ? calibrationWord(r.calibration) : r.note ?? NO_READING_YET
+  return {
+    word,
+    maker: figure ? makerWords(r.makerShare ?? null) : null,
+    count: figure && marketLevelOf(r.market!.k, n)?.kind === 'count',
+  }
+}
+
+/** The rail's one line where no subject is named (plan §2.13, Össur). */
+export const NO_SUBJECTS_LINE = 'No subjects named yet.'
+
+/** The share cell: a whole percent where the month's k and n carry one, a dot
+ *  where they do not (the count is in the Videos column). */
+const shareCell = (k: number, n: number | null): string => {
+  const l = marketLevelOf(k, n)
+  return l?.kind === 'share' ? l.text : '·'
+}
+
+/**
+ * THE RAIL ON THE MARKET (WP2.2, §2.3 S1; the approved preview's "Your
+ * subjects"): a ranked table, one row per subject, its videos in the market
+ * this month, its share of the market, and the month before on the same base;
+ * the column heads carry the base ("Sep of 654"). No editing control: a rename
+ * or a stop is Settings › Subjects' (the preview draws the rail as a reading).
+ */
+function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
+  const l = data.list
+  const base = l.base!
+  const email = mode === 'email'
+  const n = base.n
+  const prev = base.prev
+  if (email) {
+    const c = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 10px 4px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
+    const num = { ...c, fontFamily: FONT.mono, textAlign: 'right' as const }
+    return (
+      <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>
+            <th style={{ ...c, borderTop: 0, textAlign: 'left', color: EMAIL.muted, fontSize: 11 }}>Subject</th>
+            <th style={{ ...num, borderTop: 0, color: EMAIL.muted, fontSize: 11 }}>Videos</th>
+            <th style={{ ...num, borderTop: 0 }}><BaseHead month={base.month} n={n} mode={mode} /></th>
+            {prev ? <th style={{ ...num, borderTop: 0 }}><BaseHead month={prev.month} n={prev.n} mode={mode} /></th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {l.rows.map((r) => {
+            const t = railTags(r, n)
+            const figure = !isFailed(r.calibration) && r.status === 'active' && r.market != null
+            const tag = [t.word, t.maker, t.count ? 'under 10, a count' : null].filter(Boolean).join(' · ')
+            return (
+              <tr key={r.id}>
+                <td style={c}>{r.name}{tag ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{tag}</div> : null}</td>
+                <td style={num}>{figure ? <span data-copy="figure">{fmtInt(r.market!.k)}</span> : null}</td>
+                <td style={num}>{figure ? <span data-copy="figure">{shareCell(r.market!.k, n)}</span> : null}</td>
+                {prev ? <td style={{ ...num, color: EMAIL.muted }}>{figure ? <span data-copy="figure">{r.marketPrev ? prevCell(r.marketPrev.k, prev.n) : '·'}</span> : null}</td> : null}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    )
+  }
+  const cols = 'grid grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3'
+  return (
+    <div role="table" className="flex min-w-0 flex-col">
+      <div role="row" className={`${cols} items-end ${RULE.head}`}>
+        <span role="columnheader" className="flex flex-col leading-[1.35]">
+          <span className={SCALE.head}>Subject</span>
+          <span className="font-mono text-[12px] text-muted-foreground">ranked by {longMonth(base.month)}</span>
+        </span>
+        <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
+        <span role="columnheader"><BaseHead month={base.month} n={n} mode={mode} /></span>
+        <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
+      </div>
+      {l.rows.map((r) => {
+        const t = railTags(r, n)
+        const failed = isFailed(r.calibration)
+        const figure = !failed && r.status === 'active' && r.market != null
+        const tags = (
+          <span className={`col-span-full flex flex-wrap items-center gap-x-1.5 pt-0.5 ${SCALE.tag}`}>
+            {t.word ? <span>{t.word}</span> : null}
+            {t.maker ? <>{t.word ? <span aria-hidden>·</span> : null}<span className="inline-flex items-center gap-1.5 whitespace-nowrap"><MakerMark />{t.maker}</span></> : null}
+            {t.count ? <>{t.word || t.maker ? <span aria-hidden>·</span> : null}<span>under 10, a count</span></> : null}
+          </span>
+        )
+        const body = (
+          <>
+            <span role="rowheader" className={`min-w-0 [text-wrap:pretty] ${SCALE.row} ${r.selected ? 'font-semibold' : ''} ${failed ? 'text-muted-foreground' : ''}`}>{r.name}</span>
+            <span className={`${SCALE.num} font-semibold`}>{figure ? <span data-copy="figure">{fmtInt(r.market!.k)}</span> : null}</span>
+            <span className={SCALE.num}>{figure ? <span data-copy="figure">{shareCell(r.market!.k, n)}</span> : null}</span>
+            <span className={SCALE.prev}>{figure && prev ? <span data-copy="figure">{r.marketPrev ? prevCell(r.marketPrev.k, prev.n) : '·'}</span> : null}</span>
+            {/* THE ROW'S TAGS UNDER THE WHOLE ROW, as the preview sets them
+                ("provisional · ▨ over a third makers"), never squeezed into
+                the name's column. */}
+            {t.word || t.maker || t.count ? tags : null}
+          </>
+        )
+        const rowClass = `${cols} items-baseline py-3 ${RULE.row} last:border-b-0`
+        // THE SELECTED ROW SITS ON THE INNER GROUND (the preview's Looks &
+        // style row), pulled out by its own padding so its figures keep the
+        // column edges.
+        const selected = r.selected ? '-mx-3 rounded-md border-b-transparent bg-inner px-3' : ''
+        return mode === 'app' && r.href ? (
+          <Link key={r.id} role="row" href={r.href} aria-current={r.selected ? 'true' : undefined} className={`${rowClass} ${selected} transition-colors hover:bg-inner/60`}>
+            {body}
+          </Link>
+        ) : (
+          <div key={r.id} role="row" className={`${rowClass} ${selected}`}>{body}</div>
+        )
+      })}
+    </div>
+  )
+}
+
 export const subjectsList: Block<SubjectsData> = {
   key: 'subjects.list',
   title: 'Your subjects',
   question: 'What did we choose to be known for?',
 
-  render(data, mode = 'app') {
+  render(data, mode = 'app', ctx) {
     const l = data.list
     const empty = subjectsList.emptyState(data)
+
+    // THE MARKET'S RAIL (WP2.2): every list the loader builds carries its
+    // base; a list stored before WP2.2 has none and renders as sent (below).
+    if (l.base) {
+      const voice = surface('voice')
+      const footer = empty ? null : openLink(mode, `${ctx?.appUrl ?? ''}${voice.href}`, `The rest is on ${voice.label} →`)
+      // NO SUBJECT NAMED (Össur): one line (§2.13), in the plan's words.
+      const line = empty && !l.notRecorded && l.proposed.length === 0 ? NO_SUBJECTS_LINE : empty
+      return (
+        <BlockFrame title={subjectsList.title} question={subjectsList.question} mode={mode} footer={footer} roomy>
+          {line ? <BlockEmpty mode={mode}>{line}</BlockEmpty> : <MarketRail data={data} mode={mode} />}
+        </BlockFrame>
+      )
+    }
 
     if (mode === 'app') {
       const active = l.rows.filter((r) => r.status === 'active').length
