@@ -3,10 +3,9 @@ import { hydrateSnapshot, SNAPSHOT_COLS, type SnapshotRow } from '../snapshots'
 import { applyEdits, loadEdits } from './documents/edits'
 import { isDocumentData, type DocumentSnapshotData } from './documents/types'
 import { isWeeklyData, type WeeklySnapshotData } from './weekly-build'
-import { isMonthlyData, type MonthlySnapshotData } from './monthly-build'
+import { isMonthlyData, staleMonthlySnapshot, type MonthlySnapshotData } from './monthly-build'
 import { isQuarterlyData, type QuarterlySnapshotData } from './quarterly-build'
 import { WEEKLY_BLOCK_KEYS } from './weekly'
-import { MONTHLY_BLOCK_KEYS } from './monthly'
 import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
 import { documentSheetCount } from './documents/compose'
@@ -94,7 +93,8 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
   // cast below hands `deckSlides` a snapshot with no sections and
   // `d.sections.forEach` throws inside a server component.
   if (isMonthlyData(raw)) {
-    return { ...common, kind: 'monthly', data: raw, pageCount: monthlyViewerPages(raw.keys) }
+    const { monthlySections } = await import('@/components/blocks/monthly')
+    return { ...common, kind: 'monthly', data: raw, pageCount: monthlyViewerPages(raw, monthlySections) }
   }
 
   // A QUARTERLY REVIEW (Phase 1 WP20), for the same reason and by the same
@@ -149,10 +149,20 @@ export function weeklyViewerPages(keys: readonly string[]): number {
   return Math.max(1, keys.filter((k) => (WEEKLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
 }
 
-/** The same count for a monthly report — one sheet per block key this build
- *  still knows, and never zero. */
-export function monthlyViewerPages(keys: readonly string[]): number {
-  return Math.max(1, keys.filter((k) => (MONTHLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
+/**
+ * The same count for a monthly report: the sheets `MonthlyDeck` paginates.
+ * One per section PRESENT (market-first WP2.1: a slot no package has filled
+ * is absent from the deck, so a count of the stored keys would say "10 pages"
+ * over seven), and one sheet saying so for a row this build cannot draw (a
+ * version 1 row, or no key it knows). `sectionsOf` is the deck's own
+ * `monthlySections`, handed in so this module stays free of React.
+ */
+export function monthlyViewerPages(
+  data: MonthlySnapshotData,
+  sectionsOf: (keys: readonly string[], reading: MonthlySnapshotData['reading']) => readonly unknown[],
+): number {
+  if (staleMonthlySnapshot(data)) return 1
+  return Math.max(1, sectionsOf(data.keys, data.reading).length)
 }
 
 /** The same count for a quarterly review — one sheet per block key this build

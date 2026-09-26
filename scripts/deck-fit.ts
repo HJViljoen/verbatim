@@ -50,8 +50,8 @@ import { QuarterlyDeck } from '../components/print/quarterly-deck'
 import { weeklyFixture, formingFixture as weeklyForming } from '../components/blocks/weekly/fixture'
 import { WEEKLY_BLOCK_KEYS, weeklySubject } from '../lib/reports/weekly'
 import { WEEKLY_SNAPSHOT_VERSION, type WeeklySnapshotData } from '../lib/reports/weekly-build'
-import { monthlyFixture, formingMonthlyFixture } from '../components/blocks/monthly/fixture'
-import { MONTHLY_BLOCK_KEYS, monthlyPeriod } from '../lib/reports/monthly'
+import { monthlyFixture, unmeasuredMonthlyFixture } from '../components/blocks/monthly/fixture'
+import { MONTHLY_BLOCK_KEYS, monthlyStamp, monthlyTitle } from '../lib/reports/monthly'
 import { MONTHLY_SNAPSHOT_VERSION, type MonthlySnapshotData } from '../lib/reports/monthly-build'
 import { quarterlySnapshotFixture, formingFixture as quarterlyForming } from '../components/blocks/quarterly/fixture'
 
@@ -71,8 +71,8 @@ const weeklySnapshot = (reading = weeklyFixture()): WeeklySnapshotData => ({
 } as WeeklySnapshotData)
 
 const monthlySnapshot = (reading = monthlyFixture()): MonthlySnapshotData => ({
-  version: MONTHLY_SNAPSHOT_VERSION, kind: 'monthly', company: 'Sealand', title: 'Sealand · the month',
-  period: monthlyPeriod(reading.month, reading.monthStatus, reading.readingAt), readingAt: reading.readingAt,
+  version: MONTHLY_SNAPSHOT_VERSION, kind: 'monthly', company: 'Sealand', title: monthlyTitle(reading.month),
+  period: monthlyStamp(reading.month, reading.readTo), readingAt: reading.readingAt,
   month: reading.month, monthStatus: reading.monthStatus, keys: [...MONTHLY_BLOCK_KEYS], reading, figures: {},
   subject: reading.subject,
 } as MonthlySnapshotData)
@@ -86,7 +86,7 @@ const DECKS = [
   { key: 'weekly', sheets: 0, markup: () => renderToStaticMarkup(WeeklyDeck({ data: weeklySnapshot(), date: '28 Sep 2026' })) },
   { key: 'weekly-forming', sheets: 0, markup: () => renderToStaticMarkup(WeeklyDeck({ data: weeklySnapshot(weeklyForming()), date: '28 Sep 2026' })) },
   { key: 'monthly', sheets: 0, markup: () => renderToStaticMarkup(MonthlyDeck({ data: monthlySnapshot(), date: '28 Sep 2026' })) },
-  { key: 'monthly-forming', sheets: 0, markup: () => renderToStaticMarkup(MonthlyDeck({ data: monthlySnapshot(formingMonthlyFixture()), date: '28 Sep 2026' })) },
+  { key: 'monthly-forming', sheets: 0, markup: () => renderToStaticMarkup(MonthlyDeck({ data: monthlySnapshot(unmeasuredMonthlyFixture()), date: '28 Sep 2026' })) },
   { key: 'quarterly', sheets: 8, markup: () => renderToStaticMarkup(QuarterlyDeck({ data: quarterlySnapshotFixture(), date: '28 Sep 2026' })) },
   { key: 'quarterly-forming', sheets: 8, markup: () => renderToStaticMarkup(QuarterlyDeck({ data: quarterlySnapshotFixture(quarterlyForming()), date: '28 Sep 2026' })) },
 ].filter((d) => !only || d.key === only || d.key.startsWith(`${only}-`))

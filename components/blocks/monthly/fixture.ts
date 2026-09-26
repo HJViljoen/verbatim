@@ -1,241 +1,260 @@
-import type { MonthlyData, MoverRow, SubjectVoiceRow, VoicesSection } from '@/lib/pages/monthly'
-import { sparkMonths, spanOf } from '@/lib/pages/monthly'
-import { monthlySubject, seriesTrail } from '@/lib/reports/monthly'
-import type { Mover } from '@/lib/pages/overview'
-import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
-import { methodRecordFixture } from '@/lib/test/method-fixture'
-import { monthlySoundFigures } from '@/lib/reports/monthly'
-import { voiceFixture } from '@/components/pages/voice-surface/fixture'
+import type { MonthlyData } from '@/lib/pages/monthly'
+import { headline, sentenceBlockFor, type LedgerRow, type OverviewData } from '@/lib/pages/overview'
+import { monthlySubject, nextMonthlyOf } from '@/lib/reports/monthly'
+import { MONTHLY_SLOT_STUBS, type MonthlySlots } from '@/lib/reports/monthly-slots'
+import { comparabilityOf, type OurChange, type PairRow } from '@/lib/reading/comparability'
+import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
+import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { sealandReading } from '@/lib/test/reading-fixture'
+import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, verdict } from '@/components/pages/overview/fixture'
 
-// The monthly report's fixtures (Phase 1 WP18).
+// "September in your market"'s fixtures (market-first WP2.1).
 //
-// THREE STATES, ALL REAL. `monthlyFixture()` is the mock's own month — subjects
-// confirmed, ten movers, an advice standing, six voices. `refusedMonthlyFixture()`
-// is a month whose comparisons were refused and whose subjects are not
-// recorded, which is a workspace that has just had a rival renamed or a
-// re-clustering. `formingMonthlyFixture()` is SEALAND TODAY: no subjects, no
-// movers, nothing to quote and no brief — the state the WP's "done when" is
-// really about, because it is what a young workspace receives.
+// THE FRONT PAGE'S OWN FIXTURES, READ AS AN ENDED MONTH. The monthly IS the
+// front page's reading of the month that has just ended, so its fixture is
+// the front page's (`marketFrontFixture`: Sealand's September on production's
+// 24 Sep figures, plan §2.2's print, every number sourced there) with three
+// things the monthly adds, each sourced below:
 //
-// Sections 2, 4, 5 and 8 come from Overview's fixtures and section 3 from
-// Voice's, because those blocks ARE Overview's and Voice's and a second fixture
-// for them would be a second reading.
+// - THE CLOCK. The monthly is read after its month ends: the 12 Oct clock, on
+//   Sealand's real update calendar (`sealandReading`), reads September "read
+//   to the 11 Oct update". The FIGURES stay the 24 Sep production ones, a
+//   stand-in for September read past its end (not knowable until the 11 Oct
+//   update): the approved preview's own convention ("Preview on September's
+//   production figures to the 24 Sep update").
+// - THE MEASURED PAIR ROW. Staging's (August, September) row from the WP1.4
+//   rehearsal (26 Sep, `measure-comparability` read through the 20 Sep
+//   update): 148 of 351 and 376 of 625 outside the searches both months ran
+//   (the strict counts, decision D's rule 2 only), WP1.8's one figure, 356 of
+//   September's 654 market videos found only by searches first run in
+//   September (the 26 Sep ruling), and DR F39's depth medians, 23 and 15. So
+//   the change section prints the front page's measured sentence, "about
+//   half" (356 of 654), read with the 20 Sep update.
+// - THE STANDING ADVICE. Staging's current recommendation for each tenant, as
+//   the front page's ledger reads it (`loadMonthly` at the 11 Oct clock,
+//   read-only, WP2.1 fresh check, 26 Sep): `STAGING_LEDGER` and
+//   `OSSUR_STAGING_LEDGER` below.
+// - THE SIZE SENTENCE OF AN ENDED MONTH. The front page's builders
+//   (`headline`, `sentenceBlockFor`) on the same 655 videos and 16,233
+//   comments, read as September ended rather than "so far".
 
-const MONTHS = sparkMonths('2026-09-01')
+const AUG = '2026-08-01'
+const SEP = '2026-09-01'
+/** The 12 Oct clock: September has ended and two updates read past it. */
+export const MONTHLY_AT = '2026-10-12T06:00:00.000Z'
+const SUNDAYS = scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' })
 
-/** The denominator each month of the trail is a share of — the category's
- *  videos, which the fixture's own rows count out of. */
-const TRAIL_N = [1_204, 1_260, 1_311, 1_349, 1_388, 1_388]
-
-function moverRow(m: Mover, values: (number | null)[]): MoverRow {
-  const points = values.map((v, i) => (v == null ? null : { pct: v, n: TRAIL_N[i] ?? m.n }))
-  return { ...m, spark: values, sparkMonths: MONTHS, trail: seriesTrail(MONTHS, points) }
+/** Staging's measured (August, September) row (WP1.4's rehearsal, 26 Sep). */
+export const STAGING_PAIR_ROW: PairRow = {
+  prevMonth: AUG,
+  month: SEP,
+  searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } },
+  addedOnly: { k: 356, n: 654 },
+  codeChanges: [],
+  depth: { prevMedian: 23, currMedian: 15 },
+  gather: [],
+  lateCapture: null,
+  readThroughRun: 'run-2026-09-20',
+  methodVersion: 'comparability_v1',
+  computedAt: '2026-09-26T09:00:00.000Z',
 }
 
-const voiceRow = (over: Partial<SubjectVoiceRow> & { subjectId: string; subject: string }): SubjectVoiceRow => ({
-  voice: null,
-  note: null,
-  href: `/dashboard/subjects?item=${over.subjectId}`,
-  ...over,
-})
+/** The day the row was read through (staging's 20 Sep partial run, stamped
+ *  12:00 UTC as `sealandReading` stamps it). */
+const READ_WITH = '2026-09-20T12:00:00.000Z'
 
-function voicesFixture(): VoicesSection {
+/** Our search changes inside the pair (staging's change log: the 9 Sep term
+ *  swap, and the 13 and 17 Sep additions). */
+const SEARCH_CHANGES: OurChange[] = [
+  { id: 'terms-0909', surface: 'terms', changedAt: '2026-09-09T18:17:56.893Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] },
+  { id: 'terms-0913', surface: 'terms', changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] },
+  { id: 'terms-0917', surface: 'terms', changedAt: '2026-09-17T16:02:56.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] },
+]
+
+/** Sealand's current recommendation on staging (8196074b, the row WP1.9's
+ *  ledger order puts first): made on 3 updates, 253 videos behind it, marked
+ *  "Working on it" on 15 Sep. `monthsOld` is null there (no "first on record"
+ *  clause). */
+export const STAGING_LEDGER: LedgerRow = {
+  id: '8196074b-1a28-4eb2-b0bd-06248bf1a4ff',
+  title: 'Add a "fit and facts" layer to every Sealand bag page and shopping touchpoint',
+  monthsOld: null,
+  timesMade: 3,
+  grounding: { videos: 253, themes: 204, audience: INDUSTRY_AUDIENCE, pruned: false, line: '253 videos behind it' },
+  status: 'in_progress',
+  statusLabel: 'Working on it',
+  decidedAt: '2026-09-15T12:20:21.531616+00:00',
+  href: '/dashboard/market',
+}
+
+/** Össur's current recommendation on staging (85dd4fde): made once, 72 videos
+ *  behind it, no decision recorded. */
+export const OSSUR_STAGING_LEDGER: LedgerRow = {
+  id: '85dd4fde-14ef-47c9-876b-6fa86c7cf169',
+  title: 'Launch an access navigator that covers price, coverage, denials, and where to get seen',
+  monthsOld: null,
+  timesMade: 1,
+  grounding: { videos: 72, themes: 76, audience: INDUSTRY_AUDIENCE, pruned: false, line: '72 videos behind it' },
+  status: 'new',
+  statusLabel: 'New',
+  decidedAt: null,
+  href: '/dashboard/market',
+}
+
+/** Össur's own search-change days inside the pair on staging, as the front
+ *  page's loader lists them (`ChangeBlock.searchChanges`): 23 Aug and 13 Sep.
+ *  `ossurFrontFixture` inherits Sealand's change block, whose strip a paused
+ *  page never draws; the monthly draws the refused pair, so it needs Össur's. */
+const OSSUR_SEARCH_CHANGES = ['2026-08-23T00:00:00+00:00', '2026-09-13T00:00:00+00:00']
+
+/** The front page's reading, read as the monthly reads it. */
+function asEnded(base: OverviewData, over: { measured?: boolean } = {}): OverviewData {
+  const reading = sealandReading(MONTHLY_AT, SEP)
+  const pair = comparabilityOf(AUG, SEP, {
+    row: over.measured === false ? null : STAGING_PAIR_ROW,
+    changes: SEARCH_CHANGES,
+    view: 'market',
+    later: { state: 'ended', readToEnd: true, latestUpdateRunId: STAGING_PAIR_ROW.readThroughRun },
+  })
+  const size = base.market?.find((c) => c.month === SEP)
+  const head = headline({ verdicts: [], size: { month: SEP, soFar: false, videos: size?.videos ?? null, comments: size?.comments ?? null }, makerShares: null, chip: SEPTEMBER_CHIP })
+  const ledger = STAGING_LEDGER
   return {
-    rows: [
-      voiceRow({
-        subjectId: 's1',
-        subject: 'Durability',
-        voice: {
-          quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
-          cite: 'tiktok · 14 Sep · under a category video',
-          href: 'https://www.tiktok.com/@maker/video/7312345678901234567',
-          from: 'under a category video',
-          platform: 'tiktok',
-          source: 'comment' as const,
-          onScreen: null,
-        },
-      }),
-      voiceRow({
-        subjectId: 's2',
-        subject: 'Recycled materials',
-        voice: {
-          quote: { ref: 'e:2', text: 'Die sak hou vir ewig, maar die prys is ’n grap', lang: 'af', english: 'The bag lasts forever, but the price is a joke' },
-          cite: 'instagram · 7 Sep · under your post',
-          href: null,
-          from: 'under your post',
-          platform: 'instagram',
-          source: 'comment' as const,
-          onScreen: null,
-        },
-      }),
-      // A quote whose words no longer resolve: the reading it was evidence for
-      // still happened, so the row stays and the block says what became of it.
-      voiceRow({
-        subjectId: 's3',
-        subject: 'Waterproofing',
-        voice: {
-          quote: { ref: 'e:3', text: '' },
-          cite: 'reddit · 9 Sep · r/onebag',
-          href: null,
-          from: 'in a category thread',
-          platform: 'reddit',
-          source: 'comment' as const,
-          onScreen: null,
-        },
-      }),
-      voiceRow({ subjectId: 's4', subject: 'Price', note: 'nothing was said about this one this month' }),
-    ],
-    note: null,
-    href: '/dashboard/subjects',
+    ...base,
+    reading,
+    monthStatus: 'filling',
+    sentence: sentenceBlockFor({ head, verdicts: [], voices: { voices: [], from: 0 }, ledger, anomaly: null }),
+    change: base.change
+      ? { ...base.change, pair, readWith: over.measured === false ? null : READ_WITH, asAt: reading.asAt }
+      : base.change,
   }
 }
 
-export function monthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
-  const base = overviewFixture()
-  // §8's figures, as the loader composes them from the record's inputs
-  // (`monthlySoundFigures`). A snapshot frozen before the field existed has
-  // none, which `soundFallbackFixture` covers.
-  const overview = {
-    ...base,
-    record: { ...base.record, sound: monthlySoundFigures(methodRecordFixture(), { expected: base.bar.expected, readings: base.bar.readings }) },
-  }
-  const voice = voiceFixture()
-  const growing = voice.movers.growing.map((m, i) =>
-    moverRow(m, i === 0 ? [3.1, 4.0, 5.1, 6.8, 9.4, 9.4] : [null, 1.8, 2.4, 3.2, 5.1, 5.1]),
-  )
-  const fading = voice.movers.fading.map((m) => moverRow(m, [14.2, 13.0, 12.0, 9.6, 7.1, 7.1]))
-
+function monthly(overview: OverviewData, over: Partial<MonthlyData>): MonthlyData {
+  const market = overview.market?.find((c) => c.month === overview.month) ?? null
   const data: MonthlyData = {
     brand: overview.brand,
     month: overview.month,
     monthStatus: overview.monthStatus,
-    readingAt: overview.readingAt,
-    notes: overview.notes,
+    readingAt: MONTHLY_AT,
+    readTo: overview.reading.readTo,
+    market,
     overview,
-    movers: {
-      growing,
-      fading,
-      newcomers: voice.movers.newcomers,
-      goneQuiet: voice.movers.goneQuiet,
-      audienceLabel: 'the category',
-      span: spanOf(MONTHS),
-      note: null,
-      notes: [],
-      rereadNote: voice.movers.rereadNote,
-      href: '/dashboard/voice?movers=all',
-    },
-    voices: voicesFixture(),
+    slots: { ...MONTHLY_SLOT_STUBS },
     decide: {
-      interpretation: overview.sentence.interpretation,
-      figures: overview.sentence.figures,
       ledger: overview.sentence.ledger,
-      nextReading: '2026-10-01T00:00:00.000Z',
+      next: overview.reading.paused ? null : nextMonthlyOf(overview.month, SUNDAYS),
       href: '/dashboard/market',
     },
-    brief: {
-      title: 'Marketing brief',
-      // AS THE SEND PATH HANDS IT TO THE BLOCKS. The stored snapshot carries
-      // the app href and `public: false`; `withBriefShareLink` swaps in the
-      // token at render, and this fixture is that render.
-      snapshotId: '11111111-1111-4111-8111-111111111111',
-      href: '/r/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      public: true,
-      locked: false,
-      builtAt: '2026-09-12T08:25:00.000Z',
-      stale: false,
-    },
-    confirming: 'Will it survive a wet commute — August has closed at 7.1%. The report of 1 Sep read 6.8%; the rest of the month has since been counted.',
-    lead: overview.sentence.lead,
-    subject: monthlySubject(overview.brand, overview.month, overview.sentence.lead),
+    subject: monthlySubject(overview.brand, overview.month, market?.videos ?? null),
   }
   return { ...data, ...over }
 }
 
-/** A month whose comparisons were refused — a rename, or a re-clustering. */
-export function refusedMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
-  const overview = refusedFixture()
-  return monthlyFixture({
-    overview,
-    lead: overview.sentence.lead,
-    subject: monthlySubject(overview.brand, overview.month, overview.sentence.lead),
-    confirming: null,
-    ...over,
-  })
+/** Sealand's "September in your market": every slot a stub (the skeleton). */
+export function monthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
+  return monthly(asEnded(marketFrontFixture()), over)
+}
+
+/** The same, before MF1 (no maker shares, no lead, no voices) and with no
+ *  measured pair row: the change section prints the pair's own words. */
+export function unmeasuredMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
+  return monthly(asEnded(marketBeforeMakersFixture(), { measured: false }), over)
+}
+
+/** Össur's September (§2.13): paused, no subjects, no maker rule, no next
+ *  monthly promised. Staging's rows, as `ossurFrontFixture` holds them, with
+ *  Össur's own recommendation and search-change days (staging). */
+export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
+  const base = ossurFrontFixture()
+  return monthly({
+    ...base,
+    sentence: { ...base.sentence, ledger: OSSUR_STAGING_LEDGER },
+    change: base.change ? { ...base.change, searchChanges: OSSUR_SEARCH_CHANGES } : base.change,
+  }, over)
 }
 
 /**
- * Sealand today: subjects not recorded, nothing moved, no advice, no brief and
- * nothing to confirm. Every section still prints, which is the design's own
- * gate — an artefact has the same shape every month.
+ * Every slot filled, for the filled arms' render tests.
+ *
+ * - `brands`: BC F35 (staging, September, raw): the market's 662 videos, 563
+ *   without our rival searches; Patagonia 47 and 33, The North Face 36 and
+ *   11, Cotopaxi 31 and 11, Freitag 12 and 4 (mostly the German word); the 8
+ *   videos naming Sealand are its own posts, so the name line reads none.
+ * - `you`: plan §2.2 row 8 (production): 20 posts in September, 30 in August,
+ *   10 drew 5 or more comments, 9 carry a reading over 234 comments; the
+ *   followers' three themes, 4, 3 and 2; no move dated. No for-you line: its
+ *   sentences are WP2.5's.
+ * - `arrivals` and `change`: HYPOTHETICAL, and named so. What the 11 Oct
+ *   update brings is not knowable, so the counts are real ones of a different
+ *   question, borrowed for their size: 206 (GC F29, September videos first
+ *   found by the 13 Sep terms) and 4,923 (WP1.4's staging late capture of
+ *   September comments). The check line is the plan's own expected outcome
+ *   (WP2.3: "Too few videos on the searches both months ran to check.") on
+ *   "Asking for something", 146 of 626 in September (production).
  */
-export function formingMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
+export function filledSlotsFixture(): MonthlyData {
   const base = monthlyFixture()
-  const overview = overviewFixture({
-    subjects: {
-      state: 'not_recorded',
-      rows: [],
-      candidates: [],
-      gaps: {},
-      namedAt: null,
-      rivalLabel: null,
-      categoryLabel: 'The category',
-      note: 'Your subjects are not recorded for this workspace yet.',
+  const slots: MonthlySlots = {
+    brands: {
+      state: 'filled',
+      value: {
+        window: SEP,
+        nameLine: { month: SEP, n: 662, k: 0, ownPosts: 8 },
+        topics: [
+          { brandKey: 'patagonia', label: 'Patagonia', kAny: 47, kOrganic: 33, n: 662, nOrganic: 563, noise: false },
+          { brandKey: 'the-north-face', label: 'The North Face', kAny: 36, kOrganic: 11, n: 662, nOrganic: 563, noise: false },
+          { brandKey: 'cotopaxi', label: 'Cotopaxi', kAny: 31, kOrganic: 11, n: 662, nOrganic: 563, noise: false },
+          { brandKey: 'freitag', label: 'Freitag', kAny: 12, kOrganic: 4, n: 662, nOrganic: 563, noise: true },
+        ],
+        ninetyDayNote: 'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
+      },
     },
-    moves: {
-      rows: [],
-      unlock: base.overview.moves.unlock,
-      masthead: base.overview.moves.masthead,
-      empty: 'What you are doing about it is not recorded for this workspace yet.',
-      recorded: false,
-      // A WORKSPACE STILL FORMING HAS NO CARD EITHER: the posts read, but this
-      // fixture is the one where nothing about the client has been recorded,
-      // and a card drawn here would be the only figure on a section whose whole
-      // point is that there is nothing to confirm yet.
-      card: null,
-      readings: [],
-      acted: null,
+    you: {
+      state: 'filled',
+      value: {
+        foryou: null,
+        published: {
+          month: SEP,
+          posts: 20,
+          prevPosts: 30,
+          drewFive: 10,
+          withReading: 9,
+          readingComments: 234,
+          followers: [
+            { label: 'Respect for Sealand’s mission', k: 4 },
+            { label: 'Support for clean-up initiatives', k: 3 },
+            { label: 'Keen to join events', k: 2 },
+          ],
+          movesDated: 0,
+        },
+      },
     },
-  })
-  overview.sentence = {
-    ...overview.sentence,
-    lead: null,
-    anomaly: null,
-    ledger: null,
-    voices: [],
-    voicesFrom: 0,
-    verdicts: [],
-    interpretation: {
-      ...overview.sentence.interpretation,
-      sentences: ['Nothing moved clearly this month. Here is where you stand.'],
-      quotes: [],
+    arrivals: {
+      state: 'filled',
+      value: {
+        run: { id: 'run-2026-10-11', date: '2026-10-11T08:30:00.000Z' },
+        months: [{ month: SEP, videosFirstRead: 206, commentsCaptured: 4923 }],
+        current: { month: '2026-10-01', videos: null, updates: 2 },
+        newThemes: [],
+        regrouped: null,
+      },
+    },
+    change: {
+      state: 'filled',
+      value: {
+        checks: [{
+          objectKind: 'kind',
+          objectId: 'feature_request',
+          label: 'Asking for something',
+          population: 'same_searches_clean',
+          verdict: verdict({ objectKind: 'kind', objectId: 'feature_request', objectLabel: 'Asking for something', audience: INDUSTRY_AUDIENCE, value: { k: 146, n: 626 }, state: 'too_little_data', changePts: null, bandPts: null }),
+          sentence: 'Too few videos on the searches both months ran to check.',
+          populationShares: null,
+          readWith: '2026-10-11T08:30:00.000Z',
+        }],
+      },
     },
   }
-  return monthlyFixture({
-    overview,
-    movers: {
-      ...base.movers,
-      growing: [],
-      fading: [],
-      newcomers: [],
-      goneQuiet: [],
-      note: 'Too little conversation this month to say what moved.',
-      rereadNote: null,
-    },
-    voices: {
-      rows: [],
-      note: 'Your subjects are not recorded for this workspace yet.',
-      href: '/dashboard/subjects',
-    },
-    decide: {
-      ...base.decide,
-      interpretation: overview.sentence.interpretation,
-      figures: overview.sentence.figures,
-      ledger: null,
-    },
-    brief: null,
-    confirming: null,
-    lead: null,
-    subject: monthlySubject(overview.brand, overview.month, null),
-    ...over,
-  })
+  return { ...base, slots }
 }

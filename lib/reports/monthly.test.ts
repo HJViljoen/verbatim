@@ -1,21 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import type { Verdict } from '../reading/verdicts'
+import { scheduledUpdateAfter } from '../reading/reading-month'
 import {
   MONTHLY_BLOCK_KEYS,
   MONTHLY_EMAIL_WIDTH,
-  MONTHLY_MOVERS,
-  MONTHLY_RULE,
-  MONTHLY_RULE_FROZEN,
+  MONTHLY_RETIRED_KEYS,
+  MONTHLY_UPDATES_PAST_END,
   MOVED_SINCE_PTS,
-  confirmingLine,
   freezesOn,
   leadVerdict,
-  monthlyPeriod,
-  monthlyRuleFor,
+  monthlyStamp,
   monthlySubject,
+  monthlyTitle,
   movedSince,
+  nextMonthlyOf,
+  nextMonthlyParts,
+  readToWords,
   sentReadingLine,
-  seriesTrail,
   shortMonth,
   type SentReading,
 } from './monthly'
@@ -45,17 +46,23 @@ const sent = (over: Partial<SentReading> = {}): SentReading => ({
 })
 
 describe('the arrangement', () => {
-  it('is eight sections, in the mock’s order', () => {
+  it('is ten sections, in the front page’s order (plan §2.9)', () => {
     expect(MONTHLY_BLOCK_KEYS).toEqual([
       'monthly.month',
+      'monthly.themes',
+      'monthly.arrivals',
+      'monthly.kinds',
+      'monthly.asks',
       'monthly.subjects',
-      'monthly.movers',
-      'monthly.rivals',
-      'monthly.moves',
-      'monthly.voices',
+      'monthly.you',
+      'monthly.brands',
+      'monthly.change',
       'monthly.decide',
-      'monthly.sound',
     ])
+  })
+
+  it('puts what it means for you before the brands, as the front page does', () => {
+    expect(MONTHLY_BLOCK_KEYS.indexOf('monthly.you')).toBeLessThan(MONTHLY_BLOCK_KEYS.indexOf('monthly.brands'))
   })
 
   it('names every key under one page, so a stored arrangement is legible', () => {
@@ -63,76 +70,75 @@ describe('the arrangement', () => {
     expect(new Set(MONTHLY_BLOCK_KEYS).size).toBe(MONTHLY_BLOCK_KEYS.length)
   })
 
-  it('prints ten movers a side, which is what makes it not the weekly report', () => {
-    expect(MONTHLY_MOVERS).toBe(10)
+  it('never reuses a retired key for a new section', () => {
+    for (const key of MONTHLY_RETIRED_KEYS) expect((MONTHLY_BLOCK_KEYS as readonly string[]).includes(key)).toBe(false)
+    expect(MONTHLY_RETIRED_KEYS).toContain('monthly.sound')
   })
 
-  it('is the mock’s width', () => {
+  it('is the artboard’s width', () => {
     expect(MONTHLY_EMAIL_WIDTH).toBe(640)
   })
 })
 
-describe('the rule printed on the artefact', () => {
-  it('says the month keeps filling while it is filling', () => {
-    expect(monthlyRuleFor('filling')).toBe(MONTHLY_RULE)
-    expect(MONTHLY_RULE).toContain('keeps filling for thirty days')
-  })
-
-  it('says the opposite once it has closed', () => {
-    expect(monthlyRuleFor('frozen')).toBe(MONTHLY_RULE_FROZEN)
-    expect(MONTHLY_RULE_FROZEN).toContain('none of it will move again')
-  })
-
-  it('says in both arms that a month is dated by the comment', () => {
-    for (const rule of [MONTHLY_RULE, MONTHLY_RULE_FROZEN]) {
-      expect(rule).toContain('the day each comment was written')
-      expect(rule).toContain('not by the day we read it')
-    }
-  })
-})
-
 describe('the masthead', () => {
-  it('names the month, the reading date and the day the month closes', () => {
-    const line = monthlyPeriod('2026-09', 'filling', '2026-10-01T06:00:00.000Z')
-    expect(line).toBe('September · reading as at 1 Oct 2026 · still filling until 31 Oct 2026')
+  it('heads the artefact "September in your market"', () => {
+    expect(monthlyTitle('2026-09-01')).toBe('September in your market')
+    expect(monthlyTitle('2026-10')).toBe('October in your market')
   })
 
-  it('says a closed month is closed rather than naming a date in the past', () => {
-    expect(monthlyPeriod('2026-07', 'frozen', '2026-09-16T05:00:00.000Z'))
-      .toBe('July · reading as at 16 Sep 2026 · closed')
+  it('stamps the month and the update it was read to, with no "still filling"', () => {
+    expect(monthlyStamp('2026-09-01', '2026-10-11T08:30:00.000Z')).toBe('September 2026 · read to the 11 Oct update')
+    expect(monthlyStamp('2026-09-01', null)).toBe('September 2026')
+    expect(readToWords(null)).toBeNull()
   })
 
-  it('names the day the month stops moving, the same day OV6 names', () => {
-    // September ends 30 Sep; the freeze line is thirty days later. This is
-    // read from the reading layer rather than counted here, so it cannot
-    // drift from the trigger that enforces it.
+  it('names the day the month stops moving, the same day the reading layer names', () => {
     expect(freezesOn('2026-09').slice(0, 10)).toBe('2026-10-31')
     expect(freezesOn('2026-02').slice(0, 10)).toBe('2026-03-31')
   })
 })
 
 describe('the subject line', () => {
-  it('leads with the largest banded change, its size and its direction', () => {
-    expect(monthlySubject('Sealand', '2026-09', verdict({ changePts: 3 })))
-      .toBe('Sealand: September · Durability up 3 points')
+  it('leads with the market, as the plan words it', () => {
+    expect(monthlySubject('Sealand', '2026-09-01', 655)).toBe('Sealand · September in your market: 655 videos')
+    expect(monthlySubject('Össur', '2026-09-01', 362)).toBe('Össur · September in your market: 362 videos')
   })
 
-  it('says down for a fall, and prints one point in the singular', () => {
-    expect(monthlySubject('Sealand', '2026-09', verdict({ objectLabel: 'Price', changePts: -1 })))
-      .toBe('Sealand: September · Price down 1 point')
+  it('names the month alone where the market was not counted, never a zero', () => {
+    expect(monthlySubject('Sealand', '2026-09-01', null)).toBe('Sealand · September in your market')
+    expect(monthlySubject('Sealand', '2026-09-01', Number.NaN)).toBe('Sealand · September in your market')
   })
 
-  it('does not manufacture a movement when nothing cleared a band', () => {
-    expect(monthlySubject('Sealand', '2026-09', null)).toBe('Sealand: September · where you stand')
-    expect(monthlySubject('Sealand', '2026-09', verdict({ state: 'no_clear_change' })))
-      .toBe('Sealand: September · where you stand')
-    expect(monthlySubject('Sealand', '2026-09', verdict({ state: 'too_little_data', changePts: null })))
-      .toBe('Sealand: September · where you stand')
-  })
-
-  it('never prints a bare share', () => {
-    const line = monthlySubject('Össur', '2026-09', verdict())
+  it('carries no share and no change', () => {
+    const line = monthlySubject('Sealand', '2026-09-01', 655)
     expect(line).not.toContain('%')
+    expect(line).not.toMatch(/\b(up|down|points?)\b/)
+  })
+})
+
+describe('the next monthly (decision J)', () => {
+  const sundays = scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' })
+
+  it('is October’s, read to the 8 Nov update and sent Mon 9 Nov, after September’s', () => {
+    const next = nextMonthlyOf('2026-09-01', sundays)!
+    expect(next.month).toBe('2026-10-01')
+    expect(next.readTo.slice(0, 10)).toBe('2026-11-08')
+    expect(next.sendOn.slice(0, 10)).toBe('2026-11-09')
+    const p = nextMonthlyParts(next)
+    expect(`${p.lead}${p.title}${p.tail}`).toBe('Next: “October in your market”, read to the 8 Nov update, on Mon 9 Nov.')
+  })
+
+  it('reproduces September’s own dates: read to the 11 Oct update, sent Mon 12 Oct', () => {
+    const sep = nextMonthlyOf('2026-08-01', sundays)!
+    expect(sep.month).toBe('2026-09-01')
+    expect(sep.readTo.slice(0, 10)).toBe('2026-10-11')
+    expect(sep.sendOn.slice(0, 10)).toBe('2026-10-12')
+    expect(MONTHLY_UPDATES_PAST_END).toBe(2)
+  })
+
+  it('promises nothing where no update is scheduled', () => {
+    expect(nextMonthlyOf('2026-09-01', null)).toBeNull()
+    expect(nextMonthlyOf('2026-09-01', () => null)).toBeNull()
   })
 })
 
@@ -163,37 +169,7 @@ describe('leadVerdict', () => {
   })
 })
 
-describe('the series trail under a mover row', () => {
-  const p = (pct: number, n: number) => ({ pct, n })
-
-  // RULE (b) OVER SIX LEVELS. The trail used to read "Jul 5.1% → Aug 6.8% →
-  // Sep 9.4%" — up to six levels with no "of N" anywhere, ten rows a side, on
-  // the one artefact a client reads unaccompanied.
-  it('reads as the mock prints it, with every point’s denominator', () => {
-    expect(seriesTrail(['2026-07', '2026-08', '2026-09'], [p(5.1, 1349), p(6.8, 1388), p(9.4, 1388)]))
-      .toBe('Jul 5.1% of 1,349 → Aug 6.8% of 1,388 → Sep 9.4% of 1,388')
-  })
-
-  it('names a month with no reading and leaves it blank — never closes the gap', () => {
-    expect(seriesTrail(['2026-07', '2026-08', '2026-09'], [null, p(6.8, 1388), p(9.4, 1388)]))
-      .toBe('Jul — → Aug 6.8% of 1,388 → Sep 9.4% of 1,388')
-  })
-
-  it('is empty rather than misleading when it has no months', () => {
-    expect(seriesTrail([], [])).toBe('')
-  })
-
-  // A ROW OF DASHES IS NOT A READING. Every month under the floor comes back
-  // null, so a mover nobody could read anywhere in the span prints no line
-  // rather than "Apr — → May — → Jun —".
-  it('is empty where no month in the span could be read', () => {
-    expect(seriesTrail(['2026-07', '2026-08'], [null, null])).toBe('')
-  })
-
-  it('reads only as far as the shorter of the two lists', () => {
-    expect(seriesTrail(['2026-08', '2026-09'], [p(6.8, 1388)])).toBe('Aug 6.8% of 1,388')
-  })
-
+describe('shortMonth', () => {
   it('abbreviates the month without repeating the year', () => {
     expect(shortMonth('2026-09')).toBe('Sep')
   })
@@ -233,39 +209,5 @@ describe('the report of {date} read X', () => {
   it('prints a count in its own unit', () => {
     expect(sentReadingLine(sent({ unit: 'videos', value: 1200, k: null, n: null }), 1388))
       .toBe('the report of 1 Oct read 1,200 videos')
-  })
-})
-
-describe('next month’s confirming line', () => {
-  const closed = (value: number, frozen = true) => ({ value, frozen })
-
-  it('says what the month closed at, and what we had said', () => {
-    expect(confirmingLine('2026-09', sent(), closed(22))).toBe(
-      'September has closed at 22.0%. The report of 1 Oct read 19.0%.',
-    )
-  })
-
-  it('confirms rather than corrects where the number held', () => {
-    expect(confirmingLine('2026-09', sent({ value: 22 }), closed(22))).toBe(
-      'September has closed at 22.0%, which is what the report of 1 Oct read.',
-    )
-  })
-
-  it('has nothing to confirm where nothing was sent, or nothing has closed', () => {
-    expect(confirmingLine('2026-09', null, closed(22))).toBeNull()
-    expect(confirmingLine('2026-09', sent(), null)).toBeNull()
-  })
-
-  it('adds nothing where the artefact already printed the final figure', () => {
-    expect(confirmingLine('2026-09', sent({ monthStatus: 'frozen' }), closed(22))).toBeNull()
-  })
-
-  // A month keeps filling for thirty days after it ends, and nothing ties this
-  // artefact to the 1st: an every_update schedule pointed at the monthly
-  // report sends it on a Sunday, and a preview can be built any day. Saying
-  // "August has closed at 7.1%" on 10 September is the claim the frozen-month
-  // rules exist to make impossible.
-  it('will not say a month has closed while it is still filling', () => {
-    expect(confirmingLine('2026-09', sent(), closed(22, false))).toBeNull()
   })
 })

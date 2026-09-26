@@ -6,7 +6,6 @@ import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-c
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
-import { overviewRecord } from './record'
 import { moveReadingFixture, overviewFixture, refusedFixture } from './fixture'
 import { MOVE_SUBJECT_FAILED, MOVE_SUBJECT_PROVISIONAL } from '@/lib/reading/moves'
 
@@ -92,66 +91,6 @@ describe('OV5 · your moves', () => {
     expect(markup).toContain('<table')
     expect(markup).not.toContain('class=')
     expect(markup).not.toContain('var(--')
-  })
-})
-
-describe('OV6 · how sound is this month', () => {
-  it('renders in all three modes and keeps the copy contract', () => {
-    for (const data of [overviewFixture(), refusedFixture()]) {
-      for (const mode of MODES) {
-        assertCopyContract(render(overviewRecord.render(data, mode, ctx)))
-      }
-    }
-  })
-
-  it('prints the record BEHIND the band’s sentence, and not the sentence again', () => {
-    // CHANGED BY THE FIX PASS (design review Blocker 2 / High 3, code review
-    // I3 and I7). The block passed `record.line` — ~180 characters — as
-    // `BlockFrame`'s `meta`, which renders `whitespace-nowrap` inside an
-    // `overflow-hidden` tile: it was cut mid-clause on the live page ("…27% of
-    // what was said on camera"), and it squeezed the h2 beside it into five
-    // stacked words. It is the soundness band's sentence, it wraps there, and
-    // this block prints the record it rests on.
-    const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
-    expect(text).not.toContain('27% of what was said on camera was not in English · 1 tracking change')
-    // The meta slot is not empty — it carries "the record →", which is four
-    // words and fits — but nothing long is passed through it any more.
-    expect(text).toContain('the record →')
-    expect(text).toContain('comments read 18,020')
-  })
-
-  it('counts the comparisons this page refused, and leaves the freeze to the page bar (ruling F)', () => {
-    const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('comparisons refused 2')
-    expect(text).not.toContain('This month stops moving')
-  })
-
-  it('says so when nothing was refused', () => {
-    const data = overviewFixture()
-    const figures = data.record.figures.map((f) => (f.label === 'comparisons refused' ? { ...f, value: '0' } : f))
-    const text = renderText(overviewRecord.render({ ...data, record: { ...data.record, figures } }, 'app', ctx))
-    expect(text).toContain('comparisons refused 0')
-  })
-
-  it('prints each refusal\u2019s reason, in every mode — not only in a hover title', () => {
-    // The block promised "each with its reason beside it" while the reason
-    // lived in the badge's `title`: invisible in print, and dropped entirely by
-    // the email arm, which prints the word alone.
-    for (const mode of MODES) {
-      const text = renderText(overviewRecord.render(overviewFixture(), mode, ctx))
-      expect(text, mode).toContain('too little was read on one side or both')
-      expect(text, mode).toContain('the two sides were grouped differently')
-    }
-  })
-
-  it('links to the record, absolutely, in an email', () => {
-    const markup = render(overviewRecord.render(overviewFixture(), 'email', ctx))
-    expect(markup).toContain('https://app.verbatimintel.com/dashboard/settings')
-    expect(markup).not.toContain('class=')
-  })
-
-  it('declares no figures — the blocks above already print them', () => {
-    expect(blockAnswers(overviewRecord, overviewFixture()).figures).toEqual({})
   })
 })
 

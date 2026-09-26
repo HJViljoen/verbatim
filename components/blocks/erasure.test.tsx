@@ -32,25 +32,28 @@ describe('every quote withdrawn', () => {
     expect(QUARTERLY_BLOCKS['quarterly.read'].quotes?.(data)).toEqual([])
   })
 
-  it('leaves the monthly month page standing, and stops counting the voices', () => {
+  // "September in your market" (market-first WP2.1): the month's voices are
+  // the front page's lead-theme quotes, each a `{ quote, cite }` wrapper.
+  it('leaves the monthly month page standing, quoting nobody', () => {
     const full = monthlyFixture()
     const before = MONTHLY_BLOCKS['monthly.month'].quotes?.(full) ?? []
     expect(before.length).toBeGreaterThan(0)
     const data = erased(full)
-    const text = renderText(MONTHLY_BLOCKS['monthly.month'].render(data, 'app', ctx))
-    expect(text).toContain('The month')
-    expect(text).not.toMatch(/\d+ of \d+ voices/)
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = renderText(MONTHLY_BLOCKS['monthly.month'].render(data, mode, ctx))
+      expect(text).toContain('Your market in September')
+      expect(text).not.toContain('About time they do something')
+    }
     expect(MONTHLY_BLOCKS['monthly.month'].quotes?.(data)).toEqual([])
   })
 
-  // THE VOICES PAGE KEEPS ITS CELLS. One cell per subject is the page; a
-  // withdrawn comment says "counted, not quotable" there rather than falling
-  // through to the note about a subject nobody said anything about, which is a
-  // different claim.
-  it('leaves the monthly voices page standing, saying what happened per cell', () => {
+  it('leaves the monthly asks standing, their lists whole and their quotes gone', () => {
     const data = erased(monthlyFixture())
-    const text = renderText(MONTHLY_BLOCKS['monthly.voices'].render(data, 'app', ctx))
-    expect(text).toContain('counted, not quotable: this comment has since been removed')
-    expect(MONTHLY_BLOCKS['monthly.voices'].quotes?.(data)).toEqual([])
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = renderText(MONTHLY_BLOCKS['monthly.asks'].render(data, mode, ctx))
+      expect(text).toContain('Wished for')
+      expect(text).not.toContain('If you made it in pink')
+    }
+    expect(MONTHLY_BLOCKS['monthly.asks'].quotes?.(data)).toEqual([])
   })
 })

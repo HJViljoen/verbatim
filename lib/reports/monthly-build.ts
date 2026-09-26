@@ -5,7 +5,7 @@ import type { FigureTable, Verdict } from '../reading/verdicts'
 import type { MonthlyData } from '../pages/monthly'
 import { loadMonthly } from '../pages/monthly'
 import { readingHandle } from '../reading/read'
-import { MONTHLY_BLOCK_KEYS, monthlyPeriod, type MonthlyBlockKey } from './monthly'
+import { MONTHLY_BLOCK_KEYS, monthlyStamp, monthlyTitle, type MonthlyBlockKey } from './monthly'
 import { stampSnapshotReading } from './reading-stamp'
 import { STALE_ARTEFACT_LINE } from './stale'
 import { FIGURE_AUDIENCE, sentFigureRows, writeSentFigures, type SentFigureRow } from './sent-figures'
@@ -36,13 +36,20 @@ import { FIGURE_AUDIENCE, sentFigureRows, writeSentFigures, type SentFigureRow }
  */
 
 export interface MonthlySnapshotData {
-  version: 1
+  /** `MONTHLY_SNAPSHOT_VERSION` (2 since WP2.1, "September in your
+   *  market"); a stored 1 is the Phase 1 arrangement and prints
+   *  `STALE_ARTEFACT_LINE` (`staleMonthlySnapshot`). `number`, not the
+   *  literal, for the weekly's reason: callers narrowing a
+   *  `ReportSnapshotData` (whose `version` is the literal 1) with
+   *  `isMonthlyData` would otherwise collapse to `never`. */
+  version: number
   /** What tells a monthly artefact from a weekly one, an arranged report or a
    *  document. */
   kind: 'monthly'
   company: string
+  /** "September in your market". */
   title: string
-  /** "September · reading as at 1 Oct 2026 · still filling until 31 Oct 2026". */
+  /** "September 2026 · read to the 11 Oct update" (`monthlyStamp`). */
   period: string
   /** The instant the reading was taken. M9's `report_snapshots.reading_at` is
    *  stamped from here, and its backfill reads exactly this field. */
@@ -54,7 +61,7 @@ export interface MonthlySnapshotData {
   keys: MonthlyBlockKey[]
   /** The tile-ready reading. Quotes inside are refs with `text: ''`. */
   reading: MonthlyData
-  /** Every figure the eight blocks print, by token, frozen. */
+  /** Every figure the sections print, by token, frozen. */
   figures: FigureTable
   /** The subject line, frozen with the reading it describes. */
   subject: string
@@ -65,7 +72,9 @@ export function isMonthlyData(data: unknown): data is MonthlySnapshotData {
 }
 
 /**
- * The shape `data.reading` is stored in. The sibling of
+ * The shape `data.reading` is stored in (2 since market-first WP2.1: the front
+ * page's reading on an ended month, the ten v2 keys and the four slots). The
+ * sibling of
  * `WEEKLY_SNAPSHOT_VERSION` and `QUARTERLY_SNAPSHOT_VERSION`, and it exists
  * for the same reason: `isMonthlyData` matches on `kind` alone — deliberately,
  * because telling a monthly artefact from an arranged report is one question
@@ -78,7 +87,7 @@ export function isMonthlyData(data: unknown): data is MonthlySnapshotData {
  * to the single-tile arm of `app/render/[snapshotId]`, which resolves one key
  * and renders it.
  */
-export const MONTHLY_SNAPSHOT_VERSION = 1
+export const MONTHLY_SNAPSHOT_VERSION = 2
 
 /** The one line to print instead of a monthly artefact this build cannot
  *  draw, or null when it can. Every renderer of a stored monthly reading asks
@@ -92,7 +101,7 @@ export class MonthlyEmptyError extends Error {}
 
 /** What the caller hands back off the blocks, per key. Computed by the caller
  *  so this module stays free of React — and over THE KEYS THIS SNAPSHOT
- *  RENDERS, never over all eight regardless of the stored arrangement. */
+ *  RENDERS, never over every key regardless of the stored arrangement. */
 export interface BlockAnswersOf {
   (data: MonthlyData, keys: MonthlyBlockKey[]): { figures: FigureTable; verdicts: Verdict[] }[]
 }
@@ -107,7 +116,7 @@ export async function snapshotMonthly(args: {
   clientId: string
   userId?: string | null
   company: string
-  /** Which blocks, in which order. The stored arrangement, or all eight. */
+  /** Which blocks, in which order. The stored arrangement, or all ten. */
   keys?: readonly string[]
   answersOf: BlockAnswersOf
 }): Promise<{ snapshotId: string; data: MonthlySnapshotData; evidenceIds: string[]; rows: SentFigureRow[] }> {
@@ -134,8 +143,8 @@ export async function snapshotMonthly(args: {
     version: MONTHLY_SNAPSHOT_VERSION,
     kind: 'monthly',
     company,
-    title: `${company} · the month`,
-    period: monthlyPeriod(reading.month, reading.monthStatus, reading.readingAt),
+    title: monthlyTitle(reading.month),
+    period: monthlyStamp(reading.month, reading.readTo),
     readingAt: reading.readingAt,
     month: reading.month,
     monthStatus: reading.monthStatus,
@@ -173,67 +182,6 @@ export async function snapshotMonthly(args: {
       figures,
       figureAudience: FIGURE_AUDIENCE,
     }),
-  }
-}
-
-/**
- * The brief's share link, resolved AT SEND and never frozen.
- *
- * WHY IT IS NOT IN THE SNAPSHOT. `report_snapshots.data` is readable by every
- * tenant member ("Users see their own report_snapshots"); `share_links.token`
- * is not — SELECT is revoked and granted back column by column, with the
- * comment "The token and the password hash never reach a session client". A
- * `/r/<token>` written into the frozen reading is that token, published to
- * everyone who can open the Reports page, plus whether it is
- * password-protected. It is also the only place in the tree where a /r/ token
- * was written into frozen page data.
- *
- * SO THE TOKEN TRAVELS ON THE SEND. The email is rendered in a route handler
- * that already holds the admin client; this returns a COPY of the reading with
- * the brief's href, `public` and `locked` filled in, and the stored row is left
- * exactly as it was frozen. The share page and the PDF render the snapshot as
- * stored, so a recipient of one artefact's link is no longer handed another
- * artefact's — which the email intended and the share page never did.
- *
- * Non-fatal: a failed read leaves the app href, which is the honest fallback
- * `loadBriefLink` already froze.
- */
-export async function withBriefShareLink(
-  admin: SupabaseClient,
-  clientId: string,
-  data: MonthlySnapshotData,
-): Promise<MonthlySnapshotData> {
-  const brief = data.reading.brief
-  if (!brief?.snapshotId) return data
-  type LinkRow = { token: string; expires_at: string | null; password_hash: string | null }
-  let links: LinkRow[] = []
-  try {
-    const { data: rows } = await admin
-      .from('share_links')
-      .select('token, expires_at, password_hash')
-      .eq('client_id', clientId)
-      .eq('snapshot_id', brief.snapshotId)
-      .is('revoked_at', null)
-      .order('created_at', { ascending: false })
-      .limit(5)
-    links = (rows as LinkRow[] | null) ?? []
-  } catch (error) {
-    console.warn('[send] could not resolve the brief’s share link', error)
-    return data
-  }
-  const live = links.find((l) => !l.expires_at || l.expires_at > data.readingAt)
-  if (!live) return data
-  return {
-    ...data,
-    reading: {
-      ...data.reading,
-      brief: {
-        ...brief,
-        href: `/r/${live.token}`,
-        public: !live.password_hash,
-        locked: Boolean(live.password_hash),
-      },
-    },
   }
 }
 

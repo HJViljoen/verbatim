@@ -40,7 +40,7 @@ export function BlockFrame({
   // `question` is accepted and deliberately not destructured — see the note
   // where it used to be drawn, at the foot of the header.
   title, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
-  truncateFooter = false, children, className, accent = false, roomy = false,
+  truncateFooter = false, children, className, accent = false, roomy = false, card = false,
 }: {
   title: string
   question?: string
@@ -155,7 +155,49 @@ export function BlockFrame({
    * no tile to fill.
    */
   roomy?: boolean
+  /**
+   * The monthly's section card, in email only (market-first WP2.1, ADDITIVE,
+   * default off, so every existing caller and the weekly's preview are byte
+   * for byte what they were). The approved preview's "September in your
+   * market" draws each section as its own white card: the title as a 13px
+   * uppercase eyebrow with no rule above it, the body 16px under it, and the
+   * footer's link under a hairline 32px below the body. The card itself (its
+   * ground, radius and 32px inset) is the email document's, which lays the
+   * sections out. No `meta` and no `footerNote` are drawn (25 Sep rulings: a
+   * header is its title alone, a footer its links alone). App and print
+   * ignore it.
+   */
+  card?: boolean
 }) {
+  if (mode === 'email' && card) {
+    return (
+      <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
+        <tbody>
+          {header ? (
+            <tr>
+              <td style={{ paddingBottom: 16, fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: EMAIL.muted }}>
+                {title}
+              </td>
+            </tr>
+          ) : null}
+          <tr><td>{children}</td></tr>
+          {footer ? (
+            <tr>
+              <td style={{ paddingTop: 32 }}>
+                <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
+                  <tbody>
+                    <tr><td style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '12px 0 0', fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', color: EMAIL.ink }}>{footer}</td></tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          ) : (
+            <tr><td style={{ height: 16, fontSize: 0, lineHeight: 0 }}>&nbsp;</td></tr>
+          )}
+        </tbody>
+      </table>
+    )
+  }
   if (mode === 'email') {
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 22 }}>

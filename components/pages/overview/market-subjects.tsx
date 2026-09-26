@@ -27,7 +27,7 @@ const share = (k: number | null | undefined, n: number | null | undefined): stri
 /** The month before's cell: its share, or its count where it is under the
  *  floor (plan §2.2's print, "Price … 23 (4%)  5": a measured August under 10
  *  prints as a count with no share), and a dot only where there is no reading. */
-const prevCell = (k: number | null | undefined, n: number | null | undefined): string => marketLevel(k ?? null, n ?? null)?.text ?? '·'
+export const prevCell = (k: number | null | undefined, n: number | null | undefined): string => marketLevel(k ?? null, n ?? null)?.text ?? '·'
 
 /**
  * A row's tag: its calibration word, or that it has no reading yet.
@@ -44,7 +44,7 @@ const prevCell = (k: number | null | undefined, n: number | null | undefined): s
  * rail and pane and This week print too; a row with no market figure for any
  * other reason keeps "no reading yet".
  */
-function rowTag(r: SubjectRow): string | null {
+export function rowTag(r: SubjectRow): string | null {
   if (r.calibration === 'failed') return CALIBRATION_TAG.failed
   if (r.unread) return r.unread
   if (r.market?.k == null) return NO_READING_YET
@@ -52,7 +52,7 @@ function rowTag(r: SubjectRow): string | null {
 }
 
 /** Whether a row prints figures at all. */
-const printsFigures = (r: SubjectRow): boolean => r.calibration !== 'failed' && r.market?.k != null
+export const printsFigures = (r: SubjectRow): boolean => r.calibration !== 'failed' && r.market?.k != null
 
 const token = (id: string, suffix: 'k' | 'share' | 'prev'): string => `market_subject_${id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${suffix}`
 

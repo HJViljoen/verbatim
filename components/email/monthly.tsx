@@ -1,62 +1,108 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth } from '@/lib/format'
-import { PRIVACY_LINE } from '@/lib/reading/method'
-import {
-  MONTHLY_CANVAS_GUTTER,
-  MONTHLY_CARD_WIDTH,
-  monthlyContext,
-  monthlyEyebrow,
-  readingCaveat,
-} from '@/lib/reports/monthly'
-import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
-import { monthlyBlocksFor } from '@/components/blocks/monthly'
-import { Button, Hairline, text } from './primitives'
+import { MONTHLY_CANVAS_GUTTER, MONTHLY_CARD_WIDTH, readToWords } from '@/lib/reports/monthly'
+import { staleMonthlySnapshot, type MonthlySnapshotData } from '@/lib/reports/monthly-build'
+import { monthlySections } from '@/components/blocks/monthly'
+import { MONTHLY_EMAIL_CSS } from '@/components/blocks/monthly/email'
 import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 /**
- * The monthly report as an email (Phase 1 WP18, design item 13).
+ * "September in your market" as an email (market-first WP2.1; the approved
+ * preview's "What we send" artboard, MonthlyReport).
  *
- * 640 WIDE AND EIGHT SECTIONS DEEP — the mock's own geometry (640 × ~1600
- * against the weekly report's ~1000). It is the same width as the weekly
- * artefact and deliberately not the same length: Heinrich's revision 6 is that
- * the monthly report is the bigger picture and must not look like the weekly.
- * What makes it look different is not styling, it is the ten movers with a line
- * each, the six voices and the decision at the end.
+ * A 640 CANVAS AND A 600 COLUMN OF CARDS. The masthead and the first section
+ * share the first card; every section after it is a card of its own, 24px
+ * apart, as the artboard draws them; then a card with the two buttons, and one
+ * mono line under everything saying whose report it is. The sections are the
+ * blocks (`monthlySections`), each in its email arm inside `BlockFrame`'s
+ * `card` chrome; this document draws only the cards around them.
  *
- * NO SECTION IS EVER DROPPED. The design's gate for the weekly report — "print
- * their empty states rather than being dropped, so the artefact has the same
- * shape every week" — applies here with more force, because a reader meets this
- * one twelve times a year and learns where their part of it is.
+ * A SECTION THAT IS ABSENT IS NOT A CARD. A slot another package has not
+ * filled is dropped by `monthlySections`, so the artefact never carries an
+ * empty section (plan WP2.1, "Depends on").
  *
- * THE MASTHEAD SAYS WHAT THE READING IS OF, and its third clause is the one
- * nobody else prints: "still filling until 31 Oct 2026". A month keeps taking
- * comments for thirty days after it ends, so a report sent on the 1st is a
- * reading of a month that will still move — which is exactly what the sent
- * figures then let the app say beside the live number.
+ * A STORED VERSION 1 ROW IS A SENTENCE. The Phase 1 arrangement's reading is a
+ * different shape; `staleMonthlySnapshot` says so, and the email prints
+ * `STALE_ARTEFACT_LINE` under the masthead instead of asking ten blocks to
+ * draw a reading they were not built for.
  */
 
 export interface MonthlyEmailProps {
   data: MonthlySnapshotData
   shareUrl: string | null
   appUrl: string
-  /** Whether the PDF rides along, so the footer can say so. */
+  /** Whether the PDF rides along, so the end card can say so. */
   attached: boolean
   ctx: BlockContext
-  /** The inbox preview line — the subject by default. */
+  /** The inbox preview line: the subject by default. */
   preheader?: string
 }
 
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
 
+/** The artboard's card: white, a 6px radius, a hairline ring and its soft
+ *  shadow (a client that draws no shadow still draws the ring). */
+const CARD = {
+  borderCollapse: 'separate' as const,
+  background: EMAIL.card,
+  borderRadius: 6,
+  border: `1px solid ${EMAIL.hairline}`,
+  boxShadow: '0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)',
+}
+
+function Card({ children }: { children: ReactNode }) {
+  return (
+    <table width="100%" {...presentation} style={CARD}>
+      <tbody>
+        <tr><td className="vb-m-card" style={{ padding: '32px 32px 16px' }}>{children}</td></tr>
+      </tbody>
+    </table>
+  )
+}
+
+const Gap = ({ h = 24 }: { h?: number }) => <div style={{ height: h, fontSize: 0, lineHeight: 0 }}>&nbsp;</div>
+
+/** The masthead: the product and the tenant, the heading, and the month with
+ *  the update it was read to. The one context line the 25 Sep rulings allow,
+ *  with no "still filling" and no freeze date. */
+function Masthead({ data }: { data: MonthlySnapshotData }) {
+  const read = readToWords(data.reading?.readTo ?? null)
+  return (
+    <>
+      <table width="100%" {...presentation} style={{ borderCollapse: 'collapse' }}>
+        <tbody>
+          <tr>
+            <td style={{ fontFamily: FONT.sans, fontSize: 16, lineHeight: '20px', fontWeight: 700, letterSpacing: '-.02em', color: EMAIL.ink, whiteSpace: 'nowrap' }}>
+              <span aria-hidden style={{ color: EMAIL.green, fontWeight: 700, letterSpacing: '-.12em' }}>{'//'}</span>&nbsp;&nbsp;Verbatim
+            </td>
+            <td align="right" style={{ fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.ink2 }}>{data.company}</td>
+          </tr>
+        </tbody>
+      </table>
+      <Gap h={40} />
+      <h1 style={{ margin: 0, fontFamily: FONT.sans, fontSize: 24, lineHeight: '32px', fontWeight: 700, letterSpacing: '-.015em', color: EMAIL.ink }}>{data.title}</h1>
+      <div style={{ marginTop: 8, fontFamily: FONT.sans, fontSize: 14, lineHeight: '22px', color: EMAIL.ink2 }}>
+        <span style={{ fontWeight: 600, color: EMAIL.ink }}>{longMonth(data.month)} {data.month.slice(0, 4)}</span>
+        {read ? <>&nbsp;&nbsp;<span style={{ fontFamily: FONT.mono, fontSize: 13, color: EMAIL.muted }}>{read}</span></> : null}
+      </div>
+      <Gap h={32} />
+      <div style={{ height: 1, background: EMAIL.hairline, fontSize: 0, lineHeight: 0 }}>&nbsp;</div>
+      <Gap h={32} />
+    </>
+  )
+}
+
 export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: MonthlyEmailProps) {
   // A snapshot built before the em-dash sweep re-renders in the current words.
   data = withCurrentWords(data)
-  const blocks = monthlyBlocksFor(data.keys)
-  const caveat = readingCaveat(data.reading.notes)
-  const method = data.reading.overview.method
+  const stale = staleMonthlySnapshot(data)
+  const sections = stale ? [] : monthlySections(data.keys, data.reading)
+  const [first, ...rest] = sections
+  const month = longMonth(data.month)
+  const openHref = `${appUrl}/dashboard?month=${data.month.slice(0, 7)}`
   return (
     <html lang="en">
       <head>
@@ -64,143 +110,64 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="light" />
         <title>{data.title}</title>
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Serif:ital,wght@0,500;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+        <style>{MONTHLY_EMAIL_CSS}</style>
       </head>
       <body style={{ margin: 0, padding: 0, background: EMAIL.canvas, fontFamily: FONT.sans, color: EMAIL.ink, WebkitTextSizeAdjust: '100%' }}>
         {preheader ? <div style={{ display: 'none', maxHeight: 0, overflow: 'hidden', opacity: 0, color: 'transparent' }}>{preheader}</div> : null}
         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
           <tbody>
             <tr>
-              {/* THE FRAME IS 640 AND THE CARD IS 600 (E-monthly). The canvas
-                  gutter is the artboard's 20px, not 12, and the card inside it
-                  carries the artboard's own 30px of side padding — so the card
-                  is the only width that binds, and 600 + 20 + 20 is the 640.
-                  The cell carried a `max-width:640` too, which does nothing:
-                  max-width is not honoured on a table cell in CSS 2.1 and
-                  Outlook lays out with Word. */}
-              <td align="center" style={{ padding: `${MONTHLY_CANVAS_GUTTER}px ${MONTHLY_CANVAS_GUTTER}px 24px` }}>
-                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: MONTHLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+              {/* THE COLUMN IS 600 AND THE CANVAS 640: the card's max-width
+                  binds, and the gutter makes up the rest. */}
+              <td align="center" style={{ padding: `32px ${MONTHLY_CANVAS_GUTTER}px` }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', maxWidth: MONTHLY_CARD_WIDTH }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '28px 30px 22px' }}>
-                        {/* THE GREEN RULE, then the product and the reading.
-                            It is the only green on the artefact above the
-                            button, and it is what makes the masthead read as a
-                            masthead rather than as a first paragraph.
-                            THE RULE IS INSIDE THE SENTENCE'S OWN BOX (the fix
-                            pass, review finding [Important]). As three cells of
-                            a bare shrink-to-fit table — a 30px rule, a 10px
-                            spacer and the words — the masthead sized itself to
-                            the eyebrow's max-content plus 40px of fixed lead
-                            and held the WHOLE artefact at a 398px floor in all
-                            three arms, so even with section 2 fixed the email
-                            was wider than an iPhone. The rule is an
-                            inline-block at the head of the line, as the
-                            artboard draws it, and the sentence wraps under
-                            itself like any other sentence.
-                            AND THE WORDS ARE THE SNAPSHOT'S OWN STAMP, never
-                            recomposed here: `data.period` is what the deck and
-                            the share page print. */}
-                        {/* AND IT WRAPS AS A HANGING INDENT (the wave-3
-                            review, finding [Minor]). The rule is 30px plus
-                            10px of margin at the head of the line box, so the
-                            eyebrow's second line — "31 OCT 2026", the freeze
-                            date the artboard does not print at all — began at
-                            x = 0 directly UNDER the rule rather than under the
-                            words it continues, which reads as a mistake rather
-                            than as a wrap. 40px of padding pulled back by 40px
-                            of indent puts the rule where it was and every line
-                            after the first under the first line's text.
-                            Deviation 19 records that it wraps; this is the
-                            shape of the wrap, and it costs no word. */}
-                        <div style={{ ...text.eyebrow, color: EMAIL.muted, lineHeight: '1.45', paddingLeft: 40, textIndent: -40 }}>
-                          <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, verticalAlign: 'middle', marginRight: 10, fontSize: 0, lineHeight: 0 }} />
-                          {monthlyEyebrow(data.period)}
+                      <td>
+                        <Card>
+                          <Masthead data={data} />
+                          {stale ? (
+                            <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2, paddingBottom: 16 }}>{stale}</div>
+                          ) : first ? first.render(data.reading, 'email', ctx) : null}
+                        </Card>
+                        {rest.map((block) => (
+                          <Fragment key={block.key}>
+                            <Gap />
+                            <Card>{block.render(data.reading, 'email', ctx)}</Card>
+                          </Fragment>
+                        ))}
+                        <Gap />
+                        <Card>
+                          <table {...presentation} style={{ borderCollapse: 'collapse' }}>
+                            <tbody>
+                              <tr>
+                                {/* The two buttons stack on a phone (`vb-m-col`), where
+                                    side by side they would outrun the column. */}
+                                <td className="vb-m-col" style={{ paddingRight: 12, whiteSpace: 'nowrap' }}>
+                                  <a href={openHref} style={{ display: 'inline-block', padding: '12px 20px', borderRadius: 6, background: EMAIL.green, fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.card, textDecoration: 'none' }}>
+                                    Open {month} in Verbatim
+                                  </a>
+                                </td>
+                                {shareUrl ? (
+                                  <td className="vb-m-col" style={{ whiteSpace: 'nowrap' }}>
+                                    <a href={shareUrl} style={{ display: 'inline-block', padding: '11px 19px', borderRadius: 6, background: EMAIL.card, border: `1px solid ${EMAIL.border}`, fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.ink, textDecoration: 'none' }}>
+                                      Open the share page
+                                    </a>
+                                  </td>
+                                ) : null}
+                              </tr>
+                            </tbody>
+                          </table>
+                          {attached ? <div style={{ marginTop: 16, fontFamily: FONT.sans, fontSize: 14, lineHeight: '22px', color: EMAIL.muted }}>The PDF of this report is attached.</div> : null}
+                          <Gap h={16} />
+                        </Card>
+                        <Gap />
+                        <div style={{ fontFamily: FONT.mono, fontSize: 12, lineHeight: '20px', color: EMAIL.muted, textAlign: 'left' }}>
+                          <span style={{ color: EMAIL.ink2 }}>{data.company} · {data.title}</span> · sent with Verbatim
                         </div>
-                        <div style={{ fontFamily: FONT.serif, fontSize: 20, fontWeight: 500, lineHeight: '1.25', letterSpacing: '-.01em', color: EMAIL.ink2, marginTop: 11 }}>{data.subject}</div>
-                        {/* THE CONTEXT ROW: the month's own days and the updates
-                            that were delivered into it on the left, the tenant
-                            right-aligned. `updateDates` has been loaded since
-                            WP11 and printed by nothing; the tenant was in the
-                            eyebrow, where the artboard puts the product. */}
-                        <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 11 }}>
-                          <tbody>
-                            <tr>
-                              <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12 }}>{monthlyContext(data.reading.overview.bar)}</td>
-                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                        {/* NO RULE UNDER THE MASTHEAD (copy de-clutter, ruling F):
-                            the eyebrow above already says the month is still
-                            filling and until when, which is the one home the
-                            freeze has on this artefact. */}
-                        {/* AND WHAT THE READING CANNOT SUPPORT, beside the rule
-                            that says how to read it. One sentence for the whole
-                            artefact (lib/reading/series.ts mergeNotes), on the
-                            surface that is read with nobody beside the reader
-                            to add it. */}
-                        {caveat ? <div style={{ ...text.small, color: EMAIL.muted, marginTop: 8 }}>{caveat}</div> : null}
-                      </td>
-                    </tr>
-                    {/* ONE SECTION PER ROW, WITH A FULL-BLEED RULE BETWEEN THEM
-                        (E-monthly, the artboard's own structure). The email
-                        stacked all eight inside one padded cell, so the only
-                        thing separating "Rivals" from "Your moves" was 22px of
-                        margin — on an artefact eight sections deep that reads
-                        as one long column rather than as a document with parts.
-                        The rule is `#DCDFE3` edge to edge, exactly as the
-                        artboard draws it, and the section's own top padding is
-                        4 because `BlockFrame`'s email arm already carries 22 of
-                        margin (a shared primitive this package may not change). */}
-                    {blocks.map((block) => (
-                      <Fragment key={block.key}>
-                        <tr>
-                          <td style={{ height: 1, background: EMAIL.border, fontSize: 1, lineHeight: '1px' }}>&nbsp;</td>
-                        </tr>
-                        <tr>
-                          <td style={{ padding: '4px 30px 24px' }}>{block.render(data.reading, 'email', ctx)}</td>
-                        </tr>
-                      </Fragment>
-                    ))}
-                    <tr>
-                      <td style={{ height: 1, background: EMAIL.border, fontSize: 1, lineHeight: '1px' }}>&nbsp;</td>
-                    </tr>
-                    <tr>
-                      <td style={{ padding: '22px 30px 26px' }}>
-                        <div>
-                          {/* THE MONTH IS ON THE BUTTON. "Open the full report"
-                              names no reading, and a reader with twelve of
-                              these a year has twelve identical buttons in one
-                              mailbox. */}
-                          {shareUrl ? <span style={{ marginRight: 10 }}><Button href={shareUrl} primary>Open the {longMonth(data.month)} reading</Button></span> : null}
-                          <Button href={`${appUrl}/dashboard`}>Open Verbatim</Button>
-                        </div>
-                        {attached ? <div style={{ ...text.small, marginTop: 13 }}>The PDF is attached.</div> : null}
-                        <Hairline />
-                        {/* "Prepared FOR", not "by" — this is a list Verbatim
-                            sends to the client's own staff. The share page says
-                            "by", because a share link is a document the client
-                            forwards to THEIR stakeholders.
-                            THE FOOTER NAMES THE READING AND WHAT IT WAS READ
-                            OVER (the artboard's last line): the month, then the
-                            coverage sentence `methodLines` composes, which
-                            carries the platform mix and the video total. The
-                            artboard also prints a comment total; no field on
-                            this artefact holds one, so it is not printed. */}
-                        <div style={{ fontFamily: FONT.mono, fontSize: 9.5, lineHeight: '1.4', marginTop: 10, color: EMAIL.muted }}>
-                          <div>
-                            <span style={{ color: EMAIL.ink2 }}>Prepared for {data.company}</span> · with Verbatim · {longMonth(data.month)} {data.month.slice(0, 4)} reading{method ? ` · ${method.coverage}` : ''}
-                          </div>
-                          {/* THE PRIVACY SENTENCE IS NEVER CONDITIONAL. A
-                              workspace whose method footnote could not be
-                              composed is still a workspace whose commenters are
-                              never identified, so it falls back to the
-                              constant the footnote itself prints. */}
-                          <div style={{ marginTop: 4 }}>{method?.privacy ?? PRIVACY_LINE}</div>
-                          <div style={{ marginTop: 4 }}>
-                            You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
-                          </div>
+                        <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '18px', color: EMAIL.muted, textAlign: 'left', marginTop: 4 }}>
+                          You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in the Studio.
                         </div>
                       </td>
                     </tr>

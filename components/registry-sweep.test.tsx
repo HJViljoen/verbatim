@@ -8,7 +8,7 @@ import { render } from '@/lib/test/render'
 
 import { PAGES } from '@/components/pages/registry'
 import { WEEKLY_BLOCKS } from '@/components/blocks/weekly'
-import { MONTHLY_BLOCKS } from '@/components/blocks/monthly'
+import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS } from '@/components/blocks/monthly'
 import { QUARTERLY_BLOCKS } from '@/components/blocks/quarterly'
 import { CONTENT_BRIEF_BLOCKS } from '@/components/blocks/content-brief'
 import { VOICE_BLOCKS } from '@/components/pages/voice-surface'
@@ -25,7 +25,7 @@ import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/
 import { competitiveFixture, quietRivalFixture } from '@/components/pages/competitive-surface/fixture'
 import { weekFixture } from '@/components/pages/week/fixture'
 import { weeklyFixture } from '@/components/blocks/weekly/fixture'
-import { monthlyFixture } from '@/components/blocks/monthly/fixture'
+import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from '@/components/blocks/monthly/fixture'
 import { quarterlyFixture } from '@/components/blocks/quarterly/fixture'
 import {
   contentBriefFixture,
@@ -81,7 +81,9 @@ const GROUPS: [string, Record<string, Renderish> | readonly (Renderish & { key: 
   ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture()]],
   ['week', WEEK_BLOCKS as never, [weekFixture()]],
   ['weekly', WEEKLY_BLOCKS as never, [weeklyFixture()]],
-  ['monthly', MONTHLY_BLOCKS as never, [monthlyFixture()]],
+  // Two states here (the stubbed skeleton and every slot filled); the monthly's
+  // own test sweeps all four through the contract (components/blocks/monthly).
+  ['monthly', MONTHLY_BLOCKS as never, [monthlyFixture(), filledSlotsFixture()]],
   ['quarterly', QUARTERLY_BLOCKS as never, [quarterlyFixture()]],
   ['content-brief', CONTENT_BRIEF_BLOCKS as never, [
     contentBriefFixture(), thinContentBriefFixture(), refusedContentBriefFixture(), emptyContentBriefFixture(),
@@ -143,6 +145,8 @@ describe('the registry sweep', () => {
 // deploy 3 (§5.12), and are added here by the package that rebuilds each.
 const REBUILT: [string, readonly { key: string; render: (d: never, m: RenderMode, c: typeof ctx) => ReactNode }[], unknown[]][] = [
   ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture()]],
+  // "September in your market" (market-first WP2.1, deploy 3).
+  ['the monthly', ALL_MONTHLY_BLOCKS as never, [monthlyFixture(), unmeasuredMonthlyFixture(), ossurMonthlyFixture(), filledSlotsFixture()]],
 ]
 
 describe('the 25 Sep rulings on rebuilt pages', () => {

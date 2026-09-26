@@ -10,12 +10,12 @@ import { describe, expect, it } from 'vitest'
 // band, OV6 on the front page, Settings › How to read's card and the readiness
 // row's block name all went with WP1.2.
 //
-// THE ONE ALLOWED FILE, AND WHY. `components/pages/overview/record.tsx` is the
-// OV6 block, which is no longer on the front page but still renders the
-// monthly report's `monthly.sound` section until WP2.1 rebuilds that artefact
-// (deploy 3; no monthly is built before it). The weekly's `weekly.coverage`
-// prints no such string. When WP2.1 lands, this list empties.
-const ALLOWED = new Set(['components/pages/overview/record.tsx'])
+// NO FILE IS ALLOWED ANY MORE (market-first WP2.1). The last one was
+// `components/pages/overview/record.tsx`, the OV6 block the monthly rendered as
+// `monthly.sound`; WP2.1's "September in your market" retired that section
+// with the other version 1 keys, and the block went with it. The weekly's
+// `weekly.coverage` prints no such string.
+const ALLOWED = new Set<string>()
 
 const ROOT = join(__dirname, '..', '..')
 
@@ -48,7 +48,7 @@ describe('no "how sound" string a reader can meet', () => {
     expect(withoutComments("const u = 'https://example.com/how'")).toContain('https://example.com/how')
   })
 
-  it('is found in no source file outside the one the monthly still renders', () => {
+  it('is found in no source file', () => {
     const files = ['app', 'components', 'lib'].flatMap((d) => sources(join(ROOT, d)))
     expect(files.length).toBeGreaterThan(100)
     const hits = files
@@ -58,12 +58,10 @@ describe('no "how sound" string a reader can meet', () => {
     expect(hits).toEqual([])
   })
 
-  it('the allowed file is still the OV6 block the monthly renders, so the list stays honest', () => {
-    for (const f of ALLOWED) {
-      const text = readFileSync(join(ROOT, f), 'utf8')
-      expect(text).toContain("key: 'overview.record'")
-    }
-    const monthly = readFileSync(join(ROOT, 'components/blocks/monthly/index.tsx'), 'utf8')
-    expect(monthly).toContain("'monthly.sound': fromOverview('monthly.sound', overviewRecord")
+  it('the monthly no longer arranges the section, so nothing needs allowing', () => {
+    const monthly = readFileSync(join(ROOT, 'lib/reports/monthly.ts'), 'utf8')
+    const keys = monthly.slice(monthly.indexOf('export const MONTHLY_BLOCK_KEYS'), monthly.indexOf('export type MonthlyBlockKey'))
+    expect(keys).not.toContain("'monthly.sound'")
+    expect(ALLOWED.size).toBe(0)
   })
 })

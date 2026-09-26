@@ -1,120 +1,108 @@
-import type { ReactNode } from 'react'
-import type { Block } from '@/lib/blocks/types'
+import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import type { Block, BlockContext, RenderMode } from '@/lib/blocks/types'
+import { BlockFrame } from '@/components/blocks/frame'
+import { openLink } from '@/components/blocks/open-link'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { MonthlyData } from '@/lib/pages/monthly'
+import type { MonthlyBlockKey } from '@/lib/reports/monthly'
+import { MonthlyLink } from './email'
 
 /**
- * An Overview block, on the monthly report (Phase 1 WP18).
- *
- * FIVE OF THE EIGHT SECTIONS ARE OVERVIEW'S, and this is how they get there:
- * not by copying them, and not by writing a second block that draws the same
- * table from the same data. `MonthlyData.overview` IS `OverviewData`, so the
- * adapter is a projection and one line of render.
- *
- * WHY NOT JUST PUT THE OVERVIEW BLOCK IN THE ARRANGEMENT. Because `key` is a
- * stored contract. An artefact's stored arrangement names `monthly.subjects`,
- * and the day Overview re-keys or retires a block, an artefact that had stored
- * `overview.subjects` would silently lose a section it had been printing for a
- * year. The monthly report owns its own eight keys; what it does not own is the
- * code behind five of them.
- *
- * THE HEADING IS THE PAGE'S, AND IT HAS TO BE. The mock heads section 4
- * "Rivals' month" where the page heads it "Rivals", and an adapter could carry
- * a different `title` — but a Block renders its OWN heading inside its own
- * frame (`BlockFrame title={overviewRivals.title}`), so an override would reach
- * the deck's sheet heading and the artefact's contents list and NOT the words
- * printed over the table. A reader would see "Rivals' month" at the top of the
- * sheet and "Rivals" three lines under it. One heading is worth more than the
- * mock's adjective, so `title` is forwarded like everything else, and the month
- * is said once, in the masthead, where it belongs.
- *
- * `figures`, `verdicts`, `quotes` and `emptyState` are forwarded untouched for
- * a different reason: those are the READING, and a report that declared
- * different figures from the page it is made of would be a second reading of
- * one month. All five go through the same `phaseOneOverview` view (below), so
- * what the record declares is what the section prints.
- *
- * AND `project` IS FOR WORDS, NEVER FOR NUMBERS. A page may carry a sentence
- * that only makes sense on the page — a control the reader can press, a page
- * name they can click, the build state of something not shipped — and the same
- * block mailed to a client's staff carries it to people with no account. The
- * projection is where an artefact says that sentence its own way. It is handed
- * the page's data and must return the page's data with copy changed and nothing
- * else: a projection that moved a number would make the report a second reading
- * of one month, which is the thing this adapter exists to prevent.
+ * A monthly section: a Block over the monthly's reading, with one question
+ * more than a page block answers, whether the section is ABSENT from the
+ * artefact (a slot another package has not filled yet; plan WP2.1, "Depends
+ * on": "the missing sections are absent rather than empty"). A section that
+ * is absent is dropped by the arrangement in every mode.
  */
-export function fromOverview(
-  key: string,
-  block: Block<OverviewData>,
-  project: (data: OverviewData) => OverviewData = (d) => d,
-  /**
-   * THE EMAIL ARM, WHERE THE ARTEFACT HAS TO DRAW IT ITSELF (Block D wave 2,
-   * E-monthly).
-   *
-   * A page's email arm and an artefact's email arm are not the same job, and
-   * on three of these five sections they had drifted apart badly enough to be
-   * the package's largest single gap. Overview's own email arm stacks each
-   * subject and each rival into two or three full-width lines, because on the
-   * PAGE the email arm is a courtesy: the table it is a fallback for is three
-   * feet away. On this artefact the email IS the artefact — six subjects × four
-   * aligned columns is the whole argument of section 2, and stacked lines
-   * lose the alignment that makes six subjects comparable at a glance.
-   *
-   * WHAT IT IS NOT IS A SECOND READING. The override takes the SAME projected
-   * `OverviewData`, prints the same fields, the same verdicts and the same
-   * words; `figures`, `verdicts`, `quotes` and `emptyState` still come from the
-   * page's block, untouched, so the record cannot disagree with the render. It
-   * changes markup and nothing else — which is exactly what `project` is for
-   * words, one rung down.
-   *
-   * AND IT IS OPTIONAL. Sections with nothing to gain by it (the record) keep
-   * the page's arm and inherit every improvement the page makes to it.
-   */
-  email?: (data: OverviewData, ctx: Parameters<Block<OverviewData>['render']>[2], monthly: MonthlyData) => ReactNode,
-): Block<MonthlyData> {
+export interface MonthlyBlock extends Block<MonthlyData> {
+  key: MonthlyBlockKey
+  absent?(data: MonthlyData): boolean
+}
+
+/** A section footer's link: where it goes, and its words. */
+export interface SectionLink {
+  href: string
+  label: string
+}
+
+/** The footer, in the mode's own idiom: the page's link in the app, nothing
+ *  on paper (`openLink`), and the preview's underlined link in an inbox. */
+export function sectionFooter(mode: RenderMode, ctx: BlockContext, link: SectionLink | null): ReactNode {
+  if (!link) return undefined
+  const href = `${ctx.appUrl}${link.href}`
+  if (mode === 'email') return <MonthlyLink href={href} label={link.label} />
+  return openLink(mode, href, link.label)
+}
+
+/**
+ * A front page block, as a monthly section (market-first WP2.1).
+ *
+ * THE MONTHLY PRINTS THE FRONT PAGE'S BLOCKS, NOT COPIES OF THEM. `MonthlyData.overview`
+ * IS the front page's `OverviewData`, built as "Your market" on the month
+ * that has just ended, so the section is the page's block on that reading:
+ * the same rows, the same figures, the same words, and `figures` /
+ * `verdicts` / `quotes` / `emptyState` forwarded, so the record the send
+ * writes is what the section prints.
+ *
+ * WHAT THE MONTHLY CHANGES IS CHROME, AND ONLY CHROME. The page's block
+ * returns its `BlockFrame`; the monthly re-dresses that element (React's
+ * `cloneElement`) with the section's title, the section's footer link (the
+ * preview names the page the section opens, which is not always the page
+ * block's own link) and, in an inbox, the section card (`BlockFrame`'s
+ * `card`). The body is untouched, and the element is still a `BlockFrame`,
+ * so the 25 Sep rulings' sweep reads its header and footer as it reads the
+ * page's.
+ *
+ * AND IN AN INBOX THE BODY MAY BE THE MONTHLY'S OWN (`email`). The page's
+ * email arm is a courtesy fallback for a table three feet away; the monthly's
+ * email IS the document, and the preview draws its tables in full. The
+ * override reads the same data and the same pure helpers and prints the same
+ * figures: markup changes, never a number.
+ */
+export function fromFrontPage(opts: {
+  key: MonthlyBlockKey
+  title: string
+  block: Block<OverviewData>
+  link: ((data: MonthlyData) => SectionLink | null) | null
+  /** The section's own body in an inbox; the page's email arm otherwise. */
+  email?: (data: MonthlyData, ctx: BlockContext) => ReactNode
+  /** The reading the page block is handed. Words only, never a number (a
+   *  withdrawn quote's wrapper is dropped here, for one). */
+  project?: (overview: OverviewData) => OverviewData
+}): MonthlyBlock {
+  const view = (data: MonthlyData): OverviewData => (opts.project ? opts.project(data.overview) : data.overview)
   return {
-    key,
-    title: block.title,
-    ...(block.question ? { question: block.question } : {}),
+    key: opts.key,
+    title: opts.title,
+    ...(opts.block.question ? { question: opts.block.question } : {}),
     render(data, mode, ctx) {
-      const projected = project(phaseOneOverview(data.overview))
-      if (mode === 'email' && email) return email(projected, ctx, data)
-      return block.render(projected, mode, ctx)
+      const footer = sectionFooter(mode, ctx, opts.link?.(data) ?? null)
+      const empty = opts.block.emptyState(view(data))
+      if (mode === 'email' && opts.email && !empty) {
+        return <BlockFrame title={opts.title} mode={mode} card footer={footer}>{opts.email(data, ctx)}</BlockFrame>
+      }
+      return redress(opts.block.render(view(data), mode, ctx), { title: opts.title, mode, footer })
     },
-    // THE RECORD READS WHAT THE RENDER READS (WP1.6 review): the same Phase 1
-    // view of the Overview, so a monthly built on a "Your market" overview
-    // never declares the front page's figures under a section that prints
-    // the Phase 1 ones.
     figures(data) {
-      return block.figures?.(phaseOneOverview(data.overview)) ?? {}
+      return opts.block.figures?.(view(data)) ?? {}
     },
     verdicts(data) {
-      return block.verdicts?.(phaseOneOverview(data.overview)) ?? []
+      return opts.block.verdicts?.(view(data)) ?? []
     },
     quotes(data) {
-      return block.quotes?.(phaseOneOverview(data.overview)) ?? []
+      return opts.block.quotes?.(view(data)) ?? []
     },
     emptyState(data) {
-      return block.emptyState(project(phaseOneOverview(data.overview)))
+      return opts.block.emptyState(view(data))
     },
   }
 }
 
-/**
- * The Overview as the monthly reads it until WP2.1 rebuilds the monthly
- * (market-first WP1.6; plan §4.0: the monthly keeps its Phase 1 sections until
- * deploy 3, and none is built before it).
- *
- * The front page's own fields (`market`, the board, the hero, the asks, the
- * change block, the brands line) are what switch the reworked Overview blocks
- * to their "Your market" form (`isMarketPage`). The monthly borrows three of
- * those blocks, and a monthly built after deploy 2 would otherwise print the
- * front page's market rows under its own Phase 1 sections, beside email arms
- * that print the Phase 1 ones. Taking the fields off here keeps each borrowed
- * section what it was; everything the Phase 1 blocks read is left alone.
- */
-export function phaseOneOverview(overview: OverviewData): OverviewData {
-  if (overview.market == null) return overview
-  const { market: _market, themes: _themes, hero: _hero, heroVoices: _voices, asks: _asks, change: _change, brands: _brands, ...rest } = overview
-  return rest
+/** The page block's frame with the section's title and footer, and the card
+ *  in an inbox. A block that returned something other than a frame (none of
+ *  the front page's does) is framed rather than lost. */
+function redress(el: ReactNode, o: { title: string; mode: RenderMode; footer: ReactNode }): ReactNode {
+  const props = { title: o.title, footer: o.footer, ...(o.mode === 'email' ? { card: true } : {}) }
+  if (isValidElement(el) && el.type === BlockFrame) return cloneElement(el as ReactElement<Record<string, unknown>>, props)
+  return <BlockFrame mode={o.mode} {...props}>{el}</BlockFrame>
 }
