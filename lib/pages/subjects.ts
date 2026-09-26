@@ -10,7 +10,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
-import { carriesShare } from '../reading/level'
+import { carriesShare, levelText } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
 import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
@@ -421,6 +421,14 @@ export interface SubjectPane {
    *  place of its calibration word (default M-a). Optional: a stored pane
    *  has none and renders as it was sent. */
   unread?: string | null
+  /**
+   * The subject's market level on the RAIL's base, copied from its rail row
+   * (`SubjectRail.market`: the category and the tracked brands pooled,
+   * decision E), for the pane's headline figure (default M-b): one screen,
+   * one base. Null where the rail row has none (failed, unread, unknown).
+   * Optional: a stored pane has none and leads with its gap line, as sent.
+   */
+  market?: { k: number; n: number; pct: number | null } | null
   index: number
   of: number
   sides: SubjectSide[]
@@ -1956,6 +1964,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       origin: subject.origin,
       calibration,
       unread: readIn(subject.id, month) === 'unread' ? unreadNote : null,
+      // THE RAIL ROW'S OWN FIGURE, never a second read (default M-b), so the
+      // pane's headline and the row the reader clicked share one base.
+      market: rail.find((r) => r.id === subject.id)?.market ?? null,
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,
@@ -2817,9 +2828,44 @@ async function nameQuestions(
 // ---- what the blocks declare ----------------------------------------------------
 
 /** The figures the selected subject's hero prints, by token. */
+/**
+ * The pane's headline figure (market page default M-b): the subject's level in
+ * the market, on the rail's own base, so one screen shows one base: "Waterproofing
+ * came up in 29 of 654 September videos in your market (4%)." The preview's
+ * pane sentence ("came up in 104 of 626 September category videos (17%)"),
+ * read on the market the rail prints. The share through `levelText`: a whole
+ * percent at 100 videos or more, and the count alone under it.
+ *
+ * Null where the pane has no market figure (a stored pane, a failed subject,
+ * or one the month was not read for, which says "no reading yet" in its word's
+ * place instead). The Phase 1 brand comparison (the gap line and the sides)
+ * stays below it, unchanged.
+ */
+export function paneMarketLead(
+  pane: Pick<SubjectPane, 'name' | 'calibration' | 'market' | 'unread'>,
+  month: string,
+): string | null {
+  const m = pane.market
+  if (!m || pane.unread || readCalibration(pane.calibration) === 'failed') return null
+  const level = levelText(m.k, m.n)
+  if (!level) return null
+  const when = longMonth(month)
+  return level.kind === 'share'
+    ? `${pane.name} came up in ${fmtInt(m.k)} of ${fmtInt(m.n)} ${when} videos in your market (${level.text}).`
+    : `${pane.name} came up in ${level.text} ${when} videos in your market.`
+}
+
 export function sideFigures(pane: SubjectPane | null): FigureTable {
   const out: FigureTable = {}
   if (!pane) return out
+  // The headline's market figure (default M-b), under the keys it prints.
+  const m = pane.market
+  if (m && !pane.unread && readCalibration(pane.calibration) !== 'failed' && levelText(m.k, m.n)) {
+    out.subject_market_videos = { value: m.k, unit: 'videos', label: `${pane.name}, videos in your market this month` }
+    if (levelText(m.k, m.n)?.kind === 'share') {
+      out.subject_market_share = { value: Math.round((m.k / m.n) * 100), unit: 'pct', label: `${pane.name}, share of your market this month` }
+    }
+  }
   for (const s of paneSides(pane)) {
     if (s.pct == null || s.k == null || s.n == null) continue
     const token = `subject_${s.kind}_${s.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`

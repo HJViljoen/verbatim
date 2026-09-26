@@ -11,6 +11,7 @@ import {
   matchWords,
   originLine,
   paneGap,
+  paneMarketLead,
   paneSides,
   periodPhrase,
   railMarketSide,
@@ -111,6 +112,36 @@ describe('railNote, for a subject the month was not read for (WP1.1 review, find
   it('a failed or a proposed subject keeps its own sentence', () => {
     expect(railNote('failed', false, 'active', words)).toBe('being re-described')
     expect(railNote('provisional', false, 'proposed', words)).toContain('not counted yet')
+  })
+})
+
+// Default M-b: the pane's headline figure is the rail row's market figure, on
+// the rail's base (staging, Sealand, September: Waterproofing 29 of the
+// market's 654), so one screen shows one base.
+describe('paneMarketLead (the pane\'s headline on the rail\'s base, default M-b)', () => {
+  const pane = { name: 'Waterproofing', calibration: 'ready' as const, market: { k: 29, n: 654, pct: 4.4 }, unread: null }
+
+  it('prints the rail\'s "29 of 654" in your market, the share through levelText', () => {
+    expect(paneMarketLead(pane, '2026-09-01')).toBe('Waterproofing came up in 29 of 654 September videos in your market (4%).')
+    expect(paneMarketLead({ ...pane, calibration: 'provisional' }, '2026-09-01')).toContain('29 of 654')
+  })
+
+  it('under 100 videos prints the count alone, never a percent', () => {
+    // A base under the floor: July's 35 market videos (plan §2, "too few to
+    // read"); the 3 is illustrative, not a reading (F12).
+    expect(paneMarketLead({ ...pane, market: { k: 3, n: 35, pct: null } }, '2026-07-01')).toBe('Waterproofing came up in 3 of 35 July videos in your market.')
+  })
+
+  it('a read subject cited on no video prints its measured 0', () => {
+    expect(paneMarketLead({ ...pane, market: { k: 0, n: 654, pct: 0 } }, '2026-09-01')).toBe('Waterproofing came up in 0 of 654 September videos in your market (0%).')
+  })
+
+  it('prints nothing for a subject the month was not read for, a failed one, or a pane with no market figure', () => {
+    expect(paneMarketLead({ ...pane, unread: 'no reading yet' }, '2026-09-01')).toBeNull()
+    expect(paneMarketLead({ ...pane, calibration: 'failed' }, '2026-09-01')).toBeNull()
+    expect(paneMarketLead({ ...pane, market: null }, '2026-09-01')).toBeNull()
+    expect(paneMarketLead({ name: 'Waterproofing', calibration: 'ready' }, '2026-09-01')).toBeNull()
+    expect(paneMarketLead({ ...pane, market: { k: 0, n: 0, pct: null } }, '2026-09-01')).toBeNull()
   })
 })
 

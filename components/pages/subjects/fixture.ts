@@ -637,3 +637,33 @@ export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsDa
     ...over,
   }
 }
+
+/**
+ * The pane of a READ subject under default M-b: Waterproofing selected on the
+ * rail WP1.1 builds (`calibrationFixture`, staging's Sealand September: 29 of
+ * the market's 654 videos), its headline figure the rail row's own. Its sides
+ * and gap are the base fixture's layout (the mock's invented volumes, F12),
+ * the Phase 1 brand comparison that stays below the headline unchanged.
+ */
+export function marketPaneFixture(over: Partial<SubjectsData> = {}): SubjectsData {
+  const data = calibrationFixture()
+  const base = subjectsFixture()
+  const rows = data.list.rows.map((r) => ({ ...r, selected: r.id === 's-water' }))
+  const water = rows.find((r) => r.id === 's-water')!
+  return {
+    ...data,
+    list: { ...data.list, rows },
+    selected: {
+      ...base.selected!,
+      id: 's-water',
+      name: 'Waterproofing',
+      namedAt: '2026-09-23',
+      calibration: 'ready',
+      unread: null,
+      market: water.market ?? null,
+      index: 5,
+      of: 7,
+    },
+    ...over,
+  }
+}

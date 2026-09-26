@@ -20,7 +20,7 @@ import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
 import { axisNote, railNote, voiceCite, type SubjectsData } from '@/lib/pages/subjects'
-import { calibrationFixture, candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
+import { calibrationFixture, candidatesFixture, marketPaneFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -488,6 +488,55 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     const text = renderText(subjectsSubject.render(stored!, 'app', ctx))
     expect(text).not.toContain('provisional')
     expect(text).toContain(renderText(subjectsSubject.render(base, 'app', ctx)).slice(0, 40))
+  })
+})
+
+// Default M-b: the pane's headline figure is on the rail's market base, so one
+// screen shows one base; the Phase 1 brand comparison stays below it.
+describe('SU2 · the pane\'s headline on the rail\'s base (default M-b)', () => {
+  const data = marketPaneFixture()
+  const HEADLINE = 'Waterproofing came up in 29 of 654 September videos in your market (4%).'
+
+  it('the headline is the rail row\'s own "29 of 654 in your market", in every mode', () => {
+    const rail = renderText(subjectsList.render(data, 'app', ctx))
+    expect(rail).toContain('29 of 654 in your market')
+    for (const mode of MODES) {
+      assertCopyContract(render(subjectsSubject.render(data, mode, ctx)))
+      expect(renderText(subjectsSubject.render(data, mode, ctx))).toContain(HEADLINE)
+    }
+  })
+
+  it('leads the pane, set as its serif lead, with the brand comparison\'s gap line and cells below it unchanged', () => {
+    const base = subjectsFixture()
+    const gap = `Waterproofing: ${gapLine(base.selected!.gap!)}`
+    const markup = render(subjectsSubject.render(data, 'app', ctx))
+    const text = markupText(markup)
+    expect(markup).toMatch(/font-serif[^>]*>[^<]*<span data-copy="level">Waterproofing came up in 29 of 654/)
+    expect(text.indexOf(HEADLINE)).toBeGreaterThan(-1)
+    expect(text.indexOf(gap)).toBeGreaterThan(text.indexOf(HEADLINE))
+    // The sides print as the Phase 1 pane printed them.
+    const before = renderText(subjectsSubject.render({ ...base, selected: { ...base.selected!, name: 'Waterproofing' } }, 'app', ctx))
+    for (const cell of ['of their videos', 'of category videos']) expect(before.includes(cell)).toBe(text.includes(cell))
+  })
+
+  it('declares the headline\'s figures under their own keys', () => {
+    const figures = blockAnswers(subjectsSubject, data).figures
+    expect(figures.subject_market_videos).toMatchObject({ value: 29, unit: 'videos' })
+    expect(figures.subject_market_share).toMatchObject({ value: 4, unit: 'pct' })
+    expect(figureConflicts(SUBJECT_BLOCKS.map((b) => blockAnswers(b, data).figures))).toEqual([])
+  })
+
+  it('a pane stored without a market figure leads with its gap line, as sent', () => {
+    const base = subjectsFixture()
+    const markup = render(subjectsSubject.render(base, 'app', ctx))
+    expect(markup).toMatch(/font-serif[^>]*>[^<]*<span data-copy="level">Durability: /)
+    expect(markupText(markup)).not.toContain('in your market')
+  })
+
+  it('a subject the month was not read for has no headline figure', () => {
+    const text = renderText(subjectsSubject.render(calibrationFixture(), 'app', ctx))
+    expect(text).not.toContain('came up in')
+    expect(text).toContain('no reading yet')
   })
 })
 
