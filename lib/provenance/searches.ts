@@ -293,3 +293,26 @@ export function oneReachRowEach<T extends ReachRowPlan>(
   }
   return out
 }
+
+/** A JSON value with every object's keys in one order, arrays as they are. */
+function canonicalJson(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonicalJson)
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    return Object.fromEntries(Object.keys(o).sort().map((k) => [k, canonicalJson(o[k])]))
+  }
+  return v
+}
+
+/**
+ * Do two JSON values hold the same thing, whatever order their object keys
+ * came in? A jsonb column hands keys back in its own order (shorter keys
+ * first: `curr`, `prev`, `surface`, `change_id`, `population`), never the
+ * order they were written in, so `JSON.stringify` of a row read back never
+ * equalled the row about to be written, and measure-comparability re-inserted
+ * both pair rows on every same-state `--apply` (the 26 Sep staging MF1
+ * rehearsal). Array order still counts.
+ */
+export function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(canonicalJson(a)) === JSON.stringify(canonicalJson(b))
+}

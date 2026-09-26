@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   decidingGathers, evidenceTerms, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, plannedSearches, populations,
-  reachOf, searchKey, termDelta, unchangedSearches, type KeywordRow, type MonthVideo, type ReachRowPlan,
+  reachOf, sameJson, searchKey, termDelta, unchangedSearches, type KeywordRow, type MonthVideo, type ReachRowPlan,
 } from './searches'
 
 // Sealand's search eras, exact at the gather (GC F28; the WP0.1 staging
@@ -206,5 +206,33 @@ describe('one reach row per change, month and population', () => {
   it('leaves distinct changes and populations alone', () => {
     const other = { ...row('2026-08-01', 'market', 0, 377), change_id: '(stand-in: the attribution change id)' }
     expect(oneReachRowEach([...augSep, other], at)).toHaveLength(5)
+  })
+})
+
+describe('sameJson: a pair row read back from jsonb is the row about to be written (staging MF1 rehearsal, 26 Sep)', () => {
+  // The gate fix's category entry and August's late capture as
+  // measure-comparability writes them, and as jsonb hands them back (keys
+  // shorter first). The rehearsal's figures: 64 of 625, 4,923 of 10,188.
+  const written = {
+    code_changes: [{ change_id: 'gate-fix', surface: 'gate_rule', population: 'category', prev: { k: 0, n: 351 }, curr: { k: 64, n: 625 } }],
+    late_capture: { month: '2026-08-01', comments: 4923, of: 10188 },
+  }
+  const readBack = {
+    code_changes: [{ curr: { k: 64, n: 625 }, prev: { k: 0, n: 351 }, surface: 'gate_rule', change_id: 'gate-fix', population: 'category' }],
+    late_capture: { of: 10188, month: '2026-08-01', comments: 4923 },
+  }
+
+  it('matches whatever order the keys come back in, at every depth', () => {
+    expect(JSON.stringify(readBack.code_changes)).not.toBe(JSON.stringify(written.code_changes))
+    expect(sameJson(readBack.code_changes, written.code_changes)).toBe(true)
+    expect(sameJson(readBack.late_capture, written.late_capture)).toBe(true)
+    expect(sameJson(null, null)).toBe(true)
+  })
+
+  it('still sees a changed figure, a missing key and a reordered array', () => {
+    expect(sameJson(readBack.late_capture, { ...written.late_capture, comments: 4924 })).toBe(false)
+    expect(sameJson({ month: '2026-08-01', comments: 4923 }, written.late_capture)).toBe(false)
+    const two = [{ change_id: 'a' }, { change_id: 'b' }]
+    expect(sameJson([...two].reverse(), two)).toBe(false)
   })
 })

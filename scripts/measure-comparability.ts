@@ -6,7 +6,7 @@ import {
 } from '../lib/provenance/load'
 import type { ProvenanceSnapshot } from '../lib/provenance/reconstruct'
 import {
-  decidingGathers, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, populations, unchangedSearches, type MonthVideo,
+  decidingGathers, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, populations, sameJson, unchangedSearches, type MonthVideo,
   type ReachRowPlan,
 } from '../lib/provenance/searches'
 import { changeInSpan, changesFromLog, isSearchSurface, type OurChange } from '../lib/reading/comparability'
@@ -277,7 +277,7 @@ async function main() {
     }
     throw e
   }
-  const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  // Compared as values, not as text: jsonb reorders keys (`sameJson`).
   const newestPair = new Map<string, HeldPair>()
   for (const h of heldPairs) newestPair.set(`${String(h.prev_month).slice(0, 10)}|${String(h.month).slice(0, 10)}`, h)
   const freshPairs = pairRows.filter((r) => {
