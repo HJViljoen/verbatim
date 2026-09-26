@@ -41,6 +41,12 @@ export function overviewBarTitle(data: Pick<OverviewData, 'bar'>): string {
   return data.bar.daysIn != null ? 'The month so far' : 'The month'
 }
 
+/** What OV0 prints: the market's figures where the loader set them (the
+ *  lead's R7), else the stored copy's own. */
+function barShown(b: OverviewData['bar']): { videos: number | null; expected: number | null; atLastMonth: number | null; line: string; note: string | null } {
+  return b.market ?? { videos: b.videos, expected: b.expected, atLastMonth: b.atLastMonth, line: b.line, note: b.note }
+}
+
 export const overviewBar: Block<OverviewData> = {
   key: 'overview.bar',
   // The registry's name for the tile, true in every state; the drawn title is
@@ -50,17 +56,20 @@ export const overviewBar: Block<OverviewData> = {
   render(data, mode = 'app', ctx) {
     void ctx
     const b = data.bar
+    // ON THE MARKET'S BASE (deploy 1 review, the lead's R7): the same total
+    // the size headline states; an older stored copy prints its own.
+    const shown = barShown(b)
     const meta = horizonDates(data.window)
     // WHAT THE LAST REPORT READ, where the month has moved since (WP18, item
     // 13). The month's own size is the figure a reader notices moving, and this
     // is the one place on the page it is stated as a headline. Absent — and
     // printing nothing — where nothing was sent, where the figure has not
     // moved, or where the month was already closed when the artefact went out.
-    const sentLine = sentLineForToken(data.sent, 'month_videos', b.videos)
+    const sentLine = sentLineForToken(data.sent, b.market ? 'market_videos' : 'month_videos', shown.videos)
     if (mode === 'email') {
       return (
         <BlockFrame title={overviewBarTitle(data)} mode={mode} meta={meta}>
-          <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink }}>{b.line}</div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink }}>{shown.line}</div>
           <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{b.counter}</div>
           {b.updateDates.length > 0 ? (
             <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{b.updateDates.join(' · ')}</div>
@@ -81,7 +90,7 @@ export const overviewBar: Block<OverviewData> = {
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
           {paper ? (
             <BlockStat
-              value={b.videos == null ? '—' : fmtInt(b.videos)}
+              value={shown.videos == null ? '—' : fmtInt(shown.videos)}
               unit="videos"
               mode={mode}
               size="lg"
@@ -92,8 +101,8 @@ export const overviewBar: Block<OverviewData> = {
           ) : (
             <BlockStat value={longMonth(b.month)} unit={b.status === 'frozen' ? 'final' : 'ended'} mode={mode} size="lg" />
           )}
-          {paper && b.atLastMonthKnown && b.atLastMonth != null ? (
-            <BlockStat value={fmtInt(b.atLastMonth)} unit="videos" mode={mode} base="last month at this point" />
+          {paper && b.atLastMonthKnown && shown.atLastMonth != null ? (
+            <BlockStat value={fmtInt(shown.atLastMonth)} unit="videos" mode={mode} base="last month at this point" />
           ) : null}
           {paper ? (
             <BlockStat
@@ -104,7 +113,7 @@ export const overviewBar: Block<OverviewData> = {
             />
           ) : null}
         </div>
-        {b.note ? <p className="m-0 text-[12px] text-secondary-foreground">{b.note}</p> : null}
+        {shown.note ? <p className="m-0 text-[12px] text-secondary-foreground">{shown.note}</p> : null}
         {paper ? <p className="m-0 text-[11.5px] text-secondary-foreground">{b.counter}</p> : null}
         {sentLine ? <p className="m-0 text-[11.5px] text-muted-foreground">{sentLine}</p> : null}
       </BlockFrame>
@@ -113,12 +122,16 @@ export const overviewBar: Block<OverviewData> = {
 
   figures(data): FigureTable {
     const b = data.bar
-    const out: FigureTable = {
-      month_videos: { value: b.videos ?? 0, unit: 'videos', label: 'videos read into this month' },
-    }
-    if (b.expected != null) out.month_expected = { value: Math.round(b.expected), unit: 'videos', label: 'the trailing median month' }
-    if (b.atLastMonthKnown && b.atLastMonth != null) {
-      out.month_at_last_month = { value: b.atLastMonth, unit: 'videos', label: 'videos at this point last month' }
+    const shown = barShown(b)
+    // THE MARKET'S TOTAL IS OV1'S TOKEN, SO ONE PAGE HOLDS ONE NUMBER FOR IT
+    // (the lead's R7): `market_videos` is the size headline's own figure, the
+    // same value. An older stored copy keeps its all-audience `month_videos`.
+    const out: FigureTable = b.market
+      ? { market_videos: { value: b.market.videos ?? 0, unit: 'videos', label: `videos in your market in ${longMonth(b.month)}` } }
+      : { month_videos: { value: b.videos ?? 0, unit: 'videos', label: 'videos read into this month' } }
+    if (shown.expected != null) out.month_expected = { value: Math.round(shown.expected), unit: 'videos', label: 'the trailing median month' }
+    if (b.atLastMonthKnown && shown.atLastMonth != null) {
+      out.month_at_last_month = { value: shown.atLastMonth, unit: 'videos', label: 'videos at this point last month' }
     }
     return out
   },

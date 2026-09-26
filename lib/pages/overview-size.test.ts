@@ -13,6 +13,7 @@ import type { Verdict } from '../reading/verdicts'
 import { proseFigures } from '../prose/figures'
 import { substituteFigures } from '../reports/cover'
 import {
+  marketBarFigures,
   buildCategory,
   HEADLINE_MAX_MAKER_SHARE,
   headline,
@@ -100,6 +101,34 @@ describe('marketSizeOf', () => {
     const size = marketSizeOf(DENOMINATORS, RIVALS, '2026-10-01', '2026-10-02T06:00:00.000Z')
     expect(size.videos).toBeNull()
     expect(size.comments).toBeNull()
+  })
+})
+
+// ---- OV0 on the market's base (deploy 1 review, the lead's R7) ---------------
+
+describe('marketBarFigures: OV0 states the size headline\'s total', () => {
+  // Production Sealand, September (F1): 626 category + 29 rival-filed = 655
+  // for the market; every audience, the client's own 9 posts included, is 664.
+  it('pools the category and the tracked rivals, never the client’s own posts, as marketSizeOf does', () => {
+    const bar = marketBarFigures({ denominators: DENOMINATORS, rivalAudiences: RIVALS, month: SEP, firstRunMonth: AUG, atLastMonthPerAudience: null })
+    expect(bar.videos).toBe(655)
+    expect(bar.videos).toBe(marketSizeOf(DENOMINATORS, RIVALS, SEP, ENDED_SEP).videos)
+    // One gathered month before September is not a median.
+    expect(bar.expected).toBeNull()
+    expect(bar.atLastMonth).toBeNull()
+  })
+
+  it('leaves out a rival the tenant no longer tracks', () => {
+    const bar = marketBarFigures({ denominators: DENOMINATORS, rivalAudiences: RIVALS.slice(1), month: SEP, firstRunMonth: AUG, atLastMonthPerAudience: null })
+    expect(bar.videos).toBe(626)
+  })
+
+  it('sums "at this point last month" over the market’s audiences only', () => {
+    // HYPOTHETICAL use of real counts: August's whole month (F1: 351 category,
+    // 26 rival-filed, 1 of the client's) stands in for a part-month window.
+    const perAudience = new Map([[INDUSTRY_AUDIENCE, 351], [RIVALS[0], 26], [CLIENT_AUDIENCE, 1]])
+    const bar = marketBarFigures({ denominators: DENOMINATORS, rivalAudiences: RIVALS, month: SEP, firstRunMonth: AUG, atLastMonthPerAudience: perAudience })
+    expect(bar.atLastMonth).toBe(377)
   })
 })
 

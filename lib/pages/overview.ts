@@ -661,6 +661,17 @@ export interface BarBlock {
   readings: number
   /** That count as the design's one counter, printed on OV0. */
   counter: string
+  /**
+   * OV0's own figures ON THE MARKET'S BASE (decision E; deploy 1 review, the
+   * lead's R7): the category and the tracked rivals pooled as the size
+   * headline pools them (`marketSizeOf`), never the client's own posts, so the
+   * page states one total for its month. What OV0 prints on paper and in the
+   * email, and its figure (`market_videos`). `videos`, `expected` and
+   * `atLastMonth` above stay every audience's: the gates read them, and the
+   * weekly reads `videos` byte for byte. OPTIONAL, so a copy stored before it
+   * prints as it was sent.
+   */
+  market?: { videos: number | null; expected: number | null; atLastMonth: number | null; line: string; note: string | null }
 }
 
 export interface RecordBlock {
@@ -1094,6 +1105,36 @@ export function mayLead(v: Verdict, makerShares: ReadonlyMap<string, number | nu
   if (v.objectKind !== 'theme' || v.audience !== INDUSTRY_AUDIENCE) return false
   const share = makerShares?.get(v.objectId)
   return share != null && Number.isFinite(share) && share >= 0 && share <= HEADLINE_MAX_MAKER_SHARE
+}
+
+/**
+ * OV0's figures on the market's base (deploy 1 review, the lead's R7): the
+ * month's pooled videos, the trailing median of the same quantity over the
+ * gathered months before it (the era gate OV0's own median applies), and the
+ * same point last month summed over the market's audiences. Null where the
+ * page has no reading of it; `atLastMonthPerAudience` is null where the
+ * window read has none.
+ */
+export function marketBarFigures(input: {
+  denominators: readonly { month: string; audience: string; videos: number; comments: number }[]
+  rivalAudiences: readonly string[]
+  month: string
+  firstRunMonth: string
+  atLastMonthPerAudience: ReadonlyMap<string, number> | null
+}): { videos: number | null; expected: number | null; atLastMonth: number | null } {
+  const m = monthStartOf(input.month)
+  const pooled = pooledDenominators(input.denominators, input.rivalAudiences)
+  const videos = pooled.get(m)?.videos ?? null
+  const trailing = [...pooled.keys()]
+    .filter((k) => k < m && k >= input.firstRunMonth)
+    .slice(-12)
+    .map((k) => pooled.get(k)?.videos ?? null)
+  const expected = trailing.length >= 2 ? medianOf(trailing) : null
+  const market = new Set([INDUSTRY_AUDIENCE, ...input.rivalAudiences])
+  const atLastMonth = input.atLastMonthPerAudience == null
+    ? null
+    : [...input.atLastMonthPerAudience.entries()].reduce((n, [audience, v]) => (market.has(audience) ? n + v : n), 0)
+  return { videos, expected, atLastMonth }
 }
 
 /**
@@ -2010,6 +2051,10 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // ── wave 3: the readings ───────────────────────────────────────────────
   const themedRunId = await themedRunAhead
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
+  // THE MARKET'S RIVALS ARE THE TRACKED ONES (§4.2, `marketRivalAudiences`):
+  // a retired rival's rows are read for its own lines, never pooled into the
+  // month's total, which the reading month is chosen on too.
+  const marketRivals = marketRivalAudiences(rivals)
   const audiences = [CLIENT_AUDIENCE, ...rivalAudiences, INDUSTRY_AUDIENCE]
   const top = themedRunId
     ? await loadTopObjects(reading.client, clientId, {
@@ -2153,6 +2198,31 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       early,
     }),
   }
+  // ONE TOTAL FOR THE MONTH (deploy 1 review, the lead's R7). OV1's size
+  // headline pools the category and the tracked rivals (decision E); OV0
+  // summed every audience, the client's own posts included, so production
+  // Sealand's September read 664 in OV0 and 655 in OV1. OV0 prints the
+  // market's figures; the gates and the weekly keep the all-audience count.
+  const marketBar = marketBarFigures({
+    denominators: history.denominators,
+    rivalAudiences: marketRivals,
+    month,
+    firstRunMonth,
+    atLastMonthPerAudience: lastMonthSoFar.videos == null ? null : lastMonthSoFar.perAudience,
+  })
+  const marketFilling: FillingLineInput = {
+    month,
+    status: barStatus,
+    daysIn,
+    updates: updatesByMonth[month] ?? 0,
+    videos: marketBar.videos,
+    expected: marketBar.expected,
+    atLastMonth: marketBar.atLastMonth,
+    atLastMonthKnown: lastMonthSoFar.known,
+    thin,
+    early,
+  }
+  bar.market = { ...marketBar, line: fillingLine(marketFilling), note: fillingNote(marketFilling) }
 
   // ── OV2 · your subjects ────────────────────────────────────────────────
   const leadRival = rivals.find((r) => !r.retiredAt) ?? rivals[0] ?? null
@@ -2262,7 +2332,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // market is pooled (decision E), so its pair is the judge's MARKET view
   // (`viewForAudience`'s market key), which reads MF1's measured row once one
   // exists; the chip is that pair's refusal in the page's own words.
-  const size = marketSizeOf(history.denominators, rivalAudiences, month, readingAt)
+  const size = marketSizeOf(history.denominators, marketRivals, month, readingAt)
   const head = headline({
     verdicts: suppress ? [] : sentenceVerdicts,
     size,

@@ -6,6 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { overviewBar, overviewBarTitle } from './bar'
 import { overviewFixture, refusedFixture } from './fixture'
+import { fillingLine, fillingNote, type FillingLineInput } from '@/lib/pages/overview'
 import { overviewPage } from './page'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -118,5 +119,41 @@ describe('OV0 on an ended month: no "this month"', () => {
   it('heads the first exported slide with the month’s name', () => {
     const [first] = overviewPage.slides?.(ended(), 'default') ?? []
     expect(first.title).toBe('The September reading')
+  })
+})
+
+// ONE TOTAL FOR THE MONTH (deploy 1 review, the lead's R7). Production
+// Sealand's September: OV0 summed every audience (626 category + 29 rival-filed
+// + 9 of the client's own = 664) while OV1's size headline pooled the market
+// (655). OV0 now prints the market's figures, and its figure is OV1's token.
+describe('OV0 · the market’s total, the size headline’s', () => {
+  const sealandSeptember = () => {
+    const data = overviewFixture()
+    const input: FillingLineInput = {
+      month: '2026-09-01', status: 'filling', daysIn: null, updates: 3,
+      videos: 655, expected: null, atLastMonth: null, atLastMonthKnown: true, thin: false, early: false,
+    }
+    return {
+      ...data,
+      bar: {
+        ...data.bar, month: '2026-09-01', daysIn: null, updates: 3, videos: 664, expected: null, atLastMonth: null, atLastMonthKnown: true,
+        line: fillingLine({ ...input, videos: 664 }), note: fillingNote({ ...input, videos: 664 }),
+        market: { videos: 655, expected: null, atLastMonth: null, line: fillingLine(input), note: fillingNote(input) },
+      },
+    }
+  }
+
+  it('prints 655 on paper and in the email, never the all-audience 664', () => {
+    for (const mode of ['print', 'email'] as const) {
+      const text = renderText(overviewBar.render(sealandSeptember(), mode, ctx))
+      expect(text, mode).toContain('655')
+      expect(text, mode).not.toContain('664')
+    }
+  })
+
+  it('states it as the size headline’s own figure, market_videos', () => {
+    const { figures } = blockAnswers(overviewBar, sealandSeptember())
+    expect(figures.market_videos?.value).toBe(655)
+    expect(figures.month_videos).toBeUndefined()
   })
 })
