@@ -45,6 +45,22 @@ describe('the ledger’s identity', () => {
     expect(rows[0].timesMade).toBe(2)
   })
 
+  // THE LEAD'S R10: "First time" marks a lineage the latest update raised
+  // for the first time, never one an earlier update raised too.
+  it('marks a lineage first raised by the latest update, and no other', () => {
+    const rows = buildAdviceRows(
+      [
+        copy({ id: 'a1', lineage_id: 'A', created_at: '2026-09-13T00:00:00.000Z', run_id: 'run-13' }),
+        copy({ id: 'a2', lineage_id: 'A', created_at: '2026-09-20T00:00:00.000Z', run_id: 'run-20' }),
+        copy({ id: 'b1', lineage_id: 'B', created_at: '2026-09-20T00:00:00.000Z', run_id: 'run-20' }),
+        copy({ id: 'c1', lineage_id: 'C', created_at: '2026-09-13T00:00:00.000Z', run_id: 'run-13' }),
+      ],
+      [],
+    )
+    const first = Object.fromEntries(rows.map((r) => [r.lineageId, r.firstInLatest]))
+    expect(first).toEqual({ A: false, B: true, C: false })
+  })
+
   it('counts MONTHS repeated, not updates — production’s only repeat is inside one month', () => {
     const rows = buildAdviceRows(
       [

@@ -99,6 +99,8 @@ export const CURRENT_TAG = 'current recommendation'
 /** The artboard's track widths, in order. The empty one is the title, which
  *  takes what is left. */
 const TRACKS = ['w-[22px]', '', 'w-[88px]', 'w-[96px]', 'w-[176px]', 'w-[100px]', 'w-[240px]'] as const
+/** The "Repeated" track, left out where the column is not drawn (`repeatColumn`). */
+const REPEAT_TRACK = 3
 
 /** The artboard's mono figure: a number a reader can see is counted rather
  *  than asserted.
@@ -140,19 +142,11 @@ function StatusCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
 }
 
 /** The repeat cell: updates on top, months only where there is more than one
- *  (D9 — `timesMade` counts UPDATES and the word says so). The artboard's chip
- *  sits on a row first raised in the reading's own month — and it says "First
+ *  (D9 — `timesMade` counts UPDATES and the word says so). It says "First
  *  time", never "New", because the cell one column to its right prints "New"
  *  for a row nobody has decided on (`LEDGER_FIRST_TIME_LINE`). */
-function RepeatCell({ row, isNew, mode }: { row: AdviceRow; isNew: boolean; mode: RenderMode }) {
+function RepeatCell({ row, first, mode }: { row: AdviceRow; first: boolean; mode: RenderMode }) {
   const { updates, months } = repeatCell(row)
-  // "FIRST TIME" ONLY FOR A ROW RAISED ONCE, AND QUIET (deploy 1 review). Since
-  // MK2 runs newest first, every visible row on 2 Oct was first raised in
-  // September, and the amber chip printed twelve times, row 1 included, whose
-  // advice Overview's headline tile calls "repeated across 3 updates". A row
-  // raised by more than one update states its count, as every other row does;
-  // the chip, grey as the preview's row tags, marks only a first raising.
-  const first = isNew && row.timesMade === 1
   if (mode === 'email') {
     return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{first ? 'First time' : updates}</span>
   }
@@ -165,6 +159,20 @@ function RepeatCell({ row, isNew, mode }: { row: AdviceRow; isNew: boolean; mode
       {months ? <span className="text-[11px] text-muted-foreground">{months}</span> : null}
     </span>
   )
+}
+
+/**
+ * "FIRST TIME" MARKS ADVICE THE LATEST UPDATE RAISED, AND ONLY BESIDE ROWS IT
+ * DID NOT (deploy 1 review, the lead's R10). Since MK2 runs newest first,
+ * every row visible on 2 Oct was first raised in September, and the chip
+ * printed twelve times, row 1 included, directly above "Why we keep raising
+ * it". The chip now marks a row whose lineage first appears in the latest
+ * update, and only while some visible row is not one: a column that would be
+ * the chip on every row says nothing, so it is not drawn.
+ */
+export function repeatColumn(rows: readonly AdviceRow[]): { shown: boolean; first: (row: AdviceRow) => boolean } {
+  const first = (row: AdviceRow) => row.firstInLatest === true
+  return { shown: !(rows.length > 0 && rows.every(first)), first }
 }
 
 /** "Grounded in": a count, or the named absence that is not a zero. */
@@ -311,7 +319,8 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     const more = a.total - a.rows.length
     const hrefFor = (lineageId: string) => `${ctx?.appUrl ?? ''}${marketSurfaceHref(lineageId, ctx?.params ?? {})}`
     const expanded = expandedLineage(a.rows, a.highlight)
-    const readingMonth = data.month.slice(0, 7)
+    const repeat = repeatColumn(a.rows)
+    const tracks = repeat.shown ? TRACKS : TRACKS.filter((_, i) => i !== REPEAT_TRACK)
     // THE COLUMN'S UNLOCK IS GONE WHERE THE COLUMN ANSWERS. `ADVICE_UNLOCK`
     // named the absence of an Afterwards column; the column exists now, so the
     // sentence is printed only while no row on the page has a reading in it —
@@ -405,8 +414,12 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 </div>
                 <div style={{ marginTop: 2 }}>
                   <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>first raised {madeInMonth(row.firstMade)} · </span>
-                  <RepeatCell row={row} isNew={row.firstMade.slice(0, 7) === readingMonth} mode={mode} />
-                  <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · </span>
+                  {repeat.shown ? (
+                    <>
+                      <RepeatCell row={row} first={repeat.first(row)} mode={mode} />
+                      <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · </span>
+                    </>
+                  ) : null}
                   <StatusCell row={row} mode={mode} />
                   <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · grounded in </span>
                   <GroundedCell row={row} mode={mode} />
@@ -421,13 +434,13 @@ export const marketAdvice: Block<MarketSurfaceData> = {
           <>
             <div className="-mx-1 overflow-x-auto px-1">
               <table className="w-full border-collapse text-left">
-                <colgroup>{TRACKS.map((w, i) => <col key={i} className={w || undefined} />)}</colgroup>
+                <colgroup>{tracks.map((w, i) => <col key={i} className={w || undefined} />)}</colgroup>
                 <thead>
                   <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                     <th className="py-1 pr-3 font-semibold">#</th>
                     <th className="py-1 pr-3 font-semibold">Recommendation</th>
                     <th className="py-1 pr-3 font-semibold">First raised</th>
-                    <th className="py-1 pr-3 font-semibold">Repeated</th>
+                    {repeat.shown ? <th className="py-1 pr-3 font-semibold">Repeated</th> : null}
                     <th className="py-1 pr-3 font-semibold">Your decision</th>
                     <th className="py-1 pr-3 font-semibold">
                       <span title={GROUNDED_BASIS} className="cursor-help">Grounded in</span>
@@ -465,7 +478,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                             {age ? <span className="text-[11px] text-muted-foreground">{age}</span> : null}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-3"><RepeatCell row={row} isNew={row.firstMade.slice(0, 7) === readingMonth} mode={mode} /></td>
+                        {repeat.shown ? <td className="py-1.5 pr-3"><RepeatCell row={row} first={repeat.first(row)} mode={mode} /></td> : null}
                         <td className="py-1.5 pr-3"><StatusCell row={row} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><GroundedCell row={row} mode={mode} /></td>
                         <td className="py-1.5"><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></td>
@@ -477,7 +490,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     return row.lineageId === expanded
                       ? [cells, (
                         <tr key={`${row.lineageId}-why`}>
-                          <td colSpan={TRACKS.length} className="pb-2 pt-1"><Expansion row={row} mode={mode} /></td>
+                          <td colSpan={tracks.length} className="pb-2 pt-1"><Expansion row={row} mode={mode} /></td>
                         </tr>
                       )]
                       : [cells]

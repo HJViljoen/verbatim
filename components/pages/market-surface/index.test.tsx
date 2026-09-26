@@ -420,11 +420,11 @@ describe('MK2 · the ledger', () => {
     // column apart, meaning "raised this month" and "you have not decided".
     // The chip is the one that moves, and its basis (and its clock) is printed
     // under the table rather than left in a title.
-    // The chip marks a row RAISED ONCE in the reading month (deploy 1
-    // review); the fixture's September row was raised by two updates, so it is
-    // made a first raising here.
+    // The chip marks a row the LATEST UPDATE raised for the first time (the
+    // lead's R10); the fixture's September row is made one here, and the
+    // other rows are not.
     const base = marketFixture()
-    const data = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r, i) => (i === 0 ? { ...r, timesMade: 1, monthsRepeated: 1 } : r)) } }
+    const data = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r, i) => (i === 0 ? { ...r, timesMade: 1, monthsRepeated: 1, firstInLatest: true } : r)) } }
     const text = renderText(marketAdvice.render(data, 'app', ctx))
     expect(text).toContain('First time')
     // Its clock rides as the chip's tooltip (copy de-clutter B57).
@@ -432,6 +432,19 @@ describe('MK2 · the ledger', () => {
     expect(render(marketAdvice.render(data, 'app', ctx))).toContain('the update’s clock, not the comment’s')
     // "New" survives exactly where the status column puts it.
     expect((text.match(/\bNew\b/g) ?? [])).toHaveLength(1)
+  })
+
+  // THE LEAD'S R10: a column that would be the chip on every visible row says
+  // nothing, so it is not drawn, in any mode.
+  it('omits the Repeated column where every visible row was first raised by the latest update', () => {
+    const base = marketFixture()
+    const data = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r) => ({ ...r, timesMade: 1, monthsRepeated: 1, firstInLatest: true })) } }
+    for (const mode of MODES) {
+      const text = renderText(marketAdvice.render(data, mode, ctx))
+      expect(text, mode).not.toContain('First time')
+      expect(text, mode).not.toMatch(/\bRepeated\b/)
+      assertCopyContract(render(marketAdvice.render(data, mode, ctx)))
+    }
   })
 
   it('states the count, never "First time", on a September row raised by more than one update (deploy 1 review)', () => {

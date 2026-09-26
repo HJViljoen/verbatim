@@ -101,7 +101,7 @@ export const CONCLUSIONS_SHOWN = 8
  * printed under the table rather than left in a `title`.
  */
 export const LEDGER_FIRST_TIME_LINE =
-  'First time marks a row raised once, by an update inside the month the page reads: the ledger’s own dates are the update’s clock, not the comment’s.'
+  'First time marks advice the latest update raised for the first time: the ledger’s own dates are the update’s clock, not the comment’s.'
 
 /** What the ledger's "Grounded in" column counts, said once under the table
  *  because every row's cell is counted the same way (D8, and the same shape as
@@ -184,6 +184,13 @@ export interface AdviceRow {
   firstMade: string
   /** How many updates have carried it. */
   timesMade: number
+  /**
+   * The lineage first appears in the latest update that carried advice: every
+   * copy of it is that update's (deploy 1 review, the lead's R10). What MK2's
+   * "First time" chip marks. OPTIONAL, so a copy stored before it renders
+   * with no chip.
+   */
+  firstInLatest?: boolean
   /** How many CALENDAR MONTHS have carried it — the design's column. Two
    *  updates three days apart is one month, and the ledger says one. */
   monthsRepeated: number
@@ -457,6 +464,9 @@ export function buildAdviceRows(
   }
 
   const times = recUpdateTimes(copies)
+  // The latest update that carried advice: the one written last.
+  const latestUpdate = [...times.entries()].reduce<[string, string] | null>(
+    (best, e) => (best == null || e[1] > best[1] || (e[1] === best[1] && e[0] > best[0]) ? e : best), null)?.[0] ?? null
   /** What the order reads off each row: when it was last raised, and the
    *  newest copy's own rank inside that update. */
   const orderOf = new Map<string, { raisedAt: string; newest: RecCopy }>()
@@ -485,6 +495,7 @@ export function buildAdviceRows(
       kind: newest.type,
       firstMade: (oldest.created_at ?? '').slice(0, 10),
       timesMade: runs,
+      firstInLatest: latestUpdate != null && group.every((c) => recUpdateOf(c) === latestUpdate),
       monthsRepeated: months.length,
       repeatedWithinMonth: runs > 1 && months.length <= 1,
       status,
