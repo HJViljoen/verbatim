@@ -14,6 +14,8 @@ import {
 import { MONTHLY_SNAPSHOT_VERSION, type MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from '@/components/blocks/monthly/fixture'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
+import { monthlySections } from '@/components/blocks/monthly'
+import { monthlyViewerPages } from '@/lib/reports/viewer'
 import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
 import { renderMonthlyEmail } from '@/lib/email/monthly'
 import { MonthlyEmail } from './monthly'
@@ -163,6 +165,22 @@ describe('"September in your market" on paper', () => {
   it('says so on its own sheet when it knows none of the stored keys', () => {
     const none = snapshot(monthlyFixture(), { keys: ['monthly.movers'] as never })
     expect(markupText(render(<MonthlyDeck data={none} date="12 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
+  })
+
+  // The Reports viewer's "N pages" is the deck's own count: an absent slot has
+  // no sheet, and a row this build cannot draw is one sheet.
+  it('is counted for the Reports viewer as the deck paginates it', () => {
+    const sheets = (data: MonthlySnapshotData) => (render(<MonthlyDeck data={data} date="12 Oct 2026" />).match(/<section class="vb-slide[" ]/g) ?? []).length
+    const cases = [
+      snapshot(),
+      snapshot(filledSlotsFixture()),
+      snapshot(ossurMonthlyFixture()),
+      { ...snapshot(), version: 1 } as MonthlySnapshotData,
+      snapshot(monthlyFixture(), { keys: ['monthly.movers'] as never }),
+    ]
+    for (const data of cases) expect(monthlyViewerPages(data, monthlySections)).toBe(sheets(data))
+    expect(monthlyViewerPages(snapshot(), monthlySections)).toBe(7)
+    expect(monthlyViewerPages(snapshot(filledSlotsFixture()), monthlySections)).toBe(10)
   })
 })
 
