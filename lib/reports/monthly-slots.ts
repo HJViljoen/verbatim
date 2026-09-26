@@ -1,4 +1,4 @@
-import type { CheckLine } from '../pages/overview-market/change'
+import type { ChangeBlock } from '../pages/overview-market/change'
 import type { FigureTable } from '../reading/verdicts'
 
 /**
@@ -28,8 +28,8 @@ import type { FigureTable } from '../reading/verdicts'
  * in `foryou.ts` and WP2.6 grows `brands.ts`; creating those files here would
  * collide with theirs, so the pinned shapes are restated below under monthly
  * names. When a package lands, its slot's type becomes an import of the
- * package's own and the copy here is deleted. `CheckLine` is already exported
- * (WP1.6 pinned it in `change.ts`), so it is imported, not copied.
+ * package's own and the copy here is deleted. The change slot is WP2.3's
+ * `ChangeBlock` fields, imported, not copied.
  *
  * PURE.
  */
@@ -42,11 +42,12 @@ export type MonthlySlot<T> =
   | { state: 'stub'; owner: SlotOwner }
   | { state: 'filled'; value: T }
 
-/** `monthly.change`'s slot (WP2.3): the check lines the front page prints
- *  (`ChangeBlock.checks`, at most three, "Provisional" on any "moved"). */
-export interface MonthlyChecks {
-  checks: CheckLine[]
-}
+/** `monthly.change`'s slot (WP2.3): the re-check the front page prints,
+ *  in `ChangeBlock`'s own fields: the check lines (at most three,
+ *  "Provisional" on any "moved"), whether it was read or is pending, and the
+ *  buyers-only counts. The section prints them through `recheckLines`, as the
+ *  page does, so the two print one sentence each. */
+export type MonthlyChecks = Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers'>>
 
 /** `monthly.arrivals`'s slot (WP2.7): §4.2's `ArrivalsBlock`, verbatim. The
  *  monthly prints the came-in lines only; it carries no weekly volume bars. */

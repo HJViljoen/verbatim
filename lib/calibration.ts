@@ -646,3 +646,40 @@ export function refusalInBlock(
  * addition may be a constant and nothing more (plan §7.7).
  */
 export const MARKET_KIND_LABELS: Readonly<Record<string, string>> = { praise: 'Praising it' }
+
+// ---- The re-check on the searches both months ran (market-first WP2.3) ------------
+
+/**
+ * Decision D's secondary line, in the words plan WP2.3 fixed (heinrich-fidelity
+ * must-fix 10): each outcome one plain sentence, written in code, "holds up"
+ * never used. `lib/pages/overview-market/change.ts` picks which print (at most
+ * three on the front page and in the monthly) and what they say they were read
+ * with. Constants only: this file is inside the pipeline's import closure,
+ * where an addition may be a constant and nothing more (plan §7.7).
+ *
+ *   moved       only on the searches both months ran, without makers and
+ *               off-topic videos, and only with 100 videos a side
+ *               (`mayPrintMoved`); always "Provisional."
+ *   within      the same population, inside the band
+ *   too few     the same population, under 100 videos on a side
+ *   follows     among well-read videos (20 or more dated comments) the fall
+ *   depth       is gone: it follows how deeply the later month was read
+ *   pending     a check that cannot run yet (real-volume graft 1)
+ */
+export const RECHECK_MOVED = (label: string, from: string, to: string): string =>
+  `${label} went from ${from} to ${to} on the searches both months ran, without makers and off-topic videos: more than the reading can tell apart. Provisional.`
+export const RECHECK_WITHIN = (label: string): string =>
+  `${label} stayed within what the reading can tell apart on the searches both months ran.`
+export const RECHECK_TOO_FEW = 'Too few videos on the searches both months ran to check.'
+export const RECHECK_FOLLOWS_DEPTH = (month: string): string =>
+  `The fall follows how deeply ${longMonth(month)}’s videos have been read, not the market.`
+/** The population a pending line names, as the approved preview leads the
+ *  re-check ("On the searches both months ran, without makers and off-topic
+ *  videos: [the outcome]"). */
+export const RECHECK_SAME_SEARCHES = 'On the searches both months ran, without makers and off-topic videos'
+export const RECHECK_PENDING = (population: string): string => `${population}: checks pending.`
+/** The buyers-only line (plan WP2.3's done-when; heinrich-fidelity must-fix
+ *  3): the market's videos read as neither makers' nor off-topic
+ *  (segments_v1), and "too few" under 100 videos in a month. */
+export const RECHECK_BUYERS = 'Buyers only, without makers and off-topic videos'
+export const RECHECK_BUYERS_TOO_FEW = (months: string): string => `${RECHECK_BUYERS}: too few in ${months} to check.`

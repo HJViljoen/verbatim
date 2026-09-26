@@ -1,6 +1,12 @@
-import { pairSentence } from '../../calibration'
+import {
+  pairSentence, RECHECK_BUYERS, RECHECK_BUYERS_TOO_FEW, RECHECK_FOLLOWS_DEPTH, RECHECK_MOVED, RECHECK_PENDING,
+  RECHECK_SAME_SEARCHES, RECHECK_TOO_FEW, RECHECK_WITHIN,
+} from '../../calibration'
 import { fmtInt, longMonth, shortDate } from '../../format'
 import { monthShareWord } from '../../provenance/searches'
+import { KIND_LABELS } from '../../reading/kinds'
+import { levelText } from '../../reading/level'
+import { CHECK_MIN_VIDEOS, DENSE_MIN_DATED, mayPrintMoved, type CheckOutcome, type RecheckPopulation } from '../../reading/recheck'
 import {
   COMPARE_FLAG_SHARE,
   COMPARE_REFUSE_SHARE,
@@ -20,6 +26,7 @@ import {
 } from '../../reading/comparability'
 import { monthStartOf, nextMonth } from '../../reading/month-key'
 import type { FigureTable, Verdict } from '../../reading/verdicts'
+import { marketKindLabel } from './kinds'
 
 // "What changed, and what is ours" (market-first WP1.6, plan §2.2 block 10),
 // and the three pieces of Settings › What we changed that ship with it (the
@@ -71,7 +78,8 @@ export interface LedgerLine {
   months?: { month: string; touched: number; of: number; readWith: string | null }[]
 }
 
-/** WP2.3's check lines; none print before deploy 3. */
+/** WP2.3's check lines: one printed line each, at most `CHECK_LINES_MAX`
+ *  on the front page and in the monthly (`buildCheckLines`). */
 export interface CheckLine {
   objectKind: 'subject' | 'kind' | 'mood' | 'theme'
   objectId: string
@@ -80,7 +88,24 @@ export interface CheckLine {
   verdict: Verdict
   sentence: string
   populationShares: { makers: number; noise: number } | null
+  /** The finish of the update the row was read with (`read_through_run`);
+   *  '' where that run is not a delivered update the page holds. */
   readWith: string
+  /** Every object the line speaks for, where it is more than its own (the
+   *  depth line names each kind whose fall follows depth). Additive. */
+  covers?: string[]
+}
+
+/** The buyers-only line's counts (plan WP2.3's done-when): the market's
+ *  videos read as neither makers' nor off-topic (segments_v1, MF1
+ *  `market_segment_counts`) in each month of the pair, as at the page's
+ *  update. Null counts were not read. */
+export interface BuyersLine {
+  prevMonth: string
+  month: string
+  prev: number | null
+  curr: number | null
+  readWith: string | null
 }
 
 export interface ChangeBlock {
@@ -105,6 +130,15 @@ export interface ChangeBlock {
    *  instant a day: the strip's marks under those months (the preview's "our
    *  search changes, 9, 13 and 17 Sep"). Additive. */
   searchChanges?: string[]
+  /** WP2.3, the re-check beside a refused pair: 'read' where rows for the
+   *  pair were read (`checks` holds its lines), 'pending' where none can be
+   *  read yet ("checks pending"). Null or absent: no re-check is printed (the
+   *  pair was read the same way, its later month is still running, updates
+   *  are paused, or the block was stored before WP2.3). Additive. */
+  recheck?: 'read' | 'pending' | null
+  /** WP2.3, the buyers-only line's counts, where the re-check prints.
+   *  Additive. */
+  buyers?: BuyersLine | null
 }
 
 /**
@@ -125,6 +159,10 @@ export function buildChangeBlock(input: {
   paused: boolean
   /** Run id to finish instant, for "read with the {date} update". */
   runFinish: ReadonlyMap<string, string>
+  /** WP2.3: the stored re-check rows (`comparability_checks`, any pair; null
+   *  where they could not be read) and the buyers-only counts of the pair's
+   *  two months. Absent: a page built without the re-check. */
+  recheck?: { rows: readonly StoredCheck[] | null; buyers: { prev: number | null; curr: number | null } | null } | null
 }): ChangeBlock {
   const next = nextComparablePair(input.asAt ?? `${input.month}T12:00:00.000Z`, input.changes, input.pairRows, {
     view: 'market',
@@ -132,16 +170,23 @@ export function buildChangeBlock(input: {
     ...(input.nextUpdateAfter ? { nextUpdateAfter: input.nextUpdateAfter } : {}),
   })
   const readRun = input.pair.row?.readThroughRun ?? null
+  const pair = input.hasPrev ? input.pair : null
+  const shows = input.recheck != null && recheckShows(pair, input.paused)
+  const rows = shows ? (input.recheck?.rows ?? []).filter((r) => monthStartOf(r.prev_month) === monthStartOf(input.prevMonth) && monthStartOf(r.month) === monthStartOf(input.month)) : []
+  const checks = shows ? buildCheckLines({ rows, month: input.month, runFinish: input.runFinish }) : []
+  const counts = input.recheck?.buyers ?? null
   return {
     prevMonth: input.hasPrev ? input.prevMonth : null,
     month: input.month,
-    pair: input.hasPrev ? input.pair : null,
+    pair,
     next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom, inFullExpected: next.inFullExpected } : null,
-    checks: [],
+    checks,
     readWith: readRun ? input.runFinish.get(readRun) ?? null : null,
     paused: input.paused,
     asAt: input.asAt,
     searchChanges: searchChangeDays(input.changes, input.prevMonth, input.month),
+    recheck: shows ? (checks.length > 0 ? 'read' : 'pending') : null,
+    buyers: shows && counts ? { prevMonth: input.prevMonth, month: input.month, prev: counts.prev, curr: counts.curr, readWith: input.asAt } : null,
   }
 }
 
@@ -601,4 +646,238 @@ export function whyNotCompared(block: ChangeBlock): { title: string; body: strin
   const cells = whyCells(block)
   if (!body && cells.length === 0) return null
   return { title: `Why ${longMonth(pair.month)} is not compared`, body: body ?? '', figures: lead?.figures ?? {}, cells }
+}
+
+// ---- The re-check on the searches both months ran (WP2.3) -------------------------------
+
+/**
+ * DECISION D's SECONDARY LINE, BESIDE A REFUSED PAIR (plan WP2.3). The same two
+ * months read again on the searches both of them ran without makers and
+ * off-topic videos, and among well-read videos, by scripts/comparability-checks.ts
+ * into `comparability_checks` (MF2). The page never recomputes one: it reads
+ * the newest row per object and population and says what it found, in the
+ * outcome sentences `lib/calibration.ts` holds.
+ *
+ * AT MOST THREE LINES (`CHECK_LINES_MAX`), the rest waiting for Subjects'
+ * checks block in December:
+ *   1. the searches both months ran, without makers and off-topic videos: one
+ *      line where that population is under 100 videos on a side ("Too few
+ *      videos on the searches both months ran to check."), else one for each
+ *      candidate decision D names, "asking for something" and buying interest;
+ *   2. the kinds whose fall across the whole market is gone among well-read
+ *      videos: "The fall follows how deeply September's videos have been read,
+ *      not the market.";
+ *   3. the buyers-only line, where there is room (`recheckLines`).
+ *
+ * A "MOVED" PRINTS ONLY WHERE IT MAY (`mayPrintMoved`): on the searches both
+ * months ran and with 100 videos a side, and always "Provisional.". A stored
+ * "moved" among well-read videos, or on everything but the off-topic videos,
+ * is never read here (staging's plan holds six).
+ *
+ * WHEN IT PRINTS (`recheckShows`): beside a pair REFUSED once its later month
+ * has ended, and not for a paused tenant (no update is coming to read it). A
+ * month still running is refused as "not compared until it has ended", which
+ * the block's first line already says; the script refuses to write a month
+ * not read past its end, so until the first rows land the re-check reads
+ * "checks pending" (real-volume graft 1).
+ */
+
+/** A `comparability_checks` row as the page reads it (MF2). */
+export interface StoredCheck {
+  prev_month: string
+  month: string
+  population: string
+  object_kind: string
+  object_id: string
+  k_prev: number | null
+  n_prev: number | null
+  k_curr: number | null
+  n_curr: number | null
+  /** `numeric` columns come back from PostgREST as strings. */
+  population_makers: number | string | null
+  population_noise: number | string | null
+  verdict: Verdict
+  outcome: string
+  read_through_run: string | null
+  computed_at: string
+}
+
+export const CHECK_LINES_MAX = 3
+/** Decision D's two candidates, in its order: wishes, then buying interest. */
+export const RECHECK_CANDIDATES = ['feature_request', 'purchase_intent'] as const
+const CHECK_KINDS: ReadonlySet<string> = new Set(['subject', 'kind', 'mood', 'theme'])
+const KIND_ORDER = Object.keys(KIND_LABELS)
+
+/** Does the block print a re-check beside this pair? */
+export function recheckShows(pair: Pick<PairComparability, 'mode' | 'reasons'> | null | undefined, paused: boolean): boolean {
+  if (!pair || paused || pair.mode !== 'refuse' || readTheSameWay(pair)) return false
+  return !pair.reasons.some((r) => r.kind === 'incomplete')
+}
+
+/** The newest row per population and object (the table is append-only and
+ *  the newest `computed_at` wins, plan §4.0 rollback rule 4). */
+export function newestChecks(rows: readonly StoredCheck[]): StoredCheck[] {
+  const out = new Map<string, StoredCheck>()
+  for (const r of rows) {
+    const key = `${r.population}|${r.object_kind}|${r.object_id}`
+    const held = out.get(key)
+    if (!held || Date.parse(r.computed_at) > Date.parse(held.computed_at)) out.set(key, r)
+  }
+  return [...out.values()]
+}
+
+const share = (x: number | string | null): number | null => {
+  const v = x == null ? Number.NaN : Number(x)
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : null
+}
+
+/** A check's object as a reader is shown it: a kind by its market label
+ *  ("Praising it"), a theme in quotation marks, so a kind and a theme are
+ *  never read as each other (real-volume must-fix 2), the positive mood by
+ *  name. */
+export function checkLabel(r: Pick<StoredCheck, 'object_kind' | 'object_id' | 'verdict'>): string {
+  if (r.object_kind === 'kind') return marketKindLabel(r.object_id)
+  if (r.object_kind === 'theme') return `“${r.verdict?.objectLabel ?? r.object_id}”`
+  if (r.object_kind === 'mood') return `${r.verdict?.objectLabel ?? r.object_id} mood`
+  return r.verdict?.objectLabel ?? r.object_id
+}
+
+const lowerFirst = (s: string): string => `${s.charAt(0).toLowerCase()}${s.slice(1)}`
+const list = (xs: readonly string[]): string =>
+  xs.length <= 1 ? (xs[0] ?? '') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
+
+/** Both sides of a population at the floor a "moved" needs. */
+const sidesAtFloor = (r: Pick<StoredCheck, 'n_prev' | 'n_curr'>): boolean =>
+  (r.n_prev ?? 0) >= CHECK_MIN_VIDEOS && (r.n_curr ?? 0) >= CHECK_MIN_VIDEOS
+
+/**
+ * The lines the front page and the monthly print, from the pair's stored rows
+ * (see above): at most `CHECK_LINES_MAX`, each with the update it was read
+ * with and its population's maker and noise shares.
+ */
+export function buildCheckLines(input: {
+  rows: readonly StoredCheck[]
+  /** The later month of the pair. */
+  month: string
+  runFinish: ReadonlyMap<string, string>
+}): CheckLine[] {
+  const newest = newestChecks(input.rows).filter((r) => CHECK_KINDS.has(r.object_kind) && r.verdict != null)
+  const line = (r: StoredCheck, sentence: string, covers?: string[]): CheckLine => {
+    const makers = share(r.population_makers)
+    const noise = share(r.population_noise)
+    return {
+      objectKind: r.object_kind as CheckLine['objectKind'],
+      objectId: r.object_id,
+      label: checkLabel(r),
+      population: r.population as CheckLine['population'],
+      verdict: r.verdict,
+      sentence,
+      populationShares: makers != null && noise != null ? { makers, noise } : null,
+      readWith: (r.read_through_run ? input.runFinish.get(r.read_through_run) : null) ?? '',
+      ...(covers ? { covers } : {}),
+    }
+  }
+  const out: CheckLine[] = []
+
+  // 1. The searches both months ran, without makers and off-topic videos.
+  const kinds = newest.filter((r) => r.population === 'same_searches_clean' && r.object_kind === 'kind')
+  if (kinds.length > 0) {
+    const candidates = RECHECK_CANDIDATES.map((id) => kinds.find((r) => r.object_id === id)).filter((r): r is StoredCheck => r != null)
+    // The population's own size is every kind row's n: the videos in it.
+    if (!sidesAtFloor(kinds[0])) {
+      out.push(line(candidates[0] ?? kinds[0], RECHECK_TOO_FEW))
+    } else {
+      for (const r of candidates) {
+        const label = checkLabel(r)
+        if (mayPrintMoved({ population: r.population as RecheckPopulation, outcome: r.outcome as CheckOutcome }) && sidesAtFloor(r) && r.verdict.state === 'moved') {
+          const from = levelText(r.k_prev ?? 0, r.n_prev)?.text
+          const to = levelText(r.k_curr ?? 0, r.n_curr)?.text
+          if (from && to) out.push(line(r, RECHECK_MOVED(label, from, to)))
+        } else if (r.outcome === 'no_clear_change') {
+          out.push(line(r, RECHECK_WITHIN(label)))
+        } else if (r.outcome === 'too_few') {
+          out.push(line(r, `${label}: ${lowerFirst(RECHECK_TOO_FEW)}`))
+        }
+      }
+    }
+  }
+
+  // 2. The kinds whose fall follows depth, among well-read videos.
+  const depth = newest
+    .filter((r) => r.population === 'dense20' && r.object_kind === 'kind' && r.outcome === 'follows_depth')
+    .sort((a, b) => KIND_ORDER.indexOf(a.object_id) - KIND_ORDER.indexOf(b.object_id))
+  if (depth.length > 0) {
+    const labels = depth.map(checkLabel)
+    out.push(line(depth[0], `${list(labels)}: ${lowerFirst(RECHECK_FOLLOWS_DEPTH(input.month))}`, labels))
+  }
+  return out.slice(0, CHECK_LINES_MAX)
+}
+
+/** A share of a population in the words a reader would say ("about half"),
+ *  never a bare percentage: the ladder of "about half of September came
+ *  from…" (`monthShareWord`). */
+function shareWords(s: number, noun: string): string {
+  const w = monthShareWord(Math.round(s * 1000), 1000)
+  return w === 'none' ? `no ${noun}` : `${w} ${noun}`
+}
+
+/**
+ * A check line's tag: its population's maker and off-topic shares (plan
+ * WP2.3: "printed beside every result") and the update it was read with
+ * ("Every line says which update it was read with"). The shares are of the
+ * population's videos before its own clean-up, so on the searches both months
+ * ran they say what was left out.
+ */
+export function checkTag(c: Pick<CheckLine, 'population' | 'populationShares' | 'readWith' | 'verdict'>): string | null {
+  const parts: string[] = []
+  const s = c.populationShares
+  if (s) {
+    const both = `${shareWords(s.makers, 'makers')}, ${shareWords(s.noise, 'off-topic')}`
+    if (c.population === 'same_searches_clean') parts.push(`${both}, left out`)
+    else if (c.population === 'dense20') parts.push(`with ${DENSE_MIN_DATED} or more comments: ${both}`)
+    else parts.push(both)
+  }
+  // A moved or within line prints two levels; their bases sit here, so the
+  // sentence keeps one denominator's worth of words.
+  const v = c.verdict
+  if (c.population === 'same_searches_clean' && v.baseline && (v.state === 'moved' || v.state === 'no_clear_change')) {
+    const month = (iso: string | undefined) => (iso ? longMonth(iso) : '')
+    parts.push(`${month(v.basis?.from)} of ${fmtInt(v.baseline.n)}, ${month(v.basis?.to)} of ${fmtInt(v.value.n)}`)
+  }
+  if (c.readWith) parts.push(`read with the ${shortDate(c.readWith)} update`)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+/** "too few in August to check", naming each month under the floor. */
+function buyersSentence(b: BuyersLine | null | undefined): string | null {
+  if (!b || b.prev == null || b.curr == null) return null
+  const under = [b.prev < CHECK_MIN_VIDEOS ? b.prevMonth : null, b.curr < CHECK_MIN_VIDEOS ? b.month : null].filter((m): m is string => m != null)
+  if (under.length > 0) return RECHECK_BUYERS_TOO_FEW(list(under.map((m) => longMonth(m))))
+  return RECHECK_PENDING(RECHECK_BUYERS)
+}
+
+/** One printed line of the re-check: its sentence and its tag. */
+export interface RecheckLine {
+  key: string
+  sentence: string
+  tag: string | null
+}
+
+/**
+ * What the re-check prints, in order (the front page's block 10 and the
+ * monthly's change section print these and nothing else, so they print one
+ * sentence each): the check lines, or the pending line where none was read,
+ * then the buyers-only line where there is room. Empty where the block prints
+ * no re-check.
+ */
+export function recheckLines(block: Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers'>>): RecheckLine[] {
+  if (!block.recheck) return []
+  const out: RecheckLine[] = block.checks.length > 0
+    ? block.checks.slice(0, CHECK_LINES_MAX).map((c) => ({ key: `${c.population}:${c.objectKind}:${c.objectId}`, sentence: c.sentence, tag: checkTag(c) }))
+    : [{ key: 'pending', sentence: RECHECK_PENDING(RECHECK_SAME_SEARCHES), tag: null }]
+  const buyers = buyersSentence(block.buyers)
+  if (buyers && out.length < CHECK_LINES_MAX) {
+    out.push({ key: 'buyers', sentence: buyers, tag: block.buyers?.readWith ? `read with the ${shortDate(block.buyers.readWith)} update` : null })
+  }
+  return out
 }

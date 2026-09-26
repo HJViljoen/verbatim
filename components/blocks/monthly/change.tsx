@@ -1,17 +1,17 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { BlockFrame } from '@/components/blocks/frame'
-import { overviewChange, WHAT_WE_CHANGED_HREF } from '@/components/pages/overview/change'
+import { overviewChange, RecheckBox, WHAT_WE_CHANGED_HREF } from '@/components/pages/overview/change'
 import { shortMonthName } from '@/components/pages/overview/market'
 import { substituteFigures } from '@/lib/reports/cover'
 import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { shortDate } from '@/lib/format'
-import { changeLead, searchChangesLine, type ChangeBlock, type CheckLine } from '@/lib/pages/overview-market'
+import { changeLead, recheckLines, searchChangesLine, type ChangeBlock } from '@/lib/pages/overview-market'
+import type { MonthlyData } from '@/lib/pages/monthly'
 import { isFilled } from '@/lib/reports/monthly-slots'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { T, presentation } from './email-table'
 import { sectionFooter, type MonthlyBlock } from './adapt'
-import { Inner } from './email'
 
 /**
  * 9 · What changed, and what is ours (market-first WP2.1; the front page's
@@ -25,10 +25,14 @@ import { Inner } from './email'
  * The monthly calls it and never words it itself, so the figure and its words
  * change in one place (lib/pages/overview-market/change.ts).
  *
- * THE RE-CHECK IS WP2.3's SLOT. Until WP2.3 fills it, the section prints the
- * refusal and the first pair read the same way, and nothing where the
- * re-check will go (plan WP2.1, "Depends on": the refusal only). The footer is
- * the link to the dated list of our changes, never a note (25 Sep rulings).
+ * THE RE-CHECK IS WP2.3's SLOT, DRAWN AS THE PAGE DRAWS IT. The slot holds
+ * the front page's re-check fields (`MonthlyChecks`), and the section sets
+ * them on the page's change block before drawing it, so the re-check sits
+ * under the refusal in the page's own layout and its lines are
+ * `recheckLines`'s, the page's sentences. A stub prints the refusal and the
+ * first pair read the same way, and nothing where the re-check goes (plan
+ * WP2.1, "Depends on": the refusal only). The footer is the link to the dated
+ * list of our changes, never a note (25 Sep rulings).
  */
 
 export const MONTHLY_CHANGE_TITLE = overviewChange.title
@@ -47,32 +51,6 @@ function Lead({ body, figures }: { body: string; figures: FigureTable }) {
   return (
     <div style={{ fontFamily: FONT.sans, fontSize: 16, lineHeight: '24px', color: EMAIL.ink2 }}>
       {bold ? <><span style={{ fontWeight: 600, color: EMAIL.ink }}>{body.slice(0, cut + 1)}</span> {words(body.slice(cut + 2))}</> : words(body)}
-    </div>
-  )
-}
-
-/** WP2.3's check lines, once its slot is filled: each outcome sentence as
- *  code wrote it, under "Re-checked" and its "provisional" tag. */
-function Checks({ checks, mode }: { checks: readonly CheckLine[]; mode: 'app' | 'print' | 'email' }) {
-  if (checks.length === 0) return null
-  if (mode === 'email') {
-    return (
-      <Inner>
-        <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '22px', fontWeight: 600, color: EMAIL.ink }}>
-          Re-checked&nbsp;&nbsp;<span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 400, color: EMAIL.muted }}>provisional</span>
-        </div>
-        {checks.map((c) => (
-          <div key={`${c.objectKind}:${c.objectId}:${c.population}`} style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2, marginTop: 8 }}>{c.sentence}</div>
-        ))}
-      </Inner>
-    )
-  }
-  return (
-    <div className="flex flex-col gap-2 rounded-md bg-inner p-6">
-      <p className="m-0 text-[15px] font-semibold">Re-checked <span className="ml-1.5 font-mono text-[12px] font-normal text-muted-foreground">provisional</span></p>
-      {checks.map((c) => (
-        <p key={`${c.objectKind}:${c.objectId}:${c.population}`} className="m-0 max-w-[76ch] text-[15px] leading-[1.6] text-secondary-foreground">{c.sentence}</p>
-      ))}
     </div>
   )
 }
@@ -133,15 +111,33 @@ function Pairs({ block }: { block: ChangeBlock }) {
   )
 }
 
-function changeEmail(block: ChangeBlock, checks: readonly CheckLine[] | null): ReactNode {
+function changeEmail(block: ChangeBlock): ReactNode {
   const lead = changeLead(block)
   return (
     <>
       {lead ? <Lead body={lead.body} figures={lead.figures} /> : null}
-      {checks ? <Checks checks={checks} mode="email" /> : null}
+      <RecheckBox lines={recheckLines(block)} mode="email" />
       <Pairs block={block} />
     </>
   )
+}
+
+/** The page's change block with the slot's re-check on it: the slot's fields
+ *  where it is filled, none where it is a stub. */
+function withSlot(data: MonthlyData): MonthlyData['overview'] {
+  const block = data.overview.change
+  if (!block) return data.overview
+  const slot = data.slots?.change
+  const value = isFilled(slot) ? slot.value : null
+  return {
+    ...data.overview,
+    change: {
+      ...block,
+      checks: value?.checks ?? [],
+      recheck: value ? value.recheck ?? (value.checks.length > 0 ? 'read' : null) : null,
+      buyers: value?.buyers ?? null,
+    },
+  }
 }
 
 export const monthlyChange: MonthlyBlock = {
@@ -151,23 +147,17 @@ export const monthlyChange: MonthlyBlock = {
 
   render(data, mode, ctx) {
     const footer = sectionFooter(mode, ctx, { href: WHAT_WE_CHANGED_HREF, label: 'What we changed, and when →' })
-    const slot = data.slots?.change
-    const checks = isFilled(slot) ? slot.value.checks : null
-    const block = data.overview.change ?? null
+    const overview = withSlot(data)
+    const block = overview.change ?? null
     const empty = monthlyChange.emptyState(data)
     if (mode === 'email' && block && !empty) {
-      return <BlockFrame title={MONTHLY_CHANGE_TITLE} mode={mode} card footer={footer}>{changeEmail(block, checks)}</BlockFrame>
+      return <BlockFrame title={MONTHLY_CHANGE_TITLE} mode={mode} card footer={footer}>{changeEmail(block)}</BlockFrame>
     }
-    const el = overviewChange.render(data.overview, mode, ctx)
+    const el = overviewChange.render(overview, mode, ctx)
     const props = { title: MONTHLY_CHANGE_TITLE, footer, ...(mode === 'email' ? { card: true } : {}) }
     if (!isValidElement(el) || el.type !== BlockFrame) return <BlockFrame mode={mode} {...props}>{el}</BlockFrame>
     const frame = el as ReactElement<{ children?: ReactNode; title?: string; footer?: ReactNode; card?: boolean }>
-    // WP2.3's lines follow the refusal and the first pair, inside the page's
-    // own frame, once its slot is filled.
-    const children = checks && checks.length > 0 && mode !== 'email'
-      ? <>{frame.props.children}<Checks checks={checks} mode={mode} /></>
-      : frame.props.children
-    return cloneElement(frame, props, children)
+    return cloneElement(frame, props, frame.props.children)
   },
 
   figures(data) {
