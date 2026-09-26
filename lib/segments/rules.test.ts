@@ -1,10 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import {
-  MAKER_WORDS, NOISE_TERMS, SEGMENT_RULE_VERSION,
+  MAKER_WORDS, NOISE_TERMS, SEGMENTS_SQL_BEGIN, SEGMENTS_SQL_END, SEGMENT_RULE_VERSION,
   bareNameOnly, makerHaystack, makerPatternSource, makerWordIn, noiseTerms, segmentOf, segmentReason,
-  segmentRulesEnabled,
+  segmentRulesEnabled, segmentsV1Sql,
 } from './rules'
 
 // The examples are the research's own (CQ F19–F23, staging, 24 Sep): the
@@ -95,5 +96,23 @@ describe('segmentReason', () => {
     expect(segmentOf({ caption: 'DIY', sourceKeywords: [] })).toBe('maker')
     expect(segmentOf({ caption: 'Friday news', sourceKeywords: ['freitag'] })).toBe('noise')
     expect(segmentOf({ caption: 'Freitag F52 review', sourceKeywords: ['freitag bag'] })).toBe('market')
+  })
+})
+
+describe('the SQL copy in MF1 is generated from this file', () => {
+  const sql = readFileSync(new URL('../../supabase/migrations/20260928090000_market_first_s1.sql', import.meta.url), 'utf8')
+
+  it('holds exactly segmentsV1Sql() between the markers', () => {
+    const start = sql.indexOf(SEGMENTS_SQL_BEGIN)
+    const end = sql.indexOf(SEGMENTS_SQL_END)
+    expect(start, 'the generated block is missing from the migration').toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    expect(sql.slice(start, end + SEGMENTS_SQL_END.length)).toBe(segmentsV1Sql())
+  })
+
+  it('carries every maker word and every bare name', () => {
+    const block = segmentsV1Sql()
+    expect(block).toContain(makerPatternSource())
+    for (const t of NOISE_TERMS) expect(block).toContain(`'${t}'`)
   })
 })

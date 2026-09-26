@@ -42,11 +42,14 @@ import { isMissingColumnError } from './supabase-admin'
 export const CONFIG_CHANGES_TABLE = 'config_changes'
 
 /** Which configuration moved — grouped by what a reader goes looking for, not
- *  by column. Mirrors the config_changes surface CHECK. */
+ *  by column. Mirrors the config_changes surface CHECK (its newest writer:
+ *  MF1, 20260928090000_market_first_s1.sql, which added the last three: the
+ *  relevance check's rule, attribution and the segment marks, market-first
+ *  WP1.4). */
 export const CONFIG_SURFACES = [
   'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'cadence', 'knobs',
   'schedule', 'subjects', 'entity_retag', 'regate', 'prompt_version',
-  'rival_rename', 'other',
+  'rival_rename', 'other', 'segment', 'gate_rule', 'attribution',
 ] as const
 export type ConfigSurface = (typeof CONFIG_SURFACES)[number]
 

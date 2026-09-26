@@ -407,6 +407,19 @@ describe('R12: the three tracking writes use the admin client, after the checks'
     expect([...admin.writes, ...session.writes]).toEqual([])
   })
 
+  it('MF1 revokes exactly the search-set and sending columns from authenticated, and grants none back', () => {
+    const mf1 = readFileSync(join(ROOT, 'supabase/migrations/20260928090000_market_first_s1.sql'), 'utf8')
+    const revoked = mf1.match(/revoke update \(([^)]*)\)\s+on public\.tracking_configs from authenticated;/)?.[1]
+    expect(revoked, 'the R12 revoke is no longer where this test looks for it').toBeTruthy()
+    expect(revoked!.split(',').map((c) => c.trim()).sort()).toEqual([
+      'brand_keywords', 'competitor_keywords', 'competitor_names', 'exclude_terms', 'industry_keywords',
+      'report_day', 'report_period', 'subreddits',
+    ])
+    expect(mf1).not.toMatch(/grant update[^;]*on public\.tracking_configs/i)
+    // The runtime proof is on the throwaway cluster (has_column_privilege, and a
+    // tenant owner's session refused): scripts/pg-shim/mf1-checks.sql.
+  })
+
   it('no server action writes tracking_configs through a session client', () => {
     // The session client is `supabase` (SessionContext) in every action; the
     // admin client is `createAdminClient()` or a local bound to it.

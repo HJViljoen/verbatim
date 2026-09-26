@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   ACTOR_KINDS,
@@ -654,7 +654,19 @@ describe('the mirror in the migration — the two have to keep saying the same t
     // one. Read it that way rather than freezing the vocabulary here — the
     // point of the test is that TypeScript and the database agree about what a
     // surface may be, and a later migration is allowed to move the answer.
-    const rivalsSql = readFileSync(new URL('../supabase/migrations/20260918090000_competitors.sql', import.meta.url), 'utf8')
+    //
+    // Market-first MF1 (20260928090000_market_first_s1.sql) moved it again,
+    // adding 'segment', 'gate_rule' and 'attribution'. The newest migration
+    // that re-adds the constraint is found by name, not hard-coded, so the next
+    // one is read without editing this test.
+    const dir = new URL('../supabase/migrations/', import.meta.url)
+    const newest = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .filter((f) => /add constraint config_changes_surface_check/i.test(readFileSync(new URL(f, dir), 'utf8')))
+      .at(-1)
+    expect(newest).toBe('20260928090000_market_first_s1.sql')
+    const rivalsSql = readFileSync(new URL(newest!, dir), 'utf8')
     const surfaces = rivalsSql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
     const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]
     expect(surfaces).toBeTruthy()
@@ -665,5 +677,9 @@ describe('the mirror in the migration — the two have to keep saying the same t
     // that re-adds the constraint must never drop a surface already stored.
     const original = quoted(sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)![1])
     for (const surface of original) expect(CONFIG_SURFACES).toContain(surface as never)
+    const m1 = readFileSync(new URL('20260918090000_competitors.sql', dir), 'utf8')
+    for (const surface of quoted(m1.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)![1])) {
+      expect(CONFIG_SURFACES).toContain(surface as never)
+    }
   })
 })

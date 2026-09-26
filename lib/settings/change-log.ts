@@ -99,6 +99,12 @@ export const SURFACE_WORDS: Record<ConfigSurface, string> = {
   prompt_version: 'How we read',
   rival_rename: 'A rival was renamed',
   other: 'Configuration',
+  // Three changes of ours that no setting records (MF1, WP1.4): the relevance
+  // check's rule, how posts are filed under a brand, and how makers and
+  // off-topic videos are marked. A mark never takes a video out of a count.
+  gate_rule: 'How we check relevance',
+  attribution: 'How posts are filed by brand',
+  segment: 'How makers and off-topic videos are marked',
 }
 
 // ---- What it broke ---------------------------------------------------------
@@ -239,33 +245,90 @@ export interface ChangeLogView {
   firstLoggedAt: string | null
 }
 
-/** The whole reader: rows in, two lists out, newest first in each. */
+/**
+ * The rows of ONE change, grouped, so the record shows each change once (MF1,
+ * WP1.4): rows on the same surface, by the same actor, within
+ * `RECORD_GROUP_WINDOW_MS` of the group's first row. The audit trigger writes
+ * one row per column in one UPDATE (the 17 Sep script: three `terms` rows at
+ * 16:02:56), the reconstruction wrote one row per term (the 9 Sep swap:
+ * fourteen at 18:17:56), and a community edit writes the trigger's row and its
+ * own logged row a few milliseconds apart. The grouping is `changesFromLog`'s
+ * (lib/reading/comparability.ts, its CHANGE_GROUP_WINDOW_MS, which the test
+ * pins equal to this one), so a group's id is the change id that
+ * `config_change_reach` points at; the record adds the actor to the key, so
+ * two people's edits never become one entry. Oldest first within a group.
+ */
+export const RECORD_GROUP_WINDOW_MS = 60_000
+
+export function groupChangeRows(rows: readonly ConfigChange[]): ConfigChange[][] {
+  const sorted = rows
+    .map((row) => ({ row, ms: Date.parse(row.changed_at) }))
+    .sort((a, b) => (Number.isNaN(a.ms) ? 1 : 0) - (Number.isNaN(b.ms) ? 1 : 0) || a.ms - b.ms || a.row.id.localeCompare(b.row.id))
+  const groups: { startMs: number; rows: ConfigChange[] }[] = []
+  const open = new Map<string, { startMs: number; rows: ConfigChange[] }>()
+  for (const { row, ms } of sorted) {
+    if (Number.isNaN(ms)) {
+      groups.push({ startMs: ms, rows: [row] })
+      continue
+    }
+    const key = `${row.surface}\u0000${row.field === 'attention_panel' ? 'panel' : ''}\u0000${row.actor_kind}\u0000${row.actor_user_id ?? ''}`
+    const g = open.get(key)
+    if (g && ms - g.startMs <= RECORD_GROUP_WINDOW_MS) {
+      g.rows.push(row)
+      continue
+    }
+    const fresh = { startMs: ms, rows: [row] }
+    groups.push(fresh)
+    open.set(key, fresh)
+  }
+  return groups.map((g) => g.rows)
+}
+
+/** One side of a group: the row's own rendering for a single row; for several,
+ *  each row's rendered side, joined, so the 9 Sep swap reads its seven removed
+ *  terms before and its seven added terms after. */
+function groupSide(surface: ConfigSurface, rows: readonly ConfigChange[], side: 'before' | 'after'): string | null {
+  const parts = rows.map((r) => renderSide(surface, r[side])).filter((x): x is string => x != null)
+  if (parts.length === 0) return null
+  return rows.length === 1 ? parts[0] : parts.join('; ')
+}
+
+/** The whole reader: rows in, two lists out, newest first in each, ONE entry
+ *  per change (`groupChangeRows`). */
 export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
   const { rows, viewerUserId = null, emails = {} } = args
-  const view = (change: ConfigChange): ClientChange => ({
-    id: change.id,
-    on: change.changed_at.slice(0, 10),
-    date: fullDate(change.changed_at),
-    dateShort: shortDate(change.changed_at),
-    surface: change.surface,
-    what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
-    said: change.note?.trim() || composedNote(change),
-    who: actorWords(change.actor_kind, {
-      actorUserId: change.actor_user_id,
-      actorEmail: change.actor_user_id ? emails[change.actor_user_id] : null,
-      viewerUserId,
-    }),
-    breaks: breakClause(change),
-    before: renderSide(change.surface, change.before),
-    after: renderSide(change.surface, change.after),
-    rowsAffected: change.rows_affected,
-    reconstructed: change.source === 'reconstructed',
-  })
+  const view = (group: readonly ConfigChange[]): ClientChange => {
+    const change = group[0]
+    const withNote = group.find((r) => r.note?.trim())
+    const withAffects = group.find((r) => (r.affects_audiences?.length ?? 0) > 0 || r.affects_months) ?? change
+    const counted = group.filter((r) => r.rows_affected != null)
+    return {
+      id: change.id,
+      on: change.changed_at.slice(0, 10),
+      date: fullDate(change.changed_at),
+      dateShort: shortDate(change.changed_at),
+      surface: change.surface,
+      what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
+      said: withNote?.note?.trim() || composedNote(change),
+      who: actorWords(change.actor_kind, {
+        actorUserId: change.actor_user_id,
+        actorEmail: change.actor_user_id ? emails[change.actor_user_id] : null,
+        viewerUserId,
+      }),
+      breaks: breakClause({ ...withAffects, source: group.every((r) => r.source === 'reconstructed') ? 'reconstructed' : change.source }),
+      before: groupSide(change.surface, group, 'before'),
+      after: groupSide(change.surface, group, 'after'),
+      rowsAffected: counted.length > 0 ? counted.reduce((n, r) => n + (r.rows_affected ?? 0), 0) : null,
+      reconstructed: group.every((r) => r.source === 'reconstructed'),
+    }
+  }
 
-  const sorted = [...rows].sort((a, b) => (a.changed_at < b.changed_at ? 1 : a.changed_at > b.changed_at ? -1 : 0))
-  const recorded = sorted.filter((r) => r.source !== 'reconstructed')
-  const prehistory = sorted.filter((r) => r.source === 'reconstructed')
-  const firstLogged = recorded.length > 0 ? recorded[recorded.length - 1].changed_at : null
+  const newestFirst = (a: ConfigChange[], b: ConfigChange[]) =>
+    a[0].changed_at < b[0].changed_at ? 1 : a[0].changed_at > b[0].changed_at ? -1 : 0
+  const groups = groupChangeRows(rows).sort(newestFirst)
+  const recorded = groups.filter((g) => !g.every((r) => r.source === 'reconstructed'))
+  const prehistory = groups.filter((g) => g.every((r) => r.source === 'reconstructed'))
+  const firstLogged = recorded.length > 0 ? recorded[recorded.length - 1][0].changed_at : null
   return {
     recorded: recorded.map(view),
     prehistory: prehistory.map(view),
