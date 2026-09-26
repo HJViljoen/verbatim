@@ -2,11 +2,12 @@ import { SettingsCard, SettingsFrame } from '@/components/settings-frame'
 import { SubjectEditor, type SubjectEditorRow } from '@/components/subjects/subject-editor'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { originLine, setLine } from '@/lib/pages/subjects'
+import { confirmedSubjects, subjectOriginWords, type SubjectChangeRow } from '@/lib/settings/subject-origin'
 import { subjectSetVerdict } from '@/lib/subjects/moves'
-import { isMissingSubjects, TABLE_SUBJECTS, type Subject } from '@/lib/subjects/types'
+import { isMissingSubjects, SUBJECTS_MAX, SUBJECTS_MIN, TABLE_SUBJECTS, type Subject } from '@/lib/subjects/types'
 
 // Settings › Subjects (Phase 1 WP16, design items 4 and 22, decision E) — the
-// five to eight things this workspace wants to be known for, in its own words,
+// five to ten things this workspace follows in its market, named as a buyer would,
 // and the candidates we can offer from what it already says.
 //
 // THE SUBJECT IS THE MEASUREMENT, WHICH IS WHY IT IS A FORM AND NOT A PICKER.
@@ -32,15 +33,26 @@ export default async function SettingsSubjectsPage() {
   const { supabase, clientId, role } = await getSessionContext()
   const canEdit = canManageTenant(role)
 
-  const [{ data: client }, subjectRead] = await Promise.all([
+  const [{ data: client }, subjectRead, confirmRead] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase
       .from(TABLE_SUBJECTS)
-      .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+      .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n, calibration_judge_version, created_by')
       .eq('client_id', clientId)
       .order('named_at', { ascending: true })
       .order('id', { ascending: true }),
+    // WHO CHOSE EACH SUBJECT (decision G, WP3.1): the confirmations on record.
+    // A failed read confirms nothing, so every counted subject reads "picked for
+    // you, not yet confirmed" rather than a confirmation nobody recorded.
+    supabase
+      .from('config_changes')
+      .select('field, after, actor_kind, changed_at')
+      .eq('client_id', clientId)
+      .eq('surface', 'subjects')
+      .in('field', ['confirmed', 'subjects'])
+      .order('changed_at', { ascending: true }),
   ])
+  const confirmed = confirmedSubjects(confirmRead.error ? [] : ((confirmRead.data ?? []) as SubjectChangeRow[]))
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
 
   // Not switched on yet is a different answer from "you have named none", and
@@ -48,13 +60,13 @@ export default async function SettingsSubjectsPage() {
   const available = !isMissingSubjects(subjectRead.error)
   if (subjectRead.error && available) throw subjectRead.error
 
-  const rows = ((subjectRead.data ?? []) as Subject[]).map((s): SubjectEditorRow => ({
+  const rows = ((subjectRead.data ?? []) as (Subject & { created_by?: string | null })[]).map((s): SubjectEditorRow => ({
     id: s.id,
     name: s.name,
     description: s.description,
     namedAt: s.named_at,
     status: s.status,
-    because: originLine(s.origin),
+    because: subjectOriginWords(s, confirmed, originLine(s.origin)),
     // NO LINK ON A STOPPED SUBJECT. `loadSubjectRows` excludes retired subjects
     // from the rail and `selectSubject` falls back to rail[0] with no notice —
     // the defect aa32043 fixed for `?themes=` — so this href opened a DIFFERENT
@@ -80,8 +92,8 @@ export default async function SettingsSubjectsPage() {
         {!available ? (
           <SettingsCard title="Your subjects">
             <p className="text-[12px] text-muted-foreground">
-              Subjects are not switched on for this workspace yet. When they are, we will bring you five to eight
-              to look at, drawn from what your own videos already say.
+              Subjects are not switched on for this workspace yet. When they are, we will bring you {SUBJECTS_MIN} to {SUBJECTS_MAX}
+              to look at, drawn from what your own videos say and what your market talks about.
             </p>
           </SettingsCard>
         ) : (
@@ -121,7 +133,7 @@ export default async function SettingsSubjectsPage() {
               <p className="text-[12px] text-muted-foreground">
                 {verdict.state === 'short'
                   ? 'Below five, a month’s reading rests on too little to compare one subject against another. We would rather you named a few more before we start drawing them.'
-                  : 'Above eight, no single subject gets enough of the conversation for a change in it to mean anything.'}
+                  : `Above ${SUBJECTS_MAX}, no single subject gets enough of the conversation for a change in it to mean anything.`}
               </p>
             )}
           </>

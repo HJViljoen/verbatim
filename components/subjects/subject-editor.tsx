@@ -13,6 +13,7 @@ import {
   type SubjectFormState,
 } from '@/lib/actions/subjects'
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
+import { SUBJECT_WORDS } from '@/lib/calibration'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
@@ -406,7 +407,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
           open={adding}
           onOpenChange={setAdding}
           title="Add a subject"
-          description={`Name it the way a buyer would say it. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
+          description={`A subject is ${SUBJECT_WORDS}. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
         />
       ) : null}
       <SubjectSheet

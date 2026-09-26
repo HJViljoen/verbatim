@@ -111,6 +111,11 @@ export function evidenceOf(count: number, denom: number | null | undefined, noun
   return `${n.toLocaleString('en-US')} of ${denom.toLocaleString('en-US')} ${noun}`
 }
 
+/** What a subject is, in the words market-first decision G fixed. The
+ *  glossary and the subject editor both say it, from here, so the two cannot
+ *  word it twice (WP3.1). */
+export const SUBJECT_WORDS = 'something your market talks about that you chose to follow, named the way a buyer would say it'
+
 export const GLOSSARY = {
   // ---- The thirteen words (design §0, "the thirteen words a reader needs") --
   // update · month · week · video · audience · subject · theme · kind · rival ·
@@ -129,7 +134,9 @@ export const GLOSSARY = {
   // until the market was defined as the category plus the videos filed under
   // a brand you track; `market` below is the one pooled audience.
   audience: ['Audience', 'whose videos a figure is about: yours, one named rival’s, or the rest of the category. Every figure states which; the market is the one that pools two of them, and it says so'],
-  subject: ['Subject', 'something you told us you care about, in your own words, dated and logged, and counted by exactly the rule a theme is'],
+  // MARKET-FIRST (decision G, WP3.1): a subject is the market's, followed by
+  // the client, not the client's own claim.
+  subject: ['Subject', `${SUBJECT_WORDS}. Each is dated and logged, and counted by exactly the rule a theme is`],
   theme: ['Theme', 'something the category kept saying, grouped and named from what was read. The grouping is ours and it can change; when it does, the line says so'],
   kind: ['Kind', 'what a comment was doing: a question, an objection, praise. One comment is one kind, and a video can carry several, so the kinds do not sum to the conversation'],
   rival: ['Rival', 'a brand you named in Settings. A rival that leaves the tracked set terminates its line with a break, never falling to zero, and a renamed rival is one line with the rename marked on it'],
