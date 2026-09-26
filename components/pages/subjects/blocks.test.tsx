@@ -496,22 +496,30 @@ describe('the Subjects page under the three calibration states (staging, Sealand
 describe('SU2 · the pane\'s headline on the rail\'s base (default M-b)', () => {
   const data = marketPaneFixture()
   const HEADLINE = 'Waterproofing came up in 29 of 654 September videos in your market (4%).'
+  /** Rendered text as a reader reads it: `markupText` spaces every node apart,
+   *  and the headline sets each figure in its own span. */
+  const closed = (markup: string): string => markupText(markup).replace(/\s+([,.)%])/g, '$1').replace(/([(])\s+/g, '$1')
 
   it('the headline is the rail row\'s own "29 of 654 in your market", in every mode', () => {
     const rail = renderText(subjectsList.render(data, 'app', ctx))
     expect(rail).toContain('29 of 654 in your market')
     for (const mode of MODES) {
       assertCopyContract(render(subjectsSubject.render(data, mode, ctx)))
-      expect(renderText(subjectsSubject.render(data, mode, ctx))).toContain(HEADLINE)
+      expect(closed(render(subjectsSubject.render(data, mode, ctx)))).toContain(HEADLINE)
     }
   })
 
-  it('leads the pane, set as its serif lead, with the brand comparison\'s gap line and cells below it unchanged', () => {
+  it('leads the pane in the artboard\'s face (sans, its figures in mono, never the serif), with the brand comparison\'s gap line and cells below it unchanged', () => {
     const base = subjectsFixture()
     const gap = `Waterproofing: ${gapLine(base.selected!.gap!)}`
     const markup = render(subjectsSubject.render(data, 'app', ctx))
-    const text = markupText(markup)
-    expect(markup).toMatch(/font-serif[^>]*>[^<]*<span data-copy="level">Waterproofing came up in 29 of 654/)
+    const text = closed(markup)
+    const headline = markup.match(/<p data-copy="level" class="([^"]*)">Waterproofing came up in <span class="([^"]*)">29<\/span>/)
+    expect(headline).not.toBeNull()
+    expect(headline![1]).toContain('sm:text-[28px]')
+    expect(headline![1]).not.toContain('font-serif')
+    expect(headline![2]).toContain('font-mono')
+    expect(markup).not.toMatch(/font-serif[^>]*>[^<]*<span data-copy="level">Waterproofing came up in/)
     expect(text.indexOf(HEADLINE)).toBeGreaterThan(-1)
     expect(text.indexOf(gap)).toBeGreaterThan(text.indexOf(HEADLINE))
     // The sides print as the Phase 1 pane printed them.

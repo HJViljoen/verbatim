@@ -263,7 +263,10 @@ export const subjectsSubject: Block<SubjectsData> = {
         // THE LEAD IS A FIGURE NODE, NOT PROSE. Every digit in it is code's —
         // `gapLine` composes it from the two sides' own k and n — so rule (a)
         // is satisfied by provenance rather than by tokenisation.
-        lead={lead ? <span data-copy="level">{lead}</span> : undefined}
+        // A stored pane leads with its gap line, as sent, in the frame's lead;
+        // the market's headline is drawn first in the body, in the artboard's
+        // face (below).
+        lead={lead && !marketLead ? <span data-copy="level">{lead}</span> : undefined}
         actions={mode === 'app' ? (
           <>
             <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} />
@@ -282,6 +285,12 @@ export const subjectsSubject: Block<SubjectsData> = {
         {/* The row tag, over the cells: "provisional" (decision C). Email
             only: the app and print arms carry it in the heading line. */}
         {email ? <CalibrationTag calibration={pane.calibration} unread={pane.unread} mode={mode} block /> : null}
+        {/* THE MARKET'S HEADLINE IN THE ARTBOARD'S FACE (deploy 2 review):
+            the Subjects artboard sets "Looks & style came up in 104 of 626
+            …" as a large sans sentence with its figures in mono, and MASTER.md
+            keeps IBM Plex Serif for quotes alone; the frame's lead set it in
+            17px serif, under the Phase 1 cells' 24px figures. */}
+        {!email && marketLead ? <PaneHeadline text={marketLead} /> : null}
         {/* The email has no heading row, so no lead: the market's figure is
             the first line of its body (default M-b). */}
         {email && marketLead ? (
@@ -346,4 +355,19 @@ export const subjectsSubject: Block<SubjectsData> = {
     }
     return null
   },
+}
+
+/** The pane's market headline, "Waterproofing came up in 29 of 654 September
+ *  videos in your market (4%).", as the Subjects artboard sets it: a large sans
+ *  sentence, each figure (a count, a base, a share) in mono. The words are
+ *  `paneMarketLead`'s; only their face is set here. */
+function PaneHeadline({ text }: { text: string }) {
+  const parts = text.split(/(\d[\d,]*(?:\.\d+)?%?)/)
+  return (
+    <p data-copy="level" className="m-0 max-w-[660px] text-[22px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground [text-wrap:balance] sm:text-[28px]">
+      {parts.map((p, i) => (i % 2 === 1
+        ? <span key={i} className="font-mono font-semibold tabular-nums tracking-[-0.04em]">{p}</span>
+        : p))}
+    </p>
+  )
 }
