@@ -9,7 +9,7 @@ import { assertProject, modeLine, parseScriptArgs } from '../lib/ops/market-firs
 import { changesFromLog } from '../lib/reading/comparability'
 import { KIND_LABELS } from '../lib/reading/kinds'
 import {
-  keepWeekPoints, WEEK_LINE_AGES, weekKindLabel, weeksToKeep, type KeepCandidate, type WeekLineObject,
+  keepWeekPoints, WEEK_LINE_AGES, WEEK_READER_UNKNOWN, weekKindLabel, weeksToKeep, type KeepCandidate, type WeekLineObject,
   type WeekPointRow, type WeekRead, type WeekReadingRow, type WeekRun,
 } from '../lib/reading/week-line'
 import { firstPair, reachedCuts, weekLineCheck, weekLineCheckNote, type WeekFill } from '../lib/reading/week-line-check'
@@ -119,7 +119,8 @@ async function promptVersionAt(admin: SupabaseClient, clientId: string, at: stri
   if (at) q = q.lte('created_at', at)
   const { data, error } = await q.order('created_at', { ascending: false }).limit(1)
   if (error) throw new Error(`${NAME}: ai_call_log: ${error.message}`)
-  return (data?.[0] as { prompt_version?: string } | undefined)?.prompt_version ?? 'unknown'
+  // None found: recorded as unknown, which refuses every pair on 'reader' (weekPairOf).
+  return (data?.[0] as { prompt_version?: string } | undefined)?.prompt_version || WEEK_READER_UNKNOWN
 }
 
 function readKeptFiles(paths: readonly string[], clientId: string): KeptFile[] {

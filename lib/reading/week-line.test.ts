@@ -12,7 +12,7 @@ import { changesFromLog, type OurChange } from './comparability'
 import {
   buildWeekLine, fillGain, firstComparisonDue, keepWeekPoints, pendingWeekLine, pooledMix, pooledWeekPoints,
   standardisedShare, WEEK_AGE_DAYS_DEFAULT, WEEK_DEPTH_BANDS, WEEK_DEPTH_RATIO_MIN, WEEK_FILL_LATE_MAX, WEEK_LINE_EXCLUDED,
-  WEEK_LINE_FIRST_WEEK, WEEK_LINE_KINDS, WEEK_UNCHECKED_MAX, weekAgeCutoff, weekCadence, weekDepthRatios, weekPairOf,
+  WEEK_LINE_FIRST_WEEK, WEEK_LINE_KINDS, WEEK_READER_UNKNOWN, WEEK_UNCHECKED_MAX, weekAgeCutoff, weekCadence, weekDepthRatios, weekPairOf,
   weekReachesAgeAt, weeksToKeep, type WeekPoint, type WeekRead,
 } from './week-line'
 
@@ -187,6 +187,13 @@ describe('weekPairOf', () => {
       { kind: 'reader', detail: 'prompt pass_a_v4.1 and pass_a_v5' },
     ])
     expect(weekPairOf(SEP28, { ...OCT05, ageDays: 21 }, []).reasons.map((r) => r.kind)).toEqual(['reader'])
+  })
+
+  it('refuses a reader that was not recorded, even on both sides (a capture that found no Pass A call)', () => {
+    expect(weekPairOf({ ...SEP28, promptVersion: WEEK_READER_UNKNOWN }, { ...OCT05, promptVersion: WEEK_READER_UNKNOWN }, []).reasons).toEqual([
+      { kind: 'reader', detail: 'prompt version not recorded' },
+    ])
+    expect(weekPairOf(SEP28, { ...OCT05, laneRule: '' }, []).reasons).toEqual([{ kind: 'reader', detail: 'lane rule not recorded' }])
   })
 
   it('refuses a week not kept and the excluded week, and NaN never passes', () => {

@@ -96,6 +96,9 @@ export type WeekPairReason = 'cadence' | 'searches' | 'gate' | 'reader' | 'depth
 export const WEEK_SEARCH_SURFACES: readonly OurChangeSurface[] = ['terms', 'subreddits', 'rivals', 'handles', 'platforms', 'knobs']
 export const WEEK_GATE_SURFACES: readonly OurChangeSurface[] = ['gate_rule', 'regate']
 export const WEEK_READER_SURFACES: readonly OurChangeSurface[] = ['prompt_version']
+/** What a capture records when it finds no Pass A call to read the prompt
+ *  version from. Two such reads are not "the same reader": it refuses. */
+export const WEEK_READER_UNKNOWN = 'unknown'
 
 // ---- Shapes (§4.2, with four optional additions) ------------------------------------
 
@@ -357,8 +360,8 @@ function cadenceBroken(r: WeekRead): string | null {
  *   gate      a gate_rule or regate change after the earlier week began, or
  *             unchecked admissions at 10% or more of either week's videos;
  *   reader    a prompt_version change after the earlier week began, a different
- *             prompt version or lane rule at the two age runs, or two different
- *             ages or methods;
+ *             prompt version or lane rule at the two age runs, either not
+ *             recorded, or two different ages or methods;
  *   depth     either depth ratio (smaller ÷ larger, of the mean and of the
  *             median dated comments a video) under 0.8.
  * Else comparable. Never 'flag'. NaN never passes (a missing figure refuses).
@@ -399,8 +402,11 @@ export function weekPairOf(prev: WeekRead | null, curr: WeekRead | null, changes
   const reader: string[] = changes
     .filter((c) => WEEK_READER_SURFACES.includes(c.surface) && inSpan(c, prevStart - 1))
     .map((c) => `${c.surface} ${shortDay(dayOf(msOfInstant(c.changedAt)))}`)
-  if (prev.promptVersion !== curr.promptVersion) reader.push(`prompt ${prev.promptVersion} and ${curr.promptVersion}`)
-  if (prev.laneRule !== curr.laneRule) reader.push(`lane rule ${prev.laneRule} and ${curr.laneRule}`)
+  const unrecorded = (v: string): boolean => !v || v === WEEK_READER_UNKNOWN
+  if (unrecorded(prev.promptVersion) || unrecorded(curr.promptVersion)) reader.push('prompt version not recorded')
+  else if (prev.promptVersion !== curr.promptVersion) reader.push(`prompt ${prev.promptVersion} and ${curr.promptVersion}`)
+  if (!prev.laneRule || !curr.laneRule) reader.push('lane rule not recorded')
+  else if (prev.laneRule !== curr.laneRule) reader.push(`lane rule ${prev.laneRule} and ${curr.laneRule}`)
   if (prev.ageDays !== curr.ageDays) reader.push(`read at ${prev.ageDays} and ${curr.ageDays} days`)
   if (prev.methodVersion !== curr.methodVersion) reader.push(`method ${prev.methodVersion} and ${curr.methodVersion}`)
   if (reader.length) reasons.push({ kind: 'reader', detail: reader.join(', ') })
