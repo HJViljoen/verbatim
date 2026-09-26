@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -193,3 +193,20 @@ describe('OLD_PAGES_RETIRE_ON', () => {
     expect(Number.isNaN(Date.parse(OLD_PAGES_RETIRE_ON))).toBe(false)
   })
 })
+
+// The deploy-4 spend switches (decision L; WP3.2, WP3.5). Every tenant off,
+// and an unknown tenant off: no run spends on the segment judge or the brand
+// confirm before Heinrich's yes. A yes is a diff to this test.
+describe('SEGMENT_JUDGE_ENABLED and BRAND_CONFIRM_ENABLED', () => {
+  it('are off for every tenant', () => {
+    for (const map of [SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED]) {
+      expect(Object.values(map).every((on) => on === false)).toBe(true)
+      expect(Object.keys(map).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
+    }
+    for (const id of [SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) {
+      expect(segmentJudgeEnabled(id)).toBe(false)
+      expect(brandConfirmEnabled(id)).toBe(false)
+    }
+  })
+})
+
