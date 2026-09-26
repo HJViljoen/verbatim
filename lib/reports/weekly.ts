@@ -4,8 +4,7 @@ import { longMonth } from '../format'
 import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
 import { mergeFigures } from '../blocks/types'
-import type { FigureTable, VerdictPairNote } from '../reading/verdicts'
-import { pairSentence, sharedPairNote } from '../calibration'
+import type { FigureTable } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 
 /**
@@ -572,26 +571,23 @@ export interface SubjectsLead {
 }
 
 export function subjectsLead(
-  rows: readonly { label: string; category: { verdict: { state: string; pair?: VerdictPairNote | null } | null } }[],
+  rows: readonly { label: string; category: { verdict: { state: string } | null } }[],
 ): SubjectsLead | null {
   if (rows.length === 0) return null
   // ONLY AN ANSWER IS A COMPARISON (deploy 1 review). `too_little_data` is a
-  // side under the band's floor, as much a non-answer as `refused`; counted as
-  // compared, a month of refusals and thin rows read "0 of 7 subjects moved
-  // beyond their band: every change is inside the margin", which claims seven
-  // comparisons came back inside their bands when none was drawn. The count is
-  // of the subjects that were compared.
+  // side under the band's floor, as much a non-answer as `refused`; since WP1.3
+  // reads a thin side as too little data before any month-pair refusal, a
+  // September of refused and thin rows counted the thin ones as compared and
+  // read "0 of 7 subjects moved beyond their band this month: every change is
+  // inside the margin", seven comparisons claimed where none was drawn. The
+  // count is of the subjects that were compared. The weekly carries no
+  // refusal words of its own until WP3.7 rebuilds it (the lead's R1), so a
+  // month with nothing compared keeps the Phase 1 line below.
   const comparable = (state: string | undefined) => state === 'moved' || state === 'no_clear_change'
   const compared = rows.filter((r) => comparable(r.category.verdict?.state))
   const moved = rows.filter((r) => r.category.verdict?.state === 'moved')
   const noun = compared.length === 1 ? 'subject' : 'subjects'
   if (compared.length === 0) {
-    // AND A MONTH PAIR WE REFUSED SAYS WHY, in its own words (decision D):
-    // "the months to read them against are not" is false when August is there
-    // and was refused because we changed our searches. Only where the rows'
-    // refusals share one reason; otherwise the general line stands.
-    const refusal = sharedPairNote(rows.map((r) => r.category.verdict))
-    if (refusal) return { level: null, body: pairSentence(refusal) }
     return {
       level: null,
       body: `No ${rows.length === 1 ? 'subject' : 'subject'} carried a comparison this month: the readings are here, the months to read them against are not.`,
