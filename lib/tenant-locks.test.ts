@@ -154,6 +154,30 @@ describe('the sweep: every server action that can switch sending on or change tr
     expect(route).toContain("assertTenantMay(session, session.clientId, 'sends')")
   })
 
+  // AND EVERY ROUTE HANDLER (deploy 1 review): a route that sends, or writes a
+  // schedule or a tracking column, on a tenant's session must call the lock;
+  // an admin-key route is the operator's or the scheduler's, never a tenant's.
+  it('every route handler that sends or writes the locked columns calls it, or is the operator’s', () => {
+    const SENDS = [...WRITES, /\b(?:runSchedule|deliverSend)\(/]
+    const ROUTE_EXEMPT: Readonly<Record<string, string>> = {
+      'app/api/schedules/[id]/preview/route.ts#GET': 'builds the email as a preview (`mode: \'preview\'`): no send, no rows',
+    }
+    const routes = files(join(ROOT, 'app/api')).filter((f) => /\/route\.tsx?$/.test(f))
+    const senders = routes.flatMap((f) => {
+      const rel = relative(ROOT, f)
+      const text = readFileSync(f, 'utf8')
+      const operatorOnly = /\badminKeyValid\(/.test(text)
+      return topLevelFunctions(text)
+        .filter((fn) => SENDS.some((re) => re.test(fn.body)))
+        .map((fn) => ({ key: `${rel}#${fn.name}`, operatorOnly, guarded: fn.body.includes('assertTenantMay(') }))
+    })
+    // It finds what it is checking: the tenant's send route, and the operator's.
+    expect(senders.map((x) => x.key)).toContain('app/api/schedules/[id]/send/route.ts#POST')
+    expect(senders.some((x) => x.operatorOnly)).toBe(true)
+    expect(senders.filter((x) => !x.operatorOnly && !x.guarded && !(x.key in ROUTE_EXEMPT)).map((x) => x.key)).toEqual([])
+    for (const key of Object.keys(ROUTE_EXEMPT)) expect(senders.map((x) => x.key), key).toContain(key)
+  })
+
   it('a default schedule is born switched off for a locked tenant', () => {
     const src = readFileSync(join(ROOT, 'lib/schedules/default.ts'), 'utf8')
     expect(src).toContain("active: !tenantLocked(clientId, 'sends')")
@@ -168,12 +192,27 @@ describe('the sweep: every server action that can switch sending on or change tr
 const h = vi.hoisted(() => ({
   session: null as null | Record<string, unknown>,
   admin: null as unknown,
+  sent: [] as string[],
 }))
 
 vi.mock('@/lib/auth', async () => {
   const roles = await import('@/lib/roles')
-  return { ROLES: roles.ROLES, canManageTenant: roles.canManageTenant, getSessionContext: async () => h.session }
+  return { ROLES: roles.ROLES, canManageTenant: roles.canManageTenant, getSessionContext: async () => h.session, getRouteSession: async () => h.session }
 })
+// The send route's two senders, recorded rather than run (deploy 1 review):
+// the lock must refuse before either is reached.
+vi.mock('@/lib/schedules/run', () => ({
+  runSchedule: async (args: { mode: string }) => {
+    h.sent.push(`run:${args.mode}`)
+    return { status: 'sent', subject: 's', shareUrl: null, notified: 0, ms: 1, error: null }
+  },
+}))
+vi.mock('@/lib/schedules/deliver', () => ({
+  deliverSend: async () => {
+    h.sent.push('deliver')
+    return { status: 'sent', subject: 's', ms: 1, error: null }
+  },
+}))
 vi.mock('@/lib/supabase-admin', async (orig) => ({
   ...(await orig<typeof import('@/lib/supabase-admin')>()),
   createAdminClient: () => h.admin,
@@ -230,6 +269,7 @@ let admin: ReturnType<typeof fakeClient>
 let session: ReturnType<typeof fakeClient>
 
 beforeEach(() => {
+  h.sent = []
   admin = fakeClient()
   session = fakeClient({ tracking_configs: { subreddits: [], report_period: 'weekly', competitor_names: [], competitor_keywords: [] } })
   h.admin = admin.client
@@ -314,5 +354,48 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
     const actions = await import('../app/dashboard/settings/actions')
     h.session = tenantAdmin(OSSUR, session.client)
     expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(true)
+  })
+})
+
+// ---- The send-now route, run (deploy 1 review) ----------------------------------
+//
+// The string match above proves the call is in the file; these prove it runs
+// first: a Sealand admin's "now" and "deliver" are refused before any sender is
+// reached, a test to the caller's own address and the operator go through.
+
+describe('POST /api/schedules/[id]/send under the lock', () => {
+  const SCHEDULE = '451aa647-0000-4000-8000-000000000000'
+  const SEND = '00000000-0000-4000-8000-000000000001'
+  const post = async (body: Record<string, unknown>) => {
+    const { POST } = await import('../app/api/schedules/[id]/send/route')
+    const res = await POST(new Request('https://app.example/api', { method: 'POST', body: JSON.stringify(body) }), { params: Promise.resolve({ id: SCHEDULE }) })
+    return { status: res.status, json: (await res.json()) as Record<string, unknown> }
+  }
+  const routeSession = (s: Record<string, unknown>) => ({ ...s, email: 'admin@tenant.example' })
+
+  it('refuses a Sealand admin’s send now and deliver, before any sender', async () => {
+    h.session = routeSession(tenantAdmin(SEALAND, session.client))
+    for (const body of [{ mode: 'now' }, { mode: 'deliver', sendId: SEND }]) {
+      const r = await post(body)
+      expect(r.status).toBe(403)
+      expect(r.json.error).toBe(TENANT_LOCK_REFUSAL.sends)
+    }
+    expect(h.sent).toEqual([])
+  })
+
+  it('lets a Sealand admin send a test to their own address', async () => {
+    h.admin = fakeClient({ report_schedules: { id: SCHEDULE, client_id: SEALAND, recipients: ['daniela@sealand.example'] }, pipeline_runs: { id: 'run-1' } }).client
+    h.session = routeSession(tenantAdmin(SEALAND, session.client))
+    const r = await post({ mode: 'test' })
+    expect(r.status).toBe(200)
+    expect(h.sent).toEqual(['run:test'])
+  })
+
+  it('lets the operator send now', async () => {
+    h.admin = fakeClient({ report_schedules: { id: SCHEDULE, client_id: SEALAND, recipients: ['daniela@sealand.example'] }, pipeline_runs: { id: 'run-1' } }).client
+    h.session = routeSession(operatorIn(SEALAND, session.client))
+    const r = await post({ mode: 'now' })
+    expect(r.status).toBe(200)
+    expect(h.sent).toEqual(['run:send'])
   })
 })
