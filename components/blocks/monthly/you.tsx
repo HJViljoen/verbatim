@@ -7,6 +7,7 @@ import { surface } from '@/lib/nav'
 import type { MonthlyForYou, MonthlyPublished, MonthlyYou } from '@/lib/reports/monthly-slots'
 import { FOR_YOU_SENTENCES as SENTENCES, forYouWords } from '@/lib/pages/overview-market/foryou'
 import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
+import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { T, presentation } from './email-table'
 import { Num, SubHead, Table } from './email'
@@ -26,6 +27,13 @@ import { slotSection } from './slot'
  *
  * WHAT YOU PUBLISHED is the front page's census (`PublishedCensus`): the
  * posts, the followers' own themes and the moves count.
+ *
+ * THE PAGE'S WORDS, CELL FOR CELL (deploy 3 integration). The slot is filled
+ * from the front page's two blocks (`monthlySlotsFrom`), so the section says
+ * what the page says where the page says it: "1 post", a month with no
+ * reading of your audience as "no reading yet" (never a dropped cell, never
+ * 0), and, where nothing lines up, the page's own line (`FOR_YOU_NONE`). The
+ * layout is the MonthlyReport artboard's.
  */
 
 /** WP2.5's sentences, by `sentenceKey`, with `[[token]]` figures: the front
@@ -35,8 +43,16 @@ export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = SENTENCES
 
 function ForYou({ f, mode }: { f: MonthlyForYou; mode: RenderMode }) {
   const lines = f.lines.filter((l) => FOR_YOU_SENTENCES[l.sentenceKey])
-  if (lines.length === 0) return null
   const email = mode === 'email'
+  // Nothing lines up (Össur at a month with no subject asked about and no
+  // lead): the front page's one line, not a silent gap.
+  if (lines.length === 0) {
+    return (
+      <p style={email ? { fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2, margin: 0 } : undefined} className={email ? undefined : 'm-0 text-[15px] text-secondary-foreground'}>
+        {FOR_YOU_NONE}
+      </p>
+    )
+  }
   return (
     <>
       {lines.map((l, i) => {
@@ -85,12 +101,33 @@ function Cell({ figure, words, under, mode }: { figure: number; words: string; u
   )
 }
 
+/** A census cell with no figure: the month holds no reading of your
+ *  audience, which is not a zero (the front page's `CensusNote` words). */
+function Note({ words, under, mode }: { words: string; under: string; mode: RenderMode }) {
+  if (mode === 'email') {
+    return (
+      <td className="vb-m-col" style={{ width: '33%', verticalAlign: 'top', paddingRight: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '28px', color: EMAIL.muted }}>{words}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', color: EMAIL.muted, marginTop: 4 }}>{under}</div>
+      </td>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[15px] leading-[36px] text-muted-foreground">{words}</span>
+      <span className="text-[13px] text-muted-foreground">{under}</span>
+    </div>
+  )
+}
+
 function Published({ p, mode }: { p: MonthlyPublished; mode: RenderMode }) {
   const month = longMonth(p.month)
   const cells = [
-    <Cell key="posts" mode={mode} figure={p.posts} words="posts" under={<>in {month}{p.prevPosts != null ? <> · <span data-copy="figure">{fmtInt(p.prevPosts)}</span> the month before</> : null}</>} />,
+    <Cell key="posts" mode={mode} figure={p.posts} words={p.posts === 1 ? 'post' : 'posts'} under={<>in {month}{p.prevPosts != null ? <> · <span data-copy="figure">{fmtInt(p.prevPosts)}</span> the month before</> : null}</>} />,
     <Cell key="five" mode={mode} figure={p.drewFive} words="drew 5+" under="comments each" />,
-    ...(p.withReading != null ? [<Cell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments ?? 0)}</span> comments</>} />] : []),
+    p.withReading != null
+      ? <Cell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments ?? 0)}</span> comments</>} />
+      : <Note key="reading" mode={mode} words="no reading yet" under={`nothing under your posts read for ${month}`} />,
   ]
   const moves = p.movesDated === 0 ? 'none dated yet' : <><span data-copy="figure">{fmtInt(p.movesDated)}</span> dated</>
   if (mode === 'email') {

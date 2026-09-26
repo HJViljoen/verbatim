@@ -1,7 +1,7 @@
 import type { MonthlyData } from '@/lib/pages/monthly'
 import { headline, sentenceBlockFor, type LedgerRow, type OverviewData } from '@/lib/pages/overview'
 import { monthlySubject, nextMonthlyOf } from '@/lib/reports/monthly'
-import { MONTHLY_SLOT_STUBS, type MonthlySlots } from '@/lib/reports/monthly-slots'
+import { MONTHLY_SLOT_STUBS, monthlySlotsFrom, type MonthlySlots } from '@/lib/reports/monthly-slots'
 import { stagingBrandsRead } from '@/lib/test/brands-fixture'
 import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
 import { buildCheckLines } from '@/lib/pages/overview-market'
@@ -186,10 +186,12 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  *   Freitag, Rareform, Freedom of Movement and Old School not counted yet
  *   (no measured precision); the 8 videos naming Sealand are its own posts,
  *   so the name line reads none.
- * - `you`: plan §2.2 row 8 (production): 20 posts in September, 30 in August,
- *   10 drew 5 or more comments, 9 carry a reading over 234 comments; the
- *   followers' three themes, 4, 3 and 2; no move dated. No for-you line: its
- *   sentences are WP2.5's.
+ * - `you`: the front page's two WP2.5 blocks, as the loader wires them. The
+ *   for-you line is staging's Waterproofing measure (GR F24: 16 question
+ *   videos over three months, none of Sealand's 56 posts sharing two or more
+ *   of its words); the census is plan §2.2 row 8 (production): 20 posts in
+ *   September, 30 in August, 10 drew 5 or more comments, 9 carry a reading
+ *   over 234 comments; the followers' three themes, 4, 3 and 2; no move dated.
  * - `arrivals`: staging's 20 Sep update as `update_arrivals` counts it (MF2,
  *   read-only, 26 Sep): 395 September videos read for the first time and
  *   11,999 September comments (1 and 99 of August), with the nine themes it
@@ -206,26 +208,11 @@ export function filledSlotsFixture(): MonthlyData {
   const base = monthlyFixture()
   const slots: MonthlySlots = {
     brands: { state: 'filled', value: stagingBrandsRead() },
-    you: {
-      state: 'filled',
-      value: {
-        foryou: null,
-        published: {
-          month: SEP,
-          posts: 20,
-          prevPosts: 30,
-          drewFive: 10,
-          withReading: 9,
-          readingComments: 234,
-          followers: [
-            { label: 'Respect for Sealand’s mission', k: 4 },
-            { label: 'Support for clean-up initiatives', k: 3 },
-            { label: 'Keen to join events', k: 2 },
-          ],
-          movesDated: 0,
-        },
-      },
-    },
+    // The front page's own two blocks, through the loader's one wiring
+    // (`monthlySlotsFrom`): the for-you line on staging's Waterproofing
+    // measure and production's September census, as `marketFrontFixture`
+    // sources them.
+    you: monthlySlotsFrom(base.overview).you,
     arrivals: {
       state: 'filled',
       value: {

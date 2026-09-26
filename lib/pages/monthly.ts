@@ -123,8 +123,10 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     readTo: overview.reading?.readTo ?? null,
     market,
     overview,
-    // Each package fills its slot in `monthlySlotsFrom` (WP2.3 the change
-    // section's re-check, WP2.6 the brands); the rest are still stubs.
+    // Every slot reads the front page's own block (`monthlySlotsFrom`): WP2.3
+    // the change section's re-check, WP2.7 the arrivals, WP2.5 for you and
+    // what you published, WP2.6 the brands. A block the page did not build
+    // leaves its slot a stub, and the section is absent.
     slots: monthlySlotsFrom(overview),
     decide: {
       ledger: overview.sentence.ledger,

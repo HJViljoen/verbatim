@@ -142,8 +142,10 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     }
   })
 
-  it('you prints what you published, and no for-you line until WP2.5 writes its sentences', () => {
+  it('you prints the for-you line and what you published', () => {
     const t = text('monthly.you', filledSlotsFixture())
+    expect(t).toContain('Waterproofing')
+    expect(t).toMatch(/Your market asked about it on\s*16\s*videos over the last 3 months\. None of your\s*56\s*posts in that time shared two or more of its words\./)
     expect(t).toContain('What you published')
     expect(t).toMatch(/20\s*posts/)
     expect(t).toContain('30 the month before')

@@ -25,14 +25,10 @@ import type { ForYouBlock, PublishedCensus } from '../pages/overview-market/fory
  * stub (`components/blocks/monthly/index.tsx`), so a stub never reaches a
  * reader in any mode.
  *
- * THE SHAPES ARE §4.2's, COPIED UNTIL THEIR OWNERS EXPORT THEM. WP2.7 adds
- * `ArrivalsBlock` in `lib/pages/overview-market/arrivals.ts`, WP2.5 `ForYouBlock`
- * in `foryou.ts` and WP2.6 grows `brands.ts`; creating those files here would
- * collide with theirs, so the pinned shapes are restated below under monthly
- * names. When a package lands, its slot's type becomes an import of the
- * package's own and the copy here is deleted. The change slot is WP2.3's
- * `ChangeBlock` fields and the brands slot WP2.6's `BrandsRead`, imported,
- * not copied.
+ * THE SHAPES ARE THE PACKAGES' OWN (deploy 3). The four packages have
+ * landed, so every slot's type is an import of the front page's, never a
+ * copy: WP2.3's `ChangeBlock` fields, WP2.7's `ArrivalsBlock`, WP2.5's
+ * `ForYouBlock` and `PublishedCensus`, and WP2.6's `BrandsRead`.
  *
  * PURE.
  */
@@ -123,8 +119,12 @@ export interface SlotSources {
  *     leaves it a stub where the page kept deploy 2's one line (no brand
  *     rules, or the market not read), so the section is absent, never a
  *     promise sent to a client;
- *   · WP2.7 `arrivals` from `OverviewData.arrivals` and WP2.5 `you` from
- *     `OverviewData.foryou` and the posts census, when they land.
+ *   · WP2.7 fills `arrivals` from `OverviewData.arrivals` (the came-in lines
+ *     only; the monthly carries no weekly volume bars);
+ *   · WP2.5 fills `you` from `OverviewData.foryou` and `.published`, either
+ *     half alone where the other is missing.
+ * A page that built none of a block (MF2 not readable, the market not read)
+ * leaves that slot a stub, and the section is absent from the artefact.
  */
 export function monthlySlotsFrom(overview: SlotSources | null | undefined): MonthlySlots {
   const slots: MonthlySlots = { ...MONTHLY_SLOT_STUBS }
