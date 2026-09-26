@@ -55,6 +55,25 @@ export async function loadChangeReach(client: SupabaseClient, clientId: string):
   }
 }
 
+/**
+ * The tab's reading month (decision A), as the reading pages and What we
+ * changed read it: the same four memoised reads (`readingViewFrom`), so the
+ * Record page's Delivery, Coverage and scope statement read September on 1 to
+ * 15 Oct, not the calendar's October (deploy 2 review; WP1.2's open item).
+ * Null for a tenant nothing has been delivered to.
+ */
+export async function loadRecordReadingMonth(supabase: SupabaseClient, reading: ReadingHandle, now: string): Promise<ReadingMonth | null> {
+  const { client, clientId } = reading
+  const [runs, schedule, history, rivalAudiences] = await Promise.all([
+    loadDeliveredRuns(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
+    loadMonthSeries(client, clientId, { from: '2019-01-01', to: now, updatesByMonth: {} }),
+    loadMarketRivalAudiences(supabase, clientId),
+  ])
+  if (runs.length === 0) return null
+  return readingViewFrom({ now, runs, denominators: history.denominators, rivalAudiences, schedule }).reading
+}
+
 export interface WhatWeChanged {
   reading: ReadingMonth
   block: ChangeBlock

@@ -3,7 +3,8 @@ import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
 import { changesFromLog } from '@/lib/reading/comparability'
 import { otherRows } from '@/lib/settings/what-we-changed'
-import { loadWhatWeChanged } from '@/lib/settings/what-we-changed-load'
+import { loadRecordReadingMonth, loadWhatWeChanged } from '@/lib/settings/what-we-changed-load'
+import { monthStartOf } from '@/lib/reading/month-key'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
 import { RecordSection } from '@/components/settings/record/frame'
@@ -60,10 +61,6 @@ export default async function SettingsRecordPage() {
 
   const now = new Date()
   const nowIso = now.toISOString()
-  const month = nowIso.slice(0, 7)
-  const { data: client } = await supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle()
-  const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
-  const window = recordWindow(`${month}-01`, nowIso)
   const reading = readingHandle(clientId)
 
   // WHAT WE CHANGED (market-first WP1.6): the front page's "What we changed,
@@ -72,13 +69,31 @@ export default async function SettingsRecordPage() {
     console.error(`[settings] what we changed: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
   })
+  // THE READING MONTH, NOT THE CALENDAR'S (decision A; deploy 2 review, and
+  // WP1.2's open item). On 1 to 15 Oct the tab read October: "Oct 2026 · 0
+  // updates", "Coverage · October … No update ran inside this window" and
+  // "as at 2 Oct 2026", while What we changed at its top, and every reading
+  // page, read September as at the 20 Sep update. Delivery's month, Coverage's
+  // title and window, and the scope statement's "as at" now take the reading
+  // month and its update, off the same memoised reads What we changed makes;
+  // the calendar month and the clock only where nothing was delivered yet.
+  const [clientRes, rm] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    loadRecordReadingMonth(supabase, reading, nowIso).catch(() => null),
+  ])
+  const client = clientRes.data
+  const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
+  const month = (rm ? monthStartOf(rm.month) : nowIso).slice(0, 7)
+  const asAt = rm?.asAt ?? nowIso
+  const window = recordWindow(`${month}-01`, nowIso)
   const inputs = await loadRecordPage({
     client: supabase,
     admin: canSeeExcerpt ? createAdminClient() : null,
     clientId,
     tenant,
     window,
-    now: nowIso,
+    // "Reading as at" is the update the month is read as at, not the clock.
+    now: asAt,
     // THE SAME READ THE RECORD DRAWER MAKES, so this page and the drawer behind
     // "the record →" on the five reading surfaces cannot tell one workspace two
     // different things about its own discard. The reading handle is the
@@ -220,7 +235,7 @@ export default async function SettingsRecordPage() {
 
         <RecordSection title="What this covers, and what it does not">
           <ScopeStatement
-            text={scopeStatement(tenant, lines, nowIso)}
+            text={scopeStatement(tenant, lines, asAt)}
           />
         </RecordSection>
       </div>
