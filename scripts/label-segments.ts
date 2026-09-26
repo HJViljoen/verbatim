@@ -309,9 +309,19 @@ async function labelSegmentsV2(args: ScriptArgs): Promise<void> {
     console.log(`  ${fromPlanHeld} already held · ${gone} no longer stored · ${fresh.length} to write`)
     printTally(fresh, plan.videos)
     const logged = changes.some((c) => (c.surface as string) === 'segment' && c.field === SEGMENT_JUDGE_VERSION)
+    // The ledger is keyed by THIS plan, not by the change row: a second plan (the videos a
+    // first one left unjudged) finds the change row held, and its spend must still land.
+    const prior = await admin.from('ai_call_log').select('id', { count: 'exact', head: true })
+      .eq('client_id', args.clientId).eq('pass', SEGMENT_JUDGE_PASS).eq('request->>judgedAt', plan.createdAt)
+    pages.n++
+    if (prior.error) throw new Error(`${NAME}: ai_call_log read failed: ${prior.error.message}. Nothing written.`)
+    const callsHeld = (prior.count ?? 0) > 0
     console.log(logged
       ? `  change row: segment ${SEGMENT_JUDGE_VERSION} is held; none written`
-      : `  new row: segment ${SEGMENT_JUDGE_VERSION}, written with the labels, and the plan's ${plan.calls.length} calls to ai_call_log · "${SEGMENT_V2_NOTE}"`)
+      : `  new row: segment ${SEGMENT_JUDGE_VERSION}, written with the labels · "${SEGMENT_V2_NOTE}"`)
+    console.log(callsHeld
+      ? `  ai_call_log: this plan's calls are held; none written`
+      : fresh.length > 0 ? `  ai_call_log: this plan's ${plan.calls.length} calls, written with the labels` : '  ai_call_log: no label to write, so no call is logged')
     if (mode === 'review') {
       console.log(`read-only: nothing written · reads: ${pages.n} pages`)
       return
@@ -321,8 +331,10 @@ async function labelSegmentsV2(args: ScriptArgs): Promise<void> {
       const { error } = await admin.from('video_segments').insert(rows.slice(i, i + INSERT_CHUNK))
       if (error) throw new Error(`${NAME}: labels not written after ${i} rows: ${error.message}`)
     }
-    if (!logged && fresh.length + fromPlanHeld > 0) {
-      // The spend, once, in the ledger: the judged run wrote only its file.
+    if (!callsHeld && fresh.length > 0) {
+      // The spend, once per plan, in the ledger: the judged run wrote only its file. Keyed by
+      // request.judgedAt. Only an apply that writes labels logs, so a re-apply after the
+      // retention sweep has emptied the request bodies (30 days) does not log them twice.
       for (const c of plan.calls) {
         await logAiCall(admin, {
           clientId: args.clientId, runId: null, pass: SEGMENT_JUDGE_PASS, callIndex: c.callIndex, model: plan.model, promptVersion: plan.promptVersion,
@@ -330,13 +342,17 @@ async function labelSegmentsV2(args: ScriptArgs): Promise<void> {
           error: c.error, usage: c.usage, durationMs: c.durationMs, validationStatus: c.error ? 'error' : c.missing > 0 ? 'partial' : 'ok',
         })
       }
+    }
+    if (!logged && fresh.length + fromPlanHeld > 0) {
       const ok = await recordConfigChange(admin, asChangeInput({
         clientId: args.clientId, surface: 'segment', field: SEGMENT_JUDGE_VERSION, actor: scriptActor(V2_ACTOR),
         rowsAffected: fresh.length + fromPlanHeld, note: SEGMENT_V2_NOTE,
       }))
       if (!ok) throw new Error(`${NAME}: the labels are written, but the change row is not (see the log above)`)
     }
-    console.log(`APPLIED: ${fresh.length} labels written (${fromPlanHeld} already held), change row ${logged ? 'already held' : 'written'} · reads: ${pages.n} pages`)
+    const callsLine = callsHeld ? 'calls already logged' : fresh.length > 0 ? `${plan.calls.length} calls logged` : 'no call logged'
+    const changeLine = logged ? 'already held' : fresh.length + fromPlanHeld > 0 ? 'written' : 'not needed'
+    console.log(`APPLIED: ${fresh.length} labels written (${fromPlanHeld} already held), ${callsLine}, change row ${changeLine} · reads: ${pages.n} pages`)
     return
   }
 
