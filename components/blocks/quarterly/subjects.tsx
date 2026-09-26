@@ -151,7 +151,7 @@ export const quarterlySubjects: Block<QuarterlyData> = {
               // pass): no dash in each column and no "not compared", which is
               // the refusal's word for a pair and not what happened here.
               ? [
-                <span key="name" style={email ? { color: EMAIL.muted } : undefined} className={email ? undefined : 'text-muted-foreground'}>{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></span>,
+                <div key="name" style={email ? { color: EMAIL.muted } : undefined} className={email ? undefined : 'text-muted-foreground'}>{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></div>,
                 <span key="you" />, <span key="cat" />, <span key="catq" />, <span key="youq" />,
               ]
               : [
@@ -159,7 +159,8 @@ export const quarterlySubjects: Block<QuarterlyData> = {
               // name, no "you" figure on a provisional subject, and no
               // quarter change on either side: its cells carry the withheld
               // mark, not the refusal word "not compared".
-              <span key="name">{row.label}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></span>,
+              // A div, not a span: the word under the name is a block of its own.
+              <div key="name">{row.label}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></div>,
               printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label={withheldLabel(row.calibration)} />,
               <Side key="cat" side={row.category} mode={mode} />,
               !earnsVerdict(row.calibration)

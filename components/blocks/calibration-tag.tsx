@@ -36,11 +36,12 @@ export function CalibrationTag({
   const word = unread || calibrationWord(calibration)
   if (!word) return null
   if (mode === 'email') {
-    return (
-      <span style={{ display: block ? 'block' : 'inline', fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>
-        {word}
-      </span>
-    )
+    const style = { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }
+    // ON A LINE OF ITS OWN, A REAL BLOCK. The email's plain-text part is read
+    // off the HTML (`htmlToText`), which breaks lines at block ELEMENTS and
+    // knows nothing of CSS, so a span set `display: block` printed
+    // "Repair & warrantybeing re-described" there.
+    return block ? <div style={style}>{word}</div> : <span style={style}>{word}</span>
   }
   return (
     <span className={`${block ? 'block' : 'inline'} font-mono text-[11px] font-normal text-muted-foreground${className ? ` ${className}` : ''}`}>
