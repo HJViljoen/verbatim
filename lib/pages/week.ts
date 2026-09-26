@@ -50,6 +50,13 @@ import type { FormatMatrix } from '../reading/formats'
 import type { SideReading } from './overview'
 import { marketSubjectSide } from './overview-market/subjects'
 import { noiseComments, noiseVideos, skipNoise } from './noise'
+import type { ConfigChange } from '../config-log'
+import type { ScheduleConfig } from '../pipeline/schedule-due'
+import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
+import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
+import { addDays, marketWeekRowOf, weekAxis, type MarketWeekRowRaw, type WeekVolumesBlock } from '../reading/weeks'
+import { weekLineConfigFor } from '../week-line-config'
+import { weekVolumesBlock } from './overview-market/weeks'
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P,
 // the mock's ThisWeek.dc.html).
@@ -3303,4 +3310,66 @@ export function pooledBaseline(
     videos: sumMonth(denominators, m),
   }))
   return baselineStateOf({ name: 'every audience together', weekVideos, months })
+}
+
+// ---- Week by week (market-first decision M, part 1; WP2.9) ---------------------------
+
+export const RPC_MARKET_WEEK_VOLUMES = 'market_week_volumes'
+export const TABLE_WEEK_LINE_READS = 'week_line_reads'
+
+/**
+ * The weekly volume bars' reads, for Your market (inside "With this update")
+ * and for This week (`week.weeks`): ONE read of MF4's `market_week_volumes`
+ * over the axis (the weeks overlapping the month read and the month before,
+ * through the current week), with the updates, the change log and the
+ * schedule the page already holds, built by the one pure builder both pages
+ * call (`weekVolumesBlock`). A second, small read of the kept weeks
+ * (`week_line_reads`) is made only once a week's due date has passed, so the
+ * pending row can say which are kept; before then none can be.
+ *
+ * NULL, AND THE BLOCK SAYS NOTHING OF WEEKS, where MF4 cannot be read (not
+ * applied, or an error): no count is printed that nothing counted.
+ */
+export async function loadWeekVolumes(input: {
+  client: SupabaseClient
+  clientId: string
+  reading: Pick<ReadingMonth, 'month'>
+  now: string
+  /** Finish instants of completed or partial runs. */
+  updates: readonly string[]
+  rivalAudiences: readonly string[]
+  changeRows: readonly ConfigChange[]
+  schedule: ScheduleConfig | null
+}): Promise<WeekVolumesBlock | null> {
+  const { client, clientId } = input
+  const axis = weekAxis(input.reading, input.now)
+  if (axis.length === 0) return null
+  const res = await client.rpc(RPC_MARKET_WEEK_VOLUMES, { p_client: clientId, p_from: axis[0], p_to: addDays(axis[axis.length - 1], 7) })
+  if (res.error) {
+    console.error(`[pages] ${RPC_MARKET_WEEK_VOLUMES}: ${res.error.message}; week by week is not drawn`)
+    return null
+  }
+  const cfg = weekLineConfigFor(clientId)
+  const block = weekVolumesBlock({
+    reading: input.reading,
+    now: input.now,
+    updates: input.updates,
+    rows: ((res.data ?? []) as MarketWeekRowRaw[]).map(marketWeekRowOf),
+    rivalAudiences: input.rivalAudiences,
+    changes: ourChangesWithoutGatherFlags(input.changeRows),
+    cfg,
+    nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : null,
+  })
+  const line = block.line
+  if (cfg && line && 'state' in line && line.due.some((d) => d.date <= input.now.slice(0, 10))) {
+    const kept = await client.from(TABLE_WEEK_LINE_READS).select('week')
+      .eq('client_id', clientId).eq('method_version', cfg.methodVersion).eq('age_days', cfg.ageDays)
+    if (kept.error) console.error(`[pages] ${TABLE_WEEK_LINE_READS}: ${kept.error.message}; no week read as kept`)
+    else {
+      const due = new Set(line.due.map((d) => d.week))
+      const weeks = ((kept.data ?? []) as { week: string }[]).map((r) => String(r.week).slice(0, 10)).filter((w) => due.has(w))
+      if (weeks.length > 0) line.kept = [...new Set(weeks)].sort()
+    }
+  }
+  return block
 }

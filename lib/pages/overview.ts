@@ -75,7 +75,8 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
-import { loadNewThemes, monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
+import { loadNewThemes, loadWeekVolumes, monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
+import type { WeekVolumesBlock } from '../reading/weeks'
 import { ARRIVAL_THEMES_SHOWN, arrivalThemes, buildArrivals, latestUpdate, type ArrivalsBlock, type UpdateArrivalsRow } from './overview-market/arrivals'
 import type { ConfigChange } from '../config-log'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
@@ -857,6 +858,11 @@ export interface OverviewData {
    *  the latest update. Absent on a copy stored before it, and where
    *  `update_arrivals` (MF2) cannot be read. */
   arrivals?: ArrivalsBlock
+  /** Week by week (market-first decision M, part 1; WP2.9): the market's
+   *  videos and comments per week, and the same-age line's pending state,
+   *  drawn inside "With this update" with no key of its own. Absent on a copy
+   *  stored before it, and where MF4 cannot be read. */
+  weeks?: WeekVolumesBlock
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -2209,6 +2215,21 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     ? loadArrivals({ supabase, reading, clientId, runs: runsRaw, rm, month, now: readingAt, segmentRows: segmentRowsAhead })
     : null
   arrivalsAhead?.catch(() => {})
+  // WEEK BY WEEK (WP2.9), inside "With this update": one read of MF4 over the
+  // weeks of the month read and the month before, through the current week.
+  const weeksAhead = marketFirst
+    ? loadChanges(reading.client, clientId).then((changeRows) => loadWeekVolumes({
+        client: reading.client,
+        clientId,
+        reading: rm,
+        now: readingAt,
+        updates: runsRaw.map(updateInstant),
+        rivalAudiences: marketRivalAudiences(rivals),
+        changeRows,
+        schedule,
+      }))
+    : null
+  weeksAhead?.catch(() => {})
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
   // THE MARKET'S RIVALS ARE THE TRACKED ONES (§4.2, `marketRivalAudiences`):
   // a retired rival's rows are read for its own lines, never pooled into the
@@ -2596,11 +2617,19 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       })
     : {}
 
-  const arrivals = arrivalsAhead ? await arrivalsAhead : null
+  const arrivals = arrivalsAhead ? await arrivalsAhead.catch((error: unknown) => {
+    console.error(`[overview] with this update: ${(error as { message?: string })?.message ?? String(error)}; not counted`)
+    return null
+  }) : null
+  const weeks = weeksAhead ? await weeksAhead.catch((error: unknown) => {
+    console.error(`[overview] week by week: ${(error as { message?: string })?.message ?? String(error)}; not drawn`)
+    return null
+  }) : null
 
   return {
     ...front,
     ...(arrivals ? { arrivals } : {}),
+    ...(weeks ? { weeks } : {}),
     brand,
     month,
     monthStatus,

@@ -11,6 +11,7 @@ import type { OverviewData } from '@/lib/pages/overview'
 import { regroupedLine } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { isMarketPage } from './market'
+import { OverviewWeeks, WEEK_BY_WEEK_HREF } from './weeks'
 
 // "With this update" (market-first WP2.7, plan §2.2 block 3; the preview's
 // Main.dc.html): what came into your market with the latest update, as counts
@@ -181,12 +182,19 @@ export const overviewArrivals: Block<OverviewData> = {
 
   render(data, mode = 'app', ctx) {
     const week = surface('week')
-    const footer = openLink(mode, `${ctx.appUrl}${week.href}`, `Open ${week.label} →`)
+    const open = openLink(mode, `${ctx.appUrl}${week.href}`, `Open ${week.label} →`)
+    // THE METHOD IS HOW TO READ'S (25 Sep rulings): a link, beside the other.
+    const howTo = data.weeks ? openLink(mode, `${ctx.appUrl}${WEEK_BY_WEEK_HREF}`, 'How to read: Week by week →') : null
+    const footer = howTo
+      ? mode === 'email' ? <>{open}<span style={{ display: 'inline-block', width: 24 }} />{howTo}</> : <span className="flex flex-wrap gap-x-8 gap-y-1">{open}{howTo}</span>
+      : open
     const empty = overviewArrivals.emptyState(data)
     const a = data.arrivals ?? null
     return (
       <BlockFrame title={ARRIVALS_TITLE} mode={mode} footer={footer} roomy>
-        {empty || !a ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <ArrivalsColumns a={a} month={data.month} mode={mode} />}
+        {a ? <ArrivalsColumns a={a} month={data.month} mode={mode} /> : empty && !data.weeks ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {/* Week by week, inside this block (WP2.9; 25 Sep rulings). */}
+        <OverviewWeeks data={data} mode={mode} />
       </BlockFrame>
     )
   },
@@ -197,7 +205,7 @@ export const overviewArrivals: Block<OverviewData> = {
 
   emptyState(data) {
     if (!isMarketPage(data)) return 'What came in with each update is read on the front page as it is built today, not on this copy.'
-    if (!data.arrivals) return 'What came in with the latest update is not counted here yet.'
+    if (!data.arrivals && !data.weeks) return 'What came in with the latest update is not counted here yet.'
     return null
   },
 }

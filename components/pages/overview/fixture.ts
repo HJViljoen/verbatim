@@ -27,6 +27,11 @@ import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead,
 import { readingMonthFor, scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { comparabilityOf } from '@/lib/reading/comparability'
 import type { ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
+import { weekVolumesBlock } from '@/lib/pages/overview-market/weeks'
+import { ourChangesWithoutGatherFlags } from '@/lib/reading/gather-flags'
+import { OSSUR_RIVALS, OSSUR_UPDATES, OSSUR_WEEK_VOLUMES, SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
+import { WEEK_LINE } from '@/lib/week-line-config'
+import { SEALAND_CLIENT_ID } from '@/lib/config'
 
 /** The two refusals the page's own verdicts carry, as TOKENS. */
 const OV_RECORD_INPUTS = () =>
@@ -1405,12 +1410,45 @@ export const OSSUR_13_SEP_ARRIVALS: ArrivalsBlock = {
   grouped: { makers: 0, setAside: 0 },
 }
 
-/** Your market with "With this update" (Sealand, staging's 20 Sep update). */
-export function marketArrivalsFixture(): OverviewData {
-  return { ...marketFrontFixture(), arrivals: SEALAND_20_SEP_ARRIVALS }
+/**
+ * Week by week (WP2.9) on staging's own weeks (lib/test/week-fixture.ts, read
+ * 26 Sep), at the fixture's clock: Sealand's September at 24 Sep, the weeks
+ * of 27 Jul to 21 Sep, with the same-age line pending; Össur's at 2 Oct, the
+ * weeks of 27 Jul to 28 Sep, with no line (no WEEK_LINE entry).
+ */
+export function sealandWeeks(now: string = MARKET_AT) {
+  return weekVolumesBlock({
+    reading: { month: REAL_MONTH },
+    now,
+    updates: STAGING_UPDATES,
+    rows: STAGING_WEEK_VOLUMES,
+    rivalAudiences: STAGING_RIVALS,
+    changes: ourChangesWithoutGatherFlags(STAGING_CHANGES),
+    cfg: WEEK_LINE[SEALAND_CLIENT_ID],
+    nextUpdateAfter: SEALAND_NEXT_UPDATE,
+  })
 }
 
-/** Össur's front page with its last update's arrivals (paused, §2.13). */
+export function ossurWeeks(now = '2026-10-02T06:00:00.000Z') {
+  return weekVolumesBlock({
+    reading: { month: REAL_MONTH },
+    now,
+    updates: OSSUR_UPDATES,
+    rows: OSSUR_WEEK_VOLUMES,
+    rivalAudiences: OSSUR_RIVALS,
+    changes: [],
+    cfg: null,
+  })
+}
+
+/** Your market with "With this update" (Sealand, staging's 20 Sep update) and
+ *  its week by week. */
+export function marketArrivalsFixture(): OverviewData {
+  return { ...marketFrontFixture(), arrivals: SEALAND_20_SEP_ARRIVALS, weeks: sealandWeeks() }
+}
+
+/** Össur's front page with its last update's arrivals and its weeks (paused,
+ *  §2.13; no same-age row). */
 export function ossurArrivalsFixture(): OverviewData {
-  return { ...ossurFrontFixture(), arrivals: OSSUR_13_SEP_ARRIVALS }
+  return { ...ossurFrontFixture(), arrivals: OSSUR_13_SEP_ARRIVALS, weeks: ossurWeeks() }
 }

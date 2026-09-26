@@ -244,9 +244,9 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   const circleY = 64
   const plot = (
     <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} is ${kept.has(s.w) ? 'kept' : 'due'} with the ${dueLabel(s.date as string).replace(/^due /, '')} update.`).join(' ')} The first comparison is due with the ${dueLabel(firstComparison).replace(/^due /, '')} update.`} className="relative block overflow-visible">
+      <text x={pct(bracket?.to ?? 1)} y={12} textAnchor="end" fontSize={13} fontWeight={600} style={{ ...SANS, fill: 'var(--foreground)' }}>first comparison, with the {dueLabel(firstComparison).replace(/^due /, '')} update</text>
       {bracket ? (
         <>
-          <text x={pct(bracket.to)} y={12} textAnchor="end" fontSize={13} fontWeight={600} style={{ ...SANS, fill: 'var(--foreground)' }}>first comparison, with the {dueLabel(firstComparison).replace(/^due /, '')} update</text>
           <line x1={pct(bracket.from)} x2={pct(bracket.to)} y1={26} y2={26} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
           <line x1={pct(bracket.from)} x2={pct(bracket.from)} y1={26} y2={34} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
           {bracket.to < 0.999 ? <line x1={pct(bracket.to)} x2={pct(bracket.to)} y1={26} y2={34} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} /> : null}

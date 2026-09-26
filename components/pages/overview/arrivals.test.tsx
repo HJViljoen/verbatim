@@ -5,7 +5,8 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { overviewArrivals } from './arrivals'
-import { marketArrivalsFixture, marketFrontFixture, ossurArrivalsFixture, overviewFixture, SEALAND_20_SEP_ARRIVALS } from './fixture'
+import { marketArrivalsFixture, marketFrontFixture, ossurArrivalsFixture, overviewFixture, SEALAND_20_SEP_ARRIVALS, sealandWeeks } from './fixture'
+import { OVERVIEW_BLOCKS } from '.'
 
 // "With this update" (market-first WP2.7, plan §2.2 block 3), on staging's own
 // updates (the fixture's header says which).
@@ -108,5 +109,48 @@ describe('With this update (WP2.7)', () => {
     expect(f.arrivals_videos_first_read.value).toBe(395)
     expect(f.arrivals_comments_captured.value).toBe(11999)
     expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_'))).toHaveLength(5)
+  })
+})
+
+describe('week by week, inside With this update (WP2.9)', () => {
+  const oct11 = () => ({ ...marketArrivalsFixture(), weeks: sealandWeeks('2026-10-11T06:00:00.000Z') })
+
+  it('renders the bars inside the block, in all three modes, and the front page has no block of its own for them', () => {
+    for (const mode of MODES) {
+      const t = text(oct11(), mode)
+      expect(t).toContain('Week by week')
+      for (const n of ['244', '404', '318', '7,851']) expect(t).toContain(n)
+      assertCopyContract(render(overviewArrivals.render(oct11(), mode, ctx)))
+    }
+    expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.weeks')
+  })
+
+  it('draws our changes on the weeks of 7 and 14 Sep, and the pending row due 18 Oct and 25 Oct', () => {
+    const t = text(oct11())
+    expect(t).toContain('Each week, as counts')
+    for (const d of ['9 Sep', '13 Sep', '17 Sep']) expect(t).toContain(d)
+    expect(t).toContain('We changed our searches on 9, 13 and 17 Sep')
+    expect(t).toContain('Read at the same age')
+    expect(t).toContain('due 18 Oct')
+    expect(t).toContain('due 25 Oct')
+  })
+
+  it('draws no pending row for Össur, which keeps no same-age line', () => {
+    const t = text(ossurArrivalsFixture())
+    expect(t).toContain('Week by week')
+    expect(t).not.toContain('Read at the same age')
+    expect(t).not.toContain('due ')
+  })
+
+  it('puts no figure line or method note under the chart: the method is a link to How to read', () => {
+    const t = text(oct11())
+    expect(t).toContain('How to read: Week by week →')
+    expect(t).not.toMatch(/follow our searches|counts in both|not counted|two updates old/i)
+    expect(render(overviewArrivals.render(oct11(), 'app', ctx))).toContain('/dashboard/settings/how-to-read#week-by-week')
+  })
+
+  it('says no week has comments yet, rather than an empty chart', () => {
+    const empty = { ...oct11(), weeks: { ...sealandWeeks('2026-10-11T06:00:00.000Z'), weeks: sealandWeeks('2026-10-11T06:00:00.000Z').weeks.map((w) => ({ ...w, state: 'none_gathered' as const, videos: 0, comments: 0 })) } }
+    expect(text(empty)).toContain('No week has comments yet.')
   })
 })
