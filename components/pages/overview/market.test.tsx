@@ -25,6 +25,9 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 const read = (node: Parameters<typeof renderText>[0]): string =>
   renderText(node).replace(/\s+([,.)”’:])/g, '$1').replace(/([“(])\s+/g, '$1')
 
+/** The change block alone, on the front page's fixture, as the page draws it. */
+const overviewChangeRender = () => FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render(marketFrontFixture(), 'app', ctx)
+
 const STATES: [string, () => OverviewData][] = [
   ['Sealand', marketFrontFixture],
   ['Sealand before MF1', marketBeforeMakersFixture],
@@ -119,6 +122,34 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Not read as a change: we changed our searches in September.')
     expect(text).toContain('The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
     expect(render(<OverviewPage data={marketFrontFixture()} />)).toContain(`href="${WHAT_WE_CHANGED_HREF}"`)
+  })
+
+  it('what changed: the strip marks our search changes and the "as at", with its bracket words above the bracket (the approved preview)', () => {
+    const markup = render(overviewChangeRender())
+    expect(text).toContain('our search changes, 9, 13 and 17 Sep')
+    expect(text).toContain('as at 24 Sep')
+    // Three marks under September, placed on their days (8.5, 12.5 and 16.5
+    // of 30), and the rule through 24 Sep (23.5 of 30).
+    expect(markup.match(/left:28\.33%/g)?.length).toBe(1)
+    expect(markup).toContain('left:41.67%')
+    expect(markup).toContain('left:55.00%')
+    expect(markup.match(/left:78\.33%/g)?.length).toBe(2)
+    // The words sit above the bracket, not inside it.
+    const words = markup.indexOf('the first comparison read the same way</span>')
+    const bracket = markup.indexOf('border-x border-t border-secondary-foreground')
+    expect(words).toBeGreaterThan(0)
+    expect(bracket).toBeGreaterThan(words)
+    // The key is read; the drawing, which the sentences say in words, is not.
+    expect(markup).toMatch(/<p class="[^"]*font-mono[^"]*"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>our search changes/)
+  })
+
+  it('what changed: a stored block without the strip’s fields draws the months and no mark', () => {
+    const data = marketFrontFixture()
+    const bare = { ...data, change: { ...data.change!, asAt: undefined, searchChanges: undefined } }
+    const t = read(<OverviewPage data={bare} />)
+    expect(t).toContain('the first comparison read the same way')
+    expect(t).not.toContain('our search change')
+    expect(t).not.toContain('as at 24 Sep')
   })
 
   it('prints no "moved", no arrow and no direction word anywhere on the page', () => {

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
@@ -5,7 +6,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { changeLead, nextPairLine, type ChangeBlock } from '@/lib/pages/overview-market'
+import { changeLead, nextPairLine, placeInMonth, searchChangesLine, type ChangeBlock } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import { cn } from '@/lib/utils'
 import { isMarketPage, shortMonthName } from './market'
@@ -19,37 +20,97 @@ import { isMarketPage, shortMonthName } from './market'
 /** Where the dated list is: Settings › The record, at its first section. */
 export const WHAT_WE_CHANGED_HREF = '/dashboard/settings/record#what-we-changed'
 
+/** One of our search changes, as the preview marks it: a 9px triangle in
+ *  ink. A shape, not a "▲" in the text: it marks a day, it claims no rise. */
+function OurMark({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <svg width="9" height="7" viewBox="0 0 9 7" aria-hidden className={cn('shrink-0 fill-foreground', className)} style={style}>
+      <path d="M4.5 0 9 7H0z" />
+    </svg>
+  )
+}
+
+const pct = (share: number): string => `${(share * 100).toFixed(2)}%`
+
 /**
  * The preview's month strip: the pair the page reads, solid, and the first
- * pair read the same way, dashed, with the date it is read from. Drawn only
- * where there is a next pair; decoration beside the two sentences, which say
- * the same in words.
+ * pair read the same way, dashed, under its bracket with its words above it
+ * and the date it is read from below. Under the months read, a mark for each
+ * day we changed what we search, keyed beneath; through the month the page is
+ * read as at, a rule with "as at {date}" beside it. Drawn only where there is
+ * a next pair; the months and the bracket say what the sentences beside them
+ * say, so they are hidden from a screen reader, and the key, which says what
+ * they do not, is read.
  */
 function MonthStrip({ block }: { block: ChangeBlock }) {
   const next = block.next
   // No update is promised to a paused tenant, in words or in the strip.
   if (!next || !block.prevMonth || block.paused) return null
-  const cell = (month: string, kind: 'read' | 'current' | 'next') => (
-    <span
-      key={`${kind}-${month}`}
-      className={cn(
-        'flex h-10 min-w-0 flex-1 items-center rounded-md px-3 text-[13px] font-medium',
-        kind === 'next' ? 'border border-dashed border-border text-muted-foreground' : 'bg-inner text-foreground',
-      )}
-    >
-      {shortMonthName(month)}
-    </span>
-  )
-  // ONE ROW OF FOUR MONTHS, AND THE PAIR'S WORDS ABOVE AND BELOW IT (design
-  // pass): a three-row grid, so the read pair and the first comparable pair
-  // share one baseline, the bracket's label sits over the dashed pair and its
-  // date under it, both centred on it.
+  const asAt = block.asAt ?? null
+  const ours = block.searchChanges ?? []
+  const key = searchChangesLine(ours)
+  const cell = (month: string, kind: 'read' | 'next') => {
+    const at = asAt ? placeInMonth(asAt, month) : null
+    const marks = kind === 'read' ? ours.map((d) => placeInMonth(d, month)).filter((x): x is number => x != null) : []
+    return (
+      <span key={`${kind}-${month}`} className="relative flex min-w-0 flex-1">
+        <span
+          className={cn(
+            'flex h-10 min-w-0 flex-1 items-center rounded-lg px-3 text-[14px]',
+            kind === 'next' ? 'border border-dashed border-neutral-seg font-medium text-muted-foreground' : 'bg-inner font-semibold text-foreground',
+          )}
+        >
+          {shortMonthName(month)}
+        </span>
+        {marks.map((x, i) => (
+          // 7px on a phone, where a month is some 70px wide and the 9, 13
+          // and 17 Sep marks would touch at 9px.
+          <OurMark key={i} className="absolute top-[calc(100%+6px)] -translate-x-1/2 max-sm:h-[5.5px] max-sm:w-[7px]" style={{ left: pct(x) }} />
+        ))}
+        {at != null && asAt ? (
+          <>
+            <span className="absolute -top-4 -bottom-1 w-[1.5px] -translate-x-1/2 bg-foreground" style={{ left: pct(at) }} />
+            {/* Its words to the left of the rule, as the preview sets them;
+                in a dashed month, to the right, clear of the bracket's leg. */}
+            <span
+              className={cn('absolute -top-4 whitespace-nowrap font-mono text-[12px] leading-4 text-muted-foreground', kind === 'read' ? '-translate-x-full pr-1.5' : 'pl-1.5')}
+              style={{ left: pct(at) }}
+            >
+              as at {shortDate(asAt)}
+            </span>
+          </>
+        ) : null}
+      </span>
+    )
+  }
+  // FOUR MONTHS ON ONE ROW, IN TWO PAIRS (design pass; WP1.6 design check):
+  // the bracket's words sit ABOVE the bracket, the bracket over the dashed
+  // pair, and the date it is read from under it, all centred on it. The rows
+  // share one two-column grid, so each mark and the "as at" rule land on the
+  // day they name.
   return (
-    <div aria-hidden className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2">
-      <span className="col-start-2 rounded-t-[2px] border-x border-t border-foreground/50 px-2 pt-1.5 text-center text-[12px] font-semibold leading-[1.3] text-foreground [text-wrap:balance]">the first comparison read the same way</span>
-      <div className="col-start-1 flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'current')}</div>
-      <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
-      <span className="col-start-2 text-center font-mono text-[12px] text-secondary-foreground">from the {shortDate(next.sameAgeFrom)} update</span>
+    <div className="flex min-w-0 flex-col">
+      <div aria-hidden className="flex min-w-0 flex-col">
+        <div className="grid grid-cols-2 gap-x-3">
+          <div className="col-start-2 flex flex-col">
+            <span className="text-center text-[13px] font-semibold leading-4 text-foreground [text-wrap:balance]">the first comparison read the same way</span>
+            <span className="mt-1.5 h-2 border-x border-t border-secondary-foreground" />
+          </div>
+        </div>
+        <div className="mt-2.5 grid grid-cols-2 gap-x-3">
+          <div className="flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'read')}</div>
+          <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
+        </div>
+        <div className="mt-2.5 grid grid-cols-2 gap-x-3">
+          <span className="col-start-2 text-center font-mono text-[12px] font-medium leading-4 text-foreground">from the {shortDate(next.sameAgeFrom)} update</span>
+        </div>
+      </div>
+      {key ? (
+        <p className="m-0 mt-3 flex items-center gap-2 font-mono text-[12px] leading-4 text-muted-foreground">
+          <OurMark />
+          {key}
+        </p>
+      ) : null}
     </div>
   )
 }

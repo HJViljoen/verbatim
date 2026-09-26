@@ -19,7 +19,7 @@ import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFix
 import { howSoundLine, soundFigures } from '@/lib/reading/record'
 import { sealandReading } from '@/lib/test/reading-fixture'
 import { AUGUST_CATEGORY_N, SEPTEMBER_CATEGORY_N, septemberThemes } from '@/lib/test/market-fixture'
-import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, marketKindLabel, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, marketKindLabel, searchChangeDays, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import { readingMonthFor, scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { comparabilityOf } from '@/lib/reading/comparability'
 
@@ -1089,6 +1089,14 @@ export function marketFrontFixture(opts: { measured?: boolean; subjectsCalibrati
       checks: [],
       readWith: null,
       paused: false,
+      // The strip's "as at" and its marks: the bar's update, and the days we
+      // changed what we search (the 9 Sep term swap, fourteen rows at
+      // 18:17:56 on staging's log, and the two changes above).
+      asAt: reading.asAt,
+      searchChanges: searchChangeDays([
+        { id: 'terms-0909', surface: 'terms' as const, changedAt: '2026-09-09T18:17:56.893Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+        ...changes,
+      ], AUG, REAL_MONTH),
     },
     brands: brandsBlockFor(reading.asAt),
     category: {
