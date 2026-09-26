@@ -6,8 +6,8 @@ import {
 } from '../lib/provenance/load'
 import type { ProvenanceSnapshot } from '../lib/provenance/reconstruct'
 import {
-  decidingGathers, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, populations, sameJson, unchangedSearches, type MonthVideo,
-  type ReachRowPlan,
+  addedOnlyOf, decidingGathers, firstSearched, gatherHealth, gathersOf, isOutside, median, monthShareWord, oneReachRowEach, populations,
+  sameJson, searchesFirstRunIn, unchangedSearches, type MonthVideo, type ReachRowPlan,
 } from '../lib/provenance/searches'
 import { changeInSpan, changesFromLog, isSearchSurface, type OurChange } from '../lib/reading/comparability'
 import { laterMonthOf } from '../lib/reading/pairs'
@@ -40,6 +40,16 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //     searches not run (each run's config_snapshot);
 //   - late capture: the earlier month's category comments first captured after
 //     it ended (GC F30: August 4,923 of 10,188 on staging);
+//   - WP1.8's one figure (added_only_curr of market_videos_curr): the later
+//     month's MARKET videos whose search evidence is non-empty and made up only
+//     of searches first run in that month, the provenance's 'ambiguous' rows
+//     never counted (lib/provenance/searches.ts addedOnlyOf; the ruling of 26
+//     Sep: 356 of 654 on staging). It is what "about half of September came
+//     from searches we added in September" prints, on the market's base. The
+//     strict search-outside count above is decision D's rule 2 and nothing
+//     else. Null (not measured) where no provenance row is held yet: run
+//     reconstruct-provenance first. The category's figure is printed here as a
+//     check and never stored;
 // and one `config_change_reach` row per measured change, month and population,
 // once even where two pairs share the month (lib/provenance/searches.ts
 // oneReachRowEach). A row identical to the newest one held is not written
@@ -221,6 +231,17 @@ async function main() {
       console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: ${month.slice(0, 7)} ${mk.curr.k} of ${mk.curr.n} market, ${cat.curr.k} of ${cat.curr.n} category · ${prev.slice(0, 7)} ${mk.prev.k} of ${mk.prev.n} market, ${cat.prev.k} of ${cat.prev.n} category`)
     }
 
+    // WP1.8's one figure, over the later month's market; the category's is a check only.
+    const addedIn = searchesFirstRunIn(firstTermDate, month)
+    const methodOf = (id: string) => provenance?.get(id)?.method ?? null
+    const addedOnly = provenance != null && provenance.size > 0
+      ? { market: addedOnlyOf(sets.curr.market, evidence, addedIn, methodOf), category: addedOnlyOf(sets.curr.category, evidence, addedIn, methodOf) }
+      : null
+    console.log(`  searches first run in ${month.slice(0, 7)}: ${[...addedIn].sort().join(', ') || '(none)'}`)
+    console.log(addedOnly
+      ? `  added only (found only by those searches), market: ${month.slice(0, 7)} ${addedOnly.market.k} of ${addedOnly.market.n} (${monthShareWord(addedOnly.market.k, addedOnly.market.n) ?? '-'}) · category ${addedOnly.category.k} of ${addedOnly.category.n} (a check, never stored or printed)`
+      : '  added only: not measured (no video_provenance row is held: run reconstruct-provenance first, or pass --provenance)')
+
     const depth = { prev: median(sets.prev.market.map((v) => v.dated)), curr: median(sets.curr.market.map((v) => v.dated)) }
     const health = [gatherHealth(gathers, prev), gatherHealth(gathers, month)]
     const catKeys = new Set(videos.filter((v) => sets.prev.category.some((x) => x.id === v.id)).map((v) => `${v.platform}\u0000${v.video_id}`))
@@ -244,6 +265,7 @@ async function main() {
       gather: health.map(({ month: m, runs: r, partial, searches_short }) => ({ month: m, runs: r, partial, searches_short })),
       late_capture: late,
       read_through_run: update.id, method_version: METHOD_VERSION,
+      added_only_curr: addedOnly?.market.k ?? null, market_videos_curr: addedOnly?.market.n ?? null,
     })
   }
 
@@ -283,7 +305,8 @@ async function main() {
   const freshPairs = pairRows.filter((r) => {
     const h = newestPair.get(`${r.prev_month}|${r.month}`)
     if (!h) return true
-    return !(['search_outside_prev', 'videos_prev', 'search_outside_curr', 'videos_curr', 'read_through_run', 'method_version'] as const)
+    return !(['search_outside_prev', 'videos_prev', 'search_outside_curr', 'videos_curr', 'read_through_run', 'method_version',
+      'added_only_curr', 'market_videos_curr'] as const)
       .every((k) => h[k] === r[k]) || !sameJson(h.code_changes, r.code_changes) || !sameJson(h.late_capture, r.late_capture)
   })
   const newestReach = new Map<string, (typeof heldReach)[number]>()

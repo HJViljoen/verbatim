@@ -1,5 +1,6 @@
 import { pairSentence } from '../../calibration'
 import { fmtInt, longMonth, shortDate } from '../../format'
+import { monthShareWord } from '../../provenance/searches'
 import {
   COMPARE_FLAG_SHARE,
   COMPARE_REFUSE_SHARE,
@@ -29,12 +30,24 @@ import type { FigureTable, Verdict } from '../../reading/verdicts'
 // first pair of months read the same way. The footer is the link to the dated
 // list, never a note (25 Sep rulings).
 //
-// ONE SENTENCE FOR THE ONE FIGURE, EVERYWHERE. "{measured} of September's
-// videos came from searches we added in September" is WP1.8's one figure, and
-// the brief, this block, the monthly's change section and Settings › What we
-// changed print the same sentence off the same row (`month_pair_comparability`
-// via the page's pair judge). It is composed here and nowhere else, so the
-// words can change in one place once WP1.8 has named the population.
+// ONE SENTENCE FOR THE ONE FIGURE, EVERYWHERE. "About half of September came
+// from searches we added in September (356 of 654, …)" is WP1.8's one figure,
+// settled by the ruling of 26 Sep: the later month's market videos found only
+// by searches first run in that month, over the market (`PairRow.addedOnly`,
+// `month_pair_comparability.added_only_curr` of `market_videos_curr`, written
+// by measure-comparability). The brief, this block, the monthly's change
+// section and Settings › What we changed print it off the same row, its share
+// word from one fixed ladder (`monthShareWord`), never typed into copy. It is
+// composed here and nowhere else.
+//
+// THE STRICT COUNT IS NOT THIS FIGURE. `searchOutside` (not surfaced by any
+// search that ran unchanged through both months) also holds the videos only
+// the searches removed on 9 Sep found, and it is a category count. It stays
+// decision D's rule 2 and nothing else: whether the pair refuses on searches
+// (so whether the sentence prints at all), the 1% to 9% flag, and rule 2's
+// cell in "When two months are compared" (`compareRules`). It is never
+// printed as "came from searches we added". With no measured figure the
+// block prints the refusal with no figure.
 //
 // PURE.
 
@@ -200,14 +213,35 @@ export function changeLead(block: ChangeBlock): { body: string; figures: FigureT
   return note ? { body: pairSentence(note), figures: {} } : null
 }
 
+/** The pair's measured added-only figure (`PairRow.addedOnly`) with its share
+ *  word, where one was measured and is above none: a zero is never printed as
+ *  "none of September came from…" (the pair then refused on the searches we
+ *  removed, which the sentence does not name). */
+export function measuredAddedOnly(block: ChangeBlock): { k: number; n: number; word: string } | null {
+  const added = block.pair?.row?.addedOnly
+  if (!added || shareOf(added) == null || !(added.k > 0)) return null
+  const word = monthShareWord(added.k, added.n)
+  return word ? { k: added.k, n: added.n, word } : null
+}
+
+/** The figures of the one sentence, as tokens. */
+function addedOnlyFigures(month: string, added: { k: number; n: number }): FigureTable {
+  return {
+    [CHANGE_NEW]: { value: added.k, unit: 'videos', label: `${month}'s market videos found only by searches we added in ${month}` },
+    [CHANGE_OF]: { value: added.n, unit: 'videos', label: `videos in your market in ${month}` },
+  }
+}
+
 /**
- * "Not a change we can stand behind yet: [290] of September's [655] videos
- * came from searches we added in September (read with the 27 Sep update)."
+ * "Not a change we can stand behind yet: about half of September came from
+ * searches we added in September (356 of 654, read with the 20 Sep update)."
+ * (the approved preview's sentence, the 26 Sep ruling's staging figure).
  *
- * Only where the pair is REFUSED ON WHAT WE SEARCH and a measured row carries
- * the later month's search-outside count (the strict count: videos not
- * surfaced by any search that ran unchanged through both months). One
- * denominator: the later month's market videos.
+ * Only where the pair is REFUSED ON WHAT WE SEARCH (the strict count's rule 2
+ * decides) and the row measured WP1.8's figure (`PairRow.addedOnly`); null
+ * otherwise, and the block then prints the pair's refusal with no figure,
+ * never the strict count. One denominator: the later month's market videos.
+ * The share word comes from `monthShareWord`'s ladder.
  */
 export function measuredSearchSentence(block: ChangeBlock): { body: string; figures: FigureTable } | null {
   const pair = block.pair
@@ -215,16 +249,33 @@ export function measuredSearchSentence(block: ChangeBlock): { body: string; figu
   if (!pair || pair.mode !== 'refuse' || !row) return null
   const searches = pair.reasons.find((r) => r.kind === 'searches' && modeForShare(r.share) === 'refuse')
   if (!searches) return null
-  const { k, n } = row.searchOutside.curr
-  if (shareOf({ k, n }) == null) return null
+  const added = measuredAddedOnly(block)
+  if (!added) return null
   const month = longMonth(pair.month)
-  const read = block.readWith ? ` (read with the ${shortDate(block.readWith)} update)` : ''
+  const read = block.readWith ? `, read with the ${shortDate(block.readWith)} update` : ''
   return {
-    body: `Not a change we can stand behind yet: [[${CHANGE_NEW}]] of ${month}’s [[${CHANGE_OF}]] videos came from searches we added in ${month}${read}.`,
-    figures: {
-      [CHANGE_NEW]: { value: k, unit: 'videos', label: `${month}'s videos that came from searches we added in ${month}` },
-      [CHANGE_OF]: { value: n, unit: 'videos', label: `videos in your market in ${month}` },
-    },
+    body: `Not a change we can stand behind yet: ${added.word} of ${month} came from searches we added in ${month} ([[${CHANGE_NEW}]] of [[${CHANGE_OF}]]${read}).`,
+    figures: addedOnlyFigures(month, added),
+  }
+}
+
+/**
+ * Settings › What we changed's form of the same sentence (the approved
+ * `SettingsRecord` artboard): "About half of September came from searches we
+ * added in September: 356 of 654, measured on 30 Sep." Dated by when the row
+ * was measured (`computedAt`). The same gate as `measuredSearchSentence`.
+ */
+export function addedOnlyRecordSentence(block: ChangeBlock): { body: string; figures: FigureTable } | null {
+  const lead = measuredSearchSentence(block)
+  const added = measuredAddedOnly(block)
+  const pair = block.pair
+  if (!lead || !added || !pair) return null
+  const month = longMonth(pair.month)
+  const at = pair.row?.computedAt && !Number.isNaN(Date.parse(pair.row.computedAt)) ? `, measured on ${shortDate(pair.row.computedAt)}` : ''
+  const word = `${added.word.charAt(0).toUpperCase()}${added.word.slice(1)}`
+  return {
+    body: `${word} of ${month} came from searches we added in ${month}: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]]${at}.`,
+    figures: addedOnlyFigures(month, added),
   }
 }
 
@@ -397,16 +448,17 @@ export function whyCells(block: ChangeBlock): WhyCell[] {
   const readWith = block.readWith ?? null
   const cells: WhyCell[] = []
 
+  // Rule 2's strict share decides WHETHER the cell prints (a flag or worse);
+  // WP1.8's one figure is WHAT it prints (the 26 Sep ruling): "356 of 654
+  // September videos came from searches we added in September". The strict
+  // count is never printed here, and with no measured figure there is no cell.
   const searchShare = pairShare(row.searchOutside.prev, row.searchOutside.curr)
-  const curr = row.searchOutside.curr
-  if (searchShare != null && searchShare >= COMPARE_FLAG_SHARE && shareOf(curr) != null) {
+  const added = measuredAddedOnly(block)
+  if (searchShare != null && searchShare >= COMPARE_FLAG_SHARE && added) {
     cells.push({
       key: 'searches',
-      figure: curr.k,
-      base: { word: 'of', value: curr.n },
-      // The front page's sentence, with the count set apart ("206 of
-      // September’s 625 videos came from searches we added in September",
-      // `measuredSearchSentence`), as the preview's cells read.
+      figure: added.k,
+      base: { word: 'of', value: added.n },
       caption: `${month} videos came from searches we added in ${month}`,
       readWith,
     })
@@ -453,13 +505,13 @@ export function whyCells(block: ChangeBlock): WhyCell[] {
 }
 
 /** "Why September is not compared": the measured cells behind the refusal
- *  (`whyCells`), and, where none was measured, the change block's own
- *  sentence or the pair's chip words. Null where the pair is read the same
- *  way. */
+ *  (`whyCells`), and, where none was measured, the one sentence in Settings'
+ *  form (`addedOnlyRecordSentence`) or the pair's chip words. Null where the
+ *  pair is read the same way. */
 export function whyNotCompared(block: ChangeBlock): { title: string; body: string; figures: FigureTable; cells: WhyCell[] } | null {
   const pair = block.pair
   if (!pair || pair.mode === 'comparable') return null
-  const lead = measuredSearchSentence(block)
+  const lead = addedOnlyRecordSentence(block)
   const note = pairOnVerdict(pair).note
   const body = lead?.body ?? (note ? pairSentence(note) : null)
   const cells = whyCells(block)

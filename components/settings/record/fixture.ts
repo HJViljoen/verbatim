@@ -368,7 +368,10 @@ export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
   const row: PairRow | null = measured
     ? {
         prevMonth: '2026-08-01', month: '2026-09-01',
-        searchOutside: { prev: { k: 115, n: 351 }, curr: { k: 206, n: 625 } },
+        // Staging's (Aug, Sep) row, 26 Sep (the MF1 rehearsal): the strict
+        // counts (category) and WP1.8's one figure (market, the 26 Sep ruling).
+        searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } },
+        addedOnly: { k: 356, n: 654 },
         codeChanges: [
           { changeId: 'wwc-gate-fix', surface: 'gate_rule', prev: { k: 0, n: 377 }, curr: { k: 65, n: 654 }, population: 'market' },
           { changeId: 'wwc-gate-fix', surface: 'gate_rule', prev: { k: 0, n: 351 }, curr: { k: 64, n: 625 }, population: 'category' },

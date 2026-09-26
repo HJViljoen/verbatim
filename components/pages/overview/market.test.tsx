@@ -7,6 +7,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { BlockFrame } from '@/components/blocks/frame'
 import { NUMBER_BUDGET, type OverviewData } from '@/lib/pages/overview'
+import { comparabilityOf, type PairRow } from '@/lib/reading/comparability'
 import { LEAD_MAX_MAKER_SHARE, segmentOf, themeFigures, themeToken } from '@/lib/pages/overview-market'
 import { septemberThemes } from '@/lib/test/market-fixture'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OverviewPage } from './index'
@@ -127,6 +128,40 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Not read as a change: we changed our searches in September.')
     expect(text).toContain('The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
     expect(render(<OverviewPage data={marketFrontFixture()} />)).toContain(`href="${WHAT_WE_CHANGED_HREF}"`)
+  })
+
+  it('what changed, measured: WP1.8\u2019s one figure in the preview\u2019s sentence, over the market, never the strict count (the 26 Sep ruling)', () => {
+    // Staging's (Aug, Sep) row as measure-comparability wrote it on 26 Sep,
+    // read through the 20 Sep update.
+    const row: PairRow = {
+      prevMonth: '2026-08-01', month: '2026-09-01',
+      searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } }, addedOnly: { k: 356, n: 654 },
+      codeChanges: [], depth: { prevMedian: 21, currMedian: 14 }, gather: [], lateCapture: null,
+      readThroughRun: 'b67b56de', methodVersion: 'mf1_v1', computedAt: '2026-09-26T16:42:06.059Z',
+    }
+    const measured = comparabilityOf('2026-08-01', '2026-09-01', {
+      row, view: 'market',
+      changes: [{ id: 'terms-0913', surface: 'terms', changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] }],
+      later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'b67b56de' },
+    })
+    const base = marketFrontFixture()
+    const data = { ...base, change: { ...base.change!, pair: measured, readWith: '2026-09-20T08:33:47.358Z' } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!
+    for (const mode of MODES) {
+      const t = read(block.render(data, mode, ctx))
+      expect(t).toContain('Not a change we can stand behind yet: about half of September came from searches we added in September (356 of 654, read with the 20 Sep update).')
+      expect(t).not.toMatch(/\b376\b|\b625\b/)
+      assertCopyContract(render(block.render(data, mode, ctx)))
+    }
+    // Without the figure (a row written before the columns), the refusal with no figure.
+    const bare = comparabilityOf('2026-08-01', '2026-09-01', {
+      row: { ...row, addedOnly: null }, view: 'market',
+      changes: [{ id: 'terms-0913', surface: 'terms', changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] }],
+      later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'b67b56de' },
+    })
+    const t = read(block.render({ ...data, change: { ...data.change, pair: bare } }, 'app', ctx))
+    expect(t).toContain('Not read as a change: we changed our searches in September.')
+    expect(t).not.toMatch(/\b376\b|\b356\b/)
   })
 
   it('what changed: the strip marks our search changes and the "as at", with its bracket words above the bracket (the approved preview)', () => {
