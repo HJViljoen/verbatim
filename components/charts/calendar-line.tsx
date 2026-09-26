@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
+import { PairChip } from '@/components/blocks/pair-chip'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, brokenStepLine, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
+  axisLabels, brokenStepChip, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
   figureLines, lastReading, legendEveryMonth, legendMonths, legendStates, lineSegments, MIN_CHART_MONTHS,
   monthColumns, spanOf, spreadLabels, STATE_LABEL, undrawnLine, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
@@ -221,9 +222,9 @@ export function CalendarLine({
   // printed over each other. They are named once, in `undrawnLine`.
   const series = given.filter(drawsLine)
   const missing = undrawnLine(given)
-  // WHY A STEP IS NOT JOINED (WP1.3): the newest refused step's sentence, in
-  // the figure line under the plot.
-  const broken = brokenStepLine(series)
+  // WHY A STEP IS NOT JOINED (WP1.3; the lead's R11): one chip under the plot,
+  // true of every refused step. Each step's own reason is on its hover.
+  const joinsChip = brokenStepChip(series)
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
   // THE GUTTER TRACK, AND WHY IT IS NOT FIVE UNITS LOWER (SH14, amended at the
@@ -516,7 +517,7 @@ export function CalendarLine({
         ))}
       </svg>
 
-      {broken ? <p className="m-0 text-[11px] leading-[1.4] text-muted-foreground">{broken}</p> : null}
+      <PairChip words={joinsChip} mode="app" />
       {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
     </div>
   )
@@ -544,6 +545,12 @@ function SeriesMarks({
 }) {
   const points = series.points
   const runs = lineSegments(points)
+  // A POINT NO SEGMENT REACHES IS DRAWN AT THE END MARKER'S SIZE (the lead's
+  // R11). With most steps refused until each pair is measured, a line is
+  // mostly lone points, and at 2.2 units a 562px pane drew them as 2px dots;
+  // CSS scales the radius with the type (`vb-cal-point-lone`), so it stays
+  // about 7px across on the glass at any width.
+  const lone = new Set(runs.filter((r) => r.length === 1).map((r) => r[0]))
   const at = (p: CalendarPoint): number | null => g.x(p.month)
   const lastPlotted = runs.length ? runs[runs.length - 1][runs[runs.length - 1].length - 1] : null
   const end = lastPlotted != null ? points[lastPlotted] : null
@@ -608,7 +615,15 @@ function SeriesMarks({
             {p.state === 'filling' && p.atLastMonth != null && (
               <LastMonthTick x={x} atLastMonth={p.atLastMonth} y={y} slot={g.slot} format={format} padR={padR} />
             )}
-            <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
+            <circle
+              className={lone.has(i) ? 'vb-cal-point-lone' : undefined}
+              cx={x}
+              cy={y(p.value)}
+              r={isEnd || lone.has(i) ? 3.4 : 2.2}
+              fill={series.color}
+              stroke="var(--tile)"
+              strokeWidth={isEnd || lone.has(i) ? 1.5 : 1}
+            />
           </g>
         )
       })}
@@ -692,7 +707,8 @@ function CalendarFigures({
 }) {
   const rows = figureLines(series, format)
   const missing = undrawnLine(series)
-  const broken = brokenStepLine(series)
+  // NO JOINS CHIP HERE (the lead's R11): the figures join nothing. A refused
+  // pair is the verdict's to say, once, in its own block's chip.
   return (
     <div className={cn('vb-cal-figures flex min-w-0 flex-col gap-1.5', className)}>
       {rows.map((r) => (
@@ -704,7 +720,6 @@ function CalendarFigures({
         </p>
       ))}
       {missing ? <p className="m-0 text-[11px] text-muted-foreground">{missing}</p> : null}
-      {broken ? <p className="m-0 text-[11px] text-muted-foreground">{broken}</p> : null}
       <p className="m-0 text-[11px] text-muted-foreground">{CHART_WAITING}</p>
       {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
     </div>

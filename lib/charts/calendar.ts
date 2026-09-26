@@ -60,8 +60,9 @@ export interface CalendarPoint {
    * (market-first decision D, WP1.3): the two months were not read the same
    * way, so no segment joins them. The points stay; the segment does not. The
    * value is the refusal's sentence (`pairSentence`, lib/calibration.ts), which
-   * the chart prints in its figure line. Absent on a stored series from before
-   * the rule, which draws as it was sent.
+   * the month's hover carries; the chart itself says only
+   * `CHART_JOINS_CHIP`, once (the lead's R11). Absent on a stored series from
+   * before the rule, which draws as it was sent.
    */
   brokenBefore?: string
 }
@@ -732,21 +733,20 @@ export function figureLines(
 }
 
 /**
- * The figure line for refused steps (WP1.3): why the newest step a series
- * breaks at is not joined, said once for the chart. The newest, because that
- * is the pair the page is reading; an older break's reason is on its month's
- * hover. Null where no step is broken.
+ * THE ONE CHIP A CHART WITH A REFUSED STEP CARRIES (deploy 1 review, the lead's
+ * R11). Until each month pair is measured, most steps on Sealand's lines are
+ * refused, so a 12-month line is mostly points, and a figure line naming only
+ * the newest step's reason ("we changed our searches in September") misstated
+ * why April to August were not joined. The rule stays (no line across a
+ * refused step); the chart says it once, in the words that are true of every
+ * step, and each step's own reason is on its month's hover. Only where lines
+ * are drawn: the figures a chart prints while it waits for its months join
+ * nothing. Null where no step is refused.
  */
-export function brokenStepLine(series: readonly CalendarSeries[]): string | null {
-  let newest: { month: string; why: string } | null = null
-  for (const s of series) {
-    for (const p of s.points) {
-      if (!p.brokenBefore) continue
-      const month = monthStartOf(p.month)
-      if (!newest || month > newest.month) newest = { month, why: p.brokenBefore }
-    }
-  }
-  return newest?.why ?? null
+export const CHART_JOINS_CHIP = 'lines join only months read the same way'
+
+export function brokenStepChip(series: readonly CalendarSeries[]): string | null {
+  return series.some((s) => s.points.some((p) => p.brokenBefore)) ? CHART_JOINS_CHIP : null
 }
 
 /** The sentence under the figures, while the chart is waiting for its months. */

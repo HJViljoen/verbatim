@@ -454,13 +454,16 @@ describe('Sparkline with gaps', () => {
 // ---- The month-pair rule (market-first decision D, WP1.3) ---------------------------------
 //
 // A refused step is drawn broken: the points stay, the joining segment does
-// not, and the reason is in the figure line. Looks & style, the category's one
-// moving subject, is 38 of August's 351 (10.8%) and 104 of September's 626
-// (16.6%): two months our own September search changes refuse to compare.
+// not, and the chart carries one chip (the lead's R11, deploy 1 review): "lines
+// join only months read the same way". Each step's own reason is its month's
+// hover. Looks & style, the category's one moving subject, is 38 of August's
+// 351 (10.8%) and 104 of September's 626 (16.6%): two months our own September
+// search changes refuse to compare.
 describe('CalendarLine: a refused step is drawn broken', () => {
   const WHY = 'Not read as a change: we changed our searches in September.'
+  const CHIP = 'lines join only months read the same way'
 
-  it('with too few months for a line, prints the figures and the reason', () => {
+  it('with too few months for a line, prints the figures, and no chip: they join nothing', () => {
     const looks: CalendarSeries = {
       label: 'Looks & style', color: 'var(--cat)',
       points: [
@@ -473,7 +476,8 @@ describe('CalendarLine: a refused step is drawn broken', () => {
     const text = markupText(markup)
     expect(text).toContain('16.6% of 626 in Sep')
     expect(text).toContain('10.8% of 351 in Aug')
-    expect(text).toContain(WHY)
+    expect(text).not.toContain(WHY)
+    expect(text).not.toContain(CHIP)
   })
 
   it('on a drawn line, keeps every point and joins no refused step', () => {
@@ -486,16 +490,35 @@ describe('CalendarLine: a refused step is drawn broken', () => {
     const joined = render(CalendarLine({ axis: AXIS, series: [you], format: (v) => `${v}%` }))
     const markup = render(CalendarLine({ axis: AXIS, series: [broken], format: (v) => `${v}%` }))
     assertCopyContract(markup)
-    // The same points either way.
-    expect((markup.match(/<circle/g) ?? []).length).toBe((joined.match(/<circle/g) ?? []).length)
+    // The same points either way (the chip's own ⊘ icon, r 9, is not a point).
+    const points = (m: string) => (m.match(/<circle(?![^>]*r="9")/g) ?? []).length
+    expect(points(markup)).toBe(points(joined))
     // No polyline reaches September's x: the last x of every segment is August's
     // or earlier. September's x is the rightmost point on the axis.
     const xs = (m: string) => [...m.matchAll(/<polyline[^>]*points="([^"]+)"/g)].map((x) => x[1].split(' ').map((pt) => Number(pt.split(',')[0])))
     const maxJoined = Math.max(...xs(joined).flat())
     const maxBroken = Math.max(...xs(markup).flat())
     expect(maxBroken).toBeLessThan(maxJoined)
-    expect(markupText(markup)).toContain(WHY)
-    expect(markupText(joined)).not.toContain(WHY)
+    // One chip under the plot; the step's own reason only in its hover.
+    const text = markupText(markup).replace(/<title>[^<]*<\/title>/g, '')
+    expect(text.split(CHIP).length - 1).toBe(1)
+    expect(markupText(joined)).not.toContain(CHIP)
+    expect(markup).toContain(WHY)
+  })
+
+  it('draws a point no segment reaches at the end marker’s size, never a 2px dot', () => {
+    const allBroken: CalendarSeries = { ...you, points: you.points.map((pt, i) => (i === 0 ? pt : { ...pt, brokenBefore: WHY })) }
+    const markup = render(CalendarLine({ axis: AXIS, series: [allBroken], format: (v) => `${v}%` }))
+    const lone = markup.match(/<circle class="vb-cal-point-lone"[^>]*r="3.4"/g) ?? []
+    expect(lone.length).toBeGreaterThanOrEqual(4)
+    expect(markup).not.toMatch(/<circle(?![^>]*vb-cal-gutter-mark)[^>]*r="2.2"/)
+  })
+
+  it('labels each series once, at its last point, where every step is refused', () => {
+    const allBroken: CalendarSeries = { ...you, points: you.points.map((pt, i) => (i === 0 ? pt : { ...pt, brokenBefore: WHY })) }
+    const markup = render(CalendarLine({ axis: AXIS, series: [allBroken], format: (v) => `${v}%` }))
+    const labels = [...markup.matchAll(/<text[^>]*font-weight="600"[^>]*>([^<]*)</g)].map((m) => m[1])
+    expect(labels.filter((l) => l.startsWith(allBroken.label))).toHaveLength(1)
   })
 
   it('draws no segment at all where every step is refused, and still every point', () => {

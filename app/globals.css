@@ -385,6 +385,13 @@
    The `r="2.5"` attribute in the markup is the value for anything that does
    not apply this. */
 .vb-cal svg circle.vb-cal-gutter-mark { r: calc(2.5px / var(--cal-k, 1)); }
+
+/* A point no segment reaches (components/charts/calendar-line.tsx, the lead's
+   R11 in the deploy 1 review). While most month pairs are refused a line is
+   mostly lone points; its radius grows with the type (`--cal-k`, about
+   intrinsic / rendered), so a point stays about 7px across on the glass in a
+   narrow pane where the 3.4-unit attribute alone drew it at 4px. */
+.vb-cal svg circle.vb-cal-point-lone { r: calc(3.4px * var(--cal-k, 1)); }
 .vb-cal svg rect.vb-cal-gutter-mark {
   width: calc(5px / var(--cal-k, 1));
   height: calc(5px / var(--cal-k, 1));

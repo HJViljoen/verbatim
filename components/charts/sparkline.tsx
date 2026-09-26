@@ -93,8 +93,10 @@ export function Sparkline({
       )}
       {runs.map((run, k) => (run.length === 1
         // A lone reading between two gaps: a polyline of one point draws
-        // nothing at all, so it is a dot or it is invisible.
-        ? <circle key={k} className={animate ? 'vi-anim-fade' : undefined} cx={xs[run[0]]} cy={ys[run[0]] as number} r={strokeWidth} fill={color} />
+        // nothing at all, so it is a dot or it is invisible. At least 5px
+        // across (the lead's R11): while month pairs are refused, a sparkline
+        // is mostly these, and at the stroke's 1.5 they read as faint specks.
+        ? <circle key={k} className={animate ? 'vi-anim-fade' : undefined} cx={xs[run[0]]} cy={ys[run[0]] as number} r={Math.max(2.5, strokeWidth)} fill={color} />
         : <polyline key={k} className={animate ? 'vi-anim-line' : undefined} pathLength={1} points={pointsOf(run)} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" />
       ))}
       {endDot && <circle className={animate ? 'vi-anim-fade' : undefined} cx={xs[last]} cy={ys[last] as number} r={2.6} fill={color} stroke="var(--tile)" strokeWidth={1.5} />}

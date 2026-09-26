@@ -15,7 +15,9 @@ import { subjectsFixture } from './fixture'
 // SU2 under the month-pair rule (market-first decision D, WP1.3; plan §2.3 S6):
 // "a segment between two months whose pair is refused is drawn broken (points
 // only, no joining line), and the reason is in the figure line. So Aug→Sep and
-// Sep→Oct stay unjoined."
+// Sep→Oct stay unjoined." The figure line is now the chart's one chip, "lines
+// join only months read the same way" (the lead's R11, deploy 1 review); each
+// step's own reason is on its month's hover."
 //
 // The fixture's lines are the mock's (Apr to Sep); the judge is Sealand's own,
 // over its real change log (GC F2) with no pair row measured yet, which is
@@ -24,6 +26,11 @@ import { subjectsFixture } from './fixture'
 
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 const WHY = PAIR_REFUSED_SEARCHES('2026-09-01')
+const CHIP = 'lines join only months read the same way'
+/** The drawn text without the hovers, which carry each step's own reason. */
+const drawnText = (markup: string): string => markupText(markup.replace(/<title[^>]*>[^<]*<\/title>/g, ''))
+/** The chart's points, not the chip's own ⊘ icon (r 9). */
+const points = (markup: string): number => (markup.match(/<circle(?![^>]*r="9")/g) ?? []).length
 
 function judged(data: SubjectsData, steps: (line: MonthSeries) => Record<string, string>): SubjectsData {
   const pane = data.selected!
@@ -39,7 +46,7 @@ const segments = (markup: string): number[][] =>
   [...markup.matchAll(/<polyline[^>]*points="([^"]+)"/g)].map((m) => m[1].split(' ').map((pt) => Number(pt.split(',')[0])))
 
 describe('SU2 · the monthly line, under the month-pair rule', () => {
-  it('draws August and September as two points with no joining segment, and says why', () => {
+  it('draws August and September as two points with no joining segment, and says so once, as a chip', () => {
     const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
     const data = judged(subjectsFixture(), (line) => refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, line.audience)))
     for (const mode of ['app', 'print'] as const) {
@@ -49,8 +56,11 @@ describe('SU2 · the monthly line, under the month-pair rule', () => {
       // two months, and every point is still drawn.
       expect(markup).not.toContain('<polyline')
       const plain = render(subjectsLine.render(subjectsFixture(), mode, ctx))
-      expect((markup.match(/<circle/g) ?? []).length).toBe((plain.match(/<circle/g) ?? []).length)
-      expect(markupText(markup)).toContain(WHY)
+      expect(points(markup)).toBe(points(plain))
+      expect(drawnText(markup).split(CHIP).length - 1).toBe(1)
+      expect(drawnText(markup)).not.toContain(WHY)
+      // The step's own reason is on its hover.
+      expect(markup).toContain(WHY)
     }
   })
 
@@ -63,28 +73,32 @@ describe('SU2 · the monthly line, under the month-pair rule', () => {
     expect(drawn.length).toBeGreaterThan(0)
     // No segment reaches September's x, which is the rightmost on the axis.
     for (const seg of drawn) expect(Math.max(...seg)).toBeLessThan(joinedMax)
-    expect(markupText(markup)).toContain(WHY)
+    expect(drawnText(markup)).toContain(CHIP)
   })
 
-  // AND IN AN EMAIL (WP1.3 review fix): the inbox gets the picture the runner
-  // rendered, or the month table when it rendered none. Neither draws a join,
-  // and both used to drop the sentence saying why the months are not compared.
-  it('says why in an email, under the picture and under the month table', () => {
+  // AND IN AN EMAIL (WP1.3 review fix; the lead's R11): the inbox gets the
+  // picture the runner rendered, with the chart's one chip under it, or the
+  // month table when it rendered none. A table draws no line, so it carries
+  // no chip; the pair's refusal is its verdict's, in that block's chip.
+  it('puts the chip under the picture in an email, and nothing under the month table', () => {
     const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
     const data = judged(subjectsFixture(), (line) => refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, line.audience)))
     const withImage = { ...ctx, image: () => 'cid:subjects-line' }
     for (const c of [ctx, withImage]) {
       const markup = render(subjectsLine.render(data, 'email', c))
       assertCopyContract(markup)
-      expect(markupText(markup)).toContain(WHY)
+      expect(markupText(markup)).not.toContain(WHY)
     }
+    expect(markupText(render(subjectsLine.render(data, 'email', withImage)))).toContain(CHIP)
+    expect(markupText(render(subjectsLine.render(data, 'email', ctx)))).not.toContain(CHIP)
     expect(render(subjectsLine.render(data, 'email', withImage))).toContain('cid:subjects-line')
-    expect(markupText(render(subjectsLine.render(subjectsFixture(), 'email', ctx)))).not.toContain(WHY)
+    expect(markupText(render(subjectsLine.render(subjectsFixture(), 'email', withImage)))).not.toContain(CHIP)
   })
 
   it('a pane read before the rule draws as it was sent', () => {
     const markup = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
     expect(markup).toContain('<polyline')
     expect(markupText(markup)).not.toContain(WHY)
+    expect(markupText(markup)).not.toContain(CHIP)
   })
 })

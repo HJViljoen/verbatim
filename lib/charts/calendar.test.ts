@@ -2,7 +2,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  axisLabels, brokenStepLine, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K,
+  axisLabels, brokenStepChip, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K,
   calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading,
   legendEveryMonth, legendMonths, legendStates, undrawnNote,
   lineSegments, monthColumns, niceMid, spanOf, spreadLabels, stateNote, valueScale,
@@ -152,21 +152,21 @@ describe('lineSegments', () => {
   })
 })
 
-describe('brokenStepLine', () => {
-  it('names the newest refused step, once, for the whole chart', () => {
+describe('brokenStepChip (the lead\'s R11)', () => {
+  it('is the one chip for the whole chart, whatever the steps’ reasons', () => {
     const series: CalendarSeries[] = [
       { label: 'The category', color: 'var(--cat)', points: [
         p('2026-07-01', 5, 'read'),
-        p('2026-08-01', 10.8, 'read', { brokenBefore: 'older' }),
+        p('2026-08-01', 10.8, 'read', { brokenBefore: 'Not compared yet: checked with the 4 Oct update.' }),
         p('2026-09-01', 16.6, 'read', { brokenBefore: 'Not read as a change: we changed our searches in September.' }),
       ] },
       { label: 'You', color: 'var(--you)', points: [p('2026-09-01', 3, 'read', { brokenBefore: 'Not read as a change: we changed our searches in September.' })] },
     ]
-    expect(brokenStepLine(series)).toBe('Not read as a change: we changed our searches in September.')
+    expect(brokenStepChip(series)).toBe('lines join only months read the same way')
   })
 
   it('is null where no step is broken', () => {
-    expect(brokenStepLine([{ label: 'x', color: 'red', points: [p('2026-08-01', 1), p('2026-09-01', 2)] }])).toBeNull()
+    expect(brokenStepChip([{ label: 'x', color: 'red', points: [p('2026-08-01', 1), p('2026-09-01', 2)] }])).toBeNull()
   })
 
   it('the hover on the broken month says why', () => {
