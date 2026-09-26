@@ -129,18 +129,25 @@ function storedCalibrationRows() {
     ...base,
     list: {
       ...base.list,
-      rows: base.list.rows.map((r, i) => (i === 1 ? { ...r, calibration: 'calibrating' as const, level: null, verdict: null, note: 'provisional' } : r)),
+      // NO NOTE ON THE STORED ROW (WP1.1 review, finding 11). The two-state
+      // rail wrote note 'provisional' on a calibrating row, so a row carrying
+      // it printed the word whether or not `readCalibration` ran; with no
+      // note, the word can only come from reading the stored state.
+      rows: base.list.rows.map((r, i) => (i === 1 ? { ...r, calibration: 'calibrating' as const, level: null, verdict: null, note: null } : r)),
     },
     selected: base.selected ? { ...base.selected, calibration: 'calibrating' as const } : null,
   }
   const label = 'stored subject rows (WP1.1)'
   const section = (page: string) => ({ id: 'ref', page, params: {} }) as ReportSection
   renderSection(`${label}, one carrying "calibrating"`, 'subjects', section('subjects'), calibrating, true)
+  // Printed as a stored artefact prints: on paper.
   const text = (key: string, data: unknown) => {
     const r = pageModule('subjects')?.renderables[key]
-    return r ? renderToStaticMarkup(r.render(data as never, 'app') as React.ReactElement) : ''
+    return r ? renderToStaticMarkup(r.render(data as never, 'print') as React.ReactElement) : ''
   }
-  check(text('subjects.list', calibrating).includes('provisional') && text('subjects.subject', calibrating).includes('provisional'),
+  const noWord = (data: typeof calibrating) => ({ ...data, list: { ...data.list, rows: data.list.rows.map((r) => ({ ...r, calibration: undefined })) }, selected: data.selected ? { ...data.selected, calibration: undefined } : null })
+  check(text('subjects.list', calibrating).includes('provisional') && text('subjects.subject', calibrating).includes('provisional')
+    && !text('subjects.list', noWord(calibrating)).includes('provisional'),
     `${label} — a stored "calibrating" reads as provisional on the rail and the pane`)
   // The Overview's subject rows have never carried the field: no word prints.
   const overview = overviewFixture()
