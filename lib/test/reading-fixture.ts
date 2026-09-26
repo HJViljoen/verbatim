@@ -15,7 +15,10 @@ import { readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from '../rea
 // stand-in, because a clock after the 4 Oct run needs October to have a row
 // and its size is not knowable today. Only the October clocks read it, only
 // the 16 Oct clock turns on its size (it must not be thin against the trailing
-// months), and no test prints it.
+// months), and no test prints it. THE 18 OCT, 25 OCT AND 1 NOV UPDATES ARE
+// STAND-INS TOO: the schedule's Sunday slots, finished at 08:30 UTC like the
+// ones before them, for the clocks once October leads (the change strip,
+// default M-e). No test before 16 Oct reads them.
 
 const SEALAND_UPDATES = [
   '2026-06-28T12:00:00.000Z',
@@ -28,6 +31,10 @@ const SEALAND_UPDATES = [
   '2026-09-27T08:30:00.000Z',
   '2026-10-04T08:30:00.000Z',
   '2026-10-11T08:30:00.000Z',
+  // Stand-ins on the schedule (see above).
+  '2026-10-18T08:30:00.000Z',
+  '2026-10-25T08:30:00.000Z',
+  '2026-11-01T08:30:00.000Z',
 ]
 
 const SEALAND_MARKET = new Map<string, number>([

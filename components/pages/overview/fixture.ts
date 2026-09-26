@@ -1145,6 +1145,59 @@ export function marketBeforeMakersFixture(): OverviewData {
   return marketFrontFixture({ measured: false })
 }
 
+/** The two fixture clocks once October leads (default M-e): the 18 Oct update,
+ *  October so far, and the 1 Nov update, October ended. */
+export const OCTOBER_LEADS_AT = '2026-10-18T12:00:00.000Z'
+export const OCTOBER_ENDED_AT = '2026-11-01T12:00:00.000Z'
+
+/**
+ * The front page's bar and change block once October leads (decision A): at
+ * the 18 Oct update the page reads October so far, and from the 1 Nov update
+ * October, ended; either way the pair read is September against October and
+ * the first pair read the same way is October against November, from the
+ * 6 Dec update. Sealand's calendar (lib/test/reading-fixture.ts; the 18 Oct,
+ * 25 Oct and 1 Nov updates are the schedule's stand-ins) and its September
+ * search changes, the last of them on 17 Sep (none since 20 Sep, decision I).
+ *
+ * ONLY THE BAR'S LINE AND THE CHANGE BLOCK ARE AT THE CLOCK. October's
+ * figures are not knowable, so every other block keeps the September front
+ * page's rows rather than an invented October, and the selector's months are
+ * the September page's.
+ */
+export function octoberLeadsFixture(at: typeof OCTOBER_LEADS_AT | typeof OCTOBER_ENDED_AT = OCTOBER_LEADS_AT): OverviewData {
+  const base = marketFrontFixture()
+  const OCT = '2026-10-01'
+  const reading = sealandReading(at)
+  const changes = [
+    { id: 'terms-0913', surface: 'terms' as const, changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+    { id: 'terms-0917', surface: 'terms' as const, changedAt: '2026-09-17T16:02:56.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+  ]
+  const pair = comparabilityOf(REAL_MONTH, OCT, {
+    row: null,
+    changes,
+    view: 'market',
+    later: { state: reading.state, readToEnd: reading.readToEnd, latestUpdateRunId: null },
+  })
+  return {
+    ...base,
+    reading,
+    change: {
+      prevMonth: REAL_MONTH,
+      month: OCT,
+      pair,
+      next: { prevMonth: OCT, month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z', inFullExpected: '2027-01-03T04:00:00.000Z' },
+      checks: [],
+      readWith: null,
+      paused: false,
+      asAt: reading.asAt,
+      searchChanges: searchChangeDays([
+        { id: 'terms-0909', surface: 'terms' as const, changedAt: '2026-09-09T18:17:56.893Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+        ...changes,
+      ], REAL_MONTH, OCT),
+    },
+  }
+}
+
 /**
  * Össur's front page (§2.13), on staging's September (read to the 13 Sep
  * update, updates paused): 362 market videos (338 in the category, 24 filed

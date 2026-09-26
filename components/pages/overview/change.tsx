@@ -5,6 +5,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth, shortDate } from '@/lib/format'
+import { monthStartOf } from '@/lib/reading/month-key'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { changeLead, nextPairLine, placeInMonth, searchChangesLine, type ChangeBlock } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
@@ -41,7 +42,42 @@ const pct = (share: number): string => `${(share * 100).toFixed(2)}%`
  * a next pair; the months and the bracket say what the sentences beside them
  * say, so they are hidden from a screen reader, and the key, which says what
  * they do not, is read.
+ *
+ * EACH MONTH ONCE (default M-e, 26 Sep). Once October leads (from the 18 Oct
+ * update, decision A) the pair read is Sep, Oct and the first pair read the
+ * same way is Oct, Nov: the strip drew "Sep, Oct | Oct, Nov", October twice
+ * and its "as at" in both. It now draws Sep, Oct, Nov, the bracket over Oct
+ * and Nov, October solid because it is read, and the "as at" once, in it.
  */
+/** The strip's grid, one column a month: two to four months (the pair read
+ *  and the next pair, each month once). Written out whole, for Tailwind. */
+const STRIP_COLS: Record<number, string> = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' }
+const COL_START = ['col-start-1', 'col-start-2', 'col-start-3', 'col-start-4']
+const COL_SPAN = ['col-span-1', 'col-span-2', 'col-span-3', 'col-span-4']
+
+/**
+ * The strip's months, oldest first, each once: the pair read and the next
+ * pair, which share a month once October leads (Sep, Oct and Oct, Nov) and
+ * are the same pair once November leads. `read` marks the months the page
+ * reads (drawn solid), and `from` and `span` place the bracket over the next
+ * pair's columns.
+ */
+export function stripMonths(read: readonly [string, string], next: readonly [string, string]): {
+  months: { month: string; read: boolean }[]
+  from: number
+  span: number
+} {
+  const reading = new Set(read.map(monthStartOf))
+  const bracketed = new Set(next.map(monthStartOf))
+  const months = [...new Set([...read, ...next].map(monthStartOf))].sort()
+  const at = months.map((m, i) => (bracketed.has(m) ? i : -1)).filter((i) => i >= 0)
+  return {
+    months: months.map((month) => ({ month, read: reading.has(month) })),
+    from: at[0],
+    span: at[at.length - 1] - at[0] + 1,
+  }
+}
+
 /** Does the block draw its month strip? No update is promised to a paused
  *  tenant, in words or in the strip, and with no next pair there is none. */
 const drawsStrip = (block: ChangeBlock): boolean => block.next != null && block.prevMonth != null && !block.paused
@@ -89,33 +125,36 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
       </span>
     )
   }
-  // FOUR MONTHS ON ONE ROW, IN TWO PAIRS (design pass; WP1.6 design check):
-  // the bracket's words sit ABOVE the bracket, the bracket over the dashed
-  // pair, and the date it is read from under it, all centred on it. The rows
-  // share one two-column grid, so each mark and the "as at" rule land on the
-  // day they name. Where the "as at" falls in the dashed pair (from the first
-  // update of the month after the one read), its rule and words stand under
-  // the bracket, so the months drop 6px further to keep them off its line.
+  // THE MONTHS ON ONE ROW, EACH ONCE (design pass; WP1.6 design check;
+  // default M-e): the bracket's words sit ABOVE the bracket, the bracket over
+  // the next pair, and the date it is read from under it, all centred on it.
+  // The rows share one grid, a column a month, so each mark and the "as at"
+  // rule land on the day they name. Where the "as at" falls in a bracketed
+  // month (from the first update of the month after the one read, and in
+  // October once it leads), its rule and words stand under the bracket, so
+  // the months drop 6px further to keep them off its line.
+  const strip = stripMonths([block.prevMonth, block.month], [next.prevMonth, next.month])
+  const cols = STRIP_COLS[strip.months.length] ?? 'grid-cols-4'
+  const under = cn(COL_START[strip.from], COL_SPAN[strip.span - 1])
   const asAtUnderBracket = asAt != null && [next.prevMonth, next.month].some((m) => placeInMonth(asAt, m) != null)
   return (
     <div className="flex min-w-0 flex-col">
       <div aria-hidden className="flex min-w-0 flex-col">
-        <div className="grid grid-cols-2 gap-x-3">
-          <div className="col-start-2 flex flex-col">
+        <div className={cn('grid gap-x-3', cols)}>
+          <div className={cn(under, 'flex flex-col')}>
             <span className="text-center text-[13px] font-semibold leading-4 text-foreground [text-wrap:balance]">the first comparison read the same way</span>
             <span className="mt-1.5 h-2 border-x border-t border-secondary-foreground" />
           </div>
         </div>
-        <div className={cn('grid grid-cols-2 gap-x-3', asAtUnderBracket ? 'mt-4' : 'mt-2.5')}>
-          <div className="flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'read')}</div>
-          <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
+        <div className={cn('grid gap-x-3', cols, asAtUnderBracket ? 'mt-4' : 'mt-2.5')}>
+          {strip.months.map((m) => cell(m.month, m.read ? 'read' : 'next'))}
         </div>
         {/* One line from 360px, centred on the bracket as a flex item so it
             may spill a few pixels either side of the pair: at 390 the pair is
             about as wide as the words, and a wrap left "update" alone under
             "from the 6 Dec". Narrower, it breaks once, before the date. */}
-        <div className="mt-2.5 grid grid-cols-2 gap-x-3">
-          <span className="col-start-2 flex justify-center">
+        <div className={cn('mt-2.5 grid gap-x-3', cols)}>
+          <span className={cn(under, 'flex justify-center')}>
             <span className="text-center font-mono text-[12px] font-medium leading-4 text-foreground [text-wrap:balance] min-[360px]:whitespace-nowrap">
               from the <span className="whitespace-nowrap">{shortDate(next.sameAgeFrom)} update</span>
             </span>
