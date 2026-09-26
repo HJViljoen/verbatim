@@ -6,7 +6,7 @@ import {
   dueLabel, weekBarsAriaLabel, weekPlotMin, weekBarsLayout, weekBarsTable, weekChangeSentence, weekDetail, weekName,
   type WeekBarsLayout, type WeekBarsSize,
 } from '@/lib/charts/week-bars'
-import { firstComparisonDue, weekKindLabel, WEEK_LINE_EXCLUDED, WEEK_LINE_KINDS, type PendingWeekLine } from '@/lib/reading/week-line'
+import { dueHasPassed, firstComparisonDue, weekKindLabel, WEEK_LINE_EXCLUDED, WEEK_LINE_KINDS, type PendingWeekLine } from '@/lib/reading/week-line'
 import { isoWeekOf, weekRuleGroupOf, type WeekRule, type WeekVolume, type WeekVolumesBlock } from '@/lib/reading/weeks'
 import { WeekBarsHover } from './week-bars-hover'
 
@@ -231,10 +231,18 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   const kinds = WEEK_LINE_KINDS.map(weekKindLabel)
   const firstComparison = firstComparisonDue({ firstWeek: pending.firstWeek, ageDays: pending.ageDays === 21 ? 21 : 14 })
   const kept = new Set((pending.kept ?? []).map(isoWeekOf))
+  // A DATE THAT HAS PASSED IS NOT "DUE" (the deploy-3 review). As at an update
+  // after it, a week is kept or, where the kept weeks were read, not kept (a
+  // missed capture is a gap for good); and the first comparison's promise is
+  // not repeated once its update has come.
+  const passed = (d: string): boolean => dueHasPassed(d, pending.passedBefore)
+  const stateOf = (w: string, d: string): 'kept' | 'not kept' | 'due' =>
+    kept.has(w) ? 'kept' : passed(d) && pending.keptRead ? 'not kept' : 'due'
+  const promise = !passed(firstComparison)
   if (mode === 'email') {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.ink2, marginTop: 8 }}>
-        Read at the same age: pending. The first comparison is due with the {dueLabel(firstComparison).replace(/^due /, '')} update, if a check on real data passes.
+        Read at the same age: pending.{promise ? <> The first comparison is due with the {dueLabel(firstComparison).replace(/^due /, '')} update, if a check on real data passes.</> : null}
       </div>
     )
   }
@@ -257,17 +265,23 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   const base = 112.5
   const date = (d: string): string => dueLabel(d).replace(/^due /, '')
   const firstWords = `first comparison, with the ${date(firstComparison)} update`
+  const said = (w: string, d: string): string => {
+    const st = stateOf(w, d)
+    return st === 'kept' ? `is kept with the ${date(d)} update` : st === 'not kept' ? `was not kept with the ${date(d)} update` : `is due with the ${date(d)} update`
+  }
   const plot = (
-    <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} is ${kept.has(s.w) ? 'kept' : 'due'} with the ${date(s.date as string)} update.`).join(' ')} The first comparison is due with the ${date(firstComparison)} update.`} className="relative block overflow-visible">
+    <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} ${said(s.w, s.date as string)}.`).join(' ')}${promise ? ` The first comparison is due with the ${date(firstComparison)} update.` : ''}`} className="relative block overflow-visible">
       <g transform={`translate(0 ${TOP})`}>
       {/* One line where the strip is wide; two where it scrolls (under
           640px), so the words fit the strip's first view. */}
-      <text x={pct(bracket?.to ?? 1)} y={12} textAnchor="end" fontSize={13} fontWeight={600} className="max-sm:hidden" style={{ ...SANS, fill: 'var(--foreground)' }}>{firstWords}</text>
-      <text x={pct(bracket?.to ?? 1)} y={-4} textAnchor="end" fontSize={12} fontWeight={600} className="sm:hidden" style={{ ...SANS, fill: 'var(--foreground)' }}>
-        <tspan x={pct(bracket?.to ?? 1)} dy={0}>first comparison,</tspan>
-        <tspan x={pct(bracket?.to ?? 1)} dy={15}>with the {date(firstComparison)} update</tspan>
-      </text>
-      {bracket ? (
+      {promise ? <text x={pct(bracket?.to ?? 1)} y={12} textAnchor="end" fontSize={13} fontWeight={600} className="max-sm:hidden" style={{ ...SANS, fill: 'var(--foreground)' }}>{firstWords}</text> : null}
+      {promise ? (
+        <text x={pct(bracket?.to ?? 1)} y={-4} textAnchor="end" fontSize={12} fontWeight={600} className="sm:hidden" style={{ ...SANS, fill: 'var(--foreground)' }}>
+          <tspan x={pct(bracket?.to ?? 1)} dy={0}>first comparison,</tspan>
+          <tspan x={pct(bracket?.to ?? 1)} dy={15}>with the {date(firstComparison)} update</tspan>
+        </text>
+      ) : null}
+      {bracket && promise ? (
         <>
           <line x1={pct(bracket.from)} x2={pct(bracket.to)} y1={26} y2={26} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
           <line x1={pct(bracket.from)} x2={pct(bracket.from)} y1={26} y2={34} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
@@ -279,7 +293,7 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
       ))}
       {dueSlots.map((s) => (
         <g key={s.w}>
-          <text x={pct(s.cx)} y={50} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--muted-foreground)' }}>{kept.has(s.w) ? 'kept' : 'due'}</text>
+          <text x={pct(s.cx)} y={50} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--muted-foreground)' }}>{stateOf(s.w, s.date as string)}</text>
           <svg x={pct(s.cx)} y={circleY} width={1} height={1} overflow="visible">
             <circle cx={0} cy={0} r={5} style={{ fill: `var(--${surface})`, stroke: 'var(--secondary-foreground)', strokeWidth: 1.5 }} />
           </svg>

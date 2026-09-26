@@ -201,6 +201,28 @@ export interface PendingWeekLine {
    *  the line prints (WP2.9's component step). Absent where none is kept or
    *  nothing was read. */
   kept?: string[]
+  /** A due date before this day has passed (the deploy-3 review), so the row
+   *  no longer calls it "due": the day of the page's latest update, or two
+   *  days before the page's clock, whichever is later (a week is kept on the
+   *  Monday after the update it is due with, so by the Tuesday it is kept or
+   *  missed, even where no later update ran). Additive; absent on a stored
+   *  block, which draws as before. */
+  passedBefore?: string
+  /** `week_line_reads` was read, so a passed week missing from `kept` was not
+   *  kept at its age (a missed capture is a gap for good). Absent where it was
+   *  not read, and then a passed week says nothing it cannot know. */
+  keptRead?: boolean
+}
+
+/** Has a due date passed (`PendingWeekLine.passedBefore`)? */
+export const dueHasPassed = (date: string, passedBefore: string | null | undefined): boolean =>
+  passedBefore != null && passedBefore !== '' && date.slice(0, 10) < passedBefore.slice(0, 10)
+
+/** `PendingWeekLine.passedBefore` from the page's latest update and clock. */
+export function passedBeforeOf(latestUpdate: string | null | undefined, now: string): string {
+  const grace = addDays(now.slice(0, 10), -2)
+  const update = latestUpdate ? latestUpdate.slice(0, 10) : ''
+  return update > grace ? update : grace
 }
 
 /** A run as the cadence rule reads it. `startedAt` places a run in the week it

@@ -9,7 +9,7 @@ import { weekVolumesBlock } from '@/lib/pages/overview-market/weeks'
 import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
 import { WEEK_LINE } from '@/lib/week-line-config'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
-import type { PendingWeekLine } from '@/lib/reading/week-line'
+import { dueHasPassed, passedBeforeOf, type PendingWeekLine } from '@/lib/reading/week-line'
 import { WeekBars, WeekBarsKey, WeekPendingRow } from './week-bars'
 
 // The weekly volume bars (WP2.9), on staging's own weeks read at the two
@@ -158,5 +158,43 @@ describe('read at the same age, pending', () => {
   it('is one waiting line in an email', () => {
     const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={OCT11.line as PendingWeekLine} mode="email" surface="inner" />)
     expect(t).toBe('Read at the same age: pending. The first comparison is due with the 25 Oct update, if a check on real data passes.')
+  })
+
+  // THE DATES EXPIRE (the deploy-3 review): as at an update after a due date,
+  // a week is kept or not kept, never still "due", and the first comparison's
+  // promise is not repeated once its update has come.
+  const asAt = (at: string, extra: Partial<PendingWeekLine> = {}): PendingWeekLine => ({ ...(OCT11.line as PendingWeekLine), passedBefore: at, ...extra })
+
+  it('as at the 18 Oct update, the week due that day is still due, and so is the next', () => {
+    const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={asAt('2026-10-18T08:30:00.000Z', { keptRead: true })} mode="app" surface="inner" />)
+    expect(t).toContain('due 18 Oct')
+    expect(t).toContain('due 25 Oct')
+    expect(t).toContain('first comparison, with the 25 Oct update')
+  })
+
+  it('as at the 1 Nov update, a week missing from the kept reads is not kept, and the bracket\'s promise is gone', () => {
+    const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={asAt('2026-11-01T08:30:00.000Z', { keptRead: true, kept: ['2026-09-28'] })} mode="app" surface="inner" />)
+    expect(t).toContain('kept 18 Oct')
+    expect(t).toContain('not kept 25 Oct')
+    expect(t).not.toMatch(/due \d/)
+    expect(t).not.toContain('first comparison')
+    const mail = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={asAt('2026-11-01T08:30:00.000Z', { keptRead: true })} mode="email" surface="inner" />)
+    expect(mail).toBe('Read at the same age: pending.')
+  })
+
+  it('counts a due date as passed from the latest update after it, or two days on where no update came (passedBeforeOf)', () => {
+    // Paused after 20 Sep, read on 1 Nov: the 18 and 25 Oct updates never came.
+    expect(passedBeforeOf('2026-09-20T08:33:47.358Z', '2026-11-01T06:00:00.000Z')).toBe('2026-10-30')
+    // The Monday after the 18 Oct update, before its capture: still due.
+    expect(passedBeforeOf('2026-10-18T08:30:00.000Z', '2026-10-19T06:00:00.000Z')).toBe('2026-10-18')
+    expect(dueHasPassed('2026-10-18', passedBeforeOf('2026-10-18T08:30:00.000Z', '2026-10-19T06:00:00.000Z'))).toBe(false)
+    expect(dueHasPassed('2026-10-18', passedBeforeOf('2026-10-25T08:30:00.000Z', '2026-10-25T09:00:00.000Z'))).toBe(true)
+    expect(dueHasPassed('2026-10-18', undefined)).toBe(false)
+  })
+
+  it('says nothing it cannot know where the kept weeks were not read', () => {
+    const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={asAt('2026-11-01T08:30:00.000Z')} mode="app" surface="inner" />)
+    expect(t).not.toContain('not kept')
+    expect(t).not.toContain('first comparison')
   })
 })

@@ -56,6 +56,7 @@ import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-mont
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import { addDays, marketWeekRowOf, weekAxis, type MarketWeekRowRaw, type WeekVolumesBlock } from '../reading/weeks'
 import { weekLineConfigFor } from '../week-line-config'
+import { passedBeforeOf } from '../reading/week-line'
 import { weekVolumesBlock } from './overview-market/weeks'
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P,
@@ -3424,11 +3425,21 @@ export async function loadWeekVolumes(input: {
     nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : null,
   })
   const line = block.line
+  if (line && 'state' in line) {
+    // WHEN A DUE DATE HAS PASSED, so the pending row can tell one still ahead
+    // from one that has come and gone (the deploy-3 review: on 1 Nov the row
+    // still said "due 18 Oct"): the latest update's day, or two days before
+    // the clock (`passedBeforeOf`).
+    const nowMs = Date.parse(input.now)
+    const latest = input.updates.filter((u) => !(Date.parse(u) > nowMs)).sort().pop() ?? null
+    line.passedBefore = passedBeforeOf(latest, input.now)
+  }
   if (cfg && line && 'state' in line && line.due.some((d) => d.date <= input.now.slice(0, 10))) {
     const kept = await client.from(TABLE_WEEK_LINE_READS).select('week')
       .eq('client_id', clientId).eq('method_version', cfg.methodVersion).eq('age_days', cfg.ageDays)
     if (kept.error) console.error(`[pages] ${TABLE_WEEK_LINE_READS}: ${kept.error.message}; no week read as kept`)
     else {
+      line.keptRead = true
       const due = new Set(line.due.map((d) => d.week))
       const weeks = ((kept.data ?? []) as { week: string }[]).map((r) => String(r.week).slice(0, 10)).filter((w) => due.has(w))
       if (weeks.length > 0) line.kept = [...new Set(weeks)].sort()
