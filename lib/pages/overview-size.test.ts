@@ -78,7 +78,8 @@ const moved = (over: Partial<Verdict> & Pick<Verdict, 'objectKind' | 'objectId' 
  *  makers by analogy (CQ F29: 50 of 140). */
 const LOOKS_AND_STYLE = moved({
   objectKind: 'subject', objectId: 'looks-and-style', objectLabel: 'Looks & style',
-  value: { k: 104, n: 626 }, baseline: { k: 38, n: 351 }, changePts: 5.8, bandPts: 3.9,
+  // Band ±4.5 pts on production's counts (research: about 4.5 prod, 4.4 staging).
+  value: { k: 104, n: 626 }, baseline: { k: 38, n: 351 }, changePts: 5.8, bandPts: 4.5,
 })
 const READY_TO_BUY = moved({ objectKind: 'theme', objectId: 'ready-to-buy', objectLabel: 'Ready to buy handmade bags' })
 /** Its staging twin's measured maker share (CQ F29): 50 of 140. */
@@ -207,6 +208,9 @@ describe('headline, with the market’s size', () => {
   })
 
   it('never makes a subject or a theme that might be maker-led the headline', () => {
+    // HYPOTHETICAL STATE on real counts (F12): 71 of 626 against 42 of 351 is
+    // -0.6 pts, inside any band, so the band rule would read no_clear_change;
+    // it is set to "moved" by hand to reach the headline's lead rule.
     const upcycling = moved({ objectKind: 'theme', objectId: 'upcycling', objectLabel: 'Admiration for upcycled bag creativity', value: { k: 71, n: 626 }, baseline: { k: 42, n: 351 }, changePts: -0.6 })
     const verdicts = [LOOKS_AND_STYLE, READY_TO_BUY, upcycling]
     // Unmeasured: nothing may lead.
@@ -225,6 +229,9 @@ describe('headline, with the market’s size', () => {
   })
 
   it('leads with a moved category theme of few makers, where one is measured, and prints no chip', () => {
+    // HYPOTHETICAL STATE on real counts (F12): August's 9 is under the band's
+    // minK of 10, so the rule would read too_little_data, and 0.8 pts is
+    // inside the 2-pt floor anyway; "moved" is set by hand to reach the lead.
     const airline = moved({
       objectKind: 'theme', objectId: 'airline-sizes', objectLabel: 'Confusion over airline bag sizes',
       value: { k: 21, n: 626 }, baseline: { k: 9, n: 351 }, changePts: 0.8, bandPts: 2,
@@ -251,7 +258,9 @@ describe('headline, with the market’s size', () => {
 
 describe('sentenceBlockFor', () => {
   const chip = 'not read as a change: we changed our searches in September'
-  /** A voice the loader could hand in: the block must drop it under a size. */
+  /** A voice the loader could hand in: the block must drop it under a size.
+   *  HYPOTHETICAL (F12): the quote and its cite are a stand-in, not a stored
+   *  comment. */
   const VOICE: Voice = {
     quote: { ref: 'e:1', text: 'Where can I buy one?', lang: 'en', english: null },
     cite: 'TikTok · 14 Sep · under a category video',
@@ -261,6 +270,7 @@ describe('sentenceBlockFor', () => {
   const REFUSED_LOOKS: Verdict = { ...LOOKS_AND_STYLE, state: 'refused', changePts: null, refusedReason: 'tracking_change' }
   /** "Admiration for upcycled bag creativity" moved on its own terms, and is
    *  81% makers by analogy (CQ F29: 112 of 138), so `mayLead` refuses it. */
+  // HYPOTHETICAL STATE on real counts (F12): -0.6 pts would read no_clear_change.
   const UPCYCLING = moved({ objectKind: 'theme', objectId: 'upcycling', objectLabel: 'Admiration for upcycled bag creativity', value: { k: 71, n: 626 }, baseline: { k: 42, n: 351 }, changePts: -0.6 })
   const SHARES = new Map<string, number | null>([['upcycling', 112 / 138], ['looks-and-style', 0]])
 
@@ -299,6 +309,7 @@ describe('sentenceBlockFor', () => {
   })
 
   it('composes as before where a change leads, with the lead theme’s voices', () => {
+    // HYPOTHETICAL STATE on real counts, as above: the rule would not move it.
     const airline = moved({
       objectKind: 'theme', objectId: 'airline-sizes', objectLabel: 'Confusion over airline bag sizes',
       value: { k: 21, n: 626 }, baseline: { k: 9, n: 351 }, changePts: 0.8, bandPts: 2,

@@ -21,7 +21,9 @@ import { quarterlyBlocksFor } from './index'
 // reads and gets back exactly what production gets back — one reading, not a
 // second one hand-typed beside it and free to drift.
 //
-// FOUR STATES, ALL REAL.
+// FOUR STATES. The states are real; the volumes are the mock's (research F12):
+// the window reads below (4,147 videos and 33,000 comments, 3,810 and 29,000)
+// are not Sealand's, whose Q3 category is about 1,012 videos (35 + 351 + 626).
 //   `quarterlyFixture()`    — eight readings, both window reads taken, read
 //                             mid-quarter: the shape the mock draws.
 //   `formingFixture()`      — PRODUCTION TODAY: three readings, M3 unapplied so
