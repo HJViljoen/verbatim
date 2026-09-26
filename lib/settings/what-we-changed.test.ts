@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
+import { SURFACE_WORDS } from './change-log'
 import { changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
 
 // Sealand's change log around September (GC F2, staging's copy of production
@@ -83,6 +84,13 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     const gate = row({ id: 'gate-fix', changed_at: '2026-09-26T08:00:00.000Z', surface: 'gate_rule' as never, note: 'We fixed how we check that a video is about bags.' })
     const c = changesFromLog([gate])[0]
     expect(changeWords(c, [gate])).toBe('We fixed how we check that a video is about bags.')
+  })
+
+  it('names the relevance check as The record does, "How we check relevance", when its row carries no note (deploy 2 integration)', () => {
+    const gate = row({ id: 'gate-fix', changed_at: '2026-09-26T08:00:00.000Z', surface: 'gate_rule' as never })
+    const c = changesFromLog([gate])[0]
+    expect(changeWords(c, [gate])).toBe('How we check relevance')
+    expect(changeWords(c, [gate])).toBe(SURFACE_WORDS.gate_rule)
   })
 
   it('counts the exclusions list apart from the search terms (the 17 Sep script touched both)', () => {

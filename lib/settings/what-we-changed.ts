@@ -35,9 +35,12 @@ export interface ReachRow {
 }
 
 /** The words for a change no count describes, per surface, in client words.
- *  The three MF1 surfaces (WP1.4) use the preview's headings. */
+ *  The three MF1 surfaces (WP1.4) use the preview's headings, except the
+ *  relevance check, which reads as The record's surface name does
+ *  (`SURFACE_WORDS` in lib/settings/change-log.ts), so one change has one
+ *  name on the tab (settled at the deploy 2 integration). */
 const SURFACE_SENTENCE: Record<string, string> = {
-  gate_rule: 'How we decide what is relevant',
+  gate_rule: 'How we check relevance',
   attribution: 'How we file a video to a brand',
   segment: 'How we mark makers’ videos',
   entity_retag: 'Stored videos filed again under the brand they are about',
