@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { gathersOf } from '../provenance/searches'
 import { JUDGE_VERSION } from '../subjects/types'
 import {
-  anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, evidenceByVideo, excerpt, freshPath, groupOf, inMarket, isFinalRun,
-  matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, runsOnDays, schedulesVerdict, searchSetDiff, searchesPerPlatform,
-  termsFirstSearchedSince, themeSegments, threeStateCalibration, videoNameHits, videosNamed, type BoardTheme, type TextVideo, type ThemeSegments,
+  AFTER_CLOSE_MINUTES, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, evidenceByVideo, excerpt, freshPath, groupOf, inMarket, isFinalRun,
+  matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, readAfterGate, runsOnDays, schedulesVerdict, searchSetDiff, searchesPerPlatform,
+  termsFirstSearchedSince, themeSegments, threeStateCalibration, videoNameHits, videosNamed, type BoardTheme, type RunLite, type TextVideo, type ThemeSegments,
 } from './monday-reads'
 
 // Run ids and dates are staging's real Sealand runs (20 Sep b67b56de partial,
@@ -43,6 +43,69 @@ describe('pickTargetRun: the run the grounding reads after', () => {
     const d = runsOnDays([...RUNS, STAND_IN_27], ['2026-09-20', '2026-09-24', '2026-09-27', '2026-09-26'])
     expect(d.map((x) => x.runs.length)).toEqual([1, 1, 1, 0])
     expect(d[2].runs[0].clustering_key).toBe('r1')
+  })
+})
+
+describe('readAfterGate: nothing is read while a run may still be writing', () => {
+  // b67b56de closed at 08:33Z on 20 Sep (staging's row). The 27 Sep times are stand-ins: a
+  // 04:00Z start and a close about 4.5 h later, as the plan's calendar puts it.
+  const B67 = { ...RUNS[1], completed_at: '2026-09-20T08:33:12Z' }
+  const DDB = RUNS[2]
+  const at = (iso: string) => Date.parse(iso)
+  const prod = (now: string, named = false) => ({ now: at(now), production: true, named, runDay: '2026-09-27' })
+  const stg = (now: string) => ({ now: at(now), production: false, named: false, runDay: '2026-09-27' })
+  const run27 = (status: string, completed_at: string | null = null) => ({ ...STAND_IN_27, status, completed_at })
+  const gate = (runs: readonly RunLite[], opts: ReturnType<typeof prod>, named?: string) =>
+    readAfterGate(runs, pickTargetRun(runs, '2026-09-27', named ?? null), opts)
+
+  it('waits while the run of the day is in flight, whatever the in-flight status', () => {
+    for (const s of ['running', 'analyzing', null]) {
+      const g = gate([B67, DDB, { ...STAND_IN_27, status: s, completed_at: null }], prod('2026-09-27T07:00:00Z'))
+      expect(g.ok).toBe(false)
+      expect(g.why).toContain('has not ended')
+    }
+  })
+  it('waits an hour after close-run, for the steps that write after the status turns final', () => {
+    const runs = [B67, DDB, run27('completed', '2026-09-27T08:30:00Z')]
+    const early = gate(runs, prod('2026-09-27T09:00:00Z'))
+    expect(early.ok).toBe(false)
+    expect(early.why).toContain('after-close steps')
+    expect(early.from).toBe(new Date(at('2026-09-27T08:30:00Z') + AFTER_CLOSE_MINUTES * 60_000).toISOString())
+    expect(gate(runs, prod('2026-09-27T09:31:00Z')).ok).toBe(true)
+    expect(gate([B67, DDB, run27('partial', '2026-09-27T08:30:00Z')], prod('2026-09-27T09:31:00Z')).ok).toBe(true)
+  })
+  it('on production, never falls back to an earlier run: before the 27 Sep row exists that run is 20 Sep, mid-gather', () => {
+    const g = gate([B67, DDB], prod('2026-09-27T04:00:30Z'))
+    expect(g.ok).toBe(false)
+    expect(g.why).toContain('no run on 2026-09-27 yet')
+    expect(readAfterGate([], pickTargetRun([], '2026-09-27'), prod('2026-09-28T06:00:00Z')).ok).toBe(false)
+    // Named, the earlier run is read after; a named id the project lacks is the caller's exit 6.
+    expect(gate([B67, DDB], prod('2026-09-28T06:00:00Z', true), 'b67b56de').ok).toBe(true)
+    expect(gate([B67, DDB], prod('2026-09-28T06:00:00Z', true), 'nope').ok).toBe(true)
+  })
+  it('on staging, reads after the latest run that ended, past a stranded analysis row (the real rows)', () => {
+    expect(gate([B67, DDB], stg('2026-09-26T13:00:00Z')).ok).toBe(true)
+  })
+  it('waits while another run moves, such as a re-run after a failed scheduled one', () => {
+    const failed = run27('failed', '2026-09-27T05:10:00Z')
+    const rerun = { id: '27270000-0000-4000-8000-000000000001', status: 'running', started_at: '2026-09-27T06:00:00Z', scheduled_for: null, clustering_key: null, completed_at: null }
+    const g = gate([B67, DDB, failed, rerun], prod('2026-09-27T09:00:00Z'))
+    expect(g.ok).toBe(false)
+    expect(g.why).toContain('27270000 running since 2026-09-27T06:00Z')
+    // At 'running' past the pipeline's abandoned line it still waits, unless a run is named.
+    expect(gate([B67, DDB, failed, rerun], prod('2026-09-27T13:00:00Z')).ok).toBe(false)
+    expect(gate([B67, DDB, failed, rerun], prod('2026-09-28T06:00:00Z', true), 'b67b56de').ok).toBe(true)
+    // A fresh analysis run waits even when a run is named; the re-run's close starts the hour.
+    const fresh = { ...rerun, status: 'analyzing', started_at: '2026-09-28T05:00:00Z' }
+    expect(gate([B67, DDB, failed, fresh], prod('2026-09-28T06:00:00Z', true), 'b67b56de').ok).toBe(false)
+    const closed = { ...rerun, status: 'completed', completed_at: '2026-09-27T10:30:00Z' }
+    expect(gate([B67, DDB, failed, closed], prod('2026-09-27T11:00:00Z')).ok).toBe(false)
+    expect(gate([B67, DDB, failed, closed], prod('2026-09-27T11:31:00Z')).ok).toBe(true)
+  })
+  it('waits on an ended run with no completed_at: its last steps cannot be timed', () => {
+    const g = gate([B67, DDB, run27('completed', null)], prod('2026-09-28T06:00:00Z'))
+    expect(g.ok).toBe(false)
+    expect(g.why).toContain('no completed_at')
   })
 })
 

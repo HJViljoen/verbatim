@@ -1,3 +1,4 @@
+import { RUN_STALE_AFTER_HOURS } from '../pipeline/run-guard'
 import { INDUSTRY_AUDIENCE, audienceOf } from '../rivals'
 import { JUDGE_VERSION, SUBJECT_PRECISION_FLOOR, subjectCalibration, wilsonUpper } from '../subjects/types'
 import { segmentReason, segmentOfReason } from '../segments/rules'
@@ -70,6 +71,70 @@ export function runsOnDays(runs: readonly RunLite[], days: readonly string[]): {
       .filter((r) => dayOf(r.started_at) === day)
       .map((r) => ({ id: r.id, status: r.status, clustering_key: r.clustering_key ?? null })),
   }))
+}
+
+/**
+ * How long a run's own steps may still write after its status turns final.
+ * close-run writes 'completed' or 'partial' and completed_at, and the run goes
+ * on (inngest/functions/pipeline.ts): settle-apify-usage (waits up to 90 s),
+ * write-run-costs, prune-stale-analysis (deletes superseded insights and
+ * language samples), request-report (the weekly report function) and
+ * alert-partial, each with two retries on a 300 s route. An hour covers them.
+ */
+export const AFTER_CLOSE_MINUTES = 60
+
+export interface ReadAfter {
+  ok: boolean
+  /** Why the reads wait, one sentence; null when they may go ahead. */
+  why: string | null
+  /** When the after-close wait ends, if that is the reason. */
+  from: string | null
+}
+
+/**
+ * May the reads after the prechecks go ahead? Only once nothing of the run read
+ * after, or of any other run of this client, can still be writing:
+ *  - on production, only after the run of the run day or the one named with
+ *    --run: never the latest-final fallback (staging's, which has no 27 Sep
+ *    run), which before the 27 Sep row exists would be 20 Sep's, mid-gather;
+ *  - the run's status is an end state ('running', 'analyzing' and any other are not);
+ *  - every run closed at least AFTER_CLOSE_MINUTES ago (completed_at);
+ *  - no other run is moving: not ended and started within the pipeline's own
+ *    abandoned line (RUN_STALE_AFTER_HOURS; a resume restarts started_at), or
+ *    at 'running' at all unless a run was named (naming one is Heinrich's word
+ *    that a stuck run is not moving).
+ */
+export function readAfterGate(
+  runs: readonly RunLite[],
+  target: TargetRun,
+  opts: { now: number; production: boolean; named: boolean; runDay: string },
+): ReadAfter {
+  const wait = (why: string, from: string | null = null): ReadAfter => ({ ok: false, why, from })
+  const t = target.run
+  if (!t) {
+    // A named run this project does not have is the caller's exit 6, not a wait.
+    if (opts.named || !opts.production) return { ok: true, why: null, from: null }
+    return wait(`no run on ${opts.runDay} yet`)
+  }
+  if (opts.production && target.how === 'latest-final') {
+    return wait(`no run on ${opts.runDay} yet (to read after an earlier run, name it with --run)`)
+  }
+  if (!isFinalRun(t.status)) return wait(`the run ${t.id.slice(0, 8)} has not ended (status ${t.status})`)
+  if (!t.completed_at) return wait(`the run ${t.id.slice(0, 8)} is ${t.status} with no completed_at, so when its last steps end cannot be told`)
+  const staleMs = RUN_STALE_AFTER_HOURS * 3_600_000
+  const moving = runs.filter((r) => r.id !== t.id && !isFinalRun(r.status) && (
+    opts.now - Date.parse(r.started_at ?? '') < staleMs || (r.status === 'running' && !opts.named)))
+  if (moving.length > 0) {
+    return wait(`another run is still moving: ${moving.map((r) => `${r.id.slice(0, 8)} ${r.status} since ${r.started_at?.slice(0, 16)}Z`).join(', ')}`)
+  }
+  const closes = runs.filter((r) => isFinalRun(r.status) && r.completed_at).map((r) => r.completed_at as string)
+  const last = [...closes, t.completed_at].sort().pop() as string
+  const until = Date.parse(last) + AFTER_CLOSE_MINUTES * 60_000
+  if (opts.now < until) {
+    const from = new Date(until).toISOString()
+    return wait(`a run closed at ${last.slice(0, 16)}Z and its after-close steps (costs, prune, the report) may still be writing`, from)
+  }
+  return { ok: true, why: null, from: null }
 }
 
 // ---- Schedules ---------------------------------------------------------------------------

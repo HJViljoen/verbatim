@@ -6,7 +6,7 @@ import { SEALAND_CLIENT_ID, SUBREDDIT_MAX_KNOWN } from '../lib/config'
 import { MARKET_FIRST_PROJECTS, assertProject, parseScriptArgs, type ScriptArgs } from '../lib/ops/market-first-args'
 import {
   SEALAND_NAME, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, dayOf, evidenceByVideo, excerpt,
-  freshPath, inCategory, inMarket, isFinalRun, matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, runsOnDays,
+  freshPath, inCategory, inMarket, isFinalRun, matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, readAfterGate, runsOnDays,
   schedulesVerdict, searchSetDiff, searchesPerPlatform, termsFirstSearchedSince, themeSegments, videoNameHits, videosNamed,
   type BoardTheme, type TextVideo, type ThemeSegments,
 } from '../lib/ops/monday-reads'
@@ -27,7 +27,10 @@ import type { ProvenanceExport } from './export-provenance'
 //   c  the deploy-1 prechecks: Sealand's runs since 19 Sep (the clustering_key
 //      of the 20, 24 and 27 Sep runs; the 27 Sep run's status and errors), any
 //      run still in flight on any tenant, and Sealand's report_schedules (every
-//      row off, 451aa647 among them);
+//      row off, 451aa647 among them). Nothing after c is read (exit 5) until the
+//      run has ended, every run closed an hour ago and no other run is moving,
+//      and on production only after the run day's run or a named one
+//      (readAfterGate);
 //   a  WP1.0's grounding: the provenance SNAPSHOT first (full-lane videos with
 //      their source_keywords; gate verdicts and keyword rows since the staging
 //      export's last row), then the month tables (denominators Jun–Sep; subject,
@@ -420,9 +423,12 @@ async function main(): Promise<void> {
         } else say('schedules (Sealand): not read')
       }
 
-      // A run that has not ended is not read after: its first finds are still moving.
-      if (target.run && target.how !== 'latest-final' && !isFinalRun(target.run.status)) {
-        finish(`the ${runDay} run ${short(target.run.id)} has not ended (status ${target.run.status}). Nothing after the prechecks was read; run this again once it has.`)
+      // Nothing is read after a run that may still be writing: not ended, closed under an hour ago
+      // (its after-close steps), another run still moving, or on production no run on the day yet.
+      const gate = readAfterGate(runs, target, { now: Date.now(), production: MARKET_FIRST_PROJECTS[args.project] === 'production', named: Boolean(args.values.run), runDay })
+      ;(out.c as Record<string, unknown>).readAfter = gate
+      if (!gate.ok) {
+        finish(`${gate.why}. Nothing after the prechecks was read; run this again ${gate.from ? `from ${gate.from.slice(0, 16)}Z` : 'once it has ended'}.`)
         process.exit(5)
       }
       // A run named with --run that is not among this project's runs (a mistyped id, or the
