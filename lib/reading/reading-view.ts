@@ -5,6 +5,7 @@ import { isRivalAudience, loadTrackedRivals, rivalKey } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { marketAudiences, pooledDenominators } from './market'
 import { memoRead } from './memo'
+import { loadMonthSeries, type ReadingHandle } from './read'
 import { monthStartOf } from './month-key'
 import { closedMonthFor, parseMonthParam, readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from './reading-month'
 import type { MonthOrigin, MonthStatus } from './types'
@@ -288,4 +289,49 @@ export function loadReadingSchedule(supabase: SupabaseClient, clientId: string):
       return null
     }
   })
+}
+
+/** What `readingViewFrom` takes besides the clock, as a reader that holds none
+ *  of it reads it. */
+export interface ReadingInputs {
+  runs: DeliveredRun[]
+  denominators: ReadingDenominator[]
+  rivalAudiences: string[] | null
+  schedule: ScheduleConfig | null
+}
+
+/**
+ * The reading view's inputs for a reader that is not a page loader (the
+ * content brief, an Ask thread, Ask's movement block, Settings › Tracking and
+ * Settings › The record): the same four memoised reads the pages make, so
+ * such a reader cannot read another month than the pages do (decision A;
+ * default M-f). The runs, schedule and rivals on the caller's client; the
+ * stored denominators, every audience, on the reading handle's.
+ */
+export async function loadReadingInputs(supabase: SupabaseClient, handle: ReadingHandle, now: string): Promise<ReadingInputs> {
+  const [runs, schedule, history, rivalAudiences] = await Promise.all([
+    loadDeliveredRuns(supabase, handle.clientId),
+    loadReadingSchedule(supabase, handle.clientId),
+    loadMonthSeries(handle.client, handle.clientId, { from: '2019-01-01', to: now, updatesByMonth: {} }),
+    loadMarketRivalAudiences(supabase, handle.clientId),
+  ])
+  return { runs, denominators: history.denominators, rivalAudiences, schedule }
+}
+
+/**
+ * The month such a reader reads (`loadReadingInputs`, then `readingViewFrom`),
+ * with the page's `?month=` where it has one. `at` decides the month at an
+ * earlier instant on the same reads (the month an Ask thread was answered in),
+ * so a second clock costs no second read. Null for a tenant nothing has been
+ * delivered to: the caller keeps the calendar month, the only one there is.
+ */
+export async function loadReadingMonth(
+  supabase: SupabaseClient,
+  handle: ReadingHandle,
+  now: string,
+  opts: { explicit?: string | null; at?: string } = {},
+): Promise<ReadingMonth | null> {
+  const inputs = await loadReadingInputs(supabase, handle, now)
+  if (inputs.runs.length === 0) return null
+  return readingViewFrom({ ...inputs, now: opts.at ?? now, explicit: opts.explicit ?? null }).reading
 }

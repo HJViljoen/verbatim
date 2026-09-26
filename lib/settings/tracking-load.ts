@@ -7,7 +7,8 @@ import type { SubredditEntry } from '../gather/types'
 import { computeSubredditRoi, type SubredditRoiRow } from '../pipeline/subreddit-roi'
 import { freezeStateFor } from '../reading/monthly'
 import { monthStartOf } from '../reading/month-key'
-import { loadWindowReading } from '../reading/read'
+import { loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadReadingMonth } from '../reading/reading-view'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import { CLIENT_AUDIENCE, loadCompetitors, type Competitor } from '../rivals'
 import { selectAll } from '../supabase-admin'
@@ -348,15 +349,30 @@ export async function loadTrackingPage(
    *  canManageTenant. It reads exactly one thing: the community a verdict was
    *  about (`gate_verdicts.account_name`), which no tenant session may read. */
   admin: SupabaseClient | null = null,
+  /** The reading handle (the service role, paired with the tenant the session
+   *  pinned), for the reading month. Without one, the calendar month. */
+  reading: ReadingHandle | null = null,
 ): Promise<TrackingPageInputs> {
-  // WHICH MONTH THE OWN-POSTS COLUMN IS HEADED BY. The calendar month we are
-  // in — a wall-clock answer to "what month is it", which is not the same as
-  // dating a figure by the clock: the figure itself is dated by the post.
-  const censusMonth = monthStartOf(new Date().toISOString())
-  const [clientRead, configRead] = await Promise.all([
+  // WHICH MONTH THE OWN-POSTS COLUMN, THE UPDATES LINE AND THE PLATFORM SHARE
+  // ARE HEADED BY: the reading month, not the calendar's (decision A; default
+  // M-f, as the Record tab's Delivery and Coverage since 91af44f5). On 1 to 15
+  // Oct this page read October, a day or two of it, where every reading page
+  // reads September; it now reads the month they read, off the same memoised
+  // reads. The calendar month only where nothing has been delivered, or with
+  // no handle. The figures themselves are still dated by the post and the
+  // comment.
+  const nowIso = new Date().toISOString()
+  const [clientRead, configRead, rm] = await Promise.all([
     client.from('clients').select('company_name, plan').eq('id', clientId).maybeSingle(),
     client.from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle(),
+    reading
+      ? loadReadingMonth(client, reading, nowIso).catch((error: unknown) => {
+        console.error(`[settings] reading month not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+        return null
+      })
+      : Promise.resolve(null),
   ])
+  const censusMonth = monthStartOf(rm?.month ?? nowIso)
 
   const config = (configRead.data ?? null) as Record<string, unknown> | null
   const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix, railCounts] = await Promise.all([
@@ -395,15 +411,15 @@ export async function loadTrackingPage(
     platformMix: mix.mix,
     monthVideos: mix.videos,
     monthUnread: mix.failed,
-    // THE RULE, NOT THE ROW, AND THE MONTH IN HAND IS ALWAYS THE CURRENT ONE.
+    // THE RULE, AT THE UPDATE THE MONTH IS READ AS AT, AS OVERVIEW READS IT
+    // ("frozen once an UPDATE has passed its freeze line, not the clock").
     // `month_denominators.status` is the commit marker the guards enforce, but
     // the windowed read is an aggregate over a span and carries no status
-    // column, and `censusMonth` is this month — which the 30-day rule and the
-    // row always agree on. A second query to read a status that cannot yet
-    // differ would spend a production read to answer a question nobody can
-    // ask; the day this page reads a month that has closed, it has to read the
-    // row (m3).
-    monthStatus: freezeStateFor(censusMonth, new Date().toISOString()),
+    // column. On the clock alone this page could now call a month closed that
+    // no update has frozen: a paused tenant's September on 2 Nov (m3). Taken at
+    // the update, the rule and the row agree. The clock only where nothing has
+    // been delivered.
+    monthStatus: freezeStateFor(censusMonth, rm?.asAt ?? nowIso),
     railCounts,
   }
 }
