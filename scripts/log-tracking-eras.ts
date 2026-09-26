@@ -52,15 +52,20 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 const NAME = 'log-tracking-eras'
 export const REACH_METHOD = 'search_terms_v1'
 
-/** The notes, in client words (no digit, no em dash, no pipeline word). */
+/** The notes, in client words (no digit, no em dash, no pipeline word, and
+ *  no direction word: plan §4.0; lib/provenance/change-notes.test.ts holds
+ *  all four notes the Stage 1 scripts write to it). */
 // The gate note says the unjudged videos stay in the counts, and no more: the
 // only mark they get is `unjudged_admission` in video_segments.reason, which
 // nothing displays and a tenant cannot select, so "and are marked" would claim
 // what the product does not do (plan §7.11).
 export const GATE_RULE_NOTE =
   'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts.'
-export const ATTRIBUTION_NOTE =
-  'We improved how we tell which brand a post is about, so fewer posts are filed under the wrong brand.'
+// The attribution note names the change and nothing more. It read "We improved
+// how we tell which brand a post is about, so fewer posts are filed under the
+// wrong brand.": "improved" is a direction word (lib/calibration.ts
+// DIRECTION_WORDS), and "fewer" claims a fall nothing in the product measures.
+export const ATTRIBUTION_NOTE = 'We changed how we tell which brand a post is about.'
 export const CAPPED_NOTE = 'An update gathered less than usual because a spending cap was reached.'
 
 const SEARCH_CHANGE_SURFACES = ['terms', 'subreddits']
