@@ -6,6 +6,7 @@ import {
   heroLead,
   heroView,
   leadNewSearch,
+  leadRank,
   THEME_N,
   THEME_PREV_N,
   themeToken,
@@ -89,6 +90,32 @@ describe('the hero lead (plan §4.2 heroLead)', () => {
     // On a measured board too.
     const measured = septemberThemes().map((t) => (t.registryId === 'th-airline' ? { ...t, kind: 'demographic_signal' } : t))
     expect(heroLead(board(measured), [], new Set())).toMatchObject({ lead: { registryId: 'th-shipping' } })
+  })
+
+  it('says where the lead stands on the grounds the for-you line states (leadRank)', () => {
+    // Sealand's September: airline sizes leads, and every bigger row is over a
+    // quarter makers, so it is "the market's biggest conversation with few makers".
+    const b = board()
+    const lead = heroLead(b, [], new Set())
+    expect(lead.kind === 'themes' && leadRank(b, lead.lead!)).toBe(0)
+    // Airline sizes excluded and shipping new this run: packing tips leads,
+    // with shipping (few makers, 20) and airline (21) bigger: third.
+    const themes = septemberThemes().map((t) => (t.registryId === 'th-shipping' ? { ...t, identityNewThisRun: true } : t))
+    const skipped = heroLead(board(themes), [], new Set(['th-airline']))
+    expect(skipped.kind === 'themes' && leadRank(board(themes), skipped.lead!)).toBe(2)
+    // Össur, no maker rule: the demographic row above the lead counts.
+    const ossur = (id: string, label: string, k: number, kind: string): MarketTheme => ({
+      registryId: id, label, labelStripped: false, kind, k, n: 338, prev: { month: AUGUST, k: 0, n: 537 },
+      makerShare: null, noiseShare: null, identityNewThisRun: false, flags: [], provenance: null,
+    })
+    const o = buildThemeBoard([
+      ossur('o-identities', 'Audience identities and amputation types', 44, 'demographic_signal'),
+      ossur('o-resilience', 'Admiration for personal resilience', 34, 'praise'),
+    ], 338, SEPTEMBER, 'no_rule', { month: AUGUST, n: 537 })
+    const ol = heroLead(o, [], new Set())
+    expect(ol.kind === 'themes' && leadRank(o, ol.lead!)).toBe(1)
+    // A tie is not bigger.
+    expect(leadRank(o, { registryId: 'x', k: 44 })).toBe(0)
   })
 
   it('with no readable theme leads with a READY subject, and never a provisional or failed one', () => {

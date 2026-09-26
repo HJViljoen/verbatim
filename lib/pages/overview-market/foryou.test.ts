@@ -93,11 +93,27 @@ describe('buildForYou: the lines, in the preview\'s order', () => {
     expect(buildForYou({ month: SEP, questions: null, lead: { ...lead, posts: 0 }, followers: null }).lines).toEqual([])
   })
 
-  it('claims nothing about makers where no maker rule chose the lead (Össur: "the market’s biggest conversation")', () => {
+  it('claims nothing about makers where no maker rule chose the lead (Össur: "the market’s second biggest conversation")', () => {
     const lead = { label: 'Admiration for personal resilience', posts: 109, sharing: postsSharing('Admiration for personal resilience', []), fewMakers: false }
     const [l] = buildForYou({ month: SEP, questions: null, lead, followers: null }).lines
     expect(l.sentenceKey).toBe('foryou.lead_biggest.none')
     expect(FOR_YOU_SENTENCES[l.sentenceKey]).not.toContain('makers')
+    // Staging's board: "Audience identities and amputation types" (44) is
+    // bigger and never quoted, so the lead (34) is second.
+    const [second] = buildForYou({ month: SEP, questions: null, lead: { ...lead, rank: 1 }, followers: null }).lines
+    expect(second.sentenceKey).toBe('foryou.lead_biggest.second.none')
+    expect(FOR_YOU_SENTENCES[second.sentenceKey]).toBe('The market’s second biggest conversation. None of your [[foryou_posts]] posts from the month shared two or more of its words.')
+  })
+
+  it('names the lead\'s place and never calls a smaller theme the biggest', () => {
+    const lead = { label: 'Price and sale questions', posts: 20, sharing: postsSharing('Price and sale questions', []) }
+    const key = (rank: number) => buildForYou({ month: SEP, questions: null, lead: { ...lead, rank }, followers: null }).lines[0].sentenceKey
+    expect(key(0)).toBe('foryou.lead_touch.none')
+    expect(FOR_YOU_SENTENCES[key(2)]).toBe('The market’s third biggest conversation with few makers. None of your [[foryou_posts]] posts from the month shared two or more of its words.')
+    expect(FOR_YOU_SENTENCES[key(3)]).toBe('One of the market’s biggest conversations with few makers. None of your [[foryou_posts]] posts from the month shared two or more of its words.')
+    expect(key(9)).toBe(key(3))
+    // Every lead sentence: no digit, no em dash.
+    for (const k of Object.keys(FOR_YOU_SENTENCES).filter((x) => x.startsWith('foryou.lead_'))) expect(FOR_YOU_SENTENCES[k]).not.toMatch(/\d|—/)
   })
 
   it('prints the followers\' subject only for a READY subject (decision C; Community & purpose is provisional)', () => {

@@ -42,6 +42,46 @@ export interface ForYouBlock {
   lines: ForYouLine[]
 }
 
+/**
+ * THE LEAD LINE SAYS WHERE THE LEAD STANDS, AND ONLY WHAT IS TRUE (the
+ * deploy-3 review). The lead is the biggest board row that may supply voices
+ * (`mayLead`), which also skips a kind that is never quoted, an identity new
+ * this run, a stripped label and Heinrich's exclusions; so it is not always
+ * "the market's biggest conversation". `rank` counts the board's themes bigger
+ * than the lead on the grounds the sentence states (with few makers: a
+ * measured share of a quarter or less; with no maker rule: every theme), and
+ * the sentence names that place: biggest, second, third, or "one of" beyond.
+ * Össur on staging: "Audience identities and amputation types" (44, never
+ * quoted) sits above the lead, so it reads "the market's second biggest".
+ */
+const LEAD_PLACES: readonly { key: string; words: string }[] = [
+  { key: '', words: 'The market’s biggest conversation' },
+  { key: '.second', words: 'The market’s second biggest conversation' },
+  { key: '.third', words: 'The market’s third biggest conversation' },
+  { key: '.among', words: 'One of the market’s biggest conversations' },
+]
+const LEAD_TAILS = {
+  none: 'None of your [[foryou_posts]] posts from the month shared two or more of its words.',
+  some: '[[foryou_touched]] of your [[foryou_posts]] posts from the month shared two or more of its words.',
+} as const
+
+function leadSentences(): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const p of LEAD_PLACES) {
+    for (const t of ['none', 'some'] as const) {
+      out[`foryou.lead_touch${p.key}.${t}`] = `${p.words} with few makers. ${LEAD_TAILS[t]}`
+      // A tenant with no maker rule (Össur): nothing was measured about
+      // makers, so the line claims nothing about them.
+      out[`foryou.lead_biggest${p.key}.${t}`] = `${p.words}. ${LEAD_TAILS[t]}`
+    }
+  }
+  return out
+}
+
+/** The sentence key's place part for a lead `rank` (0 = the biggest). */
+export const leadPlaceKey = (rank: number | undefined): string =>
+  LEAD_PLACES[Math.min(Math.max(0, Math.floor(rank ?? 0)), LEAD_PLACES.length - 1)].key
+
 /** The lines' sentences, by `sentenceKey`. Code's words; each figure a
  *  `[[token]]` its line's table holds. One base per sentence. */
 export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = {
@@ -49,16 +89,7 @@ export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = {
     'Your market asked about it on [[foryou_asked]] videos over the last 3 months. None of your [[foryou_posts]] posts in that time shared two or more of its words.',
   'foryou.unanswered.some':
     'Your market asked about it on [[foryou_asked]] videos over the last 3 months. [[foryou_touched]] of your [[foryou_posts]] posts in that time shared two or more of its words.',
-  'foryou.lead_touch.none':
-    'The market’s biggest conversation with few makers. None of your [[foryou_posts]] posts from the month shared two or more of its words.',
-  'foryou.lead_touch.some':
-    'The market’s biggest conversation with few makers. [[foryou_touched]] of your [[foryou_posts]] posts from the month shared two or more of its words.',
-  // A tenant with no maker rule (Össur): the lead is the biggest conversation,
-  // and nothing was measured about makers, so the line claims nothing about them.
-  'foryou.lead_biggest.none':
-    'The market’s biggest conversation. None of your [[foryou_posts]] posts from the month shared two or more of its words.',
-  'foryou.lead_biggest.some':
-    'The market’s biggest conversation. [[foryou_touched]] of your [[foryou_posts]] posts from the month shared two or more of its words.',
+  ...leadSentences(),
   'foryou.followers':
     'The subject picked for you that your followers talked about most: [[foryou_touched]] of your [[foryou_posts]] posts with a reading.',
 }
@@ -103,8 +134,10 @@ export function buildForYou(input: {
   } | null
   /** `fewMakers`: the lead was chosen on a measured maker share (a quarter
    *  or fewer); false for a tenant with no maker rule, whose lead is simply
-   *  the biggest conversation. */
-  lead: { label: string; posts: number; sharing: Sharing; fewMakers?: boolean } | null
+   *  the biggest conversation. `rank`: how many board themes, eligible on the
+   *  grounds the sentence states, are bigger than the lead (`leadRank`);
+   *  absent reads as 0. */
+  lead: { label: string; posts: number; sharing: Sharing; fewMakers?: boolean; rank?: number } | null
   followers: { subject: { id: string; name: string; calibration: SubjectCalibrationWord }; k: number; n: number } | null
 }): ForYouBlock {
   const lines: ForYouLine[] = []
@@ -131,7 +164,7 @@ export function buildForYou(input: {
     const touched = l.sharing.matched.length
     lines.push({
       kind: 'lead_touch',
-      sentenceKey: `foryou.${l.fewMakers === false ? 'lead_biggest' : 'lead_touch'}.${touched === 0 ? 'none' : 'some'}`,
+      sentenceKey: `foryou.${l.fewMakers === false ? 'lead_biggest' : 'lead_touch'}${leadPlaceKey(l.rank)}.${touched === 0 ? 'none' : 'some'}`,
       figures: {
         foryou_posts: { value: l.posts, unit: 'videos', label: 'your posts in the month' },
         foryou_touched: { value: touched, unit: 'videos', label: 'your posts sharing two or more of its words' },

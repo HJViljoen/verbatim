@@ -98,6 +98,7 @@ import {
   buildThemeBoard,
   fromNewSearches,
   heroLead,
+  leadRank,
   marketCalibration,
   marketSubjectSide,
   mayLead as mayLeadTheme,
@@ -2649,7 +2650,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         subjectRows,
         questions: questionsAhead,
         lead: 'hero' in front && front.hero?.kind === 'themes' && front.hero.lead
-          ? { label: front.hero.lead.label, fewMakers: 'themes' in front && front.themes?.segments === 'measured' }
+          ? {
+              label: front.hero.lead.label,
+              fewMakers: 'themes' in front && front.themes?.segments === 'measured',
+              rank: 'themes' in front && front.themes ? leadRank(front.themes, front.hero.lead) : 0,
+            }
           : null,
         posts: await postsAhead,
         card: await cardAhead,
@@ -2970,7 +2975,7 @@ async function buildForYouAndPublished(input: {
   subjectRows: readonly Subject[] | null
   /** The questions line's input, read beside the page (`loadForYouQuestions`). */
   questions: Promise<ForYouQuestions>
-  lead: { label: string; fewMakers: boolean } | null
+  lead: { label: string; fewMakers: boolean; rank: number } | null
   posts: RecentPost[] | null
   card: CardInputs
   audience: { videos: number; comments: number } | null
@@ -2989,7 +2994,7 @@ async function buildForYouAndPublished(input: {
 
   // The lead theme against your posts of the month.
   const lead = input.lead && input.posts
-    ? { label: input.lead.label, posts: monthPosts.length, sharing: postsSharing(input.lead.label, monthPosts), fewMakers: input.lead.fewMakers }
+    ? { label: input.lead.label, posts: monthPosts.length, sharing: postsSharing(input.lead.label, monthPosts), fewMakers: input.lead.fewMakers, rank: input.lead.rank }
     : null
 
   // The subject your posts' comments matched most (a ready subject prints).

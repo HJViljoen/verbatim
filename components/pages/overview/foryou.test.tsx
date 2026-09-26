@@ -80,9 +80,12 @@ describe('What it means for you (overview.foryou)', () => {
     expect(t).toContain('1 post on zippers · rain')
   })
 
-  it('Össur (no maker rule): the biggest conversation, with nothing claimed about makers', () => {
+  it('Össur (no maker rule): its place among the biggest conversations, with nothing claimed about makers', () => {
+    // Board row 1, "Audience identities and amputation types" (44), is a kind
+    // never quoted, so the lead is row 2: never "the market's biggest".
     const t = text(overviewForYou.render(ossurFrontFixture(), 'app', ctx))
-    expect(t).toContain('The market’s biggest conversation. None of your 109 posts from the month shared two or more of its words.')
+    expect(t).toContain('The market’s second biggest conversation. None of your 109 posts from the month shared two or more of its words.')
+    expect(t).not.toContain('The market’s biggest')
     expect(t).not.toContain('makers')
   })
 

@@ -24,7 +24,7 @@ import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFix
 import { howSoundLine, soundFigures } from '@/lib/reading/record'
 import { sealandReading } from '@/lib/test/reading-fixture'
 import { AUGUST_CATEGORY_N, SEPTEMBER_CATEGORY_N, septemberThemes } from '@/lib/test/market-fixture'
-import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, marketKindLabel, searchChangeDays, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, leadRank, marketKindLabel, searchChangeDays, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import { readingMonthFor, scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { comparabilityOf } from '@/lib/reading/comparability'
 import type { ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
@@ -1309,13 +1309,15 @@ export function ossurFrontFixture(): OverviewData {
     asks: buildAsks(themes, REAL_MONTH, 'no_rule'),
     change: base.change ? { ...base.change, paused: true } : undefined,
     subjects: { ...base.subjects, state: 'none', rows: [], candidates: [], market: { month: REAL_MONTH, n: 362, prev: { month: AUG, n: 585 } } },
-    // No subject named; the lead is the biggest conversation (no maker rule),
-    // against Össur's 109 September posts on staging, none sharing two of
-    // its words (WP2.5; staging render, 11 Oct clock).
+    // No subject named; the lead is the biggest conversation that may be
+    // quoted (no maker rule), second on the board under "Audience identities
+    // and amputation types" (44, a kind never quoted), against Össur's 109
+    // September posts on staging, none sharing two of its words (WP2.5;
+    // staging render, 11 Oct clock).
     foryou: buildForYou({
       month: REAL_MONTH,
       questions: null,
-      lead: { label: 'Admiration for personal resilience', posts: 109, sharing: { checked: ['personal', 'resilience'], matched: [] }, fewMakers: false },
+      lead: { label: 'Admiration for personal resilience', posts: 109, sharing: { checked: ['personal', 'resilience'], matched: [] }, fewMakers: false, rank: leadRank(board, board.rows.find((t) => t.registryId === 'o-resilience')!) },
       followers: null,
     }),
     // Össur's own posts on staging: 109 in September (13 with five comments

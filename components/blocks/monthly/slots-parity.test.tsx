@@ -168,7 +168,7 @@ describe('the page and the monthly print one sentence each', () => {
 
   it('Össur: the lead line with no maker claim, and its census, as its page prints them', () => {
     const data = builtFull(ossurArrivalsFixture())
-    const lead = 'The market’s biggest conversation. None of your 109 posts from the month shared two or more of its words.'
+    const lead = 'The market’s second biggest conversation. None of your 109 posts from the month shared two or more of its words.'
     expect(pageText('overview.foryou', data.overview)).toContain(lead)
     for (const mode of MODES) {
       const monthly = read(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx))

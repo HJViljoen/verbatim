@@ -89,6 +89,24 @@ export function mayLead(t: MarketTheme, segments: ThemeBoard['segments'], exclud
   return s != null && Number.isFinite(s) && s >= 0 && s <= LEAD_MAX_MAKER_SHARE
 }
 
+/**
+ * Where the lead stands on the grounds the for-you line states (WP2.5, the
+ * deploy-3 review): how many board themes bigger than the lead have a
+ * measured maker share of a quarter or less (with no maker rule, every
+ * theme). 0 means no such theme is bigger, so "the market's biggest
+ * conversation with few makers" is true. A theme skipped for another reason
+ * (a kind never quoted, an identity new this run, a stripped label, an
+ * exclusion) counts, because the sentence does not state those grounds.
+ */
+export function leadRank(board: Pick<ThemeBoard, 'rows' | 'segments'>, lead: Pick<MarketTheme, 'registryId' | 'k'>): number {
+  const eligible = (t: MarketTheme): boolean => {
+    if (board.segments === 'no_rule') return true
+    const s = t.makerShare
+    return isMeasuredShare(s) && (s as number) <= LEAD_MAX_MAKER_SHARE
+  }
+  return board.rows.filter((t) => t.registryId !== lead.registryId && t.k > lead.k && eligible(t)).length
+}
+
 // ---- The sentence, as parts ------------------------------------------------------------
 
 export type HeroPart =
