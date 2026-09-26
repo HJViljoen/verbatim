@@ -58,7 +58,10 @@ describe('Where your market came from', () => {
     // Össur on staging: 362 September market videos, none with a provenance row, no maker rule.
     const ossur = renderText(<WhereItCameFrom month={MONTH} marketVideos={362} terms={{ rows: [], unknown: 362 }} makers="no_rule" />)
     expect(ossur).toContain('No video in September carries a record of the search that found it yet.')
-    expect(ossur).toContain('362 of September’s 362 videos carry no record of the search that found them.')
+    // Said once: with no search on record, the count of videos without one is the same sentence.
+    expect(ossur).not.toContain('362 of September’s 362 videos carry no record')
+    const some = renderText(<WhereItCameFrom month={MONTH} marketVideos={654} terms={{ rows: TERMS, unknown: 3 }} makers="measured" />)
+    expect(some).toContain('3 of September’s 654 videos carry no record of the search that found them.')
     const noRule = renderText(<WhereItCameFrom month={MONTH} marketVideos={654} terms={{ rows: TERMS.slice(0, 1), unknown: 0 }} makers="no_rule" />)
     expect(noRule).toContain('no rule')
   })

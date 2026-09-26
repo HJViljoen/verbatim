@@ -128,7 +128,7 @@ export function WhereItCameFrom({
       {terms.rows.length > SEARCH_ROWS ? (
         <Line>{fmtInt(SEARCH_ROWS)} of {fmtInt(terms.rows.length)} searches shown.</Line>
       ) : null}
-      {terms.unknown > 0 ? (
+      {terms.unknown > 0 && top != null ? (
         <Line>{fmtInt(terms.unknown)} of {m}’s {fmtInt(marketVideos)} videos carry no record of the search that found them.</Line>
       ) : null}
     </Section>
