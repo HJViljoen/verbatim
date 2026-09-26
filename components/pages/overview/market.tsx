@@ -36,17 +36,24 @@ export const SCALE = {
 } as const
 
 /**
- * A table ON A PHONE (below `sm`; WP1.6 review). At 390px the preview's
+ * A NARROW table (WP1.6 review; deploy 2 review). At 390px the preview's
  * columns scrolled sideways, and the first screen showed truncated labels and
- * bars and none of the figures. Below `sm` a market table is the label and
- * its three figure columns (Videos, this month, the month before), which fit
- * the tile's width: the rank and the bar leave (`PHONE_HIDDEN`), and a row's
- * tag or "under 10, a count only" takes a line of its own under the row
- * (`PHONE_OWN_LINE`). From `sm` up each table keeps its own columns.
+ * bars and none of the figures. In a narrow block a market table is the label
+ * and its three figure columns (Videos, this month, the month before), which
+ * fit: the rank and the bar leave (`PHONE_HIDDEN`), and a row's tag or "under
+ * 10, a count only" takes a line of its own under the row (`PHONE_OWN_LINE`).
+ *
+ * THE BLOCK'S WIDTH DECIDES, NOT THE WINDOW'S (deploy 2 review). Keyed to
+ * `sm`, the wide columns ran from 640px of window, but the tile sits beside
+ * the 224px sidebar from `md`: at 768 the kinds table needed 528px in a 432px
+ * block and scrolled sideways, and the subjects table 568 in 536 at 640. The
+ * table's wrapper is a container (`@container`) and the wide columns start at
+ * 600px of block (`@min-[600px]:`), the kinds and subjects tables' widest
+ * need plus room. The theme board, wider still, has its own (themes.tsx).
  */
-export const PHONE_COLS = 'grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 sm:gap-x-4'
-export const PHONE_HIDDEN = 'max-sm:hidden'
-export const PHONE_OWN_LINE = 'max-sm:order-last max-sm:col-span-full'
+export const PHONE_COLS = 'grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 @min-[600px]:gap-x-4'
+export const PHONE_HIDDEN = '@max-[600px]:hidden'
+export const PHONE_OWN_LINE = '@max-[600px]:order-last @max-[600px]:col-span-full'
 
 /** A table's rules: ink-grey under the head, a lighter hairline between rows. */
 export const RULE = {

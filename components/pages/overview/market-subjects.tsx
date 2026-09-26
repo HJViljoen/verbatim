@@ -133,15 +133,17 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
   // THE BOARD'S COLUMNS, WITHOUT ITS RANK: the figure columns are the same
   // three 64px columns, so on the full-width page they line up with the
   // board's "Videos", "Sep" and "Aug" above.
-  // On a phone the label and the three figure columns only (`PHONE_COLS`).
-  const cols = `${PHONE_COLS} sm:grid-cols-[minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
+  // In a narrow block the label and the three figure columns only
+  // (`PHONE_COLS`, a container query on the table's wrapper).
+  const cols = `${PHONE_COLS} @min-[600px]:grid-cols-[minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
+  const hidden = PHONE_HIDDEN
   return (
     <BlockFrame title={MARKET_SUBJECTS_TITLE} mode={mode} footer={footer} roomy>
-      <div className="-mx-1 overflow-x-auto px-1">
-        <div className="sm:min-w-[560px]" role="table">
+      <div className="-mx-1 overflow-x-auto px-1 @container">
+        <div className="@min-[600px]:min-w-[560px]" role="table">
           <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
             <span role="columnheader" className={SCALE.head}>Subject</span>
-            <span role="columnheader" className={PHONE_HIDDEN}><BarLegend month={data.month} prevMonth={prev?.month ?? null} /></span>
+            <span role="columnheader" className={hidden}><BarLegend month={data.month} prevMonth={prev?.month ?? null} /></span>
             <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
             <span role="columnheader"><BaseHead month={data.month} n={n} mode={mode} /></span>
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
@@ -158,10 +160,10 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
                   {tag ? <span className={SCALE.tag}>{tag}</span> : null}
                 </span>
                 {figures && !under ? (
-                  <span className={`block ${PHONE_HIDDEN}`}>
+                  <span className={`block ${hidden}`}>
                     <LevelBar share={n ? (k as number) / n : null} prevShare={prev?.n && r.marketPrev?.k != null ? r.marketPrev.k / prev.n : null} axis={axis} />
                   </span>
-                ) : under ? <span className={`text-[13px] text-muted-foreground ${PHONE_OWN_LINE}`}>under 10, a count only</span> : <span className={PHONE_HIDDEN} />}
+                ) : under ? <span className={`text-[13px] text-muted-foreground ${PHONE_OWN_LINE}`}>under 10, a count only</span> : <span className={hidden} />}
                 <span className={`${SCALE.num} font-semibold`}>{figures ? <span data-copy="figure">{fmtInt(k as number)}</span> : null}</span>
                 <span className={SCALE.num}>{figures ? <span data-copy="figure">{share(k, n)}</span> : null}</span>
                 <span className={SCALE.prev}>{figures && prev ? <span data-copy="figure">{prevCell(r.marketPrev?.k, prev.n)}</span> : null}</span>

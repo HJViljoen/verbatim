@@ -98,11 +98,12 @@ function KindsTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
       </table>
     )
   }
-  // On a phone the label and the three figure columns only (`PHONE_COLS`).
-  const cols = `${PHONE_COLS} sm:grid-cols-[minmax(150px,1.1fr)_minmax(96px,1fr)_64px_64px_64px]`
+  // In a narrow block the label and the three figure columns only
+  // (`PHONE_COLS`, a container query on the table's wrapper).
+  const cols = `${PHONE_COLS} @min-[600px]:grid-cols-[minmax(150px,1.1fr)_minmax(96px,1fr)_64px_64px_64px]`
   return (
-    <div className="-mx-1 overflow-x-auto px-1">
-      <div className="sm:min-w-[520px]" role="table">
+    <div className="-mx-1 overflow-x-auto px-1 @container">
+      <div className="@min-[600px]:min-w-[520px]" role="table">
         <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
           <span role="columnheader" className={SCALE.head}>Kind</span>
           <span role="columnheader" className={PHONE_HIDDEN}><BarLegend month={m.month} prevMonth={prev?.month ?? null} /></span>
