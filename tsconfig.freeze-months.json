@@ -4,6 +4,6 @@
     "noEmit": true,
     "incremental": false
   },
-  "files": ["lib/reading/monthly.ts"],
+  "files": ["lib/reading/monthly.ts", "lib/subjects/read.ts"],
   "include": []
 }
