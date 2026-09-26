@@ -7,7 +7,8 @@ import { surface } from '@/lib/nav'
 import { nameLineParts, topicNote } from '@/lib/pages/overview-market'
 import type { MonthlyBrands } from '@/lib/reports/monthly-slots'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { Inner, Num, RowLabel, Table } from './email'
+import { Inner, Num } from './email'
+import { T, presentation } from './email-table'
 import { slotSection } from './slot'
 
 /**
@@ -35,15 +36,70 @@ function nameWords(b: MonthlyBrands): ReactNode {
 }
 
 /** The two counts as one bar, table-safe: the count without our rival
- *  searches in orange, the rest of the count in all in its paler step. */
+ *  searches in orange, the rest of the count in all in its paler step, set
+ *  on the row's middle as the artboard draws it. */
 function EmailBar({ organic, all, axis }: { organic: number; all: number; axis: number }) {
   const px = (k: number) => Math.round((Math.max(0, k) / axis) * BAR_WIDTH)
   const a = px(organic)
   const b = Math.max(0, px(all) - a)
   const seg = (w: number, bg: string) => (w > 0 ? <td style={{ width: w, height: 8, background: bg, fontSize: 0, lineHeight: 0 }}>&nbsp;</td> : null)
   return (
-    <table role="presentation" cellPadding={0} cellSpacing={0} aria-hidden style={{ borderCollapse: 'collapse' }}>
+    <table role="presentation" cellPadding={0} cellSpacing={0} aria-hidden style={{ borderCollapse: 'collapse', marginTop: 7 }}>
       <tbody><tr>{seg(a, ORGANIC_HEX)}{seg(b, ALL_HEX)}</tr></tbody>
+    </table>
+  )
+}
+
+const cellBase = { fontFamily: FONT.sans, verticalAlign: 'top' as const }
+const headCell = (align: 'left' | 'right', width?: number) => ({
+  ...cellBase, padding: '0 0 8px 8px', borderBottom: `1px solid ${EMAIL.border}`, fontSize: 12, lineHeight: '16px',
+  color: EMAIL.muted, textAlign: align, verticalAlign: 'bottom' as const, ...(width ? { width } : {}),
+})
+const rowCell = (last: boolean, align: 'left' | 'right' = 'left', width?: number) => ({
+  ...cellBase, padding: '11px 0 11px 8px', borderBottom: last ? 0 : `1px solid ${EMAIL.hairline}`, fontSize: 15, lineHeight: '22px',
+  color: EMAIL.ink, textAlign: align, ...(width ? { width } : {}),
+})
+
+/**
+ * The artboard's table, drawn by hand rather than with the section `Table`,
+ * because a brand not counted says so ACROSS the bar and the two figures in
+ * one line ("Freitag · mostly the German word for Friday · not counted"), and
+ * that cell must survive a phone, where the bar column leaves (`vb-m-bar`).
+ */
+function EmailTable({ b }: { b: MonthlyBrands }) {
+  const n = b.topics[0]?.n ?? null
+  const axis = brandAxis(b)
+  const counted = b.topics.some((t) => topicNote(t) == null)
+  return (
+    <table width="100%" {...presentation} style={{ ...T, marginTop: 24 }}>
+      <thead>
+        <tr>
+          <th style={{ ...headCell('left'), paddingLeft: 0 }}>Brand</th>
+          <th className="vb-m-bar" style={headCell('left', BAR_WIDTH)}>{''}</th>
+          <th style={headCell('right', 112)}>{counted ? <>{swatch(ORGANIC_HEX)}Without our<br />rival searches</> : null}</th>
+          <th style={headCell('right', 64)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}In all<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {b.topics.map((t, i) => {
+          const last = i === b.topics.length - 1
+          const note = topicNote(t)
+          return (
+            <tr key={t.brandKey}>
+              <td style={{ ...rowCell(last), paddingLeft: 0 }}>{t.label}</td>
+              {note ? (
+                <td colSpan={3} style={{ ...rowCell(last), fontSize: 13, color: EMAIL.muted }}>{note}</td>
+              ) : (
+                <>
+                  <td className="vb-m-bar" style={rowCell(last, 'left', BAR_WIDTH)}><EmailBar organic={t.kOrganic ?? 0} all={t.kAny ?? 0} axis={axis} /></td>
+                  <td style={rowCell(last, 'right', 112)}><Num>{fmtInt(t.kOrganic ?? 0)}</Num></td>
+                  <td style={rowCell(last, 'right', 64)}><Num prev>{fmtInt(t.kAny ?? 0)}</Num></td>
+                </>
+              )}
+            </tr>
+          )
+        })}
+      </tbody>
     </table>
   )
 }
@@ -51,8 +107,6 @@ function EmailBar({ organic, all, axis }: { organic: number; all: number; axis: 
 const swatch = (hex: string) => <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: hex, marginRight: 6 }} />
 
 function emailBody(b: MonthlyBrands): ReactNode {
-  const n = b.topics[0]?.n ?? null
-  const axis = brandAxis(b)
   return (
     <>
       <Inner marginTop={0}>
@@ -65,27 +119,7 @@ function emailBody(b: MonthlyBrands): ReactNode {
           </tbody>
         </table>
       </Inner>
-      {b.topics.length > 0 ? (
-        <Table
-          marginTop={24}
-          columns={[
-            { head: 'Brand' },
-            { head: '', width: BAR_WIDTH, className: 'vb-m-bar' },
-            { head: <>{swatch(ORGANIC_HEX)}Without our<br />rival searches</>, align: 'right', width: 112 },
-            { head: <span data-copy="level">{swatch(ALL_HEX)}In all<br />of {n == null ? '·' : fmtInt(n)}</span>, align: 'right', width: 64 },
-          ]}
-          rows={b.topics.map((t) => {
-            const note = topicNote(t)
-            if (note) return [<RowLabel key="l" tag={note}>{t.label}</RowLabel>, null, null, null]
-            return [
-              <RowLabel key="l">{t.label}</RowLabel>,
-              <EmailBar key="b" organic={t.kOrganic ?? 0} all={t.kAny ?? 0} axis={axis} />,
-              <Num key="o">{fmtInt(t.kOrganic ?? 0)}</Num>,
-              <Num key="a" prev>{fmtInt(t.kAny ?? 0)}</Num>,
-            ]
-          })}
-        />
-      ) : null}
+      {b.topics.length > 0 ? <EmailTable b={b} /> : null}
     </>
   )
 }

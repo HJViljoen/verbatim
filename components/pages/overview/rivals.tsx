@@ -468,27 +468,37 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
       </table>
     )
   }
-  const cols = 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[480px]:grid-cols-[7.5rem_minmax(0,1fr)_7rem_3.5rem]'
+  // THE PAGE'S TABLE RHYTHM (the subjects table above it): the label takes
+  // 1.2 parts and the bar 1, so the two tables' bars start near each other at
+  // full width, and a long name ("Freedom of Movement") keeps its room.
+  const cols = 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(96px,1fr)_7rem_3.5rem]'
   const bar = '@max-[480px]:hidden'
   const pct = (k: number | null) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
+  // No figure heads over a table that prints no figure (every brand not
+  // counted yet): the heads and the base would stand over nothing.
+  const counted = b.topics.some((t) => topicNote(t) == null)
   return (
     <div className="@container min-w-0">
       <div role="table" aria-label="Brands in your market" className="flex flex-col">
         <div role="row" className={cn('grid items-end gap-x-4 border-b border-border pb-2.5 text-[13px] font-medium leading-[1.35] text-muted-foreground', cols)}>
           <span role="columnheader" className="whitespace-nowrap">Brand</span>
-          <span aria-hidden className={bar} />
-          <span role="columnheader" className="text-right"><Swatch ink={ORGANIC_INK} />Without our<br />rival searches</span>
-          <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right">
-            <span className="whitespace-nowrap"><Swatch ink={ALL_INK} />In all</span>
-            <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(n)}</span>
-          </span>
+          {counted ? (
+            <>
+              <span aria-hidden className={bar} />
+              <span role="columnheader" className="text-right"><Swatch ink={ORGANIC_INK} />Without our<br />rival searches</span>
+              <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right">
+                <span className="whitespace-nowrap"><Swatch ink={ALL_INK} />In all</span>
+                <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(n)}</span>
+              </span>
+            </>
+          ) : null}
         </div>
         {b.topics.map((t, i) => {
           const note = topicNote(t)
           const last = i === b.topics.length - 1
           return (
             <div key={t.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4 py-1.5', cols, last ? null : 'border-b border-border/60')}>
-              <span role="rowheader" className="min-w-0 truncate text-[15px] text-foreground">{t.label}</span>
+              <span role="rowheader" className="min-w-0 text-[15px] leading-[1.35] text-foreground [overflow-wrap:anywhere]">{t.label}</span>
               {note ? (
                 <span role="cell" className="col-span-2 text-[13px] leading-[1.4] text-muted-foreground @min-[480px]:col-span-3">{note}</span>
               ) : (
