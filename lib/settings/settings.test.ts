@@ -8,8 +8,12 @@ import {
   type ScheduleLike,
 } from './artefacts'
 import {
-  actorWords, breakClause, monthsOfRange, readChangeLog, renderSide, showingLine, CHANGE_LOG_ROWS,
+  actorWords, breakClause, groupChangeRows, monthsOfRange, readChangeLog, renderSide, showingLine, CHANGE_LOG_ROWS,
+  RECORD_GROUP_WINDOW_MS, SURFACE_WORDS,
 } from './change-log'
+import { CONFIG_SURFACES } from '../config-log'
+import { MF1_SURFACES, type LoggedSurface } from '../config-surfaces-mf1'
+import { CHANGE_GROUP_WINDOW_MS, changesFromLog } from '../reading/comparability'
 import { deliveryRecord, updatesInMonth } from './delivery'
 import {
   appealKey, gateSummary, gateTotals, gateTotalsFrom, keptByCommunity, keptByPlatform, keptByTerm,
@@ -281,6 +285,105 @@ describe('readChangeLog', () => {
     expect(view.firstLoggedAt).toBeNull()
     expect(view.recorded).toEqual([])
     expect(view.prehistory[0].reconstructed).toBe(true)
+  })
+})
+
+// ---- one entry per change (MF1, WP1.4) ------------------------------------------
+//
+// Sealand's tracking rows on staging, by their shape (GC F2): the 9 Sep term
+// swap reconstructed as fourteen rows, one term each, at 18:17:56; the 13 Sep
+// hand SQL as two rows at 10:00:58; the 17 Sep script as three trigger `terms`
+// rows and one `rivals` row at 16:02:56. The record shows each change once.
+
+describe('the record shows each change once', () => {
+  const swapOut = ['cotopaxi', 'freitag', 'patagonia', 'poler', 'sealandgear', 'sustainable bags', 'topo designs']
+  const swapIn = ['cotopaxi backpack', 'freitag bag', 'rareform bag', 'recycled sailcloth', 'sailcloth bag', 'sealand bag', 'upcycled backpack']
+  const recon = { source: 'reconstructed' as const, actor_kind: 'reconstructed' as const, actor_user_id: null, note: null }
+  const rows: ConfigChange[] = [
+    // The reconstructed initial term set (6 Jul): where the record begins, not a change of ours.
+    change({ id: 'init', changed_at: '2026-07-06T04:19:00Z', field: 'industry_keywords', before: null, after: ['upcycled bag'], ...recon }),
+    ...swapOut.map((t, i) => change({ id: `s-out-${i}`, changed_at: '2026-09-09T18:17:56Z', field: 'industry_keywords', before: t, after: null, ...recon })),
+    ...swapIn.map((t, i) => change({ id: `s-in-${i}`, changed_at: '2026-09-09T18:17:56Z', field: 'industry_keywords', before: null, after: t, ...recon })),
+    change({ id: 'h-1', changed_at: '2026-09-13T10:00:58Z', field: 'industry_keywords', before: null, after: ['handmade bag', 'sustainable fashion', 'travel gear'], ...recon, actor_kind: 'sql' }),
+    change({ id: 'h-2', changed_at: '2026-09-13T10:00:58Z', field: 'competitor_keywords', before: null, after: ['frtg'], ...recon, actor_kind: 'sql' }),
+    change({ id: 't-1', changed_at: '2026-09-17T16:02:56Z', field: 'competitor_keywords', source: 'trigger', actor_kind: 'script', actor_user_id: null, note: null }),
+    change({ id: 't-2', changed_at: '2026-09-17T16:02:56Z', field: 'industry_keywords', source: 'trigger', actor_kind: 'script', actor_user_id: null, note: null }),
+    change({ id: 't-3', changed_at: '2026-09-17T16:02:56Z', field: 'exclude_terms', source: 'trigger', actor_kind: 'script', actor_user_id: null, note: null }),
+    change({ id: 'r-1', changed_at: '2026-09-17T16:02:56Z', surface: 'rivals', field: 'competitor_names', source: 'trigger', actor_kind: 'script', actor_user_id: null, note: null }),
+  ]
+
+  it('groups rows on one surface, by one actor, inside a minute', () => {
+    // Oldest first; at one instant, by the first row's id.
+    expect(groupChangeRows(rows).map((g) => `${g[0].id}×${g.length}`)).toEqual(['init×1', 's-in-0×14', 'h-1×2', 'r-1×1', 't-1×3'])
+  })
+
+  it('the 9, 13 and 17 Sep term changes each appear once, with every term in the swap on its side', () => {
+    const view = readChangeLog({ rows })
+    expect(view.prehistory.map((c) => c.id)).toEqual(['h-1', 's-in-0', 'init'])
+    expect(view.recorded.map((c) => c.id)).toEqual(['r-1', 't-1'])
+    const swap = view.prehistory[1]
+    expect(swap.before).toBe(swapOut.join('; '))
+    expect(swap.after).toBe(swapIn.join('; '))
+  })
+
+  it('uses the change ids the comparability judge and the reach rows use', () => {
+    expect(RECORD_GROUP_WINDOW_MS).toBe(CHANGE_GROUP_WINDOW_MS)
+    const judged = changesFromLog(rows).filter((c) => c.surface === 'terms').map((c) => c.id)
+    const recorded = readChangeLog({ rows })
+    const shown = [...recorded.recorded, ...recorded.prehistory].filter((c) => c.surface === 'terms' && c.id !== 'init').map((c) => c.id)
+    expect([...shown].sort()).toEqual([...judged].sort())
+    expect(judged).toHaveLength(3)
+  })
+
+  it('a community edit writes the trigger row and its own logged row: one entry, the logged row’s sentence', () => {
+    const edit = [
+      change({ id: 'e-t', changed_at: '2026-09-19T08:00:00.010Z', surface: 'subreddits', field: 'subreddits', source: 'trigger', note: null }),
+      change({ id: 'e-l', changed_at: '2026-09-19T08:00:00.030Z', surface: 'subreddits', field: 'subreddits', note: 'r/onebag was added to the communities we watch.' }),
+    ]
+    const view = readChangeLog({ rows: edit })
+    expect(view.recorded).toHaveLength(1)
+    expect(view.recorded[0].said).toBe('r/onebag was added to the communities we watch.')
+  })
+
+  it('never merges two people’s edits, however close', () => {
+    const two = [change({ id: 'a', actor_user_id: 'u1' }), change({ id: 'b', actor_user_id: 'u2' })]
+    expect(readChangeLog({ rows: two }).recorded).toHaveLength(2)
+  })
+
+  // log-tracking-eras writes the gate fix and attribution v3 on 30 Sep as
+  // reconstructed rows dated at the fix deploy (here a stand-in, 28 Sep 14:05),
+  // days after the record began. They are changes of ours written afterwards
+  // at a known date, not July's inferred term sets.
+  it('a reconstructed change dated after the record began joins the record, not the prehistory', () => {
+    const script = { source: 'reconstructed' as const, actor_kind: 'script' as const, actor_user_id: null, before: null, after: null }
+    const late: ConfigChange[] = [
+      ...rows,
+      change({ id: 'gate', changed_at: '2026-09-28T14:05:00.000Z', surface: 'gate_rule' satisfies LoggedSurface as ConfigChange['surface'], field: 'relevance_gate',
+        note: 'We corrected how we check that a video belongs to your market.', affects_months: '[2026-09-01,2026-10-01)', ...script }),
+      change({ id: 'attr', changed_at: '2026-09-28T14:05:00.000Z', surface: 'attribution' satisfies LoggedSurface as ConfigChange['surface'], field: 'attribution_v3',
+        note: 'We improved how we tell which brand a post is about, so fewer posts are filed under the wrong brand.', ...script }),
+    ]
+    const view = readChangeLog({ rows: late })
+    expect(view.recorded.map((c) => c.id)).toEqual(['attr', 'gate', 'r-1', 't-1'])
+    expect(view.prehistory.map((c) => c.id)).toEqual(['h-1', 's-in-0', 'init'])
+    expect(view.firstLoggedAt).toBe('2026-09-17T16:02:56Z')
+    const [attr, gate] = view.recorded
+    expect([attr.reconstructed, gate.reconstructed]).toEqual([true, true])
+    expect(gate.what).toBe('How we check relevance')
+    expect(gate.breaks).toBe('Sep 2026')
+    expect(attr.breaks).toBe('Not recorded.')
+    expect(attr.who).toBe('Verbatim')
+    // The prehistory keeps its own sentence.
+    expect(view.prehistory[2].breaks).toMatch(/^Not known: this change was worked out afterwards/)
+    // With nothing recorded yet, every reconstructed row is still prehistory.
+    expect(readChangeLog({ rows: late.filter((r) => r.source === 'reconstructed') }).recorded).toEqual([])
+  })
+
+  it('names the three new surfaces in client words', () => {
+    for (const s of [...CONFIG_SURFACES, ...MF1_SURFACES]) expect(SURFACE_WORDS[s], s).toBeTruthy()
+    for (const s of ['gate_rule', 'attribution', 'segment'] as const) {
+      expect(SURFACE_WORDS[s]).not.toMatch(/\d|—|gate|segment|attribution/i)
+    }
   })
 })
 

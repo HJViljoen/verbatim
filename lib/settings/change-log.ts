@@ -1,6 +1,7 @@
 import { fullDate, monthName, shortDate } from '../format'
 import { audienceLabel } from '../readiness/types'
-import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
+import type { ActorKind, ConfigChange } from '../config-log'
+import type { LoggedSurface } from '../config-surfaces-mf1'
 
 /**
  * The change log, read by the person whose configuration it is (Phase 1 WP16,
@@ -19,9 +20,22 @@ import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
  * counts only `source <> 'reconstructed'`, because the boundary sentence
  * `changeLogBoundary` says the record begins at the first LOGGED row and
  * everything before it is inference. The same split is made here: recorded
- * rows are the record, reconstructed rows are a prehistory, and the two are
- * never summed. Readiness and this page must not disagree about how many
- * changes a workspace has.
+ * rows are the record, reconstructed rows dated BEFORE it began are a
+ * prehistory, and the two are never summed. Readiness and this page must not
+ * disagree about where the record begins.
+ *
+ * A reconstructed change dated AFTER the record began is not prehistory.
+ * scripts/log-tracking-eras.ts writes the relevance-gate fix and attribution
+ * v3 (and a capped update, when there is one) as `source 'reconstructed'`
+ * rows, dated at the actual deploy days after the record began: a change of
+ * ours no setting logged, written down afterwards at a known date. Filed
+ * under "Before the record began" it would sit beside July's inferred term
+ * sets, so it joins the record, keeps `reconstructed: true`, and its break
+ * clause, when it has none, says "Not recorded." like any logged row (the
+ * "worked out afterwards" sentence belongs to the prehistory). Readiness
+ * still does not count it (its query filters on the source), which is the
+ * one place the two differ: readiness counts rows, this page one entry per
+ * change, so they never printed the same number anyway.
  *
  * Pure. The caller reads the rows and supplies the viewer.
  */
@@ -84,7 +98,7 @@ export function actorWords(
  *  `platforms` are operator levers a client cannot edit, and they still appear
  *  — a log that hid the changes we made to a workspace would be worse than no
  *  log. */
-export const SURFACE_WORDS: Record<ConfigSurface, string> = {
+export const SURFACE_WORDS: Record<LoggedSurface, string> = {
   terms: 'Search terms',
   rivals: 'Rivals',
   handles: 'Accounts we read',
@@ -99,6 +113,13 @@ export const SURFACE_WORDS: Record<ConfigSurface, string> = {
   prompt_version: 'How we read',
   rival_rename: 'A rival was renamed',
   other: 'Configuration',
+  // Three changes of ours that no setting records (MF1, WP1.4): the relevance
+  // check's rule, how posts are filed under a brand, and how makers and
+  // off-topic videos are marked. A mark never takes a video out of a count.
+  // (lib/config-surfaces-mf1.ts holds the three until the 4 Oct run.)
+  gate_rule: 'How we check relevance',
+  attribution: 'How posts are filed by brand',
+  segment: 'How makers and off-topic videos are marked',
 }
 
 // ---- What it broke ---------------------------------------------------------
@@ -165,7 +186,7 @@ export interface ClientChange {
    *  (lib/format.ts's own reason for `fullDate`). The record page's table is
    *  one workspace's own recent history in a column 100px wide. */
   dateShort: string
-  surface: ConfigSurface
+  surface: LoggedSurface
   what: string
   /** The plain sentence from `note`, or a composed one when the row has none
    *  (trigger rows carry before/after and no note). */
@@ -185,7 +206,7 @@ export interface ClientChange {
 /** A list is a list of strings, a scalar is a scalar, and anything else is
  *  named rather than dumped. The alternative — `JSON.stringify` — puts a jsonb
  *  blob of handles or subreddit probe objects on a client's screen. */
-export function renderSide(surface: ConfigSurface, value: unknown): string | null {
+export function renderSide(surface: LoggedSurface, value: unknown): string | null {
   if (value === null || value === undefined) return null
   if (Array.isArray(value)) {
     const items = value.map((v) => (typeof v === 'string' ? v : (v as { name?: string })?.name)).filter(Boolean) as string[]
@@ -230,45 +251,111 @@ export interface ReadChangeLogArgs {
 }
 
 export interface ChangeLogView {
-  /** Rows the product wrote down as they happened. */
+  /** Rows the product wrote down as they happened, and the reconstructed
+   *  changes of ours dated after the record began (`reconstructed: true`). */
   recorded: ClientChange[]
-  /** Rows worked out afterwards from what each update searched — a label, not
-   *  a record, and never summed with the recorded ones. */
+  /** Rows worked out afterwards from what each update searched, dated before
+   *  the record began — a label, not a record, and never summed with the
+   *  recorded ones. */
   prehistory: ClientChange[]
   /** The first recorded change, or null while only prehistory exists. */
   firstLoggedAt: string | null
 }
 
-/** The whole reader: rows in, two lists out, newest first in each. */
+/**
+ * The rows of ONE change, grouped, so the record shows each change once (MF1,
+ * WP1.4): rows on the same surface, by the same actor, within
+ * `RECORD_GROUP_WINDOW_MS` of the group's first row. The audit trigger writes
+ * one row per column in one UPDATE (the 17 Sep script: three `terms` rows at
+ * 16:02:56), the reconstruction wrote one row per term (the 9 Sep swap:
+ * fourteen at 18:17:56), and a community edit writes the trigger's row and its
+ * own logged row a few milliseconds apart. The grouping is `changesFromLog`'s
+ * (lib/reading/comparability.ts, its CHANGE_GROUP_WINDOW_MS, which the test
+ * pins equal to this one), so a group's id is the change id that
+ * `config_change_reach` points at; the record adds the actor to the key, so
+ * two people's edits never become one entry. Oldest first within a group.
+ */
+export const RECORD_GROUP_WINDOW_MS = 60_000
+
+export function groupChangeRows(rows: readonly ConfigChange[]): ConfigChange[][] {
+  const sorted = rows
+    .map((row) => ({ row, ms: Date.parse(row.changed_at) }))
+    .sort((a, b) => (Number.isNaN(a.ms) ? 1 : 0) - (Number.isNaN(b.ms) ? 1 : 0) || a.ms - b.ms || a.row.id.localeCompare(b.row.id))
+  const groups: { startMs: number; rows: ConfigChange[] }[] = []
+  const open = new Map<string, { startMs: number; rows: ConfigChange[] }>()
+  for (const { row, ms } of sorted) {
+    if (Number.isNaN(ms)) {
+      groups.push({ startMs: ms, rows: [row] })
+      continue
+    }
+    const key = `${row.surface}\u0000${row.field === 'attention_panel' ? 'panel' : ''}\u0000${row.actor_kind}\u0000${row.actor_user_id ?? ''}`
+    const g = open.get(key)
+    if (g && ms - g.startMs <= RECORD_GROUP_WINDOW_MS) {
+      g.rows.push(row)
+      continue
+    }
+    const fresh = { startMs: ms, rows: [row] }
+    groups.push(fresh)
+    open.set(key, fresh)
+  }
+  return groups.map((g) => g.rows)
+}
+
+/** One side of a group: the row's own rendering for a single row; for several,
+ *  each row's rendered side, joined, so the 9 Sep swap reads its seven removed
+ *  terms before and its seven added terms after. */
+function groupSide(surface: LoggedSurface, rows: readonly ConfigChange[], side: 'before' | 'after'): string | null {
+  const parts = rows.map((r) => renderSide(surface, r[side])).filter((x): x is string => x != null)
+  if (parts.length === 0) return null
+  return rows.length === 1 ? parts[0] : parts.join('; ')
+}
+
+/** The whole reader: rows in, two lists out, newest first in each, ONE entry
+ *  per change (`groupChangeRows`). A group is prehistory when every row is
+ *  reconstructed AND it is dated before the first recorded group (see the
+ *  module header). */
 export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
   const { rows, viewerUserId = null, emails = {} } = args
-  const view = (change: ConfigChange): ClientChange => ({
-    id: change.id,
-    on: change.changed_at.slice(0, 10),
-    date: fullDate(change.changed_at),
-    dateShort: shortDate(change.changed_at),
-    surface: change.surface,
-    what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
-    said: change.note?.trim() || composedNote(change),
-    who: actorWords(change.actor_kind, {
-      actorUserId: change.actor_user_id,
-      actorEmail: change.actor_user_id ? emails[change.actor_user_id] : null,
-      viewerUserId,
-    }),
-    breaks: breakClause(change),
-    before: renderSide(change.surface, change.before),
-    after: renderSide(change.surface, change.after),
-    rowsAffected: change.rows_affected,
-    reconstructed: change.source === 'reconstructed',
-  })
+  const view = (group: readonly ConfigChange[], prehistoric: boolean): ClientChange => {
+    const change = group[0]
+    const withNote = group.find((r) => r.note?.trim())
+    const withAffects = group.find((r) => (r.affects_audiences?.length ?? 0) > 0 || r.affects_months) ?? change
+    const counted = group.filter((r) => r.rows_affected != null)
+    return {
+      id: change.id,
+      on: change.changed_at.slice(0, 10),
+      date: fullDate(change.changed_at),
+      dateShort: shortDate(change.changed_at),
+      surface: change.surface,
+      what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
+      said: withNote?.note?.trim() || composedNote(change),
+      who: actorWords(change.actor_kind, {
+        actorUserId: change.actor_user_id,
+        actorEmail: change.actor_user_id ? emails[change.actor_user_id] : null,
+        viewerUserId,
+      }),
+      breaks: breakClause({ ...withAffects, source: prehistoric ? 'reconstructed' : 'logged' }),
+      before: groupSide(change.surface, group, 'before'),
+      after: groupSide(change.surface, group, 'after'),
+      rowsAffected: counted.length > 0 ? counted.reduce((n, r) => n + (r.rows_affected ?? 0), 0) : null,
+      reconstructed: group.every((r) => r.source === 'reconstructed'),
+    }
+  }
 
-  const sorted = [...rows].sort((a, b) => (a.changed_at < b.changed_at ? 1 : a.changed_at > b.changed_at ? -1 : 0))
-  const recorded = sorted.filter((r) => r.source !== 'reconstructed')
-  const prehistory = sorted.filter((r) => r.source === 'reconstructed')
-  const firstLogged = recorded.length > 0 ? recorded[recorded.length - 1].changed_at : null
+  const newestFirst = (a: ConfigChange[], b: ConfigChange[]) =>
+    a[0].changed_at < b[0].changed_at ? 1 : a[0].changed_at > b[0].changed_at ? -1 : 0
+  const groups = groupChangeRows(rows).sort(newestFirst)
+  const allReconstructed = (g: readonly ConfigChange[]) => g.every((r) => r.source === 'reconstructed')
+  const logged = groups.filter((g) => !allReconstructed(g))
+  const firstLogged = logged.length > 0 ? logged[logged.length - 1][0].changed_at : null
+  const firstLoggedMs = firstLogged ? Date.parse(firstLogged) : Number.NaN
+  // Before the record began: every row reconstructed, and dated earlier than
+  // the first recorded change (or no recorded change at all yet).
+  const prehistoric = (g: readonly ConfigChange[]) =>
+    allReconstructed(g) && (Number.isNaN(firstLoggedMs) || !(Date.parse(g[0].changed_at) >= firstLoggedMs))
   return {
-    recorded: recorded.map(view),
-    prehistory: prehistory.map(view),
+    recorded: groups.filter((g) => !prehistoric(g)).map((g) => view(g, false)),
+    prehistory: groups.filter(prehistoric).map((g) => view(g, true)),
     firstLoggedAt: firstLogged,
   }
 }
@@ -279,8 +366,10 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
  * "4 changes since 19 Aug · 1 this month" — the mono meta beside the section's
  * eyebrow.
  *
- * RECORDED ROWS ONLY, for the reason the module's header gives: a reconstructed
- * row is inference and is never summed with the record. "This month" is the
+ * THE RECORD ONLY, for the reason the module's header gives: the prehistory is
+ * inference and is never summed with the record. (A reconstructed change of
+ * ours dated after the record began is in the record, and is counted: it is
+ * a row of the table this meta sits over.) "This month" is the
  * WALL CLOCK, which is what a change is dated by (`ClientChange.on` is
  * `changed_at`, and its doc comment says it is a period key for nothing) — so
  * this counts changes made in the current calendar month and not comments

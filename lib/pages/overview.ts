@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { pairChipWords, pairSentence, recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
-import { SEALAND_CLIENT_ID } from '../config'
+import { segmentRulesEnabled } from '../segments/rules'
 import { currentRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -3948,20 +3948,14 @@ export function makerSharesOf(rows: readonly ThemeMakerShareRow[]): Map<string, 
 }
 
 /**
- * The tenants whose maker rule is on, by client id: plan WP1.4's
- * `SEGMENT_RULES_ENABLED = { sealand: true }`, with Össur off, because its
- * non-buyer content is lived experience, not making (§2.13, CQ F105).
- *
- * A STAND-IN UNTIL WP1.4 MERGES. `lib/segments/rules.ts` is WP1.4's file and
- * holds the one list; the integration commit points `makerRuleEnabled` at it
- * and deletes this constant, so the rule is enabled in one place.
+ * Does this tenant have a maker rule? Without one no theme is ever marked,
+ * whatever `theme_maker_shares` would compute for it. The one list is
+ * `SEGMENT_RULES_ENABLED` (lib/segments/rules.ts, WP1.4): Sealand on, Össur
+ * off, because its non-buyer content is lived experience, not making (§2.13,
+ * CQ F43).
  */
-export const MAKER_RULE_CLIENTS: readonly string[] = [SEALAND_CLIENT_ID]
-
-/** Does this tenant have a maker rule? Without one no theme is ever marked,
- *  whatever `theme_maker_shares` would compute for it. */
-export function makerRuleEnabled(clientId: string, enabled: readonly string[] = MAKER_RULE_CLIENTS): boolean {
-  return enabled.includes(clientId)
+export function makerRuleEnabled(clientId: string): boolean {
+  return segmentRulesEnabled(clientId)
 }
 
 /** `theme_maker_shares` is not there: MF1 is not applied here yet. Narrow by

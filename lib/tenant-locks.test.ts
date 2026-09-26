@@ -357,6 +357,92 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
   })
 })
 
+// ---- R12 (deploy-1 review): the tracking writes go out on the admin client ----
+//
+// The R12 file (20260928091000_market_first_r12_grants.sql, applied once
+// deploy 2 is live) revokes `authenticated`'s column UPDATE on the search-set
+// and sending columns, so a tenant's session token cannot PATCH them around
+// the lock. MF1 leaves them alone: deploy 1's code still saves through them.
+// The three actions that wrote them through the session client now write through
+// the admin client, AFTER their role and lock checks: an operator's and an
+// unlocked tenant admin's saves still land, a locked tenant's never reach
+// either client, and no tracking_configs write is left on a session client.
+
+describe('R12: the three tracking writes use the admin client, after the checks', () => {
+  const terms = () => form({ brand_keywords: 'sealand gear', competitor_keywords: 'cotopaxi', industry_keywords: 'upcycled bag', exclude_terms: ['poker'] })
+  const cadence = () => form({ competitor_names: ['Cotopaxi', 'Topo Designs'], report_period: 'weekly', report_day: 'sunday' })
+  const trackingWrites = (w: Write[]) => w.filter((x) => x.table === 'tracking_configs')
+
+  for (const [who, make] of [
+    ['the operator on Sealand', () => operatorIn(SEALAND, session.client)],
+    ['an admin of an unlocked tenant', () => tenantAdmin(OSSUR, session.client)],
+  ] as const) {
+    it(`writes for ${who}, on the admin client only`, async () => {
+      const actions = await import('../app/dashboard/settings/actions')
+      h.session = make()
+      expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual({ ok: true, message: 'Settings saved.' })
+      expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(true)
+      expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(true)
+      // updateTrackingConfig: its update; updateSearchTerms: terms, then
+      // exclusions; updateCommunity: the communities.
+      expect(trackingWrites(admin.writes).filter((w) => w.op === 'update').length).toBeGreaterThanOrEqual(4)
+      expect(trackingWrites(session.writes)).toEqual([])
+    })
+  }
+
+  it('refuses a locked tenant before either client is written', async () => {
+    const actions = await import('../app/dashboard/settings/actions')
+    h.session = tenantAdmin(SEALAND, session.client)
+    const refused = { ok: false, message: TENANT_LOCK_REFUSAL.tracking }
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual(refused)
+    expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(refused)
+    expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'stop', name: 'onebag' }))).toEqual(refused)
+    expect([...admin.writes, ...session.writes]).toEqual([])
+  })
+
+  it('refuses a tenant member without a manager role before either client is written', async () => {
+    const actions = await import('../app/dashboard/settings/actions')
+    h.session = { ...tenantAdmin(OSSUR, session.client), role: 'member' }
+    expect((await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).ok).toBe(false)
+    expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(false)
+    expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(false)
+    expect([...admin.writes, ...session.writes]).toEqual([])
+  })
+
+  // The SQL without its comments: the R12 file's header names the grant that
+  // would undo it, and a comment grants nothing.
+  const sqlOf = (file: string) => readFileSync(join(ROOT, 'supabase/migrations', file), 'utf8').replace(/--[^\n]*/g, '')
+
+  it('the R12 file revokes exactly the search-set and sending columns from authenticated, and grants none back', () => {
+    const r12 = sqlOf('20260928091000_market_first_r12_grants.sql')
+    const revoked = r12.match(/revoke update \(([^)]*)\)\s+on public\.tracking_configs from authenticated;/)?.[1]
+    expect(revoked, 'the R12 revoke is no longer where this test looks for it').toBeTruthy()
+    expect(revoked!.split(',').map((c) => c.trim()).sort()).toEqual([
+      'brand_keywords', 'competitor_keywords', 'competitor_names', 'exclude_terms', 'industry_keywords',
+      'report_day', 'report_period', 'subreddits',
+    ])
+    expect(r12).not.toMatch(/grant update[^;]*on public\.tracking_configs/i)
+    // The runtime proof is on the throwaway cluster (has_column_privilege, and a
+    // tenant owner's session refused): scripts/pg-shim/r12-checks.sql.
+  })
+
+  it('MF1 changes no tracking_configs grant: deploy 1 still saves through them after it (rollback rule 3)', () => {
+    const mf1 = sqlOf('20260928090000_market_first_s1.sql')
+    expect(mf1).not.toMatch(/(revoke|grant)[^;]*on public\.tracking_configs/i)
+    // At runtime: scripts/pg-shim/mf1-checks.sql, sections 1 and 7.
+  })
+
+  it('no server action writes tracking_configs through a session client', () => {
+    // The session client is `supabase` (SessionContext) in every action; the
+    // admin client is `createAdminClient()` or a local bound to it.
+    const onSession = /\bsupabase\s*\.from\(\s*['"]tracking_configs['"]\s*\)\s*\.(?:update|insert|upsert)\(/
+    const offenders = serverActionModules
+      .filter((f) => onSession.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(ROOT, f))
+    expect(offenders).toEqual([])
+  })
+})
+
 // ---- The send-now route, run (deploy 1 review) ----------------------------------
 //
 // The string match above proves the call is in the file; these prove it runs
