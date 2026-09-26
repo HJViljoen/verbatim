@@ -969,6 +969,10 @@ export function pairRowFromStored(r: Json): PairRow {
     readThroughRun: typeof r.read_through_run === 'string' ? r.read_through_run : null,
     methodVersion: String(r.method_version ?? ''),
     computedAt: String(r.computed_at ?? ''),
+    // WP1.8's one figure: both columns or neither (null, not measured).
+    addedOnly: r.added_only_curr == null || r.market_videos_curr == null
+      ? null
+      : { k: num(r.added_only_curr), n: num(r.market_videos_curr) },
   }
 }
 
