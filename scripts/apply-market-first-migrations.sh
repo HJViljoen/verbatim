@@ -5,14 +5,23 @@
 # the session pooler, the refusal guards, one psql and one transaction per file,
 # a verification after each file, and the history rows at the end.
 #
-# RUN IT BY HAND, IN A REAL TERMINAL, from the run checkout at the deployed tag.
+# RUN IT BY HAND, IN A REAL TERMINAL, from the run checkout at the set's tag.
 # It asks before it writes (a `read` prompt), so it cannot run through `!`,
 # which has no tty:
 #
-#   cd ~/Documents/code/verbatim-mf-run && test "$(git rev-parse HEAD)" = "$(git rev-parse mf-d<N>)" && \
-#     bash scripts/apply-market-first-migrations.sh --set mf1 --dry-run   # plan, pre-checks, history; applies nothing
-#   cd ~/Documents/code/verbatim-mf-run && test "$(git rev-parse HEAD)" = "$(git rev-parse mf-d<N>)" && \
-#     bash scripts/apply-market-first-migrations.sh --set mf1             # the real apply
+#   cd ~/Documents/code/verbatim-mf-run && test "$(git rev-parse HEAD)" = "$(git rev-parse <tag>)" && \
+#     bash scripts/apply-market-first-migrations.sh --set <set> --dry-run   # plan, pre-checks, history; applies nothing
+#   cd ~/Documents/code/verbatim-mf-run && test "$(git rev-parse HEAD)" = "$(git rev-parse <tag>)" && \
+#     bash scripts/apply-market-first-migrations.sh --set <set>             # the real apply
+#
+# THE TAGS. mf1 (Wed 30 Sep) runs from `mf-d1-data`: deploy 1 (mf-d1) pushed
+# first, then WP1.4 merged into feat/market-first and tagged there, because
+# this runner, MF1 and the four --apply scripts exist only from WP1.4, which
+# deploys with deploy 2. So on 30 Sep the run checkout sits one tag AHEAD of
+# production's code (plan §4.0 says the deployed tag; this is the recorded
+# exception). That is safe because MF1 is additive and nothing in production
+# at mf-d1 reads or loses anything by it. r12 runs from `mf-d2`, the deployed
+# tag, once deploy 2 is live.
 #
 # The connection comes from .env.dbdump in the checkout (PROD_DB_URL; Heinrich
 # placed it there, agents never write secrets), and is printed without its
