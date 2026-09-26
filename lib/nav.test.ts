@@ -8,10 +8,18 @@ import { SETTINGS_ADDRESSES } from './settings/rail'
 import { PAGE_KEYS } from './renderables/types'
 
 describe('the nine surfaces', () => {
-  it('are in the mock’s order', () => {
+  it('are in market-first’s order (decision K): the brands before your own moves', () => {
     expect(SURFACES.map((s) => s.key)).toEqual([
-      'overview', 'subjects', 'voice', 'market', 'competitive', 'week', 'ask', 'reports', 'settings',
+      'overview', 'subjects', 'voice', 'competitive', 'market', 'week', 'ask', 'reports', 'settings',
     ])
+  })
+
+  it('carry deploy 2’s labels: "Your market" and "Your moves", never "Your market" beside "Market" (§2.1)', () => {
+    expect(SURFACES.map((s) => s.label)).toEqual([
+      'Your market', 'Subjects', 'Voice', 'Competitive', 'Your moves', 'This week', 'Ask', 'Reports', 'Settings',
+    ])
+    expect(surface('overview').question).toBe('What is your market saying this month, and what changed?')
+    expect(SURFACES.map((s) => s.label)).not.toContain('Market')
   })
 
   it('every address is unique and under /dashboard', () => {
@@ -35,20 +43,22 @@ describe('the nine surfaces', () => {
     // Market is a reading and NOT a reading of a window: its conclusions are
     // the latest update's, its ledger is all-time by design. The control used
     // to be drawn there and a press of it returned a byte-identical page.
-    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'competitive'])
+    // Your market reads the reading month in every block (WP1.6), so it
+    // offers no horizon either.
+    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['subjects', 'voice', 'competitive'])
     expect(SURFACES.find((s) => s.key === 'market')?.bar).toBe('reading')
   })
 
   it('gives the bar\'s one line to every reading and to This week, and to nothing else (25 Sep rulings)', () => {
     // The "How sound is this" band that `hasRecord` gated left every page; what
     // is left is which bar a surface wears.
-    expect(SURFACES.filter((s) => s.bar === 'reading').map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive'])
+    expect(SURFACES.filter((s) => s.bar === 'reading').map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'competitive', 'market'])
     expect(SURFACES.filter((s) => s.bar === 'week').map((s) => s.key)).toEqual(['week'])
     expect(SURFACES.filter((s) => s.bar === 'title').map((s) => s.key)).toEqual(['ask', 'reports', 'settings'])
   })
 
   it('splits into the two groups the artboards draw', () => {
-    expect(surfacesIn('Intelligence').map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive', 'week', 'ask', 'reports'])
+    expect(surfacesIn('Intelligence').map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'competitive', 'market', 'week', 'ask', 'reports'])
     expect(surfacesIn('Account').map((s) => s.key)).toEqual(['settings'])
   })
 
@@ -101,8 +111,9 @@ describe('the old pages', () => {
 
   it('parks Settings › Initiatives apart from the three, with the same banner', () => {
     const b = oldPageBanner(PARKED_INITIATIVES)
-    expect(b.title).toBe('Initiatives is being replaced by Market')
-    expect(b.body).toBe('This page stays available until 30 Nov 2026. Renaming, finishing and stopping one happens here until Market can do it.')
+    // The replacement by its CURRENT label (deploy 2 renames Market "Your moves").
+    expect(b.title).toBe('Initiatives is being replaced by Your moves')
+    expect(b.body).toBe('This page stays available until 30 Nov 2026. Renaming, finishing and stopping one happens here until Your moves can do it.')
     expect(b.href).toBe('/dashboard/market')
     // It is a Settings sub-page, not one of the three parked reading pages.
     expect(OLD_PAGES.map((p) => p.href)).not.toContain(PARKED_INITIATIVES.href)
@@ -118,9 +129,9 @@ describe('the old pages', () => {
 
   it('names the replacement and the date in the banner, and says what did not move', () => {
     const market = oldPageBanner(OLD_PAGES[0])
-    expect(market.title).toBe('Market Intelligence is being replaced by Market')
+    expect(market.title).toBe('Market Intelligence is being replaced by Your moves')
     expect(market.body).toBe('This page stays available until 30 Nov 2026.')
-    expect(market.cta).toBe('Go to Market')
+    expect(market.cta).toBe('Go to Your moves')
     expect(market.href).toBe('/dashboard/market')
 
     const content = oldPageBanner(OLD_PAGES[2])

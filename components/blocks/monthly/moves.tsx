@@ -45,7 +45,7 @@ export function monthlyMovesEmail(data: OverviewData, ctx: BlockContext): ReactN
       mode="email"
       accent
       meta={m.rows.length > 0 ? `${fmtInt(m.rows.length)} dated` : undefined}
-      footer={<a href={href} style={{ color: EMAIL.ink }}>Open Market →</a>}
+      footer={<a href={href} style={{ color: EMAIL.ink }}>Open Your moves →</a>}
     >
       {/* AN EMPTY SECTION SAYS ONE THING (the fix pass, review finding [Nit]).
           With nothing dated, this printed the empty state AND the masthead AND

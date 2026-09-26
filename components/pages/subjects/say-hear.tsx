@@ -72,7 +72,7 @@ export const subjectsSayHear: Block<SubjectsData> = {
   render(data, mode = 'app', ctx) {
     const empty = subjectsSayHear.emptyState(data)
     const email = mode === 'email'
-    const footer = openLink(mode, `${ctx.appUrl}/dashboard/market`, 'Open Market →')
+    const footer = openLink(mode, `${ctx.appUrl}/dashboard/market`, 'Open Your moves →')
     const rows = data.sayHearClaims.slice(0, SAY_HEAR_SHOWN)
 
     if (empty) {

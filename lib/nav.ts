@@ -55,16 +55,29 @@ export interface Surface {
 }
 
 /**
- * The nine, in the mock's order (`spec/artboards.md`: "logo mark, then items in
- * this order — Overview · Subjects · Voice · Market · Competitive · This week ·
- * Ask · Reports · Settings"), split into the two groups the artboards draw.
+ * The nine, in market-first's order (decision K, plan §2.1): "Your market ·
+ * Subjects · Conversation · Brands · Your moves · This week · Ask · Reports ·
+ * Settings", split into the two groups the artboards draw. The mock's order
+ * (`spec/artboards.md`) put Market before Competitive; decision K puts the
+ * brands before your own moves, and the preview draws it that way.
+ *
+ * EACH LABEL CHANGES WITH THE DEPLOY THAT REBUILDS ITS PAGE (§2.1). Deploy 2
+ * (WP1.6) renames two: "Overview" becomes "Your market", the new front page,
+ * and "Market" becomes "Your moves", because its content is already the
+ * decision page and the sidebar must never show "Your market" beside
+ * "Market". Voice becomes Conversation with deploy 3, Competitive becomes
+ * Brands with deploy 5. Keys and page keys do not change, so no stored report
+ * breaks. Your moves keeps its question until deploy 5 rebuilds the page.
  */
 export const SURFACES: readonly Surface[] = [
-  { key: 'overview', href: '/dashboard', label: 'Overview', question: 'What is this month’s reading?', group: 'Intelligence', bar: 'reading', page: 'overview' },
+  // NO HORIZON ON YOUR MARKET (WP1.6): every block reads the reading month
+  // and its month before, so the four pills would return a byte-identical
+  // page, and the approved preview's bar is the month selector and one line.
+  { key: 'overview', href: '/dashboard', label: 'Your market', question: 'What is your market saying this month, and what changed?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'overview' },
   { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How are we seen on this subject?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
   { key: 'voice', href: '/dashboard/voice', label: 'Voice', question: 'Who is saying what in this category?', group: 'Intelligence', bar: 'reading', page: 'voice' },
-  { key: 'market', href: '/dashboard/market', label: 'Market', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
   { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and how much of it do they hold?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
+  { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
   { key: 'ask', href: '/dashboard/agent', label: 'Ask', question: 'What does the conversation say about this?', group: 'Intelligence', bar: 'title', page: 'agent' },
   { key: 'reports', href: '/dashboard/reports', label: 'Reports', question: 'Which document do I need?', group: 'Intelligence', bar: 'title' },
@@ -194,7 +207,7 @@ export const PARKED_INITIATIVES: OldPage = {
   href: '/dashboard/settings/initiatives',
   label: 'Initiatives',
   replacedBy: 'market',
-  caveat: 'Renaming, finishing and stopping one happens here until Market can do it.',
+  caveat: 'Renaming, finishing and stopping one happens here until Your moves can do it.',
 }
 
 /** What a parked page says at the top of itself. */

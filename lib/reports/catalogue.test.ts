@@ -80,7 +80,8 @@ describe('pickableCatalogue', () => {
 // Market, Voice and Competitive.
 describe('catalogueReaderTitle', () => {
   it('prefers the sidebar’s own label for a page a reader can visit', () => {
-    expect(catalogueReaderTitle('market', 'Market Intelligence')).toBe('Market')
+    // "Your moves" since deploy 2 (market-first WP1.6, decision K).
+    expect(catalogueReaderTitle('market', 'Market Intelligence')).toBe('Your moves')
     expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Voice')
     expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Competitive')
   })
@@ -94,7 +95,7 @@ describe('catalogueChips', () => {
   it('is the pickable catalogue, named the way the nav names it', () => {
     const chips = catalogueChips()
     expect(chips).toHaveLength(pickableCatalogue().length)
-    expect(chips).toContain('Market')
+    expect(chips).toContain('Your moves')
     expect(chips).not.toContain('Market Intelligence')
     // and every chip that matches a surface is spelled exactly as the nav
     // spells it — no second vocabulary on this page

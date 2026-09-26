@@ -119,8 +119,8 @@ export const weekCameIn: Block<WeekData> = {
         mode={mode}
         meta={days ?? 'this update covered no window'}
         footer={email
-          ? <a href={`${ctx.appUrl}${c.playbookHref}`} style={{ color: EMAIL.ink }}>Open Market →</a>
-          : <Link href={`${ctx.appUrl}${c.playbookHref}`} className="hover:underline">Open Market →</Link>}
+          ? <a href={`${ctx.appUrl}${c.playbookHref}`} style={{ color: EMAIL.ink }}>Open Your moves →</a>
+          : <Link href={`${ctx.appUrl}${c.playbookHref}`} className="hover:underline">Open Your moves →</Link>}
         // THE MOCK'S RIGHT-HAND NOTE, which is the one sentence that says what
         // the window's comment count is a count OF.
         footerNote="videos with an analysed comment written in these days"

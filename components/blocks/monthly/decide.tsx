@@ -75,8 +75,8 @@ export const monthlyDecide: Block<MonthlyData> = {
         // date three lines above it — confirmed in both rendered emails. One
         // date, once, in the sentence a client reads.
         footer={email
-          ? <a href={href} style={{ color: EMAIL.ink }}>Open Market →</a>
-          : <Link href={href} className="hover:underline">Open Market →</Link>}
+          ? <a href={href} style={{ color: EMAIL.ink }}>Open Your moves →</a>
+          : <Link href={href} className="hover:underline">Open Your moves →</Link>}
       >
         {children}
       </BlockFrame>
