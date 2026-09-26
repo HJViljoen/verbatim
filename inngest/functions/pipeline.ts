@@ -28,6 +28,8 @@ import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { comparabilitySummary, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
 import { planSegmentVideos, runSegmentBatch, segmentSummary } from '@/lib/pipeline/segment-videos'
 import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
+import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
+import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -52,7 +54,7 @@ import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, is
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { brandConfirmEnabled, CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -1669,6 +1671,41 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[lens-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
+    // The brand-readings step (WP3.5): for every month the run refreshes, the
+    // new brand_mentions rows the rules give, and month_brand_readings per
+    // audience and brand (in all, in the content, in a comment, and without
+    // the brand's own searches). Before freeze-months for the lens step's
+    // reason. The GPT confirm of an ambiguous hit runs only where
+    // BRAND_CONFIRM_ENABLED is on for the tenant (off for every tenant until
+    // Heinrich's yes, deploy 5); off, the judge is never built. One month a step.
+    const brandPlan = await step
+      .run('plan-brand-readings', async () => {
+        const now = new Date().toISOString()
+        const r = await planBrandReadings(createAdminClient(), clientId, now)
+        console.log(`[brand-readings] ${r.note}`)
+        return { now, months: r.months }
+      })
+      .catch((e) => {
+        console.error(`[brand-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const brandMonthsToRead = brandPlan?.months ?? []
+    for (let i = 0; i < brandMonthsToRead.length; i++) {
+      const month = brandMonthsToRead[i]
+      await step
+        .run(`brand-readings:${i + 1}-of-${brandMonthsToRead.length}`, async () => {
+          const admin = createAdminClient()
+          const judge = brandConfirmEnabled(clientId) ? openAiConfirmJudge(admin, clientId, runId) : null
+          const r = await runBrandMonth(admin, { clientId, runId, now: brandPlan!.now, month, judge })
+          console.log(`[brand-readings] ${brandSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[brand-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
           return null
         })
     }
