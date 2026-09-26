@@ -325,8 +325,8 @@ export interface SubjectQuarterRow {
    * does disappear with the baseline.
    *
    * THE PORT MUST PRINT IT AS `gapLine(row.gap, { period: true })`. The row's
-   * own body prints the MONTH's levels ("you 31% of 84 · the category 22% of
-   * 1,388") and this gap is the QUARTER's (30.1% of 249 · 22% of 4,147), so
+   * own body prints the MONTH's levels (on Sealand's September, the
+   * category's 104 of 626) and this gap is the QUARTER's, over one window, so
    * the bare sentence would put two different "you …% of N" in one row with
    * nothing to tell them apart. The labelled form names the quarter in front
    * of its own figures. This is the one surface in the product that needs it,
@@ -514,8 +514,9 @@ export interface MovesPage {
    * audience the verdict carries.
    *
    * A control row is drawn as `objectLabel` and nothing else, so a move's card
-   * printed "Repair & warranty · 153 of 1,388" directly above "Repair &
-   * warranty · 41 of 142" with nothing saying which audience each was. The
+   * printed "Repair & warranty · 33 of 626" (the category, September) directly
+   * above the same subject read on another audience with nothing saying which
+   * audience each was. The
    * control audiences are the whole reason this page may report what happened
    * after a move without claiming the move caused it; unlabelled they report
    * nothing a reader can use. `audienceSideIn` already composes exactly these
@@ -2449,8 +2450,9 @@ export function methodNumbers(
   // "COMMENTS", NOT "CONVERSATIONS". `lib/calibration.ts` fixes a conversation
   // as one video and the comments it sparked, and says comments are always
   // counted separately as comments — so this row under a Videos row labelled
-  // Conversations said the quarter held 1,388 videos and 11,840 conversations,
-  // where the glossary makes the conversations 1,388.
+  // Conversations said a month of 655 videos held 16,233 conversations (the
+  // comments; Sealand's market in September), where the glossary makes them
+  // 655.
   out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments) })
   out.push({
     id: 'updates',

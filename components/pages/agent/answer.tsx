@@ -178,7 +178,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         width={380}
         // The artboard's box is 300 wide with the plot ending at x=200 and the
         // end label beside it. The end label here carries the AUDIENCE's own
-        // words and the denominator ("The category 9.4% of 1,388") where the
+        // words and the denominator ("The category 17% of 626", Sealand's Looks & style in September) where the
         // mock's carries a rival's short name and a bare percentage, so the
         // box is 80px wider and the right gutter 66px deeper — a clipped
         // denominator is a level without its "of N".
