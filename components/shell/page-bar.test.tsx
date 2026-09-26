@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { SurfacePageBar, HorizonControl } from './page-bar'
+import { SkeletonSurfaceBar } from './skeleton'
 import { SURFACES, hasHorizon } from '@/lib/nav'
 import { sealandReading } from '@/lib/test/reading-fixture'
 
@@ -97,6 +98,17 @@ describe('SurfacePageBar', () => {
       expect(markup.toLowerCase(), s.key).not.toContain('how sound')
       expect(markup, s.key).not.toContain('the record →')
     }
+  })
+})
+
+describe('SkeletonSurfaceBar', () => {
+  it('holds Your market\'s bar at the height it lands at: the 40px Export button and the 24px line', () => {
+    const markup = render(<SkeletonSurfaceBar nav="overview" button />)
+    expect(markup).toContain('h-10 w-[98px] rounded-lg')
+    expect(markup).not.toContain('rounded-full')
+    expect(markup).toContain('my-1.5 h-3')
+    // A page whose bar still pairs the pills keeps their bones.
+    expect(render(<SkeletonSurfaceBar nav="subjects" pills={2} />).match(/h-\[26px\] w-20 rounded-full/g)?.length).toBe(2)
   })
 })
 

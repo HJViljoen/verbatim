@@ -20,7 +20,7 @@ const ROOMY = 'gap-6 px-4 py-6 sm:px-8 sm:py-8'
 
 export default function DashboardLoading() {
   return (
-    <SkeletonSurface nav="overview" pills={1}>
+    <SkeletonSurface nav="overview" button>
       <PageGrid className="gap-6 xl:auto-rows-auto">
         {/* overview.sentence · the month beside its voices */}
         <SkeletonTile col={12} row={3} className={ROOMY}>

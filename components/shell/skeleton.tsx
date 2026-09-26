@@ -147,16 +147,27 @@ export function SkeletonPage({ title, pills, children }: { title: string; pills?
  *  where it has one (`hasHorizon`), because a bone the page will not draw is a
  *  jump the moment it arrives. No band bone: the "How sound is this" band left
  *  every page with the 25 Sep rulings. `pills` is the right-hand controls (How
- *  to read, Export) the page mounts. */
-export function SkeletonSurfaceBar({ nav, pills = 0 }: { nav: NavKey; pills?: number }) {
+ *  to read, Export) the page mounts; `button` is Export drawn as the approved
+ *  preview's 40px button (Your market, WP1.6 design check). */
+export function SkeletonSurfaceBar({ nav, pills = 0, button = false }: { nav: NavKey; pills?: number; button?: boolean }) {
   const s = surface(nav)
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
       {/* The one line under the title, where the surface has one (a reading
           surface's month and "as at", This week's update): a bone the page
           will draw, so the page does not jump when it lands. */}
-      <PageBar title={s.label} line={s.bar === 'title' ? undefined : <Bone className="h-3 w-80 max-w-full" />}>
-        {pills > 0 && Array.from({ length: pills }, (_, i) => <Bone key={i} className="h-[26px] w-20 rounded-full" />)}
+      {/* The line bone keeps the line's 24px (`my-1.5`), so the bar is the
+          height it will be. */}
+      <PageBar
+        title={s.label}
+        line={s.bar === 'title' ? undefined : <Bone className="my-1.5 h-3 w-80 max-w-full" />}
+      >
+        {pills > 0 || button ? (
+          <>
+            {Array.from({ length: pills }, (_, i) => <Bone key={i} className="h-[26px] w-20 rounded-full" />)}
+            {button ? <Bone className="h-10 w-[98px] rounded-lg" /> : null}
+          </>
+        ) : null}
       </PageBar>
       {hasHorizon(s) && (
         <div className="flex flex-wrap items-center gap-2">
@@ -174,11 +185,11 @@ export function SkeletonSurfaceBar({ nav, pills = 0 }: { nav: NavKey; pills?: nu
  *  Unlike `SkeletonPage` it draws no grid of its own, because the surfaces
  *  do not share one: Overview is a single column, Subjects a rail and a main
  *  column, Market two grids, Competitive a pill row above its grid. */
-export function SkeletonSurface({ nav, pills, children }: { nav: NavKey; pills?: number; children: ReactNode }) {
+export function SkeletonSurface({ nav, pills, button, children }: { nav: NavKey; pills?: number; button?: boolean; children: ReactNode }) {
   return (
     <PageFrame>
       <span role="status" className="sr-only">Loading {surface(nav).label}…</span>
-      <SkeletonSurfaceBar nav={nav} pills={pills} />
+      <SkeletonSurfaceBar nav={nav} pills={pills} button={button} />
       {children}
     </PageFrame>
   )
