@@ -37,6 +37,7 @@ import { parseRef, quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, rivalNameOf } from '../rivals'
 import { isMissingSubjects, TABLE_SUBJECTS, type Subject } from '../subjects/types'
+import { subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -303,6 +304,9 @@ export interface UnusualBlock {
 export interface SubjectWeekRow {
   id: string
   label: string
+  /** Always `'ready'` on a row the loader builds (decision C): the others are
+   *  `WeekSubjectsBlock.withheld`. Optional: a stored row has none. */
+  calibration?: SubjectCalibration
   /** Videos carrying the subject this month so far, in the client's audience. */
   monthVideos: number
   /** The month's denominator for that audience. */
@@ -337,7 +341,16 @@ export interface SubjectWeekRow {
 }
 
 export interface WeekSubjectsBlock {
+  /** The READY subjects (decision C, WP1.1): these rows are your own side of
+   *  each subject, which only a ready subject shows. */
   rows: SubjectWeekRow[]
+  /**
+   * The confirmed subjects whose own side is not shown: provisional (not
+   * checked yet, or not clearly under the floor) or failed (being
+   * re-described). Named, with their word, and no figure. Optional: a stored
+   * snapshot from before WP1.1 has none.
+   */
+  withheld?: { id: string; label: string; calibration: SubjectCalibration }[]
   /** Null when subjects are recorded here; a sentence when they are not. */
   unread: string | null
   /** The month the figures are of. */
@@ -1029,13 +1042,15 @@ export function typicalContribution(input: {
  * it into "of 6" would count a silence as a comparison that came back "not
  * above".
  */
-export function subjectLead(rows: readonly SubjectWeekRow[], _month: string): string | null {
+export function subjectLead(rows: readonly SubjectWeekRow[], _month: string, named: number = rows.length): string | null {
   const tagged = rows.filter((r) => r.tag != null)
   if (tagged.length === 0) return null
   const above = tagged.filter((r) => r.tag === 'above typical')
-  const of = tagged.length === rows.length
+  // `named` counts every confirmed subject, the withheld ones too (decision C):
+  // "your 5 subjects" is false of a workspace that named 8.
+  const of = tagged.length === named
     ? `your ${fmtInt(tagged.length)} ${tagged.length === 1 ? 'subject' : 'subjects'}`
-    : `the ${fmtInt(tagged.length)} of your ${fmtInt(rows.length)} subjects this update could be read against`
+    : `the ${fmtInt(tagged.length)} of your ${fmtInt(named)} subjects this update could be read against`
   // The definition of "above typical" is the legend's, beside the bars
   // (copy de-clutter C54); the lead keeps the count, the denominator, the names.
   if (above.length === 0) return `None of ${of} ran above typical in this update.`
@@ -1709,8 +1724,14 @@ async function buildSubjects(input: {
   const added = window ? await readSubjectWindow(reading, clientId, window) : null
   const denominator = await readClientMonthVideos(reading, clientId, month)
 
+  // DECISION C (WP1.1): these rows are your own side of each subject, which
+  // only a READY subject shows; the others are named, with their word.
+  const calibrationOf = new Map(subjects.map((s) => [s.id, subjectCalibration(s)]))
+  const withheld = subjects
+    .filter((s) => s.status === 'active' && calibrationOf.get(s.id) !== 'ready')
+    .map((s) => ({ id: s.id, label: s.name, calibration: calibrationOf.get(s.id)! }))
   const rowsOut: SubjectWeekRow[] = subjects
-    .filter((s) => s.status === 'active')
+    .filter((s) => s.status === 'active' && calibrationOf.get(s.id) === 'ready')
     .map((s) => {
       const held = stored.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE)
       const monthVideos = held.reduce((t, r) => t + (r.videos ?? 0), 0)
@@ -1723,6 +1744,7 @@ async function buildSubjects(input: {
       return {
         id: s.id,
         label: s.name,
+        calibration: 'ready' as const,
         monthVideos,
         monthOf: denominator,
         addedVideos,
@@ -1736,9 +1758,10 @@ async function buildSubjects(input: {
   const active = subjects.filter((s) => s.status === 'active')
   return {
     rows: rowsOut,
-    unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD,
+    withheld,
+    unread: rowsOut.length > 0 || withheld.length > 0 ? null : SUBJECTS_UNREAD,
     month,
-    lead: subjectLead(rowsOut, month),
+    lead: subjectLead(rowsOut, month, rowsOut.length + withheld.length),
     // The rows are the ACTIVE subjects — a proposed subject measures nothing
     // (`loadActiveSubjects`' own filter) — so the count in the footer is a
     // count of the rows above it and not of the table.

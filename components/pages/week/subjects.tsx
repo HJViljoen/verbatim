@@ -6,6 +6,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { monthPhrase, type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
 
 // WK §2 · This week in your subjects (the mock's §3; OV2 at update length).
 //
@@ -127,6 +128,7 @@ export const weekSubjects: Block<WeekData> = {
               </>
             )
         ) : null}
+        <Withheld rows={s.withheld ?? []} email={email} />
       </BlockFrame>
     )
   },
@@ -220,6 +222,28 @@ function Column({ row, top, when = 'this month' }: { row: SubjectWeekRow; top: n
           {row.tag}
         </span>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The confirmed subjects whose own side is not shown (decision C, WP1.1):
+ * each named once, with its word, and no figure. "provisional": not checked
+ * yet, or not clearly under the floor; "being re-described": clearly under.
+ */
+function Withheld({ rows, email }: { rows: NonNullable<WeekData['subjects']['withheld']>; email: boolean }) {
+  if (rows.length === 0) return null
+  return email ? (
+    <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>
+      {rows.map((r, i) => (
+        <span key={r.id}>{i > 0 ? ' · ' : ''}{r.label} <CalibrationTag calibration={r.calibration} mode="email" /></span>
+      ))}
+    </div>
+  ) : (
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
+      {rows.map((r) => (
+        <span key={r.id} className="inline-flex items-baseline gap-1.5">{r.label} <CalibrationTag calibration={r.calibration} /></span>
+      ))}
     </div>
   )
 }
