@@ -100,9 +100,19 @@ export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-x-8">
               {why.cells.map((c) => <WhyStat key={c.key} cell={c} />)}
             </div>
-          ) : (
+          ) : !block.pair?.row ? (
             // NOTHING MEASURED YET (MF1 not applied, or a month refused before
-            // its row): the refusal in its own words, one line, never a zero.
+            // its row): the rules table's own state, never a zero. Not the
+            // refusal's sentence again (fresh design check, 26 Sep): the
+            // headline above is that sentence, word for word, so printing it
+            // here said the same thing twice and answered nothing.
+            <p className="m-0 flex items-start gap-2 text-[15px] leading-[1.6] text-secondary-foreground">
+              <RuleMark state="unmeasured" />
+              <span>not measured yet</span>
+            </p>
+          ) : (
+            // MEASURED, BUT NO MEASURE FAILS (the month refused for its own
+            // reason, such as not being over): the refusal in its own words.
             <TokenProse body={why.body} figures={why.figures} mode="app" figureFace="mono" figureClassName="font-semibold text-foreground" className="m-0 text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]" />
           )}
         </div>

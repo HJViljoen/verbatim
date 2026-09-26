@@ -42,10 +42,13 @@ describe('What we changed', () => {
     expect((render(lead).match(/data-copy="level"/g) ?? []).length).toBe(2)
   })
 
-  it('without a measured row (MF1 not applied) says the refusal in its own words, never a zero', () => {
+  it('without a measured row (MF1 not applied) says the figures are not measured yet, never a zero, and does not repeat the headline', () => {
     const t = read(<WhatWeChangedLead block={whatWeChangedFixture({ measured: false }).block} />)
-    expect(t).toContain('Not read as a change: we changed our searches in September.')
+    expect(t).toContain('Why September is not compared not measured yet')
+    // The headline says the refusal; the section under it does not say it again.
+    expect(t.match(/not read as a change: we changed our searches in September/gi) ?? []).toHaveLength(1)
     expect(t).not.toMatch(/\b0 of\b/)
+    assertCopyContract(render(<WhatWeChangedLead block={whatWeChangedFixture({ measured: false }).block} />))
   })
 })
 
