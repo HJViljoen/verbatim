@@ -357,6 +357,67 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
   })
 })
 
+// ---- R12 (deploy-1 review, MF1): the tracking writes go out on the admin client ----
+//
+// MF1 revokes `authenticated`'s column UPDATE on the search-set and sending
+// columns, so a tenant's session token cannot PATCH them around the lock. The
+// three actions that wrote them through the session client now write through
+// the admin client, AFTER their role and lock checks: an operator's and an
+// unlocked tenant admin's saves still land, a locked tenant's never reach
+// either client, and no tracking_configs write is left on a session client.
+
+describe('R12: the three tracking writes use the admin client, after the checks', () => {
+  const terms = () => form({ brand_keywords: 'sealand gear', competitor_keywords: 'cotopaxi', industry_keywords: 'upcycled bag', exclude_terms: ['poker'] })
+  const cadence = () => form({ competitor_names: ['Cotopaxi', 'Topo Designs'], report_period: 'weekly', report_day: 'sunday' })
+  const trackingWrites = (w: Write[]) => w.filter((x) => x.table === 'tracking_configs')
+
+  for (const [who, make] of [
+    ['the operator on Sealand', () => operatorIn(SEALAND, session.client)],
+    ['an admin of an unlocked tenant', () => tenantAdmin(OSSUR, session.client)],
+  ] as const) {
+    it(`writes for ${who}, on the admin client only`, async () => {
+      const actions = await import('../app/dashboard/settings/actions')
+      h.session = make()
+      expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual({ ok: true, message: 'Settings saved.' })
+      expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(true)
+      expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(true)
+      // updateTrackingConfig: its update; updateSearchTerms: terms, then
+      // exclusions; updateCommunity: the communities.
+      expect(trackingWrites(admin.writes).filter((w) => w.op === 'update').length).toBeGreaterThanOrEqual(4)
+      expect(trackingWrites(session.writes)).toEqual([])
+    })
+  }
+
+  it('refuses a locked tenant before either client is written', async () => {
+    const actions = await import('../app/dashboard/settings/actions')
+    h.session = tenantAdmin(SEALAND, session.client)
+    const refused = { ok: false, message: TENANT_LOCK_REFUSAL.tracking }
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual(refused)
+    expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(refused)
+    expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'stop', name: 'onebag' }))).toEqual(refused)
+    expect([...admin.writes, ...session.writes]).toEqual([])
+  })
+
+  it('refuses a tenant member without a manager role before either client is written', async () => {
+    const actions = await import('../app/dashboard/settings/actions')
+    h.session = { ...tenantAdmin(OSSUR, session.client), role: 'member' }
+    expect((await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).ok).toBe(false)
+    expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(false)
+    expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(false)
+    expect([...admin.writes, ...session.writes]).toEqual([])
+  })
+
+  it('no server action writes tracking_configs through a session client', () => {
+    // The session client is `supabase` (SessionContext) in every action; the
+    // admin client is `createAdminClient()` or a local bound to it.
+    const onSession = /\bsupabase\s*\.from\(\s*['"]tracking_configs['"]\s*\)\s*\.(?:update|insert|upsert)\(/
+    const offenders = serverActionModules
+      .filter((f) => onSession.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(ROOT, f))
+    expect(offenders).toEqual([])
+  })
+})
+
 // ---- The send-now route, run (deploy 1 review) ----------------------------------
 //
 // The string match above proves the call is in the file; these prove it runs

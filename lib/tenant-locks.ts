@@ -19,18 +19,19 @@
 // test (lib/tenant-locks.test.ts) lists every such action and fails if one does
 // not, so a new action cannot quietly reopen what this closes.
 //
-// WHAT IT DOES NOT CLOSE: THE DATABASE. This is enforced in the app (the server
-// actions and the send-now route), not in Postgres. `report_schedules` has a
-// select-only policy for `authenticated`, so sending cannot be switched on
-// around it. But `authenticated` still holds column UPDATE on
-// `tracking_configs` (competitor_names, report_period, report_day: migration
-// 20260820120000; exclude_terms: 20260911140000; subreddits: 20260919090000)
-// under its own-row policy, so a Sealand user holding their session token could
-// PATCH those columns through PostgREST and never meet `assertTenantMay`. The
-// config audit trigger would still record it. Deploy 1 carries no migration.
-// With MF1 or MF3: revoke those column grants (the settings actions write a
-// tenant's own change through those same grants, on the session's client, so
-// they would move to the admin client first) or check the lock in a trigger.
+// AND THE DATABASE, FROM MF1 (the deploy-1 review's R12). Until MF1,
+// `authenticated` held column UPDATE on `tracking_configs` (competitor_names,
+// report_period, report_day: migration 20260820120000; exclude_terms:
+// 20260911140000; subreddits: 20260919090000) under its own-row policy, so a
+// Sealand user holding their session token could PATCH those columns through
+// PostgREST and never meet `assertTenantMay` (the audit trigger would still
+// record it). MF1 (20260928090000_market_first_s1.sql) revokes those grants,
+// and the three settings writes that used them (`updateTrackingConfig`,
+// `updateSearchTerms`' exclusions, `updateCommunity`) go out on the admin
+// client after their role and lock checks. `report_schedules` has a
+// select-only policy for `authenticated`, so sending was never open to a
+// PATCH. Until MF1 is applied, watch `config_changes` for tenant-actor rows on
+// those surfaces.
 
 export type TenantLockKind = 'sends' | 'tracking'
 

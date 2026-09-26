@@ -104,8 +104,8 @@ export async function updateTrackingConfig(
   formData: FormData,
 ): Promise<SettingsFormState> {
   // Server actions are directly POST-reachable, so authz is re-checked here —
-  // never trusting the UI's disabled state. RLS is the third layer (the
-  // tracking_configs UPDATE policy also requires owner/admin).
+  // never trusting the UI's disabled state. Since MF1 the write goes out on the
+  // admin client (R12), so this check and the lock below are the only gate.
   const session = await getSessionContext()
   const { supabase, clientId, role } = session
   if (!canManageTenant(role)) {
@@ -149,13 +149,18 @@ export async function updateTrackingConfig(
     return { ok: false, message: `Invalid ${field}: ${first?.message ?? 'check your input.'}` }
   }
 
-  // Stamped (WP2): the change log's trigger sees `authenticated` and auth.uid()
-  // for this write, which is enough to name a tenant member — but the same
-  // action runs on the SERVICE-ROLE client whenever a platform admin is inside
-  // this workspace through the switcher, and then the database sees nobody at
-  // all. The stamp is what carries the person across that difference.
+  // THE ADMIN CLIENT, AFTER THE ROLE AND LOCK CHECKS ABOVE (MF1, the deploy-1
+  // review's R12). `authenticated` no longer holds UPDATE on these columns, so
+  // a tenant's session token cannot PATCH rivals or cadence around
+  // `assertTenantMay` through PostgREST; this action is the one way in, and it
+  // has already checked who is asking. The row is pinned by `clientId` from the
+  // session, which is what the own-row policy used to pin.
+  //
+  // Stamped (WP2): on the service role the database sees nobody at all, so the
+  // stamp is what names the person, and the audit trigger takes it as written
+  // (it overrides a stamp only for an `authenticated` caller).
   const { error } = await updateWithActor(
-    (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
+    (payload) => createAdminClient().from('tracking_configs').update(payload).eq('client_id', clientId),
     {
       report_period: isPaused ? 'paused' : parsed.data.report_period,
       report_day: parsed.data.report_day,
@@ -233,9 +238,9 @@ export async function updateTrackingConfig(
 //
 // Three of the four columns are REVOKEd from `authenticated` (T0-2), so they
 // are written with the admin client — the same route competitor_keywords
-// already takes above, after the same role check. exclude_terms is granted to
-// the tenant role (20260911140000_exclude_terms.sql) and goes through the
-// session client, so RLS is the last word on it.
+// already takes above, after the same role check. exclude_terms was granted to
+// the tenant role (20260911140000_exclude_terms.sql) until MF1 revoked it
+// (R12), and now takes the same route.
 
 // Bounds the count AND the length of a term. Every term becomes an Apify
 // search query, so an owner POSTing fifteen megabyte-long "terms" is exactly
@@ -262,7 +267,7 @@ export async function updateSearchTerms(
   formData: FormData,
 ): Promise<SettingsFormState> {
   const session = await getSessionContext()
-  const { supabase, clientId, role } = session
+  const { clientId, role } = session
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change search terms.' }
   }
@@ -317,15 +322,14 @@ export async function updateSearchTerms(
     return { ok: false, message: 'Nothing was saved. This workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
   }
 
+  // The admin client, as the terms above (MF1, R12): `authenticated` no longer
+  // holds UPDATE on exclude_terms.
   const { error: exclErr } = await updateWithActor(
-    (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
+    (payload) => createAdminClient().from('tracking_configs').update(payload).eq('client_id', clientId),
     { exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() },
     // A second stamp: every stamp carries its own nonce, so the trigger cannot
     // read this one as a re-save of the statement above. The detail names which
-    // statement it was — it survives on the admin-client write above, while on
-    // this one (the session client) the database replaces the label with the
-    // caller's own identity, because a session that can write last_actor could
-    // otherwise claim to be anyone.
+    // statement it was.
     actorStamp(session, 'exclusions'),
   )
 
@@ -404,8 +408,11 @@ export async function updateCommunity(
   if ('error' in edit) return { ok: false, message: edit.error }
 
   const actor = actorStamp(session, `communities: ${kind} ${name.trim()}`, now)
+  // The admin client, after the role and lock checks above (MF1, R12):
+  // `authenticated` no longer holds UPDATE on subreddits, so a session token
+  // cannot change the communities around `assertTenantMay`.
   const { error, count } = await updateWithActor(
-    (payload) => supabase
+    (payload) => createAdminClient()
       .from('tracking_configs')
       .update(payload, { count: 'exact' })
       .eq('client_id', clientId),
