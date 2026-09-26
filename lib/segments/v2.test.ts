@@ -159,7 +159,7 @@ describe('the hand check score, against 0.8', () => {
   /** Label every item as the judge did, except `wrong` of each marked stratum. */
   const labelAll = (items: HandCheckItem[], wrong: { maker: number; offTopic: number; missed?: number }) => {
     let m = 0; let o = 0; let x = 0
-    return items.map((it) => {
+    return items.map((it): HandCheckItem => {
       const said = role.get(it.id)!
       if (said === 'maker' && m++ < wrong.maker) return { ...it, label: 'buyer' as const }
       if (said === 'off-topic' && o++ < wrong.offTopic) return { ...it, label: 'other' as const }
