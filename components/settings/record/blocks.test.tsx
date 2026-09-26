@@ -378,15 +378,14 @@ describe('the coverage grid', () => {
 
   it('carries the basis with the figures whose basis is not this window (D15)', () => {
     const text = renderText(coverage)
-    expect(text).toContain('of everything we have ever read for you, not just this window')
-    expect(text).toContain('Reddit excluded')
+    expect(text).toContain('all time, Reddit excluded')
     // No language share on the record either (2026-09-24).
     expect(text).not.toContain('not in English')
     expect(text).not.toContain('what was said on camera, not what was written in comments')
     // The two read-depth rows sit side by side and both owe a reader the
     // all-time basis; the twenty-word sentence is printed once and the second
     // row says it short (design review finding 5).
-    expect(text.match(/of everything we have ever read for you/g)).toHaveLength(1)
+    expect(text.match(/all time, Reddit excluded/g)).toHaveLength(1)
   })
 
   it('draws one grid, so the hairlines cross the gutter', () => {
@@ -413,10 +412,13 @@ describe('the coverage grid', () => {
     const text = renderText(coverage)
     // Comment-dated over run-dated is neither clock.
     expect(text).not.toContain('per update')
-    expect(text).toContain('dated by the comment, not by the update')
-    // A run's measure is not a month's.
+    // A run's measure is not a month's; the base names the update, and no
+    // method wording follows it (WP3.10).
     expect(text).not.toContain('August 2.3')
-    expect(text).toContain('an update’s own measure, never a month’s')
+    expect(text).toContain('attached per analysed video on the most recent update')
+    for (const method of ['dated by the comment, not by the update', 'which is the only span', 'and no deeper', 'which has neither audio', 'so no month before that can show it']) {
+      expect(text).not.toContain(method)
+    }
     // Audience denominators do not add, so the mix is counts.
     expect(text).toContain('TikTok')
     expect(text).not.toMatch(/TikTok \d+%/)
@@ -428,10 +430,9 @@ describe('the coverage grid', () => {
     const text = renderText(coverage)
     expect(text).toContain('trailing median')
     expect(text).toContain('Poler added as a rival, 3 Sep')
-    expect(text).toContain('under the 100 a banded reading needs')
     // Off `belowFloorTotal`, the way the route composes it: four months are
     // under the floor and three are listed (code review finding 2).
-    expect(text).toContain('and 3 other months are under it too')
+    expect(text).toContain('under 100 · 3 other months too')
   })
 
   it('prints no one-line summary of the rows under it (copy de-clutter C8)', () => {

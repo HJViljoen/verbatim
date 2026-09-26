@@ -1315,24 +1315,22 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     const undated = input.coverage.reduce((n, c) => n + c.excludedUndated, 0)
     const mix = totalPlatformMix(input.coverage)
 
-    push('comments', 'Comments read', fmtInt(comments), 'dated by the comment, not by the update', { dash: true })
+    // COVERAGE BASES CARRY NO METHOD WORDING (market-first WP3.10, a copy
+    // debt found after deploy 1): a row says what its figure is OF, and how
+    // the rule works is Settings › How to read's to say (the 25 Sep rulings).
+    push('comments', 'Comments read', fmtInt(comments), '', { dash: true })
     push(
       'videos', 'Videos analysed', fmtInt(videos),
       extra.trailingMedian != null ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))}` : 'no trailing median yet',
-      {
-        dash: true,
-        basis: extra.trailingMedian != null
-          ? 'over the months we have gathered, which is the only span the two are comparable over'
-          : 'two gathered months are the fewest a median can be taken over',
-      },
+      { dash: true, basis: extra.trailingMedian != null ? 'over the months gathered' : '' },
     )
-    push('dual', 'Dual-mention videos', fmtInt(dual), 'counted in one audience by precedence', { dash: true })
+    push('dual', 'Dual-mention videos', fmtInt(dual), '', { dash: true })
     push('platforms', 'Platform mix', null, platformMixLine(mix) || 'No platform was recorded on anything read in this window.')
     const threads = mix.reddit ?? 0
     push(
       'reddit', 'Reddit', threads > 0 ? fmtInt(threads) : null,
       threads > 0 ? 'threads' : 'No Reddit thread carried conversation in this window.',
-      threads > 0 ? { basis: `each read to ${fmtInt(REDDIT_COMMENT_DEPTH_CAP)} comments and no deeper` } : {},
+      threads > 0 ? { basis: `each read to ${fmtInt(REDDIT_COMMENT_DEPTH_CAP)} comments` } : {},
     )
     if (undated > 0) push('undated', 'Comments with no date', fmtInt(undated), 'in no month, and in no reading', { dash: true })
   }
@@ -1345,7 +1343,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
   // video and a video belongs to a month through its comments, so there is no
   // such thing as "speech read on 71% of September" — the same sentence
   // `recordLines` and `methodLines` both print, in the same words.
-  const allTime = 'of everything we have ever read for you, not just this window; Reddit excluded, which has neither audio nor a cover frame'
+  const allTime = 'all time, Reddit excluded'
   // THE SECOND READ-DEPTH ROW CARRIES THE BASIS AS TWO WORDS (copy de-clutter
   // 2026-09-24, C15). Both figures are all-time and both owe a reader that
   // basis (D15), but the full sentence is said once, on the speech row beside
@@ -1375,10 +1373,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
           ? `Nothing was looked at and set aside in this window; the record of it begins ${fullDate(g.recordedFrom)}.`
           : 'of what was looked at',
     g.readable && g.recordedFrom != null && g.judged > 0
-      ? {
-        lead: 'discarded',
-        basis: `dated by the update, and recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}`,
-      }
+      ? { lead: 'discarded', basis: `recorded from ${fullDate(g.recordedFrom)}` }
       : {},
   )
 
@@ -1391,7 +1386,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
       // NOT "August 2.3". The figure is measured on one run, and a run's date is
       // a period key for nothing (AGENTS.md).
       : 'attached per analysed video on the most recent update',
-    i.themesPerVideo == null ? {} : { basis: 'an update’s own measure, never a month’s' },
+    {},
   )
 
   const c = input.changes
@@ -1433,7 +1428,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
       'floor', 'Below the floor', fmtInt(f.videos),
       `videos in ${f.label}: ${f.who}`,
       {
-        basis: `under the ${fmtInt(f.floor)} a banded reading needs${f.more > 0 ? `, and ${fmtInt(f.more)} other ${f.more === 1 ? 'month is' : 'months are'} under it too` : ''}`,
+        basis: `under ${fmtInt(f.floor)}${f.more > 0 ? ` · ${fmtInt(f.more)} other ${f.more === 1 ? 'month' : 'months'} too` : ''}`,
       },
     )
   }
