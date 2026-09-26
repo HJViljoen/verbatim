@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { audienceOf } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import type { ConfigChange } from '../config-log'
 import type { ProvenanceRow, ProvenanceSnapshot } from './reconstruct'
@@ -160,7 +161,7 @@ export function monthVideosFromExport(d: ProvenanceExportFile, month: string): M
     if (r.month.slice(0, 7) !== month.slice(0, 7)) continue
     const v = byId.get(r.video_id)
     if (!v || v.analyzed_lane !== 'full' || v.is_client === true) continue
-    out.push({ id: v.id, platform: v.platform, audience: v.is_competitor ? `competitor:${v.competitor_name ?? 'unknown'}` : 'industry-other', dated: r.dated_comments })
+    out.push({ id: v.id, platform: v.platform, audience: audienceOf(v), dated: r.dated_comments })
   }
   return out
 }
