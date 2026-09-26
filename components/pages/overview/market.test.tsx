@@ -78,7 +78,7 @@ describe('the change strip once October leads: each month once', () => {
       expect(markup).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)
     }
     expect(markup).not.toContain('>Aug</span>')
-    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-4"/)
+    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-5"/)
     expect(markup).toMatch(/<div class="col-start-2 col-span-2 flex flex-col">/)
     expect(markup).toMatch(/<span class="col-start-2 col-span-2 flex justify-center">/)
     // One "as at", on 18 Oct (17.5 of October's 31 days); the marks stay
@@ -89,6 +89,15 @@ describe('the change strip once October leads: each month once', () => {
     expect(read(<OverviewPage data={octoberLeadsFixture(OCTOBER_LEADS_AT)} />)).toContain('from the 6 Dec update')
   })
 
+  it('the "as at" words sit clear of the cell\'s top edge, and its rule stops at the cell\'s foot (deploy 2 review)', () => {
+    for (const at of [OCTOBER_LEADS_AT, OCTOBER_ENDED_AT] as const) {
+      const markup = change(octoberLeadsFixture(at))
+      expect(markup).toContain('absolute -top-4 bottom-0 w-[1.5px]')
+      expect(markup).not.toContain('-bottom-1 w-[1.5px]')
+      expect(markup).toMatch(/absolute -top-5 whitespace-nowrap font-mono[^>]*>as at /)
+    }
+  })
+
   it('1 Nov: October, ended, and the "as at" in the dashed November, once', () => {
     const data = octoberLeadsFixture(OCTOBER_ENDED_AT)
     expect(read(<OverviewPage data={data} />)).toContain('Sealand · October 2026 as at the 1 Nov update · next update Sun 8 Nov')
@@ -96,7 +105,7 @@ describe('the change strip once October leads: each month once', () => {
     for (const name of ['Sep', 'Oct', 'Nov']) expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
     expect(markup.match(/as at 1 Nov/g)?.length).toBe(1)
     expect(markup).toContain('left:1.67%')
-    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-4"/)
+    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-5"/)
   })
 
   it('prints no "moved", no arrow and no em dash at either clock', () => {
@@ -328,7 +337,7 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     const oct = at('2026-10-11T08:30:00.000Z')
     expect(oct.match(/as at 11 Oct/g)?.length).toBe(1)
     expect(oct).toContain('left:33.87%')
-    expect(oct).toMatch(/class="grid gap-x-3 grid-cols-4 mt-4"/)
+    expect(oct).toMatch(/class="grid gap-x-3 grid-cols-4 mt-5"/)
     // Every month's name stands on its cell's ground, above the rule.
     for (const [name, ground] of [['Aug', 'bg-inner'], ['Sep', 'bg-inner'], ['Oct', 'bg-tile'], ['Nov', 'bg-tile']]) {
       expect(oct).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)

@@ -111,11 +111,15 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
         ))}
         {at != null && asAt ? (
           <>
-            <span className="absolute -top-4 -bottom-1 w-[1.5px] -translate-x-1/2 bg-foreground" style={{ left: pct(at) }} />
+            {/* The rule stops at the cell's foot, so it never reads as a
+                connector to "from the {date} update" below (deploy 2 review). */}
+            <span className="absolute -top-4 bottom-0 w-[1.5px] -translate-x-1/2 bg-foreground" style={{ left: pct(at) }} />
             {/* Its words to the left of the rule, as the preview sets them;
-                in a dashed month, to the right, clear of the bracket's leg. */}
+                in a dashed month, to the right, clear of the bracket's leg.
+                4px clear of the cell's top edge, so they never sit on a dashed
+                border (deploy 2 review, at 768 on 1 Nov). */}
             <span
-              className={cn('absolute -top-4 whitespace-nowrap font-mono text-[12px] leading-4 text-muted-foreground', kind === 'read' ? '-translate-x-full pr-1.5' : 'pl-1.5')}
+              className={cn('absolute -top-5 whitespace-nowrap font-mono text-[12px] leading-4 text-muted-foreground', kind === 'read' ? '-translate-x-full pr-1.5' : 'pl-1.5')}
               style={{ left: pct(at) }}
             >
               as at {shortDate(asAt)}
@@ -132,7 +136,7 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
   // rule land on the day they name. Where the "as at" falls in a bracketed
   // month (from the first update of the month after the one read, and in
   // October once it leads), its rule and words stand under the bracket, so
-  // the months drop 6px further to keep them off its line.
+  // the months drop 10px further to keep them off its line.
   const strip = stripMonths([block.prevMonth, block.month], [next.prevMonth, next.month])
   const cols = STRIP_COLS[strip.months.length] ?? 'grid-cols-4'
   const under = cn(COL_START[strip.from], COL_SPAN[strip.span - 1])
@@ -146,7 +150,7 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
             <span className="mt-1.5 h-2 border-x border-t border-secondary-foreground" />
           </div>
         </div>
-        <div className={cn('grid gap-x-3', cols, asAtUnderBracket ? 'mt-4' : 'mt-2.5')}>
+        <div className={cn('grid gap-x-3', cols, asAtUnderBracket ? 'mt-5' : 'mt-2.5')}>
           {strip.months.map((m) => cell(m.month, m.read ? 'read' : 'next'))}
         </div>
         {/* One line from 360px, centred on the bracket as a flex item so it
