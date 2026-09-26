@@ -151,11 +151,12 @@ async function main() {
     if (ms > PROBE_MAX_MS) throw new Error(`${NAME}: the probe took ${ms} ms (over ${PROBE_MAX_MS}). Back off 15 minutes (plan §7.6).`)
   }
 
-  // The searches both months ran, exactly as measure-comparability reads them.
-  const [videos, verdicts, kp, runs] = await Promise.all([
-    readVideos(admin, args.clientId, ration), readVerdicts(admin, args.clientId, ration),
-    readKeywordRows(admin, args.clientId, ration), readRuns(admin, args.clientId, ration),
-  ])
+  // The searches both months ran, read as measure-comparability reads them,
+  // one read in flight at a time (plan §7.6).
+  const videos = await readVideos(admin, args.clientId, ration)
+  const verdicts = await readVerdicts(admin, args.clientId, ration)
+  const kp = await readKeywordRows(admin, args.clientId, ration)
+  const runs = await readRuns(admin, args.clientId, ration)
   ration.spend(0, 'the gather reads')
   const provenance = await readProvenanceTable(admin, args.clientId, ration)
   ration.spend(0, 'video_provenance')
