@@ -1,4 +1,4 @@
-import { buildSeries, type DenominatorPoint, type NumeratorPoint, type SeriesChange } from '@/lib/reading/series'
+import { buildSeries, type DenominatorPoint, type MonthSeries, type NumeratorPoint, type SeriesChange } from '@/lib/reading/series'
 import { nextMonth } from '@/lib/reading/monthly'
 import { monthChange } from '@/lib/reading/bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -18,6 +18,8 @@ import {
   buildSides,
   gapSideOf,
   paneGap,
+  byRailRank,
+  MARKET_LINE,
   type StoredKindRow,
   type SubjectsData,
   type SubjectVoice,
@@ -665,5 +667,186 @@ export function marketPaneFixture(over: Partial<SubjectsData> = {}): SubjectsDat
       of: 7,
     },
     ...over,
+  }
+}
+
+// ---- WP2.2 · Subjects on the market -----------------------------------------
+
+/** One month of a subject's pooled market line, as `marketLineOf` builds it. */
+function marketPoint(month: string, k: number | null, n: number, frozen = false): MonthSeries['points'][number] {
+  return {
+    month,
+    state: (frozen ? 'frozen' : 'filling') as 'frozen' | 'filling',
+    videos: n,
+    comments: null,
+    k,
+    kComments: null,
+    pct: k == null ? null : Math.round((k / n) * 1000) / 10,
+    audience: MARKET_LINE,
+    status: (frozen ? 'frozen' : 'filling') as 'frozen' | 'filling',
+    origin: 'live' as const,
+    readAt: null,
+    runId: null,
+    frozenAt: null,
+    clusteringKey: null,
+    labels: [],
+  }
+}
+
+/** A subject's pooled market line over `points`. */
+export function marketLineFixture(id: string, name: string, points: MonthSeries['points'], refused: Record<string, string> = {}): MonthSeries {
+  return {
+    audience: MARKET_LINE,
+    names: [MARKET_LINE],
+    objectId: id,
+    objectLabel: name,
+    points,
+    notes: [],
+    firstReadable: points.find((p) => p.k != null)?.month ?? null,
+    substrate: 'seeded' as const,
+    refusedSteps: refused,
+  }
+}
+
+/** Staging's four September voices on Looks & style (Sealand, read with the
+ *  20 Sep update): three comments on one Reddit thread in the category, one on
+ *  a Freitag Instagram post. The refs are the evidence rows' own ids. */
+const MARKET_VOICES: SubjectVoice[] = [
+  { quote: { ref: 'e:521a5978-a0f9-41d0-977b-279a0b16f349', text: 'Ugh this look is AMAZING. I LOVE what you did with the skirt!' }, cite: '8 Sep · under a category video', href: null, from: 'under a category video', platform: 'reddit', source: 'comment', onScreen: null, likes: 6, maker: false },
+  { quote: { ref: 'e:1ad5d602-ae03-429d-b2bb-8744ecd16de9', text: 'that’s so cool and cute😍' }, cite: '17 Sep · under a Freitag video', href: null, from: 'under a Freitag video', platform: 'instagram', source: 'comment', onScreen: null, likes: null, maker: false },
+  { quote: { ref: 'e:c09627e3-7ea5-409d-ae2e-5a2cda5561f2', text: 'IMO, that makes the skirt' }, cite: '9 Sep · under a category video', href: null, from: 'under a category video', platform: 'reddit', source: 'comment', onScreen: null, likes: 1, maker: false },
+  { quote: { ref: 'e:5ae1397a-a151-42fd-a96d-33b9dc552567', text: 'wow another amazing look with cool suspendery garter belty hardware!! i love it.' }, cite: '8 Sep · under a category video', href: null, from: 'under a category video', platform: 'reddit', source: 'comment', onScreen: null, likes: 7, maker: false },
+]
+
+/**
+ * THE PAGE WP2.2 BUILDS, on staging's real figures (Sealand, September 2026,
+ * read with the 20 Sep update; the reading month at a 2 Oct clock): the market
+ * of 654 videos (377 in August), each subject's pooled k (Looks & style 103,
+ * Comfort 43, Durability 39, Repair & warranty 36, Waterproofing 29, Price 25;
+ * August 38, 28, 17, 15, 15, 5), the maker read (MF2 `lens_readings` over the
+ * month's 220 maker videos: 35, 1, 9, 8, 2, 3), Repair & warranty failed
+ * (0.333 on 33) and Community & purpose not read. Looks & style selected: its
+ * kinds (praise 93, 4, 4, 4, question 2, none hitting a problem), 2 question
+ * videos this month, and its four September voices (none under a maker's
+ * video on staging).
+ */
+export function marketSubjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
+  const base = calibrationFixture()
+  const AUG = 377
+  const SEP = 654
+  const prev: Record<string, number> = { 's-looks': 38, 's-comfort': 28, 's-durability': 17, 's-water': 15, 's-price': 5 }
+  const makers: Record<string, number> = { 's-looks': 35, 's-comfort': 1, 's-durability': 9, 's-water': 2, 's-price': 3 }
+  const rows = [...base.list.rows]
+    .map((r) => ({
+      ...r,
+      marketPrev: r.market && prev[r.id] != null ? { k: prev[r.id], n: AUG } : null,
+      makerShare: r.market && makers[r.id] != null ? makers[r.id] / r.market.k : null,
+      selected: r.id === 's-looks',
+    }))
+    .sort(byRailRank)
+  const line = marketLineFixture('s-looks', 'Looks & style', [marketPoint('2026-08-01', 38, AUG), marketPoint('2026-09-01', 103, SEP)], { '2026-09-01': 'Not read as a change: we changed our searches in September.' })
+  return {
+    ...base,
+    readingAt: '2026-10-02T06:00:00.000Z',
+    horizon: 'this_month',
+    axis: ['2026-09-01'],
+    chartAxis: ['2026-08-01', '2026-09-01'],
+    list: { ...base.list, rows, base: { month: '2026-09-01', n: SEP, prev: { month: '2026-08-01', n: AUG } } },
+    selected: {
+      ...base.selected!,
+      id: 's-looks',
+      name: 'Looks & style',
+      namedAt: '2026-09-23',
+      calibration: 'ready',
+      unread: null,
+      market: { k: 103, n: SEP, pct: 15.7 },
+      marketLine: line,
+      chip: 'not read as a change: we changed our searches in September',
+      makers: { k: 35, of: 103 },
+      kindsIn: {
+        of: 103,
+        rows: [
+          { kind: 'praise', label: 'Praising it', k: 93 },
+          { kind: 'purchase_intent', label: 'Ready to buy', k: 4 },
+          { kind: 'feature_request', label: 'Asking for something', k: 4 },
+          { kind: 'objection', label: 'Pushing back', k: 4 },
+          { kind: 'question', label: 'Asking how it works', k: 2 },
+          { kind: 'pain_point', label: 'Hitting a problem', k: 0 },
+        ],
+      },
+      nextPair: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z', inFullExpected: '2027-01-03T04:00:00.000Z' },
+      monthStates: {
+        '2026-08-01': 'ended · still filling until the 4 Oct update',
+        '2026-09-01': 'ended · still filling until the 1 Nov update',
+        '2026-10-01': 'so far from 16 Oct · ended from 1 Nov',
+        '2026-11-01': 'settles with the 3 Jan update',
+      },
+      voices: MARKET_VOICES,
+      voicesFrom: 4,
+      voicesSampled: false,
+      unanswered: { ...base.selected!.unanswered, rows: [], questionVideos: 2, yourPosts: 20, lead: null, refusal: '2 videos asked something about this subject; we do not rank a gap under 10.' },
+      index: 1,
+      of: 7,
+    },
+    // Staging's question videos over July to September, by subject (Repair &
+    // warranty's 11 is left out: it is being re-described).
+    askedMost: [
+      { id: 's-water', name: 'Waterproofing', videos: 16 },
+      { id: 's-price', name: 'Price', videos: 12 },
+      { id: 's-comfort', name: 'Comfort', videos: 7 },
+    ],
+    ...over,
+  }
+}
+
+/** Waterproofing selected over the last 3 months (staging, GR F24): 16
+ *  question videos, its three question groups, and none of Sealand's 56 posts
+ *  in the window sharing two or more of their words. Its kinds are staging's
+ *  September (pain 11, question 10, praise 8, requests 7, ready to buy 5,
+ *  pushback 2, leaving 1, of 29) and its makers 2 of 29. */
+export function waterproofingFixture(): SubjectsData {
+  const data = marketSubjectsFixture()
+  const rows = data.list.rows.map((r) => ({ ...r, selected: r.id === 's-water' }))
+  const unansweredRows = [
+    { id: 'r-demand', label: 'Demand for real waterproofing', videos: 3, reddit: 1, answered: false },
+    { id: 'r-zips', label: 'Worries about zippers in rain', videos: 2, reddit: 0, answered: false },
+    { id: 'r-canvas', label: 'Coated canvas cracking concerns', videos: 1, reddit: 0, answered: false },
+  ]
+  return {
+    ...data,
+    horizon: 'last_3',
+    list: { ...data.list, rows },
+    selected: {
+      ...data.selected!,
+      id: 's-water',
+      name: 'Waterproofing',
+      market: { k: 29, n: 654, pct: 4.4 },
+      marketLine: marketLineFixture('s-water', 'Waterproofing', [marketPoint('2026-08-01', 15, 377), marketPoint('2026-09-01', 29, 654)], { '2026-09-01': 'Not read as a change: we changed our searches in September.' }),
+      makers: { k: 2, of: 29 },
+      kindsIn: {
+        of: 29,
+        rows: [
+          { kind: 'pain_point', label: 'Hitting a problem', k: 11 },
+          { kind: 'question', label: 'Asking how it works', k: 10 },
+          { kind: 'praise', label: 'Praising it', k: 8 },
+          { kind: 'feature_request', label: 'Asking for something', k: 7 },
+          { kind: 'purchase_intent', label: 'Ready to buy', k: 5 },
+          { kind: 'objection', label: 'Pushing back', k: 2 },
+          { kind: 'switching_signal', label: 'Leaving for something else', k: 1 },
+        ],
+      },
+      unanswered: { ...data.selected!.unanswered, rows: unansweredRows, questionVideos: 16, yourPosts: 56, lead: unansweredLead(unansweredRows, 56, 'in the last 3 months'), refusal: null },
+    },
+  }
+}
+
+/** Össur on the market page: no subject named (plan §2.13). */
+export function ossurMarketFixture(): SubjectsData {
+  const data = marketSubjectsFixture()
+  return {
+    ...data,
+    brand: 'Össur',
+    list: { ...data.list, rows: [], proposed: [], setLine: setLine(0, 0), base: { month: '2026-09-01', n: null, prev: null } },
+    selected: null,
   }
 }

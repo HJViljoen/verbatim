@@ -39,11 +39,12 @@ import type { Counted, FigureTable, ObjectKind, RefusedReason, VerdictFlag, Verd
 // AND WHAT THAT FLOOR MEANS ON TODAY'S CORPUS, stated here because it is the
 // answer the product will actually give: Sealand's own audience carries about 9
 // videos in September (research F12; the mock's 84 was invented), far under
-// the 100-video floor, so the you-vs-rival gap the
-// mock prints as "13 points" reads `too few to compare` on a month and clears
-// only over a quarter. That is the same refusal the mock's own change column
-// prints one cell away — the product is consistent, and the headline is not
-// sayable at a month's n.
+// the 100-video floor, and about 27 over a quarter, still under it, so the
+// you-vs-rival gap the mock prints as "13 points" reads `too few to compare`
+// on a month and on a quarter alike. That is the same refusal the mock's own
+// change column prints one cell away — the product is consistent, and the
+// headline is not sayable at Sealand's volume. (Since market-first WP2.2 the
+// Subjects page prints no gap: the pane reads the market.)
 //
 // THE MOCK'S "NARROWED" IS NOT BUILT AS A WORD. It is built as a SECOND DATED
 // GAP READING (`Gap.basis`) printed beside the first with its own band — "12.7

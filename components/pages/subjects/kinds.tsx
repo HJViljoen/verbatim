@@ -8,7 +8,11 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
-import { allRedescribed, paneSides, sideEyebrow, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, kindsInLead, paneSides, sideEyebrow, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { RULE, SCALE } from '@/components/pages/overview/market'
+import { surface } from '@/lib/nav'
+import { marketLevel } from '@/lib/pages/overview-market/kinds'
+import type { FigureTable } from '@/lib/reading/verdicts'
 
 // SU2 · the kinds of thing said, per audience (design §3 SU2, the mock's (b)).
 //
@@ -204,6 +208,12 @@ export const subjectsKinds: Block<SubjectsData> = {
 
   render(data, mode = 'app', ctx) {
     const pane = data.selected
+    // WHAT PEOPLE SAY ABOUT IT (WP2.2): a pane the loader builds carries its
+    // own kinds; one stored before WP2.2 prints its audiences' kind mix, as
+    // sent (below).
+    if (data.list.base !== undefined && (!pane || pane.monthStates !== undefined)) {
+      return <SubjectKinds data={data} mode={mode} appUrl={ctx.appUrl} />
+    }
     const empty = subjectsKinds.emptyState(data)
     const email = mode === 'email'
     // `openLink`, not a hand-rolled pair: print draws no in-app control, which
@@ -262,12 +272,21 @@ export const subjectsKinds: Block<SubjectsData> = {
     )
   },
 
+  figures(data): FigureTable {
+    const k = data.selected?.kindsIn
+    if (!k) return {}
+    const out: FigureTable = {}
+    for (const r of k.rows) out[`subject_kind_${r.kind}_videos`] = { value: r.k, unit: 'videos', label: `${data.selected!.name}, ${r.label.toLowerCase()}, videos` }
+    return out
+  },
+
   // WHAT THIS BLOCK PRINTS, AND ONLY THAT. `verdicts()` is where a reviewer, a
   // prompt and a test read a block's movement claims off it, and this returned
   // EVERY side's kind verdicts — including the two audiences whose movement
   // strip the block never draws. The strip is the category's (or the first side
   // that has kinds), and so is this.
   verdicts(data) {
+    if (data.selected?.monthStates !== undefined) return []
     const withKinds = (data.selected ? paneSides(data.selected) : []).filter((s) => s.kinds.length > 0)
     const drawn = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
     return drawn ? Object.values(drawn.kindVerdicts).filter((v) => v != null) : []
@@ -298,3 +317,103 @@ export const subjectsKinds: Block<SubjectsData> = {
   },
 }
 
+
+// ---- WP2.2 · what people say about the subject ----------------------------------
+
+/** The block's title on the market page: the subject named. */
+export const subjectKindsTitle = (name: string | null): string => (name ? `What people say about ${name}` : 'What people say about it')
+
+/**
+ * WHAT PEOPLE SAY ABOUT IT (§2.3 S3; the approved preview's table): the kinds
+ * of the subject's own member insights on its market videos this month, each
+ * a count with its share of the subject's videos where that carries one (100
+ * videos, and 10 of the kind's own); a dot where it does not. The six big
+ * kinds print even at 0 ("no video"). A video can carry several kinds, so the
+ * rows do not sum to the whole, and the bars are levels on one axis, never a
+ * partition.
+ */
+function SubjectKinds({ data, mode, appUrl }: { data: SubjectsData; mode: RenderMode; appUrl: string }) {
+  const pane = data.selected
+  const email = mode === 'email'
+  const voice = surface('voice')
+  const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
+  const title = subjectKindsTitle(pane?.name ?? null)
+  const k = pane?.kindsIn ?? null
+  const empty = !pane
+    ? subjectsKinds.emptyState(data)
+    : !k
+      ? pane.unread
+        ? `What is said about ${pane.name}: ${pane.unread}.`
+        : `What is said about ${pane.name} in ${longMonth(data.month)} has not been read yet.`
+      : null
+  if (!pane || !k || empty) {
+    return (
+      <BlockFrame title={title} question={subjectsKinds.question} mode={mode} footer={footer} roomy>
+        <BlockEmpty mode={mode}>{empty ?? 'Nothing is selected.'}</BlockEmpty>
+      </BlockFrame>
+    )
+  }
+  const lead = kindsInLead(k)
+  const share = (n: number) => {
+    const l = marketLevel(n, k.of)
+    return l?.kind === 'share' ? l.text : '·'
+  }
+  if (email) {
+    const c = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 10px 4px 0', borderTop: `1px solid ${EMAIL.hairline}` }
+    const num = { ...c, fontFamily: FONT.mono, textAlign: 'right' as const }
+    return (
+      <BlockFrame title={title} question={subjectsKinds.question} mode={mode} footer={footer}>
+        {lead ? <p style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink, margin: '4px 0 8px' }}>{lead}</p> : null}
+        <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ ...c, borderTop: 0, textAlign: 'left', color: EMAIL.muted, fontSize: 11 }}>Kind</th>
+              <th style={{ ...num, borderTop: 0, color: EMAIL.muted, fontSize: 11 }}>Videos</th>
+              <th style={{ ...num, borderTop: 0, color: EMAIL.muted, fontSize: 11 }}><span data-copy="level">Share of {fmtInt(k.of)}</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {k.rows.map((r) => (
+              <tr key={r.kind}>
+                <td style={c}>{r.label}</td>
+                <td style={num}><span data-copy="figure">{fmtInt(r.k)}</span></td>
+                <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{share(r.k)}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </BlockFrame>
+    )
+  }
+  const cols = 'grid grid-cols-[minmax(0,1fr)_56px_64px] gap-x-4 @min-[520px]:grid-cols-[minmax(140px,0.9fr)_minmax(80px,1.1fr)_56px_64px]'
+  const hide = '@max-[520px]:hidden'
+  return (
+    <BlockFrame title={title} question={subjectsKinds.question} mode={mode} footer={footer} roomy>
+      {/* Code's sentence, its base in its own words ("of its 103 videos"). */}
+      {lead ? <p className="m-0 text-[17px] font-medium leading-[1.45] text-foreground [text-wrap:pretty]">{lead}</p> : null}
+      <div role="table" className="@container flex min-w-0 flex-col">
+        <div role="row" className={`${cols} items-end ${RULE.head}`}>
+          <span role="columnheader" className={SCALE.head}>Kind</span>
+          <span role="columnheader" className={hide} />
+          <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
+          <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right leading-[1.35]">
+            <span className="text-[13px] font-medium text-muted-foreground">Share</span>
+            <span className="whitespace-nowrap font-mono text-[12px] text-muted-foreground">of {fmtInt(k.of)}</span>
+          </span>
+        </div>
+        {k.rows.map((r) => (
+          <div key={r.kind} role="row" className={`${cols} min-h-11 items-center ${RULE.row} last:border-b-0`}>
+            <span role="rowheader" className={SCALE.row}>{r.label}</span>
+            <span className={`${hide} flex items-center`}>
+              {r.k > 0 ? (
+                <span aria-hidden className="block h-1.5 rounded-[2px] bg-foreground" style={{ width: `max(4px, ${Math.min(100, (r.k / k.of) * 100)}%)` }} />
+              ) : <span className="text-[13px] text-muted-foreground">no video</span>}
+            </span>
+            <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(r.k)}</span></span>
+            <span className={SCALE.prev}><span data-copy="figure">{share(r.k)}</span></span>
+          </div>
+        ))}
+      </div>
+    </BlockFrame>
+  )
+}

@@ -13,7 +13,7 @@ import { SHARE_BAND } from '../report-bands'
 import { carriesShare, levelText } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
-import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
+import { KIND_ORDER, kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
   ownCensusWithClaims,
   type ClaimEcho,
@@ -22,17 +22,17 @@ import {
 } from '../reading/own-posts'
 import { claimCounts, ledgerRows, type ClaimCounts } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
-import { isMissingKindMoodAttention } from '../reading/attention'
-import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
-import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { freezeBoundary, freezeStateFor } from '../reading/monthly'
+import { daysInMonth, MONTH_PARAM, READING_SWITCH_FRACTION, readingAnchor, scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { loadChanges, loadMonthSeries, type ReadingHandle } from '../reading/read'
-import { loadAppPairOn } from '../reading/gather-flags'
+import { loadChanges, loadMonthSeries, loadPairRows, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
+import { nextComparablePair, pairOnVerdict } from '../reading/comparability'
+import { pairChipWords } from '../calibration'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
-import { methodLines, type MethodLines } from '../reading/method'
-import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
+import type { MethodLines } from '../reading/method'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import type { FigureTable, RefusedReason, Verdict } from '../reading/verdicts'
@@ -62,6 +62,9 @@ import {
   type CountedSubject,
 } from '../subjects/read-in'
 import { selectAll } from '../supabase-admin'
+import { segmentRulesEnabled } from '../segments/rules'
+import { marketKindLabel, marketLevel } from './overview-market/kinds'
+import { accountKey } from './overview-market/voices'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 
@@ -298,6 +301,21 @@ export interface SubjectRail {
    * read. Optional: a snapshot stored before WP1.1 has none.
    */
   market?: { k: number; n: number; pct: number | null } | null
+  /**
+   * The market's side the month before (WP2.2, the rail's second column): k
+   * on the same pooled base as `market`, null where the subject was not read
+   * that month. Optional: a row stored before WP2.2 has none.
+   */
+  marketPrev?: { k: number; n: number } | null
+  /**
+   * The share of this subject's market videos this month that are makers'
+   * (WP2.2; MF2 `lens_readings` over the month's maker videos, by the
+   * segments_v1 reader precedence), 0 to 1. Null where it was not measured:
+   * no maker rule for the tenant (Össur), MF2 not applied, or a failed read.
+   * Printed as a row tag at a fifth or more (decision F). Optional: a row
+   * stored before WP2.2 has none.
+   */
+  makerShare?: number | null
   /** Why no share is shown, in the reader's words. */
   note: string | null
   /**
@@ -339,6 +357,13 @@ export interface SubjectListBlock {
    * open by default, and the one thing a permission flag must not be.
    */
   canEdit: boolean
+  /**
+   * The market's base for the rail's two columns (WP2.2): the reading month's
+   * pooled videos and the month before's, which the column heads carry
+   * ("Sep of 654", "Aug of 377"). Set by the loader since WP2.2; a list stored
+   * before it has none and renders as sent (the editor rail).
+   */
+  base?: { month: string; n: number | null; prev: { month: string; n: number | null } | null } | null
 }
 
 export interface SubjectVoice {
@@ -379,6 +404,14 @@ export interface SubjectVoice {
    * third party's frame exactly as an `e:` comment excerpt is.
    */
   onScreen: Quote | null
+  /** The comment's likes, where it has any (WP2.2, the preview's cite). A
+   *  tie-break is never the selection rule: the order is the evidence's own
+   *  rank. Optional: a voice stored before WP2.2 has none. */
+  likes?: number | null
+  /** The video behind it is a maker's, by the reader precedence (MF1
+   *  `segments_for_videos`), so the cite marks it (decision F: makers stay in,
+   *  and are marked). Optional: absent where the segment was not read. */
+  maker?: boolean
 }
 
 export interface UnansweredRow {
@@ -430,6 +463,40 @@ export interface SubjectPane {
    * Optional: a stored pane has none and leads with its gap line, as sent.
    */
   market?: { k: number; n: number; pct: number | null } | null
+  /**
+   * THE SUBJECT ON THE MARKET, MONTH BY MONTH (WP2.2, §2.3 S2 and S6): the
+   * pooled market line over the chart's axis, k null in a month the subject
+   * was not read in, each refused step judged on the market view. The pane's
+   * trail and "months read", and the Month by month block, are drawn from it.
+   * Optional: a pane stored before WP2.2 has none and renders its Phase 1
+   * brand comparison, as sent.
+   */
+  marketLine?: MonthSeries | null
+  /** The market pair's one chip (the reading month against the month before),
+   *  "not read as a change: we changed our searches in September", or null. */
+  chip?: string | null
+  /** The subject's market videos this month that are makers', and the base
+   *  (the pane's "Who posted them"). Null where not measured. */
+  makers?: { k: number; of: number } | null
+  /**
+   * WHAT PEOPLE SAY ABOUT IT (§2.3 S3): the kinds of the subject's own member
+   * insights, as videos in the reading month, by the month rule (a member
+   * cited on a comment dated in the month, or on camera on a video that
+   * occupies it), over the subject's market videos (`of`, which equals the
+   * headline's k: the loader prints nothing where the two disagree). Null
+   * where it was not read. Optional: absent on a stored pane.
+   */
+  kindsIn?: { of: number; rows: { kind: string; label: string; k: number }[] } | null
+  /**
+   * The next pair the months can be read the same way on (`nextComparablePair`,
+   * the market view, assuming nothing further changes), with the dates the
+   * Month by month cards print. Null where there is none to name.
+   */
+  nextPair?: { prevMonth: string; month: string; sameAgeFrom: string; inFullExpected: string } | null
+  /** Each month's state line for the Month by month cards, keyed by month
+   *  ("final", "ended · still filling until the 1 Nov update", "so far from
+   *  16 Oct · ended from 1 Nov"). Optional. */
+  monthStates?: Record<string, string>
   index: number
   of: number
   sides: SubjectSide[]
@@ -540,7 +607,19 @@ export interface SubjectsData {
    * ledger says so once, in the block's empty state.
    */
   sayHearClaims: SayHearClaim[]
-  record: SubjectsRecordBlock
+  /**
+   * THE SUBJECTS ASKED ABOUT MOST OVER THE LAST 3 MONTHS (the preview's
+   * "Asked most, last 3 months" under the questions count): each subject's
+   * question videos, as S4 counts them, the top three, none being
+   * re-described. One read for every subject (`loadQuestionsBySubject`).
+   * Optional: a page stored before it has none.
+   */
+  askedMost?: { id: string; name: string; videos: number }[] | null
+  /** The record's lines, which fed the retired "How sound" pill. No block
+   *  on the page prints them (25 Sep rulings), so since WP2.2 the loader reads
+   *  none (about fourteen reads, a quarter of the page's); a snapshot stored
+   *  before WP2.2 still carries them. */
+  record?: SubjectsRecordBlock
   /**
    * The method footnote, composed once for every surface (block D, D9).
    *
@@ -549,7 +628,7 @@ export interface SubjectsData {
    * to be worded differently here and on the next surface. Null only where the
    * record behind it could not be read. See lib/reading/method.ts.
    */
-  method: MethodLines | null
+  method?: MethodLines | null
 }
 
 // ---- pure ---------------------------------------------------------------------
@@ -605,6 +684,31 @@ export function railNote(
   if (state === 'provisional') return CALIBRATION_WORDS.provisional
   if (!read) return NO_READING_YET
   return null
+}
+
+/** Each rail row's maker share, from the maker read (in place): the share of
+ *  its market videos this month that are makers', or null where the row has
+ *  no figure or the read did not happen. */
+export function fillMakerShares(rows: SubjectRail[], makers: Pick<MarketMakers, 'lens'>, rivalAudiences: readonly string[]): void {
+  for (const r of rows) {
+    const k = r.market?.k ?? 0
+    const makerK = r.market && k > 0 && r.status === 'active' && readCalibration(r.calibration) !== 'failed'
+      ? makerKOf(makers.lens, r.id, rivalAudiences)
+      : null
+    r.makerShare = makerK != null ? makerK / k : null
+  }
+}
+
+/** The rail's order (WP2.2, §2.3 S1): rows with a market figure first, by
+ *  the market's k this month (one base, so k's order is the share's), then
+ *  the confirmed rows with no figure (not read yet, being re-described), then
+ *  the rows named but not confirmed; ties by name, so the order never depends
+ *  on how the rows came back. */
+export function byRailRank(a: Pick<SubjectRail, 'status' | 'market' | 'calibration' | 'name'>, b: Pick<SubjectRail, 'status' | 'market' | 'calibration' | 'name'>): number {
+  const tier = (r: typeof a) => (r.status !== 'active' ? 2 : r.market && readCalibration(r.calibration) !== 'failed' ? 0 : 1)
+  const t = tier(a) - tier(b)
+  if (t !== 0) return t
+  return (tier(a) === 0 ? (b.market?.k ?? 0) - (a.market?.k ?? 0) : 0) || a.name.localeCompare(b.name)
 }
 
 /** Which subject the page is about: the one asked for, else the first
@@ -807,6 +911,66 @@ export function matchWords(text: string): string[] {
 }
 
 /**
+ * THE GENERIC WORDS (market-first WP2.5): words every post and every question
+ * in this category shares, so sharing one says nothing about whether a post
+ * touched a question. "bag" is in nearly every question label and every post's
+ * topics; "handmade", "love" and "buy" are the market's own framing; and the
+ * label words a clustering puts at the front of a group ("Questions about",
+ * "Demand for", "Worries about", "Confusion over") name the KIND of thing
+ * said, not its subject. A post touches a question only on two words that are
+ * none of these. Stemmed as `matchWords` stems (a trailing s dropped).
+ */
+export const GENERIC_WORDS: ReadonlySet<string> = new Set([
+  'bag', 'backpack', 'pack', 'handmade', 'love', 'buy', 'buying', 'want', 'like', 'need', 'make', 'made',
+  'good', 'great', 'nice', 'best', 'new', 'product', 'video', 'post', 'brand', 'people', 'thing', 'one', 'get',
+  'question', 'demand', 'worrie', 'worry', 'concern', 'confusion', 'interest', 'frustration', 'praise',
+  'request', 'desire', 'wish', 'curiosity', 'comment', 'feedback', 'appreciation', 'admiration', 'excitement',
+  'over', 'into', 'onto', 'than', 'then', 'just', 'very', 'more', 'most', 'some', 'such', 'only', 'also',
+  'after', 'before', 'their', 'there', 'other', 'every', 'much', 'many', 'way', 'real',
+])
+
+/** A text's non-generic words (`matchWords` without `GENERIC_WORDS`). */
+export function contentWords(text: string): string[] {
+  return matchWords(text).filter((w) => !GENERIC_WORDS.has(w))
+}
+
+/** Each matched stem as the label wrote it ("canva" is printed "canvas"):
+ *  the first word in the text that stems to it. */
+function spelledAs(text: string): Map<string, string> {
+  const out = new Map<string, string>()
+  const folded = text.normalize('NFD').replace(COMBINING, '').toLowerCase()
+  for (const w of folded.split(/[^a-z0-9]+/)) {
+    if (w.length < 3) continue
+    const stem = w.length >= 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w
+    if (!out.has(stem)) out.set(stem, w)
+  }
+  return out
+}
+
+/**
+ * Which of your posts share two or more of a label's non-generic words, and on
+ * which words (WP2.5: a "none" can be checked). Each POST is matched on its
+ * own: two words from two different posts are not one post touching the
+ * question. `checked` is the label's words a post had to share.
+ */
+export function postsSharing(
+  label: string,
+  posts: readonly { id: string; topics: readonly string[] | null }[],
+): { checked: string[]; matched: { id: string; words: string[] }[] } {
+  const stems = contentWords(label)
+  const spelling = spelledAs(label)
+  const spell = (w: string) => spelling.get(w) ?? w
+  const checked = stems.map(spell)
+  if (stems.length < 2) return { checked, matched: [] }
+  const matched = posts.flatMap((p) => {
+    const pool = new Set((p.topics ?? []).flatMap(contentWords))
+    const words = stems.filter((w) => pool.has(w))
+    return words.length >= 2 ? [{ id: p.id, words: words.map(spell) }] : []
+  })
+  return { checked, matched }
+}
+
+/**
  * Did any of your own posts touch this question?
  *
  * TWO CONTENT WORDS IN COMMON, ALWAYS. One shared word is "bag", and one
@@ -822,9 +986,10 @@ export function matchWords(text: string): string[] {
  * CLAIM is unreadable until M8 — see UNANSWERED_CLAIMS_UNREADABLE.
  */
 export function answeredBy(label: string, haystack: readonly string[]): boolean {
-  const want = matchWords(label)
+  // Two NON-GENERIC words (WP2.5): "bag" and "love" touch every question.
+  const want = contentWords(label)
   if (want.length < 2) return false
-  const pool = new Set(haystack.flatMap(matchWords))
+  const pool = new Set(haystack.flatMap(contentWords))
   const hits = want.filter((w) => pool.has(w)).length
   return hits >= 2
 }
@@ -1211,34 +1376,6 @@ async function readByIds<T>(
   return pages.flat()
 }
 
-/** A stored month table, read straight. Null — never [] — when the migration
- *  that creates it has not been applied here (the WP11 precedent). */
-async function readStoredMonths<T>(
-  client: SupabaseClient,
-  table: string,
-  clientId: string,
-  months: readonly string[],
-  order: readonly string[],
-  missing: (error: unknown) => boolean,
-): Promise<T[] | null> {
-  if (months.length === 0) return []
-  try {
-    return await selectAll<T>(() => {
-      let q = client
-        .from(table)
-        .select('*')
-        .eq('client_id', clientId)
-        .gte('month', months[0])
-        .lte('month', months[months.length - 1])
-      for (const col of order) q = q.order(col, { ascending: true })
-      return q
-    })
-  } catch (error) {
-    if (missing(error) || isMissingMonthTable(error)) return null
-    throw error
-  }
-}
-
 /** The tenant's subjects, or null where M4 is not applied here.
  *
  *  EXPORTED FOR WP18 (one line, additive): the monthly report prints one voice
@@ -1321,29 +1458,110 @@ export async function loadMemberInsightIdsBySubject(
   }
 }
 
-/** The member insight ids of one subject, at any judge version. Id-set lookups
- *  stay on the base tables (AGENTS.md): a membership row cascades with its
- *  insight, so an id that resolves is an insight that is still live. */
-export async function loadMemberInsightIds(
+/**
+ * The selected subject's member insights, each with what the month rule reads
+ * (WP2.2): its kind, its video (whose audience and analysis), and its evidence
+ * with each comment's date. ONE PAGED READ, embedded through the foreign keys
+ * (membership → insight → video, and → evidence → comment), in place of the
+ * member-id read the pane already made: Looks & style on staging is 180 member
+ * insights and 1,073 evidence rows. Null where M4 is not applied here.
+ */
+export async function loadSubjectMembers(
   supabase: SupabaseClient,
   clientId: string,
   subjectId: string,
-): Promise<string[] | null> {
+): Promise<SubjectMember[] | null> {
+  type Row = {
+    audience_insight_id: string
+    audience_insights: {
+      category: string | null
+      source_video_id: string | null
+      videos: { is_client: boolean | null; analyzed_run_id: string | null } | null
+      insight_evidence: { source: string | null; comments: { comment_date: string | null } | null }[] | null
+    } | null
+  }
   try {
-    const rowsOut = await selectAll<MembershipRow>(() =>
+    const rows = await selectAll<Row>(() =>
       supabase
         .from(TABLE_SUBJECT_MEMBERSHIPS)
-        .select('audience_insight_id')
+        .select('audience_insight_id, audience_insights!inner(category, source_video_id, videos(is_client, analyzed_run_id), insight_evidence(source, comments(comment_date)))')
         .eq('client_id', clientId)
         .eq('subject_id', subjectId)
         .eq('member', true)
-        .order('audience_insight_id', { ascending: true }),
+        .order('audience_insight_id', { ascending: true }) as never,
     )
-    return [...new Set(rowsOut.map((r) => r.audience_insight_id))]
+    // A to-one embed comes back as an object; read an array's first as the
+    // same, so a client that types it as a list cannot drop the row.
+    const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? v[0] ?? null : v ?? null)
+    const seen = new Set<string>()
+    const out: SubjectMember[] = []
+    for (const r of rows) {
+      if (seen.has(r.audience_insight_id)) continue
+      seen.add(r.audience_insight_id)
+      const ai = one(r.audience_insights)
+      const video = one(ai?.videos)
+      out.push({
+        insightId: r.audience_insight_id,
+        kind: ai?.category ?? null,
+        videoId: ai?.source_video_id ?? null,
+        client: video?.is_client === true,
+        analysed: video?.analyzed_run_id != null,
+        evidence: (ai?.insight_evidence ?? []).map((e) => ({ source: e.source ?? null, commentDate: one(e.comments)?.comment_date ?? null })),
+      })
+    }
+    return out
   } catch (error) {
     if (isMissingSubjects(error)) return null
     throw error
   }
+}
+
+/** The month's market videos, and which of them are makers' (WP2.2). */
+export interface MarketMakers {
+  /** Every market video with a comment dated in the month (MF1
+   *  `market_month_videos`), or null where it could not be read. */
+  occupies: Set<string> | null
+  /** The maker videos among them (MF1 `segments_for_videos`), or null where
+   *  the tenant has no maker rule or the read failed. */
+  makers: Set<string> | null
+  /** MF2 `lens_readings` over the maker videos, or null (not measured). */
+  lens: { audience: string; object_kind: string; object_id: string; k: number }[] | null
+}
+
+const RPC_MISSING = new Set(['PGRST202', '42883'])
+const rpcMissing = (error: { code?: string | null } | null | undefined): boolean => RPC_MISSING.has(error?.code ?? '')
+
+/**
+ * The reading month's market videos and their makers, and every subject's
+ * videos among the makers (WP2.2: "maker shares via MF2's lens_readings").
+ * Three service-role calls, in turn, on the reading client (the functions are
+ * granted to service_role only): `market_month_videos`, `segments_for_videos`
+ * over those ids, and `lens_readings` over the maker ids. FAILS CLOSED: a read
+ * that fails leaves its part null, which the page prints as not measured,
+ * never as 0. A tenant with no maker rule (`segmentRulesEnabled`, Össur) reads
+ * the month's videos only.
+ */
+export async function loadMarketMakers(client: SupabaseClient, clientId: string, month: string): Promise<MarketMakers> {
+  const out: MarketMakers = { occupies: null, makers: null, lens: null }
+  const log = (what: string, error: { message?: string; code?: string | null }) => {
+    if (!rpcMissing(error)) console.error(`[subjects] ${what}: ${error.message ?? String(error)}; not measured`)
+  }
+  const mv = await client.rpc('market_month_videos', { p_client: clientId, p_month: monthStartOf(month) })
+  if (mv.error) { log('market_month_videos', mv.error); return out }
+  const ids = [...new Set(((mv.data ?? []) as { video_id: string }[]).map((r) => String(r.video_id)))]
+  out.occupies = new Set(ids)
+  if (!segmentRulesEnabled(clientId)) return out
+  if (ids.length === 0) return { ...out, makers: new Set(), lens: [] }
+  const seg = await client.rpc('segments_for_videos', { p_client: clientId, p_video_ids: ids })
+  if (seg.error) { log('segments_for_videos', seg.error); return out }
+  const makers = new Set(((seg.data ?? []) as { video_id: string; segment: string | null }[])
+    .filter((r) => r.segment === 'maker').map((r) => String(r.video_id)))
+  out.makers = makers
+  if (makers.size === 0) return { ...out, lens: [] }
+  const lens = await client.rpc('lens_readings', { p_client: clientId, p_month: monthStartOf(month), p_run: null, p_video_ids: [...makers] })
+  if (lens.error) { log('lens_readings', lens.error); return out }
+  out.lens = ((lens.data ?? []) as { audience: string; object_kind: string; object_id: string; k: number }[]).map((r) => ({ ...r, k: Number(r.k) }))
+  return out
 }
 
 // ---- SU4 · your own posts ------------------------------------------------------
@@ -1615,7 +1833,12 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // subject being re-described is hidden everywhere: its rail row says so and
   // it is never the pane, whatever the URL asks for.
   const calibrationOf = new Map(active.map((s) => [s.id, subjectCalibration(s)]))
-  const selectedId = selectSubject(active.filter((s) => calibrationOf.get(s.id) !== 'failed'), params.item)
+  // WHICH SUBJECT OPENS (WP2.2): the one asked for, else the rail's first,
+  // which is the market's biggest (the preview opens on Looks & style). The
+  // rail is ranked after the months are read, so here only WHETHER one will
+  // open is settled: the themed run and the pane's reads depend on that alone.
+  const selectable = active.filter((s) => calibrationOf.get(s.id) !== 'failed')
+  const opensOne = selectable.length > 0
 
   // THE THEMED RUN, STARTED HERE AND TAKEN WHERE IT IS USED (WP23). It waits
   // on the running-run ids and on nothing else, and it used to be read inside
@@ -1623,7 +1846,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // overlaps wave 2 — and ONLY WHEN A SUBJECT IS SELECTED, because the pane is
   // the only thing that reads it: a rail with nothing open makes the two reads
   // it made before this package, not two more.
-  const themedRunAhead = selectedId
+  const themedRunAhead = opensOne
     ? fetchRunningRunIds(supabase, clientId, 'subjects').then((ids) =>
         fetchThemedRunId(supabase, clientId, ids, 'subjects'),
       )
@@ -1680,10 +1903,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const onChart = (s: MonthSeries): MonthSeries =>
     ({ ...s, points: s.points.filter((p) => chartSet.has(monthStartOf(p.month))) })
 
-  // The record's reads depend on the month alone; its refusals are arithmetic
-  // over verdicts the page has not made yet and are added below.
-  const recordAhead = loadRecordInputs(reading.client, clientId, monthRecordWindow(month, readingAt), { now: readingAt })
-  recordAhead.catch(() => {})
+  // NO RECORD READ (WP2.2): the record's lines fed the "How sound" pill,
+  // which left every page on 25 Sep, and no block here prints the method
+  // footnote; the page's read budget (plan §5.4) pays for the market's reads.
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
   const judgeAhead = loadAppPairOn(reading, readingAt)
@@ -1723,8 +1945,29 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   ownPostsAhead.catch(() => {})
   sayHearAhead.catch(() => {})
 
+  // THE MONTH'S MAKERS (WP2.2), beside the month reads: the rail's maker tags,
+  // the pane's "Who posted them" and the voices' maker mark. Fails closed.
+  const makersAhead: Promise<MarketMakers> = active.length > 0
+    ? loadMarketMakers(reading.client, clientId, month).catch((error: unknown) => {
+        console.error(`[subjects] makers: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+        return { occupies: null, makers: null, lens: null }
+      })
+    : Promise.resolve({ occupies: null, makers: null, lens: null })
+  // The next pair read the same way, for the Month by month cards: the judge's
+  // own pair rows (memoised, so no second read).
+  const pairRowsAhead = opensOne ? loadPairRows(reading.client, clientId, null).catch(() => null) : Promise.resolve(null)
+  // Every subject's question videos over the last 3 months (the questions
+  // tile's "Asked most"), one read beside the month reads.
+  const last3 = horizonWindow('last_3', readingAnchor(rm), started.from)
+  const askedMostAhead = opensOne
+    ? loadQuestionsBySubject(supabase, clientId, selectable.map((s) => s.id), { from: last3.from, to: last3.to }).catch((error: unknown) => {
+        console.error(`[subjects] asked most: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      })
+    : Promise.resolve(null)
+
   const [subjectSet, kindRows, chartRead] = await Promise.all([
-    selectedId
+    opensOne
       ? loadMonthSeries(reading.client, clientId, {
           from: readAxis[0],
           to: month,
@@ -1736,17 +1979,17 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
           changeLogFrom: history.changeLogFrom,
         })
       : Promise.resolve(null),
-    readStoredMonths<StoredKindRow>(
-      reading.client, 'month_kind_readings', clientId, readAxis,
-      ['month', 'audience', 'kind'], isMissingKindMoodAttention,
-    ),
-    selectedId && chartAxis[0] < readAxis[0]
+    // NO KIND-MIX READ (WP2.2): the pane's kinds are the subject's own
+    // (`kindsIn`, off the members the pane reads), and each audience's whole
+    // kind mix is not drawn on the market page. A pane's sides carry none.
+    Promise.resolve(null as StoredKindRow[] | null),
+    opensOne && chartAxis[0] < readAxis[0]
       ? loadMonthSeries(reading.client, clientId, {
           from: chartAxis[0],
           to: month,
           audiences,
           objectKind: 'subject',
-          objectIds: [selectedId],
+          objectIds: selectable.map((s) => s.id),
           updatesByMonth,
           firstRunMonth,
           changeLogFrom: history.changeLogFrom,
@@ -1806,18 +2049,18 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // brands' audiences and the category from the rows already read: no read of
   // its own. It is what a provisional row prints (decision C).
   const marketCounts = pooledDenominators(history.denominators, marketRivals)
-  const marketOf = (subjectId: string) =>
+  const marketOf = (subjectId: string, m: string = month) =>
     railMarketSide({
-      read: readIn(subjectId, month),
-      month,
+      read: readIn(subjectId, m),
+      month: m,
       // Every market audience with a denominator row this month: a line the
       // page did not read (no subject selected) is null, which is unknown and
       // makes the whole side unknown, never a partial sum.
       rows: marketAudiences(marketRivals)
-        .filter((audience) => perAudience.has(`${month}|${audience}`))
+        .filter((audience) => perAudience.has(`${m}|${audience}`))
         .map((audience) => {
           const line = seriesFor(subjectId, audience)
-          return { audience, k: line ? pointsByMonth(line).get(month)?.k ?? null : null }
+          return { audience, k: line ? pointsByMonth(line).get(m)?.k ?? null : null }
         }),
       counts: marketCounts,
       rivalAudiences: marketRivals,
@@ -1833,11 +2076,18 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // every ready row.) NO CHANGE BADGE on the rail: no month pair is read the
   // same way before the 6 Dec update, and a refusal on every row is the
   // sentence the deploy-1 review (R3) took off rows; WP2.2 rebuilds the rail.
-  const rail: SubjectRail[] = [...active, ...proposed].slice(0, RAIL_MAX).map((s) => {
+  //
+  // RANKED BY THE MARKET (WP2.2, §2.3 S1): the market's k this month, largest
+  // first; a subject with no figure (not read yet, being re-described) after
+  // every one with a figure; a subject named but not confirmed last. Each row
+  // carries the month before on the same base, and its maker share (decision
+  // F: printed at a fifth or more).
+  const railRows: SubjectRail[] = [...active, ...proposed].map((s) => {
     // A proposed subject was never checked and measures nothing; its row says
     // "not counted yet" whatever the state (`railNote`).
     const calibration = calibrationOf.get(s.id) ?? subjectCalibration(s)
     const counted = s.status === 'active' && calibration !== 'failed' ? marketOf(s.id) : null
+    const before = counted ? marketOf(s.id, prevMonth) : null
     const unread = s.status === 'active' && readIn(s.id, month) === 'unread'
     return {
       id: s.id,
@@ -1851,16 +2101,30 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       market: counted
         ? { k: counted.k, n: counted.n, pct: carriesShare(counted.n) ? pctOf(counted.k, counted.n) : null }
         : null,
+      marketPrev: before ? { k: before.k, n: before.n } : null,
+      // Filled in below, once the maker read is in: it runs beside the pane's
+      // reads rather than in front of them.
+      makerShare: null,
       note: railNote(calibration, counted != null, s.status, unread ? unreadNote : null),
       verdict: null,
-      selected: s.id === selectedId,
+      selected: false,
       // A subject being re-described opens nothing: there is no pane to show.
       href: s.status === 'active' && calibration !== 'failed' ? `/dashboard/subjects?item=${encodeURIComponent(s.id)}` : '',
     }
   })
+  const rail = [...railRows].sort(byRailRank).slice(0, RAIL_MAX)
+  const selectedId = selectSubject(rail.filter((r) => r.status === 'active' && readCalibration(r.calibration) !== 'failed'), params.item)
+  for (const r of rail) r.selected = r.id === selectedId
 
   const list: SubjectListBlock = {
     rows: rail,
+    base: {
+      month,
+      n: marketCounts.get(monthStartOf(month))?.videos ?? null,
+      prev: marketCounts.has(monthStartOf(prevMonth))
+        ? { month: prevMonth, n: marketCounts.get(monthStartOf(prevMonth))?.videos ?? null }
+        : null,
+    },
     proposed: proposed.map((s) => ({ id: s.id, name: s.name, because: originLine(s.origin) })),
     rule: SUPERSEDE_RULE,
     notRecorded: subjectRows == null
@@ -1911,10 +2175,23 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       .map(onChart)
       .map(judged)
 
-    const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
+    // THE MEMBERS WITH WHAT THE MONTH RULE READS (WP2.2), in place of the
+    // member-id read: the ids feed the voices and the questions as before, and
+    // the subject's own market videos this month feed its kinds.
+    const members = await loadSubjectMembers(supabase, clientId, subject.id)
+    const memberIds = members ? members.map((m) => m.insightId) : null
+    // The voices are dated in the reading month, so only a member cited on a
+    // comment dated in it can supply one: the rest are not read for quotes
+    // (Looks & style on staging: every citation's translation was read for six
+    // quotes, three seconds of the page).
+    const voiceIds = members
+      ? members.filter((m) => m.evidence.some((e) => e.source === 'comment' && inMonth(e.commentDate, month))).map((m) => m.insightId)
+      : null
     const themedRunId = themedRunAhead ? await themedRunAhead : null
     const [voices, unanswered] = await Promise.all([
-      loadVoices(supabase, clientId, memberIds ?? []),
+      // Dated in the reading month, the market first, never the video's own
+      // account (§2.3 S5), a maker's video marked.
+      loadVoices(supabase, clientId, voiceIds ?? [], { month, marketFirst: true, makers: makersAhead.then((m) => m.makers) }),
       loadUnanswered(supabase, clientId, memberIds ?? [], {
         window: { from: window.from, to: window.to },
         period: periodPhrase(horizon, month),
@@ -1957,6 +2234,71 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       thin,
     })
 
+    // ── WP2.2 · the subject on the market ─────────────────────────────
+    const railRow = rail.find((r) => r.id === subject.id) ?? null
+    const readHere = readIn(subject.id, month) === 'read'
+    // The pooled line over the chart's axis, its refused steps judged on the
+    // market view (a step Aug to Sep is drawn broken, WP1.3).
+    const line = marketLineOf({
+      subjectId: subject.id,
+      label: subject.name,
+      months: chartAxis,
+      lines: marketAudiences(marketRivals)
+        .map((a) => chartSeriesFor(subject.id, a))
+        .filter((l): l is MonthSeries => l != null),
+      counts: marketCounts,
+      rivalAudiences: marketRivals,
+      read: (m) => readIn(subject.id, m) === 'read',
+    })
+    const marketLine = line
+      ? { ...line, refusedSteps: refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, MARKET_LINE)) }
+      : null
+    const readMonths = new Set(monthsReadOf(marketLine).map((p) => monthStartOf(p.month)))
+    // The one chip: the reading month against the month before, where both
+    // were read (a pair to refuse exists).
+    const pairNote = readMonths.has(monthStartOf(prevMonth)) && readMonths.has(monthStartOf(month))
+      ? pairOnVerdict(pair(prevMonth, month, MARKET_LINE)).note
+      : null
+    const chip = pairNote && pairNote.mode === 'refuse' ? pairChipWords(pairNote) : null
+    // What people say about it: the members' kinds on the subject's own
+    // market videos, printed only where that set is the headline's k.
+    const makers = await makersAhead
+    fillMakerShares(rail, makers, marketRivals)
+    let kindsIn: SubjectPane['kindsIn'] = null
+    if (members && readHere && railRow?.market) {
+      const set = subjectMonthVideos(members, month, makers.occupies)
+      if (set.videos.size === railRow.market.k) {
+        kindsIn = { of: railRow.market.k, rows: kindsInRows(set.byKind) }
+      } else {
+        console.error(`[subjects] kinds: ${set.videos.size} videos read against the headline's ${railRow.market.k}; not printed`)
+      }
+    }
+    const makerK = railRow?.market && railRow.makerShare != null ? makerKOf(makers.lens, subject.id, marketRivals) : null
+    // The next pair read the same way (market view), for the future cards.
+    const pairRows = await pairRowsAhead
+    const nextUpdateAfter = schedule ? scheduledUpdateAfter(schedule) : null
+    const next = pairRows
+      ? nextComparablePair(rm.asAt ?? readingAt, ourChangesWithoutGatherFlags(changes), pairRows, {
+          view: 'market',
+          readingMonth: month,
+          ...(nextUpdateAfter ? { nextUpdateAfter } : {}),
+        })
+      : null
+    const nextPair = next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom, inFullExpected: next.inFullExpected } : null
+    const monthStates: Record<string, string> = {}
+    for (const p of marketLine?.points ?? []) {
+      if (!readMonths.has(monthStartOf(p.month))) continue
+      monthStates[monthStartOf(p.month)] = monthCardState({ month: p.month, now: readingAt, read: true, status: p.status, paused: rm.paused, nextUpdateAfter })
+    }
+    if (nextPair) {
+      for (let m = nextMonth(monthStartOf(month)); m <= monthStartOf(nextPair.month); m = nextMonth(m)) {
+        monthStates[m] = monthCardState({
+          month: m, now: readingAt, read: false, status: null, paused: rm.paused, nextUpdateAfter,
+          settlesWith: m === monthStartOf(nextPair.month) ? nextPair.inFullExpected : null,
+        })
+      }
+    }
+
     selected = {
       id: subject.id,
       name: subject.name,
@@ -1967,11 +2309,16 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       unread: readIn(subject.id, month) === 'unread' ? unreadNote : null,
       // THE RAIL ROW'S OWN FIGURE, never a second read (default M-b), so the
       // pane's headline and the row the reader clicked share one base.
-      market: rail.find((r) => r.id === subject.id)?.market ?? null,
+      market: railRow?.market ?? null,
+      marketLine,
+      chip,
+      makers: makerK != null && railRow?.market ? { k: makerK, of: railRow.market.k } : null,
+      kindsIn,
+      nextPair,
+      monthStates,
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,
-      kindsRecorded: kindRows != null,
       series,
       chartSeries,
       voices: voices.voices,
@@ -1996,6 +2343,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     }
   }
 
+  // The rail's maker tags, where no pane filled them above.
+  if (!subject) fillMakerShares(rail, await makersAhead, marketRivals)
+
   // ── SU4 · your own posts, and the claims ledger ───────────────────────
   const census = await ownPostsAhead
   const sayHear = await sayHearAhead
@@ -2006,13 +2356,15 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // two of three were echoed.
   const ownPosts: OwnPostCensus = census
 
-  // ── the record ────────────────────────────────────────────────────────
-  const pageVerdicts = (selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
-  const recordInputs: RecordInputs = {
-    ...(await recordAhead),
-    comparisonsRefused: countRefused(pageVerdicts),
-    refusals: refusals(pageVerdicts),
-  }
+  const asked = await askedMostAhead
+  const askedMost = asked
+    ? asked
+        .filter((a) => a.questionVideos > 0)
+        .map((a) => ({ id: a.subjectId, name: selectable.find((x) => x.id === a.subjectId)?.name ?? '', videos: a.questionVideos }))
+        .filter((a) => a.name)
+        .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
+        .slice(0, UNANSWERED_SHOWN)
+    : null
 
   return {
     brand,
@@ -2020,6 +2372,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     monthStatus,
     readingAt,
     reading: rm,
+    askedMost,
     otherMonths: view.others,
     horizon,
     axis,
@@ -2031,11 +2384,6 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     ownPosts,
     sayHear: sayHear.counts,
     sayHearClaims: sayHear.entries.map((e) => ({ claim: e.you_say, state: claimState(e.audience) })),
-    record: {
-      line: howSoundLine(recordInputs),
-      lines: recordLines(recordInputs),
-    },
-    method: methodLines(recordInputs, { brand }),
   }
 }
 
@@ -2291,8 +2639,9 @@ async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
   insightIds: readonly string[],
+  opts?: VoiceReadOptions,
 ): Promise<VoiceRead> {
-  const read = await loadVoicesMany(supabase, clientId, [{ key: 'one', insightIds }])
+  const read = await loadVoicesMany(supabase, clientId, [{ key: 'one', insightIds }], opts)
   return read.get('one') ?? NO_VOICES
 }
 
@@ -2314,9 +2663,18 @@ const NO_VOICES: VoiceRead = { voices: [], from: 0, sampled: false, readable: 0 
 
 export interface VoiceReadOptions {
   /** Keep only citations whose COMMENT falls in this month ('2026-09' or its
-   *  first day). A monthly artefact asks for one; the Subjects page, which is
-   *  read over a horizon and says so, asks for none. */
+   *  first day). A monthly artefact asks for one; so does the Subjects page
+   *  since WP2.2 (§2.3 S5: voices dated in the reading month). */
   month?: string
+  /** The market first (WP2.2, §2.3 S5): the category's voices, then the
+   *  tracked brands', and the client's audience last (decision E: its own
+   *  posts are not the market). Off by default, so the monthly's order is
+   *  unchanged. */
+  marketFirst?: boolean
+  /** The reading month's maker videos (`loadMarketMakers`), so a voice under
+   *  one is marked (decision F). A promise is awaited only after the voices'
+   *  own reads, so the two run side by side. */
+  makers?: ReadonlySet<string> | null | Promise<ReadonlySet<string> | null>
 }
 
 /**
@@ -2378,13 +2736,13 @@ async function loadVoicesMany(
   const commentIds = [
     ...new Set(pools.flatMap((p) => p.considered.map((c) => c.commentId).filter((id): id is string => Boolean(id)))),
   ]
-  type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
+  type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null; author?: string | null; likes?: number | null }
   const meta = new Map<string, CommentMeta>()
   if (commentIds.length > 0) {
     const read = await readByIds<CommentMeta & { id: string }>(commentIds, (part) =>
       supabase
         .from('comments')
-        .select('id, platform, comment_date, video_id, comment_id')
+        .select('id, platform, comment_date, video_id, comment_id, author, likes')
         .eq('client_id', clientId)
         .in('id', part)
         .order('id', { ascending: true }),
@@ -2399,12 +2757,17 @@ async function loadVoicesMany(
   // column that knows: `is_client` is true of a stranger's review too, which
   // is what made every cite read "under a post of yours" (voiceFrom).
   const ownPostKeys = new Set<string>()
+  // The video's own account and its row id: a comment by the account that
+  // posted the video is the video talking, not the market (§4.0 quotes), and
+  // the row id is what the reading month's maker set is keyed by.
+  const accountByKey = new Map<string, string>()
+  const idByKey = new Map<string, string>()
   if (nativeIds.length > 0) {
-    type V = { platform: string | null; video_id: string | null; video_url: string | null; source: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }
+    type V = { id?: string | null; platform: string | null; video_id: string | null; video_url: string | null; source: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null; account_name?: string | null }
     const read = await readByIds<V>(nativeIds, (part) =>
       supabase
         .from('videos')
-        .select('platform, video_id, video_url, source, is_client, is_competitor, competitor_name')
+        .select('id, platform, video_id, video_url, source, is_client, is_competitor, competitor_name, account_name')
         .eq('client_id', clientId)
         .in('video_id', part)
         .order('video_id', { ascending: true }),
@@ -2414,6 +2777,8 @@ async function loadVoicesMany(
       const key = `${v.platform}::${v.video_id}`
       if (v.video_url) urlByKey.set(key, v.video_url)
       if (v.source === 'owned') ownPostKeys.add(key)
+      if (v.account_name) accountByKey.set(key, v.account_name)
+      if (v.id) idByKey.set(key, String(v.id))
       audienceByKey.set(
         key,
         v.is_client ? CLIENT_AUDIENCE : v.is_competitor ? rivalKey(v.competitor_name ?? 'unknown') : INDUSTRY_AUDIENCE,
@@ -2421,17 +2786,27 @@ async function loadVoicesMany(
     }
   }
 
+  const makerSet = opts?.makers ? await opts.makers : null
   for (const p of pools) {
     // A PERIOD IS DATED BY THE COMMENT (AGENTS.md), so a caller that asks for a
     // month gets the citations whose comment falls in it and no others — a
     // citation whose comment cannot be dated is not in any month. Without this
     // an artefact headed September prints a June comment under it.
-    const considered = opts?.month
+    const inMonthOnly = opts?.month
       ? p.considered.filter((c) => {
           const date = c.commentId ? meta.get(c.commentId)?.comment_date ?? null : null
           return date != null && date.slice(0, 7) === opts.month!.slice(0, 7)
         })
       : p.considered
+    // NEVER FROM THE VIDEO'S OWN ACCOUNT (§4.0 quotes; WP2.2): a creator
+    // answering under their own post is the video talking. Matched as the
+    // front page matches it (`accountKey`: letters and digits, one case).
+    const considered = inMonthOnly.filter((c) => {
+      const m = c.commentId ? meta.get(c.commentId) : undefined
+      const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
+      const author = accountKey(m?.author ?? null)
+      return !(author && key && author === accountKey(accountByKey.get(key) ?? null))
+    })
     if (considered.length === 0) {
       out.set(p.key, { voices: [], from: 0, sampled: p.sampled, readable: p.considered.length })
       continue
@@ -2449,7 +2824,10 @@ async function loadVoicesMany(
       const audience = audienceOf(c)
       byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
     }
-    const order = [CLIENT_AUDIENCE, ...[...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort(), INDUSTRY_AUDIENCE]
+    const rivalsHeard = [...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort()
+    const order = opts?.marketFirst
+      ? [INDUSTRY_AUDIENCE, ...rivalsHeard, CLIENT_AUDIENCE]
+      : [CLIENT_AUDIENCE, ...rivalsHeard, INDUSTRY_AUDIENCE]
     const shown = voicesAcross(
       order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] })),
     )
@@ -2519,6 +2897,8 @@ async function loadVoicesMany(
         platform: m?.platform ?? null,
         source,
         onScreen: source === 'video' && videoId ? onScreenByVideo.get(videoId) ?? null : null,
+        likes: typeof m?.likes === 'number' && m.likes > 0 ? m.likes : null,
+        ...(makerSet && key && idByKey.has(key) ? { maker: makerSet.has(idByKey.get(key)!) } : {}),
       }
     })
     out.set(p.key, { voices, from: considered.length, sampled: p.sampled, readable: p.considered.length })
@@ -2673,7 +3053,6 @@ async function loadUnanswered(
   // would work and is refused: `reading.client` is the month tables' client,
   // and "one careless `reading.client.from('<not a month table>')` away from an
   // RLS bypass" is the rule that file states about itself.
-  const haystack = ownVideos.flatMap((v) => v.topics ?? [])
 
   const nonOwned = new Set<string>()
   const questionInsights: InsightRow[] = []
@@ -2734,13 +3113,18 @@ async function loadUnanswered(
       label: g.label,
       videos: g.videos.size,
       reddit: g.reddit.size,
-      answered: answeredBy(g.label, haystack),
+      // PER POST (WP2.5): one of your posts shares two or more of the
+      // question's non-generic words; two words from two posts are not one.
+      answered: postsSharing(g.label, ownVideos).matched.length > 0,
       // NO ONWARD LINK. The obvious one is Voice's `?themes=`, and that
       // parameter matches on `themes.member_themes` SLUGS, not on a registry
       // id — a link that would silently filter to nothing. VO3 (WP13) is where
       // a question opens in full.
     }))
-  const shown = ranked.filter((r) => !r.answered).slice(0, UNANSWERED_SHOWN)
+  // THE TOP QUESTIONS, TOUCHED OR NOT (WP2.2, §2.3 S4): each row says whether
+  // one of your posts shared two or more of its words, so a "none" can be
+  // read against the rows it is about; an answered row is no longer dropped.
+  const shown = ranked.slice(0, UNANSWERED_SHOWN)
   const redditVideos = [...groups.values()].reduce((n, g) => n + g.reddit.size, 0)
 
   return {
@@ -2751,7 +3135,7 @@ async function loadUnanswered(
     basis: UNANSWERED_BASIS,
     claims: UNANSWERED_CLAIMS_UNREADABLE,
     reddit: redditVideos > 0 ? REDDIT_THREAD_CAP : null,
-    refusal: shown.length === 0
+    refusal: ranked.length > 0 && ranked.every((r) => r.answered)
       ? 'Your posts touch every question the category asks on this subject.'
       : null,
   }
@@ -2766,7 +3150,7 @@ async function loadUnanswered(
  * registry's canonical label is the words; the run's own label is the fallback,
  * because a registry row can be newer than its canonical label.
  */
-async function nameQuestions(
+export async function nameQuestions(
   supabase: SupabaseClient,
   clientId: string,
   themedRunId: string | null,
@@ -2824,6 +3208,325 @@ async function nameQuestions(
     if (label) out.set(id, { registryId: at.registryId, label })
   }
   return out
+}
+
+// ---- WP2.2 · the subject on the market ------------------------------------------
+//
+// §2.3 S1-S6: the rail and the pane read the market (decision E), a subject's
+// kinds and its makers are read on its own market videos, and the months are
+// one pooled line whose refused steps are drawn broken. PURE below; the loader
+// reads the rows.
+
+/**
+ * One member insight of the selected subject, with what the month rule reads
+ * off it (`loadSubjectMembers`: the subject's memberships, each with its
+ * insight, the insight's video and its evidence with each comment's date).
+ */
+export interface SubjectMember {
+  insightId: string
+  /** `audience_insights.category`: the kind of thing said. */
+  kind: string | null
+  videoId: string | null
+  /** The video is filed under the client (`videos.is_client`): its own posts
+   *  and videos that name it, which are not the market (decision E). */
+  client: boolean
+  /** The video carries a current analysis (`videos.analyzed_run_id`). */
+  analysed: boolean
+  evidence: readonly { source: string | null; commentDate: string | null }[]
+}
+
+const inMonth = (day: string | null, month: string): boolean => {
+  if (!day) return false
+  const d = day.slice(0, 10)
+  const from = monthStartOf(month)
+  return d >= from && d < nextMonth(from)
+}
+
+/**
+ * The subject's MARKET videos in a month, by the month reading's own rule
+ * (MF2 `lens_readings`' two arms, which reproduce `month_subject_readings`):
+ * a member insight cited on a comment dated in the month counts its video; a
+ * member whose only evidence is on camera or on the frame counts its video
+ * when that video occupies the month (`occupies`: videos with a comment dated
+ * in it). A comment's video is its insight's own (staging, 26 Sep: 0 of every
+ * comment citation sits on another video). The client's audience is not the
+ * market, and a video with no current analysis is not read.
+ *
+ * `byKind` holds the same videos by the kind of the member that placed them:
+ * what was said ABOUT the subject (§2.3 S3). A video counts once per kind and
+ * may carry several kinds, so the kinds do not sum to the whole.
+ *
+ * Staging, September, Sealand (26 Sep): the set equals the pooled stored k on
+ * all six read subjects (Looks & style 103, Comfort 43, Durability 39,
+ * Repair & warranty 36, Waterproofing 29, Price 25).
+ */
+export function subjectMonthVideos(
+  members: readonly SubjectMember[],
+  month: string,
+  occupies: ReadonlySet<string> | null,
+): { videos: Set<string>; byKind: Map<string, Set<string>> } {
+  const videos = new Set<string>()
+  const byKind = new Map<string, Set<string>>()
+  for (const m of members) {
+    if (!m.videoId || m.client || !m.analysed) continue
+    const comments = m.evidence.filter((e) => e.source === 'comment')
+    const cited = comments.some((e) => inMonth(e.commentDate, month))
+    const onCamera = comments.length === 0
+      && m.evidence.some((e) => e.source === 'video' || e.source === 'video_text')
+      && (occupies?.has(m.videoId) ?? false)
+    if (!cited && !onCamera) continue
+    videos.add(m.videoId)
+    if (m.kind) {
+      const held = byKind.get(m.kind) ?? new Set<string>()
+      held.add(m.videoId)
+      byKind.set(m.kind, held)
+    }
+  }
+  return { videos, byKind }
+}
+
+/** The six big kinds, printed on every subject even at 0 (the preview's
+ *  "Hitting a problem · no video"); any other kind prints where it has a video. */
+export const SUBJECT_KINDS: readonly string[] = ['praise', 'purchase_intent', 'feature_request', 'objection', 'question', 'pain_point']
+
+/** The kinds inside a subject, largest first (ties in `SUBJECT_KINDS`' order,
+ *  then `KIND_ORDER`'s), each with its market label. */
+export function kindsInRows(byKind: ReadonlyMap<string, ReadonlySet<string>>): { kind: string; label: string; k: number }[] {
+  const kinds = [...SUBJECT_KINDS, ...[...byKind.keys()].filter((k) => !SUBJECT_KINDS.includes(k) && (byKind.get(k)?.size ?? 0) > 0)]
+  const rank = (kind: string) => {
+    const i = SUBJECT_KINDS.indexOf(kind)
+    return i >= 0 ? i : SUBJECT_KINDS.length + Math.max(KIND_ORDER.indexOf(kind), 0)
+  }
+  return kinds
+    .map((kind) => ({ kind, label: marketKindLabel(kind), k: byKind.get(kind)?.size ?? 0 }))
+    .sort((a, b) => b.k - a.k || rank(a.kind) - rank(b.kind))
+}
+
+/** A kind as a noun, for the lead's "almost all of it is praise". Only the
+ *  six big kinds: any other kind leads in the plain form. */
+const KIND_NOUNS: Readonly<Record<string, string>> = {
+  praise: 'praise',
+  question: 'questions',
+  pain_point: 'problems',
+  purchase_intent: 'readiness to buy',
+  objection: 'pushback',
+  feature_request: 'requests',
+}
+
+/**
+ * The kinds block's one-line answer (the preview's "Almost all of it is praise:
+ * 92 of its 102 videos."). A share word only where the subject carries a share
+ * (100 videos) and the kind 10 of its own; otherwise the count, "Most often,
+ * hitting a problem: 11 of its 29 videos." No line where no kind has a video,
+ * or where two kinds tie for the lead (neither leads).
+ */
+export function kindsInLead(kindsIn: { of: number; rows: readonly { kind: string; label: string; k: number }[] }): string | null {
+  const [top, second] = kindsIn.rows
+  if (!top || top.k <= 0 || kindsIn.of <= 0) return null
+  if (second && second.k === top.k) return null
+  const of = `${fmtInt(top.k)} of its ${fmtInt(kindsIn.of)} videos`
+  const noun = KIND_NOUNS[top.kind]
+  const share = top.k / kindsIn.of
+  if (noun && carriesShare(kindsIn.of) && top.k >= (SHARE_BAND.minK ?? 10)) {
+    if (share >= 0.85) return `Almost all of it is ${noun}: ${of}.`
+    if (share > 0.5) return `Most of it is ${noun}: ${of}.`
+  }
+  return `Most often, ${top.label.toLowerCase()}: ${of}.`
+}
+
+/**
+ * The subject's pooled market line over `months` (decision E): each month's k
+ * summed over the market's audiences (`pooledSide`) and n the market's videos,
+ * k null in a month the subject was not read in. The points carry the
+ * category line's month state, status and origin (one denominator table, one
+ * clock); the line's audience is `MARKET_LINE`, which the month-pair judge
+ * reads as the market view.
+ */
+export const MARKET_LINE = 'market'
+
+export function marketLineOf(input: {
+  subjectId: string
+  label: string
+  months: readonly string[]
+  /** The subject's line in each market audience (the category's first). */
+  lines: readonly MonthSeries[]
+  counts: ReadonlyMap<string, MarketCount>
+  rivalAudiences: readonly string[]
+  read: (month: string) => boolean
+}): MonthSeries | null {
+  const template = input.lines.find((l) => l.audience === INDUSTRY_AUDIENCE) ?? input.lines[0] ?? null
+  if (!template) return null
+  const byAudience = input.lines.map((l) => ({ audience: l.audience, points: pointsByMonth(l) }))
+  const tpl = pointsByMonth(template)
+  const points = input.months.map((m) => {
+    const month = monthStartOf(m)
+    const base = tpl.get(month) ?? null
+    const rows = byAudience
+      .map((l) => ({ audience: l.audience, point: l.points.get(month) ?? null }))
+      .filter((r) => r.point != null && r.point.videos != null)
+      .map((r) => ({ month, audience: r.audience, k: r.point!.k }))
+    const read = input.read(month)
+    const side = pooledSide(rows, input.counts, month, input.rivalAudiences, { read })
+    const k = read ? side.k : null
+    const n = side.n
+    return {
+      month,
+      state: base?.state ?? 'missing',
+      videos: n,
+      comments: input.counts.get(month)?.comments ?? null,
+      k,
+      kComments: null,
+      pct: k != null && n != null && n > 0 ? Math.round((k / n) * 1000) / 10 : null,
+      audience: MARKET_LINE,
+      status: base?.status ?? null,
+      origin: base?.origin ?? null,
+      readAt: base?.readAt ?? null,
+      runId: base?.runId ?? null,
+      frozenAt: base?.frozenAt ?? null,
+      clusteringKey: null,
+      labels: [],
+    } as MonthSeries['points'][number]
+  })
+  return {
+    audience: MARKET_LINE,
+    names: [MARKET_LINE],
+    objectId: input.subjectId,
+    objectLabel: input.label,
+    points,
+    notes: [],
+    firstReadable: points.find((p) => p.k != null && carriesShare(p.videos))?.month ?? null,
+    substrate: template.substrate,
+  }
+}
+
+/** The months a subject was read in, on the market line (k and n both there). */
+export const monthsReadOf = (line: MonthSeries | null | undefined): MonthSeries['points'] =>
+  (line?.points ?? []).filter((p) => p.k != null && p.videos != null && p.videos > 0)
+
+/**
+ * The pane's trail, "Aug 10% of 377 · Sep 16% of 654": the last three months
+ * read, each a level on the market's base (`marketLevel`: a whole percent at
+ * 100 videos and 10 of its own, the count under) with its "of N" (§4.0: every
+ * level prints its base). Levels side by side, never a direction.
+ */
+export function marketTrail(line: MonthSeries | null | undefined): { month: string; text: string; of: string }[] {
+  return monthsReadOf(line).slice(-3).flatMap((p) => {
+    const level = marketLevel(p.k, p.videos)
+    return level ? [{ month: p.month, text: level.text, of: `of ${fmtInt(p.videos as number)}` }] : []
+  })
+}
+
+/**
+ * The share of each subject's market videos this month that are makers', from
+ * MF2 `lens_readings` rows read over the month's maker videos (per audience;
+ * pooled over the market here), against the subject's pooled k. Null where
+ * the subject has no k, or the maker read did not happen.
+ */
+export function makerKOf(rows: readonly { audience: string; object_kind: string; object_id: string; k: number }[] | null, subjectId: string, rivalAudiences: readonly string[]): number | null {
+  if (!rows) return null
+  const market = new Set(marketAudiences(rivalAudiences))
+  return rows
+    .filter((r) => r.object_kind === 'subject' && r.object_id === subjectId && market.has(r.audience))
+    .reduce((n, r) => n + (Number.isFinite(r.k) ? r.k : 0), 0)
+}
+
+/**
+ * The words a Month by month card prints under its month.
+ *
+ * A month read: "final" once frozen, "so far" while it runs, "updates paused"
+ * where none is coming, else "ended · still filling until the {date} update"
+ * (the first scheduled update after its freeze line). A month still to come:
+ * "so far from {day} · ended from {1st}", the day the pages switch to it
+ * (`READING_SWITCH_FRACTION` of the month, decision A); the later month of the
+ * next comparable pair: "settles with the {date} update". "Complete" is never
+ * a state (§4.0).
+ */
+export function monthCardState(input: {
+  month: string
+  now: string
+  read: boolean
+  status: MonthStatus | null
+  paused: boolean
+  nextUpdateAfter: ((instant: string) => string | null) | null
+  settlesWith?: string | null
+}): string {
+  const m = monthStartOf(input.month)
+  const nowMs = Date.parse(input.now)
+  const ended = nowMs >= Date.parse(`${nextMonth(m)}T00:00:00.000Z`)
+  const after = input.nextUpdateAfter
+  if (input.read) {
+    if (input.status === 'frozen') return 'final'
+    if (!ended) return 'so far'
+    if (input.paused) return 'updates paused'
+    const settle = after ? after(freezeBoundary(m)) : null
+    return settle ? `ended · still filling until the ${shortDate(settle)} update` : 'ended'
+  }
+  if (input.settlesWith) return `settles with the ${shortDate(input.settlesWith)} update`
+  const days = daysInMonth(m)
+  const day = Math.ceil(days * READING_SWITCH_FRACTION)
+  const from = `${m.slice(0, 8)}${String(day).padStart(2, '0')}`
+  return `so far from ${shortDate(from)} · ended from ${shortDate(nextMonth(m))}`
+}
+
+// ---- WP2.5 · the questions each subject was asked, for the front page -------------
+
+/** One subject's questions over a window: the videos that asked (not your
+ *  own), and the question insights behind them. */
+export interface SubjectQuestions {
+  subjectId: string
+  questionVideos: number
+  insights: { id: string; videoId: string }[]
+}
+
+/**
+ * Every subject's question videos over a window, in ONE paged read (WP2.5):
+ * the members that are question insights, embedded with their video's
+ * upload day and whose audience it is. The same count SU3 prints on the
+ * Subjects page (`loadUnanswered`: non-owned videos, placed by the day they
+ * were posted), for all subjects at once, so the front page can name the one
+ * asked about most. Null where M4 is not applied.
+ */
+export async function loadQuestionsBySubject(
+  supabase: SupabaseClient,
+  clientId: string,
+  subjectIds: readonly string[],
+  window: { from: string; to: string },
+): Promise<SubjectQuestions[] | null> {
+  if (subjectIds.length === 0) return []
+  type Row = {
+    subject_id: string
+    audience_insight_id: string
+    audience_insights: { source_video_id: string | null; videos: { is_client: boolean | null; upload_date: string | null } | { is_client: boolean | null; upload_date: string | null }[] | null } | null
+  }
+  try {
+    const rows = await selectAll<Row>(() =>
+      supabase
+        .from(TABLE_SUBJECT_MEMBERSHIPS)
+        .select('subject_id, audience_insight_id, audience_insights!inner(source_video_id, videos(is_client, upload_date))')
+        .eq('client_id', clientId)
+        .in('subject_id', [...subjectIds])
+        .eq('member', true)
+        .eq('audience_insights.category', 'question')
+        .order('audience_insight_id', { ascending: true }) as never,
+    )
+    const from = window.from.slice(0, 10)
+    const to = window.to.slice(0, 10)
+    const out = new Map<string, { videos: Set<string>; insights: { id: string; videoId: string }[] }>(subjectIds.map((id) => [id, { videos: new Set(), insights: [] }]))
+    for (const r of rows) {
+      const ai = r.audience_insights
+      const v = Array.isArray(ai?.videos) ? ai?.videos[0] ?? null : ai?.videos ?? null
+      const day = v?.upload_date?.slice(0, 10) ?? null
+      if (!ai?.source_video_id || !v || v.is_client || !day || day < from || day >= to) continue
+      const held = out.get(r.subject_id)
+      if (!held) continue
+      held.videos.add(ai.source_video_id)
+      held.insights.push({ id: r.audience_insight_id, videoId: ai.source_video_id })
+    }
+    return [...out.entries()].map(([subjectId, h]) => ({ subjectId, questionVideos: h.videos.size, insights: h.insights }))
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
 }
 
 // ---- what the blocks declare ----------------------------------------------------

@@ -55,11 +55,18 @@ export const READING_CARDS: readonly ReadingCard[] = [
   },
   {
     key: 'subjects',
-    tells: 'How the conversation reads on each of the five to eight things you told us you care about: your share of it, the category’s, and each rival’s, month by month.',
-    read: ['subject', 'level', 'change', 'direction'],
+    // SUBJECTS ON THE MARKET (WP2.2, deploy 3). The method sentences the page
+    // no longer prints under its blocks (25 Sep rulings) are said here once.
+    tells: 'How big each of the subjects picked for you is in your market, month by month: in how many of the market’s videos people talked about it, what they said about it, the questions they asked on it and their own words.',
+    read: ['subject', 'market', 'level', 'month', 'video'],
     cannot: [
       'A subject is counted by the same rule a theme is, which means it counts what people SAID, not what they bought.',
-      'A subject we cannot yet spot accurately enough prints no share at all rather than a share we do not trust.',
+      'A subject still being checked prints its figure marked provisional; one whose check clearly failed prints no figure while it is re-described.',
+      'Makers’ videos stay in every count. A subject where a fifth or more of the videos are makers’ says so beside its figure.',
+      'Two months sit side by side as levels. A line joins two months only where both were read the same way; until then each month stands alone.',
+      'The questions asked on a subject are counted over the period you pick, each video placed by the day it was posted, and matched against what your own posts are about: two or more words in common count as a post touching a question. What your posts claim is not read for this yet.',
+      'The kinds of thing said about a subject overlap: one video can carry several, so together they are more than its whole.',
+      'Your own posts are counted by the day you posted them, while every other figure on the page is dated by the comment. Say vs hear reads the latest update.',
     ],
   },
   {

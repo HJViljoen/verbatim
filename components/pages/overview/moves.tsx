@@ -3,6 +3,7 @@ import { carriesShare } from '@/lib/reading/level'
 import { BrandClaim } from '@/components/blocks/brand-claim'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
+import { surface } from '@/lib/nav'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { PairChip } from '@/components/blocks/pair-chip'
@@ -404,6 +405,11 @@ export const overviewMoves: Block<OverviewData> = {
   question: 'What have we said we are doing about it?',
 
   render(data, mode = 'app', ctx) {
+    // WHAT YOU PUBLISHED (market-first WP2.5): the market page's census; a
+    // page stored before it prints OV5, as sent (below).
+    // Called, not mounted, so the block's root is its frame (the 25 Sep
+    // rulings' test reads the frame's props).
+    if (data.published) return publishedCensus(data, mode, ctx.appUrl)
     const m = data.moves
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/market`
@@ -484,6 +490,8 @@ export const overviewMoves: Block<OverviewData> = {
   },
 
   verdicts(data): Verdict[] {
+    // The census prints counts, no verdict (WP2.5).
+    if (data.published) return []
     const card = data.moves.card
     return [
       ...(data.moves.readings ?? []).flatMap((r) => [r.verdict, ...r.control].filter((v): v is Verdict => v != null)),
@@ -492,6 +500,116 @@ export const overviewMoves: Block<OverviewData> = {
   },
 
   emptyState(data) {
+    // The census always has something to say: a month with no post says 0.
+    if (data.published) return null
     return data.moves.rows.length === 0 ? data.moves.empty : null
   },
+}
+
+// ---- WP2.5 · What you published (plan §2.2 block 8) ------------------------------
+
+export const PUBLISHED_TITLE = 'What you published'
+
+/** One of the census's three cells: a figure, its words, and the line under
+ *  them (the preview's "20 posts / in September / 30 in August"). */
+function CensusCell({ figure, words, under, mode }: { figure: number; words: string; under: ReactNode; mode: RenderMode }) {
+  if (mode === 'email') {
+    return (
+      <td style={{ width: '33%', verticalAlign: 'top', paddingRight: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2 }}>
+          <span data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 22, fontWeight: 600, color: EMAIL.ink }}>{fmtInt(figure)}</span> {words}
+        </div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted, marginTop: 2 }}>{under}</div>
+      </td>
+    )
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="flex flex-wrap items-baseline gap-x-2">
+        <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground">{fmtInt(figure)}</span>
+        <span className="text-[15px] text-secondary-foreground">{words}</span>
+      </span>
+      <span className="text-[13px] leading-[1.45] text-muted-foreground">{under}</span>
+    </div>
+  )
+}
+
+/** A census cell with no figure: the month holds no reading of your
+ *  audience, which is not a zero. */
+function CensusNote({ words, under, mode }: { words: string; under: string; mode: RenderMode }) {
+  if (mode === 'email') {
+    return (
+      <td style={{ width: '33%', verticalAlign: 'top', paddingRight: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.muted }}>{words}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted, marginTop: 2 }}>{under}</div>
+      </td>
+    )
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-[15px] leading-[28px] text-muted-foreground">{words}</span>
+      <span className="text-[13px] leading-[1.45] text-muted-foreground">{under}</span>
+    </div>
+  )
+}
+
+/**
+ * WHAT YOU PUBLISHED (plan §2.2 block 8; the approved preview's tile beside
+ * the brands): your posts in the month and the month before, how many drew
+ * five or more comments, how many carry a reading and their comments, what
+ * your followers talked about most (your audience's own themes, the you ink),
+ * and the moves dated. Posts are counted by the day posted; the reading by the
+ * comment (How to read says so).
+ */
+function publishedCensus(data: OverviewData, mode: RenderMode, appUrl: string) {
+  const p = data.published!
+  const moves = surface('market')
+  const footer = openLink(mode, `${appUrl}${moves.href}`, `Open ${moves.label} →`)
+  const month = longMonth(p.month)
+  const prev = p.prevPosts
+  const cells = [
+    <CensusCell key="posts" mode={mode} figure={p.posts} words={p.posts === 1 ? 'post' : 'posts'} under={<>in {month}{prev != null ? <> · <span data-copy="figure">{fmtInt(prev)}</span> the month before</> : null}</>} />,
+    <CensusCell key="five" mode={mode} figure={p.drewFive} words="drew 5+" under="comments each" />,
+    p.withReading != null
+      ? <CensusCell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments ?? 0)}</span> comments</>} />
+      : <CensusNote key="reading" mode={mode} words="no reading yet" under={`nothing under your posts read for ${month}`} />,
+  ]
+  const movesLine = p.movesDated === 0 ? 'none dated yet' : <><span data-copy="figure">{fmtInt(p.movesDated)}</span> dated</>
+  const max = Math.max(1, ...p.followers.map((f) => f.k))
+  if (mode === 'email') {
+    return (
+      <BlockFrame title={PUBLISHED_TITLE} question={overviewMoves.question} mode={mode} footer={footer}>
+        <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}><tbody><tr>{cells}</tr></tbody></table>
+        {p.followers.length > 0 ? (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>Your followers talked most about</div>
+            {p.followers.map((f) => (
+              <div key={f.label} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+                <span data-copy="subject" data-slot="pass_b_theme">{f.label}</span> · <span data-copy="figure">{fmtInt(f.k)}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, marginTop: 10 }}><strong style={{ color: EMAIL.ink }}>Moves:</strong> {movesLine}</div>
+      </BlockFrame>
+    )
+  }
+  return (
+    <BlockFrame title={PUBLISHED_TITLE} question={overviewMoves.question} mode={mode} footer={footer} roomy>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3" data-print-cols="3">{cells}</div>
+      {p.followers.length > 0 ? (
+        <div className="flex min-w-0 flex-col">
+          <p className="m-0 pb-2 text-[15px] font-semibold text-foreground">Your followers talked most about</p>
+          {p.followers.map((f) => (
+            <div key={f.label} className="grid min-h-11 grid-cols-[minmax(0,1fr)_minmax(64px,140px)_40px] items-center gap-x-4 border-b border-border/60 last:border-b-0">
+              <span className="min-w-0 text-[15px] text-foreground [text-wrap:pretty]"><span data-copy="subject" data-slot="pass_b_theme">{f.label}</span></span>
+              <span aria-hidden className="block h-1.5 rounded-[2px] bg-you" style={{ width: `${Math.max(6, (f.k / max) * 100)}%` }} />
+              <span className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground"><span data-copy="figure">{fmtInt(f.k)}</span></span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <p className="m-0 rounded-md bg-inner px-6 py-4 text-[15px] text-secondary-foreground"><span className="font-semibold text-foreground">Moves:</span> {movesLine}</p>
+    </BlockFrame>
+  )
 }

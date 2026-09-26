@@ -17,6 +17,8 @@ import { overviewMoves } from './moves'
 import { overviewThemes } from './themes'
 import { overviewAsks } from './asks'
 import { overviewChange } from './change'
+import { FOR_YOU_TITLE, overviewForYou } from './foryou'
+import { PUBLISHED_TITLE } from './moves'
 import { MARKET_SENTENCE_TITLE } from './sentence'
 import { MARKET_KINDS_TITLE } from './market-kinds'
 import { MARKET_SUBJECTS_TITLE, marketSubjectsLine } from './market-subjects'
@@ -45,6 +47,7 @@ export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewRivals,
   overviewChange,
   overviewMoves,
+  overviewForYou,
 ]
 
 /**
@@ -62,6 +65,10 @@ export const FRONT_PAGE_BLOCKS: readonly Block<OverviewData>[] = [
   overviewCategory,
   overviewAsks,
   overviewSubjects,
+  // What it means for you, and what you published (WP2.5, deploy 3): beside
+  // the subjects, and beside the brands, as the preview pairs them.
+  overviewForYou,
+  overviewMoves,
   overviewRivals,
   overviewChange,
 ]
@@ -79,6 +86,8 @@ export const MARKET_TITLES: Readonly<Record<string, string>> = {
   'overview.subjects': MARKET_SUBJECTS_TITLE,
   'overview.rivals': MARKET_BRANDS_TITLE,
   'overview.change': overviewChange.title,
+  'overview.foryou': FOR_YOU_TITLE,
+  'overview.moves': PUBLISHED_TITLE,
 }
 
 /**
@@ -92,13 +101,22 @@ export const MARKET_TITLES: Readonly<Record<string, string>> = {
  * the board's above them. Deploy 3 restores the 8 : 4 with the block it was
  * drawn for.
  */
-const FRONT_COLS: Record<string, 4 | 6 | 8 | 12> = {}
+const FRONT_COLS: Record<string, 4 | 6 | 8 | 12> = {
+  // WP2.5 restores the preview's pairs: the subjects beside what it means for
+  // you (8 : 4), and what you published beside the brands (6 : 6).
+  'overview.subjects': 8,
+  'overview.foryou': 4,
+  'overview.moves': 6,
+  'overview.rivals': 6,
+}
 
 /** Where the subjects are one line too (no subject named yet, Össur), the two
  *  one-line blocks share a row, half and half, rather than stacking two slim
  *  tiles. Both take one row, so the pair is one height. */
 const ONE_LINE_COLS: Record<string, 4 | 6 | 8 | 12> = {
   'overview.subjects': 6,
+  'overview.foryou': 6,
+  'overview.moves': 6,
   'overview.rivals': 6,
 }
 const ONE_LINE_ROWS: Record<string, number> = {
@@ -130,6 +148,7 @@ const ROWS: Record<string, number> = {
   'overview.themes': 4,
   'overview.asks': 3,
   'overview.change': 2,
+  'overview.foryou': 3,
 }
 
 

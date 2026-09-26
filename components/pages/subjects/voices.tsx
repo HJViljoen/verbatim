@@ -4,7 +4,11 @@ import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote, BlockQuotes } from '@/components/blocks/quote'
 import { PlatformIcon } from '@/components/charts/platform-icon'
+import type { ReactNode } from 'react'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { fmtInt, longMonth } from '@/lib/format'
+import { surface } from '@/lib/nav'
+import { MakerMark } from '@/components/pages/overview/market'
 import { allRedescribed, SUBJECTS_ALL_REDESCRIBED, voiceCite, voicesMeta, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
@@ -104,6 +108,11 @@ export const subjectsVoices: Block<SubjectsData> = {
 
   render(data, mode = 'app', ctx) {
     const pane = data.selected
+    // VOICES ON IT, FROM THE READING MONTH (WP2.2): a pane the loader builds;
+    // one stored before WP2.2 prints as sent (below).
+    if (data.list.base !== undefined && (!pane || pane.monthStates !== undefined)) {
+      return <MarketVoices data={data} mode={mode} appUrl={ctx.appUrl} />
+    }
     const empty = subjectsVoices.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/voice`
     const footer = openLink(mode, href, 'Hear these voices in Voice →')
@@ -211,4 +220,72 @@ export const subjectsVoices: Block<SubjectsData> = {
     }
     return null
   },
+}
+
+// ---- WP2.2 · voices on the subject, from the reading month ------------------------
+
+/** A voice's cite on the market page: when, its likes, and under whose video,
+ *  a maker's video marked (decision F). The platform is the app's glyph, or a
+ *  word on paper and in an email (`voiceCite`). */
+function marketCite(v: SubjectVoice, mode: RenderMode): ReactNode {
+  const likes = v.likes ? `${fmtInt(v.likes)} like${v.likes === 1 ? '' : 's'}` : null
+  const [when, ...where] = v.cite.split(' · ')
+  const cite = [when, likes, ...where].filter(Boolean).join(' · ')
+  // The platform in words where no glyph is drawn (`voiceCite`'s rule).
+  const parts = mode === 'app' ? cite : voiceCite({ ...v, cite })
+  if (mode === 'email') return <span>{parts}{v.maker ? ' · a maker’s video' : ''}</span>
+  return (
+    <span>
+      {mode === 'app' && v.platform ? <PlatformIcon platform={v.platform} className="mr-1.5 inline-block align-[-2px]" /> : null}
+      {parts}
+      {v.maker ? <> · <span className="whitespace-nowrap"><MakerMark /> a maker’s video</span></> : null}
+    </span>
+  )
+}
+
+/**
+ * SIX VOICES FROM THE READING MONTH (§2.3 S5; the approved preview's cards):
+ * each the evidence of one of the subject's own member insights, dated in the
+ * month, the market's first, never the video's own account. Three across on
+ * the inner ground in the app; three columns on paper; stacked in an email.
+ */
+function MarketVoices({ data, mode, appUrl }: { data: SubjectsData; mode: RenderMode; appUrl: string }) {
+  const pane = data.selected
+  const voice = surface('voice')
+  const footer = openLink(mode, `${appUrl}${voice.href}`, `Hear these voices in ${voice.label} →`)
+  const title = pane ? `Voices on ${pane.name}` : subjectsVoices.title
+  const empty = subjectsVoices.emptyState(data)
+  if (!pane || empty) {
+    const words = pane && pane.voices.length === 0 && !pane.notRecorded
+      ? `No comment on ${pane.name} dated in ${longMonth(data.month)} can be quoted yet.`
+      : empty ?? 'Nothing is selected.'
+    return (
+      <BlockFrame title={title} question={subjectsVoices.question} mode={mode} footer={footer} roomy>
+        <BlockEmpty mode={mode}>{words}</BlockEmpty>
+      </BlockFrame>
+    )
+  }
+  if (mode === 'email') {
+    return (
+      <BlockFrame title={title} question={subjectsVoices.question} mode={mode} footer={footer}>
+        <BlockQuotes mode={mode} quotes={pane.voices.map((v) => ({ quote: v.quote, cite: v.href ? <a href={v.href} rel="noreferrer" target="_blank" style={{ color: EMAIL.muted, fontFamily: FONT.mono }}>{marketCite(v, mode)}</a> : marketCite(v, mode) }))} />
+      </BlockFrame>
+    )
+  }
+  const card = (v: SubjectVoice) => {
+    const cite = marketCite(v, mode)
+    return (
+      <div key={v.quote.ref ?? v.cite} className={`flex min-w-0 flex-col gap-2 rounded-md bg-inner p-6 ${mode === 'print' ? 'mb-3 break-inside-avoid' : ''}`}>
+        {SOURCE_FLAG[v.source] ? <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{SOURCE_FLAG[v.source]}</span> : null}
+        <BlockQuote quote={v.quote} mode={mode} ground="inner" cite={v.href && mode === 'app' ? <a href={v.href} rel="noreferrer" target="_blank">{cite}</a> : cite} />
+      </div>
+    )
+  }
+  return (
+    <BlockFrame title={title} question={subjectsVoices.question} mode={mode} footer={footer} roomy>
+      {mode === 'print'
+        ? <div className="min-w-0 [column-count:3] [column-gap:20px]">{pane.voices.map(card)}</div>
+        : <div className="grid min-w-0 grid-cols-1 items-stretch gap-6 sm:grid-cols-2 xl:grid-cols-3">{pane.voices.map(card)}</div>}
+    </BlockFrame>
+  )
 }

@@ -1,12 +1,15 @@
 
+import Link from 'next/link'
+
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, longMonth } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
-import { allRedescribed, SUBJECTS_ALL_REDESCRIBED, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
+import { allRedescribed, periodPhrase, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
+import { RULE, SCALE } from '@/components/pages/overview/market'
 
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
 // the mock's (d)).
@@ -62,6 +65,11 @@ export const subjectsUnanswered: Block<SubjectsData> = {
   question: 'What is the category asking that we have never addressed?',
 
   render(data, mode = 'app', ctx) {
+    // QUESTIONS PEOPLE ASK ON IT (WP2.2): a pane the loader builds; one stored
+    // before WP2.2 prints its Phase 1 gap list, as sent (below).
+    if (data.list.base !== undefined && (!data.selected || data.selected.monthStates !== undefined)) {
+      return <QuestionsOnIt data={data} mode={mode} appUrl={ctx.appUrl} />
+    }
     const u = data.selected?.unanswered ?? null
     const empty = subjectsUnanswered.emptyState(data)
     const email = mode === 'email'
@@ -180,4 +188,134 @@ export const subjectsUnanswered: Block<SubjectsData> = {
     if (u.rows.length === 0) return 'Your posts touch every question the category asks on this subject.'
     return null
   },
+}
+
+// ---- WP2.2 · questions people ask on it ------------------------------------------
+
+export const QUESTIONS_TITLE = 'Questions people ask on it'
+
+/**
+ * The count line every subject prints (decision B: a count inside a drawn
+ * block, never a hidden card; §2.3 S4): "16 videos asked about Waterproofing
+ * in the last 3 months." Counted over the period the reader chose, each video
+ * placed by the day it was posted (How to read says so, not a note here).
+ */
+export function questionsCountLine(u: Pick<UnansweredBlock, 'questionVideos'>, name: string, period: string): { k: number; words: string } {
+  const k = u.questionVideos
+  return k === 0
+    ? { k, words: `No video asked about ${name} ${period}.` }
+    : { k, words: `${k === 1 ? 'video' : 'videos'} asked about ${name} ${period}.` }
+}
+
+/** The line under the list: which of your posts shared two or more of a
+ *  question's words (`answeredBy`), or that none did. */
+export function questionsPostsLine(u: Pick<UnansweredBlock, 'rows' | 'yourPosts'>, period: string): string {
+  const touched = u.rows.filter((r) => r.answered).length
+  if (u.yourPosts === 0) return `You published nothing ${period}.`
+  const posts = `${fmtInt(u.yourPosts)} post${u.yourPosts === 1 ? '' : 's'}`
+  if (touched === 0) return `None of your ${posts} shared two or more of its words.`
+  return `Your posts shared two or more words with ${fmtInt(touched)} of these questions.`
+}
+
+function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: RenderMode; appUrl: string }) {
+  const pane = data.selected
+  const email = mode === 'email'
+  const footer = email ? null : openLink(mode, `${appUrl}/dashboard/reports`, 'Open the content brief →')
+  const empty = subjectsUnanswered.emptyState(data)
+  if (!pane) {
+    return (
+      <BlockFrame title={QUESTIONS_TITLE} question={subjectsUnanswered.question} mode={mode} footer={footer} roomy>
+        <BlockEmpty mode={mode}>{empty ?? 'Nothing is selected.'}</BlockEmpty>
+      </BlockFrame>
+    )
+  }
+  const u = pane.unanswered
+  // The month by its full name ("in September"), the other periods in the
+  // control's own words ("in the last 3 months").
+  const period = data.horizon === 'this_month' ? `in ${longMonth(data.month)}` : periodPhrase(data.horizon, data.month)
+  const count = questionsCountLine(u, pane.name, period)
+  const listed = u.questionVideos >= UNANSWERED_GATE && u.rows.length > 0
+  const countBlock = email ? (
+    <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, background: EMAIL.inner, borderRadius: 6, padding: '10px 12px' }}>
+      {count.k > 0 ? <><span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600, color: EMAIL.ink }}>{fmtInt(count.k)}</span> {count.words}</> : count.words}
+    </div>
+  ) : (
+    <div className="flex flex-col gap-2 rounded-md bg-inner p-6">
+      {count.k > 0 ? (
+        <>
+          <span className="flex items-baseline gap-2.5">
+            <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground">{fmtInt(count.k)}</span>
+            <span className="text-[15px] text-secondary-foreground">{count.k === 1 ? 'video' : 'videos'}</span>
+          </span>
+          <span className="text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">asked about {pane.name} {period}.</span>
+        </>
+      ) : <span className="text-[15px] leading-[1.5] text-secondary-foreground">{count.words}</span>}
+    </div>
+  )
+  const list = listed ? (
+    email ? (
+      <div>
+        {u.rows.map((r) => (
+          <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+            <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span> · <span data-copy="figure">{fmtInt(r.videos)}</span>
+          </div>
+        ))}
+        <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, paddingTop: 6 }}>{questionsPostsLine(u, period)}</div>
+      </div>
+    ) : (
+      <div className="flex min-w-0 flex-col">
+        <div className={`flex items-baseline justify-between gap-4 ${RULE.head}`}>
+          <span className="text-[15px] font-semibold">Asked most</span>
+          <span className={SCALE.head}>videos</span>
+        </div>
+        {u.rows.map((r) => (
+          <div key={r.id} className={`flex min-h-11 items-center justify-between gap-4 ${RULE.row} last:border-b-0`}>
+            <span className="flex min-w-0 flex-col">
+              <span className={`min-w-0 ${SCALE.row}`}><span data-copy="subject" data-slot="pass_b_theme">{r.label}</span></span>
+              {r.answered ? <span className={SCALE.tag}>your posts shared two or more of its words</span> : null}
+            </span>
+            <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(r.videos)}</span></span>
+          </div>
+        ))}
+        <p className="m-0 pt-3 text-[14px] leading-[1.5] text-secondary-foreground">{questionsPostsLine(u, period)}</p>
+      </div>
+    )
+  ) : null
+  // THE SUBJECTS ASKED ABOUT MOST OVER THE LAST 3 MONTHS (the preview), where
+  // this subject's own list does not open: where the questions are.
+  const most = !listed ? (data.askedMost ?? []) : []
+  const askedMost = most.length > 0 ? (
+    email ? (
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>Asked most, last 3 months</div>
+        {most.map((a) => (
+          <div key={a.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+            {a.name} · <span data-copy="figure">{fmtInt(a.videos)}</span>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="flex min-w-0 flex-col">
+        <div className={`flex items-baseline justify-between gap-4 ${RULE.head}`}>
+          <span className="text-[15px] font-semibold">Asked most, last 3 months</span>
+          <span className={SCALE.head}>videos</span>
+        </div>
+        {most.map((a) => (
+          <div key={a.id} className={`flex min-h-11 items-center justify-between gap-4 ${RULE.row} last:border-b-0`}>
+            {mode === 'app'
+              ? <Link href={`${appUrl}/dashboard/subjects?item=${encodeURIComponent(a.id)}&horizon=last_3`} className={`min-w-0 ${SCALE.row} underline decoration-border underline-offset-[5px] hover:decoration-foreground`}>{a.name}</Link>
+              : <span className={`min-w-0 ${SCALE.row}`}>{a.name}</span>}
+            <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(a.videos)}</span></span>
+          </div>
+        ))}
+      </div>
+    )
+  ) : null
+  return (
+    <BlockFrame title={QUESTIONS_TITLE} question={subjectsUnanswered.question} mode={mode} footer={footer} roomy>
+      {countBlock}
+      {list}
+      {askedMost}
+    </BlockFrame>
+  )
 }

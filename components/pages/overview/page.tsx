@@ -61,12 +61,14 @@ const renderables: Record<string, Renderable<OverviewData>> = Object.fromEntries
 function overviewSlides(data: OverviewData, _variant: PrintVariant): Slide[] {
   // YOUR MARKET, IN THE PAGE'S ORDER (market-first WP1.6): the month and what
   // it talked about; what people did and asked; subjects, brands and what
-  // changed. `overview.moves` is not on the page and not on a sheet.
+  // changed; then what it means for you, and what you published (WP2.5).
   if (isMarketPage(data)) {
     return [
       { title: `The ${longMonth(data.month)} reading`, keys: ['overview.bar', 'overview.sentence', 'overview.themes'], layout: 'grid' },
       { title: 'What your market did and asked', keys: ['overview.category', 'overview.asks'], layout: 'grid' },
       { title: 'Subjects, brands and what changed', keys: ['overview.subjects', 'overview.rivals', 'overview.change'], layout: 'grid' },
+      // WP2.5 (deploy 3): what it means for you, and what you published.
+      { title: 'What it means for you', keys: ['overview.foryou', 'overview.moves'], layout: 'grid' },
     ]
   }
   return [

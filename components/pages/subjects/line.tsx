@@ -4,9 +4,15 @@ import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/charts/from-series'
 import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts/calendar'
-import { fmtPct, monthName } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
-import { allRedescribed, endReadings, paneSides, sideLegend, SUBJECTS_ALL_REDESCRIBED, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, endReadings, monthsReadOf, paneSides, sideLegend, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectsData } from '@/lib/pages/subjects'
+import type { CSSProperties } from 'react'
+import type { RenderMode } from '@/lib/blocks/types'
+import type { MonthPoint } from '@/lib/reading/series'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { EMAIL, FONT } from '@/lib/email/theme'
+import { marketLevel } from '@/lib/pages/overview-market/kinds'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -74,6 +80,7 @@ function lineSeriesOf(data: SubjectsData): CalendarSeries[] | null {
  *  and stacked 512px floors left an empty band about 250px tall). */
 export function subjectLineDrawsChart(data: SubjectsData): boolean {
   if (subjectsLine.emptyState(data)) return false
+  if (data.selected?.monthStates !== undefined) return monthsReadOf(data.selected.marketLine).length >= LINE_FROM
   const lines = lineSeriesOf(data)
   return lines != null && lines.length > 0 && chartReady(lines)
 }
@@ -85,6 +92,11 @@ export const subjectsLine: Block<SubjectsData> = {
 
   render(data, mode = 'app', ctx) {
     const pane = data.selected
+    // THE SUBJECT ON THE MARKET, MONTH BY MONTH (WP2.2): a pane the loader
+    // builds; one stored before WP2.2 draws its sides' lines, as sent (below).
+    if (data.list.base !== undefined && (!pane || pane.monthStates !== undefined)) {
+      return <MarketMonths data={data} mode={mode} appUrl={ctx.appUrl} ctx={ctx} />
+    }
     const empty = subjectsLine.emptyState(data)
     if (!pane || empty) {
       return (
@@ -211,4 +223,167 @@ export const subjectsLine: Block<SubjectsData> = {
     }
     return null
   },
+}
+
+// ---- WP2.2 · the subject on the market, month by month ----------------------------
+
+/** A line is drawn from the third month read (§2.3 S6: "figures until three
+ *  readable months"); under it each month is a card. */
+export const LINE_FROM = 3
+
+const COUNT_WORDS = ['No', 'One', 'Two'] as const
+
+/** The block's one line under its title while there is no line yet: "Two
+ *  months read, not yet a line." The preview's sentence named each month's
+ *  share there too; each share needs its base (§4.0: every level prints "of
+ *  N") and a sentence carries one base, so the levels are the cards' under it
+ *  ("10% · 38 of 377"), and the sentence is the count of months alone. */
+export function monthsLead(line: SubjectPane['marketLine']): string | null {
+  const read = monthsReadOf(line).length
+  if (read >= LINE_FROM) return null
+  if (read === 0) return 'No month read yet.'
+  return `${COUNT_WORDS[read]} month${read === 1 ? '' : 's'} read, not yet a line.`
+}
+
+/** The note under the next pair's cards: "once November has filled, about
+ *  the 3 Jan update". */
+export const nextPairNote = (next: NonNullable<SubjectPane['nextPair']>): string =>
+  `once ${longMonth(next.month)} has filled, about the ${shortDate(next.inFullExpected)} update`
+
+function MonthCard({ month, state, point, current, future, mode }: {
+  month: string; state: string | null; point: MonthPoint | null
+  current: boolean; future: boolean; mode: RenderMode
+}) {
+  const level = point ? marketLevel(point.k, point.videos) : null
+  // ON A PHONE the months read come first, then their chip, then the months to
+  // come and their note; from `md` one grid row holds every card.
+  const order = future ? 'order-3 md:order-none' : 'order-1 md:order-none'
+  if (mode === 'email') {
+    return (
+      <tr>
+        <td style={{ fontFamily: FONT.sans, fontSize: 12.5, color: future ? EMAIL.muted : EMAIL.ink, padding: '4px 10px 4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>{longMonth(month)}{state ? <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}> · {state}</span> : null}</td>
+        <td data-copy={point && level ? 'level' : undefined} style={{ fontFamily: FONT.mono, fontSize: 12.5, color: EMAIL.ink, textAlign: 'right', padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+          {point && level && point.k != null && point.videos != null ? (level.kind === 'share' ? `${level.text} · ${fmtInt(point.k)} of ${fmtInt(point.videos)}` : `${fmtInt(point.k)} of ${fmtInt(point.videos)}`) : ''}
+        </td>
+      </tr>
+    )
+  }
+  return (
+    <div className={future
+      ? `flex min-w-0 flex-col gap-1 rounded-md border border-dashed border-border p-6 md:row-start-2 md:min-h-[152px] ${order}`
+      : `flex min-w-0 flex-col gap-1 rounded-md bg-inner p-6 md:row-start-2 md:min-h-[152px] ${order}`}
+    >
+      <span className="flex items-center gap-2">
+        {future ? null : <span aria-hidden className={`size-2.5 rounded-[2px] ${current ? 'bg-foreground' : 'bg-cat'}`} />}
+        <span className={`text-[15px] font-semibold ${future ? 'text-muted-foreground' : 'text-foreground'}`}>{longMonth(month)}</span>
+      </span>
+      {state ? <span className="text-[13px] leading-[1.45] text-muted-foreground">{state}</span> : null}
+      {point && level && point.k != null && point.videos != null ? (
+        <span data-copy="level" className="mt-auto flex items-baseline gap-2 pt-4">
+          <span className={`font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] ${current ? 'text-foreground' : 'text-muted-foreground'}`}>
+            {level.kind === 'share' ? level.text : fmtInt(point.k)}
+          </span>
+          <span className="font-mono text-[13px] tabular-nums text-muted-foreground">{level.kind === 'share' ? `${fmtInt(point.k)} of ${fmtInt(point.videos)}` : `of ${fmtInt(point.videos)}`}</span>
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * MONTH BY MONTH ON THE MARKET (WP2.2, §2.3 S6; the approved preview). One
+ * pooled line for the subject's share of the market. Until three months are
+ * read, each month read is a card (its state and its level) and the months to
+ * come up to the next pair read the same way are dashed cards with the dates
+ * the pages move on, the pair bracketed as "the first step joined as a line";
+ * the pair's one chip sits under the months read. From the third month a line
+ * is drawn, and a step whose pair is refused is drawn broken (WP1.3). No
+ * weekly strip at deploy 3 (§2.3 S6).
+ */
+function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: RenderMode; appUrl: string; ctx: Parameters<typeof subjectsLine.render>[2] }) {
+  const pane = data.selected
+  const footer = openLink(mode, `${appUrl}/dashboard/subjects`, 'Compare another subject →')
+  const empty = subjectsLine.emptyState(data)
+  if (!pane || (empty && !pane.marketLine)) {
+    return (
+      <BlockFrame title={subjectsLine.title} question={subjectsLine.question} mode={mode} roomy>
+        <BlockEmpty mode={mode}>{empty ?? 'Nothing is selected.'}</BlockEmpty>
+      </BlockFrame>
+    )
+  }
+  const line = pane.marketLine ?? null
+  const read = monthsReadOf(line)
+  const lead = monthsLead(line)
+  const chip = pane.chip ? <PairChip words={pane.chip} mode={mode} /> : null
+
+  if (read.length >= LINE_FROM && line) {
+    const axis = data.chartAxis ?? data.axis
+    const series = [seriesToCalendar(line, { color: 'var(--foreground)', label: 'Your market', legendLabel: 'Your market' })]
+    return (
+      <BlockFrame title={subjectsLine.title} question={subjectsLine.question} mode={mode} footer={footer} roomy>
+        <BlockCalendar
+          blockKey={subjectsLine.key}
+          axis={axis}
+          series={series}
+          rules={calendarRulesFor([line])}
+          bands={calendarBandsFor([line])}
+          format={(v) => fmtPct(v)}
+          label={`${pane.name}, share of your market's videos, month by month`}
+          mode={mode}
+          ctx={ctx}
+          endLabels={mode !== 'print'}
+        />
+        {chip}
+      </BlockFrame>
+    )
+  }
+
+  const states = pane.monthStates ?? {}
+  const readMonths = read.map((p) => p.month.slice(0, 10))
+  const futureMonths = Object.keys(states).filter((m) => m > data.month.slice(0, 10) && !readMonths.includes(m)).sort().slice(0, 4 - readMonths.length)
+  const cards = [...readMonths, ...futureMonths]
+  const pointOf = (m: string) => read.find((p) => p.month.slice(0, 10) === m) ?? null
+  const next = pane.nextPair ?? null
+  const from = next ? cards.indexOf(next.prevMonth.slice(0, 10)) : -1
+  const to = next ? cards.indexOf(next.month.slice(0, 10)) : -1
+  const bracket = next && from >= 0 && to > from
+
+  if (mode === 'email') {
+    return (
+      <BlockFrame title={subjectsLine.title} question={subjectsLine.question} mode={mode} footer={footer}>
+        {lead ? <p style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink, margin: '4px 0 8px' }}>{lead}</p> : null}
+        <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <tbody>
+            {cards.map((m) => <MonthCard key={m} month={m} state={states[m] ?? null} point={pointOf(m)} current={m === data.month.slice(0, 10)} future={!readMonths.includes(m)} mode={mode} />)}
+          </tbody>
+        </table>
+        {chip}
+        {next && bracket ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, paddingTop: 6 }}>{`the first step joined as a line: ${longMonth(next.prevMonth)} to ${longMonth(next.month)}, ${nextPairNote(next)}`}</div> : null}
+      </BlockFrame>
+    )
+  }
+  const n = cards.length
+  const grid = n >= 4 ? 'md:grid-cols-4' : n === 3 ? 'md:grid-cols-3' : n === 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'
+  const span = (a: number, b: number) => ({ '--span': `${a} / ${b}` }) as CSSProperties
+  return (
+    <BlockFrame title={subjectsLine.title} question={subjectsLine.question} mode={mode} footer={footer} roomy>
+      {lead ? <p className="m-0 text-[17px] font-medium leading-[1.45] text-foreground [text-wrap:pretty]">{lead}</p> : null}
+      <div className={`flex flex-col gap-3 md:grid md:gap-x-6 ${grid}`}>
+        {bracket ? (
+          <div aria-hidden className="hidden flex-col items-center gap-2 md:row-start-1 md:flex md:[grid-column:var(--span)]" style={span(from + 1, to + 2)}>
+            <span className="text-[13px] text-secondary-foreground">the first step joined as a line</span>
+            <span className="block h-2 w-full rounded-t-[2px] border-x border-t border-foreground/70" />
+          </div>
+        ) : null}
+        {cards.map((m) => <MonthCard key={m} month={m} state={states[m] ?? null} point={pointOf(m)} current={m === data.month.slice(0, 10)} future={!readMonths.includes(m)} mode={mode} />)}
+        {chip ? <div className="order-2 md:order-none md:row-start-3 md:[grid-column:var(--span)]" style={span(1, Math.max(2, readMonths.length + 1))}>{chip}</div> : null}
+        {next && bracket ? (
+          <p className="order-4 m-0 font-mono text-[13px] text-muted-foreground md:order-none md:row-start-3 md:text-center md:[grid-column:var(--span)]" style={span(from + 1, to + 2)}>
+            <span className="md:hidden">the first step joined as a line: {longMonth(next.prevMonth)} to {longMonth(next.month)}, </span>
+            {nextPairNote(next)}
+          </p>
+        ) : null}
+      </div>
+    </BlockFrame>
+  )
 }
