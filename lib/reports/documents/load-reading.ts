@@ -7,6 +7,7 @@ import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
 import { CONTENT_BRIEF_BLOCKS, contentMake } from '../../../components/blocks/content-brief'
 import { audienceInLabel, loadOverview, type OverviewData } from '../../pages/overview'
+import { earnsVerdict } from '../../subjects/calibration-state'
 import { loadSubjectsPage } from '../../pages/subjects'
 import { confidenceOf } from '../../pages/quarterly'
 import { loadVoiceSurface } from '../../pages/voice-surface'
@@ -359,10 +360,12 @@ export interface ChartLead {
  * the shape says so rather than drawing a second line off the same numbers.
  */
 export function chartLead(
-  rows: readonly { label: string; spark: (number | null)[]; sparkMonths: string[]; sparkBreaks?: boolean[] }[],
+  rows: readonly { label: string; calibration?: string | null; spark: (number | null)[]; sparkMonths: string[]; sparkBreaks?: boolean[] }[],
   categoryLabel: string,
 ): ChartLead | null {
-  const lead = rows.find((r) => r.spark.some((p) => p != null)) ?? null
+  // Never a provisional or failed subject (decision C, WP1.1): the line leads
+  // the slide, and neither may lead. A row stored with no state is eligible.
+  const lead = rows.find((r) => earnsVerdict(r.calibration) && r.spark.some((p) => p != null)) ?? null
   if (!lead) return null
   return {
     months: lead.sparkMonths,
@@ -406,7 +409,11 @@ export async function briefSlideFigures(
   // carries its own n and is printed as context of the same month, never as a
   // cause — the standard `figures.ts` holds one line above ("A REASON WITH NO
   // DENOMINATOR IS NOT A REASON") and this loader was quietly failing.
+  // READY SUBJECTS ONLY (decision C, WP1.1): a provisional subject's figure
+  // prints only marked "provisional", which this bare list has no place for,
+  // and a failed one never prints.
   const alsoRunning = a.overview.subjects.rows
+    .filter((row) => earnsVerdict(row.calibration))
     .map((row) => ({ label: row.label, value: { k: row.category.k ?? 0, n: row.category.n ?? 0 } }))
     .filter((b) => b.value.n > 0 && b.value.k > 0)
     .sort((x, y) => y.value.k - x.value.k)
