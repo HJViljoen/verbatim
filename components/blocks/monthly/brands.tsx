@@ -4,7 +4,7 @@ import { MARKET_BRANDS_TITLE, MarketBrandsBody, brandAxis } from '@/components/p
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { nameLineParts, topicNote } from '@/lib/pages/overview-market'
+import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, nameLineParts, organicBase, topicNote } from '@/lib/pages/overview-market'
 import type { MonthlyBrands } from '@/lib/reports/monthly-slots'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { Inner, Num } from './email'
@@ -19,8 +19,9 @@ import { slotSection } from './slot'
  *
  * THE PAGE'S BODY, THE PAGE'S WORDS (WP2.6). In the app and on paper the
  * section draws the front page's body (`MarketBrandsBody`): the name line
- * first, then each brand counted in every video it comes up in, without our
- * rival searches and in all, a brand not counted saying so ("not counted
+ * first, then each brand counted in every video it comes up in, without any
+ * video our rival searches found (one base for every brand) and in all, a
+ * brand not counted saying so ("not counted
  * yet", or "mostly the German word for Friday · not counted"). In an inbox it
  * draws the email artboard's table from the same words (`nameLineParts`,
  * `topicNote`), so the two print one sentence each.
@@ -35,8 +36,8 @@ function nameWords(b: MonthlyBrands): ReactNode {
   return nameLineParts(b).map((p, i) => (p.t === 'text' ? <span key={i}>{p.s}</span> : <Num key={i} size={15}>{fmtInt(p.value)}</Num>))
 }
 
-/** The two counts as one bar, table-safe: the count without our rival
- *  searches in orange, the rest of the count in all in its paler step, set
+/** The two counts as one bar, table-safe: the headline count in orange, the
+ *  rest of the count in all in its paler step, set
  *  on the row's middle as the artboard draws it. */
 function EmailBar({ organic, all, axis }: { organic: number; all: number; axis: number }) {
   const px = (k: number) => Math.round((Math.max(0, k) / axis) * BAR_WIDTH)
@@ -68,6 +69,7 @@ const rowCell = (last: boolean, align: 'left' | 'right' = 'left', width?: number
  */
 function EmailTable({ b }: { b: MonthlyBrands }) {
   const n = b.topics[0]?.n ?? null
+  const nOrganic = organicBase(b)
   const axis = brandAxis(b)
   const counted = b.topics.some((t) => topicNote(t) == null)
   return (
@@ -76,8 +78,10 @@ function EmailTable({ b }: { b: MonthlyBrands }) {
         <tr>
           <th style={{ ...headCell('left'), paddingLeft: 0 }}>Brand</th>
           <th className="vb-m-bar" style={headCell('left', BAR_WIDTH)}>{''}</th>
-          <th style={headCell('right', 112)}>{counted ? <>{swatch(ORGANIC_HEX)}Without our<br />rival searches</> : null}</th>
-          <th style={headCell('right', 64)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}In all<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
+          <th style={headCell('right', 144)}>{counted ? (nOrganic == null
+            ? <>{swatch(ORGANIC_HEX)}{BRANDS_HEAD_ORGANIC}</>
+            : <span data-copy="level">{swatch(ORGANIC_HEX)}{BRANDS_HEAD_ORGANIC}<br />of {fmtInt(nOrganic)}</span>) : null}</th>
+          <th style={headCell('right', 64)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}{BRANDS_HEAD_ALL}<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
         </tr>
       </thead>
       <tbody>
@@ -92,7 +96,7 @@ function EmailTable({ b }: { b: MonthlyBrands }) {
               ) : (
                 <>
                   <td className="vb-m-bar" style={rowCell(last, 'left', BAR_WIDTH)}><EmailBar organic={t.kOrganic ?? 0} all={t.kAny ?? 0} axis={axis} /></td>
-                  <td style={rowCell(last, 'right', 112)}><Num>{fmtInt(t.kOrganic ?? 0)}</Num></td>
+                  <td style={rowCell(last, 'right', 144)}><Num>{fmtInt(t.kOrganic ?? 0)}</Num></td>
                   <td style={rowCell(last, 'right', 64)}><Num prev>{fmtInt(t.kAny ?? 0)}</Num></td>
                 </>
               )}
@@ -136,11 +140,15 @@ function figures(b: MonthlyBrands): FigureTable {
     out.brands_name_n = { value: b.nameLine.n, unit: 'videos', label: `videos in your market in ${month}` }
     out.brands_own_posts = { value: b.nameLine.ownPosts, unit: 'videos', label: `your own posts that name you in ${month}` }
   }
+  const nOrganic = organicBase(b)
+  if (nOrganic != null && b.topics.some((t) => !topicNote(t))) {
+    out.brands_organic_n = { value: nOrganic, unit: 'videos', label: `videos in your market in ${month}, without any video our rival searches found` }
+  }
   for (const t of b.topics) {
     // A brand not counted has no figure: never a 0.
     if (topicNote(t) || t.kOrganic == null || t.kAny == null) continue
     const id = t.brandKey.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
-    out[`brand_${id}_organic`] = { value: t.kOrganic, unit: 'videos', label: `videos naming ${t.label} in ${month}, without our rival searches` }
+    out[`brand_${id}_organic`] = { value: t.kOrganic, unit: 'videos', label: `videos naming ${t.label} in ${month}, without any video our rival searches found` }
     out[`brand_${id}_any`] = { value: t.kAny, unit: 'videos', label: `videos naming ${t.label} in ${month}` }
   }
   return out

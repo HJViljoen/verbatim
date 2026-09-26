@@ -9,9 +9,10 @@ import {
   barePattern, BRAND_RULE_VERSION, brandPattern, brandRulesFingerprint, brandRulesFor, type BrandRule,
 } from '../lib/brands/aliases'
 import {
-  foundOnlyByOf, handCheckList, mentionKey, monthBrandCounts, ownPostMentions, planMentions, standInCandidates, termBrand,
+  handCheckList, mentionKey, monthBrandCounts, ownPostMentions, planMentions, standInCandidates,
   type BrandCandidates, type Candidate, type HandCheckEntry, type MentionRow, type StandInComment, type StandInVideo,
 } from '../lib/brands/mentions'
+import { readRivalFound, withoutRivalSearches } from '../lib/brands/rival-searches'
 import { SEALAND_CLIENT_ID } from '../lib/config'
 import { normAccount, ownAccountNames } from '../lib/gather/owned'
 import { assertProject, modeLine, parseScriptArgs, type ScriptArgs } from '../lib/ops/market-first-args'
@@ -65,9 +66,14 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // THE READS (production, Sealand): the probe (1), tracking_configs (1),
 // competitors (1), brand_mention_candidates once per brand and once more per
 // guarded brand (13), the own-post identity (1, and 1 per 100 matched videos:
-// 2 on staging's 145), market_month_videos per month (2 to 3), the first-found
-// terms of every market video in the window (1 per 100: 9 on staging's Aug
-// and Sep); with --apply, the held rows (1+). About 35.
+// 2 on staging's 145), market_month_videos per month (2 to 3), the rival
+// searches and the videos they found (3 on staging: lib/brands/rival-searches.ts,
+// the reads the page makes); with --apply, the held rows (1+). About 30.
+//
+// THE HEADLINE COUNT'S BASE (decision E, the research's F37, the 27 Sep
+// ruling): a brand's count without the videos ANY of our rival searches found
+// (current and retired, `keyword_performance`'s rival bucket), over one base
+// for every brand in the month; the count in all beside it.
 //
 //   cd ~/Documents/code/verbatim-mf-run && … node --env-file=.env.local --import tsx scripts/brand-mentions.ts \
 //     --project mkwjlckescdveosvrvaq --confirm [--from 2026-08-01] [--to 2026-11-01] \
@@ -307,7 +313,8 @@ async function main() {
     return rivalNames.find((x) => x.names.get(r.platform)?.has(account))?.key ?? null
   }
 
-  // The month's market, and the first-found terms (organic).
+  // The month's market, and the videos any of our rival searches found (the
+  // one base every brand's headline count sits over; the page reads the same).
   const months = monthsIn(from, to)
   const markets = new Map<string, string[]>()
   for (const m of months) {
@@ -315,26 +322,14 @@ async function main() {
     ration.spend(0, `market_month_videos ${m}`)
     if (set) markets.set(m, set.map((v) => v.id))
   }
-  // Every market video's first-found terms, not only the matched ones': a video
-  // found only by a brand's own searches leaves that brand's organic base
-  // (nOrganic) whether or not it names the brand.
-  const marketIds = [...new Set([...markets.values()].flat())].sort()
-  let firstTerms: Map<string, string[]> | null = new Map()
-  try {
-    for (const ids of chunks(marketIds, ID_CHUNK)) {
-      ration.spend(1, 'the first-found terms')
-      const { data, error } = await admin.from('video_provenance').select('video_id, first_terms').eq('client_id', args.clientId).in('video_id', ids)
-      if (error) throw error
-      for (const r of (data ?? []) as { video_id: string; first_terms: string[] }[]) firstTerms.set(r.video_id, r.first_terms)
-    }
-  } catch (e) {
-    if (!isMissingObject(e, 'video_provenance')) throw e
-    firstTerms = null
+  const rivalFound = await readRivalFound(admin, args.clientId, tracking.competitor_keywords)
+  ration.spend(rivalFound.pages, 'the rival searches and what they found')
+  console.log(`  our rival searches, current and retired (${rivalFound.terms.size}): ${[...rivalFound.terms].sort().join(', ')}`)
+  for (const [m, ids] of [...markets.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const base = withoutRivalSearches(ids, rivalFound.videos).length
+    console.log(`  ${m.slice(0, 7)}: the market's ${ids.length} videos; ${ids.length - base} found by a rival search of ours; ${base} without them (every brand's headline base)`)
   }
-  const allTerms = new Set([...(firstTerms?.values() ?? [])].flat().map((t) => t.trim().toLowerCase()))
-  const termBrands = new Map([...allTerms].map((t) => [t, termBrand(t, brands)]))
-  const foundOnlyBy = firstTerms ? foundOnlyByOf(firstTerms, termBrands) : () => false
-  const counts = monthBrandCounts(plan.mentions, brands.map((b) => ({ brand: b.rule.brand, brandKey: b.brandKey })), { markets, ownerOf, foundOnlyBy })
+  const counts = monthBrandCounts(plan.mentions, brands.map((b) => ({ brand: b.rule.brand, brandKey: b.brandKey })), { markets, ownerOf, rivalFound: rivalFound.videos })
   const own = ownPostMentions(plan.mentions, ownerOf)
 
   // The report.
@@ -346,7 +341,7 @@ async function main() {
     console.log(`\n${b.rule.brand} (${b.brandKey}): ${content} content rows, ${comment} comment rows; ${plan.homonymVideos.get(b.rule.brand)?.size ?? 0} videos read as the other meaning (${dropped.length} matches dropped); own posts naming it: ${own.get(b.brandKey) ?? 0}`)
     for (const c of counts.filter((x) => x.brandKey === b.brandKey)) {
       console.log(`  ${c.month.slice(0, 7)}: came up in ${c.kAny} of the market's ${c.n} videos (content ${c.kContent}, a comment dated in the month ${c.kComment})` +
-        (firstTerms ? `; without the videos only its own searches found: ${c.kOrganic} of ${c.nOrganic}` : '; first-found terms not read (MF1 missing)'))
+        `; without any video our rival searches found: ${c.kOrganic} of ${c.nOrganic}`)
     }
   }
   if (markets.size < months.length) console.log(`\n  market_month_videos missing for ${months.length - markets.size} month(s): MF1 not applied?`)

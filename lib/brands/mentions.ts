@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { barePattern, jsRegex, negativePattern, strongPattern, type BrandRule } from './aliases'
+import { jsRegex, negativePattern, strongPattern, type BrandRule } from './aliases'
 
 // Brand topics v1 (WP2.6): which brand_mentions rows the rules give, from the
 // candidates brand_mention_candidates (MF2) returns, and the counts they make
@@ -184,8 +184,9 @@ export interface MonthBrandCount {
   kAny: number
   kContent: number
   kComment: number
-  /** kAny and n without the videos found only by that brand's own searches
-   *  (their first-found terms are all its competitor_keywords). */
+  /** kAny and n leaving out every video any of our rival searches found
+   *  (lib/brands/rival-searches.ts): one base, nOrganic, for every brand in
+   *  the month (decision E, the research's F37, the 27 Sep ruling). */
   kOrganic: number
   nOrganic: number
 }
@@ -195,8 +196,8 @@ export interface CountInputs {
   markets: ReadonlyMap<string, readonly string[]>
   /** The brand a video is the own post of ('client' | competitors.id), or null. */
   ownerOf: (videoId: string) => string | null
-  /** Videos found only by this brand's own searches. */
-  foundOnlyBy: (videoId: string, brandKey: string) => boolean
+  /** The videos any of our rival searches found (`readRivalFound`). */
+  rivalFound: ReadonlySet<string>
 }
 
 export function monthBrandCounts(mentions: readonly PlannedMention[], brands: readonly { brand: string; brandKey: string }[], inputs: CountInputs): MonthBrandCount[] {
@@ -209,7 +210,7 @@ export function monthBrandCounts(mentions: readonly PlannedMention[], brands: re
       const commentVideos = new Set(mine.filter((m) => m.row.source === 'comment' && m.row.comment_month === month).map((m) => m.row.video_id))
       const counted = (v: string) => market.has(v) && inputs.ownerOf(v) !== brandKey
       const any = new Set([...contentVideos, ...commentVideos].filter(counted))
-      const organic = (v: string) => !inputs.foundOnlyBy(v, brandKey)
+      const organic = (v: string) => !inputs.rivalFound.has(v)
       out.push({
         brand, brandKey, month, n: market.size,
         kAny: any.size,
@@ -232,29 +233,6 @@ export function ownPostMentions(mentions: readonly PlannedMention[], ownerOf: (v
     out.set(m.row.brand_key, (out.get(m.row.brand_key) ?? new Set()).add(m.row.video_id))
   }
   return new Map([...out].map(([k, v]) => [k, v.size]))
-}
-
-/** Which brand a search term belongs to: the brand whose rule (or bare name)
- *  it names. 'north face backpack' → The North Face; a term naming none, or
- *  two, belongs to none. */
-export function termBrand(term: string, brands: readonly { rule: BrandRule; brandKey: string }[]): string | null {
-  const hit = brands.filter(({ rule }) => {
-    const bare = barePattern(rule, 'js')
-    const strong = strongPattern(rule, 'js')
-    const weak = rule.weak.length ? `(?<![\\p{L}\\p{N}_])(?:${rule.weak.join('|')})(?![\\p{L}\\p{N}_])` : null
-    return [bare, strong, weak].some((p) => test(p, term))
-  })
-  return hit.length === 1 ? hit[0].brandKey : null
-}
-
-/** Videos found only by one brand's searches: every first-found term names
- *  that brand (a video first found in a community, or by a category term, is
- *  organic for every brand). */
-export function foundOnlyByOf(firstTerms: ReadonlyMap<string, readonly string[]>, termBrands: ReadonlyMap<string, string | null>) {
-  return (videoId: string, brandKey: string): boolean => {
-    const terms = firstTerms.get(videoId) ?? []
-    return terms.length > 0 && terms.every((t) => termBrands.get(t.trim().toLowerCase()) === brandKey)
-  }
 }
 
 // ---- the hand check -----------------------------------------------------------

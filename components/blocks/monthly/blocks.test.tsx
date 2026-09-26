@@ -124,16 +124,16 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     }
   })
 
-  it('brands print the name line and each brand, without our rival searches and in all (staging’s brands_v1 plan)', () => {
+  it('brands print the name line and each brand, without any video our rival searches found (one base) and in all (staging’s brands_v1 plan)', () => {
     for (const mode of MODES) {
       const t = text('monthly.brands', filledSlotsFixture(), mode)
       expect(t, mode).toContain('In September your name came up in none of your market’s 654 videos.')
       expect(t, mode).toContain('The 8 videos that name you are your own posts.')
-      expect(t, mode).toContain('Without our rival searches')
-      expect(t, mode).toContain('In all of 654')
-      expect(t, mode).toMatch(/Patagonia\s*26\s*45/)
-      expect(t, mode).toMatch(/The North Face\s*20\s*36/)
-      expect(t, mode).toMatch(/Cotopaxi\s*7\s*28/)
+      expect(t, mode).toMatch(/Without any video our rival searches found\s*(·\s*)?of 516/)
+      expect(t, mode).toMatch(/In all\s*(·\s*)?of 654/)
+      expect(t, mode).toMatch(/Patagonia\s*13\s*45/)
+      expect(t, mode).toMatch(/The North Face\s*6\s*36/)
+      expect(t, mode).toMatch(/Cotopaxi\s*3\s*28/)
       // No measured precision: "not counted yet", never 0 and never a count.
       for (const brand of ['Freitag', 'Rareform', 'Freedom of Movement', 'Old School']) {
         expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))

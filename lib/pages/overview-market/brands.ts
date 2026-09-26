@@ -67,9 +67,11 @@ export function brandsLine(b: BrandsArriving, competitiveLabel: string): string 
  * scripts/brand-mentions.ts), and it is never counted in its own posts. Counts
  * are videos, not mentions, each "of" the market's videos that month.
  *
- * TWO COUNTS A BRAND (§2.2's print): without the videos only that brand's own
- * searches found ("organic", by the videos' first-found terms), which is the
- * headline count, and in all, beside it.
+ * TWO COUNTS A BRAND (§2.2's print): the headline count leaves out EVERY
+ * video ANY of our rival searches found, so all brands share one base, one
+ * denominator (decision E, the research's F37, the lead's ruling of 27 Sep:
+ * lib/brands/rival-searches.ts); in all, over the market, beside it. The
+ * table's column heads carry the two bases.
  *
  * NEVER A 0 FOR A BRAND NOBODY COUNTED (the lead's default of 26 Sep): a brand
  * prints its counts only where its precision was measured at the floor and the
@@ -86,6 +88,16 @@ export function brandsLine(b: BrandsArriving, competitiveLabel: string): string 
  * block for Settings › How to read and is never printed under it.
  */
 
+/** The table's column heads, each over its own base (a column head carries
+ *  its base, §1 B ruling 3): the headline count says exactly what it leaves
+ *  out, every video any of our rival searches found, so every brand's count
+ *  sits over the one base printed under it (the 27 Sep ruling). */
+export const BRANDS_HEAD_ORGANIC = 'Without any video our rival searches found'
+export const BRANDS_HEAD_ALL = 'In all'
+
+/** The headline column's base, where the block read one. */
+export const organicBase = (b: BrandsRead): number | null => b.topics[0]?.nOrganic ?? null
+
 /** S17's line: How to read's text, never a footnote under the block. */
 export const NINETY_DAY_NOTE = 'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.'
 
@@ -94,15 +106,15 @@ export interface BrandTopic {
   /** `competitors.id` (a rename does not split it). */
   brandKey: string
   label: string
-  /** Videos it came up in, in all and without the videos only its own
-   *  searches found; null where it is not counted. */
+  /** Videos it came up in, in all and leaving out every video any of our
+   *  rival searches found; null where it is not counted. */
   kAny: number | null
   kOrganic: number | null
   /** The market's videos this month. */
   n: number
-  /** The market's videos without those only this brand's searches found; null
-   *  where the page did not read it (it reads first-found terms only for the
-   *  videos that name a brand, and prints the market's n as the base). */
+  /** The market's videos leaving out every video any of our rival searches
+   *  found: one base, the same for every brand in the block. Null in a block
+   *  built before the 27 Sep ruling, which read no such base. */
   nOrganic: number | null
   /** Measured under the precision floor: "mostly … not counted". */
   noise: boolean
@@ -149,6 +161,9 @@ export function buildBrandsBlock(input: {
   month: string
   /** The market's videos this month. */
   n: number
+  /** The market's videos no rival search of ours found: every brand's
+   *  headline base. */
+  nOrganic: number
   rivals: readonly BrandCountIn[]
   name: NameCountIn
   checks?: typeof BRAND_HAND_CHECKS
@@ -164,7 +179,7 @@ export function buildBrandsBlock(input: {
       kAny: count === 'counted' ? r.kAny : null,
       kOrganic: count === 'counted' ? r.kOrganic : null,
       n: input.n,
-      nOrganic: null,
+      nOrganic: input.nOrganic,
       noise: count === 'noise',
       count,
     }

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { SEALAND_CLIENT_ID } from '../config'
 import { BRAND_RULE_VERSION, brandPattern, brandRulesFor, type BrandRule } from './aliases'
 import {
-  CONTENT_FIELD_ORDER, excerptAt, foundOnlyByOf, handCheckList, homonymVideosOf, mentionKey, monthBrandCounts, ownPostMentions,
-  planMentions, standInCandidates, termBrand, type Candidate, type PlannedMention,
+  CONTENT_FIELD_ORDER, excerptAt, handCheckList, homonymVideosOf, mentionKey, monthBrandCounts, ownPostMentions,
+  planMentions, standInCandidates, type Candidate, type PlannedMention,
 } from './mentions'
 
 // The excerpts are real staging matches (Sealand, Aug to 20 Sep 2026, the
@@ -79,36 +79,26 @@ describe('the counts in a month', () => {
     row: { client_id: 'a', video_id, brand_key: brandKey, source, field: source === 'content' ? 'caption' : null, comment_id: source === 'comment' ? `c-${video_id}` : null, comment_month: month, method: 'rule', rule_version: 'brands_v1' },
   })
 
-  it('counts videos in the month market, content or a comment dated in the month; own posts apart; organic without the brand\'s own searches', () => {
+  it('counts videos in the month market, content or a comment dated in the month; own posts apart; the headline count leaves out every video a rival search found', () => {
     const mentions = [
       m('P', 'v1', 'content'), m('P', 'v1', 'comment', '2026-09-01'), // one video, counted once
       m('P', 'v2', 'comment', '2026-08-01'), // a comment dated in August does not count in September
-      m('P', 'v3', 'content'), // found only by the brand's own search
+      m('P', 'v3', 'content'), // found by a rival search of ours
       m('P', 'v9', 'content'), // not in September's market
+      m('N', 'v4', 'content'), m('N', 'v5', 'content'), // v5 found by a rival search too, whichever brand's
       m('client', 'own', 'content'), // the client's own post
     ]
-    const counts = monthBrandCounts(mentions, [{ brand: 'Patagonia', brandKey: 'P' }, { brand: 'Sealand', brandKey: 'client' }], {
-      markets: new Map([['2026-09-01', ['v1', 'v2', 'v3', 'v4', 'own']]]),
+    const counts = monthBrandCounts(mentions, [{ brand: 'Patagonia', brandKey: 'P' }, { brand: 'The North Face', brandKey: 'N' }, { brand: 'Sealand', brandKey: 'client' }], {
+      markets: new Map([['2026-09-01', ['v1', 'v2', 'v3', 'v4', 'v5', 'own']]]),
       ownerOf: (v) => (v === 'own' ? 'client' : null),
-      foundOnlyBy: (v, key) => v === 'v3' && key === 'P',
+      rivalFound: new Set(['v3', 'v5']),
     })
-    expect(counts.find((c) => c.brandKey === 'P')).toMatchObject({ month: '2026-09-01', n: 5, kAny: 2, kContent: 2, kComment: 1, kOrganic: 1, nOrganic: 4 })
-    expect(counts.find((c) => c.brandKey === 'client')).toMatchObject({ kAny: 0, n: 5 })
+    expect(counts.find((c) => c.brandKey === 'P')).toMatchObject({ month: '2026-09-01', n: 6, kAny: 2, kContent: 2, kComment: 1, kOrganic: 1, nOrganic: 4 })
+    expect(counts.find((c) => c.brandKey === 'N')).toMatchObject({ n: 6, kAny: 2, kOrganic: 1, nOrganic: 4 })
+    // One base: every brand's headline count sits over the same 4.
+    expect(new Set(counts.map((c) => c.nOrganic))).toEqual(new Set([4]))
+    expect(counts.find((c) => c.brandKey === 'client')).toMatchObject({ kAny: 0, n: 6 })
     expect(ownPostMentions(mentions, (v) => (v === 'own' ? 'client' : null))).toEqual(new Map([['client', 1]]))
-  })
-
-  it("files Sealand's rival search terms to their brand, and every other term to none (staging tracking_configs, 26 Sep)", () => {
-    const brands = rules.map((rule) => ({ rule, brandKey: rule.key.kind === 'client' ? 'client' : rule.key.name }))
-    const got = Object.fromEntries(['cotopaxi backpack', 'freitag bag', 'frtg', 'rareform bag', 'north face backpack', 'patagonia black hole', 'fombrand',
-      'sealand gear', '#sealandgear', 'upcycled bag', 'eco backpack', 'r/onebag'].map((t) => [t, termBrand(t, brands)]))
-    expect(got).toEqual({
-      'cotopaxi backpack': 'Cotopaxi', 'freitag bag': 'Freitag', frtg: 'Freitag', 'rareform bag': 'Rareform',
-      'north face backpack': 'The North Face', 'patagonia black hole': 'Patagonia', fombrand: 'Freedom of Movement',
-      'sealand gear': 'client', '#sealandgear': 'client', 'upcycled bag': null, 'eco backpack': null, 'r/onebag': null,
-    })
-    const only = foundOnlyByOf(new Map([['v1', ['cotopaxi backpack']], ['v2', ['cotopaxi backpack', 'upcycled bag']], ['v3', []]]),
-      new Map([['cotopaxi backpack', 'Cotopaxi'], ['upcycled bag', null]]))
-    expect([only('v1', 'Cotopaxi'), only('v2', 'Cotopaxi'), only('v3', 'Cotopaxi'), only('v1', 'Patagonia')]).toEqual([true, false, false, false])
   })
 })
 

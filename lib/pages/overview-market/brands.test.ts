@@ -2,29 +2,38 @@ import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../../config'
 import { SEPTEMBER_BRANDS, emptyBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
-import { buildBrandsBlock, isBrandsRead, nameLineParts, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
+import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, buildBrandsBlock, isBrandsRead, nameLineParts, organicBase, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
 
 // Brands in your market in deploy 3's form (WP2.6): the name line first, then
 // the brands counted in every video they come up in, on staging's brands_v1
-// plan of 26 Sep (lib/test/brands-fixture.ts).
+// plan of 27 Sep (lib/test/brands-fixture.ts). The headline count leaves out
+// every video any of our rival searches found: one base for every brand (the
+// 27 Sep ruling).
 
 const words = (b: ReturnType<typeof stagingBrandsRead>) =>
   nameLineParts(b).map((p) => (p.t === 'text' ? p.s : String(p.value))).join('')
 
 describe('buildBrandsBlock', () => {
-  it('counts the measured brands, organic first, over the market’s 654 September videos', () => {
+  it('counts the measured brands, headline count first, each over one base: the 516 of September’s 654 no rival search of ours found', () => {
     const b = stagingBrandsRead()
     expect(isBrandsRead(b)).toBe(true)
-    expect(b.topics.map((t) => [t.label, t.kOrganic, t.kAny, t.n])).toEqual([
-      ['Patagonia', 26, 45, 654],
-      ['The North Face', 20, 36, 654],
-      ['Cotopaxi', 7, 28, 654],
-      ['Freedom of Movement', null, null, 654],
-      ['Freitag', null, null, 654],
-      ['Old School', null, null, 654],
-      ['Rareform', null, null, 654],
+    expect(b.topics.map((t) => [t.label, t.kOrganic, t.nOrganic, t.kAny, t.n])).toEqual([
+      ['Patagonia', 13, 516, 45, 654],
+      ['The North Face', 6, 516, 36, 654],
+      ['Cotopaxi', 3, 516, 28, 654],
+      ['Freedom of Movement', null, 516, null, 654],
+      ['Freitag', null, 516, null, 654],
+      ['Old School', null, 516, null, 654],
+      ['Rareform', null, 516, null, 654],
     ])
+    expect(organicBase(b)).toBe(516)
+    expect(organicBase(stagingBrandsRead('2026-08-01'))).toBe(249)
     expect(b.ninetyDayNote).toBe(NINETY_DAY_NOTE)
+  })
+
+  it('heads the headline column with exactly what it leaves out', () => {
+    expect(BRANDS_HEAD_ORGANIC).toBe('Without any video our rival searches found')
+    expect(BRANDS_HEAD_ALL).toBe('In all')
   })
 
   it('never prints a 0 or a count for a brand nobody measured: Freitag’s 6 stays unprinted', () => {
@@ -51,7 +60,7 @@ describe('buildBrandsBlock', () => {
   })
 
   it('holds the name line at "not counted yet" while a match outside your own posts is unread, and prints the reading once read', () => {
-    const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, rivals: SEPTEMBER_BRANDS }
+    const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS }
     const unread = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 } })
     expect(unread.nameLine).toBeNull()
     const reads = { [SEALAND_CLIENT_ID]: [{ videoId: 'v1', brand: false, month: '2026-09-01', on: '2026-10-07', where: 'production' as const }] }
@@ -63,7 +72,7 @@ describe('buildBrandsBlock', () => {
 
   it('prints a brand measured under the floor as mostly another word, with no count', () => {
     const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-09-24', where: 'staging' as const, of: 'the bare name', source: 'research' } } }
-    const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })
+    const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })
     const freitag = b.topics.find((t) => t.label === 'Freitag')!
     expect(freitag).toMatchObject({ noise: true, kAny: null, count: 'noise' })
     expect(topicNote(freitag)).toBe('mostly the German word for Friday · not counted')

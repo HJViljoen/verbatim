@@ -11,8 +11,9 @@ import { marketFrontFixture, ossurFrontFixture } from './fixture'
 
 // "Brands in your market" in deploy 3's form (WP2.6; the approved preview's
 // Main board): the name line first, then each brand counted in every video it
-// comes up in, without our rival searches and in all. Staging's brands_v1 plan
-// of 26 Sep (lib/test/brands-fixture.ts).
+// comes up in, without any video our rival searches found (one base for every
+// brand, the 27 Sep ruling) and in all. Staging's brands_v1 plan of 27 Sep
+// (lib/test/brands-fixture.ts).
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -26,10 +27,13 @@ describe('Brands in your market (WP2.6)', () => {
       const t = read(overviewRivals.render(withBrands(stagingBrandsRead()), mode, ctx))
       expect(t, mode).toContain('In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.')
       expect(t.indexOf('your name came up'), mode).toBeLessThan(t.indexOf('Patagonia'))
-      expect(t, mode).toMatch(/Patagonia\s*26\s*45/)
-      expect(t, mode).toMatch(/The North Face\s*20\s*36/)
-      expect(t, mode).toMatch(/Cotopaxi\s*7\s*28/)
-      expect(t, mode).toContain('of 654')
+      expect(t, mode).toMatch(/Patagonia\s*13\s*45/)
+      expect(t, mode).toMatch(/The North Face\s*6\s*36/)
+      expect(t, mode).toMatch(/Cotopaxi\s*3\s*28/)
+      // Each count's head carries its base: the headline count's one base,
+      // and the market's.
+      expect(t, mode).toMatch(/Without any video our rival searches found\s*(·\s*)?of 516/)
+      expect(t, mode).toMatch(/In all\s*(·\s*)?of 654/)
       assertCopyContract(render(overviewRivals.render(withBrands(stagingBrandsRead()), mode, ctx)))
     }
   })
@@ -54,12 +58,12 @@ describe('Brands in your market (WP2.6)', () => {
     }
   })
 
-  it('draws the preview’s bars on one axis, the count without our rival searches over the count in all', () => {
+  it('draws the preview’s bars on one axis, the headline count over the count in all', () => {
     const b = stagingBrandsRead()
     expect(brandAxis(b)).toBe(48)
     const markup = render(overviewRivals.render(withBrands(b), 'app', ctx))
     expect(markup).toContain('width:93.8%')
-    expect(markup).toContain('width:54.2%')
+    expect(markup).toContain('width:27.1%')
     expect(markup).toContain('var(--comp)')
     expect(markup).toContain('bg-you')
   })

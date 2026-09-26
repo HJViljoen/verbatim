@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { isMarketPage, InnerLine } from './market'
-import { brandsBlockFor, brandsLine, isBrandsRead, nameLineParts, topicNote, type BrandsRead } from '@/lib/pages/overview-market'
+import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, brandsBlockFor, brandsLine, isBrandsRead, nameLineParts, organicBase, topicNote, type BrandsRead } from '@/lib/pages/overview-market'
 import { surface } from '@/lib/nav'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
@@ -376,10 +376,10 @@ export const overviewRivals: Block<OverviewData> = {
 /** The front page's brands block title (market-first WP1.6). */
 export const MARKET_BRANDS_TITLE = 'Brands in your market'
 
-/** The block's inks (the approved preview): a brand's count without our rival
- *  searches in the rivals' orange, in all in the same orange at 48% over the
- *  tile (`RIVAL_INKS`' third step, #F8BC99 on white), your name's mark in
- *  green. */
+/** The block's inks (the approved preview): a brand's count without any
+ *  video our rival searches found in the rivals' orange, in all in the same
+ *  orange at 48% over the tile (`RIVAL_INKS`' third step, #F8BC99 on white),
+ *  your name's mark in green. */
 const ORGANIC_INK = 'var(--comp)'
 const ALL_INK = 'color-mix(in srgb, var(--comp) 48%, var(--tile))'
 
@@ -431,15 +431,18 @@ function Swatch({ ink }: { ink: string }) {
 
 /**
  * The topics (the approved preview's table): each brand, a bar of its count
- * in all with its count without our rival searches over it, then the two
- * counts; a brand not counted prints why in one line across the figures. The
- * base, the market's videos, sits under "In all". In a narrow block the bar
- * leaves, as the page's other tables' do (`PHONE_HIDDEN`'s rule, at this
- * table's own width).
+ * in all with its headline count over it, then the two counts; a brand not
+ * counted prints why in one line across the figures. EACH COUNT'S HEAD
+ * CARRIES ITS BASE (the 27 Sep ruling): the headline count leaves out every
+ * video any of our rival searches found, so all brands share the one base
+ * under its head; the market's videos sit under "In all". In a narrow block
+ * the bar leaves, as the page's other tables' do (`PHONE_HIDDEN`'s rule, at
+ * this table's own width).
  */
 export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   if (b.topics.length === 0) return null
   const n = b.topics[0].n
+  const nOrganic = organicBase(b)
   const axis = brandAxis(b)
   if (mode === 'email') {
     const cell = { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink, padding: '6px 10px 6px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
@@ -449,8 +452,8 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
         <thead>
           <tr>
             <th style={head}>Brand</th>
-            <th style={{ ...head, textAlign: 'right' }}>Without our rival searches</th>
-            <th style={{ ...head, textAlign: 'right' }}><span data-copy="level">In all · of {fmtInt(n)}</span></th>
+            <th style={{ ...head, textAlign: 'right' }}>{nOrganic == null ? BRANDS_HEAD_ORGANIC : <span data-copy="level">{BRANDS_HEAD_ORGANIC} · of {fmtInt(nOrganic)}</span>}</th>
+            <th style={{ ...head, textAlign: 'right' }}><span data-copy="level">{BRANDS_HEAD_ALL} · of {fmtInt(n)}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -471,7 +474,9 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   // THE PAGE'S TABLE RHYTHM (the subjects table above it): the label takes
   // 1.2 parts and the bar 1, so the two tables' bars start near each other at
   // full width, and a long name ("Freedom of Movement") keeps its room.
-  const cols = 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(96px,1fr)_7rem_3.5rem]'
+  // The headline column is wider than the preview's 112px: its head says what
+  // the count leaves out in full (the 27 Sep ruling), in two lines at 144px.
+  const cols = 'grid-cols-[minmax(0,1fr)_7.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(96px,1fr)_9rem_3.5rem]'
   const bar = '@max-[480px]:hidden'
   const pct = (k: number | null) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
   // No figure heads over a table that prints no figure (every brand not
@@ -485,9 +490,12 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
           {counted ? (
             <>
               <span aria-hidden className={bar} />
-              <span role="columnheader" className="text-right"><Swatch ink={ORGANIC_INK} />Without our<br />rival searches</span>
+              <span role="columnheader" data-copy={nOrganic == null ? undefined : 'level'} className="flex flex-col items-end text-right">
+                <span className="[text-wrap:balance]"><Swatch ink={ORGANIC_INK} />{BRANDS_HEAD_ORGANIC}</span>
+                {nOrganic == null ? null : <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(nOrganic)}</span>}
+              </span>
               <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right">
-                <span className="whitespace-nowrap"><Swatch ink={ALL_INK} />In all</span>
+                <span className="whitespace-nowrap"><Swatch ink={ALL_INK} />{BRANDS_HEAD_ALL}</span>
                 <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(n)}</span>
               </span>
             </>

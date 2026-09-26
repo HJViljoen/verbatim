@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { BRAND_RULE_VERSION, brandRulesFor } from '../brands/aliases'
-import { foundOnlyByOf, monthBrandCounts, termBrand, type PlannedMention } from '../brands/mentions'
+import { monthBrandCounts, type PlannedMention } from '../brands/mentions'
 import { ownerOfVideos, type IdentityRow } from '../brands/owners'
+import { readRivalFound, withoutRivalSearches } from '../brands/rival-searches'
 import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { selectAll } from '../supabase-admin'
@@ -11,18 +12,24 @@ import { buildBrandsBlock, type BrandsRead } from './overview-market/brands'
 // Your market's brands block, read (market-first WP2.6): the month's market
 // videos (MF1 `market_month_videos`), the mention layer (`brand_mentions`, MF2,
 // written by scripts/brand-mentions.ts), whose own posts the matched videos
-// are, and how each matched video was first found. The counts are the
-// script's own (`monthBrandCounts`), so the page and the script's report print
-// one figure. The block decides what prints (`buildBrandsBlock`).
+// are, and which videos any of our rival searches found (the one base every
+// brand's headline count sits over: lib/brands/rival-searches.ts). The counts
+// are the script's own (`monthBrandCounts`, `readRivalFound`), so the page and
+// the script's report print one figure. The block decides what prints
+// (`buildBrandsBlock`).
 //
 // THE READS (Sealand): the market (1), the mention rows (1), tracking_configs
-// (1), competitors (1), the own posts' accounts (1), and per 250 matched
-// videos their identity (1) and their first-found terms (1): about 7.
+// (1), competitors (1), the own posts' accounts (1), per 250 matched videos
+// their identity (1), and the rival searches and what they found (3 on
+// staging's September: the rival terms, the full-lane videos whose terms name
+// one, the first-found terms that name one, 1,203 rows): about 9.
 //
 // FAILS CLOSED, NEVER A 0. A tenant with no brand rules (Össur) or a month
 // whose market cannot be read gets no block (the page keeps deploy 2's line).
 // A mention layer that cannot be read (MF2 not applied) reads as no rows, so
-// every brand prints "not counted yet".
+// every brand prints "not counted yet". A rival-search read that fails throws,
+// and the page keeps deploy 2's line (lib/pages/overview.ts): never a
+// headline count over a base it could not read.
 
 export const TABLE_BRAND_MENTIONS = 'brand_mentions'
 
@@ -106,23 +113,6 @@ async function identities(client: SupabaseClient, clientId: string, ids: readonl
   return out
 }
 
-/** The matched videos' first-found terms (MF1 `video_provenance`); an empty
- *  map where the table is not there (every video then reads as organic). */
-async function firstTerms(client: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>()
-  try {
-    for (const part of chunk(ids, UUID_IN_CHUNK)) {
-      const res = await client.from('video_provenance').select('video_id, first_terms').eq('client_id', clientId).in('video_id', part)
-      if (res.error) throw res.error
-      for (const r of (res.data ?? []) as { video_id: string; first_terms: string[] | null }[]) out.set(String(r.video_id), r.first_terms ?? [])
-    }
-  } catch (error) {
-    if (!missing(error, 'video_provenance')) say('video_provenance', error)
-    return new Map()
-  }
-  return out
-}
-
 /**
  * The block for the reading month, or null where the page keeps deploy 2's
  * line: a tenant with no brand rules, or a month whose market cannot be read.
@@ -140,7 +130,7 @@ export async function loadBrandsBlock(
   const [market, mentions, tcRes, compRes, owned] = await Promise.all([
     opts.market ?? marketIds(client, clientId, m),
     mentionRows(client, clientId),
-    client.from('tracking_configs').select('competitor_names, own_handles, competitor_handles').eq('client_id', clientId).maybeSingle(),
+    client.from('tracking_configs').select('competitor_names, competitor_keywords, own_handles, competitor_handles').eq('client_id', clientId).maybeSingle(),
     client.from('competitors').select('id, name, retired_at').eq('client_id', clientId),
     selectAll<IdentityRow>(() => client.from('videos').select('id, platform, source, account_name, is_client, is_competitor, competitor_name')
       .eq('client_id', clientId).in('source', ['owned', 'competitor_owned']).order('id')),
@@ -148,7 +138,7 @@ export async function loadBrandsBlock(
   if (market == null) return null
   if (tcRes.error) throw new Error(`tracking_configs: ${tcRes.error.message}`)
   if (compRes.error && !missing(compRes.error, 'competitors')) throw new Error(`competitors: ${compRes.error.message}`)
-  const tc = (tcRes.data ?? {}) as { competitor_names?: string[] | null; own_handles?: Record<string, string> | null; competitor_handles?: Record<string, Record<string, string>> | null }
+  const tc = (tcRes.data ?? {}) as { competitor_names?: string[] | null; competitor_keywords?: string[] | null; own_handles?: Record<string, string> | null; competitor_handles?: Record<string, Record<string, string>> | null }
 
   // The tracked rivals, by identity (`competitors.id`), in the tenant's order;
   // a rival with no rule is still listed, and prints "not counted yet".
@@ -158,16 +148,11 @@ export async function loadBrandsBlock(
     const id = live.get(norm(name))
     return id ? [{ name, brandKey: id }] : []
   })
-  const ruleOf = new Map(rules.filter((r) => r.key.kind === 'rival').map((r) => [norm((r.key as { name: string }).name), r]))
-  const clientRule = rules.find((r) => r.key.kind === 'client') ?? null
-  const ruled = [
-    ...(clientRule ? [{ rule: clientRule, brandKey: 'client' }] : []),
-    ...rivals.flatMap((r) => (ruleOf.get(norm(r.name)) ? [{ rule: ruleOf.get(norm(r.name))!, brandKey: r.brandKey }] : [])),
-  ]
 
-  // Whose own post each matched video is, and how it was first found.
+  // Whose own post each matched video is, and which videos our rival searches
+  // found (every brand's one base).
   const matched = [...new Set(mentions.map((r) => r.video_id))].sort()
-  const [rows, terms] = await Promise.all([identities(client, clientId, matched), firstTerms(client, clientId, matched)])
+  const [rows, rivalFound] = await Promise.all([identities(client, clientId, matched), readRivalFound(client, clientId, tc.competitor_keywords)])
   const ownerOf = ownerOfVideos({
     rows,
     owned,
@@ -175,8 +160,6 @@ export async function loadBrandsBlock(
     competitorHandles: tc.competitor_handles ?? null,
     rivalKey: new Map(rivals.map((r) => [norm(r.name), r.brandKey])),
   })
-  const allTerms = new Set([...terms.values()].flat().map(norm))
-  const foundOnlyBy = foundOnlyByOf(terms, new Map([...allTerms].map((t) => [t, termBrand(t, ruled)])))
 
   // The month's counts, by the script's own function.
   const planned: PlannedMention[] = mentions.map((r) => ({
@@ -187,7 +170,7 @@ export async function loadBrandsBlock(
   const counts = monthBrandCounts(planned, rivals.map((r) => ({ brand: r.name, brandKey: r.brandKey })), {
     markets: new Map([[m, market]]),
     ownerOf,
-    foundOnlyBy,
+    rivalFound: rivalFound.videos,
   })
   const withRows = new Set(mentions.map((r) => r.brand_key))
 
@@ -207,6 +190,7 @@ export async function loadBrandsBlock(
     clientId,
     month: m,
     n: market.length,
+    nOrganic: withoutRivalSearches(market, rivalFound.videos).length,
     rivals: rivals.map((r) => {
       const c = counts.find((x) => x.brandKey === r.brandKey)
       return { brandKey: r.brandKey, label: r.name, hasRows: withRows.has(r.brandKey), kAny: c?.kAny ?? 0, kOrganic: c?.kOrganic ?? 0 }

@@ -79,12 +79,13 @@ describe('the page and the monthly print one sentence each', () => {
       for (const words of [
         'In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.',
         'not counted yet',
-        'Without our',
+        'Without any video our rival searches found',
       ]) {
         expect(page).toContain(words)
         expect(monthly, mode).toContain(words)
       }
-      expect(monthly, mode).toMatch(/Patagonia\s*26\s*45/)
+      expect(monthly, mode).toMatch(/of 516/)
+      expect(monthly, mode).toMatch(/Patagonia\s*13\s*45/)
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.brands'].render(data, mode, ctx)))
     }
   })

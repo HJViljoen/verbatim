@@ -182,9 +182,10 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
 /**
  * Every slot filled, for the filled arms' render tests.
  *
- * - `brands`: staging's brands_v1 plan of 26 Sep (lib/test/brands-fixture.ts):
- *   the market's 654 September videos; Patagonia 26 without our rival
- *   searches and 45 in all, The North Face 20 and 36, Cotopaxi 7 and 28;
+ * - `brands`: staging's brands_v1 plan of 27 Sep (lib/test/brands-fixture.ts):
+ *   the market's 654 September videos, 516 of them without any video our
+ *   rival searches found; Patagonia 13 over that one base and 45 in all, The
+ *   North Face 6 and 36, Cotopaxi 3 and 28;
  *   Freitag, Rareform, Freedom of Movement and Old School not counted yet
  *   (no measured precision); the 8 videos naming Sealand are its own posts,
  *   so the name line reads none.
