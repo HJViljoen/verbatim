@@ -425,6 +425,12 @@ async function main(): Promise<void> {
         finish(`the ${runDay} run ${short(target.run.id)} has not ended (status ${target.run.status}). Nothing after the prechecks was read; run this again once it has.`)
         process.exit(5)
       }
+      // A run named with --run that is not among this project's runs (a mistyped id, or the
+      // other project's) is not read after either: the ration is not spent on no run.
+      if (args.values.run && !target.run) {
+        finish(`${target.note} (this project's runs since 19 Sep). Nothing after the prechecks was read; check the id and run this again.`)
+        process.exit(6)
+      }
     }
 
     // ---- a: the snapshot first, then the grounding reads ------------------------------------------
