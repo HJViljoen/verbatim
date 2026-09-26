@@ -193,9 +193,18 @@ export function renderMarketKinds(data: OverviewData, mode: RenderMode, appUrl: 
       {mode === 'email' ? (
         <div><KindsTable m={m} mode={mode} /><MoodTable m={m} mode={mode} /></div>
       ) : (
-        <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]" data-print-cols="2">
-          <KindsTable m={m} mode={mode} />
-          <MoodTable m={m} mode={mode} />
+        // SIDE BY SIDE ONLY WHERE THE MOOD TABLE FITS (deploy 2 review). It
+        // needs 344px (104 + three 64px figures + gaps) and takes a 1 : 1.9
+        // share after the 80px gap, so the pair needs 1,080px of block; keyed
+        // to `xl` it began at 1280, where the block holds 944 and the tile cut
+        // the "Aug" column off. A container query on the block's width; at
+        // 1440 (the preview) the two sit side by side as drawn. On paper the
+        // print rule sets the two columns (`data-print-cols`).
+        <div className="@container">
+          <div className="grid grid-cols-1 gap-x-20 gap-y-8 @min-[1080px]:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]" data-print-cols="2">
+            <KindsTable m={m} mode={mode} />
+            <MoodTable m={m} mode={mode} />
+          </div>
         </div>
       )}
       <PairChip words={m.chip} mode={mode} />
