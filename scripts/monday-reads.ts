@@ -6,8 +6,8 @@ import { SEALAND_CLIENT_ID, SUBREDDIT_MAX_KNOWN } from '../lib/config'
 import { MARKET_FIRST_PROJECTS, assertProject, parseScriptArgs, type ScriptArgs } from '../lib/ops/market-first-args'
 import {
   SEALAND_NAME, anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, dayOf, evidenceByVideo, excerpt,
-  inCategory, inMarket, isFinalRun, ofN, onlyFrom, pickTargetRun, pooledBy, runsOnDays, schedulesVerdict, searchSetDiff,
-  searchesPerPlatform, termsFirstSearchedSince, themeSegments, videoNameHits,
+  freshPath, inCategory, inMarket, isFinalRun, matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, runsOnDays,
+  schedulesVerdict, searchSetDiff, searchesPerPlatform, termsFirstSearchedSince, themeSegments, videoNameHits, videosNamed,
   type BoardTheme, type TextVideo, type ThemeSegments,
 } from '../lib/ops/monday-reads'
 import { firstSearched, gathersOf, termDelta, type KeywordRow } from '../lib/provenance/searches'
@@ -54,8 +54,12 @@ import type { ProvenanceExport } from './export-provenance'
 // THE RATION (plan §7.6). A timed probe first: over 3 s, or an error, and it
 // stops ("wait fifteen minutes"). Every PostgREST request is one page, counted
 // against its part's cap (--max-pages c=6,a=28,b=16,d=14); a part that reaches
-// its cap stops reading and says which figures it did not read. Two requests
-// over 3 s in a row stop everything (§7.11), keeping what was already written.
+// its cap stops reading and says which figures it did not read. Pages are
+// spared where one read can carry more: labels and quote comments come
+// embedded (each by its one foreign key), a count rides on a row read, the
+// match kinds stop at the first 'exact', and the membership reads go across
+// platforms. Two requests over 3 s in a row stop everything (§7.11), keeping
+// what was already written.
 // A step that fails (a column this project does not have) is recorded and the
 // next step runs, so one surprise never costs the snapshot.
 //
@@ -88,11 +92,11 @@ const SIX_TABLES = ['month_denominators', 'month_theme_readings', 'month_subject
 class RationReached extends Error {}
 class TooSlow extends Error {}
 
-type Res<T> = { data: T[] | null; error: unknown }
+type Res<T> = { data: T[] | null; error: unknown; count?: number | null }
 type Ranged<T> = { range: (from: number, to: number) => PromiseLike<Res<T>> }
 const errText = (e: unknown): string => (e as { message?: string })?.message ?? String(e)
 
-interface ReadLog { part: string; label: string; pages: number; rows: number; ms: number; slowest: number }
+interface ReadLog { part: string; label: string; pages: number; rows: number; ms: number; slowest: number; counted?: number }
 
 class Reader {
   part = 'probe'
@@ -116,14 +120,21 @@ class Reader {
     return { r, ms }
   }
 
-  private note(label: string, pages: number, rows: number, total: number, slowest: number): void {
-    this.log.push({ part: this.part, label, pages, rows, ms: total, slowest })
-    console.log(`  · ${label}: ${rows} rows, ${pages} page${pages === 1 ? '' : 's'}, ${total} ms`)
+  private note(label: string, pages: number, rows: number, total: number, slowest: number, counted: number | null = null): void {
+    this.log.push({ part: this.part, label, pages, rows, ms: total, slowest, ...(counted != null ? { counted } : {}) })
+    console.log(`  · ${label}: ${rows} rows${counted != null ? ` (of ${counted} counted)` : ''}, ${pages} page${pages === 1 ? '' : 's'}, ${total} ms`)
   }
 
   /** Every row, a page of 1,000 at a time. */
   async rows<T>(label: string, build: () => Ranged<T>): Promise<T[]> {
+    return (await this.paged(label, build)).rows
+  }
+
+  /** Pages of 1,000 until a short one, or until `until` says a page (with the
+   *  count a `count: 'exact'` select carries) leaves nothing to learn. */
+  async paged<T>(label: string, build: () => Ranged<T>, until?: (page: readonly T[], count: number | null) => boolean): Promise<{ rows: T[]; count: number | null }> {
     const out: T[] = []
+    let count: number | null = null
     let pages = 0
     let total = 0
     let slowest = 0
@@ -134,27 +145,27 @@ class Reader {
       slowest = Math.max(slowest, ms)
       if (r.error) throw new Error(`${label}: ${errText(r.error)}`)
       const data = r.data ?? []
+      if (count == null && typeof r.count === 'number') count = r.count
       out.push(...data)
-      if (data.length < PAGE) break
+      if (data.length < PAGE || until?.(data, count)) break
     }
     this.note(label, pages, out.length, total, slowest)
-    return out
+    return { rows: out, count }
   }
 
   /** One request (a `limit` read), one page. */
   async one<T>(label: string, query: PromiseLike<Res<T>>): Promise<T[]> {
-    const { r, ms } = await this.request(label, () => query)
-    if (r.error) throw new Error(`${label}: ${errText(r.error)}`)
-    this.note(label, 1, (r.data ?? []).length, ms, ms)
-    return r.data ?? []
+    return (await this.oneCounted(label, query)).rows
   }
 
-  /** A HEAD count, one page. */
-  async count(label: string, query: PromiseLike<{ count: number | null; error: unknown }>): Promise<number | null> {
+  /** One request, one page, with the count a `count: 'exact'` select carries
+   *  (the rows the filter matches, not the rows returned). */
+  async oneCounted<T>(label: string, query: PromiseLike<Res<T>>): Promise<{ rows: T[]; count: number | null }> {
     const { r, ms } = await this.request(label, () => query)
     if (r.error) throw new Error(`${label}: ${errText(r.error)}`)
-    this.note(label, 1, r.count ?? 0, ms, ms)
-    return r.count
+    const count = typeof r.count === 'number' ? r.count : null
+    this.note(label, 1, (r.data ?? []).length, ms, ms, count)
+    return { rows: r.data ?? [], count }
   }
 
   timed(label: string): number | null {
@@ -190,7 +201,8 @@ interface KpRow extends KeywordRow { bucket: string | null; videos_found?: numbe
 interface MonthRow { month: string; audience: string; videos: number; comments: number; status?: string | null; clustering_key?: string | null; read_at?: string | null; frozen_at?: string | null; run_id?: string | null }
 interface ThemeReadingRow extends MonthRow { theme_id: string }
 interface StatRow { month: string; audience: string; judged: number; positive: number; negative: number; neutral: number; mixed: number; status?: string | null; read_at?: string | null; frozen_at?: string | null }
-interface ObservationRow { theme_id: string; label: string | null; category: string | null; match_kind: string | null; match_score: number | null; evidence_count: number | null }
+interface ObservationRow { theme_id: string; label: string | null; category: string | null; match_kind: string | null; match_score: number | null; evidence_count: number | null; member_insight_ids: string[] | null }
+interface RegistryRow { id: string; canonical_label: string | null; bucket: string | null; status: string | null; first_seen_at: string | null }
 interface SubjectRow { id: string; name: string; status: string | null; origin: string | null; calibrated_at: string | null; calibration_precision: number | string | null; calibration_n: number | string | null; calibration_judge_version: string | null }
 interface ChangeRow { id: string; changed_at: string; surface: string; field: string | null; before: unknown; after: unknown; actor_kind: string | null; source: string | null; note: string | null; affects_months: string | null }
 interface TrackingRow { brand_keywords: string[] | null; competitor_keywords: string[] | null; industry_keywords: string[] | null; competitor_names: string[] | null; platforms: string[] | null; subreddits: unknown; exclude_terms: string[] | null; report_period: string | null; report_day: string | null; updated_at: string | null }
@@ -206,6 +218,8 @@ interface ExportFile {
 const md5 = (x: unknown): string => createHash('md5').update(JSON.stringify(x)).digest('hex')
 const maxAt = (xs: readonly { created_at: string }[]): string | null => xs.reduce<string | null>((m, x) => (m == null || x.created_at > m ? x.created_at : m), null)
 const short = (id: string | null | undefined): string => (id ?? '-').slice(0, 8)
+/** A many-to-one embed: PostgREST sends an object; the untyped client's inference says an array. */
+const embedded = <T>(x: T | T[] | null | undefined): T | null => (Array.isArray(x) ? (x[0] ?? null) : (x ?? null))
 /** A path under the plan folder, as the paste-back block prints it. */
 const rel = (p: string): string => p.replace(`${process.env.HOME ?? ''}/.claude/plans/verbatim-market-first/`, '')
 const pct = (x: number | null | undefined): string => (x == null ? 'not measured' : `${(100 * x).toFixed(1)}%`)
@@ -214,16 +228,12 @@ function chunks<T>(xs: readonly T[], n: number): T[][] {
   for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n))
   return out
 }
-/** Never overwrite a file that already exists: the snapshot cannot be retaken. */
-function freshPath(path: string): string {
-  if (!existsSync(path)) return path
-  const stamp = new Date().toISOString().slice(11, 16).replace(':', '')
-  return path.replace(/(\.[a-z]+)?$/, (ext) => `-${stamp}Z${ext}`)
-}
+/** Never overwrite a file that already exists: the snapshot cannot be retaken
+ *  (freshPath finds a free name; 'wx' refuses one taken since). */
 function writeJson(path: string, value: unknown): string {
   mkdirSync(dirname(path), { recursive: true })
   const text = JSON.stringify(value, null, 1) + '\n'
-  writeFileSync(path, text)
+  writeFileSync(path, text, { flag: 'wx' })
   return createHash('sha256').update(text).digest('hex')
 }
 
@@ -256,6 +266,8 @@ function dumpSummary(path: string): void {
 // ---- Main ---------------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // Before the shared parser, whose --write sentence points at --apply, which this script refuses too.
+  if (process.argv.slice(2).includes('--write')) throw new Error(`${NAME}: --write refused: this script reads and has no write path`)
   const args: ScriptArgs = parseScriptArgs(process.argv.slice(2), {
     name: NAME,
     values: ['snapshot-out', 'grounding-out', 'summary-out', 'staging-export', 'run', 'run-day', 'parts', 'max-pages', 'dump-summary'],
@@ -274,7 +286,7 @@ async function main(): Promise<void> {
     return
   }
   if (!args.flags.has('confirm')) {
-    console.error(`${NAME} reads ${where} (about 50 pages in four parts) and will not start without --confirm.`)
+    console.error(`${NAME} reads ${where} (about 35 pages in four parts on staging, more on production) and will not start without --confirm.`)
     process.exit(2)
   }
   for (const k of ['snapshot-out', 'grounding-out', 'summary-out']) if (!args.values[k]) throw new Error(`${NAME}: --${k} <file> is required`)
@@ -349,7 +361,7 @@ async function main(): Promise<void> {
       `MON-READONLY · ${where} · client ${short(clientId)} · ${started}`,
       ...(stopped ? [`STOPPED: ${stopped}`] : []),
     ]
-    const gPath = freshPath(args.values['grounding-out'])
+    const gPath = freshPath(args.values['grounding-out'], existsSync)
     const tail = [
       `reads: ${pagesLine} = ${total} pages · slowest ${slowest} ms · PostgREST path (every read here uses it)`,
       `errors: ${errors.length === 0 ? 'none' : `${errors.length}: ${errors.map((e) => `${e.part}/${e.step}`).join('; ').slice(0, 300)}`}`,
@@ -462,7 +474,7 @@ async function main(): Promise<void> {
             runs: { n: snapRuns.length, md5: md5(snapRuns) },
           },
         }
-        snapshotPath = freshPath(args.values['snapshot-out'])
+        snapshotPath = freshPath(args.values['snapshot-out'], existsSync)
         snapshotSha = writeJson(snapshotPath, snapshot)
         console.log(`  snapshot written: ${snapshotPath}`)
         summaryFacts.snapshot = snapshotPath
@@ -479,7 +491,7 @@ async function main(): Promise<void> {
     const gatherOf = (id: string | null | undefined) => gathers.find((g) => g.runId === id)
     const run20 = runs.find((r) => dayOf(r.started_at) === '2026-09-20' && isFinalRun(r.status)) ?? null
 
-    let registry = new Map<string, { canonical_label: string | null; bucket: string | null; status: string | null; first_seen_at: string | null }>()
+    const registry = new Map<string, RegistryRow>()
     let obsById = new Map<string, ObservationRow>()
     let sepThemes: ThemeReadingRow[] = []
     let augThemes: ThemeReadingRow[] = []
@@ -506,30 +518,40 @@ async function main(): Promise<void> {
       statRows = (await step('a', 'month_audience_stats', () => reader.rows<StatRow>('month_audience_stats (Aug–Sep)', () =>
         admin.from('month_audience_stats').select('month, audience, judged, positive, negative, neutral, mixed, judged_framing, panel_id, panel_videos, attention_comments, status, read_at, run_id, frozen_at')
           .eq('client_id', clientId).gte('month', PREV_MONTH).lte('month', MONTH).order('month').order('audience')))) ?? []
-      sepThemes = (await step('a', 'month_theme_readings Sep', () => reader.one<ThemeReadingRow>('month_theme_readings (Sep, category, top 40)',
-        admin.from('month_theme_readings').select('month, audience, theme_id, videos, comments, status, read_at, run_id, frozen_at, clustering_key')
-          .eq('client_id', clientId).eq('month', MONTH).eq('audience', INDUSTRY_AUDIENCE).order('videos', { ascending: false }).order('theme_id').limit(TOP_THEMES)))) ?? []
-      augThemes = (await step('a', 'month_theme_readings Aug', () => reader.one<ThemeReadingRow>('month_theme_readings (Aug, category, top 40)',
-        admin.from('month_theme_readings').select('month, audience, theme_id, videos, comments, status, read_at, run_id, frozen_at, clustering_key')
-          .eq('client_id', clientId).eq('month', PREV_MONTH).eq('audience', INDUSTRY_AUDIENCE).order('videos', { ascending: false }).order('theme_id').limit(TOP_THEMES)))) ?? []
-      const themeIds = [...new Set([...sepThemes, ...augThemes].map((t) => t.theme_id))]
-      if (themeIds.length > 0) {
-        const reg = await step('a', 'theme_registry', () => reader.one<{ id: string; canonical_label: string | null; bucket: string | null; status: string | null; first_seen_at: string | null }>('theme_registry (those themes)',
-          admin.from('theme_registry').select('id, canonical_label, bucket, status, first_seen_at').in('id', themeIds)))
-        registry = new Map((reg ?? []).map((r) => [r.id, r]))
-      }
+      // Each theme's registry row comes embedded (month_theme_readings.theme_id's one foreign
+      // key), so the labels cost no page of their own.
+      type WithRegistry = ThemeReadingRow & { theme_registry: RegistryRow | RegistryRow[] | null }
+      const themesOf = (label: string, month: string) => reader.one<WithRegistry>(label,
+        admin.from('month_theme_readings').select('month, audience, theme_id, videos, comments, status, read_at, run_id, frozen_at, clustering_key, theme_registry(id, canonical_label, bucket, status, first_seen_at)')
+          .eq('client_id', clientId).eq('month', month).eq('audience', INDUSTRY_AUDIENCE).order('videos', { ascending: false }).order('theme_id').limit(TOP_THEMES))
+      const withLabels = (rows: WithRegistry[] | null): ThemeReadingRow[] => (rows ?? []).map(({ theme_registry: reg, ...t }) => {
+        const r = embedded(reg)
+        if (r) registry.set(t.theme_id, r)
+        return t
+      })
+      sepThemes = withLabels(await step('a', 'month_theme_readings Sep', () => themesOf('month_theme_readings (Sep, category, top 40, with registry labels)', MONTH)))
+      augThemes = withLabels(await step('a', 'month_theme_readings Aug', () => themesOf('month_theme_readings (Aug, category, top 40, with registry labels)', PREV_MONTH)))
       if (target.run) {
-        const obs = await step('a', 'theme_observations', () => reader.rows<ObservationRow>(`theme_observations (run ${short(target.run?.id)})`, () =>
-          admin.from('theme_observations').select('theme_id, label, category, match_kind, match_score, evidence_count')
-            .eq('run_id', target.run?.id ?? '').order('id')))
+        const runId = target.run.id
+        // The run's match kinds: one read ordered by match_kind descending, carrying the exact
+        // count; 'exact' sorts last, so with the count in hand the read stops at its first
+        // 'exact' row (matchKindTally); without it, it reads every row.
+        const kinds = await step('a', 'theme_observations match kinds', () => reader.paged<{ match_kind: string | null }>(`theme_observations match kinds (run ${short(runId)}, to the first exact)`, () =>
+          admin.from('theme_observations').select('match_kind', { count: 'exact' })
+            .eq('client_id', clientId).eq('run_id', runId).order('match_kind', { ascending: false }).order('id'),
+        (page, count) => count != null && page.some((o) => o.match_kind === 'exact')))
+        const tally = kinds ? matchKindTally(kinds.rows.map((o) => o.match_kind), kinds.count) : null
+        // The board's own observations (September's top 40), with the members the quotes read.
+        const obs = sepThemes.length === 0 ? [] : await step('a', 'theme_observations', () => reader.one<ObservationRow>(`theme_observations (run ${short(runId)}, September's top 40)`,
+          admin.from('theme_observations').select('theme_id, label, category, match_kind, match_score, evidence_count, member_insight_ids')
+            .eq('client_id', clientId).eq('run_id', runId).in('theme_id', sepThemes.map((t) => t.theme_id))))
         obsById = new Map((obs ?? []).map((o) => [o.theme_id, o]))
-        const byKind: Record<string, number> = {}
-        for (const o of obs ?? []) byKind[o.match_kind ?? 'null'] = (byKind[o.match_kind ?? 'null'] ?? 0) + 1
+        const byKind = tally?.byKind ?? {}
         const prevFinal = runs.filter((r) => isFinalRun(r.status) && (r.started_at ?? '') < (target.run?.started_at ?? '')).pop() ?? null
         const tk = (target.run as RunRow).clustering_key ?? null
         newRegime = tk != null && (prevFinal == null || prevFinal.clustering_key !== tk)
-        out.observations = { run: target.run.id, total: obs?.length ?? null, byMatchKind: byKind, newRegime, previousRun: prevFinal?.id ?? null, previousKey: prevFinal?.clustering_key ?? null }
-        say(`identities on the run: ${byKind.new ?? 0} new of ${obs?.length ?? 'unread'} observations (${Object.entries(byKind).map(([k, n]) => `${k} ${n}`).join(', ')}) · opens a new clustering regime: ${newRegime ? 'yes' : 'no'}`)
+        out.observations = { run: runId, total: tally?.total ?? null, byMatchKind: byKind, newRegime, previousRun: prevFinal?.id ?? null, previousKey: prevFinal?.clustering_key ?? null }
+        say(`identities on the run: ${byKind.new ?? 0} new of ${tally?.total ?? 'unread'} observations (${Object.entries(byKind).map(([k, n]) => `${k} ${n}`).join(', ')}) · opens a new clustering regime: ${newRegime ? 'yes' : 'no'}`)
       }
       subjects = (await step('a', 'subjects', () => reader.rows<SubjectRow>('subjects (Sealand)', () =>
         admin.from('subjects').select('id, name, status, origin, named_at, calibrated_at, calibration_precision, calibration_n, calibration_judge_version, superseded_by, updated_at')
@@ -656,31 +678,32 @@ async function main(): Promise<void> {
 
       // September membership for the videos the export cannot place (first stored, or first
       // commented in September, after 20 Sep), in priority order: the {measured} population,
-      // then the name line's videos, then the legacy share. Each group says if it was cut short.
+      // then the name line's videos, then the legacy share. One list, each video once, read
+      // 100 videos a request across platforms (membershipPlan), so a ration that runs out cuts
+      // the last group first. Each group says if it was cut short.
       const sepFound = new Set<string>()
       const checked = new Set<string>()
-      const groups: { name: string; ids: ReadonlySet<string>; toCheck: number; complete: boolean }[] = [
-        { name: 'measured', ids: inC, toCheck: 0, complete: true },
-        { name: 'name line', ids: new Set(nameVideos.map((x) => x.v.id)), toCheck: 0, complete: true },
-        { name: 'legacy', ids: inL, toCheck: 0, complete: true },
+      const groupIds = [
+        { name: 'measured', ids: inC as ReadonlySet<string> },
+        { name: 'name line', ids: new Set(nameVideos.map((x) => x.v.id)) as ReadonlySet<string> },
+        { name: 'legacy', ids: inL as ReadonlySet<string> },
       ]
-      for (const g of groups) {
-        const list = [...g.ids].filter((id) => !sepFromExport.has(id) && !checked.has(id)).map((id) => byId.get(id)).filter((v): v is VideoRow => v != null)
-        g.toCheck = list.length
-        const byPlatform = new Map<string, VideoRow[]>()
-        for (const v of list) byPlatform.set(v.platform, [...(byPlatform.get(v.platform) ?? []), v])
-        for (const [platform, pl] of byPlatform) {
-          for (const chunk of chunks(pl, IN_CHUNK)) {
-            const rows = await step('b', `September membership (${g.name})`, () => reader.rows<{ platform: string; video_id: string }>(`comments dated in Sep (${g.name}, ${platform}, ${chunk.length} videos the export cannot place)`, () =>
-              admin.from('comments').select('platform, video_id').eq('client_id', clientId).eq('platform', platform)
-                .in('video_id', chunk.map((v) => v.video_id)).gte('comment_date', `${MONTH}T00:00:00Z`).lt('comment_date', `${NEXT_MONTH}T00:00:00Z`).order('id')))
-            if (rows == null) { g.complete = false; continue }
-            for (const v of chunk) checked.add(v.id)
-            const idOf = new Map(chunk.map((v) => [v.video_id, v.id]))
-            for (const r of rows) { const id = idOf.get(r.video_id); if (id) sepFound.add(id) }
-          }
-        }
+      const plan = membershipPlan(groupIds, sepFromExport, byId, IN_CHUNK)
+      for (const chunk of plan.chunks) {
+        const platforms = [...new Set(chunk.map((v) => v.platform))].sort()
+        const mix = platforms.map((p) => `${p} ${chunk.filter((v) => v.platform === p).length}`).join(', ')
+        const rows = await step('b', 'September membership', () => reader.rows<{ platform: string; video_id: string }>(`comments dated in Sep (${chunk.length} videos the export cannot place: ${mix})`, () =>
+          admin.from('comments').select('platform, video_id').eq('client_id', clientId).in('platform', platforms)
+            .in('video_id', chunk.map((v) => v.video_id)).gte('comment_date', `${MONTH}T00:00:00Z`).lt('comment_date', `${NEXT_MONTH}T00:00:00Z`).order('id')))
+        if (rows == null) continue
+        for (const v of chunk) checked.add(v.id)
+        for (const id of videosNamed(chunk, rows)) sepFound.add(id)
       }
+      const groups = groupIds.map((g) => ({
+        ...g,
+        toCheck: plan.toCheck[g.name] ?? 0,
+        complete: [...g.ids].every((id) => sepFromExport.has(id) || checked.has(id) || !byId.has(id)),
+      }))
       const cut = (name: string): string => (groups.find((g) => g.name === name)?.complete === false ? ' · CUT SHORT (ration): a floor, not the figure' : '')
       const membershipRead = groups.every((g) => g.complete)
       const toCheck = groups.reduce((n, g) => n + g.toCheck, 0)
@@ -739,29 +762,29 @@ async function main(): Promise<void> {
       // WP1.0 read 16: the evidence quotes of the top five themes not led by makers.
       const five = board.rows.slice(0, QUOTE_THEMES)
       if (five.length > 0 && target.run) {
-        const members = await step('a', 'quote themes: members', () => reader.one<{ theme_id: string; member_insight_ids: string[] | null }>('theme_observations members (five themes)',
-          admin.from('theme_observations').select('theme_id, member_insight_ids').eq('run_id', target.run?.id ?? '').in('theme_id', five.map((t) => t.id))))
+        // The members came with the board's observations (part a), so they cost no page here.
         const insightTheme = new Map<string, string>()
-        for (const m of members ?? []) for (const id of (m.member_insight_ids ?? []).slice(0, QUOTE_INSIGHTS_PER_THEME)) insightTheme.set(id, m.theme_id)
-        const evidenceRows: { audience_insight_id: string; comment_id: string | null; quote: string | null; relevance_rank: number | null; source: string | null; source_video_id: string | null; redacted: boolean | null }[] = []
+        for (const t of five) for (const id of (obsById.get(t.id)?.member_insight_ids ?? []).slice(0, QUOTE_INSIGHTS_PER_THEME)) insightTheme.set(id, t.id)
+        type QuoteComment = { id: string; author: string | null; comment_date: string | null; platform: string; video_id: string; likes: number | null }
+        const evidenceRows: { id: string; audience_insight_id: string; comment_id: string | null; quote: string | null; relevance_rank: number | null; source: string | null; source_video_id: string | null; redacted: boolean | null; comments: QuoteComment | QuoteComment[] | null }[] = []
+        // Each row's comment comes embedded (insight_evidence.comment_id's one foreign key).
         for (const chunk of chunks([...insightTheme.keys()], IN_CHUNK)) {
-          const rows = await step('a', 'quote themes: evidence', () => reader.rows<(typeof evidenceRows)[number]>('insight_evidence (five themes)', () =>
-            admin.from('insight_evidence').select('audience_insight_id, comment_id, quote, relevance_rank, source, source_video_id, redacted').in('audience_insight_id', chunk).order('id')))
+          const rows = await step('a', 'quote themes: evidence', () => reader.rows<(typeof evidenceRows)[number]>('insight_evidence (five themes, with each comment)', () =>
+            admin.from('insight_evidence').select('id, audience_insight_id, comment_id, quote, relevance_rank, source, source_video_id, redacted, comments(id, author, comment_date, platform, video_id, likes)')
+              .in('audience_insight_id', chunk).order('id')))
           evidenceRows.push(...(rows ?? []))
         }
-        // Up to 20 candidates a theme by relevance (100 comments, one request), then per theme
+        // Up to 20 candidates a theme by relevance (ties by evidence id, so how the requests
+        // were cut never changes the pick; 100 comments, embedded above), then per theme
         // the quotes dated in the month and not from the video's own account first.
         const candidates = new Map<string, typeof evidenceRows>()
-        for (const e of [...evidenceRows].filter((e) => e.comment_id && !e.redacted && e.quote).sort((a, b) => (a.relevance_rank ?? 99) - (b.relevance_rank ?? 99))) {
+        for (const e of [...evidenceRows].filter((e) => e.comment_id && !e.redacted && e.quote).sort((a, b) => (a.relevance_rank ?? 99) - (b.relevance_rank ?? 99) || a.id.localeCompare(b.id))) {
           const theme = insightTheme.get(e.audience_insight_id) as string
           const list = candidates.get(theme) ?? []
           if (list.length < QUOTE_CANDIDATES_PER_THEME) list.push(e)
           candidates.set(theme, list)
         }
-        const commentIds = [...new Set([...candidates.values()].flat().map((e) => e.comment_id as string))].slice(0, IN_CHUNK)
-        const comments = commentIds.length === 0 ? [] : (await step('a', 'quote themes: comments', () => reader.one<{ id: string; author: string | null; comment_date: string | null; platform: string; video_id: string; likes: number | null }>('comments (the quote candidates)',
-          admin.from('comments').select('id, author, comment_date, platform, video_id, likes').in('id', commentIds)))) ?? []
-        const cById = new Map(comments.map((c) => [c.id, c]))
+        const cById = new Map([...candidates.values()].flat().map((e) => embedded(e.comments)).filter((c): c is QuoteComment => c != null).map((c) => [c.id, c]))
         const fold = (s: string | null | undefined) => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
         out.quotes = five.map((t) => ({
           theme: t.label, id: t.id, k: t.k, makerShare: t.seg?.makerShare ?? null,
@@ -788,12 +811,11 @@ async function main(): Promise<void> {
     // ---- d: the six month tables' baseline ----------------------------------------------------------------
     if (parts.has('d')) {
       const counts: Record<string, { rows: number | null; latestReadAt: string | null }> = {}
+      // One request a table: the exact count of Sealand's rows rides on the latest read_at row.
       for (const table of SIX_TABLES) {
-        const n = await step('d', `${table} count`, () => reader.count(`${table} (Sealand rows)`,
-          admin.from(table).select('client_id', { count: 'exact', head: true }).eq('client_id', clientId)))
-        const latest = await step('d', `${table} latest read_at`, () => reader.one<{ read_at: string | null }>(`${table} (latest read_at)`,
-          admin.from(table).select('read_at').eq('client_id', clientId).order('read_at', { ascending: false, nullsFirst: false }).limit(1)))
-        counts[table] = { rows: n, latestReadAt: latest?.[0]?.read_at ?? null }
+        const r = await step('d', `${table} rows and latest read_at`, () => reader.oneCounted<{ read_at: string | null }>(`${table} (Sealand rows, latest read_at)`,
+          admin.from(table).select('read_at', { count: 'exact' }).eq('client_id', clientId).order('read_at', { ascending: false, nullsFirst: false }).limit(1)))
+        counts[table] = { rows: r?.count ?? null, latestReadAt: r?.rows[0]?.read_at ?? null }
       }
       out.monthTables = counts
       say(`month tables (Sealand rows, latest read_at): ${SIX_TABLES.map((t) => `${t.replace('month_', '')} ${counts[t].rows ?? '?'}`).join(' · ')} · latest ${Object.values(counts).map((c) => c.latestReadAt ?? '').sort().pop()?.slice(0, 16) ?? '-'}Z`)

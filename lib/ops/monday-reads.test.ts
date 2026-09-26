@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { gathersOf } from '../provenance/searches'
 import { JUDGE_VERSION } from '../subjects/types'
 import {
-  anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, evidenceByVideo, excerpt, groupOf, inMarket, isFinalRun, ofN,
-  onlyFrom, pickTargetRun, pooledBy, runsOnDays, schedulesVerdict, searchSetDiff, searchesPerPlatform, termsFirstSearchedSince, themeSegments,
-  threeStateCalibration, videoNameHits, type BoardTheme, type TextVideo, type ThemeSegments,
+  anyOf, boardOf, calibrationStates, carriesOnlyCurrent, currentSearchTerms, evidenceByVideo, excerpt, freshPath, groupOf, inMarket, isFinalRun,
+  matchKindTally, membershipPlan, ofN, onlyFrom, pickTargetRun, pooledBy, runsOnDays, schedulesVerdict, searchSetDiff, searchesPerPlatform,
+  termsFirstSearchedSince, themeSegments, threeStateCalibration, videoNameHits, videosNamed, type BoardTheme, type TextVideo, type ThemeSegments,
 } from './monday-reads'
 
 // Run ids and dates are staging's real Sealand runs (20 Sep b67b56de partial,
@@ -214,5 +214,53 @@ describe('ofN', () => {
     expect(ofN(206, 625)).toBe('206 of 625 (33.0%)')
     expect(ofN(3, 0)).toBe('3')
     expect(ofN(null, 625)).toBe('not measured')
+  })
+})
+
+describe('fewer pages', () => {
+  // Staging's 20 Sep run b67b56de: 1,384 observations, exact 707, new 468, strong 161, weak 48.
+  const nonExact = [...Array(48).fill('weak'), ...Array(161).fill('strong'), ...Array(468).fill('new')]
+  it('counts the exact matches as the total less the kinds read before them', () => {
+    const firstPage = [...nonExact, ...Array(1000 - nonExact.length).fill('exact')]
+    expect(matchKindTally(firstPage, 1384)).toEqual({ byKind: { exact: 707, new: 468, strong: 161, weak: 48 }, total: 1384 })
+  })
+  it('reads every row as it is when there is no count', () => {
+    const all = [...nonExact, ...Array(707).fill('exact')]
+    expect(matchKindTally(all, null)).toEqual({ byKind: { exact: 707, new: 468, strong: 161, weak: 48 }, total: 1384 })
+  })
+  it('lists no exact row when the whole run is another kind', () => {
+    expect(matchKindTally(['new', 'new', 'revived'], 3)).toEqual({ byKind: { new: 2, revived: 1 }, total: 3 })
+  })
+
+  const v = (id: string, platform: string) => ({ id, platform, video_id: `${platform}-${id}` })
+  const byId = new Map([v('a', 'tiktok'), v('b', 'youtube'), v('c', 'reddit'), v('d', 'instagram'), v('e', 'youtube')].map((x) => [x.id, x]))
+  it('lists each video once, in group order, across platforms, leaving out what the export places', () => {
+    const plan = membershipPlan([
+      { name: 'measured', ids: new Set(['a', 'b', 'c']) },
+      { name: 'name line', ids: new Set(['b', 'd']) },
+      { name: 'legacy', ids: new Set(['e', 'zz']) },
+    ], new Set(['c']), byId, 2)
+    expect(plan.chunks.map((c) => c.map((x) => x.id))).toEqual([['a', 'b'], ['d', 'e']])
+    expect(plan.toCheck).toEqual({ measured: 2, 'name line': 1, legacy: 1 })
+  })
+  it('puts staging\'s 50 unplaced videos (48 measured, 2 on the name line) in one request of 100', () => {
+    const ids = Array.from({ length: 50 }, (_, i) => `${i}`)
+    const many = new Map(ids.map((id, i) => [id, v(id, ['tiktok', 'youtube', 'reddit', 'instagram'][i % 4])]))
+    const plan = membershipPlan([{ name: 'measured', ids: new Set(ids.slice(0, 48)) }, { name: 'name line', ids: new Set(ids.slice(48)) }], new Set(), many, 100)
+    expect(plan.chunks).toHaveLength(1)
+    expect(plan.toCheck).toEqual({ measured: 48, 'name line': 2 })
+  })
+  it('matches a comment to its video by platform and video id together', () => {
+    const chunk = [v('a', 'tiktok'), v('b', 'youtube')]
+    expect([...videosNamed(chunk, [{ platform: 'tiktok', video_id: 'tiktok-a' }, { platform: 'reddit', video_id: 'youtube-b' }])]).toEqual(['a'])
+  })
+
+  it('never names a file that exists: the second, then a counter', () => {
+    const now = new Date('2026-09-26T11:38:12Z')
+    const taken = new Set(['/d/snapshot-staging-2026-09-26.json', '/d/snapshot-staging-2026-09-26-113812Z.json', '/d/snapshot-staging-2026-09-26-113812Z-2.json'])
+    const exists = (p: string) => taken.has(p)
+    expect(freshPath('/d/grounding.json', exists, now)).toBe('/d/grounding.json')
+    expect(freshPath('/d/snapshot-staging-2026-09-26.json', (p) => p === '/d/snapshot-staging-2026-09-26.json', now)).toBe('/d/snapshot-staging-2026-09-26-113812Z.json')
+    expect(freshPath('/d/snapshot-staging-2026-09-26.json', exists, now)).toBe('/d/snapshot-staging-2026-09-26-113812Z-3.json')
   })
 })

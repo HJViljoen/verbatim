@@ -368,3 +368,84 @@ export function ofN(k: number | null | undefined, n: number | null | undefined):
   if (n == null || n <= 0) return `${k}`
   return `${k} of ${n} (${((100 * k) / n).toFixed(1)}%)`
 }
+
+// ---- Fewer pages ------------------------------------------------------------------------------
+
+/**
+ * A run's observations by match kind, from a read ordered by match_kind
+ * DESCENDING that may stop at the first page holding an 'exact' row. 'exact'
+ * is the smallest value theme_observations_match_kind_check allows (exact,
+ * new, revived, strong, weak), so every row after it is 'exact' too, and their
+ * number is the read's exact count less the other kinds. With no count,
+ * `seen` must be every row. Keys sorted.
+ */
+export function matchKindTally(seen: readonly (string | null)[], total: number | null): { byKind: Record<string, number>; total: number } {
+  const byKind: Record<string, number> = {}
+  for (const k of seen) byKind[k ?? 'null'] = (byKind[k ?? 'null'] ?? 0) + 1
+  if (total != null) {
+    const exact = Math.max(0, total - seen.filter((k) => k !== 'exact').length)
+    if (exact > 0) byKind.exact = exact
+    else delete byKind.exact
+  }
+  return { byKind: Object.fromEntries(Object.entries(byKind).sort(([a], [b]) => a.localeCompare(b))), total: total ?? seen.length }
+}
+
+export interface MembershipVideo { id: string; platform: string; video_id: string }
+
+/**
+ * The videos whose September membership the staging export cannot place, in
+ * the groups' order (each once, under the first group that holds it), cut
+ * into requests of `size` videos across platforms, so a ration that runs out
+ * cuts the last group first. `toCheck` is each group's share of the list.
+ */
+export function membershipPlan<V extends MembershipVideo>(
+  groups: readonly { name: string; ids: ReadonlySet<string> }[],
+  placed: ReadonlySet<string>,
+  byId: ReadonlyMap<string, V>,
+  size: number,
+): { chunks: V[][]; toCheck: Record<string, number> } {
+  const listed = new Set<string>()
+  const list: V[] = []
+  const toCheck: Record<string, number> = {}
+  for (const g of groups) {
+    toCheck[g.name] = 0
+    for (const id of g.ids) {
+      const v = byId.get(id)
+      if (!v || placed.has(id) || listed.has(id)) continue
+      listed.add(id)
+      list.push(v)
+      toCheck[g.name]++
+    }
+  }
+  const chunks: V[][] = []
+  for (let i = 0; i < list.length; i += size) chunks.push(list.slice(i, i + size))
+  return { chunks, toCheck }
+}
+
+/** The chunk's videos a comment row names, by platform AND video id (the read
+ *  filters the two separately, so a video id another platform shares is not a hit). */
+export function videosNamed(chunk: readonly MembershipVideo[], rows: readonly { platform: string; video_id: string }[]): Set<string> {
+  const idOf = new Map(chunk.map((v) => [`${v.platform}\u0000${v.video_id}`, v.id]))
+  const out = new Set<string>()
+  for (const r of rows) {
+    const id = idOf.get(`${r.platform}\u0000${r.video_id}`)
+    if (id) out.add(id)
+  }
+  return out
+}
+
+// ---- Files ------------------------------------------------------------------------------------
+
+/**
+ * A path nothing is at: `path` itself, else the UTC time to the second before
+ * the extension (`-113812Z`), else that and a counter (`-113812Z-2`). The
+ * snapshot cannot be retaken, so no file is ever replaced.
+ */
+export function freshPath(path: string, exists: (p: string) => boolean, now: Date = new Date()): string {
+  if (!exists(path)) return path
+  const stamp = now.toISOString().slice(11, 19).replace(/:/g, '')
+  for (let n = 1; ; n++) {
+    const p = path.replace(/(\.[a-z]+)?$/, (ext) => `-${stamp}Z${n === 1 ? '' : `-${n}`}${ext}`)
+    if (!exists(p)) return p
+  }
+}
