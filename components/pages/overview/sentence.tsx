@@ -15,6 +15,9 @@ import { onScreenText } from '@/lib/pages/overview'
 import type { AnomalyLine, LedgerRow, OverviewData, Voice } from '@/lib/pages/overview'
 import { TokenProse } from '@/components/blocks/prose'
 import { PairChip } from '@/components/blocks/pair-chip'
+import { surface } from '@/lib/nav'
+import { heroView, voicesHeading } from '@/lib/pages/overview-market'
+import { InnerLine, isMarketPage, Parts } from './market'
 
 // OV1 · In one sentence, anything unusual, and the one thing to do
 // (design §3 OV1; ported to `Main.dc.html` §1 in Block D wave 2).
@@ -159,12 +162,107 @@ function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
   )
 }
 
+/** The front page's first block's title (market-first WP1.6; 25 Sep rulings:
+ *  "The month in one line" became "The month"). The block's registry title
+ *  stays the Phase 1 one, which a stored copy renders under. */
+export const MARKET_SENTENCE_TITLE = 'The month'
+
+/**
+ * "The month" (market-first WP1.6, plan §2.2 block 1): the market's size, its
+ * three biggest conversations with one denominator in the clause, the month
+ * before as levels, the refusal chip, and the lead theme's two voices behind
+ * them. No top recommendation and no unusual-week line here: the first moves
+ * to Your moves, the second has nothing to say before January (§2.11).
+ */
+function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string) {
+  const s = data.sentence
+  const email = mode === 'email'
+  const view = heroView(data.hero, data.themes, data.month)
+  const voices = data.heroVoices ?? []
+  const lead = data.hero?.kind === 'themes' ? data.hero.lead : null
+  const voice = surface('voice')
+  const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
+  const size = (
+    <TokenProse
+      body={s.body}
+      figures={s.figures}
+      mode={mode}
+      figureFace="inherit"
+      className={email ? undefined : 'm-0 max-w-[700px] text-[26px] font-medium leading-[1.3] tracking-[-0.02em] [text-wrap:balance]'}
+    />
+  )
+  const clause = view.parts.length > 0 ? (
+    email
+      ? <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2, marginTop: 8 }}><Parts parts={view.parts} figures={view.figures} mode={mode} /></div>
+      : <p className="m-0 max-w-[620px] text-[16px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><Parts parts={view.parts} figures={view.figures} mode={mode} labelClassName="font-semibold text-foreground" /></p>
+  ) : null
+  const prev = view.prev ? (
+    email
+      ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><Parts parts={view.prev} figures={view.figures} mode={mode} /></div>
+      : <span data-copy="level" className="font-mono text-[13px] tabular-nums text-muted-foreground"><Parts parts={view.prev} figures={view.figures} mode={mode} /></span>
+  ) : null
+  const chip = s.chip ? <PairChip words={s.chip} mode={mode} /> : null
+  const aside = lead && voices.length > 0 ? (
+    email ? (
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>
+          {voicesHeading(voices.length)} on “<span data-copy="subject" data-slot="pass_b_theme">{lead.label}</span>”
+        </div>
+        {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} />)}
+        {view.newSearch ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 }}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></div> : null}
+      </div>
+    ) : (
+      <aside className="flex min-w-0 flex-col gap-4 rounded-md bg-inner p-6">
+        <div className="flex flex-col gap-1">
+          <h3 className="m-0 text-[15px] font-semibold">
+            {voicesHeading(voices.length)} on “<span data-copy="subject" data-slot="pass_b_theme">{lead.label}</span>”
+          </h3>
+          <span className="font-mono text-[12px] text-muted-foreground">from that theme’s own comments</span>
+        </div>
+        {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} />)}
+        {view.newSearch ? <p className="m-0 text-[13px] leading-[1.5] text-secondary-foreground"><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></p> : null}
+      </aside>
+    )
+  ) : lead && view.newSearch ? (
+    <InnerLine mode={mode}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></InnerLine>
+  ) : null
+
+  if (email) {
+    return (
+      <BlockFrame title={MARKET_SENTENCE_TITLE} mode={mode} footer={footer}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 18, fontWeight: 500, color: EMAIL.ink }}>{size}</div>
+        {clause}
+        {prev}
+        {chip}
+        {aside}
+      </BlockFrame>
+    )
+  }
+  const main = (
+    <div className="flex min-w-0 flex-col gap-6 pt-1">
+      <div className="flex flex-col gap-4">{size}{clause}</div>
+      {prev || chip ? <div className="flex flex-wrap items-center gap-4">{prev}{chip}</div> : null}
+    </div>
+  )
+  return (
+    <BlockFrame title={MARKET_SENTENCE_TITLE} mode={mode} footer={footer}>
+      {aside ? (
+        <div className="grid grid-cols-1 gap-x-16 gap-y-6 xl:grid-cols-[minmax(0,1fr)_304px]" data-print-cols="2">
+          {main}
+          {aside}
+        </div>
+      ) : main}
+    </BlockFrame>
+  )
+}
+
 export const overviewSentence: Block<OverviewData> = {
   key: 'overview.sentence',
   title: 'In one sentence',
   question: 'What moved this month, and what should we do about it?',
 
   render(data, mode = 'app', ctx) {
+    if (isMarketPage(data)) return renderMarketMonth(data, mode, ctx.appUrl)
     const s = data.sentence
     const email = mode === 'email'
     const market = `${ctx.appUrl}/dashboard/market`
@@ -346,7 +444,7 @@ export const overviewSentence: Block<OverviewData> = {
         // "next 4 Oct" beside it (D14): the next update's date is a promise,
         // and nothing in the product holds one.
         meta={lastUpdateMeta(data)}
-        footer={openLink(mode, market, 'Open Market →')}
+        footer={openLink(mode, market, 'Open Your moves →')}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {email ? (
@@ -376,6 +474,7 @@ export const overviewSentence: Block<OverviewData> = {
   },
 
   figures(data): FigureTable {
+    if (isMarketPage(data)) return { ...data.sentence.figures, ...heroView(data.hero, data.themes, data.month).figures }
     const out: FigureTable = { ...data.sentence.figures }
     const a = data.sentence.anomaly
     if (a) {
@@ -390,6 +489,7 @@ export const overviewSentence: Block<OverviewData> = {
   },
 
   quotes(data): QuoteRef[] {
+    if (isMarketPage(data)) return (data.heroVoices ?? []).map((v) => v.quote.ref)
     const refs = data.sentence.voices.map((v) => v.quote.ref)
     return data.sentence.anomaly?.quote ? [...refs, data.sentence.anomaly.quote.ref] : refs
   },

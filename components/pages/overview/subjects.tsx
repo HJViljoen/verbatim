@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { isMarketPage } from './market'
+import { marketSubjectsFigures, renderMarketSubjects } from './market-subjects'
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
@@ -324,6 +326,9 @@ export const overviewSubjects: Block<OverviewData> = {
   question: 'How are we seen on the things we chose to be known for?',
 
   render(data, mode = 'app', ctx) {
+    // THE FRONT PAGE'S FORM (market-first WP1.6): market rows ranked by size,
+    // each with its calibration word. A stored copy renders the Phase 1 block.
+    if (isMarketPage(data)) return renderMarketSubjects(data, mode, ctx.appUrl)
     const s = data.subjects
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/subjects`
@@ -437,6 +442,7 @@ export const overviewSubjects: Block<OverviewData> = {
   },
 
   figures(data): FigureTable {
+    if (isMarketPage(data)) return marketSubjectsFigures(data)
     const out: FigureTable = {}
     // The hero's own numbers: each subject's category share, which is the side
     // that carries the month. The other two sides are levels on the row and are
@@ -453,12 +459,16 @@ export const overviewSubjects: Block<OverviewData> = {
   },
 
   verdicts(data): Verdict[] {
+    // The front page's form prints levels only: a provisional subject gets no
+    // verdict (decision C), and August against September is refused anyway.
+    if (isMarketPage(data)) return []
     return data.subjects.rows.flatMap((r) =>
       [r.you.verdict, r.rival?.verdict ?? null, r.category.verdict].filter((v): v is Verdict => v != null),
     )
   },
 
   emptyState(data) {
+    if (isMarketPage(data)) return null
     const s = data.subjects
     if (s.state === 'not_recorded') return 'Your subjects are not recorded for this workspace yet.'
     if (s.state === 'candidates' || s.state === 'none') return candidateLine(s.candidates)

@@ -16,6 +16,13 @@ import { overviewSubjects } from './subjects'
 import { overviewCategory } from './category'
 import { overviewRivals } from './rivals'
 import { overviewMoves } from './moves'
+import { overviewThemes } from './themes'
+import { overviewAsks } from './asks'
+import { overviewChange } from './change'
+import { MARKET_SENTENCE_TITLE } from './sentence'
+import { MARKET_KINDS_TITLE } from './market-kinds'
+import { MARKET_SUBJECTS_TITLE } from './market-subjects'
+import { MARKET_BRANDS_TITLE } from './rivals'
 
 // Overview — the page (Phase 1 WP11, design §3 OV0–OV5; ported to the artboard
 // in Block D wave 2, `mock-sealand/artboards/Main.dc.html`).
@@ -33,11 +40,56 @@ import { overviewMoves } from './moves'
 export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewBar,
   overviewSentence,
-  overviewSubjects,
+  overviewThemes,
   overviewCategory,
+  overviewAsks,
+  overviewSubjects,
   overviewRivals,
+  overviewChange,
   overviewMoves,
 ]
+
+/**
+ * YOUR MARKET, IN ITS ORDER (market-first WP1.6, plan §2.2; deploy 2's
+ * column: blocks 0 to 2, 4 to 6, 9 as one line, and 10). The order is the
+ * argument: the market in full, then brands, then what changed and what is
+ * ours. "With this update", "What it means for you" and "What you published"
+ * join with deploy 3 (WP2.7, WP2.5); "How sound is this month" is gone (25 Sep
+ * rulings). `overview.moves` stays in the registry above, because stored
+ * exports and the briefs name it, and is not on the page.
+ */
+export const FRONT_PAGE_BLOCKS: readonly Block<OverviewData>[] = [
+  overviewSentence,
+  overviewThemes,
+  overviewCategory,
+  overviewAsks,
+  overviewSubjects,
+  overviewRivals,
+  overviewChange,
+]
+
+/**
+ * What each block is called on the front page. The four reworked blocks keep
+ * their Phase 1 registry titles, which a stored copy and the monthly (until
+ * WP2.1) still render under; on the page and in its exports they carry these.
+ */
+export const MARKET_TITLES: Readonly<Record<string, string>> = {
+  'overview.sentence': MARKET_SENTENCE_TITLE,
+  'overview.themes': overviewThemes.title,
+  'overview.category': MARKET_KINDS_TITLE,
+  'overview.asks': overviewAsks.title,
+  'overview.subjects': MARKET_SUBJECTS_TITLE,
+  'overview.rivals': MARKET_BRANDS_TITLE,
+  'overview.change': overviewChange.title,
+}
+
+/** The front page's spans: every block the width of the page, except the
+ *  subjects and the brands' one line, which share a row (the preview's
+ *  8 : 4 split). */
+const FRONT_COLS: Record<string, 4 | 8 | 12> = {
+  'overview.subjects': 8,
+  'overview.rivals': 4,
+}
 
 /**
  * How tall each block's tile is BELOW `xl`, where the page is one stacked
@@ -58,20 +110,11 @@ const ROWS: Record<string, number> = {
   'overview.category': 3,
   'overview.rivals': 3,
   'overview.moves': 3,
+  'overview.themes': 4,
+  'overview.asks': 3,
+  'overview.change': 2,
 }
 
-/**
- * The one block the artboard draws as a HERO (Block D wave 2,
- * `main.sentence.hero`).
- *
- * `Tile variant="hero"` is P0's, built in wave 1 and used by nothing: 12px gaps,
- * 16/20 padding, and the serif ramp for the page's one sentence. The artboard
- * gives §1 that treatment and every other section the default tile, so the map
- * is one entry rather than a flag per block — and the block itself prints the
- * serif line, because the monthly report renders it with no Tile around it at
- * all and the sentence must not lose its weight on paper.
- */
-const HERO = 'overview.sentence'
 
 /**
  * The blocks the APP page draws as tiles — every one but OV0 (Block D wave 3,
@@ -93,7 +136,7 @@ const HERO = 'overview.sentence'
  * drops is an APP duplication, which is what the finding measured.
  */
 const NOT_TILED: ReadonlySet<string> = new Set([overviewBar.key])
-export const TILE_BLOCKS = OVERVIEW_BLOCKS.filter((b) => !NOT_TILED.has(b.key))
+export const TILE_BLOCKS = FRONT_PAGE_BLOCKS.filter((b) => !NOT_TILED.has(b.key))
 
 /**
  * The app's context: RELATIVE links.
@@ -163,13 +206,12 @@ export function OverviewPage({
     <ExportScope
       page="overview"
       params={params}
-      tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}
+      tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: MARKET_TITLES[b.key] ?? b.title }))}
     >
       <PageFrame>
         <SurfacePageBar
           nav="overview"
           params={params}
-          range={horizonRange(data)}
           // The brand, the month selector and "as at the {update} update ·
           // next update {date}" (25 Sep rulings, market-first WP1.2). No "How
           // sound is this" band: it left every page on 25 Sep.
@@ -202,9 +244,11 @@ export function OverviewPage({
           {TILE_BLOCKS.map((block) => (
             <Tile
               key={block.key}
-              col={12}
+              col={FRONT_COLS[block.key] ?? 12}
               row={ROWS[block.key] ?? 2}
-              variant={block.key === HERO ? 'hero' : 'default'}
+              // NOT THE INVERTED HERO (market-first WP1.6): the approved
+              // preview sets "The month" on the same white as every block.
+              variant="default"
               // A tile that exports names itself. The key is `<page>.<tile>`
               // and it is stable — it names stored PNG artefacts — so it is the
               // block's own key and never a position.

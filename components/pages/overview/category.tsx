@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { isMarketPage } from './market'
+import { marketKindsEmpty, marketKindsFigures, renderMarketKinds } from './market-kinds'
 import { carriesShare, levelText } from '@/lib/reading/level'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
@@ -405,6 +407,9 @@ export const overviewCategory: Block<OverviewData> = {
   question: 'What is this category talking about, and how does it feel about it?',
 
   render(data, mode = 'app', ctx) {
+    // THE FRONT PAGE'S FORM (market-first WP1.6): every kind and the four
+    // moods on the market's base. A stored copy renders the Phase 1 block.
+    if (isMarketPage(data)) return renderMarketKinds(data, mode, ctx.appUrl)
     const c = data.category
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/voice`
@@ -818,6 +823,7 @@ export const overviewCategory: Block<OverviewData> = {
   },
 
   figures(data): FigureTable {
+    if (isMarketPage(data)) return data.category.market ? marketKindsFigures(data.category.market) : {}
     const c = data.category
     const out: FigureTable = {}
     if (c.denominator != null) {
@@ -879,10 +885,13 @@ export const overviewCategory: Block<OverviewData> = {
    * ref is not a conflict — a ref is an address, and the freeze de-duplicates.
    */
   quotes(data) {
+    if (isMarketPage(data)) return []
     return categoryVoices(data).map((v) => v.quote.ref)
   },
 
   verdicts(data): Verdict[] {
+    // The front page's form prints levels and one chip, and no verdict.
+    if (isMarketPage(data)) return []
     const c = data.category
     return [
       ...Object.values(c.kindVerdicts).filter((v): v is Verdict => v != null),
@@ -894,6 +903,7 @@ export const overviewCategory: Block<OverviewData> = {
   },
 
   emptyState(data) {
+    if (isMarketPage(data)) return marketKindsEmpty(data)
     const c = data.category
     const nothing = c.kinds.length === 0 && c.growing.length === 0 && c.fading.length === 0 && !c.mood && !c.attention
       && (c.levels ?? []).length === 0
