@@ -337,6 +337,40 @@ begin
   raise notice 'ok  a queued edit is stamped applied once; a second stamp is refused';
 end $$;
 
+-- R9b. The weekly keep inside the comparability step (WP3.13): a week that
+-- reached its age on this run goes to week_line_reads / week_line_points
+-- through mf/s3-weekline's store, ON CONFLICT DO NOTHING (INSERT alone); a
+-- second keep of the same week inserts nothing and rewrites nothing.
+begin;
+set local role service_role;
+with r as (
+  insert into public.week_line_reads (client_id, week, age_days, captured_before, read_through_run, conditions, method_version, computed_at) values
+    ('00000000-0000-4000-8000-0000000005c1', '2026-09-28', 21, '2026-10-26 00:00Z', '00000000-0000-4000-8000-0000000005a1', '{"runs_in_week":1}', 'week_line_v1', '2026-10-25 08:00Z')
+  on conflict (client_id, week, age_days, method_version) do nothing returning 1
+)
+select count(*) from r;
+insert into public.week_line_points (client_id, week, age_days, method_version, audience, object_kind, object_id, depth_band, k, n) values
+  ('00000000-0000-4000-8000-0000000005c1', '2026-09-28', 21, 'week_line_v1', 'industry-other', 'kind', 'praise', '5-19', 3, 5)
+on conflict do nothing;
+commit;
+do $$
+declare got int;
+begin
+  set local role service_role;
+  with r as (
+    insert into public.week_line_reads (client_id, week, age_days, captured_before, read_through_run, conditions, method_version, computed_at) values
+      ('00000000-0000-4000-8000-0000000005c1', '2026-09-28', 21, '2026-10-26 00:00Z', '00000000-0000-4000-8000-0000000005a2', '{"runs_in_week":9}', 'week_line_v1', '2026-11-01 08:00Z')
+    on conflict (client_id, week, age_days, method_version) do nothing returning 1
+  )
+  select count(*) into got from r;
+  reset role;
+  if got <> 0 then raise exception 'weeks FAILED: a second keep of the week of 28 Sep inserted a read'; end if;
+  if (select read_through_run from public.week_line_reads where client_id = '00000000-0000-4000-8000-0000000005c1' and week = '2026-09-28') <> '00000000-0000-4000-8000-0000000005a1' then
+    raise exception 'weeks FAILED: a kept read was rewritten';
+  end if;
+  raise notice 'ok  the weekly keep: a week kept once, a second keep inserts nothing and rewrites nothing';
+end $$;
+
 -- R10. The tenant goes; the cascade takes its frozen rows with it.
 delete from public.clients where id = '00000000-0000-4000-8000-0000000005c1';
 do $$
