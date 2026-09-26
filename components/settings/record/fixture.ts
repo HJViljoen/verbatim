@@ -368,10 +368,12 @@ const WWC_MORE_ROWS: ConfigChange[] = [
   { ...wwcChange({ id: 'wwc-rivals-0917', at: '2026-09-17T16:02:56.000Z', surface: 'rivals', before: ['Rareform'], after: ['Rareform', 'Freedom of Movement', 'Old School', 'Patagonia', 'The North Face'] }), field: 'competitor_names' },
   { ...wwcChange({ id: 'wwc-capped', at: '2026-09-20T04:18:34.000Z', surface: 'other', before: null, after: null }), field: 'gather_capped', run_id: 'run-20sep', note: 'An update gathered less than usual because a spending cap was reached.' },
   { ...wwcChange({ id: 'wwc-gate-fix', at: '2026-09-26T12:00:00.000Z', surface: 'gate_rule' as never, before: null, after: null }), field: 'relevance_gate', note: 'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts.' },
-  { ...wwcChange({ id: 'wwc-attribution', at: '2026-09-26T12:00:00.000Z', surface: 'attribution' as never, before: null, after: null }), field: 'attribution_v3', // NOT THE STORED NOTE (R-a): WP1.4's ATTRIBUTION_NOTE, "We improved how
-  // we tell…", trips the copy contract's direction-word rule (D1); this is
-  // the wording proposed for Heinrich's Mon 28 note read.
-  note: 'We changed how we tell which brand a post is about, so fewer posts are filed under the wrong brand.' },
+  // WP1.4's ATTRIBUTION_NOTE as it will be stored (mf/wp1-4 993d31d0): it
+  // read "We improved how we tell…, so fewer posts are filed under the wrong
+  // brand.", a direction word and a fall nothing measures. Staging's rehearsal
+  // row still holds that old text; Heinrich reads this one on Mon 28.
+  { ...wwcChange({ id: 'wwc-attribution', at: '2026-09-26T12:00:00.000Z', surface: 'attribution' as never, before: null, after: null }), field: 'attribution_v3',
+    note: 'We changed how we tell which brand a post is about.' },
 ]
 
 function wwcChange(o: { id: string; at: string; surface: ConfigChange['surface']; before: unknown; after: unknown }): ConfigChange {

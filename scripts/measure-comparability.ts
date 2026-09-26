@@ -33,7 +33,16 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //     month's videos a gate verdict admitted unjudged, source 'default') and
 //     attribution v3 (the month's videos first stored after it, whose filing it
 //     decided). Any other change of ours in the span has no measure here; it
-//     is printed, and the judge counts it as 10% (it refuses);
+//     is printed, and the judge counts it as 10% on each view it moves (it
+//     refuses them). A change that moves no view (`affects` empty: a segment
+//     rule, VIEWS_BY_SURFACE.segment, or an attention-panel freeze) never
+//     enters the judge's span, so it is printed as refusing nothing. A capped update
+//     (log-tracking-eras --capped-run, an `other` row with field
+//     'gather_capped') is not a change of ours at all: it is run health, a
+//     gather flag that flags a pair and never refuses it (decision D rule 6;
+//     the 26 Sep default R-c, lib/reading/gather-flags.ts from deploy 2). It
+//     is printed as that, gets no entry and no reach row, and its shortfall is
+//     in the row's gather figures;
 //   - depth: the median dated comments a video in each month's market
 //     (market_month_depth's figure);
 //   - gather health per month: gathers run, partial or failed, and planned
@@ -137,6 +146,15 @@ async function main() {
 
   // Our changes; the two code changes may be stood in for on a dry run.
   const ours: OurChange[] = changesFromLog(changes)
+  // A capped update: every row of the change is log-tracking-eras' `other`
+  // row with field 'gather_capped' (GATHER_FLAG_FIELDS, lib/reading/gather-flags.ts
+  // on deploy 2). Printed as run health; nothing here is stored for it.
+  const isGatherFlag = (c: OurChange): boolean => {
+    if (c.surface !== 'other') return false
+    const ids = new Set(c.rowIds && c.rowIds.length > 0 ? c.rowIds : [c.id])
+    const mine = changes.filter((r) => ids.has(r.id))
+    return mine.length > 0 && mine.every((r) => r.surface === 'other' && r.field === 'gather_capped')
+  }
   for (const [surface, flag] of [['gate_rule', 'gate-fix-at'], ['attribution', 'attribution-at']] as const) {
     const at = args.values[flag]
     if (!at || ours.some((c) => c.surface === surface)) continue
@@ -214,7 +232,11 @@ async function main() {
           ? (v: MonthVideo) => (firstSeen.get(v.id) ?? '') >= c.changedAt
           : null
       if (!touchedBy) {
-        console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: not measured here (the judge counts it as a tenth: refused)`)
+        console.log(isGatherFlag(c)
+          ? `  change ${c.id} · ${c.changedAt.slice(0, 16)} · a capped update: run health, not a change of ours (decision D rule 6, R-c); it flags the pair and never refuses it (the judge from deploy 2; deploy 1's still counts it as a tenth), and there is nothing to measure`
+          : c.affects.length === 0
+            ? `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: moves no view the judge reads, so it refuses nothing; nothing to measure`
+            : `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: not measured here (the judge counts it as a tenth on ${c.affects.join(', ')}: refused)`)
         continue
       }
       for (const pop of ['market', 'category'] as const) {
