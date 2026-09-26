@@ -81,14 +81,16 @@ export function WeekBarsHover({
   const shown = hover ?? (detail === 'panel' ? initial : null)
   const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
   const chart = (
-    <div className={cn('grid min-w-0', labelWidth === 'wide' ? 'grid-cols-[88px_minmax(0,1fr)] sm:grid-cols-[116px_minmax(0,1fr)]' : 'grid-cols-[88px_minmax(0,1fr)]')}>
+    <div className={cn('grid min-w-0', labelWidth === 'wide' ? 'grid-cols-[88px_minmax(0,1fr)] xl:grid-cols-[116px_minmax(0,1fr)]' : 'grid-cols-[88px_minmax(0,1fr)]')}>
       <div className="relative" style={{ height }}>{labels}</div>
       {/* UNDER THE PLOT'S NARROWEST WIDTH THE STRIP SCROLLS SIDEWAYS, AND IT
           OPENS AT THE LATEST WEEK: a reversed flex row starts scrolled to its
           end, with no script. */}
       <div className="min-w-0 overflow-x-auto overflow-y-hidden">
         <div className="flex flex-row-reverse">
-          <div className="relative flex-1" style={{ minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
+          {/* A CONTAINER, so the chart's smallest words step down a size where
+              its slots are narrow (`@max-[640px]:` on the SVG text). */}
+          <div className="relative flex-1 @container" style={{ minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
             {shown != null ? (
               <span
                 aria-hidden

@@ -78,6 +78,9 @@ describe('the weekly volume bars', () => {
     // Staging's relevance row is the MF1 rehearsal's stand-in, dated 26 Sep.
     expect(key).toContain('how we check relevance on 26 Sep')
     expect(key).not.toContain('▲')
+    // A filing change moves no bar of the pooled market: not drawn, not keyed.
+    expect(key).not.toContain('file')
+    expect(render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)).not.toContain('how we file videos')
   })
 
   it('draw a week still being read outlined, with its word under the axis (the preview)', () => {
@@ -97,7 +100,8 @@ describe('the weekly volume bars', () => {
     const markup = render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
     expect(markup).toContain('overflow-x-auto')
     expect(markup).toContain('flex-row-reverse')
-    expect(markup).toContain('min-width:520px')
+    // 11 weeks at 48px a slot at the least (weekPlotMin).
+    expect(markup).toContain('min-width:528px')
   })
 
   it('show This week’s panel on the latest week that is no longer so far (the preview’s)', () => {

@@ -3,11 +3,11 @@ import type { ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import {
-  WEEK_PLOT_MIN, dueLabel, weekBarsAriaLabel, weekBarsLayout, weekBarsTable, weekChangeSentence, weekDetail, weekName,
+  dueLabel, weekBarsAriaLabel, weekPlotMin, weekBarsLayout, weekBarsTable, weekChangeSentence, weekDetail, weekName,
   type WeekBarsLayout, type WeekBarsSize,
 } from '@/lib/charts/week-bars'
 import { firstComparisonDue, weekKindLabel, WEEK_LINE_EXCLUDED, WEEK_LINE_KINDS, type PendingWeekLine } from '@/lib/reading/week-line'
-import { isoWeekOf, type WeekVolume, type WeekVolumesBlock } from '@/lib/reading/weeks'
+import { isoWeekOf, weekRuleGroupOf, type WeekRule, type WeekVolume, type WeekVolumesBlock } from '@/lib/reading/weeks'
 import { WeekBarsHover } from './week-bars-hover'
 
 // The weekly volume bars (market-first decision M, part 1; WP2.9 "Design"),
@@ -36,7 +36,15 @@ import { WeekBarsHover } from './week-bars-hover'
 // key without the hover; an email gets a table of week labels and counts.
 
 const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
+
+/** The changes the chart draws: our searches and our relevance check. A
+ *  filing change moves no bar of the pooled market (decision E), so neither
+ *  the marks, the key nor the text alternative names one. */
+const drawnRules = (rules: readonly WeekRule[]): WeekRule[] => rules.filter((r) => weekRuleGroupOf(r.surface) !== 'filing')
 const MONO = { fontFamily: 'var(--font-mono)' } as const
+/** A state word where the plot's slots are narrow (under 640px of plot):
+ *  "filling" beside "filling" must not touch. */
+const NARROW_WORD = '@max-[640px]:text-[10px]'
 const SANS = { fontFamily: 'var(--font-sans)' } as const
 const HALO = (surface: 'inner' | 'tile') => ({ stroke: `var(--${surface})`, strokeWidth: 4, strokeLinejoin: 'round' as const, paintOrder: 'stroke' as const })
 
@@ -82,12 +90,12 @@ function Plot({ L, surface, ticks, label }: { L: WeekBarsLayout; surface: 'inner
             {c.comments ? <text x={pct(c.cx)} y={c.comments.y - 7} textAnchor="middle" fontSize={12} fontWeight={500} style={{ ...MONO, fill: 'var(--secondary-foreground)', ...HALO(surface) }}>{c.comments.label}</text> : null}
             <text x={pct(c.cx)} y={L.axis.dayY} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{c.dayLabel}</text>
             {c.monthLabel ? <text x={pct(c.cx)} y={L.axis.monthY} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--muted-foreground)' }}>{c.monthLabel}</text> : null}
-            {c.stateWord ? <text x={pct(c.cx)} y={L.axis.stateY} textAnchor="middle" fontSize={12} fontWeight={500} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{c.stateWord}</text> : null}
+            {c.stateWord ? <text x={pct(c.cx)} y={L.axis.stateY} textAnchor="middle" fontSize={12} fontWeight={500} className={NARROW_WORD} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{c.stateWord}</text> : null}
           </g>
         )
       })}
       {L.gaps.map((g, i) => (
-        <text key={`g${i}`} x={pct(g.cx)} y={L.axis.stateY} textAnchor="middle" fontSize={12} fontWeight={500} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{g.label}</text>
+        <text key={`g${i}`} x={pct(g.cx)} y={L.axis.stateY} textAnchor="middle" fontSize={12} fontWeight={500} className={NARROW_WORD} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{g.label}</text>
       ))}
       {/* The marks and their days last, over the lines. Each sits in its own
           viewport at its x, so its shape and its label keep their pixel sizes
@@ -167,7 +175,8 @@ export function WeekBars({ block, mode, variant, surface }: { block: WeekVolumes
   if (mode === 'email') return <WeekBarsEmailTable weeks={block.weeks} />
   const size: WeekBarsSize = variant === 'front' ? 'large' : 'medium'
   const ticks = variant === 'front' ? 'top' : 'row'
-  const L = weekBarsLayout(block.weeks, block.rules, { size, ticks })
+  const rules = drawnRules(block.rules)
+  const L = weekBarsLayout(block.weeks, rules, { size, ticks })
   const details = block.weeks.map(weekDetail)
   // THE PANEL'S DEFAULT WEEK: the latest one with anything gathered that is no
   // longer "so far" (the preview's week of 7 Sep), else the latest with any.
@@ -177,9 +186,9 @@ export function WeekBars({ block, mode, variant, surface }: { block: WeekVolumes
     <WeekBarsHover
       details={details}
       labels={<RowLabels L={L} sub={variant === 'front'} marks={ticks === 'row'} />}
-      plot={<Plot L={L} surface={surface} ticks={ticks} label={weekBarsAriaLabel(block.weeks, block.rules)} />}
+      plot={<Plot L={L} surface={surface} ticks={ticks} label={weekBarsAriaLabel(block.weeks, rules)} />}
       height={L.height}
-      minWidth={WEEK_PLOT_MIN}
+      minWidth={weekPlotMin(L.n)}
       labelWidth="wide"
       surface={surface}
       detail={variant === 'front' ? 'card' : 'panel'}
@@ -192,10 +201,10 @@ export function WeekBars({ block, mode, variant, surface }: { block: WeekVolumes
 /** The key under the chart: our changes' marks and one sentence naming their
  *  days. Nothing where no change is on the chart. */
 export function WeekBarsKey({ block, mode }: { block: WeekVolumesBlock; mode: RenderMode }) {
-  const sentence = weekChangeSentence(block.rules)
+  const sentence = weekChangeSentence(drawnRules(block.rules))
   if (!sentence) return null
   if (mode === 'email') return <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.ink2, marginTop: 8 }}>{sentence}</div>
-  const L = weekBarsLayout(block.weeks, block.rules, { size: 'large', ticks: 'top' })
+  const L = weekBarsLayout(block.weeks, drawnRules(block.rules), { size: 'large', ticks: 'top' })
   const search = L.ticks.some((t) => t.mark === 'search')
   const other = L.ticks.some((t) => t.mark === 'other')
   return (
@@ -240,11 +249,24 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   // slot, or to the plot's end when that week is not on the axis yet.
   const first = dueSlots[0] ?? null
   const bracket = first ? { from: first.cx - 0.3 / n, to: dueSlots[1] ? dueSlots[1].cx + 0.3 / n : 1 } : null
-  const H = 118
+  // 14px of headroom over the preview's rows, for the bracket's words on two
+  // lines where the strip scrolls.
+  const TOP = 14
+  const H = 160 + TOP
   const circleY = 64
+  const base = 112.5
+  const date = (d: string): string => dueLabel(d).replace(/^due /, '')
+  const firstWords = `first comparison, with the ${date(firstComparison)} update`
   const plot = (
-    <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} is ${kept.has(s.w) ? 'kept' : 'due'} with the ${dueLabel(s.date as string).replace(/^due /, '')} update.`).join(' ')} The first comparison is due with the ${dueLabel(firstComparison).replace(/^due /, '')} update.`} className="relative block overflow-visible">
-      <text x={pct(bracket?.to ?? 1)} y={12} textAnchor="end" fontSize={13} fontWeight={600} style={{ ...SANS, fill: 'var(--foreground)' }}>first comparison, with the {dueLabel(firstComparison).replace(/^due /, '')} update</text>
+    <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} is ${kept.has(s.w) ? 'kept' : 'due'} with the ${date(s.date as string)} update.`).join(' ')} The first comparison is due with the ${date(firstComparison)} update.`} className="relative block overflow-visible">
+      <g transform={`translate(0 ${TOP})`}>
+      {/* One line where the strip is wide; two where it scrolls (under
+          640px), so the words fit the strip's first view. */}
+      <text x={pct(bracket?.to ?? 1)} y={12} textAnchor="end" fontSize={13} fontWeight={600} className="max-sm:hidden" style={{ ...SANS, fill: 'var(--foreground)' }}>{firstWords}</text>
+      <text x={pct(bracket?.to ?? 1)} y={-4} textAnchor="end" fontSize={12} fontWeight={600} className="sm:hidden" style={{ ...SANS, fill: 'var(--foreground)' }}>
+        <tspan x={pct(bracket?.to ?? 1)} dy={0}>first comparison,</tspan>
+        <tspan x={pct(bracket?.to ?? 1)} dy={15}>with the {date(firstComparison)} update</tspan>
+      </text>
       {bracket ? (
         <>
           <line x1={pct(bracket.from)} x2={pct(bracket.to)} y1={26} y2={26} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
@@ -261,17 +283,30 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
           <svg x={pct(s.cx)} y={circleY} width={1} height={1} overflow="visible">
             <circle cx={0} cy={0} r={5} style={{ fill: `var(--${surface})`, stroke: 'var(--secondary-foreground)', strokeWidth: 1.5 }} />
           </svg>
-          <text x={pct(s.cx)} y={92} textAnchor="middle" fontSize={13} fontWeight={500} style={{ ...MONO, fill: 'var(--foreground)' }}>{dueLabel(s.date as string).replace(/^due /, '')}</text>
+          <text x={pct(s.cx)} y={92} textAnchor="middle" fontSize={13} fontWeight={500} className="@max-[640px]:text-[11px]" style={{ ...MONO, fill: 'var(--foreground)' }}>{date(s.date as string)}</text>
         </g>
       ))}
       {leftOut.map((s) => (
         <text key={`o${s.w}`} x={pct(s.cx)} y={68} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--muted-foreground)' }}>left out</text>
       ))}
-      <line x1="0" x2="100%" y1={H - 5.5} y2={H - 5.5} style={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+      <line x1="0" x2="100%" y1={base} y2={base} style={{ stroke: 'var(--border)', strokeWidth: 1 }} />
+      {/* The bars' own week axis, again, so each date sits over its week. */}
+      {slots.map((sl, i) => {
+        const here = isoWeekOf(sl.w)
+        const prev = i > 0 ? slots[i - 1].w : null
+        const month = prev == null || prev.slice(5, 7) !== here.slice(5, 7) ? weekName(here).split(' ')[1] : null
+        return (
+          <g key={`a${sl.w}`}>
+            <text x={pct(sl.cx)} y={base + 21.5} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{weekName(here).split(' ')[0]}</text>
+            {month ? <text x={pct(sl.cx)} y={base + 39.5} textAnchor="middle" fontSize={12} style={{ ...MONO, fill: 'var(--muted-foreground)' }}>{month}</text> : null}
+          </g>
+        )
+      })}
+      </g>
     </svg>
   )
   const labels = (
-    <span className="absolute left-0 flex flex-col" style={{ top: 44 }}>
+    <span className="absolute left-0 flex flex-col" style={{ top: 44 + TOP }}>
       <span className="text-[15px] font-semibold leading-[20px] text-foreground">Kept points</span>
       <span className="text-[13px] leading-[20px] text-muted-foreground">{kept.size > 0 ? `${kept.size} kept` : 'none yet'}</span>
     </span>
@@ -283,7 +318,7 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
         labels={labels}
         plot={plot}
         height={H}
-        minWidth={WEEK_PLOT_MIN}
+        minWidth={weekPlotMin(n)}
         labelWidth="wide"
         surface={surface}
         detail="card"

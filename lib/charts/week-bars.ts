@@ -418,6 +418,13 @@ export const pendingWaitingLine = (firstComparisonDate: string): string =>
 /** The narrowest plot the chart draws at; under it the strip scrolls. */
 export const WEEK_PLOT_MIN = 520
 
+/** The narrowest a week's slot may be (its day label and a due date fit). */
+export const WEEK_SLOT_MIN = 48
+
+/** The plot's narrowest width for this many weeks: never under
+ *  `WEEK_PLOT_MIN`, and never so narrow a slot cannot hold its labels. */
+export const weekPlotMin = (weeks: number): number => Math.max(WEEK_PLOT_MIN, weeks * WEEK_SLOT_MIN)
+
 export type WeekBarsSize = 'large' | 'medium'
 
 /** The rows' heights, per size: the front page's (the preview's Week by week,
@@ -429,7 +436,7 @@ export const WEEK_BARS_SIZES: Record<WeekBarsSize, { videosH: number; commentsH:
 
 const TICK_ROW = 20
 const TICK_LABEL_CHAR = 7.4
-const TICK_PAD = 14
+const TICK_PAD = 22
 const f4 = (n: number): number => Math.round(n * 10000) / 10000
 
 export interface WeekTick {
@@ -539,7 +546,7 @@ export function weekBarsLayout(
     byDay.set(r.date, held)
   }
   const days = [...byDay.values()].sort((a, b) => a.x - b.x || (a.date < b.date ? -1 : 1))
-  const spots = opts.ticks === 'top' ? placeTicks(days.map((d) => ({ x: d.x, label: shortDay(d.date) })), opts.plotPx ?? WEEK_PLOT_MIN) : []
+  const spots = opts.ticks === 'top' ? placeTicks(days.map((d) => ({ x: d.x, label: shortDay(d.date) })), opts.plotPx ?? weekPlotMin(n)) : []
   const tickRows = opts.ticks === 'top' && days.length > 0 ? Math.max(...spots.map((s) => s.row)) + 1 : 0
   const ticks: WeekTick[] = opts.ticks === 'top'
     ? days.map((d, i) => ({ date: d.date, x: f4(d.x), row: spots[i].row, side: spots[i].side, label: shortDay(d.date), mark: d.search ? 'search' : 'other' }))
