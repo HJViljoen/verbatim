@@ -155,10 +155,30 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
  * block has 201px to spend once the figure cards and the recommendation above
  * it have taken theirs. The worst reachable case — four rows, a caveat and a
  * truncation line — clears the box by 4px measured.
+ *
+ * AND NOT EVERY ROW COSTS 41 (WP1.1 review, finding 3). Measured the same way
+ * on staging's Sealand at 2 Oct (26 Sep): a row whose category change is a
+ * REFUSAL SENTENCE ("Not read as a change: we changed our searches in
+ * September.") wraps to three lines in its 138px column and costs 54px, which
+ * is every ready row while August against September is refused (1 to 15
+ * Oct); a failed or unread row is one line, 21px (its words sit in the cell
+ * across the figure columns); a provisional row with its word under the name
+ * is 37px, inside the 41. Charged at 41 each, three refused rows and a failed
+ * one cut the truncation line in half and the caveat entirely.
+ * `sheetRowPx` says what each row costs.
  */
 const SUBJECT_ROW_PX = 41
+const SUBJECT_ROW_REFUSED_PX = 54
+const SUBJECT_ROW_ONE_LINE_PX = 21
 const SUBJECTS_TRAIL_PX = 18
 const SUBJECTS_BUDGET_PX = 201
+
+/** What one subject row costs on the sheet, measured (see above). */
+export function sheetRowPx(row: Pick<SubjectRow, 'calibration' | 'unread' | 'category'>): number {
+  if (isFailed(row.calibration) || row.unread) return SUBJECT_ROW_ONE_LINE_PX
+  if (earnsVerdict(row.calibration) && row.category.verdict?.state === 'refused') return SUBJECT_ROW_REFUSED_PX
+  return SUBJECT_ROW_PX
+}
 
 /** The artboard's own row count, and the most this will ever show. The
  *  arithmetic decides everything below it. */
@@ -174,11 +194,15 @@ export const SHEET_SUBJECT_ROWS = 6
  * paragraph, its second line is counted here and nowhere else. The truncation
  * line is not passed in, because whether it prints depends on the answer: it
  * is charged only to the counts that cause it.
+ *
+ * `rowPx` is each row's own cost in order (`sheetRowPx`); a row it does not
+ * name costs `SUBJECT_ROW_PX`.
  */
-export function sheetSubjectRows(total: number, trailLines: number): number {
+export function sheetSubjectRows(total: number, trailLines: number, rowPx: readonly number[] = []): number {
+  const cost = (n: number) => Array.from({ length: n }, (_, i) => rowPx[i] ?? SUBJECT_ROW_PX).reduce((a, b) => a + b, 0)
   for (let n = Math.min(total, SHEET_SUBJECT_ROWS); n > 1; n--) {
     const trails = trailLines + (n < total ? 1 : 0)
-    if (SUBJECT_ROW_PX * n + SUBJECTS_TRAIL_PX * trails <= SUBJECTS_BUDGET_PX) return n
+    if (cost(n) + SUBJECTS_TRAIL_PX * trails <= SUBJECTS_BUDGET_PX) return n
   }
   return 1
 }
@@ -662,7 +686,7 @@ function Cell({ side, withheld = false }: { side: SideReading | null; withheld?:
  */
 function SubjectsTable({ data }: { data: OverviewData }) {
   const s = data.subjects
-  const shown = s.rows.slice(0, sheetSubjectRows(s.rows.length, s.note ? 1 : 0))
+  const shown = s.rows.slice(0, sheetSubjectRows(s.rows.length, s.note ? 1 : 0, s.rows.map(sheetRowPx)))
   const over = s.rows.length - shown.length
   const COLS = 'grid grid-cols-[minmax(0,112px)_82px_120px_138px_minmax(0,1fr)] items-center gap-x-2'
   return (
@@ -686,25 +710,28 @@ function SubjectsTable({ data }: { data: OverviewData }) {
           <tbody role="rowgroup" className="block">
             {shown.map((r, i) => (
               <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
-                {/* THE WORD UNDER THE NAME, NEVER AFTER IT (design pass). The
-                    name cell is 112px and truncates, so "Repair & warranty
-                    being re-described" printed as "Repair & warranty…": the
-                    word that says the row is held back was the part cut off.
-                    The name truncates on its own line and the word keeps its
-                    own, as on every other subjects table. */}
+                {/* THE WORD NEVER INSIDE THE TRUNCATING NAME (design pass).
+                    The name cell is 112px and truncates, so "Repair &
+                    warranty being re-described" printed as "Repair &
+                    warranty…": the word that says the row is held back was
+                    the part cut off. A provisional row's word sits under the
+                    name, inside the height its two-line figure cells already
+                    take. A row with no figures (failed, or not read this
+                    month) says its words in the cell across the four figure
+                    columns instead, so it stays ONE line (WP1.1 review,
+                    finding 3): on its own line under the name it was 16px
+                    taller than the budget below allowed, and the sheet's
+                    `overflow: hidden` body cut the truncation line in half. */}
                 <th role="rowheader" scope="row" className={`min-w-0 font-normal${isFailed(r.calibration) ? ' text-muted-foreground' : ''}`}>
                   <span className="block truncate">{r.label}</span>
-                  <CalibrationTag calibration={r.calibration} unread={r.unread} mode="print" block />
+                  {isFailed(r.calibration) || r.unread ? null : <CalibrationTag calibration={r.calibration} mode="print" block />}
                 </th>
-                {isFailed(r.calibration) ? (
-                  // A failed row is its name and its word: one cell across
-                  // the four, with the words for a screen reader, not a dash
-                  // in each.
-                  <td role="cell" className="col-span-4"><span className="sr-only">not shown until this subject is checked</span></td>
-                ) : r.unread ? (
-                  // So is a subject the month was not read for (WP1.1 review,
-                  // finding 1): its words, under its name, say when it will be.
-                  <td role="cell" className="col-span-4" />
+                {isFailed(r.calibration) || r.unread ? (
+                  // One cell across the four, carrying the row's words, not
+                  // a dash in each.
+                  <td role="cell" className="col-span-4 min-w-0 truncate">
+                    <CalibrationTag calibration={r.calibration} unread={r.unread} mode="print" />
+                  </td>
                 ) : (
                   <>
                     <td role="cell"><Cell side={r.you} withheld={!printsClient(r.calibration)} /></td>

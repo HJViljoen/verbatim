@@ -11,7 +11,7 @@ import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
 import { provenanceLine } from '@/components/pages/overview/sentence'
-import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData, sheetSubjectRows } from './leadership-sheet'
+import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData, sheetRowPx, sheetSubjectRows } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
 //
@@ -265,6 +265,29 @@ describe('the leadership one-pager', () => {
     expect(sheetSubjectRows(6, 3)).toBe(3)
     // It never returns nothing: one row and the count is still a table.
     expect(sheetSubjectRows(6, 12)).toBe(1)
+  })
+
+  // WP1.1 review, finding 3: a failed row's word on a line of its own made
+  // it taller than the flat 41px budget allowed, and the truncation line was
+  // cut in half on staging's own 2 Oct sheet. Measured in Chromium on that
+  // sheet (26 Sep): a refused row (its change a three-line sentence) 54px, a
+  // failed or unread row one line, 21px, a provisional row 37px.
+  it('charges each row what it measures, for a mix of ready, provisional and failed rows', () => {
+    // Looks & style and Waterproofing ready and refused, Repair & warranty
+    // failed, Community & purpose unread.
+    expect(calibrationOverviewFixture().subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 54])
+    // Waterproofing provisional (never checked): its cells hold no sentence.
+    expect(calibrationOverviewFixture({ unchecked: ['water'] }).subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 41])
+    // Staging at 2 Oct: seven rows, a caveat. Charged what they measure, three
+    // rows, the truncation line and the caveat (54 + 21 + 54 + 18 + 18 = 165).
+    expect(sheetSubjectRows(7, 1, [54, 21, 54, 54, 54, 54, 21])).toBe(3)
+    // Charged a flat 41, it showed four and the body cut the last two lines.
+    expect(sheetSubjectRows(7, 1)).toBe(4)
+    // All four fixture rows and the caveat fit, with nothing to truncate.
+    expect(sheetSubjectRows(4, 1, [54, 21, 21, 41])).toBe(4)
+    const words = renderText(sheet(calibrationOverviewFixture({ unchecked: ['water'] })))
+    expect(words).toContain('Waterproofing')
+    expect(words).not.toContain('more subject')
   })
 
   it('says how many moves it did not show, rather than slicing in silence', () => {
