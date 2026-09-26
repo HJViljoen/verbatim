@@ -6,6 +6,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, shortDate } from '@/lib/format'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectsData } from '@/lib/pages/subjects'
+import { isFailed } from '@/lib/subjects/calibration-state'
 
 // SU1 · The subjects, and editing them (design §3 SU1; the mock's first rail
 // tile).
@@ -80,6 +81,7 @@ export const subjectsList: Block<SubjectsData> = {
               verdict: r.verdict,
               selected: r.selected,
               href: r.href || undefined,
+              withheld: isFailed(r.calibration),
             }))}
             setLine={l.setLine}
             notRecorded={l.notRecorded}
