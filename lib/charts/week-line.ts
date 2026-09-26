@@ -51,8 +51,6 @@ export const WEEK_LINE_ROW = {
    *  own week axis gives its plot the same gutters. */
   labelWidth: 176,
   endWidth: 216,
-  /** Under this many px a week's slot, the strip scrolls sideways (app). */
-  colMinPx: 44,
 } as const
 
 /** The rows' empty state: the line prints and no week is kept yet. */
