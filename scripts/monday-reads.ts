@@ -10,7 +10,7 @@ import {
   schedulesVerdict, searchSetDiff, searchesPerPlatform, termsFirstSearchedSince, themeSegments, videoNameHits, videosNamed,
   type BoardTheme, type TextVideo, type ThemeSegments,
 } from '../lib/ops/monday-reads'
-import { firstSearched, gathersOf, termDelta, type KeywordRow } from '../lib/provenance/searches'
+import { firstSearched, gathersOf, isAddedOnly, monthShareWord, searchesFirstRunIn, termDelta, type KeywordRow } from '../lib/provenance/searches'
 import { activeCommunities } from '../lib/reading/comparability'
 import { pooledDenominators } from '../lib/reading/market'
 import { marketRivalAudiences } from '../lib/reading/reading-view'
@@ -45,6 +45,8 @@ import type { ProvenanceExport } from './export-provenance'
 //      the themes at 10+ not led by makers, the lead and its new-search share,
 //      the pooled market figures, "{measured} of September's videos came from
 //      searches we added in September", the legacy share, and the name line;
+//      the settled figure (the 26 Sep ruling) goes to the grounding JSON as
+//      `addedOnly`: k of n, its share word and the sentence the brief prints;
 //   d  the six month tables' Sealand row counts and latest read_at, the
 //      baseline before Wednesday's applies.
 //
@@ -678,6 +680,12 @@ async function main(): Promise<void> {
       const market = videos.filter((v) => inMarket(v, marketSet))
       const inC = new Set(market.filter((v) => onlyFrom(evidence.get(v.id), addedSep)).map((v) => v.id))
       const inC13 = new Set(market.filter((v) => onlyFrom(evidence.get(v.id), added13)).map((v) => v.id))
+      // THE SETTLED FIGURE (the ruling of 26 Sep; lib/provenance/searches.ts
+      // isAddedOnly, as measure-comparability stores it): evidence made up only
+      // of searches first run IN September. A subset of inC (first run from 1
+      // Sep), so the membership reads below already cover it: no page more.
+      const addedInMonth = searchesFirstRunIn(first, MONTH)
+      const inA = new Set(market.filter((v) => inC.has(v.id) && isAddedOnly(evidence.get(v.id), addedInMonth)).map((v) => v.id))
       const inL = new Set(market.filter((v) => anyOf(evidence.get(v.id), delta9.removed) && carriesOnlyCurrent(v.source_keywords, current)).map((v) => v.id))
       const nameVideos = market.map((v) => ({ v, hit: videoNameHits(v) })).filter((x) => x.hit.where.length > 0)
       const sepFromExport = new Set((staging?.videoMonths ?? []).filter((r) => r.month.startsWith(MONTH.slice(0, 7))).map((r) => r.video_id))
@@ -725,6 +733,7 @@ async function main(): Promise<void> {
       const measured = { market: countIn(inC, all), category: countIn(inC, inCategory) }
       const only13 = { market: countIn(inC13, all), category: countIn(inC13, inCategory) }
       const legacy = { market: countIn(inL, all), category: countIn(inL, inCategory) }
+      const settled = { market: countIn(inA, all), category: countIn(inA, inCategory) }
       out.searchMeasures = {
         definitions: {
           measured: 'September market videos (full lane, the category plus tracked rivals, a comment dated in September) every one of whose surfacing terms (source_keywords in the staging export and now, every gate verdict keyword) was first searched on or after 1 Sep',
@@ -741,8 +750,36 @@ async function main(): Promise<void> {
         membershipComplete: membershipRead && staging != null,
       }
       summaryFacts.measured = `${measured.market}`
+      // WP1.8's one figure under its own name, for the brief's change slot
+      // (brief/fill-brief.py) and the Thu 1 Oct copy sheet: k of the market's
+      // n, the share word from the fixed ladder, and the sentence in the
+      // preview's words, read with the update this reader read after.
+      const settledN = sep?.videos ?? null
+      const settledWord = settledN != null ? monthShareWord(settled.market, settledN) : null
+      const readWith = target.run?.completed_at ?? null
+      const readWithDay = readWith ? `${Number(readWith.slice(8, 10))} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(readWith.slice(5, 7)) - 1]}` : null
+      // Complete when the staging export was read and the {measured} group's
+      // membership reads were not cut short (the figure's candidates are that group's).
+      const settledComplete = staging != null && groups.find((g) => g.name === 'measured')?.complete === true
+      out.addedOnly = {
+        definition: 'WP1.8\'s one figure (the ruling of 26 Sep): September\'s market videos (full lane, the category plus tracked rivals, a comment dated in September) whose search evidence (source_keywords in the staging export and now, every gate verdict\'s keyword) is non-empty and made up only of searches first run in September (keyword_performance, any platform, a gather dated by its earliest row). No video_provenance is read (MF1 lands Wed 30 Sep), so its first-found terms and the \'ambiguous\' exclusion are not applied here: where this and the stored month_pair_comparability.added_only_curr differ, the stored value wins.',
+        month: MONTH,
+        k: settled.market,
+        n: settledN,
+        share: settledN ? settled.market / settledN : null,
+        word: settledWord,
+        sentence: settledWord && settledN != null
+          ? `${settledWord.charAt(0).toUpperCase()}${settledWord.slice(1)} of September came from searches we added in September (${settled.market} of ${settledN}${readWithDay ? `, read with the ${readWithDay} update` : ''}).`
+          : null,
+        readThroughRun: target.run?.id ?? null,
+        readWith,
+        searchesFirstRunInMonth: [...addedInMonth].sort(),
+        category: { k: settled.category, n: sep?.category ?? null, note: 'a check only, never printed' },
+        complete: settledComplete,
+      }
       say(`search additions: ${ofN(measured.market, sep?.videos)} of September's market videos came only from searches first run in September (category ${ofN(measured.category, sep?.category)})${staging ? '' : ' · NO STAGING EXPORT: evidence after 20 Sep only'}${cut('measured')}`)
       say(`  only 13 Sep+ terms: category ${ofN(only13.category, sep?.category)}, market ${only13.market}`)
+      say(`  settled figure (grounding addedOnly): ${settled.market} of ${settledN ?? '?'} ${settledWord ? `(${settledWord})` : ''} of September's market videos came only from searches first run in September (category ${settled.category}, a check)${cut('measured')}`)
       detail(`  first searched in Sep: ${[...addedSep].sort().join(', ') || '-'}`)
       say(`legacy share: ${ofN(legacy.market, sep?.videos)} (category ${legacy.category})${cut('legacy')} · removed on 9 Sep: ${[...delta9.removed].sort().join(', ') || 'none logged'}`)
 
