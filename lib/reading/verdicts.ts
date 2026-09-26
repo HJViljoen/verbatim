@@ -128,18 +128,22 @@ export type VerdictFlag =
  *   `searches`  a change to what we search refused or flagged the pair.
  *   `ours`      another change of ours (how we check, file or read videos).
  *   `not_yet`   the pair has not been read far enough, or measured, to be
- *               compared: the newer month is so far or was not read to its end,
- *               its threads are still shallow, or no measurement exists.
+ *               compared: the newer month was not read to its end, its
+ *               threads are still shallow, or no measurement exists.
+ *   `running`   the newer month is still running (so far) and no change of
+ *               ours is named: "{Month} is not compared until it has ended"
+ *               (deploy 1 review, the lead's R4). `changeMonth` holds that
+ *               month.
  *
  * `changeMonth` is the month the named change was made in ('YYYY-MM-01'), or
  * the pair's newer month when the share was measured with no logged change to
- * name. `checkWith` is the update the pair is next read with, when one is
+ * name, or the running month for `running`. `checkWith` is the update the pair is next read with, when one is
  * scheduled. Optional on `Verdict`, so a verdict stored before it existed
  * renders as it was sent.
  */
 export interface VerdictPairNote {
   mode: 'flag' | 'refuse'
-  cause: 'searches' | 'ours' | 'not_yet'
+  cause: 'searches' | 'ours' | 'not_yet' | 'running'
   changeMonth: string | null
   checkWith: string | null
 }

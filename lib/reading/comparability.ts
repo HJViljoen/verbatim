@@ -725,6 +725,11 @@ export function pairOnVerdict(pair: PairComparability | null | undefined): PairO
       : kinds.has('depth')
         ? 'depth'
         : 'unmeasured'
+    // A MONTH STILL RUNNING SAYS SO (deploy 1 review, the lead's R4): "{Month}
+    // is not compared until it has ended", not "not compared yet".
+    if (kinds.has('incomplete')) {
+      return { refused, flag: false, note: { mode: 'refuse', cause: 'running', changeMonth: monthStartOf(pair.month), checkWith: pair.checkWith ?? null } }
+    }
     return { refused, flag: false, note: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: pair.checkWith ?? null } }
   }
 

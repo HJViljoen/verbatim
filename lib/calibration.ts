@@ -508,33 +508,69 @@ export const recStatus = (value: string | null | undefined): RecStatus =>
 // NO "threads are still filling" WORDING (Heinrich, 25 Sep): a pair refused on
 // depth reads as one not compared yet, with the update it is read with next.
 
+// ONE WORDING EVERYWHERE (deploy 1 review, the lead's R4). The words are the
+// approved preview's chip words, lower case with no full stop, and every
+// surface takes them from here: a block's chip (`pairChipWords`), a chart's
+// hover, a lead sentence that stands in for "nothing moved" (`pairSentence`,
+// the same words capitalised with a full stop), the size headline's chip.
+//
+//   our searches   "not read as a change: we changed our searches in {Month}"
+//   other of ours  "not read as a change: we changed how we check or file videos in {Month}"
+//   not yet        "not compared yet: checked with the {date} update"
+//   still running  "{Month} is not compared until it has ended"
+
+/** A chip's words as a sentence: the first letter capitalised (a month name
+ *  already is), and a full stop. */
+const asSentence = (chip: string): string => `${chip.charAt(0).toUpperCase()}${chip.slice(1)}.`
+
 /** The note under a pair a change of ours touched from 1% to under 10% of. */
-export const PAIR_FLAG_NOTE = (month: string | null): string =>
-  `Read with a note: a change of ours${month ? ` in ${longMonth(month)}` : ''} touched under a tenth of the videos.`
+export const PAIR_FLAG_CHIP = (month: string | null): string =>
+  `read with a note: a change of ours${month ? ` in ${longMonth(month)}` : ''} touched under a tenth of the videos`
 
 /** A pair refused because we changed our searches. The approved preview's
  *  words (25 Sep), on every artboard, and decision D's own ("we changed our
  *  searches, our relevance check or our filing"). */
-export const PAIR_REFUSED_SEARCHES = (month: string): string =>
-  `Not read as a change: we changed our searches in ${longMonth(month)}.`
+export const PAIR_REFUSED_SEARCHES_CHIP = (month: string): string =>
+  `not read as a change: we changed our searches in ${longMonth(month)}`
 
 /** A pair refused because we changed how we check or file videos (the
  *  relevance check, the filing judge, a re-tag, the reader). */
-export const PAIR_REFUSED_OURS = (month: string): string =>
-  `Not read as a change: we changed how we check or file videos in ${longMonth(month)}.`
+export const PAIR_REFUSED_OURS_CHIP = (month: string): string =>
+  `not read as a change: we changed how we check or file videos in ${longMonth(month)}`
 
 /** A pair that is not read far enough, or not measured, to be compared: the
- *  newer month is so far or was not read to its end, its threads are shallow,
- *  or nobody has measured it. With no scheduled update (a paused tenant) there
- *  is no date to name, and none is promised. */
-export const PAIR_NOT_YET = (checkWith: string | null): string =>
-  checkWith ? `Not compared yet: checked with the ${shortDate(checkWith)} update.` : 'Not compared yet.'
+ *  newer month was not read to its end, its threads are shallow, or nobody has
+ *  measured it. With no scheduled update (a paused tenant) there is no date to
+ *  name, and none is promised. */
+export const PAIR_NOT_YET_CHIP = (checkWith: string | null): string =>
+  checkWith ? `not compared yet: checked with the ${shortDate(checkWith)} update` : 'not compared yet'
 
-/** The sentence for a pair judgement on a verdict. */
+/** A pair whose newer month is still running (so far), with no change of ours
+ *  to name. */
+export const PAIR_RUNNING_CHIP = (month: string): string =>
+  `${longMonth(month)} is not compared until it has ended`
+
+/** The same five, as sentences (a lead that stands in for "nothing moved"). */
+export const PAIR_FLAG_NOTE = (month: string | null): string => asSentence(PAIR_FLAG_CHIP(month))
+export const PAIR_REFUSED_SEARCHES = (month: string): string => asSentence(PAIR_REFUSED_SEARCHES_CHIP(month))
+export const PAIR_REFUSED_OURS = (month: string): string => asSentence(PAIR_REFUSED_OURS_CHIP(month))
+export const PAIR_NOT_YET = (checkWith: string | null): string => asSentence(PAIR_NOT_YET_CHIP(checkWith))
+export const PAIR_RUNNING = (month: string): string => asSentence(PAIR_RUNNING_CHIP(month))
+
+/** The chip's words for a pair judgement on a verdict: lower case, no full
+ *  stop, as the approved preview prints the refusal beside a figure or at a
+ *  block's foot. The one source every refusal's words come from. */
+export function pairChipWords(note: VerdictPairNote): string {
+  if (note.mode === 'flag') return PAIR_FLAG_CHIP(note.changeMonth)
+  if (note.cause === 'running' && note.changeMonth) return PAIR_RUNNING_CHIP(note.changeMonth)
+  if (note.cause === 'not_yet' || note.cause === 'running' || !note.changeMonth) return PAIR_NOT_YET_CHIP(note.checkWith)
+  return note.cause === 'searches' ? PAIR_REFUSED_SEARCHES_CHIP(note.changeMonth) : PAIR_REFUSED_OURS_CHIP(note.changeMonth)
+}
+
+/** The same words as a sentence. One sentence, two faces, so a chip and a
+ *  lead can never give one pair two reasons. */
 export function pairSentence(note: VerdictPairNote): string {
-  if (note.mode === 'flag') return PAIR_FLAG_NOTE(note.changeMonth)
-  if (note.cause === 'not_yet' || !note.changeMonth) return PAIR_NOT_YET(note.checkWith)
-  return note.cause === 'searches' ? PAIR_REFUSED_SEARCHES(note.changeMonth) : PAIR_REFUSED_OURS(note.changeMonth)
+  return asSentence(pairChipWords(note))
 }
 
 /** A row's short non-answer where its block prints the refusal once, as a
@@ -577,11 +613,3 @@ export function refusalInBlock(
     && pairSentence(verdict.pair) === pairSentence(shared)
 }
 
-/** The same words as a chip: lower case, no full stop ("not read as a change:
- *  we changed our searches in September"), as the approved preview prints the
- *  refusal beside a figure or at a block's foot. One sentence, two faces, so a
- *  chip and a row can never give one pair two reasons. */
-export function pairChipWords(note: VerdictPairNote): string {
-  const sentence = pairSentence(note).replace(/\.$/, '')
-  return sentence.charAt(0).toLowerCase() + sentence.slice(1)
-}

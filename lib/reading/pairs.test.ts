@@ -118,11 +118,11 @@ describe('monthChange: August against September never reads "moved"', () => {
     expect(judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'themes').reasons[0].kind).toBe('not_read_to_end')
   })
 
-  it('with no change of ours in its span, a so-far later month reads "not compared yet", with the update after it ends', () => {
+  it('with no change of ours in its span, a so-far later month says it is not compared until it has ended (R4)', () => {
     const v = change(judgeAt('2026-09-20T12:00:00.000Z', [], [])('2026-08-01', '2026-09-01', 'themes'))
     expect(v.refusedReason).toBe('incomplete')
-    expect(v.pair?.cause).toBe('not_yet')
-    expect(pairSentence(v.pair!)).toBe('Not compared yet: checked with the 4 Oct update.')
+    expect(v.pair?.cause).toBe('running')
+    expect(pairSentence(v.pair!)).toBe('September is not compared until it has ended.')
   })
 
   it('measured: refused on the searches (206 of 625 is 33%), named by the latest search change', () => {
@@ -373,11 +373,11 @@ describe('pairJudge', () => {
   // A CHANGE THE ROW MEASURED UNDER 1% IS NOT BLAMED (WP1.3 review fix). On
   // a so-far September the rule refuses before it reads the row; the words
   // named every in-span change even when a row measured it as nothing.
-  it('a so-far pair whose row measures the searches under 1% reads "not compared yet", not a search change', () => {
+  it('a so-far pair whose row measures the searches under 1% says the month is still running, not a search change', () => {
     const measured = judgeAt('2026-09-20T13:30:00.000Z', [HYPOTHETICAL_SEARCHES_UNDER_FLAG])('2026-08-01', '2026-09-01', 'market')
     expect(measured.mode).toBe('refuse')
     expect(measured.reasons.map((r) => r.kind)).toEqual(['incomplete'])
-    expect(pairSentence(pairOnVerdict(measured).note!)).toBe('Not compared yet: checked with the 4 Oct update.')
+    expect(pairSentence(pairOnVerdict(measured).note!)).toBe('September is not compared until it has ended.')
     // With no row, the same pair names our September search change.
     const unmeasured = judgeAt('2026-09-20T13:30:00.000Z')('2026-08-01', '2026-09-01', 'market')
     expect(pairSentence(pairOnVerdict(unmeasured).note!)).toBe('Not read as a change: we changed our searches in September.')
@@ -390,7 +390,7 @@ describe('pairJudge', () => {
     expect(searches.length).toBeGreaterThan(0)
     for (const r of searches) expect(r.share).toBeCloseTo(9 / 625)
     expect(pairOnVerdict(pair).refused).toBe('incomplete')
-    expect(pairSentence(pairOnVerdict(pair).note!)).toBe('Not compared yet: checked with the 4 Oct update.')
+    expect(pairSentence(pairOnVerdict(pair).note!)).toBe('September is not compared until it has ended.')
   })
 
   it('refuseEveryPair fails closed', () => {

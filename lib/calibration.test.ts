@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { SHARE_BAND } from './report-bands'
-import { DIRECTION_WORDS, READER_FLAGS, THIRTEEN_WORDS, directionHits, evidenceOf, glossaryRule, quotedSpans } from './calibration'
+import { DIRECTION_WORDS, READER_FLAGS, THIRTEEN_WORDS, directionHits, evidenceOf, glossaryRule, pairChipWords, pairSentence, quotedSpans, refusalInBlock, sharedPairNote } from './calibration'
 
 describe('evidenceOf — every number carries its denominator (Tier 1)', () => {
   it('renders the shape this module promised and never shipped', () => {
@@ -207,5 +207,25 @@ describe('directionHits — the scrubber’s match list, calibrated on productio
   it('is empty for prose that makes no directional claim', () => {
     expect(directionHits('People ask the price of the 3R78 before purchase.')).toEqual([])
     expect(directionHits('')).toEqual([])
+  })
+})
+
+// ---- The month-pair words (deploy 1 review, the lead's R3 and R4) -------------
+
+describe('the month-pair words: one wording, stated once', () => {
+  const note = (cause: 'searches' | 'ours' | 'not_yet' | 'running', changeMonth: string | null, checkWith: string | null = null) =>
+    ({ mode: 'refuse' as const, cause, changeMonth, checkWith })
+
+  it('prints the four refusals in the approved preview\'s chip words', () => {
+    expect(pairChipWords(note('searches', '2026-09-01'))).toBe('not read as a change: we changed our searches in September')
+    expect(pairChipWords(note('ours', '2026-08-01'))).toBe('not read as a change: we changed how we check or file videos in August')
+    expect(pairChipWords(note('not_yet', null, '2026-10-04T06:00:00.000Z'))).toBe('not compared yet: checked with the 4 Oct update')
+    expect(pairChipWords(note('running', '2026-10-01'))).toBe('October is not compared until it has ended')
+  })
+
+  it('gives each the same words as a sentence, and keeps a month name capitalised', () => {
+    expect(pairSentence(note('searches', '2026-09-01'))).toBe('Not read as a change: we changed our searches in September.')
+    expect(pairSentence(note('running', '2026-10-01'))).toBe('October is not compared until it has ended.')
+    expect(pairSentence(note('not_yet', null))).toBe('Not compared yet.')
   })
 })

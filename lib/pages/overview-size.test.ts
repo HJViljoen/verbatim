@@ -369,7 +369,7 @@ describe('pairChip', () => {
 
   it('ignores a change that cannot move the market (a re-filing moves themes and brands only)', () => {
     const retag: OurChange = { id: 'retag', surface: 'entity_retag', changedAt: '2026-09-29T10:00:00.000Z', note: null, affects: VIEWS_BY_SURFACE.entity_retag }
-    expect(pairChip(market('2026-09-29T12:00:00.000Z', AUG, SEP, [], [retag]))).toBe('not compared yet: checked with the 4 Oct update')
+    expect(pairChip(market('2026-09-29T12:00:00.000Z', AUG, SEP, [], [retag]))).toBe('September is not compared until it has ended')
   })
 
   it('the August view: the market pair names September\'s searches, which reached back into August', () => {
