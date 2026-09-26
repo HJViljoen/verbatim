@@ -94,7 +94,7 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
   // Every figure column is the same 64px, so "Videos", "Sep" and "Aug" line up
   // with the same columns on "The market by subject" further down.
   const cols = makersColumn
-    ? 'grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px_minmax(150px,0.7fr)]'
+    ? 'grid-cols-[28px_minmax(200px,1.5fr)_minmax(96px,1fr)_64px_64px_64px_minmax(140px,0.7fr)]'
     : 'grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]'
   return (
     <div className="flex min-w-0 flex-col gap-6">

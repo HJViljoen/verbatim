@@ -46,7 +46,7 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
   // date under it, both centred on it.
   return (
     <div aria-hidden className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2">
-      <span className="col-start-2 rounded-t-[2px] border-x border-t border-foreground/50 px-2 pt-1.5 text-center text-[12px] font-semibold leading-[1.3] text-foreground">the first comparison read the same way</span>
+      <span className="col-start-2 rounded-t-[2px] border-x border-t border-foreground/50 px-2 pt-1.5 text-center text-[12px] font-semibold leading-[1.3] text-foreground [text-wrap:balance]">the first comparison read the same way</span>
       <div className="col-start-1 flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'current')}</div>
       <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
       <span className="col-start-2 text-center font-mono text-[12px] text-secondary-foreground">from the {shortDate(next.sameAgeFrom)} update</span>

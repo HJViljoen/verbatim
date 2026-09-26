@@ -51,7 +51,7 @@ export interface QuoteBlockProps {
   cite?: ReactNode
   /**
    * The quote sits on an inner block, which frames it already (market-first
-   * WP1.6 design pass, ADDITIVE, app only). The box is the frame, so the
+   * WP1.6 design pass, ADDITIVE; app and print). The box is the frame, so the
    * quote draws no left rule; the language pill takes the card's ground so it
    * still reads against the box; and the attribution sets at 12px, the
    * preview's. Default `tile`: every other caller is unchanged.
@@ -198,15 +198,16 @@ export function QuoteBlock({ quote, mode = 'app', cite, ground = 'tile' }: Quote
   // artboard's own quote card at the deck's scale; the app arm is untouched,
   // because a screen has the room and this is the one place the two differ.
   const big = mode === 'print'
-  const boxed = !big && ground === 'inner'
+  // On an inner block the box is the frame, on paper as on screen.
+  const boxed = ground === 'inner'
   return (
-    <blockquote className={big ? 'max-w-[66ch] rounded-lg bg-inner px-4 py-2.5' : boxed ? 'm-0' : 'border-l-2 border-primary/30 pl-3'}>
+    <blockquote className={boxed ? 'm-0' : big ? 'max-w-[66ch] rounded-lg bg-inner px-4 py-2.5' : 'border-l-2 border-primary/30 pl-3'}>
       {/* THE SPEAKER'S WORDS, MARKED AS THEIRS. See the `quote` kind in
           lib/test/copy-contract.ts: rule (c) is about what the PRODUCT claims,
           and a customer who writes "I'm a double below knee" is not claiming a
           movement. `directionHits` has skipped quoted spans since WP0 for the
           same reason; a rendered quote needed the marker to say so. */}
-      <p data-copy="quote" className={big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : boxed ? 'm-0 font-serif text-[15px] italic leading-[1.55] text-foreground [text-wrap:pretty]' : 'font-serif text-[15px] italic leading-[1.375] text-foreground/85'}>“{quote.text}”</p>
+      <p data-copy="quote" className={boxed ? 'm-0 font-serif text-[15px] italic leading-[1.55] text-foreground [text-wrap:pretty]' : big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : 'font-serif text-[15px] italic leading-[1.375] text-foreground/85'}>“{quote.text}”</p>
       {/* THE LABEL INTRODUCES THE ENGLISH, AS A PILL (Block D wave 3, SB8).
           The artboards set "German · machine-translated" as a filled pill
           BETWEEN the original and the rendering; the build set it as a bare
@@ -227,7 +228,7 @@ export function QuoteBlock({ quote, mode = 'app', cite, ground = 'tile' }: Quote
         </p>
       )}
       {english && (
-        <p data-copy="quote" className={big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : boxed ? 'mt-2 font-serif text-[15px] leading-[1.55] text-secondary-foreground [text-wrap:pretty]' : 'mt-1.5 font-serif text-[12.5px] leading-[1.375] text-muted-foreground'}>{english}</p>
+        <p data-copy="quote" className={boxed ? 'mt-2 font-serif text-[15px] leading-[1.55] text-secondary-foreground [text-wrap:pretty]' : big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : 'mt-1.5 font-serif text-[12.5px] leading-[1.375] text-muted-foreground'}>{english}</p>
       )}
       {cite && <footer className={boxed ? 'mt-2 font-mono text-[12px] text-muted-foreground' : 'mt-1 font-mono text-[10.5px] text-muted-foreground'}>{cite}</footer>}
     </blockquote>
