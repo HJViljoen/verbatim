@@ -16,6 +16,7 @@ import { rivalRows } from '@/lib/settings/rivals-view'
 import { heldStillLine, loadQueue, queueLines, queueSummary, type QueueColumn } from '@/lib/settings/queue'
 import { loadYourMarket, searchPlan } from '@/lib/settings/your-market'
 import { saveState } from '@/lib/settings/save-state'
+import { oneLineBar } from '@/lib/shell/bar'
 import { termDateShort } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
 import { canSeeStudio } from '@/lib/studio-visibility'
@@ -126,6 +127,7 @@ export default async function SettingsTrackingPage() {
       active="tracking"
       title="Settings"
       context={context}
+      bar={oneLineBar(inputs.tenant, inputs.reading)}
       contentTitle="Tracking"
       contentMeta={c ? [
         `${termCount} search term${termCount === 1 ? '' : 's'}`,

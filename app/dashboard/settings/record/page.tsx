@@ -26,6 +26,7 @@ import { loadRailCounts, loadRecordPage } from '@/lib/settings/record-load'
 import { gateSummary, keptByPlatform, keptByTerm, sampleHead } from '@/lib/settings/reject-log'
 import { saveState } from '@/lib/settings/save-state'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { oneLineBar } from '@/lib/shell/bar'
 import { AppealButton } from './appeal-button'
 
 // Settings › The record (Phase 1 WP16, ported to the SettingsRecord artboard in
@@ -172,6 +173,7 @@ export default async function SettingsRecordPage() {
     <SettingsFrame
       active="record"
       title="Settings"
+      bar={oneLineBar(tenant, rm)}
       // D14: the first half is EARLIEST EVIDENCE, not a start date — the same
       // caveat Settings › Tracking already prints about its rival rows.
       context={[

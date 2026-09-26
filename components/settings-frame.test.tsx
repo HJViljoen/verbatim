@@ -175,3 +175,21 @@ describe('the readiness table, read by a client', () => {
     expect(operator).not.toContain('By ')
   })
 })
+
+describe('the one-line bar (the 25 Sep rulings, market-first WP3.10)', () => {
+  it('prints the brand, the reading month and "as at … · next update …" under the title, with no menu', async () => {
+    const { sealandReading } = await import('@/lib/test/reading-fixture')
+    const { oneLineBar } = await import('@/lib/shell/bar')
+    const markup = render(<SettingsFrame active="tracking" title="Settings" bar={oneLineBar('Sealand', sealandReading('2026-10-01T00:00:00.000Z'))}>x</SettingsFrame>)
+    const text = renderText(<SettingsFrame active="tracking" title="Settings" bar={oneLineBar('Sealand', sealandReading('2026-10-01T00:00:00.000Z'))}>x</SettingsFrame>)
+    expect(text).toContain('Sealand · September 2026')
+    expect(text).toContain('as at the 27 Sep update')
+    expect(text).toContain('next update Sun 4 Oct')
+    expect(markup).not.toContain('aria-haspopup')
+  })
+  it('is the title alone without a reading month', () => {
+    const text = renderText(<SettingsFrame active="tracking" title="Settings" context="Sealand · first update on record 6 Apr" bar={null}>x</SettingsFrame>)
+    expect(text).not.toContain('as at the')
+    expect(text).not.toContain('first update on record')
+  })
+})

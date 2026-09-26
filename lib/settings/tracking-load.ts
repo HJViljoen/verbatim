@@ -9,6 +9,7 @@ import { freezeStateFor } from '../reading/monthly'
 import { monthStartOf } from '../reading/month-key'
 import { loadWindowReading, type ReadingHandle } from '../reading/read'
 import { loadReadingMonth } from '../reading/reading-view'
+import type { ReadingMonth } from '../reading/reading-month'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import { CLIENT_AUDIENCE, loadCompetitors, type Competitor } from '../rivals'
 import { selectAll } from '../supabase-admin'
@@ -47,6 +48,9 @@ import { termDates, termYieldByMonth, type KeywordRunRow, type TermDate, type Te
  */
 
 export interface TrackingPageInputs {
+  /** The reading month the page is headed by, for the one-line bar (WP3.10);
+   *  null where nothing has been delivered, or the read failed. */
+  reading?: ReadingMonth | null
   tenant: string
   plan: string | null
   config: Record<string, unknown> | null
@@ -392,6 +396,7 @@ export async function loadTrackingPage(
   return {
     tenant: (clientRead.data?.company_name as string | undefined) ?? 'Your workspace',
     plan: (clientRead.data?.plan as string | undefined) ?? null,
+    reading: rm ?? null,
     config,
     configFailed: configRead.error !== null,
     termDates: termDates(changes),

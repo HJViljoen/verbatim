@@ -3,6 +3,7 @@ import { SubjectEditor, type SubjectEditorRow } from '@/components/subjects/subj
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { originLine, setLine } from '@/lib/pages/subjects'
 import { confirmedSubjects, subjectOriginWords, type SubjectChangeRow } from '@/lib/settings/subject-origin'
+import { settingsBar } from '@/lib/settings/bar'
 import { subjectSetVerdict } from '@/lib/subjects/moves'
 import { isMissingSubjects, SUBJECTS_MAX, SUBJECTS_MIN, TABLE_SUBJECTS, type Subject } from '@/lib/subjects/types'
 
@@ -54,6 +55,7 @@ export default async function SettingsSubjectsPage() {
   ])
   const confirmed = confirmedSubjects(confirmRead.error ? [] : ((confirmRead.data ?? []) as SubjectChangeRow[]))
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
+  const bar = await settingsBar(supabase, clientId, tenant)
 
   // Not switched on yet is a different answer from "you have named none", and
   // the page must not print the second when the first is true.
@@ -83,6 +85,7 @@ export default async function SettingsSubjectsPage() {
     <SettingsFrame
       active="subjects"
       title="Settings"
+      bar={bar}
       context={`${tenant}${!canEdit ? ' · read-only' : ''}`}
       contentTitle="Subjects"
       contentMeta={available ? verdict.line : undefined}
