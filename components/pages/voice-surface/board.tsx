@@ -97,8 +97,10 @@ function RowTags({ t, board }: { t: MarketTheme; board: ConversationBoard }) {
   if (!kind && !makers) return null
   return (
     <span className="flex flex-wrap items-center gap-x-2 text-[13px] leading-[18px]">
-      {kind ? <span className="text-muted-foreground">{kind}</span> : null}
-      {kind && makers ? <span aria-hidden className="text-muted-foreground/70">·</span> : null}
+      {/* EACH TAG WRAPS WHOLE, and below sm the "·" is not drawn (the deploy-3
+          design review: at 390 a lone "·" wrapped onto its own line). */}
+      {kind ? <span className="whitespace-nowrap text-muted-foreground">{kind}</span> : null}
+      {kind && makers ? <span aria-hidden className="text-muted-foreground/70 max-sm:hidden">·</span> : null}
       {makers === MAKERS_NOT_MEASURED
         ? <span className={SCALE.tag}>makers {makers}</span>
         : makers
@@ -140,10 +142,12 @@ function Row({ t, rank, board, params, openId, axis }: {
         {/* THE NARROW LAYOUT'S THIRD LINE: where its videos came from and the
             flag, which have no column under 900px of board. */}
         {t.provenance || t.flags.length > 0 ? (
-          <span className={`${NARROW} ${SCALE.tag}`}>
-            {t.provenance ? <><span data-copy="figure">{provenance}</span> from searches added in {shortMonthName(board.month)}</> : null}
-            {t.provenance && t.flags.length > 0 ? ' · ' : null}
-            {t.flags[0] ? <span title={FLAG_NOT_A_CHANGE}>{FLAG_WORDS[t.flags[0]]}{flagBase(t) ? <>, <span data-copy="figure">{flagBase(t)}</span></> : null}</span> : null}
+          <span className={`${NARROW} ${SCALE.tag} flex flex-wrap gap-x-2`}>
+            {/* Two units that each wrap whole ("Now 10+" never splits), and
+                the "·" between them only where they share a line (sm up). */}
+            {t.provenance ? <span className="whitespace-nowrap"><span data-copy="figure">{provenance}</span> from searches added in {shortMonthName(board.month)}</span> : null}
+            {t.provenance && t.flags.length > 0 ? <span aria-hidden className="max-sm:hidden">·</span> : null}
+            {t.flags[0] ? <span className="whitespace-nowrap" title={FLAG_NOT_A_CHANGE}>{FLAG_WORDS[t.flags[0]]}{flagBase(t) ? <>, <span data-copy="figure">{flagBase(t)}</span></> : null}</span> : null}
           </span>
         ) : null}
       </span>
