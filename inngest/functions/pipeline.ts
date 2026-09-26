@@ -30,6 +30,7 @@ import { planSegmentVideos, runSegmentBatch, segmentSummary } from '@/lib/pipeli
 import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
 import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
 import { openAiConfirmJudge } from '@/lib/brands/confirm'
+import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -298,6 +299,18 @@ export const runPipeline = inngest.createFunction(
         await admin.from('pipeline_runs')
           .update({ status: 'failed', error_message: `abandoned: still 'running' after ${RUN_STALE_AFTER_HOURS}h when a new run opened`, completed_at: new Date().toISOString() })
           .in('id', decision.staleRunIds)
+      }
+      // Queued tracking edits (market-first decision I, WP3.10, deploy 4):
+      // due on their effective month's 1st and never before 1 Jan 2027, applied
+      // here, before the config is read below, so this run gathers what it
+      // applied; each is one UPDATE with an actor naming who asked, and
+      // applied_at is stamped once. Inert until January. Never fatal: a
+      // failure is logged and the run opens on the config as it stands.
+      try {
+        const queued = await applyQueuedEdits(admin, { clientId, runId: options.runId ?? newRunId, now: new Date().toISOString() })
+        if (queued.status !== 'nothing_due') console.log(`[open-run] queued tracking edits: ${queued.status} · ${queued.note}`)
+      } catch (e) {
+        console.error(`[open-run] queued tracking edits not applied: ${e instanceof Error ? e.message : String(e)}`)
       }
       // Frozen here, inside the memoised step: every later step replays these
       // values instead of re-reading an environment (or a tenant config) that
