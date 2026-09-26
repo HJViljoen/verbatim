@@ -27,6 +27,7 @@ import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { comparabilitySummary, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
 import { planSegmentVideos, runSegmentBatch, segmentSummary } from '@/lib/pipeline/segment-videos'
+import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -1634,6 +1635,40 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[comparability] ${taskLabel(task)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
+    // The lens-readings step (WP3.3): every lens (market, buyers, makers,
+    // all but noise, well read, the same searches) of every month the run
+    // refreshes, over this run's themes. BEFORE freeze-months, and it has to
+    // be: a month that freezes in this run gets its lens rows written frozen
+    // before freeze-months writes the denominator marker, as freezeMonths
+    // orders its own sides; after it, the insert guard would refuse every
+    // first-seen key for that month. One month a step; the plan's clock is
+    // the one every month is frozen by.
+    const lensPlan = await step
+      .run('plan-lens-readings', async () => {
+        const now = new Date().toISOString()
+        const r = await planLensReadings(createAdminClient(), clientId, now)
+        console.log(`[lens-readings] ${r.note}`)
+        return { now, months: r.months }
+      })
+      .catch((e) => {
+        console.error(`[lens-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const lensMonthsToRead = lensPlan?.months ?? []
+    for (let i = 0; i < lensMonthsToRead.length; i++) {
+      const month = lensMonthsToRead[i]
+      await step
+        .run(`lens-readings:${i + 1}-of-${lensMonthsToRead.length}`, async () => {
+          const r = await runLensMonth(createAdminClient(), { clientId, runId, now: lensPlan!.now, month })
+          console.log(`[lens-readings] ${lensSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[lens-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
           return null
         })
     }
