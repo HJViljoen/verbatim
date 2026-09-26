@@ -27,27 +27,26 @@ import { cn } from '@/lib/utils'
  * draws, so the two pages cannot drift apart. It replaces the hairline-divided
  * document the Phase 1 artboard drew.
  *
- * `meta` and `note` are the Phase 1 header's two notes; the 25 Sep rulings
- * take them off every section (below, in the same package).
+ * THE 25 SEP RULINGS, FOR EVERY SECTION OF THE TAB (Heinrich's default, 26
+ * Sep): the header is the title alone, so the section takes no meta and no
+ * note (the Phase 1 header carried both); the footer is links only; and no
+ * explanatory or method line sits under a section's data. Where a method needs
+ * saying, that is Settings › How to read's job.
  */
 export function RecordSection({
-  title, meta, note, footer, id, children, className,
+  title, footer, id, children, className,
 }: {
   title: string
   /** The tile's anchor, for a link that opens this section. */
   id?: string
-  /** The mono line beside the eyebrow — the section's basis or its count. */
-  meta?: ReactNode
-  /** The right-aligned mono note. */
-  note?: ReactNode
-  /** The footer: links only (25 Sep rulings). */
+  /** The footer: links only. */
   footer?: ReactNode
   children: ReactNode
   className?: string
 }) {
   return (
     <div id={id} data-record-section="" className={cn('min-w-0 scroll-mt-6 rounded-lg bg-tile shadow-tile', className)}>
-      <BlockFrame title={title} mode="app" roomy meta={meta} footerNote={note} footer={footer}>
+      <BlockFrame title={title} mode="app" roomy footer={footer}>
         {children}
       </BlockFrame>
     </div>
@@ -133,21 +132,5 @@ export function MonthFlag({ children }: { children: ReactNode }) {
     <span className="inline-block whitespace-nowrap rounded-full bg-warning/20 px-2 py-px text-[10.5px] font-semibold text-foreground">
       {children}
     </span>
-  )
-}
-
-/**
- * The page's footer row: the rule about what the record IS, and whatever
- * control sits beside it.
- *
- * The artboard's control is "Export the record". The page has none, and the
- * reason is structural rather than an oversight — see `ScopeStatement` below.
- */
-export function RecordFooter({ children, rule }: { children?: ReactNode; rule: ReactNode }) {
-  return (
-    <div className="flex flex-col items-start gap-3 border-t border-border pt-5 md:flex-row md:items-center">
-      {children}
-      <p className="m-0 min-w-0 flex-1 text-[12.5px] text-muted-foreground">{rule}</p>
-    </div>
   )
 }

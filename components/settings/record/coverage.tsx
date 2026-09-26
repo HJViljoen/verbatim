@@ -19,10 +19,10 @@ import { RecordSection } from './frame'
  * themes-per-video comparison, the platform mix as percentages, and the refused
  * comparisons a page other than this one counts).
  *
- * THE "STILL FILLING · AS AT 28 SEP" META MOVED INTO THE HEADER, where the
- * artboard has it. Both halves were already composed — they were the last two
- * lines of the list body, where they read as two more facts about the corpus
- * rather than as the reading's own stamp.
+ * TITLE ALONE (25 Sep rulings, the whole Record tab from WP1.6). The "still
+ * filling · as at 28 Sep" stamp that sat beside the title is gone: a month's
+ * state lives in the month selector, and "Reading as at …" is the last line of
+ * the scope statement below.
  *
  * ONE GRID, NOT TWO LISTS (design review finding 4). The first port sliced the
  * rows in half and drew two independent flex columns, which is what the
@@ -40,12 +40,10 @@ import { RecordSection } from './frame'
  */
 
 export function CoverageBlock({
-  title, meta, rows,
+  title, rows,
 }: {
   /** "Coverage · September 2026". */
   title: string
-  /** "still filling · as at 28 Sep 2026". */
-  meta: string
   rows: readonly RecordRow[]
   /** The mono one-liner under the grid: the readings counter and
    *  `howSoundLine`, which every reading surface prints in its page bar and
@@ -55,7 +53,7 @@ export function CoverageBlock({
   oneLine?: string
 }) {
   return (
-    <RecordSection title={title} meta={meta}>
+    <RecordSection title={title}>
       {/* THREE STATES, AND THE WIDEST IS THE ARTBOARD'S, AT THE ARTBOARD'S
           WIDTH (Block D wave 3, RC10). Stacked on a phone; label beside value
           from `lg`; two pairs abreast from 1440, which is where the artboard

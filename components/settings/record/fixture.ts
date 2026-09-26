@@ -2,11 +2,11 @@ import type { ConfigChange } from '@/lib/config-log'
 import { howSoundLine, recordRows, type RecordInputs, type RecordRow } from '@/lib/reading/record'
 import type { DenominatorPoint } from '@/lib/reading/series'
 import type { UpdateInput } from '@/lib/readiness/types'
-import { changeLogMeta, changeNote, readChangeLog, type ChangeLogView } from '@/lib/settings/change-log'
+import { changeNote, readChangeLog, type ChangeLogView } from '@/lib/settings/change-log'
 import { deliveryRecord, deliveryStats, type DeliveryRecord, type DeliveryStat } from '@/lib/settings/delivery'
 import { readingsRecord, type ReadingsRecord } from '@/lib/settings/readings'
 import type { KeptRate, RejectRow } from '@/lib/settings/reject-log'
-import { gateSummary, gateTotalsFrom, sampleNote } from '@/lib/settings/reject-log'
+import { gateSummary, gateTotalsFrom, sampleHead } from '@/lib/settings/reject-log'
 import { saveState, type SaveState } from '@/lib/settings/save-state'
 import { changesFromLog, comparabilityOf, type PairRow } from '@/lib/reading/comparability'
 import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
@@ -183,10 +183,6 @@ export function changeLogFixture(): ChangeLogView {
   })
 }
 
-export function changeMetaFixture(): string {
-  return changeLogMeta(changeLogFixture(), { now: '2026-09-28T09:00:00.000Z' })
-}
-
 export function rejectRowsFixture(): RejectRow[] {
   return [
     {
@@ -214,8 +210,8 @@ export function gateSummaryFixture(): string {
   )
 }
 
-export function gateBasisFixture(): string | null {
-  return sampleNote(1000, 3820)
+export function lookedAtFixture(): string {
+  return sampleHead(1000, 3820)
 }
 
 export function keptByTermFixture(): KeptRate[] {

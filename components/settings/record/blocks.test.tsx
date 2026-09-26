@@ -3,18 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { AppealControl } from '@/app/dashboard/settings/record/appeal-control'
 import { APPEAL_ASK, APPEAL_FILED } from '@/app/dashboard/settings/record/appeal-copy'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { changeLogBoundary } from '@/lib/config-log'
 import { render, renderText } from '@/lib/test/render'
+import { deliveryRecord } from '@/lib/settings/delivery'
 
 import { ChangeLogBlock } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
-import { NO_EXPORT_WHY, RecordHeader, SaveStrip, ScopeStatement } from './header'
+import { NO_EXPORT_WHY, SaveStrip, ScopeStatement } from './header'
 import { RejectLogBlock } from './rejects'
 import {
-  changeLogFixture, changeMetaFixture, coverageRowsFixture, deliveryFixture,
-  freshCoverageRowsFixture, gateBasisFixture, gateSummaryFixture, keptByPlatformFixture,
-  keptByTermFixture, noReadingsFixture, oneLineFixture, readingsFixture, rejectRowsFixture,
+  changeLogFixture, coverageRowsFixture, deliveryFixture,
+  freshCoverageRowsFixture, gateSummaryFixture, keptByPlatformFixture,
+  keptByTermFixture, lookedAtFixture, noReadingsFixture, oneLineFixture, readingsFixture, rejectRowsFixture,
   saveStateFixture, statsFixture, unrecordedSaveStateFixture, updatesFixture,
 } from './fixture'
 
@@ -25,6 +25,10 @@ import {
 // five sections today.
 
 const september = updatesFixture().filter((u) => u.startedAt.startsWith('2026-09'))
+
+/** The same updates where the scheduled slots are not recorded, which is the
+ *  state that composes a delivery caveat. */
+const deliveryRecordUnslotted = () => deliveryRecord({ updates: updatesFixture(), slotsRecorded: false })
 
 const delivery = (
   <DeliveryBlock
@@ -40,14 +44,6 @@ const changeLog = (
   <ChangeLogBlock
     log={changeLogFixture()}
     rows={20}
-    meta={changeMetaFixture()}
-    // THE ROUTE'S OWN SENTENCE, NOT A STAND-IN (Block D wave 3, RC1). This was
-    // a 45-character fragment the route never produces; the value
-    // `record/page.tsx` actually passes is `changeLogBoundary`, 133 characters
-    // — 838px on one mono line — and the header held it at `shrink-0`, so the
-    // section overflowed the content pane at every width below 1440 and the
-    // review surface could not see it.
-    boundary={changeLogBoundary(changeLogFixture().firstLoggedAt)}
     showing={null}
     now="2026-09-28T09:00:00.000Z"
   />
@@ -60,7 +56,7 @@ const rejects = (
     unjudged={null}
     byTerm={keptByTermFixture()}
     byPlatform={keptByPlatformFixture()}
-    basis={gateBasisFixture()}
+    lookedAt={lookedAtFixture()}
     // THE CONTROL A READER ACTUALLY GETS. `AppealButton` holds `useActionState`
     // and a static render cannot drive it, so the markup and the copy live in
     // `AppealControl` / `appeal-copy.ts` and this renders those — the stand-in
@@ -73,7 +69,6 @@ const rejects = (
 const coverage = (
   <CoverageBlock
     title="Coverage · September 2026"
-    meta="still filling · as at 28 Sep 2026"
     rows={coverageRowsFixture()}
     oneLine={oneLineFixture()}
   />
@@ -133,24 +128,36 @@ describe('the delivery block', () => {
     expect(june).toContain('did not finish')
   })
 
-  it('keeps the delivery caveats with the delivery figures', () => {
-    // Design review finding 7: rendered after the readings strip they read as
-    // footnotes to the readings, and the section's argument went stats → month
-    // → readings → stats again.
+  it('keeps how many finished with the delivery figures, and no caveat under them (25 Sep rulings)', () => {
+    // Design review finding 7: rendered after the readings strip it read as a
+    // footnote to the readings.
     const text = renderText(delivery)
     const finished = text.indexOf('of the last 8 finished')
     const readings = text.indexOf('Monthly readings')
     expect(finished).toBeGreaterThan(-1)
     expect(finished).toBeLessThan(readings)
+    const unslotted = renderText(
+      <DeliveryBlock
+        record={deliveryRecordUnslotted()}
+        stats={statsFixture()}
+        updates={september}
+        month="September 2026"
+        readings={readingsFixture()}
+      />,
+    )
+    expect(deliveryRecordUnslotted().caveats.length).toBeGreaterThan(0)
+    expect(unslotted).not.toContain('a missed slot cannot be told')
   })
 
   it('prints the monthly readings strip this page never had', () => {
     const text = renderText(delivery)
     expect(text).toContain('Monthly readings')
     expect(text).toContain('6 so far')
-    expect(text).toContain('monthly reading')
-    expect(text).toContain('Your 6th monthly reading')
-    expect(text).toContain('read at setup')
+    // The months and their updates, and no line of method under them: what
+    // the quarter view needs, and which months were read at setup, are gone
+    // with the 25 Sep rulings.
+    expect(text).not.toContain('Your 6th monthly reading')
+    expect(text).not.toContain('read at setup')
     // Which months are under the floor is the coverage row's, once for the
     // page (copy de-clutter C103).
     expect(text).not.toContain('under the floor')
@@ -212,12 +219,10 @@ describe('the change log', () => {
     expect(text).not.toContain('digital director')
   })
 
-  it('keeps the reconstructed rows apart from the record', () => {
+  it('keeps the reconstructed rows apart from the record, under their own heading', () => {
     const text = renderText(changeLog)
-    expect(text).toContain('Before the record began')
-    expect(text).toContain('a label, not a record')
-    expect(changeMetaFixture()).toContain('4 changes since 6 Apr')
-    expect(changeMetaFixture()).toContain('1 this month')
+    expect(text).toContain('Before the record began · 1 entry')
+    expect(text).toContain('Reconstructed, not recorded')
   })
 
   it('says the log is not recorded rather than drawing an empty table', () => {
@@ -225,8 +230,6 @@ describe('the change log', () => {
       <ChangeLogBlock
         log={changeLogFixture()}
         rows={20}
-        meta=""
-        boundary=""
         showing={null}
         now="2026-09-28T09:00:00.000Z"
         unavailable="Nothing in the product can record a configuration change yet."
@@ -242,23 +245,15 @@ describe('the change log', () => {
     // an unbreakable 85px word in a 53px track at 1024, where the document
     // genuinely scrolled 8px. Both cells now carry `break-words`; before, only
     // "What it breaks" did.
-    expect(render(changeLog).match(/min-w-0 break-words text-\[12\.5px\]/g)).toHaveLength(
+    expect(render(changeLog).match(/min-w-0 break-words text-\[13px\]/g)).toHaveLength(
       (changeLogFixture().recorded.length + changeLogFixture().prehistory.length) * 2,
     )
   })
 
-  it('prints the boundary the route passes, and lets it wrap', () => {
-    // RC1: the header note is the one node on this page that carried a whole
-    // sentence in a `shrink-0` flex item. A flex item that cannot shrink
-    // cannot wrap, so the 133-character boundary was 838px wide inside a
-    // 752px pane at 1280 and a 240px pane at 768 — the document's own
-    // `scrollWidth` was 1342 at four widths. Nothing here can measure a
-    // layout; what it CAN pin is that the class which made it impossible is
-    // gone and that the review surface prints the route's sentence.
+  it('prints its title alone: no count and no boundary sentence beside it (25 Sep rulings)', () => {
     const text = renderText(changeLog)
-    expect(text).toContain('No change was recorded before')
-    expect(text).toContain('a label, not a record')
-    expect(render(changeLog)).not.toContain('md:shrink-0')
+    expect(text).not.toContain('changes since')
+    expect(text).not.toContain('No change was recorded before')
   })
 
   it('keeps the copy contract', () => {
@@ -287,40 +282,44 @@ describe('the reject log', () => {
     expect(renderText(rejects)).not.toContain('Filed — we will look at this one.')
   })
 
-  it('prints the note about what an appeal does and does not do', () => {
+  it('prints no note under the rows (25 Sep rulings), and never claims an appeal trains the gate', () => {
     const text = renderText(rejects)
-    expect(text).toContain('files it for a person to look at')
-    expect(text).toContain('does not change a month already read')
+    expect(text).not.toContain('files it for a person to look at')
     // NOT "trains the gate": nothing reads `gate_appeals` except this page and
     // a readiness probe, so a feedback loop is a claim the code does not carry
     // (design review finding 3, code review finding 3).
     expect(text).not.toContain('train the gate')
   })
 
-  it('keeps the note beside the control, and not on the two states that have none', () => {
-    // RC7. A member (the M8 default for anyone who is not owner or admin) read
-    // "saying so files it" with every row withheld, and an empty workspace
-    // read "Nothing has been set aside yet." followed by it.
+  it('answers with the set-aside count as its first line, and carries the rates’ base in the column head', () => {
+    const markup = render(rejects)
+    const header = markup.match(/<header[^>]*>([\s\S]*?)<\/header>/)?.[1] ?? ''
+    expect(header).not.toContain(gateSummaryFixture())
+    const text = renderText(rejects)
+    expect(text.indexOf(gateSummaryFixture())).toBeLessThan(text.indexOf('Thrown away'))
+    expect(text).toContain('Looked at (of the last 1,000)')
+    expect(text).not.toContain('most recent judgements')
+  })
+
+  it('prints its one line in the two states that have no rows', () => {
     const withheld = renderText(
       <RejectLogBlock
         rows={rejectRowsFixture()} summary={gateSummaryFixture()} unjudged={null}
-        byTerm={[]} byPlatform={[]} basis={null}
+        byTerm={[]} byPlatform={[]}
         withheld="The posts themselves are shown to owners and admins only."
         control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
       />,
     )
     expect(withheld).toContain('owners and admins only')
-    expect(withheld).not.toContain('files it for a person to look at')
 
     const empty = renderText(
       <RejectLogBlock
         rows={[]} summary={gateSummaryFixture()} unjudged={null}
-        byTerm={[]} byPlatform={[]} basis={null}
+        byTerm={[]} byPlatform={[]}
         control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
       />,
     )
     expect(empty).toContain('Nothing has been set aside yet')
-    expect(empty).not.toContain('files it for a person to look at')
   })
 
   it('says the record is not open rather than printing a confident nothing', () => {
@@ -331,7 +330,6 @@ describe('the reject log', () => {
         unjudged={null}
         byTerm={[]}
         byPlatform={[]}
-        basis={null}
         unavailable="We do not yet show you what was set aside."
       />,
     )
@@ -425,7 +423,6 @@ describe('the coverage grid', () => {
     const text = renderText(
       <CoverageBlock
         title="Coverage · September 2026"
-        meta="nothing frozen yet"
         rows={freshCoverageRowsFixture()}
         oneLine="no monthly reading yet · 0 updates"
       />,
@@ -439,29 +436,46 @@ describe('the coverage grid', () => {
   it('keeps the copy contract in both arms', () => {
     assertCopyContract(coverage)
     assertCopyContract(
-      <CoverageBlock title="Coverage" meta="" rows={freshCoverageRowsFixture()} oneLine="no monthly reading yet" />,
+      <CoverageBlock title="Coverage" rows={freshCoverageRowsFixture()} oneLine="no monthly reading yet" />,
     )
   })
 })
 
-describe('the page’s own chrome', () => {
-  it('states the record’s rule in the header, in the artboard’s words', () => {
-    const text = renderText(
-      <RecordHeader meta="23 updates on record · since 6 Apr · longest gap 5 weeks · last on 27 Sep">
-        What was delivered, what changed, what was thrown away, and how much was read. Written as the work happens; it
-        is added to, never edited.
-      </RecordHeader>,
-    )
-    expect(text).toContain('added to, never edited')
-    // The brief's meta, with its first date back (design review finding 8) and
-    // without the word the count cannot carry (code review finding 1).
-    expect(text).toContain('23 updates on record')
-    expect(text).toContain('since 6 Apr')
-    // ("What was delivered" in the sentence under it describes the page, and
-    // is not a caption on a count.)
-    expect(text).not.toMatch(/updates delivered/)
+describe('the 25 Sep rulings, on every section of the tab (Heinrich’s default, 26 Sep)', () => {
+  const sections = { delivery, changeLog, rejects, coverage }
+
+  it('draws each section as a tile whose header is its title alone', () => {
+    for (const [name, node] of Object.entries(sections)) {
+      const markup = render(node)
+      expect(markup, name).toContain('data-record-section=""')
+      expect(markup, name).toContain('shadow-tile')
+      const header = markup.match(/<header[^>]*>([\s\S]*?)<\/header>/)?.[1] ?? ''
+      // The title's <h2> and nothing beside it: no meta, no note.
+      expect(header.replace(/<h2[^>]*>[\s\S]*?<\/h2>/, '').replace(/<[^>]+>/g, '').trim(), name).toBe('')
+    }
   })
 
+  it('puts no footer under a section that has no link to give', () => {
+    for (const [name, node] of Object.entries(sections)) expect(render(node), name).not.toContain('<footer')
+  })
+
+  it('prints none of the method lines the Phase 1 page carried', () => {
+    const all = Object.values(sections).map((n) => renderText(n)).join(' ')
+    for (const line of [
+      'every update since the first one on record',
+      'the quarter view needs',
+      'read at setup',
+      'No change was recorded before',
+      'files it for a person to look at',
+      'most recent judgements',
+      'still filling',
+      'select it and paste',
+      'added to, never edited',
+    ]) expect(all).not.toContain(line)
+  })
+})
+
+describe('the page’s own chrome', () => {
   it('tells a save that broke nothing from a save whose breakage was never written down', () => {
     const recorded = renderText(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
     expect(recorded).toContain('Nothing waiting to be saved.')
