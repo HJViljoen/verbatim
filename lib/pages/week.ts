@@ -21,7 +21,9 @@ import {
 } from '../reading/anomaly'
 import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
-import { loadMonthSeries, loadPairOn, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
+import { marketAudiences } from '../reading/market'
 import { pairedVerdict } from '../reading/bands'
 import { pairOnVerdict } from '../reading/comparability'
 import type { PairOn } from '../reading/pairs'
@@ -30,7 +32,7 @@ import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import { loadUpdateSeries, type UpdateSeries } from '../reading/updates'
-import { loadReadingSchedule, updateClock } from '../reading/reading-view'
+import { loadReadingSchedule, marketRivalAudiences, updateClock } from '../reading/reading-view'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { FigureTable, Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
@@ -38,6 +40,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, rivalNameOf } from '../rivals'
 import { isMissingSubjects, TABLE_SUBJECTS, type Subject } from '../subjects/types'
 import { subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
+import { monthsWrittenAt, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -349,8 +352,13 @@ export interface WeekSubjectsBlock {
    * checked yet, or not clearly under the floor) or failed (being
    * re-described). Named, with their word, and no figure. Optional: a stored
    * snapshot from before WP1.1 has none.
+   *
+   * AND A SUBJECT THE MONTH WAS NOT READ FOR (default M-a), whatever its
+   * calibration, unless it failed: its `unread` holds `unreadWords` ("no
+   * reading yet"), which prints in place of the calibration word, since
+   * "provisional" is the calibration word alone and its zero is no reading.
    */
-  withheld?: { id: string; label: string; calibration: SubjectCalibration }[]
+  withheld?: { id: string; label: string; calibration: SubjectCalibration; unread?: string | null }[]
   /** Null when subjects are recorded here; a sentence when they are not. */
   unread: string | null
   /** The month the figures are of. */
@@ -1309,7 +1317,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       // the months behind it only where they were read the same way. It fails
       // closed (every pair refused) and never rejects, so a read error here
       // cannot take the page down.
-      loadPairOn(reading, readingAt),
+      loadAppPairOn(reading, readingAt),
     ])
 
   const denominators = monthSet.denominators
@@ -1330,6 +1338,15 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // same labels or the same change log ask once.)
   const baseline = pooledBaseline(denominators, month, windowVideos ?? 0)
   const contributionRead = (monthWindowRead ?? windowRead)?.denominators ?? null
+  // THE BAR'S CLOCK, off the two runs already read: "as at" is the last
+  // update, never the wall clock, and a paused tenant is promised nothing.
+  // Read before the sections, because §2's words for a subject the month was
+  // not read for depend on whether an update will read it (`unreadWords`).
+  const clock = updateClock({
+    now: readingAt,
+    runs: runsRaw.filter((r): r is RunRow & { started_at: string } => r.started_at != null),
+    schedule,
+  })
   const [unusual, subjectsBlock, risingRead, cameIn, replies, sales] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
@@ -1342,6 +1359,10 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       // the denominator the subject rows are of, and the one half of
       // `typicalContribution` that is not a stored month row.
       clientUpdateVideos: contributionRead?.find((d) => d.audience === CLIENT_AUDIENCE)?.videos ?? null,
+      readIn: {
+        writtenAt: monthsWrittenAt(denominators, new Set(marketAudiences(marketRivalAudiences(rivals)))).get(month) ?? null,
+        unreadWords: unreadWords({ month, filling: monthStatus === 'filling', nextUpdate: clock.nextUpdate }),
+      },
     }),
     // ── §3 · rising now ──────────────────────────────────────────────────
     buildRising({
@@ -1392,14 +1413,6 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     }),
     privacy: PRIVACY_LINE,
   }
-
-  // THE BAR'S CLOCK, off the two runs already read: "as at" is the last
-  // update, never the wall clock, and a paused tenant is promised nothing.
-  const clock = updateClock({
-    now: readingAt,
-    runs: runsRaw.filter((r): r is RunRow & { started_at: string } => r.started_at != null),
-    schedule,
-  })
 
   return {
     brand,
@@ -1712,6 +1725,9 @@ async function buildSubjects(input: {
    *  half of `typicalContribution`, and null where the windowed read cannot
    *  answer. */
   clientUpdateVideos: number | null
+  /** When the month's market rows were last written (`monthsWrittenAt`), and
+   *  the words a subject the month was not read for prints (`unreadWords`). */
+  readIn: { writtenAt: number | null; unreadWords: string }
 }): Promise<WeekSubjectsBlock> {
   const { reading, clientId, subjects, month, window } = input
   const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null, namedLine: null }
@@ -1723,15 +1739,36 @@ async function buildSubjects(input: {
 
   const added = window ? await readSubjectWindow(reading, clientId, window) : null
   const denominator = await readClientMonthVideos(reading, clientId, month)
+  // WAS THE SUBJECT READ IN THE MONTH AT ALL? (WP1.1 review, finding 1, on
+  // This week: default M-a.) One named after the month's last update has no
+  // row, and its 0 there is no reading: it says "no reading yet", as Your
+  // market and the Subjects rail do, and never "provisional". The change log
+  // is the one the month-pair judge already read (memoised): no new read.
+  const changes = await loadChanges(reading.client, clientId)
+  const unread = new Set(subjects
+    .filter((s) => subjectReadIn({
+      countedFrom: subjectCountedFrom(s as CountedSubject, changes),
+      writtenAt: input.readIn.writtenAt,
+      cited: stored.some((r) => r.subject_id === s.id),
+    }) === 'unread')
+    .map((s) => s.id))
 
   // DECISION C (WP1.1): these rows are your own side of each subject, which
-  // only a READY subject shows; the others are named, with their word.
+  // only a READY subject shows; the others are named, with their word. A
+  // subject the month was not read for is named with "no reading yet" and
+  // no figure (default M-a); a failed one stays "being re-described".
   const calibrationOf = new Map(subjects.map((s) => [s.id, subjectCalibration(s)]))
+  const unreadOf = (id: string) => calibrationOf.get(id) !== 'failed' && unread.has(id)
   const withheld = subjects
-    .filter((s) => s.status === 'active' && calibrationOf.get(s.id) !== 'ready')
-    .map((s) => ({ id: s.id, label: s.name, calibration: calibrationOf.get(s.id)! }))
+    .filter((s) => s.status === 'active' && (calibrationOf.get(s.id) !== 'ready' || unreadOf(s.id)))
+    .map((s) => ({
+      id: s.id,
+      label: s.name,
+      calibration: calibrationOf.get(s.id)!,
+      ...(unreadOf(s.id) ? { unread: input.readIn.unreadWords } : {}),
+    }))
   const rowsOut: SubjectWeekRow[] = subjects
-    .filter((s) => s.status === 'active' && calibrationOf.get(s.id) === 'ready')
+    .filter((s) => s.status === 'active' && calibrationOf.get(s.id) === 'ready' && !unreadOf(s.id))
     .map((s) => {
       const held = stored.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE)
       const monthVideos = held.reduce((t, r) => t + (r.videos ?? 0), 0)

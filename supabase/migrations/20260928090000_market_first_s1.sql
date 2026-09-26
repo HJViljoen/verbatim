@@ -132,11 +132,25 @@ create table if not exists public.month_pair_comparability (
   read_through_run    uuid,
   method_version      text not null,
   computed_at         timestamptz not null default now(),
-  primary key (client_id, prev_month, month, computed_at)
+  -- WP1.8's one figure (the ruling of 26 Sep): the later month's market videos
+  -- found only by searches first run in that month, of the month's market
+  -- videos. Null: not measured. Last, so a database that held MF1 before they
+  -- were added (staging, 26 Sep) takes them by ALTER in this same place.
+  added_only_curr     int,
+  market_videos_curr  int,
+  primary key (client_id, prev_month, month, computed_at),
+  constraint month_pair_comparability_added_only_check check (
+    (added_only_curr is null and market_videos_curr is null)
+    or (added_only_curr is not null and market_videos_curr is not null
+        and added_only_curr >= 0 and added_only_curr <= market_videos_curr))
 );
 
 comment on table public.month_pair_comparability is
   'Whether two months were read the same way: videos found outside the searches both months ran, each change of ours and its reach, depth medians, gather health and late capture. Derived; append-only; the newest computed_at wins.';
+comment on column public.month_pair_comparability.added_only_curr is
+  'The later month''s market videos found only by searches first run in that month (no older search surfaced them). Null: not measured.';
+comment on column public.month_pair_comparability.market_videos_curr is
+  'The later month''s market videos (market_month_videos), the base of added_only_curr. Null: not measured.';
 
 -- Heinrich's "never lead with this theme" (the trial's safety valve). The
 -- newest row per registry_id wins.
@@ -191,7 +205,7 @@ grant select (client_id, change_id, month, population, videos_touched, videos_in
   on public.config_change_reach to authenticated;
 grant select (client_id, prev_month, month, search_outside_prev, videos_prev, search_outside_curr, videos_curr,
               code_changes, depth_prev_median, depth_curr_median, gather, late_capture, read_through_run,
-              method_version, computed_at)
+              method_version, computed_at, added_only_curr, market_videos_curr)
   on public.month_pair_comparability to authenticated;
 grant select (client_id, registry_id, action, set_at)
   on public.front_page_overrides to authenticated;

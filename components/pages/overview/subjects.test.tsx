@@ -380,16 +380,16 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
   // WP1.1 review, finding 1: Community & purpose was named 24 Sep, after the
   // 24 Sep update wrote September, and has no row in any month. The 0 a month
   // series fills there is no reading: "0 of 625" was invented.
-  it('a subject named after the month was written prints when it will be read, and no figure, never 0', () => {
+  it('a subject named after the month was written says "no reading yet" (default M-a), and no figure, never 0', () => {
     for (const mode of MODES) {
       const text = renderText(overviewSubjects.render(data, mode, ctx))
-      expect(text).toContain('first reading with the 4 Oct update')
+      expect(text).toContain('no reading yet')
       expect(text).not.toContain('0 of 625')
       // Said once: the row's words are the whole row.
-      expect(text.match(/first reading with the 4 Oct update/g)?.length).toBe(1)
+      expect(text.match(/no reading yet/g)?.length).toBe(1)
     }
     const row = byId('community')
-    expect(row.unread).toBe('first reading with the 4 Oct update')
+    expect(row.unread).toBe('no reading yet')
     expect(row.category).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
     expect(row.spark.every((v) => v == null)).toBe(true)
     expect(row.categoryAtLastMonth).toBeNull()
@@ -408,7 +408,7 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
 
   it('an unread row is its linked name and its words, one cell across', () => {
     const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
-    expect(row).toContain('first reading with the 4 Oct update')
+    expect(row).toContain('no reading yet')
     expect(row).toContain('item=community')
     expect(row).toMatch(/colspan="6"/i)
     expect(row).not.toContain('provisional')
@@ -438,7 +438,7 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
   it('the monthly email prints the same states', () => {
     const text = renderText(monthlySubjectsEmail(data, ctx))
     expect(text).toContain('being re-described')
-    expect(text).toContain('first reading with the 4 Oct update')
+    expect(text).toContain('no reading yet')
     expect(text).not.toContain('33 of 625')
     expect(text).not.toContain('0 of 625')
     expect(renderText(monthlySubjectsEmail(unchecked, ctx))).toContain('provisional')

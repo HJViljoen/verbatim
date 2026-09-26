@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { barLine, monthWords } from './reading-month'
 import {
   asAtOf,
+  MONTH_MENU_MAX,
   marketMonths,
   marketRivalAudiences,
   monthlyMonthFor,
@@ -13,6 +14,7 @@ import {
   updateClock,
   updateInstant,
   type DeliveredRun,
+  type OtherMonth,
   type ReadingDenominator,
 } from './reading-view'
 
@@ -81,43 +83,78 @@ const OCTOBER_ROW = row('2026-10-01', 'industry-other', 626)
 
 const SUNDAY = { report_period: 'weekly', report_day: 'sunday' }
 
-describe('readingViewFrom: which month, and the one other month the selector offers', () => {
-  it('24 Sep: September so far leads, and August is the other month', () => {
+/** The months before September the market has a row for, newest first, as the
+ *  selector offers them: none is the default, so each links with `?month=`. */
+const EARLIER = ['2026-08-01', '2026-07-01', '2026-06-01', '2026-05-01', '2026-04-01'].map((month) => ({ month, isDefault: false }))
+
+/** The offer's months and defaults, without each month's state (tested on its
+ *  own below). */
+const offer = (others: readonly OtherMonth[]): { month: string; isDefault: boolean }[] => others.map(({ month, isDefault }) => ({ month, isDefault }))
+
+// THE SELECTOR ALWAYS STEPS BACK (default M-d, 26 Sep). It offered one other
+// month, and on 1 to 3 Oct, before October has a row, none at all; it now
+// offers every month the market has a row for, newest first. Which month is
+// READ is decision A's rule, and every clock below reads the month it read
+// before: only the offer changed.
+describe('readingViewFrom: which month, and the other months the selector offers', () => {
+  it('says which months are too few to read (deploy 2 review): July 36, June 50, May 11, April 5; August 377 reads', () => {
+    const v = readingViewFrom({ now: '2026-10-02T06:00:00.000Z', runs: SEALAND_RUNS, denominators: SEALAND_ROWS, schedule: SUNDAY })
+    expect(v.others.map((o) => [o.month, o.tooFew, o.videos])).toEqual([
+      ['2026-08-01', false, 377],
+      ['2026-07-01', true, 36],
+      ['2026-06-01', true, 50],
+      ['2026-05-01', true, 11],
+      ['2026-04-01', true, 5],
+    ])
+  })
+
+  it('24 Sep: September so far leads, and August, July and the months before are one click back', () => {
     const v = readingViewFrom({ now: '2026-09-24T18:00:00.000Z', runs: SEALAND_RUNS, denominators: SEALAND_ROWS, schedule: SUNDAY })
     expect(v.reading.month).toBe('2026-09-01')
     expect(v.reading.state).toBe('so_far')
-    expect(v.other).toEqual({ month: '2026-08-01', isDefault: false })
+    expect(offer(v.others)).toEqual(EARLIER)
     expect(barLine(v.reading)).toBe('as at the 24 Sep update · next update Sun 27 Sep')
   })
 
-  it('2 Oct, before any October row: September, ended, and no other month to offer', () => {
+  it('2 Oct, before any October row: September, ended, and still August, July and the months before one click back', () => {
     const v = readingViewFrom({
       now: '2026-10-02T06:00:00.000Z', runs: [...SEALAND_RUNS, SUNDAYS[0]], denominators: SEALAND_ROWS, schedule: SUNDAY,
     })
     expect(v.reading.month).toBe('2026-09-01')
     expect(v.reading.state).toBe('ended')
     expect(v.reading.reason).toBe('current_thin')
-    expect(v.other).toBeNull()
+    // WP1.2 offered nothing here (October has no row until the 4 Oct update).
+    expect(offer(v.others)).toEqual(EARLIER)
     expect(barLine(v.reading)).toBe('as at the 27 Sep update · next update Sun 4 Oct')
   })
 
-  it('5 Oct, once October has a row: still September, with October one click away', () => {
+  it('5 Oct, once October has a row: still September, with October and every earlier month one click away', () => {
     const v = readingViewFrom({
       now: '2026-10-05T06:00:00.000Z', runs: [...SEALAND_RUNS, ...SUNDAYS.slice(0, 2)],
       denominators: [...SEALAND_ROWS, OCTOBER_ROW], schedule: SUNDAY,
     })
     expect(v.reading.month).toBe('2026-09-01')
-    expect(v.other).toEqual({ month: '2026-10-01', isDefault: false })
+    expect(offer(v.others)).toEqual([{ month: '2026-10-01', isDefault: false }, ...EARLIER])
   })
 
-  it('?month= names the month read, and the other month is the default, linked with no parameter', () => {
+  it('?month= names the month read, and the default is offered first among the rest, linked with no parameter', () => {
     const v = readingViewFrom({
       now: '2026-10-05T06:00:00.000Z', runs: [...SEALAND_RUNS, ...SUNDAYS.slice(0, 2)],
       denominators: [...SEALAND_ROWS, OCTOBER_ROW], schedule: SUNDAY, explicit: '2026-10',
     })
     expect(v.reading.month).toBe('2026-10-01')
     expect(v.reading.reason).toBe('explicit')
-    expect(v.other).toEqual({ month: '2026-09-01', isDefault: true })
+    expect(offer(v.others)).toEqual([{ month: '2026-09-01', isDefault: true }, ...EARLIER])
+  })
+
+  it('a ?month= naming an earlier month reads it, and every other month stays in the selector', () => {
+    const v = readingViewFrom({
+      now: '2026-10-02T06:00:00.000Z', runs: [...SEALAND_RUNS, SUNDAYS[0]], denominators: SEALAND_ROWS, schedule: SUNDAY, explicit: '2026-07',
+    })
+    expect(v.reading.month).toBe('2026-07-01')
+    expect(offer(v.others)).toEqual([
+      { month: '2026-09-01', isDefault: true }, ...EARLIER.filter((o) => o.month !== '2026-07-01'),
+    ])
   })
 
   it('a ?month= naming the default month offers what the default offers', () => {
@@ -126,16 +163,24 @@ describe('readingViewFrom: which month, and the one other month the selector off
       denominators: [...SEALAND_ROWS, OCTOBER_ROW], schedule: SUNDAY, explicit: '2026-09',
     })
     expect(v.reading.month).toBe('2026-09-01')
-    expect(v.other).toEqual({ month: '2026-10-01', isDefault: false })
+    expect(offer(v.others)).toEqual([{ month: '2026-10-01', isDefault: false }, ...EARLIER])
   })
 
-  it('a ?month= with no row is not honoured, and offers nothing extra', () => {
+  it('a ?month= with no row is not honoured, and offers no month without one', () => {
     const v = readingViewFrom({
       now: '2026-10-02T06:00:00.000Z', runs: [...SEALAND_RUNS, SUNDAYS[0]], denominators: SEALAND_ROWS, explicit: '2026-10',
     })
     expect(v.reading.month).toBe('2026-09-01')
     expect(v.reading.reason).not.toBe('explicit')
-    expect(v.other).toBeNull()
+    expect(offer(v.others)).toEqual(EARLIER)
+  })
+
+  it('never offers a month after the clock (a staging clock set back behind its rows)', () => {
+    const v = readingViewFrom({
+      now: '2026-09-24T18:00:00.000Z', runs: SEALAND_RUNS, denominators: [...SEALAND_ROWS, OCTOBER_ROW], schedule: SUNDAY,
+    })
+    expect(v.reading.month).toBe('2026-09-01')
+    expect(offer(v.others)).toEqual(EARLIER)
   })
 
   it('the client’s own posts are not the market: a month holding only them has no row', () => {
@@ -146,7 +191,27 @@ describe('readingViewFrom: which month, and the one other month the selector off
     })
     expect(v.reading.month).toBe('2026-09-01')
     expect(v.reading.current.videos).toBeNull()
-    expect(v.other).toBeNull()
+    expect(offer(v.others)).toEqual(EARLIER)
+  })
+
+  it('holds a year at most, the default kept: Össur’s back-read reaches six years', () => {
+    // A SHAPE, NOT A MEASUREMENT: seventy-two months of rows, each carrying
+    // Össur's September category count as a stand-in; nothing below turns on
+    // a size beyond "has a row".
+    const months: string[] = []
+    for (let y = 2020, m = 10; months.length < 72; m === 12 ? (y++, (m = 1)) : m++) months.push(`${y}-${String(m).padStart(2, '0')}-01`)
+    const rows = months.map((month) => row(month, 'industry-other', 338))
+    const runs = [run('o1', '2026-04-06'), run('o2', '2026-09-13')]
+    const v = readingViewFrom({ now: '2026-10-02T06:00:00.000Z', runs, denominators: rows })
+    expect(v.reading.month).toBe('2026-09-01')
+    expect(v.others).toHaveLength(MONTH_MENU_MAX - 1)
+    expect(offer(v.others)[0]).toEqual({ month: '2026-08-01', isDefault: false })
+    expect(v.others[v.others.length - 1].month).toBe('2025-10-01')
+    // An old month named in the URL keeps the way back to the default.
+    const old = readingViewFrom({ now: '2026-10-02T06:00:00.000Z', runs, denominators: rows, explicit: '2021-03' })
+    expect(old.reading.month).toBe('2021-03-01')
+    expect(offer(old.others)[0]).toEqual({ month: '2026-09-01', isDefault: true })
+    expect(old.others).toHaveLength(MONTH_MENU_MAX - 1)
   })
 
   it('pools the category with the tracked rivals only when a list is handed in', () => {
@@ -227,13 +292,13 @@ describe('readingViewFrom: Össur, paused since 13 Sep', () => {
     row('2026-08-01', 'industry-other', 537), row('2026-08-01', OTTOBOCK, 48),
     row('2026-09-01', 'industry-other', 338), row('2026-09-01', OTTOBOCK, 24),
   ]
-  it('reads September on 2 Oct, 2 Nov and 7 Dec, "as at the 13 Sep update · updates paused"', () => {
+  it('reads September on 2 Oct, 2 Nov and 7 Dec, "as at the 13 Sep update · updates paused", with August one click back', () => {
     for (const now of ['2026-10-02T06:00:00.000Z', '2026-11-02T06:00:00.000Z', '2026-12-07T06:00:00.000Z']) {
       const v = readingViewFrom({ now, runs: OSSUR_RUNS, denominators: OSSUR_ROWS, schedule: { report_period: 'paused', report_day: 'sunday' } })
       expect(v.reading.month).toBe('2026-09-01')
       expect(barLine(v.reading)).toBe('as at the 13 Sep update · updates paused')
       expect(monthWords(v.reading)).toBe('September · read to the 13 Sep update · updates paused')
-      expect(v.other).toBeNull()
+      expect(offer(v.others)).toEqual([{ month: '2026-08-01', isDefault: false }])
     }
   })
 })
@@ -341,12 +406,12 @@ describe('marketRivalAudiences: the one market every loader pools', () => {
     const view = readingViewFrom({ ...at, rivalAudiences: list })
     expect(view.reading.month).toBe('2026-09-01')
     // A stopped rival's October row is not a market month: no page offers it.
-    expect(view.other).toBeNull()
+    expect(view.others.map((o) => o.month)).not.toContain('2026-10-01')
     expect(marketMonths(ROWS, list)).not.toContain('2026-10-01')
     expect(monthlyMonthFor(at.now, ROWS, null, list)).toBe(view.reading.month.slice(0, 7))
     // What the three inferring loaders drew before: October offered on a
     // stopped rival's row alone.
-    expect(readingViewFrom(at).other).toEqual({ month: '2026-10-01', isDefault: false })
+    expect(offer(readingViewFrom(at).others)[0]).toEqual({ month: '2026-10-01', isDefault: false })
   })
 
   // THE SWEEP. Every loader that decides the reading month hands in the one

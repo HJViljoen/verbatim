@@ -309,7 +309,49 @@ begin
     values ('00000000-0000-4000-8000-00000000c001', '00000000-0000-4000-8000-0000000000d1', 'exclude_lead', 'check');
   raise notice 'ok  append-only: the service role inserts, and cannot update or delete';
 end $$;
+
+-- WP1.8's one figure (the 26 Sep ruling): two nullable columns, last in the
+-- table, a count within its base, and a tenant may read both.
+do $$
+declare cols text;
+begin
+  select string_agg(column_name, ',' order by ordinal_position) into cols from (
+    select column_name, ordinal_position from information_schema.columns
+     where table_schema = 'public' and table_name = 'month_pair_comparability' order by ordinal_position desc limit 2) last2;
+  if cols is distinct from 'added_only_curr,market_videos_curr' then
+    raise exception 'added-only FAILED: the last two columns are %, not added_only_curr and market_videos_curr', cols;
+  end if;
+  insert into public.month_pair_comparability (client_id, prev_month, month, search_outside_prev, videos_prev,
+      search_outside_curr, videos_curr, method_version, computed_at)
+    values ('00000000-0000-4000-8000-00000000c001', '2026-08-01', '2026-09-01', 1, 4, 2, 4, 'check', '2026-09-30T00:00:00Z');
+  insert into public.month_pair_comparability (client_id, prev_month, month, search_outside_prev, videos_prev,
+      search_outside_curr, videos_curr, method_version, computed_at, added_only_curr, market_videos_curr)
+    values ('00000000-0000-4000-8000-00000000c001', '2026-08-01', '2026-09-01', 1, 4, 2, 4, 'check', '2026-09-30T00:00:01Z', 1, 4);
+  begin
+    insert into public.month_pair_comparability (client_id, prev_month, month, search_outside_prev, videos_prev,
+        search_outside_curr, videos_curr, method_version, computed_at, added_only_curr, market_videos_curr)
+      values ('00000000-0000-4000-8000-00000000c001', '2026-08-01', '2026-09-01', 1, 4, 2, 4, 'check', '2026-09-30T00:00:02Z', 5, 4);
+    raise exception 'added-only FAILED: a count over its base was stored';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.month_pair_comparability (client_id, prev_month, month, search_outside_prev, videos_prev,
+        search_outside_curr, videos_curr, method_version, computed_at, added_only_curr)
+      values ('00000000-0000-4000-8000-00000000c001', '2026-08-01', '2026-09-01', 1, 4, 2, 4, 'check', '2026-09-30T00:00:03Z', 1);
+    raise exception 'added-only FAILED: a count with no base was stored';
+  exception when check_violation then null;
+  end;
+  raise notice 'ok  added-only: two nullable columns last, a count within its base';
+end $$;
 reset role;
+do $$
+begin
+  if not (has_column_privilege('authenticated', 'public.month_pair_comparability', 'added_only_curr', 'SELECT')
+      and has_column_privilege('authenticated', 'public.month_pair_comparability', 'market_videos_curr', 'SELECT')) then
+    raise exception 'added-only FAILED: a tenant cannot read the added-only figure (the front page selects every column)';
+  end if;
+  raise notice 'ok  added-only: a tenant reads both columns';
+end $$;
 
 -- A cascade still works: a video removed with its tenant's data takes its labels.
 do $$

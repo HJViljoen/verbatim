@@ -4,13 +4,19 @@ import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
 import { SURFACE_WORDS } from './change-log'
 import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
+import { cellReadWith, mergeStops, reachCaption, recordGroupOf, recordPairs, recordView, stopLines, stopsOf, type StopEntry } from './what-we-changed'
+import { pairOn, type PairOn } from '../reading/pairs'
+import { CHANGES, SEALAND_LOG, sealandJudge } from '../test/sealand-pairs'
+import { gathersOf } from '../provenance/searches'
+import type { PairRow } from '../reading/comparability'
 
 // Sealand's change log around September (GC F2, staging's copy of production
 // to 20 Sep): the 9 Sep swap (seven terms out, seven in, one reconstructed row
 // each), the 13 Sep additions (two trigger rows a second apart), and a cadence
-// row that is not a change of ours. Reach: CQ F27's 187 for the 13 Sep change
-// (by last surfacing, over staging's 625 September category videos) and CQ
-// F25's "about 115 of 351" for the 9 Sep names in August. Ids are labels.
+// row that is not a change of ours. Reach: staging's config_change_reach rows
+// (26 Sep): the 13 Sep change 182 of September's 654 market videos, and the
+// 9 Sep swap 167 of August's 377 market videos (141 of 351 in the category, a
+// population the list does not print). Ids are labels.
 const row = (over: Partial<ConfigChange> & Pick<ConfigChange, 'id' | 'changed_at' | 'surface'>): ConfigChange => ({
   client_id: 'sealand', field: null, before: null, after: null, actor_kind: 'reconstructed', actor_user_id: null, actor_label: null,
   run_id: null, source: 'reconstructed', rows_affected: null, note: null, affects_audiences: null, affects_months: null, ...over,
@@ -28,12 +34,12 @@ const ROWS: ConfigChange[] = [
   row({ id: 'cadence', changed_at: '2026-09-17T16:10:00.000Z', surface: 'cadence', field: 'report_day' }),
 ]
 const REACH: ReachRow[] = [
-  { changeId: '0913-industry', month: '2026-09-01', population: 'market', touched: 187, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+  { changeId: '0913-industry', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
   // An older computation of the same measure: the newest wins.
   { changeId: '0913-industry', month: '2026-09-01', population: 'market', touched: 180, inMonth: 610, readThroughRun: null, computedAt: '2026-09-29T10:00:00.000Z' },
-  { changeId: '0909-out-0', month: '2026-08-01', population: 'market', touched: 115, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+  { changeId: '0909-out-0', month: '2026-08-01', population: 'market', touched: 167, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
   // The category population is not what the list prints.
-  { changeId: '0909-out-0', month: '2026-08-01', population: 'category', touched: 112, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+  { changeId: '0909-out-0', month: '2026-08-01', population: 'category', touched: 141, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
 ]
 const RUNS = new Map([['run-27sep', '2026-09-27T08:30:00.000Z']])
 
@@ -54,16 +60,16 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
   })
 
   it('carries each month it touched, on the market’s population, the newest measure, read with its update', () => {
-    expect(lines[0].months).toEqual([{ month: '2026-09-01', touched: 187, of: 625, readWith: '2026-09-27T08:30:00.000Z' }])
-    expect(lines[0].reach).toEqual({ month: '2026-09-01', touched: 187, of: 625, readWith: '2026-09-27T08:30:00.000Z' })
+    expect(lines[0].months).toEqual([{ month: '2026-09-01', touched: 182, of: 654, readWith: '2026-09-27T08:30:00.000Z' }])
+    expect(lines[0].reach).toEqual({ month: '2026-09-01', touched: 182, of: 654, readWith: '2026-09-27T08:30:00.000Z' })
     // A change made on 9 Sep that is measured in August: its own month has no
     // measure, so `reach` is null and August is still listed.
     expect(lines[1].reach).toBeNull()
-    expect(lines[1].months).toEqual([{ month: '2026-08-01', touched: 115, of: 351, readWith: '2026-09-27T08:30:00.000Z' }])
+    expect(lines[1].months).toEqual([{ month: '2026-08-01', touched: 167, of: 377, readWith: '2026-09-27T08:30:00.000Z' }])
   })
 
   it('prints a cell as "k of n", and nothing for a month it did not measure', () => {
-    expect(reachCell(lines[0], '2026-09-01')).toBe('187 of 625')
+    expect(reachCell(lines[0], '2026-09-01')).toBe('182 of 654')
     expect(reachCell(lines[0], '2026-08-01')).toBeNull()
     expect(ledgerMonths(lines, '2026-09-01', '2026-08-01')).toEqual(['2026-08-01', '2026-09-01'])
   })
@@ -161,10 +167,186 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     expect(line.items).toEqual({ added: ['Rareform'], removed: ['Patagonia', 'Poler', 'Topo Designs'] })
   })
 
+  // Staging (a production copy to 20 Sep): the reconstruction's 9 Sep rows,
+  // stamped at midnight with today's status, and keyword_performance's Reddit
+  // communities by gather: r/backpacks from 17 Aug 07:04, r/travelgear from 9
+  // Sep 10:30, r/onebag from 9 Sep 18:17 (the other 9 Sep rows name
+  // communities never searched: r/minimalism, r/cycling, r/southafrica and
+  // r/capetown, all rejected).
+  it('names the 9 Sep communities the gathers ran: r/onebag and r/travelgear, not the re-probed r/backpacks (staging)', () => {
+    const sep9 = (id: string, name: string, before: string | null, after: string) => row({ id, changed_at: '2026-09-09T00:00:00+00:00', surface: 'subreddits' as never,
+      field: 'subreddits', before: before ? { name, status: before } : null, after: { name, status: after } })
+    const rows = [
+      sep9('s-backpacks', 'backpacks', 'candidate', 'active'), sep9('s-travelgear', 'travelgear', 'candidate', 'active'),
+      sep9('s-minimalism', 'minimalism', 'candidate', 'rejected'), sep9('s-cycling', 'cycling', 'candidate', 'rejected'),
+      sep9('s-onebag', 'onebag', null, 'candidate'), sep9('s-capetown', 'capetown', null, 'candidate'), sep9('s-capetown-probe', 'capetown', 'candidate', 'rejected'),
+    ]
+    const kp = (run: string, at: string, terms: string[]) => terms.map((keyword) => ({ run_id: run, platform: 'reddit', keyword, created_at: at }))
+    const three = ['r/backpacks', 'r/travelgear', 'r/onebag']
+    const gathers = gathersOf([
+      ...kp('g0709', '2026-07-09T13:20:55Z', ['upcycled bag']),
+      ...kp('g0817', '2026-08-17T07:04:33Z', ['upcycled bag', 'r/backpacks']),
+      ...kp('g0909a', '2026-09-09T10:30:31Z', ['upcycled bag', 'r/backpacks', 'r/travelgear']),
+      ...kp('g0909b', '2026-09-09T18:17:56Z', ['upcycled bag', ...three]),
+      ...kp('g0913', '2026-09-13T10:12:30Z', ['upcycled bag', ...three]),
+      ...kp('g0920', '2026-09-20T04:18:34Z', ['upcycled bag', ...three]),
+    ], [])
+    const changes = changesFromLog(rows)
+    expect(changes).toHaveLength(1)
+    // Read as the rows stand: the line the record printed on staging.
+    const [asStored] = ledgerLines({ changes, rows, reach: [], runFinish: new Map() })
+    expect([asStored.words, asStored.items]).toEqual(['2 communities added', { added: ['r/backpacks', 'r/travelgear'], removed: [] }])
+    const [line] = ledgerLines({ changes, rows, reach: [], runFinish: new Map(), gathers })
+    expect([line.words, line.items]).toEqual(['2 communities added', { added: ['r/onebag', 'r/travelgear'], removed: [] }])
+    expect(changeWords(changes[0], rows, gathers)).toBe('2 communities added')
+  })
+
+  it('Össur’s 13 Sep re-probe of r/bionics (run since 30 Aug) names no community against the gathers (staging)', () => {
+    const bionics = row({ id: 'o-bionics', changed_at: '2026-09-13T00:00:00+00:00', surface: 'subreddits' as never, field: 'subreddits',
+      before: { name: 'bionics', status: 'candidate' }, after: { name: 'bionics', status: 'active' } })
+    const kp = (run: string, at: string) => ['r/amputee', 'r/prosthetics', 'r/bionics'].map((keyword) => ({ run_id: run, platform: 'reddit', keyword, created_at: at }))
+    const gathers = gathersOf([...kp('o0830', '2026-08-30T04:11:44Z'), ...kp('o0906', '2026-09-06T04:07:00Z'), ...kp('o0913', '2026-09-13T04:11:00Z')], [])
+    const changes = changesFromLog([bionics])
+    expect(ledgerLines({ changes, rows: [bionics], reach: [], runFinish: new Map() })[0].items).toEqual({ added: ['r/bionics'], removed: [] })
+    const [line] = ledgerLines({ changes, rows: [bionics], reach: [], runFinish: new Map(), gathers })
+    expect([line.words, line.items]).toEqual([SURFACE_WORDS.subreddits, null])
+  })
+
   it('lists the communities a change switched on and off beside its words', () => {
     const onebag = row({ id: 'sub-0909', changed_at: '2026-09-09T00:00:00.000Z', surface: 'subreddits' as never, before: { name: 'onebag', status: 'candidate' }, after: { name: 'onebag', status: 'active' } })
     const line = ledgerLines({ changes: changesFromLog([onebag]), rows: [onebag], reach: [], runFinish: new Map() })[0]
     expect(line.words).toBe('1 community added')
     expect(line.items).toEqual({ added: ['r/onebag'], removed: [] })
+  })
+})
+
+
+// ---- The record, grouped (R-a) ---------------------------------------------------------
+
+describe('what a record cell counts (reachCaption)', () => {
+  it('names the searches a change moved, the way its reach counts them', () => {
+    expect(reachCaption({ surface: 'terms', items: { added: ['handmade bag'], removed: [] } })).toBe('found only by the searches it added')
+    expect(reachCaption({ surface: 'terms', items: { added: ['sailcloth bag'], removed: ['freitag'] } })).toBe('found only by the searches it added or took out')
+    expect(reachCaption({ surface: 'terms', items: { added: [], removed: ['freitag'] } })).toBe('found only by the searches it took out')
+    expect(reachCaption({ surface: 'subreddits', items: { added: ['r/travelgear'], removed: [] } })).toBe('found only by the communities it added')
+    expect(reachCaption({ surface: 'gate_rule', items: null })).toBe('had been let in unchecked')
+    expect(reachCaption({ surface: 'attribution', items: null })).toBe('filed by the new check')
+    // Nothing measures a rival's or an account's reach here.
+    expect(reachCaption({ surface: 'rivals', items: { added: ['Rareform'], removed: [] } })).toBeNull()
+    expect(reachCaption({ surface: 'handles', items: null })).toBeNull()
+  })
+})
+
+describe('the record, grouped as the preview groups it', () => {
+  it('files the searches, communities, rivals and accounts under "What we search", the rest under "How we check, mark and file videos"', () => {
+    for (const s of ['terms', 'platforms', 'subreddits', 'rivals', 'handles']) expect(recordGroupOf(s)).toBe('search')
+    for (const s of ['gate_rule', 'attribution', 'segment', 'entity_retag', 'regate', 'prompt_version', 'knobs', 'rival_rename', 'other']) expect(recordGroupOf(s)).toBe('check')
+  })
+
+  it('asks about the pairs the page can show: each column month against the one before, and the reading month against the next', () => {
+    expect(recordPairs(['2026-08-01', '2026-09-01'], '2026-09-01')).toEqual([
+      { prevMonth: '2026-07-01', month: '2026-08-01' },
+      { prevMonth: '2026-08-01', month: '2026-09-01' },
+      { prevMonth: '2026-09-01', month: '2026-10-01' },
+    ])
+  })
+
+  // Sealand's real log (GC F2) judged at 2 Oct, with staging's measured
+  // (Aug, Sep) row after the 26 Sep rehearsal (exec/logs/staging-mf1-
+  // rehearsal-2026-09-26.md): 148 of 351 and 376 of 625 outside the unchanged
+  // searches, depth 21 against 14, read through the 20 Sep update.
+  const ROW: PairRow = {
+    prevMonth: '2026-08-01', month: '2026-09-01',
+    searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } },
+    codeChanges: [], depth: { prevMedian: 21, currMedian: 14 }, gather: [], lateCapture: null,
+    readThroughRun: 'run-2026-09-20', methodVersion: 'mf1_v1', computedAt: '2026-09-26T14:10:00.000Z',
+  }
+  const judge: PairOn = pairOn(sealandJudge('2026-10-02T06:00:00.000Z', [ROW]))
+  const pairs = recordPairs(['2026-08-01', '2026-09-01'], '2026-09-01')
+  const byId = new Map(CHANGES.map((c) => [c.id, c]))
+
+  it('a search change stops the pairs the searches reason refuses, measured where the row measured it', () => {
+    const stops = stopsOf(byId.get('terms-0913')!, judge, pairs)
+    expect(stops.map((e) => [e.pair.month, e.views, e.unmeasured])).toEqual([
+      ['2026-08-01', ['market', 'themes', 'brands'], true],
+      ['2026-09-01', ['market', 'themes', 'brands'], false],
+      ['2026-10-01', ['market', 'themes', 'brands'], true],
+    ])
+  })
+
+  it('a filing change stops brands and themes only, and never the market (decision E)', () => {
+    const stops = stopsOf(byId.get('retag-0909')!, judge, pairs)
+    expect(stops.every((e) => !e.views.includes('market'))).toBe(true)
+    expect(stopLines(stops, true)).toEqual(['Pairs with August or September, for brands and themes, until measured'])
+  })
+
+  it('merges a group’s stops a pair at a time, measured where any change’s refusal was', () => {
+    const merged = mergeStops([stopsOf(byId.get('terms-0913')!, judge, pairs), stopsOf(byId.get('rivals-0909')!, judge, pairs)])
+    expect(stopLines(merged)).toEqual([
+      'July against August, until measured',
+      'August against September',
+      'September against October, until measured',
+    ])
+  })
+
+  it('compresses only what reads true: "Pairs with September" is exactly August against September and September against October', () => {
+    const e = (prevMonth: string, month: string, views: StopEntry['views'] = ['themes'], unmeasured = false): StopEntry => ({ pair: { prevMonth, month }, views, unmeasured })
+    expect(stopLines([e('2026-08-01', '2026-09-01'), e('2026-09-01', '2026-10-01')], true)).toEqual(['Pairs with September, for themes'])
+    // Not every pair with August: listed one by one.
+    expect(stopLines([e('2026-07-01', '2026-08-01'), e('2026-09-01', '2026-10-01')], true)).toEqual([
+      'July against August, for themes',
+      'September against October, for themes',
+    ])
+    // Different states are never merged into one line.
+    expect(stopLines([e('2026-08-01', '2026-09-01', ['themes'], false), e('2026-09-01', '2026-10-01', ['themes'], true)], true)).toEqual([
+      'August against September, for themes',
+      'September against October, for themes, until measured',
+    ])
+    expect(stopLines([e('2026-08-01', '2026-09-01', ['brands', 'themes'])])).toEqual(['August against September, for brands and themes'])
+    expect(stopLines([e('2026-08-01', '2026-09-01', ['market', 'themes'])])).toEqual(['August against September'])
+  })
+
+  it('prints nothing awaiting a measure for a change that moves no view (an attention-panel freeze)', () => {
+    const panel = row({ id: 'panel', changed_at: '2026-09-24T12:16:36.000Z', surface: 'other', field: 'attention_panel' })
+    const changes = changesFromLog([panel])
+    const lines = ledgerLines({ changes, rows: [panel], reach: [], runFinish: new Map() })
+    const view = recordView({ lines, changes, rows: [panel], pair: judge, readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: null })
+    expect(view.groups.map((g) => g.key)).toEqual(['check'])
+    expect(view.groups[0].lines[0].cells.map((c) => c.state)).toEqual(['blank', 'blank'])
+    expect(view.groups[0].lines[0].stops).toEqual([])
+    expect(view.aside).toBeNull()
+  })
+
+  it('builds the view: groups, cells, the aside and "read with" said once', () => {
+    const reach: ReachRow[] = [
+      { changeId: 'terms-0913', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-2026-09-20', computedAt: '2026-09-26T14:08:00.000Z' },
+      { changeId: 'terms-0913', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-2026-09-20', computedAt: '2026-09-26T14:08:00.000Z' },
+    ]
+    const runFinish = new Map([['run-2026-09-20', '2026-09-20T12:00:00.000Z']])
+    const lines = ledgerLines({ changes: CHANGES, rows: SEALAND_LOG, reach, runFinish })
+    const view = recordView({ lines, changes: CHANGES, rows: SEALAND_LOG, pair: judge, readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: null })
+    expect(view.months).toEqual(['2026-08-01', '2026-09-01'])
+    expect(view.groups.map((g) => g.key)).toEqual(['search', 'check'])
+    expect(view.groups[1].lines.map((l) => l.line.surface)).toEqual(['entity_retag'])
+    const t13 = view.groups[0].lines.find((l) => l.line.changeId === 'terms-0913')!
+    expect(t13.cells).toEqual([
+      { month: '2026-08-01', state: 'none', readWith: '2026-09-20T12:00:00.000Z' },
+      { month: '2026-09-01', state: 'measured', touched: 182, of: 654, readWith: '2026-09-20T12:00:00.000Z' },
+    ])
+    // The one update is said beside the group's heading, and not in the cells.
+    expect(view.groups[0].readWith).toBe('2026-09-20T12:00:00.000Z')
+    expect(cellReadWith(t13.cells[1], view.groups[0])).toBeNull()
+    expect(cellReadWith({ ...t13.cells[1], readWith: '2026-09-27T08:30:00.000Z' } as never, view.groups[0])).toBe('2026-09-27T08:30:00.000Z')
+    // No update handed in: the latest change's own date.
+    expect(view.aside?.since).toBe('2026-09-17T16:02:56.000Z')
+    // The first update after it, which first searched it: the artboard's 20 Sep.
+    const dated = recordView({ lines, changes: CHANGES, rows: SEALAND_LOG, pair: judge, readingMonth: '2026-09-01', prevMonth: '2026-08-01', block: null,
+      updates: ['2026-09-27T08:30:00.000Z', '2026-09-20T12:00:00.000Z', '2026-09-10T12:00:00.000Z'] })
+    expect(dated.aside?.since).toBe('2026-09-20T12:00:00.000Z')
+    expect(view.aside?.stops).toEqual([
+      'July against August, until measured',
+      'August against September',
+      'September against October, until measured',
+    ])
   })
 })

@@ -83,14 +83,21 @@ export function SettingsFrame({
   return (
     <PageFrame className="min-h-0 flex-1">
       <PageBar title={title} context={context}>{controls}</PageBar>
-      <div className="flex min-h-0 flex-col items-start gap-6 md:flex-row md:gap-8">
-        <nav aria-label="Settings" className="flex w-full shrink-0 flex-col gap-0.5 md:w-[224px]">
+      {/* THE RAIL SITS BESIDE THE PANE ONLY WHERE THE PANE KEEPS ITS ROOM
+          (deploy 2 review). From `md` (768px) the app sidebar and a 224px rail
+          left the content 240px at 768 and 496px at 1024: The record stacked
+          into a column 4,693px tall. Below 1100px the seven sub-pages are a
+          row of tabs over a full-width pane, as the SettingsRecord artboard
+          draws them ("What we read · Subjects · The record …"); from 1100px,
+          where the pane is 572px or more, the rail stands beside it as before. */}
+      <div className="flex min-h-0 flex-col items-start gap-6 min-[1100px]:flex-row min-[1100px]:gap-8">
+        <nav aria-label="Settings" className="flex w-full shrink-0 flex-row flex-wrap gap-1 min-[1100px]:w-[224px] min-[1100px]:flex-col min-[1100px]:flex-nowrap min-[1100px]:gap-0.5">
           {/* AT FULL STRENGTH (Block D wave 3, SH16). It was
               `text-muted-foreground/80`, which resolved to #8B8F93 — 3.26:1,
               on the label that says what the rail IS, shared by nine routes.
               The 40px row height below is the artboard's and stays; the
               contrast and the focus ring were never the mock's to decide. */}
-          <p className="flex h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Settings</p>
+          <p className="hidden h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground min-[1100px]:flex">Settings</p>
           {SETTINGS_SUBPAGES.map((s) => {
             const count = counts?.[s.key] ?? null
             return (
@@ -110,7 +117,7 @@ export function SettingsFrame({
                     : 'text-secondary-foreground hover:bg-inner hover:text-foreground',
                 )}
               >
-                <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                <span className="min-w-0 truncate min-[1100px]:flex-1">{s.label}</span>
                 {count != null && (
                   /* THE UNIT IS DRAWN WHERE THE ROW HOLDS IT (Block D wave 3,
                      RC9, `lib/settings/rail.ts`). This printed `count.value`
@@ -129,7 +136,7 @@ export function SettingsFrame({
               </Link>
             )
           })}
-          {railFooter && <div className="mt-4">{railFooter}</div>}
+          {railFooter && <div className="mt-4 w-full">{railFooter}</div>}
         </nav>
         <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
           {contentTitle && (

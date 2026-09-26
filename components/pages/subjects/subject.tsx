@@ -14,7 +14,7 @@ import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
-import { allRedescribed, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { calibrationWord, printsClient } from '@/lib/subjects/calibration-state'
 
@@ -199,9 +199,11 @@ export const subjectsSubject: Block<SubjectsData> = {
     // floated 30px from each, a caption belonging to neither. The email arm
     // has no heading row (its title is the eyebrow), so there it stays at the
     // top of the body.
-    const word = calibrationWord(pane.calibration)
+    // A SUBJECT THE MONTH WAS NOT READ FOR says "no reading yet" in the
+    // word's place (default M-a), as its rail row does, never "provisional".
+    const word = pane.unread || calibrationWord(pane.calibration)
     const meta = word && !email
-      ? <><CalibrationTag calibration={pane.calibration} mode={mode} /> · {named}</>
+      ? <><CalibrationTag calibration={pane.calibration} unread={pane.unread} mode={mode} /> · {named}</>
       : named
     // THE EARLIER GAP PRINTS ONLY WHERE ONE OF THE TWO IS AN ANSWER. Where
     // both refuse, "too few to compare. Too few to compare in August." is the
@@ -218,7 +220,16 @@ export const subjectsSubject: Block<SubjectsData> = {
     const basis = gapShown && (answered(gapShown.state) || answered(gapShown.basis?.state ?? ''))
       ? gapBasisLine(gapShown)
       : null
-    const lead = gapShown ? `${pane.name}: ${gapLine(gapShown)}${basis ? `; ${basis}` : ''}.` : null
+    const gapLead = gapShown ? `${pane.name}: ${gapLine(gapShown)}${basis ? `; ${basis}` : ''}.` : null
+    // THE HEADLINE FIGURE IS THE MARKET'S, ON THE RAIL'S BASE (default M-b):
+    // "29 of 654" on the row the reader clicked and "28 of 625" in the pane's
+    // headline was two bases on one screen. The market sentence leads; the
+    // Phase 1 brand comparison (the gap line, then the sides) stays below it,
+    // unchanged. A stored pane carries no market figure and leads with its gap
+    // line, as sent.
+    const marketLead = paneMarketLead(pane, data.month)
+    const lead = marketLead ?? gapLead
+    const comparison = marketLead ? gapLead : null
     // ONE REFUSAL, SAID ONCE (deploy 1 review): the hero's cells each printed
     // the same refusal under their figure. Refused for one pair, each says
     // "not compared" and the chip under the cells says why.
@@ -252,7 +263,10 @@ export const subjectsSubject: Block<SubjectsData> = {
         // THE LEAD IS A FIGURE NODE, NOT PROSE. Every digit in it is code's —
         // `gapLine` composes it from the two sides' own k and n — so rule (a)
         // is satisfied by provenance rather than by tokenisation.
-        lead={lead ? <span data-copy="level">{lead}</span> : undefined}
+        // A stored pane leads with its gap line, as sent, in the frame's lead;
+        // the market's headline is drawn first in the body, in the artboard's
+        // face (below).
+        lead={lead && !marketLead ? <span data-copy="level">{lead}</span> : undefined}
         actions={mode === 'app' ? (
           <>
             <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} />
@@ -270,7 +284,22 @@ export const subjectsSubject: Block<SubjectsData> = {
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
         {/* The row tag, over the cells: "provisional" (decision C). Email
             only: the app and print arms carry it in the heading line. */}
-        {email ? <CalibrationTag calibration={pane.calibration} mode={mode} block /> : null}
+        {email ? <CalibrationTag calibration={pane.calibration} unread={pane.unread} mode={mode} block /> : null}
+        {/* THE MARKET'S HEADLINE IN THE ARTBOARD'S FACE (deploy 2 review):
+            the Subjects artboard sets "Looks & style came up in 104 of 626
+            …" as a large sans sentence with its figures in mono, and MASTER.md
+            keeps IBM Plex Serif for quotes alone; the frame's lead set it in
+            17px serif, under the Phase 1 cells' 24px figures. */}
+        {!email && marketLead ? <PaneHeadline text={marketLead} /> : null}
+        {/* The email has no heading row, so no lead: the market's figure is
+            the first line of its body (default M-b). */}
+        {email && marketLead ? (
+          <p data-copy="level" style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink, margin: '4px 0 8px' }}>{marketLead}</p>
+        ) : null}
+        {/* The brand comparison's own line, below the market's headline. */}
+        {comparison && !email ? (
+          <p data-copy="level" className="m-0 text-[13px] leading-[1.45] text-foreground [text-wrap:pretty]">{comparison}</p>
+        ) : null}
 
         {email ? (
           <div>{sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
@@ -326,4 +355,19 @@ export const subjectsSubject: Block<SubjectsData> = {
     }
     return null
   },
+}
+
+/** The pane's market headline, "Waterproofing came up in 29 of 654 September
+ *  videos in your market (4%).", as the Subjects artboard sets it: a large sans
+ *  sentence, each figure (a count, a base, a share) in mono. The words are
+ *  `paneMarketLead`'s; only their face is set here. */
+function PaneHeadline({ text }: { text: string }) {
+  const parts = text.split(/(\d[\d,]*(?:\.\d+)?%?)/)
+  return (
+    <p data-copy="level" className="m-0 max-w-[660px] text-[22px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground [text-wrap:balance] sm:text-[28px]">
+      {parts.map((p, i) => (i % 2 === 1
+        ? <span key={i} className="font-mono font-semibold tabular-nums tracking-[-0.04em]">{p}</span>
+        : p))}
+    </p>
+  )
 }

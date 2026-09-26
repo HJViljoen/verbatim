@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
 
 import { fmtInt } from '@/lib/format'
-import type { KeptRate, RejectRow } from '@/lib/settings/reject-log'
+import { REJECT_ROWS, type KeptRate, type RejectRow } from '@/lib/settings/reject-log'
 
 import { RecordSection } from './frame'
+import { ShowAll } from './show-all'
 
 /**
  * THE REJECT LOG — the artboard's `1fr │ 260px │ 230px` table
@@ -111,7 +112,12 @@ export function RejectLogBlock({
             <span>The rule that fired</span>
             <span />
           </div>
-          {rows.map((r) => (
+          {/* THE LATEST FIVE, THEN THE REST (Heinrich's default, 26 Sep,
+              R-b): in a native disclosure, keyboard reachable, with no client
+              script, and every row printed (show-all.tsx). The page reads
+              only the REJECT_ROWS most recent posts, so a full read says
+              "Show the 20 most recent", never "all" (deploy 2 review). */}
+          <ShowAll items={rows} count={rows.length} capped={rows.length >= REJECT_ROWS} render={(r) => (
             <div
               key={`${r.runId}-${r.platform}-${r.videoId}`}
               className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-b border-border/60 py-3 last:border-b-0 xl:min-h-[60px] xl:py-2 ${TRACKS}`}
@@ -135,7 +141,7 @@ export function RejectLogBlock({
               </span>
               <span className="xl:justify-self-end">{control?.(r)}</span>
             </div>
-          ))}
+          )} />
         </div>
       )}
 

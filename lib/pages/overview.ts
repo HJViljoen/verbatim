@@ -47,7 +47,8 @@ import {
   type MoveSeries,
 } from '../reading/moves'
 import { BRANDS_PANEL, pairTools, type PairOn } from '../reading/pairs'
-import { loadChanges, loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
@@ -69,13 +70,13 @@ import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOV
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import type { KeywordRow } from '../provenance/searches'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
 import type { ConfigChange } from '../config-log'
-import { changesFromLog } from '../reading/comparability'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
 import { updateInstant, type DeliveredRun } from '../reading/reading-view'
@@ -94,9 +95,11 @@ import {
   marketSubjectSide,
   mayLead as mayLeadTheme,
   namesABrand,
+  pastOffers,
   pickQuotes,
   searchesAddedIn,
   stripUnevidencedBrand,
+  type ThemeEvidence,
   THEME_FLOOR,
   type AsksBlock,
   type BrandsBlock,
@@ -237,9 +240,9 @@ export interface SubjectRow {
    * 1): one counted after the month's last update wrote its rows, which has no
    * row in any audience. Its sides are withheld, since the 0 a month series
    * fills there is no reading, and the row prints its name and these words in
-   * place of its figures: "first reading with the 27 Sep update"
-   * (`unreadWords`). Absent on every row that was read, so a stored row
-   * renders as it was sent.
+   * place of its figures: "no reading yet" (`unreadWords`, the one wording on
+   * every surface, default M-a). Absent on every row that was read, so a
+   * stored row renders as it was sent.
    */
   unread?: string
 }
@@ -792,9 +795,9 @@ export interface OverviewData {
    * a snapshot taken before WP1.2 has none.
    */
   reading: ReadingMonth
-  /** The one other month the bar's month selector offers. Optional for the
-   *  same reason as `reading`. */
-  otherMonth?: OtherMonth | null
+  /** The other months the bar's month selector offers (default M-d), newest
+   *  first. Optional for the same reason as `reading`. */
+  otherMonths?: OtherMonth[]
   horizon: Horizon
   window: HorizonWindow
   axis: string[]
@@ -2071,7 +2074,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // step below is judged by it. It depends on the tenant and the clock only:
   // whether a month is still so far is the clock's question, and the pair it
   // is asked about is the reading month's (`month` below is `rm.month`).
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
   themedRunAhead.catch(() => {})
   ledgerAhead.catch(() => {})
 
@@ -2587,7 +2590,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: pinned ? null : view.other,
+    otherMonths: pinned ? [] : view.others,
     horizon,
     window,
     axis,
@@ -3870,6 +3873,8 @@ function quietRows<T>(res: { data: unknown; error: unknown }, label: string, nam
 
 export const TABLE_FRONT_PAGE_OVERRIDES = 'front_page_overrides'
 export const TABLE_VIDEO_PROVENANCE = 'video_provenance'
+const TABLE_KEYWORD_PERFORMANCE = 'keyword_performance'
+const TABLE_GATE_VERDICTS = 'gate_verdicts'
 
 /** The reading month's category themes at the floor, and the previous month's
  *  k for each (0 where that month has rows and the theme is not in them). Two
@@ -3989,6 +3994,10 @@ async function loadThemeQuotes(
   themedRunId: string | null,
   wanted: ReadonlyMap<string, string | null>,
   month: string,
+  /** The themes whose voices the headline may print (the lead candidates):
+   *  a sale offer or an ad among their best candidates is read but not
+   *  counted (`pastOffers`, default M-c), so the voice after it is read. */
+  leads: ReadonlySet<string> = new Set(),
 ): Promise<Map<string, { candidates: CiteCandidate[]; texts: string[] }>> {
   const out = new Map<string, { candidates: CiteCandidate[]; texts: string[] }>()
   const ids = [...wanted.keys()]
@@ -4058,7 +4067,9 @@ async function loadThemeQuotes(
       }
     }
     list.sort((a, b) => (a.e.relevance_rank ?? 99) - (b.e.relevance_rank ?? 99) || a.e.id.localeCompare(b.e.id))
-    shortlist.set(themeId, list.slice(0, QUOTE_CANDIDATES_PER_THEME))
+    shortlist.set(themeId, leads.has(themeId)
+      ? pastOffers(list, QUOTE_CANDIDATES_PER_THEME, (x) => x.e.quote)
+      : list.slice(0, QUOTE_CANDIDATES_PER_THEME))
     out.set(themeId, { candidates: [], texts })
   }
   const kept = [...shortlist.values()].flat()
@@ -4139,15 +4150,31 @@ interface VideoCite {
  *  Phase 1 voices read kept (40), so a large theme cannot make it heavy. */
 const QUOTE_INSIGHTS_PER_THEME = 40
 
-/** The lead's reading-month videos (`month_evidence_refs`) and their
- *  provenance (MF1 `video_provenance`): two reads, only for the lead. Null
- *  where either is not there. */
+/** The searches first run in the reading month (`keyword_performance`, one
+ *  paged read, memoised per page load: both lead candidates share it), or null
+ *  where it cannot be read. */
+function addedSearchesRead(client: SupabaseClient, clientId: string, month: string): () => Promise<Set<string> | null> {
+  let held: Promise<Set<string> | null> | null = null
+  return () => (held ??= selectAll<KeywordRow>(() =>
+    client.from(TABLE_KEYWORD_PERFORMANCE).select('run_id, platform, keyword, created_at').eq('client_id', clientId).order('id'),
+  ).then((kp) => searchesAddedIn(month, kp), (error: unknown) => {
+    console.error(`[overview] leadProvenance keyword_performance: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+    return null
+  }))
+}
+
+/** The lead's reading-month videos (`month_evidence_refs`) and how each was
+ *  found (the 26 Sep ruling's evidence: MF1 `video_provenance`, the videos'
+ *  source_keywords and their gate verdicts' keywords), against the searches
+ *  first run in the month: the refs read, then three reads beside each other
+ *  (a chunk each at the lead's size), only for the lead. Null where any is not
+ *  there (not measured, never a zero). */
 async function loadLeadProvenance(
   client: SupabaseClient,
   clientId: string,
   month: string,
   registryId: string,
-  changeRows: readonly ConfigChange[],
+  addedSearches: () => Promise<Set<string> | null>,
 ): Promise<{ fromNewSearches: number; of: number } | null> {
   const refRes = await client
     .from(TABLE_EVIDENCE_REFS)
@@ -4161,20 +4188,53 @@ async function loadLeadProvenance(
   if (refRes.error) return null
   const videoIds = ((refRes.data as { video_ids?: string[] | null } | null)?.video_ids ?? []).map(String)
   if (videoIds.length === 0) return null
-  const provenance: { video_id: string; first_terms: string[] | null; first_subreddits: string[] | null }[] = []
-  for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
-    const res = await client
-      .from(TABLE_VIDEO_PROVENANCE)
-      .select('video_id, first_terms, first_subreddits')
-      .eq('client_id', clientId)
-      .in('video_id', part)
-    if (res.error) {
-      if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
-      return null
+  type Prov = ThemeEvidence['provenance'][number]
+  type Vid = ThemeEvidence['videos'][number]
+  type Verdict = ThemeEvidence['verdicts'][number]
+  const readProvenance = async (): Promise<Prov[] | null> => {
+    const out: Prov[] = []
+    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+      const res = await client
+        .from(TABLE_VIDEO_PROVENANCE)
+        .select('video_id, first_terms, first_subreddits, method')
+        .eq('client_id', clientId)
+        .in('video_id', part)
+      if (res.error) {
+        if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
+        return null
+      }
+      out.push(...((res.data ?? []) as Prov[]))
     }
-    provenance.push(...((res.data ?? []) as typeof provenance))
+    return out
   }
-  return fromNewSearches(videoIds, provenance, searchesAddedIn(month, changeRows))
+  const readVideos = async (): Promise<Vid[] | null> => {
+    const out: Vid[] = []
+    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+      const res = await client.from('videos').select('id, platform, video_id, source_keywords').eq('client_id', clientId).in('id', part)
+      if (res.error) {
+        rows(res as never, 'overview.leadProvenance videos')
+        return null
+      }
+      out.push(...((res.data ?? []) as Vid[]))
+    }
+    return out
+  }
+  const [provenance, videos, added] = await Promise.all([readProvenance(), readVideos(), addedSearches()])
+  if (!provenance || !videos || !added) return null
+  // Every gate verdict's keyword for these videos (by the platform's own id).
+  const verdicts: Verdict[] = []
+  const platformIds = [...new Set(videos.map((v) => v.video_id))]
+  try {
+    for (const part of chunk(platformIds, UUID_IN_CHUNK)) {
+      verdicts.push(...await selectAll<Verdict>(() =>
+        client.from(TABLE_GATE_VERDICTS).select('platform, video_id, keyword').eq('client_id', clientId).in('video_id', part).order('id'),
+      ))
+    }
+  } catch (error) {
+    console.error(`[overview] leadProvenance gate_verdicts: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+    return null
+  }
+  return fromNewSearches(videoIds, { provenance, videos, verdicts }, added)
 }
 
 /** A candidate as a printed voice: the quote by its evidence ref, and the
@@ -4254,7 +4314,7 @@ async function loadMarketReads(input: {
     loadBoardThemes(client, clientId, month, prevMonth),
     loadLeadExclusions(client, clientId),
     loadChanges(client, clientId),
-    // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadPairOn`): a read error
+    // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadAppPairOn`): a read error
     // on the pair rows leaves the change block unmeasured, never the page down
     // (a missing table is already an empty list).
     loadPairRows(client, clientId, null).catch((error: unknown): PairRow[] => {
@@ -4315,9 +4375,10 @@ async function loadMarketReads(input: {
   for (const id of asked) wanted.set(id, themes.find((t) => t.registryId === id)?.kind ?? null)
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
   const firstLead = leadCandidates[0]?.registryId ?? null
+  const addedSearches = addedSearchesRead(client, clientId, month)
   const [quotes, firstProvenance] = await Promise.all([
-    loadThemeQuotes(supabase, clientId, themedRunId, wanted, month),
-    firstLead ? loadLeadProvenance(client, clientId, month, firstLead, changeRows) : Promise.resolve(null),
+    loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(leadCandidates.map((t) => t.registryId))),
+    firstLead ? loadLeadProvenance(client, clientId, month, firstLead, addedSearches) : Promise.resolve(null),
   ])
   // DECISION F: MAKERS NEVER SUPPLY THE HEADLINE'S QUOTES. The lead may be up
   // to a quarter makers, so the videos behind its candidates are read for
@@ -4337,7 +4398,7 @@ async function loadMarketReads(input: {
   const leadId = final.rows.find((t) => mayLeadTheme(t, segments, excluded))?.registryId ?? null
   const provenance = leadId == null
     ? null
-    : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, changeRows)
+    : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
   return {
     themes,
     segments,
@@ -4387,7 +4448,8 @@ function marketFrontPage(reads: MarketReads, input: {
   const hero = heroLead(board, subjects, reads.excluded)
   const lead = hero.kind === 'themes' ? hero.lead : null
   const heroVoices = lead
-    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured' }).map((c) => voiceOf(c as CiteCandidate))
+    // Never a sale offer or an ad (default M-c): the next eligible voice.
+    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured', skipOffers: true }).map((c) => voiceOf(c as CiteCandidate))
     : []
   const askQuotes = new Map<string, Quote | null>()
   for (const id of askIds(themes, reads.segments)) {
@@ -4400,7 +4462,10 @@ function marketFrontPage(reads: MarketReads, input: {
     month,
     hasPrev: counts.has(prevMonth),
     pair: input.pair(prevMonth, month, 'market'),
-    changes: changesFromLog(reads.changeRows),
+    // A CAPPED UPDATE IS A GATHER FLAG, NOT A CHANGE OF OURS (decision D,
+    // lib/reading/gather-flags.ts): it never moves the first pair read the
+    // same way.
+    changes: ourChangesWithoutGatherFlags(reads.changeRows),
     pairRows: reads.pairRows,
     nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : null,
     asAt: input.rm.asAt,

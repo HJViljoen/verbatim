@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { MonthSeries } from '../reading/series'
-import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, withoutUnreadMonths } from './read-in'
+import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, NO_READING_YET, unreadWords, withoutUnreadMonths } from './read-in'
 
 // Staging (zfmxrrugaihxpubunleu, read 26 Sep): Sealand's 24 Sep update wrote
 // August and September at 12:15:41.468 UTC. Six subjects were created 23 Sep at
@@ -108,8 +108,9 @@ describe('subjectBackRead (the one-shot back-read, decision K)', () => {
 })
 
 describe('unreadWords', () => {
-  it('names the next update while the month is still read by the updates to come', () => {
-    expect(unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })).toBe('first reading with the 27 Sep update')
+  it('says "no reading yet" while the month is still read by the updates to come, and promises no date (default M-a)', () => {
+    expect(unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })).toBe('no reading yet')
+    expect(unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })).toBe(NO_READING_YET)
   })
 
   it('says the month was not read once it has frozen, or while no update is scheduled', () => {

@@ -12,7 +12,10 @@ import { sealandReading } from '@/lib/test/reading-fixture'
 // "How sound is this" band.
 
 const READING = sealandReading('2026-09-24T18:00:00.000Z')
-const CONTEXT = { brand: 'Sealand', reading: READING, other: { month: '2026-08-01', isDefault: false } }
+/** What the reading view offers on 24 Sep and on 1 to 3 Oct: every earlier
+ *  month with a row, newest first (default M-d). */
+const EARLIER = ['2026-08-01', '2026-07-01', '2026-06-01', '2026-05-01', '2026-04-01'].map((month) => ({ month, isDefault: false }))
+const CONTEXT = { brand: 'Sealand', reading: READING, others: EARLIER }
 const UPDATE = {
   update: '2026-09-20T12:00:00.000Z',
   window: { from: '2026-09-10T08:00:00.000Z', to: '2026-09-20T06:00:00.000Z' },
@@ -36,26 +39,41 @@ describe('SurfacePageBar', () => {
     expect(text).not.toContain('still filling')
   })
 
-  it('puts the month\'s state in the selector\'s tooltip and the other month one click away', () => {
+  it('puts the month\'s state in the selector\'s tooltip, and the chip opens a menu of months', () => {
     const markup = render(<SurfacePageBar nav="overview" context={CONTEXT} params={{ horizon: 'last_3' }} />)
     expect(markup).toContain('title="September so far · 24 days · 4 updates"')
-    expect(markup).toContain('href="/dashboard?horizon=last_3&amp;month=2026-08"')
+    // The months themselves are the menu's (`monthOptions`, lib/shell/bar.ts),
+    // drawn when it opens; the chip says it has one.
+    expect(markup).toMatch(/<button [^>]*aria-haspopup="menu"[^>]*>September 2026<svg/)
   })
 
-  it('draws no link where there is no other month to offer', () => {
-    const markup = render(<SurfacePageBar nav="competitive" context={{ ...CONTEXT, other: null }} />)
+  it('draws no menu where the market has no other month at all', () => {
+    const markup = render(<SurfacePageBar nav="competitive" context={{ ...CONTEXT, others: [] }} />)
     expect(markup).toContain('September 2026')
-    expect(markup).not.toContain('month=')
+    expect(markup).not.toContain('aria-haspopup')
   })
 
-  it('draws the preview\'s selector: a 32px chip, with the chevron only where it changes month', () => {
-    const linked = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
-    expect(linked).toMatch(/<a [^>]*class="[^"]*h-8[^"]*rounded-lg[^"]*bg-inner[^"]*"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
-    // Nothing to change to (1 to 3 Oct, decision A): the month's name and its
-    // tooltip, and no chevron promising a menu.
-    const alone = render(<SurfacePageBar nav="overview" context={{ ...CONTEXT, other: null }} />)
+  it('draws the preview\'s selector: a 32px chip with its chevron, a button reached by keyboard', () => {
+    const menu = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    expect(menu).toMatch(/<button [^>]*class="[^"]*h-8[^"]*rounded-lg[^"]*bg-inner[^"]*"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
+    // A button (Tab reaches it, Enter or Space opens it) with a focus ring.
+    expect(menu).toMatch(/<button type="button"[^>]*aria-haspopup="menu"[^>]*class="[^"]*focus-visible:ring-2[^"]*"/)
+    // Nothing to change to: the month's name and its tooltip, and no chevron
+    // promising a menu.
+    const alone = render(<SurfacePageBar nav="overview" context={{ ...CONTEXT, others: [] }} />)
     expect(alone).toMatch(/<span title="[^"]*" class="[^"]*h-8[^"]*bg-inner[^"]*">September 2026<\/span>/)
     expect(alone).not.toContain('lucide-chevron-down')
+  })
+
+  it('steps back on 1 to 3 Oct too: September, ended, with the chevron, and the line unchanged (default M-d)', () => {
+    const october = { brand: 'Sealand', reading: sealandReading('2026-10-02T06:00:00.000Z'), others: EARLIER }
+    const markup = render(<SurfacePageBar nav="overview" context={october} />)
+    expect(markup).toMatch(/aria-haspopup="menu"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
+    const text = renderText(<SurfacePageBar nav="overview" context={october} />)
+    expect(text).toContain('as at the 27 Sep update · next update Sun 4 Oct')
+    // The state words stay the tooltip's: none in the bar (§5.1).
+    expect(text).not.toContain('so far')
+    expect(text).not.toContain('still filling')
   })
 
   it('breaks the one line at its " · " on a phone, never inside a date', () => {

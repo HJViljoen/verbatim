@@ -151,6 +151,15 @@ export interface PairRow {
   readThroughRun: string | null
   methodVersion: string
   computedAt: string
+  /** WP1.8's one figure (the 26 Sep ruling): the later month's MARKET videos
+   *  found only by searches first run in that month, of the month's market
+   *  videos (`added_only_curr` of `market_videos_curr`). It is what "about
+   *  half of September came from searches we added in September" prints.
+   *  Null or absent: not measured (a row written before MF1 held the columns),
+   *  and then nothing prints a figure for it, never `searchOutside`. The
+   *  strict `searchOutside` stays the input to decision D's rule 2 only.
+   *  Additive. */
+  addedOnly?: Counted | null
 }
 
 export type PairReason = 'incomplete' | 'not_read_to_end' | 'unmeasured' | 'searches' | 'code_change' | 'depth' | 'gather'

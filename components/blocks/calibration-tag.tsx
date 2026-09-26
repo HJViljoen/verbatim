@@ -12,9 +12,9 @@ import { calibrationWord } from '@/lib/subjects/calibration-state'
 // names nothing is a hole (AGENTS.md).
 //
 // A SUBJECT THE MONTH WAS NOT READ FOR carries its words in the same place and
-// face (WP1.1 review, finding 1): "first reading with the 27 Sep update", the
-// preview's row for a subject named after the month's last update. Its digits
-// are a date, which rule (a) does not police outside a prose node.
+// face (WP1.1 review, finding 1): "no reading yet" (`unreadWords`, the one
+// wording on every surface, default M-a), or "not read in {Month}" once no
+// update will read the month.
 
 export function CalibrationTag({
   calibration,

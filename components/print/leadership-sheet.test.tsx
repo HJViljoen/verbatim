@@ -579,8 +579,8 @@ describe('the leadership sheet under the three calibration states (decision C, W
     expect(markup).toContain('<span class="block truncate">Community &amp; purpose</span>')
     expect(markupText(markup)).toContain('being re-described')
     // Community & purpose was never read (WP1.1 review, finding 1): its words
-    // say when it will be, in the word's place.
-    expect(markupText(markup)).toContain('first reading with the 4 Oct update')
+    // say so, in the word's place ("no reading yet", default M-a).
+    expect(markupText(markup)).toContain('no reading yet')
     expect(markupText(render(sheet(calibrationOverviewFixture({ unchecked: ['water'] }))))).toContain('provisional')
   })
 

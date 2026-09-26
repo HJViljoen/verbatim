@@ -19,11 +19,13 @@ export function SettingsSkeleton({ title, cards = 3 }: { title: string; cards?: 
       <PageBar title={title} context={<Bone className="h-3 w-32" />}>
         <Bone className="h-3 w-24" />
       </PageBar>
-      <div className="flex min-h-0 flex-col items-start gap-6 md:flex-row md:gap-8">
-        <nav aria-hidden className="flex w-full shrink-0 flex-col gap-0.5 md:w-[224px]">
-          <div className="flex h-[26px] items-center px-3"><Bone className="h-2 w-14" /></div>
+      {/* The frame's own breakpoint: tabs over the pane below 1100px, the
+          rail beside it from there (components/settings-frame.tsx). */}
+      <div className="flex min-h-0 flex-col items-start gap-6 min-[1100px]:flex-row min-[1100px]:gap-8">
+        <nav aria-hidden className="flex w-full shrink-0 flex-row flex-wrap gap-1 min-[1100px]:w-[224px] min-[1100px]:flex-col min-[1100px]:flex-nowrap min-[1100px]:gap-0.5">
+          <div className="hidden h-[26px] items-center px-3 min-[1100px]:flex"><Bone className="h-2 w-14" /></div>
           {SETTINGS_SUBPAGES.map((s, i) => (
-            <div key={s.key} className="flex min-h-10 items-center px-3">
+            <div key={s.key} className="flex min-h-10 w-24 items-center px-3 min-[1100px]:w-auto">
               <Bone className={i % 3 === 0 ? 'h-3 w-3/5' : i % 3 === 1 ? 'h-3 w-2/5' : 'h-3 w-1/2'} />
             </div>
           ))}

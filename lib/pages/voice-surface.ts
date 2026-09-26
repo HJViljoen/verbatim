@@ -25,7 +25,8 @@ import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingVi
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
-import { loadMonthSeries, loadPairOn, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { pairOnVerdict } from '../reading/comparability'
 import { comparableOn, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
@@ -477,11 +478,11 @@ export interface VoiceSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The reading month (market-first decision A) and the bar's other month.
-   *  Always set by the loader; optional because a stored snapshot taken
-   *  before WP1.2 has neither. */
+  /** The reading month (market-first decision A) and the bar's other months
+   *  (default M-d), newest first. Always set by the loader; optional because a
+   *  stored snapshot taken before WP1.2 has neither. */
   reading?: ReadingMonth
-  otherMonth?: OtherMonth | null
+  otherMonths?: OtherMonth[]
   horizon: Horizon
   window: HorizonWindow
   axis: string[]
@@ -1152,7 +1153,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   recordAhead.catch(() => {})
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
   const themedRunId = await themedRunAhead
@@ -1469,7 +1470,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: view.other,
+    otherMonths: view.others,
     horizon,
     window,
     axis,

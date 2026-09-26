@@ -7,13 +7,17 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { BlockFrame } from '@/components/blocks/frame'
 import { NUMBER_BUDGET, type OverviewData } from '@/lib/pages/overview'
+import { comparabilityOf, type PairRow } from '@/lib/reading/comparability'
+import { withGatherFlags } from '@/lib/reading/gather-flags'
+import { pairJudge } from '@/lib/reading/pairs'
+import { WhatWeChangedLead } from '@/components/settings/record/what-we-changed'
 import { LEAD_MAX_MAKER_SHARE, segmentOf, themeFigures, themeToken } from '@/lib/pages/overview-market'
 import { septemberThemes } from '@/lib/test/market-fixture'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OverviewPage } from './index'
 import { overviewSentence } from './sentence'
 import { overviewThemes } from './themes'
-import { WHAT_WE_CHANGED_HREF } from './change'
-import { marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture } from './fixture'
+import { WHAT_WE_CHANGED_HREF, drawsStrip, stripMonths } from './change'
+import { OCTOBER_ENDED_AT, OCTOBER_LEADS_AT, marketBeforeMakersFixture, marketFrontFixture, octoberLeadsFixture, ossurFrontFixture, overviewFixture } from './fixture'
 
 // Your market (market-first WP1.6): the done-when checks that a render can
 // make, on plan §2.2's print (production's figures as at the 24 Sep update).
@@ -34,6 +38,144 @@ const STATES: [string, () => OverviewData][] = [
   ['Sealand, staging calibration', () => marketFrontFixture({ subjectsCalibration: 'staging' })],
   ['Össur', ossurFrontFixture],
 ]
+
+// ONCE OCTOBER LEADS (default M-e, 26 Sep): from the 18 Oct update the pair
+// read is September against October and the first pair read the same way is
+// October against November. The strip drew "Sep, Oct | Oct, Nov", October
+// twice; it draws each month once, the bracket over Oct and Nov, and the "as
+// at" in October (18 Oct) or, from the 1 Nov update, in November.
+describe('the change strip once October leads: each month once', () => {
+  const change = (data: OverviewData) => render(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render(data, 'app', ctx))
+
+  it('stripMonths: the pairs as one row, oldest first, the bracket over the next pair', () => {
+    expect(stripMonths(['2026-08-01', '2026-09-01'], ['2026-10-01', '2026-11-01'])).toEqual({
+      months: [
+        { month: '2026-08-01', read: true }, { month: '2026-09-01', read: true },
+        { month: '2026-10-01', read: false }, { month: '2026-11-01', read: false },
+      ],
+      from: 2, span: 2,
+    })
+    expect(stripMonths(['2026-09-01', '2026-10-01'], ['2026-10-01', '2026-11-01'])).toEqual({
+      months: [{ month: '2026-09-01', read: true }, { month: '2026-10-01', read: true }, { month: '2026-11-01', read: false }],
+      from: 1, span: 2,
+    })
+    // November leads (from 16 Nov): the pair read IS the next pair.
+    expect(stripMonths(['2026-10-01', '2026-11-01'], ['2026-10-01', '2026-11-01'])).toEqual({
+      months: [{ month: '2026-10-01', read: true }, { month: '2026-11-01', read: true }],
+      from: 0, span: 2,
+    })
+  })
+
+  it('draws the strip only where its months touch: never "Jul | Aug | Oct Nov" on an earlier month (deploy 2 review)', () => {
+    const sep = marketFrontFixture().change!
+    expect(drawsStrip(sep)).toBe(true)
+    expect(drawsStrip(octoberLeadsFixture(OCTOBER_LEADS_AT).change!)).toBe(true)
+    expect(drawsStrip(octoberLeadsFixture(OCTOBER_ENDED_AT).change!)).toBe(true)
+    // The August page, one click away through the month menu: the pair read
+    // is July against August, the next pair October against November.
+    const aug = { ...sep, prevMonth: '2026-07-01', month: '2026-08-01' }
+    expect(drawsStrip(aug)).toBe(false)
+    const markup = change({ ...marketFrontFixture(), change: aug })
+    expect(markup).not.toContain('>Jul</span>')
+    expect(markup).not.toContain('the first comparison read the same way</span>')
+    expect(read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...marketFrontFixture(), change: aug }, 'app', ctx)))
+      .toContain('The first comparison read the same way: October against November')
+  })
+
+  it('18 Oct: the bar reads October, as at the 18 Oct update', () => {
+    const text = read(<OverviewPage data={octoberLeadsFixture(OCTOBER_LEADS_AT)} />)
+    expect(text).toContain('Sealand · October 2026 as at the 18 Oct update · next update Sun 25 Oct')
+  })
+
+  it('18 Oct: Sep, Oct and Nov once each, October solid, the bracket over Oct and Nov, the "as at" in October', () => {
+    const markup = change(octoberLeadsFixture(OCTOBER_LEADS_AT))
+    for (const [name, ground] of [['Sep', 'bg-inner'], ['Oct', 'bg-inner'], ['Nov', 'bg-tile']]) {
+      expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
+      expect(markup).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)
+    }
+    expect(markup).not.toContain('>Aug</span>')
+    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-5"/)
+    expect(markup).toMatch(/<div class="col-start-2 col-span-2 flex flex-col">/)
+    expect(markup).toMatch(/<span class="col-start-2 col-span-2 flex justify-center">/)
+    // One "as at", on 18 Oct (17.5 of October's 31 days); the marks stay
+    // under September (8.5, 12.5 and 16.5 of 30).
+    expect(markup.match(/as at 18 Oct/g)?.length).toBe(1)
+    expect(markup.match(/left:56\.45%/g)?.length).toBe(2)
+    for (const x of ['28.33', '41.67', '55.00']) expect(markup).toContain(`left:${x}%`)
+    expect(read(<OverviewPage data={octoberLeadsFixture(OCTOBER_LEADS_AT)} />)).toContain('from the 6 Dec update')
+  })
+
+  it('the "as at" words sit clear of the cell\'s top edge, and its rule stops at the cell\'s foot (deploy 2 review)', () => {
+    for (const at of [OCTOBER_LEADS_AT, OCTOBER_ENDED_AT] as const) {
+      const markup = change(octoberLeadsFixture(at))
+      expect(markup).toContain('absolute -top-4 bottom-0 w-[1.5px]')
+      expect(markup).not.toContain('-bottom-1 w-[1.5px]')
+      expect(markup).toMatch(/absolute -top-5 whitespace-nowrap font-mono[^>]*>as at /)
+    }
+  })
+
+  it('1 Nov: October, ended, and the "as at" in the dashed November, once', () => {
+    const data = octoberLeadsFixture(OCTOBER_ENDED_AT)
+    expect(read(<OverviewPage data={data} />)).toContain('Sealand · October 2026 as at the 1 Nov update · next update Sun 8 Nov')
+    const markup = change(data)
+    for (const name of ['Sep', 'Oct', 'Nov']) expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
+    expect(markup.match(/as at 1 Nov/g)?.length).toBe(1)
+    expect(markup).toContain('left:1.67%')
+    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-5"/)
+  })
+
+  it('prints no "moved", no arrow and no em dash at either clock', () => {
+    for (const at of [OCTOBER_LEADS_AT, OCTOBER_ENDED_AT] as const) {
+      const text = read(<OverviewPage data={octoberLeadsFixture(at)} />)
+      expect(text).not.toMatch(/\bmoved\b/)
+      expect(text).not.toMatch(/[▲▼]/)
+      expect(text).not.toContain('\u2014')
+    }
+  })
+})
+
+// A CAPPED SUNDAY IN OCTOBER (R-c, deploy 2 review): from the 6 Dec update
+// October against November is measured and read the same way on all four
+// rules, and the 11 Oct update was capped. The judge flags the pair for run
+// health only, which is not one of decision D's rules: the block still says the
+// pair was read the same way, and does not offer it again as the first one.
+describe('the change block at the 6 Dec update, with a capped October update', () => {
+  const row: PairRow = {
+    prevMonth: '2026-10-01', month: '2026-11-01',
+    searchOutside: { prev: { k: 0, n: 700 }, curr: { k: 0, n: 720 } }, addedOnly: { k: 0, n: 720 },
+    codeChanges: [], depth: { prevMedian: 20, currMedian: 19 }, gather: [], lateCapture: null,
+    readThroughRun: 'run-6dec', methodVersion: 'mf1', computedAt: '2026-12-07T10:00:00.000Z',
+  }
+  const updates = ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25', '2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22', '2026-11-29', '2026-12-06']
+    .map((d) => ({ id: d === '2026-12-06' ? 'run-6dec' : `run-${d}`, finishedAt: `${d}T08:00:00.000Z` }))
+  const judge = withGatherFlags(
+    pairJudge({ now: '2026-12-08T06:00:00.000Z', changes: [], rows: [row], updates, nextUpdateAfter: null }),
+    [{ id: 'capped-1011', at: '2026-10-11T04:18:00.000Z', month: '2026-10-01', runId: 'run-2026-10-11' }],
+  )
+  const pair = judge('2026-10-01', '2026-11-01', 'market')
+  const change: NonNullable<OverviewData['change']> = {
+    prevMonth: '2026-10-01', month: '2026-11-01', pair,
+    next: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z', inFullExpected: '2027-01-03T04:00:00.000Z' },
+    checks: [], readWith: '2026-12-06T08:00:00.000Z', paused: false, asAt: '2026-12-06T08:00:00.000Z', searchChanges: [],
+  }
+
+  it('prints "October and November were read the same way." and no next pair, in every mode', () => {
+    expect(pair.mode).toBe('flag')
+    for (const mode of MODES) {
+      const text = read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...marketFrontFixture(), change }, mode, ctx))
+      expect(text, mode).toContain('October and November were read the same way.')
+      expect(text, mode).not.toContain('The first comparison read the same way')
+    }
+  })
+
+  it('Settings › What we changed says the same, with nothing under "Why … is not compared"', () => {
+    const text = read(<WhatWeChangedLead block={change} />)
+    expect(text).toContain('October and November were read the same way.')
+    expect(text).not.toContain('sit side by side')
+    expect(text).not.toContain('is not compared')
+    expect(text).not.toContain('The first comparison read the same way')
+  })
+})
 
 describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   const text = read(<OverviewPage data={marketFrontFixture()} />)
@@ -109,6 +251,24 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Buying & delivery no reading yet')
   })
 
+  // Default M-a: one wording for a subject the month was not read for on every
+  // surface, which is the row's `unread` (`unreadWords`): "no reading yet"
+  // while an update will still read the month, and "not read in August" once
+  // none will (a month picked in the selector after it froze).
+  it('a subject the month was not read for prints the row\'s own unread words, the ones every surface prints', () => {
+    const base = marketFrontFixture()
+    const rows = base.subjects.rows.map((r) => (r.id === 's-buying' ? { ...r, unread: 'not read in August' } : r))
+    const frozen = { ...base, subjects: { ...base.subjects, rows } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
+    for (const mode of MODES) {
+      const printed = read(block.render(frozen, mode, ctx))
+      expect(printed).toContain('Buying & delivery')
+      expect(printed).toContain('not read in August')
+      expect(printed).not.toContain('Buying & delivery no reading yet')
+      expect(printed).not.toContain('Buying & delivery · no reading yet')
+    }
+  })
+
   it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
     expect(text).toContain('Price provisional 23 4% 5')
     expect(text).not.toContain('Price provisional 23 4% ·')
@@ -127,6 +287,40 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Not read as a change: we changed our searches in September.')
     expect(text).toContain('The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
     expect(render(<OverviewPage data={marketFrontFixture()} />)).toContain(`href="${WHAT_WE_CHANGED_HREF}"`)
+  })
+
+  it('what changed, measured: WP1.8\u2019s one figure in the preview\u2019s sentence, over the market, never the strict count (the 26 Sep ruling)', () => {
+    // Staging's (Aug, Sep) row as measure-comparability wrote it on 26 Sep,
+    // read through the 20 Sep update.
+    const row: PairRow = {
+      prevMonth: '2026-08-01', month: '2026-09-01',
+      searchOutside: { prev: { k: 148, n: 351 }, curr: { k: 376, n: 625 } }, addedOnly: { k: 356, n: 654 },
+      codeChanges: [], depth: { prevMedian: 21, currMedian: 14 }, gather: [], lateCapture: null,
+      readThroughRun: 'b67b56de', methodVersion: 'mf1_v1', computedAt: '2026-09-26T16:42:06.059Z',
+    }
+    const measured = comparabilityOf('2026-08-01', '2026-09-01', {
+      row, view: 'market',
+      changes: [{ id: 'terms-0913', surface: 'terms', changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] }],
+      later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'b67b56de' },
+    })
+    const base = marketFrontFixture()
+    const data = { ...base, change: { ...base.change!, pair: measured, readWith: '2026-09-20T08:33:47.358Z' } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!
+    for (const mode of MODES) {
+      const t = read(block.render(data, mode, ctx))
+      expect(t).toContain('Not a change we can stand behind yet: about half of September came from searches we added in September (356 of 654, read with the 20 Sep update).')
+      expect(t).not.toMatch(/\b376\b|\b625\b/)
+      assertCopyContract(render(block.render(data, mode, ctx)))
+    }
+    // Without the figure (a row written before the columns), the refusal with no figure.
+    const bare = comparabilityOf('2026-08-01', '2026-09-01', {
+      row: { ...row, addedOnly: null }, view: 'market',
+      changes: [{ id: 'terms-0913', surface: 'terms', changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] }],
+      later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'b67b56de' },
+    })
+    const t = read(block.render({ ...data, change: { ...data.change, pair: bare } }, 'app', ctx))
+    expect(t).toContain('Not read as a change: we changed our searches in September.')
+    expect(t).not.toMatch(/\b376\b|\b356\b/)
   })
 
   it('what changed: the strip marks our search changes and the "as at", with its bracket words above the bracket (the approved preview)', () => {
@@ -159,13 +353,19 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     const oct = at('2026-10-11T08:30:00.000Z')
     expect(oct.match(/as at 11 Oct/g)?.length).toBe(1)
     expect(oct).toContain('left:33.87%')
-    expect(oct).toMatch(/class="grid grid-cols-2 gap-x-3 mt-4"/)
+    expect(oct).toMatch(/class="grid gap-x-3 grid-cols-4 mt-5"/)
     // Every month's name stands on its cell's ground, above the rule.
     for (const [name, ground] of [['Aug', 'bg-inner'], ['Sep', 'bg-inner'], ['Oct', 'bg-tile'], ['Nov', 'bg-tile']]) {
       expect(oct).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)
     }
     // The preview's state, an "as at" in the month read, keeps its spacing.
-    expect(render(overviewChangeRender())).toMatch(/class="grid grid-cols-2 gap-x-3 mt-2\.5"/)
+    expect(render(overviewChangeRender())).toMatch(/class="grid gap-x-3 grid-cols-4 mt-2\.5"/)
+  })
+
+  it('what changed: four months while September is read, the bracket over the last two', () => {
+    const markup = render(overviewChangeRender())
+    for (const name of ['Aug', 'Sep', 'Oct', 'Nov']) expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
+    expect(markup).toMatch(/<div class="col-start-3 col-span-2 flex flex-col">/)
   })
 
   it('what changed: a stored block without the strip’s fields draws the months and no mark', () => {

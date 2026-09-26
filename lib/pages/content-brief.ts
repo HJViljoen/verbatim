@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import { monthStartOf } from '../reading/month-key'
+import { loadReadingMonth } from '../reading/reading-view'
 import { belowMedian, type FormatRow } from '../reading/formats'
 import { methodLines, REDDIT_CAP_LINE, type MethodLines } from '../reading/method'
 import {
@@ -494,12 +495,29 @@ export async function loadContentBrief(scope: Scope): Promise<ContentBriefData |
   const reading = scope.reading
   const { clientId } = scope
   const readingAt = new Date().toISOString()
-  const month = monthStartOf(readingAt)
 
-  const [clientRes, configRes] = await Promise.all([
+  // THE READING MONTH, NOT THE CALENDAR'S (decision A; default M-f, as the
+  // Record tab's Delivery and Coverage since 91af44f5). On 1 to 15 Oct this
+  // surface read October, a day or two of it, inside a brief whose stamp and
+  // every other section read September; it now reads the month the brief's
+  // Overview reads,
+  // with its `?month=`, off the same memoised reads. The calendar month only
+  // where nothing has been delivered. `readingAt` stays the clock: it is the
+  // brief's "Prepared ... {date}", and the brief's own record takes the clock
+  // too (lib/reports/documents/load-reading.ts). The month's status is read at
+  // the update, as Overview reads it ("frozen once an UPDATE has passed its
+  // freeze line, not the clock"), so a paused tenant's month is not called
+  // frozen by the clock alone.
+  const [clientRes, configRes, rm] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle(),
+    loadReadingMonth(supabase, reading, readingAt, { explicit: scope.params.month }).catch((e) => {
+      console.error(`[pages] content-brief.month: ${message(e)}`)
+      return null
+    }),
   ])
+  const month = monthStartOf(rm?.month ?? readingAt)
+  const monthStatus = freezeStateFor(month, rm?.asAt ?? readingAt)
   const brand = (clientRes.data as { company_name?: string | null } | null)?.company_name ?? 'Your brand'
   // THE FIRST TRACKED RIVAL IS THE THIRD COLUMN, and the column is headed with
   // its name. A brief cannot ask the reader which rival they meant, and a table
@@ -544,7 +562,7 @@ export async function loadContentBrief(scope: Scope): Promise<ContentBriefData |
     brand,
     month,
     monthLabel: longMonth(month),
-    monthStatus: freezeStateFor(month, readingAt),
+    monthStatus,
     readingAt,
     // `read` IS `videos != null`, AND THAT IS THE WHOLE POINT: the catch above
     // turns a failed read into null, and a null that reached the slide used to
@@ -552,7 +570,7 @@ export async function loadContentBrief(scope: Scope): Promise<ContentBriefData |
     playbook: buildPlaybookSlide({ playbook, read: videos != null, brand, monthLabel: longMonth(month), rival }),
     record: buildRecordSlide({
       month,
-      monthStatus: freezeStateFor(month, readingAt),
+      monthStatus,
       record,
       // BOTH READS THREW IS THE ONLY WAY TO REACH THE EMPTY ARM, and that is a
       // fact about this request, not about the workspace.
