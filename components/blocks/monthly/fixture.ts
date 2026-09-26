@@ -188,9 +188,10 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  * - `arrivals`: staging's 20 Sep update as `update_arrivals` counts it (MF2,
  *   read-only, 26 Sep): 395 September videos read for the first time and
  *   11,999 September comments (1 and 99 of August), with the nine themes it
- *   heard first at 10+ category videos in September, the first five named
- *   (65, 25, 14, 13, 12; provenance not measured here). What the 11 Oct
- *   update brings is not knowable.
+ *   heard first at 10+ category videos in September as the loader read them
+ *   on staging: three led by makers counted, six named, the first five with
+ *   their videos from searches first run in September (8 of 13, 9 of 12, 11
+ *   of 12, 6 of 11, 8 of 10). What the 11 Oct update brings is not knowable.
  * - `change`: HYPOTHETICAL, and named so. The check line is the plan's own expected outcome
  *   (WP2.3: "Too few videos on the searches both months ran to check.") on
  *   "Asking for something", 146 of 626 in September (production).
@@ -241,19 +242,16 @@ export function filledSlotsFixture(): MonthlyData {
           { month: SEP, videosFirstRead: 395, commentsCaptured: 11999 },
         ],
         current: { month: SEP, videos: 654, updates: 3 },
-        newThemes: [
-          { registryId: '184e2461-8604-4bd6-b056-b92e7f913c2f', label: 'Admiration for handmade craftsmanship', k: 65, fromNewSearches: null },
-          { registryId: 'fb4361bb-7490-4395-8ba2-b7d94bbf8e07', label: 'Questions about materials and tools', k: 25, fromNewSearches: null },
-          { registryId: 'daf78e91-fffb-452b-87e4-453d89eaa83c', label: 'Tutorial praised as easy to follow', k: 14, fromNewSearches: null },
-          { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: null },
-          { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: null },
-          { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: null },
-          { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: null },
-          { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: null },
+      newThemes: [
+          { registryId: '2c7238b7-8152-4c33-9d44-e366eb0efdba', label: 'Interest in shipping and locations', k: 13, fromNewSearches: 8 },
+          { registryId: '056a478a-ea54-4ab7-97d4-82681d263c82', label: 'Appreciation for smart packing tips', k: 12, fromNewSearches: 9 },
+          { registryId: 'f329a7dd-7afe-4710-80e3-f4ba6e63b708', label: 'Confusion about airline size rules', k: 12, fromNewSearches: 11 },
+          { registryId: '8285e151-7e5a-41b1-b0db-5941e027a20a', label: 'Praise for laptop carry features', k: 11, fromNewSearches: 6 },
+          { registryId: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', k: 10, fromNewSearches: 8 },
           { registryId: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', k: 10, fromNewSearches: null },
         ],
         regrouped: null,
-        grouped: { makers: 0, setAside: 0 },
+        grouped: { makers: 3, setAside: 0 },
       },
     },
     change: {

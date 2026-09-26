@@ -47,25 +47,31 @@ describe('With this update (WP2.7)', () => {
       const t = text(marketArrivalsFixture(), mode)
       expect(t).toContain('Heard for the first time')
       expect(t).toContain('With 10+ videos in September:')
-      expect(t).toMatch(/“\s*Admiration for handmade craftsmanship\s*”: 65 videos/)
-      expect(t).toMatch(/“\s*Confusion about airline size rules\s*”: 12 videos/)
-      expect(t).not.toContain('Laundry planning for travel')
-      expect(t).toContain('And 4 more.')
+      expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
+      expect(t).toMatch(/“\s*Laundry planning for travel\s*”: 8 of its 10 videos/)
+      expect(t).not.toContain('Preference for secondhand fashion')
+      expect(t).toContain('And 1 more.')
+      // Led by makers: counted, never named (decision F).
+      expect(t).toContain('3 more are led by makers.')
+      expect(t).not.toContain('Admiration for handmade craftsmanship')
     }
   })
 
   it('says how many of a theme’s videos came from searches added in the month, one denominator a line', () => {
     const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: [
-      { ...SEALAND_20_SEP_ARRIVALS.newThemes[3], fromNewSearches: 4 },
-      { ...SEALAND_20_SEP_ARRIVALS.newThemes[4], fromNewSearches: 0 },
+      SEALAND_20_SEP_ARRIVALS.newThemes[0],
+      { ...SEALAND_20_SEP_ARRIVALS.newThemes[2], fromNewSearches: 0 },
+      SEALAND_20_SEP_ARRIVALS.newThemes[5],
     ] }
     const t = text({ ...marketArrivalsFixture(), arrivals: a })
-    expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 4 of its 13 videos came from searches we added in September/)
+    expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
     expect(t).toMatch(/“\s*Confusion about airline size rules\s*”: none of its 12 videos came from searches we added in September/)
+    // Not measured: the count alone, never a zero.
+    expect(t).toMatch(/“\s*Preference for secondhand fashion\s*”: 10 videos/)
   })
 
   it('counts the themes led by makers or set aside, never names them (decision F)', () => {
-    const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: SEALAND_20_SEP_ARRIVALS.newThemes.slice(3, 5), grouped: { makers: 2, setAside: 1 } }
+    const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: SEALAND_20_SEP_ARRIVALS.newThemes.slice(0, 2), grouped: { makers: 2, setAside: 1 } }
     const t = text({ ...marketArrivalsFixture(), arrivals: a })
     expect(t).toContain('2 more are led by makers.')
     expect(t).toContain('1 more is set aside as off-topic.')
@@ -110,7 +116,9 @@ describe('With this update (WP2.7)', () => {
     const f = overviewArrivals.figures!(marketArrivalsFixture())
     expect(f.arrivals_videos_first_read.value).toBe(395)
     expect(f.arrivals_comments_captured.value).toBe(11999)
-    expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_'))).toHaveLength(5)
+    // The five named themes: their videos, and those from searches added in the month.
+    expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_') && k.endsWith('_videos'))).toHaveLength(5)
+    expect(Object.keys(f).filter((k) => k.endsWith('_new_searches'))).toHaveLength(5)
   })
 })
 
