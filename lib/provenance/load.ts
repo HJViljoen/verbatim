@@ -40,16 +40,17 @@ export interface VideoRow {
   is_competitor: boolean | null
   competitor_name: string | null
   analyzed_lane: string | null
+  account_name?: string | null
   caption?: string | null
   hashtags?: string[] | null
   topics?: string[] | null
 }
 
-/** Every video of the client. `text` adds caption, hashtags and topics (the maker rule). */
+/** Every video of the client. `text` adds account, caption, hashtags and topics (the maker rule, the heuristic gate). */
 export function readVideos(admin: SupabaseClient, clientId: string, pages: Pages, opts: { text?: boolean } = {}): Promise<VideoRow[]> {
   const build = opts.text
     ? () => admin.from('videos')
-      .select('id, platform, video_id, source_keywords, first_seen:scraped_at, source, is_client, is_competitor, competitor_name, analyzed_lane, caption, hashtags, topics')
+      .select('id, platform, video_id, source_keywords, first_seen:scraped_at, source, is_client, is_competitor, competitor_name, analyzed_lane, account_name, caption, hashtags, topics')
       .eq('client_id', clientId).order('id')
     : () => admin.from('videos')
       .select('id, platform, video_id, source_keywords, first_seen:scraped_at, source, is_client, is_competitor, competitor_name, analyzed_lane')
