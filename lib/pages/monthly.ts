@@ -36,8 +36,9 @@ export interface DecideSection {
   /** The current recommendation, as the front page's ledger reads it (the
    *  newest first, WP1.9), or null where none stands. */
   ledger: LedgerRow | null
-  /** The next monthly, read to the second update after its month ends and
-   *  sent the day after (decision J); null where no update is promised. */
+  /** The next monthly, read to the first update after its month ends and
+   *  sent two days later (decision J, moved by plan §3.7); null where no
+   *  update is promised. */
   next: NextMonthly | null
   href: string
 }
@@ -51,7 +52,7 @@ export interface MonthlyData {
    *  `readTo`. */
   readingAt: string
   /** The last update that read the month (`ReadingMonth.readTo`): the
-   *  masthead's "read to the 11 Oct update". */
+   *  masthead's "read to the 4 Oct update". */
   readTo: string | null
   /** The month's pooled market (decision E): the subject line's count and
    *  "The month"'s size. */

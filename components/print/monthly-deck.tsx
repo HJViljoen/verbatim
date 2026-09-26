@@ -21,7 +21,7 @@ import { withCurrentWords } from '@/lib/reports/legacy-words'
 // the app call, so the PDF a send attaches and the email it is attached to
 // cannot say different things; a section the email leaves out (an absent
 // slot) has no sheet either. The chrome carries the masthead's one line
-// ("September 2026 · read to the 11 Oct update") and the date; no rule or
+// ("September 2026 · read to the 4 Oct update") and the date; no rule or
 // caveat footnote (25 Sep rulings).
 //
 // NOT toLocaleDateString: lib/format.ts's own header forbids it, because Intl

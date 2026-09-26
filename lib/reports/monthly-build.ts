@@ -49,7 +49,7 @@ export interface MonthlySnapshotData {
   company: string
   /** "September in your market". */
   title: string
-  /** "September 2026 · read to the 11 Oct update" (`monthlyStamp`). */
+  /** "September 2026 · read to the 4 Oct update" (`monthlyStamp`). */
   period: string
   /** The instant the reading was taken. M9's `report_snapshots.reading_at` is
    *  stamped from here, and its backfill reads exactly this field. */

@@ -532,7 +532,7 @@ export function MarketBrandsBody({ b, mode }: { b: BrandsRead; mode: RenderMode 
 
 /** The front page's brands block: deploy 3's name line and topics where the
  *  page read them (WP2.6); else deploy 2's one line ("Brands in your market,
- *  counted in every video they come up in, arrive with the 11 Oct update.
+ *  counted in every video they come up in, arrive with the 4 Oct update.
  *  Until then, Competitive lists …") inside a drawn block (decision B 2). The
  *  footer links Competitive by its current sidebar label. */
 function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string) {

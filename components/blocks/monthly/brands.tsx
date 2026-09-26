@@ -14,7 +14,7 @@ import { slotSection } from './slot'
 /**
  * 8 · Brands in your market (market-first WP2.1; the front page's block 9 in
  * its D3 form, WP2.6's slot). Absent until the slot is filled: the front
- * page's deploy 2 line ("arrive with the 11 Oct update") is a promise about
+ * page's deploy 2 line ("arrive with the 4 Oct update") is a promise about
  * the page, not something to send a client.
  *
  * THE PAGE'S BODY, THE PAGE'S WORDS (WP2.6). In the app and on paper the

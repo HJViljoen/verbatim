@@ -19,7 +19,8 @@ import { Body, Inner } from './email'
  * recommendation first, WP1.9): its title as stored, how often it was made and
  * what it rests on (`provenanceLine`, the page's own line), and the decision
  * on it. Under it, when the next monthly comes: "Next: “October in your
- * market”, read to the 8 Nov update, on Mon 9 Nov." (decision J). Version 1's
+ * market”, read to the 1 Nov update, on Tue 3 Nov." (decision J, moved one
+ * update earlier by plan §3.7). Version 1's
  * interpretation slot and the brief's link are not in the approved preview
  * and are gone: the build calls no model (plan WP2.1, "Cost").
  */

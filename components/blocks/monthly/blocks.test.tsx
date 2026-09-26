@@ -319,13 +319,13 @@ describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
 })
 
 describe('10 · what to decide', () => {
-  it('prints the current recommendation and the next monthly, decision J’s dates', () => {
+  it('prints the current recommendation and the next monthly, on plan §3.7’s dates', () => {
     const t = text('monthly.decide')
     expect(t).toContain('The current recommendation')
     expect(t).toContain('Add a "fit and facts" layer to every Sealand bag page and shopping touchpoint')
     expect(t).toContain('Repeated across 3 updates · 253 videos behind it')
     expect(t).toContain('You marked it Working on it on 15 Sep')
-    expect(t).toMatch(/Next: “October in your market”\s*, read to the 8 Nov update, on Mon 9 Nov\./)
+    expect(t).toMatch(/Next: “October in your market”\s*, read to the 1 Nov update, on Tue 3 Nov\./)
     expect(t).not.toContain('Interpretation')
   })
 

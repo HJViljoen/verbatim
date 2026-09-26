@@ -64,9 +64,20 @@ describe('the monthly email: "September in your market"', () => {
     expect(text).toContain('Sealand')
     expect(text).toContain('September in your market')
     expect(text).toContain('September 2026')
-    expect(text).toContain('read to the 11 Oct update')
+    expect(text).toContain('read to the 4 Oct update')
     expect(text).not.toContain('still filling')
     expect(text).not.toContain('reading as at')
+  })
+
+  // Plan §3.7 option (b), decided 26 Sep: sent Tue 6 Oct, read to the 4 Oct
+  // update, and the next one a month on by the same rule.
+  it('reads every date on the fast track’s calendar: read to the 4 Oct update, the next on Tue 3 Nov', () => {
+    for (const data of [snapshot(), snapshot(filledSlotsFixture())]) {
+      const text = words(data)
+      expect(text).toMatch(/September 2026[\s·]*read to the 4 Oct update/)
+      expect(text).toMatch(/Next: “October in your market”\s*, read to the 1 Nov update, on Tue 3 Nov\./)
+      expect(text).not.toMatch(/11 Oct|12 Oct|8 Nov|9 Nov/)
+    }
   })
 
   it('leads the inbox with the market, never a change (the subject line)', () => {
@@ -151,26 +162,26 @@ describe('the monthly email: "September in your market"', () => {
 
 describe('"September in your market" on paper', () => {
   it('paginates one present section per sheet, and gives an absent slot no sheet', () => {
-    const markup = render(<MonthlyDeck data={snapshot()} date="12 Oct 2026" />)
+    const markup = render(<MonthlyDeck data={snapshot()} date="6 Oct 2026" />)
     expect((markup.match(/vb-slide/g) ?? []).length).toBeGreaterThanOrEqual(7)
     expect(markup).not.toContain('With this update')
-    expect(markupText(markup)).toContain('September 2026 · read to the 11 Oct update')
+    expect(markupText(markup)).toContain('September 2026 · read to the 4 Oct update')
   })
 
   it('prints the stale line on its own sheet for a version 1 row', () => {
     const v1 = { ...snapshot(), version: 1 } as MonthlySnapshotData
-    expect(markupText(render(<MonthlyDeck data={v1} date="12 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
+    expect(markupText(render(<MonthlyDeck data={v1} date="6 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
   })
 
   it('says so on its own sheet when it knows none of the stored keys', () => {
     const none = snapshot(monthlyFixture(), { keys: ['monthly.movers'] as never })
-    expect(markupText(render(<MonthlyDeck data={none} date="12 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
+    expect(markupText(render(<MonthlyDeck data={none} date="6 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
   })
 
   // The Reports viewer's "N pages" is the deck's own count: an absent slot has
   // no sheet, and a row this build cannot draw is one sheet.
   it('is counted for the Reports viewer as the deck paginates it', () => {
-    const sheets = (data: MonthlySnapshotData) => (render(<MonthlyDeck data={data} date="12 Oct 2026" />).match(/<section class="vb-slide[" ]/g) ?? []).length
+    const sheets = (data: MonthlySnapshotData) => (render(<MonthlyDeck data={data} date="6 Oct 2026" />).match(/<section class="vb-slide[" ]/g) ?? []).length
     const cases = [
       snapshot(),
       snapshot(filledSlotsFixture()),
@@ -188,7 +199,7 @@ describe('the shared "September in your market"', () => {
   it('heads the page as the email heads it, and draws the present sections', () => {
     const text = markupText(render(<MonthlyShareShell data={snapshot()} appUrl={APP} />))
     expect(text).toContain('September in your market')
-    expect(text).toContain('read to the 11 Oct update')
+    expect(text).toContain('read to the 4 Oct update')
     expect(text).toContain('What your market talked about')
     expect(text).toContain('What to decide')
     expect(text).not.toContain('Brands in your market')

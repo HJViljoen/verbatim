@@ -19,12 +19,13 @@ import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFro
 // 24 Sep figures, plan §2.2's print, every number sourced there) with three
 // things the monthly adds, each sourced below:
 //
-// - THE CLOCK. The monthly is read after its month ends: the 12 Oct clock, on
-//   Sealand's real update calendar (`sealandReading`), reads September "read
-//   to the 11 Oct update". The FIGURES stay the 24 Sep production ones, a
-//   stand-in for September read past its end (not knowable until the 11 Oct
-//   update): the approved preview's own convention ("Preview on September's
-//   production figures to the 24 Sep update").
+// - THE CLOCK. The monthly is read after its month ends: the 6 Oct clock (its
+//   send, plan §3.7 option (b)), on Sealand's real update calendar
+//   (`sealandReading`), reads September "read to the 4 Oct update". The
+//   FIGURES stay the 24 Sep production ones, a stand-in for September read
+//   past its end (not knowable until the 4 Oct update): the approved
+//   preview's own convention ("Preview on September's production figures to
+//   the 24 Sep update").
 // - THE MEASURED PAIR ROW. Staging's (August, September) row from the WP1.4
 //   rehearsal (26 Sep, `measure-comparability` read through the 20 Sep
 //   update): 148 of 351 and 376 of 625 outside the searches both months ran
@@ -43,8 +44,9 @@ import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFro
 
 const AUG = '2026-08-01'
 const SEP = '2026-09-01'
-/** The 12 Oct clock: September has ended and two updates read past it. */
-export const MONTHLY_AT = '2026-10-12T06:00:00.000Z'
+/** The 6 Oct clock, the send (plan §3.7): September has ended and one update
+ *  (4 Oct) read past it. */
+export const MONTHLY_AT = '2026-10-06T06:00:00.000Z'
 const SUNDAYS = scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' })
 
 /** Staging's measured (August, September) row (WP1.4's rehearsal, 26 Sep). */
@@ -198,7 +200,7 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  *   heard first at 10+ category videos in September as the loader read them
  *   on staging (no earlier month holds them: the two Conversation flags New),
  *   each with 8 of its 10 videos from searches first run in September. What
- *   the 11 Oct update brings is not knowable.
+ *   the 4 Oct update brings is not knowable.
  * - `change`: staging's re-check plan of 26 Sep (lib/test/recheck-fixture.ts),
  *   read with the 20 Sep update: too few on the searches both months ran (78
  *   and 103 videos), the two kinds whose fall follows depth (recheck_v2), and the

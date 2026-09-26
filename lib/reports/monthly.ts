@@ -136,14 +136,14 @@ export function monthlyTitle(month: string): string {
   return `${longMonth(month)} in your market`
 }
 
-/** "read to the 11 Oct update": the last update that read the month
+/** "read to the 4 Oct update": the last update that read the month
  *  (`ReadingMonth.readTo`), or null where none has. Never the wall clock. */
 export function readToWords(readTo: string | null | undefined): string | null {
   return readTo ? `read to the ${shortDate(readTo)} update` : null
 }
 
 /**
- * "September 2026 · read to the 11 Oct update": the masthead's stamp, frozen
+ * "September 2026 · read to the 4 Oct update": the masthead's stamp, frozen
  * with the snapshot as `period`, and what the deck's chrome and the share page
  * print. The 25 Sep rulings' one context line on an artefact: the month and
  * the update it was read to, with no "still filling" and no freeze date.
@@ -168,25 +168,34 @@ export function monthlySubject(company: string, month: string, videos: number | 
 
 // ---- the next monthly --------------------------------------------------------------
 
-/** How many updates read a month past its end before its monthly is built
- *  (decision J: September's on the 4 and 11 Oct updates, sent Mon 12 Oct;
- *  October's on the 1 and 8 Nov updates, sent Mon 9 Nov). */
-export const MONTHLY_UPDATES_PAST_END = 2
+/** How many updates read a month past its end before its monthly is built.
+ *  Decision J set two (September on the 4 and 11 Oct updates, sent Mon 12
+ *  Oct); the fast track (plan §3.7, option (b), decided 26 Sep) moved it one
+ *  update earlier: September read to the 4 Oct update, October to the 1 Nov
+ *  update, November to the 6 Dec update. */
+export const MONTHLY_UPDATES_PAST_END = 1
+
+/** Days from the update a monthly is read to until it is sent by hand: the
+ *  update lands on the Sunday, that update's applies run on the Monday (the
+ *  re-check, the brand counts), and the monthly goes on the Tuesday (plan
+ *  §3.7: "September in your market" on Tue 6 Oct, after the 4 Oct update and
+ *  Mon 5's applies; October's on Tue 3 Nov). */
+export const MONTHLY_SEND_DAYS_AFTER = 2
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export interface NextMonthly {
   /** The month the next monthly reads (`YYYY-MM-01`). */
   month: string
-  /** The update it is read to: the second scheduled update after it ends. */
+  /** The update it is read to: the first scheduled update after it ends. */
   readTo: string
-  /** The day after that update, when it is sent by hand (decision J). */
+  /** Two days after that update, when it is sent by hand (plan §3.7). */
   sendOn: string
 }
 
 /**
  * The next monthly, from the tenant's schedule: the month after this one,
- * read to the second scheduled update after it ends, sent the day after.
+ * read to the first scheduled update after it ends, sent two days later.
  * Null where no update is promised (a paused tenant, no cadence).
  */
 export function nextMonthlyOf(
@@ -198,10 +207,10 @@ export function nextMonthlyOf(
   let at: string | null = `${nextMonth(next)}T00:00:00.000Z`
   for (let i = 0; i < MONTHLY_UPDATES_PAST_END && at != null; i += 1) at = nextUpdateAfter(at)
   if (at == null || Number.isNaN(Date.parse(at))) return null
-  return { month: next, readTo: at, sendOn: new Date(Date.parse(at) + DAY_MS).toISOString() }
+  return { month: next, readTo: at, sendOn: new Date(Date.parse(at) + MONTHLY_SEND_DAYS_AFTER * DAY_MS).toISOString() }
 }
 
-/** "Next: “October in your market”, read to the 8 Nov update, on Mon 9 Nov."
+/** "Next: “October in your market”, read to the 1 Nov update, on Tue 3 Nov."
  *  In parts, so the email can set the title in weight as the preview does. */
 export function nextMonthlyParts(n: NextMonthly): { lead: string; title: string; tail: string } {
   return {

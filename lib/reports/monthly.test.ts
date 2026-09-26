@@ -5,6 +5,7 @@ import {
   MONTHLY_BLOCK_KEYS,
   MONTHLY_EMAIL_WIDTH,
   MONTHLY_RETIRED_KEYS,
+  MONTHLY_SEND_DAYS_AFTER,
   MONTHLY_UPDATES_PAST_END,
   MOVED_SINCE_PTS,
   freezesOn,
@@ -87,7 +88,7 @@ describe('the masthead', () => {
   })
 
   it('stamps the month and the update it was read to, with no "still filling"', () => {
-    expect(monthlyStamp('2026-09-01', '2026-10-11T08:30:00.000Z')).toBe('September 2026 · read to the 11 Oct update')
+    expect(monthlyStamp('2026-09-01', '2026-10-04T08:30:00.000Z')).toBe('September 2026 · read to the 4 Oct update')
     expect(monthlyStamp('2026-09-01', null)).toBe('September 2026')
     expect(readToWords(null)).toBeNull()
   })
@@ -116,24 +117,40 @@ describe('the subject line', () => {
   })
 })
 
-describe('the next monthly (decision J)', () => {
+describe('the next monthly (decision J, moved one update earlier by plan §3.7)', () => {
   const sundays = scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' })
+  const line = (n: NonNullable<ReturnType<typeof nextMonthlyOf>>) => {
+    const p = nextMonthlyParts(n)
+    return `${p.lead}${p.title}${p.tail}`
+  }
 
-  it('is October’s, read to the 8 Nov update and sent Mon 9 Nov, after September’s', () => {
-    const next = nextMonthlyOf('2026-09-01', sundays)!
-    expect(next.month).toBe('2026-10-01')
-    expect(next.readTo.slice(0, 10)).toBe('2026-11-08')
-    expect(next.sendOn.slice(0, 10)).toBe('2026-11-09')
-    const p = nextMonthlyParts(next)
-    expect(`${p.lead}${p.title}${p.tail}`).toBe('Next: “October in your market”, read to the 8 Nov update, on Mon 9 Nov.')
-  })
-
-  it('reproduces September’s own dates: read to the 11 Oct update, sent Mon 12 Oct', () => {
+  it('reproduces September’s own dates: read to the 4 Oct update, sent Tue 6 Oct (option (b), decided 26 Sep)', () => {
     const sep = nextMonthlyOf('2026-08-01', sundays)!
     expect(sep.month).toBe('2026-09-01')
-    expect(sep.readTo.slice(0, 10)).toBe('2026-10-11')
-    expect(sep.sendOn.slice(0, 10)).toBe('2026-10-12')
-    expect(MONTHLY_UPDATES_PAST_END).toBe(2)
+    expect(sep.readTo).toBe('2026-10-04T04:00:00.000Z')
+    expect(sep.sendOn.slice(0, 10)).toBe('2026-10-06')
+    expect(line(sep)).toBe('Next: “September in your market”, read to the 4 Oct update, on Tue 6 Oct.')
+    expect(MONTHLY_UPDATES_PAST_END).toBe(1)
+    expect(MONTHLY_SEND_DAYS_AFTER).toBe(2)
+  })
+
+  it('is October’s, read to the 1 Nov update and sent Tue 3 Nov, after September’s', () => {
+    const next = nextMonthlyOf('2026-09-01', sundays)!
+    expect(next.month).toBe('2026-10-01')
+    expect(next.readTo.slice(0, 10)).toBe('2026-11-01')
+    expect(next.sendOn.slice(0, 10)).toBe('2026-11-03')
+    expect(line(next)).toBe('Next: “October in your market”, read to the 1 Nov update, on Tue 3 Nov.')
+  })
+
+  it('keeps the rule after the trial: November read to the 6 Dec update, sent Tue 8 Dec', () => {
+    const nov = nextMonthlyOf('2026-10-01', sundays)!
+    expect(nov.month).toBe('2026-11-01')
+    expect(line(nov)).toBe('Next: “November in your market”, read to the 6 Dec update, on Tue 8 Dec.')
+  })
+
+  it('never names a date on the old calendar (11 Oct, Mon 12 Oct, 8 Nov, Mon 9 Nov)', () => {
+    const lines = ['2026-08-01', '2026-09-01'].map((m) => line(nextMonthlyOf(m, sundays)!)).join(' ')
+    expect(lines).not.toMatch(/11 Oct|12 Oct|8 Nov|9 Nov/)
   })
 
   it('promises nothing where no update is scheduled', () => {
