@@ -47,7 +47,7 @@ export const BRAND_RULE_VERSION = 'brands_v1'
  *  this prints "mostly another word · not counted". */
 export const BRAND_PRECISION_FLOOR = 0.8
 
-export type BrandKeyRef = { kind: 'client' } | { kind: 'rival'; name: string }
+export type BrandKeyRef = { kind: 'client' } | { kind: 'rival'; name: string } | { kind: 'watched'; name: string }
 
 export interface BrandRule {
   /** The brand as the tenant names it (competitor_names, or the client). */
@@ -280,3 +280,42 @@ export const jsRegex = (pattern: string): RegExp => new RegExp(pattern, 'isu')
 export function ruleMatches(rule: BrandRule, text: string | null | undefined): boolean {
   return !!text && jsRegex(brandPattern(rule, 'js')).test(text)
 }
+
+// ---- watched brands (WP3.5) -------------------------------------------------
+//
+// Brands the market names that we do not search (Peak Design, tomtoc, Osprey,
+// Matador, Bellroy, BAGSMART on Sealand's staging captions: 13, 12, 11, 9, 7
+// and 7 in August and September), listed by the operator in
+// tracking_configs.watched_brands (MF3; operator-only, logged through
+// recordConfigChange). Counted without adding a search. A watched name has no
+// guard list of its own, so it counts only as the whole name, as written: its
+// precision is checked by hand before a page prints it (a brand under
+// BRAND_PRECISION_FLOOR prints as not counted), and a name that needs guards
+// graduates to a rule above, under a new BRAND_RULE_VERSION. Its rows carry
+// WATCHED_RULE_VERSION and brand_key 'watched:<slug>'.
+
+export const WATCHED_RULE_VERSION = 'watched_v1'
+
+/** 'Peak Design' → 'peak-design'. */
+export const watchedSlug = (name: string): string =>
+  name.trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+export const watchedKey = (name: string): string => `watched:${watchedSlug(name)}`
+
+/** A watched name's rule: the whole name, spaces flexible, as a strong form.
+ *  Null for a name with nothing to match or with characters the two engines
+ *  might read apart (only letters, digits, spaces, '&', '.', '-' and an
+ *  apostrophe are taken). */
+export function watchedRule(name: string): BrandRule | null {
+  const trimmed = name.trim()
+  if (!watchedSlug(trimmed) || !/^[\p{L}\p{N} &.'-]+$/u.test(trimmed)) return null
+  const body = trimmed.toLowerCase().split(/\s+/).map((w) => w.replace(/[.]/g, '\\.').replace(/-/g, '[- ]?')).join('\\s*')
+  return {
+    brand: trimmed,
+    key: { kind: 'watched', name: trimmed },
+    strong: [body],
+    weak: [],
+    why: 'a watched brand (tracking_configs.watched_brands): the whole name only, no guards; printed only once its hand-checked precision clears the floor',
+  }
+}
+
