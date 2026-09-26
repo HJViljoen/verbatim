@@ -6,7 +6,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { BarPill } from '@/components/shell/page-grid'
+import { BarPill, barButtonClass } from '@/components/shell/page-grid'
 import { FORMAT_NOUN, exportErrorLine, jobKey, pageSections, tileSections, type ExportJob, type ExportSection } from '@/lib/exports/jobs'
 import type { PageKey } from '@/lib/renderables/types'
 
@@ -162,23 +162,37 @@ function Body({ sections, ex }: { sections: ExportSection[]; ex: ReturnType<type
   )
 }
 
-/** The page-level control: this page, this page with everything, any tile. */
-export function ExportMenu() {
+/**
+ * The page-level control: this page, this page with everything, any tile.
+ *
+ * `button` is the approved preview's Export (a 40px button beside nothing,
+ * Your market since the WP1.6 design check); `pill` is the bar's older pill,
+ * kept on the pages whose bar still pairs Export with the How to read pill,
+ * so one row never mixes the two shapes.
+ */
+export function ExportMenu({ variant = 'pill' }: { variant?: 'pill' | 'button' } = {}) {
   const scope = useContext(ExportScopeContext)
   const { open, setOpen, ex } = useExportControl(scope)
   if (!scope) return null
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button" data-print-hide=""
-          className="cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <BarPill active={open}>
-            <StateIcon phase={ex.state.phase} className="size-3.5" />
+        {variant === 'button' ? (
+          <button type="button" data-print-hide="" className={barButtonClass(open)}>
+            <StateIcon phase={ex.state.phase} className={ex.state.phase === 'done' ? 'size-4 shrink-0' : 'size-4 shrink-0 text-muted-foreground'} />
             Export
-          </BarPill>
-        </button>
+          </button>
+        ) : (
+          <button
+            type="button" data-print-hide=""
+            className="cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <BarPill active={open}>
+              <StateIcon phase={ex.state.phase} className="size-3.5" />
+              Export
+            </BarPill>
+          </button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <Body sections={pageSections(scope.tiles)} ex={ex} />

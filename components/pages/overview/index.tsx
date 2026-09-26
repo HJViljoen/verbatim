@@ -235,8 +235,9 @@ export function OverviewPage({
           {/* EXPORT ALONE AT THE RIGHT-HAND END, as the approved preview
               draws Your market's bar (Heinrich's default, 26 Sep). The "How to
               read this page" pill left the bar; How to read stays one click
-              away in Settings, in its rail. */}
-          <ExportMenu />
+              away in Settings, in its rail. Alone, it is the preview's 40px
+              button rather than the bar's pill (WP1.6 design check). */}
+          <ExportMenu variant="button" />
         </SurfacePageBar>
         {/* THE GRID SIZES TO ITS CONTENT ON THIS PAGE, and that is a fix
             rather than a preference. `PageGrid`'s rows WERE a fixed 116px track

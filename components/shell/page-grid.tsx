@@ -232,6 +232,20 @@ export function PageBar({
   )
 }
 
+/**
+ * A page-bar action drawn as the approved preview draws Export: a 40px
+ * button, radius 6, white on a hairline ring (the caller sets its 16px icon
+ * in the muted ink). Classes rather than a component, because the element is
+ * the caller's (Export's is a menu trigger).
+ */
+export function barButtonClass(active = false): string {
+  return cn(
+    'inline-flex h-10 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-4 text-[14px] leading-none font-medium text-secondary-foreground ring-1 ring-border transition-colors',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    active ? 'bg-inner text-foreground' : 'bg-tile hover:bg-inner',
+  )
+}
+
 /** A quiet pill control for the page bar (a link or a static label). Green
  *  only when it is the page's primary action (rule 1). */
 export function BarPill({ children, active = false, primary = false, className }: { children: ReactNode; active?: boolean; primary?: boolean; className?: string }) {

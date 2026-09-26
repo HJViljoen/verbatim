@@ -231,6 +231,18 @@ describe('the page bar, ported', () => {
     }
   })
 
+  it('draws Export as the preview\'s 40px button, not the bar\'s pill (WP1.6 design check)', () => {
+    const markup = render(<OverviewPage data={marketFrontFixture()} />)
+    const at = markup.indexOf('Export</button>')
+    expect(at).toBeGreaterThan(0)
+    const open = markup.lastIndexOf('<button', at)
+    const tag = markup.slice(open, markup.indexOf('>', open) + 1)
+    expect(tag).toContain('h-10')
+    expect(tag).toContain('rounded-lg')
+    expect(tag).toContain('ring-1 ring-border')
+    expect(markup.slice(open, at)).not.toContain('rounded-full')
+  })
+
   it('carries the month selector and the one line, and no "How sound is this" band (25 Sep rulings)', () => {
     const markup = render(<OverviewPage data={overviewFixture()} />)
     const text = renderText(<OverviewPage data={overviewFixture()} />)
