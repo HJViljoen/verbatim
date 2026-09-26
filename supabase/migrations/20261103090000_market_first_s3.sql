@@ -52,8 +52,10 @@
 --
 -- THE OPERATOR COLUMNS. watched_brands and market_description carry no column
 -- grant for a tenant: authenticated lost table-level UPDATE on tracking_configs
--- on 20 Aug (20260820120000) and holds column UPDATE on last_actor,
--- report_emails and updated_at only, so no tenant session can write either.
+-- on 20 Aug (20260820120000) and holds column UPDATE on named columns only
+-- (last_actor, report_emails and updated_at once R12, 20260928091000, is
+-- applied; before it, also the rivals, exclusions, communities and cadence),
+-- never on these two, so no tenant session can write either.
 -- They are written by the operator through recordConfigChange (surface
 -- 'other'), because the audit trigger's column list (20260915091000:265-268)
 -- does not watch them. A tenant still READS them on its own row, through the
