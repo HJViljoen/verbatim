@@ -1,9 +1,8 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
-import { HowWeCheck, PagesCanSay, SearchesHeldStill } from '@/components/settings/record/additions'
+import { PagesCanSay, SearchesHeldStill } from '@/components/settings/record/additions'
 import { loadQueue, QUEUE_COLUMNS, queueLines, type QueueColumn } from '@/lib/settings/queue'
-import { checkMethods } from '@/lib/settings/record-additions'
 import { tenantLocked } from '@/lib/tenant-locks'
 import { changesFromLog } from '@/lib/reading/comparability'
 import { otherRows } from '@/lib/settings/what-we-changed'
@@ -197,7 +196,6 @@ export default async function SettingsRecordPage() {
               />
             ) : null}
             <TheRecord view={changed.record} />
-            <HowWeCheck methods={checkMethods(clientId, changed.changeRows)} />
             <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
             {locked ? <PagesCanSay now={nowIso} /> : null}
           </>

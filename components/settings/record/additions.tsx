@@ -1,8 +1,7 @@
 import { openLink } from '@/components/blocks/open-link'
-import { shortDate } from '@/lib/format'
 import { effectiveWords, heldStillLine, type QueueLine } from '@/lib/settings/queue'
 import { settingsSubPage } from '@/lib/settings/rail'
-import { PAGES_CAN_SAY_LEAD, timelineRows, type CheckMethod } from '@/lib/settings/record-additions'
+import { PAGES_CAN_SAY_LEAD, timelineRows } from '@/lib/settings/record-additions'
 import { cn } from '@/lib/utils'
 
 import { RecordSection } from './frame'
@@ -34,26 +33,6 @@ export function SearchesHeldStill({ state, lines }: { state: 'available' | 'unav
       ) : state === 'available' ? (
         <p className="m-0 font-mono text-[13px] text-muted-foreground">queued: none yet</p>
       ) : null}
-    </RecordSection>
-  )
-}
-
-export function HowWeCheck({ methods }: { methods: readonly CheckMethod[] }) {
-  return (
-    <RecordSection title="How we check, mark and file videos">
-      <div role="table" className="flex max-w-[860px] flex-col">
-        {methods.map((m) => (
-          <div key={m.key} role="row" className="grid grid-cols-1 gap-x-6 gap-y-1 border-b border-border/60 py-4 last:border-b-0 lg:grid-cols-[minmax(0,1fr)_200px]">
-            <span role="cell" className="flex flex-col gap-1">
-              <span className="text-[15px] font-semibold leading-[22px]">{m.title}</span>
-              <span className="max-w-[560px] text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{m.does}</span>
-            </span>
-            <span role="cell" className="font-mono text-[13px] leading-[22px] text-muted-foreground lg:text-right">
-              {m.lastChanged ? `changed by us ${shortDate(m.lastChanged)}` : 'no change of ours on record'}
-            </span>
-          </div>
-        ))}
-      </div>
     </RecordSection>
   )
 }

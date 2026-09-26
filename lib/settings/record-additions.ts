@@ -1,14 +1,13 @@
-import { segmentRulesEnabled } from '../segments/rules'
-
 // Settings › What we changed gains three sections with deploy 5 (market-first
 // plan §2.10 D5, WP3.10; the approved SettingsRecord artboard):
 //   - "Searches held still until January", with its request path ("Ask for a
 //     change", decision I): for a tracking-locked tenant, what the lock does now
 //     and what is queued;
-//   - "How we check, mark and file videos": the three ways a video is judged
-//     after a search finds it, what each does today, and when a change of ours
-//     last moved it (the dated changes themselves stay in The record's group of
-//     the same name);
+//   - "How we check, mark and file videos": shipped early, with deploy 2, as The
+//     record's group of that name (WP1.6: the relevance check, the maker marks
+//     and brand filing, each change of ours dated with what it moved), so it is
+//     not drawn twice; a standing description of each check would be method
+//     text, which is How to read's (the 25 Sep rulings);
 //   - "What the pages can say, and when": §2.11's timeline, levels now and the
 //     first comparison read the same way in December, if nothing we search
 //     changes.
@@ -44,51 +43,4 @@ export function timelineRows(now: string): { when: string; says: string; state: 
     nextSeen = true
     return { when: r.when, says: r.says, state }
   })
-}
-
-// ---- How we check, mark and file videos -------------------------------------------------
-
-export interface CheckMethod {
-  key: 'relevance' | 'makers' | 'filing'
-  title: string
-  /** What it does today, in one or two sentences. */
-  does: string
-  /** The newest change of ours to it on record, or null. */
-  lastChanged: string | null
-}
-
-/** Which logged surfaces move each method. */
-const METHOD_SURFACES: Readonly<Record<CheckMethod['key'], readonly string[]>> = {
-  relevance: ['gate_rule', 'regate'],
-  makers: ['segment'],
-  filing: ['attribution', 'entity_retag'],
-}
-
-export function checkMethods(clientId: string, rows: readonly { surface: string; changed_at: string }[]): CheckMethod[] {
-  const last = (key: CheckMethod['key']): string | null => {
-    const dates = rows.filter((r) => METHOD_SURFACES[key].includes(r.surface)).map((r) => r.changed_at).sort()
-    return dates.length ? dates[dates.length - 1] : null
-  }
-  return [
-    {
-      key: 'relevance',
-      title: 'How we decide what is relevant',
-      does: 'Every new video a search finds is checked for being about your category before it is read. What is set aside is listed in the reject log on this page.',
-      lastChanged: last('relevance'),
-    },
-    {
-      key: 'makers',
-      title: 'How we mark makers’ videos',
-      does: segmentRulesEnabled(clientId)
-        ? 'Videos made by makers, and off-topic ones, are marked by a word check on caption, hashtags and topics. They stay in every count; a theme where a fifth or more are makers’ says so.'
-        : 'No maker rule is switched on for this workspace, so no video is marked.',
-      lastChanged: last('makers'),
-    },
-    {
-      key: 'filing',
-      title: 'How we file a video to a brand',
-      does: 'A check decides which brand you track, if any, a video is about, and files it there. Your market’s own figures do not move with it; brand and theme counts can.',
-      lastChanged: last('filing'),
-    },
-  ]
 }
