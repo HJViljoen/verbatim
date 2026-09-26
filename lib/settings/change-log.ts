@@ -303,11 +303,13 @@ export function groupChangeRows(rows: readonly ConfigChange[]): ConfigChange[][]
 
 /** One side of a group: the row's own rendering for a single row; for several,
  *  each row's rendered side, joined, so the 9 Sep swap reads its seven removed
- *  terms before and its seven added terms after. */
+ *  terms before and its seven added terms after. A rendering several rows
+ *  share prints once (deploy 2 review): six object rows each rendered "6
+ *  settings", and the side read "6 settings; 6 settings; …" six times. */
 function groupSide(surface: LoggedSurface, rows: readonly ConfigChange[], side: 'before' | 'after'): string | null {
-  const parts = rows.map((r) => renderSide(surface, r[side])).filter((x): x is string => x != null)
+  const parts = [...new Set(rows.map((r) => renderSide(surface, r[side])).filter((x): x is string => x != null))]
   if (parts.length === 0) return null
-  return rows.length === 1 ? parts[0] : parts.join('; ')
+  return parts.join('; ')
 }
 
 /** The whole reader: rows in, two lists out, newest first in each, ONE entry

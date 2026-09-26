@@ -345,6 +345,16 @@ describe('the record shows each change once', () => {
     expect(view.recorded[0].said).toBe('r/onebag was added to the communities we watch.')
   })
 
+  it('prints a rendering several rows of one change share once, not once a row (deploy 2 review)', () => {
+    // Staging's 24 Sep calibration write: six `subjects` rows in one minute,
+    // each side an object of six settings, read "6 settings; 6 settings; …".
+    const obj = { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 }
+    const six = Array.from({ length: 6 }, (_, i) => change({ id: `c-${i}`, changed_at: '2026-09-24T11:46:16.982Z', surface: 'subjects', field: null, before: obj, after: obj, note: null }))
+    const [row] = readChangeLog({ rows: six }).recorded
+    expect(row.before).toBe('6 settings')
+    expect(row.after).toBe('6 settings')
+  })
+
   it('never merges two people’s edits, however close', () => {
     const two = [change({ id: 'a', actor_user_id: 'u1' }), change({ id: 'b', actor_user_id: 'u2' })]
     expect(readChangeLog({ rows: two }).recorded).toHaveLength(2)
