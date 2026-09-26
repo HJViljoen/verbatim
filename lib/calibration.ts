@@ -124,7 +124,11 @@ export const GLOSSARY = {
   month: ['Month', 'the calendar month a comment was written in, not the day we read it: the one clock this product keeps. A month is re-read by every update until 30 days after it ends, marked "still filling" until then, and frozen after'],
   week: ['Week', 'seven days inside a month. Printed only on the weekly report and This week, always beside the month it is stated against, never on its own'],
   video: ['Video', 'one video and the comments written under it that month: the unit every share is a share of. A video posted in June and still drawing comment in September belongs to both months. Comments are counted separately, as comments'],
-  audience: ['Audience', 'whose videos a figure is about: yours, one named rival’s, or the rest of the category. Every figure states which, and no two are pooled silently'],
+  // THE MARKET POOLS TWO AUDIENCES, AND SAYS SO HERE ONCE (market-first
+  // WP1.6, decision E, S16). This entry read "no two are pooled silently"
+  // until the market was defined as the category plus the videos filed under
+  // a brand you track; `market` below is the one pooled audience.
+  audience: ['Audience', 'whose videos a figure is about: yours, one named rival’s, or the rest of the category. Every figure states which; the market is the one that pools two of them, and it says so'],
   subject: ['Subject', 'something you told us you care about, in your own words, dated and logged, and counted by exactly the rule a theme is'],
   theme: ['Theme', 'something the category kept saying, grouped and named from what was read. The grouping is ours and it can change; when it does, the line says so'],
   kind: ['Kind', 'what a comment was doing: a question, an objection, praise. One comment is one kind, and a video can carry several, so the kinds do not sum to the conversation'],
@@ -132,6 +136,9 @@ export const GLOSSARY = {
   move: ['Move', 'something you did, such as a launch, a campaign or a message you pushed, dated by you and read against the audiences you did not touch. Your statement, not ours; we only report what the conversation did after it'],
   level: ['Level', 'what a figure is running at, always printed with its denominator: "3 of the 28 videos in your audience"'],
   change: ['Change', 'the difference between two levels, banded with each side’s video count as n. Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
+  // ---- Market-first (WP1.6, decision K): the market and the brands in it --
+  market: ['Market', 'everything we read except your own posts: the category, plus the videos filed under a brand you track, pooled into one count. Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market'],
+  brand: ['Brand', 'a company your market talks about: you, the rivals you track, and others it names. A brand’s own posts are its posts, never the market talking about it'],
   direction: ['Growing · fading · flat', 'a direction word, earned only by three consecutive monthly readings under one grouping and assigned in code, never by the model. One comparison can say a thing moved; it can never say which way it is going'],
   gone_quiet: ['Gone quiet', 'heard in earlier months and not in this one: a flag, not a direction, and computed only over updates that actually produced themes'],
   // `new` — the other flag — is the entry below. ONE definition (copy
@@ -193,6 +200,10 @@ export const glossaryRule = (key: GlossaryKey): string => GLOSSARY[key][1]
 export const THIRTEEN_WORDS = [
   'update', 'month', 'week', 'video', 'audience', 'subject', 'theme', 'kind',
   'rival', 'move', 'level', 'change', 'direction',
+  // Market-first (WP1.6, decision K): the reading vocabulary gains the two
+  // words the front page is built on. The name stays, as the constant every
+  // surface imports; it is fifteen words now.
+  'market', 'brand',
 ] as const satisfies readonly GlossaryKey[]
 
 /** The two flags that sit beside the thirteen. A flag is not a direction: it
@@ -623,3 +634,15 @@ export function refusalInBlock(
   return verdict != null && shared != null && verdict.state === 'refused' && verdict.pair?.mode === 'refuse'
 }
 
+// ---- The kinds on market pages (market-first WP1.6, decision K) -------------------
+
+/**
+ * A kind's label on a market page. "Praise" reads "Praising it" there
+ * (decision K): the market's praise is often for a maker's work, not a product
+ * that worked, which is what the Phase 1 label "Saying it worked" claims.
+ * Every other kind keeps its label (`KIND_LABELS`, lib/reading/kinds.ts;
+ * `marketKindLabel` in lib/pages/overview-market/kinds.ts reads both). A
+ * constant only: this file is inside the pipeline's import closure, where an
+ * addition may be a constant and nothing more (plan §7.7).
+ */
+export const MARKET_KIND_LABELS: Readonly<Record<string, string>> = { praise: 'Praising it' }
