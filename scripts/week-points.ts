@@ -329,8 +329,11 @@ async function apply(args: ScriptArgs): Promise<void> {
     total.points.offered += report.points.offered
     total.points.inserted += report.points.inserted
   }
-  console.log(total.inserted.length === 0 && total.points.inserted === 0
-    ? `APPLIED: nothing inserted; every read in ${files.length === 1 ? 'the file' : `the ${files.length} files`} is already held`
+  const theFiles = files.length === 1 ? 'the file' : `the ${files.length} files`
+  console.log(files.every((f) => f.reads.length === 0)
+    ? `APPLIED: nothing inserted; ${theFiles} hold${files.length === 1 ? 's' : ''} no kept read (${ordered.map((f) => f.note ?? 'no note').join('; ')})`
+    : total.inserted.length === 0 && total.points.inserted === 0
+    ? `APPLIED: nothing inserted; every read in ${theFiles} is already held`
     : `APPLIED: ${total.inserted.length} read(s) and ${total.points.inserted} point row(s) inserted; ${total.completed.length + total.held.length} read(s) already held and left alone`)
 }
 

@@ -531,6 +531,7 @@ export function keepReportLines(r: KeepReport): string[] {
   const name = (k: KeptKey): string => `the week of ${dayWords(k.week)} at ${k.ageDays} days (${k.methodVersion}, computed ${k.computedAt})`
   const lines: string[] = []
   const nothing = r.inserted.length === 0 && r.points.inserted === 0
+  if (nothing && r.completed.length + r.held.length === 0) return ['nothing inserted: no kept read']
   lines.push(nothing
     ? `nothing inserted: ${r.completed.length + r.held.length} read(s) already held${r.completed.length ? `, and the ${r.points.offered} point row(s) of this capture with them` : ''}`
     : `inserted ${r.inserted.length} read(s) and ${r.points.inserted} point row(s)${r.completed.length + r.held.length ? `; ${r.completed.length + r.held.length} read(s) already held` : ''}`)

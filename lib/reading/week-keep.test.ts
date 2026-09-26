@@ -225,6 +225,9 @@ describe('insertKeptWeeks (the one insert)', () => {
     expect(db.count(TABLE_WEEK_LINE_POINTS)).toBe(128)
     expect(keepReportLines(second)[0]).toBe('nothing inserted: 1 read(s) already held, and the 128 point row(s) of this capture with them')
     expect(keepReportLines(first)[0]).toBe('inserted 1 read(s) and 128 point row(s)')
+    // A capture that kept nothing (no week reached its age) says so, not "0 already held".
+    const empty = await insertKeptWeeks(db.store, { clientId: SEALAND_CLIENT_ID, reads: [], rows: [] })
+    expect(keepReportLines(empty)).toEqual(['nothing inserted: no kept read'])
   })
 
   it('leaves a read held from another capture alone, with its points', async () => {
