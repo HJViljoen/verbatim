@@ -206,6 +206,8 @@ interface ExportFile {
 const md5 = (x: unknown): string => createHash('md5').update(JSON.stringify(x)).digest('hex')
 const maxAt = (xs: readonly { created_at: string }[]): string | null => xs.reduce<string | null>((m, x) => (m == null || x.created_at > m ? x.created_at : m), null)
 const short = (id: string | null | undefined): string => (id ?? '-').slice(0, 8)
+/** A path under the plan folder, as the paste-back block prints it. */
+const rel = (p: string): string => p.replace(`${process.env.HOME ?? ''}/.claude/plans/verbatim-market-first/`, '')
 const pct = (x: number | null | undefined): string => (x == null ? 'not measured' : `${(100 * x).toFixed(1)}%`)
 function chunks<T>(xs: readonly T[], n: number): T[][] {
   const out: T[][] = []
@@ -285,8 +287,10 @@ async function main(): Promise<void> {
   const started = new Date().toISOString()
   const errors: { part: string; step: string; error: string }[] = []
   const out: Record<string, unknown> = {}
-  const lines: string[] = []
-  const say = (s: string): void => { lines.push(s) }
+  // Key lines go to the paste-back block; detail lines to the log and the grounding JSON only.
+  const lines: { s: string; key: boolean }[] = []
+  const say = (s: string): void => { lines.push({ s, key: true }) }
+  const detail = (s: string): void => { lines.push({ s, key: false }) }
 
   console.log(`${NAME}: read-only on ${where}, client ${clientId} (nothing is written to the database)`)
   console.log(`  caps (pages): ${Object.entries(caps).map(([k, n]) => `${k}=${n}`).join(' ')} · parts ${[...parts].join(',')}`)
@@ -349,9 +353,10 @@ async function main(): Promise<void> {
     const tail = [
       `reads: ${pagesLine} = ${total} pages · slowest ${slowest} ms · PostgREST path (every read here uses it)`,
       `errors: ${errors.length === 0 ? 'none' : `${errors.length}: ${errors.map((e) => `${e.part}/${e.step}`).join('; ').slice(0, 300)}`}`,
-      `grounding: ${gPath}`,
+      `grounding: ${rel(gPath)}`,
     ]
-    const all = [...header, ...lines, ...tail]
+    const all = [...header, ...lines.map((l) => l.s), ...tail]
+    const paste = [...header, ...lines.filter((l) => l.key).map((l) => l.s), ...tail]
     const grounding = {
       generatedAt: started, finishedAt: new Date().toISOString(), project: args.project, projectLabel: MARKET_FIRST_PROJECTS[args.project], clientId,
       stopped, targetRun: { id: target.run?.id ?? null, how: target.how, note: target.note }, caps, pagesByPart: reader.used, reads: reader.log, errors,
@@ -359,7 +364,7 @@ async function main(): Promise<void> {
     }
     writeJson(gPath, grounding)
     mkdirSync(dirname(args.values['summary-out']), { recursive: true })
-    writeFileSync(args.values['summary-out'], all.join('\n') + '\n')
+    writeFileSync(args.values['summary-out'], paste.join('\n') + '\n')
     console.log(`\n  grounding written to ${gPath}`)
     console.log(`  summary written to ${args.values['summary-out']}\n`)
     console.log(all.join('\n'))
@@ -382,7 +387,7 @@ async function main(): Promise<void> {
         keysByDay: runsOnDays(runs, ['2026-09-20', '2026-09-24', runDay]),
       }
       say(`target run: ${t ? `${short(t.id)} started ${t.started_at?.slice(0, 16)}Z · status ${t.status} · completed ${t.completed_at?.slice(0, 16) ?? '-'}Z · errors ${errs.length}${t.error_message ? ` (${t.error_message.slice(0, 80)})` : ''} · clustering_key ${t.clustering_key ?? 'null'}` : 'none'}${target.how === 'run-day' ? '' : ` · ${target.note}`}`)
-      if (errs.length > 0) say(`  run errors: ${errs.map((e) => String(typeof e === 'string' ? e : JSON.stringify(e)).slice(0, 90)).slice(0, 3).join(' | ')}`)
+      if (errs.length > 0) detail(`  run errors: ${errs.map((e) => String(typeof e === 'string' ? e : JSON.stringify(e)).slice(0, 90)).slice(0, 3).join(' | ')}`)
       say(`clustering_key by run day: ${(out.c as { keysByDay: ReturnType<typeof runsOnDays> }).keysByDay.map((d) => `${d.day.slice(5)} ${d.runs.length === 0 ? 'no run' : d.runs.map((r) => `${short(r.id)} ${r.status} ${r.clustering_key ?? 'null'}`).join(', ')}`).join(' · ')}`)
 
       if (parts.has('c')) {
@@ -462,7 +467,7 @@ async function main(): Promise<void> {
         console.log(`  snapshot written: ${snapshotPath}`)
         summaryFacts.snapshot = snapshotPath
       }
-      say(`snapshot: ${snapshotPath ? `${snapshotPath} · sha256 ${snapshotSha?.slice(0, 16)} · videos ${videos.length} · verdicts ${verdicts.length} · keyword rows ${kp.length} · runs ${runs.length}` : 'NOT WRITTEN'}`)
+      say(`snapshot: ${snapshotPath ? `${rel(snapshotPath)} · sha256 ${snapshotSha?.slice(0, 16)} · videos ${videos.length} · verdicts ${verdicts.length} · keyword rows ${kp.length} · runs ${runs.length}` : 'NOT WRITTEN'}`)
     }
 
     // The gathers: the staging export's, to 20 Sep, and production's since.
@@ -558,11 +563,11 @@ async function main(): Promise<void> {
       const cal = subjects.map((s) => ({ id: s.id, name: s.name, status: s.status, precision: s.calibration_precision, n: s.calibration_n, judge: s.calibration_judge_version, calibrated_at: s.calibrated_at, ...calibrationStates(s) }))
       const tally = (k: 'wp11' | 'deployed') => cal.reduce<Record<string, number>>((m, c) => { m[c[k]] = (m[c[k]] ?? 0) + 1; return m }, {})
       say(`subjects: ${subjects.length} · WP1.1 states ${Object.entries(tally('wp11')).map(([k, n]) => `${k} ${n}`).join(', ') || '-'} · as deployed ${Object.entries(tally('deployed')).map(([k, n]) => `${k} ${n}`).join(', ') || '-'}`)
-      say(`  ${cal.map((c) => `${c.name} ${c.wp11}${c.precision != null ? ` (${Number(c.precision).toFixed(2)} on ${c.n ?? '?'})` : ''}`).join(' · ')}`)
+      detail(`  ${cal.map((c) => `${c.name} ${c.wp11}${c.precision != null ? ` (${Number(c.precision).toFixed(2)} on ${c.n ?? '?'})` : ''}`).join(' · ')}`)
       const latestPanel = (panels ?? []).at(-1)
       say(`attention panels: ${panels == null ? 'not read' : `${panels.length}${latestPanel ? ` (latest frozen ${latestPanel.frozen_at?.slice(0, 10) ?? '-'}, cutoff ${latestPanel.cutoff ?? '-'}, ${latestPanel.account_count ?? '?'} accounts)` : ''}`}`)
       const bySurface = changes.reduce<Record<string, number>>((m, c) => { m[c.surface] = (m[c.surface] ?? 0) + 1; return m }, {})
-      say(`config_changes since 1 Sep: ${changes.length} (${Object.entries(bySurface).map(([k, n]) => `${k} ${n}`).join(', ')}) · since the run read began: ${changes.filter((c) => c.changed_at >= (target.run?.started_at ?? '9')).length}`)
+      detail(`config_changes since 1 Sep: ${changes.length} (${Object.entries(bySurface).map(([k, n]) => `${k} ${n}`).join(', ')}) · since the run read began: ${changes.filter((c) => c.changed_at >= (target.run?.started_at ?? '9')).length}`)
 
       const communities = activeCommunities(tracking?.subreddits ?? null)
       const known = Array.isArray(tracking?.subreddits) ? (tracking?.subreddits as unknown[]).length : null
@@ -604,9 +609,9 @@ async function main(): Promise<void> {
         moods: Object.fromEntries(['judged', 'positive', 'negative', 'neutral', 'mixed'].map((f) => [f, pooledBy(statRows, marketSet, () => f, (r) => (r as unknown as Record<string, number>)[f])])),
       }
       const kindsSep = Object.entries((out.pooled as { kinds: Record<string, Record<string, number>> }).kinds['2026-09'] ?? {}).sort((a, b) => b[1] - a[1])
-      say(`kinds (market, Sep): ${kindsSep.length} · ${kindsSep.slice(0, 4).map(([k, n]) => `${k} ${ofN(n, sep?.videos)}`).join(' · ')}`)
+      detail(`kinds (market, Sep): ${kindsSep.length} · ${kindsSep.slice(0, 4).map(([k, n]) => `${k} ${ofN(n, sep?.videos)}`).join(' · ')}`)
       const mood = (f: string) => ((out.pooled as { moods: Record<string, Record<string, Record<string, number>>> }).moods[f]?.['2026-09']?.[f]) ?? null
-      say(`moods (market, Sep): judged ${mood('judged') ?? '?'} · positive ${mood('positive') ?? '?'} · negative ${mood('negative') ?? '?'} · neutral ${mood('neutral') ?? '?'} · mixed ${mood('mixed') ?? '?'}`)
+      detail(`moods (market, Sep): judged ${mood('judged') ?? '?'} · positive ${mood('positive') ?? '?'} · negative ${mood('negative') ?? '?'} · neutral ${mood('neutral') ?? '?'} · mixed ${mood('mixed') ?? '?'}`)
 
       // Makers and noise on the top September themes, the v1 rule computed here.
       const refs = sepThemes.length === 0 ? null : await step('b', 'month_evidence_refs', () => reader.one<{ object_id: string; audience: string; video_ids: string[] | null }>('month_evidence_refs (Sep, category, top themes)',
@@ -623,7 +628,7 @@ async function main(): Promise<void> {
       const capped = sepThemes.length === TOP_THEMES && (sepThemes.at(-1)?.videos ?? 0) >= 10
       const top25 = themes.slice(0, 25).map((t) => ({ id: t.id, label: t.label, kind: t.kind, k: t.k, refs: t.seg?.refs ?? null, known: t.seg?.known ?? null, maker: t.seg?.maker ?? null, noise: t.seg?.noise ?? null, makerShare: t.seg?.makerShare ?? null, noiseShare: t.seg?.noiseShare ?? null, matchKind: t.matchKind, prevK: augThemes.find((a) => a.theme_id === t.id)?.videos ?? null }))
       say(`themes at 10+ (Sep, category): ${board.atFloor}${capped ? ' (or more: the top-40 read ends at 10+)' : ''} · led by makers ${board.makers.length} · led by noise ${board.noise.length} · on the board ${board.rows.length} · not led by makers ${board.atFloor - board.makers.length}`)
-      for (const t of board.rows.slice(0, 3)) say(`  ${t.label}: ${t.k} videos, makers ${pct(t.seg?.makerShare)}${t.seg && t.seg.known < t.seg.refs ? ` (${t.seg.known} of ${t.seg.refs} videos read)` : ''}`)
+      for (const t of board.rows.slice(0, 3)) detail(`  ${t.label}: ${t.k} videos, makers ${pct(t.seg?.makerShare)}${t.seg && t.seg.known < t.seg.refs ? ` (${t.seg.known} of ${t.seg.refs} videos read)` : ''}`)
       out.themes = { top25, atFloor: board.atFloor, cappedRead: capped, makers: board.makers.map((t) => t.label), noise: board.noise.map((t) => t.label), rows: board.rows.map((t) => t.label), newRegime }
 
       // Our search additions, the legacy share, and September membership where the export cannot answer it.
@@ -702,7 +707,8 @@ async function main(): Promise<void> {
       }
       summaryFacts.measured = `${measured.market}`
       say(`search additions: ${ofN(measured.market, sep?.videos)} of September's market videos came only from searches first run in September (category ${ofN(measured.category, sep?.category)})${staging ? '' : ' · NO STAGING EXPORT: evidence after 20 Sep only'}${cut('measured')}`)
-      say(`  only 13 Sep+ terms: category ${ofN(only13.category, sep?.category)}, market ${only13.market} · added in Sep: ${[...addedSep].sort().join(', ') || '-'}`)
+      say(`  only 13 Sep+ terms: category ${ofN(only13.category, sep?.category)}, market ${only13.market}`)
+      detail(`  first searched in Sep: ${[...addedSep].sort().join(', ') || '-'}`)
       say(`legacy share: ${ofN(legacy.market, sep?.videos)} (category ${legacy.category})${cut('legacy')} · removed on 9 Sep: ${[...delta9.removed].sort().join(', ') || 'none logged'}`)
 
       // The lead and its new-search share.
@@ -775,7 +781,7 @@ async function main(): Promise<void> {
         }))
         const quoteList = out.quotes as { quotes: { datedInMonth: boolean | null; ownAccount: boolean | null }[] }[]
         const usable = quoteList.map((q) => q.quotes.filter((x) => x.datedInMonth && x.ownAccount === false).length)
-        say(`quotes (top five not led by makers): ${quoteList.map((q, i) => `${five[i].label.slice(0, 32)} ${usable[i]}`).join(' · ')} usable (dated in Sep, not the video's own account)`)
+        detail(`quotes (top five not led by makers): ${quoteList.map((q, i) => `${five[i].label.slice(0, 32)} ${usable[i]}`).join(' · ')} usable (dated in Sep, not the video's own account)`)
       }
     }
 
