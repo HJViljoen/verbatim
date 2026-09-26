@@ -310,6 +310,14 @@ describe('Össur, paused, with no maker rule and no subjects (§2.13, §5.2)', (
     expect(text).not.toContain('from the 6 Dec update')
     expect(text).toContain('are not read for this workspace yet')
   })
+
+  it('draws the change block in one column: no next pair and no strip beside the refusal (deploy 2 review)', () => {
+    const markup = render(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render(ossurFrontFixture(), 'app', ctx))
+    expect(markup).not.toContain('xl:grid-cols-2')
+    expect(read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render(ossurFrontFixture(), 'app', ctx))).toContain('What changed, and what is ours')
+    // Sealand's, with a next pair and its strip, keeps the two columns.
+    expect(render(overviewChangeRender())).toContain('xl:grid-cols-2')
+  })
 })
 
 describe('a stored copy from before WP1.6 renders as it was sent', () => {

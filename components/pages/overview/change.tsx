@@ -42,9 +42,12 @@ const pct = (share: number): string => `${(share * 100).toFixed(2)}%`
  * say, so they are hidden from a screen reader, and the key, which says what
  * they do not, is read.
  */
+/** Does the block draw its month strip? No update is promised to a paused
+ *  tenant, in words or in the strip, and with no next pair there is none. */
+const drawsStrip = (block: ChangeBlock): boolean => block.next != null && block.prevMonth != null && !block.paused
+
 function MonthStrip({ block }: { block: ChangeBlock }) {
   const next = block.next
-  // No update is promised to a paused tenant, in words or in the strip.
   if (!next || !block.prevMonth || block.paused) return null
   const asAt = block.asAt ?? null
   const ours = block.searchChanges ?? []
@@ -170,6 +173,16 @@ export const overviewChange: Block<OverviewData> = {
         <BlockFrame title={overviewChange.title} mode={mode} footer={footer}>
           {lead ? <div style={{ fontFamily: FONT.sans, fontSize: 13.5, color: EMAIL.ink }}><TokenProse body={lead.body} figures={lead.figures} mode={mode} /></div> : null}
           {next ? <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, marginTop: 6 }}>{next}</div> : null}
+        </BlockFrame>
+      )
+    }
+    // ONE COLUMN WHEN THERE IS NOTHING FOR THE SECOND (deploy 2 review): a
+    // paused tenant, or no next pair, has the refusal alone, which then keeps
+    // its own reading measure rather than half the block beside an empty one.
+    if (!next && !drawsStrip(block)) {
+      return (
+        <BlockFrame title={overviewChange.title} mode={mode} footer={footer} roomy>
+          {lead ? <LeadSentence body={lead.body} figures={lead.figures} mode={mode} /> : null}
         </BlockFrame>
       )
     }
