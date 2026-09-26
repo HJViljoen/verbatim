@@ -129,6 +129,10 @@ export default async function SettingsRecordPage() {
       // finding 2): the grid's BELOW THE FLOOR basis repeats this number.
       ? { label: floor.label, who: floor.who, videos: floor.videos, floor: readings.floor, more: readings.belowFloorTotal - 1 }
       : null,
+    // NOT "NEVER BY THE CORPUS" (deploy 2 review): "corpus" is on MASTER's
+    // client-language ban list. The default lives in lib/reading/record.ts,
+    // inside the pipeline's import closure, so the page passes its words.
+    refusedElsewhere: 'Counted by the page that draws the comparisons.',
   })
 
   return (
