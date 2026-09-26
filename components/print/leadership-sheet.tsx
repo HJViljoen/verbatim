@@ -686,16 +686,36 @@ function SubjectsTable({ data }: { data: OverviewData }) {
           <tbody role="rowgroup" className="block">
             {shown.map((r, i) => (
               <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
-                <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">
-                  {r.label}{r.calibration && r.calibration !== 'ready' ? ' ' : null}<CalibrationTag calibration={r.calibration} mode="print" />
+                {/* THE WORD UNDER THE NAME, NEVER AFTER IT (design pass). The
+                    name cell is 112px and truncates, so "Repair & warranty
+                    being re-described" printed as "Repair & warranty…": the
+                    word that says the row is held back was the part cut off.
+                    The name truncates on its own line and the word keeps its
+                    own, as on every other subjects table. */}
+                <th role="rowheader" scope="row" className={`min-w-0 font-normal${isFailed(r.calibration) ? ' text-muted-foreground' : ''}`}>
+                  <span className="block truncate">{r.label}</span>
+                  <CalibrationTag calibration={r.calibration} mode="print" block />
                 </th>
-                <td role="cell"><Cell side={r.you} withheld={!printsClient(r.calibration)} /></td>
-                <td role="cell"><Cell side={r.rival} withheld={isFailed(r.calibration)} /></td>
-                <td role="cell"><Cell side={r.category} withheld={isFailed(r.calibration)} /></td>
-                <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
-                  <DirectionWord direction={r.direction} />
-                </td>
+                {isFailed(r.calibration) ? (
+                  // A failed row is its name and its word: one cell across
+                  // the four, with the words for a screen reader, not a dash
+                  // in each.
+                  <td role="cell" className="col-span-4"><span className="sr-only">not shown until this subject is checked</span></td>
+                ) : (
+                  <>
+                    <td role="cell"><Cell side={r.you} withheld={!printsClient(r.calibration)} /></td>
+                    <td role="cell"><Cell side={r.rival} /></td>
+                    <td role="cell"><Cell side={r.category} /></td>
+                    <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      {earnsVerdict(r.calibration) ? (
+                        <>
+                          <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
+                          <DirectionWord direction={r.direction} />
+                        </>
+                      ) : <NoValue label="not shown until this subject is checked" />}
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
