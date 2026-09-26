@@ -341,6 +341,10 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
         overview.sentence.voices.map((v) => ({ ref: v.quote.ref })),
       ),
       verdicts,
+      // The page's own pair: Össur's September refuses every theme verdict
+      // and carries no subject, so no refused verdict is left to name it
+      // (deploy 1 review).
+      overview.sentence.monthPair ?? null,
     ),
     figures: overview.sentence.figures,
     ledger: overview.sentence.ledger,

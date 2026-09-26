@@ -597,6 +597,13 @@ export interface SentenceBlock {
    * `figures` above are the Phase 1 ones already.
    */
   forWeekly?: WeeklyHeadline | null
+  /**
+   * The category's month pair (WP1.3), for an artefact that composes its own
+   * interpretation from these verdicts: the monthly's decide section words a
+   * refused pair as the refusal, not as "nothing moved" (deploy 1 review).
+   * OPTIONAL, so a stored copy without it composes as before.
+   */
+  monthPair?: VerdictPairNote | null
 }
 
 /** OV1's Phase 1 headline, as the weekly reads it (`SentenceBlock.forWeekly`). */
@@ -2355,6 +2362,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   const sentence: SentenceBlock = {
     ...sentenceBlockFor({ head, verdicts: sentenceVerdicts, voices, ledger: ledger.top, anomaly, monthPair }),
     forWeekly: weeklyPhaseOne(suppress ? [] : sentenceVerdicts),
+    monthPair,
   }
 
   // ── OV6 · how sound is this ────────────────────────────────────────────
