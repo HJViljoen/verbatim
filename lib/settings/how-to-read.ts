@@ -1,5 +1,5 @@
 import type { GlossaryKey } from '../calibration'
-import type { NavKey } from '../nav'
+import { surface, type NavKey } from '../nav'
 
 /**
  * How to read (Phase 1 WP16, design ST9) — one card per surface, plus the
@@ -157,8 +157,8 @@ export const READING_PATH: readonly { when: string; what: string[] }[] = [
   {
     when: 'Each month, once the month is done',
     what: [
-      'Read the monthly reading: your subjects against the category and against each rival, on the month just ended.',
-      'Declare what you are going to do about it on Market, so next month can be read against it.',
+      'Read the monthly report: your market in the month just ended, what it talked about and asked for, your subjects in it, the brands it named, and what changed and what was ours.',
+      `Declare what you are going to do about it on ${surface('market').label}, so next month can be read against it.`,
     ],
   },
   {
