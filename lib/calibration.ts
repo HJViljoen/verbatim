@@ -141,11 +141,16 @@ export const GLOSSARY = {
   kind: ['Kind', 'what a comment was doing: a question, an objection, praise. One comment is one kind, and a video can carry several, so the kinds do not sum to the conversation'],
   rival: ['Rival', 'a brand you named in Settings. A rival that leaves the tracked set terminates its line with a break, never falling to zero, and a renamed rival is one line with the rename marked on it'],
   move: ['Move', 'something you did, such as a launch, a campaign or a message you pushed, dated by you and read against the audiences you did not touch. Your statement, not ours; we only report what the conversation did after it'],
-  level: ['Level', 'what a figure is running at, always printed with its denominator: "3 of the 28 videos in your audience"'],
-  change: ['Change', 'the difference between two levels, banded with each side’s video count as n. Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
+  // MARKET-FIRST (WP3.10, decision K): the rest of the reading words say the
+  // market, and a change is read only between two months read the same way
+  // (decision D). Real figures: §2.3's September category read.
+  level: ['Level', 'what a figure is running at, always printed with what it is out of: "Looks & style came up in 104 of 626 September category videos"'],
+  change: ['Change', 'the difference between two levels, banded with each side’s video count as n, and read only between two months read the same way: a change of ours between them and the pair is "not read as a change". Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
   // ---- Market-first (WP1.6, decision K): the market and the brands in it --
   market: ['Market', 'everything we read except your own posts: the category, plus the videos filed under a brand you track, pooled into one count. Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market'],
   brand: ['Brand', 'a company your market talks about: you, the rivals you track, and others it names. A brand’s own posts are its posts, never the market talking about it'],
+  maker: ['Makers', 'videos where people make the thing themselves (sewing, crochet, DIY), marked by a word check on caption, hashtags and topics where a maker rule is switched on for your workspace. They stay in every count of your market; a theme where a fifth or more of the videos are makers’ says so'],
+  off_topic: ['Off-topic', 'videos a bare brand or rival name found that turned out to be about something else, such as poker or a volcano. Marked, never taken out of a count'],
   direction: ['Growing · fading · flat', 'a direction word, earned only by three consecutive monthly readings under one grouping and assigned in code, never by the model. One comparison can say a thing moved; it can never say which way it is going'],
   gone_quiet: ['Gone quiet', 'heard in earlier months and not in this one: a flag, not a direction, and computed only over updates that actually produced themes'],
   // `new` — the other flag — is the entry below. ONE definition (copy
@@ -185,7 +190,7 @@ export const GLOSSARY = {
     : ['What it is running at', 'a theme’s share of the conversation this update, and how long you have been tracking it; the share of one update is a level, not a direction, and we do not read a change from it yet'],
   on_camera: ['Said on camera', 'the creator spoke it in their own video rather than typing it in a comment. Filming an opinion costs time and reputation, so those conversations weigh more than a comment when a theme is ranked'],
   about_you: ['About you', "what other people's videos say about your brand, quoted verbatim from their transcripts and shown only when they name you: their words, never yours, and never counted as your audience"],
-  search_terms: ['Search terms', 'the words we look for on every platform, in three groups: your brand, your competitors, your category. Changing them changes what the next update finds, and nothing before it'],
+  search_terms: ['Search terms', 'the words we look for on every platform, in three groups: your name, the brands you track, your category. Changing them changes what the next update finds, and nothing before it, so a month read before a change is not compared with one after it'],
   term_value: ['Worth reviewing', 'across three or more updates, pooled or on one platform on its own, this term found at least 100 posts, kept under 5% of them, and has led to no insight yet. A suggestion to look, never a change we make for you'],
 } as const
 

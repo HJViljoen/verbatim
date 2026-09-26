@@ -143,14 +143,16 @@ category conversation where the brand is not named. It may claim:
   analysis and is quotable evidence; say "what's said to camera", never
   "every video transcribed") · **news context** around the market (live since
   2026-08-11; secondary, never a headline) · owned-account data (follower
-  movement, own posts, your audience's replies) · weekly delta layer (what
-  changed) · relevance filtering + evidence floors (a theme only counts with
+  movement, own posts, your audience's replies) · what each update brought
+  in (counted, never read as a change) · relevance filtering + evidence floors (a theme only counts with
   enough independent voices; off-topic, spam and lookalike brand names thrown
   out before analysis).
 - **Also live (product surfaces the site may show, verified 2026-09-06):**
   consumer profiles (personas with wants, blockers, triggers, how they talk,
-  each with its conversation count) · the theme map (themes sized by
-  conversations, gaining/fading/emerging week to week) · the face-off (you vs
+  each with its conversation count) · the themes (ranked by how many of the
+  market's videos carry them, month by month; NOT "gaining" or "fading": no
+  direction word until three comparable months exist, late January 2027 at
+  the earliest; corrected 2026-09-27) · the face-off (you vs
   a competitor vs the category: share of conversation, sentiment, unanswered
   questions, themes each side owns) · the analyst (question mode: answer +
   what the evidence says + my read + not in the evidence; never invents a
@@ -174,6 +176,9 @@ category conversation where the brand is not named. It may claim:
     month, the first no earlier than 1 January 2027, applied by the update
     that runs that day. Communities, a rival rename and the report day are
     not queued: they are held, and the client is told to ask.
+  - **Subjects are something the market talks about that the client chose to
+    follow**, named the way a buyer would say it; up to ten; a subject nobody
+    at the client confirmed says "picked for you, not yet confirmed".
   - **What we changed says what is held and what is checked:** the search set
     held still until January with what is queued, how videos are checked for
     relevance, marked as makers' and filed to a brand (and when we last changed
@@ -181,8 +186,10 @@ category conversation where the brand is not named. It may claim:
     read the same way with the 6 Dec update, the first direction words late in
     January, the first quarter comparison in April 2027. Say "when", never
     "trends" or "movement" before those dates.
-- **Units:** say "comments" for the raw count (18,440), "conversations" for
-  everything analysed. Never "voices".
+- **Units:** say "videos" for what a reading page counts (a video and the
+  comments under it that month; "104 of 626 September category videos"),
+  "comments" for comments. "Conversations" survives only on the legacy pages
+  that still print it. Never "voices".
 - **In development (label it exactly that, never present tense):** nothing
   platform-level right now. Previous entries (Reddit, news) shipped in August.
 - Update this map when capabilities ship; stale claims are the cardinal sin.
