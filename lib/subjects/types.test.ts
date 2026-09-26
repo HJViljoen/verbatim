@@ -36,6 +36,14 @@ describe('the band', () => {
   it('keeps the tenant subject count a range, not a number', () => {
     expect(SUBJECTS_MIN).toBeLessThan(SUBJECTS_MAX)
   })
+
+  it('caps the set at ten (market-first decision G: the confirmed market-raised set joins today\'s eight)', async () => {
+    expect(SUBJECTS_MAX).toBe(10)
+    // The activation paste carries the cap itself, because it lands before
+    // the editor's does (scripts/new-subjects.ts); once both are live they agree.
+    const { NEW_SUBJECTS_CAP } = await import('../../scripts/new-subjects')
+    expect(NEW_SUBJECTS_CAP).toBe(SUBJECTS_MAX)
+  })
 })
 
 describe('JUDGE_VERSION', () => {
