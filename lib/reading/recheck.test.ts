@@ -9,13 +9,15 @@ import { bandVerdict } from './verdicts'
 // Real figures: lens_readings' body run on staging (Sealand, data to 20 Sep
 // 2026) over the populations scripts/comparability-checks.ts built on 26 Sep
 // (exec/logs/wp2-scripts-checks-dry-2.log), pooled to the category
-// ('industry-other') and the rival-filed videos. August: the market's 377
-// videos (351 category, 26 filed under a rival); September so far: 654 (625,
-// 29).
+// ('industry-other') and the rival-filed videos (R: the seven rivals' audiences
+// summed into one row, as the stand-in file holds them). August: the market's
+// 377 videos (351 category, 26 filed under a rival); September so far: 654
+// (625, 29). The client row is Sealand's own posts in September, the same body
+// over is_client videos (8 videos, 2 with a question; August has none).
 const lens = (rows: [string, string, string, number, number][]): LensRow[] =>
   rows.map(([audience, object_kind, object_id, k, n]) => ({ audience, object_kind, object_id, k, n }))
 const C = 'industry-other'
-const R = 'competitor:Cotopaxi'
+const R = 'competitor:(the rivals, pooled)'
 
 const allAug = lens([
   [C, 'denominator', 'videos', 351, 351], [R, 'denominator', 'videos', 26, 26],
@@ -23,7 +25,6 @@ const allAug = lens([
   [C, 'kind', 'feature_request', 59, 351], [R, 'kind', 'feature_request', 5, 26],
   [C, 'mood', 'positive', 241, 351], [R, 'mood', 'positive', 21, 26],
   [C, 'theme', 'faaa44da-7c45-4750-bf9a-f1e6e08d5502', 42, 351], [C, 'theme', '3f64f05b-28b2-4564-8f15-dbd747ffb0cb', 10, 351],
-  ['client', 'denominator', 'videos', 3, 3], ['client', 'kind', 'question', 3, 3],
 ])
 const allSep = lens([
   [C, 'denominator', 'videos', 625, 625], [R, 'denominator', 'videos', 29, 29],
@@ -32,6 +33,7 @@ const allSep = lens([
   [C, 'mood', 'positive', 483, 625], [R, 'mood', 'positive', 15, 29],
   [C, 'theme', 'faaa44da-7c45-4750-bf9a-f1e6e08d5502', 72, 625], [C, 'theme', '3f64f05b-28b2-4564-8f15-dbd747ffb0cb', 2, 625],
   [C, 'theme', 'ce659d82-892e-4383-ae50-1ecca451833b', 10, 625],
+  ['client', 'denominator', 'videos', 8, 8], ['client', 'kind', 'question', 2, 8],
 ])
 const denseAug = lens([
   [C, 'denominator', 'videos', 189, 189], [R, 'denominator', 'videos', 11, 11],
@@ -77,6 +79,8 @@ describe('pooledCount', () => {
     expect(pooledCount(allAug, { kind: 'mood', id: 'positive' })).toEqual({ k: 262, n: 377 })
     expect(pooledCount(allAug, { kind: 'theme', id: 'faaa44da-7c45-4750-bf9a-f1e6e08d5502' })).toEqual({ k: 42, n: 351 })
     expect(pooledCount(allAug, { kind: 'kind', id: 'misinformation' })).toEqual({ k: 0, n: 377 })
+    // Sealand's own posts are never the market: its 8 September videos stay out of n and k.
+    expect(pooledCount(allSep, { kind: 'kind', id: 'question' })).toEqual({ k: 334, n: 654 })
   })
 
   it('re-checks the themes the whole market holds on ten videos or more in either month', () => {
@@ -134,7 +138,8 @@ describe('the outcome', () => {
   it('never reads NaN or an empty side as a change', () => {
     const v = bandVerdict({ objectKind: 'kind', objectId: 'x', objectLabel: 'x', audience: 'market', window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 0, n: 0 }, baseline: { k: 0, n: 0 } })
     expect(outcomeOf('all_but_noise', v, null)).toBe('too_few')
-    expect(outcomeOf('dense20', { ...v, state: 'moved', baseline: { k: 5, n: 50 }, value: { k: 50, n: 150 } }, null)).toBe('too_few')
+    // Even a verdict that says "moved" reads too few when a side is under 100 (staging's clean population: 13 of 78 → 24 of 103).
+    expect(outcomeOf('same_searches_clean', { ...v, state: 'moved', baseline: { k: 13, n: 78 }, value: { k: 24, n: 103 } }, null)).toBe('too_few')
   })
 
   it('writes a recompute that changed nothing as nothing (a held row read back from the database)', () => {

@@ -55,7 +55,7 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //                        rows read) and print what would be written; write
 //                        nothing.
 //   --max-reads <n>      stop before the n+1-th read (pages and RPC calls;
-//                        default 30).
+//                        default 45).
 //   --stand-in           STAGING DRY RUN ONLY: MF2 is not on staging, so the
 //                        candidates are computed from the videos and comments
 //                        in JavaScript (lib/brands/mentions.ts
@@ -65,9 +65,9 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // THE READS (production, Sealand): the probe (1), tracking_configs (1),
 // competitors (1), brand_mention_candidates once per brand and once more per
 // guarded brand (13), the own-post identity (1, and 1 per 100 matched videos:
-// about 3 on staging's 290), market_month_videos per month (2 to 3), the
-// first-found terms of the matched videos (1 per 100: about 3); with --apply,
-// the held rows (1+). About 25 to 28.
+// 2 on staging's 145), market_month_videos per month (2 to 3), the first-found
+// terms of every market video in the window (1 per 100: 9 on staging's Aug
+// and Sep); with --apply, the held rows (1+). About 35.
 //
 //   cd ~/Documents/code/verbatim-mf-run && … node --env-file=.env.local --import tsx scripts/brand-mentions.ts \
 //     --project mkwjlckescdveosvrvaq --confirm [--from 2026-08-01] [--to 2026-11-01] \
@@ -213,7 +213,7 @@ async function main() {
     throw new Error(`${NAME}: --from and --to are firsts of months, from before to (got ${from}, ${to})`)
   }
   const sample = Number(args.values.sample ?? 30)
-  const ration = new Ration(Number(args.values['max-reads'] ?? 30))
+  const ration = new Ration(Number(args.values['max-reads'] ?? 45))
   const rules = brandRulesFor(args.clientId)
   console.log(modeLine(args, NAME) + (check ? ' (--check: nothing is written)' : ''))
   console.log(`  rules ${BRAND_RULE_VERSION} (fingerprint ${brandRulesFingerprint()}), window [${from}, ${to})${standIn ? ', STAND-IN candidates (staging dry run; MF2 not applied)' : ''}`)
@@ -315,9 +315,13 @@ async function main() {
     ration.spend(0, `market_month_videos ${m}`)
     if (set) markets.set(m, set.map((v) => v.id))
   }
+  // Every market video's first-found terms, not only the matched ones': a video
+  // found only by a brand's own searches leaves that brand's organic base
+  // (nOrganic) whether or not it names the brand.
+  const marketIds = [...new Set([...markets.values()].flat())].sort()
   let firstTerms: Map<string, string[]> | null = new Map()
   try {
-    for (const ids of chunks(matched, ID_CHUNK)) {
+    for (const ids of chunks(marketIds, ID_CHUNK)) {
       ration.spend(1, 'the first-found terms')
       const { data, error } = await admin.from('video_provenance').select('video_id, first_terms').eq('client_id', args.clientId).in('video_id', ids)
       if (error) throw error

@@ -253,7 +253,8 @@ async function main() {
   const labels = new Map<string, string>()
   if (themeIds.length && !lensFile) {
     ration.spend(1, 'theme labels')
-    const { data } = await admin.from('theme_registry').select('id, canonical_label').in('id', themeIds)
+    const { data, error } = await admin.from('theme_registry').select('id, canonical_label').in('id', themeIds)
+    if (error) throw new Error(`${NAME}: theme_registry: ${error.message}. Nothing written.`)
     for (const r of (data ?? []) as { id: string; canonical_label: string | null }[]) labels.set(r.id, r.canonical_label ?? r.id)
   }
   const kindIds = [...new Set([...wholePrev, ...wholeCurr].filter((r) => r.object_kind === 'kind').map((r) => r.object_id))]
