@@ -55,6 +55,18 @@ import { RecordSection } from './frame'
 // left the post 148px and the rule 60px, one word to a line.
 const TRACKS = 'xl:grid-cols-[minmax(0,2.8fr)_minmax(0,1.13fr)_minmax(200px,1fr)]'
 
+/**
+ * One precision for a set of kept rates (deploy 2 review): a decimal share is
+ * never printed on a base under 100 (GR F25), so where any rate in the set
+ * rests on fewer than 100 looked at, every rate in it is a whole percent
+ * ("53%", not "52.7%"), and one column keeps one precision. Exported for the
+ * test.
+ */
+export function keptRateText(rates: readonly Pick<KeptRate, 'found' | 'keptPct'>[]): (r: Pick<KeptRate, 'keptPct'>) => string {
+  const whole = rates.some((r) => r.found < 100)
+  return (r) => (whole ? `${Math.round(r.keptPct)}%` : `${r.keptPct.toFixed(1)}%`)
+}
+
 export function RejectLogBlock({
   rows, summary, unavailable, unjudged, byTerm, byPlatform, lookedAt = 'Looked at', withheld, control,
 }: {
@@ -81,6 +93,8 @@ export function RejectLogBlock({
       </RecordSection>
     )
   }
+  const termRate = keptRateText(byTerm)
+  const platformRate = keptRateText(byPlatform)
   return (
     <RecordSection title="The reject log">
       {summary ? <p className="m-0 text-[15px] leading-[1.5]">{summary}</p> : null}
@@ -147,7 +161,7 @@ export function RejectLogBlock({
               {byTerm.map((t) => (
                 <tr key={t.key} className="border-b border-border/60 last:border-b-0">
                   <td className="py-2 pr-3 text-left align-top">{t.label}</td>
-                  {[fmtInt(t.found), fmtInt(t.kept), `${t.keptPct.toFixed(1)}%`].map((c, i) => (
+                  {[fmtInt(t.found), fmtInt(t.kept), termRate(t)].map((c, i) => (
                     <td key={i} className="py-2 pl-3 text-right align-top font-mono tabular-nums">{c}</td>
                   ))}
                 </tr>
@@ -157,7 +171,7 @@ export function RejectLogBlock({
           </div>
           {byPlatform.length > 0 ? (
             <p className="m-0 text-[13px] text-secondary-foreground">
-              By platform: {byPlatform.map((p) => `${p.label} ${p.keptPct.toFixed(1)}%`).join(' · ')}.
+              By platform: {byPlatform.map((p) => `${p.label} ${platformRate(p)}`).join(' · ')}.
             </p>
           ) : null}
         </div>
