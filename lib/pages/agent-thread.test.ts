@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { freezeQuotes, resolveQuotes } from '../renderables/quotes-freeze'
 import { agentFixture, refusedFixture } from '../../components/pages/agent/fixture'
-import type { AskBasis } from '../agent/basis'
 import type { PlanCheckCard } from '../ask/plan-cards'
 import {
-  agentThreadSlides, answerFindings, askDraws, askHistory, askPlanChip, askRecordHref, askRecordLines,
-  claimsCrossed, documentPages, findingKey, type AgentThreadData,
+  agentThreadSlides, answerFindings, askHistory, askPlanChip, askReadingFrom, askReads,
+  claimsCrossed, documentPages, findingKey, NO_ASK_READING, type AgentThreadData,
 } from './agent-thread'
+import { SEALAND_ASK_READING } from '../../components/pages/agent/fixture'
+import { CHANGES } from '../test/sealand-pairs'
 
 const base: AgentThreadData = {
   threadId: 't1', kind: 'question', title: 'Why do people hesitate before buying a liner?', brand: 'Sealand', createdAt: '2026-08-22T10:00:00Z',
@@ -28,9 +29,10 @@ const base: AgentThreadData = {
   notAnswered: null,
   planChip: null,
   history: null,
-  draws: [],
-  bar: { question: 'What does the conversation say about this?', context: 'x' },
-  record: null,
+  reads: askReads(NO_ASK_READING, null),
+  bar: { question: 'What does the conversation say about this?', context: 'x', reading: null },
+  about: [],
+  window: 'all',
   method: { company: 'Sealand', period: 'Asked Sat 22 Aug', platforms: ['youtube', 'tiktok'], videos: null, comments: 2, note: 'x' },
 }
 
@@ -93,33 +95,6 @@ describe('agent thread data', () => {
     expect(findingKey(1, 'G1')).toBe('1:G1')
   })
 
-  it('says what is not recorded rather than printing a zero for it', () => {
-    const empty: AskBasis = { updateAt: null, monthlyReadings: null, embedded: null, total: null, lastEmbeddedAt: null }
-    expect(askRecordLines(empty, null)).toEqual([
-      'How many updates have been delivered is not recorded here.',
-      'The month-by-month reading has not been recorded for this workspace yet.',
-      'How much of the corpus a question can search is not recorded.',
-    ])
-    const none: AskBasis = { updateAt: null, monthlyReadings: 0, embedded: 0, total: 0, lastEmbeddedAt: null }
-    expect(askRecordLines(none, 0)).toEqual([
-      'No update has been delivered for this workspace yet.',
-      'No month yet carries enough videos to compare on.',
-      'There is nothing to search yet.',
-    ])
-    expect(askRecordLines({ ...empty, monthlyReadings: 1, embedded: 2872, total: 2872 }, 23)).toEqual([
-      '23 updates delivered.',
-      '1 monthly reading carries enough videos to compare on.',
-      '2,872 of 2,872 findings are searchable.',
-    ])
-  })
-
-  it('opens the record over the page the reader is on, not Ask’s index', () => {
-    // From inside a thread the index address would throw the reader back to the
-    // question list and lose the answer they were reading.
-    expect(askRecordHref('th-1')).toBe('/dashboard/agent/th-1?detail=record')
-    expect(agentFixture().record!.href).toBe('/dashboard/agent/th-1?detail=record')
-    expect(askRecordHref()).toBe('/dashboard/agent?detail=record')
-  })
 })
 
 describe('the Ask fixtures', () => {
@@ -151,7 +126,7 @@ describe('the Ask fixtures', () => {
     const d = refusedFixture()
     expect(d.measure).toBeNull()
     expect(d.planChip).toBeNull()
-    expect(d.record!.lines[1]).toBe('The month-by-month reading has not been recorded for this workspace yet.')
+    expect(d.reads.rows[0].line).toBe('not read for this month yet')
     expect(d.turns[0].answer!.grounded[0].quotes[0].text).toContain('Three winters')
     // The bar still prints: Ask's context is the basis, not a month reading.
     expect(d.bar.question).toBe('What does the conversation say about this?')
@@ -169,53 +144,59 @@ describe('the Ask fixtures', () => {
 
 // ── Block D wave 2 (E-ask): what the rail and the chip say ──────────────────
 
-describe('what an answer draws on', () => {
-  const basis: AskBasis = {
-    updateAt: '2026-09-27T04:00:00.000Z',
-    monthlyReadings: 3,
-    readingMonths: ['2026-07-01', '2026-08-01', '2026-09-01'],
-    embedded: 2872,
-    total: 2872,
-    lastEmbeddedAt: '2026-09-15T07:31:49.323Z',
-  }
-
-  it('names the months it counted, so the count and the chart agree', () => {
-    expect(askDraws(basis, 23)).toEqual([
-      { term: 'Readings', value: '3 monthly · Jul, Aug, Sep' },
-      { term: 'Updates', value: '23 delivered' },
-      { term: 'Searchable', value: '2,872 of 2,872 findings' },
-      { term: 'Indexed', value: 'as at 15 Sep' },
+describe('what an answer reads (WP3.9)', () => {
+  it('says the market, its two parts and the client’s own posts, one denominator a line', () => {
+    const r = askReads(SEALAND_ASK_READING, 'days90')
+    expect(r.rows).toEqual([
+      { key: 'market', label: 'Your market', value: 655, line: 'videos in September so far; 626 in the category, where themes are grouped' },
+      { key: 'brands', label: 'Brands you track', value: 29, line: 'of those 655, filed under a brand; read when a question names one' },
+      { key: 'own', label: 'Your own posts', value: 9, line: 'with a reading in September so far, marked as yours and never counted as the market' },
+    ])
+    expect(r.facts).toEqual([
+      { term: 'Window', value: 'the last 90 days' },
+      { term: 'Months read', value: 'August, and September so far' },
+      { term: 'Comparisons', value: 'the first read the same way: October against November, from the 6 Dec update' },
     ])
   })
 
-  it('counts the months it names', () => {
-    // The two halves of the Readings row come off one list (lib/agent/basis.ts
-    // readableMonths), so a filter applied to one applies to both.
-    const row = askDraws(basis, 23)[0]
-    expect(row.value.startsWith(`${basis.readingMonths!.length} monthly`)).toBe(true)
+  it('names both windows where no answer has chosen one, and all time where one did', () => {
+    expect(askReads(SEALAND_ASK_READING, null).facts[0].value).toBe('the last 90 days, or all time')
+    expect(askReads(SEALAND_ASK_READING, 'all').facts[0].value).toBe('all time')
   })
 
-  it('says what is not recorded rather than printing a zero for it', () => {
-    const empty: AskBasis = { updateAt: null, monthlyReadings: null, embedded: null, total: null, lastEmbeddedAt: null }
-    expect(askDraws(empty, null).map((r) => r.value)).toEqual([
-      'not recorded for this workspace yet',
-      'not recorded here',
-      'not recorded',
-      'when they were indexed is not recorded',
-    ])
+  it('says what is not read rather than printing a zero for it', () => {
+    const r = askReads(NO_ASK_READING, null)
+    expect(r.rows.map((x) => x.value)).toEqual([null, null, null])
+    expect(r.rows[0].line).toBe('not read for this month yet')
+    expect(r.facts[1].value).toBe('no month yet carries enough videos to compare on')
+    expect(r.facts[2].value).toBe('none read the same way yet')
   })
 
-  it('prints the count alone where nobody read the months', () => {
-    // A stored basis written before `readingMonths` existed. Absent is not
-    // empty: the row names no months rather than naming none.
-    const { readingMonths: _drop, ...noMonths } = basis
-    expect(askDraws(noMonths, 4)[0].value).toBe('3 monthly')
-  })
-
-  it('distinguishes none delivered from not recorded', () => {
-    expect(askDraws(basis, 0)[1].value).toBe('none delivered yet')
-    expect(askDraws({ ...basis, monthlyReadings: 0 }, 1)[0].value).toBe('no month yet carries enough videos to compare on')
-    expect(askDraws({ ...basis, total: 0, embedded: 0 }, 1)[2].value).toBe('nothing to search yet')
+  it('reads the market off the pages’ own rows: pooled, the client left out, months over the floor', () => {
+    const den = (month: string, audience: string, videos: number) => ({ month, audience, videos, comments: 0 })
+    const r = askReadingFrom({
+      now: '2026-10-02T06:00:00.000Z',
+      runs: [{ id: 'r1', started_at: '2026-09-27T04:00:00.000Z', completed_at: '2026-09-27T08:30:00.000Z' }],
+      // Staging's August (351 in the category, 22 Cotopaxi, 4 Freitag: DR F11)
+      // and production's September (626, 29 filed under a tracked brand; the
+      // 29 are held under one rival here, the research does not split them),
+      // the client's own 9, and July's 36 under the floor.
+      denominators: [
+        den('2026-07-01', 'industry-other', 36),
+        den('2026-08-01', 'industry-other', 351), den('2026-08-01', 'competitor:Cotopaxi', 22), den('2026-08-01', 'competitor:Freitag', 4),
+        den('2026-09-01', 'industry-other', 626), den('2026-09-01', 'competitor:Cotopaxi', 29), den('2026-09-01', 'client', 9),
+      ],
+      rivalAudiences: ['competitor:Cotopaxi', 'competitor:Freitag'],
+      schedule: { report_period: 'weekly', report_day: 'sunday' },
+      changes: CHANGES,
+      rows: [],
+    })
+    expect(r.reading?.month).toBe('2026-09-01')
+    expect(r.market).toEqual({ month: '2026-09-01', videos: 655, comments: 0, category: 626, rivalFiled: 29 })
+    expect(r.own).toBe(9)
+    expect(r.monthsRead).toEqual(['2026-08-01', '2026-09-01'])
+    expect(r.earliest).toBe('2026-07-01')
+    expect(r.next).toMatchObject({ prevMonth: '2026-10-01', month: '2026-11-01' })
   })
 })
 

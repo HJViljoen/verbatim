@@ -24,9 +24,9 @@ import type { CalendarSeries } from '../charts/calendar'
 // reading `theme_observations` and started reading the comment-dated months —
 // and none of that measurement reached the page. `loadMovement` computed the
 // verdicts, `renderMovement` spent them on the PROMPT STRING, and what the
-// client saw was the model's prose about them: "305 of 1,388 category videos
-// this month — 22%, from 19% of 1,455 in August", typed by a model, checked by
-// nothing. `PROSE_POLICY.agent_answer` has said `'both'` since WP7 and
+// client saw was the model's prose about them: "104 of 626 category videos
+// this month, 17%, from 11% of 351 in August" (Sealand's Looks & style, prod
+// 24 Sep), typed by a model, checked by nothing. `PROSE_POLICY.agent_answer` has said `'both'` since WP7 and
 // `scrubProse` was never called from `lib/agent/**` (grep: prose-rules, cover,
 // documents/scrub — that is the whole list). The policy row drove nothing.
 //
@@ -42,11 +42,12 @@ import type { CalendarSeries } from '../charts/calendar'
 //     the table holds and a direction only for an object a verdict earned one
 //     for. A digit the model typed drops its SENTENCE. The model explains.
 //
-// WHAT IT DELIBERATELY DOES NOT DO. Read a rival's months. Retrieval drops
-// every rival voice before an answer is written (`scopeToClientVoices`),
-// `loadMovement` takes `client` and `industry-other` only, and
-// `readableMonthCount` filters `isRivalAudience` — precisely so a tenant is not
-// told a rival's months stand behind a claim about their own audience. The mock
+// WHAT IT DELIBERATELY DOES NOT DO. Read a rival's months for a finding. Since
+// WP3.9 retrieval reads a rival's filed videos when the question names that
+// rival, but a finding's figure stays the category's or the client's own
+// (`chooseSide` over `client` and `industry-other`): a brand is read as a
+// brand topic on the market (`loadObjectReadings`, the brands view), never as
+// a rival's own months standing behind a claim about the client's market. The mock
 // draws a Freitag line on an Ask answer; that series belongs to Competitive,
 // with its own denominator, and drawing it here would change what "N monthly
 // readings" in the same tile means.
@@ -460,6 +461,22 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
     figures,
     caveats,
   }
+}
+
+/**
+ * A measurement with the named objects' verdicts added (WP3.9).
+ *
+ * The prose may name a direction only for an object a verdict earned one for
+ * (`dropUnverdictedDirection`), and a subject, kind, mood or brand topic the
+ * question named is such an object once the market reading has judged it:
+ * its verdict carries its label, its pair's refusal and, only where three
+ * comparable ended months earned it, its direction. No figure is added: the
+ * objects' levels are printed by code beside the answer, never substituted
+ * into the model's prose. Pure.
+ */
+export function withObjectVerdicts(measure: AnswerMeasure, readings: readonly { verdict: Verdict | null }[]): AnswerMeasure {
+  const extra = readings.map((r) => r.verdict).filter((v): v is Verdict => v != null)
+  return extra.length ? { ...measure, verdicts: [...measure.verdicts, ...extra] } : measure
 }
 
 /**

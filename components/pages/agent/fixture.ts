@@ -1,13 +1,14 @@
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { measureAnswer, type AnswerMeasure } from '@/lib/agent/measure'
 import {
-  askDraws,
   askHistory,
-  askRecordHref,
-  askRecordLines,
+  askReads,
+  NO_ASK_READING,
   type AgentThreadData,
   type AskPlanChip,
+  type AskReading,
 } from '@/lib/pages/agent-thread'
+import { sealandReading } from '@/lib/test/reading-fixture'
 import { askBasisLine, type AskBasis } from '@/lib/agent/basis'
 import { NOT_ANSWERED_HREF, DECLINED_WHY } from '@/lib/agent/measure'
 import { surface } from '@/lib/nav'
@@ -34,6 +35,24 @@ import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
 // the answer is prose and quotes alone. Every new field has to survive it.
 
 const MONTH = '2026-09-01'
+
+/**
+ * What an answer reads on Sealand on 25 Sep (WP3.9; the approved preview's
+ * rail). REAL NUMBERS: the market's 655 September videos, 626 in the category
+ * and 29 filed under a tracked brand, and the client's 9 own posts with a
+ * reading (prod as at 24 Sep, plan §2.2); August (377) and September clear
+ * the floor; comments reach back to December 2020 (staging, GA F30); the first
+ * pair read the same way is October against November, from the 6 Dec update
+ * (plan §2.11).
+ */
+export const SEALAND_ASK_READING: AskReading = {
+  reading: sealandReading('2026-09-25T09:00:00.000Z'),
+  market: { month: MONTH, videos: 655, comments: 16233, category: 626, rivalFiled: 29 },
+  own: 9,
+  monthsRead: ['2026-08-01', MONTH],
+  earliest: '2020-12-01',
+  next: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z' },
+}
 const LABEL = 'Will it survive a wet commute'
 const REGISTRY_ID = 'reg-wet-commute'
 /** The mock's second finding — a subject that held. Its months are real and
@@ -333,9 +352,10 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
     // EXCLUDING th-1, which IS this thread: the rail lists where else to go,
     // not where you are (`askHistory`'s `exclude`).
     history: askHistory(HISTORY_ROWS, 3, 'th-1'),
-    draws: askDraws(BASIS, 23),
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS, { short: true }) },
-    record: { lines: askRecordLines(BASIS, 23), href: askRecordHref('th-1') },
+    reads: askReads(SEALAND_ASK_READING, 'days90'),
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS, { short: true }), reading: SEALAND_ASK_READING.reading },
+    about: [],
+    window: 'days90',
     method: METHOD,
     ...over,
   }
@@ -378,9 +398,10 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
     // and why the footer is absent rather than a hairline with a lone
     // right-aligned "earliest 28 Sep" against it.
     history: askHistory(HISTORY_ROWS.slice(0, 1), 3, 'th-1'),
-    draws: askDraws(EMPTY_BASIS, null),
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS, { short: true }) },
-    record: { lines: askRecordLines(EMPTY_BASIS, null), href: askRecordHref('th-1') },
+    reads: askReads(NO_ASK_READING, 'all'),
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS, { short: true }), reading: null },
+    about: [],
+    window: 'all',
     ...over,
   }
 }

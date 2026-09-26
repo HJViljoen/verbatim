@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { NotAnswered } from '@/lib/agent/measure'
-import type { AskDrawRow, AskHistory } from '@/lib/pages/agent-thread'
+import type { AskHistory, AskReads } from '@/lib/pages/agent-thread'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { InferencePill } from './marks'
 
@@ -38,33 +38,12 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
     <Tile
       col={col}
       row={row}
-      eyebrow="Earlier questions"
-      // A FACT ABOUT THIS TILE, which is what every other meta on this page is.
-      // It printed `history.thisMonth` — every question asked in the wall-clock
-      // month, drawn or not — so on the fixture "3 this month" sat over rows
-      // dated 13 Sep · 6 Sep · 20 Aug: a reader counting September rows got
-      // two, and the August row read as if it were inside the count. On a
-      // thread page the two can NEVER agree, because the counted question the
-      // reader is looking at is the one deliberately not drawn. `held` is how
-      // many rows there were to draw from, so "3 of 12" says what the list is
-      // and what it is a list of; the month's asking is stated once on this
-      // page, by `NotAnsweredTile`'s budget line, which is the tile whose
-      // month it is. Absent rather than "0 of 0" where there is nothing to
-      // show — `NotAnsweredTile`'s own discipline, six lines from here.
-      meta={history && history.rows.length > 0
-        ? `${fmtInt(history.rows.length)} of ${fmtInt(history.held)}`
-        : undefined}
+      // THE PREVIEW'S TITLE, AND THE TITLE ALONE (25 Sep rulings, WP3.9): a
+      // header carries its title and a footer its link, so the "3 of 12"
+      // meta and the "earliest 28 Sep" note left the tile. The month's asking
+      // is still stated once, by `NotAnsweredTile`'s budget line.
+      eyebrow="Your questions"
       footer={drawn ? <Link href={history!.href} className="hover:underline">All questions →</Link> : undefined}
-      // D14: EARLIEST EVIDENCE, and the word says so. We do not know when this
-      // workspace started asking; we know the oldest question we still hold.
-      //
-      // GATED ON THE SAME CONDITION AS THE FOOTER IT SITS IN. `Tile` draws the
-      // footer row if EITHER half is present, and the note was gated only on
-      // `earliest` — so in the refused state the tile drew a hairline and a
-      // lone mono "earliest 28 Sep" hard against the right edge, with the left
-      // half empty, under a body already saying nothing else has been asked. A
-      // note about a list is furniture where there is no list.
-      footerNote={drawn && history!.earliest ? `earliest ${shortDate(history!.earliest)}` : undefined}
       distribute="between"
     >
       {!history ? (
@@ -104,59 +83,62 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
   )
 }
 
+/** The swatch each row of "What an answer reads" carries: the market in the
+ *  main ink (decision K), the brands you track in theirs, your own posts in
+ *  yours. */
+const READ_SWATCH: Record<AskReads['rows'][number]['key'], string> = {
+  market: 'var(--foreground)',
+  brands: 'var(--comp)',
+  own: 'var(--you)',
+}
+
 /**
- * "What an answer draws on".
+ * "What an answer reads" (WP3.9; the approved preview's rail).
  *
- * FOUR ROWS, NOT THE MOCK'S FIVE — `askDraws` says which and why.
+ * WHAT IT REPLACED. "What an answer draws on" printed the index's own
+ * bookkeeping (monthly readings, updates delivered, findings searchable, when
+ * they were indexed). The market-first question is a different one: what an
+ * answer is ABOUT. So the tile says the market's size in the month the pages
+ * read and its two parts, the client's own posts (read, marked as theirs,
+ * never counted as the market), the window, the months that can be compared
+ * on, and the first pair read the same way. Every count is the pooled market's
+ * own (decision E), one denominator a line.
  *
- * NO DELIVERED COUNT IN THE FOOTER. It was a second printing of the Updates
- * row's own figure, passed on the index and null on a thread — so a reader
- * moving between the two routes watched the tile lose a fact it had not lost.
- * The count is stated once, in the row whose term names it, and the tile reads
- * the same on both routes.
- *
- * AND NO "THE RECORD →" EITHER, WHICH IS THE ONE THIS TILE LOST. The footer
- * used to carry it, on the argument that `lib/nav.ts:hasRecord` admitted Ask
- * (D-record, wave 1) precisely so the drawer could be opened from here. It
- * could — from the record BAND, which `AskShell` then mounted under the page
- * bar on both routes, and which was the product-wide door to the same drawer
- * (band, drawer and `hasRecord` all left with the 25 Sep rulings, WP1.2). Two doors to one drawer, ~400px apart on a thread at 1440, with
- * the drawer's three lines being the three rows this tile already prints in
- * the open: the band at y≈97 read "How sound is this: 23 updates delivered.
- * the record →" and this tile at y≈513 read "UPDATES 23 delivered … The record
- * →". The artboard states the basis in the bar and again in DRAWS — two
- * statements, one control — so the tile keeps its four facts and gives the
- * control up.
+ * TITLE ALONE, LINK ALONE (25 Sep rulings). Nothing sits beside the title and
+ * the footer is one link, to where the method is said in full.
  */
-export function DrawsTile({
-  draws, asAt, col = 12, row = 2,
-}: {
-  draws: readonly AskDrawRow[]
-  /** The artboard's "as at 28 Sep" — when the index these facts describe was
-   *  last written. Null leaves the slot empty rather than dating it today. */
-  asAt?: string | null
-  /** 12 in the rail (its own column); 4 on the index, where the three tiles
-   *  share one twelve-column row — see `AskIndexColumns`. */
-  col?: number
-  row?: number
-}) {
+export function ReadsTile({ reads, col = 12, row = 2 }: { reads: AskReads; col?: number; row?: number }) {
   return (
     <Tile
       col={col}
       row={row}
-      eyebrow="What an answer draws on"
-      // The artboard's "as at 28 Sep". Both neighbours use their meta slot and
-      // this one left it blank; the fact is already in the Indexed row, so the
-      // meta names WHEN rather than inventing a second one.
-      meta={asAt ?? undefined}
+      eyebrow="What an answer reads"
+      footer={<Link href={HOW_TO_READ_HREF} className="hover:underline">What we read, and how →</Link>}
       distribute="between"
     >
-      <dl className="m-0 grid grid-cols-[84px_1fr] gap-x-3 gap-y-2.5">
-        {draws.map((d) => (
-          <div key={d.term} className="contents">
-            <dt className="pt-px font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{d.term}</dt>
+      <p className="m-0 text-[13px] text-foreground">Your market, not only your own posts.</p>
+      <ul className="m-0 flex list-none flex-col p-0">
+        {reads.rows.map((r, i) => (
+          <li key={r.key} className={`flex flex-col gap-1 py-2.5 ${i > 0 ? 'border-t border-border/70' : ''}`}>
+            <div className="flex items-baseline gap-2.5">
+              <span aria-hidden className="size-2.5 flex-none translate-y-px rounded-[2px]" style={{ background: READ_SWATCH[r.key] }} />
+              <span className="min-w-0 flex-1 text-[13px] font-semibold text-foreground">{r.label}</span>
+              {r.value != null && (
+                <span data-copy="figure" className="font-mono text-[13px] font-semibold tabular-nums text-foreground">{fmtInt(r.value)}</span>
+              )}
+            </div>
+            <p className="m-0 pl-5 text-[12px] leading-[1.45] text-muted-foreground">
+              <span data-copy="figure">{r.line}</span>
+            </p>
+          </li>
+        ))}
+      </ul>
+      <dl className="m-0 grid grid-cols-[96px_1fr] gap-x-3 gap-y-2 border-t border-border/70 pt-2.5">
+        {reads.facts.map((f) => (
+          <div key={f.term} className="contents">
+            <dt className="text-[12px] text-muted-foreground">{f.term}</dt>
             <dd className="m-0 text-[12.5px] text-foreground">
-              <span data-copy="figure">{d.value}</span>
+              <span data-copy="figure">{f.value}</span>
             </dd>
           </div>
         ))}
@@ -164,6 +146,10 @@ export function DrawsTile({
     </Tile>
   )
 }
+
+/** Where "What we read, and how →" goes: Settings › How to read, where the
+ *  method is said in full (25 Sep rulings: that is its job, not a footnote's). */
+export const HOW_TO_READ_HREF = '/dashboard/settings/how-to-read'
 
 /**
  * "Not answered this month".
@@ -185,18 +171,9 @@ export function NotAnsweredTile({ notAnswered, col = 12, row = 2 }: { notAnswere
       col={col}
       row={row}
       eyebrow="Not answered this month"
-      // The neighbours' meta reads "3 this month"; this one printed a bare "2"
-      // — and in the refused state a bare "0" over an empty state saying the
-      // same thing. A meta is a fact, so it says what the number is OF, with
-      // its denominator, and it is absent rather than zero where there is
-      // nothing to report. ("declined" is on the direction list and rule (c)
-      // sweeps the whole block, so the word stays in the reasons below, which
-      // are the reader's own.)
-      meta={notAnswered && notAnswered.declined.length > 0
-        ? `${fmtInt(notAnswered.declined.length)} of ${fmtInt(notAnswered.asked)} asked`
-        : undefined}
+      // TITLE ALONE, LINK ALONE (25 Sep rulings, WP3.9): the "2 of 3 asked"
+      // meta and the "Settings" note left; the budget line says the month.
       footer={<Link href={notAnswered?.href ?? TRACKED_HREF} className="hover:underline">What we track →</Link>}
-      footerNote="Settings"
       distribute="between"
     >
       {!notAnswered ? (
