@@ -1,6 +1,7 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { weeklyStamp } from '@/lib/reports/weekly'
+import { fullDate } from '@/lib/format'
+import { weeklyDateLine, weeklyHeadline } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { LinkGuard } from './link-guard'
@@ -39,11 +40,12 @@ export function WeeklyShareShell({ data, appUrl }: { data: WeeklySnapshotData; a
             {/* The email's own date line — the window, and the update behind
                 it — so a forwarded share link and the send it came from say the
                 same thing about which days this is. */}
-            <p className="font-mono text-[11px] text-muted-foreground">{weeklyStamp(data.month, data.reading.barLine)}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">{weeklyDateLine(data.period, data.reading.update.previous)} · reading as at {fullDate(data.readingAt)}</p>
           </div>
           {/* The tenant is on the line above, once — never again as the first
               word of the headline (the artboard's own masthead). */}
-          <h1 className="m-0 max-w-[24ch] text-[30px] font-bold leading-[1.15] tracking-[-0.015em] [text-wrap:balance]">{data.title}</h1>
+          <h1 className="m-0 max-w-[24ch] font-serif text-[30px] font-medium leading-[1.15] [text-wrap:balance]">{weeklyHeadline(data.reading.section1.check)}</h1>
+          <p className="m-0 font-mono text-[11px] text-muted-foreground">figures frozen when this was sent · quoted voices read live, so a withdrawn comment never travels</p>
         </header>
         {weeklyBlocksFor(data.keys).map((block) => (
           <section key={block.key} className="rounded-lg bg-tile px-6 py-6 shadow-tile md:px-8">

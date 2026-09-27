@@ -47,7 +47,7 @@ import { salesBriefFixture, marketingDeckFixture } from '../components/print/fix
 import { WeeklyDeck } from '../components/print/weekly-deck'
 import { MonthlyDeck } from '../components/print/monthly-deck'
 import { QuarterlyDeck } from '../components/print/quarterly-deck'
-import { weeklyFixture, ossurWeeklyFixture as weeklyForming } from '../components/blocks/weekly/fixture'
+import { weeklyFixture, formingFixture as weeklyForming } from '../components/blocks/weekly/fixture'
 import { WEEKLY_BLOCK_KEYS, weeklySubject } from '../lib/reports/weekly'
 import { WEEKLY_SNAPSHOT_VERSION, type WeeklySnapshotData } from '../lib/reports/weekly-build'
 import { monthlyFixture, unmeasuredMonthlyFixture } from '../components/blocks/monthly/fixture'
@@ -67,7 +67,7 @@ const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;5
 const weeklySnapshot = (reading = weeklyFixture()): WeeklySnapshotData => ({
   version: WEEKLY_SNAPSHOT_VERSION, kind: 'weekly', company: 'Sealand', title: 'Sealand · your update',
   period: '6 Sep – 13 Sep', readingAt: '2026-09-18T09:00:00.000Z', month: '2026-09-01',
-  keys: [...WEEKLY_BLOCK_KEYS], reading, figures: {}, subject: weeklySubject('Sealand', reading.cameIn),
+  keys: [...WEEKLY_BLOCK_KEYS], reading, figures: {}, subject: weeklySubject('Sealand', reading.section1.check),
 } as WeeklySnapshotData)
 
 const monthlySnapshot = (reading = monthlyFixture()): MonthlySnapshotData => ({

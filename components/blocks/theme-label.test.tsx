@@ -12,7 +12,7 @@ import { voiceTheme } from '@/components/pages/voice-surface/theme'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 import { weekRising } from '@/components/pages/week/rising'
 import { weekFixture } from '@/components/pages/week/fixture'
-import { weeklyThemes } from '@/components/blocks/weekly/themes'
+import { weeklyIncoming } from '@/components/blocks/weekly/incoming'
 import { forSales } from '@/components/blocks/weekly/sales'
 import { weeklyFixture } from '@/components/blocks/weekly/fixture'
 
@@ -86,9 +86,9 @@ describe('a theme label never fails rule (c)', () => {
 
   it('WR3 · the weekly report’s new themes — a SENT artefact', () => {
     const data = weeklyFixture()
-    data.heard = { ...data.heard!, rows: data.heard!.rows.map((t) => ({ ...t, label: LABEL })) }
+    data.incoming.newThemes = data.incoming.newThemes.map((t) => ({ ...t, label: LABEL }))
     for (const mode of MODES) {
-      expect(directionWords(render(weeklyThemes.render(data, mode, ctx)))).toEqual([])
+      expect(directionWords(render(weeklyIncoming.render(data, mode, ctx)))).toEqual([])
     }
   })
 

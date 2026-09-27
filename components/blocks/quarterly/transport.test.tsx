@@ -29,7 +29,7 @@ const weeklySnapshot = {
   version: WEEKLY_SNAPSHOT_VERSION, kind: 'weekly', company: 'Sealand', title: 'Sealand · your update',
   period: '6 Sep – 13 Sep', readingAt: '2026-09-18T09:00:00.000Z', month: '2026-09-01',
   keys: [...WEEKLY_BLOCK_KEYS], reading: weeklyReading, figures: {},
-  subject: weeklySubject('Sealand', weeklyReading.cameIn),
+  subject: weeklySubject('Sealand', weeklyReading.section1.check),
 } as WeeklySnapshotData
 const monthlyReading = monthlyFixture()
 const monthlySnapshot = {
