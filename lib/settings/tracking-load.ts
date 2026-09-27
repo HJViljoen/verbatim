@@ -58,6 +58,11 @@ export interface TrackingPageInputs {
    *  from "this workspace has no configuration", and the page says which. */
   configFailed: boolean
   termDates: Map<string, TermDate>
+  /** The logged history of what we search and read: every terms row, and the
+   *  rivals and communities rows (What we read's "How the set got here" and
+   *  each search's first day, WP3.10). Oldest first; empty where the log is
+   *  not applied. */
+  setChanges: SetChange[]
   /** The shipped per-term record (found · kept · with comments · insights ·
    *  "worth reviewing"), pooled over updates. */
   performance: { rows: TermSummary[]; updates: number }
@@ -107,6 +112,28 @@ export interface TrackingPageInputs {
    *  monthly reading is not applied", and may not be printed as one. */
   monthUnread: boolean
   monthStatus: MonthStatus
+}
+
+/** A change-log row as "How the set got here" reads it. */
+export type SetChange = Pick<ConfigChange, 'changed_at' | 'surface' | 'field' | 'before' | 'after' | 'source'>
+
+/** The rivals and communities rows of the change log, oldest first. The terms
+ *  rows are `loadChangeLog`'s. Empty where the log is not applied, or the
+ *  read failed (logged): the card then prints what the terms rows say. */
+async function loadSetChanges(client: SupabaseClient, clientId: string): Promise<SetChange[]> {
+  try {
+    return await selectAll<SetChange>(() =>
+      client.from(CONFIG_CHANGES_TABLE)
+        .select('changed_at, surface, field, before, after, source')
+        .eq('client_id', clientId)
+        .in('surface', ['rivals', 'subreddits'])
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (!isMissingConfigLog(error)) console.error(`[settings] set history not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+    return []
+  }
 }
 
 /** The term-yield window: a quarter of weekly updates, the same number the
@@ -362,7 +389,7 @@ export async function loadTrackingPage(
   const censusMonth = monthStartOf(rm?.month ?? nowIso)
 
   const config = (configRead.data ?? null) as Record<string, unknown> | null
-  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix] = await Promise.all([
+  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix, others] = await Promise.all([
     loadChangeLog(client, clientId),
     loadTermYield(client, clientId),
     loadTermPerformance(client, clientId, TRACKING_GATHERS),
@@ -373,6 +400,7 @@ export async function loadTrackingPage(
     loadLastChange(client, clientId),
     loadUpdates(client, clientId),
     loadPlatformMix(client, clientId, censusMonth),
+    loadSetChanges(client, clientId),
   ])
 
   return {
@@ -382,6 +410,7 @@ export async function loadTrackingPage(
     config,
     configFailed: configRead.error !== null,
     termDates: termDates(changes),
+    setChanges: [...changes, ...others].sort((a, b) => (a.changed_at < b.changed_at ? -1 : a.changed_at > b.changed_at ? 1 : 0)),
     performance,
     termYield: yieldRows.rows,
     gathers: yieldRows.gathers,

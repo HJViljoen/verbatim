@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
 import { CommunitiesSection, keptCell, unconfiguredLine } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
 import { renameNotice } from '@/app/dashboard/settings/rival-rename'
+import { TrackingForm } from '@/app/dashboard/settings/tracking-form'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
@@ -23,8 +23,10 @@ import { saveState, type LastChange } from '@/lib/settings/save-state'
 // The render tier for Settings › Tracking (Block D wave 2, E-settings). One
 // static render per section, asserted on what it PRINTS — which is where every
 // honesty rule on this page lives: the scope word on a lifetime count, the em
-// dash instead of a zero, the absent third line of the save strip, the cadence
-// options the product can actually run, and the basis beside every share.
+// dash instead of a zero, the absent third line of the save strip, and the
+// basis beside every share. The cadence is not on this page any more (27 Sep:
+// every workspace is weekly, on Sunday), and the whole form is rendered once
+// below to say so.
 //
 // WHAT "keeps the copy contract" MEANS ON THIS PAGE, EXACTLY (m6). No section
 // here marks a single `data-copy` node, because nothing on a settings page is
@@ -318,7 +320,7 @@ describe('the rivals section', () => {
     // not. `SectionNotes` flows them, so the section spends the lines the
     // words need rather than four paragraphs' worth of them.
     const markup = render(section)
-    const tail = markup.slice(markup.lastIndexOf('Add a rival'))
+    const tail = markup.slice(markup.lastIndexOf('Add a brand'))
     expect(tail.match(/<p /g)?.length ?? 0).toBe(1)
   })
 
@@ -348,7 +350,7 @@ describe('the rivals section', () => {
         names={['Poler', 'Cotopaxi']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}}
       />,
     )
-    expect(noMonth.split('nothing they publish is being read').length - 1).toBe(1)
+    expect(noMonth.split('nothing it publishes is being read').length - 1).toBe(1)
   })
 
   it('keeps the capture-versus-read census and the earliest-evidence footnote', () => {
@@ -440,54 +442,42 @@ describe('the platforms section', () => {
   })
 })
 
-describe('the cadence section', () => {
-  const section = (
-    <CadenceSection
-      period="weekly" day="sunday" storedPeriod="weekly"
-      onPeriod={() => {}} onDay={() => {}} canEdit
-      updatesThisMonth={['2026-09-27', '2026-09-20', '2026-09-13', '2026-09-06']}
-      month="2026-09-01" lastUpdate="2026-09-27" showStudio={false}
+describe('the Tracking form has no cadence (27 Sep: every workspace is weekly, on Sunday)', () => {
+  const form = (canEdit: boolean) => (
+    <TrackingForm
+      canEdit={canEdit}
+      terms={{ ...TERMS }}
+      dates={{}}
+      review={[]}
+      rivals={[rival()]}
+      names={['Freitag']}
+      month="2026-09-01"
+      lastChange={null}
+      affectsRecorded
+      communities={null}
+      platforms={null}
+      performance={null}
     />
   )
-  const words = renderText(section)
 
-  it('offers only the cadences the product can run', () => {
-    expect(words).toContain('Weekly')
-    expect(words).toContain('Monthly')
-    expect(words).not.toContain('Fortnightly')
-  })
+  for (const canEdit of [true, false]) {
+    it(`prints no cadence, day, hour or pause, and posts neither field (${canEdit ? 'an owner' : 'a member'})`, () => {
+      const html = render(form(canEdit))
+      const words = renderText(form(canEdit))
+      expect(words).toContain('Freitag')
+      for (const gone of ['Cadence', 'How often', 'When it lands', 'Weekly', 'Monthly', 'Sunday', '06:00', 'Paused']) {
+        expect(words, gone).not.toContain(gone)
+      }
+      expect(html).not.toMatch(/name="report_(?:period|day)"/)
+    })
+  }
 
-  it('prints the hour as a fact and promises no next date', () => {
-    expect(words).toContain(SLOT_NOTE)
-    expect(words).not.toContain('next')
-    // The freeze rule is How to read's (copy de-clutter C19).
-    expect(words).not.toContain(FREEZE_NOTE)
-    expect(words).not.toContain('28th')
-    // M2: once, and not dressed as the disabled twin of the select beside it.
-    expect(words.split(SLOT_NOTE).length - 1).toBe(1)
-    expect(render(section)).not.toMatch(/h-11 items-center rounded-\[4px\] bg-inner[^"]*">06:00/)
-  })
-
-  it('evidences the cadence with the updates that actually landed', () => {
-    expect(words).toContain('4 updates in September: 27 Sep, 20 Sep, 13 Sep, 6 Sep')
-    // The head is its title alone (the 25 Sep rulings, WP3.10).
-    expect(words).not.toContain('last 27 Sep')
-  })
-
-  it('renders a paused workspace as a sentence, never as a select', () => {
-    const paused = renderText(
-      <CadenceSection
-        period="weekly" day="sunday" storedPeriod="paused"
-        onPeriod={() => {}} onDay={() => {}} canEdit
-        updatesThisMonth={[]} month="2026-09-01" lastUpdate={null} showStudio={false}
-      />,
-    )
-    expect(paused).toContain('Paused. Updates are not being sent.')
-    expect(paused).not.toContain('Weekly')
+  it('says what the last save was under its own save row (the strip left the rail)', () => {
+    expect(renderText(form(true))).toContain(NEVER_SAVED)
   })
 
   it('keeps the copy contract', () => {
-    assertCopyContract(section)
+    assertCopyContract(form(true))
   })
 })
 
@@ -508,8 +498,8 @@ describe('the arms nobody had rendered', () => {
     const noRival = renderText(
       <RivalsSection rows={[]} names={[]} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}} />,
     )
-    expect(noRival).toContain('No rival is named. Naming one is how the category gets a shape.')
-    expect(noRival).toContain('Add a rival')
+    expect(noRival).toContain('No brand is tracked. Naming one is how the category gets a shape.')
+    expect(noRival).toContain('Add a brand')
 
     const noTerms = renderText(
       <TermsSection terms={{ brand_keywords: [], competitor_keywords: [], industry_keywords: [], exclude_terms: [] }}

@@ -89,7 +89,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
       <input type="hidden" name={RIVALS_PRESENT} value="1" />
 
       {rows.length === 0 && added.length === 0 ? (
-        <p className="text-[12.5px] text-muted-foreground">No rival is named. Naming one is how the category gets a shape.</p>
+        <p className="text-[12.5px] text-muted-foreground">No brand is tracked. Naming one is how the category gets a shape.</p>
       ) : (
         <GridTable cols={COLS} min={860} head={head} align={ALIGN}>
           {rows.map((r) => {
@@ -205,11 +205,11 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
             onChange={(e) => { setDraft(e.target.value); setError(null) }}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
             disabled={!canEdit}
-            placeholder="Add a rival by name"
-            aria-label="Add a rival by name"
+            placeholder="Add a brand by name"
+            aria-label="Add a brand by name"
             className={cn(FIELD, 'w-[280px] max-w-full')}
           />
-          <button type="button" onClick={add} disabled={!canEdit || draft.trim() === ''} className={CONTROL}>Add a rival</button>
+          <button type="button" onClick={add} disabled={!canEdit || draft.trim() === ''} className={CONTROL}>Add a brand</button>
           {refusal && <MonoNote className="max-w-[420px]">{refusal}</MonoNote>}
         </div>
         {error && <span role="alert" className="text-[11.5px] text-negative">{error}</span>}
@@ -235,7 +235,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
           // caller that passed no month, where that column is not drawn and
           // the sentence would otherwise go unsaid.
           rows.some((r) => r.noAccounts && !r.retiredAt) && !rows.some((r) => r.ownPostsWhy)
-            ? 'Where no account is configured for a rival, nothing they publish is being read, only what a search finds.'
+            ? 'Where no account is configured for a brand, nothing it publishes is being read, only what a search finds.'
             : null,
           ...[...new Set(rows.map((r) => r.ownPostsWhy).filter((w): w is string => w != null))],
         ]}

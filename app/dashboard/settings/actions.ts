@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { assertTenantMay, CADENCE_HELD } from '@/lib/tenant-locks'
+import { assertTenantMay } from '@/lib/tenant-locks'
 import { queuedMessage, queueTrackingEdit, type QueueColumn } from '@/lib/settings/queue'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
@@ -13,7 +13,8 @@ import type { SubredditEntry } from '@/lib/gather/types'
 import { subredditKey, subredditLabel } from '@/lib/gather/subreddits'
 import { ensureRivals } from '@/lib/rivals'
 import { savedMessage } from '@/lib/settings/connections'
-import { PERIODS, DAYS, RIVALS_PRESENT, SAVED_FIELDS } from './constants'
+import { cadenceEditIn, CADENCE_REFUSAL } from '@/lib/update-rhythm'
+import { RIVALS_PRESENT, SAVED_FIELDS } from './constants'
 
 // "SUGGEST MORE TERMS" IS GONE FROM THIS PAGE, AND SO IS ITS ACTION (C7).
 // The artboard's terms section is one field with a category selector and no
@@ -134,10 +135,15 @@ const trackedNames = (formData: FormData): string[] | null => {
 // least one competitor" over a save that had half landed, and pressing Save
 // again repeated it. A workspace with no rival is a real state (it is what
 // every tenant starts as), and the ceiling is the one that bounds cost.
+//
+// AND NO CADENCE (27 Sep, Heinrich: "remove cadence from settings, and always
+// have it weekly on sunday"; deploy 2b). This action wrote `report_period` and
+// `report_day` from the Cadence section until then. Every workspace is now
+// weekly, on Sunday, and the pause is the operator's (lib/update-rhythm.ts), so
+// neither column is in the schema or the payload any more, and a POST that
+// would move either is refused before anything is written.
 const schema = z.object({
   competitor_names: z.array(z.string()).max(15, 'track at most 15 competitors'),
-  report_period: z.enum(PERIODS),
-  report_day: z.enum(DAYS),
 })
 
 export async function updateTrackingConfig(
@@ -154,24 +160,25 @@ export async function updateTrackingConfig(
   }
   // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts): the
   // rivals this writes are held still during the trial and a change to them
-  // is queued for the 1st (below); the cadence is refused in its own words.
+  // is queued for the 1st (below).
   const may = assertTenantMay(session, clientId, 'tracking')
   if (!may.ok && !may.queue) return { ok: false, message: may.message }
 
-  // Read the stored config BEFORE validating: a paused tenant's form has no
-  // period control at all (the select cannot represent 'paused'), so the field
-  // is absent from the POST and has to be filled in from what is stored.
+  // Read the stored config BEFORE validating: the rival list a POST did not
+  // carry is the stored one, and the cadence a POST did carry is checked
+  // against what is stored.
   const { data: current } = await supabase
     .from('tracking_configs')
     .select('report_period, report_day, competitor_names, competitor_keywords')
     .eq('client_id', clientId)
     .maybeSingle()
 
-  // Paused stays paused (T0-7). Before, the select rendered 'paused' as
-  // 'weekly' and a save wrote that back, re-arming the scheduler on a tenant
-  // meant to be quiet. Three live tenants sit at 'paused' today, Sealand
-  // among them.
-  const isPaused = current?.report_period === 'paused'
+  // THE CADENCE IS NOT A SETTING (27 Sep). A page opened before the Cadence
+  // section went posts the stored pair back, which moves nothing and is let
+  // through; anything else is refused here, before either write below, locked
+  // or not. Paused stays paused by construction: nothing in this action
+  // writes `report_period` any more.
+  if (cadenceEditIn(formData, current)) return { ok: false, message: CADENCE_REFUSAL }
 
   // The rival list as posted, or the stored one where the POST carried none.
   // A list nobody sent is not an empty list, and the difference decides both
@@ -181,8 +188,6 @@ export async function updateTrackingConfig(
 
   const parsed = schema.safeParse({
     competitor_names: posted ?? stored,
-    report_period: isPaused ? 'weekly' : formData.get('report_period'),
-    report_day: formData.get('report_day'),
   })
 
   if (!parsed.success) {
@@ -191,15 +196,10 @@ export async function updateTrackingConfig(
     return { ok: false, message: `Invalid ${field}: ${first?.message ?? 'check your input.'}` }
   }
 
-  // A LOCKED TENANT: the cadence is refused in its own words (a cadence-only
-  // change used to read the searches' sentence), and a rival list that moved
-  // is queued with the search terms it brings, as an unlocked save derives
-  // them below. Nothing is written to tracking_configs.
+  // A LOCKED TENANT: a rival list that moved is queued with the search terms
+  // it brings, as an unlocked save derives them below. Nothing is written to
+  // tracking_configs.
   if (!may.ok) {
-    const storedDay = (current?.report_day as string | null | undefined) ?? 'monday'
-    const storedPeriod = (current?.report_period as string | null | undefined) ?? 'weekly'
-    const cadenceMoved = parsed.data.report_day !== storedDay || (!isPaused && parsed.data.report_period !== storedPeriod)
-    if (cadenceMoved) return { ok: false, message: CADENCE_HELD }
     if (!posted) return { ok: true, message: NOTHING_TO_QUEUE, unchanged: true }
     const names = parsed.data.competitor_names
     return queueEdit(session, may.message, { competitor_names: names }, (will) => {
@@ -210,27 +210,31 @@ export async function updateTrackingConfig(
 
   // THE ADMIN CLIENT, AFTER THE ROLE AND LOCK CHECKS ABOVE (MF1, the deploy-1
   // review's R12). `authenticated` no longer holds UPDATE on these columns, so
-  // a tenant's session token cannot PATCH rivals or cadence around
-  // `assertTenantMay` through PostgREST; this action is the one way in, and it
+  // a tenant's session token cannot PATCH rivals around `assertTenantMay`
+  // through PostgREST; this action is the one way in, and it
   // has already checked who is asking. The row is pinned by `clientId` from the
   // session, which is what the own-row policy used to pin.
   //
   // Stamped (WP2): on the service role the database sees nobody at all, so the
   // stamp is what names the person, and the audit trigger takes it as written
   // (it overrides a stamp only for an `authenticated` caller).
-  const { error } = await updateWithActor(
-    (payload) => createAdminClient().from('tracking_configs').update(payload).eq('client_id', clientId),
-    {
-      report_period: isPaused ? 'paused' : parsed.data.report_period,
-      report_day: parsed.data.report_day,
-      ...(posted ? { competitor_names: parsed.data.competitor_names } : {}),
-      updated_at: new Date().toISOString(),
-    },
-    actorStamp(session, 'settings'),
-  )
+  //
+  // Only when the POST carried the list: with the cadence gone it is the one
+  // column this statement writes, and a write of `updated_at` alone logs
+  // nothing and changes nothing.
+  if (posted) {
+    const { error } = await updateWithActor(
+      (payload) => createAdminClient().from('tracking_configs').update(payload).eq('client_id', clientId),
+      {
+        competitor_names: parsed.data.competitor_names,
+        updated_at: new Date().toISOString(),
+      },
+      actorStamp(session, 'settings'),
+    )
 
-  if (error) {
-    return { ok: false, message: `Could not save: ${error.message}` }
+    if (error) {
+      return { ok: false, message: `Could not save: ${error.message}` }
+    }
   }
 
   // competitor_keywords follows competitor_names (T0-7): gather searches from
@@ -564,18 +568,33 @@ export async function saveTracking(
   prev: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
+  // A CADENCE IN THE POST IS REFUSED FIRST (27 Sep, deploy 2b).
+  // `updateTrackingConfig` refuses one that moves the stored pair, but it runs
+  // second: by then the terms would have landed, and the reader would see a
+  // refusal over a save that had half happened. So the same check runs here,
+  // before either write.
+  if (formData.has('report_period') || formData.has('report_day')) {
+    const { supabase, clientId } = await getSessionContext()
+    const { data: stored } = await supabase
+      .from('tracking_configs')
+      .select('report_period, report_day')
+      .eq('client_id', clientId)
+      .maybeSingle()
+    if (cadenceEditIn(formData, stored)) return { ok: false, message: CADENCE_REFUSAL }
+  }
   const terms = await updateSearchTerms(prev, formData)
   if (!terms.ok) return terms
   const config = await updateTrackingConfig(prev, formData)
-  // A locked tenant's terms may already be queued when the cadence is refused:
-  // say both, so a save that half-landed does not read as a refusal alone.
+  // A locked tenant's terms may already be queued when the rival list is
+  // refused: say both, so a save that half-landed does not read as a refusal
+  // alone.
   if (!config.ok) return terms.queued ? { ok: false, message: `${terms.message} ${config.message}`, queued: terms.queued } : config
   const queued = config.queued ?? terms.queued
   if (queued) return { ok: true, message: queuedMessage(queued), queued }
   if (terms.unchanged && config.unchanged) return { ok: true, message: NOTHING_TO_QUEUE, unchanged: true }
   // What it wrote, not what a third of it wrote: the form posts one
   // `saved_fields` value per pending edit and `savedMessage` reads them against
-  // its own allowlist, so the sentence names the cadence and the rival list
-  // when those are what moved.
+  // its own allowlist, so the sentence names the brands you track when those
+  // are what moved.
   return { ok: true, message: savedMessage(formData.getAll(SAVED_FIELDS).map(String)) }
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { buildPlatformTasks } from '../gather/gather'
 import type { GatherConfig } from '../gather/types'
-import { biggestSearchLine, marketPlatformMix, searchCapLine, searchPlan, SEARCH_CAP, termShares } from './your-market'
+import { biggestSearchLine, marketPlatformMix, searchPlan, SEARCH_CAP, termShares } from './your-market'
 
 // Settings › Tracking › Your market (WP3.10). Figures: staging, read-only,
 // 27 Sep 2026 (Sealand, September): 654 market videos, YouTube 289 · TikTok
@@ -28,7 +28,6 @@ describe('searchPlan', () => {
     ])
     expect(plan.used).toBe(113)
     expect(plan.cap).toBe(SEARCH_CAP)
-    expect(searchCapLine(plan)).toBe('113 of 120 searches each update · 7 free')
   })
 
   it('is the gather\'s own plan, whatever the set: the same count buildPlatformTasks makes', () => {
@@ -44,10 +43,6 @@ describe('searchPlan', () => {
     } finally {
       process.env.REDDIT_DISCOVERY_ENABLED = prev
     }
-  })
-
-  it('says when the plan is over the cap', () => {
-    expect(searchCapLine({ groups: [], used: 124, cap: 120 })).toBe('124 of 120 searches each update · 4 over, so the update drops the last of them')
   })
 })
 

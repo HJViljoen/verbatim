@@ -57,8 +57,10 @@ export const QUEUE_FIELD_WORDS: Readonly<Record<QueueField, string>> = {
   competitor_keywords: 'Brands you track',
   industry_keywords: 'The category',
   exclude_terms: 'Not these',
-  competitor_names: 'Rivals',
-  competitor_handles: 'Rival accounts',
+  // The list itself, beside its searches ("Brands you track" above), in the
+  // page's words for it (WP3.10), never "rivals".
+  competitor_names: 'The brands you track',
+  competitor_handles: 'Accounts of the brands you track',
   own_handles: 'Your accounts',
 }
 

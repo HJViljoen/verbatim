@@ -3,10 +3,9 @@
 import { useActionState, useState, type ReactNode } from 'react'
 import { saveTracking, type SettingsFormState } from './actions'
 import { SAVED_FIELDS } from './constants'
-import { CadenceSection } from '@/components/settings/tracking/cadence'
 import { RivalsSection } from '@/components/settings/tracking/rivals'
 import { TermsSection, type Bucket } from '@/components/settings/tracking/terms'
-import { SaveStateLine } from '@/components/settings/save-state-strip'
+import { LastSaveStrip, SaveStateLine } from '@/components/settings/save-state-strip'
 import { CONTROL } from '@/components/settings/chrome'
 import type { TermSummary } from '@/lib/keywords/value'
 import { cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
@@ -21,11 +20,22 @@ import { saveState, type LastChange } from '@/lib/settings/save-state'
 // honest one: a page whose sections are six views of one configuration should
 // not ask which button writes which third of it.
 //
-// EVERYTHING EDITABLE IS STATE HERE. The terms, the tracked rivals and the
-// cadence all live in this component, so the strip in the rail and the sentence
-// beside the save button describe the same edits, "Discard" has something to
-// discard, and the sections below can stay presentational — which is what makes
-// them testable with a static render.
+// EVERYTHING EDITABLE IS STATE HERE. The terms and the tracked rivals both
+// live in this component, so the strip and the sentence beside the save button
+// describe the same edits, "Discard" has something to discard, and the
+// sections below can stay presentational — which is what makes them testable
+// with a static render.
+//
+// NO CADENCE (27 Sep, Heinrich: "remove cadence from settings, and always have
+// it weekly on sunday"; deploy 2b). Every workspace is updated weekly, on
+// Sunday, and the pause is the operator's (lib/update-rhythm.ts), so the
+// Cadence section, its two fields and its state are gone, and nothing here
+// posts `report_period` or `report_day`.
+//
+// THE EDITOR OF WHAT WE READ (market-first WP3.10). Since the approved preview
+// this form is drawn inside "The search set" card, in the set's place, when
+// the reader asks to change it ("Queue a change"); the last save's strip,
+// which hung under the settings rail, sits under its save row.
 //
 // THE TWO REDDIT CONTROLS ARE NOT IN THIS FORM, deliberately. Watching a
 // community is its own logged write (`updateCommunity`) and it dispatches its
@@ -45,13 +55,9 @@ export interface TrackingFormProps {
   rivals: readonly RivalRow[]
   names: readonly string[]
   month: string
-  period: string
-  day: string
-  storedPeriod: string
-  updatesThisMonth: readonly string[]
-  lastUpdate: string | null
-  showStudio: boolean
   lastChange: LastChange | null
+  /** That change's own note, where it wrote one. */
+  lastChangeNote?: string | null
   affectsRecorded: boolean
   /** Server-rendered sections that sit between the editable ones. */
   communities: ReactNode
@@ -100,8 +106,6 @@ export function TrackingForm(props: TrackingFormProps) {
     setSeededFrom(serverNames)
     setNames([...props.names])
   }
-  const [period, setPeriod] = useState(props.period)
-  const [day, setDay] = useState(props.day)
   // useActionState keeps its last result forever, so "Saved." would sit under a
   // list the reader has since changed. The first edit after a save retires it.
   const [edited, setEdited] = useState(false)
@@ -112,8 +116,6 @@ export function TrackingForm(props: TrackingFormProps) {
     category: cleanTerms(props.terms.industry_keywords),
     exclusions: cleanTerms(props.terms.exclude_terms),
     rivals: props.names,
-    period: props.period,
-    day: props.day,
   }
   const pending = trackingPending(before, {
     brand: terms.brand_keywords,
@@ -121,8 +123,6 @@ export function TrackingForm(props: TrackingFormProps) {
     category: terms.industry_keywords,
     exclusions: terms.exclude_terms,
     rivals: names,
-    period,
-    day,
   })
   const save = saveState({ pending, lastChange: props.lastChange, affectsRecorded: props.affectsRecorded })
 
@@ -141,10 +141,10 @@ export function TrackingForm(props: TrackingFormProps) {
 
   function addRival(raw: string): string | null {
     const name = raw.trim().replace(/\s+/g, ' ')
-    if (name.length < 2) return 'Give the rival a name we can search for.'
-    if (name.length > 80) return 'Keep a rival’s name under 80 characters.'
-    if (names.length >= 15) return 'Fifteen rivals is the limit. Take one off first.'
-    if (names.some((n) => n.toLowerCase() === name.toLowerCase())) return 'That rival is already tracked.'
+    if (name.length < 2) return 'Give the brand a name we can search for.'
+    if (name.length > 80) return 'Keep a brand’s name under 80 characters.'
+    if (names.length >= 15) return 'Fifteen brands is the limit. Take one off first.'
+    if (names.some((n) => n.toLowerCase() === name.toLowerCase())) return 'That brand is already tracked.'
     setNames((prev) => [...prev, name])
     setEdited(true)
     return null
@@ -158,8 +158,6 @@ export function TrackingForm(props: TrackingFormProps) {
       exclude_terms: cleanTerms(props.terms.exclude_terms),
     })
     setNames([...props.names])
-    setPeriod(props.period)
-    setDay(props.day)
     setEdited(false)
   }
 
@@ -193,19 +191,6 @@ export function TrackingForm(props: TrackingFormProps) {
 
       {props.platforms}
 
-      <CadenceSection
-        period={period}
-        day={day}
-        storedPeriod={props.storedPeriod}
-        onPeriod={(p) => { setPeriod(p); setEdited(true) }}
-        onDay={(d) => { setDay(d); setEdited(true) }}
-        canEdit={props.canEdit}
-        updatesThisMonth={props.updatesThisMonth}
-        month={props.month}
-        lastUpdate={props.lastUpdate}
-        showStudio={props.showStudio}
-      />
-
       {/* What this save is about to write, so its answer can name it. */}
       {pending.map((p) => <input key={p.field} type="hidden" name={SAVED_FIELDS} value={p.field} />)}
 
@@ -236,6 +221,9 @@ export function TrackingForm(props: TrackingFormProps) {
             You have read-only access. Ask an owner or admin to change what we track.
           </p>
         )}
+      </div>
+      <div className="mt-3 max-w-[560px]">
+        <LastSaveStrip state={saveState({ lastChange: props.lastChange, affectsRecorded: props.affectsRecorded })} note={props.lastChangeNote ?? null} />
       </div>
     </form>
   )
