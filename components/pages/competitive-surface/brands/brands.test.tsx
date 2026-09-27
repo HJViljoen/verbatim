@@ -139,6 +139,32 @@ describe('B2 · a brand in full, last 90 days', () => {
     const data = competitiveFixture()
     for (const mode of MODES) expect(render(brandsInFull.render(data, mode, ctx))).toBe(render(competitiveRivals.render(data, mode, ctx)))
   })
+
+  it('opens the brand read in full on Conversation, over the same ninety days (the preview’s footer)', () => {
+    const app = render(brandsInFull.render(brandsFixture(), 'app', ctx))
+    expect(text(brandsInFull.render(brandsFixture(), 'app', ctx))).toContain('Open Cotopaxi’s videos →')
+    expect(app).toContain('href="https://app.verbatimintel.com/dashboard/voice?brand=Cotopaxi#board"')
+    expect(text(brandsInFull.render(ossurBrandsFixture(), 'app', ctx))).toContain('Open Ottobock’s videos →')
+    // The email carries it; a print has no links.
+    expect(render(brandsInFull.render(brandsFixture(), 'email', ctx))).toContain('/dashboard/voice?brand=Cotopaxi#board')
+    expect(render(brandsInFull.render(brandsFixture(), 'print', ctx))).not.toContain('/dashboard/voice')
+  })
+
+  it('keeps the reader’s month on the way, and names the brand the reader opened (?vs=)', () => {
+    const inAugust = blockContext('', EMAIL, { month: '2026-08', vs: 'Freitag' })
+    expect(render(brandsInFull.render(brandsFixture(), 'app', inAugust))).toContain('href="/dashboard/voice?month=2026-08&amp;brand=Cotopaxi#board"')
+    const b = brandsFixture()
+    const freitag = { ...b, brands: { ...b.brands!, inFull: { ...b.brands!.inFull, selected: { ...b.brands!.inFull.selected!, audience: 'competitor:Freitag', label: 'Freitag', videos: 8 } } } }
+    const t = text(brandsInFull.render(freitag, 'app', ctx))
+    expect(t).toContain('Open Freitag’s videos →')
+    expect(render(brandsInFull.render(freitag, 'app', ctx))).toContain('/dashboard/voice?brand=Freitag#board')
+  })
+
+  it('draws no footer where no brand had a video in the ninety days', () => {
+    const b = brandsFixture()
+    const none = { ...b, brands: { ...b.brands!, inFull: { ...b.brands!.inFull, rows: [], selected: null } } }
+    expect(render(brandsInFull.render(none, 'app', ctx))).not.toContain('<footer')
+  })
 })
 
 describe('B3 · asked under their content', () => {

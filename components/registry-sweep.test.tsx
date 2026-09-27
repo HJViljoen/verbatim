@@ -21,6 +21,7 @@ import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview'
 import { BlockFrame } from '@/components/blocks/frame'
 import { subjectsFixture, refusedFixture as subjectsRefused } from '@/components/pages/subjects/fixture'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
+import { cotopaxiVoiceFixture, ottobockVoiceFixture, rareformVoiceFixture } from '@/components/pages/voice-surface/fixture-brand'
 import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture, quietRivalFixture } from '@/components/pages/competitive-surface/fixture'
 import { brandsFixture, ossurBrandsFixture } from '@/components/pages/competitive-surface/brands/fixture'
@@ -81,7 +82,8 @@ interface Renderish { render: (d: never, m: RenderMode, c: typeof ctx) => ReactN
 
 /** The block arrays and records that are not in `PAGES`, with their states. */
 const GROUPS: [string, Record<string, Renderish> | readonly (Renderish & { key: string })[], unknown[]][] = [
-  ['voice-surface', VOICE_BLOCKS as never, [voiceFixture()]],
+  // Conversation, and the board filtered by brand (`?brand=`, B2's footer).
+  ['voice-surface', VOICE_BLOCKS as never, [voiceFixture(), cotopaxiVoiceFixture(), rareformVoiceFixture(), ottobockVoiceFixture()]],
   ['market-surface', MARKET_BLOCKS as never, [marketFixture(), deepLinkFixture(), unrecordedFixture()]],
   // Brands (WP3.5, deploy 5): the page's readings and a tenant with no brand
   // rule (Össur), beside the Phase 1 forms; the not-yet-counted state is swept
