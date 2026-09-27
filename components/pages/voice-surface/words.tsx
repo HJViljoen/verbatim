@@ -27,15 +27,18 @@ import type { WordsKind, WordsQuote } from '@/lib/pages/voice-surface-words'
 /** "More colors and variants wanted · TikTok · 19 Sep · 78 likes". The theme
  *  is Pass B's words, marked as such; the rest is code's. */
 function Cite({ q, mode }: { q: WordsQuote; mode: RenderMode }) {
-  const rest = [
-    q.platform ? platformLabel(q.platform) : null,
-    q.date ? shortDate(q.date) : null,
-  ].filter(Boolean).join(' · ')
+  // The theme wraps as text; the platform, the date and the likes each stay
+  // whole ("12 Sep" never splits across two lines of a narrow card).
+  const whole = mode === 'email' ? undefined : 'whitespace-nowrap'
+  const parts: ReactNode[] = [
+    q.platform ? <span key="p" className={whole}>{platformLabel(q.platform)}</span> : null,
+    q.date ? <span key="d" className={whole}>{shortDate(q.date)}</span> : null,
+    q.likes && q.likes > 0 ? <span key="l" data-copy="figure" className={whole}>{fmtInt(q.likes)} {q.likes === 1 ? 'like' : 'likes'}</span> : null,
+  ].filter(Boolean)
   const words = (
     <>
       <span data-copy="subject" data-slot="pass_b_theme">{q.theme}</span>
-      {rest ? ` · ${rest}` : null}
-      {q.likes && q.likes > 0 ? <> · <span data-copy="figure">{fmtInt(q.likes)} {q.likes === 1 ? 'like' : 'likes'}</span></> : null}
+      {parts.map((p, i) => <span key={i}>{' · '}{p}</span>)}
     </>
   )
   if (!q.href || mode === 'print') return words

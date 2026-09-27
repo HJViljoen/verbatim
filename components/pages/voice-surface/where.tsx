@@ -69,17 +69,23 @@ function Seen({ a, mode }: { a: WhereAccount; mode: RenderMode }) {
 }
 
 /** The list's columns, from 560px of block (a container query): the account,
- *  its videos, the months it was seen in. Written out in full for Tailwind's
- *  scanner. */
-const COLS = 'grid grid-cols-[minmax(0,1fr)_48px_64px] gap-x-3 @min-[560px]:grid-cols-[minmax(0,1fr)_64px_144px] @min-[560px]:gap-x-6'
+ *  its videos, the months it was seen in. Under 560px the last column keeps
+ *  room for its "months read" head (at 390 a 64px column set it over
+ *  "Videos"). Written out in full for Tailwind's scanner. */
+const COLS = 'grid grid-cols-[minmax(0,1fr)_44px_84px] gap-x-3 @min-[560px]:grid-cols-[minmax(0,1fr)_64px_144px] @min-[560px]:gap-x-6'
+
+/** An account's name: whole on a phone (it wraps, never cut to "ReBorn
+ *  Creati…"), one line with an ellipsis where the list has the preview's
+ *  room. */
+const NAME = `min-w-0 [overflow-wrap:anywhere] @min-[560px]:truncate ${SCALE.row}`
 
 function Row({ a, w }: { a: WhereAccount; w: WhereBlock }) {
   const largest = w.largest?.key === a.key
   return (
     <div role="row" className={`${COLS} min-h-11 items-center py-2 ${RULE.row} last:border-b-0`}>
       <span role="rowheader" className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex min-w-0 items-center gap-3">
-          <span data-copy="quote" className={`min-w-0 truncate ${SCALE.row}`}>{a.name}</span>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 @min-[560px]:flex-nowrap">
+          <span data-copy="quote" className={NAME}>{a.name}</span>
           {a.maker ? <span className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap text-[13px] text-secondary-foreground"><MakerMark />maker</span> : null}
         </span>
         {largest ? <span className={SCALE.tag}><span data-copy="figure">{fmtInt(a.comments)}</span> comments in {longMonth(w.month)}</span> : null}
@@ -102,7 +108,7 @@ function Aside({ w }: { w: WhereBlock }) {
         {w.setAside.map((a) => (
           <div key={a.key} role="row" className={`grid min-h-[60px] grid-cols-[minmax(0,1fr)_40px] items-center gap-x-4 py-3 ${RULE.row} last:border-b-0 last:pb-0`}>
             <span role="rowheader" className="flex min-w-0 flex-col gap-0.5">
-              <span data-copy="quote" className={`min-w-0 truncate ${SCALE.row}`}>{a.name}</span>
+              <span data-copy="quote" className={`min-w-0 [overflow-wrap:anywhere] ${SCALE.row}`}>{a.name}</span>
               {a.foundBy ? <span className="text-[13px] leading-[1.4] text-muted-foreground">found by “<span data-copy="quote">{a.foundBy}</span>”</span> : null}
             </span>
             <span className="text-right font-mono text-[15px] font-medium tabular-nums text-secondary-foreground"><span data-copy="figure">{fmtInt(a.videos)}</span></span>
@@ -195,7 +201,7 @@ export const voiceWhere: Block<VoiceSurfaceData> = {
     ) : null
     return (
       <BlockFrame title={voiceWhere.title} mode={mode} footer={footer} roomy>
-        <div id="where" className="grid min-w-0 scroll-mt-6 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_304px] xl:gap-x-[88px]">
+        <div id="where" className="grid min-w-0 scroll-mt-6 grid-cols-1 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_304px] xl:gap-x-[88px]">
           <div className="flex min-w-0 flex-col gap-5">
             <Lead w={w} mode={mode} />
             {table}
