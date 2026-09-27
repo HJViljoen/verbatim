@@ -45,6 +45,7 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId, pickThemedRunId, type ThemedRunRow } from './themed-run'
+import { citationsUntranslated } from './evidence-untranslated'
 import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
 import type { FormatMatrix } from '../reading/formats'
 
@@ -3016,68 +3017,6 @@ async function tenantInsights(
   )
   return held.map((r) => r.id)
 }
-
-/**
- * `fetchQuoteCitationsByAudience` (lib/quotes.ts) WITHOUT ITS TRANSLATION READ.
- * The caller reads the English (`readTranslations`) for the citations it keeps.
- *
- * WHY. §5 hands the evidence read every current sales insight (Sealand: 1,374)
- * and §4 every subject member (550), and the window then keeps a few hundred
- * of the thousands of quotes behind them. `fetchQuoteCitationsByAudience`
- * reads the English of every one of those thousands before it returns: 48 of
- * This week's 256 reads on staging (27 Sep, Sealand), about 7,000 texts at 150
- * a request, and on the critical path of both sections. A text's reading is
- * keyed on its hash alone, so reading it for fewer texts gives each kept text
- * the same reading (lib/quotes.ts `readTranslations`).
- *
- * WHY A COPY, AND WHY HERE. The split belongs in lib/quotes.ts, as an option
- * on the function it copies. lib/quotes.ts is on the freeze-months path
- * (plan §7.11, `scripts/pipeline-closure.sh`), where nothing may change
- * before the 4 Oct run. So this is that function's read line for line: the
- * same columns, the same `redacted = false` (demographic_signal evidence cites
- * but never quotes), the same 120-id chunks issued the same way, the same row
- * filter and the same row shape. THE CHUNK SIZE AND THE ORDER ARE PART OF THE
- * OUTPUT, not tuning: the Map is keyed in the order the evidence rows arrive,
- * chunk by chunk, and that order decides which quotes a section prints (see
- * `fetchChunks` in lib/quotes.ts, and `inChunks` below). Once the freeze
- * lifts, move this into lib/quotes.ts and delete the copy; until then, a
- * change to the rule there must be made here too.
- */
-async function citationsUntranslated(supabase: SupabaseClient, audienceIds: string[]): Promise<Map<string, QuoteCitation[]>> {
-  type EvidenceRow = {
-    id: string
-    audience_insight_id: string
-    quote: string | null
-    relevance_rank: number | null
-    comment_id: string | null
-    source_video_id: string | null
-    source: string | null
-  }
-  const pages = await mapWithLimit(chunk(audienceIds, CITATION_CHUNK), READ_CONCURRENCY, (part) =>
-    selectAll<EvidenceRow>(() =>
-      supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id, source').in('audience_insight_id', part).eq('redacted', false).order('id'),
-    ),
-  )
-  const byAudience = new Map<string, QuoteCitation[]>()
-  for (const r of pages.flat()) {
-    if (!r.quote) continue
-    if (!r.comment_id && !r.source_video_id) continue
-    const arr = byAudience.get(r.audience_insight_id) ?? []
-    arr.push({
-      quote: r.quote,
-      rank: r.relevance_rank ?? 99,
-      evidenceId: r.id,
-      source: r.source === 'video' || r.source === 'video_text' ? r.source : 'comment',
-      commentId: r.comment_id,
-      videoId: r.source_video_id,
-    })
-    byAudience.set(r.audience_insight_id, arr)
-  }
-  return byAudience
-}
-
-/** lib/quotes.ts `fetchChunks`' size, which `citationsUntranslated` copies. */
-const CITATION_CHUNK = 120
 
 /**
  * The comments this update's window carried that Pass A called an objection,
