@@ -41,7 +41,7 @@ const read = (t: string): string => t.replace(/\s+([,.)])/g, '$1').replace(/\s+/
 const card = (over: Partial<Parameters<typeof SearchSetCard>[0]> = {}) => (
   <SearchSetCard
     locked
-    queue={{ state: 'available', summary: 'queued for October: none yet', lines: [] }}
+    queue={{ state: 'available', summary: 'queued for January: none yet', lines: [] }}
     canEdit
     groups={GROUPS}
     communities={[{ name: 'backpacks', day: '9 Sep' }, { name: 'travelgear', day: '9 Sep' }, { name: 'onebag', day: '9 Sep' }]}
@@ -56,7 +56,7 @@ const card = (over: Partial<Parameters<typeof SearchSetCard>[0]> = {}) => (
 describe('The search set', () => {
   it('opens on the strip that holds it still, with what is queued and the one control', () => {
     const t = read(renderText(card()))
-    expect(t).toContain('Held still until January queued for October: none yet Queue a change')
+    expect(t).toContain('Held still until January queued for January: none yet Queue a change')
     expect(render(card())).toContain('aria-expanded="false"')
   })
 
@@ -99,7 +99,7 @@ describe('The search set', () => {
   })
 
   it('lists what is queued, with the month it lands and who queued it', () => {
-    const t = read(renderText(card({ queue: { state: 'available', summary: 'queued for January 2027: 1 change', lines: [
+    const t = read(renderText(card({ queue: { state: 'available', summary: 'queued for January: 1 change', lines: [
       { field: 'industry_keywords', label: 'Terms for the category', words: 'adds wet commute bag', month: '2027-01-01', queuedAt: '2026-10-12T09:00:00.000Z', queuedBy: 'daniela@sealand.example · owner' },
     ] } })))
     expect(t).toContain('Terms for the category: adds wet commute bag')
