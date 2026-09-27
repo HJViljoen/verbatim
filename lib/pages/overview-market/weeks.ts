@@ -125,6 +125,9 @@ const POINT_COLUMNS = 'week, age_days, method_version, audience, object_kind, ob
  *     `subjects` for their names and calibration (decision C), so a subject
  *     row is never named by its id. `weekVolumesBlock` builds the
  *     `WeekLineBlock` from `line`.
+ *   - `kindsOnly` (Your market, whose rows are the six kinds: WP3.13's "six
+ *     kind rows"; a subject's weeks are Subjects' strip, §2.3 S6): the subject
+ *     points are dropped, so no subject is read.
  * NULL where `week_line_reads` cannot be read (MF4 not applied, or an error):
  * the page says nothing of kept weeks it cannot know.
  */
@@ -133,6 +136,7 @@ export async function loadKeptWeekLine(client: SupabaseClient, input: {
   cfg: WeekLineConfig | null
   rivalAudiences: readonly string[]
   objects?: readonly WeekLineObject[]
+  kindsOnly?: boolean
 }): Promise<KeptWeekLine | null> {
   const { cfg, clientId } = input
   if (!cfg) return null
@@ -158,6 +162,7 @@ export async function loadKeptWeekLine(client: SupabaseClient, input: {
         .eq('client_id', clientId).eq('method_version', cfg.methodVersion).eq('age_days', cfg.ageDays).in('week', weeks)
         .order('week').order('audience').order('object_kind').order('object_id').order('depth_band'))
     points = pooledWeekPoints(rows.map(pointOfStored), input.rivalAudiences)
+    if (input.kindsOnly) points = points.filter((p) => p.objectKind === 'kind')
   } catch (e) {
     console.error(`[pages] ${TABLE_WEEK_LINE_POINTS}: ${e instanceof Error ? e.message : String(e)}; the line is not drawn`)
     return { weeks, line: null }

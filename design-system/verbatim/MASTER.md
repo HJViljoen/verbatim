@@ -353,20 +353,21 @@ The design the next chart built on weeks follows. Drawn as the approved preview 
   `components/charts/week-line.tsx`)**, once `WEEK_LINE.print` is true: the pending row's place, its
   tag gone. Small multiples on the bars' own week axis: the bars' gutter (88 px, 116 px from xl) and
   narrowest plot, so each point sits under the bar of the week it reads, scrolling and opening at the
-  latest week as the bars do. One row per kind (and per subject that clears 10 videos a week): a
-  24 px plot, 8 px to the next row, each on its own y scale with its highest and lowest shares as
-  9 px mono ticks in the gutter; the line 1.5 px in the ink (`--foreground`), points solid and ringed
-  in `--tile`, the latest larger. Over each plot, held in view while it scrolls, the name (12 px sans)
-  at the left and the latest share with its "of N" (12 px mono) and the verdict through
-  `MovementBadge` (neutral axis: "no clear change" muted; a provisional subject says "provisional")
-  at the right, the reading wrapping under the name where both do not fit. A pair not read the same
-  way draws both points and no segment, and is named in a "not read as a change" style chip under the
-  strip ("28 Sep and 5 Oct not read the same way: read to different depths"); no footnote. Under the
-  rows: "due" over the update for weeks not yet read at their age, "left out", "not kept", one label
-  over the weeks before the line's first ("weeks read on changing searches: no point"), then the week
-  and month labels as the bars print them. Each point answers a hover with its week's facts (an SVG
-  `<title>`). Subjects draws the selected subject's row the same way, under Month by month, on its own
-  week axis. Email: a table of each week's level and the latest verdict, and the chips.
+  latest week as the bars do. One row per kind (Your market draws the six kinds; a subject's weeks are
+  Subjects' strip): a 24 px plot, 8 px to the next row, each on its own y scale with its highest and
+  lowest shares as 9 px mono ticks in the gutter; the line 1.5 px in the ink (`--foreground`), points
+  solid and ringed in `--tile`, the latest larger. Over each plot, held in view while it scrolls, the
+  name (12 px sans) at the left and the latest share with its "of N" (12 px mono) and the verdict
+  through `MovementBadge` (neutral axis: "no clear change" muted; a provisional subject says
+  "provisional") at the right, the reading wrapping under the name where both do not fit. A pair not
+  read the same way draws both points and no segment, and is named in a "not read as a change" style
+  chip under the strip ("28 Sep and 5 Oct not read the same way: read to different depths"); no
+  footnote. Under the rows: "due" over the update for weeks not yet read at their age, "left out",
+  "not kept", one label over the weeks before the line's first ("weeks read on changing searches: no
+  point"), then the week and month labels as the bars print them. Each point answers a hover with its
+  week's facts (an SVG `<title>`). Subjects draws the selected subject's row the same way, under Month
+  by month, on its own week axis. Email: a table of each week's level and the latest verdict, and the
+  chips.
 - **Inner blocks:** `--inner`, no border, radius 6, 24 px padding, 16 px gap, 24 px between blocks.
 - **Print** draws the SVG and its key without the hover; **email** is a table of week labels and
   counts. `role="img"` with an `aria-label` reading the latest four weeks.

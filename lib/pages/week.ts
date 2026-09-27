@@ -3408,14 +3408,15 @@ export async function loadWeekVolumes(input: {
   changeRows: readonly ConfigChange[]
   schedule: ScheduleConfig | null
   /** Your market's (WP3.13 display): read the kept same-age line once
-   *  `WEEK_LINE` says print. This week draws no line (§2.7) and does not ask. */
+   *  `WEEK_LINE` says print, its six kinds alone (a subject's weeks are
+   *  Subjects' strip). This week draws no line (§2.7) and does not ask. */
   keptLine?: boolean
 }): Promise<WeekVolumesBlock | null> {
   const { client, clientId } = input
   const axis = weekAxis(input.reading, input.now)
   if (axis.length === 0) return null
   const cfg = weekLineConfigFor(clientId)
-  const keptAhead = input.keptLine && cfg?.print ? loadKeptWeekLine(client, { clientId, cfg, rivalAudiences: input.rivalAudiences }) : null
+  const keptAhead = input.keptLine && cfg?.print ? loadKeptWeekLine(client, { clientId, cfg, rivalAudiences: input.rivalAudiences, kindsOnly: true }) : null
   keptAhead?.catch(() => {})
   const res = await client.rpc(RPC_MARKET_WEEK_VOLUMES, { p_client: clientId, p_from: axis[0], p_to: addDays(axis[axis.length - 1], 7) })
   if (res.error) {

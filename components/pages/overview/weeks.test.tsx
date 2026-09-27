@@ -56,17 +56,19 @@ describe('Read at the same age, printed (WP3.13 display)', () => {
     expect(text).toContain('Read at the same age')
     expect(text).not.toMatch(/Read at the same age\s*pending/)
     expect(text).not.toContain('Kept points')
-    expect(m.split('data-week-line-row="').length - 1).toBe(7)
+    // The six kinds (WP3.13's six kind rows): Looks & style's weeks are Subjects' strip.
+    expect(m.split('data-week-line-row="').length - 1).toBe(6)
+    expect(text).not.toContain('Looks & style')
     // The rows' plot takes the bars' gutter: the same grid as WeekBarsHover's 'wide'.
     expect(m).toContain('grid-cols-[88px_minmax(0,1fr)] xl:grid-cols-[116px_minmax(0,1fr)]')
     // Nine weeks, 31 Aug to 26 Oct: the week of 28 Sep is the fifth, at 4.5 / 9, as its bar.
     expect(m).toContain(`x="${((4.5 / 9) * 100).toFixed(3)}%"`)
   })
 
-  it('ends each row with its latest share and "of N", "no clear change" muted, Looks & style provisional', () => {
+  it('ends each row with its latest share and "of N", "no clear change" muted', () => {
     const text = markupText(html())
     expect(text).toContain('Praising it 61% · 195 of 318 no clear change')
-    expect(text).toContain('Looks & style 12% · 38 of 318 provisional')
+    expect(text).toContain('Pushing back 16% · 50 of 318 no clear change')
     expect(text).toContain('due 1 Nov 12 due 8 Nov 19 due 15 Nov 26')
     expect(text).toContain('left out')
   })
@@ -95,6 +97,7 @@ describe('Read at the same age, printed (WP3.13 display)', () => {
   it('carries the printed line as a stored block renders it: no state field, rows and due weeks', () => {
     const line = printedFixture().weeks?.line as WeekLineBlock
     expect('state' in line).toBe(false)
+    // The block holds what the builder read; the page draws its kinds alone.
     expect(line.rows.map((r) => r.label)).toEqual([
       'Praising it', 'Asking how it works', 'Ready to buy', 'Hitting a problem', 'Asking for something', 'Pushing back', 'Looks & style',
     ])

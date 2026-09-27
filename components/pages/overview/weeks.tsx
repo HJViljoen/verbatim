@@ -16,9 +16,10 @@ import type { OverviewData } from '@/lib/pages/overview'
 //
 // ONCE THE LINE PRINTS (WP3.13, deploy 3w: Heinrich's word after the Mon 26
 // Oct check), "Read at the same age" draws the kept weeks as rows, one per
-// kind and per subject that clears 10 videos a week, on the bars' own week
-// axis (`WeekLineStrip`), and loses its "pending" tag. Until then it is the
-// pending row, as WP2.9 drew it.
+// kind (WP3.13's six kind rows, the kinds the pending row names; a subject's
+// weeks are Subjects' strip, §2.3 S6), on the bars' own week axis
+// (`WeekLineStrip`), and loses its "pending" tag. Until then it is the pending
+// row, as WP2.9 drew it.
 
 export const WEEKS_TITLE = 'Week by week'
 
@@ -35,7 +36,7 @@ export function OverviewWeeks({ data, mode }: { data: OverviewData; mode: Render
     return <div className="flex flex-col gap-3">{title}<InnerLine mode={mode}>{WEEKS_EMPTY}</InnerLine></div>
   }
   const pending = b.line && 'state' in b.line ? b.line : null
-  const printed = b.line && !('state' in b.line) ? b.line : null
+  const printed = b.line && !('state' in b.line) ? { ...b.line, rows: b.line.rows.filter((r) => r.objectKind === 'kind') } : null
   return (
     <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-4'}>
       {title}

@@ -247,8 +247,11 @@ describe('loadWeekVolumes: Your market asks for the kept line; This week does no
       const front = fakeClientWithVolumes()
       const b = await loadWeekVolumes(input(front.client, true))
       expect(front.tables()).toEqual(expect.arrayContaining(['week_line_reads', 'week_line_points']))
+      // Its rows are the six kinds (WP3.13), so no subject is read for a name.
+      expect(front.tables()).not.toContain('subjects')
       const line = b?.line as WeekLineBlock
       expect('state' in line).toBe(false)
+      expect(line.rows.map((r) => r.objectKind)).toEqual(Array(6).fill('kind'))
       expect(line.rows[0].points.map((p) => p.week)).toEqual(['2026-09-28', '2026-10-05'])
       const week = fakeClientWithVolumes()
       const w = await loadWeekVolumes(input(week.client))
