@@ -1,7 +1,7 @@
 import { createAdminClient } from '../lib/supabase-admin'
 import { scriptActor, updateWithActor } from '../lib/config-log'
-import { ALL_PERIODS, DAYS } from '../app/dashboard/settings/constants'
 import { periodWindowDays } from '../lib/config'
+import { OPERATOR_PERIODS, operatorRhythm, UPDATE_DAY, UPDATE_RHYTHM_WORDS, type OperatorPeriod } from '../lib/update-rhythm'
 
 // Set a tenant's update cadence (Phase 0 WP2, for decision D4).
 //
@@ -17,8 +17,16 @@ import { periodWindowDays } from '../lib/config'
 // it will send before it writes anything. The write itself is stamped, so the
 // tracking_configs trigger records who armed a tenant rather than "service_role".
 //
+// WEEKLY ON SUNDAY, OR PAUSED, AND NOTHING ELSE (27 Sep, Heinrich: "remove
+// cadence from settings, and always have it weekly on sunday"). This is now the
+// ONE path that moves `report_period`: the Settings save writes neither column
+// and refuses a POST that would (lib/update-rhythm.ts). So it is where the
+// pause lives: `--period paused` stops the dispatcher picking a tenant up, and
+// `--period weekly` resumes it, always on Sunday. Both write the day as Sunday;
+// `--day` survives only so an old command line that says sunday still runs.
+//
 //   node --env-file=.env.local --import tsx scripts/set-cadence.ts \
-//     --client <uuid> [--period weekly|monthly|daily|paused] [--day sunday] [--apply]
+//     --client <uuid> --period weekly|paused [--apply]
 
 interface Args { clientId: string | null; period: string | null; day: string | null; apply: boolean }
 
@@ -39,13 +47,11 @@ function parseArgs(argv: string[]): Args {
 function validate(a: Args): string[] {
   const errors: string[] = []
   if (!a.clientId) errors.push('--client <uuid> is required: there is no safe default for a cadence change')
-  if (a.period && !(ALL_PERIODS as readonly string[]).includes(a.period)) {
-    errors.push(`--period must be one of ${ALL_PERIODS.join(', ')} (the tracking_configs CHECK vocabulary)`)
+  if (!a.period) errors.push(`--period is required: ${OPERATOR_PERIODS.join(' or ')}`)
+  else if (!(OPERATOR_PERIODS as readonly string[]).includes(a.period)) {
+    errors.push(`--period must be ${OPERATOR_PERIODS.join(' or ')}: every workspace is updated ${UPDATE_RHYTHM_WORDS}, or paused by us`)
   }
-  if (a.day && !(DAYS as readonly string[]).includes(a.day)) {
-    errors.push(`--day must be one of ${DAYS.join(', ')}`)
-  }
-  if (!a.period && !a.day) errors.push('nothing to change: pass --period, --day, or both')
+  if (a.day && a.day !== UPDATE_DAY) errors.push(`--day can only be ${UPDATE_DAY}: every workspace is updated ${UPDATE_RHYTHM_WORDS}`)
   return errors
 }
 
@@ -79,10 +85,7 @@ async function main() {
   if (!cfg) throw new Error(`no tracking_configs row for ${clientId}`)
 
   const before = { report_period: cfg.report_period as string, report_day: cfg.report_day as string }
-  const after = {
-    report_period: args.period ?? before.report_period,
-    report_day: args.day ?? before.report_day,
-  }
+  const after = operatorRhythm(args.period as OperatorPeriod)
 
   console.log(`${client.company_name} — cadence ${args.apply ? 'APPLY' : 'dry run'}\n`)
   for (const key of ['report_period', 'report_day'] as const) {

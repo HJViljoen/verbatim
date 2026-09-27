@@ -17,8 +17,8 @@
  *     --competitors "Away,Beis,Calpak" \
  *     --industry "work bag,laptop bag,commuter backpack" \
  *     --emails "hello@dagnedover.com" \
- *     [--platforms tiktok,youtube,instagram] [--max-videos 30] [--day sunday]
- *     [--period paused|weekly|monthly] [--approve] [--invite owner@brand.com]
+ *     [--platforms tiktok,youtube,instagram] [--max-videos 30]
+ *     [--period paused|weekly] [--approve] [--invite owner@brand.com]
  *     [--commit]
  */
 import { randomBytes } from 'crypto'

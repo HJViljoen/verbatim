@@ -15,15 +15,10 @@ export const PLATFORMS = ['tiktok', 'youtube', 'instagram', 'reddit'] as const
 export const SELECTABLE_PLATFORMS = PLATFORMS.filter((p) => p !== 'reddit')
 
 // A tenant chooses no cadence any more (27 Sep, Heinrich: "remove cadence from
-// settings, and always have it weekly on sunday"). `PERIODS`, the weekly-or-
-// monthly choice the Cadence section offered, went with the section; every
-// workspace is weekly, on Sunday, and 'paused' is the operator's lever
-// (lib/update-rhythm.ts).
-/** Every value the pipeline understands, including operator-only ones. */
-export const ALL_PERIODS = ['weekly', 'monthly', 'daily', 'paused'] as const
-export const DAYS = [
-  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-] as const
+// settings, and always have it weekly on sunday"). `PERIODS` (the weekly-or-
+// monthly choice), `DAYS` and `ALL_PERIODS` went with the Cadence section and
+// with scripts/set-cadence.ts's old vocabulary: every workspace is weekly, on
+// Sunday, and 'paused' is the operator's lever (lib/update-rhythm.ts).
 
 export type Platform = (typeof PLATFORMS)[number]
 

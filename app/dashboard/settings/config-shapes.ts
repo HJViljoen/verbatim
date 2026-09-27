@@ -13,8 +13,8 @@ export interface SearchTermsConfig {
   exclude_terms: string[] | null
 }
 
+// The cadence columns left this shape with the Cadence section (27 Sep): the
+// page no longer reads or offers them (lib/update-rhythm.ts).
 export interface TrackingConfig {
   competitor_names: string[] | null
-  report_period: string | null
-  report_day: string | null
 }

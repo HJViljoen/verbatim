@@ -2,6 +2,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { isMonthlyDue, isWeeklyDue, lastExpectedSlot } from './pipeline/schedule-due'
+import { scheduledUpdateAfter } from './reading/reading-month'
 import {
   CADENCE_REFUSAL, cadenceEditIn, isAllowedRhythm, isPausedRhythm, nextUpdateWords, operatorRhythm,
   PAUSED_ON_SUNDAY, UPDATE_RHYTHM_WORDS, WEEKLY_ON_SUNDAY,
@@ -43,6 +45,24 @@ describe('the rhythm', () => {
     expect(isPausedRhythm(PAUSED_ON_SUNDAY)).toBe(true)
     expect(isPausedRhythm(WEEKLY_ON_SUNDAY)).toBe(false)
     expect(UPDATE_RHYTHM_WORDS).toBe('weekly, on Sunday')
+  })
+})
+
+describe('the rhythm, by the dispatcher’s own rule (lib/pipeline/schedule-due.ts)', () => {
+  it('is due on a Sunday and on no other day; the pause is never due', () => {
+    for (const weekday of ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']) {
+      expect(isWeeklyDue(WEEKLY_ON_SUNDAY, { weekday }), weekday).toBe(false)
+    }
+    expect(isWeeklyDue(WEEKLY_ON_SUNDAY, { weekday: 'sunday' })).toBe(true)
+    expect(isWeeklyDue(PAUSED_ON_SUNDAY, { weekday: 'sunday' })).toBe(false)
+    expect(isMonthlyDue(PAUSED_ON_SUNDAY, { dayOfMonth: 1 })).toBe(false)
+    expect(lastExpectedSlot(PAUSED_ON_SUNDAY, new Date('2026-09-27T12:00:00.000Z'))).toBeNull()
+  })
+
+  it('lands at 06:00 SAST on Sunday, so the bar’s next update after 27 Sep is Sun 4 Oct, and a paused one is none', () => {
+    expect(lastExpectedSlot(WEEKLY_ON_SUNDAY, new Date('2026-09-27T12:00:00.000Z'))?.toISOString()).toBe('2026-09-27T04:00:00.000Z')
+    expect(scheduledUpdateAfter(WEEKLY_ON_SUNDAY)('2026-09-27T12:00:00.000Z')).toBe('2026-10-04T04:00:00.000Z')
+    expect(scheduledUpdateAfter(PAUSED_ON_SUNDAY)('2026-09-27T12:00:00.000Z')).toBeNull()
   })
 })
 
@@ -91,7 +111,10 @@ vi.mock('@/lib/supabase-admin', async (orig) => ({
   ...(await orig<typeof import('@/lib/supabase-admin')>()),
   createAdminClient: () => h.admin,
 }))
-vi.mock('@/lib/rivals', () => ({ ensureRivals: async () => {} }))
+vi.mock('@/lib/rivals', async (orig) => ({
+  ...(await orig<typeof import('@/lib/rivals')>()),
+  ensureRivals: async () => {},
+}))
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
 
 interface Write { table: string | null; op: string; payload: Record<string, unknown> | null }
@@ -197,13 +220,48 @@ function files(dir: string): string[] {
   return out
 }
 
-describe('no server action writes report_period or report_day', () => {
-  it('holds across every “use server” module', () => {
-    const modules = ['app', 'lib'].flatMap((d) => files(join(ROOT, d)))
-      .filter((f) => /^\s*['"]use server['"]/.test(readFileSync(f, 'utf8')))
+describe('no server action writes a cadence but weekly on Sunday', () => {
+  const modules = ['app', 'lib'].flatMap((d) => files(join(ROOT, d)))
+    .filter((f) => /^\s*['"]use server['"]/.test(readFileSync(f, 'utf8')))
+
+  it('names neither column in an object literal, in any “use server” module', () => {
     expect(modules.length).toBeGreaterThan(10)
     // A property written in an object literal: `report_period:` / `report_day:`.
     const writes = modules.filter((f) => /\breport_(?:period|day)\s*:/.test(readFileSync(f, 'utf8'))).map((f) => relative(ROOT, f))
     expect(writes).toEqual([])
+  })
+
+  it('writes the pair only where a workspace is born, and then as weekly on Sunday', () => {
+    const born = modules.filter((f) => readFileSync(f, 'utf8').includes('WEEKLY_ON_SUNDAY')).map((f) => relative(ROOT, f))
+    expect(born).toEqual(['app/onboarding/actions.ts'])
+    expect(readFileSync(join(ROOT, 'app/onboarding/actions.ts'), 'utf8'))
+      .toContain(".from('tracking_configs').insert({ client_id: clientId, ...initialConfig, ...WEEKLY_ON_SUNDAY })")
+  })
+})
+
+// ---- The words never read the stored day -------------------------------------------
+//
+// A client-facing line names the rhythm from lib/update-rhythm.ts, never from
+// `report_day`: the day is not a choice any more. The few modules that still
+// read the column read it for a DATE, by the dispatcher's own rule, or to refuse
+// a POST; each is named here with why.
+
+describe('no client-facing line spells the stored day', () => {
+  const ALLOWED: Readonly<Record<string, string>> = {
+    'lib/reading/read.ts': 'the next update’s date for the month-pair judge, by the dispatcher’s rule (pipeline closure: unchanged)',
+    'lib/reading/gather-flags.ts': 'the same date, the same memoised read as read.ts',
+    'lib/reading/reading-view.ts': 'the page bar’s “next update {date}”, by the dispatcher’s rule',
+    'app/dashboard/settings/actions.ts': 'reads the stored pair to refuse a POST that would move it',
+    'app/api/cron/ops-check/route.ts': 'the operator’s missed-run check, not client-facing',
+  }
+  const readers = ['app', 'components', 'lib/pages', 'lib/settings', 'lib/readiness', 'lib/reports', 'lib/reading', 'lib/email']
+    .flatMap((d) => files(join(ROOT, d)))
+    .filter((f) => !/fixture\.ts$/.test(f))
+    .filter((f) => readFileSync(f, 'utf8').split('\n').some((l) => /\breport_day\b/.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l)))
+    .map((f) => relative(ROOT, f))
+
+  it('reads report_day only where a date or a refusal needs it', () => {
+    expect(readers.filter((f) => !(f in ALLOWED))).toEqual([])
+    for (const f of Object.keys(ALLOWED)) expect(readers, f).toContain(f)
   })
 })
