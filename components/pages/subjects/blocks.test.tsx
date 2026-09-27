@@ -20,7 +20,7 @@ import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
 import { axisNote, railNote, voiceCite, type SubjectsData } from '@/lib/pages/subjects'
-import { calibrationFixture, candidatesFixture, marketPaneFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
+import { calibrationFixture, candidatesFixture, marketPaneFixture, NOTELESS_GATE_FIX, ourChangeFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -1379,6 +1379,46 @@ describe('SU2 · the two-audience gap the pane carries', () => {
       for (const mode of MODES) {
         assertCopyContract(render(block.render(retiredRivalFixture(), mode, ctx)))
       }
+    }
+  })
+})
+
+// A NOTE-LESS CHANGE OF OURS ON THE CHART (Heinrich, 27 Sep: no notes on our
+// own changes). The gate fix reaches August and September; the chart's dated
+// rule, its hover and its band's title say the change's title, never the
+// reading layer's "it moved this month" (lib/pages/change-caveats.ts).
+describe('SU2 · a note-less change of ours on the axis', () => {
+  const CAVEAT = 'We changed how we check relevance in September'
+
+  it('drew "moved this month" before the page captioned it, so the test below is not vacuous', () => {
+    const raw = ourChangeFixture({ captioned: false })
+    expect(render(subjectsLine.render(raw, 'app', ctx))).toContain('What this workspace tracks changed, and it moved this month.')
+  })
+
+  it('draws one rule over August and September whose hover and band say the title, dated, with no direction word', () => {
+    const data = ourChangeFixture()
+    expect(calendarRulesFor(data.selected!.chartSeries!).map((r) => [r.month, r.kind, r.label])).toEqual([
+      ['2026-08-01', 'tracking_change', CAVEAT],
+      ['2026-09-01', 'tracking_change', CAVEAT],
+    ])
+    const markup = render(subjectsLine.render(data, 'app', ctx))
+    expect(markup).toContain(`<title>${CAVEAT}</title>`)
+    expect(markup).toContain(`<title>${CAVEAT}: affects Aug 2026 to Sep 2026</title>`)
+    assertCopyContract(markup)
+  })
+
+  it('prints no "moved this month" anywhere on the page, in any mode, for any of our four note-less rows', () => {
+    const rows = [
+      NOTELESS_GATE_FIX,
+      { ...NOTELESS_GATE_FIX, surface: 'attribution' as typeof NOTELESS_GATE_FIX['surface'], field: 'attribution_v3' },
+      { ...NOTELESS_GATE_FIX, surface: 'segment' as typeof NOTELESS_GATE_FIX['surface'], field: 'segments_v1', changed_at: '2026-09-27T12:00:00.000Z' },
+      { ...NOTELESS_GATE_FIX, surface: 'other' as const, field: 'gather_capped', changed_at: '2026-09-20T04:18:34.000Z' },
+    ]
+    for (const data of [ourChangeFixture({ rows: [rows[0]] }), ourChangeFixture({ rows: [rows[1]] }), ourChangeFixture({ rows: [rows[2]] }), ourChangeFixture({ rows: [rows[3]] }), ourChangeFixture({ rows })]) {
+      for (const mode of MODES) {
+        for (const block of SUBJECT_BLOCKS) expect(render(block.render(data, mode, ctx))).not.toMatch(/moved this month/i)
+      }
+      expect(render(<SubjectsPage data={data} />)).not.toMatch(/moved this month/i)
     }
   })
 })

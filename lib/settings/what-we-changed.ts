@@ -70,6 +70,33 @@ const CLIENT_NOTE_SURFACES: ReadonlySet<string> = new Set(['gate_rule', 'attribu
  *  operator prose and is never printed here. */
 const CLIENT_NOTE_OTHER_FIELDS: ReadonlySet<string> = new Set(['gather_capped'])
 
+/** The title this list gives a change of ours that carries no note (the
+ *  gate fix, attribution v3, the segment row, a capped update): the words
+ *  `changeWords` falls through to for such a row. Null for any other row. */
+export function ourChangeTitle(row: Pick<ConfigChange, 'surface' | 'field'>): string | null {
+  if (CLIENT_NOTE_SURFACES.has(row.surface)) return SURFACE_SENTENCE[row.surface] ?? null
+  if (row.surface === 'other' && CLIENT_NOTE_OTHER_FIELDS.has(row.field ?? '')) return SURFACE_SENTENCE.other
+  return null
+}
+
+/**
+ * The caveat a chart's month carries for a change of ours stored with no note
+ * (Heinrich, 27 Sep: no client-visible notes on our own changes): the title
+ * this list gives it, as a dated fact, "We changed how we check relevance in
+ * September". The month is when we made the change, not the month it
+ * caveats, so a change that reached August and September says the same words
+ * on both and the chart draws one rule. No direction word and no claim that
+ * anything moved: the reading layer's line for a note-less change ("What this
+ * workspace tracks changed, and it moved this month.") claimed both. Null for
+ * any other row, which keeps that line.
+ */
+export function ourChangeCaveat(row: Pick<ConfigChange, 'surface' | 'field' | 'changed_at'>): string | null {
+  const title = ourChangeTitle(row)
+  if (!title) return null
+  const what = title.startsWith('A change to ') ? title.slice('A change to '.length) : `${title.charAt(0).toLowerCase()}${title.slice(1)}`
+  return `We changed ${what} in ${longMonth(row.changed_at)}`
+}
+
 const listOf = (side: unknown): string[] =>
   Array.isArray(side) ? side.filter((v): v is string => typeof v === 'string') : []
 

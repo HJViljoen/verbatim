@@ -25,7 +25,7 @@ import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingVi
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
-import { loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { pairOnVerdict } from '../reading/comparability'
 import { comparableOn, refusedSteps, type PairOn } from '../reading/pairs'
@@ -48,6 +48,7 @@ import {
 import { row, rows as readRows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { captionOurChanges } from './change-caveats'
 
 // Voice — "who is saying what in this category?" (Phase 1 WP13, design §3
 // VO1–VO4, decisions Q and W).
@@ -1415,6 +1416,11 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? (asked.found ? askedId : null)
     : largestRead(pool)
 
+  // The change log the series above were built from (`loadMonthSeries` read
+  // it, memoised on this client: no second read).
+  const changes = await loadChanges(reading.client, clientId)
+  const captionSeries = (line: MonthSeries | null): MonthSeries | null => (line ? captionOurChanges(line, changes) : null)
+
   const themeBlockAhead = buildTheme({
     supabase,
     clientId,
@@ -1425,7 +1431,9 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     asked,
     narrowed,
     mover: pool.find((m) => m.id === openId) ?? null,
-    series: openId ? seriesById.get(openId) ?? null : null,
+    // A note-less change of ours says its title on the theme's months
+    // (Heinrich, 27 Sep), never "it moved this month" (lib/pages/change-caveats.ts).
+    series: openId ? captionSeries(seriesById.get(openId) ?? null) : null,
     registry: openId ? registryById.get(openId) ?? null : null,
     registryAll,
     audience: selected,
