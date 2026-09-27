@@ -2,7 +2,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
-import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
+import { weeklyStamp } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Slide } from './slide'
@@ -41,16 +41,12 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
   const blocks = stale ? [] : weeklyBlocksFor(data.keys)
   // THE RULE ONCE, ON SHEET 1 (copy de-clutter 2026-09-24). Truncated on
   // every footer it read as half a sentence eight times.
-  const chromeFor = (first: boolean) => ({
-    context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
+  // THE MASTHEAD'S ONE LINE IN THE CHROME, AND THE DATE ALONE IN THE FOOTER
+  // (market-first WP3.7; the 25 Sep rulings): no method rule on the sheet.
+  const chromeFor = (_first: boolean) => ({
+    context: `${data.company} · ${stale ? data.period : weeklyStamp(data.month, data.reading.barLine)}`,
     footer: (
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-        {first && !stale ? (
-          <>
-            <span className="text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</span>
-            <span aria-hidden> · </span>
-          </>
-        ) : null}
         <span>{date}</span>
       </p>
     ),
