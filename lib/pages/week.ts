@@ -2737,13 +2737,13 @@ async function readClientMonthVideos(reading: ReadingHandle, clientId: string, m
  *  as its analyser. The two are different sets and §4 prints both.
  *
  *  NO CAPTION AND NO LINK ON THIS READ. It is every row an update touched
- *  (Sealand's 20 Sep update: 1,565, two pages), and the page counts them;
- *  the only rows whose caption and link are ever printed are the handful of
- *  rival posts §4 weighs (`RIVAL_POSTS_CONSIDERED` per rival), and those read
- *  theirs by id (`loadPostText`). The caption was two thirds of this read's
- *  1.9 MB, and the read was the long pole of the page's second wave: measured
- *  on staging 27 Sep, 3.2 s and 1.7 s for its two pages with the caption and
- *  the page waiting on nothing else. */
+ *  (Sealand's 20 Sep update on staging: 1,565 rows, two pages), and the page
+ *  counts them; the only rows whose caption and link are ever printed are the
+ *  handful of rival posts §4 weighs (`RIVAL_POSTS_CONSIDERED` per rival), and
+ *  those read theirs by id (`loadPostText`). The caption was nearly two thirds
+ *  of this read's 1.9 MB, and the read was the long pole of the page's second
+ *  wave: on staging (27 Sep) its two pages took 3.2 s and 1.7 s with the
+ *  caption, while the rest of the wave was done in about a second. */
 async function loadUpdateVideos(supabase: SupabaseClient, clientId: string, runId: string): Promise<VideoRow[]> {
   return selectAll<VideoRow>(() =>
     supabase.from('videos')
