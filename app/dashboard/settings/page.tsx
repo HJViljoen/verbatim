@@ -21,7 +21,7 @@ import { platformRows } from '@/lib/settings/connections'
 import { loadMakersLine } from '@/lib/settings/makers-line'
 import { loadQueue, queueLines, queueSummary, type QueueColumn } from '@/lib/settings/queue'
 import { rivalRows } from '@/lib/settings/rivals-view'
-import { communitySince, exclusionGroups, firstSearched, searchedAs, setHistory, trackedSince } from '@/lib/settings/search-set'
+import { byFirstDay, communityDays, communitySince, exclusionGroups, firstSearchedOn, searchedAs, setHistory, trackedSince } from '@/lib/settings/search-set'
 import { SET_GROUPS } from '@/lib/settings/set-groups'
 import { termDateShort } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
@@ -120,9 +120,14 @@ export default async function SettingsTrackingPage({ searchParams }: { searchPar
     industry_keywords: terms?.industry_keywords ?? [],
   }
   const searchedTerms = [...lists.brand_keywords, ...lists.competitor_keywords, ...lists.industry_keywords]
-  const days = firstSearched(inputs.setChanges, inputs.updates)
+  // Each group's chips in the order they joined what we read, as the approved
+  // preview draws them (the earliest first, a tie as the list holds it).
+  const days = firstSearchedOn(inputs.setChanges, inputs.updates)
+  const dayOfTerm = (t: string) => days.get(t.trim().toLowerCase())
   const since = communitySince(inputs.entries, inputs.setChanges)
-  const communities = inputs.entries.filter((e) => e.status === 'active').map((e) => ({ name: e.name, day: since.get(e.name) ?? null }))
+  const sinceOn = communityDays(inputs.entries, inputs.setChanges)
+  const communities = byFirstDay(inputs.entries.filter((e) => e.status === 'active'), (e) => sinceOn.get(e.name))
+    .map((e) => ({ name: e.name, day: since.get(e.name) ?? null }))
   const rivals = rivalRows({ names, handles, identities: inputs.rivals, census: inputs.census, month })
   const queued = queue?.state === 'available' ? queueLines(queue.rows, inputs.config as Partial<Record<QueueColumn, unknown>> | null) : []
   const communityTable = communityRows({ entries: inputs.entries, roi: inputs.roi, gate: inputs.communityKept ?? [] })
@@ -194,7 +199,7 @@ export default async function SettingsTrackingPage({ searchParams }: { searchPar
             locked={locked}
             queue={queue?.state === 'available' ? { state: 'available', summary: queueSummary(queued, nowIso), lines: queued } : { state: 'unavailable' }}
             canEdit={canEdit}
-            groups={SET_GROUPS.map((g) => ({ key: g.key, label: g.label, sub: g.sub, terms: lists[g.key].map((t) => ({ term: t, day: days.get(t.trim().toLowerCase()) ?? null })) }))}
+            groups={SET_GROUPS.map((g) => ({ key: g.key, label: g.label, sub: g.sub, terms: byFirstDay(lists[g.key], (t) => dayOfTerm(t)?.on).map((t) => ({ term: t, day: dayOfTerm(t)?.words ?? null })) }))}
             communities={communities}
             exclusions={exclusionGroups(clientId, terms.exclude_terms ?? [])}
             history={setHistory({ changes: inputs.setChanges, terms: searchedTerms, updates: inputs.updates, locked, now: nowIso })}

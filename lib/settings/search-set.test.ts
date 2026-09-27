@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SEALAND_CLIENT_ID, OSSUR_CLIENT_ID } from '../config'
 import { brandRulesFor } from '../brands/aliases'
 import type { SubredditEntry } from '../gather/types'
-import { communitySince, countWord, exclusionGroups, firstSearched, searchedAs, setHistory, trackedSince } from './search-set'
+import { byFirstDay, communityDays, communitySince, countWord, exclusionGroups, firstSearchedOn, searchedAs, setHistory, trackedSince } from './search-set'
 
 // Sealand's change log and updates as staging holds them (read 27 Sep,
 // read-only): the 6 Jul reconstruction, the 9 Sep and 13 Sep reconstructed
@@ -44,6 +44,10 @@ const SEALAND_TERMS = [
   'travel gear', 'upcycled backpack', 'upcycled bag', 'made from waste', 'locally made south africa',
 ]
 
+/** The chip's words alone, keyed folded. */
+const firstSearched = (changes: typeof SEALAND_CHANGES, updates: typeof SEALAND_UPDATES): Map<string, string> =>
+  new Map([...firstSearchedOn(changes, updates)].map(([term, d]) => [term, d.words]))
+
 describe('the day we first searched each term', () => {
   const days = firstSearched(SEALAND_CHANGES, SEALAND_UPDATES)
   it('dates a term in the record\'s first rows "by" that day, since it may have been searched before', () => {
@@ -64,6 +68,28 @@ describe('the day we first searched each term', () => {
   })
   it('has no day for a term the log never names', () => {
     expect(days.has('wet commute bag')).toBe(false)
+  })
+  it('draws each group\'s chips in the order they were first searched, a tie as the list holds it', () => {
+    // The approved preview's order for Sealand's category: the four "by 6 Jul",
+    // then 9 Sep, 13 Sep and 20 Sep, each day's terms as the stored list has
+    // them. A term the log never names goes last.
+    const on = firstSearchedOn(SEALAND_CHANGES, SEALAND_UPDATES)
+    const category = SEALAND_TERMS.slice(10)
+    expect(byFirstDay([...category, 'wet commute bag'], (t) => on.get(t)?.on)).toEqual([
+      'eco backpack', 'recycled bag', 'sustainable backpack', 'upcycled bag',
+      'recycled sailcloth', 'sailcloth bag', 'upcycled backpack',
+      'handmade bag', 'sustainable fashion', 'travel gear',
+      'made from waste', 'locally made south africa',
+      'wet commute bag',
+    ])
+    expect(byFirstDay(SEALAND_TERMS.slice(3, 10), (t) => on.get(t)?.on)).toEqual([
+      'cotopaxi backpack', 'freitag bag', 'rareform bag', 'frtg', 'north face backpack', 'patagonia black hole', 'fombrand',
+    ])
+    expect(on.get('made from waste')).toEqual({ on: '2026-09-20', words: '20 Sep' })
+    // Not searched yet: after every dated chip.
+    const before = firstSearchedOn(SEALAND_CHANGES, SEALAND_UPDATES.slice(0, 4))
+    expect(before.get('fombrand')).toEqual({ on: null, words: 'not searched yet' })
+    expect(byFirstDay(['fombrand', 'frtg'], (t) => before.get(t)?.on)).toEqual(['frtg', 'fombrand'])
   })
 })
 
@@ -129,6 +155,7 @@ describe('the communities we read', () => {
     ]
     const since = communitySince(entries, SEALAND_CHANGES)
     expect([...since]).toEqual([['backpacks', '9 Sep'], ['travelgear', '9 Sep'], ['onebag', '9 Sep']])
+    expect([...communityDays(entries, SEALAND_CHANGES)]).toEqual([['backpacks', '2026-09-09'], ['travelgear', '2026-09-09'], ['onebag', '2026-09-09']])
   })
 })
 

@@ -77,31 +77,53 @@ function firstUpdateAfter(at: string, updates: readonly { startedAt: string }[])
 }
 
 /**
- * The chip's day for each term in the set: "by 6 Jul", "9 Sep", "not searched
- * yet", or nothing where the log never names the term. Keyed folded.
+ * The day each term in the set was first searched (`on`, a date; null where
+ * no update has searched it yet) and the chip's words for it: "by 6 Jul",
+ * "9 Sep", "not searched yet". A term the log never names is absent. Keyed
+ * folded.
  */
-export function firstSearched(
+export function firstSearchedOn(
   changes: readonly Change[],
   updates: readonly { startedAt: string }[],
-): Map<string, string> {
+): Map<string, { on: string | null; words: string }> {
   const start = recordStart(changes.filter((c) => c.surface === 'terms'))
-  const out = new Map<string, string>()
+  const out = new Map<string, { on: string | null; words: string }>()
   for (const [term, e] of entries(changes)) {
     if (e.reconstructed) {
-      out.set(term, start != null && dayOf(e.at) === dayOf(start) ? `by ${short(dayOf(e.at))}` : short(dayOf(e.at)))
+      const on = dayOf(e.at)
+      out.set(term, { on, words: start != null && on === dayOf(start) ? `by ${short(on)}` : short(on) })
     } else {
       const first = firstUpdateAfter(e.at, updates)
-      out.set(term, first ? short(first) : 'not searched yet')
+      out.set(term, { on: first, words: first ? short(first) : 'not searched yet' })
     }
   }
   return out
 }
 
+/**
+ * A group's entries in the order they joined what we read, as the approved
+ * preview draws the chips: the earliest day first, then any with no day, and
+ * a tie in the order the list holds them.
+ */
+export function byFirstDay<T>(items: readonly T[], day: (item: T) => string | null | undefined): T[] {
+  return items
+    .map((item, i) => ({ item, i, d: day(item) ?? null }))
+    .sort((a, b) => (a.d != null && b.d != null ? (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) : a.d != null ? -1 : b.d != null ? 1 : 0) || a.i - b.i)
+    .map((x) => x.item)
+}
+
 // ---- The communities we read -------------------------------------------------------
 
-/** Each watched community's first day on the list we read: the first logged
- *  row that makes it active, else the day it was found. Keyed by name. */
+/** Each watched community's first day on the list we read, as its chip
+ *  prints it ("9 Sep"). Keyed by name. */
 export function communitySince(entriesNow: readonly SubredditEntry[], changes: readonly Change[]): Map<string, string> {
+  return new Map([...communityDays(entriesNow, changes)].map(([name, day]) => [name, short(day)]))
+}
+
+/** Each watched community's first day on the list we read, as a date: the
+ *  first logged row that makes it active, else the day it was found. Keyed by
+ *  name. */
+export function communityDays(entriesNow: readonly SubredditEntry[], changes: readonly Change[]): Map<string, string> {
   const active = new Map<string, string>()
   const rows = changes.filter((c) => c.surface === 'subreddits').sort((a, b) => (a.changed_at < b.changed_at ? -1 : 1))
   const statusIn = (v: unknown): Map<string, string> => {
@@ -123,7 +145,7 @@ export function communitySince(entriesNow: readonly SubredditEntry[], changes: r
   for (const e of entriesNow) {
     if (e.status !== 'active') continue
     const day = active.get(e.name.toLowerCase()) ?? (e.discovered_at ? dayOf(e.discovered_at) : null)
-    if (day) out.set(e.name, short(day))
+    if (day) out.set(e.name, day)
   }
   return out
 }
