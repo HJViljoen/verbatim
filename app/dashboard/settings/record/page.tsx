@@ -11,7 +11,7 @@ import { monthStartOf } from '@/lib/reading/month-key'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
 import { RecordSection } from '@/components/settings/record/frame'
-import { SaveStrip, ScopeStatement } from '@/components/settings/record/header'
+import { ScopeStatement } from '@/components/settings/record/header'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { fullDate, longMonth, monthName, shortDate } from '@/lib/format'
@@ -21,7 +21,7 @@ import { recordLines, recordRows } from '@/lib/reading/record'
 import { changeNote, readChangeLog } from '@/lib/settings/change-log'
 import { deliveryRecord, deliveryStats, updatesInMonth } from '@/lib/settings/delivery'
 import { loadReadings } from '@/lib/settings/readings'
-import { loadRailCounts, loadRecordPage } from '@/lib/settings/record-load'
+import { loadRecordPage } from '@/lib/settings/record-load'
 import { gateSummary, keptByPlatform, keptByTerm, sampleHead } from '@/lib/settings/reject-log'
 import { saveState } from '@/lib/settings/save-state'
 import { createAdminClient } from '@/lib/supabase-admin'
@@ -109,14 +109,9 @@ export default async function SettingsRecordPage() {
   })
 
   const delivery = deliveryRecord({ updates: inputs.updates, slotsRecorded: inputs.slotsRecorded })
-  // The denominator history and the rail's two counts. Both wait on the load
-  // above — the readings strip is handed the updates it already read, so
-  // `pipeline_runs` is not read twice — and neither is on anything's critical
-  // path, so they go out together.
-  const [readings, counts] = await Promise.all([
-    loadReadings(reading.client, clientId, { updates: inputs.updates, month: `${month}-01`, now: nowIso }),
-    loadRailCounts(supabase, clientId, delivery.total),
-  ])
+  // The denominator history waits on the load above: the readings strip is
+  // handed the updates it already read, so `pipeline_runs` is not read twice.
+  const readings = await loadReadings(reading.client, clientId, { updates: inputs.updates, month: `${month}-01`, now: nowIso })
 
   const stats = deliveryStats(delivery, inputs.updates)
   const thisMonth = updatesInMonth(inputs.updates, month)
@@ -180,8 +175,6 @@ export default async function SettingsRecordPage() {
         delivery.since ? `first update ${shortDate(delivery.since)}` : null,
         save.lastSavedAt ? `last saved ${shortDate(save.lastSavedAt)}` : null,
       ].filter(Boolean).join(' · ')}
-      counts={counts}
-      railFooter={<SaveStrip state={save} note={inputs.changes.rows[0]?.note ?? null} />}
     >
       {/* THE PREVIEW'S RHYTHM: each section a tile, 24px apart (market-first
           WP1.6, Heinrich's default of 26 Sep). */}

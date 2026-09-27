@@ -88,7 +88,6 @@ export default async function SettingsSubjectsPage() {
       bar={bar}
       context={`${tenant}${!canEdit ? ' · read-only' : ''}`}
       contentTitle="Subjects"
-      counts={available ? { subjects: { value: String(active), unit: `subject${active === 1 ? '' : 's'} being measured` } } : undefined}
     >
       <div className="flex flex-col gap-3">
         {!available ? (

@@ -107,9 +107,6 @@ export interface TrackingPageInputs {
    *  monthly reading is not applied", and may not be printed as one. */
   monthUnread: boolean
   monthStatus: MonthStatus
-  /** What the rail prints beside the other sub-pages. A key that could not be
-   *  counted is absent rather than zero. */
-  railCounts: { subjects: number | null; schedules: number | null }
 }
 
 /** The term-yield window: a quarter of weekly updates, the same number the
@@ -332,20 +329,6 @@ async function loadPlatformMix(
   }
 }
 
-/** The two counts the rail prints for its other sub-pages. Each is a head
- *  count and each degrades to null on its own — a count nobody could take is
- *  absent from the rail, never a zero (lib/settings/rail.ts states the rule). */
-async function loadRailCounts(client: SupabaseClient, clientId: string): Promise<{ subjects: number | null; schedules: number | null }> {
-  const [subjects, schedules] = await Promise.all([
-    client.from('subjects').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('status', 'active'),
-    client.from('report_schedules').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-  ])
-  return {
-    subjects: subjects.error ? null : subjects.count ?? null,
-    schedules: schedules.error ? null : schedules.count ?? null,
-  }
-}
-
 export async function loadTrackingPage(
   client: SupabaseClient,
   clientId: string,
@@ -379,7 +362,7 @@ export async function loadTrackingPage(
   const censusMonth = monthStartOf(rm?.month ?? nowIso)
 
   const config = (configRead.data ?? null) as Record<string, unknown> | null
-  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix, railCounts] = await Promise.all([
+  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix] = await Promise.all([
     loadChangeLog(client, clientId),
     loadTermYield(client, clientId),
     loadTermPerformance(client, clientId, TRACKING_GATHERS),
@@ -390,7 +373,6 @@ export async function loadTrackingPage(
     loadLastChange(client, clientId),
     loadUpdates(client, clientId),
     loadPlatformMix(client, clientId, censusMonth),
-    loadRailCounts(client, clientId),
   ])
 
   return {
@@ -425,6 +407,5 @@ export async function loadTrackingPage(
     // the update, the rule and the row agree. The clock only where nothing has
     // been delivered.
     monthStatus: freezeStateFor(censusMonth, rm?.asAt ?? nowIso),
-    railCounts,
   }
 }

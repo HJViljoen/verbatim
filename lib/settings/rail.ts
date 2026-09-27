@@ -1,5 +1,5 @@
 /**
- * The Settings area's seven sub-pages (Phase 1 WP16, design item 29,
+ * The Settings area's seven sub-pages, drawn as tabs (Phase 1 WP16, design item 29,
  * Heinrich's 14 Sep revision 3: "a settings area with sub-pages — Tracking ·
  * Subjects · Readiness · The record · Reports and recipients · Team and
  * billing · How to read, forms not tiles").
@@ -25,29 +25,30 @@ export type SettingsSection =
 export interface SettingsSubPage {
   key: SettingsSection
   href: string
-  /** The rail label AND the content pane's title — one string, deliberately. */
+  /** The tab's label AND the sub-page's title — one string, deliberately. */
   label: string
   /** Addresses that light this entry without being it. */
   under?: string[]
 }
 
-// THE PREVIEW'S LABELS (market-first WP3.10; the approved Settings and
+// THE PREVIEW'S TABS (market-first WP3.10; the approved Settings and
 // SettingsRecord artboards draw "What we read · Subjects · The record ·
-// Reports and recipients · Team · How to read"). The key stays `tracking`, so
-// no address or stored link changes; the page it names is the market and the
-// searches that find it, which "What we read" says and "Tracking" did not.
-// "Team" is the entry's label; Billing still lights it (`under`). Readiness
-// stays in the rail although the artboards leave it out: pages still send a
-// reader to "Settings › Readiness" (lib/reading/own-posts.ts), and dropping
-// the entry is a call for Heinrich, not a label change.
+// Reports and recipients · Team · How to read", in that order, as tabs over
+// the page). The key stays `tracking`, so no address or stored link changes;
+// the page it names is the market and the searches that find it, which "What
+// we read" says and "Tracking" did not. "Team" is the entry's label; Billing
+// still lights it (`under`). Readiness comes last, after the preview's six,
+// although the artboards leave it out: pages still send a reader to
+// "Settings › Readiness" (lib/reading/own-posts.ts), and a tab a page names
+// has to be there to be found. Dropping it is a call for Heinrich.
 export const SETTINGS_SUBPAGES: readonly SettingsSubPage[] = [
   { key: 'tracking', href: '/dashboard/settings', label: 'What we read' },
   { key: 'subjects', href: '/dashboard/settings/subjects', label: 'Subjects' },
-  { key: 'readiness', href: '/dashboard/settings/readiness', label: 'Readiness' },
   { key: 'record', href: '/dashboard/settings/record', label: 'The record' },
   { key: 'reports', href: '/dashboard/settings/reports', label: 'Reports and recipients' },
   { key: 'team', href: '/dashboard/team', label: 'Team', under: ['/dashboard/billing'] },
   { key: 'guide', href: '/dashboard/settings/how-to-read', label: 'How to read' },
+  { key: 'readiness', href: '/dashboard/settings/readiness', label: 'Readiness' },
 ]
 
 export function settingsSubPage(key: SettingsSection): SettingsSubPage {
@@ -60,83 +61,3 @@ export function settingsSubPage(key: SettingsSection): SettingsSubPage {
  *  at, and what `lib/nav.test.ts` checks a retired address against. */
 export const SETTINGS_ADDRESSES: readonly string[] =
   SETTINGS_SUBPAGES.flatMap((s) => [s.href, ...(s.under ?? [])])
-
-/**
- * The counts beside the rail labels.
- *
- * READINESS CARRIES NONE, deliberately. The mock's "Readiness (3 missing)" is
- * wrong against production by 2× — both tenants read six missing — and getting
- * the true number costs the whole thirteen-row load, on every sub-page, to
- * print one digit in a rail. The Readiness page states its own summary in its
- * own header, where it is computed once and is right.
- *
- * `Partial`, and a missing key prints nothing: a count nobody has loaded must
- * not become a zero (the readiness module's own rule, applied to furniture).
- *
- * A FIGURE AND ITS UNIT, SEPARATELY, BECAUSE THE RAIL IS 224px. "5 schedules"
- * beside "Reports and recipients" does not fit, and what gave way was the
- * LABEL — the rail printed "Reports and recipi…", cutting the one entry a
- * reader is least able to guess. The number is what the rail always has room
- * for; the unit travels with it as the count's accessible name and its
- * tooltip, so nothing is lost to a reader who asks.
- *
- * THAT REASON ONLY APPLIES TO A ROW THAT CANNOT HOLD BOTH, AND IT WAS APPLIED
- * TO EVERY ROW (Block D wave 3, RC9). "Reports and recipients" — the row the
- * rule was written about — carries no count at all, deliberately, and the
- * three rows that DO carry one had 64–87px of slack each: measured at 1440,
- * a row has 200px of usable width (224 less `px-3` twice) and the three need
- * 113 / 128 / 136px with their units. So the artboard's "21 terms" and
- * "23 updates" were printed as "21" and "22", and "The record 22" said what
- * 22 was only in a `title`. `railCountText` puts the unit back wherever the
- * pair fits and keeps the bare figure where it does not — which is the
- * original rule, applied per row instead of to all of them.
- */
-export interface RailCount {
-  /** The figure, bare. */
-  value: string
-  /** What it counts, as a phrase that completes it ("schedules", "updates").
-   *  Always the count's accessible name; drawn beside the figure where the
-   *  pair fits. */
-  unit: string
-}
-
-/**
- * The row's width budget, in pixels, measured in Chromium at every width the
- * settings shell is drawn at — the rail is 224px and `px-3` takes 12 each
- * side, so the link's content box is 200px at 375 as at 1440, and `gap-2` is
- * 8 of it.
- *
- * The two per-character figures are measured, not assumed: IBM Plex Sans at
- * 13.5px runs about 7px a character on the seven labels, and IBM Plex Mono at
- * 10.5px about 6.3px — "21 terms" renders 50px and "22 updates" 63px. They are
- * an ESTIMATE of a proportional face and they are allowed to be, because the
- * consequence of being wrong is the count going bare, not a broken row: the
- * label truncates only if the count is drawn too wide, and the budget is
- * deliberately the tighter reading.
- */
-const RAIL_ROW_PX = 200
-const RAIL_GAP_PX = 8
-const LABEL_PX_PER_CHAR = 7
-const COUNT_PX_PER_CHAR = 6.3
-
-/**
- * What the rail draws beside a label: the figure and its unit where the ROW
- * holds the pair, the figure alone where it does not. The full phrase is the
- * count's accessible name and its tooltip either way, so nothing is lost to a
- * reader who asks.
- *
- * The budget is per row because the original rule was: "5 schedules" beside
- * "Reports and recipients" does not fit, and what gives way is the LABEL —
- * the rail printed "Reports and recipi…", cutting the one entry a reader is
- * least able to guess. That is still true and this still refuses it (22
- * characters of label leaves room for about 6 of count). What was wrong was
- * applying it to "Tracking · 21 terms" (113px of a 200px row) and
- * "The record · 22 updates" (136px), which have 64–87px of slack.
- */
-export function railCountText(count: RailCount, label: string): string {
-  const both = `${count.value} ${count.unit}`
-  const room = RAIL_ROW_PX - RAIL_GAP_PX - label.length * LABEL_PX_PER_CHAR
-  return both.length * COUNT_PX_PER_CHAR <= room ? both : count.value
-}
-
-export type RailCounts = Partial<Record<SettingsSection, RailCount>>

@@ -1,5 +1,4 @@
 import { SettingsFrame } from '@/components/settings-frame'
-import { LastSaveStrip } from '@/components/settings/save-state-strip'
 import { CommunitiesSection } from '@/components/settings/tracking/communities'
 import { HeldStillSection } from '@/components/settings/tracking/held-still'
 import { MakersSection, NotMyMarketSection } from '@/components/settings/tracking/market-marks'
@@ -147,19 +146,6 @@ export default async function SettingsTrackingPage() {
       title="Settings"
       context={context}
       bar={oneLineBar(inputs.tenant, inputs.reading)}
-      counts={{
-        tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
-        ...(inputs.railCounts.subjects != null
-          ? { subjects: { value: String(inputs.railCounts.subjects), unit: `subject${inputs.railCounts.subjects === 1 ? '' : 's'} being measured` } }
-          : {}),
-        ...(inputs.updates.length > 0
-          ? { record: { value: String(inputs.updates.length), unit: `update${inputs.updates.length === 1 ? '' : 's'} on record` } }
-          : {}),
-        ...(inputs.railCounts.schedules != null
-          ? { reports: { value: String(inputs.railCounts.schedules), unit: `schedule${inputs.railCounts.schedules === 1 ? '' : 's'}` } }
-          : {}),
-      }}
-      railFooter={<LastSaveStrip state={strip} note={inputs.lastChangeNote} />}
     >
       {inputs.configFailed ? (
         <p className="text-[12.5px] text-muted-foreground">We could not load your settings just now. Refresh the page, and tell us if it keeps happening.</p>

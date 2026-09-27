@@ -9,13 +9,13 @@ import { deliveryRecord } from '@/lib/settings/delivery'
 import { ChangeLogBlock, PREHISTORY_LINE, sameRows } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
-import { NO_EXPORT_WHY, SaveStrip, ScopeStatement } from './header'
+import { NO_EXPORT_WHY, ScopeStatement } from './header'
 import { keptRateText, RejectLogBlock } from './rejects'
 import {
   changeLogFixture, coverageRowsFixture, deliveryFixture,
   freshCoverageRowsFixture, gateSummaryFixture, keptByPlatformFixture,
   keptByTermFixture, lookedAtFixture, noReadingsFixture, oneLineFixture, readingsFixture, rejectRowsFixture,
-  saveStateFixture, statsFixture, unrecordedSaveStateFixture, updatesFixture,
+  statsFixture, updatesFixture,
 } from './fixture'
 
 // The render tier for Settings › The record (block E wave 2). One static
@@ -507,16 +507,6 @@ describe('the 25 Sep rulings, on every section of the tab (Heinrich’s default,
 })
 
 describe('the page’s own chrome', () => {
-  it('tells a save that broke nothing from a save whose breakage was never written down', () => {
-    const recorded = renderText(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
-    expect(recorded).toContain('Nothing waiting to be saved.')
-    expect(recorded).toContain('Last save 3 Sep: Poler added as a rival.')
-    expect(recorded).toContain('Broke:')
-    const unrecorded = renderText(<SaveStrip state={unrecordedSaveStateFixture()} />)
-    expect(unrecorded).toContain('not written down here yet')
-    expect(unrecorded).not.toContain('Broke: nothing')
-  })
-
   it('says why there is no Export button rather than drawing one that produces nothing', () => {
     // THE ROUTE'S OWN SENTENCE (RC4). This asserted on a stand-in of its own,
     // which is how "a registered page" and "page module" — the export route's
@@ -533,7 +523,6 @@ describe('the page’s own chrome', () => {
   })
 
   it('keeps the copy contract', () => {
-    assertCopyContract(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
     assertCopyContract(<ScopeStatement text="x" why="y" />)
   })
 })
