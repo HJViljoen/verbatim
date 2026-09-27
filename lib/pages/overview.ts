@@ -10,6 +10,7 @@ import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../repo
 import { monthlySoundFigures, sentReadingLine, type MonthlySoundFigures } from '../reports/monthly'
 import { proseFigures } from '../prose/figures'
 import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readingOf, readTranslations, readsAsHeroQuote, type QuoteCitation } from '../quotes'
+import { warmTranslationProbe } from './evidence-untranslated'
 import { citationLink } from '../evidence-cite'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
@@ -2074,7 +2075,9 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadDeliveredRuns(supabase, clientId),
     loadTrackedRivals(supabase, clientId),
-    loadReadingSchedule(supabase, clientId),
+    // ON THE READING CLIENT, the one the pair judge reads the same row on
+    // (`loadReadingSchedule` shares its memo; d3 speed pass): one read, not two.
+    loadReadingSchedule(reading.client, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
   const brand = client?.company_name ?? 'Your brand'
@@ -2226,6 +2229,19 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // YOUR MARKET'S OWN READS (market-first WP1.6), started here and taken at
   // the end: they need the month and the themed run and nothing below, so
   // they run beside wave 3 rather than after it.
+  // THE MONTH'S MARKET VIDEOS' SEGMENTS, as the subjects' maker shares read
+  // them below (`loadMarketMakers` `onSegments`), for the headline voices'
+  // segment call to ask only about what they do not hold (d3 speed pass).
+  // Settled null wherever that read is not made or fails.
+  let handSegments: (segments: ReadonlyMap<string, string | null> | null) => void = () => {}
+  const marketSegments = marketFirst
+    ? new Promise<ReadonlyMap<string, string | null> | null>((resolve) => { handSegments = resolve })
+    : null
+  // THE LEAD'S PROVENANCE AND "WITH THIS UPDATE"'S, ONE READ (d3 speed pass;
+  // `provenanceBatch`), where both are on the page and read the same month.
+  const [leadProvenance, arrivalsProvenance] = marketFirst && addedSearches && monthStartOf(month) === month
+    ? provenanceBatch(reading.client, clientId, month, addedSearches, 2)
+    : [null, null]
   const marketReadsAhead = marketFirst
     ? loadMarketReads({
         supabase,
@@ -2240,14 +2256,17 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         themedRunId,
         segmentRows: segmentRowsAhead,
         denominators: history.denominators,
-      })
+        provenance: leadProvenance,
+        marketSegments,
+      }).finally(() => leadProvenance?.pass())
     : null
   marketReadsAhead?.catch(() => {})
   // "WITH THIS UPDATE" (market-first WP2.7), on the front page only: the
   // latest update's arrivals and the themes it heard for the first time. Its
   // reads need the month, the runs and the segment rows, and nothing below.
   const arrivalsAhead = marketFirst
-    ? loadArrivals({ supabase, reading, clientId, runs: runsRaw, rm, month, now: readingAt, segmentRows: segmentRowsAhead, addedSearches })
+    ? loadArrivals({ supabase, reading, clientId, runs: runsRaw, rm, month, now: readingAt, segmentRows: segmentRowsAhead, addedSearches, provenance: arrivalsProvenance })
+        .finally(() => arrivalsProvenance?.pass())
     : null
   arrivalsAhead?.catch(() => {})
   // WEEK BY WEEK (WP2.9), inside "With this update": one read of MF4 over the
@@ -2271,8 +2290,40 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // month's total, which the reading month is chosen on too.
   const marketRivals = marketRivalAudiences(rivals)
   const audiences = [CLIENT_AUDIENCE, ...rivalAudiences, INDUSTRY_AUDIENCE]
-  const top = themedRunId
-    ? await loadTopObjects(reading.client, clientId, {
+  // THE SUBJECTS, AND WHAT HANGS OFF THEM, START WITH WAVE 3, NOT AFTER IT (d3
+  // speed pass). The subjects' maker shares (the month's market videos, their
+  // segments, then `lens_readings` over the makers: the page's longest chain,
+  // about 2.4 s on staging) and the for-you questions need the subject rows and
+  // nothing wave 3 reads, and they waited for the top themes' two pages and
+  // the wave behind them. The same reads, each started as soon as its inputs
+  // are in.
+  const subjectRowsAhead = loadSubjects(supabase, clientId)
+  subjectRowsAhead.catch(() => {})
+  // THE SUBJECTS' MAKER SHARES (§2.2 block 6), among the month's market
+  // videos read once above: two more reads (segments, lens), and none where no
+  // subject is named or the tenant has no maker rule.
+  const subjectMakersAhead: Promise<MarketMakers | null> | null = marketFirst
+    ? subjectRowsAhead.then((subjectRows) => (subjectRows?.length ?? 0) > 0
+        ? loadMarketMakers(reading.client, clientId, month, { ids: marketIdsAhead, onSegments: handSegments }).catch((error: unknown) => {
+            console.error(`[overview] subject maker shares: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+            return null
+          })
+        : null)
+      .finally(() => handSegments(null))
+    : null
+  subjectMakersAhead?.catch(() => {})
+  // WP2.5's questions line, beside the rest of the page (its reads need the
+  // subjects and nothing below).
+  const questionsAhead: Promise<ForYouQuestions> = marketFirst
+    ? subjectRowsAhead.then((subjectRows) => loadForYouQuestions({ supabase, clientId, month, themedRunId, subjectRows, posts: postsAhead })).catch((error: unknown) => {
+        console.error(`[pages] overview.foryou questions: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      })
+    : Promise.resolve(null)
+  // THE TOP THEMES FEED THE THEME SERIES ALONE, so the rest of wave 3 no
+  // longer waits for them: the series is chained on them inside the wave.
+  const topAhead = themedRunId
+    ? loadTopObjects(reading.client, clientId, {
         objectKind: 'theme',
         // EVERY AUDIENCE, not just the category's. OV4's "raised most under
         // their content" is a reading of the RIVAL's audience, and asking only
@@ -2284,12 +2335,12 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         to: month,
         limit: MOVER_POOL,
       })
-    : []
+    : Promise.resolve([])
 
   const levelIds = await levelPoolAhead
   const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, segmentRows] =
     await Promise.all([
-      loadMonthSeries(reading.client, clientId, {
+      topAhead.then((top) => loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
         to: month,
         audiences,
@@ -2298,11 +2349,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         updatesByMonth,
         firstRunMonth,
         changeLogFrom: history.changeLogFrom,
-      }),
+      })),
       readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, readAxis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
       readStoredMonths<StoredStatsRow>(reading.client, 'month_audience_stats', clientId, readAxis, ['month', 'audience'], isMissingKindMoodAttention),
       readStoredMonths<StoredSubjectRow>(reading.client, 'month_subject_readings', clientId, readAxis, ['month', 'audience', 'subject_id'], isMissingSubjects),
-      loadSubjects(supabase, clientId),
+      subjectRowsAhead,
       loadMoves(supabase, clientId),
       currentPanel(reading.client, clientId).catch((error: unknown) => {
         if (isMissingKindMoodAttention(error)) return null
@@ -2335,24 +2386,6 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       segmentRowsAhead,
     ])
   const makerShares = segmentRows ? makerSharesOf(segmentRows) : null
-  // THE SUBJECTS' MAKER SHARES (§2.2 block 6), among the month's market
-  // videos read once above: two more reads (segments, lens), and none where no
-  // subject is named or the tenant has no maker rule.
-  const subjectMakersAhead = marketFirst && (subjectRows?.length ?? 0) > 0
-    ? loadMarketMakers(reading.client, clientId, month, { ids: marketIdsAhead }).catch((error: unknown) => {
-        console.error(`[overview] subject maker shares: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
-        return null
-      })
-    : null
-  subjectMakersAhead?.catch(() => {})
-  // WP2.5's questions line, beside the rest of the page (its reads need the
-  // subjects, read just above, and nothing below).
-  const questionsAhead: Promise<ForYouQuestions> = marketFirst
-    ? loadForYouQuestions({ supabase, clientId, month, themedRunId, subjectRows, posts: postsAhead }).catch((error: unknown) => {
-        console.error(`[pages] overview.foryou questions: ${(error as { message?: string })?.message ?? String(error)}`)
-        return null
-      })
-    : Promise.resolve(null)
 
   const pair = await judgeAhead
 
@@ -4290,6 +4323,15 @@ export async function loadThemeQuotes(
    *  a sale offer or an ad among their best candidates is read but not
    *  counted (`pastOffers`, default M-c), so the voice after it is read. */
   leads: ReadonlySet<string> = new Set(),
+  /** The themes whose candidates' videos are read for their segment
+   *  (`markVideoSegments`' one call, on `client`), issued as soon as those
+   *  videos are known, beside the English, rather than after this whole read
+   *  (d3 speed pass). The same call, the same ids and the same result.
+   *  `known`: the month's market videos' segments where the page read them
+   *  already (the subjects' maker shares read every market video's); only a
+   *  video they do not hold is asked about. A video's segment is its own
+   *  (override, judge, rule), whichever call reads it. */
+  segmentsFor?: { client: SupabaseClient; themes: ReadonlySet<string>; known?: Promise<ReadonlyMap<string, string | null> | null> },
 ): Promise<Map<string, { candidates: CiteCandidate[]; texts: string[] }>> {
   const out = new Map<string, { candidates: CiteCandidate[]; texts: string[] }>()
   const ids = [...wanted.keys()]
@@ -4307,36 +4349,47 @@ export async function loadThemeQuotes(
   const insightIds = [...new Set([...insightsByTheme.values()].flat())]
   if (insightIds.length === 0) return out
   type EvidenceRow = { id: string; audience_insight_id: string; quote: string | null; relevance_rank: number | null; comment_id: string | null }
+  // EACH READ'S CHUNKS GO OUT TOGETHER (d3 speed pass), not one after
+  // another. The kinds and the comments land in Maps keyed by id, so their
+  // order is nobody's; the evidence keeps its chunk order (`Promise.all`
+  // returns the chunks in the order they were asked for), which is the order
+  // the texts and the ranking's tie-break have always seen.
   const [kinds, evidence] = await Promise.all([
     (async () => {
       const m = new Map<string, string | null>()
-      for (const part of chunk(insightIds, UUID_IN_CHUNK)) {
-        const res = await supabase.from('audience_insights').select('id, category').eq('client_id', clientId).in('id', part)
+      const parts = await Promise.all(chunk(insightIds, UUID_IN_CHUNK).map((part) =>
+        supabase.from('audience_insights').select('id, category').eq('client_id', clientId).in('id', part)))
+      for (const res of parts) {
         for (const r of rows<{ id: string; category: string | null }>(res, 'overview.quoteKinds')) m.set(String(r.id), r.category ?? null)
       }
       return m
     })(),
     (async () => {
-      const all: EvidenceRow[] = []
-      for (const part of chunk(insightIds, UUID_IN_CHUNK)) {
-        // redacted = false: demographic evidence cites but never quotes
-        // (counts-not-quotes, 2026-08-22), the rule every quote read keeps.
-        const res = await supabase
+      // redacted = false: demographic evidence cites but never quotes
+      // (counts-not-quotes, 2026-08-22), the rule every quote read keeps.
+      const parts = await Promise.all(chunk(insightIds, UUID_IN_CHUNK).map((part) =>
+        supabase
           .from('insight_evidence')
           .select('id, audience_insight_id, quote, relevance_rank, comment_id')
           .in('audience_insight_id', part)
           .eq('redacted', false)
-          .order('id')
-        all.push(...rows<EvidenceRow>(res, 'overview.quoteEvidence'))
-      }
+          .order('id')))
+      const all: EvidenceRow[] = []
+      for (const res of parts) all.push(...rows<EvidenceRow>(res, 'overview.quoteEvidence'))
       return all.filter((e) => e.quote)
     })(),
   ])
+  // THE ENGLISH'S ONE-ROW PROBE GOES OUT NOW, beside the comments, rather than
+  // in front of the English read below; memoised, so that read finds it
+  // answered (`warmTranslationProbe`). Only where there is evidence to quote,
+  // so a page with none makes no read it did not make before.
+  if (evidence.length > 0) warmTranslationProbe(supabase)
   const commentIds = [...new Set(evidence.map((e) => e.comment_id).filter((id): id is string => Boolean(id)))]
   type CommentMeta = { id: string; platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null; author: string | null }
   const comments = new Map<string, CommentMeta>()
-  for (const part of chunk(commentIds, UUID_IN_CHUNK)) {
-    const res = await supabase.from('comments').select('id, platform, comment_date, video_id, comment_id, author').eq('client_id', clientId).in('id', part)
+  const commentParts = await Promise.all(chunk(commentIds, UUID_IN_CHUNK).map((part) =>
+    supabase.from('comments').select('id, platform, comment_date, video_id, comment_id, author').eq('client_id', clientId).in('id', part)))
+  for (const res of commentParts) {
     for (const c of rows<CommentMeta>(res, 'overview.quoteComments')) comments.set(String(c.id), c)
   }
   const from = monthStartOf(month)
@@ -4366,28 +4419,56 @@ export async function loadThemeQuotes(
   }
   const kept = [...shortlist.values()].flat()
   const nativeIds = [...new Set(kept.map((c) => c.meta.video_id).filter((v): v is string => Boolean(v)))]
-  const [translations, videos] = await Promise.all([
-    readTranslations(supabase, kept.map((c) => c.e.quote as string)),
-    (async () => {
-      const m = new Map<string, VideoCite>()
-      for (const part of chunk(nativeIds, UUID_IN_CHUNK)) {
-        const res = await supabase
-          .from('videos')
-          .select('id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name')
-          .eq('client_id', clientId)
-          .in('video_id', part)
-        for (const v of rows<VideoCite & { platform: string | null; video_id: string | null }>(res, 'overview.quoteVideos')) {
-          if (v.video_id) m.set(`${v.platform}::${v.video_id}`, v)
-        }
+  const videoOf = (videos: ReadonlyMap<string, VideoCite>, meta: CommentMeta): VideoCite | null =>
+    meta.platform && meta.video_id ? videos.get(`${meta.platform}::${meta.video_id}`) ?? null : null
+  const videosAhead = (async () => {
+    const m = new Map<string, VideoCite>()
+    const parts = await Promise.all(chunk(nativeIds, UUID_IN_CHUNK).map((part) =>
+      supabase
+        .from('videos')
+        .select('id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name')
+        .eq('client_id', clientId)
+        .in('video_id', part)))
+    for (const res of parts) {
+      for (const v of rows<VideoCite & { platform: string | null; video_id: string | null }>(res, 'overview.quoteVideos')) {
+        if (v.video_id) m.set(`${v.platform}::${v.video_id}`, v)
       }
-      return m
-    })(),
+    }
+    return m
+  })()
+  // `markVideoSegments`' call, for the videos behind the named themes'
+  // candidates, as soon as those videos are known: null where no call is
+  // made (none asked for, or no video), and the same log and the same
+  // unread segments on an error.
+  const segmentsAhead = segmentsFor
+    ? videosAhead.then(async (videos) => {
+        const vids = [...new Set([...segmentsFor.themes].flatMap((themeId) => (shortlist.get(themeId) ?? []).map(({ meta }) => videoOf(videos, meta)?.id))
+          .filter((id): id is string => Boolean(id)))]
+        if (vids.length === 0) return null
+        const known = segmentsFor.known ? await segmentsFor.known : null
+        const missing = known ? vids.filter((id) => !known.has(id)) : vids
+        const read = new Map<string, string | null>()
+        if (missing.length > 0) {
+          const res = await segmentsFor.client.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: missing })
+          if (res.error) {
+            console.error(`[overview] ${RPC_SEGMENTS_FOR_VIDEOS}: ${res.error.message}; the headline prints no voice`)
+            return null
+          }
+          for (const r of (res.data ?? []) as { video_id: string; segment: string | null }[]) read.set(String(r.video_id), r.segment ?? null)
+        }
+        return new Map(vids.map((id) => [id, known?.has(id) ? known.get(id) ?? null : read.get(id) ?? null]))
+      })
+    : null
+  const [translations, videos, segmentOf] = await Promise.all([
+    readTranslations(supabase, kept.map((c) => c.e.quote as string)),
+    videosAhead,
+    segmentsAhead,
   ])
   for (const [themeId, list] of shortlist) {
     const held = out.get(themeId)
     if (!held) continue
     held.candidates = list.map(({ e, meta, kind }) => {
-      const video = meta.platform && meta.video_id ? videos.get(`${meta.platform}::${meta.video_id}`) ?? null : null
+      const video = videoOf(videos, meta)
       return {
         evidenceId: e.id,
         quote: cleanQuote(e.quote as string),
@@ -4403,6 +4484,11 @@ export async function loadThemeQuotes(
         video,
       }
     })
+  }
+  if (segmentsFor && segmentOf) {
+    for (const themeId of segmentsFor.themes) {
+      for (const c of out.get(themeId)?.candidates ?? []) c.segment = c.video?.id ? segmentOf.get(c.video.id) ?? null : null
+    }
   }
   return out
 }
@@ -4576,6 +4662,59 @@ async function loadThemesProvenance(
   return out
 }
 
+/** What `loadThemesProvenance` answers for each theme. */
+type ThemeProvenance = { fromNewSearches: number; of: number } | null
+
+/** One asker's handle on a shared provenance read: `ask` once with its themes,
+ *  or `pass` where it has none to ask about (idempotent). */
+export interface ProvenanceAsker {
+  ask(registryIds: readonly string[]): Promise<Map<string, ThemeProvenance>>
+  pass(): void
+}
+
+/**
+ * ONE PROVENANCE READ FOR THE PAGE'S TWO ASKERS (d3 speed pass): the lead's
+ * (`loadMarketReads`) and "With this update"'s named themes (`loadArrivals`)
+ * each made `loadThemesProvenance`'s four reads (the refs, then the
+ * provenance, the videos and their gate verdicts) over their own themes. The
+ * function already answers several themes from one read of the union of their
+ * videos, each exactly as it would alone, so the two now wait for each other
+ * and read once. Each asker settles once, by asking or by passing; an asker
+ * that asks again (a lead that moved) reads on its own, as before.
+ */
+export function provenanceBatch(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  addedSearches: () => Promise<Set<string> | null>,
+  askers: number,
+): ProvenanceAsker[] {
+  const asked = new Set<string>()
+  let left = askers
+  let release!: () => void
+  const ready = new Promise<void>((resolve) => { release = resolve })
+  const read = ready.then(() => loadThemesProvenance(client, clientId, month, [...asked], addedSearches))
+  read.catch(() => {})
+  return Array.from({ length: askers }, () => {
+    let settled = false
+    const settle = (): void => {
+      if (settled) return
+      settled = true
+      left -= 1
+      if (left === 0) release()
+    }
+    return {
+      ask(registryIds) {
+        if (settled) return loadThemesProvenance(client, clientId, month, registryIds, addedSearches)
+        for (const id of registryIds) asked.add(id)
+        settle()
+        return read.then((all) => new Map(registryIds.map((id) => [id, all.get(id) ?? null])))
+      },
+      pass: settle,
+    }
+  })
+}
+
 /** A candidate as a printed voice: the quote by its evidence ref, and the
  *  cite and link the Phase 1 voices carried. */
 export function voiceOf(c: CiteCandidate): Voice {
@@ -4652,33 +4791,47 @@ async function loadMarketReads(input: {
   themedRunId: string | null
   segmentRows: Promise<ThemeMakerShareRow[] | null>
   denominators: readonly { month: string; audience: string; videos: number; comments: number }[]
+  /** The lead's share of the page's one provenance read (`provenanceBatch`). */
+  provenance?: ProvenanceAsker | null
+  /** The month's market videos' segments, where the page reads them (the
+   *  subjects' maker shares); null where it does not. */
+  marketSegments?: Promise<ReadonlyMap<string, string | null> | null> | null
 }): Promise<MarketReads> {
   const { supabase, reading, clientId, month, prevMonth, themedRunId } = input
   const client = reading.client
   const categoryN = (m: string): number | null =>
     input.denominators.find((d) => monthStartOf(d.month) === m && d.audience === INDUSTRY_AUDIENCE)?.videos ?? null
 
-  const [boardRows, excluded, changeRows, pairRows, segmentRows, recheck, brandsRead] = await Promise.all([
+  // THE BOARD'S CHAIN DOES NOT WAIT FOR THE BLOCKS BESIDE IT (d3 speed pass).
+  // The change rows, the pair rows, the re-check and the brands feed their own
+  // blocks and nothing on the board, and the brands alone are three hops (the
+  // month's market videos, their mentions, our rival searches: about two
+  // seconds on staging). They were one `Promise.all` with the board's rows, so
+  // the board's observations and every quote after them waited for the
+  // brands. They start here, beside the board, and are taken at the end.
+  const changeRowsAhead = loadChanges(client, clientId)
+  // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadAppPairOn`): a read error
+  // on the pair rows leaves the change block unmeasured, never the page down
+  // (a missing table is already an empty list).
+  const pairRowsAhead = loadPairRows(client, clientId, null).catch((error: unknown): PairRow[] => {
+    console.error(`[overview] month pair rows: ${(error as { message?: string })?.message ?? String(error)}; read as unmeasured`)
+    return []
+  })
+  // WP2.3's re-check beside a refused pair (the block decides whether it
+  // prints); fails closed, as "checks pending".
+  const recheckAhead = loadRecheck(client, clientId, prevMonth, month)
+  // WP2.6's brands, counted in every video they come up in. A read that
+  // fails keeps deploy 2's line, never a 0.
+  const brandsAhead = loadBrandsBlock(client, clientId, month, { market: input.marketIds }).catch((error: unknown): null => {
+    console.error(`[overview] brands: ${(error as { message?: string })?.message ?? String(error)}; the one line kept`)
+    return null
+  })
+  changeRowsAhead.catch(() => {})
+  recheckAhead.catch(() => {})
+  const [boardRows, excluded, segmentRows] = await Promise.all([
     loadBoardThemes(client, clientId, month, prevMonth),
     loadLeadExclusions(client, clientId),
-    loadChanges(client, clientId),
-    // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadAppPairOn`): a read error
-    // on the pair rows leaves the change block unmeasured, never the page down
-    // (a missing table is already an empty list).
-    loadPairRows(client, clientId, null).catch((error: unknown): PairRow[] => {
-      console.error(`[overview] month pair rows: ${(error as { message?: string })?.message ?? String(error)}; read as unmeasured`)
-      return []
-    }),
     input.segmentRows,
-    // WP2.3's re-check beside a refused pair (the block decides whether it
-    // prints); fails closed, as "checks pending".
-    loadRecheck(client, clientId, prevMonth, month),
-    // WP2.6's brands, counted in every video they come up in. A read that
-    // fails keeps deploy 2's line, never a 0.
-    loadBrandsBlock(client, clientId, month, { market: input.marketIds }).catch((error: unknown): null => {
-      console.error(`[overview] brands: ${(error as { message?: string })?.message ?? String(error)}; the one line kept`)
-      return null
-    }),
   ])
   const ids = boardRows.map((r) => r.id)
   const obs = await loadBoardObservations(client, clientId, themedRunId, ids)
@@ -4733,17 +4886,23 @@ async function loadMarketReads(input: {
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
   const firstLead = leadCandidates[0]?.registryId ?? null
   const addedSearches = input.addedSearches ?? addedSearchesRead(client, clientId, month)
-  const [quotes, firstProvenance] = await Promise.all([
-    loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(leadCandidates.map((t) => t.registryId))),
-    firstLead ? loadLeadProvenance(client, clientId, month, firstLead, addedSearches) : Promise.resolve(null),
-  ])
+  // No lead, no ask: the shared read goes as soon as "With this update" asks.
+  if (!firstLead) input.provenance?.pass()
   // DECISION F: MAKERS NEVER SUPPLY THE HEADLINE'S QUOTES. The lead may be up
   // to a quarter makers, so the videos behind its candidates are read for
   // their segment (one call, the lead candidates only), and the voices take
-  // only a 'market' video's comment (`pickQuotes` `marketVideosOnly`).
-  if (segments === 'measured') {
-    await markVideoSegments(client, clientId, leadCandidates.flatMap((t) => quotes.get(t.registryId)?.candidates ?? []))
-  }
+  // only a 'market' video's comment (`pickQuotes` `marketVideosOnly`). The
+  // call goes out inside the quotes' read as soon as their videos are known,
+  // beside the English (`segmentsFor`; d3 speed pass), not after it.
+  const leadIds = new Set(leadCandidates.map((t) => t.registryId))
+  const [quotes, firstProvenance] = await Promise.all([
+    loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, leadIds, segments === 'measured' ? { client, themes: leadIds, known: input.marketSegments ?? undefined } : undefined),
+    firstLead
+      ? input.provenance
+        ? input.provenance.ask([firstLead]).then((m) => m.get(firstLead) ?? null)
+        : loadLeadProvenance(client, clientId, month, firstLead, addedSearches)
+      : Promise.resolve(null),
+  ])
   if (branded.length > 0) {
     themes = themes.map((t) => {
       if (!branded.includes(t.registryId)) return t
@@ -4756,6 +4915,7 @@ async function loadMarketReads(input: {
   const provenance = leadId == null
     ? null
     : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
+  const [changeRows, pairRows, recheck, brandsRead] = await Promise.all([changeRowsAhead, pairRowsAhead, recheckAhead, brandsAhead])
   return {
     themes,
     segments,
@@ -4796,6 +4956,9 @@ async function loadArrivals(input: {
   segmentRows: Promise<ThemeMakerShareRow[] | null>
   /** The page's one read of the searches first run in the month. */
   addedSearches?: (() => Promise<Set<string> | null>) | null
+  /** The named themes' share of the page's one provenance read
+   *  (`provenanceBatch`). */
+  provenance?: ProvenanceAsker | null
 }): Promise<ArrivalsBlock | null> {
   const { supabase, clientId, rm } = input
   const client = input.reading.client
@@ -4803,30 +4966,43 @@ async function loadArrivals(input: {
   if (!run) return null
   const month = monthStartOf(input.month)
   const months = [...new Set([month, monthStartOf(rm.current.month)])]
-  const [arrived, runRes, segmentRows] = await Promise.all([
+  const date = updateInstant(run)
+  // THE NEW THEMES' READS START AS SOON AS THE RUN'S ROW IS IN (d3 speed
+  // pass): they need its clustering key and nothing the arrivals' counts or
+  // the segment rows hold, and they are four hops of their own (This week's
+  // `loadNewThemes`), which waited for `update_arrivals`, the slowest call
+  // here. The same reads; the arrivals and the segment rows are taken beside
+  // them.
+  // `*`, for the reason This week reads its anchor that way: an absent
+  // column (clustering_key) arrives as an absent key, never a 42703.
+  const runAhead = Promise.resolve(supabase.from('pipeline_runs').select('*').eq('client_id', clientId).eq('id', run.id).maybeSingle())
+  const freshAhead = runAhead.then((runRes) => {
+    const regime = {
+      clusteringKey: (runRes.data as { clustering_key?: string | null } | null)?.clustering_key ?? null,
+      startedAt: run.started_at,
+      date,
+    }
+    return loadNewThemes(supabase, clientId, run.id, month, regime, { audience: INDUSTRY_AUDIENCE }).catch((error: unknown) => {
+      console.error(`[overview] arrivals new themes: ${(error as { message?: string })?.message ?? String(error)}; none named`)
+      return { seen: 0, shown: [], regrouped: null }
+    })
+  })
+  freshAhead.catch(() => {})
+  const [arrived, , segmentRows] = await Promise.all([
     client.rpc(RPC_UPDATE_ARRIVALS, { p_client: clientId, p_run: run.id, p_months: months }),
-    // `*`, for the reason This week reads its anchor that way: an absent
-    // column (clustering_key) arrives as an absent key, never a 42703.
-    supabase.from('pipeline_runs').select('*').eq('client_id', clientId).eq('id', run.id).maybeSingle(),
+    runAhead,
     input.segmentRows.catch(() => null),
   ])
   if (arrived.error) {
     console.error(`[overview] ${RPC_UPDATE_ARRIVALS}: ${arrived.error.message}; "With this update" is not counted`)
     return null
   }
-  const date = updateInstant(run)
-  const regime = {
-    clusteringKey: (runRes.data as { clustering_key?: string | null } | null)?.clustering_key ?? null,
-    startedAt: run.started_at,
-    date,
-  }
-  const fresh = await loadNewThemes(supabase, clientId, run.id, month, regime, { audience: INDUSTRY_AUDIENCE }).catch((error: unknown) => {
-    console.error(`[overview] arrivals new themes: ${(error as { message?: string })?.message ?? String(error)}; none named`)
-    return { seen: 0, shown: [], regrouped: null }
-  })
+  const fresh = await freshAhead
   const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
   const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes.slice(0, ARRIVAL_THEMES_SHOWN)
-  const provenance = await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), input.addedSearches ?? addedSearchesRead(client, clientId, month))
+  const provenance = input.provenance
+    ? await input.provenance.ask(named.map((t) => t.registryId))
+    : await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), input.addedSearches ?? addedSearchesRead(client, clientId, month))
   return buildArrivals({
     run: { id: run.id, date },
     rows: (arrived.data ?? []) as UpdateArrivalsRow[],

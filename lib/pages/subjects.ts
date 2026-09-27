@@ -1570,8 +1570,10 @@ export async function loadMarketMakers(
   clientId: string,
   month: string,
   /** The month's market videos, where the caller has read them already (Your
-   *  market reads them once for its brands block too). */
-  opts: { ids?: Promise<string[] | null> | null } = {},
+   *  market reads them once for its brands block too). `onSegments` is handed
+   *  the segments read, where it succeeded, for a caller that wants more of it
+   *  (Your market's headline voices; d3 speed pass). */
+  opts: { ids?: Promise<string[] | null> | null; onSegments?: (segments: ReadonlyMap<string, string | null>) => void } = {},
 ): Promise<MarketMakers> {
   const out: MarketMakers = { occupies: null, makers: null, lens: null }
   const log = (what: string, error: { message?: string; code?: string | null }) => {
@@ -1592,8 +1594,9 @@ export async function loadMarketMakers(
   if (ids.length === 0) return { ...out, makers: new Set(), lens: [] }
   const seg = await client.rpc('segments_for_videos', { p_client: clientId, p_video_ids: ids })
   if (seg.error) { log('segments_for_videos', seg.error); return out }
-  const makers = new Set(((seg.data ?? []) as { video_id: string; segment: string | null }[])
-    .filter((r) => r.segment === 'maker').map((r) => String(r.video_id)))
+  const segRows = (seg.data ?? []) as { video_id: string; segment: string | null }[]
+  opts.onSegments?.(new Map(segRows.map((r) => [String(r.video_id), r.segment ?? null])))
+  const makers = new Set(segRows.filter((r) => r.segment === 'maker').map((r) => String(r.video_id)))
   out.makers = makers
   if (makers.size === 0) return { ...out, lens: [] }
   const lens = await client.rpc('lens_readings', { p_client: clientId, p_month: monthStartOf(month), p_run: null, p_video_ids: [...makers] })

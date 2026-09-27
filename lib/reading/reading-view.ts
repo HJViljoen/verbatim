@@ -290,20 +290,25 @@ export function loadMarketRivalAudiences(supabase: SupabaseClient, clientId: str
  * bar then says only "as at", which is true, rather than promising a date.
  */
 export function loadReadingSchedule(supabase: SupabaseClient, clientId: string): Promise<ScheduleConfig | null> {
-  return memoRead(supabase, `reading-view:schedule:${clientId}`, async () => {
-    try {
-      const { data, error } = await supabase
-        .from('tracking_configs').select('report_period, report_day').eq('client_id', clientId).maybeSingle()
-      if (error) {
-        console.error(`[reading-view] schedule: ${error.message}`)
-        return null
-      }
-      return (data as ScheduleConfig | null) ?? null
-    } catch (error) {
+  // ONE READ WITH THE PAIR JUDGE'S (d3 speed pass). The judge reads the same
+  // row for "next update" (lib/reading/read.ts and gather-flags.ts
+  // `loadScheduleAfter`): the same select, memoised under
+  // `reading:schedule:{client}`. This read now shares that key, so a page that
+  // asks for the bar's schedule and judges its pairs on one client makes one
+  // read, whichever asks first. A failure is still null here, logged, and still
+  // a throw for the judge: `memoRead` evicts a rejection, so each asks again.
+  return memoRead(supabase, `reading:schedule:${clientId}`, async () => {
+    const { data, error } = await supabase
+      .from('tracking_configs').select('report_period, report_day').eq('client_id', clientId).maybeSingle()
+    if (error) throw new Error(`tracking_configs schedule: ${error.message}`)
+    return (data ?? null) as { report_period?: string | null; report_day?: string | null } | null
+  }).then(
+    (cfg) => (cfg as ScheduleConfig | null) ?? null,
+    (error: unknown) => {
       console.error(`[reading-view] schedule: ${(error as { message?: string })?.message ?? String(error)}`)
       return null
-    }
-  })
+    },
+  )
 }
 
 /** What `readingViewFrom` takes besides the clock, as a reader that holds none

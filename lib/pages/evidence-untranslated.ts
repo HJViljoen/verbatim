@@ -29,6 +29,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
 import type { QuoteCitation, QuoteRow } from '../quotes'
+import { memoRead } from '../reading/memo'
 import { selectAll } from '../supabase-admin'
 
 /** lib/quotes.ts `fetchChunks`' size, which the reads here copy. */
@@ -105,4 +106,29 @@ export async function quotesUntranslated(
     byAudience.set(r.audience_insight_id, arr)
   }
   return byAudience
+}
+
+/**
+ * lib/quotes.ts `translationsReachable`, started early (d3 speed pass).
+ *
+ * `readTranslations` asks the cache one one-row question ("is
+ * comment_translations there at all?") before its chunks, memoised per client
+ * under this key, so the first English read of a request pays a round trip in
+ * front of it. A loader that knows the English is coming can put that
+ * question in flight beside the reads before it; `readTranslations` then finds
+ * it answered (the same key, the same client) and reads the chunks at once.
+ * The same read and the same rule: the yes is remembered, a no is evicted and
+ * asked again by the next caller (`memoRead`). WHY A COPY, AND WHY HERE: this
+ * file's own reason; lib/quotes.ts is on the freeze-months path, so the probe
+ * cannot be exported from it yet, and the key must stay the one it uses.
+ */
+export function warmTranslationProbe(client: unknown): void {
+  memoRead(client, 'quotes:translations-reachable', async () => {
+    const c = client as unknown as {
+      from(table: string): { select(cols: string): { limit(n: number): PromiseLike<{ error: unknown }> } }
+    }
+    const { error } = await c.from('comment_translations').select('text_hash').limit(1)
+    if (error) throw new Error((error as { message?: string }).message ?? String(error))
+    return true as const
+  }).catch(() => {})
 }
