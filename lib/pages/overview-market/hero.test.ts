@@ -155,6 +155,24 @@ describe('the hero’s words', () => {
     expect(view.figures[themeToken(boycott.registryId, 'prev')]).toBeUndefined()
   })
 
+  // Staging reaches neither case (no top three holds more than one theme
+  // August did not read); these are Össur's three with their August rows
+  // taken away, the states the code must still word (the deploy-3 design
+  // review).
+  it('says "none" for each of two named themes August did not read, and drops the line when it read none of the three', () => {
+    const three = ['Admiration for personal resilience', 'Questions about prosthetic function', 'Brand boycott over politics']
+    const unread = (labels: readonly string[]) => stagingOssurThemes().filter((t) => three.includes(t.label))
+      .map((t) => (labels.includes(t.label) ? { ...t, prev: t.prev ? { ...t.prev, k: 0 } : t.prev } : t))
+    const lineOf = (labels: readonly string[]) => {
+      const b = buildThemeBoard(unread(labels), OSSUR_SEPTEMBER_N, SEPTEMBER, 'no_rule', { month: AUGUST, n: OSSUR_AUGUST_N })
+      const view = heroView(heroLead(b, [], new Set()), b, SEPTEMBER)
+      return text(view.prev, view.figures)
+    }
+    expect(lineOf(['Questions about prosthetic function'])).toBe('August: 16%, none and none of 537')
+    // "August: none, none and none of 537" says nothing: no line.
+    expect(lineOf(['Admiration for personal resilience', 'Questions about prosthetic function'])).toBe('')
+  })
+
   it('declares each figure once, on the board’s own tokens', () => {
     const b = board()
     const view = heroView(heroLead(b, [], new Set()), b, SEPTEMBER)

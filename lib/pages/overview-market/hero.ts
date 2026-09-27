@@ -192,10 +192,13 @@ export function heroThemeParts(hero: Extract<HeroLead, { kind: 'themes' }>, boar
 
 /** "August: 7%, 7% and 3% of 351", or null where the previous month has no
  *  category row. Levels, never a change: nothing is compared across them. A
- *  theme that month did not read is "none", never "0%" (`prevReadK`). */
+ *  theme that month did not read is "none", never "0%" (`prevReadK`); where
+ *  it read none of the themes named, there is no line ("August: none, none
+ *  and none of 537" says nothing; the deploy-3 design review). */
 export function heroPrevParts(hero: Extract<HeroLead, { kind: 'themes' }>, board: ThemeBoard): HeroPart[] | null {
   const prev = board.prev
   if (!prev || prev.n == null || prev.n <= 0 || hero.top.length === 0) return null
+  if (hero.top.every((t) => prevReadK(t) == null)) return null
   const parts: HeroPart[] = [{ t: 'text', s: `${longMonth(prev.month)}: ` }]
   hero.top.forEach((t, i) => {
     if (i > 0) parts.push({ t: 'text', s: i === hero.top.length - 1 ? ' and ' : ', ' })
