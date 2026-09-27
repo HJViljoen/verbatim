@@ -341,6 +341,12 @@ describe('the market’s lead level (WP3.11, plan §2.9)', () => {
     expect(leadTile({ kind: 'size', label: null, k: 655, n: null }, 'September 2026')).toEqual({ value: '655', label: 'videos in your market in September 2026' })
   })
 
+  it('opens on no refused gap where the brief was built with nothing to lead on', () => {
+    const refused = gap({ state: 'too_little_data', gapPts: null, bandPts: null })
+    const tiles = overviewTiles(doc({ reading: { ...reading({ gaps: [refused], verdicts: [] }), lead: null } }))
+    expect(tiles.some((t) => t.value === 'too few to compare')).toBe(false)
+  })
+
   it('leaves a brief frozen before it with the tiles it was built with', () => {
     const old = overviewTiles(doc({ reading: reading({ gaps: [gap()], verdicts: [verdict()] }) }))
     expect(old[0].label).toContain('Durability')
