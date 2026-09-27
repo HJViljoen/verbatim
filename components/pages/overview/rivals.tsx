@@ -376,7 +376,7 @@ export const overviewRivals: Block<OverviewData> = {
 export const MARKET_BRANDS_TITLE = 'Brands in your market'
 
 /** "Brands in your market, counted in every video they come up in, arrive
- *  with the 11 Oct update. Until then, Competitive lists …" as one line inside
+ *  with the 4 Oct update. Until then, Competitive lists …" as one line inside
  *  a drawn block (decision B 2), and the link to Competitive by its current
  *  sidebar label. */
 function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string) {

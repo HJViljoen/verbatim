@@ -120,14 +120,14 @@ describe('the market by subject (decision C and E)', () => {
 })
 
 describe('brands in your market, one line at deploy 2', () => {
-  it('names the 11 Oct update while it is ahead, and Competitive by its current label', () => {
-    expect(brandsLine(brandsBlockFor('2026-10-04T08:30:00.000Z'), 'Competitive')).toBe(
-      'Brands in your market, counted in every video they come up in, arrive with the 11 Oct update. Until then, Competitive lists what was filed under each brand you track.',
+  it('names the 4 Oct update while it is ahead, and Competitive by its current label', () => {
+    expect(brandsLine(brandsBlockFor('2026-09-27T08:30:00.000Z'), 'Competitive')).toBe(
+      'Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Competitive lists what was filed under each brand you track.',
     )
   })
 
   it('stops naming a date once that update has passed', () => {
-    expect(brandsLine(brandsBlockFor('2026-10-11T08:30:00.000Z'), 'Competitive')).toContain('arrive with a coming update')
+    expect(brandsLine(brandsBlockFor('2026-10-04T08:30:00.000Z'), 'Competitive')).toContain('arrive with a coming update')
   })
 
   it('promises no update to a paused tenant (Össur, §2.13)', () => {

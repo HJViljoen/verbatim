@@ -4,20 +4,20 @@ import { shortDate } from '../../format'
 //
 // ONE LINE AT DEPLOY 2. Brands counted in every video they come up in (the
 // mention layer, WP2.6) arrive with deploy 3 and are first read with the
-// 11 Oct update; until then the block says so, and points at Competitive,
+// 4 Oct update; until then the block says so, and points at Competitive,
 // which lists what was filed under each brand the client tracks. The name
 // line and brand topics replace it at deploy 3.
 //
-// THE DATE IS A PROMISE, SO IT EXPIRES. The line names the 11 Oct update only
+// THE DATE IS A PROMISE, SO IT EXPIRES. The line names the 4 Oct update only
 // while that update is still ahead of the page's "as at"; after it, a page
 // still on this code says "a coming update" rather than a date that has
 // passed (a copy claim must match what the code does).
 //
 // PURE.
 
-/** The update the mention layer is first read with (plan §3.3: deploy 3 by
- *  Sat 10 Oct, the 11 Oct run). */
-export const BRANDS_ARRIVE_WITH = '2026-10-11T04:00:00.000Z'
+/** The update the mention layer is first read with (plan §3.7: deploy 3 on
+ *  Mon 5 Oct, brand-mentions applied that morning on the 4 Oct run). */
+export const BRANDS_ARRIVE_WITH = '2026-10-04T04:00:00.000Z'
 
 export interface BrandsBlock {
   /** `arriving`: an update ahead reads them. `paused`: the tenant's updates
