@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { fmtInt } from '@/lib/format'
+import { carriesShare, levelText } from '@/lib/reading/level'
 import { REJECT_ROWS, type KeptRate, type RejectRow } from '@/lib/settings/reject-log'
 
 import { RecordSection } from './frame'
@@ -68,7 +69,8 @@ const TRACKS = 'xl:grid-cols-[minmax(0,2.8fr)_minmax(0,1.13fr)_minmax(200px,1fr)
 export function keptRateText(rates: readonly Pick<KeptRate, 'found' | 'keptPct'>[]): (r: Pick<KeptRate, 'found' | 'kept' | 'keptPct'>) => string {
   const whole = rates.some((r) => r.found < 100)
   return (r) => {
-    if (r.found < 100) return `${fmtInt(r.kept)} of ${fmtInt(r.found)}`
+    // "of N" through `levelText` (plan §4.0): its count under the floor.
+    if (!carriesShare(r.found)) return levelText(r.kept, r.found)?.text ?? `${fmtInt(r.kept)} of ${fmtInt(r.found)}`
     return whole ? `${Math.round(r.keptPct)}%` : `${r.keptPct.toFixed(1)}%`
   }
 }

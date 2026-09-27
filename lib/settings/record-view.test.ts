@@ -241,6 +241,11 @@ describe('the record as rows', () => {
     expect(recordDate('2026-04-06T06:00:00.000Z', '2026-09-28')).toBe('6 Apr')
   })
 
+  it('keeps the counts of what was let in unjudged beside the set-aside share, with no method clause (WP3.10)', () => {
+    expect(row('gate').basis).toBe('recorded from 9 Sep 2026; 295 videos passed the quick check and were never looked at more closely')
+    expect(row('gate').basis).not.toContain('so no month before that can show it')
+  })
+
   it('states the Reddit cap the product actually enforces', () => {
     expect(row('reddit').figure).toBe('214')
     expect(row('reddit').basis).toBe('each read to 40 comments')

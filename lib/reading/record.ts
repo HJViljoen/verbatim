@@ -1373,7 +1373,9 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
           ? `Nothing was looked at and set aside in this window; the record of it begins ${fullDate(g.recordedFrom)}.`
           : 'of what was looked at',
     g.readable && g.recordedFrom != null && g.judged > 0
-      ? { lead: 'discarded', basis: `recorded from ${fullDate(g.recordedFrom)}` }
+      // The caveat's counts stay (videos let in unjudged are data, not
+      // method); only the clause about how the record is dated went.
+      ? { lead: 'discarded', basis: `recorded from ${fullDate(g.recordedFrom)}${discardCaveat(g)}` }
       : {},
   )
 
