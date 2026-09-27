@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { PageBar } from '@/components/shell/page-grid'
 import { ReadingContext } from '@/components/shell/page-bar'
 import type { ContextLineInput } from '@/lib/shell/bar'
-import { SETTINGS_SUBPAGES, type SettingsSection } from '@/lib/settings/rail'
+import { SETTINGS_SUBPAGES, settingsSubPage, type SettingsSection } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
 
 // The settings area (Phase 1 WP16, design item 29): one frame shared by
@@ -23,8 +23,11 @@ import { cn } from '@/lib/utils'
 // A ROW THAT SCROLLS SIDEWAYS ON ITS OWN. At a phone's width the tabs do not
 // fit; the row scrolls inside itself and the page never does.
 //
-// SUB-PAGES THE ARTBOARDS DO NOT DRAW keep their own header (`contentTitle`,
-// `contentMeta`, `contentRule`) above their content, as before.
+// SUB-PAGES THE ARTBOARDS DO NOT DRAW keep their own header (`contentMeta`,
+// `contentRule`) above their content. Its title is dropped where it only
+// repeats the lit tab ("Subjects" under Subjects): both artboards open straight
+// on their first card, the tab naming the page. A title the tab does not say
+// ("Plan & billing" under Team) stays.
 
 export type { SettingsSection }
 
@@ -49,6 +52,7 @@ export function SettingsFrame({
   bar?: ContextLineInput | null
   children: ReactNode
 }) {
+  const heading = contentTitle && !(active && contentTitle === settingsSubPage(active).label) ? contentTitle : null
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6">
       <PageBar
@@ -74,15 +78,17 @@ export function SettingsFrame({
         ))}
       </nav>
       <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-        {contentTitle && (
+        {heading || contentMeta || contentRule ? (
           <header className="flex flex-col gap-1 pb-4">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className="shrink-0 text-[15px] font-semibold">{contentTitle}</h2>
-              {contentMeta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{contentMeta}</span>}
-            </div>
+            {heading || contentMeta ? (
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                {heading ? <h2 className="shrink-0 text-[15px] font-semibold">{heading}</h2> : null}
+                {contentMeta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{contentMeta}</span>}
+              </div>
+            ) : null}
             {contentRule && <p className="text-[12.5px] text-muted-foreground">{contentRule}</p>}
           </header>
-        )}
+        ) : null}
         {children}
       </section>
     </div>

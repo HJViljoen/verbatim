@@ -50,10 +50,16 @@ describe('the settings vocabulary', () => {
       </SettingsFrame>,
     )
     expect(markup).not.toContain('shadow-tile')
-    // A sub-page the artboards do not draw keeps its own header.
-    expect(markup).toContain('How to read')
+    // A sub-page the artboards do not draw keeps its own header, less a
+    // title that only repeats the lit tab.
     expect(markup).toContain('nine pages')
     expect(markup).toContain('What each page tells you.')
+    expect(markup).not.toContain('<h2 class="shrink-0 text-[15px] font-semibold">How to read</h2>')
+  })
+
+  it('keeps a title the lit tab does not say (Plan & billing, under Team)', () => {
+    const markup = render(<SettingsFrame active="team" title="Settings" contentTitle="Plan & billing">x</SettingsFrame>)
+    expect(markup).toContain('<h2 class="shrink-0 text-[15px] font-semibold">Plan &amp; billing</h2>')
   })
 
   it('draws a sub-page that passes no rule: the other routes\' shape', () => {
