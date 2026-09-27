@@ -516,7 +516,7 @@ export function AddSubjectFooter({ canEdit, activeCount }: { canEdit: boolean; a
         open={adding}
         onOpenChange={setAdding}
         title="Add a subject"
-        description={`Name it the way a buyer would say it. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
+        description={`A subject is ${SUBJECT_WORDS}. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
       />
     </>
   )
