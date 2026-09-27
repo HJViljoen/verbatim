@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { SettingsFrame, SettingsCard } from '@/components/settings-frame'
 import { InitiativeRowForm } from './initiative-row'
 import { getSessionContext } from '@/lib/auth'
@@ -11,7 +10,7 @@ import { PARKED_INITIATIVES } from '@/lib/nav'
 
 // Settings › Initiatives — the list of what this workspace declared it is
 // trying to move, and the only place to rename, finish or stop one. Declaring
-// happens where the theme is (Voice of Customer): a list of themes with no
+// happened where the theme was (the old Voice page): a list of themes with no
 // evidence beside them is not where anyone decides what to track.
 //
 // The card's promise comes from `initiativePromise()`, which is gated on D1:
@@ -67,11 +66,12 @@ export default async function InitiativesSettingsPage() {
           description="Each one is measured on the themes it was declared with, from the day you declared it."
         >
           {initiatives.length === 0 ? (
-            <p className="text-[12px] text-muted-foreground">
-              Nothing tracked yet. Open a theme in{' '}
-              <Link href="/dashboard/voice" className="font-medium underline underline-offset-2">Voice of Customer</Link>{' '}
-              and choose “Track this theme”.
-            </p>
+            // NO "TRACK THIS THEME" TO POINT AT (WP3.10). The empty state sent a
+            // reader to "Voice of Customer" to choose "Track this theme"; the
+            // page at that address is Conversation now and draws no such
+            // control, so the sentence claimed a behaviour the code does not
+            // have (GS constraint 8). The banner above names where this goes.
+            <p className="text-[12px] text-muted-foreground">Nothing tracked yet.</p>
           ) : (
             <div className="flex flex-col">
               {initiatives.map((i) => (
