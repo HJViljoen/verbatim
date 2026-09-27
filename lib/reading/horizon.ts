@@ -42,12 +42,32 @@ export const HORIZON_PARAM = 'horizon'
  *  horizon every tenant can answer on day one. */
 export const DEFAULT_HORIZON: Horizon = 'this_month'
 
-/** How many calendar months each horizon spans. `since_start` is open-ended and
- *  takes its start from the data. */
-const SPAN: Record<Exclude<Horizon, 'since_start'>, number> = {
-  this_month: 1,
-  last_3: 3,
-  last_12: 12,
+/**
+ * The fewest months a page reads, whatever it draws: the three consecutive
+ * months a direction word is earned over (`DIRECTION_RUN`,
+ * lib/reading/bands.ts). Equal to it, and the test pins the two together; not
+ * imported, so this module stays free of bands.ts's imports.
+ */
+export const READ_AXIS_MONTHS = 3
+
+/**
+ * How many calendar months each horizon spans: the months it DRAWS (the
+ * window, its figures and its axis) and the months a page READS for it (the
+ * read axis, `readAxisOf`). `since_start` is open-ended and takes its start
+ * from the data.
+ *
+ * THE DEFAULT HORIZON READS THREE MONTHS (market-first WP3.4). "The month"
+ * draws one month, and a page read one month wider than that for the
+ * month-on-month comparison, which is two: a direction word needs three, so
+ * the view every reader opens first could never carry one, however clean the
+ * months (research, time and change F5). It still draws the reading month
+ * alone; it reads the two months before it. The other horizons already draw
+ * three months or more and read what they draw.
+ */
+const SPAN: Record<Exclude<Horizon, 'since_start'>, { drawn: number; read: number }> = {
+  this_month: { drawn: 1, read: READ_AXIS_MONTHS },
+  last_3: { drawn: 3, read: 3 },
+  last_12: { drawn: 12, read: 12 },
 }
 
 /** The control's own words. Client-facing: no window, no range, no basis.
@@ -125,7 +145,7 @@ export function horizonWindow(horizon: Horizon, now: string, firstReadable?: str
     return { horizon, kind: 'since', months, ...windowOfMonths(months), basis: null }
   }
 
-  const span = SPAN[horizon]
+  const span = SPAN[horizon].drawn
   const months = monthsBack(current, span)
   const before = monthsBack(previousMonth(months[0]), span)
   return {
@@ -135,6 +155,28 @@ export function horizonWindow(horizon: Horizon, now: string, firstReadable?: str
     ...windowOfMonths(months),
     basis: { ...windowOfMonths(before), months: before },
   }
+}
+
+/**
+ * THE READ AXIS (market-first WP3.4): the months a page reads for a horizon,
+ * oldest first, ending on the month its window ends on. Never fewer than
+ * `READ_AXIS_MONTHS`: on the default horizon, the reading month and the two
+ * before it, so a direction word (three consecutive months, `directionWord`)
+ * can be earned on the view every reader opens first. A longer horizon reads
+ * what it draws; "since we started" with under three months to read reads
+ * three, as the default does.
+ *
+ * THE DRAWN AXIS IS NOT THIS. The window's `months` and the chart's
+ * (`chartMonths`) are unchanged, and so is everything a page draws from
+ * them: a caller reads the word over this axis and draws what it drew.
+ */
+export function readAxisOf(window: Pick<HorizonWindow, 'horizon' | 'months'>): string[] {
+  const months = window.months
+  if (months.length === 0) return []
+  const span = window.horizon === 'since_start'
+    ? Math.max(months.length, READ_AXIS_MONTHS)
+    : Math.max(months.length, SPAN[window.horizon].read)
+  return monthsBack(months[months.length - 1], span)
 }
 
 /** A denominator row, as much of it as the "since we started" rule needs. */

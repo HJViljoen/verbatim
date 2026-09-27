@@ -7,8 +7,11 @@ import {
   horizonDates,
   horizonWindow,
   parseHorizon,
+  READ_AXIS_MONTHS,
+  readAxisOf,
   sinceStart,
 } from './horizon'
+import { DIRECTION_RUN } from './bands'
 import { SENTIMENT_BAND } from '../report-bands'
 
 const NOW = '2026-09-15T10:00:00.000Z'
@@ -108,6 +111,56 @@ describe('horizonWindow', () => {
       const w = horizonWindow(h, NOW)
       expect(w.basis!.months).toHaveLength(w.months.length)
     }
+  })
+})
+
+describe('readAxisOf: the three-month read axis (market-first WP3.4)', () => {
+  it('the default horizon draws the month in hand and reads it with the two months before it', () => {
+    const w = horizonWindow('this_month', NOW)
+    expect(w.months).toEqual(['2026-09-01'])
+    expect(readAxisOf(w)).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+
+  it('reads exactly the months a direction word is earned over', () => {
+    expect(READ_AXIS_MONTHS).toBe(DIRECTION_RUN)
+    expect(readAxisOf(horizonWindow(DEFAULT_HORIZON, NOW))).toHaveLength(DIRECTION_RUN)
+  })
+
+  it('the plan\'s first words: December read in January is October to December on the default view', () => {
+    // The reading month is December (`readingAnchor`: noon on its first day).
+    expect(readAxisOf(horizonWindow('this_month', '2026-12-01T12:00:00.000Z'))).toEqual(['2026-10-01', '2026-11-01', '2026-12-01'])
+  })
+
+  it('walks back over a year boundary', () => {
+    expect(readAxisOf(horizonWindow('this_month', '2027-01-01T12:00:00.000Z'))).toEqual(['2026-11-01', '2026-12-01', '2027-01-01'])
+  })
+
+  it('a longer horizon reads what it draws', () => {
+    for (const h of ['last_3', 'last_12'] as const) {
+      const w = horizonWindow(h, NOW)
+      expect(readAxisOf(w)).toEqual(w.months)
+    }
+  })
+
+  it('since we started reads what it draws, and three months when it draws fewer', () => {
+    const long = horizonWindow('since_start', NOW, '2026-06-01')
+    expect(readAxisOf(long)).toEqual(long.months)
+    expect(readAxisOf(horizonWindow('since_start', NOW, '2026-08-01'))).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
+    expect(readAxisOf(horizonWindow('since_start', NOW))).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+
+  it('never changes what a horizon draws: every drawn month is read, and the read ends where the drawn axis does', () => {
+    for (const h of HORIZONS) {
+      const w = horizonWindow(h, NOW, '2026-06-01')
+      const read = readAxisOf(w)
+      expect(read.length).toBeGreaterThanOrEqual(READ_AXIS_MONTHS)
+      expect(read.slice(-w.months.length)).toEqual(w.months)
+    }
+    expect(horizonWindow('this_month', NOW).months).toHaveLength(1)
+  })
+
+  it('reads nothing for a window with no months', () => {
+    expect(readAxisOf({ horizon: 'this_month', months: [] })).toEqual([])
   })
 })
 
