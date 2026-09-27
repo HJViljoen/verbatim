@@ -3,8 +3,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import { SEALAND_CLIENT_ID } from '../lib/config'
-import { recordConfigChange, scriptActor } from '../lib/config-log'
-import { asChangeInput } from '../lib/config-surfaces-mf1'
+import { recordConfigChange, scriptActor, type ConfigActor } from '../lib/config-log'
+import { asChangeInput, type LoggedChangeInput } from '../lib/config-surfaces-mf1'
 import { assertProject, modeLine, parseScriptArgs } from '../lib/ops/market-first-args'
 import {
   isMissingObject, monthVideosFromExport, readConfigChanges, readExportFile, readMonthVideos, readProvenanceFile,
@@ -20,8 +20,11 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //
 // A LABEL, NEVER A DELETION. It writes `video_segments` rows (method 'rule',
 // rule_version 'segments_v1') and one `config_changes` row on the surface
-// 'segment'. Nothing is deleted and no month table is touched: September's main
-// rows are untouched, and every labelled video stays in every count.
+// 'segment', WITH NO NOTE (Heinrich, 27 Sep: "lets just not add those notes";
+// plan §8): the app titles the row by its surface, and no sentence explaining
+// the change is stored for a client to read. Nothing is deleted and no month
+// table is touched: September's main rows are untouched, and every labelled
+// video stays in every count.
 //
 // THE VIDEOS ADMITTED UNJUDGED. A gate verdict with source 'default' admitted a
 // video without judging it (a failed batch fell open; on staging 64 of
@@ -43,8 +46,21 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 
 const NAME = 'label-segments'
 const INSERT_CHUNK = 500
-export const SEGMENT_NOTE =
-  'We marked which videos are makers’ own projects and which are off-topic, so they can be grouped or set aside. Nothing was taken out of any count.'
+
+/** The one change row the labels are logged with: surface 'segment', field
+ *  segments_v1, and NO NOTE (27 Sep; the note constant this file held is gone,
+ *  so nothing can store or print it). lib/provenance/change-notes.test.ts
+ *  holds it to `note: null`. */
+export function segmentChangeRow(args: { clientId: string; actor: ConfigActor; rowsAffected: number }): LoggedChangeInput {
+  return { clientId: args.clientId, surface: 'segment', field: SEGMENT_RULE_VERSION, actor: args.actor, rowsAffected: args.rowsAffected, note: null }
+}
+
+/** The planned change row as the dry run prints it: "note: none" (the note in
+ *  quotes only if one ever came back, which run/mf-helper.mjs refuses). */
+export function segmentRowLine(row: Pick<LoggedChangeInput, 'note'>): string {
+  const note = row.note?.trim() ? `"${row.note.trim()}"` : 'none'
+  return `  new row: segment ${SEGMENT_RULE_VERSION}, written with the labels · note: ${note}`
+}
 
 const md5 = (s: string): string => createHash('md5').update(s).digest('hex')
 
@@ -140,12 +156,13 @@ async function main() {
     console.log(`  hand-check sheet (20 flagged, 20 unflagged September category videos, md5 order): ${args.values['hand-check']}`)
   }
 
-  // The change row, printed in the dry run too, so its note can be approved
-  // before the apply (as log-tracking-eras prints its own).
+  // The change row, printed in the dry run too (as log-tracking-eras prints
+  // its own), with "note: none": it is written without one.
+  const actorLabel = `scripts/${NAME}.ts --apply`
   const logged = changes.some((c) => (c.surface as string) === 'segment' && c.field === SEGMENT_RULE_VERSION)
   console.log(logged
     ? `  change row: segment ${SEGMENT_RULE_VERSION} is held; none written`
-    : `  new row: segment ${SEGMENT_RULE_VERSION}, written with the labels · "${SEGMENT_NOTE}"`)
+    : segmentRowLine(segmentChangeRow({ clientId: args.clientId, actor: scriptActor(actorLabel), rowsAffected: 0 })))
 
   if (!args.apply) {
     console.log(`read-only: nothing written · reads: ${pages.n} pages`)
@@ -162,7 +179,6 @@ async function main() {
     throw e
   }
   const heldIds = new Set(held.map((h) => h.video_id))
-  const actorLabel = `scripts/${NAME}.ts --apply`
   const fresh = [...labels.entries()].filter(([id]) => !heldIds.has(id))
   for (let i = 0; i < fresh.length; i += INSERT_CHUNK) {
     const { error } = await admin.from('video_segments').insert(fresh.slice(i, i + INSERT_CHUNK).map(([id, l]) => ({
@@ -172,10 +188,9 @@ async function main() {
     if (error) throw new Error(`${NAME}: labels not written after ${i} rows: ${error.message}`)
   }
   if (!logged && fresh.length > 0) {
-    const ok = await recordConfigChange(admin, asChangeInput({
-      clientId: args.clientId, surface: 'segment', field: SEGMENT_RULE_VERSION, actor: scriptActor(actorLabel),
-      rowsAffected: fresh.length, note: SEGMENT_NOTE,
-    }))
+    const ok = await recordConfigChange(admin, asChangeInput(segmentChangeRow({
+      clientId: args.clientId, actor: scriptActor(actorLabel), rowsAffected: fresh.length,
+    })))
     if (!ok) throw new Error(`${NAME}: the labels are written, but the change row is not (see the log above)`)
   }
   console.log(`APPLIED: ${fresh.length} labels written (${heldIds.size} already held), change row ${logged || fresh.length === 0 ? 'already held or not needed' : 'written'} · reads: ${pages.n} pages`)

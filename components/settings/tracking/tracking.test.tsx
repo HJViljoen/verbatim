@@ -583,6 +583,12 @@ describe('the save state', () => {
     expect(words).not.toContain('Broke:')
   })
 
+  it('with a note-less newest change (27 Sep: no notes on our own changes) says "Last save" and its date alone', () => {
+    const words = renderText(<LastSaveStrip state={saveState({ lastChange: change, affectsRecorded: true })} note={null} />)
+    expect(words).toContain('Last save 3 Sep')
+    expect(words).not.toMatch(/Last save 3 Sep:|undefined|null|""/)
+  })
+
   it('names what the save broke where the columns recorded it', () => {
     const words = renderText(<LastSaveStrip state={saveState({ lastChange: change, affectsRecorded: true })} />)
     expect(words).toContain('Broke: Poler’s months from Sep 2026')

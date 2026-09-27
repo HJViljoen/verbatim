@@ -31,6 +31,7 @@ import type { Subject } from '@/lib/subjects/types'
 import { unreadWords } from '@/lib/subjects/read-in'
 import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
+import { captionOurChanges, type CaptionRow } from '@/lib/pages/change-caveats'
 
 // The Subjects page's block fixtures (Phase 1 WP12).
 //
@@ -71,7 +72,7 @@ const subject = (over: Partial<Subject> = {}): Subject => ({
  *   pixel-identical to the live one but for one sentence, and proves nothing
  *   about how the page behaves when a rival was actually stopped.
  */
-function sidesAndSeries(retiredAt: string | null = null) {
+function sidesAndSeries(retiredAt: string | null = null, ours: readonly SeriesChange[] = []) {
   const denominators: DenominatorPoint[] = []
   const per = new Map<string, number>()
   const add = (month: string, audience: string, videos: number) => {
@@ -120,10 +121,12 @@ function sidesAndSeries(retiredAt: string | null = null) {
     const k = audience === INDUSTRY_AUDIENCE ? (m: string) => catK[m]
       : audience === CLIENT_AUDIENCE ? () => 26
         : () => 62
+    // `ours` are changes of ours, which reach every audience's months.
+    const changes = [...(audience === RIVAL ? stopped : []), ...ours]
     return buildSeries({
       axis: AXIS, audience, denominators, readings: readings(audience, k),
       objectId: subjectId, objectLabel: 'Durability',
-      ...(audience === RIVAL ? { changes: stopped } : {}),
+      ...(changes.length > 0 ? { changes } : {}),
     })
   }
 
@@ -559,6 +562,37 @@ export function retiredRivalFixture(): SubjectsData {
           axisNote: axisNote(sides, 100, series),
         }
       : null,
+  }
+}
+
+/** The gate fix as production stores it since 27 Sep (Heinrich: no
+ *  client-visible notes on our own changes): note NULL, reaching August and
+ *  September (`scripts/log-tracking-eras.ts`, the default-kept months). */
+export const NOTELESS_GATE_FIX: CaptionRow = {
+  surface: 'gate_rule' as CaptionRow['surface'],
+  field: 'relevance_gate',
+  note: null,
+  changed_at: '2026-09-25T16:18:47.000Z',
+  affects_months: '[2026-08-01,2026-10-01)',
+}
+
+/**
+ * The pane with a note-less change of ours on its months: every line built
+ * with the gate fix in its change log, as `loadMonthSeries` builds it, then
+ * captioned as `loadSubjectsPage` captions it (lib/pages/change-caveats.ts).
+ * `captioned: false` is the line as the reading layer alone words it ("What
+ * this workspace tracks changed, and it moved this month."), which is what
+ * the page drew before 27 Sep's fix.
+ */
+export function ourChangeFixture(opts: { captioned?: boolean; rows?: readonly CaptionRow[] } = {}): SubjectsData {
+  const base = subjectsFixture()
+  const rows = opts.rows ?? [NOTELESS_GATE_FIX]
+  const asSeries: SeriesChange[] = rows.map((c) => ({ changed_at: c.changed_at, surface: c.surface, note: c.note ?? null, months: c.affects_months ?? null }))
+  const { sides, series } = sidesAndSeries(null, asSeries)
+  const lines = opts.captioned === false ? series : series.map((s) => captionOurChanges(s, rows))
+  return {
+    ...base,
+    selected: base.selected ? { ...base.selected, sides, series: lines, chartSeries: lines } : null,
   }
 }
 

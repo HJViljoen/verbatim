@@ -90,16 +90,19 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
 
   it('says "read with …" once beside each group’s heading, never in every cell', () => {
     const t = read(list)
-    expect(t.match(/read with the 27 Sep update/g) ?? []).toHaveLength(2)
+    // Each heading once, and the aside's figure in the same words (wording
+    // read item 32): three in all, none in a cell.
+    expect(t.match(/read with the 27 Sep update/g) ?? []).toHaveLength(3)
     expect(t).toContain('What we search read with the 27 Sep update')
     expect(t).toContain('How we check, mark and file videos read with the 27 Sep update')
     expect(t).not.toContain('376 of 625')
     expect(t).toContain('182 of 654')
   })
 
-  it('prints the month’s one figure in the aside in the SettingsRecord artboard’s words (the 26 Sep ruling)', () => {
+  it('prints the month’s one figure in the aside in the SettingsRecord artboard’s words, in the one date form (the 26 Sep ruling; wording read item 32)', () => {
     const t = read(list)
-    expect(t).toContain('About half of September came from searches we added in September: 356 of 654, measured on 30 Sep.')
+    expect(t).toContain('About half of September came from searches we added in September: 356 of 654, read with the 27 Sep update.')
+    expect(t).not.toContain('measured on')
     expect(t).not.toContain('September videos came from searches we added in September, read with')
   })
 
@@ -113,6 +116,20 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     const attribution = f.view.groups[1].lines.find((l) => l.line.surface === 'attribution')!
     expect(attribution.caption).toBeNull()
     assertCopyContract(render(list))
+  })
+
+  it('captions a measured filing cell "filed the new way", never with the relevance check’s word (wording read item 29)', () => {
+    const g = recordFixture({ attribution: 41 })
+    const measured = <TheRecord view={g.view} />
+    const attribution = g.view.groups[1].lines.find((l) => l.line.surface === 'attribution')!
+    expect(attribution.cells.map((c) => c.state)).toEqual(['none', 'measured'])
+    expect(attribution.caption).toBe('filed the new way')
+    const t = read(measured)
+    expect(t).toContain('41 of 654 filed the new way')
+    expect(t).not.toContain('filed by the new check')
+    // "check" on this tab stays the relevance check's word.
+    expect(t).toContain('65 of 654 had been let in unchecked')
+    assertCopyContract(render(measured))
   })
 
   it('prints a measured zero as "none", an unmeasured month as "not measured yet", and nothing for the capped update, which moves no video', () => {
@@ -162,6 +179,23 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     const t = read(<TheRecord view={recordFixture({ measured: false }).view} />)
     expect(t).not.toMatch(/\b0 of\b/)
     expect(t).not.toContain('read with the')
+  })
+
+  it('with no note on our own changes (Heinrich, 27 Sep) prints each title alone: no description, no quotes, no "undefined"', () => {
+    const view = recordFixture({ notes: false }).view
+    const node = <TheRecord view={view} />
+    const t = read(node)
+    const check = view.groups.find((g) => g.key === 'check')!
+    expect(check.lines.map((l) => [l.line.words, l.line.detail ?? null])).toEqual([
+      ['How we file a video to a brand', null],
+      ['How we check relevance', null],
+      ['A change to how we read', null],
+    ])
+    for (const gone of ['We corrected', 'We changed how', 'spending cap', 'undefined', 'null', '""', '“”', 'relevance_gate', 'attribution_v3']) expect(t).not.toContain(gone)
+    // The measures stay: the gate fix's reach and what it stops.
+    expect(t).toContain('65 of 654 had been let in unchecked')
+    expect(t).toContain('Stops August against September, for themes')
+    assertCopyContract(render(node))
   })
 
   it('says so plainly when nothing is on record', () => {

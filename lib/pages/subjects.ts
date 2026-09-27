@@ -68,6 +68,7 @@ import { marketKindLabel, marketLevel } from './overview-market/kinds'
 import { accountKey } from './overview-market/voices'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { captionOurChanges } from './change-caveats'
 
 // Subjects — "how are we seen on this subject?" (Phase 1 WP12, design §3
 // SU1–SU3, the mock's Subjects.dc.html).
@@ -2206,12 +2207,18 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     // for a subject nothing has read. With no series the block says "This
     // subject has no stored months on this axis yet."
     const neverRead = chartAxis.every((m) => readIn(subject.id, m) !== 'read')
-    const series = neverRead ? [] : sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged)
+    // A NOTE-LESS CHANGE OF OURS SAYS ITS TITLE (Heinrich, 27 Sep): the
+    // chart's dated rule and its hover read "We changed how we check relevance
+    // in September", never the reading layer's "it moved this month"
+    // (lib/pages/change-caveats.ts).
+    const captioned = (line: MonthSeries): MonthSeries => captionOurChanges(line, changes)
+    const series = neverRead ? [] : sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged).map(captioned)
     const chartSeries = neverRead ? [] : sides
       .map((side) => chartSeriesFor(subject.id, side.audience))
       .filter((s): s is MonthSeries => s != null)
       .map(onChart)
       .map(judged)
+      .map(captioned)
 
     // THE MEMBERS WITH WHAT THE MONTH RULE READS (WP2.2), in place of the
     // member-id read: the ids feed the voices and the questions as before, and

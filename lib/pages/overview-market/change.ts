@@ -351,18 +351,28 @@ export function measuredSearchSentence(block: ChangeBlock): { body: string; figu
   const added = measuredAddedOnly(block)
   if (!added || !addedOnlyAtLine(added, 'refuse')) return null
   const month = longMonth(pair.month)
-  const read = block.readWith ? `, read with the ${shortDate(block.readWith)} update` : ''
   return {
-    body: `Not a change we can stand behind yet: ${added.word} of ${month} came from searches we added in ${month} ([[${CHANGE_NEW}]] of [[${CHANGE_OF}]]${read}).`,
+    body: `Not a change we can stand behind yet: ${added.word} of ${month} came from searches we added in ${month} ([[${CHANGE_NEW}]] of [[${CHANGE_OF}]]${readWithClause(block)}).`,
     figures: addedOnlyFigures(month, added),
   }
+}
+
+/** ", read with the 20 Sep update": the update the pair's row read through
+ *  (`block.readWith`), or nothing where that update is unknown. The one date
+ *  form of the figure on every surface. */
+function readWithClause(block: ChangeBlock): string {
+  return block.readWith ? `, read with the ${shortDate(block.readWith)} update` : ''
 }
 
 /**
  * Settings › What we changed's form of the same sentence (the approved
  * `SettingsRecord` artboard): "About half of September came from searches we
- * added in September: 356 of 654, measured on 30 Sep." Dated by when the row
- * was measured (`computedAt`). The same gate as `measuredSearchSentence`.
+ * added in September: 356 of 654, read with the 20 Sep update." Dated as the
+ * front page dates it, by the update the row read through, never by when the
+ * row was computed (deploy 2 wording read item 32, Heinrich 27 Sep: "measured
+ * on 26 Sep" beside a heading's "read with the 20 Sep update" was two dates
+ * for one figure, and after a re-run it would read "measured on 5 Oct" beside
+ * "read with the 4 Oct update"). The same gate as `measuredSearchSentence`.
  */
 export function addedOnlyRecordSentence(block: ChangeBlock): { body: string; figures: FigureTable } | null {
   const lead = measuredSearchSentence(block)
@@ -370,10 +380,9 @@ export function addedOnlyRecordSentence(block: ChangeBlock): { body: string; fig
   const pair = block.pair
   if (!lead || !added || !pair) return null
   const month = longMonth(pair.month)
-  const at = pair.row?.computedAt && !Number.isNaN(Date.parse(pair.row.computedAt)) ? `, measured on ${shortDate(pair.row.computedAt)}` : ''
   const word = `${added.word.charAt(0).toUpperCase()}${added.word.slice(1)}`
   return {
-    body: `${word} of ${month} came from searches we added in ${month}: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]]${at}.`,
+    body: `${word} of ${month} came from searches we added in ${month}: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]]${readWithClause(block)}.`,
     figures: addedOnlyFigures(month, added),
   }
 }

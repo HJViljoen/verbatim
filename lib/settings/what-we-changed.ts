@@ -56,18 +56,46 @@ const SURFACE_SENTENCE: Record<string, string> = {
 }
 
 /** Surfaces whose stored note is client words: the rows market-first's own
- *  scripts write (WP1.4), whose notes Heinrich approves before the apply.
- *  Every older row's note is the reconstruction's operator prose (GC F9) and
- *  is never printed here. */
+ *  scripts write (WP1.4). Since 27 Sep they are written with no note
+ *  (Heinrich: no client-visible notes on our own changes), so each is titled
+ *  by its surface alone; a note prints only where a row still holds one
+ *  (staging's 26 Sep rehearsal rows). Every older row's note is the
+ *  reconstruction's operator prose (GC F9) and is never printed here. */
 const CLIENT_NOTE_SURFACES: ReadonlySet<string> = new Set(['gate_rule', 'attribution', 'segment'])
 
 /** `other` rows whose stored note is client words: the capped update
- *  `log-tracking-eras --capped-run` writes (field 'gather_capped', WP1.4's
- *  CAPPED_NOTE, "An update gathered less than usual because a spending cap
- *  was reached.", approved with the other notes). Every other `other` row (an
- *  attention-panel freeze, an operator's edit) carries operator prose and is
- *  never printed here. */
+ *  `log-tracking-eras --capped-run` writes (field 'gather_capped'; with no
+ *  note since 27 Sep, when it reads "A change to how we read"). Every other
+ *  `other` row (an attention-panel freeze, an operator's edit) carries
+ *  operator prose and is never printed here. */
 const CLIENT_NOTE_OTHER_FIELDS: ReadonlySet<string> = new Set(['gather_capped'])
+
+/** The title this list gives a change of ours that carries no note (the
+ *  gate fix, attribution v3, the segment row, a capped update): the words
+ *  `changeWords` falls through to for such a row. Null for any other row. */
+export function ourChangeTitle(row: Pick<ConfigChange, 'surface' | 'field'>): string | null {
+  if (CLIENT_NOTE_SURFACES.has(row.surface)) return SURFACE_SENTENCE[row.surface] ?? null
+  if (row.surface === 'other' && CLIENT_NOTE_OTHER_FIELDS.has(row.field ?? '')) return SURFACE_SENTENCE.other
+  return null
+}
+
+/**
+ * The caveat a chart's month carries for a change of ours stored with no note
+ * (Heinrich, 27 Sep: no client-visible notes on our own changes): the title
+ * this list gives it, as a dated fact, "We changed how we check relevance in
+ * September". The month is when we made the change, not the month it
+ * caveats, so a change that reached August and September says the same words
+ * on both and the chart draws one rule. No direction word and no claim that
+ * anything moved: the reading layer's line for a note-less change ("What this
+ * workspace tracks changed, and it moved this month.") claimed both. Null for
+ * any other row, which keeps that line.
+ */
+export function ourChangeCaveat(row: Pick<ConfigChange, 'surface' | 'field' | 'changed_at'>): string | null {
+  const title = ourChangeTitle(row)
+  if (!title) return null
+  const what = title.startsWith('A change to ') ? title.slice('A change to '.length) : `${title.charAt(0).toLowerCase()}${title.slice(1)}`
+  return `We changed ${what} in ${longMonth(row.changed_at)}`
+}
 
 const listOf = (side: unknown): string[] =>
   Array.isArray(side) ? side.filter((v): v is string => typeof v === 'string') : []
@@ -229,7 +257,8 @@ function outAndIn(added: number, removed: number, one: string, many: string, gon
 export function changeWords(change: OurChange, rows: readonly ConfigChange[], gathers: CommunityGathers = null): string {
   // A market-first change with a client-words note is titled by its surface
   // (the approved preview: "How we check relevance" in weight, the note under
-  // it); its note is `changeDetail`'s. Without a note, the note stands alone.
+  // it); its note is `changeDetail`'s. Without a note (every such row
+  // written since 27 Sep), the title stands alone.
   if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return SURFACE_SENTENCE[change.surface] ?? change.note.trim()
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
@@ -562,7 +591,8 @@ export interface SearchAside {
   /** The month's one figure in the `SettingsRecord` artboard's words, as the
    *  26 Sep ruling has Settings print it (`addedOnlyRecordSentence`): "About
    *  half of September came from searches we added in September: 356 of 654,
-   *  measured on 26 Sep." Its figures are tokens. Null where the front page
+   *  read with the 20 Sep update." (wording read item 32: the one date form,
+   *  never "measured on"). Its figures are tokens. Null where the front page
    *  prints no figure either. */
   figure: { body: string; figures: FigureTable } | null
   /** Since when the searches have run unchanged: the first update after the
@@ -594,11 +624,13 @@ const isGatherEvent = (change: OurChange | undefined, rows: readonly ConfigChang
  *  prints under the figure. Each is what measure-comparability counts for that
  *  surface: the relevance fix, the month's videos a gate verdict let in
  *  unjudged (the artboard's "had been let in unchecked"); attribution v3, the
- *  month's videos first stored after it, whose filing it decided. A surface
- *  nothing measures has no caption. */
+ *  month's videos first stored after it, whose filing it decided ("filed the
+ *  new way": on this tab "check" is the relevance check's word, deploy 2
+ *  wording read item 29, Heinrich 27 Sep). A surface nothing measures has no
+ *  caption. */
 const REACH_CAPTION: Partial<Record<string, string>> = {
   gate_rule: 'had been let in unchecked',
-  attribution: 'filed by the new check',
+  attribution: 'filed the new way',
 }
 
 /**
@@ -727,9 +759,9 @@ export function recordView(input: {
   }
   const groups: RecordGroup[] = []
   if (searchLines.length > 0) {
-    // The aside's sentence is dated by when the figure was measured (the
-    // artboard's "measured on"), so the cells' update is said beside the
-    // group's heading, as for the other group.
+    // The cells' update is said once beside the group's heading, as for the
+    // other group; the aside's sentence names the update its figure was read
+    // with in the same words (wording read item 32).
     groups.push({ key: 'search', title: RECORD_GROUP_TITLE.search, lines: searchLines, readWith: oneUpdate(searchLines) })
   }
   if (grouped.check.length > 0) {

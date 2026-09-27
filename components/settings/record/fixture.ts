@@ -368,10 +368,10 @@ const WWC_MORE_ROWS: ConfigChange[] = [
   { ...wwcChange({ id: 'wwc-rivals-0917', at: '2026-09-17T16:02:56.000Z', surface: 'rivals', before: ['Rareform'], after: ['Rareform', 'Freedom of Movement', 'Old School', 'Patagonia', 'The North Face'] }), field: 'competitor_names' },
   { ...wwcChange({ id: 'wwc-capped', at: '2026-09-20T04:18:34.000Z', surface: 'other', before: null, after: null }), field: 'gather_capped', run_id: 'run-20sep', note: 'An update gathered less than usual because a spending cap was reached.' },
   { ...wwcChange({ id: 'wwc-gate-fix', at: '2026-09-26T12:00:00.000Z', surface: 'gate_rule' as never, before: null, after: null }), field: 'relevance_gate', note: 'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts.' },
-  // WP1.4's ATTRIBUTION_NOTE as it will be stored (mf/wp1-4 993d31d0): it
-  // read "We improved how we tell…, so fewer posts are filed under the wrong
-  // brand.", a direction word and a fall nothing measures. Staging's rehearsal
-  // row still holds that old text; Heinrich reads this one on Mon 28.
+  // The attribution note as WP1.4 held it until 27 Sep (mf/wp1-4 993d31d0);
+  // staging's rehearsal row still holds the older "We improved how we tell…"
+  // text. Since 27 Sep the rows are written with no note: `recordFixture({
+  // notes: false })` is the record production holds.
   { ...wwcChange({ id: 'wwc-attribution', at: '2026-09-26T12:00:00.000Z', surface: 'attribution' as never, before: null, after: null }), field: 'attribution_v3',
     note: 'We changed how we tell which brand a post is about.' },
 ]
@@ -430,10 +430,12 @@ export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
  * the capped update (a gather flag, not a change of ours: the page's judge,
  * lib/reading/gather-flags.ts), the pair row above, and the 27 Sep update.
  */
-export function recordFixture(opts: { measured?: boolean; judged?: boolean } = {}) {
+export function recordFixture(opts: { measured?: boolean; judged?: boolean; notes?: boolean; attribution?: number } = {}) {
   const measured = opts.measured ?? true
   const base = whatWeChangedFixture({ measured })
-  const rows = [...WWC_ROWS, ...WWC_MORE_ROWS]
+  // `notes: false` is the record production holds: Heinrich, 27 Sep, "lets
+  // just not add those notes", so our own changes' rows carry note NULL.
+  const rows = [...WWC_ROWS, ...WWC_MORE_ROWS].map((r) => (opts.notes === false ? { ...r, note: null } : r))
   const changes = changesFromLog(rows)
   const judged = changesFromLog(rows.filter((r) => r.field !== 'gather_capped'))
   const row = base.block.pair?.row ?? null
@@ -446,7 +448,9 @@ export function recordFixture(opts: { measured?: boolean; judged?: boolean } = {
         { changeId: 'wwc-gate-fix', month: '2026-08-01', population: 'category', touched: 0, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-gate-fix', month: '2026-09-01', population: 'category', touched: 64, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-attribution', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
-        { changeId: 'wwc-attribution', month: '2026-09-01', population: 'market', touched: 0, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        // Staging measures none (its stored videos predate attribution v3);
+        // `attribution` is September's count where production measures one.
+        { changeId: 'wwc-attribution', month: '2026-09-01', population: 'market', touched: opts.attribution ?? 0, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
       ]
     : []
   const lines = ledgerLines({ changes, rows, reach, runFinish })

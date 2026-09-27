@@ -45,6 +45,7 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId, pickThemedRunId, type ThemedRunRow } from './themed-run'
+import { citationsUntranslated } from './evidence-untranslated'
 import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
 import type { FormatMatrix } from '../reading/formats'
 import type { SideReading } from './overview'
@@ -1406,12 +1407,17 @@ interface VideoRow {
   hook_style: string | null
   classified_type: string | null
   // The post's own identity, for §5's rival table. `videos` has no title
-  // column, so this is what a post IS here.
+  // column, so this is what a post IS here. Its caption and link are not on
+  // this row: they are read for the posts the table weighs (`loadPostText`).
   account_name: string | null
-  caption: string | null
   upload_date: string | null
-  video_url: string | null
   views: number | null
+}
+
+/** The two columns of a rival post that only the posts §4 weighs need. */
+interface PostText {
+  caption: string | null
+  video_url: string | null
 }
 
 /**
@@ -1468,6 +1474,24 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   const monthStatus = freezeStateFor(month, readingAt)
   const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
 
+  // ── two sections' reads, started beside wave 2 ─────────────────────────
+  // §2's reply queue and §5's citations are the two longest chains on the
+  // page (the corpus's current insights, their evidence, the comments behind
+  // it, the videos those sit under: four reads deep, three seconds each on
+  // staging), and neither needs wave 2 to start. The reply queue wants this
+  // update's videos only for the posters' roles, at its last step, so it takes
+  // them as a promise; §5 wants the window's video count and the subjects only
+  // to label its block, so its citations start here and the block is built in
+  // the sections' wave below. Waiting for wave 2 made the page as long as wave
+  // 2 plus the longer of the two (Sealand on staging, 27 Sep: 4.4 s; started
+  // here, 3.8 s).
+  const videosAhead = loadUpdateVideos(supabase, clientId, anchor.id)
+  const repliesAhead = buildReplies({ supabase, clientId, runId: anchor.id, window, videos: videosAhead })
+  const salesCitationsAhead = window ? loadSalesCitations(supabase, clientId, window) : undefined
+  // Awaited in the sections' wave; this only keeps a failure that lands before
+  // then from being an unhandled rejection. That wave still rejects with it.
+  salesCitationsAhead?.catch(() => {})
+
   // ── wave 2: the readings ───────────────────────────────────────────────
   const [check, flags, monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects, series, judge] =
     await Promise.all([
@@ -1482,7 +1506,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       // counts. Identical to the call above whenever the window sits inside one
       // month, and the only honest answer when it does not.
       window && window.from < month ? loadWindowReading(reading.client, clientId, { from: month, to: window.to }) : null,
-      loadUpdateVideos(supabase, clientId, anchor.id),
+      videosAhead,
       fetchThemedRunId(supabase, clientId, runningIds, 'week'),
       loadSubjects(supabase, clientId),
       // THE ONE SERIES THIS PAGE IS ALLOWED, and it is a series of UPDATES —
@@ -1548,7 +1572,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       console.error(`[pages] week.weeks: ${(error as { message?: string })?.message ?? String(error)}; not drawn`)
       return null
     })
-  const [unusual, subjectsBlock, risingRead, cameIn, replies, sales] = await Promise.all([
+  const [unusual, subjectsBlock, risingRead, cameIn, replies, sales, ownPublished] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
       supabase, clientId, check, flags, baseline, month, series,
@@ -1586,20 +1610,23 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
     }),
     // ── §2 · worth a reply, and §8 · flagged for awareness ───────────────
-    // In the wave with the others: it reads the corpus's current insights,
+    // Started beside wave 2 (above): it reads the corpus's current insights,
     // their evidence and the comments behind them, and it takes no output of
     // any section above it.
-    buildReplies({ supabase, clientId, runId: anchor.id, window, videos }),
+    repliesAhead,
     // ── §5 · for sales ───────────────────────────────────────────────────
-    buildSales({ supabase, clientId, window, windowVideos, subjects }),
+    buildSales({ supabase, clientId, window, windowVideos, subjects, citations: salesCitationsAhead }),
+    // ── §6's own side ────────────────────────────────────────────────────
+    // ONE NARROW READ, IN THE WAVE. The client's own posts in the month are
+    // tens of rows on every tenant we have, and §6 is the only section that
+    // wants them; a failure here leaves the pooled reading intact and the
+    // split absent, which is the honest degradation. It needs the month and
+    // nothing else, so it no longer waits for the sections to finish before
+    // it starts (one round trip at the end of every load).
+    loadOwnPublishedVideos(supabase, clientId, month).catch(() => null),
   ])
 
   // ── §6 · what worked ───────────────────────────────────────────────────
-  // §6'S OWN SIDE — ONE NARROW READ, AFTER THE WAVE. The client's own posts in
-  // the month are tens of rows on every tenant we have, and §6 is the only
-  // section that wants them; a failure here leaves the pooled reading intact
-  // and the split absent, which is the honest degradation.
-  const ownPublished = await loadOwnPublishedVideos(supabase, clientId, month).catch(() => null)
   const worked = buildWorked(videos, ownPublished ? { month, brand, videos: ownPublished } : null)
 
   const coverage: CoverageBlock = {
@@ -1684,7 +1711,10 @@ async function buildReplies(input: {
   clientId: string
   runId: string
   window: WeekWindow | null
-  videos: readonly VideoRow[]
+  /** This update's videos, for the posters' roles — a promise, because the
+   *  queue starts reading before wave 2 has them and needs them only at the
+   *  end (`loadWeek`). */
+  videos: PromiseLike<readonly VideoRow[]>
 }): Promise<RepliesBlock> {
   const { supabase, clientId, runId, window } = input
   const empty: RepliesBlock = { rows: [], counts: [], total: 0, flagged: [], window, unread: null }
@@ -1718,7 +1748,7 @@ async function buildReplies(input: {
         .filter((h): h is string => typeof h === 'string' && h.length > 0)
         .map(handleKey),
     )
-    const roles = roleByAccount(input.videos.map((v) => ({
+    const roles = roleByAccount((await input.videos).map((v) => ({
       // `VoiceVideo` takes the columns non-null; a video with no account is a
       // video no role can be read off, and `roleByAccount` drops it itself.
       account_name: v.account_name ?? '',
@@ -2288,11 +2318,6 @@ async function buildCameIn(input: {
   const analysedTotal = audienceRows.reduce((t, r) => t + r.analysed, 0)
   for (const rowOut of audienceRows) rowOut.share = { k: rowOut.analysed, n: analysedTotal }
 
-  // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
-  // "notable rival posts" does not say which. Both are printed, named: Össur
-  // has zero competitor-owned videos in production, so the first is empty on
-  // the paying tenant and would have read as "the rivals posted nothing".
-  const everOwned = await loadOwnedRivalAudiences(supabase, clientId)
   // THE POSTS THEMSELVES, ACROSS EVERY RIVAL, COUNTED IN ONE PASS. Each named
   // post costs one HEAD count of the comments dated under it inside the window,
   // so the candidates are picked first (by reach, which is the only "notable"
@@ -2308,7 +2333,25 @@ async function buildCameIn(input: {
         .map((v) => ({ audience, video: v }))
     })
     : []
-  const postComments = await windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window)
+  // THIS SECTION'S READS, TOGETHER. None of the five takes another's answer —
+  // the candidates above are arithmetic on wave 2's rows — and they were
+  // awaited one after another, which made §4 the page's long pole: on staging
+  // (27 Sep) the owned-rival read, the comment counts, the new themes and the
+  // subject quotes ran end to end for 4.6 s behind a wave that had already
+  // finished everything else.
+  const [everOwned, postComments, postText, newThemes, subjectQuotes] = await Promise.all([
+    // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
+    // "notable rival posts" does not say which. Both are printed, named: Össur
+    // has zero competitor-owned videos in production, so the first is empty on
+    // the paying tenant and would have read as "the rivals posted nothing".
+    loadOwnedRivalAudiences(supabase, clientId),
+    windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window),
+    loadPostText(supabase, clientId, candidates.map((c) => c.video.id)),
+    loadNewThemes(supabase, clientId, runId, month, input.regime),
+    window
+      ? loadSubjectQuotes(supabase, clientId, input.subjects, window)
+      : { shown: [], total: null, unread: QUOTES_NO_WINDOW },
+  ])
   const weighedBy = new Map<string, number>()
   const postsBy = new Map<string, RivalPost[]>()
   for (const c of candidates) {
@@ -2318,8 +2361,8 @@ async function buildCameIn(input: {
       platform: c.video.platform,
       account: c.video.account_name ?? '',
       postedOn: c.video.upload_date,
-      caption: postCaption(c.video.caption),
-      href: c.video.video_url,
+      caption: postCaption(postText.get(c.video.id)?.caption ?? null),
+      href: postText.get(c.video.id)?.video_url ?? null,
       comments: postComments.get(`${c.video.platform}::${c.video.video_id}`) ?? 0,
     })
     postsBy.set(c.audience, list)
@@ -2369,11 +2412,6 @@ async function buildCameIn(input: {
   // ever captured has nothing to read. Settings › Tracking lists them.
   .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0))
   .map(({ retired: _retired, ...r }) => r)
-
-  const newThemes = await loadNewThemes(supabase, clientId, runId, month, input.regime)
-  const subjectQuotes = window
-    ? await loadSubjectQuotes(supabase, clientId, input.subjects, window)
-    : { shown: [], total: null, unread: QUOTES_NO_WINDOW }
 
   return {
     window,
@@ -2440,7 +2478,9 @@ export async function loadSubjectQuotes(
   const subjectOf = new Map<string, string>()
   for (const m of members) if (!subjectOf.has(m.audience_insight_id)) subjectOf.set(m.audience_insight_id, m.subject_id)
 
-  const citations = await fetchQuoteCitationsByAudience(supabase, [...subjectOf.keys()])
+  // WITHOUT THE ENGLISH, WHICH IS READ FOR THE QUOTES SHOWN (below): every
+  // subject member's evidence is read to find the few written in the window.
+  const citations = await citationsUntranslated(supabase, [...subjectOf.keys()])
   const pool: { subject: string; citation: QuoteCitation }[] = []
   for (const [insightId, list] of citations) {
     const subjectId = subjectOf.get(insightId)
@@ -2476,7 +2516,8 @@ export async function loadSubjectQuotes(
   const noise = await noiseCommentsOf(supabase, clientId, dated.filter((c) => okIds.has(c.id)))
   const kept = skipNoise(dayOk, (p) => p.citation.commentId, noise)
   const shown = kept.slice(0, NEW_QUOTES_SHOWN)
-  const cited = await citeQuotes(supabase, clientId, shown.map((s) => s.citation))
+  const translations = await readTranslations(supabase, shown.map((s) => s.citation.quote))
+  const cited = await citeQuotes(supabase, clientId, shown.map((s) => ({ ...s.citation, ...readingOf(translations, s.citation.quote) })))
   return {
     shown: cited.map((q, i) => ({ subject: shown[i].subject, ...q })),
     total: kept.length,
@@ -2505,6 +2546,11 @@ export async function buildSales(input: {
   window: WeekWindow | null
   windowVideos: number | null
   subjects: Subject[] | null
+  /** The citations read, where the caller started it early: This week starts
+   *  it beside its wave 2, before `windowVideos` and `subjects` (which only
+   *  label this block) are in. The weekly report passes none and it is read
+   *  here. */
+  citations?: Promise<SalesCitation[] | null>
 }): Promise<ForSalesData> {
   const { supabase, clientId, window } = input
   // GROUPED BY THEME UNTIL SUBJECTS EXIST, AND THE BLOCK SAYS SO. A heading a
@@ -2527,7 +2573,7 @@ export async function buildSales(input: {
   }
   if (!window) return { ...base, unread: SALES_UNREAD_NO_WINDOW }
 
-  const cited = await loadSalesCitations(supabase, clientId, window)
+  const cited = await (input.citations ?? loadSalesCitations(supabase, clientId, window))
   if (cited == null) return base
 
   // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7). Only the
@@ -2881,15 +2927,37 @@ async function readSubjectWindow(
 }
 
 /** Every video of this tenant this update touched, either as its discoverer or
- *  as its analyser. The two are different sets and §4 prints both. */
+ *  as its analyser. The two are different sets and §4 prints both.
+ *
+ *  NO CAPTION AND NO LINK ON THIS READ. It is every row an update touched
+ *  (Sealand's 20 Sep update on staging: 1,565 rows, two pages), and the page
+ *  counts them; the only rows whose caption and link are ever printed are the
+ *  handful of rival posts §4 weighs (`RIVAL_POSTS_CONSIDERED` per rival), and
+ *  those read theirs by id (`loadPostText`). The caption was nearly two thirds
+ *  of this read's 1.9 MB, and the read was the long pole of the page's second
+ *  wave: on staging (27 Sep) its two pages took 3.2 s and 1.7 s with the
+ *  caption, while the rest of the wave was done in about a second. */
 async function loadUpdateVideos(supabase: SupabaseClient, clientId: string, runId: string): Promise<VideoRow[]> {
   return selectAll<VideoRow>(() =>
     supabase.from('videos')
-      .select('id, platform, video_id, run_id, analyzed_run_id, is_client, is_competitor, competitor_name, source, engagement_rate, hook_style, classified_type, account_name, caption, upload_date, video_url, views')
+      .select('id, platform, video_id, run_id, analyzed_run_id, is_client, is_competitor, competitor_name, source, engagement_rate, hook_style, classified_type, account_name, upload_date, views')
       .eq('client_id', clientId)
       .or(`run_id.eq.${runId},analyzed_run_id.eq.${runId}`)
       .order('id', { ascending: true }),
   )
+}
+
+/** The caption and link of the rival posts §4 weighs, by video row id. Tens of
+ *  ids (six per tracked rival), so one chunk; a failure throws, as the read it
+ *  was split from did. */
+async function loadPostText(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, PostText>> {
+  if (ids.length === 0) return new Map()
+  const held = await inChunks<PostText & { id: string }>(ids, (part) => () =>
+    supabase.from('videos').select('id, caption, video_url')
+      .eq('client_id', clientId).in('id', part)
+      .order('id', { ascending: true }),
+  )
+  return new Map(held.map((v) => [v.id, { caption: v.caption, video_url: v.video_url }]))
 }
 
 /**
@@ -3208,7 +3276,8 @@ async function loadSalesCitations(
   if (insights.length === 0) return []
   const byInsight = new Map(insights.map((i) => [i.id, i]))
 
-  const citations = await fetchQuoteCitationsByAudience(supabase, insights.map((i) => i.id))
+  // WITHOUT THE ENGLISH, WHICH IS READ FOR THE WINDOW'S CITATIONS (below).
+  const citations = await citationsUntranslated(supabase, insights.map((i) => i.id))
   const citedComments = new Set<string>()
   for (const list of citations.values()) for (const c of list) if (c.commentId) citedComments.add(c.commentId)
   if (citedComments.size === 0) return []
@@ -3225,15 +3294,22 @@ async function loadSalesCitations(
   if (comments.length === 0) return []
   const byComment = new Map(comments.map((c) => [c.id, c]))
 
-  const videos = await inChunks<{ id: string; platform: string; video_id: string; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }>(
-    comments.map((c) => c.video_id),
-    (part) => () =>
-      supabase.from('videos')
-        .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
-        .eq('client_id', clientId)
-        .in('video_id', part)
-        .order('id', { ascending: true }),
-  )
+  // The English of the citations the window kept, beside the videos they sat
+  // under: the two reads take the comments' answer and not each other's.
+  const inWindow: string[] = []
+  for (const list of citations.values()) for (const c of list) if (c.commentId && byComment.has(c.commentId)) inWindow.push(c.quote)
+  const [videos, translations] = await Promise.all([
+    inChunks<{ id: string; platform: string; video_id: string; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }>(
+      comments.map((c) => c.video_id),
+      (part) => () =>
+        supabase.from('videos')
+          .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
+          .eq('client_id', clientId)
+          .in('video_id', part)
+          .order('id', { ascending: true }),
+    ),
+    readTranslations(supabase, inWindow),
+  ])
   const videoByKey = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v]))
 
   const out: SalesCitation[] = []
@@ -3247,6 +3323,7 @@ async function loadSalesCitations(
       if (!video) continue
       const text = cleanQuote(c.quote)
       if (!text) continue
+      const reading = readingOf(translations, c.quote)
       out.push({
         category: insight.category,
         themeId: insight.theme ?? insightId,
@@ -3260,8 +3337,8 @@ async function loadSalesCitations(
         commentUuid: comment.id,
         evidenceId: c.evidenceId,
         quote: text,
-        lang: c.lang ?? null,
-        english: c.english ?? null,
+        lang: reading.lang ?? null,
+        english: reading.english ?? null,
         platform: comment.platform,
         commentDate: comment.comment_date,
         href: citationLink(comment.platform, video.video_url ?? null, comment.comment_id).href,

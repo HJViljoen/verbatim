@@ -6,7 +6,7 @@ import { currentTopLineage, recommendationOrder, recUpdateOf, recUpdateTimes } f
 import { fmtInt, monthName, shortDate } from '../format'
 import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
-import { cleanQuote, createCitedQuotePicker, fetchInsightsByIds, fetchQuotesByAudience, type ThemeBucketRow } from '../quotes'
+import { cleanQuote, createCitedQuotePicker, fetchInsightsByIds, readingOf, readTranslations, type QuoteRow, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { methodLines, type MethodLines } from '../reading/method'
 import { PLAN_EMPTY, loadPlanChecks, type PlanCheckCard } from '../ask/plan-cards'
@@ -33,6 +33,7 @@ import type { MoveCandidate, MoveReading } from '../reading/moves'
 import { row } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { quotesUntranslated } from './evidence-untranslated'
 
 // Market — the decision surface (Phase 1 WP14, design §3 MK1-MK7, item 42's
 // second half).
@@ -931,6 +932,29 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     return [] as PlanCheckCard[]
   })
 
+  // ── MK4's card and readings, started here and awaited below ───────────
+  // Everything they take is in hand now: the moves, the subjects and the
+  // registry labels off the wave above, and the month-pair judge. They were
+  // awaited after MK1 and MK2's evidence chain (the older insights, the cited
+  // insights, the month read, the quotes), which they take nothing from, and
+  // then made four sequential reads of their own: 0.9 s at the end of the page
+  // on staging (27 Sep, Sealand). The catch only keeps a failure that
+  // lands before the await from being an unhandled rejection; the await
+  // still rejects with it.
+  const subjectsActive = (subjects ?? []).filter((x) => x.status === 'active')
+  const extrasAhead = judgeAhead.then((pair) => loadMovesExtras({
+    supabase,
+    reading,
+    clientId,
+    month,
+    moves,
+    subjectNames: new Map(subjectsActive.map((x) => [x.id, x.name])),
+    subjectCalibrations: new Map(subjectsActive.map((x) => [x.id, subjectCalibration(x)])),
+    themeLabels,
+    pair,
+  }))
+  extrasAhead.catch(() => {})
+
   // ── the ledger's rows, decided BEFORE the evidence is fetched ──────────
   //
   // THE ORDER IS THE POINT. MK2's rows are pure (`buildAdviceRows`,
@@ -1117,17 +1141,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // composition here would be a second way to count one month. This surface
   // holds no verdicts of its own, so it passes no `movementFor` and the helper
   // bands the matched subject's own two months with `monthChange`.
-  const extras = await loadMovesExtras({
-    supabase,
-    reading,
-    clientId,
-    month,
-    moves,
-    subjectNames: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, x.name])),
-    subjectCalibrations: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, subjectCalibration(x)])),
-    themeLabels,
-    pair,
-  })
+  const extras = await extrasAhead
   const movesBlock: MovesBlock = {
     rows: moveRows,
     masthead: MOVES_MASTHEAD,
@@ -1501,6 +1515,10 @@ function readAfterwards(
  * is one another row could have been vouched by. Pinned in
  * `market-surface.test.ts` against the picker itself, because it rests on the
  * picker's order and not on a comment.
+ *
+ * `heroEvidence` below reads the English only for the rows a hero can match,
+ * and that is correct only while this is zero: raise it and the heuristic
+ * path scores every row by its reading, so `heroEvidence` has to read them all.
  */
 const HERO_ONLY = 0
 
@@ -1533,9 +1551,9 @@ async function attachQuotes(
   const ids = [...new Set(rows.filter((r) => heroOf(r).length > 0).flatMap(audienceIdsFor))]
   if (ids.length === 0) return [...rows]
 
-  const byAudience = await fetchQuotesByAudience(supabase, ids).catch((error: unknown) => {
+  const byAudience = await heroEvidence(supabase, ids, rows.map(heroOf)).catch((error: unknown) => {
     console.error(`[pages] market-surface.adviceQuotes: ${error instanceof Error ? error.message : String(error)}`)
-    return new Map()
+    return new Map<string, QuoteRow[]>()
   })
   const pick = createCitedQuotePicker(byAudience, themeSlugById)
   return rows.map((r) => {
@@ -1550,6 +1568,41 @@ async function attachQuotes(
     const vouched = picked != null && cleanQuote(picked.text).toLowerCase() === cleanQuote(hero).toLowerCase()
     return { ...r, quote: vouched ? picked : null }
   })
+}
+
+/**
+ * The evidence behind the drawn rows, with the English read ONLY for the rows
+ * whose words are a hero quote's — which are the only rows `attachQuotes`'
+ * picker reads a reading off.
+ *
+ * WHY THAT IS ENOUGH, AND WHAT WOULD MAKE IT WRONG. The picker is called with
+ * `HERO_ONLY`: it finds the first evidence row whose cleaned, lower-cased words
+ * equal the hero quote's, copies that row's reading onto the quote, and
+ * returns before its heuristic path — the path that scores every row by its
+ * reading (`quoteScore`). So a reading on any other row is never read. If
+ * `HERO_ONLY` ever stops being zero, this must read the English for every row
+ * again (`fetchQuotesByAudience`), or the heuristic will score rows as unread.
+ *
+ * WHY. `fetchQuotesByAudience` read the English of every quote behind the
+ * drawn rows (Sealand: about 4,000 texts, 25 requests) to vouch for a handful
+ * of hero quotes, and it was the last read on the page: 1.1 s on staging
+ * (27 Sep). The evidence read itself is `quotesUntranslated`, that function's
+ * read line for line (lib/pages/evidence-untranslated.ts says why it is a copy
+ * and why the copy's order matters).
+ */
+async function heroEvidence(
+  supabase: SupabaseClient,
+  ids: string[],
+  heroes: readonly string[],
+): Promise<Map<string, QuoteRow[]>> {
+  const untranslated = await quotesUntranslated(supabase, ids)
+  const wanted = new Set(heroes.filter(Boolean).map((h) => cleanQuote(h).toLowerCase()))
+  const vouching: string[] = []
+  for (const list of untranslated.values()) {
+    for (const q of list) if (wanted.has(cleanQuote(q.quote).toLowerCase())) vouching.push(q.quote)
+  }
+  const translations = await readTranslations(supabase, vouching)
+  return new Map([...untranslated].map(([id, list]) => [id, list.map((q) => ({ ...q, ...readingOf(translations, q.quote) }))]))
 }
 
 /** The decision ledger. NULL — never [] — when `rec_decisions` is not applied

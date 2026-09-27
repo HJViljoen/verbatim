@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
 import { SURFACE_WORDS } from './change-log'
-import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
+import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, ourChangeCaveat, ourChangeTitle, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
 import { cellReadWith, mergeStops, reachCaption, recordGroupOf, recordPairs, recordView, stopLines, stopsOf, type StopEntry } from './what-we-changed'
 import { pairOn, type PairOn } from '../reading/pairs'
 import { CHANGES, SEALAND_LOG, sealandJudge } from '../test/sealand-pairs'
@@ -99,8 +99,8 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
 
   it('prints a capped update’s approved note, never "A change to how we read", and no other `other` row’s operator prose (deploy 2 review)', () => {
     // log-tracking-eras --capped-run's row (WP1.4): surface 'other', field
-    // 'gather_capped', CAPPED_NOTE. Staging's stand-in sits on the 20 Sep
-    // partial run.
+    // 'gather_capped', with the note staging's 20 Sep stand-in holds from the
+    // 26 Sep rehearsal (the script writes none since 27 Sep).
     const capped = row({ id: 'capped-0920', changed_at: '2026-09-20T09:38:00.000Z', surface: 'other', field: 'gather_capped', actor_kind: 'script', source: 'reconstructed', note: 'An update gathered less than usual because a spending cap was reached.' })
     const c = changesFromLog([capped])[0]
     expect(changeWords(c, [capped])).toBe('An update gathered less than usual because a spending cap was reached.')
@@ -114,6 +114,50 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     const c = changesFromLog([gate])[0]
     expect(changeWords(c, [gate])).toBe('How we check relevance')
     expect(changeWords(c, [gate])).toBe(SURFACE_WORDS.gate_rule)
+  })
+
+  it('titles each change of ours written with no note (27 Sep) and prints nothing under it', () => {
+    // Heinrich, 27 Sep: no client-visible notes on our own changes. The gate
+    // fix, attribution v3 and the segment row are stored with note NULL.
+    const rows = [
+      row({ id: 'gate-fix', changed_at: '2026-09-25T16:18:47.000Z', surface: 'gate_rule' as never, field: 'relevance_gate', actor_kind: 'script', source: 'reconstructed', affects_months: '[2026-08-01,2026-10-01)' }),
+      row({ id: 'attribution', changed_at: '2026-09-25T16:18:47.000Z', surface: 'attribution' as never, field: 'attribution_v3', actor_kind: 'script', source: 'reconstructed' }),
+      row({ id: 'segment', changed_at: '2026-09-27T12:00:00.000Z', surface: 'segment' as never, field: 'segments_v1', actor_kind: 'script', source: 'logged', rows_affected: 5256 }),
+    ]
+    const lines = ledgerLines({ changes: changesFromLog(rows), rows, reach: [], runFinish: new Map() })
+    expect(Object.fromEntries(lines.map((l) => [l.surface, [l.words, l.detail]]))).toEqual({
+      gate_rule: ['How we check relevance', null],
+      attribution: ['How we file a video to a brand', null],
+      segment: ['How we mark makers’ videos', null],
+    })
+    for (const l of lines) expect(l.words).not.toMatch(/relevance_gate|attribution_v3|segments_v1|undefined|null|"|“/)
+  })
+
+  it('gives a chart the same title for each note-less change of ours, as a dated caveat with no direction word (27 Sep)', () => {
+    // lib/pages/change-caveats.ts says these on the months a change reached,
+    // where the reading layer said "What this workspace tracks changed, and
+    // it moved this month.". One title per change, in this list's words.
+    const rows = [
+      row({ id: 'gate-fix', changed_at: '2026-09-25T16:18:47.000Z', surface: 'gate_rule' as never, field: 'relevance_gate', actor_kind: 'script', source: 'reconstructed', affects_months: '[2026-08-01,2026-10-01)' }),
+      row({ id: 'attribution', changed_at: '2026-09-25T16:18:47.000Z', surface: 'attribution' as never, field: 'attribution_v3', actor_kind: 'script', source: 'reconstructed' }),
+      row({ id: 'segment', changed_at: '2026-09-27T12:00:00.000Z', surface: 'segment' as never, field: 'segments_v1', actor_kind: 'script', source: 'logged', rows_affected: 5256 }),
+      row({ id: 'capped-0920', changed_at: '2026-09-20T09:38:00.000Z', surface: 'other', field: 'gather_capped', actor_kind: 'script', source: 'reconstructed' }),
+    ]
+    for (const r of rows) {
+      const c = changesFromLog([r])[0]
+      expect(ourChangeTitle(r)).toBe(changeWords(c, [r]))
+    }
+    expect(rows.map((r) => ourChangeCaveat(r))).toEqual([
+      'We changed how we check relevance in September',
+      'We changed how we file a video to a brand in September',
+      'We changed how we mark makers’ videos in September',
+      'We changed how we read in September',
+    ])
+    // Any other row is not ours to title: it keeps the reading layer's words,
+    // or its own note.
+    const theirs = row({ id: '0913-industry', changed_at: '2026-09-13T10:00:58.000Z', surface: 'terms', field: 'industry_keywords' })
+    const panel = row({ id: 'panel-0924', changed_at: '2026-09-24T08:20:00.000Z', surface: 'other', field: 'attention_panel' })
+    expect([ourChangeTitle(theirs), ourChangeCaveat(theirs), ourChangeTitle(panel), ourChangeCaveat(panel)]).toEqual([null, null, null, null])
   })
 
   it('counts the exclusions list apart from the search terms (the 17 Sep script touched both)', () => {
@@ -230,7 +274,10 @@ describe('what a record cell counts (reachCaption)', () => {
     expect(reachCaption({ surface: 'terms', items: { added: [], removed: ['freitag'] } })).toBe('found only by the searches it took out')
     expect(reachCaption({ surface: 'subreddits', items: { added: ['r/travelgear'], removed: [] } })).toBe('found only by the communities it added')
     expect(reachCaption({ surface: 'gate_rule', items: null })).toBe('had been let in unchecked')
-    expect(reachCaption({ surface: 'attribution', items: null })).toBe('filed by the new check')
+    // Item 29 of the deploy 2 wording read: "check" is the relevance check's
+    // word on this tab, so the filing change never borrows it.
+    expect(reachCaption({ surface: 'attribution', items: null })).toBe('filed the new way')
+    expect(reachCaption({ surface: 'attribution', items: null })).not.toMatch(/check/)
     // Nothing measures a rival's or an account's reach here.
     expect(reachCaption({ surface: 'rivals', items: { added: ['Rareform'], removed: [] } })).toBeNull()
     expect(reachCaption({ surface: 'handles', items: null })).toBeNull()
