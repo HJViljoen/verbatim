@@ -991,7 +991,7 @@ export function marketWeekFixture(): WeekData {
     },
     window: SEALAND_WEEK_20_SEP,
     readingAt: '2026-09-20T12:00:00.000Z',
-    subjects: sealandMarketSubjects(),
+    subjects: withSubjectMakers(sealandMarketSubjects()),
     // The blocks WP3.7 rebuilt, on the same update (staging, below).
     cameIn: { ...d.cameIn, window: SEALAND_WEEK_20_SEP, market: SEALAND_20_SEP_MARKET, rivals: SEALAND_20_SEP_BRANDS },
     heard: SEALAND_20_SEP_HEARD,
@@ -1612,4 +1612,22 @@ export const OSSUR_13_SEP_HEARD: NonNullable<WeekData['heard']> = {
  "setAside": null,
  "regrouped": null,
  "segments": "no_rule"
+}
+
+/** Each subject's makers among its September market videos (staging, the
+ *  Subjects rail's read, 27 Sep): Looks & style 35 of 103, Comfort 1 of 43,
+ *  Durability 9 of 39, Waterproofing 2 of 29, Price 3 of 25. */
+export const SEALAND_SEP_SUBJECT_MAKERS: Readonly<Record<string, number>> = {
+  'Looks & style': 35, Comfort: 1, Durability: 9, Waterproofing: 2, Price: 3,
+}
+
+function withSubjectMakers(block: WeekData['subjects']): WeekData['subjects'] {
+  return {
+    ...block,
+    rows: block.rows.map((r) => {
+      const k = r.market?.monthSoFar.k ?? 0
+      const m = SEALAND_SEP_SUBJECT_MAKERS[r.label]
+      return m != null && k > 0 ? { ...r, makerShare: m / k } : r
+    }),
+  }
 }

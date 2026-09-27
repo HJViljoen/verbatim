@@ -10,7 +10,8 @@ import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
-import { RULE, SCALE, shortMonthName } from '@/components/pages/overview/market'
+import { MakerMark, RULE, SCALE, shortMonthName } from '@/components/pages/overview/market'
+import { makerWords } from '@/lib/pages/overview-market'
 
 // WK §2 · This week in your subjects (the mock's §3; OV2 at update length).
 //
@@ -415,7 +416,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
           <tbody>
             {s.rows.map((r) => (
               <tr key={r.id}>
-                <td style={c}>{r.label}{r.calibration === 'provisional' ? <> <CalibrationTag calibration={r.calibration} mode={mode} /></> : null}</td>
+                <td style={c}>{r.label}{r.calibration === 'provisional' ? <> <CalibrationTag calibration={r.calibration} mode={mode} /></> : null}{makerWords(r.makerShare ?? null) ? <div style={{ fontSize: 11.5, color: EMAIL.muted }}>{makerWords(r.makerShare ?? null)}</div> : null}</td>
                 <td style={num}><span data-copy="figure">{r.market?.monthSoFar.k != null ? fmtInt(r.market.monthSoFar.k) : '·'}</span></td>
                 <td style={num}><span data-copy="figure">{shareCell(r.market?.monthSoFar.k ?? null, n)}</span></td>
                 <td style={{ ...num, color: EMAIL.ink2 }}><span data-copy="figure">{plus(r.market?.thisUpdate ?? null)}</span></td>
@@ -458,6 +459,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
                 <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                   <span className={`[text-wrap:pretty] ${SCALE.row}`}>{r.label}</span>
                   {r.calibration === 'provisional' ? <CalibrationTag calibration={r.calibration} className="text-[12px]" /> : null}
+                  {makerWords(r.makerShare ?? null) ? <span className="inline-flex items-center gap-2 text-[13px] text-secondary-foreground"><MakerMark />{makerWords(r.makerShare ?? null)}</span> : null}
                 </span>
                 {k != null ? (
                   <span aria-hidden className="block h-1 w-full max-w-[224px] rounded-[2px] bg-inner">

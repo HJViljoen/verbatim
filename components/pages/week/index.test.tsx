@@ -450,6 +450,17 @@ describe('With this update (market-first WP3.7, week.came-in)', () => {
   })
 })
 
+describe('Your market’s subjects carry their maker share (market-first WP3.7)', () => {
+  it('tags a subject a fifth or more makers’, as the front page and the Subjects rail do', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekSubjects.render(marketWeekFixture(), mode, ctx))
+      expect(text).toContain('Looks & style about a third makers')
+      expect(text).toContain('Durability about a quarter makers')
+      expect(text).toContain('Comfort 43')
+    }
+  })
+})
+
 describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
   it('leads with how many of the themes first heard reached the floor, one denominator', () => {
     for (const mode of MODES) {

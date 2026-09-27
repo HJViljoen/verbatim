@@ -53,6 +53,7 @@ import { addedSearchesRead, loadThemeSegmentRows, loadThemesProvenance, makerRul
 import { segmentOf } from './overview-market/board'
 import { segmentRulesEnabled } from '../segments/rules'
 import { brandCountState, noiseWords, OTHER_MEANING } from '../brands/precision'
+import { loadMarketMakers, makerKOf } from './subjects'
 import { marketSubjectSide } from './overview-market/subjects'
 import { noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
 import type { ConfigChange } from '../config-log'
@@ -379,6 +380,11 @@ export interface SubjectWeekRow {
    * renders as it was sent.
    */
   market?: { monthSoFar: SideReading; thisUpdate: number | null }
+  /** The share of its market videos in the month that are makers' (the
+   *  Subjects rail's and the front page's rule, `loadMarketMakers`), for the
+   *  preview's "over a third makers" tag (WP3.7). Null where it was not
+   *  measured; absent on a stored copy. */
+  makerShare?: number | null
 }
 
 export interface WeekSubjectsBlock {
@@ -1886,6 +1892,18 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   }
 
   const [weeks, heard, comparable] = await Promise.all([weeksAhead, heardAhead, comparableAhead])
+  // THE SUBJECTS' MAKER SHARES (WP3.7; the preview's row tag), as the Subjects
+  // rail and the front page read them: the month's market videos, their
+  // segments and the lens over the makers' (three reads), only where a market
+  // row prints and the tenant has a maker rule.
+  if (subjectsBlock.market && subjectsBlock.rows.some((r) => (r.market?.monthSoFar.k ?? 0) > 0) && segmentRulesEnabled(clientId)) {
+    const makers = await loadMarketMakers(reading.client, clientId, subjectsBlock.market.month).catch(() => null)
+    for (const r of subjectsBlock.rows) {
+      const k = r.market?.monthSoFar.k ?? 0
+      const makerK = makers?.lens && k > 0 ? makerKOf(makers.lens, r.id, rivalAudiences) : null
+      r.makerShare = makerK != null ? makerK / k : null
+    }
+  }
 
   return {
     brand,
