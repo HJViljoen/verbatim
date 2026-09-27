@@ -32,7 +32,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
   is honest; mixing them reads as a missing step. **The check before a deploy
   is the ordered DIFF of the ids, not the count**: five pure insertions, zero
   removals, zero reorderings. All five
-  follow the same non-fatal, no-op-without-its-migration rule. Re-register
+  follow the same non-fatal, no-op-without-its-migration rule. **Deploy 4
+  (market-first, 27 Sep) adds eight, immediately before `freeze-months`, in
+  this order:** `plan-segment-videos` and `segment-videos:${i}-of-${n}`,
+  `plan-comparability` and `comparability:${i}-of-${n}`, `plan-lens-readings`
+  and `lens-readings:${i}-of-${n}`, `plan-brand-readings` and
+  `brand-readings:${i}-of-${n}` (54 ids at `mf-d3`, 62 after;
+  `scripts/pipeline-step-ids.sh mf-d3 --expect-before freeze-months
+  segment-videos comparability lens-readings brand-readings` is the check).
+  Each ends in a `.catch` that logs and returns null, so a failed one never
+  stops `freeze-months`; `lib/pipeline/freeze-parity.test.ts` and
+  `scripts/pg-shim/d4-freeze-checks.sh` prove none of them moves what it
+  freezes. Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
