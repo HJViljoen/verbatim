@@ -657,24 +657,30 @@ describe('How they are doing (the term table), WP3.10 check', () => {
 // ---- the watched communities' kept cell (WP3.10; §4.0 "of N" through levelText) --
 
 describe('a community’s kept cell', () => {
-  // The rule is arithmetic on real counts (staging, 2 Oct clock): fombrand's
-  // 6 kept of 66 looked at (the term record above), and r/prosthetics' 25 of
-  // 100 on Össur's. The render printed "100%" beside communities of four posts.
+  // Real counts (staging, 2 Oct clock): Sealand's watched r/backpacks, 64
+  // kept of 67 looked at, and r/buyitforlife, 4 of 4 (the render printed "96%"
+  // and "100%" for them); and r/prosthetics' 25 kept of 100 found, Össur's
+  // term record, for the one row at the floor. No watched community has 100
+  // looked at yet.
   it('prints "kept of found" under 100 looked at, never a share', () => {
-    expect(keptCell({ keptPct: 9.1, found: 66, kept: 6 })).toBe('6 of 66')
+    expect(keptCell({ keptPct: (64 / 67) * 100, found: 67, kept: 64 })).toBe('64 of 67')
+    expect(keptCell({ keptPct: 100, found: 4, kept: 4 })).toBe('4 of 4')
   })
   it('prints the share at 100 or more, and nothing where the record is closed', () => {
     expect(keptCell({ keptPct: 25, found: 100, kept: 25 })).toBe('25%')
     expect(keptCell({ keptPct: null, found: null, kept: null })).toBe('—')
     // A row whose kept count is not known prints no share under 100.
-    expect(keptCell({ keptPct: 72, found: 90 })).toBe('—')
+    expect(keptCell({ keptPct: (64 / 67) * 100, found: 67 })).toBe('—')
   })
 })
 
 describe('the Reddit posts no list named', () => {
-  // The same real counts: 6 of 66, and 25 of 100.
+  // Staging, 2 Oct clock: Sealand holds 375 Reddit posts, 246 of them from
+  // communities no list named; Össur 149, 99 of them. Neither holds under 100,
+  // so the count case is the arithmetic on fombrand's real 6 of 66 (above).
   it('carries its base: a count under 100 posts, a share of N from 100', () => {
     expect(unconfiguredLine({ posts: 66, fromUnconfigured: 6 })).toBe('6 of 66 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
-    expect(unconfiguredLine({ posts: 100, fromUnconfigured: 25 })).toBe('25% of the 100 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
+    expect(unconfiguredLine({ posts: 375, fromUnconfigured: 246 })).toBe('66% of the 375 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
+    expect(unconfiguredLine({ posts: 149, fromUnconfigured: 99 })).toBe('66% of the 149 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
   })
 })

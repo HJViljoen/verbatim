@@ -6,6 +6,9 @@ import { GLOSSARY, THIRTEEN_WORDS } from '../calibration'
 import { DIRECTION_WORDS } from '../calibration'
 import { ASK_MONTHLY_CAP } from '../config'
 import { SURFACES } from '../nav'
+import { NEW_THEME_FLOOR } from '../pages/week'
+import { BASELINE_MONTHS } from '../reading/anomaly'
+import { TOUCH_MIN_WORDS } from '../reading/own-posts'
 import { LEAD_MAX_MAKER_SHARE, MAKER_GROUP_SHARE, MAKER_NOTE_SHARE } from '../pages/overview-market/board'
 import { NINETY_DAY_NOTE } from '../pages/overview-market/brands'
 import { COMPARE_RULES } from '../pages/overview-market/change'
@@ -225,6 +228,18 @@ describe('how to read, market-first', () => {
   it('holds the run clock of what a search term found, which What we read no longer prints under its table', () => {
     expect(TERM_YIELD_BASIS).toContain('Dated by the update that searched, not by when the comments were written')
     expect(cardText('settings')).toContain('dated by the update that searched, not by when the comments were written')
+  })
+
+  it('states This week’s and Your moves’ floors at the constants that apply them', () => {
+    // "named only once they carry 10 videos in the month" (week.ts), "needs
+    // three months read the same way" (anomaly.ts), "two or more of the
+    // question’s words" (own-posts.ts's word check, which Your moves reads).
+    expect(NEW_THEME_FLOOR).toBe(10)
+    expect(cardText('week')).toContain('once they carry 10 videos in the month')
+    expect(BASELINE_MONTHS).toBe(3)
+    expect(cardText('week')).toContain('needs three months read the same way')
+    expect(TOUCH_MIN_WORDS).toBe(2)
+    expect(cardText('market')).toContain('two or more of the question’s words')
   })
 
   it('names Your moves by its current sidebar label on the path (§4.0)', () => {
