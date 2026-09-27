@@ -240,8 +240,9 @@ export async function loadIndexFacts(
   clientId: string,
 ): Promise<Omit<AskBasis, 'updateAt'>> {
   const [months, all, embedded, last] = await Promise.all([
-    // DISTINCT READABLE MONTHS, not rows, and not a rival's — the three
-    // reductions `readableMonthCount` makes and the note above it explains.
+    // DISTINCT READABLE MONTHS, not rows: the MARKET's months over the floor
+    // (the category pooled with the tracked brands, never the client's own;
+    // WP3.11), which `readableMonths` and the note above it explain.
     // Össur: 119 rows, 63 months, FOUR readable (Jun–Sep 2026, all
     // `industry-other`). Sealand: 95, 66, two. Counted in code rather than in
     // SQL, because PostgREST has no count(distinct). The AUDIENCE column is
