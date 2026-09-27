@@ -9,11 +9,13 @@ import {
   objectLine,
   objectReading,
   renderObjects,
+  subjectPoints,
   type MarketObjectRef,
   type MarketPoint,
 } from './movement'
 import { askWindow, kindsNamedIn, moodAsked, namedIn, names, parseAskWindow } from './scope'
 import type { ReadingMonth } from '../reading/reading-month'
+import type { MonthSeries } from '../reading/series'
 
 // Sealand's real figures (plan §2.2, prod as at 24 Sep, and the staging
 // research it cites). Where a figure is an inference it says so beside it.
@@ -252,5 +254,103 @@ describe('loadObjectReadings: on the market, one read per kind of object', () =>
     const { client } = fakeDb(tables())
     const out = await loadObjectReadings(client as never, { ...base, objects: [{ kind: 'kind', id: 'praise', label: 'praise' }, looks('ready')] })
     expect(out.map((r) => r.state)).toEqual(['not_read', 'not_read'])
+  })
+})
+
+// ── "Ask about this" on a subject lands on Subjects' own number (S7) ─────────
+//
+// Staging, Sealand, read 27 Sep (the scratch probe of mf/s4-ask-links): the
+// market is the category and the seven tracked brands' filed videos, and in
+// September three of the seven (Freedom of Movement, Old School, Rareform)
+// have no denominator row at all. The month series still carries a point for
+// each of them, with no k and no videos, and pooling that point read the whole
+// side as unknown: every subject read "null of 654", which the block printed
+// as "0 of 654". Subjects prints Looks & style at 103 of 654 (102 in the
+// category, 1 filed under Freitag).
+describe('a subject pooled as Subjects pools it', () => {
+  const STG = {
+    cat: 'industry-other',
+    cotopaxi: 'competitor:Cotopaxi',
+    fom: 'competitor:Freedom of Movement',
+    freitag: 'competitor:Freitag',
+    oldSchool: 'competitor:Old School',
+    patagonia: 'competitor:Patagonia',
+    rareform: 'competitor:Rareform',
+    tnf: 'competitor:The North Face',
+  }
+  const rivals = [STG.cotopaxi, STG.fom, STG.freitag, STG.oldSchool, STG.patagonia, STG.rareform, STG.tnf]
+  const WRITTEN = '2026-09-27T08:30:00.000Z'
+  // Staging's denominators: August 351 + 22 + 4 = 377; September
+  // 625 + 12 + 6 + 5 + 6 = 654.
+  const denominators = [
+    denom(AUG, STG.cat, 351, 10188), denom(AUG, STG.cotopaxi, 22, 0), denom(AUG, STG.freitag, 4, 0),
+    denom(SEP, STG.cat, 625, 16233), denom(SEP, STG.cotopaxi, 12, 0), denom(SEP, STG.freitag, 6, 0),
+    denom(SEP, STG.patagonia, 5, 0), denom(SEP, STG.tnf, 6, 0),
+  ]
+  const looksRows = [
+    { client_id: CLIENT, month: AUG, audience: STG.cat, subject_id: 'subj-looks', videos: 37, comments: 0 },
+    { client_id: CLIENT, month: AUG, audience: STG.cotopaxi, subject_id: 'subj-looks', videos: 1, comments: 0 },
+    { client_id: CLIENT, month: SEP, audience: STG.cat, subject_id: 'subj-looks', videos: 102, comments: 0 },
+    { client_id: CLIENT, month: SEP, audience: STG.freitag, subject_id: 'subj-looks', videos: 1, comments: 0 },
+  ]
+  // Community & purpose (lib/subjects/read-in.ts): named 24 Sep at 12:41,
+  // after the update that last wrote the months, so no month was read for it.
+  const community = { id: 'subj-community', name: 'Community & purpose', client_id: CLIENT, named_at: '2026-09-24', created_at: '2026-09-24T12:41:00.000Z' }
+  const stagingTables = () => ({
+    config_changes: [],
+    pipeline_runs: [],
+    subjects: [
+      { id: 'subj-looks', name: 'Looks & style', client_id: CLIENT, named_at: '2026-09-15', created_at: '2026-09-15T09:00:00.000Z' },
+      community,
+    ],
+    month_denominators: denominators.map((d) => ({ ...d, read_at: d.month === SEP ? '2026-09-24T12:15:00.000Z' : '2026-09-15T08:00:00.000Z' })),
+    month_subject_readings: looksRows,
+  })
+  const base = { clientId: CLIENT, month: SEP, pair: judgeOn2Oct, asOf: ON_2_OCT, rivalAudiences: rivals }
+
+  it('leaves out a brand with no videos that month, as Subjects does: 103 of 654, not "0 of 654"', async () => {
+    const { client } = fakeDb(stagingTables())
+    const [r] = await loadObjectReadings(client as never, { ...base, objects: [looks('ready')] })
+    expect(r.state).toBe('read')
+    expect(r.curr).toEqual({ month: SEP, k: 103, n: 654 })
+    expect(r.prev).toEqual({ month: AUG, k: 38, n: 377 })
+    expect(objectLine(r)).toContain('Sep 2026 103 of 654 videos')
+    expect(objectLine(r)).not.toMatch(/\b0 of \d/)
+  })
+
+  it('a subject no month was read for says so in Subjects’ words, never "0 of 654"', async () => {
+    const { client } = fakeDb(stagingTables())
+    const withNext = await loadObjectReadings(client as never, {
+      ...base,
+      objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'provisional' }],
+      nextUpdate: '2026-10-04T06:00:00.000Z',
+    })
+    expect(withNext[0].state).toBe('unread')
+    expect(withNext[0].curr).toEqual({ month: SEP, k: null, n: 654 })
+    expect(withNext[0].unread).toBe('no reading yet')
+    expect(objectLine(withNext[0])).toContain('Community & purpose (a subject, provisional) · your market: no reading yet')
+    expect(objectLine(withNext[0])).not.toMatch(/\d+ of \d+/)
+    // No update to come (a paused tenant, or an older month): the month
+    // will not be read for it.
+    const paused = await loadObjectReadings(client as never, {
+      ...base,
+      objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'provisional' }],
+    })
+    expect(paused[0].unread).toBe('not read in September')
+  })
+
+  it('subjectPoints: a month written before the subject was counted, with no row, is no reading', () => {
+    const line = (audience: string, points: { month: string; k: number | null; videos: number | null }[]) =>
+      ({ audience, objectId: 'subj-x', points }) as unknown as MonthSeries
+    const counts = new Map([[AUG, { month: AUG, videos: 377, comments: 0, category: 351, rivalFiled: 26 }], [SEP, { month: SEP, videos: 654, comments: 0, category: 625, rivalFiled: 29 }]])
+    const lines = [
+      line(STG.cat, [{ month: AUG, k: 0, videos: 351 }, { month: SEP, k: 0, videos: 625 }]),
+      line(STG.fom, [{ month: AUG, k: null, videos: null }, { month: SEP, k: null, videos: null }]),
+    ]
+    const writtenAt = new Map([[AUG, Date.parse('2026-09-15T08:00:00.000Z')], [SEP, Date.parse(WRITTEN)]])
+    // Counted on 20 Sep: August (written 15 Sep) was not read for it,
+    // September (written 27 Sep) was, and its 0 is a reading.
+    const pts = subjectPoints(lines, [AUG, SEP], counts, rivals, { seeded: true, countedFrom: Date.parse('2026-09-20T00:00:00.000Z'), writtenAt })
+    expect(pts).toEqual([{ month: AUG, k: null, n: 377 }, { month: SEP, k: 0, n: 654 }])
   })
 })

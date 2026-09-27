@@ -7,17 +7,19 @@ import { directionWord, monthChange, type Direction, type SeriesPoint } from '..
 import { BRANDS_PANEL, comparableOn, type PairOn } from '../reading/pairs'
 import { kindChange, kindLabel } from '../reading/kinds'
 import { moodChange } from '../reading/mood'
-import { pooledDenominators, pooledSide, marketAudiences } from '../reading/market'
+import { pooledDenominators, pooledSide, marketAudiences, type MarketCount } from '../reading/market'
 import { SENTIMENT_BAND } from '../report-bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { earnsVerdict, isFailed, type SubjectCalibration } from '../subjects/calibration-state'
-import { loadMonthSeries, readingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, readingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
-import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
+import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint, type MonthSeries } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../reading/reading-view'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
+import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
+import { TABLE_SUBJECTS } from '../subjects/types'
 
 // "Has this changed?" — answered from the MONTHLY reading (Phase 1 WP21,
 // decision D1 / item 15).
@@ -460,8 +462,14 @@ export interface MarketPoint {
 export interface ObjectReading {
   object: MarketObjectRef
   /** `read`: the object has rows; `not_read`: its table is not there yet, or
-   *  nothing was recorded for it. */
-  state: 'read' | 'not_read'
+   *  nothing was recorded for it; `unread`: a subject the month was not read
+   *  for (named after the month's rows were written), which prints `unread`'s
+   *  words where Subjects prints them, never "0 of N". */
+  state: 'read' | 'not_read' | 'unread'
+  /** A subject the month was not read for: "no reading yet" while the updates
+   *  to come still read the month, else "not read in {Month}" (`unreadWords`,
+   *  the Subjects rail's and pane's own wording). Null otherwise. */
+  unread?: string | null
   /** The months on the axis up to the month read, oldest first. */
   trail: MarketPoint[]
   curr: MarketPoint | null
@@ -493,6 +501,10 @@ export interface ObjectPoints {
   filling?: ReadonlySet<string>
   /** Nothing recorded for this object at all. */
   notRead?: boolean
+  /** The next scheduled update, while the month read is the reading month:
+   *  what decides "no reading yet" against "not read in {Month}" for a
+   *  subject the month was not read for. */
+  nextUpdate?: string | null
 }
 
 const pointFor = (points: readonly MarketPoint[], month: string): MarketPoint | undefined =>
@@ -522,6 +534,11 @@ export function objectReading(
   // DECISION C. A failed subject is being re-described and prints nothing; a
   // provisional one prints its level and earns no verdict and no word.
   if (o.kind === 'subject' && isFailed(o.calibration)) return { ...empty, state: 'read', curr: null, prev: null, trail: [] }
+  // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1): its k is
+  // no reading, never 0, and it says so in Subjects' own words.
+  if (o.kind === 'subject' && curr.k == null) {
+    return { ...empty, state: 'unread', unread: unreadWords({ month: m, filling, nextUpdate: input.nextUpdate ?? null }) }
+  }
   const base: ObjectReading = { object: o, state: 'read', trail, curr, prev, verdict: null, direction: null, filling }
   if (o.kind === 'subject' && !earnsVerdict(o.calibration)) return base
 
@@ -571,9 +588,11 @@ export function objectLine(r: ObjectReading): string {
   const head = `- ${objectNoun(r.object)} · ${MARKET_WORDS}`
   if (r.state === 'not_read') return `${head}: not read yet`
   if (r.object.kind === 'subject' && isFailed(r.object.calibration)) return `${head}: being re-described, so no figure is given`
+  if (r.state === 'unread') return `${head}: ${r.unread ?? 'no reading yet'}, because it was named after the month's videos were read, so no figure is given`
+  // Only the months read: a month with no reading is left out, never "0 of N".
   const trail = r.trail
-    .filter((p) => p.n != null)
-    .map((p) => `${monthName(p.month)} ${p.k ?? 0} of ${p.n} videos${share(p.k, p.n)}`)
+    .filter((p) => p.n != null && p.k != null)
+    .map((p) => `${monthName(p.month)} ${p.k} of ${p.n} videos${share(p.k, p.n)}`)
     .join(' · ')
   const lines = [`${head}: ${trail || 'nothing read'}`]
   const v = r.verdict
@@ -629,6 +648,10 @@ export interface ObjectReadArgs {
   asOf: string
   /** The tracked rivals' audience keys; read when omitted. */
   rivalAudiences?: readonly string[] | null
+  /** The next scheduled update, when `month` is the reading month (the
+   *  frame's `reading.nextUpdate`): a subject the month was not read for says
+   *  "no reading yet" while one is coming. */
+  nextUpdate?: string | null
 }
 
 type Row = Record<string, unknown>
@@ -697,7 +720,7 @@ export async function loadObjectReadings(admin: Admin, args: ObjectReadArgs): Pr
   const brands = args.objects.filter((o) => o.kind === 'brand')
   const mood = args.objects.find((o) => o.kind === 'mood') ?? null
 
-  const [subjectSet, kindRows, moodRows, brandRows] = await Promise.all([
+  const [subjectSet, kindRows, moodRows, brandRows, subjectClock] = await Promise.all([
     subjects.length
       ? loadMonthSeries(admin, args.clientId, { audiences, objectKind: 'subject', objectIds: subjects.map((s) => s.id), from, to: month })
       : Promise.resolve(null),
@@ -708,17 +731,24 @@ export async function loadObjectReadings(admin: Admin, args: ObjectReadArgs): Pr
     brands.length
       ? readRows(admin, TABLE_BRAND_READINGS, 'month, audience, brand_key, k_any, n', args.clientId, from, month, { column: 'brand_key', values: brands.map((b) => b.id) })
       : Promise.resolve(null),
+    subjects.length ? loadSubjectClock(admin, args.clientId, subjects.map((s) => s.id)) : Promise.resolve(null),
   ])
+  const writtenAt = monthsWrittenAt(denoms.denominators, new Set(audiences))
 
   const out: ObjectReading[] = []
   for (const o of args.objects) {
     let input: ObjectPoints
     if (o.kind === 'subject') {
       const seeded = subjectSet != null && subjectSet.numeratorSubstrate === 'seeded'
-      const rows = seeded
-        ? subjectSet.series.filter((s) => s.objectId === o.id).flatMap((s) => s.points.map((p) => ({ month: monthStartOf(p.month), audience: s.audience, k: p.k })))
-        : []
-      input = { object: o, points: pooled(rows, seeded), thin, filling, notRead: !seeded }
+      const lines = seeded ? subjectSet.series.filter((s) => s.objectId === o.id) : []
+      input = {
+        object: o,
+        points: subjectPoints(lines, axis, counts, rivals, { seeded, countedFrom: subjectClock?.get(o.id) ?? null, writtenAt }),
+        thin,
+        filling,
+        notRead: !seeded,
+        nextUpdate: args.nextUpdate ?? null,
+      }
     } else if (o.kind === 'kind') {
       const rows = (kindRows ?? []).filter((r) => r.kind === o.id).map((r) => ({ month: monthStartOf(String(r.month)), audience: String(r.audience), k: Number(r.videos) }))
       input = { object: o, points: pooled(rows, kindRows != null), thin, filling, notRead: kindRows == null }
@@ -752,6 +782,60 @@ export async function loadObjectReadings(admin: Admin, args: ObjectReadArgs): Pr
     }
     out.push(objectReading(input, month, args.pair, args.asOf))
   }
+  return out
+}
+
+/**
+ * A subject's months on the market, as Subjects prints them (S7: "Ask about
+ * this" lands on the subject's own figure and trail). Pure.
+ *
+ * TWO RULES, BOTH SUBJECTS' OWN (`marketLineOf`, lib/pages/subjects.ts):
+ *  · a market audience with no denominator row in a month holds no videos
+ *    that month and is left out of its sum. The month series carries a point
+ *    for it all the same, with no k and no videos, and `pooledSide` reads a
+ *    row with no k as "this side is unknown": every subject read "null of
+ *    654" on staging's September (the named rivals with no September videos),
+ *    and the block printed "0 of 654";
+ *  · a month the subject was not read in (named after the month's rows were
+ *    written, `subjectReadIn`) is no reading, never the 0 the month series
+ *    fills in.
+ */
+export function subjectPoints(
+  lines: readonly MonthSeries[],
+  axis: readonly string[],
+  counts: ReadonlyMap<string, MarketCount>,
+  rivalAudiences: readonly string[],
+  clock: { seeded: boolean; countedFrom: number | null; writtenAt: ReadonlyMap<string, number> },
+): MarketPoint[] {
+  const cited = new Set<string>()
+  for (const l of lines) for (const p of l.points) if ((p.k ?? 0) > 0) cited.add(monthStartOf(p.month))
+  const backRead = subjectBackRead(clock.countedFrom, cited, clock.writtenAt)
+  const byAudience = lines.map((l) => ({ audience: l.audience, points: pointsByMonth(l) }))
+  return axis.map((m) => {
+    const rows = byAudience
+      .map((l) => ({ audience: l.audience, point: l.points.get(m) ?? null }))
+      .filter((r) => r.point != null && r.point.videos != null)
+      .map((r) => ({ month: m, audience: r.audience, k: r.point!.k }))
+    const read = clock.seeded && counts.has(m) && subjectReadIn({ countedFrom: clock.countedFrom, writtenAt: clock.writtenAt.get(m), cited: cited.has(m), backRead }) === 'read'
+    const side = pooledSide(rows, counts, m, rivalAudiences, { read })
+    return { month: m, k: read ? side.k : null, n: side.n }
+  })
+}
+
+/**
+ * When each named subject started being counted (`subjectCountedFrom`): its
+ * row's `named_at` and `created_at` and its confirmation in the change log
+ * (memoised, already read by the month series). One small read, only when a
+ * question names a subject.
+ */
+async function loadSubjectClock(admin: Admin, clientId: string, ids: readonly string[]): Promise<Map<string, number | null>> {
+  const [res, changes] = await Promise.all([
+    admin.from(TABLE_SUBJECTS).select('id, named_at, created_at').eq('client_id', clientId).in('id', [...ids]),
+    loadChanges(admin, clientId),
+  ])
+  if (res.error) throw new Error(`subjects clock: ${res.error.message}`)
+  const out = new Map<string, number | null>()
+  for (const row of (res.data ?? []) as CountedSubject[]) out.set(row.id, subjectCountedFrom(row, changes))
   return out
 }
 

@@ -14,6 +14,8 @@ import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
 import { pairSentence } from '@/lib/calibration'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { marketLevel } from '@/lib/pages/overview-market/kinds'
+import { NO_READING_YET } from '@/lib/subjects/read-in'
 import { findingKey } from '@/lib/pages/agent-thread'
 import { DirectionWord, FindingLevel, InferencePill } from './marks'
 
@@ -483,6 +485,23 @@ function AnswerFooter({ f }: { f: FindingMeasure | null }) {
   )
 }
 
+/**
+ * A named object's trail, as the Subjects pane prints a subject's
+ * (`marketTrail`): the last three months read, each a level on the market's
+ * base (`marketLevel`: a whole percent at 100 videos and 10 of its own, the
+ * count under) with its "of N". A month with no reading is not a month read,
+ * so it is never "0 of N". Pure.
+ */
+export function aboutTrail(r: Pick<ObjectReading, 'trail'>): { month: string; text: string; of: string }[] {
+  return r.trail
+    .filter((p) => p.k != null && p.n != null && p.n > 0)
+    .slice(-3)
+    .flatMap((p) => {
+      const level = marketLevel(p.k, p.n)
+      return level ? [{ month: p.month, text: level.text, of: `of ${fmtInt(p.n as number)}` }] : []
+    })
+}
+
 /** What a named object is, in the reader's words, as the block titles it. */
 function aboutLabel(r: ObjectReading): string {
   const o = r.object
@@ -511,32 +530,44 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
       {readings.map((r) => {
         const label = aboutLabel(r)
         const failed = r.object.kind === 'subject' && r.object.calibration === 'failed'
-        const trail = r.trail.filter((p) => p.n != null && p.k != null)
+        const unread = r.state === 'unread'
+        const trail = aboutTrail(r)
+        const current = trail.length > 0 ? trail[trail.length - 1].month : null
+        // THE SUBJECT PANE'S OWN TRAIL (S7): the last three months read, each
+        // a level on its own base with its "of N", the month read in bold.
+        const trailLine = trail.length > 1 || (unread && trail.length > 0) ? (
+          <p className="m-0 flex flex-wrap items-baseline gap-x-2 font-mono text-[11px] tabular-nums text-muted-foreground">
+            {trail.map((t, i) => (
+              <span key={t.month} className="inline-flex items-baseline gap-2">
+                {i > 0 ? <span aria-hidden>·</span> : null}
+                <span data-copy="level">{monthName(t.month).split(' ')[0]} <span className={t.month === current && !unread ? 'font-semibold text-foreground' : undefined}>{t.text}</span> {t.of}</span>
+              </span>
+            ))}
+          </p>
+        ) : null
         return (
           <TileBlock key={`${r.object.kind}:${r.object.id}`} className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13px] font-semibold text-foreground">{label}</span>
-              {r.object.kind === 'subject' && !failed ? <CalibrationTag calibration={r.object.calibration ?? null} /> : null}
+              {r.object.kind === 'subject' && !failed ? <CalibrationTag calibration={r.object.calibration ?? null} unread={unread ? r.unread ?? NO_READING_YET : null} /> : null}
             </div>
             {failed ? (
               <p className="m-0 text-[12.5px] text-muted-foreground">being re-described</p>
-            ) : r.state === 'not_read' || !r.curr || r.curr.n == null ? (
+            ) : unread ? (
+              trailLine
+            ) : r.state === 'not_read' || !r.curr || r.curr.n == null || r.curr.k == null ? (
               <p className="m-0 text-[12.5px] text-muted-foreground">not read yet</p>
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
-                  <FindingLevel value={{ k: r.curr.k ?? 0, n: r.curr.n }} />
+                  <FindingLevel value={{ k: r.curr.k, n: r.curr.n }} />
                   {r.verdict && r.verdict.state !== 'refused' ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
                   <DirectionWord direction={r.direction} />
                   <span className="font-mono text-[11px] text-muted-foreground">
                     in your market · <span data-copy="figure">{longMonth(r.curr.month)}</span>
                   </span>
                 </div>
-                {trail.length > 1 && (
-                  <p className="m-0 font-mono text-[11px] text-muted-foreground">
-                    <span data-copy="figure">{trail.map((p) => `${monthName(p.month)} ${fmtInt(p.k ?? 0)} of ${fmtInt(p.n ?? 0)}`).join(' · ')}</span>
-                  </p>
-                )}
+                {trailLine}
                 {r.verdict?.pair?.mode === 'refuse' ? (
                   <p className="m-0 text-[12px] text-muted-foreground">{pairSentence(r.verdict.pair)}</p>
                 ) : null}

@@ -293,6 +293,7 @@ export async function answerQuestion(
         month: frame.reading?.month ?? now.toISOString(),
         pair: frame.pair,
         asOf: now.toISOString(),
+        nextUpdate: frame.reading?.nextUpdate ?? null,
       }).catch((e: unknown) => {
         console.error(`[agent] named objects: ${(e as { message?: string })?.message ?? String(e)}`)
         return []
