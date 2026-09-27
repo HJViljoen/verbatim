@@ -83,7 +83,7 @@ export function CommunitiesSection({
                   </span>
                   {r.probe && (
                     <span className="block font-mono text-[10.5px] text-muted-foreground">
-                      sampled {r.probe.at}: {r.probe.kept} of {r.probe.sampled} on topic
+                      sampled {shortDate(`${r.probe.at.slice(0, 10)}T00:00:00.000Z`)}: {r.probe.kept} of {r.probe.sampled} on topic
                     </span>
                   )}
                 </span>,

@@ -12,6 +12,8 @@ import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStat
 import { gridIntrinsic, ICON_TARGET, ROW_CONTROL } from '@/components/settings/chrome'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
+import { TermPerformance } from '@/app/dashboard/settings/term-performance'
+import type { TermYield } from '@/lib/settings/terms'
 import type { TermSummary } from '@/lib/keywords/value'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
 import type { CommunityRow } from '@/lib/settings/communities'
@@ -192,7 +194,8 @@ describe('the communities section', () => {
   it('reads the state as the decision it is, with its sampling line', () => {
     expect(words).toContain('watched by hand, never sampled')
     expect(words).toContain('proposed, and measured')
-    expect(words).toContain('sampled 2026-08-11: 9 of 40 on topic')
+    expect(words).toContain('sampled 11 Aug: 9 of 40 on topic')
+    expect(words).not.toMatch(/\d{4}-\d{2}-\d{2}/)
     expect(words).not.toContain('a state is what was decided, never a count of what it brought')
   })
 
@@ -611,5 +614,32 @@ describe('the save state', () => {
     const words = renderText(<SaveStateLine state={saveState({ lastChange: change, affectsRecorded: true })} />)
     expect(words).not.toContain('A save names the series it breaks')
     expect(words).toContain('Nothing waiting to be saved')
+  })
+})
+
+describe('How they are doing (the term table), WP3.10 check', () => {
+  // Staging, Sealand, 2 Oct clock: fombrand found 66 and kept 6, sealand bag
+  // 448 and 75, eco backpack 967 and 519; fombrand and sealand bag first ran
+  // in September, so their one month is the whole of it.
+  const term = (keyword: string, found: number, kept: number): TermSummary => ({
+    key: keyword, keyword, bucket: 'industry', platforms: ['youtube'], updates: 8, found, kept, eligible: 0, insights: 0,
+    keptRate: kept / found, worthReviewing: false, reviewPlatforms: [], because: [],
+  })
+  const months: TermYield[] = [
+    { keyword: 'fombrand', found: 66, kept: 6, keptPct: 9.1, months: [{ month: '2026-09', found: 66, kept: 6, keptPct: 9.1 }] },
+    { keyword: 'sealand bag', found: 448, kept: 75, keptPct: 16.7, months: [{ month: '2026-09', found: 448, kept: 75, keptPct: 16.7 }] },
+  ]
+  const text = renderText(<TermPerformance rows={[term('fombrand', 66, 6), term('sealand bag', 448, 75), term('eco backpack', 967, 519)]} updates={8} months={months} />)
+
+  it('prints a rate on fewer than 100 found as its count, the column in whole percents', () => {
+    expect(text).toContain('6 of 66')
+    expect(text).toContain('17%')
+    expect(text).not.toMatch(/\d\.\d%/)
+  })
+
+  it('names each month, never its ISO key, with a count under 100', () => {
+    expect(text).toContain('Sep 6 of 66')
+    expect(text).toContain('Sep 17%')
+    expect(text).not.toMatch(/\d{4}-\d{2}/)
   })
 })
