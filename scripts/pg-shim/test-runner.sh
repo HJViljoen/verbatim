@@ -2,7 +2,7 @@
 # The test of scripts/apply-market-first-migrations.sh (plan §4.0: "a tested
 # runner"). Run it before handing Heinrich a set:
 #
-#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2, mf4 or mf3
+#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2, mf4, mf3 or mf5
 #
 # 1. The refusal guards, with no connection at all: no set, an unknown set,
 #    another project's URL, the transaction pooler, and a --test-target that is
@@ -38,6 +38,7 @@ case "$SET" in
   mf2) FIRST=20261005090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants')"; YES='y\n'; PREREQ=20260928090000 ;;
   mf4) FIRST=20261005091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2')"; YES='y\n'; PREREQ=20261005090000 ;;
   mf3) FIRST=20261103090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks')"; YES='y\n'; PREREQ=20261005091000 ;;
+  mf5) FIRST=20261103091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks'), ('20261103090000', 'market_first_s3')"; YES='y\n'; PREREQ=20261103090000 ;;
   *) echo "test-runner: unknown set $SET"; exit 2 ;;
 esac
 
@@ -94,6 +95,11 @@ if [[ "$SET" == "mf3" ]]; then
   expect "MF3 leaves the existing guards and the audit trigger as they were" "$out" '^  ok    existing guards unchanged'
   expect "MF3's seven guards sit on its tables" "$out" '^  ok    guards on the new tables'
   expect "MF3's operator columns carry no tenant grant" "$out" '^  ok    leaked[|]operator columns +0[|]2$'
+fi
+if [[ "$SET" == "mf5" ]]; then
+  expect "MF5's column and CHECK are in, with no member UPDATE on the day" "$out" '^  ok    dated_on[|]check[|]leaked +date:YES[|]1[|]f$'
+  expect "MF5 adds dated_on to the member's INSERT on moves" "$out" '^  ok    member INSERT on moves'
+  expect "MF5 leaves the member's UPDATE on moves as (status, updated_at)" "$out" '^  ok    member UPDATE on moves +status, updated_at$'
 fi
 [[ "$(applied)" != "0" ]] || fail "the history row was not recorded"
 bash "$TW" psql "$DIR/pg" -q -f "$ROOT/scripts/pg-shim/catalogue.sql" > "$DIR/cat-after-first.txt"

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { actorStamp, recordConfigChange, type ConfigActor } from '../config-log'
+import { isMissingColumnError } from '../supabase-admin'
+import { moveDay } from './move-day'
 import {
   MOVE_DIRECTIONS,
   MOVE_KINDS,
@@ -79,6 +81,10 @@ export interface DeclareMoveInput {
   title: string
   note?: string | null
   direction?: MoveDirection
+  /** The day the change was made, `YYYY-MM-DD` (MF5 `moves.dated_on`, Your
+   *  moves' "Date a move"). Absent, or today: dated the day it is declared,
+   *  as every move before MF5. */
+  datedOn?: string | null
 }
 
 export interface WriteResult<T> {
@@ -101,6 +107,15 @@ export interface WriteResult<T> {
 /** What a caller is told when M4 is not applied here. One string, so a reader
  *  and the three sites that return it cannot drift. */
 export const SUBJECTS_NOT_APPLIED = 'Subjects are not switched on for this workspace yet.'
+
+/** What a caller is told when a move is given a day before MF5 is applied
+ *  here (the form offers no day then, so this is a stale form or a crafted
+ *  request). */
+export const MOVE_DAY_NOT_APPLIED = 'Dating a move to an earlier day is not switched on for this workspace yet, so it can only be dated today.'
+
+/** The database's day, `YYYY-MM-DD`: `current_date` is UTC on this project,
+ *  and the window MF5's CHECK holds is measured from it. */
+export const databaseToday = (): string => new Date().toISOString().slice(0, 10)
 
 // ---- Pure -------------------------------------------------------------------
 
@@ -239,6 +254,11 @@ export async function declareMove(
   if (typeof target === 'string') return { ok: false, message: target }
   const direction = input.direction ?? 'up'
   if (!MOVE_DIRECTIONS.includes(direction)) return { ok: false, message: 'Say whether you want more of this or less.' }
+  // THE DAY, WHERE ONE IS GIVEN (MF5). Checked here against the window the
+  // database's CHECK holds, so a person gets a sentence rather than a
+  // constraint name. Today is stored as nothing: the row's declared_at says it.
+  const day = moveDay(input.datedOn, databaseToday())
+  if (typeof day === 'string') return { ok: false, message: day }
 
   // The subject must be this tenant's. The session client is RLS-scoped, so a
   // subject belonging to someone else simply does not come back, and an absent
@@ -273,10 +293,18 @@ export async function declareMove(
       note: input.note?.trim() || null,
       direction,
       declared_by: ctx.userId,
+      ...(day.day ? { dated_on: day.day } : {}),
     })
     .select('id, client_id, kind, subject_id, registry_ids, lineage_id, title, note, direction, declared_at, declared_by, status')
     .maybeSingle()
   if (error) {
+    if (day.day && isMissingColumnError(error, 'dated_on')) return { ok: false, message: MOVE_DAY_NOT_APPLIED, missing: true }
+    // The window moved under the form (a day past midnight UTC): the same
+    // sentence the check above gives.
+    if ((error as { code?: string; message?: string }).code === '23514' && (error as { message?: string }).message?.includes('moves_dated_on_window')) {
+      const again = moveDay(input.datedOn, databaseToday())
+      return { ok: false, message: typeof again === 'string' ? again : 'Pick the day you made the change.' }
+    }
     // The insert is the ONLY failure path for an advice-kinded move — it has no
     // subject to pre-read — so a missing `moves` table arrived here wearing
     // "Could not save. Try again" and nothing upstream could tell the two
@@ -291,8 +319,8 @@ export async function declareMove(
     surface: 'subjects',
     field: 'moves',
     before: null,
-    after: { id: move?.id ?? null, kind: input.kind, title, direction, target },
-    actor: actorFor(ctx, 'declared a move'),
+    after: { id: move?.id ?? null, kind: input.kind, title, direction, target, ...(day.day ? { dated_on: day.day } : {}) },
+    actor: actorFor(ctx, day.day ? 'dated a move' : 'declared a move'),
   })
   return { ok: true, message: 'Tracking it from today.', value: move ?? undefined }
 }

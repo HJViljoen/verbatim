@@ -1,10 +1,10 @@
 import { readFileSync } from 'fs'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { activationCheck, MOVE_STATUS_SAID, moveTarget, moveTitle, sameName, setMoveStatus, subjectSetVerdict } from './moves'
+import { activationCheck, declareMove, MOVE_DAY_NOT_APPLIED, MOVE_STATUS_SAID, moveTarget, moveTitle, sameName, setMoveStatus, subjectSetVerdict } from './moves'
 import { MOVE_MAX_THEMES, SUBJECTS_MAX, SUBJECTS_MIN, type MoveStatus } from './types'
 
 describe('moveTarget', () => {
@@ -218,5 +218,68 @@ describe('the subject audit trigger and the application log, which must not both
     // the discriminator is a convention instead of a rule.
     expect(m4).toMatch(/created_by = \(select auth\.uid\(\)\)/)
     expect(m4).toMatch(/grant insert \([^)]*created_by[^)]*\)\s*\n?\s*on public\.subjects to authenticated;/)
+  })
+})
+
+// MF5 (WP3.6 wave 2): "Date a move" gives a move the day it was made. The
+// write is the same insert every move takes, with `dated_on` beside it, and
+// only where a day other than today was given.
+describe('declareMove · a move dated earlier than it is declared (MF5)', () => {
+  const SUBJECT = '00000000-0000-4000-8000-0000000005f1'
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-02T06:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+
+  /** A session client that holds the tenant's one subject and records the
+   *  insert; `insertError` is what PostgREST answers the insert with. */
+  const fake = (insertError: { code: string; message: string } | null = null) => {
+    const inserted: Record<string, unknown>[] = []
+    const logged: Record<string, unknown>[] = []
+    const chain = (result: unknown) => {
+      const c: Record<string, unknown> = {}
+      for (const k of ['select', 'eq', 'in']) c[k] = () => c
+      c.maybeSingle = async () => result
+      return c
+    }
+    const supabase = {
+      from: (table: string) => ({
+        select: () => chain({ data: { id: SUBJECT }, error: null }),
+        insert: (row: Record<string, unknown>) => {
+          inserted.push(row)
+          return chain(insertError ? { data: null, error: insertError } : { data: { id: 'm-new', ...row }, error: null })
+        },
+        table,
+      }),
+    } as unknown as SupabaseClient
+    const admin = { from: () => ({ insert: async (rows: Record<string, unknown>[]) => { logged.push(...rows); return { error: null } } }) } as unknown as SupabaseClient
+    return { supabase, admin, inserted, logged }
+  }
+  const ctx = (supabase: SupabaseClient) => ({ supabase, clientId: 'c1', userId: 'u1' })
+
+  it('stores the day it was given, and logs it with the move', async () => {
+    const f = fake()
+    const r = await declareMove(ctx(f.supabase), f.admin, { kind: 'subject', subjectId: SUBJECT, title: 'Fit and facts on every bag page', datedOn: '2026-09-15' })
+    expect(r.ok).toBe(true)
+    expect(f.inserted[0].dated_on).toBe('2026-09-15')
+    expect(JSON.stringify(f.logged[0])).toContain('"dated_on":"2026-09-15"')
+  })
+
+  it('sends no day for a move dated today, so it writes before MF5 as every move has', async () => {
+    const f = fake()
+    expect((await declareMove(ctx(f.supabase), f.admin, { kind: 'subject', subjectId: SUBJECT, title: 'Today', datedOn: '2026-10-02' })).ok).toBe(true)
+    expect((await declareMove(ctx(f.supabase), f.admin, { kind: 'subject', subjectId: SUBJECT, title: 'No day' })).ok).toBe(true)
+    expect(f.inserted.map((row) => 'dated_on' in row)).toEqual([false, false])
+  })
+
+  it('refuses a day outside the window before any read or write', async () => {
+    const supabase = { from: () => { throw new Error('no read should happen') } } as unknown as SupabaseClient
+    const r = await declareMove(ctx(supabase), supabase, { kind: 'subject', subjectId: SUBJECT, title: 'Too early', datedOn: '2026-07-31' })
+    expect(r).toEqual({ ok: false, message: 'Pick a day from 1 Aug to today.' })
+  })
+
+  it('says a move can only be dated today where MF5 is not applied here', async () => {
+    const f = fake({ code: 'PGRST204', message: "Could not find the 'dated_on' column of 'moves' in the schema cache" })
+    const r = await declareMove(ctx(f.supabase), f.admin, { kind: 'subject', subjectId: SUBJECT, title: 'Before MF5', datedOn: '2026-09-15' })
+    expect(r).toEqual({ ok: false, message: MOVE_DAY_NOT_APPLIED, missing: true })
+    expect(f.logged).toEqual([])
   })
 })

@@ -13,6 +13,7 @@ import type { Verdict } from '@/lib/reading/verdicts'
 import { PLAN_EMPTY, planCard } from '@/lib/ask/plan-cards'
 import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
 import { recurrenceOf } from '@/lib/reading/head-to-head'
+import type { MoveDating } from '@/lib/pages/date-move'
 
 // Market's block fixtures (Phase 1 WP14).
 //
@@ -447,10 +448,14 @@ export function sealandMovesFixture(): MarketSurfaceData {
       echo: marketClaimEcho({ stance: 'silent', reading: { k: 0, n: 654 } }),
     },
   ]
+  const questions = sealandQuestions()
   return {
     ...base,
     advice: { ...base.advice, rows: [kbyb, ...rest], current: 'L-kbyb', total: 67, acted: 2, actedLine: actedLine(2, 67), repeatLine: repeatLine([kbyb, ...rest]) },
-    moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MARKET, card: cardFixture(), readings: [], market: [] },
+    moves: {
+      rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MARKET, card: cardFixture(), readings: [], market: [],
+      dating: sealandDating(questions, { lineageId: kbyb.lineageId, title: kbyb.title }),
+    },
     ways: {
       ...base.ways,
       claims,
@@ -461,7 +466,22 @@ export function sealandMovesFixture(): MarketSurfaceData {
         filings: null,
       }),
     },
-    questions: sealandQuestions(),
+    questions,
+  }
+}
+
+/** "Date a move" on Sealand at the 2 Oct clock (WP3.6 wave 2): the subjects
+ *  the page asks about, September's question themes, the current
+ *  recommendation, and the window from 1 Aug; MF5 applied. */
+export function sealandDating(questions: QuestionsBlock, advice: MoveDating['advice']): MoveDating {
+  return {
+    datable: true,
+    today: '2026-10-02',
+    earliest: '2026-08-01',
+    month: questions.month,
+    subjects: SUBJECTS_ASKED.map((x) => ({ id: x.id, name: x.name })),
+    themes: questions.themes.map((t) => ({ registryId: t.registryId, label: t.label })),
+    advice,
   }
 }
 
@@ -595,20 +615,27 @@ export function ossurMovesFixture(): MarketSurfaceData {
   const ossurTheme = (registryId: string, label: string, k: number): MarketTheme => ({
     registryId, label, labelStripped: false, kind: 'question', k, n: 338, prev: null, makerShare: null, noiseShare: null, identityNewThisRun: false, flags: [], provenance: null,
   })
+  const questions = buildQuestions({
+    month: '2026-09-01',
+    themes: [ossurTheme('reg-os-function', 'Questions about prosthetic function', 28), ossurTheme('reg-os-price', 'Price and availability questions', 14)],
+    segments: 'no_rule',
+    n: 338,
+    brandNames: ['Össur', 'Ottobock'],
+    posts,
+    subjects: [],
+    filings: null,
+  })
+  const current = base.advice.rows.find((r) => r.lineageId === base.advice.current) ?? null
   return {
     ...base,
     brand: 'Össur',
-    moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MARKET, card: cardFixture(), readings: [], market: [] },
+    moves: {
+      rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MARKET, card: cardFixture(), readings: [], market: [],
+      // No subject, so a move is dated on a question or the advice; and MF5
+      // not applied here, so it is dated today.
+      dating: { datable: false, today: '2026-10-02', earliest: '2026-08-01', month: questions.month, subjects: [], themes: questions.themes.map((t) => ({ registryId: t.registryId, label: t.label })), advice: current ? { lineageId: current.lineageId, title: current.title } : null },
+    },
     ways: { ...base.ways, claims: [], claimSubjects: null, claimsLine: 'Nothing you have said in your own posts has been read against the conversation this update.' },
-    questions: buildQuestions({
-      month: '2026-09-01',
-      themes: [ossurTheme('reg-os-function', 'Questions about prosthetic function', 28), ossurTheme('reg-os-price', 'Price and availability questions', 14)],
-      segments: 'no_rule',
-      n: 338,
-      brandNames: ['Össur', 'Ottobock'],
-      posts,
-      subjects: [],
-      filings: null,
-    }),
+    questions,
   }
 }

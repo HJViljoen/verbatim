@@ -24,7 +24,7 @@ import { MONTH_PARAM, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
-import { selectAll } from '../supabase-admin'
+import { isMissingColumnError, selectAll } from '../supabase-admin'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { subjectCalibration } from '../subjects/calibration-state'
@@ -44,6 +44,8 @@ import { row } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { quotesUntranslated } from './evidence-untranslated'
+import { earliestMoveDay } from '../subjects/move-day'
+import type { MoveDating } from './date-move'
 
 // Market — the decision surface (Phase 1 WP14, design §3 MK1-MK7, item 42's
 // second half).
@@ -309,6 +311,11 @@ export interface MovesBlock {
    *  move's month, the month after, the month after that). Never a verdict and
    *  never a cause. OPTIONAL: a stored copy renders its `readings` as sent. */
   market?: MoveMarketRead[]
+  /** What "Date a move" offers here (WP3.6 wave 2): the subjects, question
+   *  themes and advice a move can be dated on, the day's window, and whether
+   *  MF5 is applied. OPTIONAL: absent on a stored copy and where moves (M4)
+   *  are not recorded; the app draws no control without it. */
+  dating?: MoveDating
 }
 
 /** One month of a move read in the market: a level, or why there is none. */
@@ -328,6 +335,9 @@ export interface MoveMarketRead {
   /** What the move is on, as `MoveRow.on`. */
   on: string
   declaredAt: string
+  /** The day the change was made, where it was dated earlier than declared
+   *  (MF5 `moves.dated_on`). The move's month is this day's. */
+  datedOn?: string
   /** The object read: a subject's name or a theme's label. Null where the
    *  move names nothing the market is read on month by month. */
   label: string | null
@@ -500,6 +510,10 @@ export interface QuestionsBlock {
   windowPosts: number | null
   subjects: QuestionSubjectRow[]
   empty: string | null
+  /** Whether the makers rule was read for the month's themes (`measured`),
+   *  so "not led by makers" is known rather than assumed. OPTIONAL: a copy
+   *  stored before the hero read it has none, and says nothing about makers. */
+  segments?: ThemeBoard['segments']
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -1107,6 +1121,7 @@ export function buildQuestions(input: {
     windowPosts: input.posts ? input.posts.length : null,
     subjects,
     empty: themes.length === 0 && subjects.length === 0 ? questionsEmpty(month) : null,
+    segments: input.segments,
   }
 }
 
@@ -1174,7 +1189,7 @@ export function buildClaimSubjects(input: {
  * (null: the month was not read).
  */
 export function moveMarketReads(input: {
-  moves: readonly Pick<Move, 'id' | 'kind' | 'subject_id' | 'registry_ids' | 'lineage_id' | 'title' | 'declared_at'>[]
+  moves: readonly (Pick<Move, 'id' | 'kind' | 'subject_id' | 'registry_ids' | 'lineage_id' | 'title' | 'declared_at'> & { dated_on?: string | null })[]
   month: string
   on: (move: { id: string }) => string
   subjects: ReadonlyMap<string, { name: string; calibration: SubjectCalibrationWord }>
@@ -1186,7 +1201,9 @@ export function moveMarketReads(input: {
 }): MoveMarketRead[] {
   const reading = monthStartOf(input.month)
   return input.moves.map((m) => {
-    const moveMonth = monthStartOf(m.declared_at.slice(0, 10))
+    // THE MOVE'S MONTH IS THE DAY IT WAS MADE (MF5), else the day it was
+    // declared: every move before MF5, and one dated today.
+    const moveMonth = monthStartOf(moveDayOf(m))
     const subject = m.kind === 'subject' && m.subject_id ? input.subjects.get(m.subject_id) ?? null : null
     const themeId = m.kind === 'theme' ? (m.registry_ids ?? [])[0] ?? null
       : m.kind === 'advice' && m.lineage_id ? input.adviceTargets.get(m.lineage_id) ?? null : null
@@ -1210,12 +1227,16 @@ export function moveMarketReads(input: {
       title: m.title,
       on: input.on(m),
       declaredAt: m.declared_at,
+      ...(m.dated_on ? { datedOn: m.dated_on.slice(0, 10) } : {}),
       label: object ? label : null,
       calibration: subject?.calibration ?? null,
       months,
     }
   })
 }
+
+/** The day a move is read from: `dated_on` (MF5), else `declared_at`. */
+export const moveDayOf = (m: { declared_at: string; dated_on?: string | null }): string => (m.dated_on ?? m.declared_at).slice(0, 10)
 
 /** A month of a move's market read, in words: "104 of 655 (16%)", or why not.
  *  "of N" always rides with the figure (copy rule: every level prints of N). */
@@ -1323,7 +1344,9 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const filingsAhead = loadOwnPostSubjects(supabase, clientId)
   const claimsAhead = loadClientClaims(supabase, clientId)
   const marketVideosAhead = loadMarketMonthVideos(reading, clientId, month)
-  for (const p of [questionThemesAhead, postsAhead, filingsAhead, claimsAhead, marketVideosAhead]) p.catch(() => {})
+  // "Date a move" takes a day once MF5 is applied (WP3.6 wave 2).
+  const datableAhead = loadMoveDatable(supabase, clientId)
+  for (const p of [questionThemesAhead, postsAhead, filingsAhead, claimsAhead, marketVideosAhead, datableAhead]) p.catch(() => {})
 
   const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
     supabase.from('market_insights')
@@ -1661,6 +1684,23 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     filings: filings ? ownPostFilings(filings) : null,
   })
 
+  // ── "Date a move" (WP3.6 wave 2): what a move can be dated on, and when ──
+  // Only where moves are recorded (M4). The subjects are the ones the page
+  // asks about (active, none being re-described), the themes the month's
+  // questions, the advice the current recommendation. The day's window is
+  // the database's (UTC), and a day is offered once MF5 is applied.
+  const today = readingAt.slice(0, 10)
+  const currentAdvice = advice.current ? adviceRows.find((r) => r.lineageId === advice.current) ?? null : null
+  const dating: MoveDating | undefined = moves == null ? undefined : {
+    datable: await datableAhead.catch(() => false),
+    today,
+    earliest: earliestMoveDay(today),
+    month,
+    subjects: askable.map((x) => ({ id: x.id, name: x.name })),
+    themes: questions.themes.map((t) => ({ registryId: t.registryId, label: t.label })),
+    advice: currentAdvice ? { lineageId: currentAdvice.lineageId, title: currentAdvice.title } : null,
+  }
+
   // ── MK5 · how a move is made ───────────────────────────────────────────
   const claimEntries = ledgerRows(summary?.say_vs_hear ?? [], CLAIM_ROWS)
   // Y3 · EACH CLAIM COUNTED IN THE MARKET (IO F48): the videos behind the
@@ -1740,7 +1780,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     masthead: MOVES_MASTHEAD,
     conclusions,
     advice,
-    moves: movesBlock,
+    moves: dating ? { ...movesBlock, dating } : movesBlock,
     ways,
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),
@@ -1966,7 +2006,7 @@ async function loadMoveMarketReads(input: {
   reading: ReadingHandle
   clientId: string
   month: string
-  moves: readonly Move[]
+  moves: readonly DatedMove[]
   rivalAudiences: readonly string[]
   counts: ReadonlyMap<string, { videos: number | null }>
   on: (m: { id: string }) => string
@@ -1976,7 +2016,7 @@ async function loadMoveMarketReads(input: {
 }): Promise<MoveMarketRead[]> {
   if (input.moves.length === 0) return []
   const audiences = marketAudiences(input.rivalAudiences)
-  const from = input.moves.reduce((m, x) => (monthStartOf(x.declared_at.slice(0, 10)) < m ? monthStartOf(x.declared_at.slice(0, 10)) : m), monthStartOf(input.month))
+  const from = input.moves.reduce((m, x) => (monthStartOf(moveDayOf(x)) < m ? monthStartOf(moveDayOf(x)) : m), monthStartOf(input.month))
   const subjectIds = [...new Set(input.moves.filter((m) => m.kind === 'subject' && m.subject_id).map((m) => m.subject_id as string))]
   const themeIds = [...new Set(input.moves.flatMap((m) => m.kind === 'theme' ? (m.registry_ids ?? []).slice(0, 1) : m.kind === 'advice' && m.lineage_id && input.adviceTargets.get(m.lineage_id) ? [input.adviceTargets.get(m.lineage_id) as string] : []))]
   const levels = new Map<string, number>()
@@ -2427,9 +2467,14 @@ async function loadDecisions(supabase: SupabaseClient, clientId: string): Promis
 }
 
 /** The moves this tenant has dated. Null — never [] — before M4 is applied. */
-async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Move[] | null> {
+/** A move as `select('*')` reads it: with MF5's `dated_on` once it is applied
+ *  (lib/subjects/types.ts `Move` is on the freeze path, so the column rides
+ *  here). */
+type DatedMove = Move & { dated_on?: string | null }
+
+async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<DatedMove[] | null> {
   try {
-    return await selectAll<Move>(() =>
+    return await selectAll<DatedMove>(() =>
       supabase.from(TABLE_MOVES).select('*').eq('client_id', clientId)
         .order('declared_at', { ascending: false }).order('id', { ascending: true }),
     )
@@ -2437,6 +2482,21 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
     if (isMissingSubjects(error)) return null
     throw error
   }
+}
+
+/**
+ * Whether MF5 is applied here, so "Date a move" may take a day: a zero-row
+ * read of `moves.dated_on` on the session client. A column PostgREST does not
+ * know answers 42703; so does a table it does not know (M4), and neither is an
+ * error worth logging.
+ */
+async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Promise<boolean> {
+  const { error } = await supabase.from(TABLE_MOVES).select('dated_on').eq('client_id', clientId).limit(0)
+  if (!error) return true
+  if (!isMissingColumnError(error, 'dated_on') && !isMissingSubjects(error)) {
+    console.error(`[pages] market-surface.moveDatable: ${(error as { message?: string }).message ?? String(error)}`)
+  }
+  return false
 }
 
 /** The tenant's subjects, for a move's "on what". Null before M4.

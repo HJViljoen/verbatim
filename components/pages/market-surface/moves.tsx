@@ -13,6 +13,8 @@ import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdic
 import { MOVES_MARKET_HOW, moveMonthLevel, type MarketSurfaceData, type MoveMarketMonth, type MoveMarketRead } from '@/lib/pages/market-surface'
 import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
+import { canDate } from '@/lib/pages/date-move'
+import { DateMove } from './date-move'
 
 // MK4 · Your moves (design §3 MK4; ported to the artboard, Block D wave 2).
 //
@@ -276,7 +278,7 @@ function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) 
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{read.title}</div>
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{read.on} · dated {shortDate(read.declaredAt)}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{read.on} · dated {shortDate(read.datedOn ?? read.declaredAt)}</div>
         {read.calibration === 'failed'
           ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{MOVE_FAILED}</div>
           : on
@@ -289,7 +291,7 @@ function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) 
     <TileBlock className="flex min-w-0 flex-col gap-2.5">
       <span className="flex flex-col gap-0.5">
         <span className="text-[14px] font-semibold text-foreground">{read.title}</span>
-        <span className="text-[12px] text-muted-foreground">{read.on} · dated {shortDate(read.declaredAt)}</span>
+        <span className="text-[12px] text-muted-foreground">{read.on} · dated {shortDate(read.datedOn ?? read.declaredAt)}</span>
       </span>
       {read.calibration === 'failed' ? (
         <span className="text-[13px] text-secondary-foreground">{MOVE_FAILED}</span>
@@ -368,6 +370,9 @@ export const marketMoves: Block<MarketSurfaceData> = {
               {m.market.map((r) => <MarketMove key={r.moveId} read={r} mode={mode} />)}
             </div>
           ) : null}
+          {/* THE PREVIEW'S "DATE A MOVE", under the moves (WP3.6 wave 2): the
+              app's alone, and only where there is something to date one on. */}
+          {mode === 'app' && canDate(m.dating) ? <DateMove dating={m.dating} /> : null}
         </BlockFrame>
       )
     }

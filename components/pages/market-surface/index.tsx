@@ -16,6 +16,9 @@ import { marketSayHear } from './sayhear'
 import { marketPlans } from './plans'
 import { marketWays } from './ways'
 import { marketQuestions } from './questions'
+import { marketLine } from './line'
+import { DateMove } from './date-move'
+import { canDate } from '@/lib/pages/date-move'
 
 // Market — the page (Phase 1 WP14, design §3 MK1–MK7; ported to the artboard,
 // Block D wave 2).
@@ -86,7 +89,11 @@ import { marketQuestions } from './questions'
 // plans (Y6) and, last and unchanged, how a move is made. Every header is its
 // title alone and every footer a link alone (25 Sep rulings), which
 // `index.test.tsx` sweeps on this page's own blocks.
+//
+// WP3.6 WAVE 2: "In one line" (the preview's hero) leads the page, over the
+// questions whose three largest it names.
 export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
+  marketLine,
   marketQuestions,
   marketAdvice,
   marketSayHear,
@@ -98,7 +105,7 @@ export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
 ]
 
 /** The full-width readings at the top of the page. */
-const READINGS: readonly Block<MarketSurfaceData>[] = [marketQuestions, marketAdvice, marketSayHear]
+const READINGS: readonly Block<MarketSurfaceData>[] = [marketLine, marketQuestions, marketAdvice, marketSayHear]
 /** The pair under them: your moves beside the month's card. */
 const MOVES: readonly Block<MarketSurfaceData>[] = [marketMoves, marketCard]
 /** The full-width tail. */
@@ -106,6 +113,7 @@ const TAIL: readonly Block<MarketSurfaceData>[] = [marketConclusions, marketPlan
 
 /** Each block's span on the 12-column grid — the preview's widths. */
 const COLS: Record<string, number> = {
+  'market.line': 12,
   'market.questions': 12,
   'market.advice': 12,
   'market.sayhear': 12,
@@ -138,10 +146,10 @@ const COLS: Record<string, number> = {
 // 190px of ink). The start stays explicit so a line whose spans do not fill
 // twelve columns can never have a later tile flowed up into it.
 
-/** The grids as their lines of tile keys: the three full-width readings, one
+/** The grids as their lines of tile keys: the four full-width readings, one
  *  row each, then the tail's three. The moves pair is `MOVES_STACKS`. */
 const GRIDS: readonly (readonly (readonly string[])[])[] = [
-  [['market.questions'], ['market.advice'], ['market.sayhear']],
+  [['market.line'], ['market.questions'], ['market.advice'], ['market.sayhear']],
   [['market.conclusions'], ['market.plans'], ['market.ways']],
 ]
 
@@ -166,6 +174,8 @@ const STACK_SPAN: Record<number, string> = { 5: 'xl:col-span-5', 6: 'xl:col-span
  * carry that state and the act that ends it, so the page draws no card.
  */
 export function drawnOnMarket(key: string, data: MarketSurfaceData): boolean {
+  // A copy stored before Y1 has no questions, so no line to draw from them.
+  if (key === 'market.line') return data.questions != null
   if (key === 'market.plans') return data.plans.length > 0
   if (key === 'market.sayhear') return data.ways.claims.length > 0
   return true
@@ -278,6 +288,10 @@ export function MarketSurfacePage({
         context={barContext(data)}
       >
         <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
+        {/* The preview's green "Date a move" in the bar (WP3.6 wave 2), the
+            same sheet as the one under Your moves; from sm up, where the bar
+            has the room beside the title. */}
+        {canDate(data.moves.dating) ? <DateMove dating={data.moves.dating} place="bar" /> : null}
       </SurfacePageBar>
 
       {/* NO MASTHEAD. "We never claim you caused it" is said once per
