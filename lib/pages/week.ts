@@ -2101,11 +2101,6 @@ async function buildCameIn(input: {
   const analysedTotal = audienceRows.reduce((t, r) => t + r.analysed, 0)
   for (const rowOut of audienceRows) rowOut.share = { k: rowOut.analysed, n: analysedTotal }
 
-  // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
-  // "notable rival posts" does not say which. Both are printed, named: Össur
-  // has zero competitor-owned videos in production, so the first is empty on
-  // the paying tenant and would have read as "the rivals posted nothing".
-  const everOwned = await loadOwnedRivalAudiences(supabase, clientId)
   // THE POSTS THEMSELVES, ACROSS EVERY RIVAL, COUNTED IN ONE PASS. Each named
   // post costs one HEAD count of the comments dated under it inside the window,
   // so the candidates are picked first (by reach, which is the only "notable"
@@ -2121,9 +2116,24 @@ async function buildCameIn(input: {
         .map((v) => ({ audience, video: v }))
     })
     : []
-  const [postComments, postText] = await Promise.all([
+  // THIS SECTION'S READS, TOGETHER. None of the five takes another's answer —
+  // the candidates above are arithmetic on wave 2's rows — and they were
+  // awaited one after another, which made §4 the page's long pole: on staging
+  // (27 Sep) the owned-rival read, the comment counts, the new themes and the
+  // subject quotes ran end to end for 4.6 s behind a wave that had already
+  // finished everything else.
+  const [everOwned, postComments, postText, newThemes, subjectQuotes] = await Promise.all([
+    // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
+    // "notable rival posts" does not say which. Both are printed, named: Össur
+    // has zero competitor-owned videos in production, so the first is empty on
+    // the paying tenant and would have read as "the rivals posted nothing".
+    loadOwnedRivalAudiences(supabase, clientId),
     windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window),
     loadPostText(supabase, clientId, candidates.map((c) => c.video.id)),
+    loadNewThemes(supabase, clientId, runId, month, input.regime),
+    window
+      ? loadSubjectQuotes(supabase, clientId, input.subjects, window)
+      : { shown: [], total: null, unread: QUOTES_NO_WINDOW },
   ])
   const weighedBy = new Map<string, number>()
   const postsBy = new Map<string, RivalPost[]>()
@@ -2185,11 +2195,6 @@ async function buildCameIn(input: {
   // ever captured has nothing to read. Settings › Tracking lists them.
   .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0))
   .map(({ retired: _retired, ...r }) => r)
-
-  const newThemes = await loadNewThemes(supabase, clientId, runId, month, input.regime)
-  const subjectQuotes = window
-    ? await loadSubjectQuotes(supabase, clientId, input.subjects, window)
-    : { shown: [], total: null, unread: QUOTES_NO_WINDOW }
 
   return {
     window,
