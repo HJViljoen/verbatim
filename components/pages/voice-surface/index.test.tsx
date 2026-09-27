@@ -4,7 +4,8 @@ import { blockAnswers, figureConflicts, figureCount, mergeFigures, type RenderMo
 import { copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { VOICE_BLOCKS, VoiceSurfacePage, voiceContext } from './index'
-import { ossurVoiceFixture, refusedVoiceFixture, voiceFixture } from './fixture'
+import { allAccountsVoiceFixture, ossurVoiceFixture, refusedVoiceFixture, voiceFixture } from './fixture'
+import { BlockFrame } from '@/components/blocks/frame'
 import VoiceLoading from '@/app/dashboard/voice/loading'
 
 // Conversation — the page (market-first WP2.4, plan §2.4).
@@ -13,8 +14,24 @@ const MODES: RenderMode[] = ['app', 'print', 'email']
 const STATES = () => [voiceFixture(), ossurVoiceFixture(), refusedVoiceFixture()]
 
 describe('VOICE_BLOCKS', () => {
-  it('is the four §2.4 names, in the order a reader asks: the market, every theme, one in full, who is talking', () => {
-    expect(VOICE_BLOCKS.map((b) => b.key)).toEqual(['voice.audience', 'voice.board', 'voice.theme', 'voice.cast'])
+  it('is the six §2.4 names, in the order a reader asks: the market, every theme, one in full, who is talking, its words, where it talks', () => {
+    expect(VOICE_BLOCKS.map((b) => b.key)).toEqual(['voice.audience', 'voice.board', 'voice.theme', 'voice.cast', 'voice.words', 'voice.where'])
+  })
+
+  // The 25 Sep rulings on a rebuilt page: a header is its title alone and a
+  // footer holds links alone, so no block passes BlockFrame a meta or a footer
+  // note (the registry sweep's check, run here for Conversation's blocks).
+  it('no block passes BlockFrame a meta or a footer note, in any state or mode', () => {
+    for (const block of VOICE_BLOCKS) {
+      for (const data of [...STATES(), allAccountsVoiceFixture()]) {
+        for (const mode of MODES) {
+          const el = block.render(data, mode, voiceContext({})) as { type?: unknown; props?: { meta?: unknown; footerNote?: unknown } }
+          expect(el?.type, `${block.key} ${data.brand} ${mode}`).toBe(BlockFrame)
+          expect(el?.props?.meta ?? null, `${block.key} ${data.brand} ${mode}`).toBeNull()
+          expect(el?.props?.footerNote ?? null, `${block.key} ${data.brand} ${mode}`).toBeNull()
+        }
+      }
+    }
   })
 
   // Every block, in every state, in every mode: one case each, so a failure
@@ -62,7 +79,7 @@ describe('nothing skipped (§5.9, WP2.4’s done-when)', () => {
 })
 
 describe('the skeleton at app/dashboard/voice/loading.tsx', () => {
-  it('draws the same four growing sections the page does, and asks for no row', () => {
+  it('draws the same six growing sections the page does, and asks for no row', () => {
     const markup = render(<VoiceLoading />)
     expect(markup.match(/data-tile=""/g)).toHaveLength(VOICE_BLOCKS.length)
     expect(markup).not.toMatch(/row-span-\d/)
@@ -71,11 +88,20 @@ describe('the skeleton at app/dashboard/voice/loading.tsx', () => {
 })
 
 describe('VoiceSurfacePage', () => {
-  it('draws four tiles under the bar, the theme pane at #theme', () => {
+  it('draws six tiles under the bar, the theme pane at #theme and the accounts at #where', () => {
     const markup = render(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(markup.match(/data-tile=""/g)).toHaveLength(4)
+    expect(markup.match(/data-tile=""/g)).toHaveLength(6)
     expect(markup).toContain('id="theme"')
     expect(markup).toContain('id="board"')
+    expect(markup).toContain('id="where"')
+  })
+
+  it('names the military-dog channel only under "set aside" on the whole page (WP3.8 done-when)', () => {
+    for (const data of [voiceFixture(), allAccountsVoiceFixture()]) {
+      const text = renderText(<VoiceSurfacePage data={data} params={{}} />)
+      expect(text.split('Mike Ritland').length - 1).toBe(1)
+      expect(text.indexOf('Mike Ritland')).toBeGreaterThan(text.indexOf('Set aside, off-topic'))
+    }
   })
 
   it('gives no block a fixed height, so nothing on this page can be cut in silence', () => {

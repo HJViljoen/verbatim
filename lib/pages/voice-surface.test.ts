@@ -33,6 +33,11 @@ describe('voiceSurfaceHref', () => {
   it('is the bare address when nothing is selected', () => {
     expect(voiceSurfaceHref({})).toBe('/dashboard/voice')
   })
+
+  it('keeps every account listed ("Where your market talks", WP3.8) through a theme click, and drops it on null', () => {
+    expect(voiceSurfaceHref({ accounts: 'all' }, { theme: 't1' })).toBe('/dashboard/voice?theme=t1&accounts=all')
+    expect(voiceSurfaceHref({ accounts: 'all', theme: 't1' }, { accounts: null })).toBe('/dashboard/voice?theme=t1')
+  })
 })
 
 describe('askAboutTheme: the pane’s "Ask about this" (plan §2.8 D3)', () => {
