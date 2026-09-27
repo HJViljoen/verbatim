@@ -53,7 +53,7 @@ import {
   type ThemeFlag,
 } from './overview-market'
 import { row, rows as readRows } from './read'
-import { readConversationView } from '../views/conversation'
+import { readConversationView, viewParams } from '../views/conversation'
 import type { ViewState } from '../views/state'
 import { VIEW_PARAM } from '../views/view'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -547,7 +547,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const reading: ReadingHandle = scope.reading
-  const params = scope.params as VoiceSurfaceParams
+  // `?view=` is kept only where it names a view this tenant reads (lib/views).
+  const params = viewParams(clientId, scope.params as VoiceSurfaceParams)
   const readingAt = new Date().toISOString()
   // ONE MONTH, NO HORIZON (the nav offers none, `lib/nav.ts`): the board, the
   // pane and the market line all read the reading month.

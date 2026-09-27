@@ -5,7 +5,7 @@ import type { ConversationMarket } from '../pages/voice-surface'
 import { viewsConfigFor, viewsLive, type ViewsConfig } from './config'
 import { lensCategoryVideos, lensCounts, lensThemes, loadViewLens, type ViewRead } from './lens'
 import { viewState, type ViewState } from './state'
-import { parseView, VIEW_PARAM, type MarketView } from './view'
+import { defaultView, parseView, VIEW_PARAM, type MarketView } from './view'
 
 // Conversation's view (market-first decision F; plan §2.4 C1 "From D5, a view
 // switch: Everything · Buyers · Makers"; WP3.3). The page's loader
@@ -178,6 +178,22 @@ export function conversationView(input: {
 export function askedView(clientId: string, params: Readonly<Record<string, string | undefined>>): { cfg: ViewsConfig | null; asked: MarketView } {
   const cfg = viewsConfigFor(clientId)
   return { cfg, asked: parseView(params[VIEW_PARAM], cfg) }
+}
+
+/**
+ * The page's params with `?view=` kept only where it names a view the page
+ * reads that is not its default. With no view live (the switch off, or a
+ * tenant with no maker rule) a `?view=` in the address is read as nothing,
+ * and no link the page draws carries it on: the page is today's page, link
+ * for link. PURE.
+ */
+export function viewParams<P extends Readonly<Record<string, string | undefined>>>(clientId: string, params: P): P {
+  if (params[VIEW_PARAM] == null) return params
+  const { cfg, asked } = askedView(clientId, params)
+  if (asked !== defaultView(cfg)) return params
+  const rest: Record<string, string | undefined> = { ...params }
+  delete rest[VIEW_PARAM]
+  return rest as P
 }
 
 /**
