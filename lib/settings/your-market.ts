@@ -79,7 +79,14 @@ export function searchCapLine(plan: SearchPlan): string {
   return `${plan.used} of ${plan.cap} searches each update · ${free > 0 ? `${free} free` : free === 0 ? 'none free' : `${-free} over, so the update drops the last of them`}`
 }
 
-export interface MarketVideo { id: string; platform: string }
+export interface MarketVideo {
+  id: string
+  platform: string
+  /** `market_month_videos.audience`: 'industry-other' (the category) or
+   *  'competitor:<name>' (filed under a brand you track). Optional, so a
+   *  caller that counts platforms need not carry it (WP3.10's hero reads it). */
+  audience?: string
+}
 export interface PlatformShare { platform: string; label: string; videos: number }
 
 /** The market's videos by platform, biggest first. */
@@ -149,7 +156,38 @@ export interface YourMarket {
   /** Null where `video_provenance` is not there. */
   terms: { rows: TermShare[]; unknown: number } | null
   makers: MakerState
+  /** Settings' Makers and "This is not my market" (WP3.10): the category's
+   *  videos and the makers among them, and the market's off-topic videos, by
+   *  the reader precedence. Null where makers are not measured. */
+  segmentCounts: SegmentCounts | null
   pages: number
+}
+
+export interface SegmentCounts {
+  /** The month's category videos (audience 'industry-other'). */
+  category: number
+  /** Of them, makers'. */
+  categoryMakers: number
+  /** The month's market videos marked off-topic ('noise'). */
+  marketNoise: number
+  /** The month's market videos. */
+  market: number
+}
+
+/** The counts `SegmentCounts` holds, from the month's market and each video's
+ *  segment. A video with no segment row is 'market' (the rule marks nothing). */
+export function segmentCounts(market: readonly MarketVideo[], segments: ReadonlyMap<string, string>): SegmentCounts {
+  let category = 0
+  let categoryMakers = 0
+  let marketNoise = 0
+  for (const v of market) {
+    const seg = segments.get(v.id)
+    if (seg === 'noise') marketNoise++
+    if (v.audience !== 'industry-other') continue
+    category++
+    if (seg === 'maker') categoryMakers++
+  }
+  return { category, categoryMakers, marketNoise, market: market.length }
 }
 
 /**
@@ -161,8 +199,8 @@ export interface YourMarket {
 export async function loadYourMarket(admin: SupabaseClient, clientId: string, month: string): Promise<YourMarket> {
   const pages: Pages = { n: 0 }
   const rows = await readMonthVideos(admin, clientId, month, pages)
-  if (rows === null) return { month, market: null, mix: null, terms: null, makers: 'not_measured', pages: pages.n }
-  const market = rows.map((r) => ({ id: r.id, platform: r.platform }))
+  if (rows === null) return { month, market: null, mix: null, terms: null, makers: 'not_measured', segmentCounts: null, pages: pages.n }
+  const market = rows.map((r) => ({ id: r.id, platform: r.platform, audience: r.audience }))
   const ids = market.map((v) => v.id)
 
   let provenance: Map<string, { first_terms: string[]; first_subreddits: string[] }> | null = new Map()
@@ -204,6 +242,7 @@ export async function loadYourMarket(admin: SupabaseClient, clientId: string, mo
     mix: marketPlatformMix(market),
     terms: provenance ? termShares({ market, provenance, segments }) : null,
     makers,
+    segmentCounts: segments ? segmentCounts(market, segments) : null,
     pages: pages.n,
   }
 }
