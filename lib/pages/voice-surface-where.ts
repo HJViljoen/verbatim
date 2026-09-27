@@ -287,9 +287,27 @@ export async function loadMonthVideos(
 }
 
 /**
- * What the memory needs for the listed accounts: each earlier month's
- * category videos (one call a month, at most two) and every video of the
- * listed accounts (one read), beside each other. Null where either failed.
+ * The memory's earlier months: each one's category videos (one call a month,
+ * at most two), by month. It needs nothing but the months, so the page starts
+ * it beside the reading month's own read. Null where any failed.
+ */
+export async function loadEarlierMonths(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  months: readonly string[],
+): Promise<Map<string, Set<string>> | null> {
+  const m0 = monthStartOf(month)
+  const earlier = months.map(monthStartOf).filter((m) => m !== m0)
+  const held = await Promise.all(earlier.map(async (m) => [m, await categoryVideos(client, clientId, m)] as const))
+  if (held.some(([, rows]) => rows == null)) return null
+  return new Map(held.map(([m, rows]) => [m, new Set((rows ?? []).map((r) => String(r.video_id)))]))
+}
+
+/**
+ * What the memory needs for the listed accounts: the earlier months'
+ * videos (`loadEarlierMonths`, started by the caller) and every video of the
+ * listed accounts (one read). Null where either failed.
  */
 export async function loadMemory(
   client: SupabaseClient,
@@ -298,14 +316,15 @@ export async function loadMemory(
   months: readonly string[],
   thisMonth: readonly MonthVideo[],
   accounts: readonly { platform: string; name: string }[],
+  earlierMonths: Promise<Map<string, Set<string>> | null>,
 ): Promise<{ months: string[]; held: Map<string, Set<string>>; accountVideos: Map<string, Set<string>> } | null> {
   const m0 = monthStartOf(month)
-  const earlier = months.map(monthStartOf).filter((m) => m !== m0)
+  const hasEarlier = months.some((m) => monthStartOf(m) !== m0)
   const names = [...new Set(accounts.map((a) => a.name))]
   const [held, ownVideos] = await Promise.all([
-    Promise.all(earlier.map(async (m) => [m, await categoryVideos(client, clientId, m)] as const)),
+    earlierMonths,
     (async () => {
-      if (names.length === 0 || earlier.length === 0) return [] as { id: string; platform: string; account_name: string | null }[]
+      if (names.length === 0 || !hasEarlier) return [] as { id: string; platform: string; account_name: string | null }[]
       const res = await client.from('videos').select('id, platform, account_name').eq('client_id', clientId).in('account_name', names)
       if (res.error) {
         readRows(res as never, 'voice.where.accountVideos')
@@ -314,9 +333,9 @@ export async function loadMemory(
       return (res.data ?? []) as { id: string; platform: string; account_name: string | null }[]
     })(),
   ])
-  if (!ownVideos || held.some(([, rows]) => rows == null)) return null
+  if (!ownVideos || !held) return null
   const heldBy = new Map<string, Set<string>>([[m0, new Set(thisMonth.map((v) => v.videoId))]])
-  for (const [m, rows] of held) heldBy.set(m, new Set((rows ?? []).map((r) => String(r.video_id))))
+  for (const [m, ids] of held) heldBy.set(m, ids)
   const accountVideos = new Map<string, Set<string>>()
   for (const v of ownVideos) {
     if (!v.account_name) continue

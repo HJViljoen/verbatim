@@ -57,7 +57,7 @@ import { row, rows as readRows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { buildWords, loadKindRows, loadWordsCandidates, marketKindVideos, shortlistWords, type WordsBlock } from './voice-surface-words'
-import { buildWhere, loadMemory, loadMonthVideos, memoryMonths, type WhereBlock } from './voice-surface-where'
+import { buildWhere, loadEarlierMonths, loadMemory, loadMonthVideos, memoryMonths, type WhereBlock } from './voice-surface-where'
 
 // Conversation — "everything your market talked about, in full" (market-first
 // WP2.4, plan §2.4 C1–C4; the page was Voice, Phase 1 WP13, and keeps its key,
@@ -625,6 +625,10 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   monthVideosAhead.catch(() => {})
   const kindRowsAhead = loadKindRows(db, clientId, month, marketRivals)
   kindRowsAhead.catch(() => {})
+  // The memory's months are known now, and so are their reads.
+  const remembered = memoryMonths(month, history.denominators.filter((d) => d.audience === INDUSTRY_AUDIENCE).map((d) => monthStartOf(d.month)))
+  const earlierAhead = loadEarlierMonths(db, clientId, month, remembered)
+  earlierAhead.catch(() => {})
   const whereAhead = (async (): Promise<WhereBlock | null> => {
     const mv = await monthVideosAhead
     if (!mv) return null
@@ -632,9 +636,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     // Every listed account first (the memory reads their videos), then the
     // block as the reader asked for it.
     const listed = buildWhere({ ...base, memory: null, expanded: true }).rows
-    const monthsRead = history.denominators.filter((d) => d.audience === INDUSTRY_AUDIENCE).map((d) => monthStartOf(d.month))
     const memory = listed.length > 0
-      ? await loadMemory(db, clientId, month, memoryMonths(month, monthsRead), mv.videos, listed.map((a) => ({ platform: a.platform, name: a.name })))
+      ? await loadMemory(db, clientId, month, remembered, mv.videos, listed.map((a) => ({ platform: a.platform, name: a.name })), earlierAhead)
       : null
     return buildWhere({ ...base, memory, expanded: params.accounts === 'all' })
   })()
@@ -658,33 +661,32 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const shownIds = expanded ? pool.map((r) => r.id) : atTenIds
   const kById = new Map(pool.map((r) => [r.id, r.k]))
 
+  const segments: ThemeBoard['segments'] = !makerRule ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
+  const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
+
   // ── wave 4: last month, the labels and kinds, and each theme's videos ──
   // The refs' comment ids ride the same read: the bank's anchor (C5).
   const refComments = new Map<string, Set<string>>()
-  const [prevK, obs, refs] = await Promise.all([
+  const wave4 = Promise.all([
     loadPrevK(db, clientId, prevMonth, shownIds),
     loadBoardObservations(db, clientId, themedRunId, shownIds),
     loadThemeRefs(db, clientId, month, shownIds, refComments),
   ])
+  wave4.catch(() => {})
 
-  const denom = (m: string, audience: string) =>
-    history.denominators.find((d) => monthStartOf(d.month) === m && d.audience === audience) ?? null
-  const n = denom(month, INDUSTRY_AUDIENCE)?.videos ?? 0
-  const prevN = denom(prevMonth, INDUSTRY_AUDIENCE)?.videos ?? null
-  const segments: ThemeBoard['segments'] = !makerRule ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
-  const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
-
-  // THE BANK (C5), STARTED NOW: its themes are the board's rows, every theme
-  // at 10+ not led by makers or by off-topic videos (`buildThemeBoard`'s
-  // rule), and its reads wait on nothing else here. The shortlist's
-  // translations follow as soon as the candidates and the month's segments
-  // are in; the labels join at the end, after the brand check.
+  // THE BANK (C5), STARTED BESIDE WAVE 4: its themes are the board's rows,
+  // every theme at 10+ not led by makers or by off-topic videos
+  // (`buildThemeBoard`'s rule), known from the pool and the segments alone.
+  // The shortlist waits for wave 4 (the themes' kinds, the refs' anchors) and
+  // the month's segments, its translations follow, and the labels join at
+  // the end, after the brand check.
   const bankIds = atTenIds.filter((id) => segments !== 'measured'
     || ((shares?.maker.get(id) ?? 0) < MAKER_GROUP_SHARE && (shares?.noise.get(id) ?? 0) < MAKER_GROUP_SHARE))
   const wordsReadAhead = (async () => {
-    const [candidates, mv] = await Promise.all([
+    const [candidates, mv, [, obs]] = await Promise.all([
       loadWordsCandidates(supabase, clientId, themedRunId, bankIds, month),
       monthVideosAhead.catch(() => null),
+      wave4,
     ])
     if (!candidates) return null
     const segmentOf = mv?.segments ?? null
@@ -699,6 +701,12 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     }
   })()
   wordsReadAhead.catch(() => {})
+
+  const [prevK, obs, refs] = await wave4
+  const denom = (m: string, audience: string) =>
+    history.denominators.find((d) => monthStartOf(d.month) === m && d.audience === audience) ?? null
+  const n = denom(month, INDUSTRY_AUDIENCE)?.videos ?? 0
+  const prevN = denom(prevMonth, INDUSTRY_AUDIENCE)?.videos ?? null
 
   // FOUR THINGS NOW RUN BESIDE EACH OTHER, because none waits on another: the
   // flags' reads, where each theme's videos came from, the cast, and the lead

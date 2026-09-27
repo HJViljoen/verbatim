@@ -38,7 +38,8 @@ function Cite({ q, mode }: { q: WordsQuote; mode: RenderMode }) {
   const words = (
     <>
       <span data-copy="subject" data-slot="pass_b_theme">{q.theme}</span>
-      {parts.map((p, i) => <span key={i}>{' · '}{p}</span>)}
+      {/* The dot keeps to the word before it, so no line opens on one. */}
+      {parts.map((p, i) => <span key={i}>{'\u00a0· '}{p}</span>)}
     </>
   )
   if (!q.href || mode === 'print') return words
