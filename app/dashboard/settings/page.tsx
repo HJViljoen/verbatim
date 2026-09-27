@@ -25,7 +25,10 @@ import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
 import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
 
-// Settings › Tracking (Phase 1 WP16, design ST2 and ST4; ported to the
+// Settings › What we read (the key and the address stay `tracking`; the label
+// is the approved preview's, WP3.10, and like The record the pane carries no
+// title of its own: the lit rail entry names it) — was Tracking (Phase 1 WP16,
+// design ST2 and ST4; ported to the
 // artboard in Block D wave 2) — everything about what we look at for this
 // workspace, in one sub-page: the terms, what each one brought back, the
 // communities, the rivals, the platforms and the cadence.
@@ -127,7 +130,6 @@ export default async function SettingsTrackingPage() {
       title="Settings"
       context={context}
       bar={oneLineBar(inputs.tenant, inputs.reading)}
-      contentTitle="Tracking"
       counts={{
         tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
         ...(inputs.railCounts.subjects != null

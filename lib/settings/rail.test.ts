@@ -10,6 +10,9 @@ describe('railCountText — the unit is drawn where the ROW holds it', () => {
     // Measured in Chromium at 1440 and at 375: the link's content box is 200px
     // at every width, and these three need 113 / 128 / 136px of it.
     expect(railCountText({ value: '21', unit: 'terms' }, 'Tracking')).toBe('21 terms')
+    // The preview's label for the same entry (WP3.10) holds the page's own
+    // phrase: "22 search terms" is 95px of the 108 "What we read" leaves.
+    expect(railCountText({ value: '22', unit: 'search terms' }, 'What we read')).toBe('22 search terms')
     expect(railCountText({ value: '6', unit: 'subjects' }, 'Subjects')).toBe('6 subjects')
     expect(railCountText({ value: '22', unit: 'updates' }, 'The record')).toBe('22 updates')
   })
