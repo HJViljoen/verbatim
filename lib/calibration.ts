@@ -145,7 +145,7 @@ export const GLOSSARY = {
   // market, and a change is read only between two months read the same way
   // (decision D). Real figures: §2.3's September category read.
   level: ['Level', 'what a figure is running at, always printed with what it is out of: "Looks & style came up in 104 of 626 September category videos"'],
-  change: ['Change', 'the difference between two levels, banded with each side’s video count as n, and read only between two months read the same way: a change of ours between them and the pair is "not read as a change". Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
+  change: ['Change', 'the difference between two levels, banded with each side’s video count as n, and read only between two months read the same way: where a change of ours touched a tenth or more of either month, the pair is "not read as a change". Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
   // ---- Market-first (WP1.6, decision K): the market and the brands in it --
   market: ['Market', 'everything we read except your own posts: the category, plus the videos filed under a brand you track, pooled into one count. Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market'],
   brand: ['Brand', 'a company your market talks about: you, the rivals you track, and others it names. A brand’s own posts are its posts, never the market talking about it'],
