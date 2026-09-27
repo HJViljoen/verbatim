@@ -760,9 +760,12 @@ const MARKET_VOICES: SubjectVoice[] = [
  * August 38, 28, 17, 15, 15, 5), the maker read (MF2 `lens_readings` over the
  * month's 220 maker videos: 35, 1, 9, 8, 2, 3), Repair & warranty failed
  * (0.333 on 33) and Community & purpose not read. Looks & style selected: its
- * kinds (praise 93, 4, 4, 4, question 2, none hitting a problem), 2 question
- * videos this month, and its four September voices (none under a maker's
- * video on staging).
+ * kinds (praise 93, 4, 4, 4, question 2, none hitting a problem), where its
+ * 103 videos were found (32 on searches run before September, 71 only on the
+ * 18 searches first run in it: 9, 13 and 20 Sep; the loader on staging,
+ * re-counted by hand from video_provenance, source_keywords and gate verdicts),
+ * 2 question videos this month, and its four September voices (none under a
+ * maker's video on staging).
  */
 export function marketSubjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const base = calibrationFixture()
@@ -797,6 +800,7 @@ export function marketSubjectsFixture(over: Partial<SubjectsData> = {}): Subject
       marketLine: line,
       chip: 'not read as a change: we changed our searches in September',
       makers: { k: 35, of: 103 },
+      found: { of: 103, before: 32, added: 71, unrecorded: 0 },
       kindsIn: {
         of: 103,
         rows: [
@@ -837,7 +841,9 @@ export function marketSubjectsFixture(over: Partial<SubjectsData> = {}): Subject
  *  question videos, its three question groups, and none of Sealand's 56 posts
  *  in the window sharing two or more of their words. Its kinds are staging's
  *  September (pain 11, question 10, praise 8, requests 7, ready to buy 5,
- *  pushback 2, leaving 1, of 29) and its makers 2 of 29. */
+ *  pushback 2, leaving 1, of 29), its makers 2 of 29, and where its 29 were
+ *  found (14 on searches run before September, 15 only on searches added in
+ *  it). */
 export function waterproofingFixture(): SubjectsData {
   const data = marketSubjectsFixture()
   const rows = data.list.rows.map((r) => ({ ...r, selected: r.id === 's-water' }))
@@ -859,6 +865,7 @@ export function waterproofingFixture(): SubjectsData {
       market: { k: 29, n: 654, pct: 4.4 },
       marketLine: marketLineFixture('s-water', 'Waterproofing', [marketPoint('2026-08-01', 15, 377), marketPoint('2026-09-01', 29, 654)], { '2026-09-01': 'Not read as a change: we changed our searches in September.' }),
       makers: { k: 2, of: 29 },
+      found: { of: 29, before: 14, added: 15, unrecorded: 0 },
       kindsIn: {
         of: 29,
         rows: [

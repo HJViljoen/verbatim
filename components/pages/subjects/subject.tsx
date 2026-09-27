@@ -15,6 +15,7 @@ import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import { allRedescribed, marketTrail, monthsReadOf, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import type { FoundSplit } from '@/lib/pages/overview-market/provenance'
 import { openLink } from '@/components/blocks/open-link'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
@@ -401,7 +402,56 @@ export function marketPaneFigures(pane: SubjectPane): FigureTable {
     out[`subject_market_${month}_videos`] = { value: p.k, unit: 'videos', label: `${pane.name}, videos in your market in ${monthName(p.month)}` }
   }
   if (pane.makers) out.subject_makers_videos = { value: pane.makers.k, unit: 'videos', label: `${pane.name}, makers' videos in your market this month` }
+  if (pane.found) {
+    out.subject_found_before_videos = { value: pane.found.before, unit: 'videos', label: `${pane.name}, videos on searches we ran before this month` }
+    out.subject_found_added_videos = { value: pane.found.added, unit: 'videos', label: `${pane.name}, videos found only on searches we added this month` }
+    if (pane.found.unrecorded > 0) out.subject_found_unrecorded_videos = { value: pane.found.unrecorded, unit: 'videos', label: `${pane.name}, videos with no record of the search that found them` }
+  }
   return out
+}
+
+/**
+ * "Where we found them" (the approved preview's pane): the subject's videos
+ * this month on searches we ran before the month, against those found only on
+ * searches we added in it (the front page's added-only rule, `foundSplit`),
+ * each a count on the subject's own videos, as the preview prints them. A
+ * third part, the videos with no record of the search that found them, is
+ * drawn only where there is one (none on staging's September). The words name
+ * the month, not a day: a search's first run is its first gather (9, 13 and
+ * 20 Sep on staging), which is not the day the change log dates it (17 Sep).
+ */
+function WhereFound({ found, month, mode }: { found: FoundSplit; month: string; mode: RenderMode }) {
+  const m = longMonth(month)
+  const parts = [
+    { key: 'before', k: found.before, words: `on searches we ran before ${m}`, fill: 'bg-foreground' },
+    { key: 'added', k: found.added, words: `only on searches we added in ${m}`, fill: 'bg-neutral-seg' },
+    { key: 'unrecorded', k: found.unrecorded, words: 'with no record of the search that found them', fill: 'border border-muted-foreground/60' },
+  ].filter((p) => p.key !== 'unrecorded' || p.k > 0)
+  if (mode === 'email') {
+    return (
+      <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 }}>
+        Where we found them: {parts.map((p, i) => (
+          <span key={p.key}>{i > 0 ? ' · ' : ''}<span data-copy="figure">{fmtInt(p.k)}</span> {p.words}</span>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2.5">
+      <span className="text-[14px] text-secondary-foreground">Where we found them</span>
+      {/* Each part's length is its share of the videos, the gaps aside. */}
+      <span aria-hidden className="flex h-3.5 w-full gap-[3px]">
+        {parts.filter((p) => p.k > 0).map((p) => (
+          <span key={p.key} className={`block h-full min-w-[2px] rounded-[2px] ${p.fill}`} style={{ flex: `${p.k} 1 0%` }} />
+        ))}
+      </span>
+      <span className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-[14px] text-secondary-foreground">
+        {parts.map((p) => (
+          <span key={p.key}><span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(p.k)}</span> {p.words}</span>
+        ))}
+      </span>
+    </div>
+  )
 }
 
 /** "Who posted them": the makers' part and everyone else's, each a level on
@@ -447,8 +497,9 @@ function WhoPosted({ makers, mode }: { makers: { k: number; of: number }; mode: 
  * The headline on the rail's own base (default M-b), then one mono line: the
  * calibration word and the months read as levels, side by side, never a
  * direction ("provisional · Aug 11% · Sep 16%"); the pair's one chip; then
- * two inner blocks, who posted its videos (makers against everyone else,
- * decision F) and how many months have been read. No gap line and no brand
+ * two inner blocks: its videos, where we found them (`WhereFound`) and who
+ * posted them (makers against everyone else, decision F); and how many
+ * months have been read. No gap line and no brand
  * cells: the brand comparison left the hero (WP2.2).
  */
 function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: RenderMode; appUrl: string; empty: string | null }) {
@@ -489,12 +540,16 @@ function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: R
   const inner = (children: ReactNode) => (email
     ? <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>{children}</div>
     : <div className="flex flex-col gap-5 rounded-md bg-inner p-6">{children}</div>)
-  const itsVideos = pane.makers && k != null && k > 0 ? inner(
+  // Where we found them only over the headline's own videos (the loader
+  // builds it on them; a mismatch is not printed).
+  const found = pane.found && pane.found.of === k ? pane.found : null
+  const itsVideos = (pane.makers || found) && k != null && k > 0 ? inner(
     <>
       <span className={email ? undefined : 'text-[15px] font-semibold text-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink } : undefined}>
         Its <span data-copy="figure">{fmtInt(k)}</span> {longMonth(data.month)} videos
       </span>
-      <WhoPosted makers={pane.makers} mode={mode} />
+      {found ? <WhereFound found={found} month={data.month} mode={mode} /> : null}
+      {pane.makers ? <WhoPosted makers={pane.makers} mode={mode} /> : null}
     </>,
   ) : null
   const monthsRead = read > 0 ? inner(

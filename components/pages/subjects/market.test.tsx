@@ -151,6 +151,50 @@ describe('S2 · the subject in your market', () => {
     for (const gone of ['Track this', 'apart', 'too few to compare', 'You ·', 'rival']) expect(t).not.toContain(gone)
   })
 
+  it('prints where its videos were found, before who posted them: the month\'s added searches against the ones we ran before (staging: 32 and 71)', () => {
+    const t = text(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
+    expect(t).toContain('Its 103 September videos Where we found them 32 on searches we ran before September 71 only on searches we added in September Who posted them')
+    expect(t).not.toContain('no record of the search')
+    // Waterproofing's 29, as counts.
+    const w = text(subjectsSubject.render(waterproofingFixture(), 'app', ctx))
+    expect(w).toContain('14 on searches we ran before September')
+    expect(w).toContain('15 only on searches we added in September')
+  })
+
+  it('draws each part of the bar at its share of the videos, the parts in the preview\'s order', () => {
+    const html = render(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
+    const bars = [...html.matchAll(/class="block h-full min-w-\[2px\] rounded-\[2px\] ([^"]+)" style="flex:([^"]+)"/g)].map((m) => [m[1], m[2].trim()])
+    expect(bars).toEqual([['bg-foreground', '32 1 0%'], ['bg-neutral-seg', '71 1 0%']])
+  })
+
+  it('names a third part only where some videos carry no record of the search that found them', () => {
+    const data = marketSubjectsFixture()
+    const found = { of: 103, before: 30, added: 71, unrecorded: 2 }
+    const t = text(subjectsSubject.render({ ...data, selected: { ...data.selected!, found } }, 'app', ctx))
+    expect(t).toContain('30 on searches we ran before September 71 only on searches we added in September 2 with no record of the search that found them')
+  })
+
+  it('prints no split where none was measured, where it was read on other videos than the headline\'s, or on a stored pane', () => {
+    const data = marketSubjectsFixture()
+    for (const found of [null, undefined, { of: 102, before: 31, added: 71, unrecorded: 0 }]) {
+      const t = text(subjectsSubject.render({ ...data, selected: { ...data.selected!, found } }, 'app', ctx))
+      expect(t).not.toContain('Where we found them')
+      expect(t).toContain('Its 103 September videos Who posted them')
+    }
+    // With neither part measured, no inner block at all.
+    const bare = text(subjectsSubject.render({ ...data, selected: { ...data.selected!, found: null, makers: null } }, 'app', ctx))
+    expect(bare).not.toContain('Its 103 September videos')
+  })
+
+  it('says it in one line in an email, and declares its figures', () => {
+    const t = text(subjectsSubject.render(marketSubjectsFixture(), 'email', ctx))
+    expect(t).toContain('Where we found them: 32 on searches we ran before September · 71 only on searches we added in September')
+    const figures = blockAnswers(subjectsSubject, marketSubjectsFixture()).figures
+    expect(figures.subject_found_before_videos?.value).toBe(32)
+    expect(figures.subject_found_added_videos?.value).toBe(71)
+    expect(figures.subject_found_unrecorded_videos).toBeUndefined()
+  })
+
   it('prints makers and everyone else as counts where the subject is under 100 videos', () => {
     const t = text(subjectsSubject.render(waterproofingFixture(), 'app', ctx))
     expect(t).toContain('2 makers’ videos')
