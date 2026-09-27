@@ -1,5 +1,5 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -7,7 +7,7 @@ import { CONTENT_TITLE, levelWords, type ContentBlock } from '@/lib/pages/brands
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
-import { RULE, SCALE } from '@/components/pages/overview/market'
+import { InnerLine, RULE, SCALE } from '@/components/pages/overview/market'
 import { competitivePlaybook } from '../playbook'
 import { Fig, Inner } from './parts'
 
@@ -103,7 +103,7 @@ export const brandsContent: Block<CompetitiveSurfaceData> = {
     const footer = openLink(mode, `${ctx.appUrl}/dashboard/reports`, 'The Content brief →')
     return (
       <BlockFrame title={CONTENT_TITLE} mode={mode} footer={footer} roomy className={mode === 'app' ? 'h-full' : undefined}>
-        {c ? <Body c={c} mode={mode} /> : <BlockEmpty mode={mode}>{CONTENT_EMPTY}</BlockEmpty>}
+        {c ? <Body c={c} mode={mode} /> : <InnerLine mode={mode}>{CONTENT_EMPTY}</InnerLine>}
       </BlockFrame>
     )
   },

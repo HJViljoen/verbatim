@@ -1,5 +1,5 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -8,7 +8,7 @@ import { POSTS_TITLE, type PostsBlock } from '@/lib/pages/brands'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
-import { RULE, SCALE } from '@/components/pages/overview/market'
+import { InnerLine, RULE, SCALE } from '@/components/pages/overview/market'
 import { competitiveOwnClaims } from '../own-claims'
 import { Line, SubHead } from './parts'
 
@@ -119,11 +119,11 @@ export const brandsPosts: Block<CompetitiveSurfaceData> = {
     const footer = openLink(mode, `${ctx.appUrl}${surface('settings').href}`, 'The accounts we track, in Settings →')
     const empty = postsEmpty(b)
     if (mode === 'email') {
-      return <BlockFrame title={POSTS_TITLE} mode={mode} footer={footer}>{empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <EmailBody b={b} />}</BlockFrame>
+      return <BlockFrame title={POSTS_TITLE} mode={mode} footer={footer}>{empty ? <InnerLine mode={mode}>{empty}</InnerLine> : <EmailBody b={b} />}</BlockFrame>
     }
     return (
       <BlockFrame title={POSTS_TITLE} mode={mode} footer={footer} roomy>
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : (
+        {empty ? <InnerLine mode={mode}>{empty}</InnerLine> : (
           <div className="@container min-w-0">
             <div className="grid min-w-0 grid-cols-1 items-start gap-y-8 @min-[760px]:grid-cols-2 @min-[760px]:gap-x-12 @min-[900px]:gap-x-[88px]">
               <Posts b={b} mode={mode} />

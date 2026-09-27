@@ -1,5 +1,6 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockFrame } from '@/components/blocks/frame'
+import { InnerLine } from '@/components/pages/overview/market'
 import { BlockQuote } from '@/components/blocks/quote'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -80,7 +81,7 @@ export const competitiveFindings: Block<CompetitiveSurfaceData> = {
 
   render(data, mode = 'app', ctx) {
     const b = data.brands?.findings
-    if (!b) return <BlockFrame title={FINDINGS_TITLE} mode={mode} roomy><BlockEmpty mode={mode}>{FINDINGS_UNREAD}</BlockEmpty></BlockFrame>
+    if (!b) return <BlockFrame title={FINDINGS_TITLE} mode={mode} roomy><InnerLine mode={mode}>{FINDINGS_UNREAD}</InnerLine></BlockFrame>
     const first = b.groups[0]?.rival ?? null
     const footer = first
       ? openLink(mode, `${ctx.appUrl}${surface('ask').href}?ask=${encodeURIComponent(`What does my market say about ${first}?`)}`, `Ask about ${first} →`)
@@ -89,7 +90,7 @@ export const competitiveFindings: Block<CompetitiveSurfaceData> = {
     const empty = emptyOf(b)
     return (
       <BlockFrame title={FINDINGS_TITLE} mode={mode} footer={footer} roomy>
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {empty ? <InnerLine mode={mode}>{empty}</InnerLine> : null}
         {b.groups.map((g) => <Group key={g.rival} g={g} mode={mode} />)}
         {thin ? <Line mode={mode} className="text-[14px] text-muted-foreground">{thin}</Line> : null}
       </BlockFrame>

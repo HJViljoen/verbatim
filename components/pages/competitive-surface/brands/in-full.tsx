@@ -1,14 +1,14 @@
 import Link from 'next/link'
 
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import { IN_FULL_TITLE, type InFullBlock } from '@/lib/pages/brands'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
-import { RULE, SCALE } from '@/components/pages/overview/market'
+import { InnerLine, RULE, SCALE } from '@/components/pages/overview/market'
 import { competitiveRivals } from '../rivals'
 import { emailCell, emailHead, SubHead } from './parts'
 
@@ -80,7 +80,7 @@ function InFull({ b, mode }: { b: InFullBlock; mode: RenderMode }) {
             </div>
           ))}
         </div>
-      ) : <BlockEmpty mode={mode}>Nothing in the comments under its videos was read in these days.</BlockEmpty>}
+      ) : <InnerLine mode={mode}>Nothing in the comments under its videos was read in these days.</InnerLine>}
     </div>
   )
 }
@@ -128,11 +128,11 @@ export const brandsInFull: Block<CompetitiveSurfaceData> = {
     if (!b) return competitiveRivals.render(data, mode, ctx)
     const empty = b.rows.length === 0 ? IN_FULL_EMPTY : null
     if (mode === 'email') {
-      return <BlockFrame title={IN_FULL_TITLE} mode={mode}>{empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <EmailBody b={b} />}</BlockFrame>
+      return <BlockFrame title={IN_FULL_TITLE} mode={mode}>{empty ? <InnerLine mode={mode}>{empty}</InnerLine> : <EmailBody b={b} />}</BlockFrame>
     }
     return (
       <BlockFrame title={IN_FULL_TITLE} mode={mode} roomy>
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : (
+        {empty ? <InnerLine mode={mode}>{empty}</InnerLine> : (
           <div className="@container min-w-0">
             <div className="grid min-w-0 grid-cols-1 items-start gap-y-8 @min-[640px]:grid-cols-2 @min-[640px]:gap-x-12 @min-[760px]:gap-x-[88px]">
               <Filed b={b} mode={mode} />

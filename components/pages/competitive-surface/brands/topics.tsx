@@ -65,9 +65,11 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
   const axis = topicsAxis(t.tracked)
   // WIDE FROM 560px OF BLOCK: label, bar, the two counts, the month before.
   // Narrower, the bar leaves (Your market's rule for its tables).
+  // Narrow, the figure columns keep to their numbers' width and the brand
+  // takes the rest, breaking between words, never inside one.
   const cols = prev
-    ? 'grid-cols-[minmax(0,1fr)_6.5rem_3rem_3.5rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem_4.5rem]'
-    : 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem]'
+    ? 'grid-cols-[minmax(0,1fr)_5rem_3rem_3rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem_4.5rem]'
+    : 'grid-cols-[minmax(0,1fr)_5rem_3rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem]'
   const bar = '@max-[560px]:hidden'
   const spanAll = prev ? 'col-span-3 @min-[560px]:col-span-4' : 'col-span-2 @min-[560px]:col-span-3'
   return (
@@ -75,13 +77,13 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
       <div role="table" aria-label="Brands we track" className="flex flex-col">
         {counted ? (
           <div className="flex flex-col justify-end gap-2 border-b border-border pb-2.5">
-            <div aria-hidden className={cn('grid items-end gap-x-4 text-[13px] font-semibold leading-[1.35] text-secondary-foreground', cols)}>
+            <div aria-hidden className={cn('grid items-end gap-x-3 @min-[560px]:gap-x-4 text-[13px] font-semibold leading-[1.35] text-secondary-foreground', cols)}>
               <span />
               <span className={bar} />
               <span className="col-span-2 border-b border-border pb-1.5 text-right">{longMonth(t.month)}</span>
               {prev ? <span className="border-b border-border pb-1.5 text-right">{longMonth(t.prevMonth as string)}</span> : null}
             </div>
-            <div role="row" className={cn('grid items-end gap-x-4 text-[13px] font-medium leading-[1.35] text-muted-foreground', cols)}>
+            <div role="row" className={cn('grid items-end gap-x-3 @min-[560px]:gap-x-4 text-[13px] font-medium leading-[1.35] text-muted-foreground', cols)}>
               <span role="columnheader" className="whitespace-nowrap">Brand</span>
               <span aria-hidden className={bar} />
               <Head words={BRANDS_HEAD_ORGANIC} n={t.nOrganic} ink={ORGANIC_INK} wrap />
@@ -98,8 +100,8 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
           const words = topicWords(r)
           const last = i === t.tracked.length - 1
           return (
-            <div key={r.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4 py-1.5', counted ? cols : 'grid-cols-[minmax(9rem,11.5rem)_minmax(0,1fr)]', last ? null : 'border-b border-border/60')}>
-              <span role="rowheader" className="min-w-0 text-[15px] leading-[1.35] text-foreground [overflow-wrap:anywhere]">{r.label}</span>
+            <div key={r.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-3 py-1.5 @min-[560px]:gap-x-4', counted ? cols : 'grid-cols-[minmax(7rem,11.5rem)_minmax(0,1fr)]', last ? null : 'border-b border-border/60')}>
+              <span role="rowheader" className="min-w-0 break-words text-[15px] leading-[1.35] text-foreground">{r.label}</span>
               {words ? (
                 <span role="cell" className={cn('text-[14px] leading-[1.4] text-muted-foreground', counted ? spanAll : null)}>{words}</span>
               ) : (
@@ -150,7 +152,7 @@ function WatchedTable({ t, rows }: { t: TopicsBlock; rows: readonly TopicRow[] }
         const words = topicWords(r)
         return (
           <div key={r.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4', counted ? cols : 'grid-cols-[minmax(0,1fr)_auto]', i === rows.length - 1 ? null : 'border-b border-border/60')}>
-            <span role="rowheader" className="min-w-0 text-[15px] text-foreground [overflow-wrap:anywhere]">{r.label}</span>
+            <span role="rowheader" className="min-w-0 break-words text-[15px] text-foreground">{r.label}</span>
             {words ? <span role="cell" className={cn('text-right text-[14px] text-muted-foreground', counted && prev ? 'col-span-2' : null)}>{words}</span> : (
               <>
                 <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(r.kAny ?? 0)}</span>

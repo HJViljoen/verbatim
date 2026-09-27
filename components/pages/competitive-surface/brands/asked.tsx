@@ -1,5 +1,5 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
@@ -7,7 +7,7 @@ import { ASKED_PARAM, ASKED_TITLE, askedMonthsLine, type AskedBlock } from '@/li
 import { competitiveSurfaceHref, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
-import { RULE, SCALE } from '@/components/pages/overview/market'
+import { InnerLine, RULE, SCALE } from '@/components/pages/overview/market'
 import { competitiveQuestions } from '../questions'
 import { Fig, PartsText, SubHead } from './parts'
 
@@ -88,7 +88,7 @@ export const brandsAsked: Block<CompetitiveSurfaceData> = {
     const footer = a && !empty && a.more > 0 && href ? openLink(mode, `${ctx.appUrl}${href}`, `Show all ${fmtInt(a.videos)} →`) : null
     return (
       <BlockFrame title={ASKED_TITLE} mode={mode} footer={footer} roomy>
-        {empty || !a ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Body a={a} mode={mode} />}
+        {empty || !a ? <InnerLine mode={mode}>{empty}</InnerLine> : <Body a={a} mode={mode} />}
       </BlockFrame>
     )
   },

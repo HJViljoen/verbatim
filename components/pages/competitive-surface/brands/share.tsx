@@ -69,10 +69,10 @@ function Body({ s, mode }: { s: ShareBlock; mode: RenderMode }) {
           </div>
         ) : (
           <span className="flex items-center gap-2.5">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-secondary-foreground">
+            {s.startsWith ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none text-secondary-foreground">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 7v5l3 2" />
-            </svg>
+            </svg> : null}
             <span className="text-[15px] font-semibold text-foreground">{shareWaiting(s)}</span>
           </span>
         )}
