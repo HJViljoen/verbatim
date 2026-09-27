@@ -1291,6 +1291,24 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   const monthStatus = freezeStateFor(month, readingAt)
   const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
 
+  // ── two sections' reads, started beside wave 2 ─────────────────────────
+  // §2's reply queue and §5's citations are the two longest chains on the
+  // page (the corpus's current insights, their evidence, the comments behind
+  // it, the videos those sit under: four reads deep, three seconds each on
+  // staging), and neither needs wave 2 to start. The reply queue wants this
+  // update's videos only for the posters' roles, at its last step, so it takes
+  // them as a promise; §5 wants the window's video count and the subjects only
+  // to label its block, so its citations start here and the block is built in
+  // the sections' wave below. Waiting for wave 2 made the page as long as wave
+  // 2 plus the longer of the two (Sealand on staging, 27 Sep: 4.4 s; started
+  // here, 3.8 s).
+  const videosAhead = loadUpdateVideos(supabase, clientId, anchor.id)
+  const repliesAhead = buildReplies({ supabase, clientId, runId: anchor.id, window, videos: videosAhead })
+  const salesCitationsAhead = window ? loadSalesCitations(supabase, clientId, window) : undefined
+  // Awaited in the sections' wave; this only keeps a failure that lands before
+  // then from being an unhandled rejection. That wave still rejects with it.
+  salesCitationsAhead?.catch(() => {})
+
   // ── wave 2: the readings ───────────────────────────────────────────────
   const [check, flags, monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects, series, judge] =
     await Promise.all([
@@ -1305,7 +1323,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       // counts. Identical to the call above whenever the window sits inside one
       // month, and the only honest answer when it does not.
       window && window.from < month ? loadWindowReading(reading.client, clientId, { from: month, to: window.to }) : null,
-      loadUpdateVideos(supabase, clientId, anchor.id),
+      videosAhead,
       fetchThemedRunId(supabase, clientId, runningIds, 'week'),
       loadSubjects(supabase, clientId),
       // THE ONE SERIES THIS PAGE IS ALLOWED, and it is a series of UPDATES —
@@ -1390,12 +1408,12 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
     }),
     // ── §2 · worth a reply, and §8 · flagged for awareness ───────────────
-    // In the wave with the others: it reads the corpus's current insights,
+    // Started beside wave 2 (above): it reads the corpus's current insights,
     // their evidence and the comments behind them, and it takes no output of
     // any section above it.
-    buildReplies({ supabase, clientId, runId: anchor.id, window, videos }),
+    repliesAhead,
     // ── §5 · for sales ───────────────────────────────────────────────────
-    buildSales({ supabase, clientId, window, windowVideos, subjects }),
+    buildSales({ supabase, clientId, window, windowVideos, subjects, citations: salesCitationsAhead }),
     // ── §6's own side ────────────────────────────────────────────────────
     // ONE NARROW READ, IN THE WAVE. The client's own posts in the month are
     // tens of rows on every tenant we have, and §6 is the only section that
@@ -1488,7 +1506,10 @@ async function buildReplies(input: {
   clientId: string
   runId: string
   window: WeekWindow | null
-  videos: readonly VideoRow[]
+  /** This update's videos, for the posters' roles — a promise, because the
+   *  queue starts reading before wave 2 has them and needs them only at the
+   *  end (`loadWeek`). */
+  videos: PromiseLike<readonly VideoRow[]>
 }): Promise<RepliesBlock> {
   const { supabase, clientId, runId, window } = input
   const empty: RepliesBlock = { rows: [], counts: [], total: 0, flagged: [], window, unread: null }
@@ -1518,7 +1539,7 @@ async function buildReplies(input: {
         .filter((h): h is string => typeof h === 'string' && h.length > 0)
         .map(handleKey),
     )
-    const roles = roleByAccount(input.videos.map((v) => ({
+    const roles = roleByAccount((await input.videos).map((v) => ({
       // `VoiceVideo` takes the columns non-null; a video with no account is a
       // video no role can be read off, and `roleByAccount` drops it itself.
       account_name: v.account_name ?? '',
@@ -2325,6 +2346,11 @@ export async function buildSales(input: {
   window: WeekWindow | null
   windowVideos: number | null
   subjects: Subject[] | null
+  /** The citations read, where the caller started it early: This week starts
+   *  it beside its wave 2, before `windowVideos` and `subjects` (which only
+   *  label this block) are in. The weekly report passes none and it is read
+   *  here. */
+  citations?: Promise<SalesCitation[] | null>
 }): Promise<ForSalesData> {
   const { supabase, clientId, window } = input
   // GROUPED BY THEME UNTIL SUBJECTS EXIST, AND THE BLOCK SAYS SO. A heading a
@@ -2347,7 +2373,7 @@ export async function buildSales(input: {
   }
   if (!window) return { ...base, unread: SALES_UNREAD_NO_WINDOW }
 
-  const cited = await loadSalesCitations(supabase, clientId, window)
+  const cited = await (input.citations ?? loadSalesCitations(supabase, clientId, window))
   if (cited == null) return base
 
   const objections = groupCitations(cited.filter((c) => c.category === 'objection'))
