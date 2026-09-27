@@ -25,6 +25,10 @@ import { keepWeeksInRun, planComparability, runComparabilityTask } from './compa
 import { planLensReadings, runLensMonth } from './lens-readings'
 import { planBrandReadings, runBrandMonth } from './brand-readings'
 import { applyQueuedEdits } from './tracking-queue'
+import { subjectMonthVideos, type SubjectMember } from '../pages/subjects'
+import { TRIM_STAGING } from '../test/trim-staging'
+import { staleInsightIds } from './pass-a-plan'
+import { pruneStaleAnalysis, trimFreezeHold, trimStaleMemberships, type TrimSummary } from './stale-analysis'
 
 // THE SUN 4 OCT RUN FREEZES AUGUST FOR GOOD, and deploy 4 puts four run steps
 // (segment-videos, comparability, lens-readings, brand-readings) immediately
@@ -187,7 +191,7 @@ const changes = () => tenant([
   { changed_at: '2026-09-25T16:18:47+00:00', surface: 'attribution' },
 ].map((c, i) => ({ id: `cc-${String(i).padStart(3, '0')}`, ...c })))
 
-function database(panel: 'none' | 'before-attribution'): FakeAdmin {
+function database(panel: 'none' | 'before-attribution', subjects?: (p: Record<string, unknown>) => object[]): FakeAdmin {
   const { mentions, firstTerms } = sepMentions()
   const byPattern = new Map(rules.map((r) => [brandPattern(r, 'are'), r]))
   const brandKey = (brand: string) => ({ Patagonia: PATAGONIA, 'The North Face': NORTH_FACE, Cotopaxi: COTOPAXI } as Record<string, string>)[brand]
@@ -234,7 +238,7 @@ function database(panel: 'none' | 'before-attribution'): FakeAdmin {
       // freeze-months: staging's real outputs over the window asked
       monthly_denominators: (p) => S.denominators.filter((r) => inWindow(r.month, p)),
       monthly_kind_readings: (p) => S.kinds.filter((r) => inWindow(r.month, p)),
-      monthly_subject_readings: (p) => S.subjects.filter((r) => inWindow(r.month, p)),
+      monthly_subject_readings: (p) => (subjects ? subjects(p) : S.subjects.filter((r) => inWindow(r.month, p))),
       monthly_theme_readings: (p) => S.themes.filter((r) => inWindow(r.month, p)),
       monthly_evidence_refs: (p) => S.refs.filter((r) => inWindow(r.month, p)),
       // over a panel the attention half is that panel's: a different panel
@@ -450,5 +454,348 @@ describe('5 · the other freeze-path hunks', () => {
     const coverage = retrieve.slice(retrieve.indexOf('export async function embeddingCoverage'))
     expect(coverage.slice(0, coverage.indexOf('\n}\n'))).not.toMatch(/scope/)
     expect(retrieve).toContain('if (args.scope) return retrieveScoped(')
+  })
+})
+
+// ---- 6. Deploy 5b: the trim before the months, and what it can move ------------
+//
+// THE DEFECT. freeze-months (and, since deploy 4, lens-readings and the
+// comparability keep) read a subject's months over subject_memberships, which
+// cascades from audience_insights, and prune-stale-analysis runs after
+// close-run. So the months counted each re-read video's OLD member insights,
+// and the prune deleted them minutes later: production's September read 203
+// for Buying & delivery at 07:22 on 27 Sep and 199 after the prune. The 4 Oct
+// run freezes August. trim-stale-memberships removes, before any of those
+// steps, the memberships of exactly the insights the prune will delete
+// (lib/pipeline/stale-analysis.ts). This section proves where it sits and what
+// it can reach; §7 runs it, the freeze and the prune on staging's own
+// memberships; scripts/pg-shim/d5b-trim-checks.sql asks the real SQL.
+
+describe('6 · trim-stale-memberships: its position, its failure, and the one table it writes', () => {
+  const src = readFileSync(join(ROOT, 'inngest', 'functions', 'pipeline.ts'), 'utf8')
+  const at = (id: string) => {
+    const i = src.search(new RegExp(`\\.run\\(['\`]${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+    expect(i, id).toBeGreaterThan(0)
+    return i
+  }
+  const defs = sqlDefinitions()
+  const readers = [...defs.entries()].filter(([, d]) => /\bsubject_memberships\b/.test(d.body)).map(([n]) => n).sort()
+
+  it('sits after Pass A, the membership judge and persist-themes, and before every step that reads a subject month', () => {
+    const trim = at('trim-stale-memberships')
+    for (const before of ['plan-pass-a', 'plan-subject-membership', 'subject-membership:', 'persist-themes']) expect(at(before), before).toBeLessThan(trim)
+    for (const after of ['plan-segment-videos', 'plan-comparability', 'comparability:', 'plan-lens-readings', 'lens-readings:', 'freeze-months', 'anomaly-check', 'close-run', 'prune-stale-analysis']) {
+      expect(at(after), after).toBeGreaterThan(trim)
+    }
+    // Nothing between it and the first deploy-4 id but comments and blank lines.
+    const between = src.slice(src.indexOf('\n', src.indexOf('return null', trim)), at('plan-segment-videos'))
+    expect(between.replace(/\/\/[^\n]*/g, '').replace(/\s+/g, ' ').trim()).toMatch(/^\}\) const segmentPlan = await step$/)
+  })
+
+  it('ends in a .catch that logs and returns null, and freeze-months holds its subject side on that null', () => {
+    const rest = src.slice(at('trim-stale-memberships'))
+    const chain = rest.slice(0, rest.search(/\n {4}(?:\}|const |\/\/)/))
+    expect(chain).toMatch(/\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*return null\s*\}\)/)
+    expect(src).toContain('const trimmed = await step\n      .run(\'trim-stale-memberships\'')
+    expect(src).toContain('const subjectHold = subjectFreezeHold(subjectOutcomes) ?? trimFreezeHold(trimmed)')
+    // freeze-months' own body is deploy 5's: it reads subjectHold as it always did.
+    expect(src).toContain('sides: subjectHold ? [] : [subjectMonthSide(admin, clientId)],')
+  })
+
+  it('the prune stays where it was, under its id, and is the one beside the trim', () => {
+    expect(at('prune-stale-analysis')).toBeGreaterThan(at('close-run'))
+    expect(src).toContain(".run('prune-stale-analysis', () => pruneStaleAnalysis(createAdminClient(), clientId))")
+    expect(src).not.toMatch(/async function (pruneStaleAnalysis|citedEvidenceIds)\(/)
+    expect(src).toMatch(/import \{ pruneStaleAnalysis, trimFreezeHold, trimStaleMemberships, trimSummary \} from '@\/lib\/pipeline\/stale-analysis'/)
+  })
+
+  it('of the six functions freeze-months reads, only monthly_subject_readings reaches subject_memberships', () => {
+    const reach = FREEZE_RPCS.filter((fn) => readsOf([fn], defs).tables.has('subject_memberships'))
+    expect(reach).toEqual(['monthly_subject_readings'])
+  })
+
+  it('every SQL function that reads subject_memberships is called by the run after the trim, by a page, or is the judge', () => {
+    expect(readers).toEqual(['lens_readings', 'market_week_readings', 'monthly_subject_readings', 'subject_band', 'window_subject_readings'])
+    const code = (f: string) => readFileSync(join(ROOT, f), 'utf8')
+    // lens_readings: the lens step and the comparability re-check; market_week_readings: the
+    // comparability step's weekly keep. All three run after the trim (above).
+    expect(code('lib/pipeline/lens-readings.ts')).toContain("admin.rpc('lens_readings'")
+    expect(code('lib/pipeline/comparability-step.ts')).toContain("admin.rpc('lens_readings'")
+    expect(code('lib/reading/week-keep.ts')).toContain("rpc<WeekReadingRow>('market_week_readings'")
+    // subject_band: the judge, BEFORE the trim, over audience_insights_current, so it
+    // never names a superseded insight and cannot hand the trim's rows back.
+    expect(defs.get('subject_band')!.body).toMatch(/from public\.audience_insights_current ai/)
+    // window_subject_readings: pages only; no step calls it.
+    expect(src).not.toMatch(/window_subject_readings|RPC_WINDOW_SUBJECT_READINGS/)
+  })
+
+  it('no trigger fires from a subject_memberships delete into anything freeze-months reads', () => {
+    const triggers: string[] = []
+    for (const file of readdirSync(join(ROOT, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'))) {
+      const sql = readFileSync(join(ROOT, 'supabase', 'migrations', file), 'utf8')
+      for (const m of sql.matchAll(/create\s+trigger\s+(\w+)\s[^;]*?\son\s+(?:public\.)?subject_memberships\b[^;]*;/gi)) triggers.push(`${file}: ${m[1]}`)
+    }
+    expect(triggers).toEqual([])
+  })
+})
+
+// ---- 7. On staging's own memberships: stored equals live, and only the phantoms go ---
+
+const T = TRIM_STAGING as unknown as {
+  months: string[]
+  market: string[]
+  subjects: [string, string][]
+  videos: [string, string | null, number, string][]
+  insights: [string, string | null, string][]
+  cited: string[]
+  members: Record<string, [string, string | null, string, number][]>
+  occupies: Record<string, string[]>
+  live: [string, string, string, number][]
+}
+const NEW_RUN = 'r-1004'
+const RUN_ROW = { id: RUN, client_id: SEALAND_CLIENT_ID, status: 'running', started_at: '2026-10-04T04:00:00Z', clustering_key: 'ck-2026-10-04' }
+
+/** What each member insight carries, as the pane's rule reads it (the fixture's
+ *  header says why this is the whole of it). A re-read's new insight carries
+ *  its old one's. */
+const EVIDENCE = new Map<string, { kind: string | null; months: string[]; cam: boolean }>()
+for (const rows of Object.values(T.members)) {
+  for (const [id, kind, months, cam] of rows) EVIDENCE.set(id, { kind, months: months ? months.split('|') : [], cam: cam === 1 })
+}
+const ORIGIN = (id: string) => id.replace(/\+$/, '')
+
+/** THE 4 OCT RUN, SIMULATED ON STAGING'S STRUCTURE. Every third analysed market
+ *  video with a member is re-read by NEW_RUN: its pointer moves, each of its old
+ *  insights gets a new one, and the new reading is judged a member of the same
+ *  subject for every other old member (index even) and not for the rest. So the
+ *  old member insights of a re-read video are superseded; those something stored
+ *  cites (staging's real cited set) are kept by the prune, and the rest are the
+ *  prune's to delete. The numbers are the fixture's; only the re-read is made up. */
+function simulatedRun(): { videos: Record<string, unknown>[]; insights: Record<string, unknown>[]; memberships: Record<string, unknown>[]; reread: Set<string> } {
+  const candidates = T.videos.filter((v) => v[1] != null && v[2] === 0)
+  const reread = new Set(candidates.filter((_, i) => i % 3 === 0).map((v) => v[0]))
+  const videos = T.videos.map(([id, run, client, audience]) => ({
+    id, client_id: SEALAND_CLIENT_ID, analyzed_run_id: reread.has(id) ? NEW_RUN : run, is_client: client === 1, audience,
+  }))
+  const insights: Record<string, unknown>[] = T.insights.map(([id, run, video]) => ({ id, client_id: SEALAND_CLIENT_ID, run_id: run, source_video_id: video }))
+  const memberships: Record<string, unknown>[] = []
+  const onVideo = new Map<string, string[]>()
+  for (const [id, , video] of T.insights) onVideo.set(video, [...(onVideo.get(video) ?? []), id])
+  for (const video of reread) for (const id of onVideo.get(video) ?? []) insights.push({ id: `${id}+`, client_id: SEALAND_CLIENT_ID, run_id: NEW_RUN, source_video_id: video })
+  const videoOf = new Map(T.insights.map(([id, , video]) => [id, video]))
+  for (const [subject, rows] of Object.entries(T.members)) {
+    for (const [id] of rows) {
+      memberships.push({ subject_id: subject, audience_insight_id: id, client_id: SEALAND_CLIENT_ID, member: true })
+      const video = videoOf.get(id)!
+      if (reread.has(video) && (onVideo.get(video) ?? []).indexOf(id) % 2 === 0) {
+        memberships.push({ subject_id: subject, audience_insight_id: `${id}+`, client_id: SEALAND_CLIENT_ID, member: true })
+      }
+    }
+  }
+  return { videos, insights, memberships, reread }
+}
+
+/** monthly_subject_readings' video count, per month, audience and subject, over
+ *  the fake's tables as they stand: the member rows whose insight is still there
+ *  (the SQL's join to the base table), counted by the pane's own rule. On
+ *  staging's data the rule reads what the SQL reads (the first test below). */
+function subjectReadings(f: FakeAdmin, from: string, to: string): { month: string; audience: string; subject_id: string; videos: number }[] {
+  const video = new Map(f.tables.videos.map((v) => [v.id as string, v]))
+  const insight = new Map(f.tables.audience_insights.map((i) => [i.id as string, i]))
+  const out: { month: string; audience: string; subject_id: string; videos: number }[] = []
+  const bySubject = new Map<string, SubjectMember[]>()
+  for (const m of f.tables.subject_memberships) {
+    if (!m.member) continue
+    const i = insight.get(m.audience_insight_id as string)
+    const e = EVIDENCE.get(ORIGIN(m.audience_insight_id as string))
+    if (!i || !e) continue
+    const v = video.get(i.source_video_id as string)
+    const member: SubjectMember = {
+      insightId: i.id as string, kind: e.kind, videoId: i.source_video_id as string, client: v?.is_client === true, analysed: v?.analyzed_run_id != null,
+      evidence: [...e.months.map((mo) => ({ source: 'comment', commentDate: `${mo}-15` })), ...(e.cam ? [{ source: 'video', commentDate: null }] : [])],
+    }
+    bySubject.set(m.subject_id as string, [...(bySubject.get(m.subject_id as string) ?? []), member])
+  }
+  for (const month of T.months.filter((mo) => mo >= from.slice(0, 10) && mo < to.slice(0, 10))) {
+    for (const [subject, members] of bySubject) {
+      const byAudience = new Map<string, SubjectMember[]>()
+      for (const m of members) {
+        const a = String(video.get(m.videoId!)?.audience)
+        byAudience.set(a, [...(byAudience.get(a) ?? []), m])
+      }
+      for (const [audience, ms] of byAudience) {
+        const n = subjectMonthVideos(ms, month, new Set(T.occupies[month])).videos.size
+        if (n > 0) out.push({ month, audience, subject_id: subject, videos: n })
+      }
+    }
+  }
+  return out.sort((a, b) => `${a.month}${a.audience}${a.subject_id}`.localeCompare(`${b.month}${b.audience}${b.subject_id}`))
+}
+
+/** Market pooled, as the headline pools it: month → subject → videos. */
+function pooled(rows: readonly { month: string; audience: string; subject_id: string; videos: number }[]): Record<string, Record<string, number>> {
+  const market = new Set(T.market)
+  const out: Record<string, Record<string, number>> = {}
+  for (const m of T.months) out[m] = Object.fromEntries(T.subjects.map(([s]) => [s, 0]))
+  for (const r of rows) if (market.has(r.audience) && out[String(r.month).slice(0, 10)]) out[String(r.month).slice(0, 10)][r.subject_id] += Number(r.videos)
+  return out
+}
+
+/** The foreign key's cascade: the fake does not cascade, the database does. */
+function cascade(f: FakeAdmin): void {
+  const live = new Set(f.tables.audience_insights.map((r) => r.id))
+  f.tables.subject_memberships = f.tables.subject_memberships.filter((r) => live.has(r.audience_insight_id))
+}
+
+type Order = 'deploy 5' | 'deploy 5b' | 'deploy 5b, the trim out of retries'
+async function theRun(order: Order) {
+  // The handler runs only once the freeze calls it, by which time `f` is set.
+  const f: FakeAdmin = database('none', (p) => subjectReadings(f, String(p.p_from), String(p.p_to)))
+  const world = simulatedRun()
+  f.tables.videos.push(...world.videos)
+  f.tables.audience_insights = world.insights
+  f.tables.subject_memberships = world.memberships
+  f.tables.pipeline_runs = [RUN_ROW]
+  // Staging's real cited set, reached the way citedEvidenceIds reaches it: a
+  // recommendation, through its market insight, to the audience insights.
+  Object.assign(f.tables, {
+    recommendations: [{ id: 'rec-staging', client_id: SEALAND_CLIENT_ID, based_on: { insight_ids: ['mi-staging'] } }],
+    market_insights: [{ id: 'mi-staging', client_id: SEALAND_CLIENT_ID, evidence: { supporting_theme_ids: T.cited } }],
+    competitive_insights: [], plan_checks: [], plan_check_evaluations: [], agent_messages: [], report_snapshots: [], language_samples: [],
+  })
+  const phantom = new Set(staleInsightIds(f.tables.videos as never, f.tables.audience_insights as never, new Set(T.cited)))
+  const w0 = f.writes.length
+  let trim: TrimSummary | null = null
+  if (order === 'deploy 5b') trim = await trimStaleMemberships(f.client, SEALAND_CLIENT_ID)
+  const trimWrites = f.writes.slice(w0)
+  const hold = order === 'deploy 5' ? null : trimFreezeHold(trim)
+  const atFreeze = subjectReadings(f, '2026-08-01', '2026-11-01')
+  const w1 = f.writes.length
+  const summary = await freezeMonths(f.client, {
+    clientId: SEALAND_CLIENT_ID, runId: RUN, months: MONTHS, now: FREEZE_AT,
+    sides: hold ? [] : [subjectMonthSide(f.client, SEALAND_CLIENT_ID)],
+  })
+  const freezeWrites = f.writes.slice(w1)
+  const stored = freezeWrites.filter((w) => w.table === 'month_subject_readings').flatMap((w) => w.rows) as never[]
+  let pruned: Awaited<ReturnType<typeof pruneStaleAnalysis>>
+  if (order === 'deploy 5') {
+    // Deploy 5's prune: the same function with no membership to hold.
+    const kept = f.tables.subject_memberships
+    delete f.tables.subject_memberships
+    pruned = await pruneStaleAnalysis(f.client, SEALAND_CLIENT_ID)
+    f.tables.subject_memberships = kept
+  } else pruned = await pruneStaleAnalysis(f.client, SEALAND_CLIENT_ID)
+  cascade(f)
+  const live = subjectReadings(f, '2026-08-01', '2026-11-01')
+  return { f, world, phantom, trim, trimWrites, hold, atFreeze, summary, freezeWrites, stored, pruned, live }
+}
+
+/** The videos only a phantom member reached, per month and subject (market
+ *  pooled): the reading over every member, less the reading without them. */
+function phantomOnly(run: Awaited<ReturnType<typeof theRun>>): Record<string, Record<string, number>> {
+  const all = pooled(run.atFreeze)
+  const f = run.f
+  const kept = f.tables.subject_memberships
+  f.tables.subject_memberships = kept.filter((m) => !run.phantom.has(m.audience_insight_id as string))
+  const without = pooled(subjectReadings(f, '2026-08-01', '2026-11-01'))
+  f.tables.subject_memberships = kept
+  return Object.fromEntries(T.months.map((m) => [m, Object.fromEntries(T.subjects.map(([s]) => [s, all[m][s] - without[m][s]]))]))
+}
+
+describe('7 · the 4 Oct run on staging\'s own memberships: the stored reading is the live pane set', () => {
+  it('the model reads what staging\'s SQL reads: the pane\'s rule over the fixture is monthly_subject_readings, subject for subject, both months', () => {
+    const f = database('none')
+    f.tables.videos = T.videos.map(([id, run, client, audience]) => ({ id, analyzed_run_id: run, is_client: client === 1, audience }))
+    f.tables.audience_insights = T.insights.map(([id, run, video]) => ({ id, run_id: run, source_video_id: video }))
+    f.tables.subject_memberships = Object.entries(T.members).flatMap(([subject_id, rows]) => rows.map(([id]) => ({ subject_id, audience_insight_id: id, member: true })))
+    const liveSql = pooled(T.live.map(([month, subject_id, audience, videos]) => ({ month, subject_id, audience, videos })))
+    expect(pooled(subjectReadings(f, '2026-08-01', '2026-10-01'))).toEqual(liveSql)
+    expect(liveSql['2026-09-01']).toMatchObject({ s3: 103, s6: 43 })   // Looks & style, Comfort: the check's numbers
+  })
+
+  it('deploy 5\'s order reproduces the defect: the freeze counts phantoms, the prune takes them, the pane reads fewer', async () => {
+    const run = await theRun('deploy 5')
+    const stored = pooled(run.stored)
+    const live = pooled(run.live)
+    const only = phantomOnly(run)
+    let differ = 0
+    for (const m of T.months) for (const [s] of T.subjects) {
+      expect(stored[m][s] - live[m][s], `${m} ${s}`).toBe(only[m][s])
+      if (stored[m][s] !== live[m][s]) differ++
+    }
+    expect(differ).toBeGreaterThan(0)
+    expect(run.pruned.heldForSubjects).toBe(0)
+  })
+
+  it('deploy 5b\'s order: stored equals live in every subject and both months, August frozen, and only the phantom-only videos left the reading', async () => {
+    const before = await theRun('deploy 5')
+    const run = await theRun('deploy 5b')
+    const stored = pooled(run.stored)
+    expect(stored).toEqual(pooled(run.live))
+    // Per audience too, not only pooled.
+    expect(run.stored.map((r: { month: string; audience: string; subject_id: string; videos: number }) => [String(r.month).slice(0, 10), r.audience, r.subject_id, r.videos]).sort())
+      .toEqual(run.live.map((r) => [r.month, r.audience, r.subject_id, r.videos]).sort())
+    const only = phantomOnly(before)
+    const old = pooled(before.stored)
+    let removed = 0
+    for (const m of T.months) for (const [s] of T.subjects) { expect(old[m][s] - stored[m][s], `${m} ${s}`).toBe(only[m][s]); removed += only[m][s] }
+    expect(removed).toBeGreaterThan(0)
+    // August closes in this visit, and closes at the live number.
+    const august = run.stored.filter((r: { month: string }) => String(r.month).startsWith('2026-08')) as { status: string }[]
+    expect(august.length).toBeGreaterThan(0)
+    expect(august.every((r) => r.status === 'frozen')).toBe(true)
+    // The trim removed exactly the memberships of the prune's rows, and wrote nothing else.
+    expect([...new Set(run.trimWrites.map((w) => w.table))]).toEqual(['subject_memberships'])
+    expect(new Set(run.trimWrites.flatMap((w) => w.rows.map((r) => r.audience_insight_id)))).toEqual(
+      new Set(before.world.memberships.map((m) => m.audience_insight_id as string).filter((id) => run.phantom.has(id))),
+    )
+    expect(run.trim).toMatchObject({ skipped: null, prunable: run.trim!.prunable })
+    expect(run.pruned.heldForSubjects).toBe(0)
+    expect(run.pruned.insights).toBe(before.pruned.insights)
+  })
+
+  it('nothing else freeze-months writes moves: the other five tables, the panel and the evidence ids are write for write deploy 5\'s', async () => {
+    const before = await theRun('deploy 5')
+    const run = await theRun('deploy 5b')
+    const others = (w: FakeAdmin['writes']) => w.filter((x) => x.table !== 'month_subject_readings')
+    expect(others(run.freezeWrites)).toEqual(others(before.freezeWrites))
+    const { sides: s5b, ...rest5b } = run.summary
+    const { sides: s5, ...rest5 } = before.summary
+    expect(rest5b).toEqual(rest5)
+    for (const t of Object.keys(s5)) if (t !== 'month_subject_readings') expect(s5b[t], t).toEqual(s5[t])
+  })
+
+  it('the trim out of retries: freeze-months writes no subject row, and the prune holds every member, so no reading loses one', async () => {
+    const run = await theRun('deploy 5b, the trim out of retries')
+    expect(run.hold).toMatch(/^trim-stale-memberships did not finish/)
+    expect(run.stored).toEqual([])
+    expect(run.summary.sides).not.toHaveProperty('month_subject_readings')
+    // Every superseded member stays, so what the months read before the run still resolves.
+    expect(pooled(run.live)).toEqual(pooled(run.atFreeze))
+    expect(run.pruned.heldForSubjects).toBeGreaterThan(0)
+    // The other tables are written as ever.
+    expect(run.freezeWrites.some((w) => w.table === 'month_denominators')).toBe(true)
+  })
+
+  it('a prune that fails deletes nothing, after a freeze it cannot reach: stored still equals live', async () => {
+    const f: FakeAdmin = database('none', (p) => subjectReadings(f, String(p.p_from), String(p.p_to)))
+    const world = simulatedRun()
+    f.tables.videos.push(...world.videos)
+    f.tables.audience_insights = world.insights
+    f.tables.subject_memberships = world.memberships
+    f.tables.pipeline_runs = [RUN_ROW]
+    Object.assign(f.tables, {
+      recommendations: [{ id: 'rec-staging', client_id: SEALAND_CLIENT_ID, based_on: { insight_ids: ['mi-staging'] } }],
+      market_insights: [{ id: 'mi-staging', client_id: SEALAND_CLIENT_ID, evidence: { supporting_theme_ids: T.cited } }],
+      competitive_insights: [], plan_checks: [], agent_messages: [], report_snapshots: [], language_samples: [],
+    })
+    await trimStaleMemberships(f.client, SEALAND_CLIENT_ID).catch(() => null)   // no plan_check_evaluations: the trim fails too
+    await freezeMonths(f.client, { clientId: SEALAND_CLIENT_ID, runId: RUN, months: MONTHS, now: FREEZE_AT, sides: [subjectMonthSide(f.client, SEALAND_CLIENT_ID)] })
+    const stored = f.writes.filter((w) => w.table === 'month_subject_readings').flatMap((w) => w.rows) as never[]
+    const n = f.tables.audience_insights.length
+    await expect(pruneStaleAnalysis(f.client, SEALAND_CLIENT_ID)).rejects.toThrow(/plan_check_evaluations/)
+    expect(f.tables.audience_insights.length).toBe(n)
+    cascade(f)
+    expect(pooled(stored)).toEqual(pooled(subjectReadings(f, '2026-08-01', '2026-11-01')))
   })
 })

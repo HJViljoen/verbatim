@@ -43,7 +43,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Each ends in a `.catch` that logs and returns null, so a failed one never
   stops `freeze-months`; `lib/pipeline/freeze-parity.test.ts` and
   `scripts/pg-shim/d4-freeze-checks.sh` prove none of them moves what it
-  freezes. Re-register
+  freezes. **Deploy 5b (27 Sep) adds one, immediately before
+  `plan-segment-videos`:** `trim-stale-memberships` (62 ids at `mf-d5`, 63
+  after; `scripts/pipeline-step-ids.sh mf-d5 --expect-before
+  plan-segment-videos trim-stale-memberships` is the check). It deletes the
+  `subject_memberships` rows of exactly the insights `prune-stale-analysis`
+  deletes after the close, so no month a step reads before then counts a
+  member the prune takes; its `.catch` returns null and `trimFreezeHold` turns
+  that into freeze-months' subject hold, and the prune keeps any insight a
+  membership still counts (`lib/pipeline/stale-analysis.ts`;
+  `lib/pipeline/freeze-parity.test.ts` §6-7 and
+  `scripts/pg-shim/d5b-trim-checks.sh`). Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
@@ -100,7 +110,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `prune-stale-analysis` step deletes a superseded row only when nothing stored
   points at it, so an id-set lookup keeps resolving past the next run and not
   only during it. FOUR citation classes are protected, resolved in
-  `citedEvidenceIds` (`inngest/functions/pipeline.ts`) and enforced by the
+  `citedEvidenceIds` (`lib/pipeline/stale-analysis.ts` since deploy 5b) and enforced by the
   optional third argument to `staleInsightIds` (`lib/pipeline/pass-a-plan.ts`,
   where the tests are):
   **recommendations** — `based_on.insight_ids` through BOTH `market_insights`
