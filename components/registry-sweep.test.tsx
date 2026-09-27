@@ -83,9 +83,10 @@ interface Renderish { render: (d: never, m: RenderMode, c: typeof ctx) => ReactN
 const GROUPS: [string, Record<string, Renderish> | readonly (Renderish & { key: string })[], unknown[]][] = [
   ['voice-surface', VOICE_BLOCKS as never, [voiceFixture()]],
   ['market-surface', MARKET_BLOCKS as never, [marketFixture(), deepLinkFixture(), unrecordedFixture()]],
-  // Brands (WP3.5, deploy 5): the page's readings, counted and not yet, and a
-  // tenant with no brand rule (Össur), beside the Phase 1 forms.
-  ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture(), brandsFixture(), brandsFixture(false), ossurBrandsFixture()]],
+  // Brands (WP3.5, deploy 5): the page's readings and a tenant with no brand
+  // rule (Össur), beside the Phase 1 forms; the not-yet-counted state is swept
+  // in the page's own test (components/pages/competitive-surface/brands).
+  ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture(), brandsFixture(), ossurBrandsFixture()]],
   ['week', WEEK_BLOCKS as never, [weekFixture(), marketWeekFixture(), ossurWeeksFixture()]],
   ['weekly', WEEKLY_BLOCKS as never, [weeklyFixture()]],
   // Two states here (the stubbed skeleton and every slot filled); the monthly's
