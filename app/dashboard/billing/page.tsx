@@ -37,10 +37,12 @@ export default async function BillingPage({
   // RLS lets a member read their own client row; billing columns ride along on it.
   // select('*') so this still renders before the Phase 6 migration is applied
   // (the new columns are simply absent → treated as no comp / no subscription).
-  const [{ data }, { data: tc }] = await Promise.all([
-    supabase.from('clients').select('*').eq('id', clientId).maybeSingle(),
-    supabase.from('tracking_configs').select('report_period, report_day').eq('client_id', clientId).maybeSingle(),
-  ])
+  //
+  // NO "Updates" ROW (27 Sep, Heinrich: "remove cadence from settings, and
+  // always have it weekly on sunday"). It printed the stored cadence, "Weekly ·
+  // Sundays" or "Paused"; every workspace is now weekly, on Sunday, and the
+  // pause is the operator's (lib/update-rhythm.ts), so Settings shows neither.
+  const { data } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle()
   const client = (data ?? {}) as ClientBillingRow
 
   const access = billingAccess(client)
@@ -55,7 +57,6 @@ export default async function BillingPage({
     : access.reason === 'suspended' ? 'This workspace is suspended. Contact support to reactivate.'
     : access.reason === 'pending' ? 'This workspace is set up but not yet switched on. You’ll hear from us.'
     : 'Subscribe to keep access to your dashboards and scheduled updates.'
-  const cadence = tc?.report_period === 'paused' ? 'Paused' : tc?.report_period ? `${cap(tc.report_period)}${tc.report_day ? ` · ${cap(tc.report_day)}s` : ''}` : '—'
 
   return (
     <SettingsFrame active="team" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} contentTitle="Plan & billing" contentMeta={REASON_LABEL[access.reason] ?? 'Plan'} controls={<Link href="/dashboard/team" className="text-[12px] font-medium text-secondary-foreground hover:underline">Team →</Link>}>
@@ -70,7 +71,6 @@ export default async function BillingPage({
         <SettingsCard title="Your plan" description={description}>
           <FactRow label="Plan">{client.plan ? cap(client.plan) : '—'}</FactRow>
           <FactRow label="Access">{REASON_LABEL[access.reason] ?? '—'}</FactRow>
-          <FactRow label="Updates">{cadence}</FactRow>
           {client.trial_ends_at && access.reason === 'trialing' && <FactRow label="Trial ends">{new Date(client.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</FactRow>}
         </SettingsCard>
 

@@ -3,7 +3,6 @@
 import { useActionState, useState, type ReactNode } from 'react'
 import { saveTracking, type SettingsFormState } from './actions'
 import { SAVED_FIELDS } from './constants'
-import { CadenceSection } from '@/components/settings/tracking/cadence'
 import { RivalsSection } from '@/components/settings/tracking/rivals'
 import { TermsSection, type Bucket } from '@/components/settings/tracking/terms'
 import { SaveStateLine } from '@/components/settings/save-state-strip'
@@ -21,11 +20,17 @@ import { saveState, type LastChange } from '@/lib/settings/save-state'
 // honest one: a page whose sections are six views of one configuration should
 // not ask which button writes which third of it.
 //
-// EVERYTHING EDITABLE IS STATE HERE. The terms, the tracked rivals and the
-// cadence all live in this component, so the strip in the rail and the sentence
+// EVERYTHING EDITABLE IS STATE HERE. The terms and the tracked rivals both
+// live in this component, so the strip in the rail and the sentence
 // beside the save button describe the same edits, "Discard" has something to
 // discard, and the sections below can stay presentational — which is what makes
 // them testable with a static render.
+//
+// NO CADENCE (27 Sep, Heinrich: "remove cadence from settings, and always have
+// it weekly on sunday"). Every workspace is updated weekly, on Sunday, and the
+// pause is the operator's (lib/update-rhythm.ts), so the Cadence section, its
+// two fields and its state are gone, and nothing here posts `report_period` or
+// `report_day`.
 //
 // THE TWO REDDIT CONTROLS ARE NOT IN THIS FORM, deliberately. Watching a
 // community is its own logged write (`updateCommunity`) and it dispatches its
@@ -45,12 +50,6 @@ export interface TrackingFormProps {
   rivals: readonly RivalRow[]
   names: readonly string[]
   month: string
-  period: string
-  day: string
-  storedPeriod: string
-  updatesThisMonth: readonly string[]
-  lastUpdate: string | null
-  showStudio: boolean
   lastChange: LastChange | null
   affectsRecorded: boolean
   /** Server-rendered sections that sit between the editable ones. */
@@ -100,8 +99,6 @@ export function TrackingForm(props: TrackingFormProps) {
     setSeededFrom(serverNames)
     setNames([...props.names])
   }
-  const [period, setPeriod] = useState(props.period)
-  const [day, setDay] = useState(props.day)
   // useActionState keeps its last result forever, so "Saved." would sit under a
   // list the reader has since changed. The first edit after a save retires it.
   const [edited, setEdited] = useState(false)
@@ -112,8 +109,6 @@ export function TrackingForm(props: TrackingFormProps) {
     category: cleanTerms(props.terms.industry_keywords),
     exclusions: cleanTerms(props.terms.exclude_terms),
     rivals: props.names,
-    period: props.period,
-    day: props.day,
   }
   const pending = trackingPending(before, {
     brand: terms.brand_keywords,
@@ -121,8 +116,6 @@ export function TrackingForm(props: TrackingFormProps) {
     category: terms.industry_keywords,
     exclusions: terms.exclude_terms,
     rivals: names,
-    period,
-    day,
   })
   const save = saveState({ pending, lastChange: props.lastChange, affectsRecorded: props.affectsRecorded })
 
@@ -158,8 +151,6 @@ export function TrackingForm(props: TrackingFormProps) {
       exclude_terms: cleanTerms(props.terms.exclude_terms),
     })
     setNames([...props.names])
-    setPeriod(props.period)
-    setDay(props.day)
     setEdited(false)
   }
 
@@ -192,19 +183,6 @@ export function TrackingForm(props: TrackingFormProps) {
       />
 
       {props.platforms}
-
-      <CadenceSection
-        period={period}
-        day={day}
-        storedPeriod={props.storedPeriod}
-        onPeriod={(p) => { setPeriod(p); setEdited(true) }}
-        onDay={(d) => { setDay(d); setEdited(true) }}
-        canEdit={props.canEdit}
-        updatesThisMonth={props.updatesThisMonth}
-        month={props.month}
-        lastUpdate={props.lastUpdate}
-        showStudio={props.showStudio}
-      />
 
       {/* What this save is about to write, so its answer can name it. */}
       {pending.map((p) => <input key={p.field} type="hidden" name={SAVED_FIELDS} value={p.field} />)}

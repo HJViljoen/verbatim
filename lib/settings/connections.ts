@@ -140,21 +140,23 @@ export const PLATFORM_SHARE_UNREAD =
  *
  * Pure.
  */
-/** The seven things this form can change, in the words the strip and the save
+/** The five things this form can change, in the words the strip and the save
  *  row use. The allowlist a saved-fields POST is read against: a label that is
  *  not one of these is dropped, so the success sentence can never echo a
- *  crafted string back at the page. */
+ *  crafted string back at the page. 'Cadence' and 'The day it lands' left with
+ *  the Cadence section (27 Sep): every workspace is weekly, on Sunday, so a page
+ *  opened before then that still posts them has them dropped here. */
 export const TRACKING_FIELDS = [
   'Brand terms', 'Competitor terms', 'Category terms', 'Not this',
-  'Rivals', 'Cadence', 'The day it lands',
+  'Rivals',
 ] as const
 
 /**
  * What the one save row says afterwards.
  *
  * ONE SAVE, ONE OUTCOME — AND IT NAMES WHAT IT WROTE. The composed save could
- * change the terms, the exclusions, the rival list, the cadence and the day,
- * and it answered with the terms form's own sentence ("Saved. Your next update
+ * change the terms, the exclusions, the rival list (and, until 27 Sep, the
+ * cadence and the day), and it answered with the terms form's own sentence ("Saved. Your next update
  * searches these terms.") whichever of them had moved. The fields come off the
  * form, through the allowlist above.
  *
@@ -185,8 +187,6 @@ export function trackingPending(
   listed('Category terms', before.category, after.category)
   listed('Not this', before.exclusions, after.exclusions)
   listed('Rivals', before.rivals, after.rivals)
-  if (before.period !== after.period) out.push({ field: 'Cadence', from: before.period, to: after.period })
-  if (before.day !== after.day) out.push({ field: 'The day it lands', from: before.day, to: after.day })
   return out
 }
 
@@ -196,8 +196,6 @@ export interface TrackingFormState {
   category: readonly string[]
   exclusions: readonly string[]
   rivals: readonly string[]
-  period: string
-  day: string
 }
 
 const countWords = (xs: readonly string[]): string =>

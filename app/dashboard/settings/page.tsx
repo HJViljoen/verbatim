@@ -8,12 +8,11 @@ import { audienceLabel } from '@/lib/readiness/types'
 import { readingHandle } from '@/lib/reading/read'
 import { communityRows, tableRows, unconfiguredShare } from '@/lib/settings/communities'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
-import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
+import { deliveryRecord } from '@/lib/settings/delivery'
 import { rivalRows } from '@/lib/settings/rivals-view'
 import { saveState } from '@/lib/settings/save-state'
 import { termDateShort } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
-import { canSeeStudio } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
@@ -22,7 +21,13 @@ import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
 // Settings › Tracking (Phase 1 WP16, design ST2 and ST4; ported to the
 // artboard in Block D wave 2) — everything about what we look at for this
 // workspace, in one sub-page: the terms, what each one brought back, the
-// communities, the rivals, the platforms and the cadence.
+// communities, the rivals and the platforms.
+//
+// THE CADENCE LEFT THIS PAGE ON 27 SEP (Heinrich: "remove cadence from
+// settings, and always have it weekly on sunday"). Every workspace is updated
+// weekly, on Sunday, and the pause is the operator's (lib/update-rhythm.ts), so
+// the page neither shows a cadence nor offers one, the header's summary line
+// included.
 //
 // CONNECTIONS AND INITIATIVES RETIRE INTO THIS PAGE. Connections was three
 // rows: the sources we read (now the platforms block below), the rival accounts
@@ -44,10 +49,6 @@ import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
 export default async function SettingsTrackingPage() {
   const session = await getSessionContext()
   const { supabase, clientId, role } = session
-  // Whether this session is shown a door into the Studio (main, 2026-09-17,
-  // lib/studio-visibility.ts). The cadence section's "who receives what" line
-  // is one of those doors, so it asks here and the section takes the answer.
-  const showStudio = canSeeStudio(session)
   const canEdit = canManageTenant(role)
   // The one read on this page that a tenant session may never make: the
   // community a verdict was about is `gate_verdicts.account_name`, which M8
@@ -76,7 +77,6 @@ export default async function SettingsTrackingPage() {
   const rivals = rivalRows({ names, handles, identities: inputs.rivals, census: inputs.census, month: inputs.censusMonth })
   const delivery = deliveryRecord({ updates: inputs.updates, slotsRecorded: false })
   const strip = saveState({ lastChange: inputs.lastChange, affectsRecorded: inputs.affectsRecorded })
-  const period = (c?.report_period ?? 'weekly') as string
 
   // D14: BOTH HALVES OF THE CONTEXT LINE ARE WHAT THEY ARE. The artboard reads
   // "tracking since 6 Apr"; the only date we hold is the first update on
@@ -104,7 +104,6 @@ export default async function SettingsTrackingPage() {
         `${configured} communit${configured === 1 ? 'y' : 'ies'}`,
         `${names.length} rival${names.length === 1 ? '' : 's'}`,
         `${platforms.length} platform${platforms.length === 1 ? '' : 's'}`,
-        period,
       ].join(' · ') : undefined}
       counts={{
         tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
@@ -143,12 +142,6 @@ export default async function SettingsTrackingPage() {
           rivals={rivals}
           names={names}
           month={inputs.censusMonth}
-          period={period === 'paused' ? 'weekly' : period}
-          storedPeriod={period}
-          day={(c.report_day ?? 'monday') as string}
-          updatesThisMonth={updatesInMonth(inputs.updates, inputs.censusMonth.slice(0, 7)).map((u) => u.startedAt.slice(0, 10))}
-          lastUpdate={delivery.lastOn}
-          showStudio={showStudio}
           lastChange={inputs.lastChange}
           affectsRecorded={inputs.affectsRecorded}
           performance={<TermPerformance rows={inputs.performance.rows} updates={inputs.performance.updates} months={inputs.termYield} />}
