@@ -16,6 +16,7 @@ import { loadChanges, loadMonthSeries, readingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint, type MonthSeries } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
+import { sinceStart } from '../reading/horizon'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../reading/reading-view'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
@@ -695,10 +696,15 @@ export async function loadObjectReadings(admin: Admin, args: ObjectReadArgs): Pr
   const from = monthsBack(month, (args.months ?? AGENT_MOVEMENT_MONTHS) - 1)
   const rivals = args.rivalAudiences ?? (await loadMarketRivalAudiences(admin, args.clientId)) ?? []
   const audiences = marketAudiences(rivals)
-  const axis = monthAxisOf(from, month)
 
   const denoms = await loadMonthSeries(admin, args.clientId, { audiences, from, to: month })
   if (denoms.substrate !== 'seeded') return args.objects.map((o) => objectReading({ object: o, points: [], notRead: true }, month, args.pair, args.asOf))
+  // THE AXIS STARTS WHERE THE PAGES' CHARTS START (`chartMonths` from
+  // `sinceStart`, decision M): the first month any market audience cleared
+  // the floor. Before it the months hold too little to read, and Subjects
+  // draws none of them: Sealand's trail is "Aug 10% of 377 · Sep 16% of 654",
+  // never July's 4 of 36 before it.
+  const axis = axisFromStart(monthAxisOf(from, month), denoms.denominators, audiences)
   const counts = pooledDenominators(denoms.denominators, rivals)
   const thin = new Set<string>()
   const filling = new Set<string>()
@@ -837,6 +843,20 @@ async function loadSubjectClock(admin: Admin, clientId: string, ids: readonly st
   const out = new Map<string, number | null>()
   for (const row of (res.data ?? []) as CountedSubject[]) out.set(row.id, subjectCountedFrom(row, changes))
   return out
+}
+
+/** The axis from the first month a market audience cleared the floor
+ *  (`sinceStart`), and never empty: the month read stays. Pure. */
+export function axisFromStart(
+  axis: readonly string[],
+  denominators: readonly { month: string; audience: string; videos: number | null }[],
+  audiences: readonly string[],
+): string[] {
+  const market = new Set(audiences)
+  const start = sinceStart(denominators.filter((d) => market.has(d.audience)).map((d) => ({ month: d.month, videos: d.videos ?? 0 }))).from
+  if (!start) return [...axis]
+  const trimmed = axis.filter((m) => m >= monthStartOf(start))
+  return trimmed.length > 0 ? trimmed : axis.slice(-1)
 }
 
 /** Every month from `from` to `to` inclusive, as month starts. */

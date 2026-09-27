@@ -10,6 +10,7 @@ import {
   objectReading,
   renderObjects,
   subjectPoints,
+  axisFromStart,
   type MarketObjectRef,
   type MarketPoint,
 } from './movement'
@@ -337,6 +338,22 @@ describe('a subject pooled as Subjects pools it', () => {
       objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'provisional' }],
     })
     expect(paused[0].unread).toBe('not read in September')
+  })
+
+  it('starts the trail where the pages’ charts start: the first month the market cleared 100 videos', () => {
+    // Staging's category: June 45, July 35, August 351 (Cotopaxi 5 and 1
+    // beside the first two). Subjects' chart and trail start in August.
+    const axis = ['2026-06-01', '2026-07-01', AUG, SEP]
+    const rows = [
+      { month: '2026-06-01', audience: STG.cat, videos: 45 }, { month: '2026-06-01', audience: STG.cotopaxi, videos: 5 },
+      { month: '2026-07-01', audience: STG.cat, videos: 35 }, { month: '2026-07-01', audience: STG.cotopaxi, videos: 1 },
+      { month: AUG, audience: STG.cat, videos: 351 }, { month: SEP, audience: STG.cat, videos: 625 },
+      // The client's own posts are not the market and never start it.
+      { month: '2026-06-01', audience: 'client', videos: 120 },
+    ]
+    expect(axisFromStart(axis, rows, [STG.cat, ...rivals])).toEqual([AUG, SEP])
+    // Nothing has cleared the floor yet: the month read stays.
+    expect(axisFromStart(axis, rows.filter((r) => r.videos < 100), [STG.cat, ...rivals])).toEqual(axis)
   })
 
   it('subjectPoints: a month written before the subject was counted, with no row, is no reading', () => {
