@@ -12,7 +12,7 @@ import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { pooledDenominators } from '../reading/market'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
-import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { MONTH_PARAM, readingAnchor, windowEnd, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf } from '../reading/month-key'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
@@ -61,6 +61,8 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { buildWords, loadKindRows, loadWordsCandidates, marketKindVideos, shortlistWords, type WordsBlock } from './voice-surface-words'
 import { buildWhere, loadEarlierMonths, loadMemory, loadMonthVideos, memoryMonths, type WhereBlock } from './voice-surface-where'
+import { brandNamed, loadBrandView, type BrandView } from './voice-surface-brand'
+import { ninetyDays } from './brands'
 
 // Conversation — "everything your market talked about, in full" (market-first
 // WP2.4, plan §2.4 C1–C4; the page was Voice, Phase 1 WP13, and keeps its key,
@@ -126,6 +128,10 @@ export type VoiceSurfaceParams = {
   audience?: string
   /** `'all'` lists every account at the floor in "Where your market talks". */
   accounts?: string
+  /** A tracked brand's name: the board lists that brand's videos over the
+   *  ninety days the Brands page reads (`./voice-surface-brand.ts`), and
+   *  `board=all` lists every one of its themes. */
+  brand?: string
 }
 
 /** C1, the market in the month (plan §2.4 C1). */
@@ -267,6 +273,9 @@ export interface VoiceSurfaceData {
   /** The view the page reads and its pill (WP3.3, lib/views). Absent where no
    *  view is live for the tenant, and on a copy stored before it. */
   view?: ViewState
+  /** One brand's videos in place of the market's board (`?brand=`); null or
+   *  absent where the page reads the market. */
+  brandView?: BrandView | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -280,8 +289,9 @@ const pctOf = (k: number | null | undefined, n: number | null | undefined): numb
  * Every href on this page, with the reader's month kept.
  *
  * `?month=` travels (the bar's month selector wrote it, and a click on a
- * theme must not jump the page back to the reading month), and so do the open
- * theme, the expanded board and the persona. `?themes=`, `?horizon=` and
+ * theme must not jump the page back to the reading month), and so do the brand
+ * the board is filtered to, the open theme, the expanded board and the
+ * persona. `?themes=`, `?horizon=` and
  * `?audience=` are a stored link's and do not: the page reads none of them
  * beyond the first load. `null` drops a key.
  */
@@ -291,7 +301,7 @@ export function voiceSurfaceHref(
 ): string {
   const merged: Record<string, string | null | undefined> = { ...params, ...over }
   const qs = new URLSearchParams()
-  for (const key of [MONTH_PARAM, 'theme', 'board', 'persona', 'accounts', VIEW_PARAM]) {
+  for (const key of [MONTH_PARAM, 'brand', 'theme', 'board', 'persona', 'accounts', VIEW_PARAM]) {
     const value = merged[key]
     if (value) qs.set(key, value)
   }
@@ -654,6 +664,15 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   })()
   whereAhead.catch(() => {})
 
+  // ONE BRAND'S VIDEOS (`?brand=`), IN THE BOARD'S PLACE: the ninety days the
+  // Brands page reads, started here beside everything else. A page without
+  // the parameter reads nothing more (`./voice-surface-brand.ts`).
+  const brandName = brandNamed(params.brand, rivals)
+  const brandAhead = brandName
+    ? themedRunAhead.then((themedRunId) => loadBrandView(db, clientId, { name: brandName, window: ninetyDays(windowEnd(rm)), themedRunId, all: params.board === 'all' }))
+    : Promise.resolve(null)
+  brandAhead.catch(() => {})
+
   // ── wave 3: the pool, the segments, the overrides, the cast ────────────
   const [themedRunId, cv] = await Promise.all([themedRunAhead, viewAhead])
   const [pool, segmentRows, excluded, profileRes, newestRunRes] = await Promise.all([
@@ -667,7 +686,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       .in('status', ['completed', 'partial']).order('started_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
-  const expanded = params.board === 'all'
+  // Under a brand, `board=all` is the brand's list, not the market's pool.
+  const expanded = params.board === 'all' && !brandName
   const atTenIds = pool.filter((r) => r.k >= THEME_FLOOR).map((r) => r.id)
   const shownIds = expanded ? pool.map((r) => r.id) : atTenIds
   const kById = new Map(pool.map((r) => [r.id, r.k]))
@@ -923,10 +943,11 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     console.error(`[pages] ${label}: ${(error as Error)?.message ?? String(error)}; not read`)
     return null
   })
-  const [wordsRead, kindRows, where] = await Promise.all([
+  const [wordsRead, kindRows, where, brandView] = await Promise.all([
     quiet(wordsReadAhead, 'voice.words'),
     quiet(kindRowsAhead, 'voice.words.kinds'),
     quiet(whereAhead, 'voice.where'),
+    quiet(brandAhead, 'voice.brand'),
   ])
   const bankThemes = new Map(themes.filter((t) => bankIds.includes(t.registryId)).map((t) => [t.registryId, { label: t.label, kind: t.kind, k: t.k }]))
   const words: WordsBlock | null = wordsRead && kindRows
@@ -960,6 +981,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     words,
     where,
     ...(viewed.view ? { view: viewed.view } : {}),
+    brandView,
   }
 }
 

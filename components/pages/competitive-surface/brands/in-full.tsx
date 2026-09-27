@@ -2,10 +2,13 @@ import Link from 'next/link'
 
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
+import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import { IN_FULL_TITLE, type InFullBlock } from '@/lib/pages/brands'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { voiceSurfaceHref } from '@/lib/pages/voice-surface'
+import { MONTH_PARAM } from '@/lib/reading/reading-month'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
 import { InnerLine, RULE, SCALE } from '@/components/pages/overview/market'
@@ -27,6 +30,10 @@ import { emailCell, emailHead, SubHead } from './parts'
 // beside its filed counts (the preview's "mostly German for Friday" predates
 // the re-tag). Its name in the market is B1's to count, gated by the hand
 // check.
+//
+// THE FOOTER OPENS THE BRAND'S VIDEOS: "Open Cotopaxi's videos →" is
+// Conversation filtered to the brand read in full (`?brand=`), over these same
+// ninety days, so the 32 it counts are the 32 it opens.
 //
 // THE KEY IS CO1'S (`competitive.rivals`), whose selection this block now
 // carries; a page built before deploy 5 (no `brands`) draws CO1 as it was.
@@ -118,6 +125,15 @@ function EmailBody({ b }: { b: InFullBlock }) {
 
 export const IN_FULL_EMPTY = 'No brand you track had a video filed under it in the last 90 days.'
 
+/**
+ * "Open {brand}'s videos →" (the approved preview's B2 footer): Conversation
+ * filtered to the brand read in full, over the same ninety days, on the month
+ * the reader is reading, landing on the brand's list (`#board`).
+ */
+export function brandVideosHref(brand: string, params: Record<string, string | undefined> = {}): string {
+  return `${voiceSurfaceHref({ month: params[MONTH_PARAM] }, { brand })}#board`
+}
+
 export const brandsInFull: Block<CompetitiveSurfaceData> = {
   key: competitiveRivals.key,
   title: IN_FULL_TITLE,
@@ -127,11 +143,12 @@ export const brandsInFull: Block<CompetitiveSurfaceData> = {
     const b = data.brands?.inFull
     if (!b) return competitiveRivals.render(data, mode, ctx)
     const empty = b.rows.length === 0 ? IN_FULL_EMPTY : null
+    const footer = b.selected ? openLink(mode, `${ctx.appUrl}${brandVideosHref(b.selected.label, ctx.params)}`, `Open ${b.selected.label}’s videos →`) : null
     if (mode === 'email') {
-      return <BlockFrame title={IN_FULL_TITLE} mode={mode}>{empty ? <InnerLine mode={mode}>{empty}</InnerLine> : <EmailBody b={b} />}</BlockFrame>
+      return <BlockFrame title={IN_FULL_TITLE} mode={mode} footer={footer}>{empty ? <InnerLine mode={mode}>{empty}</InnerLine> : <EmailBody b={b} />}</BlockFrame>
     }
     return (
-      <BlockFrame title={IN_FULL_TITLE} mode={mode} roomy>
+      <BlockFrame title={IN_FULL_TITLE} mode={mode} footer={footer} roomy>
         {empty ? <InnerLine mode={mode}>{empty}</InnerLine> : (
           <div className="@container min-w-0">
             <div className="grid min-w-0 grid-cols-1 items-start gap-y-8 @min-[640px]:grid-cols-2 @min-[640px]:gap-x-12 @min-[760px]:gap-x-[88px]">

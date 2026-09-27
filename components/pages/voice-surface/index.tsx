@@ -39,6 +39,12 @@ export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
  *  at `#theme`, and the pane's "in full below" link points at it. */
 const ANCHORS: Readonly<Record<string, string>> = { 'voice.theme': 'theme' }
 
+/** A block's anchor. Under `?brand=` the board's whole section is `#board`
+ *  (the Brands page links there), so the brand's name in the title is on
+ *  screen; the market's board keeps `#board` on its table. */
+const anchorOf = (key: string, data: VoiceSurfaceData): string | undefined =>
+  key === 'voice.board' && data.brandView ? 'board' : ANCHORS[key]
+
 /**
  * NO FIXED-HEIGHT TILES ON THIS PAGE. `Tile` is `overflow-hidden`, and a tile
  * is only as tall as the row span it asks for, so a bounded tile CUTS what is
@@ -128,7 +134,7 @@ export function VoiceSurfacePage({
         {controls}
       </SurfacePageBar>
       {VOICE_BLOCKS.map((block) => (
-        <GrowingTile key={block.key} flush id={ANCHORS[block.key]}>{block.render(data, 'app', ctx)}</GrowingTile>
+        <GrowingTile key={block.key} flush id={anchorOf(block.key, data)}>{block.render(data, 'app', ctx)}</GrowingTile>
       ))}
       {/* NO FOOTNOTE UNDER A BLOCK (25 Sep rulings): the page prints no
           method paragraph and no caveat under its blocks. The privacy line is

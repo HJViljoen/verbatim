@@ -22,6 +22,7 @@ import {
 } from '@/lib/pages/overview-market'
 import { voiceSurfaceHref, type VoiceSurfaceData, type VoiceSurfaceParams } from '@/lib/pages/voice-surface'
 import { BarLegend, BaseHead, LevelBar, MakerMark, RULE, SCALE, barAxis, shortMonthName } from '@/components/pages/overview/market'
+import { brandBoardEmpty, brandBoardFigures, renderBrandBoard } from './brand-board'
 
 // C2 · Every theme at 10 videos or more (market-first WP2.4, plan §2.4 C2;
 // `voice.board`, new, replacing the movers arms on this page).
@@ -322,6 +323,8 @@ export const voiceBoard: Block<VoiceSurfaceData> = {
   question: 'Everything your market talked about, biggest first?',
 
   render(data, mode = 'app', ctx) {
+    // `?brand=`: one brand's videos in the board's place (./brand-board.tsx).
+    if (data.brandView) return renderBrandBoard(data, data.brandView, mode, ctx)
     const empty = voiceBoard.emptyState(data)
     return (
       <BlockFrame title={voiceBoard.title} mode={mode} footer={footerLink(data, mode, ctx.appUrl)} roomy>
@@ -331,6 +334,7 @@ export const voiceBoard: Block<VoiceSurfaceData> = {
   },
 
   figures(data): FigureTable {
+    if (data.brandView) return brandBoardFigures(data.brandView)
     const b = data.board
     // The base every row's share is of. The rows' own counts are the page's
     // longest list and are not declared one by one (the 30-number budget).
@@ -338,6 +342,7 @@ export const voiceBoard: Block<VoiceSurfaceData> = {
   },
 
   emptyState(data) {
+    if (data.brandView) return brandBoardEmpty(data.brandView)
     const b = data.board
     if (b.atTen === 0 && !(b.below.rows && b.below.rows.length > 0)) {
       return `No theme reached 10 videos in ${longMonth(b.month)} yet; the list opens at 10.`

@@ -9,7 +9,9 @@ import { VoiceSurfacePage } from '@/components/pages/voice-surface'
 // The address is unchanged and stored links still land: `?themes=` (fourteen
 // of the thirty-two stored links carry it) opens the biggest theme it names in
 // the pane, and `?horizon=` and `?audience=` are read as nothing, since the
-// page reads the reading month and the category's themes.
+// page reads the reading month and the category's themes. `?brand=` (the
+// Brands page's "Open {brand}'s videos →") puts one tracked brand's videos
+// over B2's ninety days in the board's place.
 //
 // The legacy Voice of Customer module stays registered under the page key
 // `voice` (components/pages/registry.ts) for the export route, the share page
