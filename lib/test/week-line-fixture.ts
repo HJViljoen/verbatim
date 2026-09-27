@@ -1,7 +1,8 @@
 import { SEALAND_CLIENT_ID } from '../config'
 import { changesFromLog } from '../reading/comparability'
 import {
-  buildWeekLine, pooledMix, WEEK_DEPTH_BANDS, WEEK_LINE_KINDS, weekAgeCutoff, type WeekLineBlock, type WeekPoint, type WeekRead,
+  buildWeekLine, pooledMix, WEEK_DEPTH_BANDS, WEEK_LINE_KINDS, weekAgeCutoff, type WeekLineBlock, type WeekLineObject, type WeekPoint,
+  type WeekRead,
 } from '../reading/week-line'
 import { weekAxis } from '../reading/weeks'
 import { WEEK_LINE } from '../week-line-config'
@@ -115,8 +116,13 @@ const firstPairPoints: WeekPoint[] = FIRST_PAIR_STAGING.flatMap((stagingWeek, i)
 })))
 
 /** The kept reads and points of the first print, as a loader reads them back
- *  (`loadKeptWeekLine`'s `line`), for the page fixtures and renders. */
-export const WEEK_LINE_FIXTURE_FIRST_PAIR_KEPT: { reads: WeekRead[]; points: WeekPoint[] } = { reads: firstPairReads, points: firstPairPoints }
+ *  (`loadKeptWeekLine`'s `line`, the subject named as the page names it), for
+ *  the page fixtures and renders. */
+export const WEEK_LINE_FIXTURE_FIRST_PAIR_KEPT: { reads: WeekRead[]; points: WeekPoint[]; objects: WeekLineObject[] } = {
+  reads: firstPairReads,
+  points: firstPairPoints,
+  objects: [{ objectKind: 'subject', objectId: STAGING_LOOKS_ID, label: 'Looks & style', calibration: 'provisional' }],
+}
 
 /** The line as the first print draws it: two weeks, one pair, read the same way. */
 export const WEEK_LINE_FIXTURE_FIRST_PAIR: WeekLineBlock = buildWeekLine(
