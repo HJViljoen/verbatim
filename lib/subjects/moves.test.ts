@@ -72,6 +72,18 @@ describe('subjectSetVerdict', () => {
     for (let n = SUBJECTS_MIN; n <= SUBJECTS_MAX; n++) expect(subjectSetVerdict(n).state).toBe('ready')
   })
 
+  it('reads ten as ready and eleven as over (decision G: the cap rose from eight to ten)', () => {
+    expect(subjectSetVerdict(10).state).toBe('ready')
+    expect(subjectSetVerdict(11)).toEqual({ state: 'over', line: '11 subjects. More than 10 and no single one gets enough of the conversation to read.' })
+    expect(subjectSetVerdict(3).line).toBe('3 of 5-10 subjects named.')
+  })
+
+  it('both add dialogs define a subject in decision G\'s words (WP3.1)', () => {
+    const src = readFileSync(new URL('../../components/subjects/subject-editor.tsx', import.meta.url), 'utf8')
+    expect(src.match(/description=\{`A subject is \$\{SUBJECT_WORDS\}\./g)).toHaveLength(2)
+    expect(src).not.toContain('Name it the way a buyer would say it.')
+  })
+
   it('says why too many is a problem, in the reader’s terms', () => {
     const over = subjectSetVerdict(SUBJECTS_MAX + 1)
     expect(over.state).toBe('over')

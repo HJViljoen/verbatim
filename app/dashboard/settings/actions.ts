@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { assertTenantMay } from '@/lib/tenant-locks'
+import { queuedMessage, queueTrackingEdit, type QueueColumn } from '@/lib/settings/queue'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
 import { applySubredditEdit } from '@/lib/settings/save-state'
@@ -30,6 +31,46 @@ import { RIVALS_PRESENT, SAVED_FIELDS } from './constants'
 export interface SettingsFormState {
   ok: boolean
   message: string
+  /** The month a locked tenant's edit was queued for (lib/settings/queue.ts). */
+  queued?: string
+  /** A locked tenant's save that moved nothing the queue takes. */
+  unchanged?: boolean
+}
+
+/** Said when a locked tenant's save changes nothing the queue takes. */
+const NOTHING_TO_QUEUE = 'Nothing to queue: that is what we search now, or it is already waiting for January.'
+
+/**
+ * A locked tenant's term, rival or handle edit, QUEUED rather than refused
+ * (market-first decision I, plan §2.10 D5, WP3.10): the rows go to
+ * `tracking_config_queue` on the admin client (MF3 grants tenants SELECT only),
+ * after the caller's role and lock checks, each carrying the person
+ * (`actorStamp`), and land on the 1st of a month, the first no earlier than
+ * 1 Jan 2027. Before MF3 there is no queue and the deploy-1 refusal stands.
+ */
+async function queueEdit(
+  session: Awaited<ReturnType<typeof getSessionContext>>,
+  refusal: string,
+  posted: Partial<Record<QueueColumn, unknown>>,
+  derive?: (will: Partial<Record<QueueColumn, unknown>>) => Partial<Record<QueueColumn, unknown>>,
+): Promise<SettingsFormState> {
+  const out = await queueTrackingEdit({
+    read: session.supabase,
+    write: createAdminClient(),
+    clientId: session.clientId,
+    posted,
+    derive,
+    actor: actorStamp(session, 'queued for the 1st'),
+    now: new Date().toISOString(),
+  })
+  if (out.state === 'queued') {
+    revalidatePath('/dashboard/settings')
+    return { ok: true, message: queuedMessage(out.month), queued: out.month }
+  }
+  if (out.state === 'unchanged') return { ok: true, message: NOTHING_TO_QUEUE, unchanged: true }
+  if (out.state === 'unavailable') return { ok: false, message: refusal }
+  console.error(`[settings] tracking edit not queued for ${session.clientId}: ${out.error}`)
+  return { ok: false, message: 'Could not queue that. Try again, and tell us if it keeps happening.' }
 }
 
 // Comma-separated text field -> trimmed, de-blanked string[].
@@ -118,9 +159,11 @@ export async function updateTrackingConfig(
     return { ok: false, message: 'You don’t have permission to change settings.' }
   }
   // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts): the
-  // rivals this writes are held still during the trial.
+  // rivals this writes are held still during the trial and a change to them
+  // is queued for the 1st (below). The cadence is no setting at all (27 Sep),
+  // for a locked tenant or any other: it is refused below, before the lock.
   const may = assertTenantMay(session, clientId, 'tracking')
-  if (!may.ok) return { ok: false, message: may.message }
+  if (!may.ok && !may.queue) return { ok: false, message: may.message }
 
   // Read the stored config BEFORE validating: the rival list a POST did not
   // carry is the stored one, and the cadence a POST did carry is checked
@@ -153,6 +196,19 @@ export async function updateTrackingConfig(
     const first = parsed.error.issues[0]
     const field = first?.path.join('.') || 'form'
     return { ok: false, message: `Invalid ${field}: ${first?.message ?? 'check your input.'}` }
+  }
+
+  // A LOCKED TENANT: a rival list that moved is queued with the search terms
+  // it brings, as an unlocked save derives them below (a cadence edit was
+  // refused above, for every tenant: 27 Sep). Nothing is written to
+  // tracking_configs.
+  if (!may.ok) {
+    if (!posted) return { ok: true, message: NOTHING_TO_QUEUE, unchanged: true }
+    const names = parsed.data.competitor_names
+    return queueEdit(session, may.message, { competitor_names: names }, (will) => {
+      const base = Array.isArray(will.competitor_keywords) ? (will.competitor_keywords as string[]) : []
+      return { competitor_keywords: mergeCompetitorKeywords(base, names) }
+    })
   }
 
   // THE ADMIN CLIENT, AFTER THE ROLE AND LOCK CHECKS ABOVE (MF1, the deploy-1
@@ -281,9 +337,10 @@ export async function updateSearchTerms(
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change search terms.' }
   }
-  // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts).
+  // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts): a locked
+  // tenant's terms are queued for the 1st, below, once they have validated.
   const may = assertTenantMay(session, clientId, 'tracking')
-  if (!may.ok) return { ok: false, message: may.message }
+  if (!may.ok && !may.queue) return { ok: false, message: may.message }
 
   const list = (name: string) => formData.getAll(name).map(String)
   const parsed = termsSchema.safeParse({
@@ -307,6 +364,14 @@ export async function updateSearchTerms(
   }
   if (terms.brand_keywords.length === 0) {
     return { ok: false, message: 'Could not save: keep at least one term for your brand.' }
+  }
+  if (!may.ok) {
+    return queueEdit(session, may.message, {
+      brand_keywords: terms.brand_keywords,
+      competitor_keywords: terms.competitor_keywords,
+      industry_keywords: terms.industry_keywords,
+      exclude_terms: cleanTerms(parsed.data.exclude_terms),
+    })
   }
 
   // Terms FIRST, exclusions last. The exclusions column arrives with a
@@ -519,7 +584,12 @@ export async function saveTracking(
   const terms = await updateSearchTerms(prev, formData)
   if (!terms.ok) return terms
   const config = await updateTrackingConfig(prev, formData)
-  if (!config.ok) return config
+  // A locked tenant's terms may already be queued when the rivals are refused:
+  // say both, so a save that half-landed does not read as a refusal alone.
+  if (!config.ok) return terms.queued ? { ok: false, message: `${terms.message} ${config.message}`, queued: terms.queued } : config
+  const queued = config.queued ?? terms.queued
+  if (queued) return { ok: true, message: queuedMessage(queued), queued }
+  if (terms.unchanged && config.unchanged) return { ok: true, message: NOTHING_TO_QUEUE, unchanged: true }
   // What it wrote, not what a third of it wrote: the form posts one
   // `saved_fields` value per pending edit and `savedMessage` reads them against
   // its own allowlist, so the sentence names the rival list when that is what

@@ -1,6 +1,6 @@
 import { Dot, Figure, gridIntrinsic, GridRow, GridTable, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { shortDate } from '@/lib/format'
-import { communitiesMeta, communityWords, type CommunityRow } from '@/lib/settings/communities'
+import { communityWords, type CommunityRow } from '@/lib/settings/communities'
 import { CommunityAction, CommunityAdd } from './community-controls'
 
 // `settings.reddit.*` — the watched communities, at the artboard's density.
@@ -60,7 +60,7 @@ export function CommunitiesSection({
 }) {
   return (
     <Section>
-      <SectionHead title="Watched communities" meta={communitiesMeta(rows)} />
+      <SectionHead title="Watched communities" />
 
       {rows.length === 0 ? (
         <p className="text-[12.5px] text-muted-foreground">No community is watched for this workspace.</p>
@@ -83,7 +83,7 @@ export function CommunitiesSection({
                   </span>
                   {r.probe && (
                     <span className="block font-mono text-[10.5px] text-muted-foreground">
-                      sampled {r.probe.at}: {r.probe.kept} of {r.probe.sampled} on topic
+                      sampled {shortDate(`${r.probe.at.slice(0, 10)}T00:00:00.000Z`)}: {r.probe.kept} of {r.probe.sampled} on topic
                     </span>
                   )}
                 </span>,

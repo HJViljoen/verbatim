@@ -2,7 +2,7 @@
 # The test of scripts/apply-market-first-migrations.sh (plan §4.0: "a tested
 # runner"). Run it before handing Heinrich a set:
 #
-#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2 or mf4
+#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2, mf4 or mf3
 #
 # 1. The refusal guards, with no connection at all: no set, an unknown set,
 #    another project's URL, the transaction pooler, and a --test-target that is
@@ -29,13 +29,15 @@ DIR="$(cd "$DIR" && pwd)"
 export MF_LOG_DIR="$DIR/logs"
 # YES: what the operator types to apply (r12 first asks whether deploy 2 is live).
 # PREREQ: the history row the set needs (the runner's PREREQ_VERSION).
-# mf2 and mf4 are brought up with R12 applied (`up --before` applies every file
-# before them), so their dry run reads R12's grants, not staging's.
+# mf2, mf4 and mf3 are brought up with R12 applied (`up --before` applies every
+# file before them), so their dry run reads R12's grants, not staging's; mf3's
+# cluster holds MF1, R12, MF2 and MF4, the order production applies them in.
 case "$SET" in
   mf1) FIRST=20260928090000; HISTORY="('20260924093000', 'steps_completed_dead')"; YES='y\n'; PREREQ=20260924093000 ;;
   r12) FIRST=20260928091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1')"; YES='y\ny\n'; PREREQ=20260928090000 ;;
   mf2) FIRST=20261005090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants')"; YES='y\n'; PREREQ=20260928090000 ;;
   mf4) FIRST=20261005091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2')"; YES='y\n'; PREREQ=20261005090000 ;;
+  mf3) FIRST=20261103090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks')"; YES='y\n'; PREREQ=20261005091000 ;;
   *) echo "test-runner: unknown set $SET"; exit 2 ;;
 esac
 
@@ -79,12 +81,20 @@ case "$SET" in
   mf1|r12) expect "the dry run reads the tenant's tracking_configs grants as staging holds them" "$out" '^  ok    as staging holds them' ;;
   *) expect "the dry run reads the tenant's tracking_configs grants with R12 applied" "$out" '^  NOTE: R12 is already applied here' ;;
 esac
+if [[ "$SET" == "mf3" ]]; then
+  expect "the mf3 dry run reads the existing guards before it" "$out" '^  functions and triggers [|] md5 = [0-9]+[|][0-9a-f]{32}$'
+fi
 [[ "$(applied)" == "0" ]] || fail "the dry run recorded history"
 expect "'n' at the prompt applies nothing" "$(printf 'n\n' | run --set "$SET" --test-target)" '^STOPPED by operator'
 [[ "$(applied)" == "0" ]] || fail "a refused prompt recorded history"
 out="$(printf "$YES" | run --set "$SET" --test-target)"
 expect "'y' applies and verifies" "$out" '^All [0-9]+ applied and verified'
 expect "no verification failed" "$out" '^DONE: '
+if [[ "$SET" == "mf3" ]]; then
+  expect "MF3 leaves the existing guards and the audit trigger as they were" "$out" '^  ok    existing guards unchanged'
+  expect "MF3's seven guards sit on its tables" "$out" '^  ok    guards on the new tables'
+  expect "MF3's operator columns carry no tenant grant" "$out" '^  ok    leaked[|]operator columns +0[|]2$'
+fi
 [[ "$(applied)" != "0" ]] || fail "the history row was not recorded"
 bash "$TW" psql "$DIR/pg" -q -f "$ROOT/scripts/pg-shim/catalogue.sql" > "$DIR/cat-after-first.txt"
 out="$(printf "$YES" | run --set "$SET" --test-target)"

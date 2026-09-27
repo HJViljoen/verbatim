@@ -118,18 +118,14 @@ export const marketWays: Block<MarketSurfaceData> = {
   render(data, mode = 'app', ctx) {
     const w = data.ways
     const email = mode === 'email'
-    const live = w.ways.filter((x) => x.live).length
 
     return (
       <BlockFrame
         title={marketWays.title}
         question={marketWays.question}
         mode={mode}
-        // THE ARTBOARD'S META, and the count it leaves out. "five ways in · a
-        // move is scored from the update after it" is true and says nothing
-        // about how many of the five a reader can actually use today, which on
-        // this page is the more useful half.
-        meta={`five ways in · ${live} of ${w.ways.length} work today`}
+        // NO META (25 Sep rulings; WP3.6): each way says for itself whether
+        // it works today.
       >
         {email ? (
           <div>{w.ways.map((way) => <Way key={way.key} way={way} mode={mode} appUrl={ctx.appUrl} />)}</div>

@@ -5,7 +5,8 @@ import { pipelineActor, updateWithActor } from '../config-log'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, SUBREDDIT_PROBES_PER_RUN, SUBREDDIT_TARGET_ACTIVE, SUBREDDIT_MAX_KNOWN, SUBREDDIT_STRIKE_LIMIT } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
 import { SubredditProposalSchema, type SubredditProposalOutput } from '../pipeline/schemas'
-import { subredditKey, knownSubreddits, applyStrikes, subredditLabel, type RedditYields } from './subreddits'
+import { subredditKey, knownSubreddits, applyStrikes, subredditLabel, discoveryPauseNote, type RedditYields } from './subreddits'
+import { tenantLocked } from '../tenant-locks'
 import { probeSubreddits } from './subreddit-probe'
 import type { GatherConfig, SubredditEntry } from './types'
 
@@ -203,6 +204,14 @@ export async function discoverSubreddits(opts: {
   //    replacement instead of waiting a week.
   const yields = await loadLastRedditYields(admin, opts.clientId)
   const strikeResult = applyStrikes(opts.config.subreddits, yields, SUBREDDIT_STRIKE_LIMIT)
+  // The pause (decision I, WP3.4): a locked tenant's communities stay as they
+  // are. Nothing is written, probed or proposed; the log says what would have
+  // happened, so a community that would have gone quiet is still visible.
+  if (tenantLocked(opts.clientId, 'tracking')) {
+    const candidates = opts.config.subreddits.filter((e) => e.status === 'candidate').slice(0, SUBREDDIT_PROBES_PER_RUN)
+    console.log(discoveryPauseNote(strikeResult, candidates, discoveryConverged(strikeResult.entries)))
+    return opts.config.subreddits
+  }
   let entries = [...strikeResult.entries]
   if (strikeResult.demoted.length || strikeResult.struck.length) {
     console.log(

@@ -39,6 +39,19 @@ export function barContext(data: { brand: string; reading?: ReadingMonth | null;
   return data.reading ? { brand: data.brand, reading: data.reading, others: data.otherMonths ?? [] } : null
 }
 
+/**
+ * The one-line bar for the surfaces that read no month of their own (Settings,
+ * Ask and Reports; the 25 Sep rulings, market-first WP3.10, WP3.9, WP3.11):
+ * the brand, the reading month's name with its state in the tooltip, and "as
+ * at the {update} update · next update {date}". No other month is offered,
+ * because nothing on these pages changes with one, so the chip is a label and
+ * not a menu. Null without a reading month (nothing delivered yet): the bar is
+ * then its title alone rather than a date invented for it.
+ */
+export function oneLineBar(brand: string, reading: ReadingMonth | null | undefined): ContextLineInput | null {
+  return reading ? { brand, reading, others: [] } : null
+}
+
 /** The bar's one line: "as at the 24 Sep update · next update Sun 27 Sep", or
  *  "as at the 13 Sep update · updates paused" (`barLine`). */
 export function contextLine(input: ContextLineInput): string {

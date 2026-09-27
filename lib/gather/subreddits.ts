@@ -171,3 +171,21 @@ export function applyStrikes(
 
   return { entries: next, demoted, struck }
 }
+
+/**
+ * The discovery pause (market-first decision I; plan WP3.4, deploy 4). While a
+ * tenant's tracking is locked (lib/tenant-locks.ts), our own discovery neither
+ * promotes nor demotes a community for it, so the three communities that have
+ * run unchanged since 20 Sep stay the set October and November are read on. It
+ * writes nothing (no strike, no probe, no proposal: a probe or a proposal
+ * spends) and says what it would have done, from the same strike rule a live
+ * run applies. Pure.
+ */
+export function discoveryPauseNote(strikes: StrikeOutcome, candidates: readonly SubredditEntry[], converged: boolean): string {
+  const parts: string[] = []
+  if (strikes.demoted.length) parts.push(`would have demoted ${strikes.demoted.map(subredditLabel).join(', ')} to a candidate`)
+  if (strikes.struck.length) parts.push(`would have struck ${strikes.struck.map(subredditLabel).join(', ')}`)
+  if (candidates.length) parts.push(`would have probed ${candidates.map((c) => subredditLabel(c.name)).join(', ')} (a promotion if it passed)`)
+  if (!converged) parts.push('would have proposed new communities')
+  return `[reddit] discovery paused: tracking is locked for this tenant (decision I), so no community is promoted or demoted; ${parts.length ? parts.join('; ') : 'it would have changed nothing'}`
+}

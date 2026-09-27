@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 
 import { createCitedQuotePicker } from '../quotes'
+import type { MarketTheme } from './overview-market/board'
+import { ownPostFilings } from '../reading/own-posts'
 import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
 import {
@@ -8,6 +10,8 @@ import {
   marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, recurrenceForTarget,
   registryIdsByInsight, repeatCell, repeatLine, waysOfMoving,
   type AdviceRow, type RecCopy, type TargetPoint,
+  buildClaimSubjects, buildQuestions, questionGroupsOf, questionTouch, questionWindowFrom,
+  type QuestionPost,
 } from './market-surface'
 import { currentRecommendation, topRecommendation } from '../dashboard-tiles'
 
@@ -666,5 +670,141 @@ describe('MK2 · the current recommendation first, then the newest (market-first
   it('offers the oldest undecided row to accept, whatever order the ledger runs in', () => {
     const rows = buildAdviceRows(SEALAND_COPIES, [])
     expect(acceptableRow(rows, null)!.lineageId).toBe('061f442e')
+  })
+})
+
+// ---- WP3.6 · Your moves: the pure half ------------------------------------------
+
+describe('buildQuestions (WP3.6 Y1)', () => {
+  // Staging, Sealand, September (measured 27 Sep): the category's question
+  // themes at 10+ and their maker shares off `theme_maker_shares`.
+  const t = (id: string, label: string, k: number, maker: number): MarketTheme => ({
+    registryId: id, label, labelStripped: false, kind: 'question', k, n: 625, prev: null, makerShare: maker / k, noiseShare: 0, identityNewThisRun: false, flags: [], provenance: null,
+  })
+  const themes = [
+    t('tut', 'Requests for step-by-step tutorials', 28, 23),
+    t('mat', 'Questions about materials and tools', 25, 24),
+    t('meas', 'Need for exact measurements', 15, 12),
+    t('air', 'Confusion about airline size rules', 12, 1),
+    t('sew', 'Requests for the sewing pattern', 11, 11),
+    t('laundry', 'Laundry planning for travel', 10, 1),
+  ]
+  const posts: QuestionPost[] = [
+    { id: 'p-sep', upload_date: '2026-09-07', topics: ['giveaway', 'event', 'crossbody bags', 'trail running'], video_url: null },
+    { id: 'p-aug', upload_date: '2026-08-26', topics: ['sustainable fashion', 'raffle', 'handmade bags'], video_url: null },
+  ]
+
+  it('drops the maker-led questions and ranks the rest by videos', () => {
+    const q = buildQuestions({ month: '2026-09-01', themes, segments: 'measured', n: 625, brandNames: ['Sealand'], posts, subjects: [], filings: null })
+    expect(q.themes.map((r) => [r.label, r.videos])).toEqual([['Confusion about airline size rules', 12], ['Laundry planning for travel', 10]])
+    expect(q.monthPosts).toBe(1)
+    expect(q.windowPosts).toBe(2)
+    expect(q.window).toEqual({ from: '2026-07-01', to: '2026-09-01' })
+    expect(q.empty).toBeNull()
+  })
+
+  it('groups nothing for a tenant with no maker rule (Össur)', () => {
+    const q = buildQuestions({ month: '2026-09-01', themes, segments: 'no_rule', n: 625, brandNames: [], posts, subjects: [], filings: null })
+    expect(q.themes.map((r) => r.videos)).toEqual([28, 25, 15])
+    expect(q.themes.every((r) => r.makers == null)).toBe(true)
+  })
+
+  it('reads a brand a question names with no evidence here as "a brand"', () => {
+    const q = buildQuestions({ month: '2026-09-01', themes: [t('cot', 'Questions about Cotopaxi sizing', 12, 0)], segments: 'measured', n: 625, brandNames: ['Cotopaxi'], posts, subjects: [], filings: null })
+    expect(q.themes[0].label).toBe('Questions about a brand sizing')
+  })
+
+  it('hides a subject being re-described, and says its empty state when nothing is left', () => {
+    const q = buildQuestions({
+      month: '2026-09-01', themes: [], segments: 'measured', n: 625, brandNames: [], posts, filings: null,
+      subjects: [{ id: 's-rw', name: 'Repair & warranty', calibration: 'failed', videos: 11, groups: [] }],
+    })
+    expect(q.subjects).toEqual([])
+    expect(q.empty).toContain('No question theme in your market reached 10 videos in September')
+  })
+
+  it('counts the window from two months before the reading month', () => {
+    expect(questionWindowFrom('2026-10-01')).toBe('2026-08-01')
+    expect(questionWindowFrom('2026-01-01')).toBe('2025-11-01')
+  })
+})
+
+describe('questionTouch (WP3.6 Y1: words, and the judge for a subject)', () => {
+  const posts: QuestionPost[] = [
+    { id: 'a', upload_date: '2026-09-15', topics: ['event', 'yoga', 'coastal clean-up', 'community'], video_url: 'https://x/a' },
+    { id: 'b', upload_date: '2026-09-02', topics: null, video_url: null },
+  ]
+  it('touched on two or more of one label’s words, with the post and the words', () => {
+    const r = questionTouch({ labels: ['Questions about coastal clean-up events'], posts })
+    expect(r.state).toBe('touched')
+    expect(r.matched).toEqual([{ id: 'a', postedOn: '2026-09-15', href: 'https://x/a', words: ['coastal', 'clean', 'events'], by: 'words' }])
+    expect(r.posts).toBe(2)
+  })
+  it('a theme row nobody touched is none, with the words checked', () => {
+    expect(questionTouch({ labels: ['Confusion over airline bag sizes'], posts })).toMatchObject({ state: 'none', checked: ['airline', 'sizes'], matched: [] })
+  })
+  it('a subject row before MF3 is not checked yet, never none', () => {
+    expect(questionTouch({ labels: ['Worries about zippers in rain'], posts, judge: { subjectId: 's', filings: null } })).toMatchObject({ state: 'unchecked', unfiled: 2 })
+  })
+  it('a subject row every post of which the judge filed is none; a filed touching post touches', () => {
+    const row = (video_id: string, touches: boolean) => ({ video_id, claim_id: null, subject_id: 's', touches, matched_words: touches ? ['rain'] : [], method: 'judge', judge_version: 'v1', decided_at: '2026-11-22T00:00:00Z' })
+    expect(questionTouch({ labels: ['Worries about zippers in rain'], posts, judge: { subjectId: 's', filings: ownPostFilings([row('a', false), row('b', false)]) } })).toMatchObject({ state: 'none', unfiled: 0 })
+    expect(questionTouch({ labels: ['Worries about zippers in rain'], posts, judge: { subjectId: 's', filings: ownPostFilings([row('a', false)]) } })).toMatchObject({ state: 'unchecked', unfiled: 1 })
+    const touched = questionTouch({ labels: ['Worries about zippers in rain'], posts, judge: { subjectId: 's', filings: ownPostFilings([row('a', false), row('b', true)]) } })
+    expect(touched.state).toBe('touched')
+    expect(touched.matched).toEqual([{ id: 'b', postedOn: '2026-09-02', href: null, words: ['rain'], by: 'judge' }])
+  })
+  it('prints a word checked under two labels once, as the first label spelled it', () => {
+    // Staging's Price row printed "price · sale · ordering · prices" before this.
+    const r = questionTouch({ labels: ['Price and sale questions', 'Buying interest and ordering questions', 'Confusion over sale prices'], posts })
+    expect(r.checked).toEqual(['price', 'sale', 'ordering'])
+  })
+  it('your posts unread is unread, claiming nothing', () => {
+    expect(questionTouch({ labels: ['Worries about zippers in rain'], posts: null, judge: { subjectId: 's', filings: null } }).state).toBe('unread')
+  })
+})
+
+describe('buildClaimSubjects (WP3.6 Y3)', () => {
+  const subjects = [
+    { id: 's-w', name: 'Waterproofing', calibration: 'provisional' as const },
+    { id: 's-d', name: 'Durability', calibration: 'provisional' as const },
+    { id: 's-r', name: 'Repair & warranty', calibration: 'failed' as const },
+  ]
+  // Two rows of one claim on one post (a re-read), and a second claim.
+  const claims = [
+    { id: 'c1', source_video_id: 'p1', claim: 'Made from  rescued sailcloth.' },
+    { id: 'c1b', source_video_id: 'p1', claim: 'made from rescued sailcloth.' },
+    { id: 'c2', source_video_id: 'p2', claim: 'Built to last ten years.' },
+  ]
+  const row = (claim_id: string, subject_id: string, touches: boolean) => ({ video_id: 'p', claim_id, subject_id, touches, matched_words: [], method: 'judge', judge_version: 'v1', decided_at: '2026-11-22T00:00:00Z' })
+
+  it('counts a claim once across its re-reads, and is unchecked before MF3', () => {
+    expect(buildClaimSubjects({ claims, subjects, filings: null })).toMatchObject({ claims: 2, unfiled: 2, state: 'unchecked' })
+    expect(buildClaimSubjects({ claims: null, subjects, filings: null })).toBeNull()
+  })
+
+  it('with no subject named (Össur), counts the claims and leaves nothing "not checked yet"', () => {
+    expect(buildClaimSubjects({ claims, subjects: [], filings: null })).toEqual({ claims: 2, subjects: [], unfiled: 0, state: 'checked' })
+  })
+
+  it('counts subjects once every claim is filed for every subject not being re-described', () => {
+    const filings = ownPostFilings([row('c1', 's-w', false), row('c1', 's-d', false), row('c2', 's-w', false), row('c2', 's-d', true)])
+    const c = buildClaimSubjects({ claims, subjects, filings })
+    expect(c).toMatchObject({ claims: 2, unfiled: 0, state: 'checked' })
+    expect(c!.subjects).toEqual([{ subjectId: 's-d', name: 'Durability', k: 1 }, { subjectId: 's-w', name: 'Waterproofing', k: 0 }])
+    expect(buildClaimSubjects({ claims, subjects, filings: ownPostFilings([row('c2', 's-w', false), row('c2', 's-d', true)]) })).toMatchObject({ unfiled: 1, state: 'partial' })
+  })
+})
+
+describe('questionGroupsOf', () => {
+  it('names each insight by the first theme that cites it, keyed on the registry id', () => {
+    const g = questionGroupsOf([
+      { registry_id: 'r1', label: 'Demand for real waterproofing', supporting_insight_ids: ['i1', 'i2'] },
+      { registry_id: 'r2', label: 'Worries about zippers in rain', supporting_insight_ids: ['i2', 'i3'] },
+      { registry_id: null, label: 'Unkeyed', supporting_insight_ids: ['i4'] },
+    ])
+    expect(g.get('i2')).toEqual({ registryId: 'r1', label: 'Demand for real waterproofing' })
+    expect(g.get('i3')?.registryId).toBe('r2')
+    expect(g.has('i4')).toBe(false)
   })
 })

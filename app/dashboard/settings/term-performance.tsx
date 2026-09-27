@@ -1,4 +1,6 @@
-import { platformLabel } from '@/lib/format'
+import { monthName, platformLabel } from '@/lib/format'
+import { levelText } from '@/lib/reading/level'
+import { keptRateText } from '@/components/settings/record/rejects'
 import { glossaryRule } from '@/lib/calibration'
 import { EnhancedTable } from '@/components/shell/enhanced-table'
 import type { TermSummary } from '@/lib/keywords/value'
@@ -21,7 +23,10 @@ const BUCKET_LABEL: Record<string, string> = {
 
 const n = (x: number) => x.toLocaleString('en-US')
 
-function Row({ t, months }: { t: TermSummary; months?: TermYield }) {
+/** 'YYYY-MM' → "Sep": the month's short name, never an ISO key (WP3.10 check). */
+const monthShort = (month: string) => monthName(`${month.slice(0, 7)}-01`).split(' ')[0]
+
+function Row({ t, months, rate }: { t: TermSummary; months?: TermYield; rate: (r: { found: number; kept: number; keptPct: number }) => string }) {
   return (
     <tr data-search={`${t.keyword} ${BUCKET_LABEL[t.bucket] ?? t.bucket} ${t.platforms.map(platformLabel).join(' ')}`.toLowerCase()} className="border-t border-border/70 align-top">
       <td className="py-1.5 pr-3">{t.keyword}</td>
@@ -33,11 +38,11 @@ function Row({ t, months }: { t: TermSummary; months?: TermYield }) {
           was written and documented it as "the number the table shows"; the
           table showed four raw counts and never it. Design ST2 asks for it
           printed, and it was a render change all along. */}
-      <td className="py-1.5 pr-3 text-right font-mono tabular-nums" data-v={Math.round(t.keptRate * 1000)}>{(t.keptRate * 100).toFixed(1)}%</td>
+      <td className="py-1.5 pr-3 text-right font-mono tabular-nums" data-v={Math.round(t.keptRate * 1000)}>{rate({ found: t.found, kept: t.kept, keptPct: t.keptRate * 100 })}</td>
       {/* Month by month, on the UPDATE's clock — the one figure in this product
           that is honestly run-dated (TERM_YIELD_BASIS, printed once below). */}
       <td className="py-1.5 pr-3 font-mono text-[10px] text-muted-foreground">
-        {months ? months.months.map((m) => `${m.month} ${m.keptPct.toFixed(0)}%`).join(' · ') : '—'}
+        {months ? months.months.map((m) => `${monthShort(m.month)} ${levelText(m.kept, m.found)?.text ?? '—'}`).join(' · ') : '—'}
       </td>
       <td className="py-1.5 pr-3 text-right font-mono tabular-nums text-muted-foreground" data-v={t.eligible}>{n(t.eligible)}</td>
       <td className="py-1.5 pr-3 text-right font-mono tabular-nums" data-v={t.insights}>{n(t.insights)}</td>
@@ -77,6 +82,9 @@ const HEAD_HELP: Readonly<Record<string, string>> = {
 
 export function TermPerformance({ rows, updates, months = [] }: { rows: TermSummary[]; updates: number; months?: readonly TermYield[] }) {
   const monthsByTerm = new Map(months.map((m) => [m.keyword.trim().toLowerCase(), m]))
+  // ONE PRECISION FOR THE COLUMN, AND NO SHARE UNDER 100 FOUND (the reject
+  // log's rule, WP3.10): a rate on fewer than 100 prints as its count.
+  const rate = keptRateText(rows.map((t) => ({ found: t.found, keptPct: t.keptRate * 100 })))
   const flagged = rows.filter((t) => t.worthReviewing).length
   const description = rows.length === 0
     ? 'Nothing to show yet: this fills in after your first update.'
@@ -93,11 +101,10 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
   // section head does.
   return (
     <div className="flex min-w-0 flex-col gap-2">
+      {/* The head is its title alone (the 25 Sep rulings, WP3.10): the
+          pooled span is the one-line answer under it. */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <span className="shrink-0 text-[12.5px] font-medium">How they are doing</span>
-        <span className="min-w-0 font-mono text-[10.5px] text-muted-foreground">
-          pooled over {updates} update{updates === 1 ? '' : 's'}
-        </span>
       </div>
       <p className="text-[11.5px] text-muted-foreground">{description}</p>
       {rows.length === 0 ? (
@@ -126,7 +133,7 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
               </tr>
             </thead>
             <tbody>
-              {rows.map((t) => <Row key={t.key} t={t} months={monthsByTerm.get(t.keyword.trim().toLowerCase())} />)}
+              {rows.map((t) => <Row key={t.key} t={t} rate={rate} months={monthsByTerm.get(t.keyword.trim().toLowerCase())} />)}
             </tbody>
           </table>
         </EnhancedTable>

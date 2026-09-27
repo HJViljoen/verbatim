@@ -21,7 +21,7 @@ import { ANALYSIS_MODEL } from '../config'
  *  proposer offers more than eight so there is something to choose from. The
  *  Settings editor enforces the ceiling; this is what it enforces. */
 export const SUBJECTS_MIN = 5
-export const SUBJECTS_MAX = 8
+export const SUBJECTS_MAX = 10
 
 export const SUBJECT_ORIGINS = ['own_claims', 'category_theme', 'client'] as const
 export type SubjectOrigin = (typeof SUBJECT_ORIGINS)[number]

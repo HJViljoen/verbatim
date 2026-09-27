@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
+import { ReadingContext } from '@/components/shell/page-bar'
+import type { ContextLineInput } from '@/lib/shell/bar'
 import { SETTINGS_SUBPAGES, railCountText, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
 
@@ -53,7 +55,7 @@ import { cn } from '@/lib/utils'
 export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, contentRule, children, controls, counts, railFooter,
+  active, title, context, contentTitle, contentMeta, contentRule, children, controls, counts, railFooter, bar,
 }: {
   /** Which rail entry is lit. `null` lights none — the parked Initiatives
    *  page is inside this frame and is not one of the seven, and lighting
@@ -78,11 +80,20 @@ export function SettingsFrame({
    *  about itself. Optional, so a page that has not composed one draws no
    *  empty box. */
   railFooter?: ReactNode
+  /** THE ONE-LINE BAR (the 25 Sep rulings, market-first WP3.10): the brand,
+   *  the reading month and "as at the {update} update · next update {date}",
+   *  from `oneLineBar`. Absent, the bar is the title alone, as before; the
+   *  free-text `context` is still not printed (PageBar ignores it). */
+  bar?: ContextLineInput | null
   children: ReactNode
 }) {
   return (
     <PageFrame className="min-h-0 flex-1">
-      <PageBar title={title} context={context}>{controls}</PageBar>
+      <PageBar
+        title={title}
+        context={context}
+        line={bar ? <ReadingContext context={bar} basePath={SETTINGS_SUBPAGES[0].href} params={{}} /> : undefined}
+      >{controls}</PageBar>
       {/* THE RAIL SITS BESIDE THE PANE ONLY WHERE THE PANE KEEPS ITS ROOM
           (deploy 2 review). From `md` (768px) the app sidebar and a 224px rail
           left the content 240px at 768 and 496px at 1024: The record stacked

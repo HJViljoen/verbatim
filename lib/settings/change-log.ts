@@ -55,6 +55,23 @@ import { MF1_SURFACES, type LoggedSurface } from '../config-surfaces-mf1'
  * "not recorded" — the same sentence it says for a row that has them and left
  * them empty.
  */
+
+/**
+ * A stored change note as it is PRINTED (market-first WP3.10, a copy debt found
+ * after deploy 1): no em dash (plan §4.0), each one read as a comma. The stored
+ * row is never rewritten; a note is a record, and this is only how it reads.
+ * Null for a note that is empty once trimmed.
+ */
+export function printNote(note: string | null | undefined): string | null {
+  const t = (note ?? '').trim()
+  if (!t) return null
+  return t
+    .replace(/^\s*\u2014\s*/, '')
+    .replace(/\s*\u2014\s*$/, '')
+    .replace(/\s*\u2014\s*/g, ', ')
+    .replace(/,\s*([.;:])/g, '$1')
+}
+
 export function isMissingAffects(error: unknown): boolean {
   if (!error) return false
   const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
@@ -340,7 +357,7 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
       dateShort: shortDate(change.changed_at),
       surface: change.surface,
       what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
-      said: withNote?.note?.trim() || composedNote(change),
+      said: printNote(withNote?.note) || composedNote(change),
       who: actorWords(change.actor_kind, {
         actorUserId: change.actor_user_id,
         actorEmail: change.actor_user_id ? emails[change.actor_user_id] : null,

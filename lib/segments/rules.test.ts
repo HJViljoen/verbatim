@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import {
   MAKER_WORDS, NOISE_TERMS, SEGMENTS_SQL_BEGIN, SEGMENTS_SQL_END, SEGMENT_RULE_VERSION,
-  bareNameOnly, makerHaystack, makerPatternSource, makerWordIn, noiseTerms, segmentOf, segmentReason,
+  bareNameOnly, makerHaystack, makerPatternSource, makerWordIn, noiseTerms, readerSegment, segmentOf, segmentReason,
   segmentRulesEnabled, segmentsV1Sql,
 } from './rules'
 
@@ -121,5 +121,35 @@ describe('the SQL copy in MF1 is generated from this file', () => {
     const block = segmentsV1Sql()
     expect(block).toContain(makerPatternSource())
     for (const t of NOISE_TERMS) expect(block).toContain(`'${t}'`)
+  })
+})
+
+describe('readerSegment: MF1 segments_for_videos’ precedence, in TypeScript (WP3.2)', () => {
+  const row = (segment: 'maker' | 'noise' | 'market', method: 'rule' | 'judge' | 'override', decided_at: string, rule_version = 'segments_v1') =>
+    ({ segment, method, decided_at, rule_version })
+
+  it('takes the newest override over any judge or rule row, however new', () => {
+    const rows = [
+      row('maker', 'rule', '2026-09-30T10:00:00Z'),
+      row('market', 'judge', '2026-11-10T09:00:00Z', 'segments_v2'),
+      row('noise', 'override', '2026-10-02T08:00:00Z', 'override'),
+    ]
+    expect(readerSegment(rows)?.segment).toBe('noise')
+  })
+
+  it('the NEWEST override wins, by instant and not by text', () => {
+    const rows = [
+      row('noise', 'override', '2026-10-02T08:00:00Z', 'override'),
+      // later instant, written with an offset that sorts earlier as text
+      row('market', 'override', '2026-10-02T07:30:00-02:00', 'override'),
+    ]
+    expect(readerSegment(rows)?.segment).toBe('market')
+    expect(readerSegment([...rows].reverse())?.segment).toBe('market')
+  })
+
+  it('else the judge (segments_v2) over the rule (segments_v1); else the newest rule row; else null (the rule inline)', () => {
+    expect(readerSegment([row('maker', 'rule', '2026-11-12T00:00:00Z'), row('market', 'judge', '2026-11-10T00:00:00Z', 'segments_v2')])?.method).toBe('judge')
+    expect(readerSegment([row('maker', 'rule', '2026-09-30T10:00:00Z'), row('market', 'rule', '2026-10-30T10:00:00Z')])?.segment).toBe('market')
+    expect(readerSegment([])).toBeNull()
   })
 })

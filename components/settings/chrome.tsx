@@ -40,18 +40,16 @@ export function Section({ children, className }: { children: ReactNode; classNam
 }
 
 /**
- * A section's head: eyebrow · mono meta · a right-hand rule.
- *
- * `rule` is the artboard's right-aligned sentence — the thing a reader has to
- * know to read the rows below ("removing one is a break, not a zero"). It is
- * never a figure.
+ * A section's head: its title alone (the 25 Sep rulings, market-first WP3.10:
+ * "a block header carries its title only: no right-aligned meta or qualifier
+ * text"). The artboard's eyebrow · mono meta · right-hand rule went with the
+ * rulings: what the meta counted is in the rows, and what the rule explained is
+ * How to read's to say.
  */
-export function SectionHead({ title, meta, rule }: { title: ReactNode; meta?: ReactNode; rule?: ReactNode }) {
+export function SectionHead({ title }: { title: ReactNode }) {
   return (
     <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
       <h3 className="shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{title}</h3>
-      {meta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span>}
-      {rule && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-muted-foreground">{rule}</span>}
     </header>
   )
 }

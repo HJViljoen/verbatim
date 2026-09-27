@@ -1,4 +1,4 @@
-import { monthName } from '../format'
+import { monthName, shortDate } from '../format'
 import { rivalSlug, type Competitor } from '../rivals'
 import { ownPostBasis, OWN_POSTS_NO_ACCOUNTS } from '../reading/own-posts'
 import type { Counted } from '../reading/verdicts'
@@ -155,7 +155,7 @@ export const RIVAL_PRECEDENCE =
 
 /** What a row says about itself. Three states, said as three sentences. */
 export function rivalState(row: RivalRow): string {
-  if (row.retiredAt) return `no longer tracked. Its months stay under this name and the line ends here, on ${row.retiredAt.slice(0, 10)}`
+  if (row.retiredAt) return `no longer tracked. Its months stay under this name and the line ends here, on ${shortDate(`${row.retiredAt.slice(0, 10)}T00:00:00.000Z`)}`
   if (row.noAccounts) return 'no accounts configured, so nothing they publish is being read'
   if (row.captured === 0) return 'accounts configured, nothing captured from them yet'
   if (row.read === 0) return `${row.captured} of their posts captured, none read. Worth checking the handles are the right accounts`

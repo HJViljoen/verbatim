@@ -1,6 +1,7 @@
 import { INSIGHT_CATEGORIES } from '../pipeline/schemas'
 import { proportionDelta, SHARE_BAND, type BandOptions, type DeltaVerdict } from '../report-bands'
 import { THIN_MONTH_SHARE } from './bands'
+import { comparabilityOf, latestPairRow, modeForShare, type OurChange, type PairRow } from './comparability'
 import type { Verdict, VerdictFlag } from './verdicts'
 
 // The anomaly check — is this week unusual against the months behind it?
@@ -744,5 +745,70 @@ export function anomalyVerdict(
     bandPts: row.verdict?.band ?? null,
     state: row.state === 'flagged' ? 'moved' : row.state,
     flags,
+  }
+}
+
+// ---- The comparable-only baseline (market-first decision D; plan WP3.4) -------
+//
+// "The unusual-week check uses comparable months only." A trailing month
+// stays in the baseline only when its pair with the week's month is not
+// refused on a change of OURS: what we search, a change to how we check or
+// file videos, or a change nobody has measured. The pair is read as a chain
+// of the months between them, so a month behind a refused step is left out
+// with it (August cannot be read against November through a September our
+// search changes refused).
+//
+// DEPTH AND THE WEEK'S OWN MONTH ARE NOT REASONS HERE. The week's month is
+// always "so far" when its week is read, and a month's thread depth is about
+// comparing two whole months; the week against its baseline has its own
+// floors (100 videos a side, 10 of the object's own). With depth counted the
+// baseline could not be ready before its newest month had filled, and the
+// plan's own calendar (§2.11) has it ready on October to December from the
+// first January updates.
+
+/** A step between two adjacent months: may they sit in one baseline? */
+export type BaselineStep = (prevMonth: string, month: string) => boolean
+
+const nextMonthKey = (m: string): string => {
+  const d = new Date(`${m.slice(0, 7)}-01T00:00:00Z`)
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+}
+
+/** The baseline months kept (each comparable with the week's month through
+ *  every step between them) and those left out, in the input's order. */
+export function comparableBaseline(months: readonly string[], weekMonth: string, step: BaselineStep): { kept: string[]; dropped: string[] } {
+  const w = `${weekMonth.slice(0, 7)}-01`
+  const kept: string[] = []
+  const dropped: string[] = []
+  for (const raw of months) {
+    const m = `${raw.slice(0, 7)}-01`
+    let ok = m < w
+    for (let a = m; ok && a < w; a = nextMonthKey(a)) ok = step(a, nextMonthKey(a))
+    ;(ok ? kept : dropped).push(raw)
+  }
+  return { kept, dropped }
+}
+
+/** "forming: 1 of 3 comparable months", or "baseline ready". */
+export function comparableBaselineLabel(monthsClearing: number, required: number = BASELINE_MONTHS): string {
+  return monthsClearing >= required ? 'baseline ready' : `forming: ${monthsClearing} of ${required} comparable months`
+}
+
+/**
+ * The step judge the check uses, off the stored pair rows and our changes:
+ * the month-pair rule on the market view (`comparabilityOf`), each pair read as
+ * ended and as of its newest row, refusing only on our own changes. A pair
+ * with no row is unmeasured and refused, so a baseline never counts a month
+ * nothing has measured.
+ */
+export function baselineStepOf(rows: readonly PairRow[], changes: readonly OurChange[]): BaselineStep {
+  return (prevMonth, month) => {
+    const row = latestPairRow(rows, prevMonth, month)
+    const pair = comparabilityOf(prevMonth, month, {
+      row, changes, view: 'market',
+      later: { state: 'ended', readToEnd: true, latestUpdateRunId: row?.readThroughRun ?? null },
+    })
+    return !pair.reasons.some((r) =>
+      r.kind === 'unmeasured' || ((r.kind === 'searches' || r.kind === 'code_change') && modeForShare(r.share) === 'refuse'))
   }
 }

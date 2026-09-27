@@ -30,6 +30,14 @@ import { createAdminClient } from '../lib/supabase-admin'
 //   node --env-file=.env.local --import tsx scripts/reconstruct-provenance.ts \
 //     --project <ref> [--client <uuid>] [--prod-snapshot <file>] [--staging-export <file>] [--out <file>] [--apply]
 //
+// --since <YYYY-MM-DD> [--until <YYYY-MM-DD>] (deploy 4, WP3.4) keeps the
+// plan to the videos first stored in [since, until): the ones stored between
+// the last snapshot the pastes reconstructed from and gather-time provenance
+// (videos first stored 18 Oct to 1 Nov; the 8 Nov run writes its own 'exact'
+// rows). Everything outside the span is left to the rows already held, which
+// the apply never rewrites anyway. Heinrich's paste after deploy 4:
+//   … scripts/reconstruct-provenance.ts --project mkwjlckescdveosvrvaq --since 2026-10-12 --until 2026-11-02 [--apply]
+//
 // Reads (pages of 1,000): videos, gate_verdicts, keyword_performance,
 // pipeline_runs and, on --apply, video_provenance's held ids. About 20 on
 // Sealand's production at the 27 Sep state.
@@ -39,8 +47,14 @@ const INSERT_CHUNK = 500
 
 async function main() {
   const args = parseScriptArgs(process.argv.slice(2), {
-    name: NAME, values: ['prod-snapshot', 'staging-export', 'out'], defaultClient: SEALAND_CLIENT_ID,
+    name: NAME, values: ['prod-snapshot', 'staging-export', 'out', 'since', 'until'], defaultClient: SEALAND_CLIENT_ID,
   })
+  const since = args.values.since ?? null
+  const until = args.values.until ?? null
+  for (const [flag, v] of [['since', since], ['until', until]] as const) {
+    if (v != null && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error(`${NAME}: --${flag} takes a date, YYYY-MM-DD (got ${v})`)
+  }
+  if (since && until && !(since < until)) throw new Error(`${NAME}: --since must come before --until`)
   assertProject(args, process.env.NEXT_PUBLIC_SUPABASE_URL, NAME)
   console.log(modeLine(args, NAME))
   const admin = createAdminClient()
@@ -59,13 +73,19 @@ async function main() {
     readRuns(admin, args.clientId, pages),
   ])
   const gathers = gathersOf(kp, runs)
-  const rows = planProvenance({
+  const planned = planProvenance({
     videos: videos.map((v) => ({ id: v.id, platform: v.platform, videoId: v.video_id, firstSeen: v.first_seen, sourceKeywords: v.source_keywords ?? [], source: v.source })),
     verdicts: verdicts.map((v) => ({ runId: v.run_id, platform: v.platform, videoId: v.video_id, keyword: v.keyword, kept: v.kept, createdAt: v.created_at })),
     gathers: gathers.map((g) => ({ runId: g.runId, at: g.at, terms: g.terms })),
     snapshots,
     now: { label: `snapshot@${now.slice(0, 10)}`, takenAt: now },
   })
+  // The span: videos first stored in [since, until) (first_seen, the insert
+  // default the gather never overwrites).
+  const inSpan = (firstSeen: string) => (!since || firstSeen >= `${since}T00:00:00.000Z`) && (!until || firstSeen < `${until}T00:00:00.000Z`)
+  const firstSeenOf = new Map(videos.map((v) => [v.id, v.first_seen]))
+  const rows = planned.filter((r) => inSpan(firstSeenOf.get(r.videoId) ?? r.firstStoredAt))
+  if (since || until) console.log(`  span [${since ?? 'the start'}, ${until ?? 'now'}): ${rows.length} of ${planned.length} videos first stored in it`)
   console.log(`  ${videos.length} videos · ${verdicts.length} gate verdicts · ${gathers.length} gathers (${gathers[0]?.at ?? '-'} to ${gathers.at(-1)?.at ?? '-'})`)
   const summary = provenanceSummary(rows)
   for (const [k, n] of Object.entries(summary).sort()) console.log(`  ${k.padEnd(40)} ${n}`)

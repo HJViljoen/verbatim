@@ -131,7 +131,7 @@ export function sameRows(changes: readonly ClientChange[]): { change: ClientChan
   return out
 }
 
-function ChangeRow({ change, count = 1, now }: { change: ClientChange; count?: number; now: string }) {
+function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: ClientChange; count?: number; now: string; prehistoric?: boolean }) {
   return (
     <div className={ROW}>
       <span className="font-mono text-[13px] leading-[1.5] text-secondary-foreground">{change.dateShort}</span>
@@ -159,7 +159,10 @@ function ChangeRow({ change, count = 1, now }: { change: ClientChange; count?: n
           </span>
         ) : null}
       </span>
-      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-muted-foreground">{change.breaks}</span>
+      {/* A reconstructed row's "Not known" and "Reconstructed, not recorded"
+          are said ONCE, under the prehistory's heading (WP3.10 copy debt): on
+          every row they read as a stutter, not a record. */}
+      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-muted-foreground">{prehistoric && change.breaks === RECONSTRUCTED_BREAKS ? '' : change.breaks}</span>
       {/* BREAKS LIKE ITS SIBLING (Block D wave 3, RC3). `minmax(0, 0.5fr)`
           stops the TRACK demanding width; it does not stop the CONTENT
           escaping it. The prehistory rows' actor is "Reconstructed, not
@@ -170,10 +173,16 @@ function ChangeRow({ change, count = 1, now }: { change: ClientChange; count?: n
           21px over; 1220 → 3px over; 1280 and up clean. In the shell the word
           was clipped with no indication, on the one row whose whole purpose is
           to say the entry was inferred rather than recorded. */}
-      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-secondary-foreground">{change.who}</span>
+      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-secondary-foreground">{prehistoric && change.who === RECONSTRUCTED_WHO ? '' : change.who}</span>
     </div>
   )
 }
+
+/** What each reconstructed row's two cells said, row after row. */
+const RECONSTRUCTED_BREAKS = 'Not known: this change was worked out afterwards, not written down at the time.'
+const RECONSTRUCTED_WHO = 'Reconstructed, not recorded'
+/** Said once, under the prehistory's heading. */
+export const PREHISTORY_LINE = 'Reconstructed, not recorded: each was worked out afterwards from what an update searched, so what it broke is not known.'
 
 /**
  * The reconstructed rows, which the artboard has no counterpart for and which
@@ -189,12 +198,13 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
       <h3 className="m-0 text-[15px] font-semibold">
         Before the record began · {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
       </h3>
+      <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{PREHISTORY_LINE}</p>
       <div className="flex flex-col">
         <ShowAll
           items={sameRows(log.prehistory)}
           count={log.prehistory.length}
           shown={rows}
-          render={({ change, count }) => <ChangeRow key={change.id} change={change} count={count} now={now} />}
+          render={({ change, count }) => <ChangeRow key={change.id} change={change} count={count} now={now} prehistoric />}
         />
       </div>
     </div>

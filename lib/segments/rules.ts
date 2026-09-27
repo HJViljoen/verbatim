@@ -197,3 +197,50 @@ export function segmentsV1Sql(): string {
     SEGMENTS_SQL_END,
   ].join('\n')
 }
+
+// ---- Stored labels: the reader precedence (segments_v2, plan WP3.2) -------------
+//
+// ADDITIVE. Nothing above this line changes: the segments_v1 rule, its word
+// lists and the SQL copy MF1 carries stay byte-identical, so the v1 parity
+// (scripts/pg-shim/segments-parity.ts) needs no re-run.
+//
+// `video_segments` holds three kinds of row (MF1): a `rule` row (segments_v1,
+// label-segments and the run's segment-videos step), a `judge` row (segments_v2,
+// lib/segments/judge.ts) and an `override` row (a client's "this is not my
+// market", lib/segments/override.ts). A reader takes, per video, the newest
+// override, else the newest judge row, else the newest rule row, else the v1
+// rule computed inline. That is MF1's `segments_for_videos`; `readerSegment`
+// is the same order in TypeScript, so the override path and its tests read a
+// video's segment the way every SQL reader does.
+
+/** `video_segments.method`. */
+export type SegmentMethod = 'rule' | 'judge' | 'override'
+
+/** A stored `video_segments` row, as far as the precedence reads it. */
+export interface StoredSegment {
+  segment: Segment
+  method: SegmentMethod
+  /** timestamptz. Compared as an instant, never as text (MF1: "Newest is
+   *  decided_at, never a text sort"). */
+  decided_at: string
+  rule_version?: string
+  reason?: string | null
+}
+
+const METHOD_RANK: Readonly<Record<SegmentMethod, number>> = { override: 0, judge: 1, rule: 2 }
+
+/**
+ * The row that decides one video's segment: the newest override, else the
+ * newest judge row, else the newest rule row. Null when the video has no stored
+ * row, and the caller computes segments_v1 inline (`segmentOf`), as
+ * `segments_for_videos` does.
+ */
+export function readerSegment<T extends StoredSegment>(rows: readonly T[]): T | null {
+  let best: T | null = null
+  for (const r of rows) {
+    if (!best) { best = r; continue }
+    const rank = METHOD_RANK[r.method] - METHOD_RANK[best.method]
+    if (rank < 0 || (rank === 0 && Date.parse(r.decided_at) > Date.parse(best.decided_at))) best = r
+  }
+  return best
+}

@@ -54,8 +54,16 @@
 # mf2 and mf4 run from the tag the lead names for them, one tag ahead of
 # production as mf1 was: both are additive and nothing deployed reads them
 # until deploy 3. They change no grant, so R12 may or may not be applied.
-# A later work package adds its set here (mf3 on Tue 3 Nov), with its files,
-# labels and verify_* functions.
+#   mf3 = 20261103090000_market_first_s3.sql (WP3.3, WP3.4, WP3.5, WP3.6,
+#         WP3.10; Tue 3 Nov, after September froze on 1 Nov and before deploy
+#         4 on Sat 7 Nov). Additive: five tables (month_lens_readings and
+#         month_brand_readings with their guards, video_surfacings,
+#         tracking_config_queue, own_post_subjects), two trigger functions,
+#         and tracking_configs.watched_brands and market_description with no
+#         tenant column grant. It changes no existing grant, month table or
+#         function (the runner reads the existing guards before and after).
+#         Needs MF4. It runs from the data tag the lead cuts on the deployed
+#         code; nothing deployed before deploy 4 reads it.
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -111,8 +119,13 @@ case "$SET" in
     LABELS=(MF4)
     PREREQ_VERSION="20261005090000"; PREREQ_NAME="MF2"
     ;;
-  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4)."; exit 2 ;;
-  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4)."; exit 2 ;;
+  mf3)
+    EXPECTED_FILES=(20261103090000_market_first_s3.sql)
+    LABELS=(MF3)
+    PREREQ_VERSION="20261005091000"; PREREQ_NAME="MF4"
+    ;;
+  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3)."; exit 2 ;;
+  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3)."; exit 2 ;;
 esac
 N=${#EXPECTED_FILES[@]}
 for f in "${EXPECTED_FILES[@]}"; do
@@ -508,6 +521,109 @@ SQL
   show "$sql"
 }
 
+# MF3 (plan §4.1): five tables under three grant rules, the guards on the two
+# month tables, the queue's one stamp, the operator columns, and the existing
+# guards untouched (read before the apply, pre-check 4, and again after it).
+MF3_TABLES="'month_lens_readings','month_brand_readings','video_surfacings','tracking_config_queue','own_post_subjects'"
+MF3_MONTH_TABLES="'month_lens_readings','month_brand_readings'"
+MF3_APPEND_TABLES="'video_surfacings','tracking_config_queue','own_post_subjects'"
+MF3_FUNCS="'month_lens_frozen_insert_guard','tracking_config_queue_applied_once'"
+MF3_TRIGGERS="month_brand_readings_delete_guard:month_reading_delete_guard,month_brand_readings_frozen_guard:month_reading_frozen_guard,month_brand_readings_frozen_insert_guard:month_reading_frozen_insert_guard,month_lens_readings_delete_guard:month_reading_delete_guard,month_lens_readings_frozen_guard:month_reading_frozen_guard,month_lens_readings_frozen_insert_guard:month_lens_frozen_insert_guard,tracking_config_queue_applied_once:tracking_config_queue_applied_once"
+# The existing guards: the four guard functions, the audit trigger's function,
+# and every trigger on the six month tables and tracking_configs, as one line
+# count and one md5. MF3 attaches the guards to its own tables and replaces none.
+GUARDS_SQL="select count(*), md5(string_agg(x, E'\n' order by x)) from (
+  select p.proname || ':' || md5(pg_get_functiondef(p.oid)) as x
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname in ('month_reading_frozen_guard', 'month_reading_frozen_insert_guard',
+         'month_reading_delete_guard', 'month_reading_written_here', 'tracking_configs_audit')
+  union all
+  select c.relname || ':' || pg_get_triggerdef(t.oid)
+    from pg_trigger t join pg_class c on c.oid = t.tgrelid
+   where not t.tgisinternal and c.relnamespace = 'public'::regnamespace
+     and c.relname in ('month_denominators', 'month_theme_readings', 'month_subject_readings', 'month_kind_readings',
+                       'month_audience_stats', 'month_evidence_refs', 'tracking_configs')
+) g;"
+PRE_GUARDS=""
+
+verify_MF3() {
+  local sql
+  read -r -d '' sql <<SQL
+select
+  (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname in ($MF3_TABLES) and c.relrowsecurity)                     as tables_rls,
+  (select count(*) from pg_policies where schemaname = 'public' and tablename in ($MF3_TABLES)
+      and cmd = 'SELECT' and roles = '{authenticated}' and qual = '(client_id = get_my_client_id())')  as select_policies,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($MF3_TABLES) and grantee in ('anon','authenticated'))                            as tenant_table_grants,
+  (select count(*) from information_schema.columns c where c.table_schema = 'public' and c.table_name in ($MF3_TABLES)
+    and not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'SELECT')) as hidden_columns,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($MF3_TABLES) and grantee = 'service_role'
+    and privilege_type in ('SELECT','INSERT'))                                                          as service_select_insert,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($MF3_MONTH_TABLES) and grantee = 'service_role'
+    and privilege_type in ('UPDATE','DELETE'))                                                          as month_update_delete,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and ((table_name in ($MF3_APPEND_TABLES) and privilege_type in ('UPDATE','DELETE','TRUNCATE'))
+         or (table_name in ($MF3_MONTH_TABLES) and privilege_type = 'TRUNCATE'))
+    and grantee = 'service_role')                                                                       as service_rewrites,
+  (select coalesce(string_agg(column_name, ',' order by column_name), '-') from information_schema.column_privileges
+    where table_schema = 'public' and table_name in ($MF3_APPEND_TABLES) and grantee = 'service_role'
+      and privilege_type = 'UPDATE')                                                                    as service_update_columns;
+SQL
+  show "$sql"
+  echo "  expect: tables|pol|tenant|hidden|sel+ins|month upd+del|rewrites|update columns = 5|5|0|2|10|4|0|applied_at"
+  echo "          (hidden: own_post_subjects' reason and actor_label; update columns: the queue's one stamp)"
+  check "tables|pol|tenant|hid|sel+ins|m|rw|col" "$(sed "s/$FS/|/g" <<<"$OUT")" "5|5|0|2|10|4|0|applied_at"
+
+  read -r -d '' sql <<SQL
+select
+  (select string_agg(t.tgname || ':' || p.proname, ',' order by t.tgname)
+     from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
+    where not t.tgisinternal and c.relnamespace = 'public'::regnamespace and c.relname in ($MF3_TABLES)) as triggers,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ($MF3_FUNCS)
+      and (has_function_privilege('anon', p.oid, 'EXECUTE')
+           or has_function_privilege('authenticated', p.oid, 'EXECUTE')))                               as leaked_execute,
+  (select count(*) from pg_attribute where attrelid = 'public.tracking_configs'::regclass and not attisdropped
+      and attname in ('watched_brands','market_description') and attacl is null
+      and not has_column_privilege('authenticated', 'public.tracking_configs', attname, 'UPDATE'))        as operator_columns;
+SQL
+  show "$sql"
+  echo "  expect: the seven guards on their tables, no tenant execute, both operator columns with no tenant grant"
+  check "guards on the new tables" "$(sed "s/$FS/|/g" <<<"$OUT" | cut -d'|' -f1)" "$MF3_TRIGGERS"
+  check "leaked|operator columns" "$(sed "s/$FS/|/g" <<<"$OUT" | cut -d'|' -f2-3)" "0|2"
+
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: MF3 changes no grant, so the list read before it"
+  check "tenant UPDATE columns kept" "$OUT" "$PRE_TENANT_UPDATE"
+
+  show "$GUARDS_SQL"
+  echo "  expect: the existing guards as read before the apply (pre-check 4)"
+  check "existing guards unchanged" "$(sed "s/$FS/|/g" <<<"$OUT")" "$PRE_GUARDS"
+  finish_verify "$CURRENT"
+
+  echo
+  echo "  == MF3 READING (human read): the new tables are empty, and Sealand's months as they stand =="
+  read -r -d '' sql <<SQL
+select 'month_lens_readings' as t, count(*) from public.month_lens_readings
+union all select 'month_brand_readings', count(*) from public.month_brand_readings
+union all select 'video_surfacings', count(*) from public.video_surfacings
+union all select 'tracking_config_queue', count(*) from public.tracking_config_queue
+union all select 'own_post_subjects', count(*) from public.own_post_subjects;
+SQL
+  show "$sql"
+  echo "  expect: 0 rows in each (deploy 4's steps and the back-read write them)"
+  read -r -d '' sql <<SQL
+select month, string_agg(distinct status, ',') as status, count(*) as audiences
+from public.month_denominators where client_id = '$SEALAND' and month >= date '2026-06-01'
+group by month order by month;
+SQL
+  show "$sql"
+  echo "  expect on Tue 3 Nov: June to September frozen (September with the 1 Nov run), October filling"
+}
+
 # ------------------------------------------------------------ pre-checks ----
 echo "== plan: $N file(s), filename order, one psql + one transaction each =="
 for i in "${!EXPECTED_FILES[@]}"; do printf '  %-5s %s\n' "${LABELS[$i]}" "${EXPECTED_FILES[$i]}"; done
@@ -540,6 +656,14 @@ elif [[ "$SET" == "r12" ]]; then
   echo "       and its check would fail after the commit. Show Claude the list above. Nothing applied."; exit 1
 else
   echo "  NOTE: differs from staging. ${LABELS[0]} changes no grant, so this does not stop ${LABELS[0]}; show Claude the list before the r12 set."
+fi
+
+if [[ "$SET" == "mf3" ]]; then
+  echo "== pre-check 4: the existing guards and the audit trigger, before MF3 =="
+  if ! PRE_GUARDS="$(q "$GUARDS_SQL")"; then echo "ABORT: guard query failed. Nothing applied."; exit 1; fi
+  PRE_GUARDS="$(sed "s/$FS/|/g" <<<"$PRE_GUARDS")"
+  echo "  functions and triggers | md5 = $PRE_GUARDS"
+  echo "  (MF3 must leave this line as it is: verify_MF3 reads it again after the apply)"
 fi
 
 HCOLS=""
@@ -644,6 +768,10 @@ case "$SET" in
   ;;
   mf4)
   echo "DONE: $SET applied, verified and recorded. MF2 and MF4 are in; nothing deployed reads them until deploy 3."
+  ;;
+  mf3)
+  echo "DONE: $SET applied, verified and recorded. MF3 is in; nothing deployed reads it until deploy 4 (Sat 7 Nov)."
+  echo "  The lens and brand back-read (June to September) waits for the 8 Nov run's parity checks (Tue 10 to Thu 12 Nov)."
   ;;
 esac
 echo "Log: $LOG"

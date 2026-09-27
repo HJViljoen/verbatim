@@ -26,9 +26,19 @@ import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
-import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { subjectCalibration } from '../subjects/calibration-state'
-import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, loadMovesExtras, longMonth, recordWindow } from './overview'
+import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, loadMovesExtras, loadThemeSegmentRows, longMonth, makerRuleEnabled, recordWindow, themeSegmentsOf } from './overview'
+import { ASK_ROWS, THEME_FLOOR, buildAsks, makerWords, namesABrand, stripUnevidencedBrand, type MarketTheme, type ThemeBoard } from './overview-market/board'
+import { marketCalibration, type SubjectCalibrationWord } from './overview-market/subjects'
+import { levelText } from '../reading/level'
+import { marketAudiences, pooledDenominators } from '../reading/market'
+import { nextMonth } from '../reading/month-key'
+import {
+  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, marketClaimEcho, marketEchoReading, ownPostFilings, postsTouching, touchWords,
+  type ClaimEcho, type OwnPostFilings, type OwnPostSubjectRow, type TouchPost,
+} from '../reading/own-posts'
+import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { MoveCandidate, MoveReading } from '../reading/moves'
 import { row } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -72,7 +82,13 @@ import { quotesUntranslated } from './evidence-untranslated'
 /** The URL parameters this surface honours. `?rec=` is the legacy deep link
  *  four sent emails and every digest until WP17 still carry; it selects a
  *  LINEAGE here, resolved from the recommendation id it names. */
-export type MarketSurfaceParams = { rec?: string; item?: string }
+export type MarketSurfaceParams = { rec?: string; item?: string; ledger?: string }
+
+/** `?ledger=all`: the ledger's "Show all" link (the preview's footer). */
+export const LEDGER_ALL_PARAM = 'ledger'
+export const LEDGER_ALL_VALUE = 'all'
+/** The most rows "Show all" draws. Both tenants hold under 70 identities. */
+export const LEDGER_ALL_CAP = 200
 
 /** How many ledger rows are drawn before the rest are counted. 64 rows of
  *  advice nobody has acted on is a filing cabinet, not a page; the current
@@ -289,6 +305,36 @@ export interface MovesBlock {
   /** One reading per active move: the one banded movement claim a move earns,
    *  with the untouched audiences beside it as a control. */
   readings: MoveReading[]
+  /** WP3.6 Y4: each dated move read in the MARKET afterwards, as levels (the
+   *  move's month, the month after, the month after that). Never a verdict and
+   *  never a cause. OPTIONAL: a stored copy renders its `readings` as sent. */
+  market?: MoveMarketRead[]
+}
+
+/** One month of a move read in the market: a level, or why there is none. */
+export interface MoveMarketMonth {
+  month: string
+  role: 'move' | 'after' | 'after_that'
+  /** `read`: a level. `not_yet`: the month is after the reading month.
+   *  `not_read`: the month has no market reading (none, or not this object). */
+  state: 'read' | 'not_yet' | 'not_read'
+  k: number | null
+  n: number | null
+}
+
+export interface MoveMarketRead {
+  moveId: string
+  title: string
+  /** What the move is on, as `MoveRow.on`. */
+  on: string
+  declaredAt: string
+  /** The object read: a subject's name or a theme's label. Null where the
+   *  move names nothing the market is read on month by month. */
+  label: string | null
+  /** A subject's calibration (decision C): a provisional one prints its market
+   *  figure marked; a failed one is not read. */
+  calibration: SubjectCalibrationWord | null
+  months: MoveMarketMonth[]
 }
 
 export interface ClaimRow {
@@ -298,6 +344,30 @@ export interface ClaimRow {
   gap: string
   audience: string
   verdictLabel: string
+  /**
+   * The claim's echo COUNTED IN THE MARKET (WP3.6 Y3, IO F48): of the reading
+   * month's market videos, how many carry what the market said back. The
+   * count decides the state and the stance only its sign (`claimEcho`), so a
+   * stance nothing carried reads "Not talked about". OPTIONAL: a copy stored
+   * before WP3.6 has none and prints the stance alone, as it was sent.
+   */
+  echo?: ClaimEcho
+}
+
+/**
+ * Your claims read to date, by the subject the post-and-claim judge filed each
+ * under (WP3.6 Y3, MF3 `own_post_subjects`). A subject's count of 0 prints only
+ * when every claim was filed for it; a claim the judge has not filed is "not
+ * checked yet", never counted as about nothing (done-when 6).
+ */
+export interface ClaimSubjects {
+  /** Your claims read to date (`video_claims`, entity client). */
+  claims: number
+  /** Active subjects (not being re-described), by claims filed as about each. */
+  subjects: { subjectId: string; name: string; k: number }[]
+  /** Claims the judge has not filed for every one of those subjects. */
+  unfiled: number
+  state: 'checked' | 'partial' | 'unchecked'
 }
 
 export interface WayRow {
@@ -320,6 +390,9 @@ export interface WaysBlock {
   /** The lineage "accept this advice" acts on, when there is one to accept. */
   acceptable: { lineageId: string; recommendationId: string; title: string } | null
   empty: string | null
+  /** WP3.6 Y3: your claims by subject. OPTIONAL: absent on a stored copy, and
+   *  null where your claims could not be read. */
+  claimSubjects?: ClaimSubjects | null
 }
 
 export interface MarketRecord {
@@ -358,6 +431,75 @@ export interface MarketSurfaceData {
   /** What MK6 says when there is no plan to show. Null when there is one — an
    *  absence this page names rather than draws as a hole. */
   plansEmpty: string | null
+  /** WP3.6 Y1 · questions to answer (`market.questions`). OPTIONAL: a stored
+   *  copy taken before WP3.6 has none, and the block prints its empty state. */
+  questions?: QuestionsBlock
+}
+
+// ---- Y1 · questions to answer (market-first WP3.6, plan §2.6) ---------------
+
+/** Whether your posts touched a question, and how that was checked. */
+export interface QuestionTouch {
+  /** Your posts in the period the row is read over. Null: not readable. */
+  posts: number | null
+  /** Each post that touched it, with the words it shared (`words`: the WP2.5
+   *  word check; `judge`: the post-and-claim judge's filing). */
+  matched: { id: string; postedOn: string | null; href: string | null; words: string[]; by: 'words' | 'judge' }[]
+  /** The question's words a post had to share, printed where none did. */
+  checked: string[]
+  /**
+   * `touched`: a post shared two or more of its words, or the judge filed one
+   *   as about it.
+   * `none`: no post did, and nothing is left unchecked.
+   * `unchecked`: no post shared its words, and the judge has not filed every
+   *   post for this subject (before MF3, none): "not checked yet", never a
+   *   false "none" (WP3.6 done-when 6). Subject rows only.
+   * `unread`: your posts could not be read.
+   */
+  state: 'touched' | 'none' | 'unchecked' | 'unread'
+  /** Subject rows: posts the judge has not filed for the subject. */
+  unfiled?: number
+}
+
+/** A question theme the market raised in the reading month. */
+export interface QuestionThemeRow {
+  registryId: string
+  label: string
+  /** Its videos in the month, in the category (the block's "of N"). */
+  videos: number
+  /** "about a third makers" at a fifth or more (decision F); else null. */
+  makers: string | null
+  touch: QuestionTouch
+}
+
+/** A subject the market asked about over the last three months. */
+export interface QuestionSubjectRow {
+  subjectId: string
+  name: string
+  calibration: 'ready' | 'provisional'
+  /** Videos (not yours) that asked something about it in the window. */
+  videos: number
+  /** Its question groups, largest first, as the Subjects page names them. */
+  groups: { label: string; videos: number }[]
+  /** Groups beyond those printed. */
+  moreGroups: number
+  touch: QuestionTouch
+}
+
+export interface QuestionsBlock {
+  month: string
+  /** The category's videos in the month: the theme rows' base (decision E:
+   *  themes are grouped within the category). Null where it was not read. */
+  n: number | null
+  /** Your posts in the month, dated by the post. Null: not readable. */
+  monthPosts: number | null
+  themes: QuestionThemeRow[]
+  /** The three months the subject rows are read over: `from` the first
+   *  month's start, `to` the reading month's. */
+  window: { from: string; to: string }
+  windowPosts: number | null
+  subjects: QuestionSubjectRow[]
+  empty: string | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -700,6 +842,13 @@ export function moveLedgerLine(move: { title: string; declared_at: string }, on:
 export const MOVES_EMPTY_MK4 =
   'Nothing dated yet. Press Track this on a subject or a theme and this block starts scoring it from the following month.'
 
+/** Your moves' empty state on a page read in the market (WP3.6 Y4, the
+ *  preview's words): nothing is dated yet, and a dated move reads what the
+ *  market said after it as a level, never as a cause. */
+export const MOVES_EMPTY_MARKET = 'No move dated yet.'
+export const MOVES_MARKET_HOW =
+  'Date something you change, such as a post series, a product page or a price, and this reads what your market said in the months after, as a level.'
+
 /** Said when `moves` (M4) is not applied here. Not the same fact as "nothing
  *  dated yet", and the page must not say the second when it means the first. */
 export const MOVES_UNRECORDED =
@@ -790,6 +939,293 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable'], plansChecked =
 export const CLAIMS_CAVEAT =
   'This is how each claim reads in the latest update. A claim’s verdict per month, held across two updates before it is printed, is not built yet.'
 
+// ---- Y1 · questions to answer: the pure half (WP3.6) -------------------------
+//
+// QUESTIONS FROM THE MARKET, EACH MARKED BY YOUR POSTS. Two lists, as the
+// preview draws them: the reading month's question themes not led by makers
+// (the front page's "Asked" list, `buildAsks`, ranked by videos in the
+// category), and the subjects the market asked about most over the last three
+// months (the Subjects page's question videos, SU3). Each row says whether one
+// of your posts touched it (two or more non-generic words, the post and the
+// words), or, where none did, which words were checked.
+//
+// A SUBJECT ROW HAS A SECOND CHECK, THE JUDGE's. What a post and its claims are
+// ABOUT is filed by the post-and-claim judge (MF3 `own_post_subjects`); a post
+// it filed as about the subject touches it, and a post it has not filed leaves
+// the row "not checked yet" rather than "none" (done-when 6). Before MF3 every
+// post is unfiled, so a subject no post shared words with reads "not checked
+// yet", with the words that were checked beside it.
+
+/** Subject rows printed (the preview's three). */
+export const QUESTION_SUBJECTS_SHOWN = ASK_ROWS
+/** Question groups printed under a subject row. */
+export const QUESTION_GROUPS_SHOWN = 2
+/** The groups a subject row's word check reads: the Subjects page's top three
+ *  (SU3), the same the front page's questions line reads (WP2.5). */
+export const QUESTION_GROUPS_CHECKED = 3
+/** Months the subject rows are read over, the reading month included. */
+export const QUESTION_WINDOW_MONTHS = 3
+
+/** The block's empty state: nothing reached the floor and nothing was asked. */
+export const questionsEmpty = (month: string): string =>
+  `No question theme in your market reached ${fmtInt(THEME_FLOOR)} videos in ${longMonth(month)}, and no subject was asked about over the last three months.`
+
+/** One of your posts as the question rows read it: what it is about
+ *  (`videos.topics`), the day it was posted, and where it lives. */
+export interface QuestionPost extends TouchPost {
+  upload_date: string | null
+  video_url: string | null
+}
+
+/** The first month of the three the subject rows read. */
+export const questionWindowFrom = (month: string): string => monthsBack(month, QUESTION_WINDOW_MONTHS - 1)
+
+/**
+ * One row's touch: the word check over `labels` (a post touches on two or more
+ * of one label's words), and for a subject row the judge's filing.
+ *
+ * Pure. `posts` null is "could not read your posts": the row says so and
+ * claims nothing either way.
+ */
+export function questionTouch(input: {
+  labels: readonly string[]
+  posts: readonly QuestionPost[] | null
+  /** A subject row: the subject, and the judge's filings (null: MF3 is not
+   *  applied, so nothing is filed). Absent on a theme row. */
+  judge?: { subjectId: string; filings: OwnPostFilings | null }
+}): QuestionTouch {
+  // ONE WORD ONCE ACROSS THE LABELS: "Price and sale questions" and a group
+  // naming "prices" check one word, and it prints once, as the first label
+  // spelled it (the rule's own stem, `touchWords`).
+  const stem = (w: string): string => touchWords(w)[0] ?? w
+  const merge = (held: readonly string[], more: readonly string[]): string[] => {
+    const out = [...held]
+    const seen = new Set(out.map(stem))
+    for (const w of more) if (!seen.has(stem(w))) { seen.add(stem(w)); out.push(w) }
+    return out
+  }
+  let checked: string[] = []
+  const byPost = new Map<string, string[]>()
+  for (const label of input.labels) {
+    const r = postsTouching(label, input.posts ?? [])
+    checked = merge(checked, r.checked)
+    for (const m of r.matched) byPost.set(m.id, merge(byPost.get(m.id) ?? [], m.words))
+  }
+  if (input.posts == null) return { posts: null, matched: [], checked, state: 'unread' }
+  const posts = input.posts
+  const postOf = new Map(posts.map((p) => [p.id, p]))
+  const matched: QuestionTouch['matched'] = [...byPost.entries()].map(([id, words]) => ({
+    id, postedOn: postOf.get(id)?.upload_date?.slice(0, 10) ?? null, href: postOf.get(id)?.video_url ?? null, words, by: 'words' as const,
+  }))
+  let unfiled: number | undefined
+  if (input.judge) {
+    const { subjectId, filings } = input.judge
+    const touching = filings?.touching.get(subjectId)
+    for (const p of posts) {
+      if (byPost.has(p.id)) continue
+      const words = touching?.get(p.id)
+      if (words) matched.push({ id: p.id, postedOn: p.upload_date?.slice(0, 10) ?? null, href: p.video_url ?? null, words, by: 'judge' })
+    }
+    unfiled = filings == null ? posts.length : posts.filter((p) => !filings.postFiled.has(`${p.id}|${subjectId}`)).length
+  }
+  matched.sort((a, b) => (a.postedOn ?? '').localeCompare(b.postedOn ?? '') || a.id.localeCompare(b.id))
+  const state: QuestionTouch['state'] = matched.length > 0 ? 'touched' : (unfiled ?? 0) > 0 ? 'unchecked' : 'none'
+  return { posts: posts.length, matched, checked, state, ...(unfiled != null ? { unfiled } : {}) }
+}
+
+/** A subject the market asked about in the window, as the loader reads it. */
+export interface SubjectAsked {
+  id: string
+  name: string
+  calibration: SubjectCalibrationWord
+  videos: number
+  /** Its question groups, any order: the builder ranks them. */
+  groups: { label: string; videos: number }[]
+}
+
+/**
+ * Y1's block, from the reading month's category themes, the subjects asked
+ * about over three months, your posts over the same three months and the
+ * judge's filings. Pure.
+ *
+ * The theme rows are `buildAsks`' question list (not led by makers, at the
+ * floor, three), read against your posts OF THE MONTH; the subject rows are
+ * read against your posts of the three months. A subject being re-described
+ * (decision C, failed) is not listed. A theme label naming a brand no
+ * evidence on this page vouches for reads "a brand" (the front page's rule,
+ * with no evidence read here).
+ */
+export function buildQuestions(input: {
+  month: string
+  themes: readonly MarketTheme[]
+  segments: ThemeBoard['segments']
+  n: number | null
+  brandNames: readonly string[]
+  /** Your posts over the three months; null where they could not be read. */
+  posts: readonly QuestionPost[] | null
+  subjects: readonly SubjectAsked[]
+  filings: OwnPostFilings | null
+}): QuestionsBlock {
+  const month = monthStartOf(input.month)
+  const from = questionWindowFrom(month)
+  const monthPosts = input.posts ? input.posts.filter((p) => p.upload_date != null && monthStartOf(p.upload_date.slice(0, 10)) === month) : null
+  const asked = buildAsks(input.themes, month, input.segments).lists.find((l) => l.kind === 'question')?.rows ?? []
+  const shareOf = new Map(input.themes.map((t) => [t.registryId, t.makerShare]))
+  const themes: QuestionThemeRow[] = asked.map((r) => {
+    const label = namesABrand(r.label, input.brandNames) ? stripUnevidencedBrand(r.label, input.brandNames, []).label : r.label
+    return {
+      registryId: r.registryId,
+      label,
+      videos: r.k,
+      makers: input.segments === 'measured' ? makerWords(shareOf.get(r.registryId)) : null,
+      touch: questionTouch({ labels: [label], posts: monthPosts }),
+    }
+  })
+  const subjects: QuestionSubjectRow[] = input.subjects
+    .filter((x) => x.calibration !== 'failed' && x.videos > 0)
+    .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
+    .slice(0, QUESTION_SUBJECTS_SHOWN)
+    .map((x) => {
+      const groups = [...x.groups].sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label))
+      const labels = groups.length > 0 ? groups.slice(0, QUESTION_GROUPS_CHECKED).map((g) => g.label) : [x.name]
+      return {
+        subjectId: x.id,
+        name: x.name,
+        calibration: x.calibration === 'ready' ? 'ready' as const : 'provisional' as const,
+        videos: x.videos,
+        groups: groups.slice(0, QUESTION_GROUPS_SHOWN),
+        moreGroups: Math.max(0, groups.length - QUESTION_GROUPS_SHOWN),
+        touch: questionTouch({ labels, posts: input.posts, judge: { subjectId: x.id, filings: input.filings } }),
+      }
+    })
+  return {
+    month,
+    n: input.n,
+    monthPosts: monthPosts ? monthPosts.length : null,
+    themes,
+    window: { from, to: month },
+    windowPosts: input.posts ? input.posts.length : null,
+    subjects,
+    empty: themes.length === 0 && subjects.length === 0 ? questionsEmpty(month) : null,
+  }
+}
+
+/** A touch's words, as the row prints them: each touching post's words, or
+ *  (none touched) the words that were checked. */
+export const QUESTION_CHECKED_SHOWN = 4
+
+// ---- Y3 · your claims, by subject (WP3.6) ---------------------------------------
+
+const normClaimText = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim()
+
+/**
+ * Your claims read to date, by the subject the judge filed each under. Rows of
+ * `video_claims` repeat a claim across updates (Sealand, staging: 120 rows,
+ * 98 distinct on 16 posts), so a claim is one post's one sentence: its rows
+ * are one claim, filed if any of them is filed, about a subject if any of them
+ * is. Pure; null where your claims could not be read.
+ */
+export function buildClaimSubjects(input: {
+  claims: readonly { id: string; source_video_id: string; claim: string }[] | null
+  subjects: readonly { id: string; name: string; calibration: SubjectCalibrationWord }[]
+  filings: OwnPostFilings | null
+}): ClaimSubjects | null {
+  if (input.claims == null) return null
+  const groups = new Map<string, string[]>()
+  for (const c of input.claims) {
+    const key = `${c.source_video_id}|${normClaimText(c.claim)}`
+    if (!normClaimText(c.claim)) continue
+    groups.set(key, [...(groups.get(key) ?? []), c.id])
+  }
+  const active = input.subjects.filter((x) => x.calibration !== 'failed')
+  const f = input.filings
+  let unfiled = 0
+  const k = new Map(active.map((x) => [x.id, 0]))
+  for (const ids of groups.values()) {
+    // NO SUBJECT, NOTHING TO FILE: the judge files a claim against subjects,
+    // and with none named (Össur) a claim is never "not checked yet".
+    if (active.length > 0 && (!f || active.some((x) => !ids.some((id) => f.claimFiled.has(`${id}|${x.id}`))))) unfiled++
+    if (!f) continue
+    for (const x of active) if (ids.some((id) => f.claimTouches.get(id)?.has(x.id))) k.set(x.id, (k.get(x.id) ?? 0) + 1)
+  }
+  const claims = groups.size
+  return {
+    claims,
+    subjects: active
+      .map((x) => ({ subjectId: x.id, name: x.name, k: k.get(x.id) ?? 0 }))
+      .sort((a, b) => b.k - a.k || a.name.localeCompare(b.name)),
+    unfiled,
+    state: claims > 0 && unfiled === claims ? 'unchecked' : unfiled > 0 ? 'partial' : 'checked',
+  }
+}
+
+// ---- Y4 · a move, read in the market (WP3.6) -------------------------------------
+
+/**
+ * Each dated move, read in the MARKET afterwards as levels: the market's
+ * videos on the move's subject or theme in the move's month, the month after
+ * and the month after that, each of the market's videos that month. No
+ * comparison is drawn between them (decision D keeps month against month for
+ * pairs read the same way) and nothing here says the move did it: a level
+ * after a date is where the market stood, not what moved it. Pure.
+ *
+ * `levels(kind, id, month)` is the pooled market k for the object in the month
+ * (null: no reading for it); `n(month)` is the market's videos that month
+ * (null: the month was not read).
+ */
+export function moveMarketReads(input: {
+  moves: readonly Pick<Move, 'id' | 'kind' | 'subject_id' | 'registry_ids' | 'lineage_id' | 'title' | 'declared_at'>[]
+  month: string
+  on: (move: { id: string }) => string
+  subjects: ReadonlyMap<string, { name: string; calibration: SubjectCalibrationWord }>
+  themes: ReadonlyMap<string, string>
+  /** The advice a move was made on, to the theme its evidence leads with. */
+  adviceTargets: ReadonlyMap<string, string>
+  levels: (kind: 'subject' | 'theme', id: string, month: string) => number | null
+  n: (month: string) => number | null
+}): MoveMarketRead[] {
+  const reading = monthStartOf(input.month)
+  return input.moves.map((m) => {
+    const moveMonth = monthStartOf(m.declared_at.slice(0, 10))
+    const subject = m.kind === 'subject' && m.subject_id ? input.subjects.get(m.subject_id) ?? null : null
+    const themeId = m.kind === 'theme' ? (m.registry_ids ?? [])[0] ?? null
+      : m.kind === 'advice' && m.lineage_id ? input.adviceTargets.get(m.lineage_id) ?? null : null
+    const object: { kind: 'subject' | 'theme'; id: string } | null =
+      subject && m.subject_id ? { kind: 'subject', id: m.subject_id }
+        : themeId && (m.kind === 'advice' || (m.registry_ids ?? []).length === 1) ? { kind: 'theme', id: themeId } : null
+    const label = subject?.name ?? (object?.kind === 'theme' ? input.themes.get(object.id) ?? null : null)
+    const failed = subject?.calibration === 'failed'
+    const roles: MoveMarketMonth['role'][] = ['move', 'after', 'after_that']
+    let at = moveMonth
+    const months: MoveMarketMonth[] = roles.map((role) => {
+      const month = at
+      at = nextMonth(at)
+      if (month > reading) return { month, role, state: 'not_yet', k: null, n: null }
+      const n = input.n(month)
+      const k = object && !failed ? input.levels(object.kind, object.id, month) : null
+      return n != null && n > 0 && k != null ? { month, role, state: 'read', k, n } : { month, role, state: 'not_read', k: null, n: null }
+    })
+    return {
+      moveId: m.id,
+      title: m.title,
+      on: input.on(m),
+      declaredAt: m.declared_at,
+      label: object ? label : null,
+      calibration: subject?.calibration ?? null,
+      months,
+    }
+  })
+}
+
+/** A month of a move's market read, in words: "104 of 655 (16%)", or why not.
+ *  "of N" always rides with the figure (copy rule: every level prints of N). */
+export function moveMonthLevel(m: MoveMarketMonth): string {
+  if (m.state === 'not_yet') return `reads with the ${longMonth(m.month)} reading`
+  if (m.state === 'not_read' || m.k == null || m.n == null) return 'no reading'
+  const lvl = levelText(m.k, m.n)
+  return lvl?.kind === 'share' ? `${fmtInt(m.k)} of ${fmtInt(m.n)} (${lvl.text})` : `${fmtInt(m.k)} of ${fmtInt(m.n)}`
+}
+
 // ---- the loader ---------------------------------------------------------------
 
 interface InsightRow {
@@ -874,6 +1310,20 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const runId = latestRun.id
   // Frozen once an UPDATE has passed its freeze line, not the clock.
   const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
+
+  // ── WP3.6's reads, started beside the page's main wave ─────────────────
+  // Y1's themes and posts, the judge's filings, your claims and the month's
+  // market videos (Y3) depend on nothing the wave below returns, so they run
+  // beside it. Each fails to its own honest absence, never the page.
+  const rivals = rivalAudiences ?? []
+  const marketCounts = pooledDenominators(history.denominators, rivals)
+  const brandNames = [brand, ...rivals.filter((a) => a.startsWith('competitor:')).map((a) => a.slice('competitor:'.length))]
+  const questionThemesAhead = loadQuestionThemes(reading, supabase, clientId, month, themedRunId ?? runId)
+  const postsAhead = loadRecentOwnPosts(supabase, clientId, questionWindowFrom(month), nextMonth(month))
+  const filingsAhead = loadOwnPostSubjects(supabase, clientId)
+  const claimsAhead = loadClientClaims(supabase, clientId)
+  const marketVideosAhead = loadMarketMonthVideos(reading, clientId, month)
+  for (const p of [questionThemesAhead, postsAhead, filingsAhead, claimsAhead, marketVideosAhead]) p.catch(() => {})
 
   const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
     supabase.from('market_insights')
@@ -974,7 +1424,9 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const requestedRow = requested
     ? adviceRows.find((r) => r.recommendationId === requested || r.lineageId === requested) ?? null
     : null
-  const shownRows = ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null)
+  // "Show all" (the preview's footer link): every identity, to a cap.
+  const showAll = params.ledger === LEDGER_ALL_VALUE
+  const shownRows = ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null, showAll ? LEDGER_ALL_CAP : LEDGER_SHOWN)
 
   // The market insights the drawn rows follow from. BY ID, not by run: a piece
   // of advice first made in June cites June's insights, and reading only the
@@ -1142,18 +1594,83 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // holds no verdicts of its own, so it passes no `movementFor` and the helper
   // bands the matched subject's own two months with `monthChange`.
   const extras = await extrasAhead
+  // ── Y4 · each move, read in the market afterwards ──────────────────────
+  const calibrationOf = new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, marketCalibration(subjectCalibration(x))]))
+  const market = await loadMoveMarketReads({
+    reading,
+    clientId,
+    month,
+    moves: moves ?? [],
+    rivalAudiences: rivals,
+    counts: marketCounts,
+    on: (m) => moveRows.find((r) => r.id === m.id)?.on ?? '',
+    subjects: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, { name: x.name, calibration: calibrationOf.get(x.id) ?? 'provisional' }])),
+    themes: themeLabels,
+    adviceTargets: new Map(groundedRows.filter((r) => r.targetIds.length > 0).map((r) => [r.lineageId, r.targetIds[0]])),
+  })
   const movesBlock: MovesBlock = {
     rows: moveRows,
     masthead: MOVES_MASTHEAD,
     unlock: MOVES_UNLOCK,
     recorded: moves != null,
-    empty: moves == null ? MOVES_UNRECORDED : moveRows.length === 0 ? MOVES_EMPTY_MK4 : null,
+    empty: moves == null ? MOVES_UNRECORDED : moveRows.length === 0 ? MOVES_EMPTY_MARKET : null,
     card: extras.card,
     readings: extras.readings,
+    market,
   }
+
+  // ── Y1 · questions to answer ───────────────────────────────────────────
+  const [questionThemes, posts, filings, clientClaims, marketVideos] = await Promise.all([
+    questionThemesAhead.catch(logAs('questions.themes', { themes: [] as MarketTheme[], segments: 'unknown' as ThemeBoard['segments'] })),
+    postsAhead.catch(logAs('questions.posts', null)),
+    filingsAhead.catch(logAs('questions.filings', null)),
+    claimsAhead.catch(logAs('claims', null)),
+    marketVideosAhead.catch(logAs('claims.marketVideos', null)),
+  ])
+  const askable = (subjects ?? []).filter((x) => x.status === 'active' && calibrationOf.get(x.id) !== 'failed')
+  const asked = await loadSubjectQuestions(supabase, clientId, askable.map((x) => x.id), {
+    from: questionWindowFrom(month),
+    to: nextMonth(month),
+  }).catch(logAs('questions.subjects', null))
+  const groupOf = questionGroupsOf(bucketRows)
+  const questions = buildQuestions({
+    month,
+    themes: questionThemes.themes,
+    segments: questionThemes.segments,
+    n: marketCounts.get(month)?.category ?? null,
+    brandNames,
+    posts,
+    subjects: askable.map((x) => {
+      const held = asked?.get(x.id)
+      const groups = new Map<string, { label: string; videos: Set<string> }>()
+      for (const i of held?.insights ?? []) {
+        const at = groupOf.get(i.id)
+        if (!at) continue
+        const g = groups.get(at.registryId) ?? { label: at.label, videos: new Set<string>() }
+        g.videos.add(i.videoId)
+        groups.set(at.registryId, g)
+      }
+      return {
+        id: x.id,
+        name: x.name,
+        calibration: calibrationOf.get(x.id) ?? 'provisional',
+        videos: held?.videos.size ?? 0,
+        groups: [...groups.values()].map((g) => ({ label: g.label, videos: g.videos.size })),
+      }
+    }),
+    filings: filings ? ownPostFilings(filings) : null,
+  })
 
   // ── MK5 · how a move is made ───────────────────────────────────────────
   const claimEntries = ledgerRows(summary?.say_vs_hear ?? [], CLAIM_ROWS)
+  // Y3 · EACH CLAIM COUNTED IN THE MARKET (IO F48): the videos behind the
+  // evidence Pass D-a cited for it, inside the month's market videos.
+  const supportIds = [...new Set(claimEntries.flatMap((e) => e.supporting_theme_ids ?? []))]
+  const supportVideo = supportIds.length > 0 && marketVideos != null
+    ? new Map((await fetchInsightsByIds<{ id: string; source_video_id: string | null }>(supabase, supportIds, 'id, source_video_id')
+        .catch(logAs('claims.support', [] as { id: string; source_video_id: string | null }[])))
+        .map((r) => [r.id, r.source_video_id]))
+    : new Map<string, string | null>()
   const claims: ClaimRow[] = claimEntries.map((e, i) => ({
     id: `c${i}`,
     youSay: e.you_say,
@@ -1161,7 +1678,19 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     gap: e.gap,
     audience: e.audience,
     verdictLabel: e.audience === 'echoes' ? 'Echoed' : e.audience === 'contradicts' ? 'Pushed back' : 'Not taken up',
+    echo: marketClaimEcho({
+      stance: e.audience,
+      reading: marketEchoReading(
+        (e.supporting_theme_ids ?? []).map((id) => supportVideo.get(id)).filter((v): v is string => Boolean(v)),
+        marketVideos,
+      ),
+    }),
   }))
+  const claimSubjects = buildClaimSubjects({
+    claims: clientClaims,
+    subjects: (subjects ?? []).filter((x) => x.status === 'active').map((x) => ({ id: x.id, name: x.name, calibration: calibrationOf.get(x.id) ?? 'provisional' })),
+    filings: filings ? ownPostFilings(filings) : null,
+  })
   // What the button acts on — see `acceptableRow`.
   const acceptable = acceptableRow(adviceRows, requestedRow)
   const plans = await plansAhead
@@ -1178,6 +1707,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     claimsCaveat: CLAIMS_CAVEAT,
     acceptable: acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title } : null,
     empty: null,
+    claimSubjects,
   }
 
   // ── the record ─────────────────────────────────────────────────────────
@@ -1216,7 +1746,272 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     method: methodLines(recordInputs, { brand }),
     plans,
     plansEmpty: plans.length === 0 ? PLAN_EMPTY : null,
+    questions,
   }
+}
+
+/** A read's failure, logged and turned into its honest absence. */
+function logAs<T>(what: string, fallback: T): (error: unknown) => T {
+  return (error: unknown) => {
+    console.error(`[pages] market-surface.${what}: ${error instanceof Error ? error.message : (error as { message?: string })?.message ?? String(error)}`)
+    return fallback
+  }
+}
+
+// ---- WP3.6's reads -------------------------------------------------------------
+
+/**
+ * The reading month's category themes at the floor, with their label and kind
+ * off the latest themed update and their maker shares (MF1): what `buildAsks`
+ * ranks. The front page's own read of the same rows is private to its loader,
+ * so this is the question list's copy of it: month tables through the reading
+ * client, the observations through the tenant's.
+ */
+async function loadQuestionThemes(
+  reading: ReadingHandle,
+  supabase: SupabaseClient,
+  clientId: string,
+  month: string,
+  themedRunId: string | null,
+): Promise<{ themes: MarketTheme[]; segments: ThemeBoard['segments'] }> {
+  const segmentsAhead = makerRuleEnabled(clientId)
+    ? loadThemeSegmentRows(reading.client, clientId, month, themedRunId)
+    : Promise.resolve(null)
+  const res = await reading.client
+    .from('month_theme_readings')
+    .select('theme_id, videos')
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .eq('audience', INDUSTRY_AUDIENCE)
+    .gte('videos', THEME_FLOOR)
+    .order('videos', { ascending: false })
+    .order('theme_id', { ascending: true })
+    .limit(200)
+  const segmentRows = await segmentsAhead
+  const segments: ThemeBoard['segments'] = !makerRuleEnabled(clientId) ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
+  if (res.error) {
+    console.error(`[pages] market-surface.questions.months: ${res.error.message}`)
+    return { themes: [], segments }
+  }
+  const rowsNow = (res.data ?? []) as { theme_id: string; videos: number }[]
+  if (rowsNow.length === 0) return { themes: [], segments }
+  const ids = rowsNow.map((r) => String(r.theme_id))
+  const labels = new Map<string, { label: string | null; kind: string | null }>()
+  if (themedRunId) {
+    const obs = await supabase
+      .from('theme_observations')
+      .select('theme_id, label, category')
+      .eq('client_id', clientId)
+      .eq('run_id', themedRunId)
+      .in('theme_id', ids)
+    for (const r of (obs.data ?? []) as { theme_id: string; label: string | null; category: string | null }[]) {
+      labels.set(String(r.theme_id), { label: r.label?.trim() || null, kind: r.category ?? null })
+    }
+  }
+  const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
+  const n = 0
+  return {
+    segments,
+    themes: rowsNow.flatMap((r) => {
+      const o = labels.get(String(r.theme_id))
+      if (!o?.label) return []
+      return [{
+        registryId: String(r.theme_id),
+        label: o.label,
+        labelStripped: false,
+        kind: o.kind,
+        k: Number(r.videos),
+        n,
+        prev: null,
+        makerShare: shares?.maker.get(String(r.theme_id)) ?? null,
+        noiseShare: shares?.noise.get(String(r.theme_id)) ?? null,
+        identityNewThisRun: false,
+        flags: [],
+        provenance: null,
+      }]
+    }),
+  }
+}
+
+/** Your posts over the window, dated by the post (`upload_date`), with what
+ *  each is about (`videos.topics`): the question rows' haystack. Null where the
+ *  read failed. Five columns, never `*`. */
+async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, from: string, to: string): Promise<QuestionPost[] | null> {
+  return selectAll<QuestionPost>(() =>
+    supabase
+      .from('videos')
+      .select('id, upload_date, topics, video_url')
+      .eq('client_id', clientId)
+      .eq('is_client', true)
+      .gte('upload_date', from)
+      .lt('upload_date', to)
+      .order('id', { ascending: true }),
+  )
+}
+
+/**
+ * Every subject's question videos over the window (not yours, placed by the day
+ * posted), and the question insights behind them: the Subjects page's SU3
+ * count, one read for every subject (an embedded select through the
+ * memberships). Null where the subjects tables are not applied.
+ */
+async function loadSubjectQuestions(
+  supabase: SupabaseClient,
+  clientId: string,
+  subjectIds: readonly string[],
+  window: { from: string; to: string },
+): Promise<Map<string, { videos: Set<string>; insights: { id: string; videoId: string }[] }> | null> {
+  if (subjectIds.length === 0) return new Map()
+  type Video = { is_client: boolean | null; upload_date: string | null }
+  type Row = {
+    subject_id: string
+    audience_insight_id: string
+    audience_insights: { source_video_id: string | null; videos: Video | Video[] | null } | null
+  }
+  try {
+    const rows = await selectAll<Row>(() =>
+      supabase
+        .from(TABLE_SUBJECT_MEMBERSHIPS)
+        .select('subject_id, audience_insight_id, audience_insights!inner(source_video_id, videos(is_client, upload_date))')
+        .eq('client_id', clientId)
+        .in('subject_id', [...subjectIds])
+        .eq('member', true)
+        .eq('audience_insights.category', 'question')
+        .order('audience_insight_id', { ascending: true })
+        .order('subject_id', { ascending: true }) as never,
+    )
+    const from = window.from.slice(0, 10)
+    const to = window.to.slice(0, 10)
+    const out = new Map(subjectIds.map((id) => [id, { videos: new Set<string>(), insights: [] as { id: string; videoId: string }[] }]))
+    for (const r of rows) {
+      const ai = r.audience_insights
+      const v = Array.isArray(ai?.videos) ? ai?.videos[0] ?? null : ai?.videos ?? null
+      const day = v?.upload_date?.slice(0, 10) ?? null
+      if (!ai?.source_video_id || !v || v.is_client || !day || day < from || day >= to) continue
+      const held = out.get(r.subject_id)
+      if (!held) continue
+      held.videos.add(ai.source_video_id)
+      held.insights.push({ id: r.audience_insight_id, videoId: ai.source_video_id })
+    }
+    return out
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+/** Which grouped question each insight belongs to, off the themed update's
+ *  themes this page already reads (`supporting_insight_ids`, first theme by id
+ *  wins, keyed on the registry id; the Subjects page's `nameQuestions` rule). */
+export function questionGroupsOf(
+  themes: readonly { supporting_insight_ids?: string[] | null; registry_id?: string | null; label?: string | null }[],
+): Map<string, { registryId: string; label: string }> {
+  const out = new Map<string, { registryId: string; label: string }>()
+  for (const t of themes) {
+    if (!t.registry_id || !t.label?.trim()) continue
+    for (const id of t.supporting_insight_ids ?? []) if (!out.has(id)) out.set(id, { registryId: t.registry_id, label: t.label.trim() })
+  }
+  return out
+}
+
+/** The judge's rows (MF3 `own_post_subjects`). Null before MF3: nothing is
+ *  filed, which the rows read as "not checked yet". */
+async function loadOwnPostSubjects(supabase: SupabaseClient, clientId: string): Promise<OwnPostSubjectRow[] | null> {
+  try {
+    return await selectAll<OwnPostSubjectRow>(() =>
+      supabase
+        .from(TABLE_OWN_POST_SUBJECTS)
+        .select('video_id, claim_id, subject_id, touches, matched_words, method, judge_version, decided_at')
+        .eq('client_id', clientId)
+        .order('decided_at', { ascending: true })
+        .order('video_id', { ascending: true })
+        .order('subject_id', { ascending: true })
+        .order('claim_id', { ascending: true, nullsFirst: true }),
+    )
+  } catch (error) {
+    if (isMissingOwnPostSubjects(error)) return null
+    throw error
+  }
+}
+
+/** Your claims read to date (`video_claims`, entity client: the tenant's own
+ *  SELECT policy admits these, M8). Null where they could not be read. */
+async function loadClientClaims(supabase: SupabaseClient, clientId: string): Promise<{ id: string; source_video_id: string; claim: string }[] | null> {
+  return selectAll<{ id: string; source_video_id: string; claim: string }>(() =>
+    supabase
+      .from('video_claims')
+      .select('id, source_video_id, claim')
+      .eq('client_id', clientId)
+      .eq('entity', 'client')
+      .order('id', { ascending: true }),
+  )
+}
+
+/** The reading month's market videos (MF1 `market_month_videos`), as a set.
+ *  Null where the function is not there or the read failed: Y3 then counts
+ *  nothing and says so. */
+async function loadMarketMonthVideos(reading: ReadingHandle, clientId: string, month: string): Promise<Set<string> | null> {
+  const rows = await selectAll<{ video_id: string }>(() =>
+    reading.client.rpc('market_month_videos', { p_client: clientId, p_month: month }).select('video_id').order('video_id', { ascending: true }) as never,
+  )
+  return new Set(rows.map((r) => String(r.video_id)))
+}
+
+/**
+ * Y4's reads: each move's subject or theme, month by month in the market
+ * audiences (the category and the tracked brands, decision E), pooled. One
+ * read per object kind, and none where nothing is dated.
+ */
+async function loadMoveMarketReads(input: {
+  reading: ReadingHandle
+  clientId: string
+  month: string
+  moves: readonly Move[]
+  rivalAudiences: readonly string[]
+  counts: ReadonlyMap<string, { videos: number | null }>
+  on: (m: { id: string }) => string
+  subjects: ReadonlyMap<string, { name: string; calibration: SubjectCalibrationWord }>
+  themes: ReadonlyMap<string, string>
+  adviceTargets: ReadonlyMap<string, string>
+}): Promise<MoveMarketRead[]> {
+  if (input.moves.length === 0) return []
+  const audiences = marketAudiences(input.rivalAudiences)
+  const from = input.moves.reduce((m, x) => (monthStartOf(x.declared_at.slice(0, 10)) < m ? monthStartOf(x.declared_at.slice(0, 10)) : m), monthStartOf(input.month))
+  const subjectIds = [...new Set(input.moves.filter((m) => m.kind === 'subject' && m.subject_id).map((m) => m.subject_id as string))]
+  const themeIds = [...new Set(input.moves.flatMap((m) => m.kind === 'theme' ? (m.registry_ids ?? []).slice(0, 1) : m.kind === 'advice' && m.lineage_id && input.adviceTargets.get(m.lineage_id) ? [input.adviceTargets.get(m.lineage_id) as string] : []))]
+  const levels = new Map<string, number>()
+  const read = new Set<string>()
+  const take = async (kind: 'subject' | 'theme', ids: string[]) => {
+    if (ids.length === 0) return
+    try {
+      const set = await loadMonthSeries(input.reading.client, input.clientId, { audiences, objectKind: kind, objectIds: ids, from, to: input.month })
+      for (const series of set.series) {
+        if (!series.objectId) continue
+        for (const p of series.points) {
+          if (p.k == null) continue
+          read.add(`${kind}:${series.objectId}`)
+          const key = `${kind}:${series.objectId}:${p.month}`
+          levels.set(key, (levels.get(key) ?? 0) + p.k)
+        }
+      }
+    } catch (error) {
+      console.error(`[pages] market-surface.moveMarket: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  await Promise.all([take('subject', subjectIds), take('theme', themeIds)])
+  return moveMarketReads({
+    moves: input.moves,
+    month: input.month,
+    on: input.on,
+    subjects: input.subjects,
+    themes: input.themes,
+    adviceTargets: input.adviceTargets,
+    // A MONTH THE OBJECT HAS ROWS IN SOME MONTH OF, WITH NO ROW OF ITS OWN, IS
+    // ZERO: the market was read and nothing on it carried the object. An
+    // object with no row in any month was never read, which is not zero.
+    levels: (kind, id, m) => levels.get(`${kind}:${id}:${m}`) ?? (read.has(`${kind}:${id}`) && input.counts.get(m)?.videos != null ? 0 : null),
+    n: (m) => input.counts.get(m)?.videos ?? null,
+  })
 }
 
 /**

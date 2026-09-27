@@ -6,7 +6,7 @@ import { monthStartOf, nextMonth, prevMonth as monthBefore } from '../reading/mo
 import { BRANDS_PANEL, CATEGORY_AUDIENCE, type PairOn } from '../reading/pairs'
 import { addedOnlyRecordSentence, type ChangeBlock, type LedgerLine } from '../pages/overview-market/change'
 import type { FigureTable } from '../reading/verdicts'
-import { SURFACE_WORDS } from './change-log'
+import { printNote, SURFACE_WORDS } from './change-log'
 
 // Settings › What we changed: the dated list of our own changes (market-first
 // WP1.6, plan §2.10 D2), the list that was to sit in the front page's "How
@@ -258,13 +258,14 @@ export function changeWords(change: OurChange, rows: readonly ConfigChange[], ga
   // A market-first change with a client-words note is titled by its surface
   // (the approved preview: "How we check relevance" in weight, the note under
   // it); its note is `changeDetail`'s. Without a note (every such row
-  // written since 27 Sep), the title stands alone.
-  if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return SURFACE_SENTENCE[change.surface] ?? change.note.trim()
+  // written since 27 Sep), the title stands alone. A printed note carries no
+  // em dash (printNote, WP3.10).
+  if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return SURFACE_SENTENCE[change.surface] ?? printNote(change.note) ?? ''
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
   if (change.surface === 'other') {
     const noted = mine.find((r) => CLIENT_NOTE_OTHER_FIELDS.has(r.field ?? '') && r.note?.trim())
-    if (noted) return (noted.note as string).trim()
+    if (noted) return printNote(noted.note) ?? ''
   }
   if (change.surface === 'terms') {
     const terms = termsMoved(mine)
@@ -303,7 +304,7 @@ export function changeWords(change: OurChange, rows: readonly ConfigChange[], ga
  */
 export function changeDetail(change: OurChange): string | null {
   if (!CLIENT_NOTE_SURFACES.has(change.surface)) return null
-  return change.note?.trim() || null
+  return printNote(change.note)
 }
 
 /**

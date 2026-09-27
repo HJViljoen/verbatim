@@ -267,6 +267,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   treating a week as a period, and it is not optional decoration. The window
   comes off the run row (`rowWindow`), never from the clock — a run with no
   window says so, and Sealand's newest update covers thirty days, not seven.
+  The one exception is decision M's same-age weekly line (`lib/reading/week-line.ts`,
+  WP3.13): each week's market share, read once at two updates old, kept in
+  `week_line_reads` / `week_line_points` and compared only with a week read
+  the same way, is the one reading computed over a week, and it prints only
+  where `WEEK_LINE.print` says so.
 - **New reading surfaces say "videos".** `conversations` keeps its meaning and
   its name on the legacy pages that still compute it (`lib/calibration.ts`
   GLOSSARY); a new surface counts videos, and a level without its "of N" is a
@@ -364,6 +369,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   a direction claim too — `profile.mix` gates a line across `run_date` that
   printed no direction word at all. Levels are untouched, as is any period
   reading with an n and a band (the digest's sentiment and share verdicts).
+  The same-age weekly line never carries one either: a pair of weeks read the
+  same way gets `bandVerdict` with `SHARE_BAND` and nothing more, and nothing
+  calls `directionWord` over weeks (`lib/reading/week-line.ts`, WP3.13).
 - **Costs are real**: gather scripts spend Apify money; synthesis calls spend
   OpenAI. Prefer inspectors/dry-run flags (`run-relevance.ts`, `--no-merge`,
   send-report's default preview) when iterating.

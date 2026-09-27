@@ -4,6 +4,11 @@
 #   (a) every neutral in app/globals.css must be cool: blue >= red (cream fails)
 #   (b) the only saturated greens in app/globals.css are the Verbatim green set
 #   (c) no backdrop-blur anywhere in the app (marketing under app/site excluded)
+#   (d) the market-first inks (decision K, WP3.10): --ink-market, --ink-you,
+#       --ink-rival and --ink-earlier are set in the light and the dark block,
+#       each equal to its twin (the market the main ink --foreground, you the
+#       green --you, rivals the orange --comp, the earlier month the grey --cat),
+#       mapped to a Tailwind colour, and listed in MASTER.md at the light value
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,6 +34,35 @@ for h in set(x.upper() for x in hexes):
 if bad:
     print('design drift:'); [print('  -', x) for x in bad]; sys.exit(1)
 print('drift guard (a)(b): ok')
+PY
+
+python3 - <<'PY'
+import re, sys
+css = open('app/globals.css').read()
+app_css = css.split('/* ── Marketing theme')[0]
+master = open('design-system/verbatim/MASTER.md').read()
+TWINS = {'ink-market': 'foreground', 'ink-you': 'you', 'ink-rival': 'comp', 'ink-earlier': 'cat'}
+
+def block(selector):
+    m = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', app_css)
+    if not m: return None
+    return dict((k, v.strip().upper()) for k, v in re.findall(r'--([a-z0-9-]+):\s*([^;]+);', m.group(1)))
+
+bad = []
+themes = {':root': block(':root'), '.dark': block('.dark')}
+for name, vars_ in themes.items():
+    if vars_ is None: bad.append(f'no {name} block in app/globals.css'); continue
+    for ink, twin in TWINS.items():
+        if ink not in vars_: bad.append(f'--{ink} is not set in {name}'); continue
+        if vars_.get(twin) != vars_[ink]: bad.append(f'--{ink} {vars_[ink]} is not --{twin} {vars_.get(twin)} in {name}')
+for ink in TWINS:
+    if f'--color-{ink}: var(--{ink});' not in app_css: bad.append(f'--{ink} has no --color-{ink} mapping')
+    light = (themes[':root'] or {}).get(ink)
+    if light and not re.search(r'`--' + ink + r'`\s*`' + re.escape(light) + r'`', master, re.I) and not re.search(r'`' + re.escape(light) + r'`[^\n]*`--' + ink + r'`', master, re.I):
+        bad.append(f'MASTER.md does not list --{ink} at {light}')
+if bad:
+    print('design drift:'); [print('  -', x) for x in bad]; sys.exit(1)
+print('drift guard (d): ok')
 PY
 
 if grep -rn "backdrop-blur" app components --include='*.tsx' --include='*.ts' --include='*.css' 2>/dev/null | grep -v '^app/site' ; then
