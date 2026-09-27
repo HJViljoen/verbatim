@@ -82,8 +82,21 @@ export const blocksFor = (surface: BriefSurface): readonly Block<never>[] => BLO
 
 type SurfaceLoader = (scope: Scope) => Promise<unknown | null>
 
+/**
+ * The brief's front page is YOUR MARKET, built as the front page's route
+ * builds it (WP3.11, plan §2.9). `marketFront` is what carries the board, the
+ * hero and the asks: the new market-first sections (`mk.themes`, `mk.asks`,
+ * `ld.themes`, `sl.asks`, `ct.themes`, `ct.asks`) draw them, and the first In
+ * short tile is the hero's lead (`briefLead`). Without it every one of those
+ * sections drew its empty state and the lead tile fell back to the gap, while
+ * the tests, built on the market fixture, passed. The borrowed Phase 1 blocks
+ * take the front page's form with it (`overview.category` draws the market's
+ * kinds, `overview.subjects` the market side), as the page itself does.
+ */
+export const loadBriefOverview = (scope: Scope) => loadOverview(scope, { marketFront: true })
+
 const LOADERS: Record<BriefSurface, SurfaceLoader> = {
-  overview: loadOverview as SurfaceLoader,
+  overview: loadBriefOverview as SurfaceLoader,
   subjects: loadSubjectsPage as SurfaceLoader,
   voice: loadVoiceSurface as SurfaceLoader,
   market: loadMarketSurface as SurfaceLoader,

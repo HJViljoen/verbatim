@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import { chartLead } from './load-reading'
+// The front page's loader is a spy here, so the brief's call to it can be read
+// (WP3.11). Everything else in the module is the real one.
+vi.mock('../../pages/overview', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../pages/overview')>()), loadOverview: vi.fn() }))
+
+import { loadOverview } from '../../pages/overview'
+import { briefLead, chartLead, loadBriefOverview } from './load-reading'
+import { marketFrontFixture } from '../../../components/pages/overview/fixture'
 
 // The pure half of the brief's document figures. The I/O around it (the
 // switching pool, the readiness read) is glue and is not mocked here; what is
@@ -48,5 +54,22 @@ describe('chartLead under the three calibration states', () => {
 
   it('is null where only provisional or failed subjects carry a series', () => {
     expect(chartLead([{ ...row('Community & purpose', [0, 0, 0, 0]), calibration: 'provisional' }], 'the category')).toBeNull()
+  })
+})
+
+// WP3.11: a brief's front page is Your market. The market-first sections draw
+// its board and asks and the first In short tile is its lead, and only the
+// market front page carries them; the Phase 1 page (no `marketFront`) left
+// every new section empty and the lead tile on the gap.
+describe('loadBriefOverview', () => {
+  it('builds the front page as Your market, the way its route does', async () => {
+    vi.mocked(loadOverview).mockResolvedValueOnce(marketFrontFixture())
+    const scope = { supabase: {}, clientId: 'c1', params: { month: '2026-09-01' } }
+    const data = await loadBriefOverview(scope as never)
+    expect(vi.mocked(loadOverview)).toHaveBeenCalledWith(scope, { marketFront: true })
+    // What the new sections and the lead tile read is there.
+    expect(data?.themes?.rows.length).toBeGreaterThan(0)
+    expect(data?.asks?.lists.length).toBeGreaterThan(0)
+    expect(briefLead(data!)).toMatchObject({ kind: 'theme', label: 'Confusion over airline bag sizes' })
   })
 })
