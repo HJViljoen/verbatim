@@ -17,13 +17,14 @@ import { marketMoves } from './moves'
 import { marketPlans } from './plans'
 import { marketSayHear } from './sayhear'
 import { marketWays } from './ways'
-import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
+import { marketQuestions } from './questions'
+import { deepLinkFixture, firstUpdateFixture, marketFixture, sealandMovesFixture, unrecordedFixture } from './fixture'
 import { moveReadingFixture } from '@/components/pages/overview/fixture'
 import { MOVE_SUBJECT_FAILED } from '@/lib/reading/moves'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [marketFixture(), unrecordedFixture(), firstUpdateFixture(), deepLinkFixture()]
+const STATES = [marketFixture(), unrecordedFixture(), firstUpdateFixture(), deepLinkFixture(), sealandMovesFixture()]
 
 describe('Market · every block, every mode, every state', () => {
   it('keeps the copy contract', () => {
@@ -86,8 +87,16 @@ describe('Market · every block, every mode, every state', () => {
     }
   })
 
-  it('declares no figures — nothing on this surface is a reading of a month', () => {
-    expect(figureCount(MARKET_BLOCKS.map((b) => blockAnswers(b, marketFixture()).figures))).toBe(0)
+  it('declares figures only where it reads the month in the market (WP3.6 Y1, Y3)', () => {
+    // Until WP3.6 nothing on this surface was a reading of a month. The
+    // questions (Y1) and the claims' market counts (Y3) are, and they declare
+    // what they print; every other block still declares none.
+    const reading = new Set(['market.questions', 'market.sayhear'])
+    expect(figureCount(MARKET_BLOCKS.filter((b) => !reading.has(b.key)).map((b) => blockAnswers(b, sealandMovesFixture()).figures))).toBe(0)
+    const q = blockAnswers(marketQuestions, sealandMovesFixture()).figures
+    expect(Object.values(q).map((f) => f.value)).toEqual([21, 20, 11, 16, 12, 11])
+    const sh = blockAnswers(marketSayHear, sealandMovesFixture()).figures
+    expect(Object.values(sh).map((f) => f.value)).toEqual([25, 89, 0])
   })
 
   it('declares every movement claim and every quote it prints', () => {
@@ -169,21 +178,28 @@ describe('the tiles are as tall as what they draw', () => {
     }
   })
 
-  it('draws the two readings as rows and the moves as two level stacks', () => {
-    // The readings are one full-width row each. The moves grid is two stacks
-    // (card over say-vs-hear, your moves over plans) so no column leaves a
-    // short card's height of white beside its neighbour (layout sweep), and
-    // the button strip runs the full width under them.
+  it('draws the page in the preview’s order: questions, advice, say and hear, the moves pair, then the tail (WP3.6)', () => {
+    // The readings are one full-width row each; your moves and the month's
+    // card sit side by side from xl, each as tall as it draws.
     expect(render(<MarketSurfacePage data={marketFixture()} />)).toContain('xl:items-start')
     const grid = tileGrid()
-    expect(grid['market.conclusions'].rowStart).toBe(1)
+    expect(grid['market.questions'].rowStart).toBe(1)
     expect(grid['market.advice'].rowStart).toBe(2)
+    expect(grid['market.sayhear'].rowStart).toBe(3)
+    expect(grid['market.conclusions'].rowStart).toBe(1)
     expect(grid['market.unlocks']).toBeUndefined()
-    expect(MOVES_STACKS.map((st) => st.keys)).toEqual([['market.card', 'market.sayhear'], ['market.moves', 'market.plans']])
+    expect(MOVES_STACKS.map((st) => st.keys)).toEqual([['market.moves'], ['market.card']])
     expect(MOVES_STACKS.reduce((n, st) => n + st.col, 0)).toBe(12)
-    const markup = render(<MarketSurfacePage data={marketFixture()} />)
-    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-5')
-    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-7')
+    const markup = render(<MarketSurfacePage data={sealandMovesFixture()} />)
+    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-6')
+    const at = (title: string) => markup.indexOf(title)
+    const order = ['Questions to answer', 'The advice, and what you decided', 'What you say, and what your market says back', 'What we concluded', 'Plans re-checked', 'How a move is made']
+    expect(order.map(at).every((i) => i >= 0)).toBe(true)
+    expect([...order.map(at)].sort((a, b) => a - b)).toEqual(order.map(at))
+    // The moves pair sits between say-and-hear and the conclusions.
+    const moves = markup.indexOf('Your moves', at('What you say, and what your market says back'))
+    expect(moves).toBeGreaterThan(at('What you say, and what your market says back'))
+    expect(moves).toBeLessThan(at('What we concluded'))
   })
 
   it('gives every start a class Tailwind can see', () => {
@@ -191,6 +207,7 @@ describe('the tiles are as tall as what they draw', () => {
     // components/shell/tile.tsx follows). A start the map has no entry for
     // would silently fall back and stack two tiles in one column.
     for (const place of Object.values(tileGrid())) {
+      if (place.col === 12) continue // a full-width line pins nothing (WP3.6)
       const classes = startClasses(place)
       expect(classes, JSON.stringify(place)).toBe(`xl:col-start-${place.colStart} xl:row-start-${place.rowStart}`)
     }
@@ -238,7 +255,7 @@ describe('MK1 · what we concluded', () => {
     expect(app).toContain('Early signal')
     expect(app).toContain('Below the evidence bar')
     expect(app).toContain('1 below the bar this update')
-    expect(app).toContain('2 above the bar · of 9 concluded')
+    expect(app).toContain('2 of 9 above the evidence bar')
     expect(app).not.toMatch(/\bconfirmed\b/)
     const print = renderText(marketConclusions.render(marketFixture(), 'print', ctx))
     expect(print).toContain('Below the evidence bar')
@@ -426,7 +443,9 @@ describe('MK2 · the ledger', () => {
     // lead's R10); the fixture's September row is made one here, and the
     // other rows are not.
     const base = marketFixture()
-    const data = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r, i) => (i === 0 ? { ...r, timesMade: 1, monthsRepeated: 1, firstInLatest: true } : r)) } }
+    // Row 1 leads as its own card (WP3.6 Y2), so the chip is tried on the
+    // table's first row.
+    const data = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r, i) => (i === 1 ? { ...r, timesMade: 1, monthsRepeated: 1, firstInLatest: true } : r)) } }
     const text = renderText(marketAdvice.render(data, 'app', ctx))
     expect(text).toContain('First time')
     // Its clock rides as the chip's tooltip (copy de-clutter B57).
@@ -454,7 +473,8 @@ describe('MK2 · the ledger', () => {
     // Overview's headline calls "repeated across 3 updates".
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(text).not.toContain('First time')
-    expect(text).toMatch(/current recommendation Sep 2 updates running/)
+    // The current recommendation leads as a card (WP3.6 Y2), counted in updates.
+    expect(text).toMatch(/1 · current recommendation Increase Content Volume to Improve Share of Voice repeated across 2 updates/)
     expect(render(marketAdvice.render(marketFixture(), 'app', ctx))).not.toContain('text-warning')
   })
 
@@ -618,13 +638,13 @@ describe('MK2 · the ledger', () => {
     // array counted twice and they must add to the total.
     const data = marketFixture()
     const text = renderText(marketAdvice.render(data, 'app', ctx))
-    // Copy de-clutter ruling D: "N of T shown", T = shown + behind.
-    expect(text).toContain('3 of 64 shown')
+    // WP3.6 (25 Sep rulings): the footer holds a link alone, the preview's
+    // "Show all 64 →", naming the whole ledger, never the cap.
+    expect(text).toContain(`Show all ${data.advice.total} →`)
+    expect(render(marketAdvice.render(data, 'app', ctx))).toContain('ledger=all')
+    expect(text).not.toContain('shown')
     expect(text).not.toContain('behind them')
     expect(text).not.toMatch(/quarter/i)
-    const [, shown, total] = text.match(/(\d+) of ([\d,]+) shown/) ?? []
-    expect(Number(shown)).toBe(data.advice.rows.length)
-    expect(Number(total.replace(/,/g, ''))).toBe(data.advice.total)
   })
 
   it('never states a row count the table is not showing, in any state', () => {
@@ -695,7 +715,8 @@ describe('MK5 · how a move is made', () => {
   // say-vs-hear claims out into their own card (`market.sayhear`).
   it('lists five ways and says how many work today', () => {
     const text = renderText(marketWays.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('five ways in · 3 of 5 work today')
+    // No header meta since WP3.6 (25 Sep rulings): each way says for itself.
+    expect(text).not.toContain('five ways in')
     expect(text).toContain('Confirm September\u2019s card')
     expect(text).toContain('Track this')
     expect(text).toContain('Register a claim you make')
@@ -762,11 +783,10 @@ describe('MK5 · how a move is made', () => {
 describe('MK5b · say vs hear', () => {
   it('is its own card, with the verdicts and the hold they do not have', () => {
     const text = renderText(marketSayHear.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Say vs hear')
-    expect(text).toContain('3 claims · your audience')
+    expect(text).toContain('What you say, and what your market says back')
     expect(text).toContain('Pushed back')
-    // The caveat is the footer note alone (copy de-clutter B72).
-    expect(text).toContain('this update’s reading')
+    // The update dating is the column head's (25 Sep rulings, WP3.6).
+    expect(text).toContain('Your market, this update')
     expect(text).not.toContain('held across two updates')
   })
 
@@ -978,7 +998,7 @@ describe('absences are lines, not cards (sweep 2026-09-24)', () => {
     expect(drawnOnMarket('market.card', bare)).toBe(true)
     const markup = render(<MarketSurfacePage data={bare} />)
     expect(markup).not.toContain('Plans re-checked')
-    expect(markup).not.toContain('Say vs hear')
+    expect(markup).not.toContain('What you say, and what your market says back')
   })
 })
 
@@ -991,15 +1011,17 @@ describe('MK2 · the current recommendation first (market-first WP1.9)', () => {
     for (const mode of ['app', 'print', 'email'] as const) {
       const text = renderText(marketAdvice.render(data, mode, ctx))
       expect(text.split(CURRENT_TAG).length - 1).toBe(1)
-      // The tag follows the first row's title, before the second row's.
-      expect(text.indexOf(CURRENT_TAG)).toBeGreaterThan(text.indexOf(data.advice.rows[0].title))
-      expect(text.indexOf(CURRENT_TAG)).toBeLessThan(text.indexOf(data.advice.rows[1].title))
+      // The tag heads the lead card (WP3.6 Y2): before the first row's title,
+      // and the first row's title before the second row's.
+      expect(text.indexOf(CURRENT_TAG)).toBeLessThan(text.indexOf(data.advice.rows[0].title))
+      expect(text.indexOf(data.advice.rows[0].title)).toBeLessThan(text.indexOf(data.advice.rows[1].title))
     }
   })
 
   it('numbers the rows in that order, the current recommendation as 1', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toMatch(/1 Increase Content Volume to Improve Share of Voice current recommendation/)
+    expect(text).toMatch(/1 · current recommendation Increase Content Volume to Improve Share of Voice/)
+    expect(text).toMatch(/2 Show the warranty process on camera/)
   })
 
   it('no longer says "oldest first" anywhere on the block', () => {

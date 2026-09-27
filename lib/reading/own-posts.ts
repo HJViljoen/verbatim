@@ -614,3 +614,212 @@ export function ownCensusWithClaims(input: OwnPostInput, read: boolean): OwnPost
   // everywhere, which is what removing the owner bought.
   return { ...census, claims: [], claimsNote: OWN_CLAIMS_UNREADABLE }
 }
+
+// ---- Touched by your posts (market-first WP3.6, plan §2.6 Y1) ----------------
+//
+// ADDITIVE, AND A LEAF COPY OF WP2.5's RULE. A question is touched by one of
+// your posts when that ONE post shares two or more of the question's
+// non-generic words, and the words it shared are printed so a "none" can be
+// checked (DF risk 5). The rule is the one the front page's "What it means for
+// you" applies (`postsSharing`, lib/pages/subjects.ts on deploy 3), restated
+// here because this file is a leaf that `lib/pages` imports and the page
+// module is another package's; the two lists below are that rule's lists,
+// word for word, so the two pages cannot disagree about one post. When deploy
+// 3 and deploy 5 meet, the page's copy can re-export this one.
+//
+// WHAT A POST IS ABOUT is `videos.topics`: the same haystack both pages match
+// on. What a post CLAIMS is the post-and-claim judge's (`own_post_subjects`,
+// below), which is a separate answer and never folded into the word check.
+
+/** A post touches a question on this many shared non-generic words or more. */
+export const TOUCH_MIN_WORDS = 2
+
+const TOUCH_STOP = new Set([
+  'the', 'and', 'for', 'with', 'you', 'your', 'our', 'are', 'was', 'were', 'will', 'can', 'does', 'did',
+  'this', 'that', 'these', 'those', 'from', 'about', 'into', 'have', 'has', 'had', 'but', 'not', 'any',
+  'all', 'how', 'why', 'what', 'when', 'where', 'who', 'its', 'it’s', 'there', 'them', 'they',
+])
+
+/** Words every post and question in the category shares, so sharing one says
+ *  nothing (WP2.5's stop list): "bag", the market's own framing, and the label
+ *  words a clustering puts at the front of a group ("Questions about",
+ *  "Confusion over"). Stemmed as `touchWords` stems (a trailing s dropped). */
+export const TOUCH_GENERIC_WORDS: ReadonlySet<string> = new Set([
+  'bag', 'backpack', 'pack', 'handmade', 'love', 'buy', 'buying', 'want', 'like', 'need', 'make', 'made',
+  'good', 'great', 'nice', 'best', 'new', 'product', 'video', 'post', 'brand', 'people', 'thing', 'one', 'get',
+  'question', 'demand', 'worrie', 'worry', 'concern', 'confusion', 'interest', 'frustration', 'praise',
+  'request', 'desire', 'wish', 'curiosity', 'comment', 'feedback', 'appreciation', 'admiration', 'excitement',
+  'over', 'into', 'onto', 'than', 'then', 'just', 'very', 'more', 'most', 'some', 'such', 'only', 'also',
+  'after', 'before', 'their', 'there', 'other', 'every', 'much', 'many', 'way', 'real',
+])
+
+const TOUCH_COMBINING = new RegExp('[\\u0300-\\u036f]', 'g')
+const stemOf = (w: string): string => (w.length >= 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)
+const foldWords = (text: string): string[] =>
+  text.normalize('NFD').replace(TOUCH_COMBINING, '').toLowerCase().split(/[^a-z0-9]+/)
+
+/** A text's non-generic words: lower-cased, accent-folded, three letters or
+ *  more, stop and generic words dropped, a trailing s dropped. */
+export function touchWords(text: string): string[] {
+  const out = foldWords(text)
+    .filter((w) => w.length >= 3 && !TOUCH_STOP.has(w))
+    .map(stemOf)
+    .filter((w) => !TOUCH_GENERIC_WORDS.has(w))
+  return [...new Set(out)]
+}
+
+/** A post, as the word check reads it. */
+export interface TouchPost {
+  id: string
+  topics: readonly string[] | null
+}
+
+/** One post that touched a question, and the words it shared. */
+export interface PostTouch {
+  id: string
+  words: string[]
+}
+
+/**
+ * Which posts share two or more of a label's non-generic words, and on which.
+ * `checked` is the label's words as the label spells them: what a post had to
+ * share, printed where none did. A label with fewer than two such words is
+ * never touched by words (one shared word is "shipping" alone), which is the
+ * direction of error that keeps a question on the list.
+ */
+export function postsTouching(label: string, posts: readonly TouchPost[]): { checked: string[]; matched: PostTouch[] } {
+  const stems = touchWords(label)
+  const spelling = new Map<string, string>()
+  for (const w of foldWords(label)) if (w.length >= 3 && !spelling.has(stemOf(w))) spelling.set(stemOf(w), w)
+  const spell = (w: string) => spelling.get(w) ?? w
+  const checked = stems.map(spell)
+  if (stems.length < TOUCH_MIN_WORDS) return { checked, matched: [] }
+  const matched = posts.flatMap((p) => {
+    const pool = new Set((p.topics ?? []).flatMap(touchWords))
+    const words = stems.filter((w) => pool.has(w))
+    return words.length >= TOUCH_MIN_WORDS ? [{ id: p.id, words: words.map(spell) }] : []
+  })
+  return { checked, matched }
+}
+
+// ---- The post-and-claim judge's filing (MF3 `own_post_subjects`, WP3.6) -----
+//
+// A judge reads each of your posts (and each claim on it) against each active
+// subject and files one row per pair: touches or not, with the words it
+// matched (lib/own-posts/subject-judge.ts). The table arrives with MF3 (plan
+// §4.1, a recorded deviation: WP3.6 writes it and MF3 carries it). Append-only;
+// the newest `decided_at` wins per (post, claim, subject), so an override is a
+// newer row, never an edit.
+//
+// A PAIR THE JUDGE HAS NOT FILED IS NOT A "NO". Before MF3 every pair is
+// unfiled, and a post with no row reads "not checked yet", never a false
+// "none" (WP3.6 done-when 6).
+
+export const TABLE_OWN_POST_SUBJECTS = 'own_post_subjects'
+
+/** The words a subject's row prints where the judge has not filed a post. */
+export const JUDGE_NOT_CHECKED = 'not checked yet'
+
+/** One `own_post_subjects` row as the reader reads it (MF3's pinned shape). */
+export interface OwnPostSubjectRow {
+  video_id: string
+  /** Null for the post as a whole. */
+  claim_id: string | null
+  subject_id: string
+  touches: boolean
+  matched_words: string[] | null
+  method: 'judge' | 'override' | string
+  judge_version: string | null
+  decided_at: string
+}
+
+/** `own_post_subjects` is not there: MF3 is not applied here yet. Narrowed by
+ *  name, so any other failure is not mistaken for an absent migration. */
+export function isMissingOwnPostSubjects(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes(TABLE_OWN_POST_SUBJECTS)) return false
+  if (code && ['PGRST205', 'PGRST200', '42P01'].includes(code)) return true
+  return /schema cache/i.test(text) || /does not exist/i.test(text)
+}
+
+/** The judge's standing answer for every (post, claim, subject) pair it filed. */
+export interface OwnPostFilings {
+  /** `${videoId}|${subjectId}`: the post as a whole was filed for the subject. */
+  postFiled: Set<string>
+  /** Subject → post → the words, for every post that touches the subject (the
+   *  post itself, or any claim on it). */
+  touching: Map<string, Map<string, string[]>>
+  /** Claim → the subjects it touches. */
+  claimTouches: Map<string, Set<string>>
+  /** `${claimId}|${subjectId}`: the claim was filed for the subject. */
+  claimFiled: Set<string>
+}
+
+/**
+ * The newest row per (post, claim, subject), as filings. Ties on `decided_at`
+ * go to an override, then to the later row in the input (the reader orders by
+ * `decided_at`), so one render always reads one answer.
+ */
+export function ownPostFilings(rows: readonly OwnPostSubjectRow[]): OwnPostFilings {
+  const newest = new Map<string, OwnPostSubjectRow>()
+  for (const r of rows) {
+    const key = `${r.video_id}|${r.claim_id ?? ''}|${r.subject_id}`
+    const held = newest.get(key)
+    if (!held || r.decided_at > held.decided_at || (r.decided_at === held.decided_at && r.method === 'override')) newest.set(key, r)
+  }
+  const out: OwnPostFilings = { postFiled: new Set(), touching: new Map(), claimTouches: new Map(), claimFiled: new Set() }
+  for (const r of newest.values()) {
+    if (r.claim_id == null) out.postFiled.add(`${r.video_id}|${r.subject_id}`)
+    else out.claimFiled.add(`${r.claim_id}|${r.subject_id}`)
+    if (!r.touches) continue
+    const bySubject = out.touching.get(r.subject_id) ?? new Map<string, string[]>()
+    bySubject.set(r.video_id, [...new Set([...(bySubject.get(r.video_id) ?? []), ...(r.matched_words ?? [])])])
+    out.touching.set(r.subject_id, bySubject)
+    if (r.claim_id != null) out.claimTouches.set(r.claim_id, new Set([...(out.claimTouches.get(r.claim_id) ?? []), r.subject_id]))
+  }
+  return out
+}
+
+// ---- Say vs hear on the market's counts (WP3.6 Y3, IO F48) -------------------
+
+/** The audience a claim's echo is counted in on Your moves: the market
+ *  (decision E), never the client audience's handful of videos a month. */
+export const MARKET_ECHO_AUDIENCE = 'market'
+export const MARKET_ECHO_LABEL = 'your market'
+
+/** Why a claim's market count could not be taken. */
+export const ECHO_MARKET_UNREAD =
+  'Your market’s videos for this month could not be read, so nothing was counted against this claim.'
+
+/**
+ * A claim's reading in the market: of the month's market videos (`n`), how
+ * many (`k`) carry what the claim's reading rests on, the videos behind the
+ * evidence Pass D-a cited for it (`run_summary.say_vs_hear
+ * .supporting_theme_ids` resolved to their videos). Null where the month's
+ * market videos were not read: an absence, never a zero.
+ *
+ * THE MONTH BOUNDS THE COUNT. The cited evidence is all-time; intersecting it
+ * with the month's market videos is what makes "k of n" a reading of this
+ * month in this audience, the same n every market figure on the page uses.
+ */
+export function marketEchoReading(
+  supportingVideoIds: readonly string[],
+  monthMarketVideos: ReadonlySet<string> | null,
+): Counted | null {
+  if (monthMarketVideos == null || monthMarketVideos.size === 0) return null
+  const k = new Set(supportingVideoIds.filter((v) => monthMarketVideos.has(v))).size
+  return { k, n: monthMarketVideos.size }
+}
+
+/** A say-vs-hear claim's echo, counted in the market. */
+export function marketClaimEcho(input: { stance: string | null; reading: Counted | null }): ClaimEcho {
+  return claimEcho({
+    audience: MARKET_ECHO_AUDIENCE,
+    audienceLabel: MARKET_ECHO_LABEL,
+    reading: input.reading,
+    stance: input.stance,
+    why: input.reading == null ? ECHO_MARKET_UNREAD : null,
+  })
+}

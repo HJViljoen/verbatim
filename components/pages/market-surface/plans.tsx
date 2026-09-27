@@ -98,6 +98,16 @@ export function leadClaim(card: PlanCheckCard): PlanClaimRow | null {
     ?? null
 }
 
+/** The plan's one line: when it was uploaded, which of how many it is, and
+ *  the update its verdicts were re-read on. */
+export function planLine(card: { uploadedOn: string; checkedOn: string | null }, plans: number): string {
+  return [
+    `uploaded ${shortDate(card.uploadedOn)}`,
+    plans > 1 ? `newest of ${fmtInt(plans)} checked` : null,
+    card.checkedOn ? `as re-read on ${shortDate(card.checkedOn)}` : 'not re-read since upload',
+  ].filter(Boolean).join(' · ')
+}
+
 export const marketPlans: Block<MarketSurfaceData> = {
   key: 'market.plans',
   title: 'Plans re-checked',
@@ -123,21 +133,20 @@ export const marketPlans: Block<MarketSurfaceData> = {
         title={marketPlans.title}
         question={marketPlans.question}
         mode={mode}
-        // THE CARD IS ONE OF A LIST AND SAYS SO. `loadPlanChecks` returns every
-        // plan a workspace has uploaded, newest first, and this block draws the
-        // first — on a page where every other count names its population, a
-        // workspace with three briefs saw one card with nothing naming the
-        // other two.
-        meta={data.plans.length > 1
-          ? `uploaded ${shortDate(card.uploadedOn)} · newest of ${fmtInt(data.plans.length)} checked`
-          : `uploaded ${shortDate(card.uploadedOn)}`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>See the claim-by-claim verdicts →</a>
           : <Link href={href} className="hover:underline">See the claim-by-claim verdicts →</Link>}
-        // THE DATE THAT MAKES THE CHIPS CHECKABLE. See the header: this is the
-        // update the printed verdicts were read on, not the upload's.
-        footerNote={card.checkedOn ? `as re-read on ${shortDate(card.checkedOn)}` : 'not re-read since upload'}
       >
+        {/* THE CARD IS ONE OF A LIST AND SAYS SO, and THE DATE THAT MAKES THE
+            CHIPS CHECKABLE: one mono line under the file, as the preview draws
+            it ("uploaded 10 Sep · 14 claims"), not header meta or a footer
+            note (25 Sep rulings, WP3.6). */}
+        <p
+          className={email ? undefined : 'm-0 font-mono text-[12px] leading-[1.4] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, margin: '0 0 4px' } : undefined}
+        >
+          {planLine(card, data.plans.length)}
+        </p>
         {card.empty ? <BlockEmpty mode={mode}>{card.empty}</BlockEmpty> : null}
         <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col justify-between gap-2.5'}>
           <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
