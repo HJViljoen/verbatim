@@ -12,7 +12,7 @@ import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
 import { carriesShare, levelText } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
-import { chartMonths, DEFAULT_HORIZON, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
+import { chartMonths, DEFAULT_HORIZON, horizonWindow, HORIZON_LABEL, parseHorizon, readAxisOf, sinceStart, type Horizon } from '../reading/horizon'
 import { hasHorizon, surface } from '../nav'
 import { KIND_ORDER, kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
@@ -34,7 +34,7 @@ import { nextComparablePair, pairOnVerdict } from '../reading/comparability'
 import { pairChipWords } from '../calibration'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import type { MethodLines } from '../reading/method'
-import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
+import { pointsByMonth, type MonthLabel, type MonthPoint, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import type { FigureTable, RefusedReason, Verdict } from '../reading/verdicts'
 import {
@@ -1940,6 +1940,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // axis, and the comparison is the calendar's, not the horizon's (OV0's rule).
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
+  // THE THREE-MONTH READ AXIS (market-first WP3.4, `readAxisOf`): the months
+  // the pane's direction words are read over, off the chart's own lines, which
+  // reach back further (below). No read of its own.
+  const wordAxis = readAxisOf(window)
   // Frozen once an UPDATE has passed its freeze line, not the clock.
   const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
   // The chart's axis is its own (`chartMonths`). Where it reaches further back
@@ -2213,6 +2217,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       month,
       prevMonth,
       axis: readAxis,
+      // The word is read off the line the chart draws: it reaches the read
+      // axis's first month wherever that month could clear the floor (a
+      // chart starts no later than the first month any audience cleared it).
+      word: { axis: wordAxis, seriesFor: chartSeriesFor },
       perAudience,
       kindRows,
       seriesFor,
@@ -2549,6 +2557,13 @@ interface SidesInput {
   month: string
   prevMonth: string
   axis: readonly string[]
+  /**
+   * THE THREE-MONTH READ AXIS (market-first WP3.4): the months each side's
+   * direction word is read over (`readAxisOf`, lib/reading/horizon.ts), and
+   * the lines it is read off. Absent (a fixture), the word is read over
+   * `axis` off `seriesFor`, as before.
+   */
+  word?: { axis: readonly string[]; seriesFor: (subjectId: string, audience: string) => MonthSeries | null }
   perAudience: Map<string, number>
   kindRows: StoredKindRow[] | null
   seriesFor: (subjectId: string, audience: string) => MonthSeries | null
@@ -2647,6 +2662,8 @@ export function buildSides(input: SidesInput): SubjectSide[] {
   return sides.map((s) => {
     const series = input.seriesFor(subject.id, s.audience)
     const byMonth = series ? pointsByMonth(series) : new Map()
+    const wordLine = input.word ? input.word.seriesFor(subject.id, s.audience) : series
+    const wordByMonth = wordLine ? pointsByMonth(wordLine) : new Map()
     const here = byMonth.get(month) ?? null
     const before = byMonth.get(prevMonth) ?? null
     const n = perAudience.get(`${month}|${s.audience}`) ?? null
@@ -2654,8 +2671,8 @@ export function buildSides(input: SidesInput): SubjectSide[] {
     const observed = n != null && k != null
     const silence: SubjectSide['silence'] = n == null ? 'not_tracked' : k == null ? 'no_reading' : null
 
-    const point = (m: string): SeriesPoint => {
-      const p = byMonth.get(m) ?? null
+    const point = (m: string, from: Map<string, MonthPoint> = byMonth): SeriesPoint => {
+      const p = from.get(m) ?? null
       return {
         month: m,
         videos: perAudience.get(`${m}|${s.audience}`) ?? null,
@@ -2687,7 +2704,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
       observed,
       silence,
       verdict,
-      direction: thin ? null : directionWord(axis.map(point), { asOf: input.asOf, comparable: comparableFor(s.audience) }),
+      direction: thin ? null : directionWord((input.word?.axis ?? axis).map((m) => point(m, wordByMonth)), { asOf: input.asOf, comparable: comparableFor(s.audience) }),
       previous: before ? { month: prevMonth, pct: pctOf(before.k, before.videos) } : null,
       kinds,
       kindVerdicts: verdictsFor(s.audience, kinds),
