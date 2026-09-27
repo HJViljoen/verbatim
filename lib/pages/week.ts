@@ -1352,7 +1352,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     runs: runsRaw.filter((r): r is RunRow & { started_at: string } => r.started_at != null),
     schedule,
   })
-  const [unusual, subjectsBlock, risingRead, cameIn, replies, sales] = await Promise.all([
+  const [unusual, subjectsBlock, risingRead, cameIn, replies, sales, ownPublished] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
       supabase, clientId, check, flags, baseline, month, series,
@@ -1396,14 +1396,17 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     buildReplies({ supabase, clientId, runId: anchor.id, window, videos }),
     // ── §5 · for sales ───────────────────────────────────────────────────
     buildSales({ supabase, clientId, window, windowVideos, subjects }),
+    // ── §6's own side ────────────────────────────────────────────────────
+    // ONE NARROW READ, IN THE WAVE. The client's own posts in the month are
+    // tens of rows on every tenant we have, and §6 is the only section that
+    // wants them; a failure here leaves the pooled reading intact and the
+    // split absent, which is the honest degradation. It needs the month and
+    // nothing else, so it no longer waits for the sections to finish before
+    // it starts (one round trip at the end of every load).
+    loadOwnPublishedVideos(supabase, clientId, month).catch(() => null),
   ])
 
   // ── §6 · what worked ───────────────────────────────────────────────────
-  // §6'S OWN SIDE — ONE NARROW READ, AFTER THE WAVE. The client's own posts in
-  // the month are tens of rows on every tenant we have, and §6 is the only
-  // section that wants them; a failure here leaves the pooled reading intact
-  // and the split absent, which is the honest degradation.
-  const ownPublished = await loadOwnPublishedVideos(supabase, clientId, month).catch(() => null)
   const worked = buildWorked(videos, ownPublished ? { month, brand, videos: ownPublished } : null)
 
   const coverage: CoverageBlock = {
