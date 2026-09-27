@@ -219,7 +219,29 @@ export function panelStale(
   changes: readonly { changed_at: string; surface: string }[],
   surfaces: readonly string[] = PANEL_STALING_SURFACES,
 ): boolean {
-  return changes.some((c) => surfaces.includes(c.surface) && c.changed_at > panel.frozen_at)
+  return changes.some((c) => surfaces.includes(c.surface) && c.changed_at > panel.frozen_at && !beforeStalingFrom(c))
+}
+
+/**
+ * The instant from which a surface re-bases a panel, where it is not "always".
+ *
+ * 'attribution' joined PANEL_STALING_SURFACES with deploy 4 (WP3.4), which
+ * ships before the Sun 4 Oct run, and that run freezes August for good. The
+ * attribution row already on record (attribution v3, 25 Sep 16:18Z, Sealand)
+ * must move no panel that run reads: were it to, August's attention figures
+ * would freeze over a panel deploy 3's code never drew. So only a change to
+ * the filing judge logged from 5 Oct 00:00Z on, after August froze, re-bases
+ * a panel; one logged before counts as deploy 3 counted it, not at all.
+ * Proven against deploy 3's surface list for every change dated before the
+ * instant (lib/reading/attention.test.ts, lib/pipeline/freeze-parity.test.ts).
+ */
+export const PANEL_STALING_FROM: Readonly<Record<string, string>> = {
+  attribution: '2026-10-05T00:00:00.000Z',
+}
+
+const beforeStalingFrom = (c: { changed_at: string; surface: string }): boolean => {
+  const from = PANEL_STALING_FROM[c.surface]
+  return from != null && !(Date.parse(c.changed_at) >= Date.parse(from))
 }
 
 /**
@@ -242,7 +264,8 @@ export function panelStale(
  */
 export const PANEL_STALING_SURFACES: readonly string[] = [
   'terms', 'rivals', 'handles', 'platforms', 'rival_rename', 'entity_retag', 'regate',
-  // A change to the filing judge re-files accounts as a re-tag does (deploy 4, WP3.4).
+  // A change to the filing judge re-files accounts as a re-tag does (deploy 4,
+  // WP3.4), from PANEL_STALING_FROM's instant on, after August froze.
   'attribution',
 ]
 

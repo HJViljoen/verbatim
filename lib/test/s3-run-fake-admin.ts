@@ -8,7 +8,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // in `tables` answers the way PostgREST answers a missing migration
 // ("Could not find the table ... in the schema cache", PGRST205), and an rpc
 // with no handler the way a missing function does (PGRST202). Every write is
-// recorded in `writes`, in order.
+// recorded in `writes`, in order, and every table a select, update or delete
+// named in `reads` (lib/pipeline/freeze-parity.test.ts compares what the run
+// steps write with what freeze-months reads). `defaults` fills the columns the
+// database would (an id, frozen_at) on an insert; an insert's `.select()` may
+// end in `.single()`; `delete()` removes what its filters match.
 
 type Row = Record<string, unknown>
 type Filter = (r: Row) => boolean
@@ -16,8 +20,9 @@ type Filter = (r: Row) => boolean
 export interface FakeAdmin {
   client: SupabaseClient
   tables: Record<string, Row[]>
-  writes: { table: string; op: 'insert' | 'upsert' | 'update'; rows: Row[] }[]
+  writes: { table: string; op: 'insert' | 'upsert' | 'update' | 'delete'; rows: Row[] }[]
   rpcCalls: { fn: string; params: Row }[]
+  reads: string[]
 }
 
 export function fakeAdmin(init: {
@@ -25,10 +30,13 @@ export function fakeAdmin(init: {
   rpc?: Record<string, (params: Row) => object[] | { error: { code?: string; message: string } }>
   /** Table name → an error every insert or upsert into it returns (a guard's refusal). */
   refuse?: Record<string, (rows: Row[]) => { code?: string; message: string } | null>
+  /** Table name → the columns the database fills on an insert (its default). */
+  defaults?: Record<string, (row: Row, i: number) => Row>
 }): FakeAdmin {
   const tables = init.tables as Record<string, Row[]>
   const writes: FakeAdmin['writes'] = []
   const rpcCalls: FakeAdmin['rpcCalls'] = []
+  const reads: string[] = []
   const missingTable = (t: string) => ({ code: 'PGRST205', message: `Could not find the table 'public.${t}' in the schema cache` })
   const cmp = (a: unknown, b: unknown) => String(a ?? '').localeCompare(String(b ?? ''))
   // An array filter's value: an array, or a Postgres array literal of quoted
@@ -43,11 +51,17 @@ export function fakeAdmin(init: {
     let lim: number | null = null
     let from = 0
     let to = Number.POSITIVE_INFINITY
-    let op: 'select' | 'update' = 'select'
+    let op: 'select' | 'update' | 'delete' = 'select'
     let patch: Row = {}
     const result = () => {
+      reads.push(table)
       if (!(table in tables)) return { data: null, error: missingTable(table) }
       let rows = tables[table].filter((r) => filters.every((f) => f(r)))
+      if (op === 'delete') {
+        tables[table] = tables[table].filter((r) => !rows.includes(r))
+        writes.push({ table, op: 'delete', rows: rows.map((r) => ({ ...r })) })
+        return { data: rows, error: null }
+      }
       if (op === 'update') {
         for (const r of rows) Object.assign(r, patch)
         writes.push({ table, op: 'update', rows: rows.map((r) => ({ ...r })) })
@@ -77,12 +91,14 @@ export function fakeAdmin(init: {
       single: () => Promise.resolve((() => { const r = result(); return { data: r.data?.[0] ?? null, error: r.error } })()),
       then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(result()).then(res, rej),
       update: (p: Row) => { op = 'update'; patch = p; return b },
+      delete: () => { op = 'delete'; return b },
     }
     return b
   }
 
   function write(table: string, op: 'insert' | 'upsert', input: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
-    const rows = (Array.isArray(input) ? input : [input]).map((r) => ({ ...r }))
+    let n = 0
+    const rows = (Array.isArray(input) ? input : [input]).map((r) => ({ ...(init.defaults?.[table]?.(r, n++) ?? {}), ...r }))
     const run = () => {
       if (!(table in tables)) return { data: null, error: missingTable(table) }
       const refused = init.refuse?.[table]?.(rows) ?? null
@@ -101,7 +117,9 @@ export function fakeAdmin(init: {
       return { data: returned, error: null }
     }
     const done = Promise.resolve().then(run)
-    return { select: () => done, then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => done.then(res, rej) }
+    const one = () => done.then((r) => ({ data: r.data?.[0] ?? null, error: r.error }))
+    const selected = { single: one, maybeSingle: one, then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => done.then(res, rej) }
+    return { select: () => selected, then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => done.then(res, rej) }
   }
 
   const client = {
@@ -110,6 +128,7 @@ export function fakeAdmin(init: {
       insert: (rows: Row | Row[]) => write(table, 'insert', rows),
       upsert: (rows: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) => write(table, 'upsert', rows, opts),
       update: (p: Row) => query(table).update(p),
+      delete: () => query(table).delete(),
     }),
     rpc: (fn: string, params: Row) => {
       rpcCalls.push({ fn, params })
@@ -129,5 +148,5 @@ export function fakeAdmin(init: {
       return b
     },
   } as unknown as SupabaseClient
-  return { client, tables, writes, rpcCalls }
+  return { client, tables, writes, rpcCalls, reads }
 }

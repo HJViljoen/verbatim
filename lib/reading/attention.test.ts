@@ -10,6 +10,7 @@ import {
   isMissingKindMoodAttention,
   onPanel,
   PANEL_EXCLUDES_NOTE,
+  PANEL_STALING_FROM,
   PANEL_STALING_SURFACES,
   attentionRowOf,
   attentionRowsOf,
@@ -134,7 +135,8 @@ describe('panelStale', () => {
   // WHERE we gather, and no surface that only moves how often or how deeply.
   it('names every surface that moves where we gather, and none that does not', () => {
     for (const surface of PANEL_STALING_SURFACES) {
-      expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(true)
+      const at = PANEL_STALING_FROM[surface] ?? '2026-09-09T10:00:00Z'
+      expect(panelStale(panel, [{ changed_at: at, surface }]), surface).toBe(true)
     }
     expect(PANEL_STALING_SURFACES).toContain('regate')
     expect(PANEL_STALING_SURFACES).toContain('entity_retag')
@@ -145,6 +147,30 @@ describe('panelStale', () => {
     const firstPanel = { frozen_at: '2026-10-04T08:30:00Z' }
     expect(panelStale(firstPanel, [{ changed_at: '2026-09-26T12:00:00Z', surface: 'attribution' }])).toBe(false)
     expect(panelStale(firstPanel, [{ changed_at: '2026-11-07T12:00:00Z', surface: 'attribution' }])).toBe(true)
+  })
+
+  // THE 4 OCT RUN FREEZES AUGUST, and deploy 4 ships before it. 'attribution'
+  // may re-base a panel only for a change logged from PANEL_STALING_FROM on,
+  // so on every clock before that instant the list reads exactly as deploy 3's
+  // did, whatever the panel's age: the 25 Sep attribution row (attribution v3,
+  // 16:18:47Z, Sealand) moves nothing, even over a panel frozen before it.
+  it('reads as deploy 3 read, for every change logged before 5 Oct (the run that freezes August)', () => {
+    const DEPLOY_3 = ['terms', 'rivals', 'handles', 'platforms', 'rival_rename', 'entity_retag', 'regate']
+    expect(PANEL_STALING_FROM).toEqual({ attribution: '2026-10-05T00:00:00.000Z' })
+    const attributionV3 = { changed_at: '2026-09-25T16:18:47+00:00', surface: 'attribution' }
+    const panels = ['2026-06-01T00:00:00Z', '2026-09-15T06:00:00Z', '2026-09-25T16:18:46Z', '2026-10-04T08:30:00Z'].map((frozen_at) => ({ frozen_at }))
+    const surfaces = [...new Set([...DEPLOY_3, ...PANEL_STALING_SURFACES, 'subreddits', 'cadence', 'other', 'segment', 'gate_rule'])]
+    const days = ['2026-06-02T00:00:00Z', '2026-09-09T18:10:00Z', attributionV3.changed_at, '2026-10-04T05:00:00Z', '2026-10-04T23:59:59.999Z']
+    for (const p of panels) {
+      expect(panelStale(p, [attributionV3])).toBe(false)
+      for (const surface of surfaces) for (const changed_at of days) {
+        const c = [{ changed_at, surface }]
+        expect(panelStale(p, c), `${surface} ${changed_at} over ${p.frozen_at}`).toBe(panelStale(p, c, DEPLOY_3))
+      }
+    }
+    // From the instant on, a new judge change splits the era, as WP3.4 asks.
+    expect(panelStale(panels[3], [{ changed_at: '2026-10-05T00:00:00.000Z', surface: 'attribution' }])).toBe(true)
+    expect(panelStale(panels[3], [{ changed_at: '2026-10-04T23:59:59Z', surface: 'attribution' }])).toBe(false)
     // `subreddits` is the one that would have bitten: Reddit accounts are never
     // panel members, and discovery rewrites the community list on roughly every
     // weekly gather (66 rows in four weeks across two tenants, production,
