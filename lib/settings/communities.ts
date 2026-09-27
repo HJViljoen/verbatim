@@ -43,6 +43,10 @@ export interface CommunityRow {
   /** From the gate record, or null while it is closed to this reader. */
   keptPct: number | null
   found: number | null
+  /** The gate's kept count behind `keptPct` (WP3.10: under 100 looked at, the
+   *  cell prints "kept of found", never a share). Optional: absent, a share
+   *  under 100 is not printed. */
+  kept?: number | null
   /** True when the community is stored against nothing anyone configured. */
   unconfigured: boolean
 }
@@ -90,6 +94,7 @@ export function communityRows(args: {
     if (!row) continue
     row.keptPct = g.keptPct
     row.found = g.found
+    row.kept = g.kept
   }
 
   const order: Record<string, number> = { active: 0, candidate: 1, stopped: 2, rejected: 3 }

@@ -1,5 +1,6 @@
 import { Dot, Figure, gridIntrinsic, GridRow, GridTable, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { shortDate } from '@/lib/format'
+import { levelText } from '@/lib/reading/level'
 import { communityWords, type CommunityRow } from '@/lib/settings/communities'
 import { CommunityAction, CommunityAdd } from './community-controls'
 
@@ -89,7 +90,7 @@ export function CommunitiesSection({
                 </span>,
                 <Figure key="p" value={r.posts > 0 ? r.posts.toLocaleString('en-GB') : '—'} muted={r.posts === 0} />,
                 <Figure key="c" value={r.comments > 0 ? r.comments.toLocaleString('en-GB') : '—'} muted={r.comments === 0} />,
-                <Figure key="k" value={r.keptPct === null ? '—' : `${r.keptPct.toFixed(0)}%`} muted={r.keptPct === null} />,
+                <Figure key="k" value={keptCell(r)} muted={r.keptPct === null} />,
                 <Figure key="i" value={r.insights > 0 ? r.insights.toLocaleString('en-GB') : '—'} muted={r.insights === 0} />,
                 // A RULED-OUT COMMUNITY IS OFFERED NO CONTROL (settings V3).
                 // `rejected` is the relevance probe's own verdict, and ST4
@@ -140,6 +141,17 @@ export function CommunitiesSection({
       />
     </Section>
   )
+}
+
+/** THE KEPT CELL ON THE LEVEL RULE (WP3.10, the reject log's rule, §4.0 "of
+ *  N" through levelText): a share at 100 looked at or more, "kept of found"
+ *  under it. It printed "100%" beside communities of four posts. A row whose
+ *  kept count is not known prints its share only where 100 or more were
+ *  looked at. */
+export function keptCell(r: Pick<CommunityRow, 'keptPct' | 'found' | 'kept'>): string {
+  if (r.keptPct === null) return '—'
+  if (r.kept != null && r.found != null) return levelText(r.kept, r.found)?.text ?? '—'
+  return r.found != null && r.found >= 100 ? `${r.keptPct.toFixed(0)}%` : '—'
 }
 
 /** The dot's tone follows the DECISION, not a yield: watched is good, proposed

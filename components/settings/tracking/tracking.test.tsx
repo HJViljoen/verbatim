@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
-import { CommunitiesSection } from './communities'
+import { CommunitiesSection, keptCell } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
@@ -651,5 +651,22 @@ describe('How they are doing (the term table), WP3.10 check', () => {
     expect(text).toContain('Sep 6 of 66')
     expect(text).toContain('Sep 17%')
     expect(text).not.toMatch(/\d{4}-\d{2}/)
+  })
+})
+
+// ---- the watched communities' kept cell (WP3.10; §4.0 "of N" through levelText) --
+
+describe('a community’s kept cell', () => {
+  // The rule is arithmetic on real counts (staging, 2 Oct clock): fombrand's
+  // 6 kept of 66 looked at (the term record above), and r/prosthetics' 25 of
+  // 100 on Össur's. The render printed "100%" beside communities of four posts.
+  it('prints "kept of found" under 100 looked at, never a share', () => {
+    expect(keptCell({ keptPct: 9.1, found: 66, kept: 6 })).toBe('6 of 66')
+  })
+  it('prints the share at 100 or more, and nothing where the record is closed', () => {
+    expect(keptCell({ keptPct: 25, found: 100, kept: 25 })).toBe('25%')
+    expect(keptCell({ keptPct: null, found: null, kept: null })).toBe('—')
+    // A row whose kept count is not known prints no share under 100.
+    expect(keptCell({ keptPct: 72, found: 90 })).toBe('—')
   })
 })
