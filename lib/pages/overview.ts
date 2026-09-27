@@ -4541,7 +4541,7 @@ async function loadLeadProvenance(
  * the one `loadLeadProvenance` gives it alone. Each theme maps to null where
  * any read is not there (not measured, never a zero).
  */
-async function loadThemesProvenance(
+export async function loadThemesProvenance(
   client: SupabaseClient,
   clientId: string,
   month: string,

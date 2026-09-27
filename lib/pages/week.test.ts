@@ -39,6 +39,17 @@ import {
   type UnusualFlag,
   type WeekWindow,
 } from './week'
+import {
+  comparableBaselineFrom,
+  heardAtFloor,
+  heardBlockOf,
+  marketCameIn,
+  monthsAfter,
+  replyContextWords,
+  updatesInto,
+} from './week'
+import { ourChangesWithoutGatherFlags as withoutFlags } from '../reading/gather-flags'
+import { STAGING_CHANGES } from '../test/week-fixture'
 
 const WINDOW: WeekWindow = {
   from: '2026-09-06T04:06:38.483Z',
@@ -784,5 +795,100 @@ describe('the update’s days in a month, pooled on the market (WP2.7, the weekl
       { subject_id: 'community', audience: 'industry-other', videos: 3 },
     ], ['competitor:The North Face'])
     expect(pooled.get('community')).toBe(4)
+  })
+})
+
+// ---- market-first WP3.7: "With this update", "Heard for the first time" ------
+
+
+// Sealand's 20 Sep update on staging, the window clipped to September
+// (`window_denominators`, read 27 Sep): the rows the page pools.
+const SEALAND_20_SEP_WINDOW = [
+  { audience: 'industry-other', videos: 421, comments: 9271 },
+  { audience: 'competitor:Cotopaxi', videos: 1, comments: 48 },
+  { audience: 'competitor:The North Face', videos: 6, comments: 44 },
+  { audience: 'competitor:Patagonia', videos: 5, comments: 97 },
+  { audience: 'competitor:Freitag', videos: 3, comments: 11 },
+  { audience: 'competitor:Freedom of Movement', videos: 0, comments: 0 },
+  { audience: 'client', videos: 4, comments: 69 },
+]
+const SEALAND_TRACKED = ['competitor:Cotopaxi', 'competitor:Freitag', 'competitor:Rareform', 'competitor:The North Face', 'competitor:Patagonia', 'competitor:Freedom of Movement', 'competitor:Old School']
+
+describe('marketCameIn (WP3.7): what the update brought into the market’s month', () => {
+  it('pools the category and the brands you track, and leaves your own posts out (decision E)', () => {
+    const m = marketCameIn({ month: '2026-09-01', update: '2026-09-20T08:33:47.358Z', read: SEALAND_20_SEP_WINDOW, rivalAudiences: SEALAND_TRACKED, monthVideos: 654, updates: 3, now: '2026-09-22T12:00:00.000Z' })!
+    expect(m.category).toEqual({ videos: 421, comments: 9271 })
+    expect(m.brands).toEqual({ videos: 15, comments: 200 })
+    expect(m.market).toEqual({ videos: 436, comments: 9471 })
+    expect(m.ended).toBe(false)
+  })
+
+  it('has no brands row for a tenant that tracks none, and says nothing where the read is not there', () => {
+    const m = marketCameIn({ month: '2026-09-01', update: '2026-09-20T08:33:47.358Z', read: SEALAND_20_SEP_WINDOW, rivalAudiences: [], monthVideos: 625, updates: 3, now: '2026-10-02T06:00:00.000Z' })!
+    expect(m.brands).toBeNull()
+    expect(m.market).toEqual({ videos: 421, comments: 9271 })
+    expect(m.ended).toBe(true)
+    expect(marketCameIn({ month: '2026-09-01', update: '2026-09-20T08:33:47.358Z', read: null, rivalAudiences: SEALAND_TRACKED, monthVideos: 654, updates: 3, now: '2026-09-22T12:00:00.000Z' })).toBeNull()
+  })
+
+  it('counts the updates that read the month, this one included (staging: 9, 10 and 20 Sep)', () => {
+    const runs = ['2026-08-17T09:00:00.000Z', '2026-09-09T10:12:00.000Z', '2026-09-10T07:17:02.291Z', '2026-09-20T08:33:47.358Z', '2026-09-24T09:00:00.000Z']
+    expect(updatesInto('2026-09-01', runs, '2026-09-20T08:33:47.358Z')).toBe(3)
+  })
+})
+
+describe('heardBlockOf (WP3.7): the themes first heard, grouped as the board groups them', () => {
+  const fresh = { seen: 374, shown: [
+    { id: 'aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', label: 'Preference for secondhand fashion', videos: 10 },
+    { id: '4f4bc420-8906-44ac-878d-2855c1011485', label: 'Laundry planning for travel', videos: 10 },
+  ], regrouped: null }
+  const segments = {
+    maker: new Map([['4f4bc420-8906-44ac-878d-2855c1011485', 0.1], ['aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', 0.2]]),
+    noise: new Map([['4f4bc420-8906-44ac-878d-2855c1011485', 0], ['aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', 0]]),
+  }
+
+  it('lists the market’s own, largest first then by id, each with its maker share and provenance', () => {
+    const h = heardBlockOf({ month: '2026-09-01', fresh, segments, segmentsState: 'measured', provenance: new Map([['4f4bc420-8906-44ac-878d-2855c1011485', { fromNewSearches: 8, of: 10 }]]) })
+    expect(h.rows.map((r) => r.label)).toEqual(['Laundry planning for travel', 'Preference for secondhand fashion'])
+    expect(h.rows[0].provenance).toEqual({ fromNewSearches: 8, of: 10 })
+    expect(h.rows[1].provenance).toBeNull()
+    expect(h.prevMonth).toBe('2026-08-01')
+    expect(heardAtFloor(h)).toBe(2)
+  })
+
+  it('groups a theme half or more makers’ into the makers line (decision F), counted with the floor', () => {
+    const makers = { maker: new Map([...segments.maker, ['aed3a6d0-5fe9-456f-b8a9-f1cd096f062c', 0.6]]), noise: segments.noise }
+    const h = heardBlockOf({ month: '2026-09-01', fresh, segments: makers, segmentsState: 'measured', provenance: new Map() })
+    expect(h.rows.map((r) => r.label)).toEqual(['Laundry planning for travel'])
+    expect(h.makers).toEqual({ count: 1, lead: [expect.objectContaining({ label: 'Preference for secondhand fashion' })] })
+    expect(heardAtFloor(h)).toBe(2)
+  })
+
+  it('names nothing after an update that re-grouped the themes (WP1.9)', () => {
+    const h = heardBlockOf({ month: '2026-09-01', fresh: { seen: 0, shown: [], regrouped: { update: '2026-09-20T08:33:47.358Z', themes: 468 } }, segments, segmentsState: 'measured', provenance: new Map() })
+    expect(h.rows).toEqual([])
+    expect(h.regrouped?.themes).toBe(468)
+  })
+})
+
+describe('replyContextWords (WP3.7): the reply row’s context in the market’s words', () => {
+  it('names a community as itself and a tracked brand’s video as filed under it', () => {
+    expect(replyContextWords('under @r/heronebag’s post · competitor · 3 likes')).toBe('r/heronebag · filed under a brand you track · 3 likes')
+    expect(replyContextWords('under @thenorthface’s post · competitor')).toBe('under @thenorthface’s post · filed under a brand you track')
+    expect(replyContextWords('under @melania beadedbag’s post · 622 likes')).toBe('under @melania beadedbag’s post · 622 likes')
+    expect(replyContextWords('under a category video')).toBe('under a category video')
+  })
+})
+
+describe('comparableBaselineFrom (WP3.7): the unusual-week baseline on comparable months', () => {
+  it('holds none of September’s three and forecasts January’s flags on staging’s change log', () => {
+    const b = comparableBaselineFrom({ month: '2026-09-01', now: '2026-09-22T12:00:00.000Z', changes: withoutFlags(STAGING_CHANGES), rows: [] })
+    expect(b.kept).toBe(0)
+    expect(b.required).toBe(3)
+    expect(b.flagsFrom).toBe('2027-01-01')
+  })
+
+  it('counts three months forward from a month', () => {
+    expect(monthsAfter('2026-10-01', 3)).toBe('2027-01-01')
   })
 })
