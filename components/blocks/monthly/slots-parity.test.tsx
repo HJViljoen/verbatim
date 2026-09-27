@@ -6,12 +6,13 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { buildCheckLines, recheckLines } from '@/lib/pages/overview-market'
 import { monthlySlotsFrom } from '@/lib/reports/monthly-slots'
-import { stagingBrandsRead } from '@/lib/test/brands-fixture'
+import { noneFoundBrandsRead, shippedBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
 import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
 import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview/index'
 import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
 import { marketArrivalsFixture, ossurArrivalsFixture } from '@/components/pages/overview/fixture'
-import { MONTHLY_BLOCKS } from './index'
+import { MONTHLY_BLOCKS, monthlySections } from './index'
+import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
 import { monthlyFixture } from './fixture'
 
 // THE PAGE AND THE MONTHLY PRINT ONE SENTENCE EACH (WP2.3, WP2.5, WP2.6, WP2.7):
@@ -94,6 +95,23 @@ describe('the page and the monthly print one sentence each', () => {
     const base = monthlyFixture()
     expect(monthlySlotsFrom(base.overview).brands.state).toBe('stub')
     expect(MONTHLY_BLOCKS['monthly.brands'].absent?.({ ...base, slots: monthlySlotsFrom(base.overview) })).toBe(true)
+  })
+
+  // The lead's ruling of 27 Sep (fast track): as deploy 3 ships, before
+  // production's hand check is in a live tag, the page prints every brand and
+  // your name "not counted yet", and the monthly sends no brands section.
+  it('the section is absent from an artefact where the page reads no brand: all "not counted yet"', () => {
+    const base = monthlyFixture()
+    const shipped = { ...base.overview, brands: shippedBrandsRead() }
+    const data = { ...base, overview: shipped, slots: monthlySlotsFrom(shipped) }
+    expect(read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.rivals')!.render(shipped, 'app', ctx))).toContain('not counted yet')
+    expect(MONTHLY_BLOCKS['monthly.brands'].absent?.(data)).toBe(true)
+    expect(monthlySections(MONTHLY_BLOCK_KEYS, data).map((b) => b.key)).not.toContain('monthly.brands')
+    // A brand "none found" is a reading: the section is sent, as the page prints it.
+    const none = { ...base.overview, brands: noneFoundBrandsRead() }
+    const sent = { ...base, overview: none, slots: monthlySlotsFrom(none) }
+    expect(monthlySections(MONTHLY_BLOCK_KEYS, sent).map((b) => b.key)).toContain('monthly.brands')
+    for (const mode of MODES) expect(read(MONTHLY_BLOCKS['monthly.brands'].render(sent, mode, ctx)), mode).toMatch(/Rareform\s*none found/)
   })
 
   it('every slot reads the page’s own block: change, arrivals, you and brands all filled from one Overview', () => {

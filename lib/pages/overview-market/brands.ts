@@ -250,3 +250,12 @@ export function topicNote(t: BrandTopic): string | null {
   if (t.count === 'none') return NONE_FOUND
   return t.noise ? noiseWords(t.label) : NOT_COUNTED_YET
 }
+
+/** Does the block print a reading of any brand: one counted, one "none
+ *  found", or your name's line? A block whose every line is "not counted
+ *  yet" (or "mostly … not counted") holds none, and the monthly sends no
+ *  brands section without one (the lead's ruling of 27 Sep;
+ *  lib/reports/monthly-slots.ts). */
+export function brandsHoldAReading(b: BrandsRead): boolean {
+  return b.nameLine != null || b.topics.some((t) => topicNote(t) == null || t.count === 'none')
+}

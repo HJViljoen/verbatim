@@ -1,4 +1,4 @@
-import { isBrandsRead, type BrandsBlock, type BrandsRead } from '../pages/overview-market/brands'
+import { brandsHoldAReading, isBrandsRead, type BrandsBlock, type BrandsRead } from '../pages/overview-market/brands'
 import type { ArrivalsBlock } from '../pages/overview-market/arrivals'
 import type { ChangeBlock } from '../pages/overview-market/change'
 import type { ForYouBlock, PublishedCensus } from '../pages/overview-market/foryou'
@@ -118,7 +118,10 @@ export interface SlotSources {
  *   · WP2.6 fills `brands` from `OverviewData.brands` in its D3 form, and
  *     leaves it a stub where the page kept deploy 2's one line (no brand
  *     rules, or the market not read), so the section is absent, never a
- *     promise sent to a client;
+ *     promise sent to a client. It leaves it a stub as well where the block
+ *     reads no brand: none counted, none "none found" and no name line (the
+ *     lead's ruling of 27 Sep, fast track), so the monthly never sends a
+ *     section that is all "not counted yet";
  *   · WP2.7 fills `arrivals` from `OverviewData.arrivals` (the came-in lines
  *     only; the monthly carries no weekly volume bars);
  *   · WP2.5 fills `you` from `OverviewData.foryou` and `.published`, either
@@ -139,7 +142,7 @@ export function monthlySlotsFrom(overview: SlotSources | null | undefined): Mont
   const arrivals = overview?.arrivals
   if (arrivals) slots.arrivals = { state: 'filled', value: arrivals }
   const brands = overview?.brands
-  if (isBrandsRead(brands)) slots.brands = { state: 'filled', value: brands }
+  if (isBrandsRead(brands) && brandsHoldAReading(brands)) slots.brands = { state: 'filled', value: brands }
   // WP2.5: what it means for you and what you published, off the front page's
   // two blocks (`OverviewData.foryou`, `.published`). A page built without the
   // market (no field) keeps the stub, and the section stays absent.
