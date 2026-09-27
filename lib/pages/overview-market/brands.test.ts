@@ -92,7 +92,7 @@ describe('buildBrandsBlock', () => {
   })
 
   it('prints a brand measured under the floor as mostly another word, with no count', () => {
-    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'a test check' } } }
+    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { headline: { read: 1, brand: 1 }, rest: { read: 39, brand: 9 }, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'a test check' } } }
     const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })
     const freitag = b.topics.find((t) => t.label === 'Freitag')!
     expect(freitag).toMatchObject({ noise: true, kAny: null, count: 'noise' })

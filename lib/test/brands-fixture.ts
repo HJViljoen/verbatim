@@ -62,13 +62,19 @@ export const AUGUST_BRANDS: readonly BrandCountIn[] = [
  * `BRAND_HAND_CHECKS` ships empty and deploy 3 prints every brand "not counted
  * yet" (`shippedBrandsRead`). These entries borrow the research's staging
  * ratios (brand-counting.md fact 8: Cotopaxi 14 of 16, Patagonia 14 of 16,
- * The North Face 15 of 15) and a check of Sealand's 9 matches (its 8 own posts
- * and 1 comment, every one the brand), so a test can draw what the block
- * prints once production has checked them. They never reach the page.
+ * The North Face 15 of 15), a sample the research did not split by part, so
+ * they sit in `rest` and the headline part reads nothing; and a check of
+ * Sealand's name, whose 9 matches on staging (8 own posts and 1 comment under
+ * one of them) are all its own posts, listed apart, so both parts read none,
+ * so a test can draw what the block prints once production has checked them.
+ * They never reach the page.
  */
 export const STAND_IN_CHECKS: typeof BRAND_HAND_CHECKS = {
-  [SEALAND_CLIENT_ID]: Object.fromEntries(([['Cotopaxi', 16, 14], ['Patagonia', 16, 14], ['The North Face', 15, 15], ['Sealand', 9, 9]] as const)
-    .map(([brand, read, yes]) => [brand, { read, brand: yes, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'test stand-in', source: 'lib/test/brands-fixture.ts' }])),
+  [SEALAND_CLIENT_ID]: Object.fromEntries(([['Cotopaxi', 0, 0, 16, 14], ['Patagonia', 0, 0, 16, 14], ['The North Face', 0, 0, 15, 15], ['Sealand', 0, 0, 0, 0]] as const)
+    .map(([brand, hRead, hYes, read, yes]) => [brand, {
+      headline: { read: hRead, brand: hYes }, rest: { read, brand: yes },
+      on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'test stand-in', source: 'lib/test/brands-fixture.ts',
+    }])),
 }
 
 /** Staging's September block, as the page builds it once production's hand

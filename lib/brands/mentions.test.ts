@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SEALAND_CLIENT_ID } from '../config'
 import { BRAND_RULE_VERSION, brandPattern, brandRulesFor, type BrandRule } from './aliases'
 import {
-  CONTENT_FIELD_ORDER, excerptAt, handCheckList, homonymVideosOf, mentionKey, monthBrandCounts, ownPostMentions,
+  CONTENT_FIELD_ORDER, excerptAt, handCheckList, handCheckTally, homonymVideosOf, mentionKey, monthBrandCounts, ownPostMentions,
   planMentions, standInCandidates, type Candidate, type PlannedMention,
 } from './mentions'
 
@@ -103,19 +103,49 @@ describe('the counts in a month', () => {
 })
 
 describe('the hand check', () => {
+  const mk = (key: string, id: string): PlannedMention => ({
+    brand: key, excerpt: id,
+    row: { client_id: 'a', video_id: id, brand_key: key, source: 'content', field: 'caption', comment_id: null, comment_month: null, method: 'rule', rule_version: 'brands_v1' },
+  })
+  const noRivals = new Set<string>()
+
   it("lists every match of the client's name outside its own posts, a fixed sample of the others, and own posts apart", () => {
-    const mk = (key: string, id: string): PlannedMention => ({
-      brand: key, excerpt: id,
-      row: { client_id: 'a', video_id: id, brand_key: key, source: 'content', field: 'caption', comment_id: null, comment_month: null, method: 'rule', rule_version: 'brands_v1' },
-    })
     const mentions = [...Array.from({ length: 5 }, (_, i) => mk('client', `s${i}`)), ...Array.from({ length: 40 }, (_, i) => mk('P', `p${i}`))]
     const ownerOf = (v: string) => (v === 's0' ? 'client' : null)
-    const a = handCheckList(mentions, { sample: 30, all: new Set(['client']), ownerOf })
-    const b = handCheckList([...mentions].reverse(), { sample: 30, all: new Set(['client']), ownerOf })
+    const all40 = new Set(Array.from({ length: 40 }, (_, i) => `p${i}`))
+    const a = handCheckList(mentions, { sample: 30, all: new Set(['client']), ownerOf, rivalFound: all40 })
+    const b = handCheckList([...mentions].reverse(), { sample: 30, all: new Set(['client']), ownerOf, rivalFound: all40 })
     expect(a.filter((e) => e.brandKey === 'client')).toHaveLength(5)
     expect(a.filter((e) => e.brandKey === 'client' && e.ownPost).map((e) => e.videoId)).toEqual(['s0'])
+    expect(a.filter((e) => e.brandKey === 'client' && e.part === 'own').map((e) => e.videoId)).toEqual(['s0'])
     expect(a.filter((e) => e.brandKey === 'P')).toHaveLength(30)
-    expect(new Set(b.filter((e) => e.brandKey === 'P').map((e) => e.videoId))).toEqual(new Set(a.filter((e) => e.brandKey === 'P').map((e) => e.videoId)))
+    expect(b.filter((e) => e.brandKey === 'P').map((e) => e.videoId)).toEqual(a.filter((e) => e.brandKey === 'P').map((e) => e.videoId))
+  })
+
+  // Staging's Patagonia (27 Sep): 178 of its 204 rows sit in videos a rival
+  // search of ours found, so a sample of all of them held 6 of the 26 rows the
+  // headline column counts. The headline set is listed in full, apart.
+  it('lists every match in a video no rival search found in full, as its own part, and samples only the rest', () => {
+    const mentions = Array.from({ length: 204 }, (_, i) => mk('P', `p${i}`))
+    const rivalFound = new Set(Array.from({ length: 178 }, (_, i) => `p${i + 26}`))
+    const list = handCheckList(mentions, { sample: 30, all: new Set(['client']), ownerOf: () => null, rivalFound })
+    const headline = list.filter((e) => e.part === 'headline')
+    expect(headline).toHaveLength(26)
+    expect(headline.every((e) => !rivalFound.has(e.videoId))).toBe(true)
+    const rest = list.filter((e) => e.part === 'rest')
+    expect(rest).toHaveLength(30)
+    expect(rest.every((e) => rivalFound.has(e.videoId))).toBe(true)
+    expect(handCheckTally(mentions, list, { ownerOf: () => null, rivalFound })).toEqual([{ brandKey: 'P', headline: 26, rest: 178, restListed: 30, own: 0 }])
+    // A brand read in full reads the rest in full too; a brand no rival
+    // search found anywhere has no rest.
+    expect(handCheckList(mentions, { sample: 30, all: new Set(['P']), ownerOf: () => null, rivalFound }).filter((e) => e.part === 'rest')).toHaveLength(178)
+    expect(handCheckList(mentions, { sample: 30, all: new Set(), ownerOf: () => null, rivalFound: noRivals }).map((e) => e.part)).toEqual(Array(204).fill('headline'))
+  })
+
+  it('keeps a brand’s own posts out of both parts', () => {
+    const mentions = [mk('P', 'own'), mk('P', 'v1'), mk('P', 'v2')]
+    const list = handCheckList(mentions, { sample: 30, all: new Set(), ownerOf: (v) => (v === 'own' ? 'P' : null), rivalFound: new Set(['own', 'v2']) })
+    expect(list.map((e) => [e.videoId, e.part])).toEqual([['v1', 'headline'], ['v2', 'rest'], ['own', 'own']])
   })
 })
 

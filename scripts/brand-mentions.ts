@@ -6,11 +6,11 @@ import { dirname } from 'node:path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import {
-  barePattern, BRAND_RULE_VERSION, brandPattern, brandRulesFingerprint, brandRulesFor, type BrandRule,
+  barePattern, BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandPattern, brandRulesFingerprint, brandRulesFor, type BrandRule,
 } from '../lib/brands/aliases'
 import {
-  handCheckList, mentionKey, monthBrandCounts, ownPostMentions, planMentions, standInCandidates,
-  type BrandCandidates, type Candidate, type HandCheckEntry, type MentionRow, type StandInComment, type StandInVideo,
+  handCheckList, handCheckTally, mentionKey, monthBrandCounts, ownPostMentions, planMentions, standInCandidates,
+  type BrandCandidates, type Candidate, type HandCheckEntry, type HandCheckTally, type MentionRow, type StandInComment, type StandInVideo,
 } from '../lib/brands/mentions'
 import { readRivalFound, withoutRivalSearches } from '../lib/brands/rival-searches'
 import { SEALAND_CLIENT_ID } from '../lib/config'
@@ -46,11 +46,17 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //                        2026-08-01 to the first of next month (UTC).
 //   --plan-out <file>    also write the planned rows and the month counts to
 //                        a NEW local file (no excerpt).
-//   --hand-check <file>  also write the hand-check list to a NEW local file:
-//                        every match of the client's name outside its own
-//                        posts, and --sample (default 30) matches per other
-//                        brand, each with its excerpt. The excerpts live in
-//                        this file only; the database never stores one.
+//   --hand-check <file>  also write the hand-check list to a NEW local file,
+//                        each match with its excerpt, per brand in two parts
+//                        read and recorded apart (lib/brands/precision.ts):
+//                        (1) EVERY match in a video none of our rival
+//                        searches found, the videos the headline column
+//                        counts; (2) --sample (default 30) of the brand's
+//                        other matches (every match of the client's name).
+//                        A brand counts only when each part with a match
+//                        clears the floor. Own posts are listed apart. The
+//                        excerpts live in this file only; the database never
+//                        stores one.
 //   --apply              write: insert the planned rows not already held for
 //                        this rule version (read first, because PostgREST
 //                        cannot target the unique index's coalesce; MF2
@@ -187,21 +193,44 @@ function candidateDigests(perBrand: readonly BrandCandidates[]) {
 }
 
 /** The list, one section per brand in `brands` (all eight, so the check
- *  covers every brand the page prints), a brand with no match saying so. */
-function handCheckMarkdown(entries: readonly HandCheckEntry[], brands: readonly string[], header: string): string {
+ *  covers every brand the page prints), a brand with no match saying so.
+ *  Each brand's two parts are separate tables with their own tally line,
+ *  because each becomes its own pair of counts in the entry. */
+function handCheckMarkdown(
+  entries: readonly HandCheckEntry[],
+  brands: readonly { brand: string; brandKey: string }[],
+  tallies: readonly HandCheckTally[],
+  header: string,
+): string {
   const clean = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').replace(/\|/g, '/').trim()
   const lines = [header, '']
-  for (const brand of brands) {
-    const mine = entries.filter((e) => e.brand === brand)
-    if (mine.length === 0) {
-      lines.push(`## ${brand}`, '', 'No match in the window: nothing to read. It stays "not counted yet" (a precision needs a match).', '')
-      continue
-    }
-    lines.push(`## ${brand}`, '', '| # | video | month | where | own post | excerpt | the brand? |', '|---|---|---|---|---|---|---|')
-    mine.forEach((e, i) => lines.push(
-      `| ${i + 1} | ${e.videoId.slice(0, 8)} | ${e.month?.slice(0, 7) ?? ''} | ${e.source === 'content' ? e.field : 'comment'} | ${e.ownPost ? 'yes' : ''} | ${clean(e.excerpt)} | |`,
+  const table = (rows: readonly HandCheckEntry[]) => {
+    lines.push('| # | video | month | where | excerpt | the brand? |', '|---|---|---|---|---|---|')
+    rows.forEach((e, i) => lines.push(
+      `| ${i + 1} | ${e.videoId.slice(0, 8)} | ${e.month?.slice(0, 7) ?? ''} | ${e.source === 'content' ? e.field : 'comment'} | ${clean(e.excerpt)} | |`,
     ))
     lines.push('')
+  }
+  for (const { brand, brandKey } of brands) {
+    const mine = entries.filter((e) => e.brandKey === brandKey)
+    const t = tallies.find((x) => x.brandKey === brandKey)
+    lines.push(`## ${brand}`, '')
+    if (mine.length === 0 || !t) {
+      lines.push('No match in the window: nothing to read. It stays "not counted yet" (a precision needs a match).', '')
+      continue
+    }
+    lines.push(`### 1. Headline: every match in a video none of our rival searches found (${t.headline})`, '')
+    if (t.headline === 0) lines.push('None in the window: this part gates nothing (the headline count is none).', '')
+    else table(mine.filter((e) => e.part === 'headline'))
+    lines.push(`### 2. The rest, in videos a rival search of ours found: ${t.restListed === t.rest ? `all ${t.rest}` : `a fixed sample of ${t.restListed} of ${t.rest}`}`, '')
+    if (t.rest === 0) lines.push('None in the window.', '')
+    else table(mine.filter((e) => e.part === 'rest'))
+    const own = mine.filter((e) => e.part === 'own')
+    if (own.length > 0) {
+      lines.push(`### Its own posts, listed apart and never counted (${own.length})`, '')
+      table(own)
+    }
+    lines.push(`Record: headline { read: ${t.headline}, brand: __ }, rest { read: ${t.restListed}, brand: __ }.`, '')
   }
   return lines.join('\n')
 }
@@ -366,11 +395,22 @@ async function main() {
     console.log(`\n  plan written: ${args.values['plan-out']} (${rows.length} rows)`)
   }
   if (args.values['hand-check']) {
-    const entries = handCheckList(plan.mentions, { sample, all: new Set(['client']), ownerOf })
-    writeNew(args.values['hand-check'], handCheckMarkdown(entries, brands.map((b) => b.rule.brand),
+    const hc = { ownerOf, rivalFound: rivalFound.videos }
+    const entries = handCheckList(plan.mentions, { sample, all: new Set(['client']), ...hc })
+    const tallies = handCheckTally(plan.mentions, entries, hc)
+    writeNew(args.values['hand-check'], handCheckMarkdown(entries, brands.map((b) => ({ brand: b.rule.brand, brandKey: b.brandKey })), tallies,
       `# Brand mentions: the hand check (${args.project === PRODUCTION ? 'production' : 'staging'}, ${BRAND_RULE_VERSION}, window ${from} to ${to}, read ${now.toISOString().slice(0, 16)}Z)\n\n` +
-      `All ${brands.length} brands: every match of your name, and ${sample} matches per other brand. Mark each "the brand?" yes or no. ` +
-      `Each brand read becomes one production entry in lib/brands/precision.ts (read, yes, the date, ruleVersion '${BRAND_RULE_VERSION}'); only a production entry under the rules the page counts with lets it count a brand. Excerpts are for this check only.`))
+      `All ${brands.length} brands. Each brand is read in two parts, and the two are counted apart: ` +
+      '(1) every match in a video none of our rival searches found, the only videos the headline column counts; ' +
+      `(2) the rest, in videos a rival search of ours found: a fixed sample of ${sample} a brand (every match of your name). ` +
+      'Mark each "the brand?" yes or no. ' +
+      `Each brand becomes one production entry in lib/brands/precision.ts: headline { read, brand } and rest { read, brand } as its "Record" line gives them, the date, ruleVersion '${BRAND_RULE_VERSION}'. ` +
+      `A brand prints its counts only when, in every part with a match, the brand's share of the matches read is at least ${BRAND_PRECISION_FLOOR}; one part under that prints "mostly another word · not counted". ` +
+      'Only a production entry under the rules the page counts with lets it count a brand. Excerpts are for this check only.'))
+    for (const t of tallies) {
+      const b = brands.find((x) => x.brandKey === t.brandKey)
+      console.log(`    ${b?.rule.brand ?? t.brandKey}: headline ${t.headline} (all listed); rest ${t.restListed} of ${t.rest}; own posts ${t.own}`)
+    }
     console.log(`  hand-check list written: ${args.values['hand-check']} (${entries.length} matches)`)
   }
 

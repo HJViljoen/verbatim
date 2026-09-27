@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../config'
 import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION } from './aliases'
-import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameChecked, noiseWords, type BrandHandCheck } from './precision'
+import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameChecked, noiseWords, type BrandHandCheck, type HandCheckPart } from './precision'
 
 // Which brands the page may count (WP2.6; the lead's rulings of 26 and 27
 // Sep): a production hand check at the floor counts, under it is "mostly
@@ -10,8 +10,10 @@ import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameCh
 // is "not counted yet" until the Mon 5 Oct production check.
 
 const EIGHT = ['Sealand', 'Cotopaxi', 'Freitag', 'Rareform', 'The North Face', 'Patagonia', 'Freedom of Movement', 'Old School']
-const prod = (read: number, brand: number): BrandHandCheck =>
-  ({ read, brand, on: '2026-10-05', where: 'production', ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'the Mon 5 Oct hand check' })
+/** A production entry: the headline set read in full, and a sample of the
+ *  rest (the defaults read no headline match). */
+const prod = (read: number, brand: number, headline: HandCheckPart = { read: 0, brand: 0 }): BrandHandCheck =>
+  ({ headline, rest: { read, brand }, on: '2026-10-05', where: 'production', ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'the Mon 5 Oct hand check' })
 
 describe('brandCountState', () => {
   it('counts no brand as shipped: all eight wait for the Mon 5 Oct production check, the research sample’s three included', () => {
@@ -49,7 +51,41 @@ describe('brandCountState', () => {
     const bad = { [SEALAND_CLIENT_ID]: { Patagonia: prod(0, 0) } }
     expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', bad)).toBe('not_yet')
     expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', { [SEALAND_CLIENT_ID]: { Patagonia: prod(10, 11) } })).toBe('not_yet')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', { [SEALAND_CLIENT_ID]: { Patagonia: prod(20, 20, { read: 4, brand: 5 }) } })).toBe('not_yet')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', { [SEALAND_CLIENT_ID]: { Patagonia: prod(20, 20, { read: 2.5, brand: 2 }) } })).toBe('not_yet')
+    // The shape before the two parts (one read and one yes) is no entry.
+    const flat = { [SEALAND_CLIENT_ID]: { Patagonia: { read: 20, brand: 20, on: '2026-10-05', where: 'production', ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'x' } as unknown as BrandHandCheck } }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', flat)).toBe('not_yet')
     expect(brandCountState('ossur', 'Ottobock')).toBe('not_yet')
+  })
+})
+
+describe('the two parts (the deploy-3 fresh review)', () => {
+  // Staging's Patagonia: 26 of its 204 mention rows sit in videos no rival
+  // search of ours found, the only videos its headline column counts; the
+  // rest are where a search for the brand surfaced it. A sample of all 204
+  // holds a handful of the 26, so the headline set is read in full.
+  it('counts a brand only when the headline set, read in full, clears the floor as well as the sample of the rest', () => {
+    const both = { [SEALAND_CLIENT_ID]: { Patagonia: prod(30, 29, { read: 26, brand: 22 }) } }
+    expect(22 / 26).toBeGreaterThanOrEqual(BRAND_PRECISION_FLOOR)
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', both)).toBe('counted')
+  })
+
+  it('reads a headline set under the floor as mostly another word, however well the rest reads', () => {
+    // The region's travel films gather outside our rival searches.
+    const region = { [SEALAND_CLIENT_ID]: { Patagonia: prod(30, 30, { read: 26, brand: 12 }) } }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia', region)).toBe('noise')
+  })
+
+  it('reads a rest under the floor as mostly another word, however well the headline set reads', () => {
+    const rest = { [SEALAND_CLIENT_ID]: { Cotopaxi: prod(30, 20, { read: 6, brand: 6 }) } }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', rest)).toBe('noise')
+  })
+
+  it('lets a part with no match gate nothing, and a check with no match at all count nothing', () => {
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', { [SEALAND_CLIENT_ID]: { Cotopaxi: prod(30, 28) } })).toBe('counted')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Sealand', { [SEALAND_CLIENT_ID]: { Sealand: prod(0, 0, { read: 9, brand: 9 }) } })).toBe('counted')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: prod(0, 0, { read: 0, brand: 0 }) } })).toBe('not_yet')
   })
 })
 
@@ -58,7 +94,19 @@ describe('the name line’s check', () => {
     expect(clientBrandName(SEALAND_CLIENT_ID)).toBe('Sealand')
     expect(clientBrandName('ossur')).toBeNull()
     expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: prod(9, 9) } })).toBe(true)
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: prod(9, 2) } })).toBe(true)
     expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Patagonia: prod(9, 9) } })).toBe(false)
+  })
+
+  // Staging's September: the 9 matches of "Sealand" are all its own posts,
+  // listed apart, so both parts read none. The check still happened, and the
+  // name line then prints "none"; the name as a brand counts nothing.
+  it('holds a check whose every match is your own posts, where both parts read none', () => {
+    const own = { [SEALAND_CLIENT_ID]: { Sealand: prod(0, 0, { read: 0, brand: 0 }) } }
+    expect(nameChecked(SEALAND_CLIENT_ID, own)).toBe(true)
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Sealand', own)).toBe('not_yet')
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: { ...prod(0, 0), ruleVersion: 'brands_v0' } } })).toBe(false)
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: prod(0, 1) } })).toBe(false)
   })
 
   it('holds no name read yet', () => {

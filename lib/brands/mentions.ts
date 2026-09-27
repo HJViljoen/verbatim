@@ -237,6 +237,11 @@ export function ownPostMentions(mentions: readonly PlannedMention[], ownerOf: (v
 
 // ---- the hand check -----------------------------------------------------------
 
+/** Which part of the check a match is read in (lib/brands/precision.ts
+ *  `BrandHandCheck`): the headline set, the sample of the rest, or the
+ *  brand's own posts, listed apart and never counted. */
+export type HandCheckPartKey = 'headline' | 'rest' | 'own'
+
 export interface HandCheckEntry {
   brand: string
   brandKey: string
@@ -246,35 +251,79 @@ export interface HandCheckEntry {
   commentId: string | null
   month: string | null
   ownPost: boolean
+  part: HandCheckPartKey
   excerpt: string | null
 }
 
-/** The list a person reads: every hit of the brands in `all` (the client:
- *  every match of your name is read, plan WP2.6), and a fixed sample of
- *  `sample` hits for every other brand, own posts listed apart. The sample is
- *  the first by a hash of the row, so a re-run on the same rows lists the
- *  same ones. */
+/** Per brand, how many matches each part holds, and how many the list reads. */
+export interface HandCheckTally {
+  brandKey: string
+  headline: number
+  rest: number
+  restListed: number
+  own: number
+}
+
+/**
+ * The list a person reads, per brand, in two parts that are counted apart
+ * (lib/brands/precision.ts, the deploy-3 fresh review):
+ *  - `headline`: EVERY match in a video none of our rival searches found
+ *    (`rivalFound`), the videos the headline column counts;
+ *  - `rest`: a fixed sample of `sample` of the brand's other matches, or all
+ *    of them for the brands in `all` (the client: every match of your name is
+ *    read, plan WP2.6);
+ * then its own posts, listed apart. The sample is the first by a hash of the
+ * row, so a re-run on the same rows lists the same ones.
+ */
 export function handCheckList(mentions: readonly PlannedMention[], opts: {
   sample: number
   all: ReadonlySet<string>
   ownerOf: (videoId: string) => string | null
+  /** The videos any of our rival searches found (`readRivalFound`). */
+  rivalFound: ReadonlySet<string>
 }): HandCheckEntry[] {
-  const entry = (m: PlannedMention): HandCheckEntry => ({
+  const entry = (m: PlannedMention, part: HandCheckPartKey): HandCheckEntry => ({
     brand: m.brand, brandKey: m.row.brand_key, videoId: m.row.video_id, source: m.row.source, field: m.row.field,
-    commentId: m.row.comment_id, month: m.row.comment_month, ownPost: opts.ownerOf(m.row.video_id) === m.row.brand_key,
+    commentId: m.row.comment_id, month: m.row.comment_month, ownPost: part === 'own', part,
     excerpt: m.excerpt,
   })
   const hash = (m: PlannedMention) => createHash('sha1').update(`${m.row.video_id}|${m.row.comment_id ?? ''}|${m.row.brand_key}`).digest('hex')
+  const byHash = (xs: readonly PlannedMention[]) => [...xs].sort((a, b) => (hash(a) < hash(b) ? -1 : 1))
   const out: HandCheckEntry[] = []
-  const brands = [...new Set(mentions.map((m) => m.row.brand_key))]
-  for (const key of brands) {
-    const mine = mentions.filter((m) => m.row.brand_key === key)
-    const market = mine.filter((m) => opts.ownerOf(m.row.video_id) !== key)
-    const own = mine.filter((m) => opts.ownerOf(m.row.video_id) === key)
-    const picked = opts.all.has(key) ? market : [...market].sort((a, b) => (hash(a) < hash(b) ? -1 : 1)).slice(0, opts.sample)
-    out.push(...picked.map(entry), ...own.map(entry))
+  for (const key of [...new Set(mentions.map((m) => m.row.brand_key))]) {
+    const p = handCheckParts(mentions.filter((m) => m.row.brand_key === key), opts)
+    const rest = opts.all.has(key) ? p.rest : byHash(p.rest).slice(0, opts.sample)
+    out.push(...byHash(p.headline).map((m) => entry(m, 'headline')), ...rest.map((m) => entry(m, 'rest')), ...p.own.map((m) => entry(m, 'own')))
   }
   return out
+}
+
+function handCheckParts(mine: readonly PlannedMention[], opts: { ownerOf: (videoId: string) => string | null; rivalFound: ReadonlySet<string> }) {
+  const own = mine.filter((m) => opts.ownerOf(m.row.video_id) === m.row.brand_key)
+  const market = mine.filter((m) => opts.ownerOf(m.row.video_id) !== m.row.brand_key)
+  return {
+    headline: market.filter((m) => !opts.rivalFound.has(m.row.video_id)),
+    rest: market.filter((m) => opts.rivalFound.has(m.row.video_id)),
+    own,
+  }
+}
+
+/** Per brand, the size of each part and how much of the rest the list
+ *  reads, for the list's headings (what the reader records). */
+export function handCheckTally(mentions: readonly PlannedMention[], entries: readonly HandCheckEntry[], opts: {
+  ownerOf: (videoId: string) => string | null
+  rivalFound: ReadonlySet<string>
+}): HandCheckTally[] {
+  return [...new Set(mentions.map((m) => m.row.brand_key))].map((brandKey) => {
+    const p = handCheckParts(mentions.filter((m) => m.row.brand_key === brandKey), opts)
+    return {
+      brandKey,
+      headline: p.headline.length,
+      rest: p.rest.length,
+      restListed: entries.filter((e) => e.brandKey === brandKey && e.part === 'rest').length,
+      own: p.own.length,
+    }
+  })
 }
 
 // ---- the staging stand-in -----------------------------------------------------

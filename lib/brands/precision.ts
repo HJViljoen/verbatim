@@ -25,9 +25,25 @@ import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandRulesFor } from './alia
 // THE MON 5 OCT HAND CHECK (plan §3.7, step 9.5) covers all eight: Sealand and
 // the seven tracked rivals (scripts/brand-mentions.ts --hand-check lists every
 // one, a brand with no match included). Its results land here as one entry
-// per brand, `where: 'production'`, with when it was read and on what; they
+// per brand, `where: 'production'`, with each part's counts (below), when it
+// was read and on what; they
 // reach the page through a commit, the gates and a tag. Until then deploy 3
 // prints every brand, and the name line, as "not counted yet".
+//
+// TWO PARTS, EACH GATED (the deploy-3 fresh review). The headline column
+// counts only the videos none of our rival searches found
+// (lib/brands/rival-searches.ts), and almost every match sits in the others:
+// on staging 178 of Patagonia's 204 mention rows, 106 of Cotopaxi's 112 and
+// 74 of The North Face's 91. In a video a search for the brand surfaced, the
+// brand is nearly always the one meant, so a sample of all the matches says
+// little about the headline figure, and the other meanings (Patagonia the
+// region, Cotopaxi the volcano) gather in the videos the headline counts. So
+// the check reads the headline set IN FULL (`headline`: every match in a video
+// no rival search of ours found; 26, 6, 17 and 1 rows on staging for
+// Patagonia, Cotopaxi, The North Face and Freitag, August and September) and a
+// fixed sample of the rest (`rest`), and a brand counts only when every part
+// that holds a match clears the floor. So "In all" never prints on a headline
+// set nobody read, and neither column prints on a part under the floor.
 //
 // AN ENTRY HOLDS FOR THE RULES IT WAS READ UNDER (the deploy-3 fresh review):
 // each names its `ruleVersion`, and `brandCountState` reads an entry only
@@ -44,11 +60,21 @@ import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandRulesFor } from './alia
 // read (staging's September: the 8 videos naming Sealand are its own posts, BC
 // F35), so once checked it prints "none".
 
-/** One brand's hand check, on production. */
-export interface BrandHandCheck {
-  /** Matches read by hand, and how many of them were the brand. */
+/** One part of a hand check: matches read by hand, and how many of them
+ *  were the brand. */
+export interface HandCheckPart {
   read: number
   brand: number
+}
+
+/** One brand's hand check, on production. */
+export interface BrandHandCheck {
+  /** Every match in a video none of our rival searches found: the videos
+   *  the headline column counts, read in full. */
+  headline: HandCheckPart
+  /** A fixed sample of the brand's other matches, in videos a rival search of
+   *  ours found (`scripts/brand-mentions.ts --hand-check`, its `--sample`). */
+  rest: HandCheckPart
   /** When it was read. */
   on: string
   /** Production only: a staging or research sample is not an entry. */
@@ -56,7 +82,7 @@ export interface BrandHandCheck {
   /** The rules the matches were planned under (BRAND_RULE_VERSION when it
    *  was read): an entry for other rules is read as no entry. */
   ruleVersion: string
-  /** What the matches were: the window. */
+  /** What the matches were: the window (a month outside it was not read). */
   of: string
   source: string
 }
@@ -94,15 +120,24 @@ export const OTHER_MEANING: Readonly<Record<string, string>> = {
 
 export type BrandCountState = 'counted' | 'noise' | 'not_yet'
 
-/** Whether a brand's counts may print: its production hand check's precision
- *  against the floor, or "not counted yet" where production has not checked
- *  it under the rules the page counts with (an entry from anywhere else, or
- *  read under other rules, is read as no entry). */
+const wellFormed = (p: HandCheckPart | null | undefined): p is HandCheckPart =>
+  p != null && Number.isInteger(p.read) && Number.isInteger(p.brand) && p.read >= 0 && p.brand >= 0 && p.brand <= p.read
+
+/** Whether a brand's counts may print: each part of its production hand
+ *  check that holds a match against the floor (both columns print only when
+ *  every such part clears it; one under it reads "mostly … not counted"), or
+ *  "not counted yet" where production has not checked it under the rules the
+ *  page counts with (an entry from anywhere else, or read under other rules,
+ *  or with no match read at all, is read as no entry). A part with no match
+ *  (no video outside our rival searches named the brand in the window) gates
+ *  nothing: its count there is none. */
 export function brandCountState(clientId: string, brand: string, checks: typeof BRAND_HAND_CHECKS = BRAND_HAND_CHECKS): BrandCountState {
   const c = checks[clientId]?.[brand]
   if (!c || c.where !== 'production' || c.ruleVersion !== BRAND_RULE_VERSION) return 'not_yet'
-  if (!(c.read > 0) || !(c.brand >= 0) || c.brand > c.read) return 'not_yet'
-  return c.brand / c.read >= BRAND_PRECISION_FLOOR ? 'counted' : 'noise'
+  if (!wellFormed(c.headline) || !wellFormed(c.rest)) return 'not_yet'
+  const read = [c.headline, c.rest].filter((p) => p.read > 0)
+  if (read.length === 0) return 'not_yet'
+  return read.every((p) => p.brand / p.read >= BRAND_PRECISION_FLOOR) ? 'counted' : 'noise'
 }
 
 /** The client's own name as its brand rule names it ("Sealand"), or null
@@ -111,11 +146,16 @@ export function clientBrandName(clientId: string): string | null {
   return brandRulesFor(clientId).find((r) => r.key.kind === 'client')?.brand ?? null
 }
 
-/** Has production hand-checked the client's own name (any precision: the name
- *  line prints what the reading found, match by match)? */
+/** Has production hand-checked the client's own name, under the rules the
+ *  page counts with (any precision: the name line prints what the reading
+ *  found, match by match)? A check whose every match is the client's own
+ *  posts reads no match in either part, and still counts as checked: there is
+ *  nothing outside them to read (staging's September, BC F35), so the name
+ *  line says "none". */
 export function nameChecked(clientId: string, checks: typeof BRAND_HAND_CHECKS = BRAND_HAND_CHECKS): boolean {
   const name = clientBrandName(clientId)
-  return name != null && brandCountState(clientId, name, checks) !== 'not_yet'
+  const c = name == null ? null : checks[clientId]?.[name]
+  return c != null && c.where === 'production' && c.ruleVersion === BRAND_RULE_VERSION && wellFormed(c.headline) && wellFormed(c.rest)
 }
 
 /** "mostly the German word for Friday · not counted", or the plan's words. */
