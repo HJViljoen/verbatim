@@ -132,7 +132,7 @@ export function CommunitiesSection({
             ? `${hidden} further communit${hidden === 1 ? 'y is' : 'ies are'} not shown, between them carrying ${hiddenPosts.toLocaleString('en-GB')} post${hiddenPosts === 1 ? '' : 's'}.`
             : null,
           unconfigured.posts > 0 && unconfigured.fromUnconfigured > 0
-            ? `${unconfigured.pct.toFixed(0)}% of the Reddit posts we hold for you came from communities nobody put on the list; the search found them.`
+            ? unconfiguredLine(unconfigured)
             : null,
           keptClosed
             ? 'How much of each community we kept is shown to owners and admins only.'
@@ -142,6 +142,17 @@ export function CommunitiesSection({
     </Section>
   )
 }
+
+/** The Reddit posts no list named, with their base ("of N" through levelText,
+ *  §4.0, WP3.10): "12% of the 340 Reddit posts …" at 100 or more, "9 of 61
+ *  Reddit posts …" under it. It printed a bare share on any count. */
+export function unconfiguredLine(u: { posts: number; fromUnconfigured: number }): string {
+  const l = levelText(u.fromUnconfigured, u.posts)
+  const lead = l == null ? fmtCount(u.fromUnconfigured) : l.kind === 'share' ? `${l.text} of the ${fmtCount(u.posts)}` : l.text
+  return `${lead} Reddit posts we hold for you came from communities nobody put on the list; the search found them.`
+}
+
+const fmtCount = (n: number): string => n.toLocaleString('en-GB')
 
 /** THE KEPT CELL ON THE LEVEL RULE (WP3.10, the reject log's rule, §4.0 "of
  *  N" through levelText): a share at 100 looked at or more, "kept of found"

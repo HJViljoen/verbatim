@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
-import { CommunitiesSection, keptCell } from './communities'
+import { CommunitiesSection, keptCell, unconfiguredLine } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
@@ -668,5 +668,13 @@ describe('a community’s kept cell', () => {
     expect(keptCell({ keptPct: null, found: null, kept: null })).toBe('—')
     // A row whose kept count is not known prints no share under 100.
     expect(keptCell({ keptPct: 72, found: 90 })).toBe('—')
+  })
+})
+
+describe('the Reddit posts no list named', () => {
+  // The same real counts: 6 of 66, and 25 of 100.
+  it('carries its base: a count under 100 posts, a share of N from 100', () => {
+    expect(unconfiguredLine({ posts: 66, fromUnconfigured: 6 })).toBe('6 of 66 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
+    expect(unconfiguredLine({ posts: 100, fromUnconfigured: 25 })).toBe('25% of the 100 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
   })
 })
