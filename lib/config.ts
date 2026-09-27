@@ -1743,3 +1743,25 @@ export const DOCUMENT_BLOCK_MAX: Record<string, number> = {
   standing: 900, gap: 330, asked: 220,
 }
 
+
+/**
+ * The two deploy-4 spend switches (market-first decision L; plan WP3.2 and
+ * WP3.5), per tenant, and off for every tenant until Heinrich says yes to each
+ * spend. Off, the `segment-videos` step writes segments_v1 rule rows for a
+ * run's new videos at $0 and never calls the segment judge (about $0.50-1.00
+ * once, then about $0.02 a run), and `brand-readings` counts an ambiguous name
+ * hit as a rule match and never calls the confirm (under $0.10). Pinned off by
+ * lib/config.test.ts: turning one on is a diff that test has to be changed for.
+ */
+export const SEGMENT_JUDGE_ENABLED: Readonly<Record<string, boolean>> = {
+  [SEALAND_CLIENT_ID]: false,
+  [OSSUR_CLIENT_ID]: false,
+}
+export const BRAND_CONFIRM_ENABLED: Readonly<Record<string, boolean>> = {
+  [SEALAND_CLIENT_ID]: false,
+  [OSSUR_CLIENT_ID]: false,
+}
+/** May this tenant's run call the segment judge? Read it; never read the map. */
+export const segmentJudgeEnabled = (clientId: string): boolean => SEGMENT_JUDGE_ENABLED[clientId] === true
+/** May this tenant's run call the brand-mention confirm? */
+export const brandConfirmEnabled = (clientId: string): boolean => BRAND_CONFIRM_ENABLED[clientId] === true

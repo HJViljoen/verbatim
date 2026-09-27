@@ -197,3 +197,16 @@ export function evidenceMap(args: {
   }
   return out
 }
+
+/** The comments dated in one month (platform, video and first capture), for
+ *  the late-capture figure (lib/provenance/measure.ts lateCaptureOf). */
+export async function readMonthComments(admin: SupabaseClient, clientId: string, month: string, pages: Pages): Promise<{ platform: string; video_id: string; created_at: string }[]> {
+  const from = `${month.slice(0, 7)}-01`
+  const d = new Date(`${from}T00:00:00Z`)
+  const to = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+  const rows = await selectAll<{ platform: string; video_id: string; created_at: string }>(() =>
+    admin.from('comments').select('platform, video_id, created_at').eq('client_id', clientId)
+      .gte('comment_date', `${from}T00:00:00.000Z`).lt('comment_date', `${to}T00:00:00.000Z`).order('id'),
+  )
+  return counted(pages, rows)
+}

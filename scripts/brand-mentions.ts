@@ -5,16 +5,14 @@ import { dirname } from 'node:path'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { BRAND_RULE_VERSION, brandRulesFingerprint, brandRulesFor, WATCHED_RULE_VERSION } from '../lib/brands/aliases'
 import {
-  barePattern, BRAND_RULE_VERSION, brandPattern, brandRulesFingerprint, brandRulesFor, type BrandRule,
-} from '../lib/brands/aliases'
-import {
-  handCheckList, mentionKey, monthBrandCounts, ownPostMentions, planMentions, standInCandidates,
+  handCheckList, mentionKey, standInCandidates,
   type BrandCandidates, type Candidate, type HandCheckEntry, type MentionRow, type StandInComment, type StandInVideo,
 } from '../lib/brands/mentions'
+import { readBrands, type IdentityRow, type Tracking } from '../lib/brands/readings'
 import { readRivalFound, withoutRivalSearches } from '../lib/brands/rival-searches'
 import { SEALAND_CLIENT_ID } from '../lib/config'
-import { normAccount, ownAccountNames } from '../lib/gather/owned'
 import { assertProject, modeLine, parseScriptArgs, type ScriptArgs } from '../lib/ops/market-first-args'
 import { isMissingObject, readMonthVideos, type Pages } from '../lib/provenance/load'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
@@ -86,9 +84,6 @@ const NAME = 'brand-mentions'
 const PRODUCTION = 'mkwjlckescdveosvrvaq'
 const STAGING = 'zfmxrrugaihxpubunleu'
 const PROBE_MAX_MS = 3000
-/** Ids per `in.(…)` read: a GET's URL carries them, so they stay well under
- *  the gateway's URL limit. */
-const ID_CHUNK = 100
 
 class Ration implements Pages {
   n = 0
@@ -118,18 +113,6 @@ function writeNew(path: string, body: string): void {
   if (existsSync(path)) throw new Error(`${NAME}: ${path} exists; name a new file`)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, body)
-}
-
-interface Tracking {
-  competitor_names: string[] | null
-  competitor_keywords: string[] | null
-  competitor_handles: Record<string, Record<string, string>> | null
-  own_handles: Record<string, string> | null
-  brand_keywords: string[] | null
-}
-interface IdentityRow {
-  id: string; platform: string; video_id: string; source: string | null; account_name: string | null
-  is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null
 }
 
 async function probe(admin: SupabaseClient, args: ScriptArgs, ration: Ration): Promise<void> {
@@ -230,8 +213,9 @@ async function main() {
   const sample = Number(args.values.sample ?? 30)
   const ration = new Ration(Number(args.values['max-reads'] ?? 45))
   const rules = brandRulesFor(args.clientId)
+  const ID_COLS = 'id, platform, video_id, source, account_name, is_client, is_competitor, competitor_name'
   console.log(modeLine(args, NAME) + (check ? ' (--check: nothing is written)' : ''))
-  console.log(`  rules ${BRAND_RULE_VERSION} (fingerprint ${brandRulesFingerprint()}), window [${from}, ${to})${standIn ? ', STAND-IN candidates (staging dry run; MF2 not applied)' : ''}`)
+  console.log(`  rules ${BRAND_RULE_VERSION} (fingerprint ${brandRulesFingerprint()}; watched brands ${WATCHED_RULE_VERSION}), window [${from}, ${to})${standIn ? ', STAND-IN candidates (staging dry run; MF2 not applied)' : ''}`)
   if (rules.length === 0) {
     console.log('  no brand rules for this client (lib/brands/aliases.ts): nothing to count, nothing written')
     return
@@ -239,107 +223,84 @@ async function main() {
   const admin = createAdminClient()
   if (args.project === PRODUCTION) await probe(admin, args, ration)
 
-  // The tenant's brands: the tracked rivals by identity (competitors.id).
-  ration.spend(1, 'tracking_configs')
-  const { data: tc, error: tcErr } = await admin.from('tracking_configs')
-    .select('competitor_names, competitor_keywords, competitor_handles, own_handles, brand_keywords').eq('client_id', args.clientId).maybeSingle()
-  if (tcErr || !tc) throw new Error(`${NAME}: tracking_configs: ${tcErr?.message ?? 'no row'}`)
-  const tracking = tc as Tracking
-  ration.spend(1, 'competitors')
-  const { data: comps, error: cErr } = await admin.from('competitors').select('id, name, retired_at').eq('client_id', args.clientId)
-  if (cErr) throw new Error(`${NAME}: competitors: ${cErr.message}`)
-  const norm = (s: string) => s.trim().toLowerCase()
-  const tracked = new Set((tracking.competitor_names ?? []).map(norm))
-  const live = new Map(((comps ?? []) as { id: string; name: string; retired_at: string | null }[])
-    .filter((c) => !c.retired_at).map((c) => [norm(c.name), c.id]))
-  const brands: { rule: BrandRule; brandKey: string }[] = []
-  for (const rule of rules) {
-    if (rule.key.kind === 'client') { brands.push({ rule, brandKey: 'client' }); continue }
-    const id = live.get(norm(rule.key.name))
-    if (!id || !tracked.has(norm(rule.key.name))) {
-      console.log(`  ${rule.brand}: not a tracked rival with a live competitors row here; skipped`)
-      continue
-    }
-    brands.push({ rule, brandKey: id })
-  }
-  const ruled = new Set(rules.filter((r) => r.key.kind === 'rival').map((r) => norm((r.key as { name: string }).name)))
-  for (const name of tracking.competitor_names ?? []) {
-    if (!ruled.has(norm(name))) console.log(`  ${name}: tracked, but lib/brands/aliases.ts has no rule for it: not counted`)
-  }
-
-  // The candidates: MF2's function, or on a staging dry run the stand-in.
-  const perBrand: BrandCandidates[] = []
-  if (standIn) {
-    const rows = await standInRows(admin, args.clientId, from, to, ration)
-    console.log(`  stand-in rows: ${rows.videos.length} readable videos with a comment in the window, ${rows.comments.length} comments`)
-    for (const b of brands) {
-      const bare = barePattern(b.rule, 'js')
-      perBrand.push({ ...b, hits: standInCandidates(brandPattern(b.rule, 'js'), rows.videos, rows.comments), bare: bare ? standInCandidates(bare, rows.videos, rows.comments) : null })
-    }
-  } else {
-    try {
-      for (const b of brands) {
-        const hits = await candidatesOf(admin, args.clientId, brandPattern(b.rule, 'are'), from, to, ration, `${b.rule.brand}'s candidates`)
-        const bareP = barePattern(b.rule, 'are')
-        const bare = bareP ? await candidatesOf(admin, args.clientId, bareP, from, to, ration, `${b.rule.brand}'s bare name`) : null
-        perBrand.push({ ...b, hits, bare })
+  // The brands, their candidates, the rows, whose own posts, each month's
+  // market and the rival searches' finds: lib/brands/readings.ts readBrands, the
+  // one copy the pipeline's brand-readings step shares (deploy 4, WP3.5).
+  // Watched brands (tracking_configs.watched_brands, MF3) are read with
+  // their own rule version (WATCHED_RULE_VERSION).
+  const cache: { standIn: Awaited<ReturnType<typeof standInRows>> | null } = { standIn: null }
+  const read = await readBrands(args.clientId, {
+    engine: standIn ? 'js' : 'are',
+    tracking: async () => {
+      ration.spend(1, 'tracking_configs')
+      const base = 'competitor_names, competitor_keywords, competitor_handles, own_handles, brand_keywords'
+      const first = await admin.from('tracking_configs').select(`${base}, watched_brands`).eq('client_id', args.clientId).maybeSingle()
+      if (!first.error && first.data) return first.data as Tracking
+      const { data, error } = await admin.from('tracking_configs').select(base).eq('client_id', args.clientId).maybeSingle()
+      if (error || !data) throw new Error(`${NAME}: tracking_configs: ${error?.message ?? 'no row'}`)
+      return data as Tracking
+    },
+    competitors: async () => {
+      ration.spend(1, 'competitors')
+      const { data, error } = await admin.from('competitors').select('id, name, retired_at').eq('client_id', args.clientId)
+      if (error) throw new Error(`${NAME}: competitors: ${error.message}`)
+      return (data ?? []) as { id: string; name: string; retired_at: string | null }[]
+    },
+    candidates: async (pattern, what) => {
+      if (standIn) {
+        cache.standIn ??= await standInRows(admin, args.clientId, from, to, ration)
+        return standInCandidates(pattern, cache.standIn.videos, cache.standIn.comments)
       }
-    } catch (e) {
-      if (isMissingObject(e, 'brand_mention_candidates')) {
-        throw new Error(`${NAME}: brand_mention_candidates is not on ${args.project}: MF2 is not applied.${args.project === STAGING ? ' A staging dry run takes --stand-in.' : ''} Nothing written.`)
+      try {
+        return await candidatesOf(admin, args.clientId, pattern, from, to, ration, what)
+      } catch (e) {
+        if (isMissingObject(e, 'brand_mention_candidates')) {
+          throw new Error(`${NAME}: brand_mention_candidates is not on ${args.project}: MF2 is not applied.${args.project === STAGING ? ' A staging dry run takes --stand-in.' : ''} Nothing written.`)
+        }
+        throw e
       }
-      throw e
-    }
+    },
+    ownedVideos: async () => {
+      const owned = await selectAll<IdentityRow>(() => admin.from('videos').select(ID_COLS).eq('client_id', args.clientId)
+        .in('source', ['owned', 'competitor_owned']).order('id'))
+      ration.spend(Math.max(1, Math.ceil(owned.length / 1000)), 'the own posts')
+      return owned
+    },
+    videosById: async (ids) => {
+      ration.spend(1, 'the matched videos')
+      const { data, error } = await admin.from('videos').select(ID_COLS).eq('client_id', args.clientId).in('id', [...ids])
+      if (error) throw new Error(`${NAME}: videos: ${error.message}`)
+      return (data ?? []) as IdentityRow[]
+    },
+    monthVideos: async (m) => {
+      const set = await readMonthVideos(admin, args.clientId, m, ration)
+      ration.spend(0, `market_month_videos ${m}`)
+      return set
+    },
+    // The rival searches and the videos they found (lib/brands/rival-searches.ts,
+    // the reads the page makes): every brand's headline count leaves them out.
+    rivalFound: async (configured) => {
+      const found = await readRivalFound(admin, args.clientId, configured)
+      ration.spend(found.pages, 'the rival searches and what they found')
+      return found
+    },
+  }, { from, to })
+  if (!read) {
+    console.log('  no brand rules for this client (lib/brands/aliases.ts): nothing to count, nothing written')
+    return
   }
-  const plan = planMentions(args.clientId, BRAND_RULE_VERSION, perBrand)
-
-  // Own posts: the client's and each rival's, by source and by account (the
-  // census rule, lib/gather/owned.ts), over the matched videos.
-  const matched = [...new Set(plan.mentions.map((m) => m.row.video_id))]
-  const idCols = 'id, platform, video_id, source, account_name, is_client, is_competitor, competitor_name'
-  const owned = await selectAll<IdentityRow>(() => admin.from('videos').select(idCols).eq('client_id', args.clientId)
-    .in('source', ['owned', 'competitor_owned']).order('id'))
-  ration.spend(Math.max(1, Math.ceil(owned.length / 1000)), 'the own posts')
-  const rowsById = new Map<string, IdentityRow>()
-  for (const ids of chunks(matched, ID_CHUNK)) {
-    ration.spend(1, 'the matched videos')
-    const { data, error } = await admin.from('videos').select(idCols).eq('client_id', args.clientId).in('id', ids)
-    if (error) throw new Error(`${NAME}: videos: ${error.message}`)
-    for (const r of (data ?? []) as IdentityRow[]) rowsById.set(r.id, r)
-  }
-  const keyOfRival = new Map(brands.filter((b) => b.rule.key.kind === 'rival').map((b) => [norm((b.rule.key as { name: string }).name), b.brandKey]))
-  const clientNames = ownAccountNames(owned, tracking.own_handles ?? {}, { source: 'owned' })
-  const rivalNames = Object.entries(tracking.competitor_handles ?? {}).map(([name, handles]) =>
-    ({ key: keyOfRival.get(norm(name)) ?? null, names: ownAccountNames(owned, handles ?? {}, { source: 'competitor_owned', competitorName: name }) }))
-  const ownerOf = (videoId: string): string | null => {
-    const r = rowsById.get(videoId)
-    if (!r) return null
-    if (r.source === 'owned') return 'client'
-    if (r.source === 'competitor_owned') return keyOfRival.get(norm(r.competitor_name ?? '')) ?? null
-    const account = normAccount(r.account_name)
-    if (!account) return null
-    if (clientNames.get(r.platform)?.has(account)) return 'client'
-    return rivalNames.find((x) => x.names.get(r.platform)?.has(account))?.key ?? null
-  }
-
+  for (const line of read.lines) console.log(line)
+  if (cache.standIn) console.log(`  stand-in rows: ${cache.standIn.videos.length} readable videos with a comment in the window, ${cache.standIn.comments.length} comments`)
+  const { brands, perBrand, plan, ownerOf, markets, rivalTerms, rivalFound, counts, own } = read
+  const months = monthsIn(from, to)
   // The month's market, and the videos any of our rival searches found (the
   // one base every brand's headline count sits over; the page reads the same).
-  const months = monthsIn(from, to)
-  const markets = new Map<string, string[]>()
-  for (const m of months) {
-    const set = await readMonthVideos(admin, args.clientId, m, ration)
-    ration.spend(0, `market_month_videos ${m}`)
-    if (set) markets.set(m, set.map((v) => v.id))
-  }
-  const rivalFound = await readRivalFound(admin, args.clientId, tracking.competitor_keywords)
-  ration.spend(rivalFound.pages, 'the rival searches and what they found')
-  console.log(`  our rival searches, current and retired (${rivalFound.terms.size}): ${[...rivalFound.terms].sort().join(', ')}`)
-  for (const [m, ids] of [...markets.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    const base = withoutRivalSearches(ids, rivalFound.videos).length
+  console.log(`  our rival searches, current and retired (${rivalTerms.size}): ${[...rivalTerms].sort().join(', ')}`)
+  for (const [m, vs] of [...markets.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const ids = vs.map((v) => v.id)
+    const base = withoutRivalSearches(ids, rivalFound).length
     console.log(`  ${m.slice(0, 7)}: the market's ${ids.length} videos; ${ids.length - base} found by a rival search of ours; ${base} without them (every brand's headline base)`)
   }
-  const counts = monthBrandCounts(plan.mentions, brands.map((b) => ({ brand: b.rule.brand, brandKey: b.brandKey })), { markets, ownerOf, rivalFound: rivalFound.videos })
-  const own = ownPostMentions(plan.mentions, ownerOf)
 
   // The report.
   for (const b of brands) {
@@ -383,7 +344,7 @@ async function main() {
   try {
     const heldRows = await selectAll<Pick<MentionRow, 'client_id' | 'video_id' | 'brand_key' | 'source' | 'comment_id' | 'rule_version'>>(() =>
       admin.from('brand_mentions').select('client_id, video_id, brand_key, source, comment_id, rule_version')
-        .eq('client_id', args.clientId).eq('rule_version', BRAND_RULE_VERSION).order('id'))
+        .eq('client_id', args.clientId).in('rule_version', [...new Set(rows.map((r) => r.rule_version)), BRAND_RULE_VERSION]).order('id'))
     ration.spend(Math.max(1, Math.ceil(heldRows.length / 1000)), 'the held rows')
     held = new Set(heldRows.map(mentionKey))
   } catch (e) {

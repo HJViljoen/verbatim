@@ -138,6 +138,13 @@ describe('panelStale', () => {
     }
     expect(PANEL_STALING_SURFACES).toContain('regate')
     expect(PANEL_STALING_SURFACES).toContain('entity_retag')
+    // A later change to the filing judge splits the attention era, as a re-tag
+    // does (market-first WP3.4, deploy 4). The one attribution row, dated at the
+    // fix deploy, predates the first panel (4 Oct), so it re-freezes nothing.
+    expect(PANEL_STALING_SURFACES).toContain('attribution')
+    const firstPanel = { frozen_at: '2026-10-04T08:30:00Z' }
+    expect(panelStale(firstPanel, [{ changed_at: '2026-09-26T12:00:00Z', surface: 'attribution' }])).toBe(false)
+    expect(panelStale(firstPanel, [{ changed_at: '2026-11-07T12:00:00Z', surface: 'attribution' }])).toBe(true)
     // `subreddits` is the one that would have bitten: Reddit accounts are never
     // panel members, and discovery rewrites the community list on roughly every
     // weekly gather (66 rows in four weeks across two tenants, production,

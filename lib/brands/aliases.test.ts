@@ -172,3 +172,23 @@ describe('the brand rules: what they count', () => {
     expect(counts('Rareform', 'Rareform bag made from billboards')).toBe(true)
   })
 })
+
+// Watched brands (WP3.5): the operator's list, counted without a search. The
+// names are the recommended ones (plan WP3.5; staging captions Aug to Sep:
+// Peak Design 13, tomtoc 12, Osprey 11, Matador 9, Bellroy 7, BAGSMART 7).
+describe('watched brands', () => {
+  it('keys each name by its slug, and matches the whole name only', async () => {
+    const { watchedKey, watchedRule, WATCHED_RULE_VERSION } = await import('./aliases')
+    expect(WATCHED_RULE_VERSION).toBe('watched_v1')
+    expect(['Peak Design', 'tomtoc', 'Osprey', 'Matador', 'Bellroy', 'BAGSMART'].map(watchedKey)).toEqual([
+      'watched:peak-design', 'watched:tomtoc', 'watched:osprey', 'watched:matador', 'watched:bellroy', 'watched:bagsmart',
+    ])
+    const peak = watchedRule('Peak Design')!
+    expect(ruleMatches(peak, 'my Peak Design everyday sling')).toBe(true)
+    expect(ruleMatches(peak, 'peakdesign travel line')).toBe(true)
+    expect(ruleMatches(peak, 'we reached the peak. design matters')).toBe(false)
+    expect(ruleMatches(watchedRule('BAGSMART')!, 'bagsmarter')).toBe(false)
+    expect(watchedRule('   ')).toBeNull()
+    expect(watchedRule('Peak <Design>')).toBeNull()
+  })
+})

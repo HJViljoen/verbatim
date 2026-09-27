@@ -181,10 +181,31 @@ export interface WeekLineRow {
   pairs: { prevWeek: string; week: string; mode: ComparabilityMode; reasons: WeekPairReason[]; verdict: Verdict | null }[]
 }
 
+/** ADDED (WP3.13 part B): a kept week's own facts, which the hover prints
+ *  ("median {m} comments a video · {u} of {n} let in before we checked
+ *  relevance"; "Also counted per week, and shown on hover"). A figure that is
+ *  not a number is null, never zero. */
+export interface WeekLineWeek {
+  week: string
+  /** The day of the update the week was read with. */
+  readWith: string
+  videos: number
+  medianDated: number | null
+  unchecked: number
+  olderVideos: number
+  /** Null: the update does not record it. */
+  rescrapeCapped: boolean | null
+}
+
 export interface WeekLineBlock {
   ageDays: 14 | 21
   /** The reference depth mix, fixed when the line first prints. */
   mix: readonly [number, number, number] | null
+  /** ADDED: the line's first week (`WeekLineConfig.firstWeek`), so a drawing
+   *  can say why a slot before it is empty. Absent on a block stored before it. */
+  firstWeek?: string
+  /** ADDED: each kept week's facts, oldest first. Absent on a block stored before it. */
+  reads?: WeekLineWeek[]
   rows: WeekLineRow[]
   /** Weeks on the axis from the first week that are not kept yet, and the
    *  update each is due with. */
@@ -651,7 +672,15 @@ export function buildWeekLine(
   })
 
   const due = opts.axis ? dueWeeks(opts.axis, cfg, opts.nextUpdateAfter).filter((d) => !kept.has(d.week)) : []
-  return { ageDays: cfg.ageDays, mix: cfg.mix, rows, due }
+  const finite = (x: number): number | null => (Number.isFinite(x) ? x : null)
+  const facts: WeekLineWeek[] = weeks.filter((w) => kept.has(w)).map((w) => {
+    const r = kept.get(w)!
+    return {
+      week: w, readWith: readWith(r), videos: r.videos, medianDated: finite(r.medianDated), unchecked: r.unchecked,
+      olderVideos: r.olderVideos, rescrapeCapped: r.rescrapeCapped,
+    }
+  })
+  return { ageDays: cfg.ageDays, mix: cfg.mix, firstWeek: cfg.firstWeek, reads: facts, rows, due }
 }
 
 // ---- Keeping a week ----------------------------------------------------------------------

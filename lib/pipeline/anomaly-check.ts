@@ -15,6 +15,9 @@ import {
   KIND_SET,
   MAX_FLAGS,
   anomalyVerdict,
+  baselineStepOf,
+  comparableBaseline,
+  comparableBaselineLabel,
   preRegisteredSet,
   thinUpdate,
   weekVsBaseline,
@@ -27,6 +30,8 @@ import {
   type UpdateSize,
 } from '../reading/anomaly'
 import { SLICE } from '../reading/coverage'
+import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
+import { loadChanges, loadPairRows } from '../reading/read'
 import { preRegisteredKind } from '../reading/kinds'
 import { quoteRef } from '../renderables/quotes-freeze'
 import {
@@ -148,6 +153,11 @@ export const ANOMALY_CHECKS_TABLE = 'anomaly_checks'
  *  year does not make every recent week look large. */
 export const TRAILING_RUNS = 8
 
+/** The stored sentence of an update the check did not compare because our own
+ *  changes left fewer than three comparable months behind it (WP3.4): This
+ *  week's own words for a refusal (components/pages/week/unusual.tsx). */
+export const NOT_COMPARED_NOTE = 'This update was not compared with the months behind it.'
+
 /** Whether a pooled baseline was read under one clustering. `not_grouped` is
  *  the answer for an object that has no grouping to be like-for-like about —
  *  a kind is the enum Pass A wrote, and a re-grouping cannot move an insight
@@ -178,6 +188,10 @@ export interface AnomalyCheckResult {
   written: number
   explanation: Interpretation | null
   costUsd: number
+  /** The comparable-only baseline (WP3.4): the trailing months kept, and those
+   *  left out because their pair with the week's month is refused on a change
+   *  of ours. Absent where the check stopped before the baseline. */
+  baseline?: { weekMonth: string; kept: string[]; dropped: string[] }
 }
 
 // ---- Pooling -----------------------------------------------------------------
@@ -1054,7 +1068,22 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     return { ...empty, status: 'suppressed', suppression, note }
   }
 
-  const months = trailingCompleteMonths(window.from, BASELINE_MONTHS)
+  // THE COMPARABLE-ONLY BASELINE (market-first decision D; WP3.4, deploy 4).
+  // A trailing month stays only when its pair with the week's month is not
+  // refused on a change of ours (lib/reading/anomaly.ts comparableBaseline),
+  // off the stored pair rows the comparability step refreshed earlier in this
+  // run. Fewer than three left reads "forming: {n} of 3 comparable months" and
+  // flags nothing. No pair table (MF1 not applied) leaves every month
+  // unmeasured, so nothing is flagged on months nobody has compared.
+  const trailingMonths = trailingCompleteMonths(window.from, BASELINE_MONTHS)
+  const weekMonth = monthStartOf(window.from)
+  const [changeLog, pairRows] = await Promise.all([
+    loadChanges(admin, args.clientId),
+    loadPairRows(admin, args.clientId, null),
+  ])
+  const comparable = comparableBaseline(trailingMonths, weekMonth, baselineStepOf(pairRows, ourChangesWithoutGatherFlags(changeLog)))
+  const months = comparable.kept
+  const baseline = { weekMonth, ...comparable }
 
   let reading: AnomalyReading
   let registration: PreRegistration
@@ -1074,9 +1103,27 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
   }
 
   if (reading.flags.length === 0) {
-    const note = `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`
+    const clearing = reading.baselines[0]?.monthsClearing ?? 0
+    // A BASELINE OUR OWN CHANGES CUT SHORT IS A REFUSAL, NOT A READING. The
+    // surfaces judge "forming" off their own count of the three months behind
+    // the week (lib/pages/week.ts pooledBaseline, lib/pages/weekly.ts), which
+    // knows nothing of comparability: stored as 'nothing_unusual', a week this
+    // check could not compare would print "Nothing unusual in this update" from
+    // the 8 Nov update on. So when a refused pair left fewer than three months,
+    // the row says the update was not compared (anomaly_checks' own rule: a
+    // refusal is never stored as a reading), in the words This week already
+    // prints for one; the run log keeps "forming: {n} of 3 comparable months".
+    // No suppression is passed, so no thin-gate median is stored beside it.
+    if (clearing < BASELINE_MONTHS && baseline.dropped.length > 0) {
+      const note = comparableBaselineLabel(clearing)
+      await recordCheck({ status: 'suppressed', note: NOT_COMPARED_NOTE, window, reading })
+      return { ...empty, status: 'suppressed', reading, registration, suppression, note, baseline }
+    }
+    const note = clearing < BASELINE_MONTHS
+      ? comparableBaselineLabel(clearing)
+      : `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`
     await recordCheck({ status: 'nothing_unusual', note, window, reading, suppression })
-    return { ...empty, status: 'nothing_unusual', reading, registration, suppression, note }
+    return { ...empty, status: 'nothing_unusual', reading, registration, suppression, note, baseline }
   }
 
   // ---- The one model call, and only now ----
@@ -1228,6 +1275,7 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     written,
     explanation,
     costUsd: call.costUsd,
+    baseline,
   }
 }
 

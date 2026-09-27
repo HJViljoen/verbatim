@@ -416,6 +416,16 @@ describe('buildWeekLine', () => {
     expect(block.due).toEqual([{ week: '2026-10-12', date: '2026-11-01' }])
   })
 
+  it("carries its first week and each kept week's own facts for the hover (staging's weeks of 7 and 14 Sep, re-dated)", () => {
+    expect(block.firstWeek).toBe('2026-09-28')
+    expect(block.reads).toEqual([
+      { week: '2026-09-28', readWith: '2026-10-18', videos: 404, medianDated: 10, unchecked: 0, olderVideos: 74, rescrapeCapped: null },
+      { week: '2026-10-05', readWith: '2026-10-25', videos: 318, medianDated: 9.5, unchecked: 0, olderVideos: 39, rescrapeCapped: null },
+    ])
+    const nan = buildWeekLine([SEP28, { ...OCT05, medianDated: Number.NaN }], points, CHANGES, cfg)
+    expect(nan.reads?.[1].medianDated).toBeNull()
+  })
+
   it('carries no direction word on any path', () => {
     const all = [block, buildWeekLine([SEP28, { ...OCT05, runsInWeek: 2 }], points, CHANGES, cfg)]
     for (const b of all) {

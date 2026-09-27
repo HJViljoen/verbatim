@@ -6,18 +6,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { SEALAND_CLIENT_ID } from '../lib/config'
 import { assertProject, modeLine, parseScriptArgs, projectRefOf, type ScriptArgs } from '../lib/ops/market-first-args'
 import {
-  evidenceMap, isMissingObject, readExportFile, readKeywordRows, readMonthVideos, readProvenanceTable, readRuns,
+  isMissingObject, readExportFile, readKeywordRows, readMonthVideos, readProvenanceTable, readRuns,
   readVerdicts, readVideos, snapshotOf, type Pages,
 } from '../lib/provenance/load'
+import { checksSummaryLine, freshCheckRows, measureContext, recheckPair, type HeldCheck, type StepCheckRow } from '../lib/provenance/measure'
 import type { ProvenanceSnapshot } from '../lib/provenance/reconstruct'
-import { gathersOf, isOutside, unchangedSearches, type MonthVideo } from '../lib/provenance/searches'
 import { KIND_LABELS } from '../lib/reading/kinds'
-import { laterMonthOf } from '../lib/reading/pairs'
-import {
-  mayPrintMoved, populationSet, RECHECK_METHOD_VERSION, RECHECK_POPULATIONS, recheckRows, sameCheck, themesToCheck,
-  type CheckObject, type CheckRow, type LensRow, type PopulationSet, type PopulationVideo, type RecheckPopulation,
-} from '../lib/reading/recheck'
-import { subjectCalibration } from '../lib/subjects/calibration-state'
+import { mayPrintMoved, RECHECK_METHOD_VERSION, type CheckRow, type LensRow, type PopulationVideo } from '../lib/reading/recheck'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 
 // The re-check on the whole of a refused month pair (market-first decision D's
@@ -123,7 +118,6 @@ class Ration implements Pages {
 }
 
 const monthStart = (m: string): string => `${m.slice(0, 7)}-01`
-const iso = (day: string): string => `${day}T00:00:00.000Z`
 const pct = (x: number | null) => (x == null ? '-' : `${(x * 100).toFixed(1)}%`)
 
 function writeNew(path: string, body: string): void {
@@ -145,10 +139,10 @@ async function segmentsOf(admin: SupabaseClient, clientId: string, ids: readonly
   return out
 }
 
-async function lensOf(admin: SupabaseClient, clientId: string, month: string, run: string | null, ids: readonly string[], minDated: number, ration: Ration, what: string): Promise<LensRow[]> {
+async function lensOf(admin: SupabaseClient, clientId: string, month: string, run: string | null, ids: readonly string[], minDated: number, capturedBefore: string | null, ration: Ration, what: string): Promise<LensRow[]> {
   ration.spend(1, what)
   const rows = await selectAll<LensRow>(() =>
-    admin.rpc('lens_readings', { p_client: clientId, p_month: month, p_run: run, p_video_ids: ids, p_min_dated_comments: minDated, p_captured_before: null })
+    admin.rpc('lens_readings', { p_client: clientId, p_month: month, p_run: run, p_video_ids: ids, p_min_dated_comments: minDated, p_captured_before: capturedBefore })
       .order('audience').order('object_kind').order('object_id'))
   if (rows.length >= 1000) ration.spend(Math.ceil(rows.length / 1000) - 1, what)
   return rows.map((r) => ({ ...r, k: Number(r.k), n: Number(r.n) }))
@@ -187,10 +181,11 @@ async function main() {
   }
 
   // The searches both months ran, read as measure-comparability reads them,
-  // one read in flight at a time (plan §7.6).
+  // one read in flight at a time (plan §7.6). The computation is
+  // lib/provenance/measure.ts's, shared with the pipeline's comparability step.
   const videos = await readVideos(admin, args.clientId, ration)
   const verdicts = await readVerdicts(admin, args.clientId, ration)
-  const kp = await readKeywordRows(admin, args.clientId, ration)
+  const keywordRows = await readKeywordRows(admin, args.clientId, ration)
   const runs = await readRuns(admin, args.clientId, ration)
   ration.spend(0, 'the gather reads')
   const provenance = await readProvenanceTable(admin, args.clientId, ration)
@@ -199,115 +194,66 @@ async function main() {
   const snapshots: ProvenanceSnapshot[] = []
   if (args.values['prod-snapshot']) snapshots.push(snapshotOf(readExportFile(args.values['prod-snapshot'], args.clientId), 'snapshot'))
   if (args.values['staging-export']) snapshots.push(snapshotOf(readExportFile(args.values['staging-export'], args.clientId), 'staging'))
-  const evidence = evidenceMap({ videos, provenance, snapshots, verdicts })
-  const gathers = gathersOf(kp, runs)
-  const updates = runs.filter((r) => (r.status === 'completed' || r.status === 'partial') && r.completed_at)
-    .map((r) => ({ id: r.id, finishedAt: r.completed_at as string }))
-  const later = laterMonthOf(month, now, updates)
-  const update = later.latestUpdateRunId ? updates.find((u) => u.id === later.latestUpdateRunId)! : null
-  const lastGather = update ? gathers.filter((g) => g.at <= update.finishedAt).at(-1) ?? null : null
-  console.log(`  ${month.slice(0, 7)}: ${later.state}, ${later.readToEnd ? 'read past its end' : 'NOT read past its end'}, latest update ${update?.id ?? '(none)'}${update ? ` of ${update.finishedAt}` : ''}`)
-  if (!later.readToEnd && args.apply && !check) {
-    if (!rehearsal) throw new Error(`${NAME}: ${month.slice(0, 7)} has not been read past its end: no re-check is written for a month still filling at its end (plan WP2.3). Nothing written.`)
-    console.log(`  REHEARSAL (staging only): ${month.slice(0, 7)} has not been read past its end; writing it as read through ${update?.id ?? '(no update)'} (the guard waived by --${REHEARSAL_FLAG})`)
-  }
-  if (!update || !lastGather) throw new Error(`${NAME}: no update has read ${month.slice(0, 7)} yet. Nothing to check.`)
-  const unchanged = unchangedSearches(gathers, iso(prevMonth), lastGather.runId)
-  console.log(`  searches unchanged through both months: ${[...new Set([...unchanged].map((k) => k.split('\u0000')[1]))].sort().join(', ') || '(none)'}`)
+  // The re-check reads no change row: `changes` is the pair measure's.
+  const ctx = measureContext({ clientId: args.clientId, now, changes: [], videos, verdicts, keywordRows, runs, provenance, snapshots })
 
-  // Each month's market videos, with what decides their populations.
-  const sides: Record<'prev' | 'curr', MonthVideo[]> = { prev: [], curr: [] }
-  for (const [side, m] of [['prev', prevMonth], ['curr', month]] as const) {
-    const set = await readMonthVideos(admin, args.clientId, m, ration)
-    ration.spend(0, `market_month_videos ${m}`)
-    if (!set) throw new Error(`${NAME}: market_month_videos is not on ${args.project}: MF1 is not applied. Nothing written.`)
-    sides[side] = set
-  }
-  const segments = await segmentsOf(admin, args.clientId, [...new Set([...sides.prev, ...sides.curr].map((v) => v.id))], ration)
-  const popVideos = (vs: readonly MonthVideo[]): PopulationVideo[] => vs.map((v) => ({
-    id: v.id, dated: v.dated, segment: segments.get(v.id) ?? 'market',
-    outside: isOutside(v, evidence.get(v.id), unchanged), ambiguous: provenance?.get(v.id)?.method === 'ambiguous',
-  }))
-  const pv = { prev: popVideos(sides.prev), curr: popVideos(sides.curr) }
-  const sets = RECHECK_POPULATIONS.map((p) => ({ prev: populationSet(pv.prev, p), curr: populationSet(pv.curr, p) }))
-  const buyers = (vs: readonly PopulationVideo[]) => vs.filter((v) => v.segment === 'market').length
-  console.log(`\n  the market: ${prevMonth.slice(0, 7)} ${pv.prev.length} videos · ${month.slice(0, 7)} ${pv.curr.length}`)
-  for (const s of sets) {
-    const line = (x: PopulationSet) => `${x.ids.length} videos (base ${x.base}: makers ${x.makers}, off-topic ${x.noise}${x.population === 'same_searches_clean' ? `, left out as ambiguous ${x.ambiguous}` : ''})`
-    const floor = Math.min(s.prev.ids.length, s.curr.ids.length) < 100 ? '  → under 100 on a side' : ''
-    console.log(`  ${s.curr.population.padEnd(19)} ${prevMonth.slice(0, 7)} ${line(s.prev)} · ${month.slice(0, 7)} ${line(s.curr)}${floor}`)
-  }
-  console.log(`  equal_age           checks pending (both months at the same age after they ended: WP3.4, from December)`)
-  const bPrev = buyers(pv.prev)
-  console.log(`  buyers only (no makers, no off-topic): ${prevMonth.slice(0, 7)} ${bPrev} · ${month.slice(0, 7)} ${buyers(pv.curr)}${bPrev < 100 ? `  → too few in ${new Date(iso(prevMonth)).toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' })} to check` : ''}`)
-
-  // The objects: the market's kinds, its ready subjects, mood, and the themes.
-  ration.spend(1, 'subjects')
-  const { data: subs, error: sErr } = await admin.from('subjects')
-    .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version').eq('client_id', args.clientId)
-  if (sErr) throw new Error(`${NAME}: subjects: ${sErr.message}`)
-  type SubjectRow = { id: string; name: string; status: string; calibrated_at: string | null; calibration_precision: number | string | null; calibration_n: number | string | null; calibration_judge_version: string | null }
-  const live = ((subs ?? []) as SubjectRow[]).filter((s) => s.status !== 'retired')
-  const ready = live.filter((s) => subjectCalibration(s) === 'ready')
-  const notReady = live.filter((s) => subjectCalibration(s) !== 'ready')
-  if (notReady.length) console.log(`\n  subjects with no verdict (not ready, decision C): ${notReady.map((s) => `${s.name} (${subjectCalibration(s)})`).join(', ')}`)
-  ration.spend(1, 'the latest themed run')
-  const { data: themed, error: tErr } = await admin.from('theme_observations').select('run_id, run_date').eq('client_id', args.clientId)
-    .order('run_date', { ascending: false }).limit(1)
-  if (tErr) throw new Error(`${NAME}: theme_observations: ${tErr.message}`)
-  const themeRun = (themed?.[0] as { run_id?: string } | undefined)?.run_id ?? null
-  console.log(`  themes read under the latest themed run: ${themeRun ?? '(none)'}`)
-
-  // lens_readings: the whole market (follows_depth's reference, the theme
-  // list) and each population, in both months.
-  const allIds = { prev: pv.prev.map((v) => v.id), curr: pv.curr.map((v) => v.id) }
   const lensFile = args.values['lens-file'] ? JSON.parse(readFileSync(args.values['lens-file'], 'utf8')) as Record<string, LensRow[]> : null
-  const lens = async (population: RecheckPopulation | 'all', m: string, ids: readonly string[], minDated: number): Promise<LensRow[] | null> => {
-    if (lensFile) return lensFile[`${population}|${m}`] ?? null
-    try {
-      return await lensOf(admin, args.clientId, m, themeRun, ids, minDated, ration, `lens_readings ${population} ${m.slice(0, 7)}`)
-    } catch (e) {
-      if (isMissingObject(e, 'lens_readings')) return null
-      throw e
-    }
+  const result = await recheckPair(ctx, {
+    monthVideos: async (m) => {
+      const set = await readMonthVideos(admin, args.clientId, m, ration)
+      ration.spend(0, `market_month_videos ${m}`)
+      if (!set) throw new Error(`${NAME}: market_month_videos is not on ${args.project}: MF1 is not applied. Nothing written.`)
+      return set
+    },
+    segments: (ids) => segmentsOf(admin, args.clientId, ids, ration),
+    lens: async (population, m, ids, minDated, capturedBefore, themeRun) => {
+      if (lensFile) return lensFile[`${population}|${m}`] ?? null
+      try {
+        return await lensOf(admin, args.clientId, m, themeRun, ids, minDated, capturedBefore, ration, `lens_readings ${population} ${m.slice(0, 7)}`)
+      } catch (e) {
+        if (isMissingObject(e, 'lens_readings')) return null
+        throw e
+      }
+    },
+    subjects: async () => {
+      ration.spend(1, 'subjects')
+      const { data, error } = await admin.from('subjects')
+        .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version').eq('client_id', args.clientId)
+      if (error) throw new Error(`${NAME}: subjects: ${error.message}`)
+      return data ?? []
+    },
+    themeRun: async () => {
+      ration.spend(1, 'the latest themed run')
+      const { data, error } = await admin.from('theme_observations').select('run_id, run_date').eq('client_id', args.clientId)
+        .order('run_date', { ascending: false }).limit(1)
+      if (error) throw new Error(`${NAME}: theme_observations: ${error.message}`)
+      return (data?.[0] as { run_id?: string } | undefined)?.run_id ?? null
+    },
+    labels: async (ids) => {
+      const labels = new Map<string, string>()
+      if (lensFile) return labels
+      ration.spend(1, 'theme labels')
+      const { data, error } = await admin.from('theme_registry').select('id, canonical_label').in('id', [...ids])
+      if (error) throw new Error(`${NAME}: theme_registry: ${error.message}. Nothing written.`)
+      for (const r of (data ?? []) as { id: string; canonical_label: string | null }[]) labels.set(r.id, r.canonical_label ?? r.id)
+      return labels
+    },
+  }, prevMonth, month, { requireReadToEnd: args.apply && !check })
+  for (const line of result.lines) console.log(line)
+  if (result.state === 'not_read_to_end') {
+    throw new Error(`${NAME}: ${month.slice(0, 7)} has not been read past its end: no re-check is written for a month still filling at its end (plan WP2.3). Nothing written.`)
   }
-  const wholePrev = await lens('all', prevMonth, allIds.prev, 1)
-  if (wholePrev == null) {
-    console.log(`\n  lens_readings is not on ${args.project} (MF2 not applied)${lensFile ? ' and not in --lens-file' : ''}: the populations are measured above; the checks are pending. Nothing written.`)
-    if (args.values['plan-out']) writeNew(args.values['plan-out'], JSON.stringify({ kind: 'comparability-checks-plan', version: 1, project: args.project, clientId: args.clientId, prevMonth, month, themeRun, readThroughRun: update.id, populations: sets, rows: [] }, null, 2))
+  if (result.state === 'unread') throw new Error(`${NAME}: no update has read ${month.slice(0, 7)} yet. Nothing to check.`)
+  if (result.state === 'pending') {
+    if (lensFile) console.log('  (and not in --lens-file)')
+    if (args.values['plan-out']) writeNew(args.values['plan-out'], JSON.stringify({ kind: 'comparability-checks-plan', version: 1, project: args.project, clientId: args.clientId, prevMonth, month, themeRun: result.themeRun, readThroughRun: result.readThroughRun, populations: result.sets, rows: [] }, null, 2))
     if (args.apply && !check) throw new Error(`${NAME}: apply MF2 first.`)
     return
   }
-  const wholeCurr = (await lens('all', month, allIds.curr, 1)) ?? []
-  const popLens = []
-  for (const s of sets) {
-    const prev = await lens(s.curr.population, prevMonth, s.prev.ids, s.prev.minDated)
-    const curr = await lens(s.curr.population, month, s.curr.ids, s.curr.minDated)
-    popLens.push({ sets: s, lens: { prev: prev ?? [], curr: curr ?? [] } })
-  }
-  const themeIds = themesToCheck(wholePrev, wholeCurr)
-  const labels = new Map<string, string>()
-  if (themeIds.length && !lensFile) {
-    ration.spend(1, 'theme labels')
-    const { data, error } = await admin.from('theme_registry').select('id, canonical_label').in('id', themeIds)
-    if (error) throw new Error(`${NAME}: theme_registry: ${error.message}. Nothing written.`)
-    for (const r of (data ?? []) as { id: string; canonical_label: string | null }[]) labels.set(r.id, r.canonical_label ?? r.id)
-  }
-  const kindIds = [...new Set([...wholePrev, ...wholeCurr].filter((r) => r.object_kind === 'kind').map((r) => r.object_id))]
-    .sort((a, b) => Object.keys(KIND_LABELS).indexOf(a) - Object.keys(KIND_LABELS).indexOf(b))
-  const objects: CheckObject[] = [
-    ...kindIds.map((id) => ({ kind: 'kind' as const, id, label: KIND_LABELS[id] ?? id })),
-    ...ready.map((s) => ({ kind: 'subject' as const, id: s.id, label: s.name })),
-    { kind: 'mood', id: 'positive', label: 'Positive' },
-    ...themeIds.map((id) => ({ kind: 'theme' as const, id, label: labels.get(id) ?? id })),
-  ]
-  const rows = recheckRows({
-    clientId: args.clientId, prevMonth, month, objects, whole: { prev: wholePrev, curr: wholeCurr },
-    populations: popLens, readThroughRun: update.id,
-  })
+  const rows = result.rows
 
   // The report.
-  const show = (r: CheckRow) => `${r.k_prev} of ${r.n_prev} → ${r.k_curr} of ${r.n_curr}: ${r.outcome}${r.verdict.changePts != null ? ` (${r.verdict.changePts > 0 ? '+' : ''}${r.verdict.changePts} pts, band ${r.verdict.bandPts})` : ''}`
+  const show = (r: StepCheckRow) => `${r.k_prev} of ${r.n_prev} → ${r.k_curr} of ${r.n_curr}: ${r.outcome}${r.verdict.changePts != null ? ` (${r.verdict.changePts > 0 ? '+' : ''}${r.verdict.changePts} pts, band ${r.verdict.bandPts})` : ''}`
   console.log('\n  the two candidates:')
   for (const kind of CANDIDATE_KINDS) {
     for (const r of rows.filter((x) => x.object_kind === 'kind' && x.object_id === kind)) {
@@ -315,16 +261,14 @@ async function main() {
     }
   }
   console.log('    (about a third of buying-interest remarks sit on makers\' videos, and "I want to make this" is filed as buying interest)')
-  const byOutcome = new Map<string, number>()
-  for (const r of rows) byOutcome.set(`${r.population}|${r.outcome}`, (byOutcome.get(`${r.population}|${r.outcome}`) ?? 0) + 1)
-  console.log(`\n  ${rows.length} rows (${objects.length} objects × ${sets.length} populations): ${[...byOutcome].map(([k, n]) => `${k} ${n}`).join(' · ')}`)
-  for (const r of rows.filter(mayPrintMoved)) console.log(`    MOVED on the searches both months ran (provisional): ${r.object_kind} ${r.verdict.objectLabel} ${show(r)}`)
+  console.log(checksSummaryLine(result))
+  for (const r of rows.filter((x) => x.population !== 'equal_age' && mayPrintMoved(x as CheckRow))) console.log(`    MOVED on the searches both months ran (provisional): ${r.object_kind} ${r.verdict.objectLabel} ${show(r)}`)
   for (const r of rows.filter((x) => x.outcome === 'follows_depth')) console.log(`    follows depth: ${r.object_kind} ${r.verdict.objectLabel} ${show(r)}`)
 
   if (args.values['plan-out']) {
     writeNew(args.values['plan-out'], JSON.stringify({
       kind: 'comparability-checks-plan', version: 1, project: args.project, clientId: args.clientId, prevMonth, month,
-      themeRun, readThroughRun: update.id, createdAt: now, populations: sets, rows,
+      themeRun: result.themeRun, readThroughRun: result.readThroughRun, createdAt: now, populations: result.sets, equalAge: result.equalAge, rows,
     }, null, 2))
     console.log(`\n  plan written: ${args.values['plan-out']} (${rows.length} rows)`)
   }
@@ -334,7 +278,7 @@ async function main() {
   }
 
   // Apply: skip a row identical to the newest one held for its key.
-  let held: (Pick<CheckRow, 'population' | 'object_kind' | 'object_id' | 'k_prev' | 'n_prev' | 'k_curr' | 'n_curr' | 'outcome' | 'read_through_run' | 'method_version' | 'population_makers' | 'population_noise'> & { computed_at: string })[]
+  let held: HeldCheck[]
   try {
     held = await selectAll(() => admin.from('comparability_checks')
       .select('population, object_kind, object_id, k_prev, n_prev, k_curr, n_curr, outcome, read_through_run, method_version, population_makers, population_noise, computed_at')
@@ -346,12 +290,7 @@ async function main() {
     console.log('  comparability_checks is not there (MF2 not applied): read as empty for --check')
     held = []
   }
-  const newest = new Map<string, (typeof held)[number]>()
-  for (const h of held) newest.set(`${h.population}|${h.object_kind}|${h.object_id}`, h)
-  const fresh = rows.filter((r) => {
-    const h = newest.get(`${r.population}|${r.object_kind}|${r.object_id}`)
-    return !(h && sameCheck(h, r))
-  })
+  const fresh = freshCheckRows(held, rows)
   if (check) {
     console.log(`\n--check: would insert ${fresh.length} rows (${rows.length - fresh.length} held as they are) · reads: ${ration.n}. Nothing written.`)
     return

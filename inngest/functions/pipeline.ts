@@ -25,6 +25,13 @@ import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
+import { comparabilitySummary, keepWeeksInRun, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
+import { planSegmentVideos, runSegmentBatch, segmentSummary, stepSegmentJudge } from '@/lib/pipeline/segment-videos'
+import { openai } from '@/lib/openai'
+import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
+import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
+import { openAiConfirmJudge } from '@/lib/brands/confirm'
+import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -49,7 +56,7 @@ import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, is
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { brandConfirmEnabled, CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -293,6 +300,21 @@ export const runPipeline = inngest.createFunction(
         await admin.from('pipeline_runs')
           .update({ status: 'failed', error_message: `abandoned: still 'running' after ${RUN_STALE_AFTER_HOURS}h when a new run opened`, completed_at: new Date().toISOString() })
           .in('id', decision.staleRunIds)
+      }
+      // Queued tracking edits (market-first decision I, WP3.10, deploy 4):
+      // due on their effective month's 1st and never before 1 Jan 2027, applied
+      // here, before the config is read below, so this run gathers what it
+      // applied; each is one UPDATE with an actor naming who asked, and
+      // applied_at is stamped once. Inert until January. Never fatal: a
+      // failure is logged and the run opens on the config as it stands.
+      // A resume re-reads the run it resumes and applies nothing.
+      if (!options.runId) {
+        try {
+          const queued = await applyQueuedEdits(admin, { clientId, runId: newRunId, now: new Date().toISOString() })
+          if (queued.status !== 'nothing_due') console.log(`[open-run] queued tracking edits: ${queued.status} · ${queued.note}`)
+        } catch (e) {
+          console.error(`[open-run] queued tracking edits not applied: ${e instanceof Error ? e.message : String(e)}`)
+        }
       }
       // Frozen here, inside the memoised step: every later step replays these
       // values instead of re-reading an environment (or a tenant config) that
@@ -1562,6 +1584,155 @@ export const runPipeline = inngest.createFunction(
       newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
     }
 
+    // ── Deploy 4 (market-first, plan §4.2 "Pipeline ids"): four additive ids
+    //    immediately before freeze-months, in this order: segment-videos ·
+    //    comparability · lens-readings · brand-readings. Each fans out as
+    //    `plan-x` + `x:${i}-of-${n}`, is non-fatal (logged, never noteError'd:
+    //    the freeze-months precedent) and a no-op until its tables exist.
+    //
+    // The segment-videos step (WP3.2): a segments_v1 rule row for every video
+    // still missing one (the run's new videos), at $0. The judge (segments_v2,
+    // mf/s3-segments' judgeSegmentBatch) is built and called only where
+    // SEGMENT_JUDGE_ENABLED is on for the tenant, and it is off for every
+    // tenant until Heinrich's yes. One batch of videos a step (100 with the
+    // judge on, so its calls finish inside the 300 s).
+    const segmentPlan = await step
+      .run('plan-segment-videos', async () => {
+        const r = await planSegmentVideos(createAdminClient(), clientId)
+        console.log(`[segment-videos] ${r.note}`)
+        return r
+      })
+      .catch((e) => {
+        console.error(`[segment-videos] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const segmentBatches = segmentPlan?.batches ?? []
+    for (let i = 0; i < segmentBatches.length; i++) {
+      const ids = segmentBatches[i]
+      await step
+        .run(`segment-videos:${i + 1}-of-${segmentBatches.length}`, async () => {
+          const admin = createAdminClient()
+          // The judge is built only where SEGMENT_JUDGE_ENABLED is on for the tenant.
+          const judge = await stepSegmentJudge(admin, clientId, runId, openai)
+          const r = await runSegmentBatch(admin, { clientId, runId, ids, judge })
+          console.log(`[segment-videos] ${segmentSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[segment-videos] batch ${i + 1} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
+    // The comparability step (WP3.4): month_pair_comparability and
+    // config_change_reach for every pair with a filling side, read through THIS
+    // run; comparability_checks for a pair whose later month has ended; and the
+    // weekly keep (WP3.13, no id of its own: each week this run brings to its
+    // age, through mf/s3-weekline's one keep store, so the Monday capture stops). One task a step, so none nears the
+    // 300 s limit. The plan's clock is memoised with it, so every task of this
+    // run measures at one instant, the same on a replay.
+    const comparabilityPlan = await step
+      .run('plan-comparability', async () => {
+        const admin = createAdminClient()
+        const now = new Date().toISOString()
+        let filling: string[] = []
+        try {
+          filling = await fillingMonths(admin, clientId)
+        } catch (e) {
+          if (!isMissingMonthlyReading(e)) throw e
+        }
+        return { now, tasks: planComparability(now, filling) }
+      })
+      .catch((e) => {
+        console.error(`[comparability] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const comparabilityTasks = comparabilityPlan?.tasks ?? []
+    for (let i = 0; i < comparabilityTasks.length; i++) {
+      const task = comparabilityTasks[i]
+      await step
+        .run(`comparability:${i + 1}-of-${comparabilityTasks.length}`, async () => {
+          const r = await runComparabilityTask(createAdminClient(), {
+            clientId, runId, now: comparabilityPlan!.now, task, keepWeeks: keepWeeksInRun,
+          })
+          console.log(`[comparability] ${comparabilitySummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[comparability] ${taskLabel(task)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
+    // The lens-readings step (WP3.3): every lens (market, buyers, makers,
+    // all but noise, well read, the same searches) of every month the run
+    // refreshes, over this run's themes. BEFORE freeze-months, and it has to
+    // be: a month that freezes in this run gets its lens rows written frozen
+    // before freeze-months writes the denominator marker, as freezeMonths
+    // orders its own sides; after it, the insert guard would refuse every
+    // first-seen key for that month. One month a step; the plan's clock is
+    // the one every month is frozen by.
+    const lensPlan = await step
+      .run('plan-lens-readings', async () => {
+        const now = new Date().toISOString()
+        const r = await planLensReadings(createAdminClient(), clientId, now)
+        console.log(`[lens-readings] ${r.note}`)
+        return { now, months: r.months }
+      })
+      .catch((e) => {
+        console.error(`[lens-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const lensMonthsToRead = lensPlan?.months ?? []
+    for (let i = 0; i < lensMonthsToRead.length; i++) {
+      const month = lensMonthsToRead[i]
+      await step
+        .run(`lens-readings:${i + 1}-of-${lensMonthsToRead.length}`, async () => {
+          const r = await runLensMonth(createAdminClient(), { clientId, runId, now: lensPlan!.now, month })
+          console.log(`[lens-readings] ${lensSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[lens-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
+    // The brand-readings step (WP3.5): for every month the run refreshes, the
+    // new brand_mentions rows the rules give, and month_brand_readings per
+    // audience and brand (in all, in the content, in a comment, and without
+    // the brand's own searches). Before freeze-months for the lens step's
+    // reason. The GPT confirm of an ambiguous hit runs only where
+    // BRAND_CONFIRM_ENABLED is on for the tenant (off for every tenant until
+    // Heinrich's yes, deploy 5); off, the judge is never built. One month a step.
+    const brandPlan = await step
+      .run('plan-brand-readings', async () => {
+        const now = new Date().toISOString()
+        const r = await planBrandReadings(createAdminClient(), clientId, now)
+        console.log(`[brand-readings] ${r.note}`)
+        return { now, months: r.months }
+      })
+      .catch((e) => {
+        console.error(`[brand-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const brandMonthsToRead = brandPlan?.months ?? []
+    for (let i = 0; i < brandMonthsToRead.length; i++) {
+      const month = brandMonthsToRead[i]
+      await step
+        .run(`brand-readings:${i + 1}-of-${brandMonthsToRead.length}`, async () => {
+          const admin = createAdminClient()
+          const judge = brandConfirmEnabled(clientId) ? openAiConfirmJudge(admin, clientId, runId) : null
+          const r = await runBrandMonth(admin, { clientId, runId, now: brandPlan!.now, month, judge })
+          console.log(`[brand-readings] ${brandSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[brand-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
     // The comment-dated monthly reading (Phase 0, design items 1–2). Here,
     // right after persist-themes, because it reads THIS run's observations:
     // the months are the months of one clustering, and the next run's
@@ -1722,6 +1893,9 @@ export const runPipeline = inngest.createFunction(
           updateVideos: totalVideos,
         })
         console.log(`[anomaly-check] ${r.status} — ${r.note}`)
+        if (r.baseline?.dropped.length) {
+          console.log(`[anomaly-check] baseline: comparable ${r.baseline.kept.map((m) => m.slice(0, 7)).join(' ') || '(none)'}; left out ${r.baseline.dropped.map((m) => m.slice(0, 7)).join(' ')}, refused against ${r.baseline.weekMonth.slice(0, 7)} on a change of ours`)
+        }
         if (r.registration) {
           console.log(
             `[anomaly-check] set: ${r.registration.counts.kind} kinds · ${r.registration.counts.rival} rivals · ` +
