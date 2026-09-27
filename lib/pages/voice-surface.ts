@@ -54,6 +54,9 @@ import {
   type ThemeFlag,
 } from './overview-market'
 import { row, rows as readRows } from './read'
+import { readConversationView, viewParams } from '../views/conversation'
+import type { ViewState } from '../views/state'
+import { VIEW_PARAM } from '../views/view'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { buildWords, loadKindRows, loadWordsCandidates, marketKindVideos, shortlistWords, type WordsBlock } from './voice-surface-words'
@@ -106,6 +109,8 @@ const ASK_MAX = 300
 export type VoiceSurfaceParams = {
   /** `?month=` (MONTH_PARAM): the month the page reads, where the reader chose one. */
   month?: string
+  /** `?view=` (VIEW_PARAM, WP3.3): Everything, Buyers or Makers, where the views are live (lib/views). */
+  view?: string
   /** `theme_registry.id` — which theme the pane is open on. */
   theme?: string
   /** `'all'` lists the themes at 3 to 9 under the board. */
@@ -259,6 +264,9 @@ export interface VoiceSurfaceData {
    *  has neither. */
   words?: WordsBlock | null
   where?: WhereBlock | null
+  /** The view the page reads and its pill (WP3.3, lib/views). Absent where no
+   *  view is live for the tenant, and on a copy stored before it. */
+  view?: ViewState
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -283,7 +291,7 @@ export function voiceSurfaceHref(
 ): string {
   const merged: Record<string, string | null | undefined> = { ...params, ...over }
   const qs = new URLSearchParams()
-  for (const key of [MONTH_PARAM, 'theme', 'board', 'persona', 'accounts']) {
+  for (const key of [MONTH_PARAM, 'theme', 'board', 'persona', 'accounts', VIEW_PARAM]) {
     const value = merged[key]
     if (value) qs.set(key, value)
   }
@@ -557,7 +565,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const reading: ReadingHandle = scope.reading
-  const params = scope.params as VoiceSurfaceParams
+  // `?view=` is kept only where it names a view this tenant reads (lib/views).
+  const params = viewParams(clientId, scope.params as VoiceSurfaceParams)
   const readingAt = new Date().toISOString()
   // ONE MONTH, NO HORIZON (the nav offers none, `lib/nav.ts`): the board, the
   // pane and the market line all read the reading month.
@@ -615,6 +624,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const judgeAhead = loadAppPairOn(reading, readingAt)
   const db = reading.client
   const addedAhead = addedSearchesRead(db, clientId, month)()
+  // THE VIEW (WP3.3, lib/views): one lens read, and none while no view is live.
+  const viewAhead = readConversationView(db, clientId, params, month, prevMonth)
 
   // C5 AND C6 START HERE (WP3.8): they read the reading month alone, so they
   // run beside everything below. The month's category videos, with their
@@ -644,9 +655,9 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   whereAhead.catch(() => {})
 
   // ── wave 3: the pool, the segments, the overrides, the cast ────────────
-  const themedRunId = await themedRunAhead
+  const [themedRunId, cv] = await Promise.all([themedRunAhead, viewAhead])
   const [pool, segmentRows, excluded, profileRes, newestRunRes] = await Promise.all([
-    loadThemePool(db, clientId, month),
+    cv.lens ? cv.pool([], POOL_FLOOR) : loadThemePool(db, clientId, month),
     loadThemeSegmentRows(db, clientId, month, themedRunId),
     loadLeadExclusions(db, clientId),
     supabase.from('consumer_profiles')
@@ -661,14 +672,16 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const shownIds = expanded ? pool.map((r) => r.id) : atTenIds
   const kById = new Map(pool.map((r) => [r.id, r.k]))
 
-  const segments: ThemeBoard['segments'] = !makerRule ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
-  const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
+  // On a view (WP3.3) the segments and shares are the view's (`cv`, an
+  // identity while no view is live).
+  const segments: ThemeBoard['segments'] = cv.segments(!makerRule ? 'no_rule' : segmentRows ? 'measured' : 'unknown')
+  const shares = cv.shares(segmentRows ? themeSegmentsOf(segmentRows) : null)
 
   // ── wave 4: last month, the labels and kinds, and each theme's videos ──
   // The refs' comment ids ride the same read: the bank's anchor (C5).
   const refComments = new Map<string, Set<string>>()
   const wave4 = Promise.all([
-    loadPrevK(db, clientId, prevMonth, shownIds),
+    cv.lens ? cv.prevK(new Map()) : loadPrevK(db, clientId, prevMonth, shownIds),
     loadBoardObservations(db, clientId, themedRunId, shownIds),
     loadThemeRefs(db, clientId, month, shownIds, refComments),
   ])
@@ -705,8 +718,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const [prevK, obs, refs] = await wave4
   const denom = (m: string, audience: string) =>
     history.denominators.find((d) => monthStartOf(d.month) === m && d.audience === audience) ?? null
-  const n = denom(month, INDUSTRY_AUDIENCE)?.videos ?? 0
-  const prevN = denom(prevMonth, INDUSTRY_AUDIENCE)?.videos ?? null
+  const n = cv.n(denom(month, INDUSTRY_AUDIENCE)?.videos ?? 0)
+  const prevN = cv.prevN(denom(prevMonth, INDUSTRY_AUDIENCE)?.videos ?? null)
 
   // FOUR THINGS NOW RUN BESIDE EACH OTHER, because none waits on another: the
   // flags' reads, where each theme's videos came from, the cast, and the lead
@@ -819,15 +832,15 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   themes = themes.map((t) => ({
     ...t,
     flags: themeFlags({ k: t.k, prevK: t.prev?.k ?? null, heardBefore: (t.prev?.k ?? 0) > 0 || heardBefore.has(t.registryId), regrouped: regrouped.has(t.registryId) }),
-    provenance: themeProvenance(refs.get(t.registryId) ?? [], evidence, added),
+    provenance: cv.provenance(themeProvenance(refs.get(t.registryId) ?? [], evidence, added), t.k),
   }))
 
   // THE CATEGORY'S VIDEOS IN A THEME AT 10+ (C1's second line): the union of
   // their videos, where every one of them was read.
   const tenIds = themes.filter((t) => t.k >= THEME_FLOOR).map((t) => t.registryId)
-  const inThemes = tenIds.length > 0 && tenIds.every((id) => refs.has(id))
+  const inThemes = cv.inThemes(tenIds.length > 0 && tenIds.every((id) => refs.has(id))
     ? new Set(tenIds.flatMap((id) => refs.get(id) ?? [])).size
-    : null
+    : null)
   const pair = await judgeAhead
   const chip = pairChip(pair(prevMonth, month, INDUSTRY_AUDIENCE))
   const board = buildConversationBoard(themes, n, month, segments, prevN != null ? { month: prevMonth, n: prevN } : null, {
@@ -858,7 +871,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const isLead = open != null && open.registryId === leadId
   const marketVoicesOnly = isLead && segments === 'measured'
   const openCandidates = open ? voicesRead.get(open.registryId)?.candidates ?? [] : []
-  if (marketVoicesOnly) await markVideoSegments(db, clientId, openCandidates)
+  if (marketVoicesOnly || cv.readsSegments) await markVideoSegments(db, clientId, openCandidates)
   const theme: ThemeBlock = open
     ? {
         state: 'ready',
@@ -872,9 +885,9 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         n: open.n,
         prev: open.prev,
         provenance: open.provenance,
-        kinds,
+        kinds: cv.kinds(kinds),
         // Never a sale offer or an ad (default M-c): the next eligible voice.
-        voices: pickQuotes(openCandidates, { month, kind: open.kind, count: THEME_VOICES, marketVideosOnly: marketVoicesOnly, skipOffers: true })
+        voices: pickQuotes(cv.voices(openCandidates), { month, kind: open.kind, count: THEME_VOICES, marketVideosOnly: marketVoicesOnly, skipOffers: true })
           .map((c) => voiceOf(c as Parameters<typeof voiceOf>[0])),
         chip,
         isLead,
@@ -901,6 +914,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     // there although `DenominatorPoint` does not name it.
     platformMix: platformShares(categoryDenom?.platform_mix, categoryDenom?.videos ?? null),
   }
+  const viewed = cv.finish(market, { month, rivalAudiences: marketRivals, params })
 
   // ── C5 and C6, in ──────────────────────────────────────────────────────
   // A failure here costs its block, never the page: each block then says it
@@ -939,12 +953,13 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     substrate: history.substrate,
     notes: history.notes,
     params,
-    market,
+    market: viewed.market,
     board,
     theme,
     cast,
     words,
     where,
+    ...(viewed.view ? { view: viewed.view } : {}),
   }
 }
 
