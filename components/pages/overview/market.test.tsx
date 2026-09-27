@@ -533,6 +533,26 @@ describe('Össur, paused, with no maker rule and no subjects (§2.13, §5.2)', (
     expect(read(overviewThemes.render(ossurFrontFixture(), 'app', ctx))).toContain('Brand boycott over politics 16')
   })
 
+  // "AUG 0%" (the lead's ruling of 27 Sep): August did not read the theme, so
+  // its August cell is the preview's "·", in every mode, never "0%".
+  it('prints "·" in August for "Brand boycott over politics", which August did not read, never "0%"', () => {
+    for (const mode of MODES) {
+      const board = read(overviewThemes.render(ossurFrontFixture(), mode, ctx))
+      expect(board, mode).toMatch(/Brand boycott over politics 16 5% ·/)
+      expect(board, mode).not.toMatch(/(^|\s)0%/)
+    }
+    expect(Object.values(overviewThemes.figures?.(ossurFrontFixture()) ?? {}).filter((f) => f.value === 0)).toEqual([])
+  })
+
+  // NO NEW / NOW 10+ COLUMN ON THE FRONT PAGE'S BOARD (the lead's ruling of
+  // 27 Sep): the preview's board has none; the flags live on Conversation.
+  it('keeps the board without a New or Now 10+ flag: those live on Conversation', () => {
+    for (const mode of MODES) {
+      const board = read(overviewThemes.render(ossurFrontFixture(), mode, ctx))
+      expect(board, mode).not.toMatch(/\bNew\b|Now 10\+|none in Aug/)
+    }
+  })
+
   it('says "No subjects named yet" in one line, and promises no update', () => {
     expect(text).toContain('No subjects named yet')
     expect(text).not.toContain('from the 6 Dec update')

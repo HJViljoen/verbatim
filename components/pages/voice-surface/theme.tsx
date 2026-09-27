@@ -10,7 +10,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { FLAG_NOT_A_CHANGE, FLAG_WORDS } from '@/lib/pages/overview-market'
+import { FLAG_NOT_A_CHANGE, FLAG_WORDS, prevReadK } from '@/lib/pages/overview-market'
 import type { ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import type { Voice } from '@/lib/pages/overview'
 
@@ -125,10 +125,13 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
       </p>
     ) : null
 
+    // THE MONTH BEFORE ONLY WHERE IT READ THE THEME: a theme first heard
+    // this month has no August figure, not "0%" (`prevReadK`); its flag says so.
+    const prev = prevReadK(t) != null ? t.prev : null
     const stats = email ? (
       <p style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, margin: '8px 0 0' }}>
         <span data-copy="level"><span data-copy="figure">{fmtInt(t.k)}</span> of {fmtInt(t.n)} category videos</span> in {month}
-        {t.prev ? <> · <span data-copy="level"><span data-copy="figure">{fmtInt(t.prev.k)}</span> of {fmtInt(t.prev.n)}</span> in {longMonth(t.prev.month)}</> : null}
+        {prev ? <> · <span data-copy="level"><span data-copy="figure">{fmtInt(prev.k)}</span> of {fmtInt(prev.n)}</span> in {longMonth(prev.month)}</> : null}
         {t.provenance ? <> · <span data-copy="figure">{fmtInt(t.provenance.fromNewSearches)}</span> of the {fmtInt(t.k)} came from searches we added in {month}</> : null}
       </p>
     ) : (
@@ -145,12 +148,12 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             </span>
           )}
         />
-        {t.prev ? (
+        {prev ? (
           <Stat
             grey
-            value={<span data-copy="figure">{level(t.prev.k, t.prev.n)}</span>}
-            unit={`in ${longMonth(t.prev.month)}`}
-            base={<span data-copy="level"><span data-copy="figure" className={figure}>{fmtInt(t.prev.k)}</span> of {fmtInt(t.prev.n)} category videos</span>}
+            value={<span data-copy="figure">{level(prev.k, prev.n)}</span>}
+            unit={`in ${longMonth(prev.month)}`}
+            base={<span data-copy="level"><span data-copy="figure" className={figure}>{fmtInt(prev.k)}</span> of {fmtInt(prev.n)} category videos</span>}
           />
         ) : null}
         {t.provenance ? (

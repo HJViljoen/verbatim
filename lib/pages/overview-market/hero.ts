@@ -7,6 +7,7 @@ import {
   THEME_FLOOR,
   isMeasuredShare,
   makerFraction,
+  prevReadK,
   type MarketTheme,
   type ThemeBoard,
 } from './board'
@@ -190,14 +191,15 @@ export function heroThemeParts(hero: Extract<HeroLead, { kind: 'themes' }>, boar
 }
 
 /** "August: 7%, 7% and 3% of 351", or null where the previous month has no
- *  category row. Levels, never a change: nothing is compared across them. */
+ *  category row. Levels, never a change: nothing is compared across them. A
+ *  theme that month did not read is "none", never "0%" (`prevReadK`). */
 export function heroPrevParts(hero: Extract<HeroLead, { kind: 'themes' }>, board: ThemeBoard): HeroPart[] | null {
   const prev = board.prev
   if (!prev || prev.n == null || prev.n <= 0 || hero.top.length === 0) return null
   const parts: HeroPart[] = [{ t: 'text', s: `${longMonth(prev.month)}: ` }]
   hero.top.forEach((t, i) => {
     if (i > 0) parts.push({ t: 'text', s: i === hero.top.length - 1 ? ' and ' : ', ' })
-    parts.push({ t: 'figure', key: themeToken(t.registryId, 'prev') })
+    parts.push(prevReadK(t) == null ? { t: 'text', s: 'none' } : { t: 'figure', key: themeToken(t.registryId, 'prev') })
   })
   parts.push({ t: 'text', s: ' of ' }, { t: 'figure', key: THEME_PREV_N })
   return parts
@@ -251,8 +253,9 @@ export function themeFigures(board: ThemeBoard, rows: readonly MarketTheme[] = b
   for (const t of rows) {
     out[themeToken(t.registryId, 'k')] = { value: t.k, unit: 'videos', label: `videos on ${t.label} in ${month}` }
     if (carriesShare(t.n)) out[themeToken(t.registryId, 'share')] = levelFigure(t.k, t.n, `${t.label}'s share of ${month}`)
-    if (prev && prev.n != null && prev.n > 0) {
-      const k = t.prev?.k ?? 0
+    // No figure for a theme the previous month did not read: it prints "·".
+    const k = prevReadK(t)
+    if (prev && prev.n != null && prev.n > 0 && k != null) {
       out[themeToken(t.registryId, 'prev')] = levelFigure(k, prev.n, `${t.label}'s level in ${longMonth(prev.month)}`)
     }
   }

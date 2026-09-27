@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
-import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OverviewPage, TILE_BLOCKS, horizonRange } from './index'
+import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OverviewPage, TILE_BLOCKS, frontTile, horizonRange } from './index'
 import { overviewPage } from './page'
 import { SidebarTenant } from '@/components/sidebar-tenant-loader'
 import { PAGES } from '@/components/pages/registry'
@@ -172,6 +172,29 @@ describe('the Overview page', () => {
     expect(text).toContain('What you published')
     expect(text).toContain('What it means for you')
     assertCopyContract(markup)
+  })
+
+  // THE PREVIEW'S PAIRS, EACH ON ONE ROW, NEITHER STRETCHED (the lead's
+  // ruling of 27 Sep): `Main.dc.html`'s order, the subjects beside what it
+  // means for you and what you published beside the brands; above xl every
+  // tile spans one row, and a paired tile is as tall as its block.
+  it('pairs the tiles as the preview does, one row a pair, and stretches neither tile of a pair', () => {
+    for (const [data, cols] of [
+      [marketFrontFixture(), { 'overview.subjects': 8, 'overview.foryou': 4, 'overview.moves': 6, 'overview.rivals': 6 }],
+      [ossurFrontFixture(), { 'overview.subjects': 6, 'overview.foryou': 6, 'overview.moves': 6, 'overview.rivals': 6 }],
+    ] as const) {
+      const markup = render(<OverviewPage data={data} />)
+      const tiles = [...markup.matchAll(/<section data-tile="" data-col="(\d+)" data-row="\d+"[^>]*class="([^"]*)"/g)]
+      expect(tiles.map((m) => Number(m[1]))).toEqual(TILE_BLOCKS.map((b) => (cols as Record<string, number>)[b.key] ?? 12))
+      for (const [i, m] of tiles.entries()) {
+        const key = TILE_BLOCKS[i].key
+        expect(m[2], key).toContain('xl:row-span-1')
+        expect(m[2], key).not.toMatch(/xl:row-span-[2-9]/)
+        expect(m[2].includes('xl:self-start'), key).toBe(key in cols)
+      }
+    }
+    expect(frontTile('overview.moves', false)).toMatchObject({ col: 6, className: 'xl:row-span-1 xl:self-start' })
+    expect(frontTile('overview.change', false)).toMatchObject({ col: 12, className: 'xl:row-span-1' })
   })
 
   // ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8). Parsed from

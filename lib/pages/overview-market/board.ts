@@ -104,6 +104,21 @@ export interface ThemeBoard {
 const finiteShare = (s: number | null | undefined): number | null =>
   s != null && Number.isFinite(s) && s >= 0 && s <= 1 ? s : null
 
+/**
+ * The previous month's count of a theme that month read, or null where it did
+ * not read the theme (no row, or a row without it).
+ *
+ * NOT "Aug 0%" (the lead's ruling of 27 Sep on the deploy-3 design review).
+ * A theme first heard this month has no August reading, and its August cell
+ * printed "0%" as if August had been read for it and found nothing. The
+ * preview's mark for a month with no figure is "·" (its subjects table sets
+ * Price's August so), so a table prints "·" where this is null, and a
+ * sentence says "none".
+ */
+export function prevReadK(t: Pick<MarketTheme, 'prev'>): number | null {
+  return t.prev && t.prev.k > 0 ? t.prev.k : null
+}
+
 /** Board order: k desc, then the previous month's k desc, then the registry
  *  id, so the order never depends on how the rows came back. */
 export function byBoardOrder(a: MarketTheme, b: MarketTheme): number {

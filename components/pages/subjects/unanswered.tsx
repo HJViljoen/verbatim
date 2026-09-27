@@ -112,11 +112,11 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         // fit beside this block's long title in the 354px header of the narrow
         // half of the mock's 1.35:1 pair, so the TITLE wrapped and left
         // "ANSWER" alone on a second line with the tile's header 18px below
-        // its neighbour's. `HORIZON_LABEL` is what the four pills at the top
-        // of the page are labelled with — "Last 12 months" — so the tile is
-        // stamped with the period in the same words the reader chose it in,
-        // and it is seven characters shorter. `periodPhrase` still writes the
-        // lead sentence, where a fragment is what a sentence needs.
+        // its neighbour's. `HORIZON_LABEL` is the period's own name — "Last
+        // 12 months", the words a link that asks for a period (`?horizon=`)
+        // opens the page on — and it is seven characters shorter.
+        // `periodPhrase` still writes the lead sentence, where a fragment is
+        // what a sentence needs.
         meta={mode === 'app' ? HORIZON_LABEL[data.horizon] : unansweredMeta(u.questionVideos, u.yourPosts)}
         footer={footer}
         // ONE LINE, CLIPPED RATHER THAN WRAPPED. This tile is the narrow half of

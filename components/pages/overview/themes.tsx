@@ -7,7 +7,7 @@ import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { MAKERS_NOT_MEASURED, groupFigures, makerCell, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { MAKERS_NOT_MEASURED, groupFigures, makerCell, prevReadK, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, RULE, SCALE, barAxis, isMarketPage } from './market'
 
@@ -31,7 +31,8 @@ const BOARD_COLS = 'grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 @min-[820px
 const BOARD_HIDDEN = '@max-[820px]:hidden'
 const BOARD_OWN_LINE = '@max-[820px]:order-last @max-[820px]:col-span-full'
 
-/** A row's level cell: its share at 100 videos or more, its count under. */
+/** A row's level cell: its share at 100 videos or more, its count under, and
+ *  "·" where the month did not read the theme (`prevReadK`). */
 function levelCell(k: number | null, n: number | null): string {
   if (k == null || n == null || n <= 0) return '·'
   return carriesShare(n) ? `${Math.round((k / n) * 100)}%` : fmtInt(k)
@@ -62,7 +63,13 @@ function GroupLine({ words, group, mode }: { words: string; group: { count: numb
 function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print' | 'email'; chip: string | null }) {
   const prev = board.prev && board.prev.n != null ? board.prev : null
   const makersColumn = board.segments === 'measured'
-  const shares = board.rows.flatMap((t) => [t.k / t.n, prev && t.prev ? t.prev.k / (prev.n as number) : null])
+  // No August mark where August did not read the theme (`prevReadK`): the
+  // cell beside it prints "·", so the bar draws no tick at zero either.
+  const prevShare = (t: MarketTheme): number | null => {
+    const k = prevReadK(t)
+    return prev && k != null ? k / (prev.n as number) : null
+  }
+  const shares = board.rows.flatMap((t) => [t.k / t.n, prevShare(t)])
   const axis = barAxis(shares)
 
   if (mode === 'email') {
@@ -86,7 +93,7 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
                 <td style={cell}><span data-copy="subject" data-slot="pass_b_theme">{t.label}</span></td>
                 <td style={num}><span data-copy="figure">{fmtInt(t.k)}</span></td>
                 <td style={num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></td>
-                {prev ? <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span></td> : null}
+                {prev ? <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{levelCell(prevReadK(t), prev.n)}</span></td> : null}
                 {makersColumn ? <td style={{ ...cell, color: makerCell(t.makerShare) === MAKERS_NOT_MEASURED ? EMAIL.muted : EMAIL.ink2 }}>{makerCell(t.makerShare) ?? ''}</td> : null}
               </tr>
             ))}
@@ -150,11 +157,11 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
                   <span data-copy="subject" data-slot="pass_b_theme">{t.label}</span>
                 </span>
                 <span className={`block ${BOARD_HIDDEN}`}>
-                  <LevelBar share={t.k / t.n} prevShare={prev && t.prev ? t.prev.k / (prev.n as number) : null} axis={axis} />
+                  <LevelBar share={t.k / t.n} prevShare={prevShare(t)} axis={axis} />
                 </span>
                 <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(t.k)}</span></span>
                 <span className={SCALE.num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></span>
-                <span className={SCALE.prev}>{prev ? <span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span> : null}</span>
+                <span className={SCALE.prev}>{prev ? <span data-copy="figure">{levelCell(prevReadK(t), prev.n)}</span> : null}</span>
                 {makersColumn ? (
                   <span className={`inline-flex min-w-0 items-center gap-2 text-[13px] text-secondary-foreground ${BOARD_OWN_LINE}`}>
                     {/* In the narrow layout the column head is gone, so the tag names makers itself. */}

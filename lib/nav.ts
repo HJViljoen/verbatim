@@ -75,9 +75,11 @@ export const SURFACES: readonly Surface[] = [
   // page, and the approved preview's bar is the month selector and one line.
   { key: 'overview', href: '/dashboard', label: 'Your market', question: 'What is your market saying this month, and what changed?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'overview' },
   // SUBJECTS ON THE MARKET (WP2.2, deploy 3; §2.1): the question is the
-  // market's. The horizon stays: the questions asked on a subject are read
-  // over the period the reader picks (§2.3 S4).
-  { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How big is each subject in your market, month by month?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
+  // market's. NO HORIZON PILLS (the lead's ruling of 27 Sep, following the
+  // approved preview and §5.12: the bar is the month selector and one line).
+  // The page still reads `?horizon=`, so a link that asks for a period (the
+  // questions pane's "Asked most, last 3 months", §2.3 S4) opens on it.
+  { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How big is each subject in your market, month by month?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'subjects' },
   // CONVERSATION WITH DEPLOY 3 (WP2.4, plan §2.1): the page is rebuilt as
   // every theme at 10 videos or more, so the label changes with it. The key,
   // the address and the page key stay `voice`, so no stored link or report

@@ -14,6 +14,7 @@ import {
 } from './hero'
 import type { FigureTable } from '../../reading/verdicts'
 import { AUGUST, AUGUST_CATEGORY_N, SEPTEMBER, SEPTEMBER_CATEGORY_N, septemberThemes } from '../../test/market-fixture'
+import { OSSUR_AUGUST_N, OSSUR_SEPTEMBER_N, stagingOssurThemes } from '../../test/conversation-fixture'
 
 const board = (themes: MarketTheme[] = septemberThemes(), segments: 'measured' | 'unknown' | 'no_rule' = 'measured') =>
   buildThemeBoard(themes, SEPTEMBER_CATEGORY_N, SEPTEMBER, segments, { month: AUGUST, n: AUGUST_CATEGORY_N })
@@ -139,6 +140,19 @@ describe('the hero’s words', () => {
       'Its three biggest conversations not led by makers, of the 626 category videos: “Ready to buy handmade bags” 69, “Love for stylish bag design” 60 and “Confusion over airline bag sizes” 21. About a third of each of the first two sits under makers’ own posts.',
     )
     expect(text(view.prev, view.figures)).toBe('August: 7%, 7% and 3% of 351')
+  })
+
+  // "AUG 0%" (the lead's ruling of 27 Sep): a theme August did not read is
+  // "none" in the August line, and declares no August figure. Össur's staging
+  // themes, three of them, so "Brand boycott over politics" (16 of 338, not
+  // read in August) is among the three named.
+  it('say "none" for a named theme the month before did not read, never "0%"', () => {
+    const three = ['Admiration for personal resilience', 'Questions about prosthetic function', 'Brand boycott over politics']
+    const b = buildThemeBoard(stagingOssurThemes().filter((t) => three.includes(t.label)), OSSUR_SEPTEMBER_N, SEPTEMBER, 'no_rule', { month: AUGUST, n: OSSUR_AUGUST_N })
+    const view = heroView(heroLead(b, [], new Set()), b, SEPTEMBER)
+    expect(text(view.prev, view.figures)).toBe('August: 16%, 9% and none of 537')
+    const boycott = b.rows.find((t) => t.label === 'Brand boycott over politics')!
+    expect(view.figures[themeToken(boycott.registryId, 'prev')]).toBeUndefined()
   })
 
   it('declares each figure once, on the board’s own tokens', () => {

@@ -97,28 +97,19 @@ export const MARKET_TITLES: Readonly<Record<string, string>> = {
 }
 
 /**
- * The front page's spans: at deploy 2, every block the width of the page.
- *
- * NOT THE PREVIEW'S 8 : 4 FOR SUBJECTS AND BRANDS (design pass). The preview
- * pairs "The market by subject" with "What it means for you", a column of
- * line-ups as tall as the subjects; that block arrives with deploy 3. Paired
- * with the brands' one line instead, the right-hand tile was one sentence over
- * 300px of white. Full width, the subjects' figure columns also line up with
- * the board's above them. Deploy 3 restores the 8 : 4 with the block it was
- * drawn for.
+ * The front page's widths: every block the width of the page but the
+ * preview's two pairs (`Main.dc.html`), the subjects beside what it means for
+ * you (8 : 4) and what you published beside the brands (6 : 6).
  */
 const FRONT_COLS: Record<string, 4 | 6 | 8 | 12> = {
-  // WP2.5 restores the preview's pairs: the subjects beside what it means for
-  // you (8 : 4), and what you published beside the brands (6 : 6).
   'overview.subjects': 8,
   'overview.foryou': 4,
   'overview.moves': 6,
   'overview.rivals': 6,
 }
 
-/** Where the subjects are one line too (no subject named yet, Össur), the two
- *  one-line blocks share a row, half and half, rather than stacking two slim
- *  tiles. Both take one row, so the pair is one height. */
+/** Where the subjects are one line (no subject named yet, Össur), the same
+ *  pairs, half and half. */
 const ONE_LINE_COLS: Record<string, 4 | 6 | 8 | 12> = {
   'overview.subjects': 6,
   'overview.foryou': 6,
@@ -131,13 +122,37 @@ const ONE_LINE_ROWS: Record<string, number> = {
 }
 
 /**
+ * THE PREVIEW'S PAIRS, EACH ON ONE ROW, NEITHER TILE STRETCHED (the lead's
+ * ruling of 27 Sep on the deploy-3 design review).
+ *
+ * `PageGrid` stretches every tile in a row to the row's height, so the
+ * shorter tile of a pair carried the difference as white inside itself, with
+ * its footer link pushed to the bottom: about 350px in "What you published"
+ * beside the brands and about 150px in "The market by subject" beside what it
+ * means for you, on staging at 11 Oct. And the spans below were rows of
+ * different counts inside one pair (published 3, brands 1), so a pair's tiles
+ * ended 48px apart and a one-line pair staggered, the next tile starting
+ * beside the middle of the one before.
+ *
+ * So above `xl` every tile spans exactly one row, which puts each pair on one
+ * row in the preview's order, and a paired tile is `self-start`: it is as tall
+ * as what it draws, its footer under its content, and the pair shares its top
+ * edge. The pairing and the order are the preview's; neither tile is widened
+ * or re-paired to hide the difference.
+ */
+export function frontTile(key: string, oneLine: boolean): { col: 4 | 6 | 8 | 12; row: number; className: string } {
+  const col = (oneLine ? ONE_LINE_COLS : FRONT_COLS)[key] ?? 12
+  return {
+    col,
+    row: (oneLine ? ONE_LINE_ROWS[key] : undefined) ?? ROWS[key] ?? 2,
+    className: col < 12 ? 'xl:row-span-1 xl:self-start' : 'xl:row-span-1',
+  }
+}
+
+/**
  * How tall each block's tile is BELOW `xl`, where the page is one stacked
  * column and `Tile`'s `MIN_H` gives each tile a floor so the page keeps its
- * rhythm as it scrolls.
- *
- * AT `xl` THE GRID SIZES TO CONTENT AND THESE ARE SPANS, NOT HEIGHTS — see the
- * `xl:auto-rows-auto` on `PageGrid` below, and why it is there. A number here
- * is a proportion, not a measurement.
+ * rhythm as it scrolls. Above `xl` every tile spans one row (`frontTile`).
  */
 const ROWS: Record<string, number> = {
   'overview.bar': 1,
@@ -241,7 +256,6 @@ export function OverviewPage({
   const ctx = overviewContext(params)
   const market = isMarketPage(data)
   const oneLine = market && marketSubjectsLine(data) != null
-  const cols = oneLine ? ONE_LINE_COLS : FRONT_COLS
   return (
     <ExportScope
       page="overview"
@@ -275,7 +289,7 @@ export function OverviewPage({
             move the cliff: the fixture carries two subjects and three rivals
             where a live tenant carries eight and ten, and the eighth subject
             row would vanish on production with nothing in a test to see it.
-            Every tile on Overview is `col={12}` and alone in its row, so a
+            Every tile spans one row above xl (`frontTile`), so a
             content-sized track costs the page nothing and the spans below stay
             meaningful under `xl`, where `Tile`'s own `min-h` is the floor. */}
         {/* THE PREVIEW'S RHYTHM (design pass): 24px between tiles, and each
@@ -285,8 +299,7 @@ export function OverviewPage({
           {TILE_BLOCKS.map((block) => (
             <Tile
               key={block.key}
-              col={cols[block.key] ?? 12}
-              row={(oneLine ? ONE_LINE_ROWS[block.key] : undefined) ?? ROWS[block.key] ?? 2}
+              {...frontTile(block.key, oneLine)}
               // Only the market page's blocks draw their own insets; a page
               // built without the market reads keeps the tile's.
               flush={market}
@@ -306,7 +319,9 @@ export function OverviewPage({
               // edge-to-edge density did not survive (mock-gap §Visual
               // fidelity). The selector is here rather than in `BlockFrame`
               // because the frame is P0's and shared: a block rendered into an
-              // email or a slide has no tile to fill.
+              // email or a slide has no tile to fill. It fills a tile's floor
+              // below `xl`; above it no tile is taller than its block
+              // (`frontTile`).
               bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
               distribute="between"
             >

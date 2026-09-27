@@ -16,6 +16,7 @@ import {
   groupedMakerWords,
   makerCell,
   marketKindLabel,
+  prevReadK,
   type ConversationBoard,
   type MarketTheme,
 } from '@/lib/pages/overview-market'
@@ -54,10 +55,18 @@ const COLS = 'grid grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 @min-[900px]
 const WIDE = '@max-[900px]:hidden'
 const NARROW = '@min-[900px]:hidden'
 
-/** A level cell: the share at 100 videos or more, the count under. */
+/** A level cell: the share at 100 videos or more, the count under, and "·"
+ *  where the month did not read the theme (`prevReadK`). */
 function levelCell(k: number | null, n: number | null): string {
   if (k == null || n == null || n <= 0) return '·'
   return carriesShare(n) ? `${Math.round((k / n) * 100)}%` : fmtInt(k)
+}
+
+/** The bar's mark for the month before, and none where that month did not
+ *  read the theme: its cell prints "·", so no tick is drawn at zero. */
+function prevShareOf(t: MarketTheme, prevN: number | null): number | null {
+  const k = prevReadK(t)
+  return k != null && prevN ? k / prevN : null
 }
 
 /** "9 in Aug", "none in Aug": last month's count under a flag. */
@@ -152,11 +161,11 @@ function Row({ t, rank, board, params, openId, axis }: {
         ) : null}
       </span>
       <span className={`block ${WIDE}`}>
-        <LevelBar share={t.k / t.n} prevShare={t.prev && prevN ? t.prev.k / prevN : null} axis={axis} />
+        <LevelBar share={t.k / t.n} prevShare={prevShareOf(t, prevN)} axis={axis} />
       </span>
       <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(t.k)}</span></span>
       <span className={SCALE.num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></span>
-      <span className={SCALE.prev}>{prevMonth ? <span data-copy="figure">{levelCell(t.prev?.k ?? 0, prevN)}</span> : null}</span>
+      <span className={SCALE.prev}>{prevMonth ? <span data-copy="figure">{levelCell(prevReadK(t), prevN)}</span> : null}</span>
       <span className={`${WIDE} text-right font-mono text-[15px] tabular-nums text-foreground`}><span data-copy="figure">{provenance}</span></span>
       <span className={WIDE}><Flag t={t} mode="app" /></span>
     </div>
@@ -219,7 +228,7 @@ function EmailBoard({ board }: { board: ConversationBoard }) {
               <td style={cell}><span data-copy="subject" data-slot="pass_b_theme">{t.label}</span></td>
               <td style={num}><span data-copy="figure">{fmtInt(t.k)}</span></td>
               <td style={num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></td>
-              {prev ? <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span></td> : null}
+              {prev ? <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{levelCell(prevReadK(t), prev.n)}</span></td> : null}
               <td style={num}><span data-copy="figure">{t.provenance ? fmtInt(t.provenance.fromNewSearches) : '·'}</span></td>
               <td style={cell}><Flag t={t} mode="email" /></td>
             </tr>
@@ -242,7 +251,7 @@ function Board({ data, mode }: { data: VoiceSurfaceData; mode: RenderMode }) {
   }
   const prevN = board.prev?.n ?? null
   const all = groups(board).flatMap((g) => g.rows)
-  const axis = barAxis(all.flatMap((t) => [t.k / t.n, t.prev && prevN ? t.prev.k / prevN : null]))
+  const axis = barAxis(all.flatMap((t) => [t.k / t.n, prevShareOf(t, prevN)]))
   const openId = data.theme.id
   const head = (
     <div role="row" className={`${COLS} items-end ${RULE.head}`}>

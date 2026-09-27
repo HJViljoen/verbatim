@@ -110,6 +110,16 @@ describe('voiceBoard (C2): nothing skipped', () => {
     expect(ossurVoiceFixture().board.rows).toHaveLength(12)
   })
 
+  // "AUG 0%" (the lead's ruling of 27 Sep): the preview's "·" where August did
+  // not read the theme, in every mode; the flag says "none in Aug".
+  it('Össur: "Brand boycott over politics" prints "·" in August, never "0%"', () => {
+    for (const mode of MODES) {
+      const text = draw(ossurVoiceFixture(), mode)
+      expect(text, mode).toMatch(/Brand boycott over politics[\s\S]*?16\s+5%\s+·/)
+      expect(text, mode).not.toMatch(/(^|\s)0%/)
+    }
+  })
+
   it('before MF1: nothing grouped, the one waiting line, and no provenance printed as a zero', () => {
     const text = draw(refusedVoiceFixture())
     expect(text).toContain('Makers’ videos are not marked yet; this list groups them once they are.')

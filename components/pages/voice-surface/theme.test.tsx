@@ -76,6 +76,21 @@ describe('voiceTheme (C3)', () => {
     expect(text).toMatch(/0\s*of the 34\s*came from searches we added in September/)
   })
 
+  // "AUG 0%" (the lead's ruling of 27 Sep): a theme August did not read has
+  // no August figure, so the pane draws no "0% in August"; its flag says New.
+  // Össur's "Brand boycott over politics" (16 of 338; not read in August).
+  it('draws no August figure for a theme August did not read, never "0%"', () => {
+    const base = ossurVoiceFixture()
+    const boycott = base.board.rows.find((t) => t.label === 'Brand boycott over politics')!
+    const data = { ...base, theme: { ...base.theme, id: boycott.registryId, label: boycott.label, k: boycott.k, n: boycott.n, prev: boycott.prev, flags: boycott.flags, provenance: null, kinds: null, voices: [] } }
+    for (const mode of ['app', 'email'] as const) {
+      const text = draw(data, mode)
+      expect(text, mode).toMatch(/16\s*(videos\s*in September,\s*5%\s*)?of 338 category videos/)
+      expect(text, mode).not.toContain('in August')
+      expect(text, mode).not.toMatch(/(^|\s)0%/)
+    }
+  })
+
   it('before MF1: no maker words, no provenance, and says when nothing can be quoted', () => {
     const text = draw(refusedVoiceFixture())
     expect(text).not.toContain('makers’ own')
