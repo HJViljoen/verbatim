@@ -360,8 +360,8 @@ async function main() {
     ration.spend(0, `market_month_videos ${m}`)
     if (set) markets.set(m, set.map((v) => v.id))
   }
-  const rivalFound = await readRivalFound(admin, args.clientId, tracking.competitor_keywords)
-  ration.spend(rivalFound.pages, 'the rival searches and what they found')
+  // In turn, each page charged to the ration before it is read (plan §7.6).
+  const rivalFound = await readRivalFound(admin, args.clientId, tracking.competitor_keywords, ration)
   console.log(`  our rival searches, current and retired (${rivalFound.terms.size}): ${[...rivalFound.terms].sort().join(', ')}`)
   for (const [m, ids] of [...markets.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
     const base = withoutRivalSearches(ids, rivalFound.videos).length

@@ -93,8 +93,14 @@ export interface RivalFound {
   terms: ReadonlySet<string>
   /** The full-lane videos (the market's lane) any of them found, by uuid. */
   videos: ReadonlySet<string>
-  /** Pages read. */
+  /** Pages read: one per request, each page of a paged read its own. */
   pages: number
+}
+
+/** A read allowance a script keeps (`--max-reads`): charged BEFORE each
+ *  request, so it stops before the read that would overshoot it. */
+export interface ReadCharge {
+  spend(k: number, what: string): void
 }
 
 /**
@@ -105,34 +111,39 @@ export interface RivalFound {
  * for the matching rows, never for every market video. A read that fails
  * throws: the caller keeps what it printed before, never a count over a base
  * it could not read.
+ *
+ * ONE QUERY IN FLIGHT (plan §7.6; the deploy-3 fresh review): the reads go in
+ * turn, never side by side, and where a script passes its allowance
+ * (`charge`) each page is charged before it is asked for.
  */
 export async function readRivalFound(
   client: SupabaseClient,
   clientId: string,
   configured: readonly string[] | null | undefined,
+  charge?: ReadCharge,
 ): Promise<RivalFound> {
   let pages = 0
-  const count = <T>(rows: T[]): T[] => {
-    pages += Math.max(1, Math.ceil(rows.length / 1000))
-    return rows
+  // selectAll calls the builder once per page: the charge goes first.
+  const page = <B>(what: string, build: () => B): (() => B) => () => {
+    charge?.spend(1, what)
+    pages += 1
+    return build()
   }
-  const runTerms = count(await selectAll<{ id: string; keyword: string | null; bucket: string | null }>(() =>
+  const runTerms = await selectAll<{ id: string; keyword: string | null; bucket: string | null }>(page('the rival searches', () =>
     client.from('keyword_performance').select('id, keyword, bucket').eq('client_id', clientId).eq('bucket', 'competitor').order('id')))
   const terms = rivalSearchTerms(runTerms, configured)
   const spellings = overlapSpellings(runTerms, configured)
   if (terms.size === 0 || spellings.length === 0) return { terms, videos: new Set(), pages }
   const literal = pgTextArray(spellings)
-  const [now, first] = await Promise.all([
-    selectAll<{ id: string; source_keywords: string[] | null }>(() =>
-      client.from('videos').select('id, source_keywords').eq('client_id', clientId).eq('analyzed_lane', 'full')
-        .overlaps('source_keywords', literal).order('id')).then(count),
-    selectAll<{ video_id: string; first_terms: string[] | null }>(() =>
-      client.from('video_provenance').select('video_id, first_terms').eq('client_id', clientId)
-        .overlaps('first_terms', literal).order('video_id')).then(count, (error: unknown) => {
-      if (missing(error, 'video_provenance')) return []
-      throw error
-    }),
-  ])
+  const now = await selectAll<{ id: string; source_keywords: string[] | null }>(page('the videos our rival searches found', () =>
+    client.from('videos').select('id, source_keywords').eq('client_id', clientId).eq('analyzed_lane', 'full')
+      .overlaps('source_keywords', literal).order('id')))
+  const first = await selectAll<{ video_id: string; first_terms: string[] | null }>(page('the videos our rival searches found first', () =>
+    client.from('video_provenance').select('video_id, first_terms').eq('client_id', clientId)
+      .overlaps('first_terms', literal).order('video_id'))).catch((error: unknown) => {
+    if (missing(error, 'video_provenance')) return []
+    throw error
+  })
   const videos = rivalFoundOf([
     ...now.map((r) => ({ id: String(r.id), terms: r.source_keywords })),
     ...first.map((r) => ({ id: String(r.video_id), terms: r.first_terms })),
