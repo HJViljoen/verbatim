@@ -42,10 +42,11 @@ export function salesVoices(s: ForSalesData): SalesQuote[] {
   return s.objections.flatMap((g) => g.quotes.slice(0, 1)).slice(0, SALES_VOICES)
 }
 
-/** The label, as the model's theme words where the groups are themes, and as
- *  the client's own subject names otherwise. */
-function Label({ s, g }: { s: ForSalesData; g: SalesGroup }) {
-  return s.grouping === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{g.label}</span> : <>{g.label}</>
+/** An objection group's label: the insight's own theme (`groupCitations`
+ *  groups by it whatever `grouping` says), a model's words read back, so it is
+ *  `stored` and names the call that wrote it. */
+function Label({ g }: { s: ForSalesData; g: SalesGroup }) {
+  return <span data-copy="stored" data-slot="pass_a_audience_insight">{g.label}</span>
 }
 
 /** "About brands you track: complaints came up under 4 videos about
@@ -147,8 +148,8 @@ function App({ s, voices, mode }: { s: ForSalesData; voices: SalesQuote[]; mode:
 }
 
 /** The section, under a surface's key: `week.sales` on This week and
- *  `weekly.sales` in the weekly. */
-export function salesSection<D>(key: string, pick: (data: D) => ForSalesData): Block<D> {
+ *  `weekly.sales` in the weekly, whose card draws no footer (the preview's). */
+export function salesSection<D>(key: string, pick: (data: D) => ForSalesData, opts: { footer?: boolean } = {}): Block<D> {
   const block: Block<D> = {
     key,
     title: SALES_TITLE,
@@ -157,7 +158,7 @@ export function salesSection<D>(key: string, pick: (data: D) => ForSalesData): B
     render(data, mode = 'app', ctx) {
       const s = pick(data)
       const href = `${ctx.appUrl}${s.brief.href}`
-      const footer: ReactNode = mode === 'email' ? <WeeklyLink href={href} label="Open the sales brief →" /> : openLink(mode, href, 'Open the sales brief →')
+      const footer: ReactNode = opts.footer === false ? undefined : mode === 'email' ? <WeeklyLink href={href} label="Open the sales brief →" /> : openLink(mode, href, 'Open the sales brief →')
       const empty = block.emptyState(data)
       if (empty) {
         return <BlockFrame title={SALES_TITLE} mode={mode} footer={footer} roomy card><BlockEmpty mode={mode}>{empty}</BlockEmpty></BlockFrame>
@@ -199,4 +200,4 @@ export function salesSection<D>(key: string, pick: (data: D) => ForSalesData): B
 }
 
 /** WR4 · the weekly's "For sales". */
-export const forSales = salesSection<{ sales: ForSalesData }>('weekly.sales', (d) => d.sales)
+export const forSales = salesSection<{ sales: ForSalesData }>('weekly.sales', (d) => d.sales, { footer: false })

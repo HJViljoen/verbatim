@@ -1,63 +1,47 @@
-import type { Block } from '@/lib/blocks/types'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import { WEEKLY_BLOCK_KEYS, type WeeklyBlockKey } from '@/lib/reports/weekly'
+import type { WeeklyBlock } from './section'
 import { forSales } from './sales'
 import { weeklyWeek } from './week'
+import { weeklyCameIn } from './came-in'
 import { weeklySubjects } from './subjects'
-import { weeklyIncoming } from './incoming'
+import { weeklyThemes } from './themes'
 import { weeklyContent } from './content'
-import { weeklyCoverage } from './coverage'
+import { weeklyChange } from './change'
 
-// The weekly report's six blocks, in the design's order (Phase 1 WP17).
+// "Your market this week": the weekly report's seven sections, by key
+// (market-first WP3.7, plan §2.9; the approved preview's WeeklyReport).
 //
-// ARRANGED OVER BLOCK KEYS, and the keys are the arrangement: `WEEKLY_BLOCK_KEYS`
-// is the stored order, this map is what each key renders, and the document walks
-// the first through the second. A schedule that stores an order therefore stores
-// key strings, exactly as a report's sections do — which is what makes the
-// migrate-schedule-keys script a migration rather than a rename.
+// ARRANGED OVER BLOCK KEYS, and the keys are the arrangement:
+// `WEEKLY_BLOCK_KEYS` is the stored order, this map is what each key renders,
+// and the documents walk the first through the second. A key this build no
+// longer knows (`WEEKLY_RETIRED_KEYS`) is dropped, as a report's is; a stored
+// version 2 row prints the stale line before any block is asked for.
 //
-// NONE OF THE SIX DECLARES A `question` (Block D wave 3).
-//
-// `BlockFrame` prints `Block.question` under the heading in EVERY mode, on a
-// docblock claim that it is "the mock's own device — every artboard prints
-// one". Counted, every PRINTED artboard prints zero: MarketingBrief 0,
-// SalesBrief 0, ContentBrief 0, LeadershipBrief 0, WeeklyReport 0,
-// MonthlyReport 0, QuarterlyReview 0 — against Ask 6, Competitive 7, ThisWeek
-// 5, Voice 4. The device belongs to an app page's tiles, where a reader is
-// choosing what to look at; this artefact arrives in an inbox already opened
-// to one thing.
-//
-// SO IT IS DECLARED NOWHERE RATHER THAN SUPPRESSED PER MODE. The shared frame
-// gains a print/email arm in its own group's package, which would still leave
-// the question on the SHARE PAGE — `components/share/weekly-share-shell.tsx`
-// renders these six in 'app' mode, and that page is this artefact on the web,
-// not a dashboard. A weekly report prints no question in any of the three
-// places it is read, which is one rule rather than a mode table.
-//
-// It cost a row of the artboard's density on every section: six extra lines of
-// 12.5px narrator over the eyebrow, on the artefact mock-gap §7 calls "the
-// single most repeated extra", against design-system.md §0 rule 8, "no
-// explanatory micro-copy inside a tile". `Block.question` is optional and the
-// field is simply absent; `Block.title` stays, because registries, deck slide
-// headings and schedule rows name a section by it.
+// NONE DECLARES A `question`: an artefact that arrives in an inbox already
+// opened to one thing prints no narrator over its sections.
 
-export const WEEKLY_BLOCKS: Record<WeeklyBlockKey, Block<WeeklyData>> = {
+export const WEEKLY_BLOCKS: Record<WeeklyBlockKey, WeeklyBlock> = {
   'weekly.week': weeklyWeek,
+  'weekly.came-in': weeklyCameIn,
   'weekly.subjects': weeklySubjects,
-  'weekly.incoming': weeklyIncoming,
-  'weekly.sales': forSales,
+  'weekly.themes': weeklyThemes,
+  'weekly.sales': forSales as unknown as WeeklyBlock,
   'weekly.content': weeklyContent,
-  'weekly.coverage': weeklyCoverage,
+  'weekly.change': weeklyChange,
 }
 
 /** The blocks an arrangement names, in ITS order, dropping any key this build
- *  no longer knows — the same degradation a report's section keys get, for the
- *  same reason: a renamed tile degrades an artefact rather than breaking it. */
-export function weeklyBlocksFor(keys: readonly string[] = WEEKLY_BLOCK_KEYS): Block<WeeklyData>[] {
+ *  no longer knows. */
+export function weeklyBlocksFor(keys: readonly string[] = WEEKLY_BLOCK_KEYS): WeeklyBlock[] {
   return keys.flatMap((k) => {
     const block = WEEKLY_BLOCKS[k as WeeklyBlockKey]
     return block ? [block] : []
   })
 }
 
-export { weeklyWeek, weeklySubjects, weeklyIncoming, weeklyContent, weeklyCoverage, forSales }
+/** Every block, in the preview's order. */
+export const ALL_WEEKLY_BLOCKS: WeeklyBlock[] = weeklyBlocksFor(WEEKLY_BLOCK_KEYS)
+
+export type { WeeklyData }
+export { weeklyWeek, weeklyCameIn, weeklySubjects, weeklyThemes, weeklyContent, weeklyChange, forSales }

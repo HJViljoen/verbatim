@@ -83,7 +83,7 @@ function GroupLine({ words, group, mode, link }: { words: string; group: NonNull
   )
 }
 
-function Table({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
+export function HeardTable({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
   const month = shortMonthName(h.month)
   const prev = shortMonthName(h.prevMonth)
   const makers = h.segments === 'measured'
@@ -193,7 +193,7 @@ export const weekHeard: Block<WeekData> = {
                 in one sentence, marked as code's figures. */}
             {lead.level ? <span data-copy="figure">{lead.level}</span> : null}{lead.rest}
           </p>
-          {h.rows.length > 0 ? <Table h={h} mode={mode} /> : null}
+          {h.rows.length > 0 ? <HeardTable h={h} mode={mode} /> : null}
           {h.makers || h.setAside ? (
             <div className={email ? undefined : 'flex flex-col gap-2'}>
               {h.makers ? <GroupLine words="Makers and DIY, grouped" group={h.makers} mode={mode} link={mode === 'app' ? show(h.makers.count) : null} /> : null}

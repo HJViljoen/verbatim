@@ -8,6 +8,7 @@
 
 export {
   MonthlyLink as WeeklyLink,
+  Bar,
   Num,
   Table,
   RowLabel,
