@@ -4,6 +4,8 @@ import type { OtherMonth } from '@/lib/reading/reading-view'
 import { buildConversationBoard, makerShareSentence, marketKindLabel, type MarketTheme } from '@/lib/pages/overview-market'
 import type { Voice } from '@/lib/pages/overview'
 import { PERSONA_VIDEO_FLOOR, askAboutTheme, voiceSurfaceHref, type CastPersona, type VoiceSurfaceData } from '@/lib/pages/voice-surface'
+import type { WordsBlock } from '@/lib/pages/voice-surface-words'
+import { ACCOUNT_ROWS, type WhereBlock } from '@/lib/pages/voice-surface-where'
 
 // Conversation's block fixtures (market-first WP2.4).
 //
@@ -15,15 +17,20 @@ import { PERSONA_VIDEO_FLOOR, askAboutTheme, voiceSurfaceHref, type CastPersona,
 // identity is only ever compared inside one fixture. Staging's category read
 // 625 videos in September (production 626) and 351 in August.
 //
-// THREE STATES:
+// FOUR STATES:
 //   - `voiceFixture()`: Sealand's September, MF1 measured: 21 themes at 10+,
-//     7 of them maker-led, the lead "Price and sale questions" open;
+//     7 of them maker-led, the lead "Price and sale questions" open; the
+//     market's words in six kinds, and 17 accounts listed at the floor (10
+//     printed) with the military-dog channel and a poker channel set aside;
 //   - `ossurVoiceFixture()`: Össur (paused, no maker rule, §2.13): 12 themes,
-//     "Brand boycott over politics" New;
+//     "Brand boycott over politics" New; nothing set aside or marked;
 //   - `refusedVoiceFixture()`: Sealand's same month before MF1 is applied
 //     (segments not measured, no provenance, no union of theme videos) and with
-//     no themed update or profile behind the pane and the cast. Every absence
-//     is a null the loader returns, never a zero.
+//     no themed update or profile behind the pane and the cast, so neither the
+//     words nor where it talks is read. Every absence is a null the loader
+//     returns, never a zero;
+//   - `allAccountsVoiceFixture()`: Sealand with every account at the floor
+//     listed (`?accounts=all`).
 
 type Row = [id: string, label: string, k: number, prevK: number | null, kind: string | null, maker: number | null, noise: number | null, flags: MarketTheme['flags'], provenance: [number, number] | null]
 
@@ -574,6 +581,1049 @@ const MONTH = '2026-09-01'
 const PREV = '2026-08-01'
 const NOW = '2026-10-11T06:00:00.000Z'
 
+// C5 and C6 (WP3.8), from the same staging read on 27 Sep at the 11 Oct clock
+// (`loadVoiceSurface` through `scripts/loader-dump.ts`; the expanded list off
+// `loadMonthVideos` and `loadMemory` the same day). Registry ids shortened as
+// above; quote refs are the comments’ own ids, whole.
+const SEALAND_WORDS: WordsBlock = {
+ "kinds": [
+  {
+   "kind": "praise",
+   "label": "Praising it",
+   "quotes": [
+    {
+     "date": "2026-09-06T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@miritamgb/video/7682479419323223298",
+     "likes": 38,
+     "maker": true,
+     "platform": "tiktok",
+     "quote": {
+      "english": "How original and how beautiful! ❤️",
+      "lang": "es",
+      "ref": "c:0626605f-51ce-46d9-90c4-b74b9832b51f",
+      "text": "qué original y qué precioso! ❤️"
+     },
+     "theme": "Praise for beautiful bag design",
+     "themeId": "0b05fdf0"
+    },
+    {
+     "date": "2026-09-07T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=0kYYPl6H66s&lc=UgxAu0-OzrQFULUoqgV4AaABAg",
+     "likes": 5,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:c6af8527-18ea-4afd-b68a-5aa3bfe03a50",
+      "text": "I always bring an iPad to watch things as well 👍"
+     },
+     "theme": "Appreciation for smart packing tips",
+     "themeId": "056a478a"
+    },
+    {
+     "date": "2026-09-18T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/backpacks/comments/1wjewal/is_this_camel_backpack_actually_practical_day_to/",
+     "likes": 2,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:09f45ef5-470e-496f-aea6-89d1c20a8cf8",
+      "text": "This is an excellent backpack and it will serve you well in the city. As said you can modify it and make it more sleek"
+     },
+     "theme": "Praise for laptop carry features",
+     "themeId": "8285e151"
+    }
+   ],
+   "videos": 468
+  },
+  {
+   "kind": "purchase_intent",
+   "label": "Ready to buy",
+   "quotes": [
+    {
+     "date": "2026-09-16T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=ooYV2pm5kRc&lc=UgxfbP8vv2NFPAMnC3p4AaABAg",
+     "likes": 189,
+     "maker": true,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:01e65d97-34f6-40e6-b0f5-aa63b12d15d2",
+      "text": "OF COURSE I WOULD DIE FOR THAT BAGG"
+     },
+     "theme": "Buying interest and ordering questions",
+     "themeId": "03cabe7e"
+    },
+    {
+     "date": "2026-09-09T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@ayotinuwabagcreation/video/7683455256092478727",
+     "likes": 18,
+     "maker": true,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:a23efc78-9e33-4755-89ed-b293ec4f6380",
+      "text": "That first bag is how much in black"
+     },
+     "theme": "Price and sale questions",
+     "themeId": "22e2445c"
+    },
+    {
+     "date": "2026-09-19T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@bataray.ng/video/7686980095516462356",
+     "likes": 6,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:3f8dcdd8-c459-4297-a3aa-808e7a8bb2a8",
+      "text": "wow i want some I'm in Zambia though how can I reach you"
+     },
+     "theme": "Interest in shipping and locations",
+     "themeId": "2c7238b7"
+    }
+   ],
+   "videos": 381
+  },
+  {
+   "kind": "question",
+   "label": "Asking how it works",
+   "quotes": [
+    {
+     "date": "2026-09-07T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=uKEdtq_BCwc&lc=Ugyp7CCASLR2PrpepWt4AaABAg",
+     "likes": 3,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:386ea6aa-c49f-4d9c-b13f-0d96198e8a3f",
+      "text": "My carry-on has a side 1.5 inches over the limit, another side is one inch under, and the third is two inches under. Passes or no ?"
+     },
+     "theme": "Confusion about airline size rules",
+     "themeId": "f329a7dd"
+    },
+    {
+     "date": "2026-09-09T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/onebag/comments/1wb3h91/trip_report_8_days_in_switzerland_personal_item/",
+     "likes": 1,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:7852673e-e2ed-48e0-9b17-6d47f7f6bda6",
+      "text": "Hmm…I’m curious about what items were still damp after sink laundry?"
+     },
+     "theme": "Laundry planning for travel",
+     "themeId": "4f4bc420"
+    },
+    {
+     "date": "2026-09-10T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@kenaroseee_/video/7683939765028179214",
+     "likes": 4,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:57851348-89ba-40bf-964f-ce2cf9c89912",
+      "text": "Where did you order the first one from?"
+     },
+     "theme": "Buying interest and ordering questions",
+     "themeId": "03cabe7e"
+    }
+   ],
+   "videos": 334
+  },
+  {
+   "kind": "pain_point",
+   "label": "Hitting a problem",
+   "quotes": [
+    {
+     "date": "2026-09-17T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/onebag/comments/1wiu2cf/psa_osprey_sojourn_porter_46_99_on_sierra/",
+     "likes": 2,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:2d73a9a0-6dc1-4e07-9c17-9f342b1af2dc",
+      "text": "I want this pack, but it weighs almost 3.5 lbs? Is that right?"
+     },
+     "theme": "Frustration with bag weight",
+     "themeId": "0c0784d8"
+    },
+    {
+     "date": "2026-09-12T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=7nSE0b5iiSc&lc=UgybnTjEUflasXMSAal4AaABAg",
+     "likes": 1,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": "If a lot of stuff goes into the bag, doesn't the shoulder get heavy??",
+      "lang": "ko",
+      "ref": "c:17944403-4b8d-400b-8a36-6db3fa08f9cb",
+      "text": "가방 물건 많이 들어가게 되면 어깨가 무겁지는 않나여??"
+     },
+     "theme": "Comfort problems when carrying",
+     "themeId": "daf7426d"
+    },
+    {
+     "date": "2026-09-08T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/clinicalresearch/comments/1waek1f/best_travel_luggage_and_misc_gear/",
+     "likes": 7,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:4a13f627-b4a9-44d8-b6ba-d63360ca368e",
+      "text": "It also fits in EVERY overhead bin, even the smallest regional jet, which is amazing."
+     },
+     "theme": "Confusion about airline size rules",
+     "themeId": "f329a7dd"
+    }
+   ],
+   "videos": 263
+  },
+  {
+   "kind": "feature_request",
+   "label": "Asking for something",
+   "quotes": [
+    {
+     "date": "2026-09-19T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@bataray.ng/video/7686980095516462356",
+     "likes": 78,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:2b0c1fa4-695e-4f9f-a5ff-2f74bc69ba4a",
+      "text": "If you made it in pink and a bigger size I would buy it immediately 😭"
+     },
+     "theme": "More colors and variants wanted",
+     "themeId": "4c312c8b"
+    },
+    {
+     "date": "2026-09-16T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@lewkearnsy/video/7685735355978501398",
+     "likes": 3,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:9552a634-5cc0-46bf-a085-fcdc81aaa9f3",
+      "text": "Prices would be nice"
+     },
+     "theme": "Price and sale questions",
+     "themeId": "22e2445c"
+    },
+    {
+     "date": "2026-09-13T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=65CDjTTXHPo&lc=UgypbKp09YP3TH9ZHs94AaABAg",
+     "likes": 0,
+     "maker": true,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:28141594-d655-4531-b6ae-1ad88850a26a",
+      "text": "Yes a packing style video would be awesome"
+     },
+     "theme": "Appreciation for smart packing tips",
+     "themeId": "056a478a"
+    }
+   ],
+   "videos": 151
+  },
+  {
+   "kind": "objection",
+   "label": "Pushing back",
+   "quotes": [
+    {
+     "date": "2026-09-07T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=uKEdtq_BCwc&lc=UgzdppKXC6rq8JPVJ9R4AaABAg",
+     "likes": 0,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:3b17dca8-8863-4262-867c-21d63721a917",
+      "text": "Another way the TSA is protecting the airline industry more than anyone else."
+     },
+     "theme": "Confusion about airline size rules",
+     "themeId": "f329a7dd"
+    },
+    {
+     "date": "2026-09-18T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/onebag/comments/1wiu2cf/psa_osprey_sojourn_porter_46_99_on_sierra/",
+     "likes": 3,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:fe565c1d-b6a5-47f0-a91c-a9c87489d8b9",
+      "text": "I returned it. It didn't feel comfortable and I did not appreciate the straight jacket feature."
+     },
+     "theme": "Comfort problems when carrying",
+     "themeId": "daf7426d"
+    },
+    {
+     "date": "2026-09-12T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=yCeqWQUQvec&lc=UgyYHIwKFDH8wm2bFPt4AaABAg",
+     "likes": 1,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:678877de-f746-4e89-9c9f-e008aded5b16",
+      "text": "Except for the fact that nothing goes back to the Comunity from thrift stores anymore"
+     },
+     "theme": "Appreciation for thrifting value",
+     "themeId": "ce659d82"
+    }
+   ],
+   "videos": 115
+  }
+ ],
+ "month": "2026-09-01",
+ "segments": "measured",
+ "themes": 14
+}
+const SEALAND_WHERE_ALL: WhereBlock = {
+ "accounts": 469,
+ "atFloor": 19,
+ "comments": 15792,
+ "expanded": true,
+ "largest": {
+  "comments": 701,
+  "key": "reddit|r/onebag"
+ },
+ "listed": 17,
+ "memory": [
+  "2026-07-01",
+  "2026-08-01",
+  "2026-09-01"
+ ],
+ "month": "2026-09-01",
+ "rows": [
+  {
+   "comments": 701,
+   "foundBy": null,
+   "key": "reddit|r/onebag",
+   "maker": false,
+   "name": "r/onebag",
+   "platform": "reddit",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 28
+  },
+  {
+   "comments": 171,
+   "foundBy": null,
+   "key": "reddit|r/backpacks",
+   "maker": false,
+   "name": "r/backpacks",
+   "platform": "reddit",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 15
+  },
+  {
+   "comments": 128,
+   "foundBy": null,
+   "key": "reddit|r/ManyBaggers",
+   "maker": false,
+   "name": "r/ManyBaggers",
+   "platform": "reddit",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 10
+  },
+  {
+   "comments": 317,
+   "foundBy": null,
+   "key": "youtube|ReBorn Creations",
+   "maker": true,
+   "name": "ReBorn Creations",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 9
+  },
+  {
+   "comments": 227,
+   "foundBy": null,
+   "key": "tiktok|Shining Echoes",
+   "maker": true,
+   "name": "Shining Echoes",
+   "platform": "tiktok",
+   "seen": {
+    "n": 3,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 105,
+   "foundBy": null,
+   "key": "youtube|Backpacking & Blisters Podcast",
+   "maker": false,
+   "name": "Backpacking & Blisters Podcast",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 43,
+   "foundBy": null,
+   "key": "youtube|Miarti - Clever Sewing",
+   "maker": true,
+   "name": "Miarti - Clever Sewing",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 229,
+   "foundBy": null,
+   "key": "tiktok|Luisa | Reworking Textiles ✂️",
+   "maker": true,
+   "name": "Luisa | Reworking Textiles ✂️",
+   "platform": "tiktok",
+   "seen": {
+    "n": 3,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 156,
+   "foundBy": null,
+   "key": "youtube|Nomads Nation",
+   "maker": false,
+   "name": "Nomads Nation",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 63,
+   "foundBy": null,
+   "key": "reddit|r/HerOneBag",
+   "maker": false,
+   "name": "r/HerOneBag",
+   "platform": "reddit",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 62,
+   "foundBy": null,
+   "key": "youtube|Pack Hacker",
+   "maker": false,
+   "name": "Pack Hacker",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 39,
+   "foundBy": null,
+   "key": "youtube|Ire Heart Crafting",
+   "maker": true,
+   "name": "Ire Heart Crafting",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 190,
+   "foundBy": null,
+   "key": "tiktok|ItsElijahAgain",
+   "maker": false,
+   "name": "ItsElijahAgain",
+   "platform": "tiktok",
+   "seen": {
+    "n": 1,
+    "of": 3
+   },
+   "videos": 3
+  },
+  {
+   "comments": 128,
+   "foundBy": null,
+   "key": "tiktok|Ama crafts",
+   "maker": true,
+   "name": "Ama crafts",
+   "platform": "tiktok",
+   "seen": {
+    "n": 1,
+    "of": 3
+   },
+   "videos": 3
+  },
+  {
+   "comments": 114,
+   "foundBy": null,
+   "key": "tiktok|HandmadeByJamal",
+   "maker": false,
+   "name": "HandmadeByJamal",
+   "platform": "tiktok",
+   "seen": {
+    "n": 1,
+    "of": 3
+   },
+   "videos": 3
+  },
+  {
+   "comments": 35,
+   "foundBy": null,
+   "key": "youtube|Pack Hacker Reviews",
+   "maker": false,
+   "name": "Pack Hacker Reviews",
+   "platform": "youtube",
+   "seen": {
+    "n": 1,
+    "of": 3
+   },
+   "videos": 3
+  },
+  {
+   "comments": 17,
+   "foundBy": null,
+   "key": "tiktok|TheCreativeBarnUS",
+   "maker": false,
+   "name": "TheCreativeBarnUS",
+   "platform": "tiktok",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 3
+  }
+ ],
+ "segments": "measured",
+ "setAside": [
+  {
+   "comments": 73,
+   "foundBy": "sealand gear",
+   "key": "youtube|Mike Ritland",
+   "maker": false,
+   "name": "Mike Ritland",
+   "platform": "youtube",
+   "seen": null,
+   "videos": 8
+  },
+  {
+   "comments": 14,
+   "foundBy": "poler",
+   "key": "youtube|The Poker Academy",
+   "maker": false,
+   "name": "The Poker Academy",
+   "platform": "youtube",
+   "seen": null,
+   "videos": 3
+  }
+ ]
+}
+const SEALAND_WHERE: WhereBlock = { ...SEALAND_WHERE_ALL, rows: SEALAND_WHERE_ALL.rows.slice(0, ACCOUNT_ROWS), expanded: false }
+const OSSUR_WORDS: WordsBlock = {
+ "kinds": [
+  {
+   "kind": "praise",
+   "label": "Praising it",
+   "quotes": [
+    {
+     "date": "2026-09-07T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=z2PvC9F6Y6Y&lc=Ugy6GuVRGHRcVVxTQwZ4AaABAg",
+     "likes": 1005,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:4288cf48-d6ef-4aca-a9e0-59f4fba6ac77",
+      "text": "She didnt touch her🤦‍♂️"
+     },
+     "theme": "Admiration for personal resilience",
+     "themeId": "2418f4d7"
+    },
+    {
+     "date": "2026-09-12T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@hey_jer.ome/video/7684456764284194069",
+     "likes": 7,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:fd1ae323-8258-42cf-b2b7-f6d05de8d67a",
+      "text": "Bro this is the smoothest prosthetic I’ve seen"
+     },
+     "theme": "Praise for prosthetic look",
+     "themeId": "559bbc8c"
+    },
+    {
+     "date": "2026-09-04T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@sabia.and.loren/video/7681721616308374814",
+     "likes": 28,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:23f3919c-b108-4d5f-8ccc-9bf389e480fd",
+      "text": "That’s a game changer for you guys I’m so happy you’ve got this 💪🏻"
+     },
+     "theme": "Excitement about prosthetic innovation",
+     "themeId": "d548dd42"
+    }
+   ],
+   "videos": 206
+  },
+  {
+   "kind": "pain_point",
+   "label": "Hitting a problem",
+   "quotes": [
+    {
+     "date": "2026-09-10T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=HUoL5xTcxZM&lc=Ugz5o042hKiwdOXNo1h4AaABAg",
+     "likes": 7,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:c2e3011f-5258-43de-a6cb-83c4536880b0",
+      "text": "All prosthetic devices break, and Murphy's Law sees to it that it is at the most inconvenient time. How much does it cost to maintain, this after the initial cost?"
+     },
+     "theme": "Cost blocks access",
+     "themeId": "b6db00ac"
+    },
+    {
+     "date": "2026-09-11T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=ytx_SKhU5I0&lc=UgwCrGf6d0lRWqL76G14AaABAg",
+     "likes": 38,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:15f2f34d-a908-48f6-b863-13a3d251db90",
+      "text": "Imagine running for a marathon and your leg falls off and not you beat your ass and lost"
+     },
+     "theme": "Socket fit keeps changing",
+     "themeId": "515ca100"
+    },
+    {
+     "date": "2026-09-09T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/FrontiersOfPandora/comments/1waxt7b/i_just_noticed_anufis_arm_prosthetic_who_do_you/",
+     "likes": 4,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:0d2b1e52-36d7-4f2f-9fa1-8b7ae15933ea",
+      "text": "That is…really creepy actually; actually startled me a little once I fully noticed."
+     },
+     "theme": "Prosthetics need more personalization",
+     "themeId": "57d9a5a3"
+    }
+   ],
+   "videos": 159
+  },
+  {
+   "kind": "question",
+   "label": "Asking how it works",
+   "quotes": [
+    {
+     "date": "2026-09-09T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@brennahuckabyofficial/video/7683455599933132045",
+     "likes": 61,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:e4cd74e9-006f-45ef-918f-ccaa8123edb4",
+      "text": "There have to be lighter ones."
+     },
+     "theme": "Questions about prosthetic function",
+     "themeId": "3c28b5fe"
+    },
+    {
+     "date": "2026-09-01T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@mfuentes9/video/7680192035256585486",
+     "likes": 3,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": "How much did your prosthesis cost? Beautiful",
+      "lang": "es",
+      "ref": "c:40ac0097-7534-45ca-a10d-cefc0b8f3a7c",
+      "text": "cuánto te costó tú prótesis? hermosa"
+     },
+     "theme": "Price and availability questions",
+     "themeId": "140e43a7"
+    },
+    {
+     "date": "2026-09-01T00:00:00+00:00",
+     "href": "https://www.youtube.com/watch?v=cT73M7cveI8&lc=UgztLNT-iaOpkqOMz454AaABAg",
+     "likes": 12,
+     "maker": false,
+     "platform": "youtube",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:d2cacc7d-0f6b-4099-bf70-55bd4cc880ba",
+      "text": "My brother also wish to stand like this can you help my brother"
+     },
+     "theme": "Requests for prosthetic help",
+     "themeId": "86349219"
+    }
+   ],
+   "videos": 151
+  },
+  {
+   "kind": "purchase_intent",
+   "label": "Ready to buy",
+   "quotes": [
+    {
+     "date": "2026-09-09T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/dancingwiththestars/comments/1wbr62z/an_informative_video_made_by_disability_advocate/",
+     "likes": 23,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:5dc0309d-b565-4023-9e86-0e96dc415621",
+      "text": "Benefits and drawbacks of each type of leg etc is super interesting, medical technology is awesome."
+     },
+     "theme": "Requests for prosthetic help",
+     "themeId": "86349219"
+    },
+    {
+     "date": "2026-09-08T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@ajplus/video/7683181189171072269",
+     "likes": 28,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:03d2d915-bd4c-41a8-a6bf-f2908f3964dd",
+      "text": "I'll definitely be buying adidas at some point now, wasn't planning on it before"
+     },
+     "theme": "Brand boycott over politics",
+     "themeId": "19c24f49"
+    },
+    {
+     "date": "2026-09-12T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@hey_jer.ome/video/7684456764284194069",
+     "likes": 3,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:838c2229-fe75-4771-bfab-4ccd89e90049",
+      "text": "what's the cost for a about know prosthetic 🦿"
+     },
+     "theme": "Price and availability questions",
+     "themeId": "140e43a7"
+    }
+   ],
+   "videos": 57
+  },
+  {
+   "kind": "objection",
+   "label": "Pushing back",
+   "quotes": [
+    {
+     "date": "2026-09-07T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/OrphanCrushingMachine/comments/1w9vf8s/new_adidas_ad_features_amputated_soldier_from_an/",
+     "likes": 80,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:b73ce959-8fa8-4300-a02f-114868a644a5",
+      "text": "Alternatively, they’ll also sell you a pair without any shoes. All you have to do is continue to boycott Adidas, and pay 0%."
+     },
+     "theme": "Brand boycott over politics",
+     "themeId": "19c24f49"
+    },
+    {
+     "date": "2026-09-04T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@johnmabry_speaker/video/7681480155906182414",
+     "likes": 0,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:b581896a-90a1-4dcb-a23c-683e8e1938be",
+      "text": "I’ve tried a lot of liners and ossurs I have found to be the best for me. I was gonna buy some out-of-pocket without a script, but they’re over $700 apiece."
+     },
+     "theme": "Cost blocks access",
+     "themeId": "b6db00ac"
+    },
+    {
+     "date": "2026-09-08T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@astepaheadprosthetics/video/7683207568453422366",
+     "likes": 5,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:83548516-6239-4e41-b11a-42eacb8d1ead",
+      "text": "But unfortunately insurance doesn’t cover it 😭"
+     },
+     "theme": "Insurance delays and denials",
+     "themeId": "4e506728"
+    }
+   ],
+   "videos": 43
+  },
+  {
+   "kind": "feature_request",
+   "label": "Asking for something",
+   "quotes": [
+    {
+     "date": "2026-09-04T00:00:00+00:00",
+     "href": "https://www.tiktok.com/@goalrush941/video/7681299885856918815",
+     "likes": 5,
+     "maker": false,
+     "platform": "tiktok",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:86b916a5-af9f-426e-bda0-d48acf48d55c",
+      "text": "They should be free"
+     },
+     "theme": "Cost blocks access",
+     "themeId": "b6db00ac"
+    },
+    {
+     "date": "2026-09-03T00:00:00+00:00",
+     "href": "https://www.reddit.com/r/hypotheticalsituation/comments/1w43hd5/prosthetic_arm_appears_totally_real_or_fully/",
+     "likes": 1,
+     "maker": false,
+     "platform": "reddit",
+     "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "c:1f4a09ff-543b-4f2b-843f-22d8462fabbb",
+      "text": "Easily 2, I prefer the functionality over feeling shame or the need to hide it, plus I could customize the arm this way its be sick"
+     },
+     "theme": "Prosthetics need more personalization",
+     "themeId": "57d9a5a3"
+    }
+   ],
+   "videos": 42
+  }
+ ],
+ "month": "2026-09-01",
+ "segments": "no_rule",
+ "themes": 12
+}
+const OSSUR_WHERE: WhereBlock = {
+ "accounts": 248,
+ "atFloor": 19,
+ "comments": 10125,
+ "expanded": false,
+ "largest": {
+  "comments": 182,
+  "key": "reddit|r/amputee"
+ },
+ "listed": 19,
+ "memory": [
+  "2026-07-01",
+  "2026-08-01",
+  "2026-09-01"
+ ],
+ "month": "2026-09-01",
+ "rows": [
+  {
+   "comments": 182,
+   "foundBy": null,
+   "key": "reddit|r/amputee",
+   "maker": false,
+   "name": "r/amputee",
+   "platform": "reddit",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 12
+  },
+  {
+   "comments": 302,
+   "foundBy": null,
+   "key": "instagram|siliconfingerco",
+   "maker": false,
+   "name": "siliconfingerco",
+   "platform": "instagram",
+   "seen": {
+    "n": 3,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 279,
+   "foundBy": null,
+   "key": "tiktok|A L I S",
+   "maker": false,
+   "name": "A L I S",
+   "platform": "tiktok",
+   "seen": {
+    "n": 3,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 154,
+   "foundBy": null,
+   "key": "youtube|MRSACHINVERMA",
+   "maker": false,
+   "name": "MRSACHINVERMA",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 80,
+   "foundBy": null,
+   "key": "reddit|r/Prosthetics",
+   "maker": false,
+   "name": "r/Prosthetics",
+   "platform": "reddit",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 6
+  },
+  {
+   "comments": 322,
+   "foundBy": null,
+   "key": "tiktok|Eldiara 🦾🪲⚔️",
+   "maker": false,
+   "name": "Eldiara 🦾🪲⚔️",
+   "platform": "tiktok",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 235,
+   "foundBy": null,
+   "key": "instagram|semibionicbarbie",
+   "maker": false,
+   "name": "semibionicbarbie",
+   "platform": "instagram",
+   "seen": {
+    "n": 3,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 105,
+   "foundBy": null,
+   "key": "tiktok|shahybxska8",
+   "maker": false,
+   "name": "shahybxska8",
+   "platform": "tiktok",
+   "seen": {
+    "n": 1,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 71,
+   "foundBy": null,
+   "key": "tiktok|saahegazvb",
+   "maker": false,
+   "name": "saahegazvb",
+   "platform": "tiktok",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  },
+  {
+   "comments": 47,
+   "foundBy": null,
+   "key": "youtube|TYTANOVI (ТИТАНОВІ)",
+   "maker": false,
+   "name": "TYTANOVI (ТИТАНОВІ)",
+   "platform": "youtube",
+   "seen": {
+    "n": 2,
+    "of": 3
+   },
+   "videos": 4
+  }
+ ],
+ "segments": "no_rule",
+ "setAside": []
+}
+
 function themesOf(rows: readonly Row[], n: number, prevN: number): MarketTheme[] {
   return rows.map(([registryId, label, k, prevK, kind, maker, noise, flags, provenance]) => ({
     registryId,
@@ -670,6 +1720,8 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       voices: SEALAND_VOICES, market: SEALAND_MARKET, reading: SEALAND_READING, others: SEALAND_OTHERS,
       personas: SEALAND_PERSONAS, profile: SEALAND_PROFILE,
     }),
+    words: SEALAND_WORDS,
+    where: SEALAND_WHERE,
     ...over,
   }
 }
@@ -682,6 +1734,8 @@ export function ossurVoiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSu
       voices: OSSUR_VOICES, market: OSSUR_MARKET, reading: OSSUR_READING, others: OSSUR_OTHERS,
       personas: OSSUR_PERSONAS, profile: OSSUR_PROFILE,
     }),
+    words: OSSUR_WORDS,
+    where: OSSUR_WHERE,
     ...over,
   }
 }
@@ -711,6 +1765,15 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
       profileDate: null,
       empty: 'Reading who is talking is not switched on for this workspace yet.',
     },
+    // C5 and C6 not read (no themed update, MF1 not applied).
+    words: null,
+    where: null,
     ...over,
   }
+}
+
+/** Sealand's September with every account at the floor listed
+ *  (`?accounts=all`): 17 listed, 2 set aside. */
+export function allAccountsVoiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurfaceData {
+  return voiceFixture({ params: { accounts: 'all' }, where: SEALAND_WHERE_ALL, ...over })
 }
