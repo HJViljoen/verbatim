@@ -167,14 +167,17 @@ export function AgentComposer({
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <form onSubmit={onSubmit} className="flex min-w-0 items-center gap-2.5">
+      {/* ON A PHONE THE BOX TAKES THE ROW, the two buttons the row under it
+          (WP3.9). Side by side at 390 the field was 90px wide and a question
+          another page sent ("Ask about this") read "What doe". */}
+      <form onSubmit={onSubmit} className="flex min-w-0 flex-wrap items-center gap-2.5 sm:flex-nowrap">
         {/* THE RING IS ON THE WRAPPER because the input inside it is
             `focus:outline-none` with a transparent background — the block IS
             the control as far as the eye is concerned, so that is where focus
             has to show. Without it a keyboard reader tabbed out of the record
             band into invisibility and out again into the rail, never once
             seeing the page's primary control (WCAG 2.4.7). */}
-        <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[4px] bg-inner px-3.5 focus-within:ring-2 focus-within:ring-ring">
+        <div className="flex h-11 min-w-0 basis-full items-center gap-2.5 rounded-[4px] bg-inner px-3.5 focus-within:ring-2 focus-within:ring-ring sm:flex-1 sm:basis-0">
           {/* The glyph the artboard puts inside the block: a search mark on the
               box, a speech mark on the follow-up — the one thing that
               distinguishes the two controls at a glance. */}
@@ -199,7 +202,7 @@ export function AgentComposer({
           // The file input inside is a 1x1 `sr-only` element and it is the
           // thing that takes focus, so the LABEL wears the ring: `has-[…]` is
           // what lets a visible wrapper answer for an invisible control.
-          className={`inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-[6px] bg-tile px-3.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${live ? '' : 'pointer-events-none opacity-40'}`}
+          className={`inline-flex h-11 flex-1 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[6px] bg-tile px-3.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring sm:flex-none ${live ? '' : 'pointer-events-none opacity-40'}`}
         >
           <Paperclip className="size-4" aria-hidden />
           <span>Check a plan</span>
@@ -216,7 +219,7 @@ export function AgentComposer({
         <button
           type="submit"
           disabled={!live}
-          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[6px] bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-30"
+          className="inline-flex h-11 flex-1 shrink-0 items-center justify-center gap-2 rounded-[6px] bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-30 sm:flex-none"
         >
           {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
           Ask
