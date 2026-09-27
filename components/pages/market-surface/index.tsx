@@ -17,6 +17,8 @@ import { marketPlans } from './plans'
 import { marketWays } from './ways'
 import { marketQuestions } from './questions'
 import { marketLine } from './line'
+import { DateMove } from './date-move'
+import { canDate } from '@/lib/pages/date-move'
 
 // Market — the page (Phase 1 WP14, design §3 MK1–MK7; ported to the artboard,
 // Block D wave 2).
@@ -286,6 +288,10 @@ export function MarketSurfacePage({
         context={barContext(data)}
       >
         <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
+        {/* The preview's green "Date a move" in the bar (WP3.6 wave 2), the
+            same sheet as the one under Your moves; from sm up, where the bar
+            has the room beside the title. */}
+        {canDate(data.moves.dating) ? <DateMove dating={data.moves.dating} place="bar" /> : null}
       </SurfacePageBar>
 
       {/* NO MASTHEAD. "We never claim you caused it" is said once per
