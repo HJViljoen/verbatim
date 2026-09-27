@@ -1,8 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { answerQuestion } from '../../agent/answer'
+import { answerQuestion, loadAskFrame, type AskFrame } from '../../agent/answer'
+import { askAllowList, measureAnswer, scrubThreadAnswer, type AnswerMeasure } from '../../agent/measure'
 import { outcomeOf, type AgentOutcome } from '../../agent/types'
-import { DOCUMENT_RESEARCH_PARALLEL } from '../../config'
+import { AGENT_MOVEMENT_MONTHS, DOCUMENT_RESEARCH_PARALLEL, directionWordsFor } from '../../config'
+import { monthStartOf, prevMonth } from '../../reading/month-key'
+import { loadMonthSeries } from '../../reading/read'
+import type { MonthSeries } from '../../reading/series'
 import { quoteRef } from '../../renderables/quotes-freeze'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
 import type { ResearchQuestion } from './questions'
 
 /**
@@ -41,6 +46,13 @@ export interface ResearchPoint {
   text: string
   insightIds: string[]
   themeLabels: string[]
+  /** The registry ids behind `themeLabels`, the only cross-run key: what the
+   *  measurement reads (WP3.9). Optional: an answer carried before it has
+   *  none, and is measured against nothing. */
+  registryIds?: string[]
+  /** The scrubbers emptied this point's own sentence and `text` is the
+   *  reading in its place, saying so (`groundedFallback`). */
+  replaced?: boolean
   conversationCount: number
   quotes: ResearchQuote[]
   questionId: string
@@ -63,13 +75,27 @@ export class BuildBlockedError extends Error {}
 
 export async function runResearch(
   admin: SupabaseClient,
-  args: { clientId: string; companyName: string; runId: string; questions: ResearchQuestion[]; budgetUsd: number; parallel?: number },
-): Promise<{ answers: ResearchAnswer[]; costUsd: number; stoppedForBudget: boolean }> {
+  args: {
+    clientId: string
+    companyName: string
+    runId: string
+    questions: ResearchQuestion[]
+    budgetUsd: number
+    parallel?: number
+    /** The frame, read once for every question (WP3.9); read here when absent. */
+    frame?: AskFrame
+    now?: Date
+  },
+): Promise<{ answers: ResearchAnswer[]; costUsd: number; stoppedForBudget: boolean; measure?: AnswerMeasure | null }> {
   const parallel = Math.max(1, args.parallel ?? DOCUMENT_RESEARCH_PARALLEL)
   const answers: ResearchAnswer[] = []
   let cost = 0
   let g = 0
   let stoppedForBudget = false
+  const now = args.now ?? new Date()
+  // ONE FRAME FOR THE WHOLE BUILD (WP3.9): the market scope reads the reading
+  // month, the rivals and the subjects once, not once per question.
+  const frame = args.frame ?? (await loadAskFrame(admin, args.clientId, now))
 
   for (let w = 0; w < args.questions.length; w += parallel) {
     if (cost >= args.budgetUsd) {
@@ -81,7 +107,7 @@ export async function runResearch(
     const results = await Promise.all(wave.map(async (q): Promise<ResearchAnswer> => {
       const started = Date.now()
       try {
-        const a = await answerQuestion(admin, { clientId: args.clientId, companyName: args.companyName, question: q.text, runId: args.runId, allowNearest: false, persist: true })
+        const a = await answerQuestion(admin, { clientId: args.clientId, companyName: args.companyName, question: q.text, runId: args.runId, allowNearest: false, persist: true, frame, now })
         return {
           question: q,
           answer: a.answer,
@@ -91,6 +117,7 @@ export async function runResearch(
             text: p.text,
             insightIds: p.insightIds,
             themeLabels: p.themeRefs.map((t) => t.label),
+            registryIds: p.themeRefs.map((t) => t.registryId).filter((r): r is string => Boolean(r)),
             conversationCount: p.conversationCount,
             quotes: p.quotes
               .map((qq) => ({ ref: qq.commentId ? quoteRef.comment(qq.commentId) : qq.videoId ? quoteRef.video(qq.videoId) : '', text: qq.text, commentId: qq.commentId, videoId: qq.videoId, lang: qq.lang, english: qq.english }))
@@ -120,7 +147,76 @@ export async function runResearch(
       answers.push({ ...r, judgement: r.judgement.map((j) => ({ ...j, basedOn: j.basedOn.map((b) => local.get(b) ?? b) })) })
     }
   }
-  return { answers, costUsd: cost, stoppedForBudget }
+  // THE SAME MEASUREMENT AND DIRECTION SCRUB AS THE ASK PAGE (WP3.9; GA F37).
+  // The brief path took the model's research prose straight to the writer: a
+  // figure it typed and a direction word nothing earned went into the brief's
+  // material unchecked. Measured off the same comment-dated months the thread
+  // page reads, over the reading month, with the same judge; a read that fails
+  // scrubs against nothing, which drops every figure and every direction
+  // sentence rather than letting one through.
+  const measure = await measureResearch(admin, args.clientId, answers, frame, now).catch((e: unknown) => {
+    console.error(`[document research] measurement: ${(e as { message?: string })?.message ?? String(e)}`)
+    return null
+  })
+  return { answers: scrubResearch(answers, measure ?? emptyMeasure(frame, now)), costUsd: cost, stoppedForBudget, measure }
+}
+
+/** A measurement of nothing, for the month the frame reads: every figure and
+ *  every direction a model typed is dropped against it. */
+function emptyMeasure(frame: AskFrame, now: Date): AnswerMeasure {
+  return { month: monthStartOf(frame.reading?.month ?? now.toISOString()), findings: [], verdicts: [], figures: {}, caveats: [] }
+}
+
+/** Every grounded point's registry ids, keyed by the point's G id. */
+export function researchFindings(answers: readonly ResearchAnswer[]): { findingId: string; registryIds: string[] }[] {
+  return answers.flatMap((a) => a.grounded.map((p) => ({ findingId: p.id, registryIds: p.registryIds ?? [] })))
+}
+
+/** The measurement, read: the month series of the themes the points rest on,
+ *  the client's and the category's, ending at the reading month. */
+async function measureResearch(admin: SupabaseClient, clientId: string, answers: readonly ResearchAnswer[], frame: AskFrame, now: Date): Promise<AnswerMeasure> {
+  const findings = researchFindings(answers)
+  const ids = [...new Set(findings.flatMap((f) => f.registryIds))]
+  const month = monthStartOf(frame.reading?.month ?? now.toISOString())
+  let series: MonthSeries[] = []
+  if (ids.length > 0) {
+    let from = month
+    for (let i = 1; i < AGENT_MOVEMENT_MONTHS; i++) from = prevMonth(from)
+    const set = await loadMonthSeries(admin, clientId, { audiences: [CLIENT_AUDIENCE, INDUSTRY_AUDIENCE], objectKind: 'theme', objectIds: ids, from, to: month })
+    if (set.substrate === 'seeded' && set.numeratorSubstrate === 'seeded') series = set.series
+  }
+  return measureAnswer({
+    findings,
+    series,
+    month,
+    pair: frame.pair,
+    asOf: now.toISOString(),
+    directionWords: directionWordsFor('agent.movement'),
+    ownAudience: CLIENT_AUDIENCE,
+    hasJudgement: answers.some((a) => a.judgement.length > 0),
+  })
+}
+
+/**
+ * Every research answer's prose, scrubbed against the measurement. Pure.
+ *
+ * The Ask page's rule, applied the same way (`scrubThreadAnswer`): a digit the
+ * model typed drops its sentence, a direction word no verdict earned drops
+ * its sentence, a point whose sentence goes is given the reading in its place
+ * and says so, and the quotes are never touched. The allow-list is the
+ * question and the theme labels, never the model's own prose.
+ */
+export function scrubResearch(answers: readonly ResearchAnswer[], measure: AnswerMeasure): ResearchAnswer[] {
+  return answers.map((a) => {
+    if (a.outcome === 'unasked' || a.outcome === 'failed') return a
+    const allow = askAllowList([a.question.text, ...a.grounded.flatMap((p) => p.themeLabels)])
+    const out = scrubThreadAnswer({ answer: a.answer, grounded: a.grounded }, measure, { keyOf: (p) => p.id, allow })
+    return {
+      ...a,
+      answer: out.answer,
+      grounded: out.grounded.map((p) => ({ ...p, ...(p.replaced ? { replaced: true } : {}) })),
+    }
+  })
 }
 
 const unasked = (q: ResearchQuestion): ResearchAnswer => ({

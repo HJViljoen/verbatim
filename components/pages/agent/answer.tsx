@@ -10,6 +10,10 @@ import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere,
 import { monthlyLineLabel } from '@/lib/pages/overview'
 import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
 import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
+import type { ObjectReading } from '@/lib/agent/movement'
+import { kindLabel } from '@/lib/reading/kinds'
+import { pairSentence } from '@/lib/calibration'
+import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { findingKey } from '@/lib/pages/agent-thread'
 import { DirectionWord, FindingLevel, InferencePill } from './marks'
 
@@ -43,16 +47,9 @@ import { DirectionWord, FindingLevel, InferencePill } from './marks'
 //     conversations — outside `ASK_LEGEND`, which is the whole list this
 //     surface may print. See `./marks.tsx`.
 //   · the chart draws ONE line, the side that has the n. The mock draws
-//     Freitag beside it, and a rival's months are out of Ask's scope by
-//     construction: retrieval drops every rival voice before an answer is
-//     written (`scopeToClientVoices`), `loadMovement` reads `client` and
-//     `industry-other`, and `readableMonthCount` filters rivals — precisely so
-//     a tenant is not told a rival's months stand behind a claim about their
-//     own audience.
-
-/** "answered 28 Sep", or nothing where the turn has no answer to date. */
-export const answeredMeta = (turn: Turn): string | null =>
-  turn.answer ? `answered ${shortDate(turn.askedAt)}` : null
+//     Freitag beside it; a rival's filed videos are read only when a question
+//     names that rival (WP3.9's market scope), and its months stay the brands
+//     view's, so a finding's line is never a rival's drawn beside the market.
 
 /**
  * One finding's measurement — the row of marks under its sentence.
@@ -181,7 +178,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         width={380}
         // The artboard's box is 300 wide with the plot ending at x=200 and the
         // end label beside it. The end label here carries the AUDIENCE's own
-        // words and the denominator ("The category 9.4% of 1,388") where the
+        // words and the denominator ("The category 17% of 626", Sealand's Looks & style in September) where the
         // mock's carries a rival's short name and a bare percentage, so the
         // box is 80px wider and the right gutter 66px deeper — a clipped
         // denominator is a level without its "of N".
@@ -486,6 +483,72 @@ function AnswerFooter({ f }: { f: FindingMeasure | null }) {
   )
 }
 
+/** What a named object is, in the reader's words, as the block titles it. */
+function aboutLabel(r: ObjectReading): string {
+  const o = r.object
+  if (o.kind === 'kind') return kindLabel(o.id)
+  if (o.kind === 'mood') return 'The mood, positive of the videos judged'
+  return o.label
+}
+
+/**
+ * WHAT THE QUESTION NAMED, READ ON THE MARKET (WP3.9, S7).
+ *
+ * "Ask about this" on a subject asks about that subject, so the answer opens
+ * on the subject's own figure: its level in the market in the month read, its
+ * trail month by month, and the month pair's answer, which on a refused pair
+ * is the refusal in the pair rule's own words and never "moved". The figures
+ * are the product's, counted off the same rows Subjects prints (decision E),
+ * never a model's. A provisional subject carries its word and no comparison
+ * (decision C); a failed one says it is being re-described; an object nothing
+ * has counted yet says so.
+ */
+export function AboutReadings({ readings }: { readings: readonly ObjectReading[] }) {
+  if (readings.length === 0) return null
+  return (
+    <section className="flex flex-col gap-2.5" aria-label="What you asked about, in your market">
+      <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">In your market</h3>
+      {readings.map((r) => {
+        const label = aboutLabel(r)
+        const failed = r.object.kind === 'subject' && r.object.calibration === 'failed'
+        const trail = r.trail.filter((p) => p.n != null && p.k != null)
+        return (
+          <TileBlock key={`${r.object.kind}:${r.object.id}`} className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] font-semibold text-foreground">{label}</span>
+              {r.object.kind === 'subject' && !failed ? <CalibrationTag calibration={r.object.calibration ?? null} /> : null}
+            </div>
+            {failed ? (
+              <p className="m-0 text-[12.5px] text-muted-foreground">being re-described</p>
+            ) : r.state === 'not_read' || !r.curr || r.curr.n == null ? (
+              <p className="m-0 text-[12.5px] text-muted-foreground">not read yet</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <FindingLevel value={{ k: r.curr.k ?? 0, n: r.curr.n }} />
+                  {r.verdict && r.verdict.state !== 'refused' ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
+                  <DirectionWord direction={r.direction} />
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    in your market · <span data-copy="figure">{longMonth(r.curr.month)}</span>
+                  </span>
+                </div>
+                {trail.length > 1 && (
+                  <p className="m-0 font-mono text-[11px] text-muted-foreground">
+                    <span data-copy="figure">{trail.map((p) => `${monthName(p.month)} ${fmtInt(p.k ?? 0)} of ${fmtInt(p.n ?? 0)}`).join(' · ')}</span>
+                  </p>
+                )}
+                {r.verdict?.pair?.mode === 'refuse' ? (
+                  <p className="m-0 text-[12px] text-muted-foreground">{pairSentence(r.verdict.pair)}</p>
+                ) : null}
+              </>
+            )}
+          </TileBlock>
+        )
+      })}
+    </section>
+  )
+}
+
 export function AnswerTile({
   turn,
   turnIndex,
@@ -495,6 +558,7 @@ export function AnswerTile({
   composer,
   prevUpdateAt,
   row = 6,
+  about,
 }: {
   turn: Turn
   turnIndex: number
@@ -529,6 +593,9 @@ export function AnswerTile({
    */
   prevUpdateAt?: string | null
   row?: number
+  /** What the question named, read on the market (WP3.9), under the first
+   *  answer. */
+  about?: readonly ObjectReading[]
 }) {
   const answer = turn.answer
   const basisChanged = turnIndex === 0 || prevUpdateAt === undefined || prevUpdateAt !== turn.updateAt
@@ -540,11 +607,12 @@ export function AnswerTile({
     <Tile
       col={12}
       row={row}
+      // TITLE ALONE, LINKS ALONE (25 Sep rulings, WP3.9): the "answered"
+      // meta is the "You asked" line's own date, and the footer's audience
+      // note is on the finding the link opens.
       eyebrow={turnIndex === 0 ? 'The answer' : 'The follow-up'}
-      meta={answeredMeta(turn) ?? undefined}
       exportKey={`agent.answer:${turnIndex}`}
       footer={<AnswerFooter f={f} />}
-      footerNote={f ? `${f.audienceLabel.toLowerCase()} · ${longMonth(measure?.month ?? '')}` : undefined}
     >
       {/* The question, under a mono eyebrow — the artboard's device, and the
           one the build printed only on paper. */}
@@ -577,6 +645,8 @@ export function AnswerTile({
           ) : answer.fallback ? (
             <p className="m-0 text-[15px] leading-[1.45] text-muted-foreground">{answer.fallback}</p>
           ) : null}
+
+          {about && about.length > 0 ? <AboutReadings readings={about} /> : null}
 
           {answer.grounded.length > 0 && (
             <section className="flex flex-col gap-2.5">

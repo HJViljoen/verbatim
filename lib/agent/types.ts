@@ -71,6 +71,12 @@ export interface AgentAnswer {
   notice?: string
   runId: string
   costUsd: number
+  /** The window the answer was read over (WP3.9): the last 90 days, or all
+   *  time. Absent on an answer stored before it, which was read over all
+   *  time. */
+  window?: 'days90' | 'all'
+  /** The tracked rivals the question named, whose filed videos it read. */
+  namedRivals?: string[]
 }
 
 /** Shown when the question is about the client's own metrics. Fixed text, like

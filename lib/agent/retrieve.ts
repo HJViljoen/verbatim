@@ -9,7 +9,9 @@ import {
   type QuoteCitation,
 } from '../quotes'
 import { AGENT_INSIGHTS_PER_QUERY, AGENT_INSIGHTS_TOTAL, CITATION_RELEVANCE_FLOOR } from '../config'
-import { fuseHits, countConversations, type Hit } from './rank'
+import { fuseHits, countConversations, type Hit, type FusedHit } from './rank'
+import { audienceOf, isRivalAudience, rivalNameOf } from '../rivals'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 
 // The retrieval half of the Verbatim Agent. Its whole job is to put real
 // insights and real quotes in front of the answering model, entity-scoped and
@@ -174,6 +176,9 @@ export async function retrieveForQueries(
     perQuery?: number
     limit?: number
     floor?: number
+    /** WP3.9 (market-first plan §2.8). OPT-IN: absent, retrieval keeps the
+     *  rule it has always had (rivals dropped after the cap, all time). */
+    scope?: RetrievalScope
   },
 ): Promise<RetrievedContext> {
   const { clientId, runId } = args
@@ -207,6 +212,9 @@ export async function retrieveForQueries(
     if (hits.length === 0) emptyQueries.push(queries[i])
     perQueryHits.push(hits)
   }
+
+  // WP3.9: the market scope takes its own path and leaves this one as it was.
+  if (args.scope) return retrieveScoped(admin, { clientId, runId, perQueryHits, emptyQueries, limit, scope: args.scope })
 
   const fused = fuseHits(perQueryHits, { limit })
   if (fused.length === 0) {
@@ -306,4 +314,204 @@ export async function retrieveForQueries(
     emptyQueries,
     runId,
   }
+}
+
+// ── The market scope (market-first plan §2.8, WP3.9) ─────────────────────────
+//
+// OPT-IN, AND THE PATH ABOVE IS UNTOUCHED. `retrieveForQueries` without a
+// `scope` keeps its rule word for word: fuse, cap, then drop every rival voice
+// (`scopeToClientVoices`). Ask and the brief research ask for the market scope
+// by passing one; nothing else calls this file's retrieval.
+//
+// WHAT THE SCOPE CHANGES, AND WHY EACH ONE.
+//  · A QUESTION THAT NAMES A RIVAL READS THAT RIVAL'S FILED VIDEOS. Decision E
+//    puts the videos filed under a tracked brand inside the market, and a
+//    question about Cotopaxi answered from category voices only is answered
+//    from the voices nearest to Cotopaxi rather than from Cotopaxi's own
+//    (GA F9–F10). A rival the question does not name stays out, as before, so
+//    a question about the client is never answered with another brand's
+//    audience.
+//  · THE SCOPE IS APPLIED BEFORE THE CAP, NOT AFTER IT. After the cap a
+//    question about a rival lost the slots its own insights held (Sealand's
+//    Patagonia questions carried 25 to 31 findings where market questions
+//    carried 50 to 60, GA F9); before it, the cap counts only what the answer
+//    may use.
+//  · THE WINDOW IS DATED BY THE COMMENT. An insight is inside a window when a
+//    comment it quotes was written inside it (its top three pieces of
+//    evidence); one that quotes no comment is dated by its video's upload day.
+//    `null` is all time. 12% of the category pool is from videos uploaded
+//    before August 2026 (GA F11), so the default of 90 days is the reader's
+//    choice to widen, never a silent inclusion.
+//
+// Reads, each bounded by the fused list (at most `perQuery` × the queries):
+// the run's themes (as above), the insight rows, their videos, and with a
+// window the top evidence and its comments' dates.
+
+/** The scope an answer is read over. */
+export interface RetrievalScope {
+  /** Tracked rival names the question names. Insights filed under one of them
+   *  are retrievable; every other rival's stay out. */
+  rivals: readonly string[]
+  /** Half-open `[from, to)` days, `YYYY-MM-DD`, dated by the comment. Null:
+   *  all time. */
+  window: { from: string; to: string } | null
+}
+
+/** How many pieces of an insight's evidence date it: its best three. */
+export const SCOPE_EVIDENCE_PER_INSIGHT = 3
+
+const foldName = (s: string): string => s.normalize('NFD').replace(/\p{M}+/gu, '').trim().toLowerCase()
+
+/** May an insight filed under `bucket` be read under this scope? The client's
+ *  own and the category's always; a rival's only where the question names it;
+ *  an insight nobody could file passes, as it does under the default rule. */
+export function scopeAdmits(bucket: string | null | undefined, scope: RetrievalScope): boolean {
+  if (!bucket || !isRivalAudience(bucket)) return true
+  const name = rivalNameOf(bucket)
+  if (!name) return false
+  const wanted = new Set(scope.rivals.map(foldName))
+  return wanted.has(foldName(name))
+}
+
+/** Is an insight inside the window? Any evidence comment dated inside it, or,
+ *  with none, the video's upload day inside it. Nothing dated at all is
+ *  outside: an insight we cannot date is not evidence about a window. */
+export function insideWindow(
+  commentDates: readonly string[],
+  uploadDate: string | null,
+  window: RetrievalScope['window'],
+): boolean {
+  if (!window) return true
+  const inside = (d: string): boolean => {
+    const day = d.slice(0, 10)
+    return day >= window.from && day < window.to
+  }
+  if (commentDates.length > 0) return commentDates.some(inside)
+  return uploadDate ? inside(uploadDate) : false
+}
+
+interface ScopedVideoRow {
+  id: string
+  is_client: boolean | null
+  is_competitor: boolean | null
+  competitor_name: string | null
+  upload_date: string | null
+}
+
+async function readChunked<R>(ids: readonly string[], read: (part: string[]) => PromiseLike<{ data: R[] | null; error: unknown }> & { range?: unknown }): Promise<R[]> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return []
+  const pages = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<R>(() => read(part) as unknown as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> }),
+  )
+  return pages.flat()
+}
+
+async function retrieveScoped(
+  admin: Admin,
+  a: { clientId: string; runId: string; perQueryHits: Hit[][]; emptyQueries: string[]; limit: number; scope: RetrievalScope },
+): Promise<RetrievedContext> {
+  const { clientId, runId, emptyQueries, limit, scope } = a
+  const empty: RetrievedContext = { insights: [], conversationCount: 0, emptyQueries, runId }
+  // Every hit, ranked: the cap comes after the scope.
+  const candidates: FusedHit[] = fuseHits(a.perQueryHits)
+  if (candidates.length === 0) return empty
+
+  const themeRows = await selectAll<ThemeBucketRow>(() =>
+    admin
+      .from('themes')
+      .select('id, registry_id, label, bucket, supporting_insight_ids')
+      .eq('client_id', clientId)
+      .eq('run_id', runId)
+      .order('id', { ascending: true }),
+  )
+  const storedBucket = bucketByAudienceId(
+    themeRows.map((t) => ({ bucket: t.bucket ?? 'industry-other', supporting_insight_ids: t.supporting_insight_ids ?? [] })),
+  )
+  const themeByInsight = new Map<string, ThemeRef>()
+  for (const t of themeRows) {
+    const ref: ThemeRef = { themeId: t.id, registryId: t.registry_id, label: t.label ?? '', bucket: t.bucket ?? 'industry-other' }
+    for (const id of t.supporting_insight_ids ?? []) if (!themeByInsight.has(id)) themeByInsight.set(id, ref)
+  }
+
+  const rows = await fetchInsightsByIds<{
+    id: string
+    theme: string | null
+    description: string | null
+    emotion: string | null
+    journey_stage: string | null
+    source_video_id: string | null
+  }>(admin, candidates.map((c) => c.id), 'id, theme, description, emotion, journey_stage, source_video_id')
+  const rowById = new Map(rows.map((r) => [r.id, r]))
+
+  // THE LIVE TAG DECIDES, as on the default path (the 2026-09-10 lesson): the
+  // stored theme bucket is the fallback for an insight with no video to ask.
+  const videos = await readChunked<ScopedVideoRow>(
+    rows.map((r) => r.source_video_id).filter((v): v is string => Boolean(v)),
+    (part) => admin.from('videos').select('id, is_client, is_competitor, competitor_name, upload_date').in('id', part).order('id'),
+  )
+  const videoById = new Map(videos.map((v) => [v.id, v]))
+  const bucketOf = (id: string): string => {
+    const video = videoById.get(rowById.get(id)?.source_video_id ?? '')
+    return video ? audienceOf(video) : storedBucket.get(id) ?? 'industry-other'
+  }
+
+  let admitted = candidates.filter((c) => rowById.has(c.id) && scopeAdmits(bucketOf(c.id), scope))
+
+  if (scope.window && admitted.length > 0) {
+    const evidence = await readChunked<{ audience_insight_id: string; comment_id: string | null; relevance_rank: number | null }>(
+      admitted.map((c) => c.id),
+      (part) => admin
+        .from('insight_evidence')
+        .select('audience_insight_id, comment_id, relevance_rank')
+        .in('audience_insight_id', part)
+        .eq('redacted', false)
+        .not('comment_id', 'is', null)
+        .order('id'),
+    )
+    const byInsight = new Map<string, { comment_id: string; rank: number }[]>()
+    for (const e of evidence) {
+      if (!e.comment_id) continue
+      const list = byInsight.get(e.audience_insight_id) ?? []
+      list.push({ comment_id: e.comment_id, rank: e.relevance_rank ?? 99 })
+      byInsight.set(e.audience_insight_id, list)
+    }
+    const top = new Map<string, string[]>()
+    for (const [id, list] of byInsight) {
+      top.set(id, list.sort((x, y) => x.rank - y.rank || x.comment_id.localeCompare(y.comment_id)).slice(0, SCOPE_EVIDENCE_PER_INSIGHT).map((x) => x.comment_id))
+    }
+    const comments = await readChunked<{ id: string; comment_date: string | null }>(
+      [...top.values()].flat(),
+      (part) => admin.from('comments').select('id, comment_date').in('id', part).order('id'),
+    )
+    const dateOf = new Map(comments.map((c) => [c.id, c.comment_date]))
+    admitted = admitted.filter((c) => {
+      const dates = (top.get(c.id) ?? []).map((id) => dateOf.get(id)).filter((d): d is string => Boolean(d))
+      const upload = videoById.get(rowById.get(c.id)?.source_video_id ?? '')?.upload_date ?? null
+      return insideWindow(dates, upload, scope.window)
+    })
+  }
+
+  const kept = limit > 0 ? admitted.slice(0, limit) : admitted
+  if (kept.length === 0) return empty
+  const quotesById = await fetchQuoteCitationsByAudience(admin, kept.map((k) => k.id))
+
+  const insights: RetrievedInsight[] = []
+  for (const hit of kept) {
+    const row = rowById.get(hit.id)
+    if (!row) continue
+    insights.push({
+      id: row.id,
+      theme: row.theme ?? '',
+      description: row.description ?? '',
+      emotion: row.emotion,
+      journeyStage: row.journey_stage,
+      videoId: row.source_video_id,
+      bucket: bucketOf(row.id),
+      themeRef: themeByInsight.get(row.id) ?? null,
+      similarity: hit.bestSimilarity,
+      quotes: (quotesById.get(row.id) ?? []).sort((x, y) => x.rank - y.rank),
+    })
+  }
+  return { insights, conversationCount: countConversations(insights), emptyQueries, runId }
 }

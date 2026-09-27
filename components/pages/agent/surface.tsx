@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { ReadingContext } from '@/components/shell/page-bar'
+import type { ReadingMonth } from '@/lib/reading/reading-month'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
 import { surface } from '@/lib/nav'
@@ -14,29 +16,15 @@ import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 // this page" legend and Export (which existed only inside a thread) never
 // printed. This mounts the bar the other six surfaces already wear.
 //
-// ASK'S BAR IS `title`, DELIBERATELY. No month context line and no horizon:
-// nothing here is a reading OF a month, so the context slot carries the ASK
-// BASIS instead — which update an answer is given against, and how much of the
-// corpus is searchable. That string is composed in the loader
-// (`AgentThreadData.bar.context`) and passed in, so the page and the deck say
-// it once.
-//
-// AND THAT IS WHY THIS COMPOSES `PageBar` RATHER THAN MOUNTING
-// `SurfacePageBar`. `SurfacePageBar` fills its context slot from a MONTH
-// reading or from This week's two updates, and a `title` bar gets neither — so
-// Ask's basis could only be passed through the bar's `children`, which is the
-// shrink-0 controls group at the right-hand end. On a workspace whose months
-// are not recorded the basis line is 174px longer than the viewport and the
-// whole page scrolled sideways, measured at 1440. The label, the question and
-// the record gate still come from `lib/nav.ts` — the one table — so nothing
-// here is a second opinion about what Ask is called or whether it states a
-// basis. A one-line additive `context` prop on `SurfacePageBar` would let this
-// go back to the shared component; that file is `main`'s.
+// ASK'S BAR IS THE ONE-LINE BAR (WP3.9): the month selector's chip and "as at
+// the {update} update · next update {date}", as on every reading page. The
+// ask basis (which update an answer was given against) is printed with the
+// answer, not in the bar. See `AskShell`.
 //
 // NO "HOW SOUND IS THIS" BAND (25 Sep rulings, market-first WP1.2). Ask used
 // to mount its own record band and drawer under the bar; the band left every
-// page, Ask's too. What an answer draws on is still stated, in the open, in
-// the Draws tile and in each answer's footer.
+// page, Ask's too. What an answer reads is stated in the open, in the rail's
+// "What an answer reads" tile.
 
 /**
  * The words the legend explains on this surface.
@@ -47,19 +35,35 @@ import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
  */
 export const ASK_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
+/**
+ * THE ONE-LINE BAR, ON ASK TOO (WP3.9; 25 Sep rulings, §5.12). The approved
+ * preview draws Ask's bar as every reading page's: "Sealand · September 2026
+ * as at the 24 Sep update · next update Sun 27 Sep". Ask's `lib/nav.ts` bar
+ * kind stays `title` (that file is not this package's), so the shell composes
+ * `PageBar` with the bar's own `line`, drawn by the same `ReadingContext` the
+ * reading pages use, over the reading month an answer's window ends in. The
+ * selector offers no other month here: an answer's window is chosen with the
+ * window switch, not the month. Where nothing has been delivered there is no
+ * reading month, and the bar is the title alone, which is true.
+ */
 export function AskShell({
-  context,
+  bar,
+  params = {},
   children,
 }: {
-  /** `AgentThreadData.bar.context` — the ask basis, never a month reading. */
-  context: string
+  /** The tenant's name and the reading month, or null. */
+  bar: { brand: string; reading: ReadingMonth | null } | null
+  params?: Record<string, string | undefined>
   children: ReactNode
 }) {
   const s = surface('ask')
+  const line = bar?.reading
+    ? <ReadingContext context={{ brand: bar.brand, reading: bar.reading, others: [] }} basePath={s.href} params={params} />
+    : undefined
   return (
     <PageFrame>
       <div className="flex shrink-0 flex-col gap-1.5">
-        <PageBar title={s.label} context={context} subtitle={s.question ?? undefined}>
+        <PageBar title={s.label} line={line}>
           <HowToRead items={ASK_LEGEND} basePath={s.href} anchor="ask" />
           <ExportMenu />
         </PageBar>

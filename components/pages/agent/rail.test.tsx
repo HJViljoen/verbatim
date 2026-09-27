@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from './rail'
-import { AskBoxTile } from './ask-box'
+import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from './rail'
+import { AskBoxTile, StarterCards } from './ask-box'
+import type { StarterQuestion } from '@/lib/agent/starters'
 import { agentFixture, refusedFixture } from './fixture'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
@@ -32,13 +33,13 @@ describe('earlier questions', () => {
     expect(text).toContain('Is price fading, or just quieter?')
   })
 
-  it('states the meta as a count of the tile, never of the month', () => {
-    // It printed `thisMonth` — every question asked in the wall-clock month,
-    // drawn or not — so "3 this month" sat over rows dated 13 Sep · 6 Sep ·
-    // 20 Aug. A reader counting September rows in the list got two. The meta
-    // now says what the list IS: three rows, of three there were to draw from.
-    expect(text).toContain('3 of 3')
-    expect(text).not.toContain('this month')
+  it('carries its title alone and its link alone (25 Sep rulings, WP3.9)', () => {
+    // The "3 of 3" meta and the "earliest 28 Sep" note left the tile: a header
+    // is its title and a footer its link.
+    expect(text).toContain('Your questions')
+    expect(text).not.toContain('3 of 3')
+    expect(text).not.toContain('earliest')
+    expect(text).toContain('All questions →')
   })
 
   it('draws the newest three of what is left', () => {
@@ -71,9 +72,9 @@ describe('earlier questions', () => {
     expect(text.split('1 claim crossed').length - 1).toBe(1)
   })
 
-  it('dates its footer by the earliest question it holds', () => {
-    // D14: earliest EVIDENCE, never a start date.
-    expect(text).toContain('earliest 20 Aug')
+  it('leaves the earliest date off the footer, which holds its link alone', () => {
+    // The 25 Sep rulings (WP3.9): a footer is links only.
+    expect(text).not.toContain('earliest 20 Aug')
   })
 
   it('draws no footer at all where there is no list', () => {
@@ -99,44 +100,33 @@ describe('earlier questions', () => {
   })
 })
 
-describe('what an answer draws on', () => {
-  const tile = (d: ReturnType<typeof agentFixture>) => (
-    <DrawsTile draws={d.draws} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
-  )
-
+describe('what an answer reads (WP3.9)', () => {
   it('keeps the copy contract in both states', () => {
-    assertCopyContract(tile(measured))
-    assertCopyContract(tile(refused))
+    assertCopyContract(<ReadsTile reads={measured.reads} />)
+    assertCopyContract(<ReadsTile reads={refused.reads} />)
   })
 
-  it('names the months behind the readings count', () => {
-    const text = renderText(tile(measured))
-    expect(text).toContain('3 monthly · Jul, Aug, Sep')
-    expect(text).toContain('2,872 of 2,872 findings')
-    expect(text).toContain('as at 15 Sep')
+  it('prints the market, its brands and the client’s own posts, as the preview does', () => {
+    const text = renderText(<ReadsTile reads={measured.reads} />)
+    expect(text).toContain('Your market, not only your own posts.')
+    expect(text).toMatch(/Your market\s*655/)
+    expect(text).toContain('videos in September so far; 626 in the category, where themes are grouped')
+    expect(text).toContain('of those 655, filed under a brand; read when a question names one')
+    expect(text).toContain('with a reading in September so far, marked as yours and never counted as the market')
+    expect(text).toContain('August, and September so far')
+    expect(text).toContain('October against November, from the 6 Dec update')
   })
 
-  it('carries no second door to the record', () => {
-    // Four rows, not the mock's five: updates-this-month, videos, languages and
-    // tracking changes need `loadRecordInputs`' eight tenant-wide reads on every
-    // page load, and the drawer is where they live. It is opened from the
-    // record BAND, which `AskShell` mounts under the page bar on both routes —
-    // one control, not two ~400px apart both opening the same three lines this
-    // tile already prints in the open.
-    const markup = render(tile(measured))
-    expect(markup).not.toContain('detail=record')
-    expect(renderText(tile(measured))).not.toContain('The record →')
-    // Stated ONCE, in the Updates row whose term names it — not again as a
-    // footer note that is present on one route and absent on the other.
-    const text = renderText(tile(measured))
-    expect(text).toContain('23 delivered')
-    expect(text).not.toContain('23 updates delivered')
+  it('links to where the method is said, and carries no meta', () => {
+    const text = renderText(<ReadsTile reads={measured.reads} />)
+    expect(text).toContain('What we read, and how →')
+    expect(render(<ReadsTile reads={measured.reads} />)).toContain('/dashboard/settings/how-to-read')
   })
 
-  it('says what is not recorded rather than printing a zero', () => {
-    const text = renderText(tile(refused))
-    expect(text).toContain('not recorded for this workspace yet')
-    expect(text).not.toContain('0 monthly')
+  it('prints no zero for a count nobody read', () => {
+    const text = renderText(<ReadsTile reads={refused.reads} />)
+    expect(text).toContain('not read for this month yet')
+    expect(text).not.toMatch(/Your market\s*0/)
   })
 })
 
@@ -167,10 +157,8 @@ describe('not answered this month', () => {
     expect(text.match(/answered from the conversation/g)).toHaveLength(1)
   })
 
-  it('names what its meta counts, and prints no bare zero', () => {
-    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('2 of 3 asked')
-    // Nothing declined: the slot is empty rather than carrying a "0" over an
-    // empty state.
+  it('carries no meta beside its title (25 Sep rulings, WP3.9)', () => {
+    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).not.toContain('2 of 3 asked')
     expect(renderText(<NotAnsweredTile notAnswered={refused.notAnswered} />)).not.toContain('0 of 1 asked')
   })
 
@@ -189,8 +177,26 @@ describe('the ask box', () => {
     assertCopyContract(box(refused))
   })
 
-  it('leaves the readings count to the draws tile (copy de-clutter C11)', () => {
-    expect(renderText(box(measured))).not.toContain('monthly readings searchable')
+  it('asks the market’s question (WP3.9)', () => {
+    const text = renderText(box(measured))
+    expect(text).toContain('Ask your market')
+    expect(text).toContain('What does your market say about this?')
+    expect(text).not.toContain('monthly readings searchable')
+  })
+
+  it('offers the window, 90 days or all time, and the month’s budget', () => {
+    const text = renderText(
+      <AskBoxTile
+        basis={measured.basis}
+        plan={null}
+        window={{ current: 'days90', href: { days90: '/dashboard/agent', all: '/dashboard/agent?window=all' }, reachesBack: '2020' }}
+        asked={{ asked: 3, cap: 40 }}
+      />,
+    )
+    expect(text).toContain('Last 90 days')
+    expect(text).toContain('All time')
+    expect(text).toContain('comments reach back to 2020')
+    expect(text).toContain('3 of 40 questions asked this month')
   })
 
   it('shows the plan a reader already checked, with how its claims read now', () => {
@@ -219,7 +225,44 @@ describe('the ask box', () => {
     expect(text).not.toContain('0 untested')
   })
 
-  it('says what checking a plan does, rather than drawing a blank rail', () => {
-    expect(renderText(box(refused))).toContain('No plan has been checked yet')
+  it('draws no footnote where no plan has been checked (25 Sep rulings)', () => {
+    expect(renderText(box(refused))).not.toContain('No plan has been checked yet')
+  })
+})
+
+describe('the starter questions (WP3.9)', () => {
+  // Sealand's front page, September (lib/agent/starters.test.ts builds these
+  // off the market fixture; the rows here are its output).
+  const starters: StarterQuestion[] = [
+    { question: 'What makes people ready to buy?', rows: [{ kind: 'theme', label: 'Ready to buy handmade bags', k: 69, tags: ['about a third makers'] }] },
+    { question: 'What does my market say about Looks & style?', rows: [{ kind: 'subject', label: 'Looks & style, a subject', k: 104, tags: ['provisional', 'over a third makers'] }] },
+  ]
+
+  it('keeps the copy contract, and marks a theme label as the model’s words', () => {
+    assertCopyContract(<StarterCards starters={starters} source="written from Your market · September so far" />)
+    expect(render(<StarterCards starters={starters} source={null} />)).toContain('data-slot="pass_b_theme"')
+  })
+
+  it('prints each card’s question, its rows with their videos, and where they came from', () => {
+    const text = renderText(<StarterCards starters={starters} source="written from Your market · September so far" />)
+    expect(text).toContain('Start from what your market talked about')
+    expect(text).toContain('written from Your market · September so far')
+    expect(text).toMatch(/Ready to buy handmade bags\s*69 videos/)
+    expect(text).toContain('about a third makers')
+    expect(text).toContain('provisional · over a third makers')
+  })
+
+  it('sends the reader to the box with the question in it, and asks nothing', () => {
+    expect(render(<StarterCards starters={starters} source={null} />)).toContain('/dashboard/agent?ask=What%20makes%20people%20ready%20to%20buy%3F')
+  })
+
+  it('keeps a reader who switched to all time on all time', () => {
+    const all = render(<StarterCards starters={starters} source={null} window="all" />)
+    expect(all).toContain('/dashboard/agent?ask=What%20makes%20people%20ready%20to%20buy%3F&amp;window=all')
+    expect(render(<StarterCards starters={starters} source={null} />)).not.toContain('window=all')
+  })
+
+  it('draws nothing where the front page has nothing', () => {
+    expect(render(<StarterCards starters={[]} source={null} />)).toBe('')
   })
 })

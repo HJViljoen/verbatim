@@ -102,34 +102,28 @@ describe('nothingSearchable', () => {
   })
 })
 
-describe('readableMonthCount', () => {
+describe('readableMonthCount: the market’s months over the floor (WP3.11, H19)', () => {
   const row = (month: string, audience: string, videos: number | null) => ({ month, audience, videos })
 
-  it('counts a month once however many audiences carry it', () => {
+  it('pools the market’s audiences in a month and counts the month once', () => {
+    // Sealand's August: 351 in the category, 22 Cotopaxi, 4 Freitag (DR F11);
+    // September: 626 and 29 (prod). The client's own 9 are not the market.
     expect(readableMonthCount([
-      row('2026-08-01', 'client', 620),
-      row('2026-08-01', 'industry-other', 628),
-      row('2026-09-01', 'industry-other', 388),
+      row('2026-08-01', 'industry-other', 351), row('2026-08-01', 'competitor:Cotopaxi', 22), row('2026-08-01', 'competitor:Freitag', 4),
+      row('2026-09-01', 'industry-other', 626), row('2026-09-01', 'competitor:Cotopaxi', 29), row('2026-09-01', 'client', 9),
     ])).toBe(2)
   })
 
-  it('drops a month under the video floor', () => {
-    expect(readableMonthCount([row('2026-08-01', 'client', 20), row('2026-08-01', 'industry-other', 99)])).toBe(0)
+  it('drops a month under the video floor, and never counts the client’s own posts', () => {
+    // July: 35 in the category and one filed under Cotopaxi (DR F11).
+    expect(readableMonthCount([row('2026-07-01', 'industry-other', 35), row('2026-07-01', 'competitor:Cotopaxi', 1)])).toBe(0)
     expect(readableMonthCount([row('2026-08-01', 'industry-other', null)])).toBe(0)
+    expect(readableMonthCount([row('2026-08-01', 'client', 620)])).toBe(0)
   })
 
-  it('does not count a rival’s months under an answer about this client', () => {
-    // Retrieval drops every rival's voice, so the movement block below this
-    // sentence never reads them. A tenant whose rivals carry the volume was
-    // told six months stood behind a claim for which none did.
-    expect(readableMonthCount([
-      row('2026-07-01', 'competitor:Ottobock', 900),
-      row('2026-08-01', 'competitor:Blatchford', 700),
-    ])).toBe(0)
-    expect(readableMonthCount([
-      row('2026-08-01', 'competitor:Ottobock', 900),
-      row('2026-08-01', 'industry-other', 628),
-    ])).toBe(1)
+  it('agrees with the quarterly gate by construction', () => {
+    const rows = [row('2026-08-01', 'industry-other', 351), row('2026-08-01', 'competitor:Cotopaxi', 22), row('2026-08-01', 'competitor:Freitag', 4)]
+    expect(readableMonths(rows)).toEqual(['2026-08-01'])
   })
 })
 
@@ -137,26 +131,23 @@ describe('readableMonths — the months the count IS', () => {
   const row = (month: string, audience: string, videos: number | null) => ({ month, audience, videos })
 
   it('names them once each, in calendar order, whatever order they arrive in', () => {
-    // The draws tile prints "3 monthly · Jul, Aug, Sep" and the chart beside it
-    // draws the same three. The LIST is the primitive and the count reads off
-    // it precisely so the two cannot disagree.
+    // Össur's category months as the basis reads them (388 and 628, GA F30's
+    // month_denominators; Aug and Sep clear), arriving out of order.
     expect(readableMonths([
       row('2026-09-01', 'industry-other', 388),
-      row('2026-07-01', 'client', 620),
-      row('2026-09-01', 'client', 402),
       row('2026-08-01', 'industry-other', 628),
-    ])).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
+    ])).toEqual(['2026-08-01', '2026-09-01'])
   })
 
   it('keeps exactly the months the count counts', () => {
     const rows = [
-      row('2026-06-01', 'industry-other', 20),
-      row('2026-07-01', 'competitor:Freitag', 900),
+      row('2026-06-01', 'industry-other', 45),
       row('2026-08-01', 'industry-other', null),
-      row('2026-09-01', 'client', 620),
+      row('2026-09-01', 'client', 9),
+      row('2026-09-01', 'industry-other', 626),
     ]
-    // Under the floor, a rival's, and an unread month all drop; the count and
-    // the list are the same answer.
+    // Under the floor, unread and the client's own all drop; the count and the
+    // list are the same answer.
     expect(readableMonths(rows)).toEqual(['2026-09-01'])
     expect(readableMonthCount(rows)).toBe(readableMonths(rows).length)
   })

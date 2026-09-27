@@ -8,12 +8,11 @@ import { ExportScope } from '@/components/export-menu'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
-import { shortDate } from '@/lib/format'
 import { loadAgentThread } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
-import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from '@/components/pages/agent/rail'
+import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '@/components/pages/agent/rail'
 import { ASK_TILE_ROW, AskColumns, AskShell } from '@/components/pages/agent/surface'
 
 // One thread, at its own URL — and, since Block D wave 2, the SAME surface the
@@ -81,11 +80,7 @@ export default async function AgentThreadPage({
   const rail = (
     <>
       <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} />
-      <DrawsTile
-        draws={data.draws}
-        asAt={data.basis.lastEmbeddedAt ? shortDate(data.basis.lastEmbeddedAt) : null}
-        row={ASK_TILE_ROW}
-      />
+      <ReadsTile reads={data.reads} row={ASK_TILE_ROW} />
       <NotAnsweredTile notAnswered={data.notAnswered} row={ASK_TILE_ROW} />
     </>
   )
@@ -98,7 +93,7 @@ export default async function AgentThreadPage({
     const doc = data.document
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
-        <AskShell context={data.bar.context}>
+        <AskShell bar={{ brand: data.brand, reading: data.bar.reading }} params={sp}>
           {back}
           {/* `ASK_TILE_ROW`, like every other tile on this surface. `row` is a
               `MIN_H[n]` floor at every width below `xl` and an inert span at
@@ -141,7 +136,7 @@ export default async function AgentThreadPage({
   if (data.kind === 'document') {
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
-        <AskShell context={data.bar.context}>
+        <AskShell bar={{ brand: data.brand, reading: data.bar.reading }} params={sp}>
           <AskColumns rail={rail}>
             <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta="nothing saved">
               <TileEmpty>
@@ -158,7 +153,7 @@ export default async function AgentThreadPage({
 
   return (
     <ExportScope page="agent" params={{ thread: id }} tiles={exportTiles}>
-      <AskShell context={data.bar.context}>
+      <AskShell bar={{ brand: data.brand, reading: data.bar.reading }} params={sp}>
         <AskColumns rail={rail}>
           {/* THE ASK BOX STAYS ABOVE THE ANSWER, as the artboard draws it: a
               reader with an answer in front of them is one keystroke from the
@@ -167,7 +162,7 @@ export default async function AgentThreadPage({
             basis={data.basis}
             plan={data.planChip}
             row={ASK_TILE_ROW}
-            composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} />}
+            composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} placeholder="Ask about anything your market talks about" />}
           />
           {/* ONE FOLLOW-UP CONTROL, ON THE LAST ANSWER. Every tile used to get
               its own, all with the same threadId, the same placeholder and the
@@ -188,6 +183,9 @@ export default async function AgentThreadPage({
               // paragraph five times (`AnswerTile.prevUpdateAt`).
               prevUpdateAt={i > 0 ? data.turns[i - 1].updateAt : undefined}
               row={ASK_TILE_ROW}
+              // What the question NAMES, read on the market (WP3.9): a
+              // subject's own figure and trail, under the first answer.
+              about={i === 0 ? data.about : undefined}
               composer={
                 i === data.turns.length - 1 ? (
                   <AgentComposer
@@ -195,6 +193,8 @@ export default async function AgentThreadPage({
                     disabledNote={disabledNote}
                     threadId={id}
                     placeholder="Ask a follow-up in this thread"
+                    // A follow-up is read over the window the thread was.
+                    window={data.window ?? undefined}
                   />
                 ) : undefined
               }

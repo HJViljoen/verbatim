@@ -140,10 +140,32 @@ describe('the four section maps', () => {
     expect(pageKindsOf(briefMap('sales_brief'))).toContain('language')
   })
 
-  it('the marketing map is RP1\'s own list: subjects, category, rivals, moves, method', () => {
+  it('the marketing map opens on the market, then RP1\'s own list: subjects, category, rivals, moves, method (WP3.11)', () => {
     const titles = sectionsOf(briefMap('market_brief')).map((s) => s.title)
-    expect(titles).toEqual(['Your subjects', 'Month by month', 'The month', 'What changed this month', 'Rivals', 'Your moves'])
+    expect(titles).toEqual([
+      'What your market talked about', 'Asked, complained about, wished for',
+      'Your subjects', 'Month by month', 'The month', 'What changed this month', 'Rivals', 'Your moves',
+    ])
     expect(pageKindsOf(briefMap('market_brief'))).toContain('method')
+  })
+
+  // WP3.11 (plan §2.9): every map opens on the market under NEW ids, because a
+  // stored brief keeps its old ids and draws them as it was built. The market
+  // blocks are the front page's own, and no framing names a month (a brief is
+  // frozen, and "this month" names the wrong one once it is opened later).
+  it('every map opens on the market, under ids no stored brief carries', () => {
+    const first = (role: typeof DOCUMENT_ROLES[number]) => sectionsOf(briefMap(role))[0]
+    expect(first('market_brief').id).toBe('mk.themes')
+    expect(first('sales_brief').id).toBe('sl.asks')
+    expect(first('content_brief').id).toBe('ct.themes')
+    expect(sectionsOf(briefMap('leadership_brief')).map((s) => s.id).slice(0, 2)).toEqual(['ld.month', 'ld.themes'])
+    const fresh = ['mk.themes', 'mk.asks', 'ld.themes', 'sl.asks', 'ct.themes', 'ct.asks']
+    for (const role of DOCUMENT_ROLES) {
+      for (const s of sectionsOf(briefMap(role)).filter((x) => fresh.includes(x.id))) {
+        expect(['overview.themes', 'overview.asks'], s.id).toContain(s.block)
+        expect(s.framing.toLowerCase(), s.id).not.toContain('this month')
+      }
+    }
   })
 
   // E-marketing, the artboard's seven sheets. The map used to paginate to
@@ -350,5 +372,47 @@ describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () =
 
   it('is empty for a map that notes nothing', () => {
     expect(untrackedNotes(briefMap('content_brief'), READINESS)).toHaveLength(0)
+  })
+})
+
+// ── WP3.11: an old brief, and the run ─────────────────────────────────────────
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { brandsClearingAsTopics } from './signals'
+
+describe('per-rival questions go to the brands that clear as topics (WP3.11)', () => {
+  // Sealand's September on staging (BC F35, the market's 654 without the
+  // client audience, as pooled rows): Patagonia 47, The North Face 36,
+  // Cotopaxi 31 clear; Freitag, whose 8 over 90 days are mostly the German
+  // word for Friday, does not.
+  const competitors = [
+    { id: 'c-pat', name: 'Patagonia' }, { id: 'c-tnf', name: 'The North Face' },
+    { id: 'c-cot', name: 'Cotopaxi' }, { id: 'c-fre', name: 'Freitag' },
+  ]
+  const row = (brand_key: string, k_any: number, n = 654) => ({ audience: 'market', brand_key, k_any, n })
+
+  it('names the brands at 10 of 100 or more, and no other', () => {
+    const clears = brandsClearingAsTopics([row('c-pat', 47), row('c-tnf', 36), row('c-cot', 31), row('c-fre', 8)], competitors)
+    expect([...clears].sort()).toEqual(['cotopaxi', 'patagonia', 'the north face'])
+  })
+
+  it('never counts the client’s own posts toward a brand', () => {
+    expect(brandsClearingAsTopics([{ audience: 'client', brand_key: 'c-pat', k_any: 40, n: 654 }], competitors).size).toBe(0)
+  })
+})
+
+describe('the closure files leave the run as it was (WP3.11)', () => {
+  // `inngest/functions/pipeline.ts` reaches sections.ts, figures.ts and
+  // types.ts only through `lib/reports/types.ts`, and every link on that path
+  // is `import type`: erased at compile, so nothing these files export runs in
+  // the pipeline. A change to their maps, sheets or copy cannot change a run.
+  const src = (f: string) => readFileSync(join(process.cwd(), f), 'utf8')
+  it('reaches them by types alone', () => {
+    expect(src('lib/reports/types.ts')).toMatch(/import type \{ DocumentSettings \} from '\.\/documents\/types'/)
+    const types = src('lib/reports/documents/types.ts')
+    expect(types).toMatch(/import type \{[^}]*\} from '\.\/figures'/)
+    expect(types).toMatch(/import type \{[^}]*\} from '\.\/sections'/)
+    expect(types).not.toMatch(/^import \{[^}]*\} from '\.\/(figures|sections)'/m)
   })
 })
