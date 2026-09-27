@@ -623,11 +623,13 @@ const isGatherEvent = (change: OurChange | undefined, rows: readonly ConfigChang
  *  prints under the figure. Each is what measure-comparability counts for that
  *  surface: the relevance fix, the month's videos a gate verdict let in
  *  unjudged (the artboard's "had been let in unchecked"); attribution v3, the
- *  month's videos first stored after it, whose filing it decided. A surface
- *  nothing measures has no caption. */
+ *  month's videos first stored after it, whose filing it decided ("filed the
+ *  new way": on this tab "check" is the relevance check's word, deploy 2
+ *  wording read item 29, Heinrich 27 Sep). A surface nothing measures has no
+ *  caption. */
 const REACH_CAPTION: Partial<Record<string, string>> = {
   gate_rule: 'had been let in unchecked',
-  attribution: 'filed by the new check',
+  attribution: 'filed the new way',
 }
 
 /**

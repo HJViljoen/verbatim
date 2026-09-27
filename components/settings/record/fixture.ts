@@ -430,7 +430,7 @@ export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
  * the capped update (a gather flag, not a change of ours: the page's judge,
  * lib/reading/gather-flags.ts), the pair row above, and the 27 Sep update.
  */
-export function recordFixture(opts: { measured?: boolean; judged?: boolean; notes?: boolean } = {}) {
+export function recordFixture(opts: { measured?: boolean; judged?: boolean; notes?: boolean; attribution?: number } = {}) {
   const measured = opts.measured ?? true
   const base = whatWeChangedFixture({ measured })
   // `notes: false` is the record production holds: Heinrich, 27 Sep, "lets
@@ -448,7 +448,9 @@ export function recordFixture(opts: { measured?: boolean; judged?: boolean; note
         { changeId: 'wwc-gate-fix', month: '2026-08-01', population: 'category', touched: 0, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-gate-fix', month: '2026-09-01', population: 'category', touched: 64, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-attribution', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
-        { changeId: 'wwc-attribution', month: '2026-09-01', population: 'market', touched: 0, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        // Staging measures none (its stored videos predate attribution v3);
+        // `attribution` is September's count where production measures one.
+        { changeId: 'wwc-attribution', month: '2026-09-01', population: 'market', touched: opts.attribution ?? 0, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
       ]
     : []
   const lines = ledgerLines({ changes, rows, reach, runFinish })

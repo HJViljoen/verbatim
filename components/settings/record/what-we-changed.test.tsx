@@ -115,6 +115,20 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     assertCopyContract(render(list))
   })
 
+  it('captions a measured filing cell "filed the new way", never with the relevance check’s word (wording read item 29)', () => {
+    const g = recordFixture({ attribution: 41 })
+    const measured = <TheRecord view={g.view} />
+    const attribution = g.view.groups[1].lines.find((l) => l.line.surface === 'attribution')!
+    expect(attribution.cells.map((c) => c.state)).toEqual(['none', 'measured'])
+    expect(attribution.caption).toBe('filed the new way')
+    const t = read(measured)
+    expect(t).toContain('41 of 654 filed the new way')
+    expect(t).not.toContain('filed by the new check')
+    // "check" on this tab stays the relevance check's word.
+    expect(t).toContain('65 of 654 had been let in unchecked')
+    assertCopyContract(render(measured))
+  })
+
   it('prints a measured zero as "none", an unmeasured month as "not measured yet", and nothing for the capped update, which moves no video', () => {
     const gate = f.view.groups[1].lines.find((l) => l.line.surface === 'gate_rule')!
     expect(gate.cells.map((c) => c.state)).toEqual(['none', 'measured'])

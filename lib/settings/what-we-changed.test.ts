@@ -274,7 +274,10 @@ describe('what a record cell counts (reachCaption)', () => {
     expect(reachCaption({ surface: 'terms', items: { added: [], removed: ['freitag'] } })).toBe('found only by the searches it took out')
     expect(reachCaption({ surface: 'subreddits', items: { added: ['r/travelgear'], removed: [] } })).toBe('found only by the communities it added')
     expect(reachCaption({ surface: 'gate_rule', items: null })).toBe('had been let in unchecked')
-    expect(reachCaption({ surface: 'attribution', items: null })).toBe('filed by the new check')
+    // Item 29 of the deploy 2 wording read: "check" is the relevance check's
+    // word on this tab, so the filing change never borrows it.
+    expect(reachCaption({ surface: 'attribution', items: null })).toBe('filed the new way')
+    expect(reachCaption({ surface: 'attribution', items: null })).not.toMatch(/check/)
     // Nothing measures a rival's or an account's reach here.
     expect(reachCaption({ surface: 'rivals', items: { added: ['Rareform'], removed: [] } })).toBeNull()
     expect(reachCaption({ surface: 'handles', items: null })).toBeNull()
