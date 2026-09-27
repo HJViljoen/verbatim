@@ -165,7 +165,10 @@ const ROWS: Record<string, number> = {
   // One line inside a drawn block at deploy 2: a floor of one row, so the
   // stacked page does not hold 380px of white under it.
   'overview.rivals': 1,
-  'overview.moves': 3,
+  // Two rows (248px), not three: without the followers list (staging's
+  // Sealand at 768) "What you published" draws about 250px, and a 380px floor
+  // held about 90px of white above its footer (the deploy-3 design review).
+  'overview.moves': 2,
   'overview.themes': 4,
   'overview.asks': 3,
   'overview.change': 2,
