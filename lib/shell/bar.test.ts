@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthOptions, monthTitle, updateLabel, updateLine } from './bar'
+import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthOptions, monthTitle, selectorParams, updateLabel, updateLine } from './bar'
+import { hasHorizon, surface } from '../nav'
 import { readingMonthFor } from '../reading/reading-month'
 import { sealandReading } from '../test/reading-fixture'
 import { directionHits } from '../calibration'
@@ -80,6 +81,19 @@ describe('monthOptions: the selector\'s menu', () => {
     expect(options[0].href).toBe('/dashboard?horizon=last_3')
     expect(options[1].href).toBe('/dashboard?horizon=last_3&month=2026-08')
     expect(options[2].href).toBe('/dashboard?horizon=last_3&month=2026-07')
+  })
+
+  // Subjects has no horizon control (the deploy-3 fresh review): a
+  // `?horizon=` in its address rides no month switch, and the questions
+  // pane's own `?questions=` does.
+  it('on a surface with no horizon control, carries no ?horizon= from month to month', () => {
+    expect(hasHorizon(surface('subjects'))).toBe(false)
+    const params = selectorParams({ item: 's-water', horizon: 'last_3', questions: 'last_3' }, hasHorizon(surface('subjects')))
+    const options = monthOptions('/dashboard/subjects', params, sealandReading('2026-10-02T06:00:00.000Z'), EARLIER)
+    for (const o of options) expect(o.href, o.month).not.toContain('horizon=')
+    expect(options[1].href).toBe('/dashboard/subjects?item=s-water&questions=last_3&month=2026-08')
+    // A surface with the control keeps it.
+    expect(selectorParams({ horizon: 'last_3' }, true)).toEqual({ horizon: 'last_3' })
   })
 
   it('under a ?month=, the month read keeps its parameter and the default drops it', () => {

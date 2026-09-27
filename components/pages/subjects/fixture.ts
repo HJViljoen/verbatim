@@ -814,7 +814,9 @@ export function waterproofingFixture(): SubjectsData {
   ]
   return {
     ...data,
-    horizon: 'last_3',
+    // The pane's own period (`?questions=last_3`, the "Asked most" link); the
+    // page reads September.
+    questionsHorizon: 'last_3',
     list: { ...data.list, rows },
     selected: {
       ...data.selected!,

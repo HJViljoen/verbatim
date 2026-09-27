@@ -210,7 +210,10 @@ describe('S4 · questions people ask on it', () => {
   it('under the list\'s floor, points at the subjects asked about most over the last 3 months (staging: 16, 12, 7)', () => {
     const t = text(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))
     expect(t).toMatch(/Asked most, last 3 months videos Waterproofing 16 Price 12 Comfort 7/)
-    expect(render(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))).toContain('/dashboard/subjects?item=s-water&amp;horizon=last_3"')
+    // The pane's own period, never the page's `?horizon=` (the deploy-3
+    // fresh review): the link moves the questions pane and nothing else.
+    expect(render(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))).toContain('/dashboard/subjects?item=s-water&amp;questions=last_3"')
+    expect(render(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))).not.toContain('horizon=')
     // Where the subject's own list opens, it is the list.
     expect(text(subjectsUnanswered.render(waterproofingFixture(), 'app', ctx))).not.toContain('Asked most, last 3 months')
   })

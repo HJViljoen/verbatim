@@ -77,8 +77,10 @@ export const SURFACES: readonly Surface[] = [
   // SUBJECTS ON THE MARKET (WP2.2, deploy 3; §2.1): the question is the
   // market's. NO HORIZON PILLS (the lead's ruling of 27 Sep, following the
   // approved preview and §5.12: the bar is the month selector and one line).
-  // The page still reads `?horizon=`, so a link that asks for a period (the
-  // questions pane's "Asked most, last 3 months", §2.3 S4) opens on it.
+  // So the page reads the month whatever `?horizon=` says, and the month
+  // selector drops it; the questions pane's "Asked most, last 3 months" links
+  // (§2.3 S4) ask for their period in the pane's own `?questions=`
+  // (lib/pages/subjects.ts `subjectsHorizons`).
   { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How big is each subject in your market, month by month?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'subjects' },
   // CONVERSATION WITH DEPLOY 3 (WP2.4, plan §2.1): the page is rebuilt as
   // every theme at 10 videos or more, so the label changes with it. The key,

@@ -74,6 +74,14 @@ export function monthHref(basePath: string, params: Record<string, string | unde
   return s ? `${basePath}?${s}` : basePath
 }
 
+/** The params a surface's month selector carries: the page's own, less
+ *  `horizon` where the surface has no horizon control (lib/nav.ts
+ *  `hasHorizon`), so a period no pill shows or undoes never rides along from
+ *  month to month (Subjects; the deploy-3 fresh review). */
+export function selectorParams(params: Record<string, string | undefined>, horizon: boolean): Record<string, string | undefined> {
+  return horizon ? params : Object.fromEntries(Object.entries(params).filter(([k]) => k !== 'horizon'))
+}
+
 /** One entry of the selector's menu. */
 export interface MonthOption {
   month: string

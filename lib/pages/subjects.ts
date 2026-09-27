@@ -12,7 +12,8 @@ import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
 import { carriesShare, levelText } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
-import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
+import { chartMonths, DEFAULT_HORIZON, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
+import { hasHorizon, surface } from '../nav'
 import { KIND_ORDER, kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
   ownCensusWithClaims,
@@ -563,6 +564,9 @@ export interface SubjectsData {
   reading?: ReadingMonth
   otherMonths?: OtherMonth[]
   horizon: Horizon
+  /** The questions pane's period (`?questions=`, `subjectsHorizons`); the
+   *  page's where absent (a stored snapshot before it). */
+  questionsHorizon?: Horizon
   axis: string[]
   /** The chart's own axis — the trailing twelve months, or from the tenant's
    *  first readable month where that is later (`chartMonths`). Not the
@@ -1063,6 +1067,25 @@ export function unansweredLeadText(lead: UnansweredLead | null): string | null {
  * them false. The control's own words are the words: it is the only period the
  * reader has been shown.
  */
+/**
+ * THE QUESTIONS PANE'S OWN PERIOD (`?questions=`; the deploy-3 fresh review).
+ * Subjects has no horizon control (lib/nav.ts `horizon: false`, the lead's
+ * ruling of 27 Sep), so nothing on the page shows or undoes a horizon: the
+ * page reads the default month whatever `?horizon=` says, and the bar's month
+ * selector does not carry it. The questions pane's "Asked most, last 3 months"
+ * links ask for their period in their own parameter, which moves the pane and
+ * nothing else; its meta and sentence say the period ("Last 3 months", "in the
+ * last 3 months").
+ */
+export const QUESTIONS_PARAM = 'questions'
+
+/** The page's horizon and the questions pane's, from the URL. */
+export function subjectsHorizons(params: Readonly<Record<string, string | undefined>>): { horizon: Horizon; questions: Horizon } {
+  const horizon = hasHorizon(surface('subjects')) ? parseHorizon(params.horizon) : DEFAULT_HORIZON
+  const asked = params[QUESTIONS_PARAM]
+  return { horizon, questions: asked ? parseHorizon(asked) : horizon }
+}
+
 export function periodPhrase(horizon: Horizon, month: string): string {
   if (horizon === 'this_month') return `in ${monthName(month).split(' ')[0]}`
   if (horizon === 'since_start') return 'since we started'
@@ -1820,7 +1843,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const { clientId, params } = scope
   const reading: ReadingHandle = scope.reading
   const readingAt = new Date().toISOString()
-  const horizon = parseHorizon(params.horizon)
+  const { horizon, questions: questionsHorizon } = subjectsHorizons(params)
 
   // Wave 1 holds what the empty-state guard itself needs and what the page
   // cannot be shaped without; anything else starts on the line after the guard,
@@ -1900,6 +1923,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   })
   const rm = view.reading
   const window = horizonWindow(horizon, readingAnchor(rm), started.from)
+  const questionsWindow = questionsHorizon === horizon ? window : horizonWindow(questionsHorizon, readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
   // The page reads one month wider than it draws: "this month" is a one-month
@@ -2207,8 +2231,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       // account (§2.3 S5), a maker's video marked.
       loadVoices(supabase, clientId, voiceIds ?? [], { month, marketFirst: true, makers: makersAhead.then((m) => m.makers) }),
       loadUnanswered(supabase, clientId, memberIds ?? [], {
-        window: { from: window.from, to: window.to },
-        period: periodPhrase(horizon, month),
+        window: { from: questionsWindow.from, to: questionsWindow.to },
+        period: periodPhrase(questionsHorizon, month),
         themedRunId,
       }),
     ])
@@ -2389,6 +2413,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     askedMost,
     otherMonths: view.others,
     horizon,
+    questionsHorizon,
     axis,
     chartAxis,
     substrate: subjectSet?.numeratorSubstrate ?? history.substrate,

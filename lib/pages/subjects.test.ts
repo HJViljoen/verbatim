@@ -19,6 +19,7 @@ import {
   selectSubject,
   setLine,
   subjectNotes,
+  subjectsHorizons,
   sideFigures,
   sideWhose,
   unansweredLead,
@@ -891,5 +892,21 @@ describe('endReadings', () => {
   it('skips a side with no series and a series with no reading at all', () => {
     expect(endReadings([side({})], [])).toBeNull()
     expect(endReadings([side({})], [line(CLIENT_AUDIENCE, [null, null, null], [null, null, null])])).toBeNull()
+  })
+})
+
+// Subjects has no horizon pills since deploy 3 (lib/nav.ts), so nothing on
+// the page shows or undoes a horizon (the deploy-3 fresh review): the page
+// reads the month whatever `?horizon=` says, and the questions pane's "Asked
+// most, last 3 months" links carry the pane's own period.
+describe('subjectsHorizons', () => {
+  it('reads the month for the page whatever ?horizon= says', () => {
+    expect(subjectsHorizons({})).toEqual({ horizon: 'this_month', questions: 'this_month' })
+    expect(subjectsHorizons({ item: 's-water', horizon: 'last_3' })).toEqual({ horizon: 'this_month', questions: 'this_month' })
+  })
+
+  it('moves only the questions pane with ?questions=', () => {
+    expect(subjectsHorizons({ item: 's-water', questions: 'last_3' })).toEqual({ horizon: 'this_month', questions: 'last_3' })
+    expect(subjectsHorizons({ questions: 'nonsense' })).toEqual({ horizon: 'this_month', questions: 'this_month' })
   })
 })

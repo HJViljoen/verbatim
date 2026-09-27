@@ -9,9 +9,10 @@ import { SubjectsPage } from '@/components/pages/subjects'
 // once M4 is applied; until then every subject read degrades to a sentence
 // saying what is not recorded yet.
 //
-// `?item=` selects the subject and `?horizon=` the window, so a reader can send
-// a colleague the subject rather than the page — which is also how OV2's rows
-// link here.
+// `?item=` selects the subject, so a reader can send a colleague the subject
+// rather than the page — which is also how OV2's rows link here — and
+// `?questions=` the questions pane's period. The page has no horizon control
+// since deploy 3 (lib/nav.ts), so `?horizon=` moves nothing.
 
 export default async function Page({
   searchParams,

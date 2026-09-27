@@ -8,7 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
-import { allRedescribed, periodPhrase, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
+import { allRedescribed, periodPhrase, QUESTIONS_PARAM, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
 import { RULE, SCALE } from '@/components/pages/overview/market'
 
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
@@ -113,11 +113,11 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         // half of the mock's 1.35:1 pair, so the TITLE wrapped and left
         // "ANSWER" alone on a second line with the tile's header 18px below
         // its neighbour's. `HORIZON_LABEL` is the period's own name — "Last
-        // 12 months", the words a link that asks for a period (`?horizon=`)
-        // opens the page on — and it is seven characters shorter.
+        // 12 months", the words a link that asks for a period (`?questions=`)
+        // opens the pane on — and it is seven characters shorter.
         // `periodPhrase` still writes the lead sentence, where a fragment is
         // what a sentence needs.
-        meta={mode === 'app' ? HORIZON_LABEL[data.horizon] : unansweredMeta(u.questionVideos, u.yourPosts)}
+        meta={mode === 'app' ? HORIZON_LABEL[data.questionsHorizon ?? data.horizon] : unansweredMeta(u.questionVideos, u.yourPosts)}
         footer={footer}
         // ONE LINE, CLIPPED RATHER THAN WRAPPED. This tile is the narrow half of
         // the mock's 1.35:1 pair and its footer note is long; without it "Open
@@ -232,7 +232,8 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
   const u = pane.unanswered
   // The month by its full name ("in September"), the other periods in the
   // control's own words ("in the last 3 months").
-  const period = data.horizon === 'this_month' ? `in ${longMonth(data.month)}` : periodPhrase(data.horizon, data.month)
+  const horizon = data.questionsHorizon ?? data.horizon
+  const period = horizon === 'this_month' ? `in ${longMonth(data.month)}` : periodPhrase(horizon, data.month)
   const count = questionsCountLine(u, pane.name, period)
   const listed = u.questionVideos >= UNANSWERED_GATE && u.rows.length > 0
   const countBlock = email ? (
@@ -303,7 +304,7 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
         {most.map((a) => (
           <div key={a.id} className={`flex min-h-11 items-center justify-between gap-4 ${RULE.row} last:border-b-0`}>
             {mode === 'app'
-              ? <Link href={`${appUrl}/dashboard/subjects?item=${encodeURIComponent(a.id)}&horizon=last_3`} className={`min-w-0 ${SCALE.row} underline decoration-border underline-offset-[5px] hover:decoration-foreground`}>{a.name}</Link>
+              ? <Link href={`${appUrl}/dashboard/subjects?item=${encodeURIComponent(a.id)}&${QUESTIONS_PARAM}=last_3`} className={`min-w-0 ${SCALE.row} underline decoration-border underline-offset-[5px] hover:decoration-foreground`}>{a.name}</Link>
               : <span className={`min-w-0 ${SCALE.row}`}>{a.name}</span>}
             <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(a.videos)}</span></span>
           </div>

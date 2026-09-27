@@ -9,6 +9,7 @@ import {
   monthLabel,
   monthOptions,
   monthTitle,
+  selectorParams,
   updateLabel,
   updateLine,
   type ContextLineInput,
@@ -127,7 +128,7 @@ export function SurfacePageBar({ nav, params = {}, context = null, updates = nul
   const line = s.bar === 'week'
     ? (updates ? <UpdateContext brand={brand ?? context?.brand ?? null} updates={updates} /> : null)
     : s.bar === 'reading' && context
-      ? <ReadingContext context={context} basePath={s.href} params={params} />
+      ? <ReadingContext context={context} basePath={s.href} params={selectorParams(params, hasHorizon(s))} />
       : null
 
   return (
