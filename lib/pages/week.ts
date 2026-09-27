@@ -1224,12 +1224,17 @@ interface VideoRow {
   hook_style: string | null
   classified_type: string | null
   // The post's own identity, for §5's rival table. `videos` has no title
-  // column, so this is what a post IS here.
+  // column, so this is what a post IS here. Its caption and link are not on
+  // this row: they are read for the posts the table weighs (`loadPostText`).
   account_name: string | null
-  caption: string | null
   upload_date: string | null
-  video_url: string | null
   views: number | null
+}
+
+/** The two columns of a rival post that only the posts §4 weighs need. */
+interface PostText {
+  caption: string | null
+  video_url: string | null
 }
 
 /**
@@ -2116,7 +2121,10 @@ async function buildCameIn(input: {
         .map((v) => ({ audience, video: v }))
     })
     : []
-  const postComments = await windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window)
+  const [postComments, postText] = await Promise.all([
+    windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window),
+    loadPostText(supabase, clientId, candidates.map((c) => c.video.id)),
+  ])
   const weighedBy = new Map<string, number>()
   const postsBy = new Map<string, RivalPost[]>()
   for (const c of candidates) {
@@ -2126,8 +2134,8 @@ async function buildCameIn(input: {
       platform: c.video.platform,
       account: c.video.account_name ?? '',
       postedOn: c.video.upload_date,
-      caption: postCaption(c.video.caption),
-      href: c.video.video_url,
+      caption: postCaption(postText.get(c.video.id)?.caption ?? null),
+      href: postText.get(c.video.id)?.video_url ?? null,
       comments: postComments.get(`${c.video.platform}::${c.video.video_id}`) ?? 0,
     })
     postsBy.set(c.audience, list)
@@ -2688,15 +2696,37 @@ async function readClientMonthVideos(reading: ReadingHandle, clientId: string, m
 }
 
 /** Every video of this tenant this update touched, either as its discoverer or
- *  as its analyser. The two are different sets and §4 prints both. */
+ *  as its analyser. The two are different sets and §4 prints both.
+ *
+ *  NO CAPTION AND NO LINK ON THIS READ. It is every row an update touched
+ *  (Sealand's 20 Sep update: 1,565, two pages), and the page counts them;
+ *  the only rows whose caption and link are ever printed are the handful of
+ *  rival posts §4 weighs (`RIVAL_POSTS_CONSIDERED` per rival), and those read
+ *  theirs by id (`loadPostText`). The caption was two thirds of this read's
+ *  1.9 MB, and the read was the long pole of the page's second wave: measured
+ *  on staging 27 Sep, 3.2 s and 1.7 s for its two pages with the caption and
+ *  the page waiting on nothing else. */
 async function loadUpdateVideos(supabase: SupabaseClient, clientId: string, runId: string): Promise<VideoRow[]> {
   return selectAll<VideoRow>(() =>
     supabase.from('videos')
-      .select('id, platform, video_id, run_id, analyzed_run_id, is_client, is_competitor, competitor_name, source, engagement_rate, hook_style, classified_type, account_name, caption, upload_date, video_url, views')
+      .select('id, platform, video_id, run_id, analyzed_run_id, is_client, is_competitor, competitor_name, source, engagement_rate, hook_style, classified_type, account_name, upload_date, views')
       .eq('client_id', clientId)
       .or(`run_id.eq.${runId},analyzed_run_id.eq.${runId}`)
       .order('id', { ascending: true }),
   )
+}
+
+/** The caption and link of the rival posts §4 weighs, by video row id. Tens of
+ *  ids (six per tracked rival), so one chunk; a failure throws, as the read it
+ *  was split from did. */
+async function loadPostText(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, PostText>> {
+  if (ids.length === 0) return new Map()
+  const held = await inChunks<PostText & { id: string }>(ids, (part) => () =>
+    supabase.from('videos').select('id, caption, video_url')
+      .eq('client_id', clientId).in('id', part)
+      .order('id', { ascending: true }),
+  )
+  return new Map(held.map((v) => [v.id, { caption: v.caption, video_url: v.video_url }]))
 }
 
 /**
