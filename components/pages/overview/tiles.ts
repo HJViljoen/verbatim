@@ -46,30 +46,31 @@ const ONE_LINE_ROWS: Record<string, number> = {
 }
 
 /**
- * THE PREVIEW'S PAIRS, EACH ON ONE ROW, NEITHER TILE STRETCHED (the lead's
- * ruling of 27 Sep on the deploy-3 design review).
+ * THE PREVIEW'S PAIRS, EACH ON ONE ROW, BOTH TILES ONE HEIGHT (the lead's
+ * ruling of 27 Sep, fast track, on deploy 3's open rulings; it replaces the
+ * earlier "neither tile stretched", which the lead withdrew as a mistake).
  *
- * `PageGrid` stretches every tile in a row to the row's height, so the
- * shorter tile of a pair carried the difference as white inside itself, with
- * its footer link pushed to the bottom: about 350px in "What you published"
- * beside the brands and about 150px in "The market by subject" beside what it
- * means for you, on staging at 11 Oct. And the spans below were rows of
- * different counts inside one pair (published 3, brands 1), so a pair's tiles
- * ended 48px apart and a one-line pair staggered, the next tile starting
- * beside the middle of the one before.
+ * `Main.dc.html` draws each pair on its 12-column grid with `align-items:
+ * stretch`, every section a flex column whose body is `flex: 1` with its
+ * footer last: both tiles of a pair are as tall as the taller, both footer
+ * links sit on one line, and the shorter tile carries its white above its
+ * footer. So above `xl` every tile spans exactly one row (a pair's tiles once
+ * spanned rows of different counts, published 3 against the brands' 1, and
+ * ended 48px apart; a one-line pair staggered), `PageGrid` stretches both to
+ * the row, and the page's `bodyClassName` makes each block's section fill its
+ * tile (./index.tsx), whose body is `flex-1` with the footer after it
+ * (`BlockFrame`'s roomy arm). The pairing and the order are the preview's;
+ * neither tile is widened or re-paired.
  *
- * So above `xl` every tile spans exactly one row, which puts each pair on one
- * row in the preview's order, and a paired tile is `self-start`: it is as tall
- * as what it draws, its footer under its content, and the pair shares its top
- * edge. The pairing and the order are the preview's; neither tile is widened
- * or re-paired to hide the difference.
+ * Below `xl` the page is one column and each tile keeps its floor (`ROWS`,
+ * below), set so a short block holds no white under its footer.
  */
 export function frontTile(key: string, oneLine: boolean): { col: 4 | 6 | 8 | 12; row: number; className: string } {
   const col = (oneLine ? ONE_LINE_COLS : FRONT_COLS)[key] ?? 12
   return {
     col,
     row: (oneLine ? ONE_LINE_ROWS[key] : undefined) ?? ROWS[key] ?? 2,
-    className: col < 12 ? 'xl:row-span-1 xl:self-start' : 'xl:row-span-1',
+    className: 'xl:row-span-1',
   }
 }
 

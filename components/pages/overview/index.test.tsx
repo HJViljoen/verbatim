@@ -176,11 +176,13 @@ describe('the Overview page', () => {
     assertCopyContract(markup)
   })
 
-  // THE PREVIEW'S PAIRS, EACH ON ONE ROW, NEITHER STRETCHED (the lead's
-  // ruling of 27 Sep): `Main.dc.html`'s order, the subjects beside what it
-  // means for you and what you published beside the brands; above xl every
-  // tile spans one row, and a paired tile is as tall as its block.
-  it('pairs the tiles as the preview does, one row a pair, and stretches neither tile of a pair', () => {
+  // THE PREVIEW'S PAIRS, EACH ON ONE ROW, BOTH ONE HEIGHT (the lead's ruling
+  // of 27 Sep, fast track; it withdrew "neither stretched"): `Main.dc.html`'s
+  // order, the subjects beside what it means for you and what you published
+  // beside the brands; above xl every tile spans one row and the grid
+  // stretches both tiles of a pair to it, each block's section filling its
+  // tile with its footer last.
+  it('pairs the tiles as the preview does, one row a pair, both tiles of a pair stretched to one height', () => {
     for (const [data, cols] of [
       [marketFrontFixture(), { 'overview.subjects': 8, 'overview.foryou': 4, 'overview.moves': 6, 'overview.rivals': 6 }],
       [ossurFrontFixture(), { 'overview.subjects': 6, 'overview.foryou': 6, 'overview.moves': 6, 'overview.rivals': 6 }],
@@ -192,10 +194,15 @@ describe('the Overview page', () => {
         const key = TILE_BLOCKS[i].key
         expect(m[2], key).toContain('xl:row-span-1')
         expect(m[2], key).not.toMatch(/xl:row-span-[2-9]/)
-        expect(m[2].includes('xl:self-start'), key).toBe(key in cols)
+        // No tile opts out of the row's height (the grid's default stretch).
+        expect(m[2], key).not.toMatch(/self-(start|center|end)|xl:h-fit/)
       }
+      // Each block's section fills its tile, its body flex-1 and its footer
+      // last, so a stretched tile's white sits above its footer.
+      expect(markup).toContain('[&amp;&gt;section]:flex-1')
     }
-    expect(frontTile('overview.moves', false)).toMatchObject({ col: 6, className: 'xl:row-span-1 xl:self-start' })
+    expect(frontTile('overview.moves', false)).toMatchObject({ col: 6, className: 'xl:row-span-1' })
+    expect(frontTile('overview.subjects', false)).toMatchObject({ col: 8, className: 'xl:row-span-1' })
     // Below xl a floor, not a size: "What you published" at two rows
     // (248px), so a short one holds no white above its footer.
     expect(frontTile('overview.moves', false).row).toBe(2)
@@ -210,7 +217,7 @@ describe('the Overview page', () => {
   it('has a loading skeleton with the page’s tiles, in its order, widths, floors and pairs', () => {
     expect(TILE_BLOCKS.map((b) => b.key)).toEqual([...FRONT_TILE_KEYS])
     const tiles = (markup: string) => [...markup.matchAll(/<section data-tile="" data-col="(\d+)" data-row="(\d+)"[^>]*class="([^"]*)"/g)]
-      .map((m) => [m[1], m[2], m[3].includes('xl:self-start'), m[3].includes('xl:row-span-1')])
+      .map((m) => [m[1], m[2], /self-(start|center|end)/.test(m[3]), m[3].includes('xl:row-span-1')])
     const page = tiles(render(<OverviewPage data={marketFrontFixture()} />))
     const skeleton = tiles(render(<DashboardLoading />))
     expect(skeleton).toEqual(page)

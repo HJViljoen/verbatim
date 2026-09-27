@@ -12,7 +12,8 @@ import { FRONT_TILE_KEYS, frontTile } from '@/components/pages/overview/tiles'
 // the kinds and mood · the asks · the subjects (8) beside what it means for
 // you (4) · what you published (6) beside the brands (6) · what changed. The
 // grid is `xl:auto-rows-auto` there, so it is here: the tiles are as tall as
-// their bones, which are sized to the blocks. A bone the page will not draw is
+// their bones, which are sized to the blocks, and a pair as tall as the taller
+// of its two, as the page's pairs stretch. A bone the page will not draw is
 // a jump when the page lands (about 5s on staging), so the order and the pairs
 // are the page's own. No tile carries a meta bone: a block header is its title
 // alone (25 Sep rulings).

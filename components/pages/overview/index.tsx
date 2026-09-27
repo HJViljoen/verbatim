@@ -247,8 +247,9 @@ export function OverviewPage({
               // fidelity). The selector is here rather than in `BlockFrame`
               // because the frame is P0's and shared: a block rendered into an
               // email or a slide has no tile to fill. It fills a tile's floor
-              // below `xl`; above it no tile is taller than its block
-              // (`frontTile`).
+              // below `xl`; above it, a paired tile's row, as tall as the
+              // taller of the pair, its footer last (`frontTile`, the
+              // preview's pairs).
               bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
               distribute="between"
             >
