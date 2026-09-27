@@ -33,11 +33,13 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //        gate_rule    the relevance-gate fix, dated --gate-fix-at
 //        attribution  attribution v3, dated --attribution-at
 //      both the fix branch's ACTUAL production deploy (never assumed), source
-//      'reconstructed', this command as the actor, and a note in client words;
-//      and, with --capped-run <run id>, an `other` row dated at that update: "an
-//      update gathered less than usual because a spending cap was reached".
-//   Heinrich approves each note's wording before the apply (Mon 28 Sep); the
-//   dry run prints them.
+//      'reconstructed', this command as the actor; and, with --capped-run
+//      <run id>, an `other` row (field gather_capped) dated at that update.
+//   NO NOTE ON ANY OF THEM (Heinrich, 27 Sep: "lets just not add those
+//   notes"; plan §8). The rows stay, because decision D's comparison refusals
+//   and the record's reach read them, but no sentence explaining the change is
+//   stored, so none can reach a client: the app titles each row by its surface.
+//   The dry run prints each planned row with "note: none".
 //
 // The re-tag, if applied, writes its own entity_retag row through the fix
 // branch's tool; its reach is not measured here (the tool's moved set is not
@@ -54,21 +56,24 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 const NAME = 'log-tracking-eras'
 export const REACH_METHOD = 'search_terms_v1'
 
-/** The notes, in client words (no digit, no em dash, no pipeline word, and
- *  no direction word: plan §4.0; lib/provenance/change-notes.test.ts holds
- *  all four notes the Stage 1 scripts write to it). */
-// The gate note says the unjudged videos stay in the counts, and no more: the
-// only mark they get is `unjudged_admission` in video_segments.reason, which
-// nothing displays and a tenant cannot select, so "and are marked" would claim
-// what the product does not do (plan §7.11).
-export const GATE_RULE_NOTE =
-  'We corrected how we check that a video belongs to your market. Some videos found before the correction were let in without that check; they stay in the counts.'
-// The attribution note names the change and nothing more. It read "We improved
-// how we tell which brand a post is about, so fewer posts are filed under the
-// wrong brand.": "improved" is a direction word (lib/calibration.ts
-// DIRECTION_WORDS), and "fewer" claims a fall nothing in the product measures.
-export const ATTRIBUTION_NOTE = 'We changed how we tell which brand a post is about.'
-export const CAPPED_NOTE = 'An update gathered less than usual because a spending cap was reached.'
+/**
+ * A change row of ours this script writes where none exists: source
+ * 'reconstructed', and NO NOTE (Heinrich, 27 Sep: no client-visible notes on
+ * our own changes). The three note constants this file held (the gate fix,
+ * attribution v3 and a capped update) are gone, so nothing can store or print
+ * them; lib/provenance/change-notes.test.ts holds every row to `note: null`.
+ */
+export function ourChangeRow(row: Omit<LoggedChangeInput, 'source' | 'note'>): LoggedChangeInput {
+  return { ...row, source: 'reconstructed', note: null }
+}
+
+/** A planned row as the dry run prints it: "note: none" where it has no note
+ *  (every row this script plans), the note in quotes only if one ever came
+ *  back, which run/mf-helper.mjs `figures` then refuses. */
+export function newRowLine(p: Pick<LoggedChangeInput, 'surface' | 'changedAt' | 'note' | 'affects'>): string {
+  const note = p.note?.trim() ? `"${p.note.trim()}"` : 'none'
+  return `  new row: ${p.surface} at ${p.changedAt} · note: ${note}${p.affects?.months ? ` · months ${p.affects.months}` : ''}`
+}
 
 const SEARCH_CHANGE_SURFACES = ['terms', 'subreddits']
 
@@ -176,17 +181,17 @@ async function main() {
   }
   if (has('gate_rule')) console.log('  gate_rule: a row exists; none written')
   else if (!gateFixAt) console.log('  gate_rule: not planned (--gate-fix-at <the fix deploy> not given)')
-  else planned.push({ clientId: args.clientId, surface: 'gate_rule', field: 'relevance_gate', actor, source: 'reconstructed', changedAt: gateFixAt, note: GATE_RULE_NOTE, affects: { months: band([...defaultMonths]) } })
+  else planned.push(ourChangeRow({ clientId: args.clientId, surface: 'gate_rule', field: 'relevance_gate', actor, changedAt: gateFixAt, affects: { months: band([...defaultMonths]) } }))
   if (has('attribution')) console.log('  attribution: a row exists; none written')
   else if (!attributionAt) console.log('  attribution: not planned (--attribution-at <the fix deploy> not given)')
-  else planned.push({ clientId: args.clientId, surface: 'attribution', field: 'attribution_v3', actor, source: 'reconstructed', changedAt: attributionAt, note: ATTRIBUTION_NOTE })
+  else planned.push(ourChangeRow({ clientId: args.clientId, surface: 'attribution', field: 'attribution_v3', actor, changedAt: attributionAt }))
   if (args.values['capped-run']) {
     const run = gathers.find((g) => g.runId === args.values['capped-run'])
     if (!run) throw new Error(`${NAME}: --capped-run ${args.values['capped-run']} is not a gather of this client`)
     if (changes.some((c) => c.surface === 'other' && c.field === 'gather_capped' && c.run_id === run.runId)) console.log('  capped run: a row exists; none written')
-    else planned.push({ clientId: args.clientId, surface: 'other', field: 'gather_capped', actor, runId: run.runId, source: 'reconstructed', changedAt: run.at, note: CAPPED_NOTE })
+    else planned.push(ourChangeRow({ clientId: args.clientId, surface: 'other', field: 'gather_capped', actor, runId: run.runId, changedAt: run.at }))
   }
-  for (const p of planned) console.log(`  new row: ${p.surface} at ${p.changedAt} · "${p.note}"${p.affects?.months ? ` · months ${p.affects.months}` : ''}`)
+  for (const p of planned) console.log(newRowLine(p))
 
   if (!args.apply) {
     console.log(`read-only: nothing written (${reach.length} reach rows and ${planned.length} change rows planned) · reads: ${pages.n} pages`)
