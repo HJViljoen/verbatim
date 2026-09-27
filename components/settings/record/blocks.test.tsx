@@ -11,13 +11,13 @@ import type { ConfigChange } from '@/lib/config-log'
 import { ChangeLogBlock, PREHISTORY_LINE, sameRows } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
-import { NO_EXPORT_WHY, SaveStrip, ScopeStatement } from './header'
+import { NO_EXPORT_WHY, ScopeStatement } from './header'
 import { keptRateText, RejectLogBlock } from './rejects'
 import {
   changeLogFixture, coverageRowsFixture, deliveryFixture,
   freshCoverageRowsFixture, gateSummaryFixture, keptByPlatformFixture,
   keptByTermFixture, lookedAtFixture, noReadingsFixture, oneLineFixture, readingsFixture, rejectRowsFixture,
-  saveStateFixture, statsFixture, unrecordedSaveStateFixture, updatesFixture,
+  statsFixture, updatesFixture,
 } from './fixture'
 
 // The render tier for Settings › The record (block E wave 2). One static
@@ -509,24 +509,6 @@ describe('the 25 Sep rulings, on every section of the tab (Heinrich’s default,
 })
 
 describe('the page’s own chrome', () => {
-  it('tells a save that broke nothing from a save whose breakage was never written down', () => {
-    const recorded = renderText(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
-    expect(recorded).toContain('Nothing waiting to be saved.')
-    expect(recorded).toContain('Last save 3 Sep: Poler added as a rival.')
-    expect(recorded).toContain('Broke:')
-    const unrecorded = renderText(<SaveStrip state={unrecordedSaveStateFixture()} />)
-    expect(unrecorded).toContain('not written down here yet')
-    expect(unrecorded).not.toContain('Broke: nothing')
-  })
-
-  // Heinrich, 27 Sep: no client-visible notes on our own changes. The newest
-  // row on Sunday is label-segments' segment row, stored with note NULL.
-  it('with a note-less newest change says "Last save" and its date alone: no colon, no quotes, no "undefined"', () => {
-    const text = renderText(<SaveStrip state={saveStateFixture()} note={null} />)
-    expect(text).toContain('Last save 3 Sep.')
-    expect(text).not.toMatch(/Last save 3 Sep:|undefined|null|""/)
-  })
-
   it('says each note-less change of ours on an MF1 surface by its title alone in the change log (27 Sep)', () => {
     const ours = (id: string, surface: string, field: string, at: string, source: ConfigChange['source']): ConfigChange => ({
       id, client_id: 't1', changed_at: at, surface: surface as ConfigChange['surface'], field, before: null, after: null,
@@ -562,7 +544,6 @@ describe('the page’s own chrome', () => {
   })
 
   it('keeps the copy contract', () => {
-    assertCopyContract(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
     assertCopyContract(<ScopeStatement text="x" why="y" />)
   })
 })

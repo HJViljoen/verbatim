@@ -73,12 +73,6 @@ export function searchPlan(config: {
   return { groups, used: groups.reduce((n, g) => n + g.searches, 0), cap: SEARCH_CAP }
 }
 
-/** "113 of 120 searches each update · 7 free", or "capped" past it. */
-export function searchCapLine(plan: SearchPlan): string {
-  const free = plan.cap - plan.used
-  return `${plan.used} of ${plan.cap} searches each update · ${free > 0 ? `${free} free` : free === 0 ? 'none free' : `${-free} over, so the update drops the last of them`}`
-}
-
 export interface MarketVideo {
   id: string
   platform: string
@@ -152,6 +146,8 @@ export interface YourMarket {
   month: string
   /** The month's market videos; null where MF1's function is not there. */
   market: MarketVideo[] | null
+  /** The CATEGORY's videos in the month by platform ("Where we read it", as
+   *  the approved preview reads it: "of the category's videos"). */
   mix: PlatformShare[] | null
   /** Null where `video_provenance` is not there. */
   terms: { rows: TermShare[]; unknown: number } | null
@@ -239,7 +235,7 @@ export async function loadYourMarket(admin: SupabaseClient, clientId: string, mo
   return {
     month,
     market,
-    mix: marketPlatformMix(market),
+    mix: marketPlatformMix(market.filter((v) => v.audience === 'industry-other')),
     terms: provenance ? termShares({ market, provenance, segments }) : null,
     makers,
     segmentCounts: segments ? segmentCounts(market, segments) : null,

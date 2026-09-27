@@ -58,6 +58,11 @@ export interface TrackingPageInputs {
    *  from "this workspace has no configuration", and the page says which. */
   configFailed: boolean
   termDates: Map<string, TermDate>
+  /** The logged history of what we search and read: every terms row, and the
+   *  rivals and communities rows (What we read's "How the set got here" and
+   *  each search's first day, WP3.10). Oldest first; empty where the log is
+   *  not applied. */
+  setChanges: SetChange[]
   /** The shipped per-term record (found · kept · with comments · insights ·
    *  "worth reviewing"), pooled over updates. */
   performance: { rows: TermSummary[]; updates: number }
@@ -107,9 +112,28 @@ export interface TrackingPageInputs {
    *  monthly reading is not applied", and may not be printed as one. */
   monthUnread: boolean
   monthStatus: MonthStatus
-  /** What the rail prints beside the other sub-pages. A key that could not be
-   *  counted is absent rather than zero. */
-  railCounts: { subjects: number | null; schedules: number | null }
+}
+
+/** A change-log row as "How the set got here" reads it. */
+export type SetChange = Pick<ConfigChange, 'changed_at' | 'surface' | 'field' | 'before' | 'after' | 'source'>
+
+/** The rivals and communities rows of the change log, oldest first. The terms
+ *  rows are `loadChangeLog`'s. Empty where the log is not applied, or the
+ *  read failed (logged): the card then prints what the terms rows say. */
+async function loadSetChanges(client: SupabaseClient, clientId: string): Promise<SetChange[]> {
+  try {
+    return await selectAll<SetChange>(() =>
+      client.from(CONFIG_CHANGES_TABLE)
+        .select('changed_at, surface, field, before, after, source')
+        .eq('client_id', clientId)
+        .in('surface', ['rivals', 'subreddits'])
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (!isMissingConfigLog(error)) console.error(`[settings] set history not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+    return []
+  }
 }
 
 /** The term-yield window: a quarter of weekly updates, the same number the
@@ -332,20 +356,6 @@ async function loadPlatformMix(
   }
 }
 
-/** The two counts the rail prints for its other sub-pages. Each is a head
- *  count and each degrades to null on its own — a count nobody could take is
- *  absent from the rail, never a zero (lib/settings/rail.ts states the rule). */
-async function loadRailCounts(client: SupabaseClient, clientId: string): Promise<{ subjects: number | null; schedules: number | null }> {
-  const [subjects, schedules] = await Promise.all([
-    client.from('subjects').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('status', 'active'),
-    client.from('report_schedules').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
-  ])
-  return {
-    subjects: subjects.error ? null : subjects.count ?? null,
-    schedules: schedules.error ? null : schedules.count ?? null,
-  }
-}
-
 export async function loadTrackingPage(
   client: SupabaseClient,
   clientId: string,
@@ -379,7 +389,7 @@ export async function loadTrackingPage(
   const censusMonth = monthStartOf(rm?.month ?? nowIso)
 
   const config = (configRead.data ?? null) as Record<string, unknown> | null
-  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix, railCounts] = await Promise.all([
+  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix, others] = await Promise.all([
     loadChangeLog(client, clientId),
     loadTermYield(client, clientId),
     loadTermPerformance(client, clientId, TRACKING_GATHERS),
@@ -390,7 +400,7 @@ export async function loadTrackingPage(
     loadLastChange(client, clientId),
     loadUpdates(client, clientId),
     loadPlatformMix(client, clientId, censusMonth),
-    loadRailCounts(client, clientId),
+    loadSetChanges(client, clientId),
   ])
 
   return {
@@ -400,6 +410,7 @@ export async function loadTrackingPage(
     config,
     configFailed: configRead.error !== null,
     termDates: termDates(changes),
+    setChanges: [...changes, ...others].sort((a, b) => (a.changed_at < b.changed_at ? -1 : a.changed_at > b.changed_at ? 1 : 0)),
     performance,
     termYield: yieldRows.rows,
     gathers: yieldRows.gathers,
@@ -425,6 +436,5 @@ export async function loadTrackingPage(
     // the update, the rule and the row agree. The clock only where nothing has
     // been delivered.
     monthStatus: freezeStateFor(censusMonth, rm?.asAt ?? nowIso),
-    railCounts,
   }
 }

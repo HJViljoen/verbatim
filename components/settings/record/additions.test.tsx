@@ -1,33 +1,38 @@
 import { describe, expect, it } from 'vitest'
 
-import { renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { directionHits } from '@/lib/calibration'
 import { queueLines, type QueuedRow } from '@/lib/settings/queue'
 import { PAGES_CAN_SAY, timelineRows } from '@/lib/settings/record-additions'
 
-import { ASK_FOR_A_CHANGE, PagesCanSay, SearchesHeldStill } from './additions'
+import { ASK_FOR_A_CHANGE, HeldStillAside, PagesCanSay } from './additions'
 
-// Settings › What we changed, deploy 5's three sections (WP3.10, §2.10 D5).
+// Settings › What we changed, what deploy 5 adds (WP3.10, §2.10 D5): the
+// held-still aside and the timeline, as the SettingsRecord artboard draws them.
 
-describe('Searches held still until January', () => {
+describe('Searches held still until January, the aside in What we changed', () => {
   const rows: QueuedRow[] = [{ field: 'industry_keywords', after: ['travel gear', 'carry-on backpack'], effective_month: '2027-01-01', queued_label: 'x', queued_at: '2026-11-22T09:00:00Z' }]
-  it('says what the lock does, with its request path, and each queued change with its month', () => {
-    const text = renderText(<SearchesHeldStill state="available" lines={queueLines(rows, { industry_keywords: ['upcycled bag', 'travel gear'] })} />)
+  it('says what the lock keeps, each queued change with its month, the request path and when a change lands', () => {
+    const text = renderText(<HeldStillAside state="available" lines={queueLines(rows, { industry_keywords: ['upcycled bag', 'travel gear'] })} />)
     expect(text).toContain('Searches held still until January')
-    expect(text).toContain('lands on the 1st of a month, no earlier than 1 January 2027')
+    expect(text).toContain('This keeps October and November comparable. A change you queue waits for the 1st.')
     expect(text).toContain('The category: adds carry-on backpack; takes out upcycled bag')
     expect(text).toContain('from 1 January 2027')
     expect(text).toContain(ASK_FOR_A_CHANGE)
+    expect(text).toContain('A change lands on the 1st of a month, no earlier than 1 Jan 2027.')
+  })
+  it('asks for the change on What we read\'s search set', () => {
+    expect(render(<HeldStillAside state="available" lines={[]} />)).toContain('href="/dashboard/settings#search-set"')
   })
   it('says none yet, and before MF3 claims no queue', () => {
-    expect(renderText(<SearchesHeldStill state="available" lines={[]} />)).toContain('queued: none yet')
-    const before = renderText(<SearchesHeldStill state="unavailable" lines={[]} />)
-    expect(before).toContain('tell us and we will note it for then')
+    expect(renderText(<HeldStillAside state="available" lines={[]} />)).toContain('queued: none yet')
+    const before = renderText(<HeldStillAside state="unavailable" lines={[]} />)
+    expect(before).toContain('Tell us what you would change and we will note it for then.')
     expect(before).not.toContain('queued')
   })
   it('keeps the copy contract', () => {
-    assertCopyContract(<SearchesHeldStill state="available" lines={[]} />)
+    assertCopyContract(<HeldStillAside state="available" lines={[]} />)
   })
 })
 

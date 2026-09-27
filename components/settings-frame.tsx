@@ -1,168 +1,97 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { PageFrame, PageBar } from '@/components/shell/page-grid'
+import { PageBar } from '@/components/shell/page-grid'
 import { ReadingContext } from '@/components/shell/page-bar'
 import type { ContextLineInput } from '@/lib/shell/bar'
-import { SETTINGS_SUBPAGES, railCountText, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
+import { SETTINGS_SUBPAGES, settingsSubPage, type SettingsSection } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
 
-// The settings area (Phase 1 WP16, design item 29, revision 3): a rail of
-// seven sub-pages and a content pane, shared by everything under
-// /dashboard/settings plus Team and Billing, so the account pages read as one
-// place. The rail's labels and addresses come from lib/settings/rail.ts — this
-// file draws them and decides nothing.
+// The settings area (Phase 1 WP16, design item 29): one frame shared by
+// everything under /dashboard/settings plus Team and Billing, so the account
+// pages read as one place. The labels and addresses come from
+// lib/settings/rail.ts; this file draws them and decides nothing.
 //
-// ONE GROUP, NOT TWO. The rail carried a "Workspace" / "Help" split when the
-// Guide was a page of its own; the Guide is now the seventh sub-page and the
-// mock's rail is flat. A group label over a single group is furniture.
+// TABS OVER THE PAGE, AS THE APPROVED PREVIEW DRAWS THEM (market-first WP3.10,
+// the Settings and SettingsRecord artboards). The bar (the title and the
+// one-line context), then a row of tabs on a hairline, the lit one in the
+// page's ink with the green rule under it, then the sub-page itself. The
+// 224px rail beside a flat column is gone, and with it the counts beside the
+// labels and the save-state strip under them: the artboards draw neither, and
+// the page that saves (What we read) says what its last save was beside its
+// own save button.
 //
-// FORMS, NOT TILES (revision 3). The vocabulary below is the whole of it:
-// SettingsCard is an inner block with a title and a line of explanation,
-// FactRow is label-left value-right, ConnectionRow is name · what · status.
-// None of them is the elevated `bg-tile shadow-tile` card the reading pages
-// use, and nothing in a sub-page should introduce one.
+// A ROW THAT SCROLLS SIDEWAYS ON ITS OWN. At a phone's width the tabs do not
+// fit; the row scrolls inside itself and the page never does.
 //
-// NEITHER IS THE FRAME ITSELF, AS OF THE ARTBOARD PORT (Block D wave 2,
-// E-settings). The rail and the content pane were each an elevated
-// `bg-tile shadow-tile` card with a `PaneHeader` eyebrow, and that spent the
-// system's two nesting levels — tile, then flat inner block — on the furniture,
-// leaving every `SettingsCard` on a third and every field on a fourth. The
-// artboard draws a BARE 224px nav on white beside a flat column: no card, no
-// eyebrow over the rail, 40px rail items at 13.5px, and a sub-page header that
-// is a 15px/600 `h2` with a mono meta beside it and one sentence of rule under
-// it. That header is deliberately NOT `PaneHeader`: `PaneHeader`'s 10.5px
-// uppercase eyebrow is what the artboard uses for a SECTION head inside the
-// page (components/settings/chrome.tsx SectionHead), and one component cannot
-// hold both type scales without one of them being wrong.
-//
-// NINE ROUTES SHARE THIS FILE AND EIGHT OF THEM WERE NOT IN THE PORT'S SHOTS
-// (C6). The seven sub-pages plus Team and Billing all pass the same five props
-// — active, title, context, contentTitle, contentMeta — and nothing else, so
-// the new ones (contentRule, counts, railFooter) are additive for them and the
-// header and pane changes below are what actually reaches them: a 15px h2
-// where a PaneHeader eyebrow was, and flat white where two elevated cards
-// were. That is the artboard's settings area, applied to the area rather than
-// to one page of it, which is the point; the test file renders that exact prop
-// shape, because none of the eight can be rendered in the static tier (each
-// needs a session and a read). E-record re-ports /dashboard/settings/record
-// against this same file in this wave.
-//
-// The pane no longer scrolls inside a fixed height either. The artboard's
-// Tracking page is 2,460px tall and the shell's <main> already scrolls; an
-// inner scroller here meant the rail scrolled away from its own save-state
-// strip and the page had two scrollbars.
+// SUB-PAGES THE ARTBOARDS DO NOT DRAW keep their own header (`contentMeta`,
+// `contentRule`) above their content. Its title is dropped where it only
+// repeats the lit tab ("Subjects" under Subjects): both artboards open straight
+// on their first card, the tab naming the page. A title the tab does not say
+// ("Plan & billing" under Team) stays.
 
 export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, contentRule, children, controls, counts, railFooter, bar,
+  active, title, context, contentTitle, contentMeta, contentRule, children, controls, bar,
 }: {
-  /** Which rail entry is lit. `null` lights none — the parked Initiatives
-   *  page is inside this frame and is not one of the seven, and lighting
-   *  Tracking from it would tell a reader they were somewhere they are not. */
+  /** Which tab is lit. `null` lights none: the parked Initiatives page is
+   *  inside this frame and is not one of the tabs, and lighting What we read
+   *  from it would tell a reader they were somewhere they are not. */
   active: SettingsSection | null
   title: string
   context?: ReactNode
   contentTitle?: ReactNode
   contentMeta?: ReactNode
-  /** The one sentence under the sub-page title: what this page is for, and
-   *  what changing it costs. */
+  /** The one sentence under the sub-page title. */
   contentRule?: ReactNode
   controls?: ReactNode
-  /** Rail counts, where the page that drew the rail happens to know them. A
-   *  key that is absent prints nothing rather than a zero. */
-  counts?: RailCounts
-  /** Under the rail, below the seven links: the mock's save-state strip
-   *  (`SettingsRecord.dc.html`, and the same block on the Tracking artboard).
-   *  It belongs to the AREA rather than to a sub-page — the thing it says is
-   *  "you have unsaved edits somewhere in Settings, and the last save broke
-   *  this" — and a sub-page that drew it inside its own pane would be saying it
-   *  about itself. Optional, so a page that has not composed one draws no
-   *  empty box. */
-  railFooter?: ReactNode
   /** THE ONE-LINE BAR (the 25 Sep rulings, market-first WP3.10): the brand,
    *  the reading month and "as at the {update} update · next update {date}",
-   *  from `oneLineBar`. Absent, the bar is the title alone, as before; the
-   *  free-text `context` is still not printed (PageBar ignores it). */
+   *  from `oneLineBar`. Absent, the bar is the title alone; the free-text
+   *  `context` is still not printed (PageBar ignores it). */
   bar?: ContextLineInput | null
   children: ReactNode
 }) {
+  const heading = contentTitle && !(active && contentTitle === settingsSubPage(active).label) ? contentTitle : null
   return (
-    <PageFrame className="min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-6">
       <PageBar
         title={title}
         context={context}
         line={bar ? <ReadingContext context={bar} basePath={SETTINGS_SUBPAGES[0].href} params={{}} /> : undefined}
       >{controls}</PageBar>
-      {/* THE RAIL SITS BESIDE THE PANE ONLY WHERE THE PANE KEEPS ITS ROOM
-          (deploy 2 review). From `md` (768px) the app sidebar and a 224px rail
-          left the content 240px at 768 and 496px at 1024: The record stacked
-          into a column 4,693px tall. Below 1100px the seven sub-pages are a
-          row of tabs over a full-width pane, as the SettingsRecord artboard
-          draws them ("What we read · Subjects · The record …"); from 1100px,
-          where the pane is 572px or more, the rail stands beside it as before. */}
-      <div className="flex min-h-0 flex-col items-start gap-6 min-[1100px]:flex-row min-[1100px]:gap-8">
-        <nav aria-label="Settings" className="flex w-full shrink-0 flex-row flex-wrap gap-1 min-[1100px]:w-[224px] min-[1100px]:flex-col min-[1100px]:flex-nowrap min-[1100px]:gap-0.5">
-          {/* AT FULL STRENGTH (Block D wave 3, SH16). It was
-              `text-muted-foreground/80`, which resolved to #8B8F93 — 3.26:1,
-              on the label that says what the rail IS, shared by nine routes.
-              The 40px row height below is the artboard's and stays; the
-              contrast and the focus ring were never the mock's to decide. */}
-          <p className="hidden h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground min-[1100px]:flex">Settings</p>
-          {SETTINGS_SUBPAGES.map((s) => {
-            const count = counts?.[s.key] ?? null
-            return (
-              <Link
-                key={s.key}
-                href={s.href}
-                aria-current={active === s.key ? 'page' : undefined}
-                className={cn(
-                  // Every other control on these pages sets a focus ring; the
-                  // seven links that ARE the settings area's navigation fell
-                  // back to the UA outline, which on a rounded tinted row is
-                  // the one place it is least visible (SH16).
-                  'flex min-h-10 items-center gap-2 rounded-[4px] px-3 text-[13.5px] transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                  active === s.key
-                    ? 'bg-inner font-semibold text-foreground'
-                    : 'text-secondary-foreground hover:bg-inner hover:text-foreground',
-                )}
-              >
-                <span className="min-w-0 truncate min-[1100px]:flex-1">{s.label}</span>
-                {count != null && (
-                  /* THE UNIT IS DRAWN WHERE THE ROW HOLDS IT (Block D wave 3,
-                     RC9, `lib/settings/rail.ts`). This printed `count.value`
-                     alone on every row, for a reason that only applies to a
-                     row too narrow for both — and the one row that reason was
-                     written about carries no count at all. The full phrase
-                     stays the accessible name and the tooltip either way. */
-                  <span
-                    className="shrink-0 whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground"
-                    aria-label={`${count.value} ${count.unit}`}
-                    title={`${count.value} ${count.unit}`}
-                  >
-                    {railCountText(count, s.label)}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
-          {railFooter && <div className="mt-4 w-full">{railFooter}</div>}
-        </nav>
-        <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-          {contentTitle && (
-            <header className="flex flex-col gap-1 pb-4">
+      <nav aria-label="Settings" className="-mt-2 flex items-end gap-8 overflow-x-auto border-b border-border">
+        {SETTINGS_SUBPAGES.map((s) => (
+          <Link
+            key={s.key}
+            href={s.href}
+            aria-current={active === s.key ? 'page' : undefined}
+            className={cn(
+              'relative inline-flex h-11 shrink-0 items-center whitespace-nowrap text-[14px] transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+              active === s.key ? 'font-semibold text-foreground' : 'text-secondary-foreground hover:text-foreground',
+            )}
+          >
+            {s.label}
+            {active === s.key ? <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-t-[2px] bg-primary" /> : null}
+          </Link>
+        ))}
+      </nav>
+      <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+        {heading || contentMeta || contentRule ? (
+          <header className="flex flex-col gap-1 pb-4">
+            {heading || contentMeta ? (
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h2 className="shrink-0 text-[15px] font-semibold">{contentTitle}</h2>
+                {heading ? <h2 className="shrink-0 text-[15px] font-semibold">{heading}</h2> : null}
                 {contentMeta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{contentMeta}</span>}
               </div>
-              {contentRule && <p className="text-[12.5px] text-muted-foreground">{contentRule}</p>}
-            </header>
-          )}
-          {children}
-        </section>
-      </div>
-    </PageFrame>
+            ) : null}
+            {contentRule && <p className="text-[12.5px] text-muted-foreground">{contentRule}</p>}
+          </header>
+        ) : null}
+        {children}
+      </section>
+    </div>
   )
 }
 

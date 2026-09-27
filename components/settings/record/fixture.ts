@@ -7,7 +7,6 @@ import { deliveryRecord, deliveryStats, type DeliveryRecord, type DeliveryStat }
 import { readingsRecord, type ReadingsRecord } from '@/lib/settings/readings'
 import type { KeptRate, RejectRow } from '@/lib/settings/reject-log'
 import { gateSummary, gateTotalsFrom, sampleHead } from '@/lib/settings/reject-log'
-import { saveState, type SaveState } from '@/lib/settings/save-state'
 import { changesFromLog, comparabilityOf, type PairRow } from '@/lib/reading/comparability'
 import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { buildChangeBlock, compareRules } from '@/lib/pages/overview-market/change'
@@ -310,27 +309,6 @@ export function freshCoverageRowsFixture(): RecordRow[] {
 
 export function oneLineFixture(): string {
   return `${readingsFixture().counter} · ${howSoundLine(recordInputsFixture())}`
-}
-
-export function saveStateFixture(): SaveState {
-  return saveState({
-    lastChange: {
-      changed_at: '2026-09-03T11:02:00.000Z',
-      affects_audiences: ['competitor:Poler'],
-      affects_months: '[2026-09-01,2026-10-01)',
-      source: 'logged',
-    },
-    affectsRecorded: true,
-  })
-}
-
-/** M1 unapplied: the two columns cannot be read, so the "Broke" half is absent
- *  rather than empty. */
-export function unrecordedSaveStateFixture(): SaveState {
-  return saveState({
-    lastChange: { changed_at: '2026-09-03T11:02:00.000Z', affects_audiences: null, affects_months: null, source: 'logged' },
-    affectsRecorded: false,
-  })
 }
 
 // ---- What we changed (market-first WP1.6) -------------------------------------------

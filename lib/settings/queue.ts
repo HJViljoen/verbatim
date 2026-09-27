@@ -57,8 +57,10 @@ export const QUEUE_FIELD_WORDS: Readonly<Record<QueueField, string>> = {
   competitor_keywords: 'Brands you track',
   industry_keywords: 'The category',
   exclude_terms: 'Not these',
-  competitor_names: 'Rivals',
-  competitor_handles: 'Rival accounts',
+  // The list itself, beside its searches ("Brands you track" above), in the
+  // page's words for it (WP3.10), never "rivals".
+  competitor_names: 'The brands you track',
+  competitor_handles: 'Accounts of the brands you track',
   own_handles: 'Your accounts',
 }
 
@@ -304,11 +306,4 @@ export async function loadQueue(read: ReadClient, clientId: string): Promise<{ s
     throw new Error(`${QUEUE_TABLE}: ${String((res.error as { message?: string }).message ?? res.error)}`)
   }
   return { state: 'available', rows: (res.data ?? []) as QueuedRow[] }
-}
-
-/** The held-still section's one line under its title. */
-export function heldStillLine(state: 'available' | 'unavailable'): string {
-  return state === 'available'
-    ? `Searches are held still until January so October and November can be compared. A change you save here waits, and lands on the 1st of a month, no earlier than ${effectiveWords(QUEUE_FLOOR)}.`
-    : 'Searches are held still until January so October and November can be compared; tell us and we will note it for then.'
 }

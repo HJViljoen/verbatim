@@ -320,7 +320,7 @@ describe('the rivals section', () => {
     // not. `SectionNotes` flows them, so the section spends the lines the
     // words need rather than four paragraphs' worth of them.
     const markup = render(section)
-    const tail = markup.slice(markup.lastIndexOf('Add a rival'))
+    const tail = markup.slice(markup.lastIndexOf('Add a brand'))
     expect(tail.match(/<p /g)?.length ?? 0).toBe(1)
   })
 
@@ -350,7 +350,7 @@ describe('the rivals section', () => {
         names={['Poler', 'Cotopaxi']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}}
       />,
     )
-    expect(noMonth.split('nothing they publish is being read').length - 1).toBe(1)
+    expect(noMonth.split('nothing it publishes is being read').length - 1).toBe(1)
   })
 
   it('keeps the capture-versus-read census and the earliest-evidence footnote', () => {
@@ -472,6 +472,10 @@ describe('the Tracking form has no cadence (27 Sep: every workspace is weekly, o
     })
   }
 
+  it('says what the last save was under its own save row (the strip left the rail)', () => {
+    expect(renderText(form(true))).toContain(NEVER_SAVED)
+  })
+
   it('keeps the copy contract', () => {
     assertCopyContract(form(true))
   })
@@ -494,8 +498,8 @@ describe('the arms nobody had rendered', () => {
     const noRival = renderText(
       <RivalsSection rows={[]} names={[]} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}} />,
     )
-    expect(noRival).toContain('No rival is named. Naming one is how the category gets a shape.')
-    expect(noRival).toContain('Add a rival')
+    expect(noRival).toContain('No brand is tracked. Naming one is how the category gets a shape.')
+    expect(noRival).toContain('Add a brand')
 
     const noTerms = renderText(
       <TermsSection terms={{ brand_keywords: [], competitor_keywords: [], industry_keywords: [], exclude_terms: [] }}

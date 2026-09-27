@@ -144,22 +144,24 @@ export const PLATFORM_SHARE_UNREAD =
  *  row use. The allowlist a saved-fields POST is read against: a label that is
  *  not one of these is dropped, so the success sentence can never echo a
  *  crafted string back at the page. 'Cadence' and 'The day it lands' left with
- *  the Cadence section (27 Sep): every workspace is weekly, on Sunday, so a page
- *  opened before then that still posts them has them dropped here. */
+ *  the Cadence section (Heinrich, 27 Sep: "remove cadence from settings, and
+ *  always have it weekly on sunday"), so a page opened before then that still
+ *  posts them has them dropped here. The tracked list is "Brands you track",
+ *  the page's own name for it (WP3.10). */
 // THE GROUPS BY THE PAGE'S OWN NAMES (market-first WP3.10): the search set's
 // four groups are "Your name · Brands you track · The category · Not these"
 // on the page and in the queue (lib/settings/queue.ts QUEUE_FIELD_WORDS), so
 // the strip and the save sentence name them the same way.
 export const TRACKING_FIELDS = [
   'Terms for your name', 'Terms for brands you track', 'Terms for the category', 'Not these',
-  'Rivals',
+  'Brands you track',
 ] as const
 
 /**
  * What the one save row says afterwards.
  *
  * ONE SAVE, ONE OUTCOME — AND IT NAMES WHAT IT WROTE. The composed save could
- * change the terms, the exclusions, the rival list (and, until 27 Sep, the
+ * change the terms, the exclusions and the rival list (and, until 27 Sep, the
  * cadence and the day), and it answered with the terms form's own sentence ("Saved. Your next update
  * searches these terms.") whichever of them had moved. The fields come off the
  * form, through the allowlist above.
@@ -190,7 +192,7 @@ export function trackingPending(
   listed('Terms for brands you track', before.competitor, after.competitor)
   listed('Terms for the category', before.category, after.category)
   listed('Not these', before.exclusions, after.exclusions)
-  listed('Rivals', before.rivals, after.rivals)
+  listed('Brands you track', before.rivals, after.rivals)
   return out
 }
 

@@ -91,13 +91,17 @@ export function oneReadWith(cells: readonly Pick<WhyCell, 'readWith'>[]): string
   return dates.size === 1 && only ? only : null
 }
 
-export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
+/** The lead of The record, as the approved SettingsRecord artboard draws it:
+ *  the headline, the next pair and "Why September is not compared" on the
+ *  left, and, where the searches are held still, the aside that says so
+ *  beside them (304px, 88px apart, from `xl`; under them below it). */
+export function WhatWeChangedLead({ block, aside = null }: { block: ChangeBlock; aside?: ReactNode }) {
   const head = sideBySide(block)
   const next = nextPairParts(block)
   const why = whyNotCompared(block)
   const said = why ? oneReadWith(why.cells) : null
-  return (
-    <RecordSection title="What we changed" id={WHAT_WE_CHANGED_ID}>
+  const main = (
+    <>
       <div className="flex max-w-[720px] flex-col gap-4">
         {head ? <p className="m-0 text-[22px] font-medium leading-[1.3] tracking-[-0.02em] [text-wrap:balance] sm:text-[28px]">{head}</p> : null}
         {next ? (
@@ -139,6 +143,16 @@ export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
           )}
         </div>
       ) : null}
+    </>
+  )
+  return (
+    <RecordSection title="What we changed" id={WHAT_WE_CHANGED_ID}>
+      {aside ? (
+        <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_304px] xl:gap-x-[88px]">
+          <div className="flex min-w-0 flex-col gap-6">{main}</div>
+          {aside}
+        </div>
+      ) : main}
     </RecordSection>
   )
 }
@@ -407,7 +421,9 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
                 <RuleMark state={r.state} />
                 <span className="sr-only">{STATE_WORDS[r.state]}: </span>
                 {r.counts ? (
-                  <span className="inline-flex flex-wrap items-baseline">
+                  // Inline, so ", for themes" breaks after its comma in the
+                  // narrower column beside the timeline, never before it.
+                  <span>
                     <Counted figure={r.counts.figure} word={r.counts.word} base={r.counts.base} size="row" />
                     {r.view === 'themes' ? <span className="text-[15px] text-secondary-foreground">, for themes</span> : null}
                   </span>

@@ -1,49 +1,34 @@
-import { PageFrame, PageBar } from '@/components/shell/page-grid'
+import { PageBar } from '@/components/shell/page-grid'
 import { Bone, BoneLines } from '@/components/shell/skeleton'
 import { SETTINGS_SUBPAGES } from '@/lib/settings/rail'
 
 // One skeleton for every page inside the settings frame
-// (components/settings-frame.tsx): the seven sub-pages under
-// /dashboard/settings, plus Team and Billing. It draws what the frame draws
-// since the artboard port: a BARE 224px rail on white (the "Settings" label
-// and one 40px row per sub-page, read from the same `SETTINGS_SUBPAGES` the
-// real rail maps), beside a flat column whose header is a 15px title, a mono
-// meta and one sentence of rule, then `cards` flat inner blocks
-// (`SettingsCard`). The old version drew the rail and the pane as two elevated
-// cards, which the frame stopped doing, so every settings page jumped when it
-// landed.
+// (components/settings-frame.tsx): the sub-pages under /dashboard/settings,
+// plus Team and Billing. It draws what the frame draws since the approved
+// preview (market-first WP3.10): the bar, a row of tabs on a hairline, one bone
+// per tab (read from the same `SETTINGS_SUBPAGES` the real tabs map), then
+// `cards` tiles, as What we read and The record draw them.
 export function SettingsSkeleton({ title, cards = 3 }: { title: string; cards?: number }) {
   return (
-    <PageFrame className="min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-6">
       <span role="status" className="sr-only">Loading {title}…</span>
       <PageBar title={title} context={<Bone className="h-3 w-32" />}>
         <Bone className="h-3 w-24" />
       </PageBar>
-      {/* The frame's own breakpoint: tabs over the pane below 1100px, the
-          rail beside it from there (components/settings-frame.tsx). */}
-      <div className="flex min-h-0 flex-col items-start gap-6 min-[1100px]:flex-row min-[1100px]:gap-8">
-        <nav aria-hidden className="flex w-full shrink-0 flex-row flex-wrap gap-1 min-[1100px]:w-[224px] min-[1100px]:flex-col min-[1100px]:flex-nowrap min-[1100px]:gap-0.5">
-          <div className="hidden h-[26px] items-center px-3 min-[1100px]:flex"><Bone className="h-2 w-14" /></div>
-          {SETTINGS_SUBPAGES.map((s, i) => (
-            <div key={s.key} className="flex min-h-10 w-24 items-center px-3 min-[1100px]:w-auto">
-              <Bone className={i % 3 === 0 ? 'h-3 w-3/5' : i % 3 === 1 ? 'h-3 w-2/5' : 'h-3 w-1/2'} />
-            </div>
-          ))}
-        </nav>
-        <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
-          <header className="flex flex-col gap-1.5 pb-4">
-            <div className="flex items-baseline gap-3"><Bone className="h-4 w-36" /><Bone className="h-2.5 w-24" /></div>
-            <Bone className="h-3 w-2/3" />
-          </header>
-          <div className="flex flex-col gap-3">
-            {Array.from({ length: cards }, (_, i) => (
-              <div key={i} className="flex flex-col gap-2 rounded-md bg-inner px-4 py-3.5">
-                <Bone className="h-3.5 w-32 bg-tile" /><Bone className="h-2.5 w-2/3 bg-tile" /><BoneLines lines={3} className="[&>*]:bg-tile" />
-              </div>
-            ))}
+      <nav aria-hidden className="-mt-2 flex items-end gap-8 overflow-x-hidden border-b border-border">
+        {SETTINGS_SUBPAGES.map((s, i) => (
+          <div key={s.key} className="flex h-11 shrink-0 items-center">
+            <Bone className={i % 3 === 0 ? 'h-3 w-24' : i % 3 === 1 ? 'h-3 w-16' : 'h-3 w-20'} />
           </div>
-        </section>
+        ))}
+      </nav>
+      <div className="flex flex-col gap-6">
+        {Array.from({ length: cards }, (_, i) => (
+          <div key={i} className="flex flex-col gap-3 rounded-lg bg-tile p-4 shadow-tile sm:p-8">
+            <Bone className="h-3 w-32" /><Bone className="h-5 w-2/3" /><BoneLines lines={3} />
+          </div>
+        ))}
       </div>
-    </PageFrame>
+    </div>
   )
 }

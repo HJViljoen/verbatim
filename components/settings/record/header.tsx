@@ -1,67 +1,13 @@
 import type { ReactNode } from 'react'
 
-import { NOTHING_PENDING, type SaveState } from '@/lib/settings/save-state'
-import { shortDate } from '@/lib/format'
-import { printNote } from '@/lib/settings/change-log'
-
 /**
- * The save-state strip and the scope statement. (The sub-page's own header,
- * "The record" with its delivery meta and its rule, left with the 25 Sep
- * rulings: the tab opens on its first tile, as the approved preview does, and
- * the delivery figures are the Delivery tile's.)
+ * The scope statement. (The save-state strip left with the rail: the approved
+ * SettingsRecord artboard draws tabs over the page and no strip, and this page
+ * edits nothing. The sub-page's own header, "The record" with its delivery
+ * meta and its rule, left with the 25 Sep rulings: the tab opens on its first
+ * tile, as the approved preview does, and the delivery figures are the
+ * Delivery tile's.)
  */
-
-/**
- * The save-state strip (`record.savestate`).
- *
- * Settings is the one surface where a reader can break a series, and the
- * product said so nowhere: both forms carried their own inline "Saved." and
- * nothing aggregated them. `saveState` (wave 1) composes the strip; this draws
- * it.
- *
- * THE "BROKE" HALF IS ABSENT, NOT EMPTY, UNTIL M1. `config_changes
- * .affects_audiences` / `.affects_months` arrive with the competitors
- * migration, and `SaveState.recorded` is what says whether they could be read.
- * "This save broke nothing" and "we did not write down what this save broke"
- * are different sentences, and 91 of the 93 stored rows are the second — so
- * where the columns are absent the strip says that rather than printing a
- * reassuring silence.
- *
- * ON THE RECORD PAGE THE PENDING HALF IS ALWAYS EMPTY, because this page edits
- * nothing. That is the quiet case and it is the one worth showing here: the
- * strip's job on a read-only page is to say when the last save was and what it
- * moved.
- */
-export function SaveStrip({ state, note }: { state: SaveState; note?: string | null }) {
-  return (
-    // THE SMALLEST TYPE ON THE PAGE TAKES THE DARKER INK (Block D wave 3,
-    // RC8). Both lines were `text-muted-foreground` on `bg-inner`, which is
-    // 4.46:1 — the strip is 10.5px mono, the smallest thing this page sets,
-    // and it is the rail's only content below the seven links. SH7 lifts the
-    // token itself to 4.66:1 for every surface that paints muted ink on a
-    // tint; this block takes `text-secondary-foreground` (6.4:1 on the same
-    // ground) as well, which is what `ScopeStatement` below — the other
-    // `bg-inner` block on this page — already does.
-    <div className="flex flex-col gap-1.5 rounded-[4px] bg-inner p-3">
-      <span className="font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
-        {state.pending.length === 0
-          ? `${NOTHING_PENDING}.`
-          : `${state.pending.length} change${state.pending.length === 1 ? '' : 's'} waiting to be saved.`}
-      </span>
-      <span className="font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
-        {state.lastSavedAt
-          ? `Last save ${shortDate(state.lastSavedAt)}${printNote(note) ? `: ${printNote(note)!.replace(/\.$/, '')}.` : '.'}`
-          : 'Nothing has been saved on this workspace yet.'}
-        <br />
-        {!state.recorded
-          ? 'What a save breaks is not written down here yet.'
-          : state.breaks.length === 0
-            ? 'Broke: nothing recorded.'
-            : `Broke: ${state.breaks.map((b) => b.line).join(' · ')}.`}
-      </span>
-    </div>
-  )
-}
 
 /**
  * The scope statement, in place of the artboard's "Export the record" button

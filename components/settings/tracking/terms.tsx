@@ -6,6 +6,7 @@ import { CONTROL, Dot, FIELD, ICON_TARGET, LabelRow, MonoNote, Section, SectionH
 import { glossaryRule } from '@/lib/calibration'
 import type { TermSummary } from '@/lib/keywords/value'
 import { MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
+import { NOT_THESE, SET_GROUPS } from '@/lib/settings/set-groups'
 import { cn } from '@/lib/utils'
 
 // `settings.terms.*` — the search-terms section, as the artboard draws it.
@@ -34,12 +35,16 @@ export type Bucket = 'brand_keywords' | 'competitor_keywords' | 'industry_keywor
 // THE PREVIEW'S WORDS (market-first WP3.10; the approved "What we read"
 // artboard's "The search set"): each group is named for what it finds, with
 // its line under the name. The hover keeps the longer help.
-export const BUCKETS: readonly { key: Bucket; label: string; sub: string; hint: string }[] = [
-  { key: 'brand_keywords', label: 'Your name', sub: 'how people write it', hint: 'How people write your name, including the ways they get it wrong.' },
-  { key: 'competitor_keywords', label: 'Brands you track', sub: 'their products, by name', hint: 'What we search for to find their posts. The names we file them under are set under Brands you track.' },
-  { key: 'industry_keywords', label: 'The category', sub: 'what people call products like yours', hint: 'What buyers type when they are talking about this kind of product.' },
-  { key: 'exclude_terms', label: 'Not these', sub: 'other meanings of the names we track', hint: 'Senses of a name that are not it: Cotopaxi the volcano, Sealand the shipping line.' },
-]
+// The words are the read card's (lib/settings/set-groups.ts), so
+// the set and its editor cannot name a group two ways.
+const HINTS: Readonly<Record<Bucket, string>> = {
+  brand_keywords: 'How people write your name, including the ways they get it wrong.',
+  competitor_keywords: 'What we search for to find their posts. The names we file them under are set under Brands you track.',
+  industry_keywords: 'What buyers type when they are talking about this kind of product.',
+  exclude_terms: 'Senses of a name that are not it: Cotopaxi the volcano, Sealand the shipping line.',
+}
+export const BUCKETS: readonly { key: Bucket; label: string; sub: string; hint: string }[] =
+  [...SET_GROUPS, NOT_THESE].map((g) => ({ key: g.key, label: g.label, sub: g.sub, hint: HINTS[g.key] }))
 
 export interface TermsSectionProps {
   terms: Record<Bucket, string[]>

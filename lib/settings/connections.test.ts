@@ -77,7 +77,7 @@ describe('what is waiting to be saved', () => {
 
   it('counts a removal, and an empty list says "nothing"', () => {
     const pending = trackingPending(form(), form({ rivals: [] }))
-    expect(pending).toEqual([{ field: 'Rivals', from: '1 entry', to: 'nothing' }])
+    expect(pending).toEqual([{ field: 'Brands you track', from: '1 entry', to: 'nothing' }])
   })
 })
 
@@ -200,22 +200,22 @@ describe('the platform share’s basis sentence', () => {
 describe('what the one save row says afterwards', () => {
   it('names what was written, not the terms alone', () => {
     // m4: the composed save may change the terms, the exclusions and the
-    // rival list, and answered with the terms form's own sentence whichever of
-    // them had moved. The groups by the page's own names (WP3.10).
+    // brands you track, and answered with the terms form's own sentence
+    // whichever of them had moved. The groups by the page's own names (WP3.10).
     expect(savedMessage(['Not these'])).toBe('Saved: not these. Your next update is the first one to use it.')
-    expect(savedMessage(['Terms for your name', 'Rivals', 'Not these']))
-      .toBe('Saved: terms for your name, rivals and not these. Your next update is the first one to use them.')
+    expect(savedMessage(['Terms for your name', 'Brands you track', 'Not these']))
+      .toBe('Saved: terms for your name, brands you track and not these. Your next update is the first one to use them.')
   })
 
   it('drops the cadence a page opened before 27 Sep still posts', () => {
     // The Cadence section is gone (every workspace is weekly, on Sunday), so
     // its two fields are no longer ones this form can change.
     expect(savedMessage(['Cadence', 'The day it lands'])).toBe('Saved. Nothing had changed, so nothing moved.')
-    expect(savedMessage(['Rivals', 'The day it lands'])).toBe('Saved: rivals. Your next update is the first one to use it.')
+    expect(savedMessage(['Brands you track', 'The day it lands'])).toBe('Saved: brands you track. Your next update is the first one to use it.')
   })
 
   it('drops a field it does not know, so nothing crafted is echoed back', () => {
-    expect(savedMessage(['<script>', 'Rivals'])).toBe('Saved: rivals. Your next update is the first one to use it.')
+    expect(savedMessage(['<script>', 'Brands you track'])).toBe('Saved: brands you track. Your next update is the first one to use it.')
     expect(savedMessage([])).toBe('Saved. Nothing had changed, so nothing moved.')
   })
 
