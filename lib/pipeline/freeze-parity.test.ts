@@ -379,3 +379,66 @@ describe('4 · every new step is non-fatal, so freeze-months always runs after i
     expect(gather).toMatch(/try \{\s*const rec = await recordGatherSurfacings[\s\S]*?\} catch \(e\) \{\s*errors\.push\(/)
   })
 })
+
+// ---- 5. The other three freeze-path hunks move nothing freeze-months does -------
+
+/** The freeze-months path: lib/reading/monthly.ts and lib/subjects/read.ts and
+ *  everything they import (tsconfig.freeze-months.json; scripts/pipeline-closure.sh
+ *  lists the same 38 files through tsc). */
+function freezePath(): Map<string, string> {
+  const out = new Map<string, string>()
+  const queue = ['lib/reading/monthly.ts', 'lib/subjects/read.ts']
+  while (queue.length) {
+    const file = queue.pop()!
+    if (out.has(file)) continue
+    const src = readFileSync(join(ROOT, file), 'utf8')
+    out.set(file, src)
+    for (const m of src.matchAll(/(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+'([^']+)'/g)) {
+      const spec = m[1]
+      let rel: string | null = null
+      if (spec.startsWith('@/')) rel = spec.slice(2)
+      else if (spec.startsWith('.')) rel = join(file, '..', spec)
+      if (!rel) continue
+      for (const cand of [`${rel}.ts`, `${rel}.tsx`, join(rel, 'index.ts')]) {
+        try { readFileSync(join(ROOT, cand)); queue.push(cand); break } catch { /* next */ }
+      }
+    }
+  }
+  return out
+}
+
+describe('5 · the other freeze-path hunks', () => {
+  const path = freezePath()
+  const uses = (name: string) => [...path.entries()].filter(([, src]) => new RegExp(`\\b${name}\\b`).test(src)).map(([f]) => f)
+
+  it('walks the same path tsc lists (38 files)', () => {
+    expect(path.size).toBe(38)
+  })
+
+  it('lib/config.ts: the two spend switches are read by nothing on the path, and are off for every tenant', async () => {
+    for (const name of ['SEGMENT_JUDGE_ENABLED', 'BRAND_CONFIRM_ENABLED', 'segmentJudgeEnabled', 'brandConfirmEnabled']) {
+      expect(uses(name), name).toEqual(['lib/config.ts'])
+    }
+    const config = await vi.importActual<typeof import('../config')>('../config')
+    expect(Object.values(config.SEGMENT_JUDGE_ENABLED).every((on) => on === false)).toBe(true)
+    expect(Object.values(config.BRAND_CONFIRM_ENABLED).every((on) => on === false)).toBe(true)
+  })
+
+  it('lib/subjects/types.ts: SUBJECTS_MAX (8 to 10) is read by nothing on the path, and by nothing that writes a row without a person or an operator asking', () => {
+    expect(uses('SUBJECTS_MAX')).toEqual(['lib/subjects/types.ts'])
+    // Beyond the path: Settings' ceiling on adding one (lib/subjects/moves.ts),
+    // its copy, and the operator's proposer script. No run step, no loader.
+    const pipeline = readFileSync(join(ROOT, 'inngest', 'functions', 'pipeline.ts'), 'utf8')
+    expect(pipeline).not.toMatch(/SUBJECTS_MAX|subjects\/propose|PROPOSE_KEEP_MAX/)
+  })
+
+  it('lib/agent/retrieve.ts: the path takes embeddingCoverage alone from it, and WP3.9\'s scope is opt-in', () => {
+    const importers = [...path.entries()].filter(([, src]) => /from '\.\.\/agent\/retrieve'|from '\.\/retrieve'/.test(src))
+    expect(importers.map(([f]) => f)).toEqual(['lib/subjects/membership.ts'])
+    expect(importers[0][1]).toMatch(/import \{ embeddingCoverage \} from '\.\.\/agent\/retrieve'/)
+    const retrieve = path.get('lib/agent/retrieve.ts')!
+    const coverage = retrieve.slice(retrieve.indexOf('export async function embeddingCoverage'))
+    expect(coverage.slice(0, coverage.indexOf('\n}\n'))).not.toMatch(/scope/)
+    expect(retrieve).toContain('if (args.scope) return retrieveScoped(')
+  })
+})
