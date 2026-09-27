@@ -335,7 +335,7 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
     const refused = { ok: false, message: TENANT_LOCK_REFUSAL.tracking }
     expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(refused)
     expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).toEqual(refused)
-    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, form({ competitor_names: ['Cotopaxi', 'Topo Designs'], report_period: 'weekly', report_day: 'sunday' }))).toEqual(refused)
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, form({ competitor_names: ['Cotopaxi', 'Topo Designs'] }))).toEqual(refused)
     expect(await actions.saveTracking({ ok: false, message: '' }, terms())).toEqual(refused)
     expect(await renameTrackedRival({ ok: false, message: '' }, form({ id: '5d3b4c1e-2f60-4a8b-9c7d-0e1f2a3b4c5d', name: 'Topo' }))).toEqual(refused)
     expect(admin.writes).toEqual([])
@@ -370,7 +370,9 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
 
 describe('R12: the three tracking writes use the admin client, after the checks', () => {
   const terms = () => form({ brand_keywords: 'sealand gear', competitor_keywords: 'cotopaxi', industry_keywords: 'upcycled bag', exclude_terms: ['poker'] })
-  const cadence = () => form({ competitor_names: ['Cotopaxi', 'Topo Designs'], report_period: 'weekly', report_day: 'sunday' })
+  // The rival list alone: since 27 Sep the cadence is not a setting, and a POST
+  // that moves it is refused (lib/update-rhythm.test.ts).
+  const rivals = () => form({ competitor_names: ['Cotopaxi', 'Topo Designs'] })
   const trackingWrites = (w: Write[]) => w.filter((x) => x.table === 'tracking_configs')
 
   for (const [who, make] of [
@@ -380,7 +382,7 @@ describe('R12: the three tracking writes use the admin client, after the checks'
     it(`writes for ${who}, on the admin client only`, async () => {
       const actions = await import('../app/dashboard/settings/actions')
       h.session = make()
-      expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual({ ok: true, message: 'Settings saved.' })
+      expect(await actions.updateTrackingConfig({ ok: false, message: '' }, rivals())).toEqual({ ok: true, message: 'Settings saved.' })
       expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(true)
       expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(true)
       // updateTrackingConfig: its update; updateSearchTerms: terms, then
@@ -394,7 +396,7 @@ describe('R12: the three tracking writes use the admin client, after the checks'
     const actions = await import('../app/dashboard/settings/actions')
     h.session = tenantAdmin(SEALAND, session.client)
     const refused = { ok: false, message: TENANT_LOCK_REFUSAL.tracking }
-    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual(refused)
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, rivals())).toEqual(refused)
     expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(refused)
     expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'stop', name: 'onebag' }))).toEqual(refused)
     expect([...admin.writes, ...session.writes]).toEqual([])
@@ -403,7 +405,7 @@ describe('R12: the three tracking writes use the admin client, after the checks'
   it('refuses a tenant member without a manager role before either client is written', async () => {
     const actions = await import('../app/dashboard/settings/actions')
     h.session = { ...tenantAdmin(OSSUR, session.client), role: 'member' }
-    expect((await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).ok).toBe(false)
+    expect((await actions.updateTrackingConfig({ ok: false, message: '' }, rivals())).ok).toBe(false)
     expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(false)
     expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(false)
     expect([...admin.writes, ...session.writes]).toEqual([])

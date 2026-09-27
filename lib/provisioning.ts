@@ -1,5 +1,6 @@
 import { deriveCompetitorKeywords, ONBOARDING_MAX_VIDEOS } from './onboarding-config'
 import type { Platform } from './gather/types'
+import { OPERATOR_PERIODS, UPDATE_DAY, UPDATE_RHYTHM_WORDS } from './update-rhythm'
 
 /** Every platform the pipeline can store data for. Mirrors the `Platform`
  *  union in lib/gather/types, which is the type the adapters are keyed by —
@@ -28,8 +29,12 @@ export interface TenantSpec {
   industryKeywords?: string[]
   platforms?: string[]
   reportEmails?: string[]
+  /** Sunday, or nothing: every workspace is updated weekly, on Sunday (27 Sep,
+   *  lib/update-rhythm.ts). Kept so an old command line that says so still
+   *  runs, and one that names another day is refused rather than ignored. */
   reportDay?: string
-  reportPeriod?: 'weekly' | 'monthly' | 'paused'
+  /** Weekly (on Sunday) or the operator's pause, which is the default. */
+  reportPeriod?: 'weekly' | 'paused'
   maxVideos?: number
   commentDepth?: number
   /** Each competitor's own accounts, keyed by the EXACT competitorNames entry:
@@ -54,7 +59,6 @@ export const LIMITS = {
   reportEmails: 25,
 } as const
 
-const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 export function validateSpec(spec: TenantSpec): string[] {
   const errors: string[] = []
@@ -68,7 +72,9 @@ export function validateSpec(spec: TenantSpec): string[] {
   push((spec.reportEmails ?? []).length > LIMITS.reportEmails, `at most ${LIMITS.reportEmails} report recipients`)
   push((spec.maxVideos ?? 0) > LIMITS.maxVideos, `maxVideos must be at most ${LIMITS.maxVideos}`)
   push((spec.commentDepth ?? 0) > LIMITS.commentDepth, `commentDepth must be at most ${LIMITS.commentDepth}`)
-  push(!!spec.reportDay && !DAYS.includes(spec.reportDay), `reportDay must be one of ${DAYS.join(', ')}`)
+  push(!!spec.reportDay && spec.reportDay !== UPDATE_DAY, `reportDay must be ${UPDATE_DAY}: every workspace is updated ${UPDATE_RHYTHM_WORDS}`)
+  push(!!spec.reportPeriod && !(OPERATOR_PERIODS as readonly string[]).includes(spec.reportPeriod),
+    `reportPeriod must be one of ${OPERATOR_PERIODS.join(', ')}: every workspace is updated ${UPDATE_RHYTHM_WORDS}, or paused`)
 
   const unknown = (spec.platforms ?? []).filter((p) => !KNOWN_PLATFORMS.includes(p as Platform))
   push(unknown.length > 0, `unknown platform(s): ${unknown.join(', ')}`)
@@ -276,7 +282,7 @@ export function buildProvisionPlan(spec: TenantSpec, now = new Date()): Provisio
       industry_keywords: (spec.industryKeywords ?? []).map((s) => s.trim()).filter(Boolean),
       platforms: spec.platforms ?? ['tiktok', 'youtube', 'instagram'],
       report_emails: (spec.reportEmails ?? []).map((s) => s.trim()).filter(Boolean),
-      report_day: spec.reportDay ?? 'sunday',
+      report_day: UPDATE_DAY,
       // Paused by default: a new tenant should produce its first read when an
       // operator asks for it, not whenever the next scheduler tick lands.
       report_period: spec.reportPeriod ?? 'paused',

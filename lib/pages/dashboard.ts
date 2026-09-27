@@ -10,7 +10,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { recStatus, sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey, type RecStatus } from '../calibration'
 import { loadInitiatives } from '../initiatives/read'
 import type { InitiativesData } from '../initiatives/types'
-import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '../format'
+import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } from '../format'
 import {
   themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation, latestPerDay,
   type ThemeRankRow, type HistoryRow, type Sov, type AudienceSentiment, type Bucket, type Movement, type AccountSeries,
@@ -20,6 +20,7 @@ import { ownedCensusTotal, type OwnedCensus } from '../gather/owned'
 import { fetchThemedRunId } from './themed-run'
 import { row, rows } from './read'
 import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
+import { isPausedRhythm } from '../update-rhythm'
 
 // Dashboard loader — the data half of app/dashboard/page.tsx (split 2026-08-29,
 // Reports & Exports T3). Everything below the session line of the old page,
@@ -189,7 +190,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const [clientRes, tcRes, latestRunRes, runningIds, registryRes, historyRaw, snapRows, tierRows] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs')
-      .select('brand_keywords, competitor_keywords, industry_keywords, platforms, report_day, report_period')
+      .select('brand_keywords, competitor_keywords, industry_keywords, platforms, report_period')
       .eq('client_id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
@@ -215,7 +216,6 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     competitor_keywords: string[] | null
     industry_keywords: string[] | null
     platforms: string[] | null
-    report_day: string | null
     report_period: string | null
   }>(tcRes, 'dashboard.trackingConfig')
   const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'dashboard.latestRun')
@@ -230,8 +230,12 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     category: tc?.industry_keywords?.length ?? 0,
   }
   const termTotal = termCounts.brand + termCounts.competitor + termCounts.category
-  const cadence = tc?.report_period === 'weekly' ? `weekly${tc?.report_day ? `, ${cap(tc.report_day)}s` : ''}` : tc?.report_period === 'monthly' ? 'monthly' : null
-  const nextUpdate = tc?.report_period === 'weekly' && tc?.report_day ? `next update ${cap(tc.report_day)}` : tc?.report_period === 'monthly' ? 'updates monthly' : null
+  // Weekly, on Sunday, for every workspace (27 Sep, lib/update-rhythm.ts): the
+  // stored day is no longer a choice, so the words do not read it. A paused
+  // workspace is promised nothing.
+  const updating = Boolean(tc) && !isPausedRhythm(tc)
+  const cadence = updating ? 'weekly, Sundays' : null
+  const nextUpdate = updating ? 'next update Sunday' : null
 
   if (!runId) return { empty: true, brand, nextUpdate }
 

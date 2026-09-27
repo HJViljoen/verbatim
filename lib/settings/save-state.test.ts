@@ -31,7 +31,7 @@ describe('saveState', () => {
     const s = saveState({
       pending: [
         { field: 'Rivals', from: 'Freitag, Patagonia', to: 'Freitag, Patagonia, Poler' },
-        { field: 'Cadence', from: 'weekly', to: 'monthly' },
+        { field: 'Not this', from: 'nothing', to: '1 entry' },
       ],
     })
     expect(s.line).toBe('2 changes waiting')
@@ -40,7 +40,7 @@ describe('saveState', () => {
   })
 
   it('says "1 change waiting", not "1 changes"', () => {
-    expect(saveState({ pending: [{ field: 'Cadence', from: 'weekly', to: 'monthly' }] }).line).toBe('1 change waiting')
+    expect(saveState({ pending: [{ field: 'Not this', from: 'nothing', to: '1 entry' }] }).line).toBe('1 change waiting')
   })
 
   it('draws no break half at all where M1 is unapplied', () => {

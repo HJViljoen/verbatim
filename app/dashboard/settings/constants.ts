@@ -14,18 +14,11 @@ export const PLATFORMS = ['tiktok', 'youtube', 'instagram', 'reddit'] as const
 // form alone is not a control, since a hand-crafted POST bypasses it.
 export const SELECTABLE_PLATFORMS = PLATFORMS.filter((p) => p !== 'reddit')
 
-// What a tenant may CHOOSE. 'paused' is a real production value (three tenants
-// carry it) that this list deliberately excludes: pausing is an operator lever.
-// Because the select could not represent it, the form rendered 'paused' as
-// 'weekly' and the next save silently re-armed the scheduler on a tenant that
-// was meant to be quiet — see the cadence section and the T0-7 guard in the
-// action, which refuses to move a paused tenant rather than rewriting it.
-export const PERIODS = ['weekly', 'monthly'] as const
-/** Every value the pipeline understands, including operator-only ones. */
-export const ALL_PERIODS = ['weekly', 'monthly', 'daily', 'paused'] as const
-export const DAYS = [
-  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
-] as const
+// A tenant chooses no cadence any more (27 Sep, Heinrich: "remove cadence from
+// settings, and always have it weekly on sunday"). `PERIODS` (the weekly-or-
+// monthly choice), `DAYS` and `ALL_PERIODS` went with the Cadence section and
+// with scripts/set-cadence.ts's old vocabulary: every workspace is weekly, on
+// Sunday, and 'paused' is the operator's lever (lib/update-rhythm.ts).
 
 export type Platform = (typeof PLATFORMS)[number]
 

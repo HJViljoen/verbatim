@@ -11,6 +11,7 @@ import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/sugge
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { actorStamp, diffConfigRows, recordConfigChanges, type ConfigActor } from '@/lib/config-log'
 import { ensureRivals } from '@/lib/rivals'
+import { WEEKLY_ON_SUNDAY } from '@/lib/update-rhythm'
 
 // State shape (a type) — idle value lives in the client form; a 'use server'
 // module may only export async functions.
@@ -159,7 +160,12 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
     max_videos: ONBOARDING_MAX_VIDEOS,
     report_emails: user.email ? [user.email] : [],
   }
-  const { error: cfgErr } = await admin.from('tracking_configs').insert({ client_id: clientId, ...initialConfig })
+  // WEEKLY, ON SUNDAY, WRITTEN OUT (27 Sep, lib/update-rhythm.ts). The columns'
+  // defaults are weekly and MONDAY, so a workspace an operator later approved
+  // would have been dispatched on Mondays while every page promised Sunday.
+  // Not in `initialConfig`: the rhythm is not something this person chose, so
+  // the birth rows below do not log it as their configuration.
+  const { error: cfgErr } = await admin.from('tracking_configs').insert({ client_id: clientId, ...initialConfig, ...WEEKLY_ON_SUNDAY })
   if (cfgErr) return { ok: false, message: `Could not save tracking settings: ${cfgErr.message}` }
 
   // 2b) Default schedule ("Weekly digest"), seeded with the creator's address

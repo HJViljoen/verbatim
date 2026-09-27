@@ -17,6 +17,7 @@ import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { fetchThemedRunId } from './themed-run'
 import { row, rows as readRows } from './read'
 import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
+import { nextUpdateWords } from '../update-rhythm'
 
 // Competitive Intelligence loader — the data half of the old
 // app/dashboard/competitive-intel/page.tsx (split 2026-08-29, Reports & Exports
@@ -173,7 +174,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   // findings yet and would blank the page for the duration of every update.
   const [clientRes, tcRes, latestRunRes, runningIds, historyRaw] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    supabase.from('tracking_configs').select('report_day, report_period').eq('client_id', clientId).maybeSingle(),
+    supabase.from('tracking_configs').select('report_period').eq('client_id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
@@ -184,12 +185,14 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
     ),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'competitive.client')
-  const tc = row<{ report_day: string | null; report_period: string | null }>(tcRes, 'competitive.trackingConfig')
+  const tc = row<{ report_period: string | null }>(tcRes, 'competitive.trackingConfig')
   const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'competitive.latestRun')
   const brand = client?.company_name ?? 'Your brand'
   const brandShort = brand.split(/\s[—–-]\s/)[0].trim() || brand
   const runId = latestRun?.id as string | undefined
-  const nextUpdate = tc?.report_period === 'weekly' && tc?.report_day ? `${cap(tc.report_day)}’s update` : 'the next update'
+  // "Sunday's update" for every workspace that is not paused (27 Sep,
+  // lib/update-rhythm.ts): the stored day is no longer a choice.
+  const nextUpdate = nextUpdateWords(tc)
 
   if (!runId) return { empty: true, brand, nextUpdate }
 

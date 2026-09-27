@@ -22,7 +22,7 @@ const rival = (over: Partial<RivalRow> = {}): RivalRow => ({
 
 const form = (over: Partial<TrackingFormState> = {}): TrackingFormState => ({
   brand: ['Sealand'], competitor: ['Freitag'], category: ['eco bag'], exclusions: [],
-  rivals: ['Freitag'], period: 'weekly', day: 'sunday',
+  rivals: ['Freitag'],
   ...over,
 })
 
@@ -69,10 +69,10 @@ describe('what is waiting to be saved', () => {
   })
 
   it('names each list that changed, by how many it now holds', () => {
-    const pending = trackingPending(form(), form({ category: ['eco bag', 'wet commute bag'], day: 'monday' }))
-    expect(pending.map((p) => p.field)).toEqual(['Category terms', 'The day it lands'])
+    const pending = trackingPending(form(), form({ category: ['eco bag', 'wet commute bag'], exclusions: ['poker'] }))
+    expect(pending.map((p) => p.field)).toEqual(['Category terms', 'Not this'])
     expect(pending[0]).toMatchObject({ from: '1 entry', to: '2 entries' })
-    expect(pending[1]).toMatchObject({ from: 'sunday', to: 'monday' })
+    expect(pending[1]).toMatchObject({ from: 'nothing', to: '1 entry' })
   })
 
   it('counts a removal, and an empty list says "nothing"', () => {
@@ -199,12 +199,19 @@ describe('the platform share’s basis sentence', () => {
 
 describe('what the one save row says afterwards', () => {
   it('names what was written, not the terms alone', () => {
-    // m4: the composed save may change the terms, the exclusions, the rival
-    // list, the cadence and the day, and answered with the terms form's own
-    // sentence whichever of them had moved.
-    expect(savedMessage(['Cadence'])).toBe('Saved: cadence. Your next update is the first one to use it.')
-    expect(savedMessage(['Brand terms', 'Rivals', 'Cadence']))
-      .toBe('Saved: brand terms, rivals and cadence. Your next update is the first one to use them.')
+    // m4: the composed save may change the terms, the exclusions and the
+    // rival list, and answered with the terms form's own sentence whichever of
+    // them had moved.
+    expect(savedMessage(['Not this'])).toBe('Saved: not this. Your next update is the first one to use it.')
+    expect(savedMessage(['Brand terms', 'Rivals', 'Not this']))
+      .toBe('Saved: brand terms, rivals and not this. Your next update is the first one to use them.')
+  })
+
+  it('drops the cadence a page opened before 27 Sep still posts', () => {
+    // The Cadence section is gone (every workspace is weekly, on Sunday), so
+    // its two fields are no longer ones this form can change.
+    expect(savedMessage(['Cadence', 'The day it lands'])).toBe('Saved. Nothing had changed, so nothing moved.')
+    expect(savedMessage(['Rivals', 'The day it lands'])).toBe('Saved: rivals. Your next update is the first one to use it.')
   })
 
   it('drops a field it does not know, so nothing crafted is echoed back', () => {
@@ -212,15 +219,16 @@ describe('what the one save row says afterwards', () => {
     expect(savedMessage([])).toBe('Saved. Nothing had changed, so nothing moved.')
   })
 
-  it('knows the same seven fields the pending strip does', () => {
+  it('knows the same five fields the pending strip does', () => {
     const before: TrackingFormState = {
       brand: ['a'], competitor: ['b'], category: ['c'], exclusions: ['d'],
-      rivals: ['Freitag'], period: 'weekly', day: 'monday',
+      rivals: ['Freitag'],
     }
     const after: TrackingFormState = {
       brand: [], competitor: [], category: [], exclusions: [],
-      rivals: [], period: 'monthly', day: 'sunday',
+      rivals: [],
     }
+    expect(trackingPending(before, after)).toHaveLength(5)
     for (const edit of trackingPending(before, after)) {
       expect(savedMessage([edit.field]), `${edit.field} is a field the message knows`)
         .not.toBe('Saved. Nothing had changed, so nothing moved.')
@@ -283,7 +291,10 @@ describe('every configuration write on this page carries an actor', () => {
     // The marker, not the absence: without it a cached page or a hand-made
     // POST would erase a tracked list nobody touched.
     expect(actions).toContain('RIVALS_PRESENT')
-    expect(actions).toContain('...(posted ? { competitor_names: parsed.data.competitor_names } : {})')
+    // Since the cadence left the statement (27 Sep) the list is the only column
+    // it writes, so a POST without one writes nothing at all.
+    expect(actions).toContain('if (posted) {')
+    expect(actions).toContain('competitor_names: parsed.data.competitor_names,')
     expect(rivalsSection).toContain('name={RIVALS_PRESENT}')
   })
 

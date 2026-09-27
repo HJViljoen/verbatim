@@ -28,7 +28,7 @@ describe('validateSpec — fail with a sentence, not a constraint name (Tier 2)'
   })
 
   it('rejects a report day the scheduler would never match', () => {
-    expect(validateSpec({ ...base, reportDay: 'someday' })[0]).toContain('reportDay must be one of')
+    expect(validateSpec({ ...base, reportDay: 'someday' })[0]).toContain('reportDay must be sunday')
   })
 })
 
@@ -51,6 +51,15 @@ describe('buildProvisionPlan (Tier 2)', () => {
     expect(p.client.approved_at).toBeNull()
     // A new tenant produces its first read when asked, not on the next tick.
     expect(p.config.report_period).toBe('paused')
+    // …and when it is resumed, it lands on Sunday like every workspace.
+    expect(p.config.report_day).toBe('sunday')
+  })
+
+  it('is weekly on Sunday or paused, and refuses any other day or period (27 Sep)', () => {
+    expect(validateSpec({ ...base, reportDay: 'monday' })).toEqual([expect.stringContaining('reportDay must be sunday')])
+    expect(validateSpec({ ...base, reportDay: 'sunday', reportPeriod: 'weekly' })).toEqual([])
+    expect(validateSpec({ ...base, reportPeriod: 'monthly' as never })).toEqual([expect.stringContaining('reportPeriod must be one of weekly, paused')])
+    expect(buildProvisionPlan({ ...base, reportPeriod: 'weekly' }).config).toMatchObject({ report_period: 'weekly', report_day: 'sunday' })
   })
 
   it('approving is explicit, and says what it means', () => {
