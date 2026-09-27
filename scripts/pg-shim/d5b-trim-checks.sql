@@ -41,6 +41,11 @@
 --       monthly_subject_readings reads the same after the prune as before it.
 --   E6. subject_memberships carries no trigger, and after the prune no
 --       membership names a deleted insight on any tenant.
+--   E7. The lens step (deploy 4; it writes August's month_lens_readings FROZEN
+--       on 4 Oct, before freeze-months) reads lens_readings, which reads
+--       subject_memberships too: after the trim it reads on B what A reads
+--       after its prune for every subject, and the same as A before the trim
+--       for every other object.
 -- The tenants and their counts are made up; the arithmetic is the test's own.
 \set ON_ERROR_STOP 1
 
@@ -180,6 +185,16 @@ begin
     (select count(*) from d5_before where tenant = 'A'), (select count(*) from d5_before where tenant = 'A' and what = 'subjects');
 end $$;
 
+-- What the lens step reads (MF2's lens_readings, the stored lens with the
+-- defaults: every video, depth 1, no capture cut), August and September.
+create or replace function pg_temp.d5_lens(c uuid) returns table (line text) language sql stable as $$
+  select format('%s|%s|%s|%s|%s|%s', m.m, l.audience, l.object_kind,
+                case when l.object_kind in ('subject', 'theme') then pg_temp.d5_label(c, l.object_id::uuid) else l.object_id end, l.k, l.n)
+    from (values (date '2026-08-01'), (date '2026-09-01')) m(m),
+         lateral public.lens_readings(c, m.m, pg_temp.d5_id(c, 'run-1004'), null, 1, null) l
+$$;
+create temp table d5_lens_a_before as select line from pg_temp.d5_lens('00000000-0000-4000-8000-00000000d5a1');
+
 -- B's trim, before any month is read: the memberships of the prune's rows,
 -- the statement the code sends, as service_role.
 begin;
@@ -191,6 +206,7 @@ commit;
 
 -- E4. The trim moved monthly_subject_readings and nothing else.
 create temp table d5_trimmed as select 'B' as tenant, * from pg_temp.d5_reads('00000000-0000-4000-8000-00000000d5b1');
+create temp table d5_lens_b_trimmed as select line from pg_temp.d5_lens('00000000-0000-4000-8000-00000000d5b1');
 do $$
 declare diff text;
 begin
@@ -400,6 +416,27 @@ begin
     raise exception 'E6 FAILED: a membership names a deleted insight';
   end if;
   raise notice 'ok  E6: subject_memberships carries no trigger (a trim delete writes nothing else), and after every prune no membership names a deleted insight';
+end $$;
+
+-- E7. The lens step's read, the same question.
+do $$
+declare a uuid := '00000000-0000-4000-8000-00000000d5a1'; diff text;
+begin
+  select string_agg(line, E'\n') into diff from (
+    (select line from d5_lens_a_before where split_part(line, '|', 3) <> 'subject' except all select line from d5_lens_b_trimmed where split_part(line, '|', 3) <> 'subject')
+    union all
+    (select line from d5_lens_b_trimmed where split_part(line, '|', 3) <> 'subject' except all select line from d5_lens_a_before where split_part(line, '|', 3) <> 'subject')) x;
+  if diff is not null then raise exception E'E7 FAILED: the trim moved a lens object that is not a subject:\n%', diff; end if;
+  select string_agg(line, E'\n') into diff from (
+    (select line from d5_lens_b_trimmed where split_part(line, '|', 3) = 'subject' except all select line from pg_temp.d5_lens(a) where split_part(line, '|', 3) = 'subject')
+    union all
+    (select line from pg_temp.d5_lens(a) where split_part(line, '|', 3) = 'subject' except all select line from d5_lens_b_trimmed where split_part(line, '|', 3) = 'subject')) x;
+  if diff is not null then raise exception E'E7 FAILED: after the trim, B''s lens subjects are not what A reads after its prune:\n%', diff; end if;
+  if not exists (select line from d5_lens_a_before where split_part(line, '|', 3) = 'subject' except select line from pg_temp.d5_lens(a) where split_part(line, '|', 3) = 'subject') then
+    raise exception 'E7 FAILED: A''s lens subjects did not move across its prune (the seed has phantoms to remove)';
+  end if;
+  raise notice 'ok  E7: lens_readings (the lens step, August frozen on 4 Oct): after the trim B reads, for every subject, what A reads after its prune (% subject lines), and the same as A before it for every other object (% lines)',
+    (select count(*) from d5_lens_b_trimmed where split_part(line, '|', 3) = 'subject'), (select count(*) from d5_lens_b_trimmed where split_part(line, '|', 3) <> 'subject');
 end $$;
 
 delete from public.clients where id in ('00000000-0000-4000-8000-00000000d5a1', '00000000-0000-4000-8000-00000000d5b1', '00000000-0000-4000-8000-00000000d5c1');
