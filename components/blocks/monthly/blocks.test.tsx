@@ -13,7 +13,7 @@ import { overviewThemes } from '@/components/pages/overview/themes'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor, monthlySections } from './index'
 import { splitClause } from './month'
 import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from './fixture'
-import { shippedBrandsRead } from '@/lib/test/brands-fixture'
+import { noneFoundBrandsRead, shippedBrandsRead } from '@/lib/test/brands-fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -157,6 +157,21 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     expect(text('monthly.brands', shipped)).toMatch(/Freedom of Movement\s*not counted yet/)
     expect(head(filledSlotsFixture())).toMatch(/width:\s*160px/)
     expect(head(filledSlotsFixture())).toMatch(/width:\s*144px/)
+  })
+
+  // The lead's ruling of 27 Sep (fast track): a brand production's list held
+  // no match of prints "none found" in the monthly as on the page.
+  it('brands print "none found" for a brand production’s list held no match of, in every mode', () => {
+    const data = { ...filledSlotsFixture(), slots: { ...filledSlotsFixture().slots, brands: { state: 'filled' as const, value: noneFoundBrandsRead() } } }
+    for (const mode of MODES) {
+      const t = text('monthly.brands', data, mode)
+      for (const brand of ['Rareform', 'Freedom of Movement', 'Old School']) expect(t, mode).toMatch(new RegExp(`${brand}\\s*none found`))
+      for (const brand of ['Cotopaxi', 'Patagonia', 'The North Face', 'Freitag']) expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))
+      expect(t, mode).not.toMatch(/\b0\b|of 516/)
+      assertCopyContract(render(MONTHLY_BLOCKS['monthly.brands'].render(data, mode, ctx)))
+    }
+    // No figure is declared for a brand none found: it prints a word.
+    expect(Object.keys(MONTHLY_BLOCKS['monthly.brands'].figures?.(data) ?? {}).filter((k) => k.startsWith('brand_'))).toEqual([])
   })
 
   it('you prints the for-you line and what you published', () => {

@@ -77,6 +77,34 @@ export const STAND_IN_CHECKS: typeof BRAND_HAND_CHECKS = {
     }])),
 }
 
+/**
+ * A STAND-IN FOR THE MON 5 OCT CHECK OF THE BRANDS WITH NO MATCH (the lead's
+ * ruling of 27 Sep): on staging's plan Rareform, Freedom of Movement and Old
+ * School have no match in the window (`hasRows: false` above), so the list
+ * has nothing to read and each entry records `matches: 'none'`. For the
+ * render tests of "none found" only; they never reach the page.
+ */
+export const NO_MATCH_CHECKS: typeof BRAND_HAND_CHECKS = {
+  [SEALAND_CLIENT_ID]: Object.fromEntries(['Rareform', 'Freedom of Movement', 'Old School'].map((brand) => [brand, {
+    matches: 'none' as const, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'test stand-in', source: 'lib/test/brands-fixture.ts',
+  }])),
+}
+
+/** Staging's September with only the no-match brands checked: those three
+ *  "none found", the other four and your name "not counted yet". */
+export function noneFoundBrandsRead(): BrandsRead {
+  return buildBrandsBlock({
+    clientId: SEALAND_CLIENT_ID,
+    month: '2026-09-01',
+    n: 654,
+    nOrganic: 516,
+    rivals: SEPTEMBER_BRANDS,
+    name: { hasRows: true, outside: [], ownPosts: 8 },
+    checks: NO_MATCH_CHECKS,
+    mentionsRead: true,
+  })
+}
+
 /** Staging's September block, as the page builds it once production's hand
  *  check holds the three brands and your name (`STAND_IN_CHECKS`). */
 export function stagingBrandsRead(month: '2026-09-01' | '2026-08-01' = '2026-09-01'): BrandsRead {

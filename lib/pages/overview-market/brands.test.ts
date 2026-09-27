@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { BRAND_RULE_VERSION } from '../../brands/aliases'
 import { SEALAND_CLIENT_ID } from '../../config'
-import { SEPTEMBER_BRANDS, STAND_IN_CHECKS, emptyBrandsRead, shippedBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
+import { NO_MATCH_CHECKS, SEPTEMBER_BRANDS, STAND_IN_CHECKS, emptyBrandsRead, noneFoundBrandsRead, shippedBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
 import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, buildBrandsBlock, isBrandsRead, nameLineParts, organicBase, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
 
 // Brands in your market in deploy 3's form (WP2.6): the name line first, then
@@ -100,6 +100,65 @@ describe('buildBrandsBlock', () => {
     // With only Freitag checked, the others are unmeasured: the brand
     // measured as noise sorts after any counted brand and before the rest.
     expect(b.topics.map((t) => t.count)).toEqual(['noise', 'not_yet', 'not_yet', 'not_yet', 'not_yet', 'not_yet', 'not_yet'])
+  })
+
+  // The lead's ruling of 27 Sep (fast track): a brand production's list held
+  // no match of prints "none found", a real zero by the rule; "not counted
+  // yet" stays only for a brand whose matches exist and are not checked.
+  it('prints "none found" for a brand production’s list held no match of, in a month with none', () => {
+    const b = noneFoundBrandsRead()
+    expect(b.topics.map((t) => [t.label, t.count, t.kAny, t.kOrganic])).toEqual([
+      ['Freedom of Movement', 'none', null, null],
+      ['Old School', 'none', null, null],
+      ['Rareform', 'none', null, null],
+      ['Cotopaxi', 'not_yet', null, null],
+      ['Freitag', 'not_yet', null, null],
+      ['Patagonia', 'not_yet', null, null],
+      ['The North Face', 'not_yet', null, null],
+    ])
+    expect(b.topics.slice(0, 3).map(topicNote)).toEqual(['none found', 'none found', 'none found'])
+    expect(b.topics.slice(3).every((t) => topicNote(t) === 'not counted yet')).toBe(true)
+    // Your name has matches (its own posts) and no production check: held.
+    expect(words(b)).toBe('Your name in your market in September: not counted yet.')
+  })
+
+  it('sorts a brand none found after the counted ones and before the rest', () => {
+    const checks = { [SEALAND_CLIENT_ID]: { ...STAND_IN_CHECKS[SEALAND_CLIENT_ID], ...NO_MATCH_CHECKS[SEALAND_CLIENT_ID] } }
+    const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks, mentionsRead: true })
+    expect(b.topics.map((t) => [t.label, t.count])).toEqual([
+      ['Patagonia', 'counted'], ['The North Face', 'counted'], ['Cotopaxi', 'counted'],
+      ['Freedom of Movement', 'none'], ['Old School', 'none'], ['Rareform', 'none'],
+      ['Freitag', 'not_yet'],
+    ])
+  })
+
+  it('prints "not counted yet", not "none found", for a month where a match turned up after the check', () => {
+    // A later gather finds Rareform in September: that match passed no hand check.
+    const rivals = SEPTEMBER_BRANDS.map((r) => (r.label === 'Rareform' ? { ...r, hasRows: true, kAny: 2, kOrganic: 1 } : r))
+    const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals, name: { hasRows: true, outside: [], ownPosts: 8 }, checks: NO_MATCH_CHECKS, mentionsRead: true })
+    const rareform = b.topics.find((t) => t.label === 'Rareform')!
+    expect(rareform).toMatchObject({ count: 'not_yet', kAny: null, kOrganic: null })
+    expect(topicNote(rareform)).toBe('not counted yet')
+    // A month with none still prints none found, though another month holds a match.
+    const other = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-08-01', n: 377, nOrganic: 249, rivals: SEPTEMBER_BRANDS.map((r) => (r.label === 'Rareform' ? { ...r, hasRows: true } : r)), name: { hasRows: true, outside: [], ownPosts: 0 }, checks: NO_MATCH_CHECKS, mentionsRead: true })
+    expect(topicNote(other.topics.find((t) => t.label === 'Rareform')!)).toBe('none found')
+  })
+
+  it('prints no "none found" where the mention layer could not be read: nothing found there is no zero', () => {
+    for (const mentionsRead of [false, undefined]) {
+      const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: false, outside: [], ownPosts: 0 }, checks: NO_MATCH_CHECKS, mentionsRead })
+      expect(b.topics.every((t) => t.count === 'not_yet'), String(mentionsRead)).toBe(true)
+    }
+  })
+
+  it('prints your name line as none where the list held no match of it, even with no row of it in the layer', () => {
+    const checks = { [SEALAND_CLIENT_ID]: { Sealand: { matches: 'none' as const, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'a test check' } } }
+    const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: false, outside: [], ownPosts: 0 }, checks }
+    expect(words(buildBrandsBlock({ ...base, mentionsRead: true }))).toBe('In September your name came up in none of your market’s 654 videos.')
+    expect(buildBrandsBlock({ ...base, mentionsRead: false }).nameLine).toBeNull()
+    // Its own posts only: the same line, with them named apart.
+    expect(words(buildBrandsBlock({ ...base, name: { hasRows: true, outside: [], ownPosts: 8 }, mentionsRead: true })))
+      .toBe('In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.')
   })
 
   it('keeps deploy 2’s line as a separate form', () => {

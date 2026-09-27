@@ -51,6 +51,11 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count and are marked.',
       'Under With this update, “heard for the first time” names a theme no earlier month holds, the rule Conversation’s “New” follows. A theme an update only named again is not listed.',
       'Two months sit side by side as levels. They are compared only when both were read the same way; until then the page says why not.',
+      // BRANDS IN YOUR MARKET (WP2.6; the lead's ruling of 27 Sep): the rule
+      // counts a brand's name, its handles and its phrases (lib/brands/
+      // aliases.ts), never in its own posts, so "none found" is a zero by that
+      // rule; "not counted yet" waits for the hand check (lib/brands/precision.ts).
+      'Under Brands in your market, a brand is counted in a video when the video, or a comment on it written in the month, names it: the rule counts the brand’s name, its handles and its phrases, and never counts a brand in its own posts. “None found” means the rule found no such video that month; “not counted yet” means we have not yet checked its matches by hand.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
     ],
   },

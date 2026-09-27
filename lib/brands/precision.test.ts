@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../config'
 import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION } from './aliases'
-import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameChecked, noiseWords, type BrandHandCheck, type HandCheckPart } from './precision'
+import { BRAND_HAND_CHECKS, NAME_READS, NONE_FOUND, brandCountState, clientBrandName, nameChecked, nameNoMatch, noiseWords, type BrandHandCheck, type HandCheckPart } from './precision'
 
 // Which brands the page may count (WP2.6; the lead's rulings of 26 and 27
 // Sep): a production hand check at the floor counts, under it is "mostly
@@ -86,6 +86,42 @@ describe('the two parts (the deploy-3 fresh review)', () => {
     expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', { [SEALAND_CLIENT_ID]: { Cotopaxi: prod(30, 28) } })).toBe('counted')
     expect(brandCountState(SEALAND_CLIENT_ID, 'Sealand', { [SEALAND_CLIENT_ID]: { Sealand: prod(0, 0, { read: 9, brand: 9 }) } })).toBe('counted')
     expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: prod(0, 0, { read: 0, brand: 0 }) } })).toBe('not_yet')
+  })
+})
+
+describe('a brand with no match (the lead’s ruling of 27 Sep)', () => {
+  // Staging's plan: Rareform, Freedom of Movement and Old School have no match
+  // in the window, so the list has nothing to read and no precision can be
+  // measured. The entry records that, and the brand is a zero by the rule.
+  const none = (over: Record<string, unknown> = {}): BrandHandCheck =>
+    ({ matches: 'none', on: '2026-10-05', where: 'production', ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'the Mon 5 Oct hand check', ...over }) as BrandHandCheck
+
+  it('reads a production entry of no match as none, which the page prints "none found"', () => {
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: none() } })).toBe('none')
+    expect(NONE_FOUND).toBe('none found')
+  })
+
+  it('reads no match from anywhere but production, or under other rules, as no entry', () => {
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: none({ where: 'staging' }) } })).toBe('not_yet')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: none({ ruleVersion: 'brands_v0' }) } })).toBe('not_yet')
+  })
+
+  it('reads a no-match entry that also carries parts, or an unknown matches word, as no entry', () => {
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: none({ headline: { read: 0, brand: 0 }, rest: { read: 0, brand: 0 } }) } })).toBe('not_yet')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: none({ matches: 'some' }) } })).toBe('not_yet')
+  })
+
+  it('keeps two parts that read no match at all as no entry: no match is recorded as matches none', () => {
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: prod(0, 0) } })).toBe('not_yet')
+  })
+
+  it('holds your name checked where the list held no match of it outside your own posts', () => {
+    const own = { [SEALAND_CLIENT_ID]: { Sealand: none() } }
+    expect(nameChecked(SEALAND_CLIENT_ID, own)).toBe(true)
+    expect(nameNoMatch(SEALAND_CLIENT_ID, own)).toBe(true)
+    expect(nameNoMatch(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: prod(9, 9) } })).toBe(false)
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: none({ where: 'staging' }) } })).toBe(false)
+    expect(nameNoMatch('ossur')).toBe(false)
   })
 })
 

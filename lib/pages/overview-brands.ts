@@ -27,7 +27,8 @@ import { buildBrandsBlock, type BrandsRead } from './overview-market/brands'
 // FAILS CLOSED, NEVER A 0. A tenant with no brand rules (Össur) or a month
 // whose market cannot be read gets no block (the page keeps deploy 2's line).
 // A mention layer that cannot be read (MF2 not applied) reads as no rows, so
-// every brand prints "not counted yet". A rival-search read that fails throws,
+// every brand prints "not counted yet", and none "none found": a layer read
+// as no rows proves no zero (`mentionsRead`). A rival-search read that fails throws,
 // and the page keeps deploy 2's line (lib/pages/overview.ts): never a
 // headline count over a base it could not read.
 
@@ -87,7 +88,9 @@ async function marketIds(client: SupabaseClient, clientId: string, month: string
   }
 }
 
-async function mentionRows(client: SupabaseClient, clientId: string): Promise<MentionRow[]> {
+/** The tenant's mention rows under the current rules, or null where the
+ *  layer cannot be read. */
+async function mentionRows(client: SupabaseClient, clientId: string): Promise<MentionRow[] | null> {
   try {
     const rows = await selectAll<MentionRow>(() =>
       client.from(TABLE_BRAND_MENTIONS).select('video_id, brand_key, source, comment_month')
@@ -95,7 +98,7 @@ async function mentionRows(client: SupabaseClient, clientId: string): Promise<Me
     return rows.map((r) => ({ ...r, video_id: String(r.video_id), comment_month: r.comment_month ? monthStartOf(String(r.comment_month)) : null }))
   } catch (error) {
     if (!missing(error, TABLE_BRAND_MENTIONS)) say(TABLE_BRAND_MENTIONS, error)
-    return []
+    return null
   }
 }
 
@@ -127,7 +130,7 @@ export async function loadBrandsBlock(
   const rules = brandRulesFor(clientId)
   if (rules.length === 0) return null
   const m = monthStartOf(month)
-  const [market, mentions, tcRes, compRes, owned] = await Promise.all([
+  const [market, layer, tcRes, compRes, owned] = await Promise.all([
     opts.market ?? marketIds(client, clientId, m),
     mentionRows(client, clientId),
     client.from('tracking_configs').select('competitor_names, competitor_keywords, own_handles, competitor_handles').eq('client_id', clientId).maybeSingle(),
@@ -136,6 +139,7 @@ export async function loadBrandsBlock(
       .eq('client_id', clientId).in('source', ['owned', 'competitor_owned']).order('id')),
   ])
   if (market == null) return null
+  const mentions = layer ?? []
   if (tcRes.error) throw new Error(`tracking_configs: ${tcRes.error.message}`)
   if (compRes.error && !missing(compRes.error, 'competitors')) throw new Error(`competitors: ${compRes.error.message}`)
   const tc = (tcRes.data ?? {}) as { competitor_names?: string[] | null; competitor_keywords?: string[] | null; own_handles?: Record<string, string> | null; competitor_handles?: Record<string, Record<string, string>> | null }
@@ -196,5 +200,6 @@ export async function loadBrandsBlock(
       return { brandKey: r.brandKey, label: r.name, hasRows: withRows.has(r.brandKey), kAny: c?.kAny ?? 0, kOrganic: c?.kOrganic ?? 0 }
     }),
     name: { hasRows: withRows.has('client'), outside, ownPosts },
+    mentionsRead: layer != null,
   })
 }

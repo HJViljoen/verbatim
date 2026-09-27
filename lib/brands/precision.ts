@@ -30,6 +30,15 @@ import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandRulesFor } from './alia
 // reach the page through a commit, the gates and a tag. Until then deploy 3
 // prints every brand, and the name line, as "not counted yet".
 //
+// A BRAND WITH NO MATCH (the lead's ruling of 27 Sep, fast track): where the
+// list holds no match of a brand outside its own posts (on staging Rareform,
+// Freedom of Movement and Old School), there is nothing to read and no
+// precision to measure, so its entry records `matches: 'none'` instead of two
+// parts. The rule found nothing, a real zero by the rule, so the page and the
+// monthly print it "none found" for a month in which the mention layer holds
+// no match of it either; "not counted yet" stays only for a brand whose
+// matches exist and have not passed the hand check.
+//
 // TWO PARTS, EACH GATED (the deploy-3 fresh review). The headline column
 // counts only the videos none of our rival searches found
 // (lib/brands/rival-searches.ts), and almost every match sits in the others:
@@ -67,14 +76,35 @@ export interface HandCheckPart {
   brand: number
 }
 
-/** One brand's hand check, on production. */
-export interface BrandHandCheck {
+/** One brand's hand check, on production: its matches read in two parts, or
+ *  `matches: 'none'` where the list held no match of it outside its own posts
+ *  (`BrandNoMatchCheck`). */
+export type BrandHandCheck = BrandPartsCheck | BrandNoMatchCheck
+
+/** A hand check that read the brand's matches, in two parts. */
+export interface BrandPartsCheck extends HandCheckRecord {
+  matches?: never
   /** Every match in a video none of our rival searches found: the videos
    *  the headline column counts, read in full. */
   headline: HandCheckPart
   /** A fixed sample of the brand's other matches, in videos a rival search of
    *  ours found (`scripts/brand-mentions.ts --hand-check`, its `--sample`). */
   rest: HandCheckPart
+}
+
+/** NO MATCH (the lead's ruling of 27 Sep, fast track): production's hand-check
+ *  list held no match of the brand outside its own posts, so there was
+ *  nothing to read. The rule found nothing in the window's market, a real
+ *  zero by the rule, so the brand prints "none found" for a month in which
+ *  the mention layer still holds no match of it (lib/pages/overview-market/
+ *  brands.ts). The sheet's "Record" line says `matches: 'none'` for such a
+ *  brand (scripts/brand-mentions.ts --hand-check). */
+export interface BrandNoMatchCheck extends HandCheckRecord {
+  matches: 'none'
+}
+
+/** What every entry records: when, where, under which rules, of what. */
+export interface HandCheckRecord {
   /** When it was read. */
   on: string
   /** Production only: a staging or research sample is not an entry. */
@@ -118,23 +148,42 @@ export const OTHER_MEANING: Readonly<Record<string, string>> = {
   Freitag: 'the German word for Friday',
 }
 
-export type BrandCountState = 'counted' | 'noise' | 'not_yet'
+/** `none`: production's list held no match of the brand (`BrandNoMatchCheck`);
+ *  the page prints "none found" only for a month in which the mention layer
+ *  holds none either (lib/pages/overview-market/brands.ts). */
+export type BrandCountState = 'counted' | 'noise' | 'none' | 'not_yet'
 
 const wellFormed = (p: HandCheckPart | null | undefined): p is HandCheckPart =>
   p != null && Number.isInteger(p.read) && Number.isInteger(p.brand) && p.read >= 0 && p.brand >= 0 && p.brand <= p.read
 
+/** Production's entry for a brand under the rules the page counts with, or
+ *  null: an entry from anywhere else, read under other rules, or malformed
+ *  (a part that is not a whole count, more yes than read, or a no-match entry
+ *  that also carries parts) is read as no entry. */
+function productionEntry(clientId: string, brand: string, checks: typeof BRAND_HAND_CHECKS): BrandHandCheck | null {
+  const c = checks[clientId]?.[brand]
+  if (!c || c.where !== 'production' || c.ruleVersion !== BRAND_RULE_VERSION) return null
+  if (c.matches === 'none') {
+    const parts = c as unknown as { headline?: unknown; rest?: unknown }
+    return parts.headline === undefined && parts.rest === undefined ? c : null
+  }
+  if (c.matches !== undefined) return null
+  return wellFormed(c.headline) && wellFormed(c.rest) ? c : null
+}
+
 /** Whether a brand's counts may print: each part of its production hand
  *  check that holds a match against the floor (both columns print only when
- *  every such part clears it; one under it reads "mostly … not counted"), or
+ *  every such part clears it; one under it reads "mostly … not counted"),
+ *  "none" where production's list held no match of it (`matches: 'none'`), or
  *  "not counted yet" where production has not checked it under the rules the
  *  page counts with (an entry from anywhere else, or read under other rules,
- *  or with no match read at all, is read as no entry). A part with no match
- *  (no video outside our rival searches named the brand in the window) gates
- *  nothing: its count there is none. */
+ *  or with parts that read no match at all, is read as no entry). A part with
+ *  no match (no video outside our rival searches named the brand in the
+ *  window) gates nothing: its count there is none. */
 export function brandCountState(clientId: string, brand: string, checks: typeof BRAND_HAND_CHECKS = BRAND_HAND_CHECKS): BrandCountState {
-  const c = checks[clientId]?.[brand]
-  if (!c || c.where !== 'production' || c.ruleVersion !== BRAND_RULE_VERSION) return 'not_yet'
-  if (!wellFormed(c.headline) || !wellFormed(c.rest)) return 'not_yet'
+  const c = productionEntry(clientId, brand, checks)
+  if (!c) return 'not_yet'
+  if (c.matches === 'none') return 'none'
   const read = [c.headline, c.rest].filter((p) => p.read > 0)
   if (read.length === 0) return 'not_yet'
   return read.every((p) => p.brand / p.read >= BRAND_PRECISION_FLOOR) ? 'counted' : 'noise'
@@ -149,16 +198,28 @@ export function clientBrandName(clientId: string): string | null {
 /** Has production hand-checked the client's own name, under the rules the
  *  page counts with (any precision: the name line prints what the reading
  *  found, match by match)? A check whose every match is the client's own
- *  posts reads no match in either part, and still counts as checked: there is
- *  nothing outside them to read (staging's September, BC F35), so the name
- *  line says "none". */
+ *  posts has nothing outside them to read (staging's September, BC F35): it
+ *  is recorded `matches: 'none'` (or, as before the 27 Sep ruling, as two
+ *  parts that read none), still counts as checked, and the name line says
+ *  "none". */
 export function nameChecked(clientId: string, checks: typeof BRAND_HAND_CHECKS = BRAND_HAND_CHECKS): boolean {
   const name = clientBrandName(clientId)
-  const c = name == null ? null : checks[clientId]?.[name]
-  return c != null && c.where === 'production' && c.ruleVersion === BRAND_RULE_VERSION && wellFormed(c.headline) && wellFormed(c.rest)
+  return name != null && productionEntry(clientId, name, checks) != null
+}
+
+/** Did production's list hold no match of the client's own name outside its
+ *  own posts (`matches: 'none'`)? The name line may then print "none" even
+ *  where the mention layer holds no row of the name at all. */
+export function nameNoMatch(clientId: string, checks: typeof BRAND_HAND_CHECKS = BRAND_HAND_CHECKS): boolean {
+  const name = clientBrandName(clientId)
+  return name != null && productionEntry(clientId, name, checks)?.matches === 'none'
 }
 
 /** "mostly the German word for Friday · not counted", or the plan's words. */
 export const noiseWords = (brand: string): string => `mostly ${OTHER_MEANING[brand] ?? 'another word'} · not counted`
 
 export const NOT_COUNTED_YET = 'not counted yet'
+
+/** A brand production's hand-check list held no match of, in a month the
+ *  mention layer holds none of either (the lead's ruling of 27 Sep). */
+export const NONE_FOUND = 'none found'

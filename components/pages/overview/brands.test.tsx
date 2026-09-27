@@ -4,7 +4,7 @@ import { blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { emptyBrandsRead, shippedBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
+import { emptyBrandsRead, noneFoundBrandsRead, shippedBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
 import type { OverviewData } from '@/lib/pages/overview'
 import { brandAxis, overviewRivals } from './rivals'
 import { marketFrontFixture, ossurFrontFixture } from './fixture'
@@ -69,6 +69,26 @@ describe('Brands in your market (WP2.6)', () => {
       expect(t, mode).toContain('Your name in your market in September: not counted yet.')
       expect(t, mode).not.toMatch(/\b0\b/)
       expect((t.match(/not counted yet/g) ?? []).length, mode).toBe(8)
+    }
+  })
+
+  // The lead's ruling of 27 Sep (fast track): a brand production's list held
+  // no match of is a zero by the rule, so it prints "none found"; "not
+  // counted yet" stays for a brand whose matches are not checked.
+  it('prints "none found" for a brand production’s list held no match of, in every mode, with no figure or head', () => {
+    for (const mode of MODES) {
+      const t = read(overviewRivals.render(withBrands(noneFoundBrandsRead()), mode, ctx))
+      for (const brand of ['Rareform', 'Freedom of Movement', 'Old School']) {
+        expect(t, mode).toMatch(new RegExp(`${brand}\\s*none found`))
+      }
+      for (const brand of ['Cotopaxi', 'Patagonia', 'The North Face', 'Freitag']) {
+        expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))
+      }
+      expect((t.match(/none found/g) ?? []).length, mode).toBe(3)
+      expect(t, mode).toContain('Your name in your market in September: not counted yet.')
+      // A word, not a 0, and no figure heads over a table with no figure.
+      expect(t, mode).not.toMatch(/\b0\b|\bof 516\b|In all/)
+      assertCopyContract(render(overviewRivals.render(withBrands(noneFoundBrandsRead()), mode, ctx)))
     }
   })
 

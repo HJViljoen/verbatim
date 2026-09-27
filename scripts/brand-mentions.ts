@@ -31,8 +31,10 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // and reads the hand-check list that morning: it covers all eight (your name
 // and every tracked rival, a brand with no match included), and its results
 // become lib/brands/precision.ts's production entries. Until a brand has one,
-// the page prints it "not counted yet". No model call (the GPT confirm is
-// Stage 3, decision L).
+// the page prints it "not counted yet"; a brand the list holds no match of
+// outside its own posts is recorded `matches: 'none'` and prints "none found"
+// (the lead's ruling of 27 Sep). No model call (the GPT confirm is Stage 3,
+// decision L).
 //
 // READ-ONLY BY DEFAULT, and it never prompts (it runs through `!`).
 //   --project <ref>      required; one of the two allow-listed refs, and the
@@ -192,10 +194,21 @@ function candidateDigests(perBrand: readonly BrandCandidates[]) {
   return Object.fromEntries(perBrand.map((b) => [b.rule.brand, { hits: digest(b.hits), bare: b.bare ? digest(b.bare) : null }]))
 }
 
+/** The "Record" line of a brand with nothing to read (lib/brands/precision.ts
+ *  `BrandNoMatchCheck`): a rival prints "none found", your name's line
+ *  "none". */
+const noMatchRecord = (brandKey: string): string =>
+  `Record: matches: 'none' (no headline or rest). ${brandKey === 'client'
+    ? 'The name line then prints "none" for a month in which the mention layer holds no match of your name outside your own posts.'
+    : 'The page prints it "none found" for a month in which the mention layer holds no match of it.'}`
+
 /** The list, one section per brand in `brands` (all eight, so the check
  *  covers every brand the page prints), a brand with no match saying so.
  *  Each brand's two parts are separate tables with their own tally line,
- *  because each becomes its own pair of counts in the entry. */
+ *  because each becomes its own pair of counts in the entry. A brand with no
+ *  match outside its own posts (none at all, or only its own posts) has
+ *  nothing to read: its "Record" line is `matches: 'none'` (the lead's ruling
+ *  of 27 Sep: it prints "none found"). */
 function handCheckMarkdown(
   entries: readonly HandCheckEntry[],
   brands: readonly { brand: string; brandKey: string }[],
@@ -216,7 +229,17 @@ function handCheckMarkdown(
     const t = tallies.find((x) => x.brandKey === brandKey)
     lines.push(`## ${brand}`, '')
     if (mine.length === 0 || !t) {
-      lines.push('No match in the window: nothing to read. It stays "not counted yet" (a precision needs a match).', '')
+      lines.push('No match in the window: nothing to read.', '', noMatchRecord(brandKey), '')
+      continue
+    }
+    if (t.headline === 0 && t.rest === 0) {
+      lines.push('No match outside its own posts in the window: nothing to read.', '')
+      const own = mine.filter((e) => e.part === 'own')
+      if (own.length > 0) {
+        lines.push(`### Its own posts, listed apart and never counted (${own.length})`, '')
+        table(own)
+      }
+      lines.push(noMatchRecord(brandKey), '')
       continue
     }
     lines.push(`### 1. Headline: every match in a video none of our rival searches found (${t.headline})`, '')
@@ -406,6 +429,7 @@ async function main() {
       'Mark each "the brand?" yes or no. ' +
       `Each brand becomes one production entry in lib/brands/precision.ts: headline { read, brand } and rest { read, brand } as its "Record" line gives them, the date, ruleVersion '${BRAND_RULE_VERSION}'. ` +
       `A brand prints its counts only when, in every part with a match, the brand's share of the matches read is at least ${BRAND_PRECISION_FLOOR}; one part under that prints "mostly another word · not counted". ` +
+      'A brand with no match outside its own posts has nothing to read: its entry is matches: \'none\', and it prints "none found". ' +
       'Only a production entry under the rules the page counts with lets it count a brand. Excerpts are for this check only.'))
     for (const t of tallies) {
       const b = brands.find((x) => x.brandKey === t.brandKey)

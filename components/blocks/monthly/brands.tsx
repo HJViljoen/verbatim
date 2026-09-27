@@ -21,8 +21,9 @@ import { slotSection } from './slot'
  * section draws the front page's body (`MarketBrandsBody`): the name line
  * first, then each brand counted in every video it comes up in, without any
  * video our rival searches found (one base for every brand) and in all, a
- * brand not counted saying so ("not counted
- * yet", or "mostly the German word for Friday · not counted"). In an inbox it
+ * brand not counted saying so ("none found" where production's list held no
+ * match of it, "not counted yet", or "mostly the German word for Friday · not
+ * counted"). In an inbox it
  * draws the email artboard's table from the same words (`nameLineParts`,
  * `topicNote`), so the two print one sentence each.
  */

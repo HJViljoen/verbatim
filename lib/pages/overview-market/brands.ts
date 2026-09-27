@@ -1,4 +1,4 @@
-import { brandCountState, BRAND_HAND_CHECKS, NAME_READS, nameChecked, noiseWords, type BrandCountState } from '../../brands/precision'
+import { brandCountState, BRAND_HAND_CHECKS, NAME_READS, nameChecked, nameNoMatch, noiseWords, NONE_FOUND, NOT_COUNTED_YET, type BrandCountState } from '../../brands/precision'
 import { longMonth, shortDate } from '../../format'
 import { monthStartOf } from '../../reading/month-key'
 
@@ -80,6 +80,14 @@ export function brandsLine(b: BrandsArriving, competitiveLabel: string): string 
  * counted" (lib/brands/precision.ts). A research or staging sample counts no
  * brand.
  *
+ * "NONE FOUND" (the lead's ruling of 27 Sep, fast track): a brand production's
+ * hand-check list held no match of (`matches: 'none'`) prints "none found"
+ * for a month in which the mention layer, read, holds no match of it either:
+ * the rule found nothing in the month's market, a real zero by the rule. A
+ * match that turns up after the check (a later gather) has passed no hand
+ * check, so that month prints "not counted yet"; and a mention layer that
+ * could not be read finds nothing, so it prints no "none found" either.
+ *
  * THE NAME LINE FIRST (heinrich-fidelity must-fix 2): "In September your name
  * came up in none of your market's 654 videos. The 8 videos that name you are
  * your own posts." It prints only once production's hand check holds the
@@ -121,7 +129,8 @@ export interface BrandTopic {
   nOrganic: number | null
   /** Measured under the precision floor: "mostly … not counted". */
   noise: boolean
-  /** Additive: counted, mostly another word, or not counted yet. */
+  /** Additive: counted, none found, mostly another word, or not counted
+   *  yet. */
   count?: BrandCountState
 }
 
@@ -157,7 +166,7 @@ export interface NameCountIn {
   ownPosts: number
 }
 
-const ORDER: Record<BrandCountState, number> = { counted: 0, noise: 1, not_yet: 2 }
+const ORDER: Record<BrandCountState, number> = { counted: 0, none: 1, noise: 2, not_yet: 3 }
 
 export function buildBrandsBlock(input: {
   clientId: string
@@ -171,11 +180,19 @@ export function buildBrandsBlock(input: {
   name: NameCountIn
   checks?: typeof BRAND_HAND_CHECKS
   nameReads?: typeof NAME_READS
+  /** Was the mention layer read (`brand_mentions`)? Only then is a month
+   *  with no match of a brand a zero by the rule ("none found"); a layer that
+   *  could not be read (MF2 missing) finds nothing and proves nothing. */
+  mentionsRead?: boolean
 }): BrandsRead {
   const month = monthStartOf(input.month)
+  const layer = input.mentionsRead === true
   const topics: BrandTopic[] = input.rivals.map((r) => {
     const measured = brandCountState(input.clientId, r.label, input.checks)
-    const count: BrandCountState = measured === 'counted' && !r.hasRows ? 'not_yet' : measured
+    const count: BrandCountState =
+      measured === 'counted' && !r.hasRows ? 'not_yet'
+        : measured === 'none' && !(layer && r.kAny === 0 && r.kOrganic === 0) ? 'not_yet'
+          : measured
     return {
       brandKey: r.brandKey,
       label: r.label,
@@ -194,11 +211,14 @@ export function buildBrandsBlock(input: {
     || a.label.localeCompare(b.label))
 
   // The name line: the name checked on production, and every match outside
-  // its own posts read by hand there.
+  // its own posts read by hand there. Where production's list held no match
+  // of the name at all (`matches: 'none'`), a mention layer that was read and
+  // holds no row of it is that same zero, so the line prints "none".
   const reads = (input.nameReads ?? NAME_READS)[input.clientId] ?? []
   const read = new Map(reads.filter((r) => r.where === 'production' && monthStartOf(r.month) === month).map((r) => [r.videoId, r.brand]))
   const unread = input.name.outside.filter((id) => !read.has(id))
-  const nameLine = input.name.hasRows && nameChecked(input.clientId, input.checks) && unread.length === 0
+  const rows = input.name.hasRows || (layer && nameNoMatch(input.clientId, input.checks))
+  const nameLine = rows && nameChecked(input.clientId, input.checks) && unread.length === 0
     ? { month, n: input.n, k: input.name.outside.filter((id) => read.get(id) === true).length, ownPosts: input.name.ownPosts }
     : null
   return { state: 'read', window: month, nameLine, topics, ninetyDayNote: NINETY_DAY_NOTE }
@@ -222,8 +242,11 @@ export function nameLineParts(b: BrandsRead): ({ t: 'text'; s: string } | { t: '
   return parts
 }
 
-/** A topic's words where it prints no count. */
+/** A topic's words where it prints no count: "none found" where
+ *  production's list held no match of it and the month holds none, "mostly
+ *  … not counted", or "not counted yet". */
 export function topicNote(t: BrandTopic): string | null {
   if (t.count === 'counted' || (t.count == null && !t.noise && t.kAny != null)) return null
-  return t.noise ? noiseWords(t.label) : 'not counted yet'
+  if (t.count === 'none') return NONE_FOUND
+  return t.noise ? noiseWords(t.label) : NOT_COUNTED_YET
 }

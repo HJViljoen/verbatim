@@ -45,6 +45,14 @@ describe('how to read', () => {
     expect(words).toContain('Your search terms are yours')
   })
 
+  it('says what the brands rule counts, so "none found" reads as a zero by that rule (the lead’s ruling of 27 Sep)', () => {
+    const line = READING_CARDS.find((c) => c.key === 'overview')!.cannot.find((l) => l.startsWith('Under Brands in your market'))!
+    expect(line).toContain('the rule counts the brand’s name, its handles and its phrases')
+    expect(line).toContain('“None found” means the rule found no such video that month')
+    expect(line).toContain('“not counted yet” means we have not yet checked its matches by hand')
+    expect(line).not.toMatch(/[0-9—]/)
+  })
+
   it('never calls a month "complete" (plan §4.0: ended or final, never complete; deploy 2 review)', () => {
     for (const card of READING_CARDS) {
       expect([card.tells, ...card.cannot].join(' ')).not.toMatch(/\bcomplete months?\b/i)
