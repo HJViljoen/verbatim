@@ -1,7 +1,7 @@
 import { fullDate, monthName, shortDate } from '../format'
 import { audienceLabel } from '../readiness/types'
 import type { ActorKind, ConfigChange } from '../config-log'
-import type { LoggedSurface } from '../config-surfaces-mf1'
+import { MF1_SURFACES, type LoggedSurface } from '../config-surfaces-mf1'
 
 /**
  * The change log, read by the person whose configuration it is (Phase 1 WP16,
@@ -220,11 +220,21 @@ export function renderSide(surface: LoggedSurface, value: unknown): string | nul
   return keys.length === 0 ? 'nothing' : `${keys.length} settings`
 }
 
+/** The three changes of ours no setting records (MF1, WP1.4). Their rows
+ *  carry no note (Heinrich, 27 Sep: no client-visible notes on our own
+ *  changes), and their `field` is a version label (relevance_gate,
+ *  attribution_v3, segments_v1), never a client's word, so such a row says
+ *  its title alone: "How we check relevance", not "How we check relevance
+ *  (relevance_gate) changed.". */
+const TITLE_ONLY: ReadonlySet<string> = new Set(MF1_SURFACES)
+
 /** The sentence a row with no `note` gets. Trigger rows are the case: the
  *  database cannot write prose, so it writes the field and the two sides, and
- *  the sentence is composed here from the same three facts. */
+ *  the sentence is composed here from the same three facts. A change of ours
+ *  on an MF1 surface gets its title alone (`TITLE_ONLY`). */
 function composedNote(change: ConfigChange): string {
   const what = SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other
+  if (TITLE_ONLY.has(change.surface)) return what
   const field = change.field ? ` (${change.field})` : ''
   return `${what}${field} changed.`
 }

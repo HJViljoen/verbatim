@@ -39,7 +39,7 @@ import { scheduledUpdateAfter } from './reading-month'
 // we changed judge one pair one way.
 
 /** The `other` fields that record an update's health, not a change of ours.
- *  `gather_capped` is WP1.4's (`CAPPED_NOTE`, scripts/log-tracking-eras.ts). */
+ *  `gather_capped` is WP1.4's (scripts/log-tracking-eras.ts --capped-run). */
 export const GATHER_FLAG_FIELDS: readonly string[] = ['gather_capped']
 
 /** Is this change-log row a gather flag (an update that fell short), not a

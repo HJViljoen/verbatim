@@ -164,6 +164,23 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     expect(t).not.toContain('read with the')
   })
 
+  it('with no note on our own changes (Heinrich, 27 Sep) prints each title alone: no description, no quotes, no "undefined"', () => {
+    const view = recordFixture({ notes: false }).view
+    const node = <TheRecord view={view} />
+    const t = read(node)
+    const check = view.groups.find((g) => g.key === 'check')!
+    expect(check.lines.map((l) => [l.line.words, l.line.detail ?? null])).toEqual([
+      ['How we file a video to a brand', null],
+      ['How we check relevance', null],
+      ['A change to how we read', null],
+    ])
+    for (const gone of ['We corrected', 'We changed how', 'spending cap', 'undefined', 'null', '""', '“”', 'relevance_gate', 'attribution_v3']) expect(t).not.toContain(gone)
+    // The measures stay: the gate fix's reach and what it stops.
+    expect(t).toContain('65 of 654 had been let in unchecked')
+    expect(t).toContain('Stops August against September, for themes')
+    assertCopyContract(render(node))
+  })
+
   it('says so plainly when nothing is on record', () => {
     expect(read(<TheRecord view={{ months: [], groups: [], aside: null }} />)).toContain('No change of ours is on record for this workspace yet.')
   })

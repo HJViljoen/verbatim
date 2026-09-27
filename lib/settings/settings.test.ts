@@ -8,7 +8,7 @@ import {
   type ScheduleLike,
 } from './artefacts'
 import {
-  actorWords, breakClause, groupChangeRows, monthsOfRange, readChangeLog, renderSide, showingLine, CHANGE_LOG_ROWS,
+  actorWords, breakClause, changeNote, groupChangeRows, monthsOfRange, readChangeLog, renderSide, showingLine, CHANGE_LOG_ROWS,
   RECORD_GROUP_WINDOW_MS, SURFACE_WORDS,
 } from './change-log'
 import { CONFIG_SURFACES } from '../config-log'
@@ -272,6 +272,40 @@ describe('readChangeLog', () => {
   it('composes a sentence for a trigger row that carries no note', () => {
     const [row] = readChangeLog({ rows: [change({ note: null, surface: 'cadence', field: 'report_day' })] }).recorded
     expect(row.said).toBe('Cadence (report_day) changed.')
+  })
+
+  // Heinrich, 27 Sep: no client-visible notes on our own changes. The gate
+  // fix, attribution v3 and the segment row are written with note NULL
+  // (scripts/log-tracking-eras.ts, scripts/label-segments.ts), and their
+  // `field` is a version label: the row says its title alone, never
+  // "How we check relevance (relevance_gate) changed.".
+  it('says a note-less change of ours on an MF1 surface by its title alone (27 Sep)', () => {
+    const ours = (surface: string, field: string, over: Partial<ConfigChange> = {}) => change({
+      id: surface, surface: surface as ConfigChange['surface'], field, note: null, before: null, after: null,
+      actor_kind: 'script', actor_user_id: null, actor_label: `scripts/${surface}.ts --apply`, ...over,
+    })
+    const rows = [
+      ours('gate_rule', 'relevance_gate', { changed_at: '2026-09-25T16:18:47Z', source: 'reconstructed', affects_months: '[2026-08-01,2026-10-01)' }),
+      ours('attribution', 'attribution_v3', { changed_at: '2026-09-25T16:18:47Z', source: 'reconstructed' }),
+      ours('segment', 'segments_v1', { changed_at: '2026-09-27T12:00:00Z', rows_affected: 5256 }),
+    ]
+    const view = readChangeLog({ rows })
+    const all = [...view.recorded, ...view.prehistory]
+    expect(Object.fromEntries(all.map((c) => [c.surface, c.said]))).toEqual({
+      gate_rule: 'How we check relevance',
+      attribution: 'How posts are filed by brand',
+      segment: 'How makers and off-topic videos are marked',
+    })
+    for (const c of all) {
+      expect(c.said).toBe(SURFACE_WORDS[c.surface])
+      expect(c.said).not.toMatch(/relevance_gate|attribution_v3|segments_v1|\(|changed\.|undefined|null|"|“/)
+      expect(c.before).toBeNull()
+      expect(c.after).toBeNull()
+    }
+    // The segment row is the one recorded change; the coverage row names it
+    // the same way, with its date and nothing else.
+    expect(view.recorded.map((c) => c.surface)).toEqual(['segment'])
+    expect(changeNote(view, { from: '2026-09-01', to: '2026-09-30' })).toBe('How makers and off-topic videos are marked, 27 Sep')
   })
 
   it('resolves a teammate to an address, and the viewer to "You"', () => {

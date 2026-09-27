@@ -56,17 +56,18 @@ const SURFACE_SENTENCE: Record<string, string> = {
 }
 
 /** Surfaces whose stored note is client words: the rows market-first's own
- *  scripts write (WP1.4), whose notes Heinrich approves before the apply.
- *  Every older row's note is the reconstruction's operator prose (GC F9) and
- *  is never printed here. */
+ *  scripts write (WP1.4). Since 27 Sep they are written with no note
+ *  (Heinrich: no client-visible notes on our own changes), so each is titled
+ *  by its surface alone; a note prints only where a row still holds one
+ *  (staging's 26 Sep rehearsal rows). Every older row's note is the
+ *  reconstruction's operator prose (GC F9) and is never printed here. */
 const CLIENT_NOTE_SURFACES: ReadonlySet<string> = new Set(['gate_rule', 'attribution', 'segment'])
 
 /** `other` rows whose stored note is client words: the capped update
- *  `log-tracking-eras --capped-run` writes (field 'gather_capped', WP1.4's
- *  CAPPED_NOTE, "An update gathered less than usual because a spending cap
- *  was reached.", approved with the other notes). Every other `other` row (an
- *  attention-panel freeze, an operator's edit) carries operator prose and is
- *  never printed here. */
+ *  `log-tracking-eras --capped-run` writes (field 'gather_capped'; with no
+ *  note since 27 Sep, when it reads "A change to how we read"). Every other
+ *  `other` row (an attention-panel freeze, an operator's edit) carries
+ *  operator prose and is never printed here. */
 const CLIENT_NOTE_OTHER_FIELDS: ReadonlySet<string> = new Set(['gather_capped'])
 
 const listOf = (side: unknown): string[] =>
@@ -229,7 +230,8 @@ function outAndIn(added: number, removed: number, one: string, many: string, gon
 export function changeWords(change: OurChange, rows: readonly ConfigChange[], gathers: CommunityGathers = null): string {
   // A market-first change with a client-words note is titled by its surface
   // (the approved preview: "How we check relevance" in weight, the note under
-  // it); its note is `changeDetail`'s. Without a note, the note stands alone.
+  // it); its note is `changeDetail`'s. Without a note (every such row
+  // written since 27 Sep), the title stands alone.
   if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return SURFACE_SENTENCE[change.surface] ?? change.note.trim()
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))

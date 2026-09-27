@@ -5,6 +5,8 @@ import { APPEAL_ASK, APPEAL_FILED } from '@/app/dashboard/settings/record/appeal
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { deliveryRecord } from '@/lib/settings/delivery'
+import { readChangeLog } from '@/lib/settings/change-log'
+import type { ConfigChange } from '@/lib/config-log'
 
 import { ChangeLogBlock, sameRows } from './change-log'
 import { CoverageBlock } from './coverage'
@@ -504,6 +506,33 @@ describe('the page’s own chrome', () => {
     const unrecorded = renderText(<SaveStrip state={unrecordedSaveStateFixture()} />)
     expect(unrecorded).toContain('not written down here yet')
     expect(unrecorded).not.toContain('Broke: nothing')
+  })
+
+  // Heinrich, 27 Sep: no client-visible notes on our own changes. The newest
+  // row on Sunday is label-segments' segment row, stored with note NULL.
+  it('with a note-less newest change says "Last save" and its date alone: no colon, no quotes, no "undefined"', () => {
+    const text = renderText(<SaveStrip state={saveStateFixture()} note={null} />)
+    expect(text).toContain('Last save 3 Sep.')
+    expect(text).not.toMatch(/Last save 3 Sep:|undefined|null|""/)
+  })
+
+  it('says each note-less change of ours on an MF1 surface by its title alone in the change log (27 Sep)', () => {
+    const ours = (id: string, surface: string, field: string, at: string, source: ConfigChange['source']): ConfigChange => ({
+      id, client_id: 't1', changed_at: at, surface: surface as ConfigChange['surface'], field, before: null, after: null,
+      actor_kind: 'script', actor_user_id: null, actor_label: `scripts/${id}.ts --apply`, run_id: null, source,
+      rows_affected: null, note: null, affects_audiences: null, affects_months: null,
+    })
+    const log = readChangeLog({ rows: [
+      ours('seed', 'terms', 'industry_keywords', '2026-09-13T10:00:00Z', 'logged'),
+      ours('gate', 'gate_rule', 'relevance_gate', '2026-09-25T16:18:47Z', 'reconstructed'),
+      ours('attr', 'attribution', 'attribution_v3', '2026-09-25T16:18:47Z', 'reconstructed'),
+      ours('seg', 'segment', 'segments_v1', '2026-09-27T12:00:00Z', 'logged'),
+    ] })
+    const node = <ChangeLogBlock log={log} rows={20} now="2026-09-28T09:00:00.000Z" />
+    const text = renderText(node)
+    for (const title of ['How we check relevance', 'How posts are filed by brand', 'How makers and off-topic videos are marked']) expect(text).toContain(title)
+    expect(text).not.toMatch(/relevance_gate|attribution_v3|segments_v1|marked changed|relevance changed|brand changed|undefined|""/)
+    assertCopyContract(node)
   })
 
   it('says why there is no Export button rather than drawing one that produces nothing', () => {
