@@ -2264,7 +2264,9 @@ export async function loadSubjectQuotes(
   const subjectOf = new Map<string, string>()
   for (const m of members) if (!subjectOf.has(m.audience_insight_id)) subjectOf.set(m.audience_insight_id, m.subject_id)
 
-  const citations = await fetchQuoteCitationsByAudience(supabase, [...subjectOf.keys()])
+  // WITHOUT THE ENGLISH, WHICH IS READ FOR THE QUOTES SHOWN (below): every
+  // subject member's evidence is read to find the few written in the window.
+  const citations = await citationsUntranslated(supabase, [...subjectOf.keys()])
   const pool: { subject: string; citation: QuoteCitation }[] = []
   for (const [insightId, list] of citations) {
     const subjectId = subjectOf.get(insightId)
@@ -2293,7 +2295,8 @@ export async function loadSubjectQuotes(
   const fresh = new Set(dated.map((c) => c.id))
   const kept = pool.filter((p) => p.citation.commentId && fresh.has(p.citation.commentId))
   const shown = kept.slice(0, NEW_QUOTES_SHOWN)
-  const cited = await citeQuotes(supabase, clientId, shown.map((s) => s.citation))
+  const translations = await readTranslations(supabase, shown.map((s) => s.citation.quote))
+  const cited = await citeQuotes(supabase, clientId, shown.map((s) => ({ ...s.citation, ...readingOf(translations, s.citation.quote) })))
   return {
     shown: cited.map((q, i) => ({ subject: shown[i].subject, ...q })),
     total: kept.length,
@@ -2989,6 +2992,68 @@ async function tenantInsights(
 }
 
 /**
+ * `fetchQuoteCitationsByAudience` (lib/quotes.ts) WITHOUT ITS TRANSLATION READ.
+ * The caller reads the English (`readTranslations`) for the citations it keeps.
+ *
+ * WHY. §5 hands the evidence read every current sales insight (Sealand: 1,374)
+ * and §4 every subject member (550), and the window then keeps a few hundred
+ * of the thousands of quotes behind them. `fetchQuoteCitationsByAudience`
+ * reads the English of every one of those thousands before it returns: 48 of
+ * This week's 256 reads on staging (27 Sep, Sealand), about 7,000 texts at 150
+ * a request, and on the critical path of both sections. A text's reading is
+ * keyed on its hash alone, so reading it for fewer texts gives each kept text
+ * the same reading (lib/quotes.ts `readTranslations`).
+ *
+ * WHY A COPY, AND WHY HERE. The split belongs in lib/quotes.ts, as an option
+ * on the function it copies. lib/quotes.ts is on the freeze-months path
+ * (plan §7.11, `scripts/pipeline-closure.sh`), where nothing may change
+ * before the 4 Oct run. So this is that function's read line for line: the
+ * same columns, the same `redacted = false` (demographic_signal evidence cites
+ * but never quotes), the same 120-id chunks issued the same way, the same row
+ * filter and the same row shape. THE CHUNK SIZE AND THE ORDER ARE PART OF THE
+ * OUTPUT, not tuning: the Map is keyed in the order the evidence rows arrive,
+ * chunk by chunk, and that order decides which quotes a section prints (see
+ * `fetchChunks` in lib/quotes.ts, and `inChunks` below). Once the freeze
+ * lifts, move this into lib/quotes.ts and delete the copy; until then, a
+ * change to the rule there must be made here too.
+ */
+async function citationsUntranslated(supabase: SupabaseClient, audienceIds: string[]): Promise<Map<string, QuoteCitation[]>> {
+  type EvidenceRow = {
+    id: string
+    audience_insight_id: string
+    quote: string | null
+    relevance_rank: number | null
+    comment_id: string | null
+    source_video_id: string | null
+    source: string | null
+  }
+  const pages = await mapWithLimit(chunk(audienceIds, CITATION_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<EvidenceRow>(() =>
+      supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id, source').in('audience_insight_id', part).eq('redacted', false).order('id'),
+    ),
+  )
+  const byAudience = new Map<string, QuoteCitation[]>()
+  for (const r of pages.flat()) {
+    if (!r.quote) continue
+    if (!r.comment_id && !r.source_video_id) continue
+    const arr = byAudience.get(r.audience_insight_id) ?? []
+    arr.push({
+      quote: r.quote,
+      rank: r.relevance_rank ?? 99,
+      evidenceId: r.id,
+      source: r.source === 'video' || r.source === 'video_text' ? r.source : 'comment',
+      commentId: r.comment_id,
+      videoId: r.source_video_id,
+    })
+    byAudience.set(r.audience_insight_id, arr)
+  }
+  return byAudience
+}
+
+/** lib/quotes.ts `fetchChunks`' size, which `citationsUntranslated` copies. */
+const CITATION_CHUNK = 120
+
+/**
  * The comments this update's window carried that Pass A called an objection,
  * praise or a switch — with the video they sat under, so a group can be counted
  * in distinct videos and a rival's complaints told from the category's.
@@ -3020,7 +3085,8 @@ async function loadSalesCitations(
   if (insights.length === 0) return []
   const byInsight = new Map(insights.map((i) => [i.id, i]))
 
-  const citations = await fetchQuoteCitationsByAudience(supabase, insights.map((i) => i.id))
+  // WITHOUT THE ENGLISH, WHICH IS READ FOR THE WINDOW'S CITATIONS (below).
+  const citations = await citationsUntranslated(supabase, insights.map((i) => i.id))
   const citedComments = new Set<string>()
   for (const list of citations.values()) for (const c of list) if (c.commentId) citedComments.add(c.commentId)
   if (citedComments.size === 0) return []
@@ -3037,15 +3103,22 @@ async function loadSalesCitations(
   if (comments.length === 0) return []
   const byComment = new Map(comments.map((c) => [c.id, c]))
 
-  const videos = await inChunks<{ id: string; platform: string; video_id: string; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }>(
-    comments.map((c) => c.video_id),
-    (part) => () =>
-      supabase.from('videos')
-        .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
-        .eq('client_id', clientId)
-        .in('video_id', part)
-        .order('id', { ascending: true }),
-  )
+  // The English of the citations the window kept, beside the videos they sat
+  // under: the two reads take the comments' answer and not each other's.
+  const inWindow: string[] = []
+  for (const list of citations.values()) for (const c of list) if (c.commentId && byComment.has(c.commentId)) inWindow.push(c.quote)
+  const [videos, translations] = await Promise.all([
+    inChunks<{ id: string; platform: string; video_id: string; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }>(
+      comments.map((c) => c.video_id),
+      (part) => () =>
+        supabase.from('videos')
+          .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
+          .eq('client_id', clientId)
+          .in('video_id', part)
+          .order('id', { ascending: true }),
+    ),
+    readTranslations(supabase, inWindow),
+  ])
   const videoByKey = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v]))
 
   const out: SalesCitation[] = []
@@ -3059,6 +3132,7 @@ async function loadSalesCitations(
       if (!video) continue
       const text = cleanQuote(c.quote)
       if (!text) continue
+      const reading = readingOf(translations, c.quote)
       out.push({
         category: insight.category,
         themeId: insight.theme ?? insightId,
@@ -3072,8 +3146,8 @@ async function loadSalesCitations(
         commentUuid: comment.id,
         evidenceId: c.evidenceId,
         quote: text,
-        lang: c.lang ?? null,
-        english: c.english ?? null,
+        lang: reading.lang ?? null,
+        english: reading.english ?? null,
         platform: comment.platform,
         commentDate: comment.comment_date,
         href: citationLink(comment.platform, video.video_url ?? null, comment.comment_id).href,
