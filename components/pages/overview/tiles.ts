@@ -96,6 +96,9 @@ const ROWS: Record<string, number> = {
   'overview.themes': 4,
   'overview.asks': 3,
   'overview.change': 2,
-  'overview.foryou': 3,
+  // Two rows as well: Össur's (one line, no subject named) draws about 257px,
+  // and a 380px floor held about 120px of white above its footer at 768 and
+  // 390 (staging, 11 Oct; the deploy-3 design review's finding on the floors).
+  'overview.foryou': 2,
   'overview.arrivals': 3,
 }

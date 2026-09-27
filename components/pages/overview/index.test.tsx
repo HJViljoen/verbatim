@@ -199,6 +199,7 @@ describe('the Overview page', () => {
     // Below xl a floor, not a size: "What you published" at two rows
     // (248px), so a short one holds no white above its footer.
     expect(frontTile('overview.moves', false).row).toBe(2)
+    expect(frontTile('overview.foryou', true).row).toBe(2)
     expect(frontTile('overview.change', false)).toMatchObject({ col: 12, className: 'xl:row-span-1' })
   })
 
