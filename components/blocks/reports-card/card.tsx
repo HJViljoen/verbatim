@@ -276,7 +276,10 @@ export function QuarterLevelsChart({ levels }: { levels: QuarterLevels }) {
           <span key={m.month} className="relative flex h-full w-11 flex-col items-center justify-end">
             {m.videos != null && (
               <>
-                <span className="mb-1 font-mono text-[12px] font-semibold tabular-nums text-foreground">{fmtInt(m.videos)}</span>
+                {/* On the tile's own ground: a bar under the floor puts its
+                    count on the dashed rule, which struck through July's 36
+                    (the staging render, 27 Sep). */}
+                <span className="mb-1 rounded-[2px] bg-tile px-1 font-mono text-[12px] font-semibold tabular-nums text-foreground">{fmtInt(m.videos)}</span>
                 <span className="block w-full rounded-t-[2px]" style={{ height: `${scale(m.videos)}%`, background: 'var(--foreground)' }} />
               </>
             )}
