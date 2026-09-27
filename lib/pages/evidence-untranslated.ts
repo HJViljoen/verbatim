@@ -28,7 +28,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
-import type { QuoteCitation } from '../quotes'
+import type { QuoteCitation, QuoteRow } from '../quotes'
 import { selectAll } from '../supabase-admin'
 
 /** lib/quotes.ts `fetchChunks`' size, which the reads here copy. */
@@ -78,6 +78,30 @@ export async function citationsUntranslated(
       commentId: r.comment_id,
       videoId: r.source_video_id,
     })
+    byAudience.set(r.audience_insight_id, arr)
+  }
+  return byAudience
+}
+
+/** `fetchQuotesByAudience`, with no reading on the rows. */
+export async function quotesUntranslated(
+  supabase: SupabaseClient,
+  audienceIds: string[],
+): Promise<Map<string, QuoteRow[]>> {
+  const rows = await evidenceChunks<{
+    id: string
+    audience_insight_id: string
+    quote: string | null
+    relevance_rank: number | null
+    source: string | null
+  }>(audienceIds, (part) => () =>
+    supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, source').in('audience_insight_id', part).eq('redacted', false).order('id'),
+  )
+  const byAudience = new Map<string, QuoteRow[]>()
+  for (const r of rows) {
+    if (!r.quote) continue
+    const arr = byAudience.get(r.audience_insight_id) ?? []
+    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id, source: evidenceSource(r.source) })
     byAudience.set(r.audience_insight_id, arr)
   }
   return byAudience
