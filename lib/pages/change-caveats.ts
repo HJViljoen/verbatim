@@ -19,13 +19,18 @@ import { ourChangeCaveat } from '../settings/what-we-changed'
 // log the series was built from (`loadChanges`, memoised: no second read).
 //
 // WHERE THE LINE CAN REACH A READER. Only through a `tracking_change` point
-// label, and only two loaders put points in front of one: Subjects
+// label. On deploy 2 two loaders put points in front of one: Subjects
 // (`SubjectPane.series` and `.chartSeries`, which the line chart turns into a
 // dated rule whose hover and band title are the label, `calendarRulesFor`)
-// and Voice (`ThemeBlock.points`, drawn without their labels today). Both
-// caption here. A series' NOTES never carry the label (`buildSeries` puts it
-// on points only), and the notes are all the monthly, the weekly and every
-// other page print of a series' caveats.
+// and Voice (`ThemeBlock.points`, drawn without their labels). Subjects
+// captions here. Deploy 3 (merged 27 Sep) keeps Subjects' two and adds the
+// subject's pooled market line (`SubjectPane.marketLine`), whose points
+// `marketLineOf` builds with no label, so it has nothing to caption (a test
+// in change-caveats.test.ts holds that); its Conversation page draws no
+// month points at all, so Voice's caption went with deploy 2's theme pane.
+// A series' NOTES never carry the label (`buildSeries` puts it on points
+// only), and the notes are what the weekly and every other page print of a
+// series' caveats.
 
 /** The reading layer's sentence for a month a note-less change covers
  *  (`buildSeries`, lib/reading/series.ts), which a test holds to series.ts's

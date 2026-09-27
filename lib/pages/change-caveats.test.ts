@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { DIRECTION_WORDS } from '../calibration'
 import { collapseRules } from '../charts/calendar'
 import { calendarRulesFor, seriesToCalendar } from '../charts/from-series'
+import { pooledDenominators } from '../reading/market'
 import { buildSeries, mergeNotes, mergeSeriesNotes, type DenominatorPoint, type MonthSeries, type SeriesChange } from '../reading/series'
 import { captionOurChanges, NOTELESS_CHANGE_LINE, type CaptionRow } from './change-caveats'
+import { marketLineOf } from './subjects'
 
 // Heinrich, 27 Sep: our own change rows (gate_rule/relevance_gate,
 // attribution/attribution_v3, segment/segments_v1, other/gather_capped) carry
@@ -154,6 +156,37 @@ describe('no "moved this month" can print for a change of ours', () => {
         expect(words).not.toMatch(/moved this month|\bmoved\b|\bmove\b/i)
         expect(words).toContain(`We changed how we`)
       }
+    })
+  }
+})
+
+describe('deploy 3, merged with deploy 2 (27 Sep): Subjects on the market draws no change line', () => {
+  // Deploy 3's Subjects page draws the subject's pooled market line
+  // (`SubjectPane.marketLine`, `marketLineOf`) with `calendarRulesFor([line])`
+  // (components/pages/subjects/line.tsx), a path deploy 2's caption never saw.
+  // It is built from the same series the caption reads, but its points carry
+  // no label, so no change of ours (captioned or not) can print on it as
+  // "it moved this month". If the market line ever takes its template's
+  // labels, this fails first, and it must take the captioned ones.
+  const marketOf = (s: MonthSeries): MonthSeries =>
+    marketLineOf({
+      subjectId: 's1', label: 'Looks & style', months: AXIS, lines: [s],
+      counts: pooledDenominators(DENOMINATORS, []), rivalAudiences: [], read: () => true,
+    })!
+
+  for (const captioned of [false, true]) {
+    it(`carries no label from a series ${captioned ? 'captioned' : 'as the reading layer built it'}`, () => {
+      const s = pageSeries(OURS, captioned)
+      // Not vacuous: the series it is built from says the change on September.
+      expect(saidOn(s, '2026-09-01').length).toBeGreaterThan(0)
+      if (!captioned) expect(saidOn(s, '2026-09-01')).toContain(NOTELESS_CHANGE_LINE)
+      const line = marketOf(s)
+      expect(line.points.map((p) => p.month)).toEqual(AXIS)
+      expect(line.points.flatMap((p) => p.labels)).toEqual([])
+      expect(line.notes).toEqual([])
+      expect(calendarRulesFor([line])).toEqual([])
+      const words = seriesToCalendar(line, { color: 'var(--foreground)' }).points.map((p) => p.note ?? '').join(' ')
+      expect(words).not.toMatch(/moved this month/i)
     })
   }
 })
