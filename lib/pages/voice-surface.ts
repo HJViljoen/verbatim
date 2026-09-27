@@ -56,6 +56,7 @@ import {
 import { row, rows as readRows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { themeQuestion } from '../agent/starters'
 import { buildWords, loadKindRows, loadWordsCandidates, marketKindVideos, shortlistWords, type WordsBlock } from './voice-surface-words'
 import { buildWhere, loadEarlierMonths, loadMemory, loadMonthVideos, memoryMonths, type WhereBlock } from './voice-surface-where'
 
@@ -306,13 +307,20 @@ export function platformShares(
 /**
  * The question "Ask about this" pre-fills (plan §2.8 D3): `?ask=`, which the
  * Ask box reads (app/dashboard/agent/page.tsx), where the pane sent `?q=`,
- * which Ask ignores (`lib/pages/voice-surface.ts:1883` before WP2.4). The
- * month by name, never "this month": on 1 to 15 Oct the page reads an ended
- * September (the lead's R6).
+ * which Ask ignores (`lib/pages/voice-surface.ts:1883` before WP2.4).
+ *
+ * THE QUESTION ASK'S OWN STARTER WRITES FOR THE THEME (`themeQuestion`,
+ * WP3.9): Sealand's lead, "Price and sale questions", is "What does my market
+ * say about price and sale?" here and on the lead's starter card, as Subjects'
+ * link and the subject's card share theirs. It was "What is behind “Price and
+ * sale questions” in September?": a second question for the same theme, whose
+ * quoted label named the whole market's kinds (lib/agent/scope.ts
+ * `withoutQuoted`), and whose month was the page's, not the answer's, on a
+ * Conversation opened on an earlier month. Never "this month" either way (the
+ * lead's R6).
  */
-export function askAboutTheme(label: string, month: string): string {
-  const q = `What is behind “${label}” in ${longMonth(month)}?`
-  return `/dashboard/agent?ask=${encodeURIComponent(q.slice(0, ASK_MAX))}`
+export function askAboutTheme(theme: { label: string; kind: string | null }): string {
+  return `/dashboard/agent?ask=${encodeURIComponent(themeQuestion(theme).slice(0, ASK_MAX))}`
 }
 
 /**
@@ -879,7 +887,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         chip,
         isLead,
         videosHref: `/dashboard/videos?theme=${encodeURIComponent(open.registryId)}`,
-        askHref: askAboutTheme(open.label, month),
+        askHref: askAboutTheme(open),
         notes: [],
       }
     : {

@@ -94,18 +94,22 @@ describe('Subjects: "Ask about this" lands on the subject’s own figure and tra
   })
 })
 
-describe('Conversation: "Ask about this" lands on its theme, not on kinds its label happens to name', () => {
-  it('Sealand’s open theme, "Price and sale questions": the box holds the question, and only Price is named', () => {
-    const question = askedFrom(render(voiceTheme.render(voiceFixture(), 'app', ctx)))
-    expect(question).toBe('What is behind “Price and sale questions” in September?')
-    // "questions" in the label named the whole market's "asking how it
-    // works" before; Price is a name, and names are read wherever they stand.
+describe('Conversation: "Ask about this" asks what Ask’s own starter asks about the theme', () => {
+  it('Sealand’s lead, "Price and sale questions": the lead’s starter card, word for word', () => {
+    const data = voiceFixture()
+    const question = askedFrom(render(voiceTheme.render(data, 'app', ctx)))
+    expect(question).toBe('What does my market say about price and sale?')
+    const lead = data.board.rows.find((r) => r.registryId === data.theme.id)!
+    const starters = starterQuestions({ hero: { kind: 'themes', lead } as never })
+    expect(starters.map((s) => s.question)).toEqual([question])
+    // Price is a name, read wherever it stands; nothing names a kind.
     expect(namedObjects(question, FRAME)).toEqual([{ kind: 'subject', id: 's-price', label: 'Price', calibration: 'ready' }])
   })
 
-  it('Össur’s open theme names nothing on its own market', () => {
+  it('Össur’s lead names nothing on its own market, and no month', () => {
     const question = askedFrom(render(voiceTheme.render(ossurVoiceFixture(), 'app', ctx)))
-    expect(question).toMatch(/^What is behind “.+” in September\?$/)
+    expect(question).toMatch(/^What does my market (ask|say) about [^?]+\?$/)
+    expect(question).not.toMatch(/September|August|this month/)
     expect(namedObjects(question, { subjects: [], rivals: [{ id: 'c-ottobock', name: 'Ottobock' }] })).toEqual([])
   })
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { themeQuestion } from '@/lib/agent/starters'
 
 import {
   askAboutTheme,
@@ -40,20 +41,27 @@ describe('voiceSurfaceHref', () => {
   })
 })
 
-describe('askAboutTheme: the pane’s "Ask about this" (plan §2.8 D3)', () => {
-  it('sends `?ask=`, which the Ask box reads, with the month by name', () => {
-    expect(askAboutTheme('Price and sale questions', '2026-09-01'))
-      .toBe('/dashboard/agent?ask=What%20is%20behind%20%E2%80%9CPrice%20and%20sale%20questions%E2%80%9D%20in%20September%3F')
+describe('askAboutTheme: the pane’s "Ask about this" (plan §2.8 D3, WP3.9)', () => {
+  it('sends `?ask=`, which the Ask box reads, with the question Ask’s own starter writes for the theme', () => {
+    // Sealand's lead on staging: a buying theme, so "say about", its topic
+    // without the trailing "questions".
+    expect(askAboutTheme({ label: 'Price and sale questions', kind: 'purchase_intent' }))
+      .toBe('/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20price%20and%20sale%3F')
+    expect(askAboutTheme({ label: 'Price and sale questions', kind: 'purchase_intent' }))
+      .toBe(`/dashboard/agent?ask=${encodeURIComponent(themeQuestion({ label: 'Price and sale questions', kind: 'purchase_intent' }))}`)
+    // A question theme is asked about as one (the preview's lead).
+    expect(decodeURIComponent(askAboutTheme({ label: 'Confusion about airline size rules', kind: 'question' }).split('?ask=')[1]))
+      .toBe('What does my market ask about airline size rules?')
   })
 
-  it('never sends `?q=`, which Ask ignores, and never says "this month"', () => {
-    const href = askAboutTheme('Price and sale questions', '2026-09-01')
+  it('never sends `?q=`, which Ask ignores, and names no month, "this month" least of all', () => {
+    const href = decodeURIComponent(askAboutTheme({ label: 'Price and sale questions', kind: 'purchase_intent' }))
     expect(href).not.toContain('?q=')
-    expect(decodeURIComponent(href)).not.toContain('this month')
+    expect(href).not.toMatch(/this month|September|August/)
   })
 
   it('stays inside the 300 characters the Ask box takes', () => {
-    const q = decodeURIComponent(askAboutTheme('x'.repeat(400), '2026-09-01').split('?ask=')[1])
+    const q = decodeURIComponent(askAboutTheme({ label: 'x'.repeat(400), kind: null }).split('?ask=')[1])
     expect(q.length).toBe(300)
   })
 })

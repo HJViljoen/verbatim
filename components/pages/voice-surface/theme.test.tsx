@@ -56,7 +56,8 @@ describe('voiceTheme (C3)', () => {
 
   it('"Ask about this" pre-fills the Ask box: `?ask=`, never `?q=` (plan §2.8)', () => {
     const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('href="/dashboard/agent?ask=What%20is%20behind%20%E2%80%9CPrice%20and%20sale%20questions%E2%80%9D%20in%20September%3F"')
+    // The question Ask's lead starter writes for the same theme (WP3.9).
+    expect(markup).toContain('href="/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20price%20and%20sale%3F"')
     expect(markup).not.toContain('agent?q=')
     expect(renderText(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('The 18 videos behind this →')
   })

@@ -66,9 +66,10 @@ describe('what a question names (the client’s own words)', () => {
   })
 
   it('a quoted theme label is a name: its words name no kind and not the mood, and a subject in it is still named', () => {
-    // Conversation's "Ask about this" on Sealand's September themes (staging,
-    // 27 Sep): read as the reader's words, these named "asking how it works",
-    // "ready to buy", "saying it worked" and "hitting a problem".
+    // Conversation's "Ask about this" as deploy 3 drew it, and as a snapshot
+    // stored before WP3.9 still carries it, on Sealand's September themes
+    // (staging, 27 Sep): read as the reader's words, these named "asking how
+    // it works", "ready to buy", "saying it worked" and "hitting a problem".
     const ask = (label: string) => `What is behind “${label}” in September?`
     for (const label of ['Buying interest and ordering questions', 'Praise for beautiful bag design', 'Frustration with bag weight', 'Price and sale questions', 'Comfort problems when carrying']) {
       expect(kindsNamedIn(ask(label)), label).toEqual([])

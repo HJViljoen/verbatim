@@ -1695,7 +1695,7 @@ function build(input: {
       chip: input.board.chip,
       isLead: true,
       videosHref: `/dashboard/videos?theme=${open.registryId}`,
-      askHref: askAboutTheme(open.label, MONTH),
+      askHref: askAboutTheme(open),
       notes: [],
     },
     cast: {
