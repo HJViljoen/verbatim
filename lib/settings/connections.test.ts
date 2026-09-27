@@ -70,7 +70,7 @@ describe('what is waiting to be saved', () => {
 
   it('names each list that changed, by how many it now holds', () => {
     const pending = trackingPending(form(), form({ category: ['eco bag', 'wet commute bag'], day: 'monday' }))
-    expect(pending.map((p) => p.field)).toEqual(['Category terms', 'The day it lands'])
+    expect(pending.map((p) => p.field)).toEqual(['Terms for the category', 'The day it lands'])
     expect(pending[0]).toMatchObject({ from: '1 entry', to: '2 entries' })
     expect(pending[1]).toMatchObject({ from: 'sunday', to: 'monday' })
   })
@@ -203,8 +203,8 @@ describe('what the one save row says afterwards', () => {
     // list, the cadence and the day, and answered with the terms form's own
     // sentence whichever of them had moved.
     expect(savedMessage(['Cadence'])).toBe('Saved: cadence. Your next update is the first one to use it.')
-    expect(savedMessage(['Brand terms', 'Rivals', 'Cadence']))
-      .toBe('Saved: brand terms, rivals and cadence. Your next update is the first one to use them.')
+    expect(savedMessage(['Terms for your name', 'Rivals', 'Cadence']))
+      .toBe('Saved: terms for your name, rivals and cadence. Your next update is the first one to use them.')
   })
 
   it('drops a field it does not know, so nothing crafted is echoed back', () => {

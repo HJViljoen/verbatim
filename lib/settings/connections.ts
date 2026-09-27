@@ -144,8 +144,12 @@ export const PLATFORM_SHARE_UNREAD =
  *  row use. The allowlist a saved-fields POST is read against: a label that is
  *  not one of these is dropped, so the success sentence can never echo a
  *  crafted string back at the page. */
+// THE GROUPS BY THE PAGE'S OWN NAMES (market-first WP3.10): the search set's
+// four groups are "Your name · Brands you track · The category · Not these"
+// on the page and in the queue (lib/settings/queue.ts QUEUE_FIELD_WORDS), so
+// the strip and the save sentence name them the same way.
 export const TRACKING_FIELDS = [
-  'Brand terms', 'Competitor terms', 'Category terms', 'Not this',
+  'Terms for your name', 'Terms for brands you track', 'Terms for the category', 'Not these',
   'Rivals', 'Cadence', 'The day it lands',
 ] as const
 
@@ -180,10 +184,10 @@ export function trackingPending(
     if (a.length === b.length && a.every((x, i) => x === b[i])) return
     out.push({ field: label, from: countWords(a), to: countWords(b) })
   }
-  listed('Brand terms', before.brand, after.brand)
-  listed('Competitor terms', before.competitor, after.competitor)
-  listed('Category terms', before.category, after.category)
-  listed('Not this', before.exclusions, after.exclusions)
+  listed('Terms for your name', before.brand, after.brand)
+  listed('Terms for brands you track', before.competitor, after.competitor)
+  listed('Terms for the category', before.category, after.category)
+  listed('Not these', before.exclusions, after.exclusions)
   listed('Rivals', before.rivals, after.rivals)
   if (before.period !== after.period) out.push({ field: 'Cadence', from: before.period, to: after.period })
   if (before.day !== after.day) out.push({ field: 'The day it lands', from: before.day, to: after.day })

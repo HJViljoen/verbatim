@@ -56,7 +56,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
   // table said it on every visit.
   const ownBasis = rows.find((r) => r.ownPosts)?.ownPosts?.basis
   const head = [
-    'Rival',
+    'Brand',
     'Accounts we read',
     <span key="since" title={TRACKED_SINCE_NOTE} className="cursor-help underline decoration-dotted underline-offset-2">Tracked since</span>,
     <span key="own" title={`Own posts are dated by the day the post went up, a different clock from everything else on this page${ownBasis ? `: ${ownBasis}` : ''}.`} className="cursor-help underline decoration-dotted underline-offset-2">{`Own posts · ${monthName(month)}`}</span>,
@@ -79,7 +79,9 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
 
   return (
     <Section>
-      <SectionHead title="Rivals" />
+      {/* The preview's title (WP3.10): the brands you track, by the word the
+          market-first pages use for them. */}
+      <SectionHead title="Brands you track" />
 
       {/* "This POST carried the rival list." Outside the table on purpose: the
           state that most needs it is the empty one, where there is no table and

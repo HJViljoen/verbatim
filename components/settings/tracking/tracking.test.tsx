@@ -76,7 +76,11 @@ describe('the search terms section', () => {
 
   it('heads the section with its title alone, and prints every bucket, the fourth one included (the 25 Sep rulings, WP3.10)', () => {
     expect(words).not.toContain('4 terms · brand 2')
-    expect(words).toContain('Not this')
+    // The preview's words for the four groups and the section (WP3.10).
+    expect(words).toContain('The search set')
+    for (const w of ['Your name', 'Brands you track', 'The category', 'Not these']) expect(words).toContain(w)
+    expect(words).toContain('how people write it')
+    expect(words).toContain('other meanings of the names we track')
   })
 
   it('leaves the chips bare where the log holds no date at all', () => {
@@ -597,12 +601,12 @@ describe('the save state', () => {
 
   it('carries the pending half at the save row, where the form knows it', () => {
     const state = saveState({
-      pending: [{ field: 'Category terms', from: '12 entries', to: '13 entries' }],
+      pending: [{ field: 'Terms for the category', from: '12 entries', to: '13 entries' }],
       lastChange: change,
       affectsRecorded: false,
     })
     const words = renderText(<SaveStateLine state={state} />)
-    expect(words).toContain('1 change waiting to be saved: category terms')
+    expect(words).toContain('1 change waiting to be saved: terms for the category')
     expect(words).toContain('last saved 3 Sep')
     // M3: the break half is the rail's, and it is drawn once.
     expect(words).not.toContain('was not written down')

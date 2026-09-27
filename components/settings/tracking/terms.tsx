@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 // selector beside it, which is also the only shape that can say out loud what
 // adding a term does to the series.
 //
-// THE FOURTH BUCKET STAYS. "Not this" is exclusions, it exists in the product,
+// THE FOURTH BUCKET STAYS. "Not these" is exclusions, it exists in the product,
 // it is the list a client gets wrong most often, and the artboard simply has no
 // row for it. A port that deleted it would be deleting a feature to match a
 // drawing.
@@ -31,11 +31,14 @@ import { cn } from '@/lib/utils'
 
 export type Bucket = 'brand_keywords' | 'competitor_keywords' | 'industry_keywords' | 'exclude_terms'
 
-export const BUCKETS: readonly { key: Bucket; label: string; hint: string }[] = [
-  { key: 'brand_keywords', label: 'Brand', hint: 'How people write your name, including the ways they get it wrong.' },
-  { key: 'competitor_keywords', label: 'Competitor', hint: 'What we search for to find their posts. The names we tag them by are set under Rivals.' },
-  { key: 'industry_keywords', label: 'Category', hint: 'What buyers type when they are talking about this kind of product.' },
-  { key: 'exclude_terms', label: 'Not this', hint: 'Senses of your name that are not you: Cotopaxi the volcano, Sealand the shipping line.' },
+// THE PREVIEW'S WORDS (market-first WP3.10; the approved "What we read"
+// artboard's "The search set"): each group is named for what it finds, with
+// its line under the name. The hover keeps the longer help.
+export const BUCKETS: readonly { key: Bucket; label: string; sub: string; hint: string }[] = [
+  { key: 'brand_keywords', label: 'Your name', sub: 'how people write it', hint: 'How people write your name, including the ways they get it wrong.' },
+  { key: 'competitor_keywords', label: 'Brands you track', sub: 'their products, by name', hint: 'What we search for to find their posts. The names we file them under are set under Brands you track.' },
+  { key: 'industry_keywords', label: 'The category', sub: 'what people call products like yours', hint: 'What buyers type when they are talking about this kind of product.' },
+  { key: 'exclude_terms', label: 'Not these', sub: 'other meanings of the names we track', hint: 'Senses of a name that are not it: Cotopaxi the volcano, Sealand the shipping line.' },
 ]
 
 export interface TermsSectionProps {
@@ -75,7 +78,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
 
   return (
     <Section>
-      <SectionHead title={<span title={glossaryRule('search_terms')}>Search terms</span>} />
+      <SectionHead title={<span title={glossaryRule('search_terms')}>The search set</span>} />
 
       {BUCKETS.map((b) => (
         <LabelRow
@@ -85,7 +88,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
             // The bucket's help is a hover once it has been read (copy
             // de-clutter C109).
             <span title={b.hint} className="cursor-help">
-              {terms[b.key].length} term{terms[b.key].length === 1 ? '' : 's'}
+              {terms[b.key].length} term{terms[b.key].length === 1 ? '' : 's'} · {b.sub}
             </span>
           }
         >
