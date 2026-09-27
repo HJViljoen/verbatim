@@ -783,6 +783,19 @@ describe('the update’s days in a month, pooled on the market (WP2.7, the weekl
     expect(await marketSubjectArrivals(reading, 'c', null, '2026-10-01', [])).toBeNull()
   })
 
+  it('clips the end too: on 1 to 15 of a month the weekly reads the month before the update’s days (WP3.7)', async () => {
+    // The 4 Oct update's days cross into October: only its September days
+    // are September's.
+    expect(clipToMonth({ from: '2026-09-27T04:00:00.000Z', to: '2026-10-04T04:00:00.000Z' }, '2026-09-01'))
+      .toEqual({ from: '2026-09-27T04:00:00.000Z', to: '2026-10-01' })
+    // The 11 Oct update's days are all October's: none is September's, so the
+    // weekly reading September holds no "+N" and reads nothing.
+    const window = { from: '2026-10-04T04:00:00.000Z', to: '2026-10-11T04:00:00.000Z' }
+    expect(clipToMonth(window, '2026-09-01')).toBeNull()
+    const reading = new Proxy({}, { get: () => { throw new Error('no read expected') } }) as never
+    expect(await marketSubjectArrivals(reading, 'c', window, '2026-09-01', [])).toBeNull()
+  })
+
   it('sums the category and the tracked brands, never the client’s own posts or an untracked rival', () => {
     // Staging, the 20 Sep update's window: Community & purpose carried 4 of
     // the client's own videos, 1 filed under The North Face and 3 in the

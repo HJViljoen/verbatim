@@ -1367,11 +1367,11 @@ export function pooledSubjectCounts(
  * applied, or no window), never zeros.
  *
  * AND NULL WHERE NO DAY OF THE WINDOW FALLS IN THE MONTH (the deploy-3
- * review): the weekly reads the calendar month, so on 1-3 Oct, after the 27
- * Sep update, the window lies wholly in September and "+0 videos since the
- * last update" on every October row would say the market was silent while that
- * update brought September dozens. The row then prints no count, and the
- * weekly says the arrivals are not recorded for it.
+ * review; both ends since the WP3.7 check): the weekly reads the reading
+ * month, so from 1 to 15 Oct it reads September while the 11 Oct update's days
+ * are all October's, and "+N" there would print October's arrivals beside
+ * September's rows (a "+0" on every row, the other way round, would say the
+ * market was silent). The row then prints "·".
  */
 export async function marketSubjectArrivals(
   reading: ReadingHandle,
@@ -1388,11 +1388,15 @@ export async function marketSubjectArrivals(
 }
 
 /** An update's days inside a month, or null when none fall there: the window
- *  from the month's first day, so a count read over it adds to that month. */
+ *  from the month's first day to the next month's, so a count read over it
+ *  adds to that month. BOTH ENDS (WP3.7 check): the weekly reads the reading
+ *  month, which on 1 to 15 of a month is the month BEFORE the update's days,
+ *  and an unclipped end printed October's arrivals beside September's rows. */
 export function clipToMonth(window: { from: string; to: string }, month: string): { from: string; to: string } | null {
   const m = monthStartOf(month)
-  if (window.to <= m) return null
-  return { from: window.from < m ? m : window.from, to: window.to }
+  const next = nextMonth(m)
+  if (window.to <= m || window.from >= next) return null
+  return { from: window.from < m ? m : window.from, to: window.to > next ? next : window.to }
 }
 
 /** What `marketSubjectsOf` takes: the month's stored subject rows and this
