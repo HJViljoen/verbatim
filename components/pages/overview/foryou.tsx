@@ -61,12 +61,13 @@ function Head({ line, mode }: { line: ForYouLine; mode: RenderMode }) {
  *  months"). */
 function Cell({ figure, unit, under }: { figure: number; unit: React.ReactNode; under: string }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-md bg-inner p-6">
+    <div className="flex flex-col gap-2 rounded-md bg-inner p-6">
       <span className="flex flex-wrap items-baseline gap-x-2">
         <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground">{fmtInt(figure)}</span>
         <span className="text-[15px] text-secondary-foreground">{unit}</span>
       </span>
-      <span className="text-[14px] leading-[1.45] text-secondary-foreground">{under}</span>
+      {/* The preview's caption: 13px in the muted ink (d3 polish). */}
+      <span className="text-[13px] leading-[1.5] text-muted-foreground [text-wrap:pretty]">{under}</span>
     </div>
   )
 }

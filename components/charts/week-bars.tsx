@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import {
-  dueLabel, weekBarsAriaLabel, weekPlotMin, weekBarsLayout, weekBarsTable, weekChangeSentence, weekDetail, weekName,
+  dueLabel, GAP_SECOND_LINE, weekBarsAriaLabel, weekPlotMin, weekBarsLayout, weekBarsTable, weekChangeSentence, weekDetail, weekName,
   type WeekBarsLayout, type WeekBarsSize,
 } from '@/lib/charts/week-bars'
 import { dueHasPassed, firstComparisonDue, weekKindLabel, WEEK_LINE_EXCLUDED, WEEK_LINE_KINDS, type PendingWeekLine } from '@/lib/reading/week-line'
@@ -95,7 +95,9 @@ function Plot({ L, surface, ticks, label }: { L: WeekBarsLayout; surface: 'inner
         )
       })}
       {L.gaps.map((g, i) => (
-        <text key={`g${i}`} x={pct(g.cx)} y={L.axis.stateY} textAnchor="middle" fontSize={12} fontWeight={500} className={NARROW_WORD} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>{g.label}</text>
+        <text key={`g${i}`} x={pct(g.cx)} y={L.axis.stateY} textAnchor="middle" fontSize={12} fontWeight={500} className={NARROW_WORD} style={{ ...MONO, fill: 'var(--secondary-foreground)' }}>
+          {g.split ? <>{g.label.split(' ')[0]}<tspan x={pct(g.cx)} dy={GAP_SECOND_LINE}>{g.label.split(' ').slice(1).join(' ')}</tspan></> : g.label}
+        </text>
       ))}
       {/* The marks and their days last, over the lines. Each sits in its own
           viewport at its x, so its shape and its label keep their pixel sizes

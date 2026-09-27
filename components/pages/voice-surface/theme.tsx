@@ -178,7 +178,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="flex-none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 8v2" /><path d="M12 13h.01" /></svg>
           {askLabel}
         </Link>
-        <span className="text-[14px] font-medium text-foreground [&_[data-link-text]]:underline [&_[data-link-text]]:decoration-border [&_[data-link-text]]:underline-offset-[5px]">
+        <span className="text-[14px] font-medium text-foreground [&_[data-link-text]]:underline [&_[data-link-text]]:decoration-neutral-seg [&_[data-link-text]]:underline-offset-[5px]">
           {openLink(mode, `${ctx.appUrl}${t.videosHref}`, videosLabel)}
         </span>
       </div>

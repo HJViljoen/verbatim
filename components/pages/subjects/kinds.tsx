@@ -392,7 +392,9 @@ function SubjectKinds({ data, mode, appUrl }: { data: SubjectsData; mode: Render
   return (
     <BlockFrame title={title} question={subjectsKinds.question} mode={mode} footer={footer} roomy>
       {/* Code's sentence, its base in its own words ("of its 103 videos"). */}
-      {lead ? <p className="m-0 text-[17px] font-medium leading-[1.45] text-foreground [text-wrap:pretty]">{lead}</p> : null}
+      {/* The one-line answer sits 16px under its title, as the preview sets it
+          (d3 polish): the body's 24px gap, less 8. */}
+      {lead ? <p className="-mt-2 mb-0 max-w-[760px] text-[17px] font-medium leading-[1.5] tracking-[-0.01em] text-foreground [text-wrap:pretty]">{lead}</p> : null}
       <div role="table" className="@container flex min-w-0 flex-col">
         <div role="row" className={`${cols} items-end ${RULE.head}`}>
           <span role="columnheader" className={SCALE.head}>Kind</span>

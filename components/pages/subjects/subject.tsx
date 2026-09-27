@@ -424,7 +424,7 @@ function WhoPosted({ makers, mode }: { makers: { k: number; of: number }; mode: 
   const w = makers.of > 0 ? (makers.k / makers.of) * 100 : 0
   return (
     <div className="flex flex-col gap-2.5">
-      <span className="text-[14px] text-secondary-foreground">Who posted them</span>
+      <span className="text-[14px] font-medium text-secondary-foreground">Who posted them</span>
       <span aria-hidden className="flex h-3.5 w-full gap-[3px]">
         {makers.k > 0 ? (
           <span

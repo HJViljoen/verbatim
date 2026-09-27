@@ -375,11 +375,13 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
   const span = (a: number, b: number) => ({ '--span': `${a} / ${b}` }) as CSSProperties
   return (
     <BlockFrame title={subjectsLine.title} question={subjectsLine.question} mode={mode} footer={footer} roomy>
-      {lead ? <p className="m-0 text-[17px] font-medium leading-[1.45] text-foreground [text-wrap:pretty]">{lead}</p> : null}
+      {/* The one-line answer sits 16px under its title, as the preview sets it
+          (d3 polish): the body's 24px gap, less 8. */}
+      {lead ? <p className="-mt-2 mb-0 max-w-[760px] text-[17px] font-medium leading-[1.5] tracking-[-0.01em] text-foreground [text-wrap:pretty]">{lead}</p> : null}
       <div className={`flex flex-col gap-3 md:grid md:gap-x-6 ${grid}`}>
         {bracket ? (
           <div aria-hidden className="hidden flex-col items-center gap-2 md:row-start-1 md:flex md:[grid-column:var(--span)]" style={span(from + 1, to + 2)}>
-            <span className="text-[13px] text-secondary-foreground">the first step joined as a line</span>
+            <span className="text-[13px] font-medium text-secondary-foreground">the first step joined as a line</span>
             <span className="block h-2 w-full rounded-t-[2px] border-x border-t border-foreground/70" />
           </div>
         ) : null}

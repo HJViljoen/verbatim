@@ -141,7 +141,7 @@ function Row({ t, rank, board, params, openId, axis }: {
             </Link>
           )}
           {open ? (
-            <a href="#theme" className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] text-secondary-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
+            <a href="#theme" className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] text-secondary-foreground underline decoration-neutral-seg underline-offset-4 hover:decoration-foreground">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="flex-none text-muted-foreground"><path d="M12 5v14" /><path d="m6 13 6 6 6-6" /></svg>
               in full below
             </a>
@@ -284,7 +284,10 @@ function Board({ data, mode }: { data: VoiceSurfaceData; mode: RenderMode }) {
       </>
     )
     body.push(g.tinted
-      ? <div key={g.key} className="-mx-4 mt-4 rounded-md bg-inner px-4 pb-1">{section}</div>
+      // The front page's "Show the 7 →" lands on its group (`#makers`,
+      // `#set-aside`; d3 polish). On a phone the tint stays inside the tile's
+      // own 16px inset rather than meeting its edge.
+      ? <div key={g.key} id={g.key} className="-mx-2 mt-4 scroll-mt-6 rounded-md bg-inner px-2 pb-1 sm:-mx-4 sm:px-4">{section}</div>
       : <div key={g.key}>{section}</div>)
   }
   return (

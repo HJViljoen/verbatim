@@ -257,7 +257,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   return (
     <BlockFrame title={MARKET_SENTENCE_TITLE} mode={mode} footer={footer} roomy>
       {aside ? (
-        <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-[minmax(0,1fr)_304px]" data-print-cols="2">
+        <div className="grid grid-cols-1 gap-x-22 gap-y-8 xl:grid-cols-[minmax(0,1fr)_304px]" data-print-cols="2">
           {main}
           {aside}
         </div>

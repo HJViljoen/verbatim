@@ -84,6 +84,56 @@ function Group({ label, children, mode }: { label: string; children: React.React
   )
 }
 
+/** One of the preview's census cells: a 28px figure, its words, and a line
+ *  under it (Subjects.dc.html's "Your own posts", the front page's "What you
+ *  published" cells, in their words: "20 posts / in September"; d3 polish). */
+function Cell({ figure, words, under }: { figure: number; words: string; under: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="flex flex-wrap items-baseline gap-x-2">
+        <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground">{fmtInt(figure)}</span>
+        <span className="text-[15px] text-secondary-foreground">{words}</span>
+      </span>
+      <span className="text-[13px] leading-[1.45] text-muted-foreground">{under}</span>
+    </div>
+  )
+}
+
+/** A labelled run of counts, each with its own "of N": "Your hooks: Bold
+ *  claim 6 of 20 · Personal story 4 of 20". */
+function CountLine({ label, items }: { label: string; items: { label: string; value: { k: number; n: number } }[] }) {
+  return (
+    <p className="m-0 text-[14px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">
+      <span className="font-semibold text-foreground">{label}:</span>{' '}
+      {items.map((h, i) => (
+        <span key={h.label}>
+          {i > 0 ? ' · ' : ''}{h.label}{' '}
+          <span data-copy="level"><span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(h.value.k)}</span> of {fmtInt(h.value.n)}</span>
+        </span>
+      ))}
+    </p>
+  )
+}
+
+/** THE APP'S TILE, AS THE PREVIEW DRAWS IT (d3 polish): the census as cells,
+ *  then the subjects your posts matched and your hooks, each as one line with
+ *  every count's own "of N". The email and paper arms are unchanged. */
+function AppOwnPosts({ c, hooks, footer }: { c: OwnPostCensus; hooks: OwnPostCensus['hooks']; footer: React.ReactNode }) {
+  return (
+    <BlockFrame title={subjectsOwnPosts.title} question={subjectsOwnPosts.question} mode="app" footer={footer} truncateFooter roomy>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <Cell figure={c.published.k} words={c.published.k === 1 ? 'post' : 'posts'} under={`in ${longMonth(c.month)}`} />
+        <Cell figure={c.overFloor.k} words={`drew ${fmtInt(c.commentFloor)}+`} under="comments each" />
+      </div>
+      {c.subjects.length > 0 ? <CountLine label="Subjects matched" items={c.subjects} /> : c.subjectsNote ? (
+        <p className="m-0 text-[14px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><span className="font-semibold text-foreground">Subjects matched:</span> {c.subjectsNote}</p>
+      ) : null}
+      {hooks.length > 0 ? <CountLine label="Your hooks" items={hooks} /> : null}
+      {c.claimsNote ? <BlockEmpty mode="app">{c.claimsNote}</BlockEmpty> : null}
+    </BlockFrame>
+  )
+}
+
 export const subjectsOwnPosts: Block<SubjectsData> = {
   key: 'subjects.ownposts',
   title: 'Your own posts',
@@ -105,6 +155,7 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
     }
 
     const hooks = c.hooks.slice(0, 3)
+    if (mode === 'app') return <AppOwnPosts c={c} hooks={hooks} footer={footer} />
     return (
       <BlockFrame
         title={subjectsOwnPosts.title}

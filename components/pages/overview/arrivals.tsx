@@ -138,7 +138,7 @@ export function ArrivalsColumns({ a, month, mode }: { a: ArrivalsBlock; month: s
     )
   }
   return (
-    <div className="grid grid-cols-1 gap-x-12 gap-y-6 md:grid-cols-2" data-print-cols="2">
+    <div className="grid grid-cols-1 gap-x-22 gap-y-6 md:grid-cols-2" data-print-cols="2">
       <div className="flex min-w-0 flex-col gap-2">
         <p className="m-0 text-[15px] font-semibold">Came in</p>
         <p className="m-0 max-w-[62ch] text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><ArrivalsCameIn a={a} month={month} mode={mode} /></p>

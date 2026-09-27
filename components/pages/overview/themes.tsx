@@ -38,13 +38,16 @@ function levelCell(k: number | null, n: number | null): string {
   return carriesShare(n) ? `${Math.round((k / n) * 100)}%` : fmtInt(k)
 }
 
-/** "Makers and DIY, grouped: 7 themes at 10+, led by …". */
-function GroupLine({ words, group, mode }: { words: string; group: { count: number; lead: MarketTheme[] }; mode: 'app' | 'print' | 'email' }) {
+/** "Makers and DIY, grouped: 7 themes at 10+, led by …", and in the app the
+ *  preview's "Show the 7 →" at the line's right-hand end, to the same group on
+ *  Conversation (d3 polish; the approved preview's makers line). */
+function GroupLine({ words, group, mode, show }: { words: string; group: { count: number; lead: MarketTheme[] }; mode: 'app' | 'print' | 'email'; show?: string }) {
   if (group.count === 0) return null
   const lead = group.lead
-  return (
-    <InnerLine mode={mode}>
-      {mode === 'email' ? null : <span className="mr-2 inline-flex align-[-1px] text-muted-foreground"><MakerMark /></span>}
+  const link = mode === 'app' && show ? openLink(mode, show, `Show the ${fmtInt(group.count)} →`) : null
+  const line = (
+    <>
+      {mode === 'email' ? null : <span className="mr-3 inline-flex align-[-1px] text-muted-foreground"><MakerMark /></span>}
       <strong className="font-semibold text-foreground">{words}:</strong>{' '}
       <span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(group.count)}</span>{' '}
       {group.count === 1 ? 'theme' : 'themes'} at 10+
@@ -56,11 +59,21 @@ function GroupLine({ words, group, mode }: { words: string; group: { count: numb
           (<span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(t.k)}</span>)
         </span>
       ))}
-    </InnerLine>
+    </>
+  )
+  if (!link) return <InnerLine mode={mode}>{line}</InnerLine>
+  // THE PREVIEW'S LINE: one row, the words in the ink at the left and the
+  // link at the right, 56px tall, the words taking the width (no reading
+  // measure: the link closes the line).
+  return (
+    <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-6 gap-y-1 rounded-md bg-inner px-4 py-2 sm:px-6">
+      <p className="m-0 min-w-0 flex-1 basis-[28ch] text-[15px] leading-[1.55] text-foreground [text-wrap:pretty]">{line}</p>
+      <span className="flex min-h-11 flex-none items-center whitespace-nowrap text-[14px] font-medium text-foreground [&_[data-link-text]]:underline [&_[data-link-text]]:decoration-neutral-seg [&_[data-link-text]]:decoration-1 [&_[data-link-text]]:underline-offset-[5px] [&_a:hover_[data-link-text]]:decoration-foreground [&_[data-link-text]+span]:pl-0.5">{link}</span>
+    </div>
   )
 }
 
-function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print' | 'email'; chip: string | null }) {
+function Board({ board, mode, chip, voiceHref }: { board: ThemeBoard; mode: 'app' | 'print' | 'email'; chip: string | null; voiceHref?: string }) {
   const prev = board.prev && board.prev.n != null ? board.prev : null
   const makersColumn = board.segments === 'measured'
   // No August mark where August did not read the theme (`prevReadK`): the
@@ -107,10 +120,11 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
     )
   }
 
-  // THE PREVIEW'S COLUMNS: the rank, the theme at its natural width, the bar
-  // taking what is left, three figure columns of one width, and the makers tag.
-  // Every figure column is the same 64px, so "Videos", "Sep" and "Aug" line up
-  // with the same columns on "The market by subject" further down.
+  // THE PREVIEW'S COLUMNS (Main.dc.html: 32 · 300 · 1fr · 72 · 64 · 64 · 200,
+  // 16px apart; d3 polish): the rank, the theme up to 300px, the bar taking
+  // what is left, "Videos" at 72px and the two levels at 64px, and the makers
+  // tag up to 200px. At 1440 the tracks are the preview's to the pixel; under
+  // it the theme and the tag give way to their floors before the bar does.
   //
   // ON A PHONE (below `sm`; WP1.6 review) the table fits the tile with no
   // sideways scroll, so the first screen carries the board's figures: the
@@ -132,8 +146,8 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
   // at 1440, where the preview is drawn); at 140 it read "about a third
   // make…" at every width under about 1400.
   const cols = makersColumn
-    ? `${BOARD_COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.5fr)_minmax(96px,1fr)_64px_64px_64px_minmax(172px,0.7fr)]`
-    : `${BOARD_COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
+    ? `${BOARD_COLS} @min-[820px]:grid-cols-[32px_minmax(200px,300px)_minmax(96px,1fr)_72px_64px_64px_minmax(172px,200px)]`
+    : `${BOARD_COLS} @min-[820px]:grid-cols-[32px_minmax(200px,1.2fr)_minmax(96px,1fr)_72px_64px_64px]`
   return (
     <div className="flex min-w-0 flex-col gap-6 @container">
       <div className="-mx-1 overflow-x-auto px-1">
@@ -175,8 +189,8 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
       </div>
       {board.makers || board.setAside || board.segments === 'unknown' ? (
         <div className="flex flex-col gap-2">
-          {board.makers ? <GroupLine words="Makers and DIY, grouped" group={board.makers} mode={mode} /> : null}
-          {board.setAside ? <GroupLine words="Set aside as off-topic" group={board.setAside} mode={mode} /> : null}
+          {board.makers ? <GroupLine words="Makers and DIY, grouped" group={board.makers} mode={mode} show={voiceHref ? `${voiceHref}#makers` : undefined} /> : null}
+          {board.setAside ? <GroupLine words="Set aside as off-topic" group={board.setAside} mode={mode} show={voiceHref ? `${voiceHref}#set-aside` : undefined} /> : null}
           {board.segments === 'unknown' ? <InnerLine mode={mode}>Makers’ videos are not marked yet; this list groups them once they are.</InnerLine> : null}
         </div>
       ) : null}
@@ -202,7 +216,7 @@ export const overviewThemes: Block<OverviewData> = {
     const empty = overviewThemes.emptyState(data)
     return (
       <BlockFrame title={overviewThemes.title} mode={mode} footer={footer} roomy>
-        {empty || !board ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Board board={board} mode={mode} chip={board.chip ?? null} />}
+        {empty || !board ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Board board={board} mode={mode} chip={board.chip ?? null} voiceHref={`${ctx.appUrl}${voice.href}`} />}
       </BlockFrame>
     )
   },

@@ -143,11 +143,12 @@ export function LevelBar({ share, prevShare, axis, tone = 'ink' }: { share: numb
 }
 
 /** The legend over a bar column: "▬ September | August". */
-export function BarLegend({ month, prevMonth }: { month: string; prevMonth: string | null }) {
+export function BarLegend({ month, prevMonth, short = false }: { month: string; prevMonth: string | null; short?: boolean }) {
+  const name = short ? shortMonthName : longMonth
   return (
     <span aria-hidden className="flex items-center gap-4 whitespace-nowrap text-[13px] font-medium text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-[2px] bg-foreground" />{longMonth(month)}</span>
-      {prevMonth ? <span className="inline-flex items-center gap-1.5"><span className="h-3.5 w-[2px] rounded-[1px] bg-cat" />{longMonth(prevMonth)}</span> : null}
+      <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-[2px] bg-foreground" />{name(month)}</span>
+      {prevMonth ? <span className="inline-flex items-center gap-1.5"><span className="h-3.5 w-[2px] rounded-[1px] bg-cat" />{name(prevMonth)}</span> : null}
     </span>
   )
 }

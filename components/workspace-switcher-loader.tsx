@@ -10,9 +10,9 @@ import { VerbatimMark } from "@/components/brand/mark"
  */
 export function SidebarWordmark() {
   return (
-    <div className="flex items-center gap-2 px-4 pt-5 pb-1">
+    <div className="flex h-14 items-center gap-2 px-4">
       <VerbatimMark size={20} className="shrink-0 text-primary" />
-      <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
+      <span className="text-[18px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
     </div>
   )
 }

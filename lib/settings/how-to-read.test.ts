@@ -298,12 +298,9 @@ describe('How-to-read legend pills', () => {
     for (const p of pills) expect(anchors.has(p.anchor), `${p.file} → #${p.anchor}`).toBe(true)
   })
 
-  it('puts the same pill on every reading page but Your market', () => {
+  it('puts the same pill on every reading page but Your market and Conversation', () => {
     const pages = {
       subjects: 'components/pages/subjects/index.tsx',
-      // Voice mounts its pill from the route (useSearchParams must sit under
-      // the page's Suspense boundary there), so the route file is the one read.
-      voice: 'app/dashboard/voice/page.tsx',
       market: 'components/pages/market-surface/index.tsx',
       competitive: 'components/pages/competitive-surface/index.tsx',
       week: 'components/pages/week/index.tsx',
@@ -312,6 +309,13 @@ describe('How-to-read legend pills', () => {
       const text = readFileSync(join(ROOT, file), 'utf8')
       expect(text, file).toMatch(new RegExp(`<HowToRead\\b[^>]*anchor="${key}"`))
     }
+  })
+
+  it('leaves Conversation’s bar with no pill, as the approved preview draws it (d3 polish)', () => {
+    // Voice mounted its pill from the route (useSearchParams must sit under
+    // the page's Suspense boundary there), so the route file is the one read.
+    const text = readFileSync(join(ROOT, 'app/dashboard/voice/page.tsx'), 'utf8')
+    expect(text).not.toMatch(/<HowToRead\b/)
   })
 
   it('leaves Your market’s bar with Export alone, as the approved preview draws it (Heinrich’s default, 26 Sep)', () => {

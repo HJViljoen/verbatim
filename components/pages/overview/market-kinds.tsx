@@ -100,7 +100,7 @@ function KindsTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
   }
   // In a narrow block the label and the three figure columns only
   // (`PHONE_COLS`, a container query on the table's wrapper).
-  const cols = `${PHONE_COLS} @min-[600px]:grid-cols-[minmax(150px,1.1fr)_minmax(96px,1fr)_64px_64px_64px]`
+  const cols = `${PHONE_COLS} @min-[600px]:grid-cols-[minmax(150px,220px)_minmax(96px,1fr)_64px_56px_56px]`
   return (
     <div className="-mx-1 overflow-x-auto px-1 @container">
       <div className="@min-[600px]:min-w-[520px]" role="table">
@@ -147,8 +147,9 @@ function MoodTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
     )
   }
   const total = m.mood.reduce((n, r) => n + (r.k ?? 0), 0)
-  // Narrower figure columns on a phone, so the four fit without a scroll.
-  const cols = 'grid-cols-[minmax(88px,1fr)_52px_56px_56px] sm:grid-cols-[minmax(104px,1fr)_64px_64px_64px]'
+  // Narrower figure columns on a phone, so the four fit without a scroll;
+  // wider, the preview's 56 · 48 · 64 (Main.dc.html's mood table, d3 polish).
+  const cols = 'grid-cols-[minmax(88px,1fr)_52px_56px_56px] sm:grid-cols-[minmax(88px,1fr)_56px_48px_64px]'
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <div role="table">
@@ -193,15 +194,14 @@ export function renderMarketKinds(data: OverviewData, mode: RenderMode, appUrl: 
       {mode === 'email' ? (
         <div><KindsTable m={m} mode={mode} /><MoodTable m={m} mode={mode} /></div>
       ) : (
-        // SIDE BY SIDE ONLY WHERE THE MOOD TABLE FITS (deploy 2 review). It
-        // needs 344px (104 + three 64px figures + gaps) and takes a 1 : 1.9
-        // share after the 80px gap, so the pair needs 1,080px of block; keyed
-        // to `xl` it began at 1280, where the block holds 944 and the tile cut
-        // the "Aug" column off. A container query on the block's width; at
-        // 1440 (the preview) the two sit side by side as drawn. On paper the
-        // print rule sets the two columns (`data-print-cols`).
+        // SIDE BY SIDE ONLY WHERE THE MOOD TABLE FITS (deploy 2 review): a
+        // container query on the block's width; at 1440 (the preview) the two
+        // sit side by side as drawn. The preview's pair is the kinds at the
+        // rest and the mood at 304px, 88px apart (d3 polish), and the mood
+        // table's 88 · 56 · 48 · 64 tracks fit its 304. On paper the print
+        // rule sets the two columns (`data-print-cols`).
         <div className="@container">
-          <div className="grid grid-cols-1 gap-x-20 gap-y-8 @min-[1080px]:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]" data-print-cols="2">
+          <div className="grid grid-cols-1 gap-x-22 gap-y-8 @min-[1080px]:grid-cols-[minmax(0,1fr)_304px]" data-print-cols="2">
             <KindsTable m={m} mode={mode} />
             <MoodTable m={m} mode={mode} />
           </div>

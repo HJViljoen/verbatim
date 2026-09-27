@@ -296,7 +296,9 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
         ))}
       </div>
     ) : (
-      <div className="flex min-w-0 flex-col">
+      // At the tile's foot, as the preview sets it (d3 polish): the pair's
+      // taller tile gives its spare height above the list, not under it.
+      <div className="mt-auto flex min-w-0 flex-col">
         <div className={`flex items-baseline justify-between gap-4 ${RULE.head}`}>
           <span className="text-[15px] font-semibold">Asked most, last 3 months</span>
           <span className={SCALE.head}>videos</span>
@@ -304,7 +306,7 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
         {most.map((a) => (
           <div key={a.id} className={`flex min-h-11 items-center justify-between gap-4 ${RULE.row} last:border-b-0`}>
             {mode === 'app'
-              ? <Link href={`${appUrl}/dashboard/subjects?item=${encodeURIComponent(a.id)}&${QUESTIONS_PARAM}=last_3`} className={`min-w-0 ${SCALE.row} underline decoration-border underline-offset-[5px] hover:decoration-foreground`}>{a.name}</Link>
+              ? <Link href={`${appUrl}/dashboard/subjects?item=${encodeURIComponent(a.id)}&${QUESTIONS_PARAM}=last_3`} className={`min-w-0 ${SCALE.row} underline decoration-neutral-seg underline-offset-[5px] hover:decoration-foreground`}>{a.name}</Link>
               : <span className={`min-w-0 ${SCALE.row}`}>{a.name}</span>}
             <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(a.videos)}</span></span>
           </div>

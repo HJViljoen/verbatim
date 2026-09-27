@@ -1,4 +1,4 @@
-import { LayoutDashboard, Target, Users, ChartColumn, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { Globe, Target, MessageSquareText, ChartColumn, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
 
 import type { NavKey } from "@/lib/nav"
 
@@ -52,11 +52,18 @@ import type { NavKey } from "@/lib/nav"
  * `SlidersHorizontal` is that glyph turned 90°. The ruling's own sentence says
  * the mock is the spec, so the mock decides and the name in the note is the
  * thing that was loose. One word to reverse if the name was meant literally.
+ *
+ * TWO MORE WITH THE MARKET-FIRST PREVIEW (design-mf2, approved 25 Sep; d3
+ * polish): Your market is the market, a globe (`circle r9 · M3 12h18` and two
+ * meridians), not a dashboard grid, and Conversation is talk, a speech square
+ * with two lines of text in it (`M21 15a2 2 … z · M8 9h8 · M8 13h5`), not two
+ * people. Each glyph follows its label: Competitive keeps its columns until
+ * deploy 5 renames it Brands (the preview's tag).
  */
 export const NAV_ICON: Record<NavKey, LucideIcon> = {
-  overview: LayoutDashboard,
+  overview: Globe,
   subjects: List,
-  voice: Users,
+  voice: MessageSquareText,
   market: Target,
   competitive: ChartColumn,
   week: CalendarDays,
