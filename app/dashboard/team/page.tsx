@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { UserPlus, Users, Clock, Mail } from 'lucide-react'
 import { SettingsFrame } from '@/components/settings-frame'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
+import { settingsBar } from '@/lib/settings/bar'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { recipientsBySchedule } from '@/lib/schedules/default'
 import { getBaseUrl } from '@/lib/site'
@@ -93,8 +94,11 @@ export default async function TeamPage() {
   // different gates — billing is owner-only through billingAccess(), team is
   // mixed — and one route would mean merging the gates or gating panes inside
   // a page. The two link to each other instead.
+  // THE ONE-LINE BAR (the 25 Sep rulings, market-first WP3.10), as on every
+  // Settings sub-page.
+  const bar = await settingsBar(supabase, clientId, client?.company_name ?? 'Your workspace')
   return (
-    <SettingsFrame active="team" title="Settings" context={`${client?.company_name ?? 'Workspace'}${!canManage ? ' · read-only' : ''}`} contentTitle="Team" contentMeta={`${memberRows.length} member${memberRows.length === 1 ? '' : 's'}`} controls={<Link href="/dashboard/billing" className="text-[12px] font-medium text-secondary-foreground hover:underline">Plan &amp; billing →</Link>}>
+    <SettingsFrame active="team" title="Settings" context={`${client?.company_name ?? 'Workspace'}${!canManage ? ' · read-only' : ''}`} bar={bar} contentTitle="Team" contentMeta={`${memberRows.length} member${memberRows.length === 1 ? '' : 's'}`} controls={<Link href="/dashboard/billing" className="text-[12px] font-medium text-secondary-foreground hover:underline">Plan &amp; billing →</Link>}>
     <div className="max-w-3xl space-y-4">
 
       {canManage && (

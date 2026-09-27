@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { SettingsFrame, SettingsCard } from '@/components/settings-frame'
 import { InitiativeRowForm } from './initiative-row'
 import { getSessionContext } from '@/lib/auth'
+import { settingsBar } from '@/lib/settings/bar'
 import { weekdayDate } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
@@ -38,7 +39,6 @@ export default async function InitiativesSettingsPage() {
 
   const client = row<{ company_name: string | null }>(clientRes, 'initiatives.client')
   const initiatives = readRows<InitiativeDbRow>(initiativesRes, 'initiatives.list').map(toInitiative)
-  const active = initiatives.filter((i) => i.status === 'active')
 
   // Theme names for the rows — read once, by identity. A label is display only:
   // it is the registry id that the measurement follows.
@@ -47,6 +47,9 @@ export default async function InitiativesSettingsPage() {
     ? await supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', registryIds)
     : { data: [], error: null }
   const labelById = new Map(readRows<{ id: string; canonical_label: string }>(registryRes, 'initiatives.registry').map((r) => [r.id, r.canonical_label]))
+  // THE ONE-LINE BAR (the 25 Sep rulings, WP3.10), as on every Settings
+  // sub-page; and no meta beside the pane title: the counts are the list's.
+  const bar = await settingsBar(supabase, clientId, client?.company_name ?? 'Your workspace')
 
   return (
     <SettingsFrame
@@ -54,8 +57,8 @@ export default async function InitiativesSettingsPage() {
       active={null}
       title="Settings"
       context={client?.company_name ?? 'Client'}
+      bar={bar}
       contentTitle="Initiatives"
-      contentMeta={initiatives.length > 0 ? `${active.length} being tracked · ${initiatives.length} in all` : undefined}
     >
       <div className="flex flex-col gap-3">
         <OldPageBanner page={PARKED_INITIATIVES} />
