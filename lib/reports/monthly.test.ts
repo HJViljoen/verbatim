@@ -89,6 +89,9 @@ describe('the masthead', () => {
 
   it('stamps the month and the update it was read to, with no "still filling"', () => {
     expect(monthlyStamp('2026-09-01', '2026-10-04T08:30:00.000Z')).toBe('September 2026 · read to the 4 Oct update')
+    // Built after a later update (a re-send after 11 Oct), it says that
+    // update, beside the send's own 4 Oct (the deploy-3 fresh review).
+    expect(monthlyStamp('2026-09-01', '2026-10-11T08:30:00.000Z')).toBe('September 2026 · read to the 11 Oct update')
     expect(monthlyStamp('2026-09-01', null)).toBe('September 2026')
     expect(readToWords(null)).toBeNull()
   })

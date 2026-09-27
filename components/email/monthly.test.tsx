@@ -20,6 +20,7 @@ import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
 import { renderMonthlyEmail } from '@/lib/email/monthly'
 import { MonthlyEmail } from './monthly'
 import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
+import { sealandReading } from '@/lib/test/reading-fixture'
 
 const APP = 'https://app.verbatimintel.com'
 const ctx = blockContext(APP, EMAIL)
@@ -78,6 +79,22 @@ describe('the monthly email: "September in your market"', () => {
       expect(text).toMatch(/Next: “October in your market”\s*, read to the 1 Nov update, on Tue 3 Nov\./)
       expect(text).not.toMatch(/11 Oct|12 Oct|8 Nov|9 Nov/)
     }
+  })
+
+  // Beside the send's 6 Oct clock, not in place of it (plan §3.7's list; the
+  // deploy-3 fresh review): a monthly built after a later update, a re-send
+  // after 11 Oct, stamps that update and still promises October on the
+  // 1 Nov update, on Tue 3 Nov.
+  it('built at the 12 Oct clock, reads to the 11 Oct update and keeps the same Next: line', () => {
+    const at = '2026-10-12T06:00:00.000Z'
+    const base = monthlyFixture()
+    const reading = sealandReading(at, '2026-09')
+    expect(reading.month).toBe('2026-09-01')
+    const later = monthlyFixture({ readingAt: at, readTo: reading.readTo, overview: { ...base.overview, reading } })
+    const text = words(snapshot(later))
+    expect(text).toMatch(/September 2026[\s·]*read to the 11 Oct update/)
+    expect(text).not.toContain('read to the 4 Oct update')
+    expect(text).toMatch(/Next: “October in your market”\s*, read to the 1 Nov update, on Tue 3 Nov\./)
   })
 
   it('leads the inbox with the market, never a change (the subject line)', () => {
