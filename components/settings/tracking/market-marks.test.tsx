@@ -92,6 +92,9 @@ describe('This is not my market', () => {
     const t = read(renderText(<NotMyMarketSection month={MONTH} byYou={0} counts={null} makers="no_rule" />))
     expect(t).toContain('By us nothing: no off-topic rule is switched on for your workspace.')
     expect(t).not.toContain('not measured')
+    // No page groups or marks off-topic videos there, so the line does not say so.
+    expect(t).toContain('we mark it off-topic. It stays in every count.')
+    expect(t).not.toContain('grouped with the off-topic videos')
   })
 
   it('reads "not measured" where a table is not there', () => {

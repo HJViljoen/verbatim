@@ -118,7 +118,13 @@ export function NotMyMarketSection({
   return (
     <Section id="not-my-market">
       <SectionHead title="This is not my market" />
-      <Line>Tell us when something we read is not your market, and we mark it off-topic. It stays in every count, marked, and is grouped with the off-topic videos.</Line>
+      {/* Where no off-topic rule is on (Össur), no page groups or marks
+          off-topic videos (the board's segments read 'no_rule'), so the line
+          promises only what the mark does there: the row, and every count. */}
+      <Line>
+        Tell us when something we read is not your market, and we mark it off-topic.{' '}
+        {makers === 'no_rule' ? 'It stays in every count.' : 'It stays in every count, marked, and is grouped with the off-topic videos.'}
+      </Line>
       <div className="max-w-[720px] rounded-[4px] bg-inner px-4 py-3">
         <p className="m-0 pb-2 text-[12.5px] font-semibold">Set aside</p>
         <dl className="m-0 flex flex-col">
