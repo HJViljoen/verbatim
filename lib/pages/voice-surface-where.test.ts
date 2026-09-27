@@ -1,6 +1,8 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 
-import { ACCOUNT_ROWS, buildWhere, foundByBareName, memoryMonths, type MonthVideo } from './voice-surface-where'
+import { INDUSTRY_AUDIENCE } from '../rivals'
+import { ACCOUNT_ROWS, buildWhere, foundByBareName, loadMemory, loadMonthVideos, memoryMonths, type MonthVideo } from './voice-surface-where'
 
 // C6 · Where your market talks (market-first WP3.8). REAL ROWS: every video,
 // its dated comments in September, its segment and its searches are staging's
@@ -182,5 +184,76 @@ describe('foundByBareName', () => {
   it('names none where any search was another term', () => {
     expect(foundByBareName(MANYBAGGERS.map((v) => v.sourceKeywords))).toBeNull()
     expect(foundByBareName([])).toBeNull()
+  })
+})
+
+// ---- the reads, on a fake client (no network) --------------------------------
+
+type Call = { kind: 'rpc' | 'from'; name: string; filters: [string, string, unknown][]; order: string | null; range: [number, number] | null }
+type Answer = { data: unknown[] | null; error: { message: string } | null }
+
+/** Just enough of supabase-js's builder for these reads: every call is
+ *  recorded, and `answer` decides what it returns. */
+function fakeClient(answer: (c: Call) => Answer): { client: SupabaseClient; calls: Call[] } {
+  const calls: Call[] = []
+  const make = (kind: Call['kind'], name: string) => {
+    const call: Call = { kind, name, filters: [], order: null, range: null }
+    calls.push(call)
+    const b: Record<string, unknown> = {}
+    Object.assign(b, {
+      select: () => b,
+      eq: (col: string, v: unknown) => { call.filters.push(['eq', col, v]); return b },
+      in: (col: string, v: unknown) => { call.filters.push(['in', col, v]); return b },
+      order: (col: string) => { call.order = col; return b },
+      range: (from: number, to: number) => { call.range = [from, to]; return Promise.resolve(answer(call)) },
+      then: (ok: (a: Answer) => unknown, no: (e: unknown) => unknown) => Promise.resolve(answer(call)).then(ok, no),
+    })
+    return b
+  }
+  return { client: { rpc: (name: string) => make('rpc', name), from: (name: string) => make('from', name) } as unknown as SupabaseClient, calls }
+}
+
+// Staging's Mike Ritland videos in September (the RITLAND rows above).
+const MONTH_ROWS = RITLAND.map((v) => ({ video_id: v.videoId, audience: INDUSTRY_AUDIENCE, platform: 'youtube', dated_comments: v.dated }))
+const VIDEO_ROWS = RITLAND.map((v) => ({ id: v.videoId, account_name: 'Mike Ritland', source_keywords: v.sourceKeywords }))
+
+describe('loadMonthVideos', () => {
+  it('gives each of the month’s category videos its account and searches', async () => {
+    const { client } = fakeClient((c) => ({ data: c.kind === 'rpc' ? (c.range?.[0] === 0 ? MONTH_ROWS : []) : VIDEO_ROWS, error: null }))
+    const out = await loadMonthVideos(client, 'sealand', '2026-09-01', false)
+    expect(out?.videos.map((v) => [v.account, v.dated])).toEqual(RITLAND.map((v) => ['Mike Ritland', v.dated]))
+    expect(out?.segmentsState).toBe('no_rule')
+  })
+
+  it('fails the read where a page of accounts failed, rather than print fewer accounts', async () => {
+    const { client } = fakeClient((c) => (c.kind === 'rpc'
+      ? { data: c.range?.[0] === 0 ? MONTH_ROWS : [], error: null }
+      : { data: null, error: { message: 'canceling statement due to statement timeout' } }))
+    expect(await loadMonthVideos(client, 'sealand', '2026-09-01', false)).toBeNull()
+  })
+})
+
+describe('loadMemory', () => {
+  const months = ['2026-07-01', '2026-08-01', '2026-09-01']
+  const earlier = Promise.resolve(new Map([['2026-07-01', new Set<string>()], ['2026-08-01', new Set<string>()]]))
+
+  it('reads the listed accounts’ videos in pages by id, past PostgREST’s 1,000-row cap', async () => {
+    // The fake fills whatever page the reader asks for, then ends: a reader
+    // that took one page would stop at the first.
+    const { client, calls } = fakeClient((c) => {
+      const [from, to] = c.range ?? [0, 0]
+      const size = from === 0 ? to - from + 1 : 1
+      return { data: Array.from({ length: size }, (_, i) => ({ id: `v${from + i}`, platform: 'reddit', account_name: 'r/onebag' })), error: null }
+    })
+    const out = await loadMemory(client, 'sealand', '2026-09-01', months, [], [{ platform: 'reddit', name: 'r/onebag' }], earlier)
+    const reads = calls.filter((c) => c.name === 'videos')
+    expect(reads.map((c) => c.range)).toEqual([[0, 999], [1000, 1999]])
+    expect(reads.every((c) => c.order === 'id')).toBe(true)
+    expect(out?.accountVideos.get('reddit|r/onebag')?.size).toBe(1001)
+  })
+
+  it('is not read where the accounts’ videos could not be read', async () => {
+    const { client } = fakeClient(() => ({ data: null, error: { message: 'canceling statement due to statement timeout' } }))
+    expect(await loadMemory(client, 'sealand', '2026-09-01', months, [], [{ platform: 'reddit', name: 'r/onebag' }], earlier)).toBeNull()
   })
 })

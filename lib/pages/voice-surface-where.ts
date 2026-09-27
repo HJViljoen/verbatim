@@ -252,10 +252,15 @@ export async function loadMonthVideos(
   if (!rowsIn) return null
   const ids = rowsIn.map((r) => r.video_id)
   type VideoRow = { id: string; account_name: string | null; source_keywords: string[] | null }
+  // A failed page of accounts fails the read: its videos would otherwise lose
+  // their accounts in silence, and the block would print fewer accounts, a
+  // smaller floor and a different largest, as if they were the month's.
+  let accountsFailed = false
   const [accounts, segments] = await Promise.all([
     (async () => {
       const pages = await mapWithLimit(chunk(ids, UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
         const res = await client.from('videos').select('id, account_name, source_keywords').eq('client_id', clientId).in('id', part)
+        if (res.error) accountsFailed = true
         return readRows<VideoRow>(res as never, 'voice.where.accounts')
       })
       return new Map(pages.flat().map((v) => [String(v.id), v]))
@@ -273,6 +278,7 @@ export async function loadMonthVideos(
       }
     })(),
   ])
+  if (accountsFailed) return null
   const videos: MonthVideo[] = rowsIn.map((r) => {
     const v = accounts.get(String(r.video_id))
     return {
@@ -307,7 +313,8 @@ export async function loadEarlierMonths(
 /**
  * What the memory needs for the listed accounts: the earlier months'
  * videos (`loadEarlierMonths`, started by the caller) and every video of the
- * listed accounts (one read). Null where either failed.
+ * listed accounts (one read, paged past 1,000 rows). Null where either
+ * failed.
  */
 export async function loadMemory(
   client: SupabaseClient,
@@ -324,13 +331,19 @@ export async function loadMemory(
   const [held, ownVideos] = await Promise.all([
     earlierMonths,
     (async () => {
-      if (names.length === 0 || !hasEarlier) return [] as { id: string; platform: string; account_name: string | null }[]
-      const res = await client.from('videos').select('id, platform, account_name').eq('client_id', clientId).in('account_name', names)
-      if (res.error) {
-        readRows(res as never, 'voice.where.accountVideos')
+      type Own = { id: string; platform: string; account_name: string | null }
+      if (names.length === 0 || !hasEarlier) return [] as Own[]
+      // Paged by id: every video the listed accounts have, over all months,
+      // passes PostgREST's 1,000-row cap as the months add up, and a cut
+      // list would print "Seen in 1 of 3" for an account seen in all three.
+      try {
+        return await selectAll<Own>(() =>
+          client.from('videos').select('id, platform, account_name').eq('client_id', clientId).in('account_name', names).order('id') as never,
+        )
+      } catch (error) {
+        console.error(`[pages] voice.where.accountVideos: ${(error as Error)?.message ?? String(error)}; the memory is not read`)
         return null
       }
-      return (res.data ?? []) as { id: string; platform: string; account_name: string | null }[]
     })(),
   ])
   if (!ownVideos || !held) return null
