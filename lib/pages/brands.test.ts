@@ -294,7 +294,7 @@ describe('B5 · what they post and say about themselves', () => {
   })
 
   it('lists each brand’s posts in the month, most first', () => {
-    const b = buildPosts({ month: '2026-09-01', censuses: POSTS.map(([n, p]) => census(n, p)), noAccounts: [] })
+    const b = buildPosts({ month: '2026-09-01', censuses: POSTS.map(([n, p]) => census(n, p)) })
     expect(b.rows.map((r) => [r.label, r.posts])).toEqual(POSTS)
     expect(b.claims).toEqual([])
   })
@@ -310,7 +310,6 @@ describe('B5 · what they post and say about themselves', () => {
         ]),
         census('Freitag', 14, [{ id: 'k4', post: 0, claim: 'The Lassie is a smaller version of Freitag Heritage bags, suitable for spontaneous shopping.' }]),
       ],
-      noAccounts: [],
     })
     expect(b.claims.map((c) => [c.label, c.posts.k, c.posts.n, c.claim.slice(0, 32)])).toEqual([
       ['Cotopaxi', 2, 21, 'Cotopaxi’s Empacable Collection '],

@@ -16,6 +16,14 @@ import { competitiveOwnClaims } from './own-claims'
 import { competitiveSaidAbout } from './said-about'
 import { competitiveQuestions } from './questions'
 import { competitivePlaybook } from './playbook'
+import { competitiveName } from './brands/name'
+import { competitiveTopics } from './brands/topics'
+import { brandsInFull } from './brands/in-full'
+import { brandsAsked } from './brands/asked'
+import { competitiveFindings } from './brands/findings'
+import { brandsPosts } from './brands/posts'
+import { brandsContent } from './brands/content'
+import { brandsShare } from './brands/share'
 
 // Competitive — the page (Phase 1 WP14, design §3 CO1–CO7; ported to the
 // artboard in Block D wave 2).
@@ -42,15 +50,44 @@ import { competitivePlaybook } from './playbook'
 // twelve. CO6 needs a finding identity that survives an update: `recurrenceOf`
 // is built and waiting, and nothing loads a `monthsSeen` for it to key on.
 
+// BRANDS WITH DEPLOY 5 (market-first WP3.5, plan §2.5 B1 to B7). The page is
+// rebuilt in the approved preview's order: your name in your market, the
+// brands in it, one brand in full beside what is asked under its content,
+// where a rival's talk differs, what they post and say, how the market makes
+// content beside each brand's share of what our searches found. Three keys
+// are new (`competitive.name`, `.topics`, `.findings`); the other five keep
+// CO1, CO5, CO4, CO7 and CO2's keys, each drawing its Brands form where the
+// page read `brands` and its Phase 1 form where it did not (a stored page, the
+// quarterly and the briefs, which load without it). CO3's face-off and "Said
+// about them" stay registered for those readers and are not drawn here: no
+// "you against them" share prints on the Brands page.
 export const COMPETITIVE_BLOCKS: readonly Block<CompetitiveSurfaceData>[] = [
-  competitiveRivals,
-  competitiveStandings,
+  competitiveName,
+  competitiveTopics,
+  brandsInFull,
+  brandsAsked,
+  competitiveFindings,
+  brandsPosts,
+  brandsContent,
+  brandsShare,
   competitiveHeadToHead,
-  competitiveOwnClaims,
   competitiveSaidAbout,
-  competitiveQuestions,
-  competitivePlaybook,
 ]
+
+/** The Brands page's tiles, a line at a time, with the preview's spans. */
+export const BRANDS_LINES: readonly (readonly { block: Block<CompetitiveSurfaceData>; col: 4 | 6 | 8 | 12 }[])[] = [
+  [{ block: competitiveName, col: 12 }],
+  [{ block: competitiveTopics, col: 12 }],
+  [{ block: brandsInFull, col: 8 }, { block: brandsAsked, col: 4 }],
+  [{ block: competitiveFindings, col: 12 }],
+  [{ block: brandsPosts, col: 12 }],
+  [{ block: brandsContent, col: 6 }, { block: brandsShare, col: 6 }],
+]
+
+/** Is the name block drawn? A tenant with no brand rule (Össur) has no name
+ *  to read, so its tile is not drawn (an absence is a line, never a card). */
+export const brandsDrawn = (block: Block<CompetitiveSurfaceData>, data: CompetitiveSurfaceData): boolean =>
+  block !== competitiveName || data.brands?.name != null
 
 /** The blocks that are TILES, in the artboard's order. CO1 is drawn inline
  *  above the grid and is deliberately absent. */
@@ -187,6 +224,7 @@ export function CompetitiveSurfacePage({
   }
 
   const ctx = competitiveContext(params)
+  if (data.brands) return <BrandsPage data={data} params={params} ctx={ctx} />
   return (
     <ExportScope page="competitive" params={params} tiles={tilesFor(data).map(({ block: b }) => ({ key: b.key, title: b.title }))}>
       <PageFrame>
@@ -218,6 +256,46 @@ export function CompetitiveSurfacePage({
             method, and stays. */}
         {data.method ? (
           <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{data.method.privacy}</p>
+        ) : null}
+      </PageFrame>
+    </ExportScope>
+  )
+}
+
+/**
+ * THE BRANDS PAGE (deploy 5): the preview's bar (the month selector, its one
+ * line, Export as the 40px button, no horizon pills and no "How to read"
+ * pill, as Your market's bar) and its grid, 24px between tiles, each block
+ * drawing its own 32px inset. A pair shares its row and its height, as the
+ * preview draws it (`align-items: stretch`); each block fills its tile so its
+ * footer sits on the floor.
+ */
+function BrandsPage({ data, params, ctx }: { data: CompetitiveSurfaceData; params: Record<string, string | undefined>; ctx: BlockContext }) {
+  const lines = BRANDS_LINES.map((line) => line.filter(({ block }) => brandsDrawn(block, data))).filter((line) => line.length > 0)
+  return (
+    <ExportScope page="competitive" params={params} tiles={lines.flat().map(({ block: b }) => ({ key: b.key, title: b.title }))}>
+      <PageFrame className="gap-6">
+        <SurfacePageBar nav="competitive" params={params} context={barContext(data)}>
+          <ExportMenu variant="button" />
+        </SurfacePageBar>
+        <PageGrid className="gap-6 xl:auto-rows-auto">
+          {lines.flat().map(({ block, col }) => (
+            <Tile
+              key={block.key}
+              col={col}
+              row={1}
+              flush
+              exportKey={block.key}
+              className="min-h-0"
+              bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
+              distribute="between"
+            >
+              {block.render(data, 'app', ctx)}
+            </Tile>
+          ))}
+        </PageGrid>
+        {data.method ? (
+          <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{data.method.privacy}</p>
         ) : null}
       </PageFrame>
     </ExportScope>

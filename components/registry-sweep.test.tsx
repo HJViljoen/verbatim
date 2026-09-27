@@ -23,6 +23,7 @@ import { subjectsFixture, refusedFixture as subjectsRefused } from '@/components
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture, quietRivalFixture } from '@/components/pages/competitive-surface/fixture'
+import { brandsFixture, ossurBrandsFixture } from '@/components/pages/competitive-surface/brands/fixture'
 import { marketWeekFixture, ossurWeeksFixture, weekFixture } from '@/components/pages/week/fixture'
 import { weekSubjects } from '@/components/pages/week/subjects'
 import { weekWeeks } from '@/components/pages/week/weeks'
@@ -82,7 +83,9 @@ interface Renderish { render: (d: never, m: RenderMode, c: typeof ctx) => ReactN
 const GROUPS: [string, Record<string, Renderish> | readonly (Renderish & { key: string })[], unknown[]][] = [
   ['voice-surface', VOICE_BLOCKS as never, [voiceFixture()]],
   ['market-surface', MARKET_BLOCKS as never, [marketFixture(), deepLinkFixture(), unrecordedFixture()]],
-  ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture()]],
+  // Brands (WP3.5, deploy 5): the page's readings, counted and not yet, and a
+  // tenant with no brand rule (Össur), beside the Phase 1 forms.
+  ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture(), brandsFixture(), brandsFixture(false), ossurBrandsFixture()]],
   ['week', WEEK_BLOCKS as never, [weekFixture(), marketWeekFixture(), ossurWeeksFixture()]],
   ['weekly', WEEKLY_BLOCKS as never, [weeklyFixture()]],
   // Two states here (the stubbed skeleton and every slot filled); the monthly's

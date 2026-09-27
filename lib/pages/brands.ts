@@ -516,11 +516,9 @@ export interface PostsBlock {
    *  words the claims read wrote (stored `pass_a_brand_claim`), as plain
    *  text, never set as a quote. */
   claims: { audience: string; label: string; id: string; claim: string; posts: { k: number; n: number } }[]
-  /** Tracked brands with no account configured to read their posts from. */
-  noAccounts: string[]
 }
 
-export function buildPosts(input: { month: string; censuses: readonly OwnPostCensus[]; noAccounts: readonly string[] }): PostsBlock {
+export function buildPosts(input: { month: string; censuses: readonly OwnPostCensus[] }): PostsBlock {
   const rows = input.censuses
     .filter((c) => c.unread == null && c.published.k > 0)
     .map((c) => ({ audience: c.audience, label: c.audienceLabel, posts: c.published.k }))
@@ -533,7 +531,7 @@ export function buildPosts(input: { month: string; censuses: readonly OwnPostCen
       return { audience: c.audience, label: c.audienceLabel, id: top.id, claim: top.claim, posts: top.posts }
     })
     .sort((a, b) => (order.get(a.audience) ?? 0) - (order.get(b.audience) ?? 0))
-  return { month: monthStartOf(input.month), rows, claims, noAccounts: [...input.noAccounts] }
+  return { month: monthStartOf(input.month), rows, claims }
 }
 
 /** The claim most of the month's posts carried; ties to the earliest said,
