@@ -283,7 +283,10 @@ describe('every configuration write on this page carries an actor', () => {
     // The marker, not the absence: without it a cached page or a hand-made
     // POST would erase a tracked list nobody touched.
     expect(actions).toContain('RIVALS_PRESENT')
-    expect(actions).toContain('...(posted ? { competitor_names: parsed.data.competitor_names } : {})')
+    // Since the cadence left the statement (27 Sep) the list is the only column
+    // it writes, so a POST without one writes nothing at all.
+    expect(actions).toContain('if (posted) {')
+    expect(actions).toContain('competitor_names: parsed.data.competitor_names,')
     expect(rivalsSection).toContain('name={RIVALS_PRESENT}')
   })
 
