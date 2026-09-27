@@ -14,7 +14,7 @@ import {
   type MarketObjectRef,
   type MarketPoint,
 } from './movement'
-import { askWindow, kindsNamedIn, moodAsked, namedIn, names, parseAskWindow } from './scope'
+import { askWindow, kindsNamedIn, moodAsked, namedIn, names, parseAskWindow, withoutQuoted } from './scope'
 import type { ReadingMonth } from '../reading/reading-month'
 import type { MonthSeries } from '../reading/series'
 
@@ -63,6 +63,25 @@ describe('what a question names (the client’s own words)', () => {
     expect(kindsNamedIn('What do people say about zips?')).toEqual([])
     expect(moodAsked('How does my market feel about Cotopaxi?')).toBe(true)
     expect(moodAsked('What do people say about zips?')).toBe(false)
+  })
+
+  it('a quoted theme label is a name: its words name no kind and not the mood, and a subject in it is still named', () => {
+    // Conversation's "Ask about this" on Sealand's September themes (staging,
+    // 27 Sep): read as the reader's words, these named "asking how it works",
+    // "ready to buy", "saying it worked" and "hitting a problem".
+    const ask = (label: string) => `What is behind “${label}” in September?`
+    for (const label of ['Buying interest and ordering questions', 'Praise for beautiful bag design', 'Frustration with bag weight', 'Price and sale questions', 'Comfort problems when carrying']) {
+      expect(kindsNamedIn(ask(label)), label).toEqual([])
+      expect(moodAsked(ask(label)), label).toBe(false)
+    }
+    // Össur's: "Questions about prosthetic function", "Requests for prosthetic help".
+    expect(kindsNamedIn(ask('Questions about prosthetic function'))).toEqual([])
+    expect(kindsNamedIn(ask('Requests for prosthetic help'))).toEqual([])
+    // A subject named inside the label is a name all the same.
+    expect(namedIn(ask('Price and sale questions'), SUBJECTS).map((s) => s.id)).toEqual(['subj-price'])
+    // The reader's own words around a quotation still name a kind.
+    expect(kindsNamedIn('What do people complain about in “Praise for beautiful bag design”?')).toEqual(['pain_point'])
+    expect(withoutQuoted('What is behind “Frustration with bag weight” in September?')).toBe('What is behind   in September?')
   })
 })
 

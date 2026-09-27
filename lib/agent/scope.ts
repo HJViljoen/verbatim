@@ -6,9 +6,10 @@ import { windowEnd, type ReadingMonth } from '../reading/reading-month'
  *
  * THE QUESTION'S OWN WORDS DECIDE, NEVER THE MODEL'S. A subject, a rival, a
  * kind or the mood is "named" when the question the client typed names it:
- * Subjects' and Conversation's "Ask about this" send a question that carries
- * the subject's own name ("What does my market say about Waterproofing?"), so
- * the link lands on that subject's own figure without a parameter of its own.
+ * Subjects' "Ask about this" sends a question that carries the subject's own
+ * name ("What does my market say about Waterproofing?"), so the link lands on
+ * that subject's own figure without a parameter of its own; Conversation's
+ * quotes its theme's label, whose words are a name (`withoutQuoted`).
  * The interpret step's queries are a model's rewrite and are not read here: a
  * model that could widen the scope by phrasing a query would decide whose
  * voices an answer rests on.
@@ -106,8 +107,27 @@ export const KIND_WORDS: Readonly<Record<string, readonly string[]>> = {
   switching_signal: ['switch', 'switching', 'leaving'],
 }
 
+/**
+ * The question without the names it quotes.
+ *
+ * A QUOTED LABEL IS A NAME, NOT THE READER'S WORDS ABOUT WHAT PEOPLE DID.
+ * Conversation's "Ask about this" sends the open theme's label in quotation
+ * marks ("What is behind “Buying interest and ordering questions” in
+ * September?"), and a theme label leads with what its people were doing
+ * ("Praise for", "Frustration with", "… questions"). Read as the reader's own
+ * words, Sealand's September labels on staging named the "asking how it
+ * works" and "ready to buy" kinds, "saying it worked" and "hitting a
+ * problem": readings of the whole market beside an answer about one theme. A
+ * kind and the mood are named only by the words around the quotation. A
+ * subject or a brand inside it is still a name (`namedIn` reads the whole
+ * question): "Price and sale questions" names Price.
+ */
+export function withoutQuoted(text: string): string {
+  return text.replace(/“[^”]*”/g, ' ')
+}
+
 export function kindsNamedIn(text: string): string[] {
-  const t = ` ${foldText(text).replace(/[^\p{L}\p{N}]+/gu, ' ')} `
+  const t = ` ${foldText(withoutQuoted(text)).replace(/[^\p{L}\p{N}]+/gu, ' ')} `
   return Object.entries(KIND_WORDS)
     .filter(([, words]) => words.some((w) => t.includes(` ${w} `)))
     .map(([kind]) => kind)
@@ -117,6 +137,6 @@ export function kindsNamedIn(text: string): string[] {
 export const MOOD_WORDS: readonly string[] = ['mood', 'feel', 'feels', 'feeling', 'sentiment', 'positive', 'negative', 'warm', 'warming']
 
 export function moodAsked(text: string): boolean {
-  const t = ` ${foldText(text).replace(/[^\p{L}\p{N}]+/gu, ' ')} `
+  const t = ` ${foldText(withoutQuoted(text)).replace(/[^\p{L}\p{N}]+/gu, ' ')} `
   return MOOD_WORDS.some((w) => t.includes(` ${w} `))
 }
