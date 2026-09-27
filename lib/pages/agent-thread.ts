@@ -750,7 +750,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
         .then((frame) => {
           const objects = namedObjects(questionsText, frame)
           return objects.length
-            ? loadObjectReadings(scope.reading.client, { clientId, objects, month: readMonth, pair: frame.pair, asOf: measuredAt })
+            ? loadObjectReadings(scope.reading.client, {
+                clientId, objects, month: readMonth, pair: frame.pair, asOf: measuredAt,
+                // "No reading yet" only while an update is still to read the
+                // month: the reading month's next update, never an older one's.
+                nextUpdate: frame.reading && monthStartOf(frame.reading.month) === readMonth ? frame.reading.nextUpdate : null,
+              })
             : []
         })
         .catch((e: unknown) => {

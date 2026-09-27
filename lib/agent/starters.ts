@@ -61,6 +61,23 @@ export function topicOf(label: string): string {
   return t.charAt(0).toLowerCase() + t.slice(1)
 }
 
+/**
+ * The question about one theme, asked by its topic: the lead's starter card,
+ * and the question Conversation's "Ask about this" sends for the theme it has
+ * open, so both land on the same question, as Subjects' link and the subject
+ * card do (the approved preview: Conversation's lead, "Confusion over airline
+ * bag sizes", is asked on Ask as "What does my market ask about carry-on
+ * sizes?"). "Ask about" only where the theme IS a question: Össur's lead on
+ * staging is "Admiration for personal resilience", and "What does my market
+ * ask about personal resilience?" claimed questions the theme does not hold.
+ * No month: the answer reads the window and names its month itself, and a
+ * month in the question would say August over an answer read on September
+ * when the reader had Conversation on August.
+ */
+export function themeQuestion(t: { label: string; kind: string | null }): string {
+  return `What does my market ${t.kind === 'question' ? 'ask' : 'say'} about ${topicOf(t.label)}?`
+}
+
 const themeRow = (t: Pick<MarketTheme, 'label' | 'k' | 'makerShare'>): StarterRow => {
   const maker = makerWords(t.makerShare)
   return { kind: 'theme', label: t.label, k: t.k, tags: maker ? [maker] : [] }
@@ -94,14 +111,10 @@ export function starterQuestions(input: StarterInput): StarterQuestion[] {
   const buying = board.find((t) => t.kind === 'purchase_intent')
   if (buying) push('What makes people ready to buy?', [themeRow(buying)])
 
-  // The lead theme the front page quotes, asked about by its topic. "Ask
-  // about" only where the lead IS a question: Össur's lead on staging is
-  // "Admiration for personal resilience", and "What does my market ask about
-  // personal resilience?" claimed questions the theme does not hold.
+  // The lead theme the front page quotes, asked about by its topic
+  // (`themeQuestion`, the question Conversation's "Ask about this" sends).
   const lead = input.hero && input.hero.kind === 'themes' ? input.hero.lead : null
-  const ask = (t: { label: string; kind: string | null }) =>
-    `What does my market ${t.kind === 'question' ? 'ask' : 'say'} about ${topicOf(t.label)}?`
-  if (lead) push(ask(lead), [themeRow(lead)])
+  if (lead) push(themeQuestion(lead), [themeRow(lead)])
 
   const lists = input.asks?.lists ?? []
   const listOf = (kind: string) => lists.find((l) => l.kind === kind)?.rows ?? []
