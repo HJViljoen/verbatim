@@ -1121,7 +1121,7 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     }
     const note = clearing < BASELINE_MONTHS
       ? comparableBaselineLabel(clearing)
-      : `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`
+      : `nothing unusual: ${reading.tested} of ${reading.setSize} objects tested`
     await recordCheck({ status: 'nothing_unusual', note, window, reading, suppression })
     return { ...empty, status: 'nothing_unusual', reading, registration, suppression, note, baseline }
   }
