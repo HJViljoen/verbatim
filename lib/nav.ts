@@ -66,7 +66,7 @@ export interface Surface {
  * and "Market" becomes "Your moves", because its content is already the
  * decision page and the sidebar must never show "Your market" beside
  * "Market". Voice became Conversation with deploy 3 (WP2.4); Competitive
- * becomes Brands with deploy 5. Keys and page keys do not change, so no stored report
+ * became Brands with deploy 5 (WP3.5). Keys and page keys do not change, so no stored report
  * breaks. Your moves keeps its question until deploy 5 rebuilds the page.
  */
 export const SURFACES: readonly Surface[] = [
@@ -88,7 +88,13 @@ export const SURFACES: readonly Surface[] = [
   // breaks.
   // No horizon either: every block reads the reading month, as on Your market.
   { key: 'voice', href: '/dashboard/voice', label: 'Conversation', question: 'Everything your market talked about, in full', group: 'Intelligence', bar: 'reading', horizon: false, page: 'voice' },
-  { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and how much of it do they hold?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
+  // BRANDS WITH DEPLOY 5 (WP3.5, plan §2.1): the page is rebuilt as the brands
+  // that come up in your market, so the label and the question change with
+  // it. The key, the address and the page key stay `competitive`, so no stored
+  // link or report breaks. NO HORIZON (the approved preview's bar is the month
+  // selector and one line): its brand counts read the reading month and its
+  // "in full" blocks the ninety days ending at the reading month's last update.
+  { key: 'competitive', href: '/dashboard/competitive', label: 'Brands', question: 'Which brands come up in your market, and what is said around them?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'competitive' },
   { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
   { key: 'ask', href: '/dashboard/agent', label: 'Ask', question: 'What does the conversation say about this?', group: 'Intelligence', bar: 'title', page: 'agent' },

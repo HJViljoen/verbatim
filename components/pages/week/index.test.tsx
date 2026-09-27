@@ -927,7 +927,8 @@ describe('WK §5 · notable rival posts', () => {
     // and the footer says so once, rather than a column repeating it.
     const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
     expect(text).not.toContain('what the audience asked is read per rival')
-    expect(text).toContain('Open Competitive →')
+    // The page by its current sidebar label: "Brands" since deploy 5 (WP3.5).
+    expect(text).toContain('Open Brands →')
   })
 })
 

@@ -307,8 +307,9 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(read(<OverviewPage data={data as never} />)).not.toContain('We did not record how themes were grouped')
   })
 
-  it('brands in one line, naming Competitive by its current label', () => {
-    expect(text).toContain('Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Competitive lists what was filed under each brand you track.')
+  it('brands in one line, naming the brands page by its current label', () => {
+    // "Brands" since deploy 5 (WP3.5).
+    expect(text).toContain('Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Brands lists what was filed under each brand you track.')
   })
 
   it('what changed: the refusal, the first pair read the same way, and the link to the dated list', () => {

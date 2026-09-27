@@ -189,10 +189,12 @@ export const overviewRivals: Block<OverviewData> = {
     if (isMarketPage(data)) return renderMarketBrands(data, mode, ctx.appUrl)
     const r = data.rivals
     const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard/competitive`
+    // The page by its current sidebar label (§4.0): Brands from deploy 5.
+    const nav = surface('competitive')
+    const href = `${ctx.appUrl}${nav.href}`
     const footer = email
       ? null
-      : openLink(mode, href, 'Open Competitive →')
+      : openLink(mode, href, `Open ${nav.label} →`)
 
     const empty = overviewRivals.emptyState(data)
     // The own-posts column's absence, said once instead of once per row.

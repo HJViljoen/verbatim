@@ -3,13 +3,15 @@ import { readingHandle } from '@/lib/reading/read'
 import { loadCompetitiveSurface } from '@/lib/pages/competitive-surface'
 import { CompetitiveSurfacePage } from '@/components/pages/competitive-surface'
 
-// Competitive — "who else is in this, and are they gaining?" (Phase 1 WP14).
-// The address Competitive Intelligence used to hold; that page is parked at
+// Brands (market-first WP3.5, deploy 5; was Competitive, Phase 1 WP14). The
+// address Competitive Intelligence used to hold; that page is parked at
 // /dashboard/competitive-intel until OLD_PAGES_RETIRE_ON.
 //
-// `?vs=<rival>` scopes the surface and `?horizon=` sets the window. Neither
-// this page nor its loader reads `run_summary.period_share_of_voice`: the
-// parked page keeps that layer, and this one is the monthly reading.
+// `?vs=<brand>` names the brand read in full and `?asked=all` lists every
+// question theme under it. Neither this page nor its loader reads
+// `run_summary.period_share_of_voice`: the parked page keeps that layer, and
+// this one is the monthly reading. The page asks its loader for the Brands
+// readings (`{ brands: true }`); the quarterly and the briefs do not.
 
 export default async function Page({
   searchParams,
@@ -18,6 +20,6 @@ export default async function Page({
 }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  const data = await loadCompetitiveSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp })
+  const data = await loadCompetitiveSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { brands: true })
   return <CompetitiveSurfacePage data={data} params={sp} />
 }
