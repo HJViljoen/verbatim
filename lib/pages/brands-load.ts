@@ -82,9 +82,10 @@ export interface BrandsLoadInput {
   schedule: ScheduleConfig | null
   pair: PairOn | null
   params: Record<string, string | undefined>
-  /** Competitive's census read of the month's own posts. */
-  ownPosts: { censusInputs: readonly OwnPostCensusInput[] } | null
-  playbook: PlaybookBlock | null
+  /** Competitive's census read of the month's own posts (every live rival's). */
+  ownPosts: Promise<readonly OwnPostCensusInput[]>
+  /** The month's playbook; B6 reads its category column. */
+  playbook: Promise<PlaybookBlock | null>
   hrefFor: (rival: string) => string
 }
 
@@ -98,13 +99,18 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
   const live = input.rivals.filter((r) => !r.retiredAt).map((r) => ({ name: r.name, audience: rivalKey(r.name) }))
   const window = ninetyDays(windowEnd(input.reading))
 
+  // EVERY SECTION'S READS START TOGETHER. B3's question themes are a live
+  // window reading (`window_theme_readings`, about four seconds a page on
+  // staging), so they are read for every live brand at once, one page, beside
+  // the rest, and the selected brand's list is taken after.
   const running = fetchRunningRunIds(input.db, input.clientId, 'brands').catch((e: unknown) => { say('running', e); return [] as string[] })
-  const [b1, windowReads, findingsRaw, claims, share] = await Promise.all([
+  const [b1, windowReads, findingsRaw, claims, share, questions] = await Promise.all([
     readBrandCounts(input, month, prev, live).catch((e: unknown) => { say('topics', e); return null }),
     readWindow(input.db, input.clientId, window).catch((e: unknown) => { say('window', e); return null }),
     running.then((r) => readFindings(input.db, input.clientId, month, live, r)).catch((e: unknown) => { say('findings', e); return [] as FindingRead[] }),
     readClaims(input.db, input.clientId, input.ownPosts).catch((e: unknown) => { say('claims', e); return null }),
     readShare(input, month, live).catch((e: unknown) => { say('share', e); return buildShare({ month, stats: null, rivals: live, startsWith: null }) }),
+    running.then((r) => readQuestions(input.db, input.clientId, month, window, live, r)).catch((e: unknown) => { say('asked', e); return null }),
   ])
 
   const inFull = buildInFull({
@@ -116,9 +122,16 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     hrefFor: input.hrefFor,
   })
   const selected = inFull.selected ? { name: inFull.selected.label, audience: inFull.selected.audience } : null
-  const asked = selected && windowReads
-    ? await readAsked(input.db, input.clientId, month, window, selected, windowReads.kinds, input.params[ASKED_PARAM] === 'all', await running)
-      .catch((e: unknown) => { say('asked', e); return null })
+  const asked = selected && windowReads && questions
+    ? buildAsked({
+        rival: selected,
+        window,
+        month,
+        questionVideos: windowReads.kinds.find((k) => k.audience === selected.audience && k.kind === 'question')?.videos ?? 0,
+        months: questions.months.get(selected.audience) ?? [],
+        themes: questions.themes.get(selected.audience) ?? [],
+        all: input.params[ASKED_PARAM] === 'all',
+      })
     : null
 
   const videosIn = new Map(inFull.rows.map((r) => [r.label, r.videos]))
@@ -129,8 +142,11 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     floor: COMPETITIVE_MIN_VIDEOS,
   })
 
-  const censuses: OwnPostCensus[] = (input.ownPosts?.censusInputs ?? []).map((ci) =>
-    ownPostCensus({ ...ci, claims: claims?.get(ci.audience) ?? [] }))
+  const [ownInputs, playbook] = await Promise.all([
+    input.ownPosts.catch((e: unknown) => { say('posts', e); return [] as OwnPostCensusInput[] }),
+    input.playbook.catch((e: unknown) => { say('playbook', e); return null }),
+  ])
+  const censuses: OwnPostCensus[] = ownInputs.map((ci) => ownPostCensus({ ...ci, claims: claims?.get(ci.audience) ?? [] }))
 
   return {
     month,
@@ -141,7 +157,7 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     asked,
     findings,
     posts: buildPosts({ month, censuses }),
-    content: input.playbook ? buildContent({ month, formats: input.playbook.formats, hooks: input.playbook.hooks, audience: INDUSTRY_AUDIENCE }) : null,
+    content: playbook ? buildContent({ month, formats: playbook.formats, hooks: playbook.hooks, audience: INDUSTRY_AUDIENCE }) : null,
     share,
   }
 }
@@ -393,49 +409,47 @@ async function readWindow(db: SupabaseClient, clientId: string, window: { from: 
 
 // ---- B3 -------------------------------------------------------------------------
 
-async function readAsked(
+/** B3's reads for every live brand: the question videos month by month
+ *  (`month_kind_readings`) and the question themes over the window
+ *  (`window_theme_readings`, filtered to the brands' audiences so it is one
+ *  page, on the latest themed update; each theme's kind and label from that
+ *  update's observations). */
+async function readQuestions(
   db: SupabaseClient,
   clientId: string,
   month: string,
   window: { from: string; to: string },
-  rival: { name: string; audience: string },
-  kinds: WindowReads['kinds'],
-  all: boolean,
+  live: readonly { name: string; audience: string }[],
   running: readonly string[],
-): Promise<BrandsPageData['asked']> {
-  const questions = kinds.find((k) => k.audience === rival.audience && k.kind === 'question')?.videos ?? 0
+): Promise<{ months: Map<string, { month: string; videos: number }[]>; themes: Map<string, { registryId: string; label: string; videos: number }[]> }> {
+  const audiences = live.map((r) => r.audience)
   const months: string[] = []
   for (let m = monthStartOf(window.from); m <= month; m = nextMonth(m)) months.push(m)
+  const out = { months: new Map<string, { month: string; videos: number }[]>(), themes: new Map<string, { registryId: string; label: string; videos: number }[]>() }
+  if (audiences.length === 0) return out
   const [mk, runId] = await Promise.all([
-    db.from('month_kind_readings').select('month, videos').eq('client_id', clientId).eq('audience', rival.audience).eq('kind', 'question').in('month', months),
+    db.from('month_kind_readings').select('month, audience, videos').eq('client_id', clientId).eq('kind', 'question').in('audience', audiences).in('month', months),
     fetchThemedRunId(db, clientId, running, 'brands'),
   ])
   if (mk.error) throw new Error(`month_kind_readings: ${mk.error.message}`)
-  let themes: { registryId: string; label: string; videos: number }[] = []
-  if (runId && questions > 0) {
-    const wt = await selectAll<{ audience: string; theme_id: string; videos: number }>(() =>
-      db.rpc(RPC_WINDOW_THEME_READINGS, { p_client: clientId, p_run: runId, p_from: window.from, p_to: window.to }).order('theme_id'))
-    const mine = wt.filter((r) => r.audience === rival.audience && Number(r.videos) > 0)
-    if (mine.length > 0) {
-      const obs = await selectAll<{ theme_id: string; category: string | null; label: string }>(() =>
-        db.from('theme_observations').select('theme_id, category, label').eq('client_id', clientId).eq('run_id', runId)
-          .in('theme_id', mine.map((r) => r.theme_id)).order('theme_id'))
-      const byId = new Map(obs.map((o) => [String(o.theme_id), o]))
-      themes = mine
-        .map((r) => ({ r, o: byId.get(String(r.theme_id)) }))
-        .filter((x) => x.o?.category === 'question')
-        .map(({ r, o }) => ({ registryId: String(r.theme_id), label: o?.label ?? '', videos: Number(r.videos) }))
-    }
+  for (const r of (mk.data ?? []) as { month: string; audience: string; videos: number }[]) {
+    out.months.set(r.audience, [...(out.months.get(r.audience) ?? []), { month: String(r.month), videos: Number(r.videos) || 0 }])
   }
-  return buildAsked({
-    rival,
-    window,
-    month,
-    questionVideos: questions,
-    months: ((mk.data ?? []) as { month: string; videos: number }[]).map((r) => ({ month: String(r.month), videos: Number(r.videos) || 0 })),
-    themes,
-    all,
-  })
+  if (!runId) return out
+  const wt = await selectAll<{ audience: string; theme_id: string; videos: number }>(() =>
+    db.rpc(RPC_WINDOW_THEME_READINGS, { p_client: clientId, p_run: runId, p_from: window.from, p_to: window.to })
+      .in('audience', audiences).gt('videos', 0).order('audience').order('theme_id'))
+  if (wt.length === 0) return out
+  const obs = await selectAll<{ theme_id: string; category: string | null; label: string }>(() =>
+    db.from('theme_observations').select('theme_id, category, label').eq('client_id', clientId).eq('run_id', runId)
+      .eq('category', 'question').in('theme_id', [...new Set(wt.map((r) => r.theme_id))]).order('theme_id'))
+  const byId = new Map(obs.map((o) => [String(o.theme_id), o]))
+  for (const r of wt) {
+    const o = byId.get(String(r.theme_id))
+    if (!o) continue
+    out.themes.set(r.audience, [...(out.themes.get(r.audience) ?? []), { registryId: String(r.theme_id), label: o.label, videos: Number(r.videos) }])
+  }
+  return out
 }
 
 // ---- B4 -------------------------------------------------------------------------
@@ -598,9 +612,9 @@ async function readClaims(
   clientId: string,
   own: BrandsLoadInput['ownPosts'],
 ): Promise<Map<string, { id: string; source_video_id: string; entity: string; claim: string; quote: string }[]> | null> {
-  if (!own) return null
+  const inputs = await own
   const audienceOf = new Map<string, string>()
-  for (const ci of own.censusInputs) for (const v of ci.videos) audienceOf.set(v.id, ci.audience)
+  for (const ci of inputs) for (const v of ci.videos) audienceOf.set(v.id, ci.audience)
   const ids = [...audienceOf.keys()]
   const out = new Map<string, { id: string; source_video_id: string; entity: string; claim: string; quote: string }[]>()
   for (const part of chunk(ids, UUID_IN_CHUNK)) {

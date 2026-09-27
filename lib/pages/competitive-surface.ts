@@ -689,6 +689,29 @@ export async function loadCompetitiveSurface(scope: Scope, opts: { brands?: bool
   // and a second scan of the largest table on the page would buy nothing.
   const playbookAhead = loadPlaybookVideos(supabase, clientId, month).catch(() => null)
 
+  // ── the Brands page (WP3.5, deploy 5) ─────────────────────────────────
+  // Its own reads, on the reading client, each section failing alone
+  // (lib/pages/brands-load.ts), started here so they run beside CO5's and the
+  // record's. Only the page asks for it. B6 reads the category's column of
+  // the same playbook videos; B5 the same own-post read.
+  const brandsAhead = opts.brands
+    ? loadBrandsPage({
+        db: reading.client,
+        clientId,
+        reading: rm,
+        now: readingAt,
+        rivals: rivals.rivals,
+        denominators: history.denominators,
+        schedule,
+        pair,
+        params: scope.params as Record<string, string | undefined>,
+        ownPosts: ownInputsAhead,
+        playbook: playbookAhead.then((videos) => (videos ? buildPlaybook({ month, brand, rival: null, videos, conclusionMinRated: LEAD_MIN_RATED }) : null)),
+        hrefFor: (name) => competitiveSurfaceHref(name, scope.params as Record<string, string | undefined>),
+      })
+    : null
+  brandsAhead?.catch(() => {})
+
   // ── CO5 · what the category asks under their content ───────────────────
   const questions = await buildQuestions({
     supabase,
@@ -730,25 +753,7 @@ export async function loadCompetitiveSurface(scope: Scope, opts: { brands?: bool
         })
       : null
 
-  // ── the Brands page (WP3.5, deploy 5) ─────────────────────────────────
-  // Its own reads, on the reading client, each section failing alone
-  // (lib/pages/brands-load.ts). Only the page asks for it.
-  const brandsPage = opts.brands
-    ? await loadBrandsPage({
-        db: reading.client,
-        clientId,
-        reading: rm,
-        now: readingAt,
-        rivals: rivals.rivals,
-        denominators: history.denominators,
-        schedule,
-        pair,
-        params: scope.params as Record<string, string | undefined>,
-        ownPosts: { censusInputs: ownInputs },
-        playbook,
-        hrefFor: (name) => competitiveSurfaceHref(name, scope.params as Record<string, string | undefined>),
-      })
-    : undefined
+  const brandsPage = brandsAhead ? await brandsAhead : undefined
 
   // ── the record ─────────────────────────────────────────────────────────
   const verdicts = standingsVerdicts({ standings })
