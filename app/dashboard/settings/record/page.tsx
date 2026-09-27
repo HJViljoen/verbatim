@@ -1,7 +1,7 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
-import { PagesCanSay, SearchesHeldStill } from '@/components/settings/record/additions'
+import { HeldStillAside, PagesCanSay } from '@/components/settings/record/additions'
 import { loadQueue, QUEUE_COLUMNS, queueLines, type QueueColumn } from '@/lib/settings/queue'
 import { tenantLocked } from '@/lib/tenant-locks'
 import { changesFromLog } from '@/lib/reading/comparability'
@@ -181,16 +181,26 @@ export default async function SettingsRecordPage() {
       <div className="flex flex-col gap-6">
         {changed ? (
           <>
-            <WhatWeChangedLead block={changed.block} />
-            {locked ? (
-              <SearchesHeldStill
-                state={queue?.state === 'available' ? 'available' : 'unavailable'}
-                lines={queue?.state === 'available' ? queueLines(queue.rows, stored) : []}
-              />
-            ) : null}
+            <WhatWeChangedLead
+              block={changed.block}
+              aside={locked ? (
+                <HeldStillAside
+                  state={queue?.state === 'available' ? 'available' : 'unavailable'}
+                  lines={queue?.state === 'available' ? queueLines(queue.rows, stored) : []}
+                />
+              ) : null}
+            />
             <TheRecord view={changed.record} />
-            <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
-            {locked ? <PagesCanSay now={nowIso} /> : null}
+            {/* SIDE BY SIDE FROM `xl`, as the artboard draws the pair: the
+                rules narrower, the timeline wider. Stacked below it. */}
+            {locked ? (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+                <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
+                <PagesCanSay now={nowIso} />
+              </div>
+            ) : (
+              <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
+            )}
           </>
         ) : null}
 

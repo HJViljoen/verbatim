@@ -307,10 +307,3 @@ export async function loadQueue(read: ReadClient, clientId: string): Promise<{ s
   }
   return { state: 'available', rows: (res.data ?? []) as QueuedRow[] }
 }
-
-/** The held-still section's one line under its title. */
-export function heldStillLine(state: 'available' | 'unavailable'): string {
-  return state === 'available'
-    ? `Searches are held still until January so October and November can be compared. A change you save here waits, and lands on the 1st of a month, no earlier than ${effectiveWords(QUEUE_FLOOR)}.`
-    : 'Searches are held still until January so October and November can be compared; tell us and we will note it for then.'
-}
