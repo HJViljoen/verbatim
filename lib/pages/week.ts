@@ -57,7 +57,7 @@ import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import { addDays, marketWeekRowOf, weekAxis, type MarketWeekRowRaw, type WeekVolumesBlock } from '../reading/weeks'
 import { weekLineConfigFor } from '../week-line-config'
 import { passedBeforeOf } from '../reading/week-line'
-import { weekVolumesBlock } from './overview-market/weeks'
+import { loadKeptWeekLine, weekVolumesBlock } from './overview-market/weeks'
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P,
 // the mock's ThisWeek.dc.html).
@@ -3407,16 +3407,21 @@ export async function loadWeekVolumes(input: {
   rivalAudiences: readonly string[]
   changeRows: readonly ConfigChange[]
   schedule: ScheduleConfig | null
+  /** Your market's (WP3.13 display): read the kept same-age line once
+   *  `WEEK_LINE` says print. This week draws no line (§2.7) and does not ask. */
+  keptLine?: boolean
 }): Promise<WeekVolumesBlock | null> {
   const { client, clientId } = input
   const axis = weekAxis(input.reading, input.now)
   if (axis.length === 0) return null
+  const cfg = weekLineConfigFor(clientId)
+  const keptAhead = input.keptLine && cfg?.print ? loadKeptWeekLine(client, { clientId, cfg, rivalAudiences: input.rivalAudiences }) : null
+  keptAhead?.catch(() => {})
   const res = await client.rpc(RPC_MARKET_WEEK_VOLUMES, { p_client: clientId, p_from: axis[0], p_to: addDays(axis[axis.length - 1], 7) })
   if (res.error) {
     console.error(`[pages] ${RPC_MARKET_WEEK_VOLUMES}: ${res.error.message}; week by week is not drawn`)
     return null
   }
-  const cfg = weekLineConfigFor(clientId)
   const block = weekVolumesBlock({
     reading: input.reading,
     now: input.now,
@@ -3426,6 +3431,7 @@ export async function loadWeekVolumes(input: {
     changes: ourChangesWithoutGatherFlags(input.changeRows),
     cfg,
     nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : null,
+    line: keptAhead ? (await keptAhead.catch(() => null))?.line ?? null : null,
   })
   const line = block.line
   if (line && 'state' in line) {

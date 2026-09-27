@@ -4,7 +4,8 @@ import type { OurChange } from '../../reading/comparability'
 import type { ReadingMonth } from '../../reading/reading-month'
 import { pointOfStored, readOfStored, TABLE_WEEK_LINE_POINTS, TABLE_WEEK_LINE_READS } from '../../reading/week-keep'
 import {
-  buildWeekLine, pendingWeekLine, pooledWeekPoints, type WeekLineObject, type WeekPoint, type WeekRead,
+  buildWeekLine, dueHasPassed, passedBeforeOf, pendingWeekLine, pooledWeekPoints, type WeekLineBlock, type WeekLineObject, type WeekPoint,
+  type WeekRead,
 } from '../../reading/week-line'
 import { pooledWeekVolumes, weekAxis, weekRules, type MarketWeekRow, type WeekVolumesBlock } from '../../reading/weeks'
 import { subjectCalibration } from '../../subjects/calibration-state'
@@ -60,9 +61,31 @@ export function weekVolumesBlock(input: WeekVolumesInput): WeekVolumesBlock {
   const line = !cfg
     ? null
     : cfg.print && input.line
-      ? buildWeekLine(input.line.reads, input.line.points, input.changes, cfg, { objects: input.line.objects, axis, nextUpdateAfter: input.nextUpdateAfter })
+      ? keptLineAsAt(
+          buildWeekLine(input.line.reads, input.line.points, input.changes, cfg, { objects: input.line.objects, axis, nextUpdateAfter: input.nextUpdateAfter }),
+          latestUpdate(input.updates, input.now),
+          input.now,
+        )
       : pendingWeekLine(cfg, axis, input.nextUpdateAfter)
   return { weeks, rules, line }
+}
+
+/** The latest update on or before `now` (a finish instant), or null. */
+const latestUpdate = (updates: readonly string[], now: string): string | null => {
+  const nowMs = Date.parse(now)
+  return updates.filter((u) => !(Date.parse(u) > nowMs)).sort().pop() ?? null
+}
+
+/**
+ * The printed line as at the page's clock (WP3.13 display): a week whose due
+ * date has passed is no longer "due" (the deploy-3 review's rule for the
+ * pending row, `passedBeforeOf`: the latest update's day, or two days before
+ * the clock). It is either kept, or it was not kept at its age, and the strip
+ * says "not kept" in its slot: a missed capture is a gap for good.
+ */
+export function keptLineAsAt(line: WeekLineBlock, latest: string | null, now: string): WeekLineBlock {
+  const passedBefore = passedBeforeOf(latest, now)
+  return { ...line, due: line.due.filter((d) => !dueHasPassed(d.date, passedBefore)) }
 }
 
 /** Does the block have nothing to draw (every week none gathered)? */
@@ -154,4 +177,60 @@ export async function loadKeptWeekLine(client: SupabaseClient, input: {
     points = points.filter((p) => p.objectKind === 'kind' || known.has(p.objectId))
   }
   return { weeks, line: { reads, points, ...(objects ? { objects } : {}) } }
+}
+
+// ---- Subjects' week strip (WP3.13 display, §2.3 S6) ---------------------------------------
+
+/**
+ * The same-age line on Subjects: the selected subject's row, on the page's own
+ * week axis (the weeks WP2.9's bars would draw for the month read: `weekAxis`),
+ * never on the month axis. Stored on the pane (optional; a pane stored before
+ * it has none and draws no strip).
+ */
+export interface WeekStrip {
+  /** The strip's week axis: the Mondays, oldest first. */
+  axis: string[]
+  /** The line with the selected subject's row alone (none where it does not
+   *  clear 10 videos in both weeks of a pair: "too few videos a week to
+   *  read"), or every kept read with no row where the line holds none yet. */
+  line: WeekLineBlock
+}
+
+/** The words Subjects prints for a subject with no row on the line (§2.3 S6). */
+export const WEEK_STRIP_TOO_FEW = 'Too few videos a week to read.'
+
+/**
+ * The kept line for Subjects' strip, read once `WEEK_LINE` says print and
+ * never before (deploy 3 draws no strip, §2.3 S6): `loadKeptWeekLine` (the kept
+ * reads and their points, pooled over the market), built on the page's week
+ * axis with the subjects' names and calibrations the page already holds, so no
+ * subject read is added. Null for a tenant with no entry (Össur), while the
+ * line is kept and not shown, or where the kept tables cannot be read.
+ */
+export async function loadWeekStrip(client: SupabaseClient, input: {
+  clientId: string
+  cfg: WeekLineConfig | null
+  reading: Pick<ReadingMonth, 'month'>
+  now: string
+  /** The latest update on or before the clock (`ReadingMonth.asAt`). */
+  asAt: string | null
+  rivalAudiences: readonly string[]
+  changes: readonly OurChange[]
+  /** Every subject the page may select, with its name and calibration. */
+  objects: readonly WeekLineObject[]
+  nextUpdateAfter?: ((instant: string) => string | null) | null
+}): Promise<WeekStrip | null> {
+  const { cfg } = input
+  if (!cfg || !cfg.print) return null
+  const kept = await loadKeptWeekLine(client, { clientId: input.clientId, cfg, rivalAudiences: input.rivalAudiences, objects: input.objects })
+  if (!kept?.line) return null
+  const axis = weekAxis(input.reading, input.now)
+  const line = buildWeekLine(kept.line.reads, kept.line.points, input.changes, cfg, { objects: input.objects, axis, nextUpdateAfter: input.nextUpdateAfter })
+  return { axis, line: keptLineAsAt(line, input.asAt, input.now) }
+}
+
+/** The strip for one subject: its row alone, the line's reads and due weeks kept. */
+export function weekStripFor(strip: WeekStrip | null | undefined, subjectId: string): WeekStrip | null {
+  if (!strip) return null
+  return { axis: strip.axis, line: { ...strip.line, rows: strip.line.rows.filter((r) => r.objectKind === 'subject' && r.objectId === subjectId) } }
 }

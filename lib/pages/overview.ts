@@ -2262,6 +2262,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
         rivalAudiences: marketRivalAudiences(rivals),
         changeRows,
         schedule,
+        keptLine: true,
       }))
     : null
   weeksAhead?.catch(() => {})

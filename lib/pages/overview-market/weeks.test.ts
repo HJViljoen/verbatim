@@ -10,7 +10,10 @@ import {
   STAGING_UPDATES, STAGING_WEEK_VOLUMES, standInSundayRuns,
 } from '../../test/week-fixture'
 import { WEEK_LINE, weekLineConfigFor } from '../../week-line-config'
-import { loadKeptWeekLine, WEEKS_EMPTY, weekVolumesBlock, weekVolumesEmpty } from './weeks'
+import { loadWeekVolumes } from '../week'
+import {
+  keptLineAsAt, loadKeptWeekLine, loadWeekStrip, WEEK_STRIP_TOO_FEW, WEEKS_EMPTY, weekStripFor, weekVolumesBlock, weekVolumesEmpty,
+} from './weeks'
 
 // Week by week's builder (WP2.9), on staging's real weeks. On the 11 Oct
 // clock the weeks after 20 Sep hold nothing on staging (it holds no data after
@@ -178,5 +181,117 @@ describe('loadKeptWeekLine', () => {
   it('says nothing of kept weeks it cannot read (MF4 not applied)', async () => {
     const { client } = fakeClient({ failReads: true })
     expect(await loadKeptWeekLine(client, { clientId: SEALAND_CLIENT_ID, cfg: sealand, rivalAudiences: STAGING_RIVALS })).toBeNull()
+  })
+})
+
+// ---- The printed line on the pages (WP3.13 display, deploy 3w) ---------------------------------
+
+describe('the printed line as at the page\'s clock', () => {
+  const printed = { ...WEEK_LINE[SEALAND_CLIENT_ID], print: true }
+  const PROD_UPDATES = PROD_RUNS.map((r) => r.finishedAt!)
+
+  it('keeps every week not read yet "due" with its update on Tue 27 Oct', async () => {
+    const { client } = fakeClient()
+    const kept = await loadKeptWeekLine(client, { clientId: SEALAND_CLIENT_ID, cfg: printed, rivalAudiences: STAGING_RIVALS })
+    const b = weekVolumesBlock({ ...base, updates: PROD_UPDATES, reading: { month: '2026-10-01' }, now: '2026-10-27T09:00:00.000Z', cfg: printed, line: kept!.line })
+    expect((b.line as WeekLineBlock).due).toEqual([
+      { week: '2026-10-12', date: '2026-11-01' }, { week: '2026-10-19', date: '2026-11-08' }, { week: '2026-10-26', date: '2026-11-15' },
+    ])
+  })
+
+  it('drops a due date that has passed: by Wed 4 Nov the week of 12 Oct was kept or it was not, never still "due 1 Nov"', async () => {
+    const { client } = fakeClient()
+    const kept = await loadKeptWeekLine(client, { clientId: SEALAND_CLIENT_ID, cfg: printed, rivalAudiences: STAGING_RIVALS })
+    // Tue 3 Nov: two days' grace after the 1 Nov update (the capture is Monday's).
+    const tue = weekVolumesBlock({ ...base, updates: PROD_UPDATES, reading: { month: '2026-10-01' }, now: '2026-11-03T09:00:00.000Z', cfg: printed, line: kept!.line })
+    expect((tue.line as WeekLineBlock).due.map((d) => d.week)).toContain('2026-10-12')
+    const wed = weekVolumesBlock({ ...base, updates: PROD_UPDATES, reading: { month: '2026-10-01' }, now: '2026-11-04T09:00:00.000Z', cfg: printed, line: kept!.line })
+    expect((wed.line as WeekLineBlock).due.map((d) => [d.week, d.date])).toEqual([
+      ['2026-10-19', '2026-11-08'], ['2026-10-26', '2026-11-15'], ['2026-11-02', '2026-11-22'],
+    ])
+    expect(keptLineAsAt({ ...(wed.line as WeekLineBlock), due: [{ week: '2026-10-12', date: '2026-11-01' }] }, '2026-11-01T08:33:00.000Z', '2026-11-04T09:00:00.000Z').due).toEqual([])
+  })
+})
+
+/** The fake client, answering the MF4 volumes rpc too (staging's weeks). */
+function fakeClientWithVolumes(opts: { failReads?: boolean } = {}) {
+  const f = fakeClient(opts)
+  const rpcs: string[] = []
+  const client = Object.assign(Object.create(f.client as object), {
+    rpc: async (name: string) => {
+      rpcs.push(name)
+      return { data: STAGING_WEEK_VOLUMES.map((r) => ({ week: r.week, audience: r.audience, videos: r.videos, comments: r.comments, comments_next_month: r.commentsNextMonth, under_5: r.under5, median_dated: r.medianDated, mean_dated: r.meanDated, older_videos: r.olderVideos, unchecked: r.unchecked })), error: null }
+    },
+  }) as SupabaseClient
+  return { ...f, client, rpcs }
+}
+
+describe('loadWeekVolumes: Your market asks for the kept line; This week does not', () => {
+  const input = (client: SupabaseClient, keptLine?: boolean) => ({
+    client, clientId: SEALAND_CLIENT_ID, reading: { month: '2026-10-01' }, now: '2026-10-27T09:00:00.000Z',
+    updates: PROD_RUNS.map((r) => r.finishedAt!), rivalAudiences: STAGING_RIVALS, changeRows: STAGING_CHANGES,
+    schedule: { report_period: 'weekly', report_day: 'sunday' } as never, ...(keptLine ? { keptLine } : {}),
+  })
+
+  it('while print is false (as now) reads no point, and the line stays pending', async () => {
+    const { client, tables } = fakeClientWithVolumes()
+    const b = await loadWeekVolumes(input(client, true))
+    expect(b?.line && 'state' in b.line ? b.line.state : null).toBe('pending')
+    expect(tables()).not.toContain('week_line_points')
+  })
+
+  it('once print is true, Your market reads the kept line and draws it; This week does not read it', async () => {
+    const original = WEEK_LINE[SEALAND_CLIENT_ID].print
+    ;(WEEK_LINE[SEALAND_CLIENT_ID] as { print: boolean }).print = true
+    try {
+      const front = fakeClientWithVolumes()
+      const b = await loadWeekVolumes(input(front.client, true))
+      expect(front.tables()).toEqual(expect.arrayContaining(['week_line_reads', 'week_line_points']))
+      const line = b?.line as WeekLineBlock
+      expect('state' in line).toBe(false)
+      expect(line.rows[0].points.map((p) => p.week)).toEqual(['2026-09-28', '2026-10-05'])
+      const week = fakeClientWithVolumes()
+      const w = await loadWeekVolumes(input(week.client))
+      expect(week.tables()).not.toContain('week_line_points')
+      expect(w?.line && 'state' in w.line).toBe(true)
+    } finally {
+      ;(WEEK_LINE[SEALAND_CLIENT_ID] as { print: boolean }).print = original
+    }
+  })
+})
+
+describe('loadWeekStrip: Subjects\' week strip (§2.3 S6)', () => {
+  const printed = { ...WEEK_LINE[SEALAND_CLIENT_ID], print: true }
+  const LOOKS = { objectKind: 'subject' as const, objectId: STAGING_LOOKS_ID, label: 'Looks & style', calibration: 'provisional' as const }
+  const input = (cfg: typeof printed | null) => ({
+    clientId: SEALAND_CLIENT_ID, cfg, reading: { month: '2026-10-01' }, now: '2026-10-27T09:00:00.000Z', asAt: '2026-10-25T08:33:00.000Z',
+    rivalAudiences: STAGING_RIVALS, changes: changesFromLog(STAGING_CHANGES), objects: [LOOKS], nextUpdateAfter: SEALAND_NEXT_UPDATE,
+  })
+
+  it('reads nothing and draws no strip for Össur, or while the line is kept and not shown (deploy 3)', async () => {
+    const { client, calls } = fakeClient()
+    expect(await loadWeekStrip(client, input(null))).toBeNull()
+    expect(await loadWeekStrip(client, input(WEEK_LINE[SEALAND_CLIENT_ID]))).toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it('once printed, reads the kept line with the names the page holds, on the page\'s own week axis', async () => {
+    const { client, tables } = fakeClient()
+    const strip = await loadWeekStrip(client, input(printed))
+    expect(tables()).toEqual(['week_line_reads', 'week_line_points'])
+    expect(strip?.axis).toEqual(['2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26'])
+    const looks = weekStripFor(strip, STAGING_LOOKS_ID)
+    expect(looks?.line.rows.map((r) => [r.label, r.calibration, r.points.map((p) => p.k)])).toEqual([['Looks & style', 'provisional', [22, 22]]])
+    expect(looks?.line.rows[0].pairs[0].verdict).toBeNull()
+    expect(looks?.line.due.map((d) => d.date)).toEqual(['2026-11-01', '2026-11-08', '2026-11-15'])
+    // Another subject has no row: Subjects prints the one line.
+    expect(weekStripFor(strip, 'cf7bd22c-9a38-47c6-80dd-e8d3c5b3852d')?.line.rows).toEqual([])
+    expect(WEEK_STRIP_TOO_FEW).toBe('Too few videos a week to read.')
+    expect(weekStripFor(null, STAGING_LOOKS_ID)).toBeNull()
+  })
+
+  it('draws no strip where the kept tables cannot be read', async () => {
+    const { client } = fakeClient({ failReads: true })
+    expect(await loadWeekStrip(client, input(printed))).toBeNull()
   })
 })
