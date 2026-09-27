@@ -58,7 +58,13 @@ describe('artefacts', () => {
   it('does not count an active schedule with no addresses as sending', () => {
     const rows = recipientRows([schedule({ recipients: [] })], 'weekly')
     expect(rows[0].sending).toBe(false)
-    expect(sendingSummary(rows, 'weekly')).toBe('None of these has a recipient yet.')
+    expect(sendingSummary(rows, 'weekly')).toBe('None of these is being sent.')
+  })
+
+  it('does not say "no recipient" of a report switched off with addresses on it (Sealand’s weekly under the lock)', () => {
+    const rows = recipientRows([schedule({ active: false, recipients: ['a@x.test', 'b@x.test'] })], 'weekly')
+    expect(rows[0].sending).toBe(false)
+    expect(sendingSummary(rows, 'weekly')).toBe('None of these is being sent.')
   })
 
   it('names the older schedules that ARE still going out, instead of saying nothing is', () => {
@@ -68,10 +74,10 @@ describe('artefacts', () => {
     const legacy = schedule({ artefact: null, recipients: ['a@x.test'] })
     const rows = recipientRows([legacy], 'weekly')
     expect(sendingSummary(rows, 'weekly', [legacy]))
-      .toBe('None of these has a recipient yet. 1 older schedule is still going out, below.')
+      .toBe('None of these is being sent. 1 older schedule is still going out, below.')
     // An older schedule with nobody on it is not "still going out".
     expect(sendingSummary(rows, 'weekly', [schedule({ artefact: null, recipients: [] })]))
-      .toBe('None of these has a recipient yet.')
+      .toBe('None of these is being sent.')
   })
 
   // A row for an artefact nothing builds is recorded and inert: it would have

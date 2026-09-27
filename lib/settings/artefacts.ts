@@ -223,7 +223,10 @@ export function sendingSummary(
     ? ''
     : ` ${stillSending.length} older schedule${stillSending.length === 1 ? ' is' : 's are'} still going out, below.`
   const sending = rows.filter((r) => r.sending)
-  if (sending.length === 0) return `None of these has a recipient yet.${older}`
+  // "IS BEING SENT", NOT "HAS A RECIPIENT" (WP3.10 check): a report switched
+  // off with addresses on it (Sealand's weekly, under the lock, decision J)
+  // has recipients and goes to none of them, and the table prints the names.
+  if (sending.length === 0) return `None of these is being sent.${older}`
   const people = new Set(sending.flatMap((r) => r.recipients.map((e) => e.toLowerCase())))
   // "REPORTS", NOT "ARTEFACTS". This module's own docblock says "Client
   // wording: no template keys, no 'starter', no cadence jargon", and then
