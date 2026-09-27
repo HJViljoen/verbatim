@@ -497,8 +497,9 @@ function WhoPosted({ makers, mode }: { makers: { k: number; of: number }; mode: 
  * The headline on the rail's own base (default M-b), then one mono line: the
  * calibration word and the months read as levels, side by side, never a
  * direction ("provisional · Aug 11% · Sep 16%"); the pair's one chip; then
- * two inner blocks, who posted its videos (makers against everyone else,
- * decision F) and how many months have been read. No gap line and no brand
+ * two inner blocks: its videos, where we found them (`WhereFound`) and who
+ * posted them (makers against everyone else, decision F); and how many
+ * months have been read. No gap line and no brand
  * cells: the brand comparison left the hero (WP2.2).
  */
 function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: RenderMode; appUrl: string; empty: string | null }) {

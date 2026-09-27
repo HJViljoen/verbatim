@@ -102,9 +102,20 @@ describe('where a subject’s videos were found: before the month, only on its a
   })
 
   it('reads each month against its own added searches: August added only r/backpacks', () => {
-    // In August r/backpacks is the added search, so v4 is added; the 9 and 13
-    // Sep terms had not run yet and prove nothing ran before August.
-    expect(foundSplit(['v2', 'v4', 'v1'], EVIDENCE, KP, '2026-08-01')).toEqual({ of: 3, before: 1, added: 1, unrecorded: 1 })
+    // In August r/backpacks is the added search, so v4 is added; v2 was also
+    // found by upcycled bag, run since July.
+    expect(foundSplit(['v2', 'v4'], EVIDENCE, KP, '2026-08-01')).toEqual({ of: 2, before: 1, added: 1, unrecorded: 0 })
+  })
+
+  it('does not split a month where a video was found only by a search first run after it', () => {
+    // v1 (handmade bag, 13 Sep) read in August: there is a record of its
+    // search, so "no record" would be false (staging's August: 13 of Comfort's
+    // 28, found only by the 9 Sep searches). v5, ambiguous on the same day's
+    // frtg, likewise.
+    expect(foundSplit(['v2', 'v4', 'v1'], EVIDENCE, KP, '2026-08-01')).toBeNull()
+    expect(foundSplit(['v2', 'v4', 'v5'], EVIDENCE, KP, '2026-08-01')).toBeNull()
+    // In September the same videos split: 13 Sep is inside the month.
+    expect(foundSplit(['v2', 'v4', 'v1', 'v5'], EVIDENCE, KP, '2026-09-01')).toEqual({ of: 4, before: 2, added: 1, unrecorded: 1 })
   })
 
   it('is null where there is nothing to split against: no search added in the month, no provenance, no video', () => {

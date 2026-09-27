@@ -113,12 +113,17 @@ export interface FoundSplit { of: number; before: number; added: number; unrecor
  *   - `unrecorded`: neither. A video with no evidence, one whose provenance is
  *     'ambiguous' (the gather that first stored it searched none of its
  *     evidence) and names no older search, or one found only by searches
- *     keyword_performance does not show running before the month. Zero on
- *     staging's September (654 market videos: 356 added, 298 before).
+ *     keyword_performance never shows running. Zero on staging's September
+ *     (654 market videos: 356 added, 298 before).
  *
  * Null where there is nothing to split against: no videos, no provenance rows
  * (MF1 not applied), or no search first run in the month (every video is then
- * on searches we ran before it, which says nothing). PURE.
+ * on searches we ran before it, which says nothing). Null too where a video
+ * neither added nor before names a search first run AFTER the month: a past
+ * month read later (staging's August: 13 of Comfort's 28 and 9 of Looks &
+ * style's 38 were found only by the 9 Sep searches), where "no record of the
+ * search that found them" would be false and the month's two parts do not
+ * cover it. PURE.
  */
 export function foundSplit(
   videoIds: readonly string[],
@@ -131,10 +136,12 @@ export function foundSplit(
   const added = searchesFirstRunIn(first, month)
   if (added.size === 0) return null
   const monthStart = Date.parse(`${month.slice(0, 7)}-01T00:00:00Z`)
+  const start = new Date(monthStart)
+  const monthEnd = Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1)
   // `evidenceTerms` and `firstSearched` both key a search by `normTerm`.
-  const ranBefore = (term: string): boolean => {
+  const firstRun = (term: string): number => {
     const at = first.get(term)
-    return at != null && Date.parse(at) < monthStart
+    return at == null ? Number.NaN : Date.parse(at)
   }
   const of = evidenceOf(evidence)
   const ids = new Set(videoIds)
@@ -142,7 +149,9 @@ export function foundSplit(
   for (const id of ids) {
     const { terms, method } = of(id)
     if (isAddedOnly(terms, added, method)) out.added += 1
-    else if ([...terms].some(ranBefore)) out.before += 1
+    else if ([...terms].some((t) => firstRun(t) < monthStart)) out.before += 1
+    // Found later, by a search the month had not run yet: not a split to print.
+    else if ([...terms].some((t) => firstRun(t) >= monthEnd)) return null
     else out.unrecorded += 1
   }
   return out
