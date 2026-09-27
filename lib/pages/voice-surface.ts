@@ -34,6 +34,7 @@ import {
   type Voice,
 } from './overview'
 import {
+  MAKER_GROUP_SHARE,
   THEME_FLOOR,
   POOL_FLOOR,
   buildConversationBoard,
@@ -55,6 +56,8 @@ import {
 import { row, rows as readRows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { buildWords, loadKindRows, loadWordsCandidates, marketKindVideos, shortlistWords, type WordsBlock } from './voice-surface-words'
+import { buildWhere, loadMemory, loadMonthVideos, memoryMonths, type WhereBlock } from './voice-surface-where'
 
 // Conversation — "everything your market talked about, in full" (market-first
 // WP2.4, plan §2.4 C1–C4; the page was Voice, Phase 1 WP13, and keeps its key,
@@ -71,7 +74,12 @@ import { fetchThemedRunId } from './themed-run'
 //      how many of its videos came from searches added in the month;
 //   C3 `voice.theme`    — one theme in full: the lead theme unless the reader
 //      opened another, with its voices and the Ask link;
-//   C4 `voice.cast`     — who is talking, grouped at an update.
+//   C4 `voice.cast`     — who is talking, grouped at an update;
+//   C5 `voice.words`    — the market's words: a bank of real quotes, per kind,
+//      from the board's themes (WP3.8, `./voice-surface-words.ts`);
+//   C6 `voice.where`    — where your market talks: the accounts behind the
+//      category's videos, with a floor and a memory (WP3.8,
+//      `./voice-surface-where.ts`).
 //
 // THE MOVERS ARMS ARE GONE (§2.4 C2 "replaces the movers arms on this page").
 // They drew only the themes at 10+ in BOTH months, which on staging's
@@ -111,6 +119,8 @@ export type VoiceSurfaceParams = {
    *  category's themes, so neither narrows anything any more. */
   horizon?: string
   audience?: string
+  /** `'all'` lists every account at the floor in "Where your market talks". */
+  accounts?: string
 }
 
 /** C1, the market in the month (plan §2.4 C1). */
@@ -244,6 +254,11 @@ export interface VoiceSurfaceData {
   board: ConversationBoard
   theme: ThemeBlock
   cast: CastBlock
+  /** C5 and C6 (WP3.8, deploy 5). Always set by the loader, null where they
+   *  could not be read; optional because a stored snapshot taken before them
+   *  has neither. */
+  words?: WordsBlock | null
+  where?: WhereBlock | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -268,7 +283,7 @@ export function voiceSurfaceHref(
 ): string {
   const merged: Record<string, string | null | undefined> = { ...params, ...over }
   const qs = new URLSearchParams()
-  for (const key of [MONTH_PARAM, 'theme', 'board', 'persona']) {
+  for (const key of [MONTH_PARAM, 'theme', 'board', 'persona', 'accounts']) {
     const value = merged[key]
     if (value) qs.set(key, value)
   }
@@ -466,20 +481,23 @@ async function loadRegrouped(
 }
 
 /** Each theme's videos in the month (`month_evidence_refs`, the category's
- *  theme rows), by registry id. Empty where the table is not there. */
-async function loadThemeRefs(client: SupabaseClient, clientId: string, month: string, ids: readonly string[]): Promise<Map<string, string[]>> {
+ *  theme rows), by registry id. Empty where the table is not there. The same
+ *  rows' comment ids go into `comments`, where given: the quote bank's anchor
+ *  (WP3.8), at no extra read. */
+async function loadThemeRefs(client: SupabaseClient, clientId: string, month: string, ids: readonly string[], comments?: Map<string, Set<string>>): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>()
   for (const part of chunk(ids, UUID_IN_CHUNK)) {
     const res = await client
       .from(TABLE_EVIDENCE_REFS)
-      .select('object_id, video_ids')
+      .select(comments ? 'object_id, video_ids, comment_ids' : 'object_id, video_ids')
       .eq('client_id', clientId)
       .eq('month', month)
       .eq('audience', INDUSTRY_AUDIENCE)
       .eq('object_kind', 'theme')
       .in('object_id', part)
-    for (const r of monthRows<{ object_id: string; video_ids: string[] | null }>(res, 'voice.refs')) {
+    for (const r of monthRows<{ object_id: string; video_ids: string[] | null; comment_ids?: string[] | null }>(res, 'voice.refs')) {
       out.set(String(r.object_id), (r.video_ids ?? []).map(String))
+      comments?.set(String(r.object_id), new Set((r.comment_ids ?? []).map(String)))
     }
   }
   return out
@@ -598,6 +616,30 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const db = reading.client
   const addedAhead = addedSearchesRead(db, clientId, month)()
 
+  // C5 AND C6 START HERE (WP3.8): they read the reading month alone, so they
+  // run beside everything below. The month's category videos, with their
+  // accounts and segments, serve both: every quote the bank prints is under
+  // one of them.
+  const makerRule = makerRuleEnabled(clientId)
+  const monthVideosAhead = loadMonthVideos(db, clientId, month, makerRule)
+  monthVideosAhead.catch(() => {})
+  const kindRowsAhead = loadKindRows(db, clientId, month, marketRivals)
+  kindRowsAhead.catch(() => {})
+  const whereAhead = (async (): Promise<WhereBlock | null> => {
+    const mv = await monthVideosAhead
+    if (!mv) return null
+    const base = { month, videos: mv.videos, segments: mv.segments, segmentsState: mv.segmentsState }
+    // Every listed account first (the memory reads their videos), then the
+    // block as the reader asked for it.
+    const listed = buildWhere({ ...base, memory: null, expanded: true }).rows
+    const monthsRead = history.denominators.filter((d) => d.audience === INDUSTRY_AUDIENCE).map((d) => monthStartOf(d.month))
+    const memory = listed.length > 0
+      ? await loadMemory(db, clientId, month, memoryMonths(month, monthsRead), mv.videos, listed.map((a) => ({ platform: a.platform, name: a.name })))
+      : null
+    return buildWhere({ ...base, memory, expanded: params.accounts === 'all' })
+  })()
+  whereAhead.catch(() => {})
+
   // ── wave 3: the pool, the segments, the overrides, the cast ────────────
   const themedRunId = await themedRunAhead
   const [pool, segmentRows, excluded, profileRes, newestRunRes] = await Promise.all([
@@ -617,18 +659,46 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const kById = new Map(pool.map((r) => [r.id, r.k]))
 
   // ── wave 4: last month, the labels and kinds, and each theme's videos ──
+  // The refs' comment ids ride the same read: the bank's anchor (C5).
+  const refComments = new Map<string, Set<string>>()
   const [prevK, obs, refs] = await Promise.all([
     loadPrevK(db, clientId, prevMonth, shownIds),
     loadBoardObservations(db, clientId, themedRunId, shownIds),
-    loadThemeRefs(db, clientId, month, shownIds),
+    loadThemeRefs(db, clientId, month, shownIds, refComments),
   ])
 
   const denom = (m: string, audience: string) =>
     history.denominators.find((d) => monthStartOf(d.month) === m && d.audience === audience) ?? null
   const n = denom(month, INDUSTRY_AUDIENCE)?.videos ?? 0
   const prevN = denom(prevMonth, INDUSTRY_AUDIENCE)?.videos ?? null
-  const segments: ThemeBoard['segments'] = !makerRuleEnabled(clientId) ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
+  const segments: ThemeBoard['segments'] = !makerRule ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
   const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
+
+  // THE BANK (C5), STARTED NOW: its themes are the board's rows, every theme
+  // at 10+ not led by makers or by off-topic videos (`buildThemeBoard`'s
+  // rule), and its reads wait on nothing else here. The shortlist's
+  // translations follow as soon as the candidates and the month's segments
+  // are in; the labels join at the end, after the brand check.
+  const bankIds = atTenIds.filter((id) => segments !== 'measured'
+    || ((shares?.maker.get(id) ?? 0) < MAKER_GROUP_SHARE && (shares?.noise.get(id) ?? 0) < MAKER_GROUP_SHARE))
+  const wordsReadAhead = (async () => {
+    const [candidates, mv] = await Promise.all([
+      loadWordsCandidates(supabase, clientId, themedRunId, bankIds, month),
+      monthVideosAhead.catch(() => null),
+    ])
+    if (!candidates) return null
+    const segmentOf = mv?.segments ?? null
+    const anchors = refComments.size > 0 ? refComments : null
+    const known = new Map(bankIds.map((id) => [id, { kind: obs.get(id)?.kind ?? null, k: kById.get(id) ?? 0 }]))
+    const short = shortlistWords(candidates.map((c) => ({ ...c, segment: c.videoId ? segmentOf?.get(c.videoId) ?? null : null })), month, anchors, known)
+    const translations = await readTranslations(supabase, short.map((c) => c.quote))
+    return {
+      candidates: short.map((c) => ({ ...c, ...readingOf(translations, c.quote) })),
+      anchors,
+      segments: (mv?.segmentsState ?? (makerRule ? 'unknown' : 'no_rule')) as WordsBlock['segments'],
+    }
+  })()
+  wordsReadAhead.catch(() => {})
 
   // FOUR THINGS NOW RUN BESIDE EACH OTHER, because none waits on another: the
   // flags' reads, where each theme's videos came from, the cast, and the lead
@@ -811,7 +881,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       }
 
   // ── the market in the month ─────────────────────────────────────────────
-  const counts = pooledDenominators(history.denominators, marketRivals).get(month) ?? null
+  const pooled = pooledDenominators(history.denominators, marketRivals)
+  const counts = pooled.get(month) ?? null
   const categoryDenom = denom(month, INDUSTRY_AUDIENCE) as (ReturnType<typeof denom> & { platform_mix?: Record<string, number> }) | null
   const market: ConversationMarket = {
     videos: counts?.videos ?? null,
@@ -822,6 +893,30 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     // there although `DenominatorPoint` does not name it.
     platformMix: platformShares(categoryDenom?.platform_mix, categoryDenom?.videos ?? null),
   }
+
+  // ── C5 and C6, in ──────────────────────────────────────────────────────
+  // A failure here costs its block, never the page: each block then says it
+  // was not read.
+  const quiet = <T,>(p: Promise<T>, label: string): Promise<T | null> => p.catch((error: unknown) => {
+    console.error(`[pages] ${label}: ${(error as Error)?.message ?? String(error)}; not read`)
+    return null
+  })
+  const [wordsRead, kindRows, where] = await Promise.all([
+    quiet(wordsReadAhead, 'voice.words'),
+    quiet(kindRowsAhead, 'voice.words.kinds'),
+    quiet(whereAhead, 'voice.where'),
+  ])
+  const bankThemes = new Map(themes.filter((t) => bankIds.includes(t.registryId)).map((t) => [t.registryId, { label: t.label, kind: t.kind, k: t.k }]))
+  const words: WordsBlock | null = wordsRead && kindRows
+    ? buildWords({
+        month,
+        candidates: wordsRead.candidates,
+        kindVideos: marketKindVideos(kindRows, pooled, month, marketRivals),
+        themes: bankThemes,
+        anchors: wordsRead.anchors,
+        segments: wordsRead.segments,
+      })
+    : null
 
   return {
     brand,
@@ -840,6 +935,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     board,
     theme,
     cast,
+    words,
+    where,
   }
 }
 
