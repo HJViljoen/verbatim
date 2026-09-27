@@ -47,6 +47,13 @@ describe('confirmedSubjects', () => {
       // a retirement by a member
       { field: 'subjects', after: { id: 'repair', status: 'retired' }, actor_kind: 'user', changed_at: '2026-10-13T08:00:00Z' },
     ]
-    expect([...confirmedSubjects(rows)]).toEqual([['travel', '2026-10-14T08:00:00Z'], ['materials', '2026-10-12T08:00:00Z']])
+    // The operator's row is dated by the call (13 Oct), not the paste (14 Oct).
+    expect([...confirmedSubjects(rows)]).toEqual([['travel', '2026-10-13T00:00:00.000Z'], ['materials', '2026-10-12T08:00:00Z']])
+    expect(subjectOriginWords({ id: 'travel', status: 'active', created_by: null }, confirmedSubjects(rows), CANDIDATE)).toBe('you confirmed it on 13 Oct')
+  })
+
+  it('falls back to when the row was written where it names no call date', () => {
+    const rows = [{ field: 'confirmed', after: { id: 'travel' }, actor_kind: 'operator', changed_at: '2026-10-14T08:00:00Z' }]
+    expect([...confirmedSubjects(rows)]).toEqual([['travel', '2026-10-14T08:00:00Z']])
   })
 })

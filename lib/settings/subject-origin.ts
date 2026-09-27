@@ -31,17 +31,22 @@ export interface SubjectChangeRow {
 }
 
 /** The subjects the record shows the client confirmed, with the day: the
- *  earliest confirmation of each. */
+ *  earliest confirmation of each. An operator's confirmation row is dated by
+ *  the call it records (`after.confirmed_on`), not by the paste that wrote it
+ *  days later; a member's activation by when it happened. */
 export function confirmedSubjects(rows: readonly SubjectChangeRow[]): Map<string, string> {
   const out = new Map<string, string>()
   for (const r of rows) {
-    const after = (r.after && typeof r.after === 'object' ? r.after : {}) as { id?: unknown; status?: unknown }
+    const after = (r.after && typeof r.after === 'object' ? r.after : {}) as { id?: unknown; status?: unknown; confirmed_on?: unknown }
     const id = typeof after.id === 'string' ? after.id : null
     if (!id) continue
     const confirms = r.field === 'confirmed' || (r.field === 'subjects' && after.status === 'active' && r.actor_kind === 'user')
     if (!confirms) continue
+    const on = r.field === 'confirmed' && typeof after.confirmed_on === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(after.confirmed_on)
+      ? `${after.confirmed_on}T00:00:00.000Z`
+      : r.changed_at
     const held = out.get(id)
-    if (!held || r.changed_at < held) out.set(id, r.changed_at)
+    if (!held || on < held) out.set(id, on)
   }
   return out
 }
