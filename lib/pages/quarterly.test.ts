@@ -85,40 +85,36 @@ describe('confidenceOf', () => {
   })
 })
 
-describe('coverBody', () => {
-  it('names the lead and its denominator as tokens, never as digits', () => {
-    const body = coverBody({ lead: verdict(), monthLabel: 'September', quarterLabel: 'Q3 2026', unlocked: true, readings: 8 })
-    // ONE SENTENCE, ONE PERIOD. The lead is a MONTH verdict and the sentence
-    // used to call it "the biggest banded change this quarter … in September".
-    expect(body).toContain('The biggest banded change in September')
-    expect(body).not.toMatch(/banded change this quarter/)
-    expect(body).toContain('[[lead_share]]')
-    expect(body).toContain('[[lead_of]]')
-    expect(body).toContain('[[quarter_videos]]')
-    // The cover is code's prose and may carry a figure, but only as a token:
-    // a bare digit here is a number nobody can re-substitute at render. The
-    // quarter's own NAME is not a figure — "Q3 2026" is a period, the same
-    // call WP17 made about a date on the weekly report's first screen.
+describe('coverBody, at quarter grain (WP3.11)', () => {
+  it('opens on the market over the quarter, as a token, and names no month', () => {
+    const body = coverBody({ quarterLabel: 'Q3 2026', unlocked: true, readings: 8, counted: true, moved: verdict() })
+    expect(body).toContain('Your market was read across [[quarter_videos]] videos in Q3 2026.')
+    expect(body).toContain('The biggest banded change over the quarter is')
+    expect(body).toContain('[[moved_share]]')
+    // The cover is code's prose and may carry a figure, but only as a token.
     expect(body.replace(/\[\[[a-z_]+\]\]/g, '').replace(/Q3 2026/g, '')).not.toMatch(/\d/)
+    expect(body).not.toMatch(/September|October/)
+  })
+
+  it('says the quarter pair’s refusal in its own words, and no change', () => {
+    const body = coverBody({
+      quarterLabel: 'Q3 2026', unlocked: true, readings: 8, counted: true, moved: verdict(),
+      pairSentence: 'Q3 2026 against Q2 2026 is not read as a change: we changed our searches in September.',
+    })
+    expect(body).toContain('Q3 2026 against Q2 2026 is not read as a change')
+    expect(body).not.toContain('biggest banded change')
   })
 
   it('leaves the gate to the stat card when the quarter is locked (copy de-clutter)', () => {
-    const body = coverBody({ lead: verdict(), monthLabel: 'September', quarterLabel: 'Q3 2026', unlocked: false, readings: 3 })
-    // The cover's stat card carries "your 3rd monthly reading, the quarter
-    // view needs 6"; the body saying it again was the third copy on one sheet.
+    const body = coverBody({ quarterLabel: 'Q3 2026', unlocked: false, readings: 3, counted: true })
     expect(body).not.toContain('needs six months')
     expect(body).not.toContain('you have 3')
   })
 
-  it('says the month the lead is of is not a month of the quarter, when it is not', () => {
-    const body = coverBody({ lead: verdict(), monthLabel: 'October', quarterLabel: 'Q3 2026', unlocked: true, readings: 9, monthOutside: true })
-    expect(body).toContain('the month in hand rather than a month of Q3 2026')
-  })
-
-  it('says nothing cleared rather than inventing a lead', () => {
-    const body = coverBody({ lead: null, monthLabel: 'September', quarterLabel: 'Q3 2026', unlocked: true, readings: 8 })
-    expect(body).toContain('Nothing on either side cleared its band')
-    expect(body).not.toContain('[[lead_share]]')
+  it('says so where the quarter is not counted as one window', () => {
+    const body = coverBody({ quarterLabel: 'Q3 2026', unlocked: true, readings: 8, counted: false })
+    expect(body).toContain('is not counted as one window')
+    expect(body).toContain('Nothing on either side cleared its band over the quarter')
   })
 })
 

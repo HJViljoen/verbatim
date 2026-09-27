@@ -5,7 +5,7 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { AGENT_MOVEMENT_MONTHS, ASK_THEMES_PER_CLAIM, directionWordsFor } from '../config'
-import { fmtInt, monthName, shortDate, weekdayDate } from '../format'
+import { fmtInt, longMonth, shortDate, weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
@@ -18,17 +18,26 @@ import {
   loadNotAnswered,
   measureAnswer,
   scrubThreadAnswer,
+  withObjectVerdicts,
   type AnswerMeasure,
   type NotAnswered,
 } from '../agent/measure'
-import { loadMonthSeries } from '../reading/read'
+import { loadMonthSeries, loadOurChanges, loadPairRows, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { refuseEveryPair } from '../reading/pairs'
 import { monthStartOf, prevMonth } from '../reading/month-key'
-import { loadReadingMonth } from '../reading/reading-view'
+import { loadReadingInputs, loadReadingMonth, readingViewFrom } from '../reading/reading-view'
+import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
+import { nextComparablePair } from '../reading/comparability'
+import { pooledDenominators, type MarketCount } from '../reading/market'
+import { SHARE_BAND } from '../report-bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
-import { detailHref } from '../shell/bar'
 import { surface } from '../nav'
+import { loadAskFrame, namedObjects } from '../agent/answer'
+import { loadObjectReadings, type ObjectReading } from '../agent/movement'
+import { ASK_WINDOW_WORDS, type AskWindowChoice } from '../agent/scope'
+import { starterQuestions, type StarterQuestion } from '../agent/starters'
+import { loadOverview } from './overview'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -172,36 +181,31 @@ export interface AgentThreadData {
   planChip: AskPlanChip | null
   /** The rail's "Earlier questions" tile. Null where the read failed. */
   history: AskHistory | null
-  /** The rail's "What an answer draws on" `<dl>`. */
-  draws: AskDrawRow[]
+  /** The rail's "What an answer reads" (WP3.9): the market, the brands
+   *  tracked, the client's own posts, the window, the months read and the
+   *  first comparison read the same way. */
+  reads: AskReads
   /**
-   * What the page bar prints. Ask's bar is `title` (lib/nav.ts) because nothing
-   * on this surface is a reading of a month, so `context` is the ASK BASIS —
-   * which update an answer is given against and how much of the corpus is
-   * searchable — and never the month/still-filling context line the five
-   * reading surfaces carry.
+   * What the page bar prints (WP3.9: the one-line bar). `reading` is the
+   * reading month every page reads, so the bar carries the month selector's
+   * chip and "as at the {update} update · next update {date}"; null where
+   * nothing has been delivered, and the bar is then the title alone.
+   * `context` is the ask basis, which the answer tile still prints under the
+   * first answer.
    */
-  bar: { question: string; context: string }
-  /** The "what an answer draws on" lines and where the record drawer opened.
-   *  NOTHING RENDERS IT NOW: the "How sound" band and its drawer left every
-   *  page with the 25 Sep rulings (market-first WP1.2), and `hasRecord` left
-   *  `lib/nav.ts` with them. Kept only until WP3.9 rebuilds Ask, which drops
-   *  it with `askRecordHref`. */
-  record: { lines: string[]; href: string } | null
+  bar: { question: string; context: string; reading: ReadingMonth | null }
+  /**
+   * What the thread's questions NAME, read on the market for the month the
+   * newest answer was measured on (WP3.9, S7): a subject's own figure and
+   * trail, a named brand's topic, a kind, the mood. Empty where they name
+   * nothing, or the read failed.
+   */
+  about: ObjectReading[]
+  /** The window the newest answer was read over; `all` for an answer stored
+   *  before WP3.9, which read all time. Null on a thread with no answer. */
+  window: AskWindowChoice | null
   method: MethodNoteData
 }
-
-/**
- * Where "The record →" opened the how-sound drawer from Ask: the current
- * address with `?detail=record`, so opening it inside a thread kept the answer.
- *
- * NO LONGER MOUNTED. The drawer and the band that opened it left every page
- * with the 25 Sep rulings (market-first WP1.2), and `lib/nav.ts:hasRecord`,
- * which decided whether it mounted, went with them. This link opens nothing;
- * it and `AgentThreadData.record` go with WP3.9.
- */
-export const askRecordHref = (threadId?: string | null): string =>
-  detailHref(threadId ? `${surface('ask').href}/${threadId}` : surface('ask').href, {}, 'record')
 
 /**
  * A finding's key on this page: the TURN it was written in, then the model's
@@ -240,115 +244,170 @@ export function answerFindings(turns: readonly Turn[]): { findingId: string; reg
   return out
 }
 
-/**
- * "What an answer draws on", in the reader's words.
- *
- * FOUR OF THE MOCK'S FIVE ROWS ARE NOT HERE, and each is left out for its own
- * reason rather than for want of a query. Updates-this-month, videos-analysed
- * and the language mix all live on `lib/reading/record.ts:loadRecordInputs`,
- * which is the record surface's loader and a far heavier read than this page
- * has any business doing; the tracking-changes row is `config_changes`, the
- * same. What is here is what this page already holds: the two facts the basis
- * line reads, plus the one count that makes "The record →" mean something.
- * Pure, so the sentences are argued in a test.
- */
-export function askRecordLines(basis: AskBasis, delivered: number | null): string[] {
-  const lines: string[] = []
-  lines.push(
-    delivered == null
-      ? 'How many updates have been delivered is not recorded here.'
-      : delivered === 0
-        ? 'No update has been delivered for this workspace yet.'
-        : `${fmtInt(delivered)} ${delivered === 1 ? 'update' : 'updates'} delivered.`,
-  )
-  lines.push(
-    basis.monthlyReadings == null
-      ? 'The month-by-month reading has not been recorded for this workspace yet.'
-      : basis.monthlyReadings === 0
-        ? 'No month yet carries enough videos to compare on.'
-        : basis.monthlyReadings === 1
-          ? '1 monthly reading carries enough videos to compare on.'
-          : `${fmtInt(basis.monthlyReadings)} monthly readings carry enough videos to compare on.`,
-  )
-  lines.push(
-    basis.total == null || basis.embedded == null
-      ? 'How much of the corpus a question can search is not recorded.'
-      : basis.total === 0
-        ? 'There is nothing to search yet.'
-        : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings are searchable.`,
-  )
-  return lines
-}
-
-// ── "What an answer draws on" — the rail's <dl> (Block D wave 2, E-ask) ──────
-
-/** One row of the draws tile: the mono term and the fact beside it. */
-export interface AskDrawRow {
-  /** The `<dt>` — one word, the mock's own. */
-  term: string
-  /** The `<dd>`. Code's sentence, always; a row with nothing to say says so. */
-  value: string
-}
+// ── "What an answer reads" (WP3.9; the approved preview's rail) ────────────
 
 /**
- * The four facts Ask holds about what stands behind an answer.
+ * The market an answer is read on, for the month the pages read.
  *
- * THE MOCK DRAWS FIVE ROWS AND THIS PRINTS FOUR, and the missing three are a
- * stated deviation rather than an oversight. Updates-this-month with its dates,
- * videos-analysed with its trailing median, the language mix and the
- * tracking-change count all live on `lib/reading/record.ts:loadRecordInputs` —
- * eight tenant-wide reads, on a page whose own loader already pays three
- * uncached counts per render (`lib/agent/basis.ts:loadIndexFacts` says so in
- * its own docstring, and the 16 September outage is what the docstring is
- * about). So the tile prints what this page ALREADY read. The rest is the
- * record's, in Settings (the drawer that once opened over Ask left every page
- * with the 25 Sep rulings, market-first WP1.2).
- *
- * `Updates` is the ALL-TIME delivered count, not the mock's four-this-month,
- * and the row says "delivered" rather than "this month" so the two cannot be
- * read as each other. Pure, so the sentences are argued in a test.
+ * THE PAGES' OWN READS. `loadReadingInputs` is the four memoised reads every
+ * page makes (the runs, the schedule, the stored denominators, the tracked
+ * rivals), so Ask cannot name another month or another market than Your
+ * market does. Two more, both small and both memoised by the reading layer:
+ * the change log and the pair rows, for the first comparison read the same
+ * way (`nextComparablePair`).
  */
-export function askDraws(basis: AskBasis, delivered: number | null): AskDrawRow[] {
-  const months = basis.readingMonths ?? []
-  const named = months.length ? ` · ${months.map((m) => monthName(m).split(' ')[0]).join(', ')}` : ''
-  return [
+export interface AskReading {
+  reading: ReadingMonth | null
+  /** The market in the reading month (decision E), or null. */
+  market: MarketCount | null
+  /** The client's own posts with a reading in the month, or null. */
+  own: number | null
+  /** Months whose market clears the floor (`SHARE_BAND.minN`), ascending, to
+   *  the reading month: the months an answer can compare on. */
+  monthsRead: string[]
+  /** The earliest month any comment was read into. */
+  earliest: string | null
+  /** The first pair read the same way, assuming nothing further changes. */
+  next: { prevMonth: string; month: string; sameAgeFrom: string } | null
+}
+
+export const NO_ASK_READING: AskReading = { reading: null, market: null, own: null, monthsRead: [], earliest: null, next: null }
+
+export async function loadAskReading(supabase: SupabaseClient, handle: ReadingHandle, now: string): Promise<AskReading> {
+  const [inputs, changes, rows] = await Promise.all([
+    loadReadingInputs(supabase, handle, now),
+    loadOurChanges(handle.client, handle.clientId).catch(() => []),
+    loadPairRows(handle.client, handle.clientId, null).catch(() => []),
+  ])
+  return askReadingFrom({ ...inputs, changes, rows, now })
+}
+
+/** The pure half: the reading, the market and the months, off the rows. */
+export function askReadingFrom(input: Parameters<typeof readingViewFrom>[0] & {
+  changes: Parameters<typeof nextComparablePair>[1]
+  rows: Parameters<typeof nextComparablePair>[2]
+}): AskReading {
+  if (input.runs.length === 0) return NO_ASK_READING
+  const { reading } = readingViewFrom(input)
+  const rivals = input.rivalAudiences ?? [...new Set(input.denominators.map((d) => d.audience).filter((a) => a.startsWith('competitor:')))]
+  const pooled = pooledDenominators(input.denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })), rivals)
+  const month = monthStartOf(reading.month)
+  const own = input.denominators.find((d) => monthStartOf(d.month) === month && d.audience === CLIENT_AUDIENCE)?.videos ?? null
+  const monthsRead = [...pooled.values()]
+    .filter((c) => c.videos != null && c.videos >= SHARE_BAND.minN && c.month <= month)
+    .map((c) => c.month)
+  const months = input.denominators.map((d) => monthStartOf(d.month)).sort()
+  const after = input.schedule ? scheduledUpdateAfter(input.schedule) : undefined
+  const next = nextComparablePair(input.now, input.changes, input.rows, { readingMonth: month, ...(after ? { nextUpdateAfter: after } : {}) })
+  return {
+    reading,
+    market: pooled.get(month) ?? null,
+    own,
+    monthsRead,
+    earliest: months[0] ?? null,
+    next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom } : null,
+  }
+}
+
+/** One row of the rail's three: the swatch's name, its count, and one line
+ *  saying what the count is. */
+export interface AskReadsRow {
+  key: 'market' | 'brands' | 'own'
+  label: string
+  value: number | null
+  line: string
+}
+
+export interface AskReads {
+  rows: AskReadsRow[]
+  /** The three facts under them: the window, the months read, and the first
+   *  comparison read the same way. */
+  facts: { term: string; value: string }[]
+}
+
+/** "September so far", "September": the month as the selector names it. */
+const monthPhrase = (r: ReadingMonth | null, month: string): string =>
+  r && monthStartOf(r.month) === monthStartOf(month) && r.state === 'so_far' ? `${longMonth(month)} so far` : longMonth(month)
+
+const listOf = (items: readonly string[]): string =>
+  items.length <= 1 ? items[0] ?? '' : `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
+
+/**
+ * The rail's words, off the reading (the approved preview's "What an answer
+ * reads"). Pure. Every count is the market's own, one denominator a line, and
+ * a count nobody read says so rather than printing a zero.
+ */
+export function askReads(r: AskReading, window: AskWindowChoice | null): AskReads {
+  const month = r.reading ? monthStartOf(r.reading.month) : null
+  const when = month ? monthPhrase(r.reading, month) : null
+  const total = r.market?.videos ?? null
+  const rows: AskReadsRow[] = [
     {
-      term: 'Readings',
-      value:
-        basis.monthlyReadings == null
-          ? 'not recorded for this workspace yet'
-          : basis.monthlyReadings === 0
-            ? 'no month yet carries enough videos to compare on'
-            : `${fmtInt(basis.monthlyReadings)} monthly${named}`,
+      key: 'market',
+      label: 'Your market',
+      value: total,
+      line: total == null || !when
+        ? 'not read for this month yet'
+        : `videos in ${when}${r.market?.category != null ? `; ${fmtInt(r.market.category)} in the category, where themes are grouped` : ''}`,
     },
     {
-      term: 'Updates',
-      value:
-        delivered == null
-          ? 'not recorded here'
-          : delivered === 0
-            ? 'none delivered yet'
-            : `${fmtInt(delivered)} delivered`,
+      key: 'brands',
+      label: 'Brands you track',
+      value: r.market?.rivalFiled ?? null,
+      line: total == null ? 'filed under a brand; read when a question names one' : `of those ${fmtInt(total)}, filed under a brand; read when a question names one`,
     },
     {
-      term: 'Searchable',
-      value:
-        basis.total == null || basis.embedded == null
-          ? 'not recorded'
-          : basis.total === 0
-            ? 'nothing to search yet'
-            : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings`,
-    },
-    {
-      term: 'Indexed',
-      value: basis.lastEmbeddedAt ? `as at ${shortDate(basis.lastEmbeddedAt)}` : 'when they were indexed is not recorded',
+      key: 'own',
+      label: 'Your own posts',
+      value: r.own,
+      line: when ? `with a reading in ${when}, marked as yours and never counted as the market` : 'marked as yours and never counted as the market',
     },
   ]
+  const facts = [
+    {
+      term: 'Window',
+      value: window == null
+        ? 'the last 90 days, or all time'
+        : window === 'all' ? `${ASK_WINDOW_WORDS.all.toLowerCase()}` : 'the last 90 days',
+    },
+    {
+      term: 'Months read',
+      value: r.monthsRead.length === 0
+        ? 'no month yet carries enough videos to compare on'
+        : listOf(r.monthsRead.map((m) => monthPhrase(r.reading, m))),
+    },
+    {
+      term: 'Comparisons',
+      value: r.next
+        ? `the first read the same way: ${longMonth(r.next.prevMonth)} against ${longMonth(r.next.month)}, from the ${shortDate(r.next.sameAgeFrom)} update`
+        : 'none read the same way yet',
+    },
+  ]
+  return { rows, facts }
 }
 
 // ── "Earlier questions" — the rail's history tile ────────────────────────────
 
 /** One earlier thread, as the rail prints it. */
+/**
+ * Ask's starter questions, off the front page's own load (WP3.9, plan §2.8).
+ *
+ * `marketFront` IS WHAT BUILDS THE OBJECTS THEY ARE WRITTEN FROM. Without it
+ * `loadOverview` returns the Phase 1 page, which carries no board, no hero and
+ * no asks, so `starterQuestions` had nothing to write from and the Ask index
+ * drew no starter at all (the staging render, 27 Sep). The same flag the
+ * front page's route passes, so a starter cannot name an object or a count
+ * that page does not print. Null is the first-run empty state.
+ */
+export async function loadAskFront(scope: Pick<Scope, 'supabase' | 'clientId' | 'reading'>): Promise<{ brand: string; starters: StarterQuestion[] } | null> {
+  const overview = await loadOverview({ ...scope, params: {} }, { marketFront: true })
+  if (!overview) return null
+  return {
+    brand: overview.brand,
+    starters: starterQuestions({ themes: overview.themes, hero: overview.hero, asks: overview.asks, subjects: overview.subjects.rows }),
+  }
+}
+
 export interface AskHistoryRow {
   threadId: string
   /** The thread's title — `ask_extract_title`, a model slot. */
@@ -609,10 +668,6 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // one plan row, one month of message rows, and the month series for the
   // themes THIS thread already rests on (never the whole registry, and never a
   // rival's audience — see lib/agent/measure.ts).
-  const deliveredP = supabase
-    .from('pipeline_runs')
-    .select('id', { count: 'exact', head: true })
-    .eq('client_id', clientId)
   // THE PLAN COMES THROUGH THE SHARED LOADER (E-ask; see `AskPlanChip`). This
   // was two hand-rolled reads that could disagree with Market's card about
   // which plan is the plan and about how its claims read; it is now the one
@@ -680,6 +735,29 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const judgeP = storedRegistryIds.length
     ? loadAppPairOn(scope.reading, measuredAt)
     : Promise.resolve(refuseEveryPair)
+  // WHAT AN ANSWER READS, off the pages' own reads (WP3.9).
+  const askReadingP = loadAskReading(supabase, scope.reading, measuredAt).catch((e: unknown) => {
+    console.error(`[pages] agentThread.reading: ${(e as { message?: string })?.message ?? String(e)}`)
+    return NO_ASK_READING
+  })
+  // WHAT THE THREAD'S QUESTIONS NAME, read on the market for the month the
+  // answer is measured on (WP3.9, S7): "Ask about this" on a subject lands on
+  // that subject's own figure and trail. The client's own words decide, never
+  // the model's.
+  const questionsText = messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n')
+  const aboutP: Promise<ObjectReading[]> = thread.kind === 'question' && questionsText
+    ? loadAskFrame(scope.reading.client, clientId, new Date(measuredAt))
+        .then((frame) => {
+          const objects = namedObjects(questionsText, frame)
+          return objects.length
+            ? loadObjectReadings(scope.reading.client, { clientId, objects, month: readMonth, pair: frame.pair, asOf: measuredAt })
+            : []
+        })
+        .catch((e: unknown) => {
+          console.error(`[pages] agentThread.about: ${(e as { message?: string })?.message ?? String(e)}`)
+          return [] as ObjectReading[]
+        })
+    : Promise.resolve([] as ObjectReading[])
 
   // A document thread wraps a plan_check; its quotes resolve from stored
   // insight ids — no quote text is kept in either table.
@@ -817,7 +895,8 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // prompts have asked for in words since WP7 and nothing has enforced.
   const set = await seriesP
   const seeded = set != null && set.substrate === 'seeded' && set.numeratorSubstrate === 'seeded'
-  const measure = measureAnswer({
+  const about = await aboutP
+  const measure = withObjectVerdicts(measureAnswer({
     findings: answerFindings(turns),
     series: seeded ? (set as NonNullable<typeof set>).series : [],
     month: readMonth,
@@ -826,7 +905,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     directionWords: directionWordsFor('agent.movement'),
     ownAudience: CLIENT_AUDIENCE,
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
-  })
+  }), about)
   const fallback = answerFallback(measure)
   // The thread's own inputs, never its output: the client's questions and the
   // theme labels the answer rests on. A product name with a digit in it
@@ -862,10 +941,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   })
 
   const planChip = askPlanChip(await plansP)
-
-  const deliveredRes = (await deliveredP) as { count: number | null; error: unknown }
-  const delivered = deliveredRes.error ? null : deliveredRes.count ?? null
   const basis: AskBasis = { updateAt: newestUpdateAt, ...facts }
+  const askReading = await askReadingP
+  // The window the newest answer was read over. An answer stored before
+  // WP3.9 carries none, and was read over all time.
+  const newestAnswer = [...turns].reverse().find((t) => t.answer)?.answer ?? null
+  const window: AskWindowChoice | null = newestAnswer ? newestAnswer.window ?? 'all' : null
 
   return {
     threadId: id,
@@ -885,9 +966,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     notAnswered: await notAnsweredP,
     planChip,
     history: await historyP,
-    draws: askDraws(basis, delivered),
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis, { short: true }) },
-    record: { lines: askRecordLines(basis, delivered), href: askRecordHref(id) },
+    reads: askReads(askReading, window),
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis, { short: true }), reading: askReading.reading },
+    about,
+    window,
     method: {
       company: brand,
       period: `Asked ${weekdayDate(thread.created_at as string)}`,

@@ -1,3 +1,4 @@
+import { STALE_SECTION_LINE } from '@/lib/reports/stale'
 import { Fragment, type ReactNode } from 'react'
 import { MACHINE_TRANSLATION_STAMP, QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
@@ -2138,7 +2139,7 @@ function SectionBody({ section, data, why = false, framing = true, title = false
     // of a column — and the contract's kinds are all about a model's words.
     // Marking it `stored` asked the scanner for a `data-slot` that does not
     // exist (measured: two violations on Össur's marketing brief).
-    ? <p className="m-0 text-[14.5px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? 'This section could not be read for this month.'}</p>
+    ? <p className="m-0 text-[14.5px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? (section.empty == null && !block ? STALE_SECTION_LINE : 'This section could not be read for this month.')}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
   // THE FRAMING IS THE SLIDE'S NOTE WHERE THE SHEET HAS ONE TO SPARE, not a
   // paragraph inside the body: the artboard draws it as a serif italic line

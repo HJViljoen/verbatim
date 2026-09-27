@@ -609,6 +609,11 @@ export function documentReading(r: BriefReading): DocumentReading {
     // artefact and never from a live loader.
     ...(r.gaps.length ? { gaps: r.gaps.map((g) => ({ ...g })) } : {}),
     ...(r.verdicts.length ? { verdicts: r.verdicts.map((v) => ({ ...v })) } : {}),
+    // WP3.11: the market's lead level, frozen for the first In short tile.
+    // A reading built with the lead but with nothing to lead on freezes
+    // `null`, not nothing: absent is a brief from before WP3.11 (its old tile
+    // order), and a new brief never opens on a refused gap.
+    ...(r.lead !== undefined ? { lead: r.lead ? { ...r.lead } : null } : {}),
   }
 }
 

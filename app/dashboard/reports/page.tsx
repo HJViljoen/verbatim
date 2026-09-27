@@ -23,6 +23,8 @@ import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
 import { PRIVACY_LINE } from '@/lib/reading/method'
 import { readingHandle } from '@/lib/reading/read'
+import { loadReadingMonth } from '@/lib/reading/reading-view'
+import { ReadingContext } from '@/components/shell/page-bar'
 import { catalogueChips } from '@/lib/reports/catalogue'
 import { UPDATES_UNREAD_LINE, activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
 import { fmtBytes } from '@/lib/reports/files'
@@ -182,13 +184,23 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // and answers null on a workspace with no confirmed subject, which is every
   // workspace until M4 is applied. Both degrade in words and neither can take
   // the archive down with it.
-  const [ctx, quarterly] = await Promise.all([
+  const reading = readingHandle(clientId)
+  const [ctx, quarterly, barReading, clientRes] = await Promise.all([
     loadReportsPageContext(supabase, clientId),
-    loadQuarterlyCard({ supabase, clientId, reading: readingHandle(clientId), params: sp }).catch((e: unknown) => {
+    loadQuarterlyCard({ supabase, clientId, reading, params: sp }).catch((e: unknown) => {
       console.error(`[reports] quarterly card: ${(e as { message?: string })?.message ?? String(e)}`)
       return null
     }),
+    // THE ONE-LINE BAR (WP3.11; 25 Sep rulings): the pages' own reading
+    // month, off the same memoised reads, so the bar says what every reading
+    // page's says. A read that fails leaves the title alone.
+    loadReadingMonth(supabase, reading, new Date().toISOString()).catch((e: unknown) => {
+      console.error(`[reports] reading month: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    }),
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
   ])
+  const brand = (clientRes.data?.company_name as string | undefined) ?? 'Your brand'
   // readRows, not `data ?? []`: a failed read and an empty archive render the
   // same page, so a broken query would show a client an empty Sent or Exported
   // tab with nothing anywhere saying the read failed.
@@ -609,13 +621,16 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   return (
     <PageFrame className="gap-4">
-      {/* THE TITLE ALONE (`reports.shell`). `lib/nav.ts` gives Reports
-          `bar: 'title'`: this page makes no reading of a period, so it carries
-          no horizon and no reading line. The question left every bar on 24
-          Sep; the month-and-"as at" line it once passed here was never
-          printed after that, and the 25 Sep rulings' one line belongs to the
-          reading surfaces (market-first WP1.2). */}
-      <PageBar title={surface('reports').label}>
+      {/* THE ONE-LINE BAR (WP3.11; the approved preview's Reports bar, 25 Sep
+          rulings): "Sealand · September 2026 as at the 24 Sep update · next
+          update Sun 27 Sep". `lib/nav.ts` still gives Reports `bar: 'title'`
+          (not this package's file), so the page passes the line itself,
+          drawn by the reading pages' own `ReadingContext`. No horizon: this
+          page makes no reading of a period. */}
+      <PageBar
+        title={surface('reports').label}
+        line={barReading ? <ReadingContext context={{ brand, reading: barReading, others: [] }} basePath={BASE} params={{}} /> : undefined}
+      >
         <Suspense fallback={null}>
           <HowToRead items={['month', 'level', 'change', 'video']} basePath={BASE} />
         </Suspense>

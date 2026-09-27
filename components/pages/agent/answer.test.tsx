@@ -195,15 +195,17 @@ describe('the registers', () => {
 })
 
 describe('the tile’s chrome', () => {
-  it('wears the artboard’s eyebrow, meta and footer rail', () => {
+  it('wears its title alone and its link alone (25 Sep rulings, WP3.9)', () => {
     const text = renderText(tile(measured))
     expect(text).toContain('The answer')
-    expect(text).toContain('answered 28 Sep')
+    // The date is the "You asked" line's; no meta repeats it beside the title.
     expect(text).toContain('You asked · 28 Sep')
+    expect(text).not.toContain('answered 28 Sep')
     expect(text).toContain('Open the 130 videos behind this')
-    // The footer note names the population and the month every figure above is
-    // a figure of — the basis travelling with the figure (D15).
-    expect(text).toContain('the category · September')
+    // The population and the month are on the finding the link opens, never a
+    // note beside the link.
+    const markup = render(tile(measured))
+    expect(markup.slice(markup.indexOf('Open the'))).not.toContain('the category · September')
   })
 
   it('gives the follow-up control its own rail above the footer', () => {
@@ -354,5 +356,47 @@ describe('THE SEAM: the scrubber licenses a direction word the contract refuses'
     )
     expect(violations.map((v) => v.rule)).toContain('direction-word')
     expect(violations.map((v) => v.text).join(' ')).toMatch(/growing/)
+  })
+})
+
+// ── What the question named, read on the market (WP3.9, S7) ─────────────────
+
+import { AboutReadings } from './answer'
+import { objectReading } from '@/lib/agent/movement'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
+import { assertCopyContract as assertAboutContract } from '@/lib/test/copy-contract'
+
+describe('"Ask about this" on a subject: its own figure and trail', () => {
+  // Looks & style: 38 of 351 in August (research §1), 104 of 626 in September
+  // (prod, 24 Sep), category figures standing in for the market's. Read on
+  // 2 Oct, when the Aug→Sep pair is refused: we changed our searches in
+  // September. HYPOTHETICAL calibration `ready`, to show the verdict path.
+  const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+  const points = [{ month: '2026-08-01', k: 38, n: 351 }, { month: '2026-09-01', k: 104, n: 626 }]
+  const ready = objectReading({ object: { kind: 'subject', id: 's1', label: 'Looks & style', calibration: 'ready' }, points }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
+  const provisional = objectReading({ object: { kind: 'subject', id: 's2', label: 'Waterproofing', calibration: 'provisional' }, points: [{ month: '2026-09-01', k: 33, n: 626 }] }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
+  const brand = objectReading({ object: { kind: 'brand', id: 'b1', label: 'Cotopaxi' }, points: [], notRead: true }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
+
+  it('prints the level with its "of N", the trail and the refusal, never "moved"', () => {
+    const text = renderText(<AboutReadings readings={[ready]} />)
+    expect(text).toContain('Looks & style')
+    expect(text).toContain('104 of 626 videos')
+    expect(text).toContain('in your market · September')
+    expect(text).toContain('Aug 2026 38 of 351 · Sep 2026 104 of 626')
+    expect(text).toContain('Not read as a change: we changed our searches in September.')
+    expect(text).not.toMatch(/\bmoved\b/)
+  })
+
+  it('marks a provisional subject and says "not read yet" where nothing was counted', () => {
+    const text = renderText(<AboutReadings readings={[provisional, brand]} />)
+    expect(text).toContain('provisional')
+    expect(text).toContain('33 of 626 videos')
+    expect(text).toContain('Cotopaxi')
+    expect(text).toContain('not read yet')
+  })
+
+  it('keeps the copy contract', () => {
+    assertAboutContract(<AboutReadings readings={[ready, provisional, brand]} />)
   })
 })

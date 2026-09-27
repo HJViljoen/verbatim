@@ -32,8 +32,8 @@ import type { Counted } from '@/lib/reading/verdicts'
  * cumulative corpus, under a chip whose denominator is a comment-dated month's
  * VIDEOS. Two definitions of one word on one page.
  *
- * So the level prints as the glossary's own example of a level — "130 of 1,388
- * videos" — and the ladder word goes. Nothing is lost that the page did not
+ * So the level prints as the glossary's own example of a level — "104 of 626
+ * videos" (Sealand's Looks & style, September) — and the ladder word goes. Nothing is lost that the page did not
  * already say: the audience and the month are in the mono line beside it, the
  * comparison is in the badge after it, and `level` is one of the thirteen.
  * Adding the prevalence ladder to `THIRTEEN_WORDS` instead would be this
@@ -57,7 +57,7 @@ import type { Counted } from '@/lib/reading/verdicts'
  *
  * So the chip takes the anchor the artboard gives it (`accent` /
  * `accent-foreground`, 5.4:1 light and 7.6:1 dark) and keeps none of the claim:
- * the artboard's green said "Strong evidence", and this says "130 of 1,388
+ * the artboard's green said "Strong evidence", and this says "104 of 626
  * videos" — a counted pair, in the glossary's own example of a level, with no
  * tier and no ladder anywhere near it. Green here is emphasis, not
  * favourability: `MovementBadge` is the node that colours on an axis, and it

@@ -333,13 +333,13 @@ describe('what each page owes the reader', () => {
     }
   })
 
-  it('calls the category’s count the category’s, not every audience added up', () => {
+  it('counts the market over the quarter, the client’s own videos left out (WP3.11)', () => {
     // The figure summed the window read across every audience — your own, each
-    // rival's and the category's — and the prose called the total "the
-    // category". On Össur's real Q3 rows that is ~1,306 against a category of
-    // 1,134. The fixture's own pair is 4,147 category videos and 249 of yours.
+    // rival's and the category's. The market is the category and the brands
+    // tracked (decision E), never the client's own: the fixture's pair is
+    // 4,147 category videos and 249 of yours, so the market is 4,147.
     expect(data.cover.figures.quarter_videos?.value).toBe(4147)
-    expect(renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'app', ctx))).toContain('The category was read across 4,147 videos')
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'app', ctx))).toContain('Your market was read across 4,147 videos in Q3 2026')
   })
 
   it('argues the interpretation from the quarter’s own comparisons only', () => {
@@ -646,8 +646,8 @@ describe('the artboard port (Block D wave 2)', () => {
     const cover = text('quarterly.cover')
     const read = text('quarterly.read')
     // The counts are on the page that argues from them, once.
-    expect(read).toContain('4,147 category videos read in Q3 2026')
-    expect(cover).not.toContain('4,147 category videos read in Q3 2026')
+    expect(read).toContain('4,147 videos read in your market in Q3 2026')
+    expect(cover).not.toContain('4,147 videos read in your market in Q3 2026')
     // The mix is on the cover, once — the artboard's own `qr.p1.footer`.
     expect(cover).toContain('TikTok 38%')
     expect(read).not.toContain('TikTok 38%')
@@ -721,7 +721,7 @@ describe('the artboard port (Block D wave 2)', () => {
   it('qr.p2.meta / .whatitmeans / .standingadvice / .confidence', () => {
     const t = text('quarterly.read')
     // The three facts that were split across pages 1 and 7.
-    expect(t).toContain('4,147 category videos read in Q3 2026')
+    expect(t).toContain('4,147 videos read in your market in Q3 2026')
     // The counter is the cover's stat card's alone (copy de-clutter E16).
     expect(t).not.toContain('your 8th monthly reading')
     // The grounding count; its all-time basis is said once, under the moves
@@ -1177,5 +1177,67 @@ describe('page 3 under the three calibration states (decision C, WP1.1)', () => 
       expect(failed).not.toContain('—')
       expect(provisional).not.toContain('not compared')
     }
+  })
+})
+
+// ── WP3.11: a quarterly built at a 2026-10-02 clock speaks of Q3 ────────────
+
+import { builtInOctoberFixture } from './fixture'
+
+describe('a quarterly built at a 2026-10-02 clock (WP3.11)', () => {
+  const october = builtInOctoberFixture()
+  const allText = (mode: 'app' | 'print' | 'email') =>
+    QUARTERLY_BLOCK_KEYS.map((k) => renderText(QUARTERLY_BLOCKS[k].render(october, mode, ctx))).join(' ')
+
+  it('speaks of Q3 on every page, in every mode, and reads no October', () => {
+    // GR F51's review built on 2 Oct said "Nothing on either side cleared its
+    // band in October" and "the month-level pages read October, outside this
+    // quarter". The only October left is a move's own date ahead ("first
+    // scoring lands with the October reading"), which is a fact about when,
+    // not a reading of October.
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = allText(mode)
+      expect(text).toContain('Q3 2026')
+      expect(text).not.toMatch(/\b(in|of) October\b/)
+      expect(text).not.toMatch(/October (still filling|is outside)/)
+      expect(text).not.toMatch(/pages read October/)
+      expect(text.replace(/lands with the October reading/g, '')).not.toMatch(/\bOctober\b/)
+    }
+  })
+
+  it('opens at quarter grain: the market over the quarter, then the pair’s refusal', () => {
+    expect(october.cover.body).toContain('Your market was read across [[quarter_videos]] videos in Q3 2026.')
+    expect(october.cover.body).toContain('Q3 2026 against Q2 2026 is not read as a change: we changed our searches in September.')
+    expect(october.pair).toEqual({ mode: 'refuse', sentence: 'Q3 2026 against Q2 2026 is not read as a change: we changed our searches in September.' })
+    expect(october.marketVideos).toBe(4147)
+  })
+
+  it('gates on the floor-clearing months, and refuses every quarter verdict across the pair', () => {
+    expect(october.readings).toBe(2)
+    expect(october.unlocked).toBe(false)
+    for (const v of october.category.quarter) expect(['refused', 'too_little_data']).toContain(v.state)
+    expect(october.category.quarter.some((v) => v.state === 'moved')).toBe(false)
+  })
+})
+
+import { QuarterlyDeck } from '@/components/print/quarterly-deck'
+import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
+import { QuarterlyEmail } from '@/components/email/quarterly'
+import { quarterlySnapshotFixture } from './fixture'
+
+describe('a stored v2 quarterly renders as it was sent (WP3.11)', () => {
+  // A v2 reading has none of v3's optional fields: no pair, no market count.
+  const { pair: _pair, marketVideos: _market, ...v2reading } = quarterlyFixture()
+  const v2 = { ...quarterlySnapshotFixture(v2reading as ReturnType<typeof quarterlyFixture>), version: 2 }
+
+  it('draws every sheet of the deck, not the stale line', () => {
+    const text = renderText(<QuarterlyDeck data={v2} date="2 Oct 2026" />)
+    expect(text).not.toContain('older version of Verbatim')
+    expect(text).toContain(v2.reading.cover.stamp)
+  })
+
+  it('draws the share page and the email too', () => {
+    expect(renderText(<QuarterlyShareShell data={v2} appUrl="https://app.verbatimintel.com" />)).not.toContain('older version of Verbatim')
+    expect(renderText(<QuarterlyEmail data={v2} shareUrl={null} appUrl="https://app.verbatimintel.com" attached={false} ctx={ctx} />)).not.toContain('older version of Verbatim')
   })
 })

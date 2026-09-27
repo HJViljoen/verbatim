@@ -1,6 +1,11 @@
 import { longMonth, monthName } from '../format'
+import { pairChipWords } from '../calibration'
 import { nextMonth } from '../reading/month-key'
-import { QUARTER_UNLOCKS_AT } from '../reading/bands'
+import { quarterChange, QUARTER_UNLOCKS_AT, type QuarterChangeInput } from '../reading/bands'
+import { pairOnVerdict, type ComparabilityMode, type PairComparability } from '../reading/comparability'
+import { pooledDenominators } from '../reading/market'
+import { bandVerdict, type Verdict } from '../reading/verdicts'
+import { SHARE_BAND } from '../report-bands'
 
 /**
  * The quarterly review's arrangement (Phase 1 WP20, design item 14).
@@ -282,6 +287,132 @@ export function firstQuarterVerdictMonth(readings: number, latestMonth: string |
   let month = latestMonth
   for (let i = readings; i < QUARTER_READINGS_NEEDED; i++) month = nextMonth(month)
   return month
+}
+
+// ---- the gate counts floor-clearing months (H19, WP3.11) ---------------------
+
+/**
+ * The months a quarter comparison can stand on: those whose MARKET (the
+ * category pooled with the videos filed under a tracked brand, decision E)
+ * clears the band's floor, `SHARE_BAND.minN` videos, up to `to` (inclusive).
+ * Ascending, `YYYY-MM-01`.
+ *
+ * H19, SETTLED. The quarter's gate counted Overview's `bar.readings` (every
+ * month of the gathered era with a denominator row in any audience, at any
+ * volume) while Ask counted months over the floor, so the card, the artefact
+ * and Ask could put three numbers beside one gate sentence. A month under the
+ * floor is a month nothing can be compared on, so it is not a reading the
+ * gate should count: July's 36 videos are not one of Sealand's readings,
+ * August's 377 and September's 655 are. Ask's own count (`readableMonths`,
+ * lib/agent/basis.ts) is this function, so the three agree by construction.
+ */
+export function floorClearingMonths(
+  rows: readonly { month: string; audience: string; videos: number | null; comments?: number | null }[],
+  rivalAudiences: readonly string[],
+  to?: string | null,
+): string[] {
+  const pooled = pooledDenominators(
+    rows.map((r) => ({ month: r.month, audience: r.audience, videos: r.videos ?? Number.NaN, comments: r.comments ?? 0 })),
+    rivalAudiences,
+  )
+  const last = to ? `${to.slice(0, 7)}-01` : null
+  return [...pooled.values()]
+    .filter((c) => c.videos != null && c.videos >= (SHARE_BAND.minN ?? 100) && (last == null || c.month <= last))
+    .map((c) => c.month)
+}
+
+// ---- quarter against quarter, under the month-pair rule (WP3.11) -------------
+
+/**
+ * Were two quarters read the same way?
+ *
+ * A QUARTER PAIR IS READ THE SAME WAY ONLY WHERE EVERY STEP ACROSS ITS SIX
+ * MONTHS IS (decision D). Each consecutive pair of months, from the earlier
+ * quarter's first to the later quarter's last, goes through the month-pair
+ * judge; one refused step refuses the quarter pair, one flagged step flags it.
+ * So Q4 2026 against Q3 2026 is refused (we changed our searches in
+ * September, inside Q3), and the first quarter pair read the same way is Q1
+ * 2027 against Q4 2026, in April (plan §2.11), if nothing we search changes.
+ *
+ * `refusedBy` is the step whose refusal the artefact prints: one that names a
+ * change of ours first (the latest), else the first refused step.
+ */
+export interface QuarterPair {
+  prior: Quarter
+  quarter: Quarter
+  mode: ComparabilityMode
+  refusedBy: PairComparability | null
+}
+
+export function quarterPairOf(
+  prior: Quarter,
+  quarter: Quarter,
+  judge: (prevMonth: string, month: string) => PairComparability,
+): QuarterPair {
+  const months = [...prior.months, ...quarter.months]
+  const steps: PairComparability[] = []
+  for (let i = 1; i < months.length; i++) steps.push(judge(months[i - 1], months[i]))
+  const refused = steps.filter((p) => p.mode === 'refuse')
+  const named = refused.filter((p) => {
+    const note = pairOnVerdict(p).note
+    return note != null && (note.cause === 'searches' || note.cause === 'ours')
+  })
+  const mode: ComparabilityMode = refused.length > 0 ? 'refuse' : steps.some((p) => p.mode === 'flag') ? 'flag' : 'comparable'
+  return { prior, quarter, mode, refusedBy: named.at(-1) ?? refused[0] ?? null }
+}
+
+/**
+ * A quarter verdict under the pair rule. A refused quarter pair is refused
+ * whatever the gate says, with both sides' counts kept so the levels still
+ * print and the refusal's own words on the verdict; otherwise the gate
+ * (`quarterChange`, six floor-clearing months) decides as it always has.
+ * Never a "moved" across a refused pair.
+ */
+export function quarterVerdict(input: QuarterChangeInput, pair: QuarterPair | null): Verdict {
+  if (pair && pair.mode === 'refuse' && pair.refusedBy) {
+    const on = pairOnVerdict(pair.refusedBy)
+    const v = bandVerdict({
+      objectKind: input.object.kind,
+      objectId: input.object.id,
+      objectLabel: input.object.label,
+      audience: input.audience,
+      window: input.window,
+      basis: input.basis,
+      value: input.value,
+      baseline: input.baseline,
+      flags: input.flags ?? [],
+      floor: input.floor,
+      refused: on.refused ?? 'unmeasured',
+    })
+    return on.note ? { ...v, pair: on.note } : v
+  }
+  return quarterChange(input)
+}
+
+/** "Q4 2026 against Q3 2026 is not read as a change: we changed our searches
+ *  in September." The refusal in the pair rule's own words, at quarter grain.
+ *  Null where the pair is read the same way. */
+export function quarterPairSentence(pair: QuarterPair): string | null {
+  if (pair.mode !== 'refuse' || !pair.refusedBy) return null
+  const note = pairOnVerdict(pair.refusedBy).note
+  if (!note) return null
+  return `${quarterLabel(pair.quarter, false)} against ${quarterLabel(pair.prior, false)} is ${pairChipWords(note).replace(/^./, (c) => c.toLowerCase())}.`
+}
+
+/** The quarter after this one. */
+export function nextQuarter(quarter: Quarter): Quarter {
+  return quarter.q === 4 ? quarterFor(quarter.year + 1, 1) : quarterFor(quarter.year, (quarter.q + 1) as 2 | 3 | 4)
+}
+
+/** The month the page loaders read for a quarter's review: its last month
+ *  once it has closed (a review of Q3 reads September, never the October the
+ *  clock is in), else the month in progress. `YYYY-MM`, the `?month=` form. */
+export function quarterPageMonth(quarter: Quarter, readingAt: string, tz: string = REVIEW_TZ): string {
+  const day = dayIn(readingAt, tz)
+  const last = quarter.months[2]
+  if (day > quarter.to) return last.slice(0, 7)
+  const inProgress = `${day.slice(0, 7)}-01`
+  return (inProgress < quarter.months[0] ? quarter.months[0] : inProgress).slice(0, 7)
 }
 
 // ---- what the artefact says about itself --------------------------------------

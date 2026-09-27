@@ -403,6 +403,11 @@ describe('notAnsweredFrom', () => {
     expect(n.line).toBe('1 of 40 questions asked this month. Every one was answered from the conversation.')
   })
 
+  it('claims nothing about answers where nothing was asked', () => {
+    const n = notAnsweredFrom([], '2026-09-01T00:00:00.000Z', 40)
+    expect(n.line).toBe('0 of 40 questions asked this month.')
+  })
+
   it('reads at the cap without inventing room', () => {
     const many = Array.from({ length: 40 }, (_, i) => ({
       role: 'user', content: `q${i}`, outcome: null, result: null, created_at: at(1),

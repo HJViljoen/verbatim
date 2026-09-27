@@ -48,6 +48,7 @@ export function AgentComposer({
   placeholder = 'Ask about a subject, a rival, a claim or a plan',
   disabledNote = 'Only an owner or admin can ask here',
   ask,
+  window,
 }: {
   canSend: boolean
   threadId?: string
@@ -61,6 +62,9 @@ export function AgentComposer({
    *  send WHAT they were reading with them. The reader owns it from the first
    *  keystroke: it is the initial value of the box, never a controlled one. */
   ask?: string
+  /** The window the page is set to (WP3.9): "all" when the reader switched
+   *  to all time; absent is the last 90 days. Posted with the question. */
+  window?: 'days90' | 'all'
 }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -98,7 +102,7 @@ export function AgentComposer({
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: q, threadId }),
+        body: JSON.stringify({ question: q, threadId, ...(window === 'all' ? { window } : {}) }),
       })
       const data = (await res.json()) as { threadId?: string; error?: string }
       if (!res.ok || !data.threadId) {

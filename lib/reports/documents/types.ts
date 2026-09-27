@@ -195,6 +195,23 @@ export interface DocLens {
  * reader of it is optional-chained rather than defaulted: a missing reading is
  * a fact about the brief, not a zero.
  */
+/**
+ * The market's lead level (WP3.11, plan §2.9): what a brief's first "In short"
+ * tile says, the front page's own lead. `theme` is the lead theme the front
+ * page quotes (k of the category's n, since themes are grouped per audience);
+ * `subject` a ready subject leading where no theme could; `size` the market's
+ * own videos (decision E) where nothing leads. ADDITIVE AND OPTIONAL: a brief
+ * frozen before it has none and keeps the tiles it was built with.
+ */
+export interface BriefLead {
+  kind: 'theme' | 'subject' | 'size'
+  /** The theme's label or the subject's name; null for the market's size. */
+  label: string | null
+  k: number
+  /** What `k` is out of; null for the market's size, which is its own n. */
+  n: number | null
+}
+
 export interface DocumentReading {
   /** `YYYY-MM-01`. */
   month: string
@@ -220,6 +237,8 @@ export interface DocumentReading {
   /** The banded comparisons the blocks drew, frozen for the same reason. The
    *  stat tiles print one; nothing on the deck may invent another. */
   verdicts?: Verdict[]
+  /** The market's lead level (WP3.11), frozen: the first "In short" tile. */
+  lead?: BriefLead | null
   /** True where the window crosses a recorded clustering boundary — the label
    *  decision L requires travels with it. */
   crossesClustering: boolean

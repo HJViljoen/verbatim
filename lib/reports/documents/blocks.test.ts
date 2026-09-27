@@ -84,7 +84,9 @@ describe('the four fixed templates', () => {
     // 2026-09-24: the four `description` strings were rewritten around the
     // role each brief serves (Heinrich). Display copy only: no prompt reads a
     // template's description.
-    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('86e76b43')
+    // 2026-09-27 (WP3.11, plan §2.9): the Leadership description reverts
+    // 2b148b25 to its market framing. Display copy only.
+    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('d2c49dbb')
   })
 })
 

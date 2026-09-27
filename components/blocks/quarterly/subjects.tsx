@@ -33,8 +33,9 @@ import { Card, ChartEndings, Column, Columns, Eyebrow, Note, NotDrawn, TableHead
 // ---- the port (Block D wave 2) -------------------------------------------------
 //
 // THE MOCK'S FIVE COLUMNS, AS FIVE COLUMNS. The build stacked all four figures
-// into one sentence per row ("you 31% 26 of 84 · the category 22% 305 of
-// 1,388"), which is the one arrangement in which a reader cannot scan a column.
+// into one sentence per row ("your own 9 videos · the category 17% 104 of
+// 626", Sealand's September), which is the one arrangement in which a reader
+// cannot scan a column.
 // The cells are `FigureCell` — P0's, which stacks the figure over its "of N"
 // and stamps its own `data-copy`, so rule (b) holds by construction.
 //

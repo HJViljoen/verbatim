@@ -63,7 +63,21 @@ import {
  * The weekly package closed the identical defect in the same wave (1bff3082);
  * this is that fix, on the artefact where the row can actually exist.
  */
-export const QUARTERLY_SNAPSHOT_VERSION = 2
+export const QUARTERLY_SNAPSHOT_VERSION = 3
+
+/**
+ * THE VERSIONS A RENDERER CAN STILL DRAW, AND WHY 2 IS ONE OF THEM (WP3.11).
+ *
+ * Version 3 is the market-first review: the page loaders read the quarter's
+ * own last month, the cover speaks at quarter grain, the gate counts
+ * floor-clearing months (H19) and a quarter pair is judged by the month-pair
+ * rule. Every field it adds is OPTIONAL on `QuarterlyData` and read with `?.`,
+ * and none of v2's required fields was removed or reshaped, so a stored v2
+ * reading still has everything the renderers dereference: it renders AS IT
+ * WAS SENT, with v2's own words, rather than as the stale line. Version 1
+ * predates block D's required fields and stays stale.
+ */
+export const QUARTERLY_READABLE_VERSIONS: readonly number[] = [2, QUARTERLY_SNAPSHOT_VERSION]
 
 export interface QuarterlySnapshotData {
   /** `number`, not the literal: the callers that narrow with `isQuarterlyData`
@@ -120,7 +134,7 @@ export function isQuarterlyData(data: unknown): data is QuarterlySnapshotData {
  * rather than a TypeError inside a server component.
  */
 export function staleQuarterlySnapshot(data: QuarterlySnapshotData): string | null {
-  return data.version === QUARTERLY_SNAPSHOT_VERSION
+  return QUARTERLY_READABLE_VERSIONS.includes(data.version)
     ? null
     : 'This review was built by an older version of Verbatim and cannot be redrawn here. The next scheduled review will be readable.'
 }

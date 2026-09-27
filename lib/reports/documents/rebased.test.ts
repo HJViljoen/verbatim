@@ -228,4 +228,14 @@ describe('documentReading', () => {
       ['confidence', 'crossesClustering', 'delivery', 'denominators', 'method', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
     )
   })
+
+  // WP3.11: a reading built with the market's lead freezes it, and one built
+  // with nothing to lead on freezes null (the new tile order, never the
+  // refused gap first); absent stays absent (a brief from before it).
+  it('freezes the market’s lead, and null where nothing leads', () => {
+    const lead = { kind: 'theme' as const, label: 'Confusion over airline bag sizes', k: 21, n: 626 }
+    expect(documentReading(reading({ lead })).lead).toEqual(lead)
+    expect(documentReading(reading({ lead: null }))).toHaveProperty('lead', null)
+    expect(documentReading(reading())).not.toHaveProperty('lead')
+  })
 })

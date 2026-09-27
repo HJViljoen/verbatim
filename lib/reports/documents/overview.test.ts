@@ -306,3 +306,49 @@ describe('overviewTiles \u00b7 the switching tile keeps its basis and its audien
     expect(switching?.label).toContain('dated by when each video was posted')
   })
 })
+
+// ── WP3.11: the first In short tile is the market's lead level ──────────────
+
+import { leadTile } from './overview'
+import { briefLead } from './load-reading'
+import { buildThemeBoard } from '../../pages/overview-market/board'
+import { heroLead } from '../../pages/overview-market/hero'
+import { SEPTEMBER, SEPTEMBER_CATEGORY_N, septemberThemes } from '../../test/market-fixture'
+
+describe('the market’s lead level (WP3.11, plan §2.9)', () => {
+  // Sealand's September front page (production's themes as at 24 Sep, maker
+  // shares by analogy): the lead theme is "Confusion over airline bag sizes",
+  // 21 of the category's 626.
+  const board = buildThemeBoard(septemberThemes(), SEPTEMBER_CATEGORY_N, SEPTEMBER, 'measured')
+  const hero = heroLead(board, [], new Set())
+  const lead = briefLead({ hero, market: [{ month: SEPTEMBER, videos: 655, comments: 16233, category: 626, rivalFiled: 29 }], month: SEPTEMBER })
+
+  it('is the front page’s own lead, never a second choice', () => {
+    expect(lead).toEqual({ kind: 'theme', label: 'Confusion over airline bag sizes', k: 21, n: 626 })
+  })
+
+  it('falls back to the market’s size where nothing leads', () => {
+    expect(briefLead({ hero: { kind: 'size' }, market: [{ month: SEPTEMBER, videos: 655, comments: 16233, category: 626, rivalFiled: 29 }], month: SEPTEMBER }))
+      .toEqual({ kind: 'size', label: null, k: 655, n: null })
+    expect(briefLead({ hero: undefined, market: undefined, month: SEPTEMBER })).toBeNull()
+  })
+
+  it('opens the In short sheet, a level with its "of N"; a refused gap is never a tile', () => {
+    const refused = gap({ state: 'too_little_data', gapPts: null, bandPts: null })
+    const tiles = overviewTiles(doc({ reading: { ...reading({ gaps: [refused], verdicts: [] }), lead } }))
+    expect(tiles[0]).toEqual({ value: '21', label: 'of 626 category videos in September 2026: Confusion over airline bag sizes', level: true })
+    expect(tiles.some((t) => t.value === 'too few to compare')).toBe(false)
+    expect(leadTile({ kind: 'size', label: null, k: 655, n: null }, 'September 2026')).toEqual({ value: '655', label: 'videos in your market in September 2026' })
+  })
+
+  it('opens on no refused gap where the brief was built with nothing to lead on', () => {
+    const refused = gap({ state: 'too_little_data', gapPts: null, bandPts: null })
+    const tiles = overviewTiles(doc({ reading: { ...reading({ gaps: [refused], verdicts: [] }), lead: null } }))
+    expect(tiles.some((t) => t.value === 'too few to compare')).toBe(false)
+  })
+
+  it('leaves a brief frozen before it with the tiles it was built with', () => {
+    const old = overviewTiles(doc({ reading: reading({ gaps: [gap()], verdicts: [verdict()] }) }))
+    expect(old[0].label).toContain('Durability')
+  })
+})

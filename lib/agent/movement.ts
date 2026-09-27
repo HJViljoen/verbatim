@@ -4,12 +4,19 @@ import { AGENT_MOVEMENT_MONTHS, AGENT_MOVEMENT_TOPICS } from '../config'
 import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, type Direction, type SeriesPoint } from '../reading/bands'
-import { comparableOn, type PairOn } from '../reading/pairs'
+import { BRANDS_PANEL, comparableOn, type PairOn } from '../reading/pairs'
+import { kindChange, kindLabel } from '../reading/kinds'
+import { moodChange } from '../reading/mood'
+import { pooledDenominators, pooledSide, marketAudiences } from '../reading/market'
+import { SENTIMENT_BAND } from '../report-bands'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
+import { selectAll } from '../supabase-admin'
+import { earnsVerdict, isFailed, type SubjectCalibration } from '../subjects/calibration-state'
 import { loadMonthSeries, readingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
-import { loadReadingMonth } from '../reading/reading-view'
+import { loadMarketRivalAudiences, loadReadingMonth } from '../reading/reading-view'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 
 // "Has this changed?" — answered from the MONTHLY reading (Phase 1 WP21,
@@ -403,4 +410,365 @@ function monthsBack(month: string, n: number): string {
   let m = monthStartOf(month)
   for (let i = 0; i < n; i++) m = prevMonth(m)
   return m
+}
+
+// ── Beyond themes: subjects, kinds, mood and brand topics (WP3.9) ────────────
+//
+// THE MARKET, NOT THE CLIENT AND THE CATEGORY. A theme is grouped per audience
+// and its figure stays the category's (decision E). A subject, a kind, the
+// mood and a brand topic are read on the MARKET: the category pooled with the
+// videos filed under a brand the client tracks, month by month, the client's
+// own posts left out (`pooledDenominators`, `pooledSide`, lib/reading/market.ts)
+// — the figure the front page and Subjects print for the same object, so
+// "Ask about this" on a subject lands on the subject's own number (S7).
+//
+// THE SAME RULES AS EVERY OTHER READER.
+//  · Each pair is judged by the month-pair rule (decision D): the pooled market
+//    is the `market` view, a brand topic the `brands` view. A refused pair
+//    prints its refusal and never "moved".
+//  · A direction word comes from `directionWord` alone, over three comparable
+//    ended months (`comparableOn`), and never on a thin month.
+//  · Decision C: a provisional subject prints its market level with no verdict
+//    and no direction word; a failed one prints nothing but "being
+//    re-described".
+//  · A brand topic is read off `month_brand_readings` (MF3). Before that table
+//    exists every brand line says "not read yet": the name was asked about,
+//    and nothing counted it.
+
+/** What a question can name besides a theme. */
+export type MarketObjectKind = 'subject' | 'kind' | 'mood' | 'brand'
+
+export interface MarketObjectRef {
+  kind: MarketObjectKind
+  /** The subject's id, the kind's enum value, the mood's (`positive`), or the
+   *  brand's `month_brand_readings.brand_key` (a competitor's id). */
+  id: string
+  label: string
+  /** A subject's state (decision C). */
+  calibration?: SubjectCalibration | null
+}
+
+/** One month of one object on the market: k of n, never a zero for a month
+ *  nobody read. */
+export interface MarketPoint {
+  month: string
+  k: number | null
+  n: number | null
+}
+
+/** One object's reading, as the prompt and the thread page both take it. */
+export interface ObjectReading {
+  object: MarketObjectRef
+  /** `read`: the object has rows; `not_read`: its table is not there yet, or
+   *  nothing was recorded for it. */
+  state: 'read' | 'not_read'
+  /** The months on the axis up to the month read, oldest first. */
+  trail: MarketPoint[]
+  curr: MarketPoint | null
+  prev: MarketPoint | null
+  /** Null where no comparison is owed: a provisional or failed subject, or an
+   *  object that was not read. */
+  verdict: Verdict | null
+  direction: Direction | null
+  /** The month read is still filling. */
+  filling: boolean
+}
+
+/** The key a brand topic's month pair is judged under: the brands view. */
+export const BRAND_PAIR_KEY = BRANDS_PANEL
+
+/** The key the pooled market is judged under: the market view. */
+export const MARKET_PAIR_KEY = 'market'
+
+/** What a question names, for the reading below. The client's words, never
+ *  the model's (lib/agent/scope.ts). */
+export interface ObjectPoints {
+  object: MarketObjectRef
+  /** One point per axis month; a month with no row at all is null k and n. */
+  points: MarketPoint[]
+  /** Months the reading layer marked thin (under two updates, or under 60% of
+   *  the trailing median), which carry no direction word. */
+  thin?: ReadonlySet<string>
+  /** Months whose row status is still filling. */
+  filling?: ReadonlySet<string>
+  /** Nothing recorded for this object at all. */
+  notRead?: boolean
+}
+
+const pointFor = (points: readonly MarketPoint[], month: string): MarketPoint | undefined =>
+  points.find((p) => monthStartOf(p.month) === month)
+
+/**
+ * One object's reading of `month` against the month before it. Pure.
+ *
+ * `asOf` is the instant the reading is taken: the newest month of a direction
+ * word must have ended by it (`directionWord`'s own rule).
+ */
+export function objectReading(
+  input: ObjectPoints,
+  month: string,
+  pair: PairOn,
+  asOf: string,
+): ObjectReading {
+  const m = monthStartOf(month)
+  const prevKey = prevMonth(m)
+  const trail = input.points.filter((p) => monthStartOf(p.month) <= m)
+  const curr = pointFor(trail, m) ?? null
+  const prev = pointFor(trail, prevKey) ?? null
+  const filling = input.filling?.has(m) ?? false
+  const o = input.object
+  const empty: ObjectReading = { object: o, state: 'not_read', trail, curr, prev, verdict: null, direction: null, filling }
+  if (input.notRead || !curr || curr.n == null) return empty
+  // DECISION C. A failed subject is being re-described and prints nothing; a
+  // provisional one prints its level and earns no verdict and no word.
+  if (o.kind === 'subject' && isFailed(o.calibration)) return { ...empty, state: 'read', curr: null, prev: null, trail: [] }
+  const base: ObjectReading = { object: o, state: 'read', trail, curr, prev, verdict: null, direction: null, filling }
+  if (o.kind === 'subject' && !earnsVerdict(o.calibration)) return base
+
+  const key = o.kind === 'brand' ? BRAND_PAIR_KEY : MARKET_PAIR_KEY
+  const comparability = pair(prevKey, m, key)
+  const thin = input.thin?.has(m) ?? false
+  const flags = thin ? (['thin'] as VerdictFlag[]) : []
+  const at = (p: MarketPoint | null, when: string) => ({ month: when, videos: p?.n ?? null, k: p?.k ?? null, audience: MARKET_PAIR_KEY })
+
+  let verdict: Verdict
+  if (o.kind === 'kind') {
+    verdict = kindChange({ kind: o.id, audience: MARKET_PAIR_KEY, curr: at(curr, m), prev: at(prev, prevKey), flags, comparability })
+  } else if (o.kind === 'mood') {
+    // Decision K: the mood is compared on its positive share. `n` is the
+    // judged videos, `k` the positive ones (`moodChange`'s own reading).
+    const counts = (p: MarketPoint | null) => ({ judged: p?.n ?? 0, positive: p?.k ?? 0, negative: 0, neutral: 0, mixed: 0 })
+    verdict = moodChange({ audience: MARKET_PAIR_KEY, mood: 'positive', curr: { month: m, ...counts(curr) }, prev: { month: prevKey, ...counts(prev) }, flags, comparability })
+  } else {
+    verdict = monthChange({
+      object: { kind: o.kind === 'brand' ? 'rival' : 'subject', id: o.id, label: o.label },
+      audience: MARKET_PAIR_KEY,
+      ...(flags.length ? { flags } : {}),
+      curr: { ...at(curr, m), regime: 'n/a' } as SeriesPoint,
+      prev: { ...at(prev, prevKey), regime: 'n/a' } as SeriesPoint,
+      comparability,
+    })
+  }
+  const series: SeriesPoint[] = trail.map((p) => ({ month: monthStartOf(p.month), videos: p.n, k: p.k, audience: MARKET_PAIR_KEY, regime: 'n/a' }))
+  const direction = thin ? null : directionWord(series, { asOf, comparable: comparableOn(pair, key), ...(o.kind === 'mood' ? { floor: SENTIMENT_BAND } : {}) })
+  verdict.direction = direction
+  return { ...base, verdict, direction }
+}
+
+/** What each object is, in the reader's words, in a line of the prompt. */
+function objectNoun(o: MarketObjectRef): string {
+  if (o.kind === 'subject') return `${o.label} (a subject${o.calibration === 'provisional' ? ', provisional' : ''})`
+  if (o.kind === 'kind') return `${kindLabel(o.id)} (what people were doing)`
+  if (o.kind === 'mood') return 'The mood, positive of the videos judged'
+  return `${o.label} (a brand, named in the video or its comments)`
+}
+
+const MARKET_WORDS = 'your market'
+
+/** One object's lines in the prompt. The figures are CODE's, stated for the
+ *  model to read and never to retype (the answer's digits are scrubbed). */
+export function objectLine(r: ObjectReading): string {
+  const head = `- ${objectNoun(r.object)} · ${MARKET_WORDS}`
+  if (r.state === 'not_read') return `${head}: not read yet`
+  if (r.object.kind === 'subject' && isFailed(r.object.calibration)) return `${head}: being re-described, so no figure is given`
+  const trail = r.trail
+    .filter((p) => p.n != null)
+    .map((p) => `${monthName(p.month)} ${p.k ?? 0} of ${p.n} videos${share(p.k, p.n)}`)
+    .join(' · ')
+  const lines = [`${head}: ${trail || 'nothing read'}`]
+  const v = r.verdict
+  if (v) {
+    const state = STATE_NOTE[v.state] ?? v.state
+    lines.push(`    ${isAnswer(v.state) && v.changePts != null && v.bandPts != null ? `${state} (${v.changePts >= 0 ? '+' : ''}${v.changePts} pts, band ${v.bandPts} pts)` : state} against the month before`)
+    lines.push(`    ${r.direction ? `direction over the last three months: ${r.direction}` : 'no direction word has been earned here'}`)
+    if (v.pair) lines.push(`    · ${pairSentence(v.pair)}`)
+  } else {
+    lines.push('    a level only: not compared with the month before, because this subject is still being checked')
+  }
+  if (r.filling && r.curr) lines.push(`    · ${monthName(r.curr.month)} is still filling and is not yet a settled reading`)
+  return lines.join('\n')
+}
+
+/**
+ * The block every question that NAMES something carries, whatever its
+ * timeframe: the named objects' own figures and trail, so an answer about
+ * Waterproofing is an answer about Waterproofing's own number.
+ */
+export function renderObjects(readings: readonly ObjectReading[]): string {
+  if (readings.length === 0) return ''
+  return [
+    'WHAT THE QUESTION NAMES, READ ON YOUR MARKET (calendar months, each with its own denominator; the client’s own posts are not in it).',
+    ...readings.map(objectLine),
+    'These are the readings of the things the question names. Answer about them from these lines, name the month,',
+    'and never type a figure yourself: the page prints them. Name a direction only where a line says growing, fading or flat.',
+  ].join('\n')
+}
+
+/** Is this error "the table is not there yet"? Narrow by name, the
+ *  `isMissing*` precedent: any other failure of the read is not an absent
+ *  migration. */
+export function isMissingRelation(error: unknown, table: string): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes(table)) return false
+  if (code && ['42P01', 'PGRST205', 'PGRST202', '42883'].includes(code)) return true
+  return /does not exist/i.test(text) || /in the schema cache/i.test(text)
+}
+
+/** `month_brand_readings` (MF3, plan §4.2). */
+export const TABLE_BRAND_READINGS = 'month_brand_readings'
+
+export interface ObjectReadArgs {
+  clientId: string
+  objects: readonly MarketObjectRef[]
+  /** The month read, `YYYY-MM-01`. */
+  month: string
+  months?: number
+  pair: PairOn
+  asOf: string
+  /** The tracked rivals' audience keys; read when omitted. */
+  rivalAudiences?: readonly string[] | null
+}
+
+type Row = Record<string, unknown>
+
+type RangeRead = { range: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: unknown }> }
+
+async function readRows(
+  admin: Admin,
+  table: string,
+  columns: string,
+  clientId: string,
+  from: string,
+  to: string,
+  only?: { column: string; values: readonly string[] },
+): Promise<Row[] | null> {
+  try {
+    return await selectAll<Row>(() => {
+      let q = admin.from(table).select(columns).eq('client_id', clientId).gte('month', from).lte('month', to)
+      if (only) q = q.in(only.column, [...only.values])
+      return q.order('month', { ascending: true }).order('audience', { ascending: true }) as unknown as RangeRead
+    })
+  } catch (error) {
+    if (isMissingRelation(error, table)) return null
+    throw error
+  }
+}
+
+/**
+ * The named objects' readings, on the market, for one month.
+ *
+ * AT MOST FIVE READS, each over the axis and each only when a named object
+ * needs it: the denominators (one read, memoised per request by the reading
+ * layer), the subjects' months, the kinds', the mood's, and the brand topics'.
+ * A table that is not there answers "not read yet" for its objects and the
+ * rest still read. Any other failure throws, and the caller answers without
+ * the block rather than with a wrong one.
+ */
+export async function loadObjectReadings(admin: Admin, args: ObjectReadArgs): Promise<ObjectReading[]> {
+  if (args.objects.length === 0) return []
+  const month = monthStartOf(args.month)
+  const from = monthsBack(month, (args.months ?? AGENT_MOVEMENT_MONTHS) - 1)
+  const rivals = args.rivalAudiences ?? (await loadMarketRivalAudiences(admin, args.clientId)) ?? []
+  const audiences = marketAudiences(rivals)
+  const axis = monthAxisOf(from, month)
+
+  const denoms = await loadMonthSeries(admin, args.clientId, { audiences, from, to: month })
+  if (denoms.substrate !== 'seeded') return args.objects.map((o) => objectReading({ object: o, points: [], notRead: true }, month, args.pair, args.asOf))
+  const counts = pooledDenominators(denoms.denominators, rivals)
+  const thin = new Set<string>()
+  const filling = new Set<string>()
+  for (const s of denoms.series) {
+    if (s.audience !== INDUSTRY_AUDIENCE) continue
+    for (const p of s.points) {
+      if (p.labels.some((l) => l.kind === 'thin')) thin.add(monthStartOf(p.month))
+      if (p.state === 'filling') filling.add(monthStartOf(p.month))
+    }
+  }
+  const pooled = (rows: readonly { month: string; audience: string; k: number | null }[], read: boolean): MarketPoint[] =>
+    axis.map((m) => {
+      const side = pooledSide(rows, counts, m, rivals, { read: read && counts.has(m) })
+      return { month: m, k: side.k, n: side.n }
+    })
+
+  const subjects = args.objects.filter((o) => o.kind === 'subject')
+  const kinds = args.objects.filter((o) => o.kind === 'kind')
+  const brands = args.objects.filter((o) => o.kind === 'brand')
+  const mood = args.objects.find((o) => o.kind === 'mood') ?? null
+
+  const [subjectSet, kindRows, moodRows, brandRows] = await Promise.all([
+    subjects.length
+      ? loadMonthSeries(admin, args.clientId, { audiences, objectKind: 'subject', objectIds: subjects.map((s) => s.id), from, to: month })
+      : Promise.resolve(null),
+    kinds.length
+      ? readRows(admin, 'month_kind_readings', 'month, audience, kind, videos', args.clientId, from, month, { column: 'kind', values: kinds.map((k) => k.id) })
+      : Promise.resolve(null),
+    mood ? readRows(admin, 'month_audience_stats', 'month, audience, judged, positive', args.clientId, from, month) : Promise.resolve(null),
+    brands.length
+      ? readRows(admin, TABLE_BRAND_READINGS, 'month, audience, brand_key, k_any, n', args.clientId, from, month, { column: 'brand_key', values: brands.map((b) => b.id) })
+      : Promise.resolve(null),
+  ])
+
+  const out: ObjectReading[] = []
+  for (const o of args.objects) {
+    let input: ObjectPoints
+    if (o.kind === 'subject') {
+      const seeded = subjectSet != null && subjectSet.numeratorSubstrate === 'seeded'
+      const rows = seeded
+        ? subjectSet.series.filter((s) => s.objectId === o.id).flatMap((s) => s.points.map((p) => ({ month: monthStartOf(p.month), audience: s.audience, k: p.k })))
+        : []
+      input = { object: o, points: pooled(rows, seeded), thin, filling, notRead: !seeded }
+    } else if (o.kind === 'kind') {
+      const rows = (kindRows ?? []).filter((r) => r.kind === o.id).map((r) => ({ month: monthStartOf(String(r.month)), audience: String(r.audience), k: Number(r.videos) }))
+      input = { object: o, points: pooled(rows, kindRows != null), thin, filling, notRead: kindRows == null }
+    } else if (o.kind === 'mood') {
+      // n is the market's JUDGED videos, pooled; k its positive ones.
+      const byMonth = new Map<string, { judged: number; positive: number }>()
+      const markets = new Set(audiences)
+      for (const r of moodRows ?? []) {
+        if (!markets.has(String(r.audience))) continue
+        const m = monthStartOf(String(r.month))
+        const c = byMonth.get(m) ?? { judged: 0, positive: 0 }
+        c.judged += Number(r.judged) || 0
+        c.positive += Number(r.positive) || 0
+        byMonth.set(m, c)
+      }
+      input = { object: o, points: axis.map((m) => ({ month: m, k: byMonth.get(m)?.positive ?? null, n: byMonth.get(m)?.judged ?? null })), thin, filling, notRead: moodRows == null }
+    } else {
+      // A brand topic: the videos in the market naming the brand. A row per
+      // market audience pools like a subject's; a pooled row of its own
+      // (an audience that is not an audience key) is taken as it is.
+      const mine = (brandRows ?? []).filter((r) => r.brand_key === o.id)
+      const perAudience = mine.filter((r) => audiences.includes(String(r.audience)))
+      const pooledRows = mine.filter((r) => !audiences.includes(String(r.audience)) && String(r.audience) !== CLIENT_AUDIENCE)
+      const points: MarketPoint[] = perAudience.length > 0 || pooledRows.length === 0
+        ? pooled(perAudience.map((r) => ({ month: monthStartOf(String(r.month)), audience: String(r.audience), k: Number(r.k_any) })), brandRows != null)
+        : axis.map((m) => {
+          const r = pooledRows.find((x) => monthStartOf(String(x.month)) === m)
+          return { month: m, k: r ? Number(r.k_any) : null, n: r ? Number(r.n) : null }
+        })
+      input = { object: o, points, thin, filling, notRead: brandRows == null || mine.length === 0 }
+    }
+    out.push(objectReading(input, month, args.pair, args.asOf))
+  }
+  return out
+}
+
+/** Every month from `from` to `to` inclusive, as month starts. */
+function monthAxisOf(from: string, to: string): string[] {
+  const out: string[] = []
+  let m = monthStartOf(from)
+  const last = monthStartOf(to)
+  while (m <= last && out.length < 60) {
+    out.push(m)
+    m = nextMonthOf(m)
+  }
+  return out
+}
+
+function nextMonthOf(month: string): string {
+  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
+  d.setUTCMonth(d.getUTCMonth() + 1)
+  return d.toISOString().slice(0, 10)
 }
