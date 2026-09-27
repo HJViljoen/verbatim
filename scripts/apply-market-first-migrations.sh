@@ -64,6 +64,12 @@
 #         function (the runner reads the existing guards before and after).
 #         Needs MF4. It runs from the data tag the lead cuts on the deployed
 #         code; nothing deployed before deploy 4 reads it.
+#   mf5 = 20261103091000_market_first_moves.sql (WP3.6 wave 2, "Date a move"),
+#         after MF3, from the tag the lead cuts for it. Additive: one nullable
+#         column (moves.dated_on), one CHECK on it and the member's INSERT on
+#         it; no other grant, policy or trigger changes (the runner reads the
+#         member's grants on moves after it). Your moves dates a move today
+#         until it is applied, and reads the day once it is.
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -124,8 +130,13 @@ case "$SET" in
     LABELS=(MF3)
     PREREQ_VERSION="20261005091000"; PREREQ_NAME="MF4"
     ;;
-  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3)."; exit 2 ;;
-  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3)."; exit 2 ;;
+  mf5)
+    EXPECTED_FILES=(20261103091000_market_first_moves.sql)
+    LABELS=(MF5)
+    PREREQ_VERSION="20261103090000"; PREREQ_NAME="MF3"
+    ;;
+  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3 | mf5)."; exit 2 ;;
+  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3 | mf5)."; exit 2 ;;
 esac
 N=${#EXPECTED_FILES[@]}
 for f in "${EXPECTED_FILES[@]}"; do
@@ -624,6 +635,53 @@ SQL
   echo "  expect on Tue 3 Nov: June to September frozen (September with the 1 Nov run), October filling"
 }
 
+# MF5 (WP3.6 wave 2): the column, its CHECK, and the member's grants on moves:
+# INSERT on the nine columns 20260918093000 names plus dated_on, UPDATE on
+# (status, updated_at) and nothing else, as before it.
+MOVES_TENANT_SQL="select
+  (select string_agg(column_name, ', ' order by column_name) from information_schema.role_column_grants
+    where table_schema = 'public' and table_name = 'moves' and grantee = 'authenticated' and privilege_type = 'INSERT'),
+  (select string_agg(column_name, ', ' order by column_name) from information_schema.role_column_grants
+    where table_schema = 'public' and table_name = 'moves' and grantee = 'authenticated' and privilege_type = 'UPDATE');"
+MOVES_INSERT_AFTER="client_id, dated_on, declared_by, direction, kind, lineage_id, note, registry_ids, subject_id, title"
+
+verify_MF5() {
+  local sql
+  read -r -d '' sql <<'SQL'
+select
+  (select data_type || ':' || is_nullable from information_schema.columns
+    where table_schema = 'public' and table_name = 'moves' and column_name = 'dated_on')                  as dated_on,
+  (select count(*) from pg_constraint where conrelid = 'public.moves'::regclass and conname = 'moves_dated_on_window'
+      and pg_get_constraintdef(oid) like '%dated_on <= declared_at%'
+      and pg_get_constraintdef(oid) like '%2 mons%')                                                       as window_check,
+  (select has_column_privilege('authenticated', 'public.moves', 'dated_on', 'UPDATE')
+       or has_column_privilege('anon', 'public.moves', 'dated_on', 'INSERT'))                              as leaked;
+SQL
+  show "$sql"
+  echo "  expect: dated_on = date:YES, the window CHECK in place, no member UPDATE and no anon INSERT on it"
+  check "dated_on|check|leaked" "$(sed "s/$FS/|/g" <<<"$OUT")" "date:YES|1|f"
+
+  show "$MOVES_TENANT_SQL"
+  echo "  expect: the member's INSERT is the nine columns plus dated_on; its UPDATE is status and updated_at, as before"
+  check "member INSERT on moves" "$(field 1 "$OUT")" "$MOVES_INSERT_AFTER"
+  check "member UPDATE on moves" "$(field 2 "$OUT")" "status, updated_at"
+
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: MF5 changes no grant on tracking_configs, so the list read before it"
+  check "tenant UPDATE columns kept" "$OUT" "$PRE_TENANT_UPDATE"
+  finish_verify "$CURRENT"
+
+  echo
+  echo "  == MF5 READING (human read): the moves each tenant holds, and how many carry a day =="
+  read -r -d '' sql <<'SQL'
+select c.company_name, count(m.id) as moves, count(m.dated_on) as dated_on
+from public.clients c left join public.moves m on m.client_id = c.id
+group by c.company_name order by c.company_name;
+SQL
+  show "$sql"
+  echo "  expect: dated_on 0 on every tenant (only Your moves' Date a move writes it, once this is in)"
+}
+
 # ------------------------------------------------------------ pre-checks ----
 echo "== plan: $N file(s), filename order, one psql + one transaction each =="
 for i in "${!EXPECTED_FILES[@]}"; do printf '  %-5s %s\n' "${LABELS[$i]}" "${EXPECTED_FILES[$i]}"; done
@@ -772,6 +830,9 @@ case "$SET" in
   mf3)
   echo "DONE: $SET applied, verified and recorded. MF3 is in; nothing deployed reads it until deploy 4 (Sat 7 Nov)."
   echo "  The lens and brand back-read (June to September) waits for the 8 Nov run's parity checks (Tue 10 to Thu 12 Nov)."
+  ;;
+  mf5)
+  echo "DONE: $SET applied, verified and recorded. MF5 is in: Your moves' Date a move now takes the day the change was made."
   ;;
 esac
 echo "Log: $LOG"
