@@ -480,7 +480,10 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   // full width, and a long name ("Freedom of Movement") keeps its room.
   // The headline column is wider than the preview's 112px: its head says what
   // the count leaves out in full (the 27 Sep ruling), in two lines at 144px.
-  const cols = 'grid-cols-[minmax(0,1fr)_7.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(96px,1fr)_9rem_3.5rem]'
+  // The bar's floor is 72px, so the four tracks and their gaps fit from the
+  // 480px the query switches at: at 96 they needed 504, and the tile's 500px
+  // at 1440 (the 32px page inset, d3 polish) ran "In all" 4px past its edge.
+  const cols = 'grid-cols-[minmax(0,1fr)_7.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(72px,1fr)_9rem_3.5rem]'
   const bar = '@max-[480px]:hidden'
   const pct = (k: number | null) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
   return (

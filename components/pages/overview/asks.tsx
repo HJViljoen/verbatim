@@ -50,7 +50,11 @@ function List({ list, month, mode }: { list: AsksBlock['lists'][number]; month: 
   // list's length. Below `xl` a list and its quote stack, in reading order.
   return (
     <div className="flex min-w-0 flex-col gap-6 xl:row-span-2 xl:grid xl:grid-rows-subgrid">
-      <div className="flex flex-col">
+      {/* `min-w-0`: at `xl` the column is a grid whose one track would grow
+          to a label's full width; with the preview's 88px gaps that pushed
+          the counts past the tile's edge at 1280 (d3 polish). The label
+          truncates in its own column instead. */}
+      <div className="flex min-w-0 flex-col">
         <div className={`flex items-baseline justify-between ${RULE.head}`}>
           <span className="text-[15px] font-semibold">{ASK_TITLES[list.kind]}</span>
           <span className={SCALE.head}>videos</span>

@@ -86,7 +86,7 @@ function Group({ label, children, mode }: { label: string; children: React.React
 
 /** One of the preview's census cells: a 28px figure, its words, and a line
  *  under it (Subjects.dc.html's "Your own posts", the front page's "What you
- *  published" cells; d3 polish). */
+ *  published" cells, in their words: "20 posts / in September"; d3 polish). */
 function Cell({ figure, words, under }: { figure: number; words: string; under: React.ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -122,7 +122,7 @@ function AppOwnPosts({ c, hooks, footer }: { c: OwnPostCensus; hooks: OwnPostCen
   return (
     <BlockFrame title={subjectsOwnPosts.title} question={subjectsOwnPosts.question} mode="app" footer={footer} truncateFooter roomy>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-        <Cell figure={c.published.k} words={c.published.k === 1 ? 'post published' : 'posts published'} under={`in ${longMonth(c.month)}`} />
+        <Cell figure={c.published.k} words={c.published.k === 1 ? 'post' : 'posts'} under={`in ${longMonth(c.month)}`} />
         <Cell figure={c.overFloor.k} words={`drew ${fmtInt(c.commentFloor)}+`} under="comments each" />
       </div>
       {c.subjects.length > 0 ? <CountLine label="Subjects matched" items={c.subjects} /> : c.subjectsNote ? (

@@ -910,9 +910,12 @@ describe('SU3 · questions your posts did not answer', () => {
 describe('SU4 · your own posts', () => {
   it('counts what you published, says what cleared the floor, and names its month', () => {
     const text = renderText(subjectsOwnPosts.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('9 posts published')
-    // The preview's cell (d3 polish), the front page's own words: "3 drew
-    // 5+ / comments each", beside "9 posts published".
+    // The preview's cells (d3 polish), the front page's own words: "9 posts /
+    // in September" beside "3 drew 5+ / comments each". The email keeps its
+    // sentence.
+    expect(text).toContain('9 posts')
+    expect(text).not.toContain('posts published')
+    expect(renderText(subjectsOwnPosts.render(subjectsFixture(), 'email', ctx))).toContain('9 posts published')
     expect(text).toContain('3 drew 5+')
     expect(text).toContain('comments each')
     expect(renderText(subjectsOwnPosts.render(subjectsFixture(), 'email', ctx))).toContain('3 of 9 cleared the 5-comment floor')
@@ -942,7 +945,7 @@ describe('SU4 · your own posts', () => {
 
   it('survives M4 — `videos` is readable whatever the month tables say', () => {
     expect(subjectsOwnPosts.emptyState(refusedFixture())).toBeNull()
-    expect(renderText(subjectsOwnPosts.render(refusedFixture(), 'app', ctx))).toContain('9 posts published')
+    expect(renderText(subjectsOwnPosts.render(refusedFixture(), 'app', ctx))).toContain('9 posts')
   })
 
   // ONE ANSWER PER SCREENFUL. The membership rows are read THROUGH the subject
@@ -965,7 +968,7 @@ describe('SU4 · your own posts', () => {
     expect(text).not.toContain(SUBJECTS_NONE_NAMED)
     expect(text).not.toContain('Subjects matched')
     // The rest of the census is real and still prints.
-    expect(text).toContain('9 posts published')
+    expect(text).toContain('9 posts')
   })
 
   // AND WHERE THE SET WAS READ AND IS EMPTY, THE SENTENCE IS STILL THERE —
