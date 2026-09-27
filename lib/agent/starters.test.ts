@@ -61,4 +61,17 @@ describe('starter questions, written by code from the front page’s biggest obj
     expect(topicOf('Interest in specific colors')).toBe('specific colors')
     expect(topicOf('Backpack comfort and fit issues')).toBe('backpack comfort and fit issues')
   })
+
+  // Staging's labels on its 20 Sep update, where the cards read "ask about
+  // confusion about airline size rules" and "ask about price and sale
+  // questions" (the render of 27 Sep).
+  it('takes any leading "X about / over / in" phrase and a trailing "questions" off', () => {
+    expect(topicOf('Confusion about airline size rules')).toBe('airline size rules')
+    expect(topicOf('Price and sale questions')).toBe('price and sale')
+    expect(topicOf('Frustration with bag weight')).toBe('bag weight')
+    expect(topicOf('Interest in shipping and locations')).toBe('shipping and locations')
+    // A theme that merely contains the word keeps it.
+    expect(topicOf('Buying interest and ordering questions')).toBe('buying interest and ordering')
+    expect(topicOf('Questions and answers on sizing')).toBe('questions and answers on sizing')
+  })
 })

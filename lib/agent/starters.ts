@@ -45,12 +45,19 @@ export interface StarterQuestion {
 /** At most this many cards: the preview's two rows of three. */
 export const STARTERS_SHOWN = 6
 
-const LEADING = /^(confusion over|questions about|question about|interest in|frustration with|praise for|love for|requests for|request for|need for|demand for|worries about|concerns about|appreciation for|admiration for|respect for)\s+/i
+const LEADING = /^(confusion|questions?|interest|curiosity|frustrations?|praise|love|requests?|needs?|demand|worries|concerns?|complaints?|appreciation|admiration|respect|excitement|doubts?)\s+(over|about|in|with|for|on|around|regarding)\s+/i
 
-/** A theme label's topic: the label without its leading noun phrase, first
- *  letter lowered. "Confusion over airline bag sizes" → "airline bag sizes". */
+/** A trailing "questions" says again what "ask about" already says. */
+const TRAILING = /\s+(questions?)$/i
+
+/** A theme label's topic: the label without its leading noun phrase or a
+ *  trailing "questions", first letter lowered. "Confusion over airline bag
+ *  sizes" → "airline bag sizes"; on staging's 20 Sep update, "Confusion about
+ *  airline size rules" → "airline size rules" and "Price and sale questions"
+ *  → "price and sale", where the card had read "ask about confusion about
+ *  airline size rules" and "ask about price and sale questions". */
 export function topicOf(label: string): string {
-  const t = label.trim().replace(LEADING, '')
+  const t = label.trim().replace(LEADING, '').replace(TRAILING, '')
   return t.charAt(0).toLowerCase() + t.slice(1)
 }
 
