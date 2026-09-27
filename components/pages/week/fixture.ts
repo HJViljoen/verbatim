@@ -992,6 +992,14 @@ export function marketWeekFixture(): WeekData {
     window: SEALAND_WEEK_20_SEP,
     readingAt: '2026-09-20T12:00:00.000Z',
     subjects: sealandMarketSubjects(),
+    // The blocks WP3.7 rebuilt, on the same update (staging, below).
+    cameIn: { ...d.cameIn, window: SEALAND_WEEK_20_SEP, market: SEALAND_20_SEP_MARKET, rivals: SEALAND_20_SEP_BRANDS },
+    heard: SEALAND_20_SEP_HEARD,
+    sales: SEALAND_20_SEP_SALES,
+    replies: { rows: SEALAND_20_SEP_REPLY_ROWS, counts: [{ intent: 'buying', count: 6 }, { intent: 'question', count: 3 }, { intent: 'objection', count: 3 }], total: 12, flagged: [], window: SEALAND_WEEK_20_SEP, unread: null },
+    worked: { ...d.worked, formats: SEALAND_20_SEP_WORKED.formats, hooks: SEALAND_20_SEP_WORKED.hooks, unread: null },
+    rising: { ...d.rising, rows: [], unread: 'Not read as a change: we changed our searches in September.', chip: 'not read as a change: we changed our searches in September' },
+    unusual: { ...d.unusual, state: 'baseline_forming', flags: [], comparable: { kept: 0, required: 3, flagsFrom: '2027-01-01' } },
     // Week by week (WP2.9) on staging's weeks at the page's clock: the weeks
     // of 27 Jul to 14 Sep, the preview's own (7 Sep filling, 14 Sep so far).
     weeks: weekVolumesBlock({
@@ -1014,6 +1022,9 @@ export function marketWeekFixture(): WeekData {
 export function ossurWeeksFixture(): WeekData {
   return {
     ...weekFixture(),
+    cameIn: { ...weekFixture().cameIn, market: OSSUR_13_SEP_MARKET },
+    heard: OSSUR_13_SEP_HEARD,
+    unusual: { ...weekFixture().unusual, comparable: { kept: 0, required: 3, flagsFrom: '2027-01-01' } },
     // Össur names no subject on staging (§2.13): the market block's one line.
     subjects: {
       rows: [],
@@ -1033,4 +1044,572 @@ export function ossurWeeksFixture(): WeekData {
       cfg: null,
     }),
   }
+}
+
+// ---- Sealand's 20 Sep update as WP3.7 builds it (staging, read 27 Sep) ------
+//
+// Real figures only: `loadWeek` on staging at a 22 Sep clock, read-only, the
+// fields the rebuilt blocks print. "With this update": 421 category videos and
+// 15 under the brands Sealand tracks came in with 9,271 and 200 comments, 436
+// of September's 654 after three updates (9, 10 and 20 Sep). Two of the 374
+// themes the update first heard reached 10 videos. The unusual-week baseline
+// holds none of its three comparable months; its first flags are January's.
+
+export const SEALAND_20_SEP_MARKET: NonNullable<WeekData['cameIn']['market']> = {
+ "month": "2026-09-01",
+ "update": "2026-09-20T08:33:47.358+00:00",
+ "category": {
+  "videos": 421,
+  "comments": 9271
+ },
+ "brands": {
+  "videos": 15,
+  "comments": 200
+ },
+ "market": {
+  "videos": 436,
+  "comments": 9471
+ },
+ "monthVideos": 654,
+ "updates": 3,
+ "ended": false
+}
+
+export const SEALAND_20_SEP_HEARD: NonNullable<WeekData['heard']> = {
+ "month": "2026-09-01",
+ "prevMonth": "2026-08-01",
+ "seen": 374,
+ "rows": [
+  {
+   "registryId": "4f4bc420-8906-44ac-878d-2855c1011485",
+   "label": "Laundry planning for travel",
+   "k": 10,
+   "makerShare": 0.1,
+   "noiseShare": 0,
+   "provenance": {
+    "fromNewSearches": 8,
+    "of": 10
+   }
+  },
+  {
+   "registryId": "aed3a6d0-5fe9-456f-b8a9-f1cd096f062c",
+   "label": "Preference for secondhand fashion",
+   "k": 10,
+   "makerShare": 0.2,
+   "noiseShare": 0,
+   "provenance": {
+    "fromNewSearches": 8,
+    "of": 10
+   }
+  }
+ ],
+ "makers": null,
+ "setAside": null,
+ "regrouped": null,
+ "segments": "measured"
+}
+
+export const SEALAND_20_SEP_SALES: WeekData['sales'] = {
+ "window": {
+  "from": "2026-09-10T07:02:10.201+00:00",
+  "to": "2026-09-20T04:02:57.874+00:00"
+ },
+ "videos": 440,
+ "grouping": "subject",
+ "objections": [
+  {
+   "id": "price_concern",
+   "label": "Price concern",
+   "videos": 2,
+   "quotes": [
+    {
+     "quote": {
+      "ref": "e:23c07e9e-1c26-421d-a64f-1ff44f92d2c0",
+      "text": "Man, I’ve really been underwhelmed with mine. It’s a nice bag, but the price tag was a bit ridiculous",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "Reddit · 11 Sep · under a category video",
+     "href": "https://www.reddit.com/r/golf/comments/1wd595h/thinking_of_ordering_a_kaleidoscope_c130/"
+    },
+    {
+     "quote": {
+      "ref": "e:8dad1400-94ab-41b0-b70b-5f06a777da9d",
+      "text": "I clicked the link and snort laughed at the price. Guess I was expecting something more budget. My kit costs probably half that, and I think a some of it is better.",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "YouTube · 14 Sep · under a category video",
+     "href": "https://www.youtube.com/watch?v=toCRnR5D8iE&lc=UgyIxwND6-deK_6ZCnt4AaABAg"
+    }
+   ]
+  },
+  {
+   "id": "price_too_high",
+   "label": "Price too high",
+   "videos": 2,
+   "quotes": [
+    {
+     "quote": {
+      "ref": "e:ac830545-95a9-435a-a3bd-c571dd0c41d0",
+      "text": "It does look decent and the thought behind the little features is very good....but the price makes it an awkward decision to buy or not",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "YouTube · 17 Sep · under a category video",
+     "href": "https://www.youtube.com/watch?v=2QcVpM9ELVk&lc=UgzllqhWXNDoXbehbZR4AaABAg"
+    },
+    {
+     "quote": {
+      "ref": "e:9c0080ae-db78-4b32-bd98-f53725e5e013",
+      "text": "Way too expensive...",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "YouTube · 17 Sep · under a category video",
+     "href": "https://www.youtube.com/watch?v=2QcVpM9ELVk&lc=Ugw_LK0MIC-2lYrZ6Sd4AaABAg"
+    }
+   ]
+  },
+  {
+   "id": "aesthetic_and_materials",
+   "label": "Aesthetic and materials",
+   "videos": 1,
+   "quotes": [
+    {
+     "quote": {
+      "ref": "e:77c5d249-4da0-4b86-a618-de83f63d79c9",
+      "text": "Everyone was amazed that it didn’t look like trash bags. But to me, it did… the finale isn’t the time for shit like that.",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "Reddit · 13 Sep · under a category video",
+     "href": "https://www.reddit.com/r/ProjectRunway/comments/1wfdxbq/anna_reveals_her_collections_second_look_is_made/"
+    },
+    {
+     "quote": {
+      "ref": "e:72625565-751b-4b87-a19f-44ee52f17f8c",
+      "text": "Who wants soda can tabs against their tits? No. And this looks like trash bags. And not in a chic way.",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "Reddit · 13 Sep · under a category video",
+     "href": "https://www.reddit.com/r/ProjectRunway/comments/1wfdxbq/anna_reveals_her_collections_second_look_is_made/"
+    }
+   ]
+  },
+  {
+   "id": "ai_skepticism",
+   "label": "Ai skepticism",
+   "videos": 1,
+   "quotes": [
+    {
+     "quote": {
+      "ref": "e:0d5b6883-c4a7-41e7-b3aa-ed17fde79348",
+      "text": "no bro, nobody cares about your chinese made piano bags and your ai ads",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "YouTube · 11 Sep · under a category video",
+     "href": "https://www.youtube.com/watch?v=zpIges4-4hs&lc=UgxooSFSV3XjJBVvj2p4AaABAg"
+    },
+    {
+     "quote": {
+      "ref": "e:b950ad90-b822-401d-8b04-bd9417324945",
+      "text": "Ai btw",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "YouTube · 11 Sep · under a category video",
+     "href": "https://www.youtube.com/watch?v=zpIges4-4hs&lc=Ugxr088XcaLLf5irmOl4AaABAg"
+    }
+   ]
+  }
+ ],
+ "objectionsTotal": 75,
+ "switchingTotal": 47,
+ "rivalComplaints": [
+  {
+   "id": "competitor:Patagonia",
+   "label": "Patagonia",
+   "videos": 4,
+   "quotes": [
+    {
+     "quote": {
+      "ref": "e:0d66d1fb-955e-402f-98a6-2ec183c97cb3",
+      "text": "With damage like this it seems more like user error though",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "Reddit · 11 Sep · under a Patagonia video",
+     "href": "https://www.reddit.com/r/PatagoniaClothing/comments/1wcnaqs/my_black_holes_waterproof_cover_melted_can_it_be/"
+    },
+    {
+     "quote": {
+      "ref": "e:e5d728fd-eb95-4760-b709-a92d717a48b3",
+      "text": "yeah delamination ALMOST always = replace. However if it’s delaminating because of user error it’s a bit of a coin flip",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "Reddit · 11 Sep · under a Patagonia video",
+     "href": "https://www.reddit.com/r/PatagoniaClothing/comments/1wcnaqs/my_black_holes_waterproof_cover_melted_can_it_be/"
+    }
+   ]
+  },
+  {
+   "id": "competitor:The North Face",
+   "label": "The North Face",
+   "videos": 1,
+   "quotes": [
+    {
+     "quote": {
+      "ref": "e:deb0df19-e2ba-48be-8456-3e0d8d73f03d",
+      "text": "Did I make a mistake buying it? I'm feeling kind of down.",
+      "lang": "en",
+      "english": null
+     },
+     "cite": "Reddit · 11 Sep · under a The North Face video",
+     "href": "https://www.reddit.com/r/backpacks/comments/1wde70m/anyone_here_use_the_north_face_jester_backpack/"
+    }
+   ]
+  }
+ ],
+ "brief": {
+  "href": "/dashboard/reports",
+  "label": "Open the sales brief →"
+ },
+ "unread": null,
+ "praise": [],
+ "switching": []
+}
+
+export const SEALAND_20_SEP_REPLY_ROWS: ReplyRow[] = [
+ {
+  "id": "1409ba77-3ad8-4de2-ac1d-aeca9c5eb1eb",
+  "intent": "buying",
+  "date": "2026-09-16T00:00:00+00:00",
+  "context": "under @melania beadedbag’s post · 622 likes",
+  "reason": "Wedding bag interest",
+  "platform": "youtube",
+  "quote": {
+   "ref": "m:1409ba77-3ad8-4de2-ac1d-aeca9c5eb1eb",
+   "text": "TOO SPARKLY? ITS NEVER TOO SPARKLY I WOULD LOVE THIS",
+   "lang": "en",
+   "english": null
+  },
+  "href": "https://www.youtube.com/watch?v=ooYV2pm5kRc&lc=UgxrW4WX22VAfY_zScB4AaABAg",
+  "insightId": "410d150b-e80f-4770-8e96-cdf1459042d9",
+  "maker": true
+ },
+ {
+  "id": "9966134a-556b-4c38-b72d-4c90b63e80a9",
+  "intent": "buying",
+  "date": "2026-09-16T00:00:00+00:00",
+  "context": "under @melania beadedbag’s post · 558 likes",
+  "reason": "Wedding bag interest",
+  "platform": "youtube",
+  "quote": {
+   "ref": "m:9966134a-556b-4c38-b72d-4c90b63e80a9",
+   "text": "There can NEVER be TOO MANY ✨sPaRklEs✨ Edit: mOmmY iM fAmOuS!",
+   "lang": "en",
+   "english": null
+  },
+  "href": "https://www.youtube.com/watch?v=ooYV2pm5kRc&lc=UgyQjkbny8OUiwNGbaB4AaABAg",
+  "insightId": "410d150b-e80f-4770-8e96-cdf1459042d9",
+  "maker": true
+ },
+ {
+  "id": "f7c85c8c-a4cd-4086-bb58-736b1c39699b",
+  "intent": "buying",
+  "date": "2026-09-15T00:00:00+00:00",
+  "context": "r/heronebag · filed under a brand you track · 3 likes",
+  "reason": "Brand comparison",
+  "platform": "reddit",
+  "quote": {
+   "ref": "m:f7c85c8c-a4cd-4086-bb58-736b1c39699b",
+   "text": "Totepack, finally I have a name for this. I hacked my Cotopaxi backpack and opened the side seams a bit and sewed in a luggage pass through. One two many trips wrapping the straps around my luggage, annoying. I like the Cotopaxi because I use it as a day pack at the destination and that's nice because it's not too big. I'm sorta shopping for a new personal item sized bag. I like the idea of a totepack in that it's a tote thus more easy to access the items inside and keep things organized and it's a backpack for those situations. But I also like the idea of a cabin spinner...but that means no tote option and it's not a backpack either. But every time I travel I wonder about a tote bag or a cabin spinner to change up my travel situation.",
+   "lang": "en",
+   "english": null
+  },
+  "href": "https://www.reddit.com/r/HerOneBag/comments/1wgn241/fjallraven_high_coast_totepack_luggage_pass/",
+  "insightId": "43e92513-e5f5-4ef5-9497-cd81490d719e"
+ },
+ {
+  "id": "ae93f744-8320-4840-9e0f-c0e1057cbcc3",
+  "intent": "buying",
+  "date": "2026-09-15T00:00:00+00:00",
+  "context": "r/heronebag · filed under a brand you track · 1 like",
+  "reason": "Brand comparison",
+  "platform": "reddit",
+  "quote": {
+   "ref": "m:ae93f744-8320-4840-9e0f-c0e1057cbcc3",
+   "text": "I have this backpack and the Bellroy Lite. I was wearing the Bellroy when I saw another person wearing the High Coast and realized it had features I preferred. Plus the bellroy backpack straps would always loosen up for me.",
+   "lang": "en",
+   "english": null
+  },
+  "href": "https://www.reddit.com/r/HerOneBag/comments/1wgn241/fjallraven_high_coast_totepack_luggage_pass/",
+  "insightId": "43e92513-e5f5-4ef5-9497-cd81490d719e"
+ }
+]
+
+export const SEALAND_20_SEP_BRANDS: WeekData['cameIn']['rivals'] = [
+ {
+  "audience": "competitor:Cotopaxi",
+  "label": "Cotopaxi",
+  "byThem": 12,
+  "aboutThem": 15,
+  "comments": 29,
+  "posts": [
+   {
+    "platform": "instagram",
+    "account": "cotopaxi",
+    "postedOn": "2026-09-10",
+    "caption": "What goes into a Cotopaxi photoshoot? Come along with our Social Media Specialist Elisa…",
+    "href": "https://www.instagram.com/p/DdHrPx-SwF9/",
+    "comments": 22,
+    "own": true
+   }
+  ],
+  "postsTotal": 27,
+  "postsConsidered": 6,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-06-28T14:41:28.287813+00:00",
+  "nameNote": null
+ },
+ {
+  "audience": "competitor:Freedom of Movement",
+  "label": "Freedom of Movement",
+  "byThem": 30,
+  "aboutThem": 3,
+  "comments": 59,
+  "posts": [
+   {
+    "platform": "tiktok",
+    "account": "fombrand",
+    "postedOn": "2026-09-12",
+    "caption": "Recipe for a lekker time! What’s missing??👇🇿🇦 #freedomofmovement…",
+    "href": "https://www.tiktok.com/@fombrand/video/7684546116502686994",
+    "comments": 33,
+    "own": true
+   }
+  ],
+  "postsTotal": 33,
+  "postsConsidered": 6,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-09-20T04:45:30.261985+00:00",
+  "nameNote": null
+ },
+ {
+  "audience": "competitor:Freitag",
+  "label": "Freitag",
+  "byThem": 6,
+  "aboutThem": 149,
+  "comments": 34,
+  "posts": [
+   {
+    "platform": "instagram",
+    "account": "freitaglab",
+    "postedOn": "2026-09-11",
+    "caption": "A flea market find makes its way back to where it all began. Meet Azur from…",
+    "href": "https://www.instagram.com/p/DdI3eTQCGzQ/",
+    "comments": 20,
+    "own": true
+   }
+  ],
+  "postsTotal": 155,
+  "postsConsidered": 6,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-06-28T14:49:44.45009+00:00",
+  "nameNote": "mostly the German word for Friday · not counted"
+ },
+ {
+  "audience": "competitor:Old School",
+  "label": "Old School",
+  "byThem": 8,
+  "aboutThem": 0,
+  "comments": 29,
+  "posts": [
+   {
+    "platform": "instagram",
+    "account": "oldschool_ltd",
+    "postedOn": "2026-09-18",
+    "caption": "South Africa, we deserve better emojis 🇿🇦 Which one are you adding first?",
+    "href": "https://www.instagram.com/p/DdbutAIOvSB/",
+    "comments": 29,
+    "own": true
+   }
+  ],
+  "postsTotal": 8,
+  "postsConsidered": 6,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-09-20T04:35:25.183927+00:00",
+  "nameNote": null
+ },
+ {
+  "audience": "competitor:Patagonia",
+  "label": "Patagonia",
+  "byThem": 19,
+  "aboutThem": 12,
+  "comments": 83,
+  "posts": [
+   {
+    "platform": "instagram",
+    "account": "patagonia",
+    "postedOn": "2026-09-16",
+    "caption": "1992 is calling. Exceptional gear for uncommon pursuits. Link in bio.",
+    "href": "https://www.instagram.com/p/DdW0kajxVrB/",
+    "comments": 50,
+    "own": true
+   }
+  ],
+  "postsTotal": 31,
+  "postsConsidered": 6,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-07-06T04:19:53.577703+00:00",
+  "nameNote": null
+ },
+ {
+  "audience": "competitor:Rareform",
+  "label": "Rareform",
+  "byThem": 1,
+  "aboutThem": 0,
+  "comments": 0,
+  "posts": [
+   {
+    "platform": "tiktok",
+    "account": "rareform",
+    "postedOn": "2026-09-15",
+    "caption": "have you snagged your 1 of 1 tote yet? #totebag #upcycling #upcycledfashion #upcycledbag",
+    "href": "https://www.tiktok.com/@rareform/video/7685854392712514830",
+    "comments": 0,
+    "own": true
+   }
+  ],
+  "postsTotal": 1,
+  "postsConsidered": 1,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-09-09T19:32:02.05635+00:00",
+  "nameNote": null
+ },
+ {
+  "audience": "competitor:The North Face",
+  "label": "The North Face",
+  "byThem": 23,
+  "aboutThem": 33,
+  "comments": 220,
+  "posts": [
+   {
+    "platform": "instagram",
+    "account": "thenorthface",
+    "postedOn": "2026-09-14",
+    "caption": "Aimé Leon Dore / The North Face 2026. @aimeleondore @thenorthface",
+    "href": "https://www.instagram.com/p/DdRD7Hsx8Ml/",
+    "comments": 98,
+    "own": true
+   }
+  ],
+  "postsTotal": 56,
+  "postsConsidered": 6,
+  "ownPostsUnread": false,
+  "trackedSince": "2026-09-20T04:18:33.090193+00:00",
+  "nameNote": null
+ }
+]
+
+export const SEALAND_20_SEP_WORKED = {
+ "formats": [
+  {
+   "label": "Story",
+   "videos": 118,
+   "engagement": 5.618389830508476,
+   "multiple": 2.5596309022817656
+  },
+  {
+   "label": "Entertainment",
+   "videos": 20,
+   "engagement": 5.231,
+   "multiple": 2.383143507972665
+  },
+  {
+   "label": "Promotional",
+   "videos": 92,
+   "engagement": 5.146521739130436,
+   "multiple": 2.344656828761018
+  },
+  {
+   "label": "Challenge",
+   "videos": 5,
+   "engagement": 4.172,
+   "multiple": 1.900683371298405
+  }
+ ],
+ "hooks": [
+  {
+   "label": "Controversy",
+   "videos": 5,
+   "engagement": 9.642,
+   "multiple": 4.392710706150341
+  },
+  {
+   "label": "Before and after",
+   "videos": 5,
+   "engagement": 5.872000000000001,
+   "multiple": 2.6751708428246013
+  },
+  {
+   "label": "Personal story",
+   "videos": 266,
+   "engagement": 4.655075187969924,
+   "multiple": 2.1207631835853866
+  },
+  {
+   "label": "Demonstration",
+   "videos": 61,
+   "engagement": 3.38327868852459,
+   "multiple": 1.5413570334963962
+  }
+ ]
+}
+
+/** Össur's 13 Sep update (staging, paused): 160 category videos and 8 under
+ *  Ottobock, 168 of September's 362 after two updates; one theme first heard
+ *  at the floor, "Brand boycott over politics" (16); no maker rule. */
+export const OSSUR_13_SEP_MARKET: NonNullable<WeekData['cameIn']['market']> = {
+ "month": "2026-09-01",
+ "update": "2026-09-13T06:26:49.308+00:00",
+ "category": {
+  "videos": 160,
+  "comments": 4117
+ },
+ "brands": {
+  "videos": 8,
+  "comments": 180
+ },
+ "market": {
+  "videos": 168,
+  "comments": 4297
+ },
+ "monthVideos": 362,
+ "updates": 2,
+ "ended": false
+}
+
+export const OSSUR_13_SEP_HEARD: NonNullable<WeekData['heard']> = {
+ "month": "2026-09-01",
+ "prevMonth": "2026-08-01",
+ "seen": 93,
+ "rows": [
+  {
+   "registryId": "19c24f49-be3f-4a9c-8acb-1072de3078d4",
+   "label": "Brand boycott over politics",
+   "k": 16,
+   "makerShare": null,
+   "noiseShare": null,
+   "provenance": null
+  }
+ ],
+ "makers": null,
+ "setAside": null,
+ "regrouped": null,
+ "segments": "no_rule"
 }

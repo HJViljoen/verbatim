@@ -42,7 +42,7 @@ export const weekWeeks: Block<WeekData> = {
       ? mode === 'email' ? <>{howTo}<span style={{ display: 'inline-block', width: 24 }} />{sameAge}</> : <span className="flex flex-wrap gap-x-8 gap-y-1">{howTo}{sameAge}</span>
       : howTo
     return (
-      <BlockFrame title={weekWeeks.title} mode={mode} footer={footer}>
+      <BlockFrame title={weekWeeks.title} mode={mode} footer={footer} roomy card>
         {empty || !b ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <WeekBars block={b} mode={mode} variant="week" surface="tile" />}
       </BlockFrame>
     )

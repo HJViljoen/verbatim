@@ -391,7 +391,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
 
   if (empty) {
     return (
-      <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer}>
+      <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer} roomy card>
         <BlockEmpty mode={mode}>{empty}</BlockEmpty>
       </BlockFrame>
     )
@@ -402,7 +402,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
     const num = { ...c, fontFamily: FONT.mono, textAlign: 'right' as const }
     const head = { ...c, borderTop: 0, color: EMAIL.muted, fontSize: 11 }
     return (
-      <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer}>
+      <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer} roomy card>
         <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
@@ -433,7 +433,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
   }
 
   return (
-    <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer}>
+    <BlockFrame title={MARKET_SUBJECTS_WEEK_TITLE} mode={mode} footer={footer} roomy card>
       <div role="table" className="flex flex-col">
         <div role="row" className={`grid ${MARKET_COLS} items-end ${RULE.head}`}>
           <span role="columnheader" className={SCALE.head}>Subject</span>

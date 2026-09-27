@@ -1,51 +1,51 @@
 import { PageGrid, TileColumns } from '@/components/shell/page-grid'
-import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
+import { SkeletonSurface, SkeletonTile, BoneLines, BoneBars } from '@/components/shell/skeleton'
 
-// Mirrors components/pages/week/index.tsx (WeekPage): the week bar (no
-// horizon: it is dated by the update) with its one line, How to read
-// and Export, then the blocks in `WEEK_BLOCKS` order at their `COLS` widths:
-// unusual · worth a reply · subjects · what came in · rival posts · what
-// worked (5) beside sales (7) · rising, and the coverage footnote bare under
-// the grid. "Flagged" is not drawn: the page folds it into "Worth a reply"
-// whenever it is quiet, which is the usual case.
+// Mirrors components/pages/week/index.tsx (WeekPage; market-first WP3.7, the
+// approved preview's This week): the week bar (no horizon: it is dated by the
+// update) with its one line, How to read and Export, then the blocks in
+// `WEEK_BLOCKS` order at their `COLS` widths: with this update · week by week
+// · heard for the first time · your market's subjects (6) beside for sales (6)
+// · worth a reply · what worked · what brands you track posted · checks on
+// this update. Nothing under the grid (25 Sep rulings).
 export default function WeekLoading() {
   return (
     <SkeletonSurface nav="week" pills={3}>
-      <PageGrid>
-        {/* week.unusual · two columns */}
-        <SkeletonTile col={12} row={2} meta>
+      <PageGrid className="gap-6 xl:auto-rows-auto">
+        {/* week.came-in · the sentence and the came-in table */}
+        <SkeletonTile col={12} row={2}>
           <TileColumns of={2}>
             <BoneLines lines={4} />
-            <div className="xl:pl-4"><BoneLines lines={4} /></div>
-          </TileColumns>
-        </SkeletonTile>
-        {/* week.reply */}
-        <SkeletonTile col={12} row={2} meta lines={5} />
-        {/* week.subjects */}
-        <SkeletonTile col={12} row={2} meta><BoneBars rows={4} /></SkeletonTile>
-        {/* week.camein · two columns */}
-        <SkeletonTile col={12} row={2} meta>
-          <TileColumns of={2}>
-            <BoneBars rows={3} />
             <div className="xl:pl-4"><BoneBars rows={3} /></div>
           </TileColumns>
         </SkeletonTile>
-        {/* week.rivalposts */}
-        <SkeletonTile col={12} row={1} meta lines={3} />
-        {/* week.worked (5) · week.sales (7) */}
-        <SkeletonTile col={5} row={2} meta lines={4} />
-        <SkeletonTile col={7} row={2} meta lines={4} />
-        {/* week.rising · three abreast */}
-        <SkeletonTile col={12} row={2} meta>
+        {/* week.weeks */}
+        <SkeletonTile col={12} row={2}><BoneBars rows={4} /></SkeletonTile>
+        {/* week.heard */}
+        <SkeletonTile col={12} row={2}><BoneBars rows={3} /></SkeletonTile>
+        {/* week.subjects (6) · week.sales (6) */}
+        <SkeletonTile col={6} row={2}><BoneBars rows={5} /></SkeletonTile>
+        <SkeletonTile col={6} row={2} lines={5} />
+        {/* week.reply */}
+        <SkeletonTile col={12} row={2} lines={5} />
+        {/* week.worked · formats beside hooks */}
+        <SkeletonTile col={12} row={2}>
+          <TileColumns of={2}>
+            <BoneBars rows={4} />
+            <div className="xl:pl-4"><BoneBars rows={4} /></div>
+          </TileColumns>
+        </SkeletonTile>
+        {/* week.rival-posts */}
+        <SkeletonTile col={12} row={2} lines={5} />
+        {/* week.checks · three abreast */}
+        <SkeletonTile col={12} row={1}>
           <TileColumns of={3}>
-            <BoneLines lines={3} />
-            <div className="xl:pl-4"><BoneLines lines={3} /></div>
-            <div className="xl:pl-4"><BoneLines lines={3} /></div>
+            <BoneLines lines={2} />
+            <div className="xl:pl-4"><BoneLines lines={2} /></div>
+            <div className="xl:pl-4"><BoneLines lines={2} /></div>
           </TileColumns>
         </SkeletonTile>
       </PageGrid>
-      {/* week.coverage · the bare footnote */}
-      <Bone className="h-2.5 w-2/3" />
     </SkeletonSurface>
   )
 }
