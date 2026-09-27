@@ -1515,6 +1515,10 @@ function readAfterwards(
  * is one another row could have been vouched by. Pinned in
  * `market-surface.test.ts` against the picker itself, because it rests on the
  * picker's order and not on a comment.
+ *
+ * `heroEvidence` below reads the English only for the rows a hero can match,
+ * and that is correct only while this is zero: raise it and the heuristic
+ * path scores every row by its reading, so `heroEvidence` has to read them all.
  */
 const HERO_ONLY = 0
 
