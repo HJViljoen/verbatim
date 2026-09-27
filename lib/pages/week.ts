@@ -54,7 +54,7 @@ import { segmentOf } from './overview-market/board'
 import { segmentRulesEnabled } from '../segments/rules'
 import { brandCountState, noiseWords, OTHER_MEANING } from '../brands/precision'
 import { marketSubjectSide } from './overview-market/subjects'
-import { noiseCommentsOf, noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
+import { noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
 import type { ConfigChange } from '../config-log'
 import type { ScheduleConfig } from '../pipeline/schedule-due'
 import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
@@ -153,9 +153,6 @@ export const NEW_THEME_FLOOR = 10
 
 /** Formats and hooks shown in "What worked". */
 export const WORKED_SHOWN = 4
-
-/** Quotes shown under §4's "new quotes on your subjects". */
-export const NEW_QUOTES_SHOWN = 4
 
 /**
  * Rival posts named per rival in §5.
@@ -1924,6 +1921,86 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   }
 }
 
+// ---- the weekly's share of this page (WP3.7) ------------------------------------
+
+/** What the weekly report prints of This week: the same builders over the
+ *  same update, so the email and the page print one set of counts. */
+export interface WeekParts {
+  update: WeekUpdate
+  window: WeekWindow | null
+  /** The month the window ends in: This week's month. */
+  month: string
+  cameIn: MarketCameIn | null
+  heard: HeardBlock
+  sales: ForSalesData
+  replies: RepliesBlock
+}
+
+/**
+ * This week's "With this update", "Heard for the first time", "For sales" and
+ * "Worth a reply", for the weekly report (market-first WP3.7): the page's own
+ * builders and reads, without the sections the weekly does not print (the
+ * update series, the risers, the rivals' posts, what worked, week by week). The
+ * weekly's done-when: it and This week print the same counts for one update.
+ * Null for a tenant nothing has been delivered to.
+ */
+export async function loadWeekParts(scope: Scope): Promise<WeekParts | null> {
+  const supabase = scope.supabase as SupabaseClient
+  const { clientId } = scope
+  const reading: ReadingHandle = scope.reading
+  const readingAt = new Date().toISOString()
+  const [runsRes, runningIds, rivals, delivered] = await Promise.all([
+    supabase.from('pipeline_runs').select('*')
+      .eq('client_id', clientId).in('status', ['completed', 'partial'])
+      .order('started_at', { ascending: false }).limit(2),
+    fetchRunningRunIds(supabase, clientId, 'week'),
+    loadRivals(supabase, clientId),
+    loadDeliveredRuns(supabase, clientId).catch(() => null),
+  ])
+  const runsRaw = rows<RunRow>(runsRes, 'week.parts.runs')
+  const anchor = runsRaw[0]
+  if (!anchor) return null
+  const update: WeekUpdate = {
+    id: anchor.id,
+    date: anchor.completed_at ?? anchor.started_at ?? readingAt,
+    previous: runsRaw[1]?.completed_at ?? runsRaw[1]?.started_at ?? null,
+    status: anchor.status,
+  }
+  const stored = rowWindow(anchor)
+  const window: WeekWindow | null = stored?.start && stored.end ? { from: stored.start, to: stored.end, basis: stored.basis } : null
+  const month = monthStartOf(window?.to ?? update.date)
+  const rivalAudiences = marketRivalAudiences(rivals)
+  const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
+
+  const [monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects] = await Promise.all([
+    loadMonthSeries(reading.client, clientId, { from: month, to: month, audiences }),
+    window ? loadWindowReading(reading.client, clientId, { from: window.from, to: window.to }) : null,
+    window && window.from < month ? loadWindowReading(reading.client, clientId, { from: month, to: window.to }) : null,
+    loadUpdateVideos(supabase, clientId, anchor.id),
+    fetchThemedRunId(supabase, clientId, runningIds, 'week'),
+    loadSubjects(supabase, clientId),
+  ])
+  const contributionRead = (monthWindowRead ?? windowRead)?.denominators ?? null
+  const cameIn = marketCameIn({
+    month,
+    update: update.date,
+    read: contributionRead,
+    rivalAudiences,
+    monthVideos: pooledDenominators(monthSet.denominators, rivalAudiences).get(month)?.videos ?? null,
+    updates: delivered ? updatesInto(month, delivered.map(updateInstant), update.date) : null,
+    now: readingAt,
+  })
+  const [heard, sales, replies] = await Promise.all([
+    loadHeard({
+      supabase, client: reading.client, clientId, runId: anchor.id, month, themedRunId,
+      regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
+    }),
+    buildSales({ supabase, clientId, window, windowVideos: totalVideos(windowRead?.denominators ?? null), subjects }),
+    buildReplies({ supabase, clientId, runId: anchor.id, window, videos }),
+  ])
+  return { update, window, month, cameIn, heard, sales, replies }
+}
+
 // ---- §2 · worth a reply, and §8 · flagged for awareness -----------------------
 
 const REPLIES_UNREAD =
@@ -2691,87 +2768,6 @@ async function buildCameIn(input: {
   }
 }
 
-const QUOTES_UNREAD =
-  'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted.'
-
-/**
- * The comments this update's window carried that sit under one of the client's
- * subjects.
- *
- * MEMBERSHIP IS PER (INSIGHT, SUBJECT) AND IS A STORED JUDGEMENT (M4), so this
- * is a read of `subject_memberships` and never a keyword match: a quote filed
- * under "Durability" because the word appears in it is the thing the judge was
- * built to stop. Absent the table, the honest answer is that the instrument is
- * not installed — not that the week was quiet.
- */
-export async function loadSubjectQuotes(
-  supabase: SupabaseClient,
-  clientId: string,
-  subjects: Subject[] | null,
-  window: { from: string; to: string },
-): Promise<{ shown: { subject: string; quote: Quote; cite: string; href: string | null }[]; total: number | null; unread: string | null }> {
-  if (!subjects || subjects.length === 0) return { shown: [], total: null, unread: QUOTES_UNREAD }
-  const nameById = new Map(subjects.map((s) => [s.id, s.name]))
-
-  let members: { subject_id: string; audience_insight_id: string }[]
-  try {
-    members = await selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
-      supabase.from('subject_memberships').select('subject_id, audience_insight_id')
-        .eq('client_id', clientId).eq('member', true)
-        .order('audience_insight_id', { ascending: true }),
-    )
-  } catch (error) {
-    if (isMissingSubjects(error)) return { shown: [], total: null, unread: QUOTES_UNREAD }
-    throw error
-  }
-  if (members.length === 0) return { shown: [], total: 0, unread: null }
-
-  const subjectOf = new Map<string, string>()
-  for (const m of members) if (!subjectOf.has(m.audience_insight_id)) subjectOf.set(m.audience_insight_id, m.subject_id)
-
-  const citations = await fetchQuoteCitationsByAudience(supabase, [...subjectOf.keys()])
-  const pool: { subject: string; citation: QuoteCitation }[] = []
-  for (const [insightId, list] of citations) {
-    const subjectId = subjectOf.get(insightId)
-    if (!subjectId) continue
-    for (const c of [...list].sort((a, b) => a.rank - b.rank)) {
-      const text = cleanQuote(c.quote)
-      if (!text || !c.commentId) continue
-      pool.push({ subject: nameById.get(subjectId) ?? 'A subject', citation: { ...c, quote: text } })
-    }
-  }
-  if (pool.length === 0) return { shown: [], total: 0, unread: null }
-
-  // THE WINDOW IS APPLIED TO THE COMMENT'S DATE and to nothing else. An
-  // insight this update wrote out of a comment written in March is March's
-  // comment, and "new quotes this update" means quotes written inside the days
-  // this update covered.
-  // With each comment's platform and video, so the noise filter below needs
-  // no second read of the same comments (`noiseCommentsOf`).
-  const dated = await inChunks<{ id: string; platform: string; video_id: string }>(
-    pool.map((p) => p.citation.commentId as string),
-    (part) => () =>
-      supabase.from('comments').select('id, platform, video_id')
-        .eq('client_id', clientId)
-        .in('id', part)
-        .gte('comment_date', window.from).lt('comment_date', window.to)
-        .order('id', { ascending: true }),
-  )
-  const fresh = new Set(dated.map((c) => c.id))
-  const dayOk = pool.filter((p) => p.citation.commentId && fresh.has(p.citation.commentId))
-  // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7), and the
-  // count beside the list is of the quotes it could have shown.
-  const okIds = new Set(dayOk.map((p) => p.citation.commentId as string))
-  const noise = await noiseCommentsOf(supabase, clientId, dated.filter((c) => okIds.has(c.id)))
-  const kept = skipNoise(dayOk, (p) => p.citation.commentId, noise)
-  const shown = kept.slice(0, NEW_QUOTES_SHOWN)
-  const cited = await citeQuotes(supabase, clientId, shown.map((s) => s.citation))
-  return {
-    shown: cited.map((q, i) => ({ subject: shown[i].subject, ...q })),
-    total: kept.length,
-    unread: null,
-  }
-}
 
 // ---- §5 ----------------------------------------------------------------------
 

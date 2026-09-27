@@ -5,7 +5,7 @@ import type { FigureTable } from '../reading/verdicts'
 import type { WeeklyData } from '../pages/weekly'
 import { loadWeekly } from '../pages/weekly'
 import { readingHandle } from '../reading/read'
-import { WEEKLY_BLOCK_KEYS, weeklyPeriod, weeklySubject, type WeeklyBlockKey } from './weekly'
+import { WEEKLY_BLOCK_KEYS, WEEKLY_TITLE, weeklyPeriod, weeklySubject, type WeeklyBlockKey } from './weekly'
 import { STALE_ARTEFACT_LINE } from './stale'
 
 /**
@@ -34,29 +34,23 @@ import { STALE_ARTEFACT_LINE } from './stale'
 /**
  * The stored shape's version.
  *
- * TWO, AND THE BUMP IS THE POINT. Block D wave 2 changed `data.reading`
- * incompatibly — `update` is new and required, `sales` went from a flat quote
- * list to `ForSalesData` (and then gained `objectionsTotal`), `content` gained
- * `surfaced` / `surfacedCounts` and `runnerUp`, `incoming` gained
- * `newThemesTotal` — and every reader of a stored snapshot now dereferences
- * those. A row written before this branch would throw a TypeError at
- * `/r/<token>` and on the "email as sent" re-render, and `version: 1` asserted
- * a compatibility that no longer held.
+ * THREE (market-first WP3.7). "Your market this week" reads the reading month
+ * and holds the front page's reading (`overview`) and This week's parts
+ * (`cameIn`, `heard`, `sales`, `replies`) where version 2 held Phase 1's six
+ * sections (the unusual-week check, "What came in", the coverage line). Every
+ * reader of a stored snapshot dereferences the new fields, so a version 2 row
+ * prints `STALE_ARTEFACT_LINE` at the top of the render instead of a
+ * TypeError three components in (`staleWeeklySnapshot`). Production has none:
+ * the weekly is not sent in the trial (decision J).
  *
- * THE BLAST RADIUS IS PROVABLY ZERO IN PRODUCTION: `lib/reports/weekly-build.ts`
- * does not exist on `main`, so no `report_snapshots` row of kind `weekly` has
- * ever been written by a deployed build. What the bump protects is a Phase 1
- * database on somebody's machine, where a v1 row can exist — and there it now
- * meets `staleWeeklySnapshot`'s sentence at the top of the render instead of a
- * stack trace three components in.
+ * `isWeeklyData` deliberately still matches on `kind` alone: telling a weekly
+ * artefact from a report is one question and telling a readable one from a
+ * stale one is another.
  *
- * `isWeeklyData` deliberately still matches on `kind` alone: the branches that
- * ask it (lib/reports/viewer.ts, app/r/[token]) fall through to the arranged-
- * report path, which reads `data.sections` and would throw on a weekly row of
- * ANY version. Telling a weekly artefact from a report is one question and
- * telling a readable one from a stale one is another.
+ * Version 2 (Block D wave 2) is kept in the history: `update` became required
+ * and `sales` a `ForSalesData`.
  */
-export const WEEKLY_SNAPSHOT_VERSION = 2
+export const WEEKLY_SNAPSHOT_VERSION = 3
 
 export interface WeeklySnapshotData {
   /** `number`, not the literal: the callers that narrow with `isWeeklyData`
@@ -145,14 +139,14 @@ export async function snapshotWeekly(args: {
     version: WEEKLY_SNAPSHOT_VERSION,
     kind: 'weekly',
     company,
-    title: `${company} · your update`,
+    title: WEEKLY_TITLE,
     period: weeklyPeriod(reading.window, reading.month),
     readingAt: reading.readingAt,
     month: reading.month,
     keys,
     reading,
     figures: mergeFigures(args.figuresOf(reading, keys)),
-    subject: weeklySubject(company, reading.section1.check),
+    subject: weeklySubject(company, reading.cameIn),
   }
 
   const snap = await createSnapshot(args.admin, {
@@ -160,7 +154,7 @@ export async function snapshotWeekly(args: {
     userId: args.userId ?? null,
     kind: 'report',
     ref: { params: {} },
-    title: `${data.title} · ${data.period}`,
+    title: `${company} · ${data.title} · ${data.period}`,
     runId: reading.runId,
     data,
   })
