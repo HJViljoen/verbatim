@@ -189,7 +189,7 @@ export default async function SettingsTrackingPage() {
           conversationLabel={conversation.label}
           conversationHref={conversation.href}
         />
-        <NotMyMarketSection month={inputs.censusMonth} byYou={byYou} counts={market?.segmentCounts ?? null} />
+        <NotMyMarketSection month={inputs.censusMonth} byYou={byYou} counts={market?.segmentCounts ?? null} makers={market?.makers ?? 'not_measured'} />
         {locked ? (
           <HeldStillSection
             line={heldStillLine(queue?.state === 'available' ? 'available' : 'unavailable')}

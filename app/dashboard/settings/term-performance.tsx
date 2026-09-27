@@ -15,10 +15,12 @@ import { TERM_YIELD_BASIS, type TermYield } from '@/lib/settings/terms'
 // printed as DROP-CANDIDATE, and it opens to show the three numbers behind it
 // (MASTER rule 5 — a claim is clickable evidence). The client decides.
 
+// The search set's group names (WP3.10), as the chips above and the queue
+// print them: one name per group on the page.
 const BUCKET_LABEL: Record<string, string> = {
-  brand: 'Your brand',
-  competitor: 'Competitors',
-  industry: 'Your category',
+  brand: 'Your name',
+  competitor: 'Brands you track',
+  industry: 'The category',
 }
 
 const n = (x: number) => x.toLocaleString('en-US')

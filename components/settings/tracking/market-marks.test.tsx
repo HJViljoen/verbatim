@@ -88,6 +88,12 @@ describe('This is not my market', () => {
     expect(read(renderText(<NotMyMarketSection month={MONTH} byYou={2} counts={SEALAND} />))).toContain('By you 2 videos you marked')
   })
 
+  it('says nothing is marked by us where no rule is on (Össur), rather than "not measured"', () => {
+    const t = read(renderText(<NotMyMarketSection month={MONTH} byYou={0} counts={null} makers="no_rule" />))
+    expect(t).toContain('By us nothing: no off-topic rule is switched on for your workspace.')
+    expect(t).not.toContain('not measured')
+  })
+
   it('reads "not measured" where a table is not there', () => {
     const t = renderText(<NotMyMarketSection month={MONTH} byYou={null} counts={null} />)
     expect(t.match(/not measured/g)).toHaveLength(2)

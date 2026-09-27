@@ -103,12 +103,16 @@ export function MakersSection({
  * holds).
  */
 export function NotMyMarketSection({
-  month, byYou, counts,
+  month, byYou, counts, makers = 'measured',
 }: {
   month: string
   /** Videos you marked; null where the table is not there. */
   byYou: number | null
   counts: SegmentCounts | null
+  /** 'no_rule': no maker or off-topic rule is on for the workspace (Össur),
+   *  so nothing is marked by us, and the line says why rather than "not
+   *  measured". */
+  makers?: MakerState
 }) {
   const m = longMonth(month)
   return (
@@ -122,9 +126,11 @@ export function NotMyMarketSection({
             {byYou == null ? NOT_MEASURED : byYou === 0 ? 'nothing yet' : <><span data-copy="figure" className="font-mono font-semibold text-foreground">{fmtInt(byYou)}</span> {byYou === 1 ? 'video' : 'videos'} you marked</>}
           </Rule>
           <Rule label="By us">
-            {counts && counts.market > 0
-              ? <>off-topic videos, such as those a bare brand name found about something else: <Level k={counts.marketNoise} n={counts.market} /> market videos in {m}.</>
-              : NOT_MEASURED}
+            {makers === 'no_rule'
+              ? 'nothing: no off-topic rule is switched on for your workspace.'
+              : counts && counts.market > 0
+                ? <>off-topic videos, such as those a bare brand name found about something else: <Level k={counts.marketNoise} n={counts.market} /> market videos in {m}.</>
+                : NOT_MEASURED}
           </Rule>
           <Rule label="By rule">your own posts, and the comments under brands’ own posts. Neither is counted in your market.</Rule>
         </dl>
