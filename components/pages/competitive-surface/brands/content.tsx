@@ -89,7 +89,8 @@ function Body({ c, mode }: { c: ContentBlock; mode: RenderMode }) {
   )
 }
 
-export const CONTENT_EMPTY = 'The category’s formats were not read for this month.'
+/** Where the category's formats were not read for the reading month. */
+export const contentEmpty = (month: string): string => `The category’s formats were not read for ${longMonth(month)}.`
 
 export const brandsContent: Block<CompetitiveSurfaceData> = {
   key: competitivePlaybook.key,
@@ -103,7 +104,7 @@ export const brandsContent: Block<CompetitiveSurfaceData> = {
     const footer = openLink(mode, `${ctx.appUrl}/dashboard/reports`, 'The Content brief →')
     return (
       <BlockFrame title={CONTENT_TITLE} mode={mode} footer={footer} roomy className={mode === 'app' ? 'h-full' : undefined}>
-        {c ? <Body c={c} mode={mode} /> : <InnerLine mode={mode}>{CONTENT_EMPTY}</InnerLine>}
+        {c ? <Body c={c} mode={mode} /> : <InnerLine mode={mode}>{contentEmpty(b.month)}</InnerLine>}
       </BlockFrame>
     )
   },
@@ -117,6 +118,6 @@ export const brandsContent: Block<CompetitiveSurfaceData> = {
   emptyState(data) {
     const b = data.brands
     if (!b) return competitivePlaybook.emptyState(data)
-    return b.content && b.content.formats.length > 0 ? null : CONTENT_EMPTY
+    return b.content && b.content.formats.length > 0 ? null : contentEmpty(b.month)
   },
 }

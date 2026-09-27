@@ -80,7 +80,7 @@ function InFull({ b, mode }: { b: InFullBlock; mode: RenderMode }) {
             </div>
           ))}
         </div>
-      ) : <InnerLine mode={mode}>Nothing in the comments under its videos was read in these days.</InnerLine>}
+      ) : <InnerLine mode={mode}>Nothing in the comments under its videos was read in the last 90 days.</InnerLine>}
     </div>
   )
 }
