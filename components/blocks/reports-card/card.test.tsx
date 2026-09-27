@@ -330,7 +330,10 @@ describe('the quarterly card draws the quarter’s levels with one line (WP3.11)
     const text = renderText(<QuarterlyCardTile card={card} />)
     expect(text).toContain('Your market’s videos in Q3 2026, by month')
     for (const figure of ['36', '377', '655']) expect(text).toContain(figure)
-    expect(text).toContain('too few to read')
+    // July's words sit on two short lines under its 44px bar, as the preview
+    // sets them; on one line they ran past the tile's edge.
+    expect(text).toMatch(/too few\s*to read/)
+    expect(render(<QuarterlyCardTile card={card} />)).toContain('<span class="whitespace-nowrap">too few</span><span class="whitespace-nowrap">to read</span>')
     expect(text).toContain('so far')
     expect(text).toContain('read from 100 videos')
     expect(text).toContain('Q4 2026 against Q3 2026 is not read as a change: we changed our searches in September.')

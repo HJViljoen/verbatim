@@ -243,12 +243,14 @@ export function QuarterlyCardTile({
 /** "Jul", "Aug": the month's own three letters. */
 const monthAbbr = (month: string): string => longMonth(month).slice(0, 3)
 
-/** The word under a month's bar, where it owes one. */
-const LEVEL_WORD: Record<QuarterLevels['months'][number]['state'], string | null> = {
-  read: null,
-  too_few: 'too few to read',
-  so_far: 'so far',
-  none: 'not read',
+/** The words under a month's bar, where it owes some, one short line each
+ *  as the preview sets them: a bar's column is 44px, and "too few to read" on
+ *  one line ran past the tile's left edge (the staging render, 27 Sep). */
+const LEVEL_WORD: Record<QuarterLevels['months'][number]['state'], readonly string[]> = {
+  read: [],
+  too_few: ['too few', 'to read'],
+  so_far: ['so far'],
+  none: ['not read'],
 }
 
 /**
@@ -285,7 +287,7 @@ export function QuarterLevelsChart({ levels }: { levels: QuarterLevels }) {
         {levels.months.map((m) => (
           <span key={m.month} className="flex w-11 flex-col items-center text-center font-mono text-[11px] leading-[1.3] text-muted-foreground">
             <span>{monthAbbr(m.month)}</span>
-            {LEVEL_WORD[m.state] ? <span className="whitespace-nowrap">{LEVEL_WORD[m.state]}</span> : null}
+            {LEVEL_WORD[m.state].map((line) => <span key={line} className="whitespace-nowrap">{line}</span>)}
           </span>
         ))}
       </div>
