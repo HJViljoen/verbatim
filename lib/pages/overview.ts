@@ -32,7 +32,7 @@ import {
 } from '../reading/attention'
 import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { horizonWindow, parseHorizon, readAxisOf, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable, monthEndInstant } from '../reading/monthly'
 import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
@@ -2150,6 +2150,12 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // read, so the page reads one month wider than it draws.
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
+  // THE THREE-MONTH READ AXIS (market-first WP3.4, `readAxisOf`): the months
+  // a direction word is read over. On the default horizon it reaches one month
+  // further back than `readAxis`, and the one read a word here needs, the
+  // subject rows, reads that far (the same read, one month longer). Every
+  // block keeps the months it read and drew.
+  const wordAxis = readAxisOf(window)
   // Frozen once an UPDATE has passed its freeze line, not the clock.
   const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
 
@@ -2287,7 +2293,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     : []
 
   const levelIds = await levelPoolAhead
-  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, segmentRows] =
+  const [themeSet, kindRows, statsRows, subjectMonthsRead, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, segmentRows] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
@@ -2301,7 +2307,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       }),
       readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, readAxis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
       readStoredMonths<StoredStatsRow>(reading.client, 'month_audience_stats', clientId, readAxis, ['month', 'audience'], isMissingKindMoodAttention),
-      readStoredMonths<StoredSubjectRow>(reading.client, 'month_subject_readings', clientId, readAxis, ['month', 'audience', 'subject_id'], isMissingSubjects),
+      readStoredMonths<StoredSubjectRow>(reading.client, 'month_subject_readings', clientId, wordAxis, ['month', 'audience', 'subject_id'], isMissingSubjects),
       loadSubjects(supabase, clientId),
       loadMoves(supabase, clientId),
       currentPanel(reading.client, clientId).catch((error: unknown) => {
@@ -2334,6 +2340,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       // groups noise-led themes on the same read (WP1.6).
       segmentRowsAhead,
     ])
+  // The subject rows over `readAxis`, exactly the rows this read returned
+  // before it reached back for the word: the rows, their market sides and
+  // which months each subject was read in take these, and the direction word
+  // alone takes the whole read (`buildSubjects`' `word`).
+  const subjectMonths = subjectMonthsRead && subjectMonthsRead.filter((r) => monthStartOf(r.month) >= readAxis[0])
   const makerShares = segmentRows ? makerSharesOf(segmentRows) : null
   // THE SUBJECTS' MAKER SHARES (§2.2 block 6), among the month's market
   // videos read once above: two more reads (segments, lens), and none where no
@@ -2476,6 +2487,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     denominators: denominatorByMonth,
     perAudience: audienceMonthVideos(history.denominators),
     axis: readAxis,
+    word: { axis: wordAxis, months: subjectMonthsRead ?? [] },
     month,
     prevMonth,
     leadRival: leadRival?.name ?? null,
@@ -4988,6 +5000,15 @@ interface SubjectsInput {
   denominators: Map<string, number>
   perAudience: Map<string, number>
   axis: readonly string[]
+  /**
+   * THE THREE-MONTH READ AXIS (market-first WP3.4): the months each row's
+   * direction word is read over (`readAxisOf`, lib/reading/horizon.ts) and
+   * the stored rows over them. On the default horizon it reaches one month
+   * before `axis`, which nothing in the row draws: the levels, the verdicts,
+   * the line and the read-in words keep `axis` and `months`. Absent (a
+   * fixture), the word is read over `axis` and `months`, as before.
+   */
+  word?: { axis: readonly string[]; months: readonly StoredSubjectRow[] }
   month: string
   prevMonth: string
   leadRival: string | null
@@ -5061,6 +5082,38 @@ function atLastMonthFor(input: SubjectsInput, subjectId: string) {
   return { k, n, pct: pctOf(k, n) }
 }
 
+/**
+ * A subject's videos in an audience-month, off stored subject rows.
+ *
+ * AN ABSENT ROW IS A ZERO ONLY WHERE THE MONTH WAS READ AT ALL.
+ * `monthly_subject_readings` writes no zero rows, so a subject missing from
+ * an audience-month that OTHER subjects have rows in really did come up in
+ * no video. A month with no subject rows at all was never computed, and
+ * reading that as zero prints "0.0% 0 of 388" for a month nothing looked at
+ * — and produces a real banded change out of it next month. The two readers
+ * disagreed about which was which: the table said 0 wherever a denominator
+ * existed and the sparkline said "no reading" for the same cell.
+ *
+ * AND ONLY FOR A SUBJECT THE MONTH WAS READ FOR (WP1.1 review, finding 1).
+ * Other subjects' rows say the audience-month was computed; they say
+ * nothing about a subject named after it was, which has no row anywhere
+ * and whose "0 of 625" was invented (`lib/subjects/read-in.ts`).
+ */
+function subjectKOf(
+  rows: readonly StoredSubjectRow[],
+  readIn: (subjectId: string, month: string) => 'read' | 'unread' | 'no_month',
+): (subjectId: string, audience: string, month: string) => number | null {
+  const byKey = new Map<string, StoredSubjectRow>()
+  for (const r of rows) byKey.set(`${monthStartOf(r.month)}|${r.audience}|${r.subject_id}`, r)
+  const readMonths = new Set(rows.map((r) => `${monthStartOf(r.month)}|${r.audience}`))
+  return (subjectId, audience, month) => {
+    const row = byKey.get(`${month}|${audience}|${subjectId}`)
+    if (row) return row.videos
+    if (readIn(subjectId, month) === 'unread') return null
+    return readMonths.has(`${month}|${audience}`) ? 0 : null
+  }
+}
+
 export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   const categoryLabel = audienceLabel(INDUSTRY_AUDIENCE)
   const rivalLabel = input.leadRival
@@ -5095,32 +5148,15 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     }
   }
 
-  const byKey = new Map<string, StoredSubjectRow>()
-  for (const r of input.months) byKey.set(`${monthStartOf(r.month)}|${r.audience}|${r.subject_id}`, r)
   const rivalAudience = input.leadRival ? rivalKey(input.leadRival) : null
   // THE MONTH-PAIR RULE (decision D, WP1.3). No judge (a fixture) is "no pair
   // applies here": nothing refused, every step joined.
   const { pairFor, comparableFor, stepBreaks, stepReasons } = pairTools(input.pair)
-  // AN ABSENT ROW IS A ZERO ONLY WHERE THE MONTH WAS READ AT ALL.
-  // `monthly_subject_readings` writes no zero rows, so a subject missing from
-  // an audience-month that OTHER subjects have rows in really did come up in
-  // no video. A month with no subject rows at all was never computed, and
-  // reading that as zero prints "0.0% 0 of 388" for a month nothing looked at
-  // — and produces a real banded change out of it next month. The two readers
-  // disagreed about which was which: the table said 0 wherever a denominator
-  // existed and the sparkline said "no reading" for the same cell.
-  const readMonths = new Set(input.months.map((r) => `${monthStartOf(r.month)}|${r.audience}`))
-  // AND ONLY FOR A SUBJECT THE MONTH WAS READ FOR (WP1.1 review, finding 1).
-  // Other subjects' rows say the audience-month was computed; they say
-  // nothing about a subject named after it was, which has no row anywhere
-  // and whose "0 of 625" was invented (`lib/subjects/read-in.ts`).
   const readIn = subjectReadInOf(input.read, input.months)
-  const kOf = (subjectId: string, audience: string, month: string): number | null => {
-    const row = byKey.get(`${month}|${audience}|${subjectId}`)
-    if (row) return row.videos
-    if (readIn(subjectId, month) === 'unread') return null
-    return readMonths.has(`${month}|${audience}`) ? 0 : null
-  }
+  const kOf = subjectKOf(input.months, readIn)
+  // The word's k, by the same rule over the read axis's rows (WP3.4).
+  const word = input.word ?? { axis: input.axis, months: input.months }
+  const wordK = input.word ? subjectKOf(word.months, subjectReadInOf(input.read, word.months)) : kOf
 
   const side = (subjectId: string, audience: string, month: string | null): SideReading => {
     if (!month) return { k: null, n: null, pct: null, verdict: null, observed: false }
@@ -5210,6 +5246,10 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
 
     const axisPoints = input.axis.map((m) => point(INDUSTRY_AUDIENCE, m))
     const sparkMonths = axisPoints.slice(-SPARK_MONTHS).map((p) => p.month)
+    // THE WORD IS READ OVER THE READ AXIS, THE LINE IS DRAWN OVER `axis`
+    // (WP3.4): on the default horizon the word takes the category's last three
+    // months, the line the two it drew.
+    const wordPoints = word.axis.map((m): SeriesPoint => ({ ...point(INDUSTRY_AUDIENCE, m), k: wordK(s.id, INDUSTRY_AUDIENCE, m) }))
     const unread = input.read && readIn(s.id, input.month) === 'unread' ? input.read.unreadWords : null
     return unreadRow(calibratedRow({
       id: s.id,
@@ -5218,7 +5258,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       you,
       rival,
       category,
-      direction: input.thin ? null : directionWord(axisPoints, { asOf: input.asOf, comparable: comparableFor(INDUSTRY_AUDIENCE) }),
+      direction: input.thin ? null : directionWord(wordPoints, { asOf: input.asOf, comparable: comparableFor(INDUSTRY_AUDIENCE) }),
       spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
       sparkMonths,
       sparkBreaks: stepBreaks(sparkMonths, INDUSTRY_AUDIENCE),
@@ -5525,6 +5565,13 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       n: curr.videos,
       pct: curr.pct,
       verdict,
+      // THE THEME'S OWN SERIES, AS READ (WP3.4): the three-month read axis
+      // is not taken here. The theme read builds each month's labels and the
+      // page's notes from the months it covers, so reaching it back would
+      // change what the briefs and the notes say, and no word of a mover's
+      // prints on the default horizon (Your market, the monthly and the
+      // briefs draw no movers; the weekly's month is still filling, which
+      // earns no word; the quarterly reads `last_3`, three months already).
       direction: input.thin ? null : directionWord(s.points, { asOf: input.asOf, comparable: comparableFor(s.audience) }),
       // THE LAST MONTHS OF THIS OBJECT'S OWN SERIES, on the page's own axis —
       // the same slice `SubjectRow.spark` takes, so the two lines on one
