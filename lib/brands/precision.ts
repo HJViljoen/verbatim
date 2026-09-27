@@ -27,8 +27,15 @@ import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandRulesFor } from './alia
 // one, a brand with no match included). Its results land here as one entry
 // per brand, `where: 'production'`, with each part's counts (below), when it
 // was read and on what; they
-// reach the page through a commit, the gates and a tag. Until then deploy 3
-// prints every brand, and the name line, as "not counted yet".
+// reach the page through a commit, the gates and a tag.
+//
+// PRODUCTION'S FIRST CHECK, 27 SEP (deploy 3 moved up; data/hand-check-brands-
+// prod-20260927T135758Z.md, judged row by row in its -judged copy): brands_v1's
+// 532 rows, window 1 Aug to 1 Oct. Every part read at 1.00 (Sealand 2 of 2,
+// Cotopaxi 7 of 7 and 30 of 30, Freitag 2 of 2 and 10 of 10, Rareform 2 of 2,
+// The North Face 26 of 26 and 30 of 30, Patagonia 26 of 26 and 30 of 30), so
+// those six count; Freedom of Movement and Old School had no match. The Mon 5
+// Oct re-check reads September again.
 //
 // A BRAND WITH NO MATCH (the lead's ruling of 27 Sep, fast track): where the
 // list holds no match of a brand outside its own posts (on staging Rareform,
@@ -117,11 +124,29 @@ export interface HandCheckRecord {
   source: string
 }
 
+/** What production's hand check of 27 Sep read: brands_v1's rows on
+ *  production, every Sealand match and up to 30 a brand. */
+const PRODUCTION_27_SEP = {
+  on: '2026-09-27',
+  where: 'production',
+  ruleVersion: 'brands_v1',
+  of: 'brands_v1 matches, window 2026-08-01 to 2026-10-01, every Sealand match and up to 30 a brand',
+  source: 'data/hand-check-brands-prod-20260927T135758Z.md',
+} as const satisfies HandCheckRecord
+
 /** Per tenant, per brand as the tenant names it (`competitor_names`, or the
- *  client's own name as its brand rule names it). Empty until the Mon 5 Oct
- *  production hand check. */
+ *  client's own name as its brand rule names it). */
 export const BRAND_HAND_CHECKS: Readonly<Record<string, Readonly<Record<string, BrandHandCheck>>>> = {
-  [SEALAND_CLIENT_ID]: {},
+  [SEALAND_CLIENT_ID]: {
+    Sealand: { headline: { read: 2, brand: 2 }, rest: { read: 0, brand: 0 }, ...PRODUCTION_27_SEP },
+    Cotopaxi: { headline: { read: 7, brand: 7 }, rest: { read: 30, brand: 30 }, ...PRODUCTION_27_SEP },
+    Freitag: { headline: { read: 2, brand: 2 }, rest: { read: 10, brand: 10 }, ...PRODUCTION_27_SEP },
+    Rareform: { headline: { read: 2, brand: 2 }, rest: { read: 0, brand: 0 }, ...PRODUCTION_27_SEP },
+    'The North Face': { headline: { read: 26, brand: 26 }, rest: { read: 30, brand: 30 }, ...PRODUCTION_27_SEP },
+    Patagonia: { headline: { read: 26, brand: 26 }, rest: { read: 30, brand: 30 }, ...PRODUCTION_27_SEP },
+    'Freedom of Movement': { matches: 'none', ...PRODUCTION_27_SEP },
+    'Old School': { matches: 'none', ...PRODUCTION_27_SEP },
+  },
 }
 
 /** A match of the client's name outside its own posts, read by hand on
@@ -136,10 +161,15 @@ export interface NameRead {
 }
 
 /** Per tenant: every match of its name outside its own posts that someone has
- *  read on production (plan WP2.6: "every Sealand match"). Empty until one
- *  exists. */
+ *  read on production (plan WP2.6: "every Sealand match"). */
 export const NAME_READS: Readonly<Record<string, readonly NameRead[]>> = {
-  [SEALAND_CLIENT_ID]: [],
+  [SEALAND_CLIENT_ID]: [
+    // 27 Sep, both in one September video about a Sea-Land (the shipping
+    // line) item: "Sealand Gear" is the site a search for it turns up, the
+    // client by name. A comment dated in September, then the caption.
+    { videoId: 'a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26', brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
+    { videoId: 'a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26', brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
+  ],
 }
 
 /** What a brand's word means where it is not the brand, for the "mostly …

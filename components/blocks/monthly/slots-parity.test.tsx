@@ -6,7 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { buildCheckLines, recheckLines } from '@/lib/pages/overview-market'
 import { monthlySlotsFrom } from '@/lib/reports/monthly-slots'
-import { noneFoundBrandsRead, shippedBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
+import { noneFoundBrandsRead, uncheckedBrandsRead, stagingBrandsRead } from '@/lib/test/brands-fixture'
 import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
 import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview/index'
 import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
@@ -97,12 +97,12 @@ describe('the page and the monthly print one sentence each', () => {
     expect(MONTHLY_BLOCKS['monthly.brands'].absent?.({ ...base, slots: monthlySlotsFrom(base.overview) })).toBe(true)
   })
 
-  // The lead's ruling of 27 Sep (fast track): as deploy 3 ships, before
-  // production's hand check is in a live tag, the page prints every brand and
+  // The lead's ruling of 27 Sep (fast track): before production's hand
+  // check is in a live tag (or after a rule change), the page prints every brand and
   // your name "not counted yet", and the monthly sends no brands section.
   it('the section is absent from an artefact where the page reads no brand: all "not counted yet"', () => {
     const base = monthlyFixture()
-    const shipped = { ...base.overview, brands: shippedBrandsRead() }
+    const shipped = { ...base.overview, brands: uncheckedBrandsRead() }
     const data = { ...base, overview: shipped, slots: monthlySlotsFrom(shipped) }
     expect(read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.rivals')!.render(shipped, 'app', ctx))).toContain('not counted yet')
     expect(MONTHLY_BLOCKS['monthly.brands'].absent?.(data)).toBe(true)

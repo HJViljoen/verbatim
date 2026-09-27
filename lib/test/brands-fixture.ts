@@ -59,8 +59,8 @@ export const AUGUST_BRANDS: readonly BrandCountIn[] = [
 /**
  * A STAND-IN FOR THE MON 5 OCT PRODUCTION HAND CHECK, for the render tests of
  * the counted state only. No production check exists yet, so
- * `BRAND_HAND_CHECKS` ships empty and deploy 3 prints every brand "not counted
- * yet" (`shippedBrandsRead`). These entries borrow the research's staging
+ * `BRAND_HAND_CHECKS` held no production entry then, so every brand printed
+ * "not counted yet" (`uncheckedBrandsRead`). These entries borrow the research's staging
  * ratios (brand-counting.md fact 8: Cotopaxi 14 of 16, Patagonia 14 of 16,
  * The North Face 15 of 15), a sample the research did not split by part, so
  * they sit in `rest` and the headline part reads nothing; and a check of
@@ -120,9 +120,10 @@ export function stagingBrandsRead(month: '2026-09-01' | '2026-08-01' = '2026-09-
   })
 }
 
-/** The same September as deploy 3 ships it: no production hand check yet, so
- *  every brand and your name print "not counted yet". */
-export function shippedBrandsRead(): BrandsRead {
+/** The same September with no production hand check under the page's rules
+ *  (before production's first, or after a rule change): every brand and your
+ *  name print "not counted yet". */
+export function uncheckedBrandsRead(): BrandsRead {
   return buildBrandsBlock({
     clientId: SEALAND_CLIENT_ID,
     month: '2026-09-01',
@@ -130,6 +131,7 @@ export function shippedBrandsRead(): BrandsRead {
     nOrganic: 516,
     rivals: SEPTEMBER_BRANDS,
     name: { hasRows: true, outside: [], ownPosts: 8 },
+    checks: { [SEALAND_CLIENT_ID]: {} },
   })
 }
 

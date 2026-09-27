@@ -13,7 +13,7 @@ import { overviewThemes } from '@/components/pages/overview/themes'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor, monthlySections } from './index'
 import { splitClause } from './month'
 import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from './fixture'
-import { noneFoundBrandsRead, shippedBrandsRead } from '@/lib/test/brands-fixture'
+import { noneFoundBrandsRead, uncheckedBrandsRead } from '@/lib/test/brands-fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -143,12 +143,12 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     }
   })
 
-  // Deploy 3 ships every brand "not counted yet" (the 27 Sep ruling): the
-  // heads are empty then, and the design review found their bar, 144px and
+  // With every brand "not counted yet" (the 27 Sep ruling) the heads are
+  // empty, and the design review found their bar, 144px and
   // 64px widths still set, so "Freedom of Movement" wrapped at 640 beside an
   // empty area. The widths are the figures' only, where a brand is counted.
   it('brands set the figure columns’ widths only where a brand is counted', () => {
-    const shipped = { ...filledSlotsFixture(), slots: { ...filledSlotsFixture().slots, brands: { state: 'filled' as const, value: shippedBrandsRead() } } }
+    const shipped = { ...filledSlotsFixture(), slots: { ...filledSlotsFixture().slots, brands: { state: 'filled' as const, value: uncheckedBrandsRead() } } }
     const head = (data: ReturnType<typeof filledSlotsFixture>) => {
       const html = render(MONTHLY_BLOCKS['monthly.brands'].render(data, 'email', ctx))
       return html.slice(html.indexOf('<thead'), html.indexOf('</thead>'))

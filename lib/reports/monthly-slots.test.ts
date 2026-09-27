@@ -3,7 +3,7 @@ import { MONTHLY_SLOT_STUBS, isFilled, monthlySlotsFrom, type MonthlySlot } from
 import { brandsBlockFor, buildBrandsBlock, buildCheckLines } from '../pages/overview-market'
 import { BRAND_RULE_VERSION } from '../brands/aliases'
 import { SEALAND_CLIENT_ID } from '../config'
-import { SEPTEMBER_BRANDS, emptyBrandsRead, noneFoundBrandsRead, shippedBrandsRead, stagingBrandsRead } from '../test/brands-fixture'
+import { SEPTEMBER_BRANDS, emptyBrandsRead, noneFoundBrandsRead, uncheckedBrandsRead, stagingBrandsRead } from '../test/brands-fixture'
 import { RECHECK_BUYERS, recheckRows, recheckRunFinish } from '../test/recheck-fixture'
 
 // The monthly's four slots (market-first WP2.1): typed now, stubbed, and
@@ -74,7 +74,7 @@ describe('the slots WP2.3 and WP2.6 fill (monthlySlotsFrom)', () => {
   // The lead's ruling of 27 Sep (fast track): the monthly never sends a
   // brands section that is all "not counted yet".
   it('leaves the brands slot a stub where no brand is counted, none is "none found" and your name prints no line', () => {
-    expect(monthlySlotsFrom({ brands: shippedBrandsRead() }).brands).toEqual(MONTHLY_SLOT_STUBS.brands)
+    expect(monthlySlotsFrom({ brands: uncheckedBrandsRead() }).brands).toEqual(MONTHLY_SLOT_STUBS.brands)
     expect(monthlySlotsFrom({ brands: emptyBrandsRead() }).brands).toEqual(MONTHLY_SLOT_STUBS.brands)
     // Freitag mostly another word and the rest not counted yet: still no reading of a brand.
     const freitag = { [SEALAND_CLIENT_ID]: { Freitag: { headline: { read: 1, brand: 1 }, rest: { read: 39, brand: 9 }, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'a test check' } } }

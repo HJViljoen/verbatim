@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { BRAND_RULE_VERSION } from '../../brands/aliases'
 import { SEALAND_CLIENT_ID } from '../../config'
-import { NO_MATCH_CHECKS, SEPTEMBER_BRANDS, STAND_IN_CHECKS, emptyBrandsRead, noneFoundBrandsRead, shippedBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
+import { NO_MATCH_CHECKS, SEPTEMBER_BRANDS, STAND_IN_CHECKS, emptyBrandsRead, noneFoundBrandsRead, uncheckedBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
 import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, buildBrandsBlock, isBrandsRead, nameLineParts, organicBase, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
 
 // Brands in your market in deploy 3's form (WP2.6): the name line first, then
@@ -47,8 +47,8 @@ describe('buildBrandsBlock', () => {
     expect(topicNote(b.topics[0])).toBeNull()
   })
 
-  it('prints every brand and your name "not counted yet" as deploy 3 ships: no production hand check yet, the mention layer full', () => {
-    const b = shippedBrandsRead()
+  it('prints every brand and your name "not counted yet" with no production hand check, the mention layer full', () => {
+    const b = uncheckedBrandsRead()
     expect(b.topics.map((t) => [t.label, t.count, t.kAny, t.kOrganic])).toEqual([
       ['Cotopaxi', 'not_yet', null, null],
       ['Freedom of Movement', 'not_yet', null, null],
@@ -84,11 +84,21 @@ describe('buildBrandsBlock', () => {
     expect(unread.nameLine).toBeNull()
     const reads = { [SEALAND_CLIENT_ID]: [{ videoId: 'v1', brand: false, month: '2026-09-01', on: '2026-10-05', where: 'production' as const }] }
     // Every match read, but the name itself not checked on production: held.
-    expect(buildBrandsBlock({ ...base, checks: undefined, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads }).nameLine).toBeNull()
+    expect(buildBrandsBlock({ ...base, checks: { [SEALAND_CLIENT_ID]: {} }, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads }).nameLine).toBeNull()
     const read = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads })
     expect(read.nameLine).toEqual({ month: '2026-09-01', n: 654, k: 0, ownPosts: 8 })
     const yes = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: { [SEALAND_CLIENT_ID]: [{ ...reads[SEALAND_CLIENT_ID][0], brand: true }] } })
     expect(words(yes)).toBe('In September your name came up in 1 of your market’s 654 videos. The 8 videos that name you are your own posts.')
+  })
+
+  it('prints production’s September name line from the shipped entries: the one video outside your own posts, read as you', () => {
+    // Production's plan of 27 Sep: 852 videos, a8fdd6fe the only one naming
+    // Sealand outside its own posts (lib/brands/precision.ts NAME_READS).
+    const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 852, nOrganic: 672, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: ['a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26'], ownPosts: 0 } })
+    expect(b.nameLine).toEqual({ month: '2026-09-01', n: 852, k: 1, ownPosts: 0 })
+    expect(words(b)).toBe('In September your name came up in 1 of your market’s 852 videos.')
+    // An unread video outside your own posts still holds the line.
+    expect(buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 852, nOrganic: 672, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: ['a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26', 'unread'], ownPosts: 0 } }).nameLine).toBeNull()
   })
 
   it('prints a brand measured under the floor as mostly another word, with no count', () => {

@@ -15,11 +15,52 @@ const EIGHT = ['Sealand', 'Cotopaxi', 'Freitag', 'Rareform', 'The North Face', '
 const prod = (read: number, brand: number, headline: HandCheckPart = { read: 0, brand: 0 }): BrandHandCheck =>
   ({ headline, rest: { read, brand }, on: '2026-10-05', where: 'production', ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'the Mon 5 Oct hand check' })
 
+describe('production’s hand check of 27 Sep (data/hand-check-brands-prod-20260927T135758Z.md)', () => {
+  const read = { on: '2026-09-27', where: 'production', ruleVersion: 'brands_v1', of: 'brands_v1 matches, window 2026-08-01 to 2026-10-01, every Sealand match and up to 30 a brand', source: 'data/hand-check-brands-prod-20260927T135758Z.md' }
+  const A8 = 'a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26'
+
+  it('holds one entry per brand, all eight, as the sheet’s Record lines read', () => {
+    expect(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID]).toEqual({
+      Sealand: { headline: { read: 2, brand: 2 }, rest: { read: 0, brand: 0 }, ...read },
+      Cotopaxi: { headline: { read: 7, brand: 7 }, rest: { read: 30, brand: 30 }, ...read },
+      Freitag: { headline: { read: 2, brand: 2 }, rest: { read: 10, brand: 10 }, ...read },
+      Rareform: { headline: { read: 2, brand: 2 }, rest: { read: 0, brand: 0 }, ...read },
+      'The North Face': { headline: { read: 26, brand: 26 }, rest: { read: 30, brand: 30 }, ...read },
+      Patagonia: { headline: { read: 26, brand: 26 }, rest: { read: 30, brand: 30 }, ...read },
+      'Freedom of Movement': { matches: 'none', ...read },
+      'Old School': { matches: 'none', ...read },
+    })
+    expect(Object.keys(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID]).sort()).toEqual([...EIGHT].sort())
+  })
+
+  it('counts the six with matches, every part at 1.00, and finds none of the other two', () => {
+    for (const brand of ['Sealand', 'Cotopaxi', 'Freitag', 'Rareform', 'The North Face', 'Patagonia']) {
+      expect(brandCountState(SEALAND_CLIENT_ID, brand), brand).toBe('counted')
+    }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Freedom of Movement')).toBe('none')
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Old School')).toBe('none')
+    expect(nameChecked(SEALAND_CLIENT_ID)).toBe(true)
+    expect(nameNoMatch(SEALAND_CLIENT_ID)).toBe(false)
+  })
+
+  it('reads every match of your name outside your own posts: both in one September video, both you', () => {
+    expect(NAME_READS[SEALAND_CLIENT_ID]).toEqual([
+      { videoId: A8, brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
+      { videoId: A8, brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
+    ])
+  })
+
+  it('holds only while the rules are brands_v1: a new rule version sends all eight back to not counted yet', () => {
+    expect(BRAND_RULE_VERSION).toBe('brands_v1')
+    const next = { [SEALAND_CLIENT_ID]: Object.fromEntries(Object.entries(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID]).map(([b, c]) => [b, { ...c, ruleVersion: 'brands_v2' }])) }
+    for (const brand of EIGHT) expect(brandCountState(SEALAND_CLIENT_ID, brand, next), brand).toBe('not_yet')
+  })
+})
+
 describe('brandCountState', () => {
-  it('counts no brand as shipped: all eight wait for the Mon 5 Oct production check, the research sample’s three included', () => {
-    for (const brand of EIGHT) expect(brandCountState(SEALAND_CLIENT_ID, brand), brand).toBe('not_yet')
-    expect(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID]).toEqual({})
-    expect(nameChecked(SEALAND_CLIENT_ID)).toBe(false)
+  it('counts no brand without a production check: all eight wait, the research sample’s three included', () => {
+    for (const brand of EIGHT) expect(brandCountState(SEALAND_CLIENT_ID, brand, { [SEALAND_CLIENT_ID]: {} }), brand).toBe('not_yet')
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: {} })).toBe(false)
   })
 
   it('never counts on a check from anywhere but production (the research’s staging pool: Cotopaxi 14 of 16)', () => {
@@ -143,9 +184,5 @@ describe('the name line’s check', () => {
     expect(brandCountState(SEALAND_CLIENT_ID, 'Sealand', own)).toBe('not_yet')
     expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: { ...prod(0, 0), ruleVersion: 'brands_v0' } } })).toBe(false)
     expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: prod(0, 1) } })).toBe(false)
-  })
-
-  it('holds no name read yet', () => {
-    expect(NAME_READS[SEALAND_CLIENT_ID]).toEqual([])
   })
 })
