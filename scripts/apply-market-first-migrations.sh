@@ -55,15 +55,16 @@
 # production as mf1 was: both are additive and nothing deployed reads them
 # until deploy 3. They change no grant, so R12 may or may not be applied.
 #   mf3 = 20261103090000_market_first_s3.sql (WP3.3, WP3.4, WP3.5, WP3.6,
-#         WP3.10; Tue 3 Nov, after September froze on 1 Nov and before deploy
-#         4 on Sat 7 Nov). Additive: five tables (month_lens_readings and
+#         WP3.10; planned for Tue 3 Nov before deploy 4 on Sat 7 Nov, moved to
+#         right after deploy 4 went live on 27 Sep, run/mf3.sh). Additive: five tables (month_lens_readings and
 #         month_brand_readings with their guards, video_surfacings,
 #         tracking_config_queue, own_post_subjects), two trigger functions,
 #         and tracking_configs.watched_brands and market_description with no
 #         tenant column grant. It changes no existing grant, month table or
 #         function (the runner reads the existing guards before and after).
-#         Needs MF4. It runs from the data tag the lead cuts on the deployed
-#         code; nothing deployed before deploy 4 reads it.
+#         Needs MF4. It runs from the run checkout at mf-d4, the deployed
+#         code; deploy 4's steps and pages read it from the next run and page
+#         load (before it, each says the table is not there and writes nothing).
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -621,7 +622,7 @@ from public.month_denominators where client_id = '$SEALAND' and month >= date '2
 group by month order by month;
 SQL
   show "$sql"
-  echo "  expect on Tue 3 Nov: June to September frozen (September with the 1 Nov run), October filling"
+  echo "  expect before the Sun 4 Oct run: the months before August frozen, August and September filling; after it, August frozen too"
 }
 
 # ------------------------------------------------------------ pre-checks ----
@@ -770,8 +771,8 @@ case "$SET" in
   echo "DONE: $SET applied, verified and recorded. MF2 and MF4 are in; nothing deployed reads them until deploy 3."
   ;;
   mf3)
-  echo "DONE: $SET applied, verified and recorded. MF3 is in; nothing deployed reads it until deploy 4 (Sat 7 Nov)."
-  echo "  The lens and brand back-read (June to September) waits for the 8 Nov run's parity checks (Tue 10 to Thu 12 Nov)."
+  echo "DONE: $SET applied, verified and recorded. MF3 is in, and deploy 4 (live) reads it: the next run writes the lens, brand and surfacing rows."
+  echo "  The lens and brand back-read of the months that closed before MF3 is a later, separate step; nothing here runs it."
   ;;
 esac
 echo "Log: $LOG"

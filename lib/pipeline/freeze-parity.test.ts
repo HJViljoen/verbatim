@@ -211,6 +211,11 @@ function database(panel: 'none' | 'before-attribution'): FakeAdmin {
       gate_verdicts: tenant(LABEL_SEGMENTS_STAGING.filter((v) => v.unjudged).map((v) => ({ platform: v.platform, video_id: `pid-${v.id.slice(0, 8)}`, kept: true, source: 'default' }))),
       keyword_performance: tenant(SUNDAYS.filter((d) => d <= '2026-10-04').flatMap((d) => gatherRows(d)).map((r) => (r.run_id === 'run-2026-10-04' ? { ...r, run_id: RUN } : r))),
       comments: [],
+      // Every table the SQL reads is here, empty where the SQL half is faked:
+      // the fake refuses a write to a table it does not hold as a missing
+      // migration and records nothing, so a step writing subject_memberships
+      // or audience_insights would otherwise pass §2 unseen.
+      subject_memberships: [], audience_insights: [],
       theme_observations: tenant([{ run_id: RUN, run_date: '2026-10-04', member_insight_ids: [] }]),
       theme_registry: [], subjects: [],
       month_pair_comparability: [], config_change_reach: [], comparability_checks: [],
@@ -298,6 +303,11 @@ describe('2 and 3 · freeze-months on staging\'s August, with and without every 
       const alone = await freeze(d3)
 
       const d4 = database(panel)
+      // A write is recorded only on a table the fake holds: every table
+      // freeze-months reads or writes is held, so none can be written unseen.
+      for (const t of [...FREEZE_SQL_READS, 'config_changes', 'month_denominators', 'month_theme_readings', 'month_subject_readings', 'month_kind_readings', 'month_audience_stats', 'month_evidence_refs']) {
+        expect(d4.tables, t).toHaveProperty(t)
+      }
       const stepWrites = await runTheNewSteps(d4)
       const after = await freeze(d4)
 
