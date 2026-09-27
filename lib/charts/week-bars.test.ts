@@ -189,6 +189,20 @@ describe('weekBarsLayout', () => {
     expect(L.gaps).toEqual([{ cx: 0.125, label: 'none gathered' }])
   })
 
+  // d3 polish: staging's paused Sealand at a 27 Sep clock reads a ninth week,
+  // 21 Sep, with nothing gathered. One slot at the narrowest plot is 57.8px
+  // and "none gathered" is about 96, so it ran into the "filling" beside it
+  // and past the plot's edge ("fillingnone gathere"). It takes two lines.
+  it('puts "none gathered" on two lines where its run is one slot too narrow for it, and gives the line room', () => {
+    const axis = [...AXIS, '2026-09-21']
+    const weeks = pooledWeekVolumes(STAGING_WEEK_VOLUMES, STAGING_RIVALS, axis, { now: '2026-09-27T14:00:00.000Z', updates: STAGING_UPDATES })
+    const M = weekBarsLayout(weeks, weekRules(changesFromLog(STAGING_CHANGES), axis), { size: 'large', ticks: 'top' })
+    expect(M.gaps.map((g) => [g.cx, g.split ?? false])).toEqual([[0.1111, false], [0.9444, true]])
+    expect(M.height - M.axis.stateY).toBe(L.height - L.axis.stateY + 15)
+    const W = weekBarsLayout(weeks, weekRules(changesFromLog(STAGING_CHANGES), axis), { size: 'medium', ticks: 'row' })
+    expect(W.axis.marksY! - W.axis.stateY).toBe(45)
+  })
+
   it('marks our changes on their days, filled for our searches, and never lets two labels collide at the narrowest plot', () => {
     expect(L.ticks.map((t) => [t.date, t.mark])).toEqual([['2026-09-09', 'search'], ['2026-09-13', 'search'], ['2026-09-17', 'search']])
     const spans = L.ticks.map((t) => {

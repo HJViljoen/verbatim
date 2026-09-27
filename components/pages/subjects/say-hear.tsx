@@ -39,6 +39,38 @@ const STATE_DOT: Record<SayHearClaim['state'], { app: string; email: string }> =
   silent: { app: 'var(--border)', email: EMAIL.border },
 }
 
+/** THE PREVIEW'S "WHAT CAME BACK" (Subjects.dc.html, d3 polish): the verdict
+ *  in Your moves' own words (`lib/pages/market-surface.ts` `verdictLabel`:
+ *  Echoed · Pushed back · Not taken up), each after a small square: green,
+ *  amber, and an empty one where nothing came back. The email keeps its dot
+ *  and the tally's lower-case words, as it was sent. */
+const VERDICT: Record<SayHearClaim['state'], { word: string; square: string }> = {
+  echoed: { word: 'Echoed', square: 'bg-you' },
+  pushed_back: { word: 'Pushed back', square: 'bg-warning' },
+  silent: { word: 'Not taken up', square: 'shadow-[inset_0_0_0_1.5px_var(--cat)]' },
+}
+
+/** The whole ledger in the app, in the rows' own words: "13 claims · 3
+ *  echoed · 2 pushed back · 8 not taken up". */
+const appTally = (c: { total: number; echoed: number; pushedBack: number; silent: number }): string =>
+  `${c.total} claim${c.total === 1 ? '' : 's'} · ${c.echoed} echoed · ${c.pushedBack} pushed back · ${c.silent} not taken up`
+
+/** The app's two columns, the preview's: what you said, and what came back. */
+const SAY_HEAR_COLS = 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 sm:grid-cols-[minmax(0,1fr)_112px]'
+
+function AppClaimRow({ row }: { row: SayHearClaim }) {
+  const v = VERDICT[row.state]
+  return (
+    <div className={`${SAY_HEAR_COLS} items-baseline border-b border-border/60 py-6 last:border-b-0 last:pb-0`}>
+      <BrandClaim mode="app" copy="stored" slot="pass_d_a_say_vs_hear" className="text-[15px] leading-[1.55] [text-wrap:pretty]">{row.claim}</BrandClaim>
+      <span className="inline-flex items-center gap-2.5 justify-self-end whitespace-nowrap text-[15px] font-semibold text-foreground">
+        <span aria-hidden className={`inline-block size-2 flex-none rounded-[2px] ${v.square}`} />
+        {v.word}
+      </span>
+    </div>
+  )
+}
+
 function ClaimRow({ row, mode }: { row: SayHearClaim; mode: RenderMode }) {
   const email = mode === 'email'
   const dot = STATE_DOT[row.state]
@@ -95,17 +127,25 @@ export const subjectsSayHear: Block<SubjectsData> = {
         truncateFooter
         roomy
       >
-        {rows.map((r, i) => <ClaimRow key={`${i}:${r.claim}`} row={r} mode={mode} />)}
+        {mode === 'app' ? (
+          <div className="flex min-w-0 flex-col">
+            <div className={`${SAY_HEAR_COLS} items-end border-b border-border pb-2.5 text-[13px] font-medium leading-[1.35] text-muted-foreground`}>
+              <span>What you said</span>
+              <span className="text-right">What came back</span>
+            </div>
+            {rows.map((r, i) => <AppClaimRow key={`${i}:${r.claim}`} row={r} />)}
+          </div>
+        ) : rows.map((r, i) => <ClaimRow key={`${i}:${r.claim}`} row={r} mode={mode} />)}
         {data.sayHear && data.sayHear.total > rows.length ? (
           // THE WHOLE LEDGER, ONLY WHERE THE ROWS ARE NOT ALL OF IT. With every
           // claim listed above, the tally only repeats the rows. A tally, not
           // a level: four counts of one ledger, so `figure`.
           <span
             data-copy="figure"
-            className={email ? undefined : 'text-[11px] tabular-nums text-muted-foreground'}
+            className={email ? undefined : 'text-[13px] tabular-nums text-muted-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, display: 'block', paddingTop: 4 } : undefined}
           >
-            {claimCountsLine(data.sayHear)}
+            {email ? claimCountsLine(data.sayHear) : appTally(data.sayHear)}
           </span>
         ) : null}
       </BlockFrame>

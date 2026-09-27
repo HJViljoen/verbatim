@@ -67,7 +67,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           aria-label="Open navigation"
           className="absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden"
         />
-        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto p-6 pt-14 md:pt-6">
+        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto p-6 pt-14 md:p-8">
           <Suspense fallback={null}>
             <AccessBannerLoader />
           </Suspense>

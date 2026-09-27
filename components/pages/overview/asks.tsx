@@ -90,7 +90,7 @@ export const overviewAsks: Block<OverviewData> = {
         ) : mode === 'email' ? (
           <div>{asks.lists.map((l) => <List key={l.kind} list={l} month={asks.month} mode={mode} />)}</div>
         ) : (
-          <div className="grid grid-cols-1 gap-x-16 gap-y-8 xl:grid-cols-3 xl:gap-y-6" data-print-cols="3">
+          <div className="grid grid-cols-1 gap-x-22 gap-y-8 xl:grid-cols-3 xl:gap-y-6" data-print-cols="3">
             {asks.lists.map((l) => <List key={l.kind} list={l} month={asks.month} mode={mode} />)}
           </div>
         )}

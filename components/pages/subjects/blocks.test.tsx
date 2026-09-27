@@ -911,7 +911,11 @@ describe('SU4 · your own posts', () => {
   it('counts what you published, says what cleared the floor, and names its month', () => {
     const text = renderText(subjectsOwnPosts.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('9 posts published')
-    expect(text).toContain('3 of 9 cleared the 5-comment floor')
+    // The preview's cell (d3 polish), the front page's own words: "3 drew
+    // 5+ / comments each", beside "9 posts published".
+    expect(text).toContain('3 drew 5+')
+    expect(text).toContain('comments each')
+    expect(renderText(subjectsOwnPosts.render(subjectsFixture(), 'email', ctx))).toContain('3 of 9 cleared the 5-comment floor')
     expect(text).toContain('in September')
     // D9's clock (a census is dated by the day each post went up, every other
     // figure by the comment) is How to read's since WP2.2: no method note
@@ -994,13 +998,16 @@ describe('SU5 · say vs hear', () => {
   it('prints each ledger claim with its own state, and the tally only where rows are cut', () => {
     const text = renderText(subjectsSayHear.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Built to last a decade')
-    expect(text).toContain('echoed')
-    expect(text).toContain('pushed back')
+    // The preview's "What came back", in Your moves' own verdict words.
+    expect(text).toContain('Echoed')
+    expect(text).toContain('Pushed back')
     // ONE LEDGER: the rows carry the tally's own states, never a per-row
     // "not tracked" under a tally that says some were echoed.
     expect(text).not.toContain('not tracked')
-    // Thirteen claims and three rows, so the whole ledger is counted under them.
-    expect(text).toContain('13 claims · 3 echoed · 2 pushed back · 8 silent')
+    // Thirteen claims and three rows, so the whole ledger is counted under
+    // them, in the rows' words.
+    expect(text).toContain('13 claims · 3 echoed · 2 pushed back · 8 not taken up')
+    expect(renderText(subjectsSayHear.render(subjectsFixture(), 'email', ctx))).toContain('13 claims · 3 echoed · 2 pushed back · 8 silent')
     const all = renderText(subjectsSayHear.render({ ...subjectsFixture(), sayHear: { total: 3, echoed: 1, pushedBack: 1, silent: 1 } }, 'app', ctx))
     expect(all).not.toContain('3 claims')
   })

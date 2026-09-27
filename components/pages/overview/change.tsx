@@ -305,10 +305,11 @@ export const overviewChange: Block<OverviewData> = {
     }
     return (
       <BlockFrame title={overviewChange.title} mode={mode} footer={footer} roomy>
-        <div className="grid grid-cols-1 gap-x-20 gap-y-8 xl:grid-cols-2" data-print-cols="2">
+        <div className="grid grid-cols-1 gap-x-22 gap-y-8 xl:grid-cols-2" data-print-cols="2">
           {left ?? <span />}
           <div className="flex min-w-0 flex-col gap-6">
-            {next ? <p className="m-0 text-[17px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">{next}</p> : null}
+            {/* In the ink, as the preview sets it (d3 polish). */}
+            {next ? <p className="m-0 text-[17px] leading-[1.6] text-foreground [text-wrap:pretty]">{next}</p> : null}
             <MonthStrip block={block} />
           </div>
         </div>

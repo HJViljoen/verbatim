@@ -277,7 +277,10 @@ function MarketVoices({ data, mode, appUrl }: { data: SubjectsData; mode: Render
   const card = (v: SubjectVoice) => {
     const cite = marketCite(v, mode)
     return (
-      <div key={v.quote.ref ?? v.cite} className={`flex min-w-0 flex-col gap-2 rounded-md bg-inner p-6 ${mode === 'print' ? 'mb-3 break-inside-avoid' : ''}`}>
+      // THE PREVIEW'S CARD (d3 polish): the quote at the top and its line of
+      // provenance at the foot, 16px clear of it at least, so a row of cards
+      // of one height reads as one row.
+      <div key={v.quote.ref ?? v.cite} className={`flex min-w-0 flex-col gap-2 rounded-md bg-inner p-6 ${mode === 'print' ? 'mb-3 break-inside-avoid' : 'min-h-[148px] [&>blockquote]:flex [&>blockquote]:flex-1 [&>blockquote]:flex-col [&>blockquote>footer]:mt-auto [&>blockquote>footer]:pt-4'}`}>
         {SOURCE_FLAG[v.source] ? <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{SOURCE_FLAG[v.source]}</span> : null}
         <BlockQuote quote={v.quote} mode={mode} ground="inner" cite={v.href && mode === 'app' ? <a href={v.href} rel="noreferrer" target="_blank">{cite}</a> : cite} />
       </div>

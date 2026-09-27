@@ -53,7 +53,9 @@ function PersonaRow({ p, max, mode }: { p: CastPersona; max: number; mode: Rende
     )
   }
   return (
-    <div role="row" className="grid grid-cols-1 gap-x-12 gap-y-3 border-b border-border/60 py-6 xl:grid-cols-[minmax(0,1fr)_216px_336px]">
+    // The last group closes the table with no rule under it, as the preview
+    // draws it (d3 polish).
+    <div role="row" className="grid grid-cols-1 gap-x-12 gap-y-3 border-b border-border/60 py-6 last:border-b-0 last:pb-0 xl:grid-cols-[minmax(0,1fr)_216px_336px]">
       <div role="rowheader" className="flex min-w-0 flex-col gap-2">
         <span className="text-[15px] font-semibold text-foreground">{p.name}</span>
         {/* THE MODEL'S OWN WORDS ABOUT THE GROUP, so `subject` and not `prose`

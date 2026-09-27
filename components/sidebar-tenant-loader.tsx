@@ -36,9 +36,9 @@ const ROLE_WORD: Record<Role, string> = {
 export function SidebarTenant({ brand, role }: { brand: string | null; role: Role | null }) {
   if (!brand && !role) return null
   return (
-    <div className="flex flex-col gap-px px-2.5 pb-2.5">
-      {brand ? <span className="truncate text-[12.5px] font-medium text-sidebar-foreground">{brand}</span> : null}
-      {role ? <span className="font-mono text-[10.5px] text-muted-foreground">{ROLE_WORD[role]}</span> : null}
+    <div className="flex flex-col gap-0.5 px-3 pb-2">
+      {brand ? <span className="truncate text-[14px] font-semibold text-foreground">{brand}</span> : null}
+      {role ? <span className="font-mono text-[12px] text-muted-foreground">{ROLE_WORD[role]}</span> : null}
     </div>
   )
 }

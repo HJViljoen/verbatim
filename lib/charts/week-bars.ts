@@ -436,6 +436,10 @@ export const WEEK_BARS_SIZES: Record<WeekBarsSize, { videosH: number; commentsH:
 
 const TICK_ROW = 20
 const TICK_LABEL_CHAR = 7.4
+/** The words over a run of weeks with nothing gathered, and the drop to the
+ *  second of its two lines where the run is too narrow for one. */
+const GAP_LABEL = 'none gathered'
+export const GAP_SECOND_LINE = 15
 const TICK_PAD = 22
 const f4 = (n: number): number => Math.round(n * 10000) / 10000
 
@@ -472,7 +476,12 @@ export interface WeekBarsLayout {
     dayLabel: string
     monthLabel: string | null
   }[]
-  gaps: { cx: number; label: string }[]
+  /** "none gathered" over each run of empty weeks. `split` where the run is
+   *  too narrow at the plot's narrowest width to hold the words on one line:
+   *  "none" over "gathered", so it never runs into a neighbour's "filling"
+   *  or past the plot's edge (d3 polish: "fillingnone gathere" at 390, and
+   *  on This week at 1440). */
+  gaps: { cx: number; label: string; split?: true }[]
   /** 'row' ticks (This week): our changes as marks under the axis, per week. */
   marks: { cx: number; items: { day: string; mark: 'search' | 'other' }[] }[]
 }
@@ -557,6 +566,22 @@ export function weekBarsLayout(
     ? days.map((d, i) => ({ date: d.date, x: f4(d.x), row: spots[i].row, side: spots[i].side, label: shortDay(d.date), mark: d.search ? 'search' : 'other' }))
     : []
 
+  // The runs of weeks with nothing gathered, each labelled once; a run too
+  // narrow for "none gathered" on one line at the plot's narrowest width
+  // takes it on two (`split`), and the axis gives the second line its room.
+  const hasBar = (w: WeekVolume): boolean => w.state !== 'none_gathered' && w.videos > 0
+  const slotPx = (opts.plotPx ?? weekPlotMin(n)) / n
+  const gaps: WeekBarsLayout['gaps'] = []
+  for (let i = 0; i < weeks.length; i++) {
+    if (hasBar(weeks[i])) continue
+    let j = i
+    while (j + 1 < weeks.length && !hasBar(weeks[j + 1])) j++
+    const fits = (j - i + 1) * slotPx >= GAP_LABEL.length * TICK_LABEL_CHAR + 12
+    gaps.push(fits ? { cx: f4((i + j + 1) / 2 / n), label: GAP_LABEL } : { cx: f4((i + j + 1) / 2 / n), label: GAP_LABEL, split: true })
+    i = j
+  }
+  const splitLine = gaps.some((g) => g.split) ? GAP_SECOND_LINE : 0
+
   const top = tickRows * TICK_ROW + (tickRows > 0 ? 28 : 8) + 16
   const vBase = top + S.videosH
   const cTop = vBase + S.rowGap
@@ -564,8 +589,8 @@ export function weekBarsLayout(
   const dayY = cBase + 22
   const monthY = dayY + 18
   const stateY = monthY + 22
-  const marksY = opts.ticks === 'row' && days.length > 0 ? stateY + 30 : null
-  const height = (marksY ?? stateY) + 10
+  const marksY = opts.ticks === 'row' && days.length > 0 ? stateY + splitLine + 30 : null
+  const height = (marksY ?? stateY + splitLine) + 10
 
   const drawn = weeks.filter((w) => w.state !== 'none_gathered' && w.videos > 0)
   const vMax = Math.max(1, ...drawn.map((w) => w.videos))
@@ -590,15 +615,6 @@ export function weekBarsLayout(
       monthLabel: prev == null || prev.mi !== here.mi ? here.m : null,
     }
   })
-
-  const gaps: WeekBarsLayout['gaps'] = []
-  for (let i = 0; i < weeks.length; i++) {
-    if (columns[i].videos) continue
-    let j = i
-    while (j + 1 < weeks.length && !columns[j + 1].videos) j++
-    gaps.push({ cx: f4((i + j + 1) / 2 / n), label: 'none gathered' })
-    i = j
-  }
 
   const marks: WeekBarsLayout['marks'] = []
   if (opts.ticks === 'row') {

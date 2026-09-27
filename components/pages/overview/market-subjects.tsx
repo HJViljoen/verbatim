@@ -142,12 +142,13 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
       </BlockFrame>
     )
   }
-  // THE BOARD'S COLUMNS, WITHOUT ITS RANK: the figure columns are the same
-  // three 64px columns, so on the full-width page they line up with the
-  // board's "Videos", "Sep" and "Aug" above.
+  // THE PREVIEW'S COLUMNS (Main.dc.html's subjects table: 288 · 1fr · 64 ·
+  // 56 · 56; d3 polish): the subject up to 288px, the bar the rest, then
+  // "Videos" and the two levels. The legend says "Sep" and "Aug", as the
+  // preview's narrower tile does.
   // In a narrow block the label and the three figure columns only
   // (`PHONE_COLS`, a container query on the table's wrapper).
-  const cols = `${PHONE_COLS} @min-[600px]:grid-cols-[minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
+  const cols = `${PHONE_COLS} @min-[600px]:grid-cols-[minmax(200px,288px)_minmax(96px,1fr)_64px_56px_56px]`
   const hidden = PHONE_HIDDEN
   return (
     <BlockFrame title={MARKET_SUBJECTS_TITLE} mode={mode} footer={footer} roomy>
@@ -155,7 +156,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
         <div className="@min-[600px]:min-w-[560px]" role="table">
           <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
             <span role="columnheader" className={SCALE.head}>Subject</span>
-            <span role="columnheader" className={hidden}><BarLegend month={data.month} prevMonth={prev?.month ?? null} /></span>
+            <span role="columnheader" className={hidden}><BarLegend month={data.month} prevMonth={prev?.month ?? null} short /></span>
             <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
             <span role="columnheader"><BaseHead month={data.month} n={n} mode={mode} /></span>
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
@@ -174,7 +175,10 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
                     <span className={`flex flex-wrap items-center gap-x-2 ${SCALE.tag}`}>
                       {tag ? <span>{tag}</span> : null}
                       {tag && makers ? <span aria-hidden className="max-sm:hidden">·</span> : null}
-                      {makers ? <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><MakerMark />{makers}</span> : null}
+                      {/* The tag wraps inside its own column on a phone rather
+                          than running under the figures beside it (d3 polish:
+                          "about a third makers103" at 390). */}
+                      {makers ? <span className="inline-flex min-w-0 items-center gap-1.5 @min-[600px]:whitespace-nowrap"><MakerMark />{makers}</span> : null}
                     </span>
                   ) : null}
                 </span>

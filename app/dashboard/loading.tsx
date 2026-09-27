@@ -28,7 +28,7 @@ const ROOMY = 'gap-6 px-4 py-6 sm:px-8 sm:py-8'
 const BONES: Record<(typeof FRONT_TILE_KEYS)[number], ReactNode> = {
   // The month beside its voices.
   'overview.sentence': (
-    <div className="grid grid-cols-1 gap-x-16 gap-y-6 xl:grid-cols-[minmax(0,1fr)_304px]">
+    <div className="grid grid-cols-1 gap-x-22 gap-y-6 xl:grid-cols-[minmax(0,1fr)_304px]">
       <div className="flex flex-col gap-3">
         <Bone className="h-7 w-3/4" />
         <Bone className="h-7 w-1/2" />
@@ -56,14 +56,14 @@ const BONES: Record<(typeof FRONT_TILE_KEYS)[number], ReactNode> = {
   ),
   // The kinds beside the mood.
   'overview.category': (
-    <div className="grid grid-cols-1 gap-x-16 gap-y-6 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-x-22 gap-y-6 xl:grid-cols-[minmax(0,1fr)_304px]">
       <BoneBars rows={8} />
       <BoneBars rows={4} />
     </div>
   ),
   // Three short lists.
   'overview.asks': (
-    <div className="grid grid-cols-1 gap-x-12 gap-y-6 xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-x-22 gap-y-6 xl:grid-cols-3">
       {Array.from({ length: 3 }, (_, i) => <BoneLines key={i} lines={4} />)}
     </div>
   ),

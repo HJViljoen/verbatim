@@ -55,9 +55,10 @@ describe('the sidebar’s icons', () => {
     // M8 6h13 / M8 12h13 / M8 18h13 + three dots — a list, not stacked planes.
     expect(draw('subjects')).toContain('M8 12h13')
     expect(draw('subjects')).not.toContain('lucide-layers')
-    // circle cx9 cy7 r4 with a second figure behind — people, not a bubble.
-    expect(draw('voice')).toContain('cx="9"')
-    expect(draw('voice')).toContain('cy="7"')
+    // The market-first preview (design-mf2): talk, a speech square with lines
+    // of text in it, not two people.
+    expect(draw('voice')).toContain('lucide-message-square-text')
+    expect(draw('voice')).not.toContain('lucide-users')
     // M6 20v-5 / M12 20V8 / M18 20v-9 / M3 20h18 — three columns on an axis.
     expect(draw('competitive')).toContain('M13 17V5')
     expect(draw('competitive')).not.toContain('lucide-swords')
@@ -73,7 +74,8 @@ describe('the sidebar’s icons', () => {
 
     // The four that already matched, so a future sweep cannot quietly move
     // them either.
-    expect(draw('overview')).toContain('lucide-layout-dashboard')
+    // Your market is the market (design-mf2): a globe, not a dashboard grid.
+    expect(draw('overview')).toContain('lucide-globe')
     expect(draw('market')).toContain('lucide-target')
     expect(draw('week')).toContain('lucide-calendar-days')
     expect(draw('reports')).toContain('lucide-file-text')

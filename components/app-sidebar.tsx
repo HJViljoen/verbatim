@@ -39,15 +39,17 @@ const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: STUDIO_ICON }
 
 type NavItem = { href: string; label: string; icon: LucideIcon }
 
-// Active = weight + a 2px green bar on the left (rule 1: green marks the active
-// page). No pill fill — the shadcn default paints bg-sidebar-accent on
-// data-active, which is overridden here.
+// THE APPROVED PREVIEW'S ROW (design-mf2, every board's sidebar; d3 polish):
+// 40px rows 4px apart, the icon 12px in from a 12px rail, and the active page
+// in weight, a quiet pill and a 3px green bar at the pill's own left edge
+// (rule 1: green marks the active page). The pill is the ink at 7%, the
+// preview's #EFF1F3 on white, so it follows the theme rather than a hex.
 const ITEM_CLASS =
-  "relative h-9 gap-2.5 rounded-md px-2.5 text-[14px] font-normal text-sidebar-foreground " +
+  "relative h-10 gap-3 rounded-md px-3 text-[14px] font-normal text-sidebar-foreground " +
   "hover:bg-sidebar-accent hover:text-foreground " +
-  "data-[active=true]:bg-transparent data-[active=true]:font-semibold data-[active=true]:text-foreground " +
-  "data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 " +
-  "data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
+  "data-[active=true]:bg-foreground/[0.07] data-[active=true]:font-semibold data-[active=true]:text-foreground " +
+  "data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-2.5 data-[active=true]:before:bottom-2.5 " +
+  "data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-r-[2px] data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
 
 // One row of the navigation, module-level so the streamed Studio item below
 // renders exactly the same markup the static groups do. `active` is a PROP
@@ -101,12 +103,12 @@ export function AppSidebar({ header, ops, studio, tenant }: { header?: React.Rea
   }
 
   const renderGroup = (label: string, items: NavItem[], isActive: (href: string) => boolean, lead?: React.ReactNode) => (
-    <SidebarGroup className="px-1.5">
-      <SidebarGroupLabel className="h-7 px-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">
+    <SidebarGroup className="px-3 py-0">
+      <SidebarGroupLabel className="mb-1 h-8 items-end px-3 pb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu className="gap-0.5">
+        <SidebarMenu className="gap-1">
           {lead}
           {items.map((navItem) => (
             <NavRow key={navItem.href} item={navItem} active={isActive(navItem.href)} />
@@ -125,14 +127,14 @@ export function AppSidebar({ header, ops, studio, tenant }: { header?: React.Rea
           this is the wordmark, unchanged. */}
       <SidebarHeader>
         {header ?? (
-          <div className="flex items-center gap-2 px-4 pt-5 pb-1">
+          <div className="flex h-14 items-center gap-2 px-4">
             <VerbatimMark size={20} className="shrink-0 text-primary" />
-            <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
+            <span className="text-[18px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
           </div>
         )}
       </SidebarHeader>
 
-      <SidebarContent className="gap-1 pt-1">
+      <SidebarContent className="gap-4 pt-0">
         {renderGroup("Intelligence", intelligence, (href) => active?.href === href)}
         {/* The Studio leads the Account group when this session may see it,
             and is absent — not hidden, never rendered — when it may not. */}
@@ -148,7 +150,7 @@ export function AppSidebar({ header, ops, studio, tenant }: { header?: React.Rea
         {ops}
       </SidebarContent>
 
-      <SidebarFooter className="px-2 pb-3">
+      <SidebarFooter className="px-3 pb-6">
         {/* WHOSE WORKSPACE, AND WHO YOU ARE IN IT (Block D wave 2,
             `main.shell.sidebar.tenant`). The artboard draws it above Logout and
             the footer held Logout alone, so a reader with two workspaces —
