@@ -27,6 +27,14 @@ describe('starter questions, written by code from the front page’s biggest obj
     expect(lead?.rows).toEqual([{ kind: 'theme', label: 'Confusion over airline bag sizes', k: 21, tags: [] }])
   })
 
+  it('asks "ask about" only where the lead is a question, else "say about"', () => {
+    // Össur's lead on staging's 13 Sep update: a praise theme.
+    const praise = { ...board.rows[0], label: 'Admiration for personal resilience', kind: 'praise' }
+    const theirs = starterQuestions({ themes: { ...board, rows: [praise] }, hero: { kind: 'themes', top: [praise], lead: praise } })
+    expect(theirs.map((c) => c.question)).toContain('What does my market say about personal resilience?')
+    expect(theirs.some((c) => c.question.includes('ask about personal resilience'))).toBe(false)
+  })
+
   it('starts from what buys, with its maker share as the front page prints it', () => {
     expect(cards[0]).toEqual({ question: 'What makes people ready to buy?', rows: [{ kind: 'theme', label: 'Ready to buy handmade bags', k: 69, tags: ['about a third makers'] }] })
   })

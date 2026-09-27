@@ -94,9 +94,13 @@ export function starterQuestions(input: StarterInput): StarterQuestion[] {
   const buying = board.find((t) => t.kind === 'purchase_intent')
   if (buying) push('What makes people ready to buy?', [themeRow(buying)])
 
-  // The lead theme the front page quotes, asked about by its topic.
+  // The lead theme the front page quotes, asked about by its topic. "Ask
+  // about" only where the lead IS a question: Össur's lead on staging is
+  // "Admiration for personal resilience", and "What does my market ask about
+  // personal resilience?" claimed questions the theme does not hold.
   const lead = input.hero && input.hero.kind === 'themes' ? input.hero.lead : null
-  const ask = (t: { label: string }) => `What does my market ask about ${topicOf(t.label)}?`
+  const ask = (t: { label: string; kind: string | null }) =>
+    `What does my market ${t.kind === 'question' ? 'ask' : 'say'} about ${topicOf(t.label)}?`
   if (lead) push(ask(lead), [themeRow(lead)])
 
   const lists = input.asks?.lists ?? []
