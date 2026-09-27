@@ -18,6 +18,10 @@ import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, ty
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { HeadToHead } from '../reading/head-to-head'
 import { buildHeadToHead, buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from './playbook'
+// The Brands page's seven readings (market-first WP3.5, deploy 5), loaded only
+// where the page asks for them (`loadCompetitiveSurface(scope, { brands: true })`).
+import type { BrandsPageData } from './brands'
+import { loadBrandsPage } from './brands-load'
 // THE FLOOR THE CONTENT BRIEF ALREADY RESTS ITS CONCLUSION ON. Imported rather
 // than re-derived from `COMPETITIVE_MIN_VIDEOS` so the two surfaces cannot
 // drift into two answers about the same sentence.
@@ -276,6 +280,16 @@ export interface CompetitiveSurfaceData {
    *  rival, on the published clock, with the classified n per column. */
   playbook: PlaybookBlock | null
   record: { line: string; lines: string[]; href: string }
+  /**
+   * THE BRANDS PAGE (market-first WP3.5, deploy 5): your name in your market,
+   * the brands in it, one brand in full over ninety days, what is asked under
+   * their content, where a rival's talk differs, what they post and say, how
+   * the market makes content and each brand's share of what our searches
+   * found (lib/pages/brands.ts). Set only by the page's own load
+   * (`{ brands: true }`); absent on a stored snapshot and on the quarterly's
+   * and the briefs' reads, whose blocks keep their Phase 1 forms.
+   */
+  brands?: BrandsPageData
   /**
    * The method footnote, composed once for every surface (block D, D9).
    *
@@ -540,7 +554,7 @@ interface QuestionInsight {
   source_video_id: string | null
 }
 
-export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveSurfaceData | null> {
+export async function loadCompetitiveSurface(scope: Scope, opts: { brands?: boolean } = {}): Promise<CompetitiveSurfaceData | null> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const params = scope.params as CompetitiveSurfaceParams
@@ -615,8 +629,12 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // CO4 · what each rival published this month. It needs the month and the
   // tracked list and nothing else, so it starts here and is collected at the
   // bottom beside the record.
-  const ownClaimsAhead = loadRivalOwnPosts(supabase, clientId, month, listed)
-  ownClaimsAhead.catch(() => {})
+  // THE BRANDS PAGE READS EVERY LIVE RIVAL'S POSTS (B5 prints a brand with no
+  // filed video, Freedom of Movement's 30); CO4 keeps the listed ones, off the
+  // same read.
+  const liveRivals = rivals.rivals.filter((r) => !r.retiredAt)
+  const ownInputsAhead = readRivalOwnPostInputs(supabase, clientId, month, opts.brands ? liveRivals : listed)
+  ownInputsAhead.catch(() => {})
 
   // The record's reads depend on the month and nothing else; the refusals it
   // also carries are arithmetic over verdicts, added below.
@@ -684,7 +702,9 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
 
   // CO4 · the censuses, taken before the return because the readiness row below
   // is read off them.
-  const ownClaims = await ownClaimsAhead
+  const ownInputs = await ownInputsAhead
+  const listedAudiences = new Set(listed.map((r) => rivalKey(r.name)))
+  const ownClaims = rivalOwnClaims(ownInputs.filter((i) => listedAudiences.has(i.audience)))
   const playbookVideos = await playbookAhead
   // THE CONCLUSION IS FLOORED HERE TOO (CO6). `matrixConclusion` defaults its
   // `leadMinRated` to 0, so this call promoted the exact sentence the option
@@ -709,6 +729,26 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
           pair,
         })
       : null
+
+  // ── the Brands page (WP3.5, deploy 5) ─────────────────────────────────
+  // Its own reads, on the reading client, each section failing alone
+  // (lib/pages/brands-load.ts). Only the page asks for it.
+  const brandsPage = opts.brands
+    ? await loadBrandsPage({
+        db: reading.client,
+        clientId,
+        reading: rm,
+        now: readingAt,
+        rivals: rivals.rivals,
+        denominators: history.denominators,
+        schedule,
+        pair,
+        params: scope.params as Record<string, string | undefined>,
+        ownPosts: { censusInputs: ownInputs },
+        playbook,
+        hrefFor: (name) => competitiveSurfaceHref(name, scope.params as Record<string, string | undefined>),
+      })
+    : undefined
 
   // ── the record ─────────────────────────────────────────────────────────
   const verdicts = standingsVerdicts({ standings })
@@ -756,6 +796,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     headToHead,
     playbook,
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
+    ...(brandsPage ? { brands: brandsPage } : {}),
     method: methodLines(recordInputs, { brand }),
   }
 }
@@ -843,6 +884,18 @@ export async function loadRivalOwnPosts(
   month: string,
   rivals: readonly { name: string }[],
 ): Promise<OwnPostCensus[]> {
+  return rivalOwnClaims(await readRivalOwnPostInputs(supabase, clientId, month, rivals))
+}
+
+/** The census inputs `loadRivalOwnPosts` counts: each rival's posts in the
+ *  month and its accounts, with no claims (the Brands page reads those on the
+ *  reading client, lib/pages/brands-load.ts). */
+export async function readRivalOwnPostInputs(
+  supabase: SupabaseClient,
+  clientId: string,
+  month: string,
+  rivals: readonly { name: string }[],
+): Promise<OwnPostInput[]> {
   if (rivals.length === 0) return []
   const start = monthStartOf(month)
   const d = new Date(`${start}T00:00:00.000Z`)
@@ -880,7 +933,7 @@ export async function loadRivalOwnPosts(
     echoes: [],
     handles: handlesByName.get(fold(r.name)) ?? {},
   }))
-  return rivalOwnClaims(inputs)
+  return inputs
 }
 
 /** Nobody read them, and the page says which silence that is. */
