@@ -4,7 +4,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { POSTS_TITLE, type PostsBlock } from '@/lib/pages/brands'
+import { levelWords, POSTS_TITLE, type PostsBlock } from '@/lib/pages/brands'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
@@ -19,8 +19,9 @@ import { Line, SubHead } from './parts'
 // clock on this page that is not the comment's), and the claim most of them
 // carried, in the words the claims read wrote. A CLAIM IS PLAIN TEXT, NEVER
 // SET AS A QUOTE (plan §2.5): it is the brand's own marketing, not a voice of
-// the market, and it carries the posts it rests on as a level ("1 of 30"),
-// always as a count: each row has its own base, so no column head can carry it.
+// the market, and it carries the posts it rests on as a level ("1 of 30",
+// through `levelText`), in the row: each row has its own base, so no column
+// head can carry it.
 //
 // THE KEY IS CO4'S (`competitive.ownclaims`); a page built before deploy 5
 // draws CO4 as it was.
@@ -30,8 +31,9 @@ const POST_COLS = 'grid-cols-[minmax(0,1fr)_2.5rem] @min-[480px]:grid-cols-[minm
 export const postsEmpty = (b: PostsBlock): string | null =>
   b.rows.length === 0 ? `No brand you track published a post in ${longMonth(b.month)}.` : null
 
-/** "1 of 30": the posts a claim rests on, of the brand's month. */
-const inPosts = (p: { k: number; n: number }): string => `${fmtInt(p.k)} of ${fmtInt(p.n)}`
+/** "1 of 30": the posts a claim rests on, of the brand's month, through
+ *  `levelText` as every level is (§4.0; a count under 100 posts). */
+const inPosts = (p: { k: number; n: number }): string => levelWords(p.k, p.n)
 
 export const claimsNone = (b: PostsBlock): string =>
   `No claim was read from their posts in ${longMonth(b.month)}.`
