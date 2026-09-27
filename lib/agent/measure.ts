@@ -766,16 +766,21 @@ export function notAnsweredFrom(rows: readonly AskRow[], monthStart: string, cap
     if (reply.outcome === 'silent') declined.push({ question: m.content, why: DECLINED_WHY.silent })
     else if (reply.result?.notice) declined.push({ question: m.content, why: DECLINED_WHY.out_of_corpus })
   }
+  // Nothing asked is nothing answered: "0 of 40 questions asked this month.
+  // Every one was answered" printed under "No question has been asked this
+  // month" on Össur's Ask (the staging render, 27 Sep).
   const tail =
-    declined.length === 0
-      ? 'Every one was answered from the conversation.'
-      : `${fmtInt(declined.length)} of them could not be answered from the conversation.`
+    asked === 0
+      ? null
+      : declined.length === 0
+        ? 'Every one was answered from the conversation.'
+        : `${fmtInt(declined.length)} of them could not be answered from the conversation.`
   return {
     month: monthStart.slice(0, 10),
     asked,
     cap,
     declined,
-    line: `${capLine(asked, cap)} this month. ${tail}`,
+    line: tail ? `${capLine(asked, cap)} this month. ${tail}` : `${capLine(asked, cap)} this month.`,
     href: NOT_ANSWERED_HREF,
   }
 }
