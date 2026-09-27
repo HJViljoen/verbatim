@@ -1,7 +1,9 @@
+import { isValidElement } from 'react'
 import { describe, it, expect } from 'vitest'
 
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
+import { BlockFrame } from '@/components/blocks/frame'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, type WeekData } from '@/lib/pages/week'
@@ -10,14 +12,14 @@ import { FIRST_SCREEN, WEEK_BLOCKS, WEEK_RETIRED_BLOCKS, WeekPage, weekContext, 
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
 import { weekCameIn } from './came-in'
-import { weekHeard } from './heard'
-import { weekRivalPosts } from './rival-posts'
-import { repliesSection, weekReply } from './reply'
+import { heardLead, weekHeard } from './heard'
+import { brandsPostedOrder, topOwnPost, weekRivalPosts } from './rival-posts'
+import { repliesSection, replyRowsFor, weekReply } from './reply'
 import { weekFlagged } from './flagged'
 import { weekSales } from './sales'
-import { weekWorked } from './worked'
+import { weekWorked, workedOrder, WORKED_FLOOR } from './worked'
 import { weekCoverage } from './coverage'
-import { baselineMeter, weekChecks } from './checks'
+import { baselineMeter, unusualLine, weekChecks } from './checks'
 import { weekPage } from './module'
 import { absentReadingFixture, marketWeekFixture, ossurWeeksFixture, regroupedFixture, thinFixture, weekFixture } from './fixture'
 import { weekWeeks } from './weeks'
@@ -834,5 +836,110 @@ describe('WK §2 under the three calibration states', () => {
       expect(text).not.toContain('provisional')
       expect(text).toContain('Repair & warranty being re-described')
     }
+  })
+})
+
+
+// ---- every block, every mode, both tenants on the market: one case each ------
+
+const PAGE_CASES = [marketWeekFixture, ossurWeeksFixture].flatMap((fixture) =>
+  WEEK_BLOCKS.flatMap((block) => MODES.map((mode) => ({ name: `${block.key} [${mode}] ${fixture.name}`, block, mode, fixture }))))
+
+describe.each(PAGE_CASES)('$name', ({ block, mode, fixture }) => {
+  it('keeps the copy contract, with its title alone in the header and links alone in the footer', () => {
+    const el = block.render(fixture(), mode, ctx)
+    assertCopyContract(render(el))
+    expect(isValidElement(el) && el.type === BlockFrame).toBe(true)
+    const props = (el as { props: { meta?: unknown; footerNote?: unknown } }).props
+    expect(props.meta).toBeUndefined()
+    expect(props.footerNote).toBeUndefined()
+  })
+})
+
+describe('This week’s pure helpers (WP3.7)', () => {
+  const rows = marketWeekFixture().worked.formats
+
+  it('workedOrder: the rows at the floor by multiple, then the counts', () => {
+    expect(workedOrder(rows).map((o) => o.row.label)).toEqual(['Story', 'Entertainment', 'Promotional', 'Challenge'])
+    expect(workedOrder(rows).map((o) => o.counted)).toEqual([false, false, false, true])
+  })
+
+  it('workedOrder: the floor is 10 videos', () => {
+    expect(WORKED_FLOOR).toBe(10)
+    expect(workedOrder([{ label: 'Nine', videos: 9, engagement: 1, multiple: 9 }])[0].counted).toBe(true)
+    expect(workedOrder([{ label: 'Ten', videos: 10, engagement: 1, multiple: 1 }])[0].counted).toBe(false)
+  })
+
+  it('workedOrder: ties on the multiple go to the larger count', () => {
+    const tied = workedOrder([{ label: 'A', videos: 12, engagement: 1, multiple: 2 }, { label: 'B', videos: 40, engagement: 1, multiple: 2 }])
+    expect(tied.map((o) => o.row.label)).toEqual(['B', 'A'])
+  })
+
+  it('brandsPostedOrder: by the comments under their top post, the name not counted last', () => {
+    expect(brandsPostedOrder(marketWeekFixture().cameIn.rivals).map((r) => r.label)).toEqual(['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Rareform', 'Freitag'])
+  })
+
+  it('topOwnPost: the brand’s own post, never one about it', () => {
+    const r = marketWeekFixture().cameIn.rivals[0]
+    expect(topOwnPost(r)?.own).toBe(true)
+    expect(topOwnPost({ ...r, posts: [] })).toBeNull()
+    expect(topOwnPost({ ...r, posts: [{ ...r.posts[0], own: false }] })).toBeNull()
+  })
+
+  it('replyRowsFor: every kind, three rows, where no tab is picked', () => {
+    const r = marketWeekFixture().replies
+    expect(replyRowsFor(r, undefined)).toEqual({ tab: 'all', rows: r.rows.slice(0, 3) })
+  })
+
+  it('replyRowsFor: only the picked kind', () => {
+    const r = marketWeekFixture().replies
+    expect(replyRowsFor(r, 'buying').rows.every((row) => row.intent === 'buying')).toBe(true)
+    expect(replyRowsFor(r, 'buying').tab).toBe('buying')
+  })
+
+  it('replyRowsFor: a tab the queue has none of, or awareness, falls back to all', () => {
+    const r = marketWeekFixture().replies
+    expect(replyRowsFor({ ...r, counts: r.counts.filter((c) => c.intent !== 'objection') }, 'objection').tab).toBe('all')
+    expect(replyRowsFor(r, 'misinformation').tab).toBe('all')
+    expect(replyRowsFor(r, 'nonsense').tab).toBe('all')
+  })
+
+  it.each([
+    ['baseline_forming', 'Not checked with this update: the baseline is forming.'],
+    ['nothing_unusual', 'Nothing was unusual with this update.'],
+  ] as const)('unusualLine: %s', (state, words) => {
+    expect(unusualLine({ ...weekFixture().unusual, state })).toBe(words)
+  })
+
+  it('unusualLine: a flagged check counts its flags', () => {
+    const u = weekFixture().unusual
+    expect(unusualLine({ ...u, state: 'flagged', flags: u.flags.slice(0, 1) })).toBe('One thing was unusual with this update.')
+  })
+
+  it('unusualLine: a refused or unreadable check says its own note', () => {
+    const u = weekFixture().unusual
+    expect(unusualLine({ ...u, state: 'refused', note: 'A note.' })).toBe('A note.')
+    expect(unusualLine({ ...u, state: 'unreadable', note: null })).toBe('The check could not be read with this update.')
+  })
+
+  it('baselineMeter: comparable months, with the month its flags start', () => {
+    expect(baselineMeter(marketWeekFixture().unusual)).toEqual({ kept: 0, required: 3, from: '2027-01-01' })
+  })
+
+  it('baselineMeter: none once the baseline is ready, or for a check that answered', () => {
+    const u = marketWeekFixture().unusual
+    expect(baselineMeter({ ...u, comparable: { kept: 3, required: 3, flagsFrom: null } })).toBeNull()
+    expect(baselineMeter({ ...u, state: 'nothing_unusual' })).toBeNull()
+  })
+
+  it('heardLead: the level and its base, then the floor', () => {
+    const h = marketWeekFixture().heard!
+    expect(heardLead(h, 'this month')).toEqual({ level: '2 of the 374', rest: ' themes first heard with this update reached 10 videos this month.' })
+  })
+
+  it('heardLead: nothing first heard, or none at the floor', () => {
+    const h = marketWeekFixture().heard!
+    expect(heardLead({ ...h, seen: 0, rows: [] }, 'this month').rest).toBe('Nothing was heard for the first time with this update.')
+    expect(heardLead({ ...h, seen: 1, rows: [] }, 'in September').rest).toBe('1 theme was first heard with this update, and none reached 10 videos in September.')
   })
 })

@@ -62,3 +62,32 @@ describe('which figures are a reading of the month', () => {
     }))).toEqual(['weekly_market_videos'])
   })
 })
+
+describe.each([
+  ['came_in_market_videos', false],
+  ['came_in_category_comments', false],
+  ['heard_t_4f4bc420_videos', false],
+  ['objection_1_videos', false],
+  ['rival_complaint_2_videos', false],
+  ['reply_picked', false],
+  ['reply_buying', false],
+  ['weekly_subject_s_looks_added', false],
+  ['weekly_market_videos', true],
+  ['market_subject_s_looks_share', true],
+  ['theme_n', true],
+])('isMonthScopedFigure(%s)', (token, monthly) => {
+  it(`is ${monthly ? 'the month’s' : 'the update’s own'}`, () => {
+    expect(isMonthScopedFigure(token)).toBe(monthly)
+  })
+})
+
+describe('the subject line in its other shapes', () => {
+  it('counts one video and one comment in the singular', () => {
+    expect(weeklySubject('Össur', { market: { videos: 1, comments: 1 } })).toBe('Össur · your market this week: 1 video and 1 comment came in')
+  })
+
+  it('never carries an arrow, a change or a gate word', () => {
+    const line = weeklySubject('Sealand', { market: { videos: 436, comments: 9471 } })
+    expect(line).not.toMatch(/[▲▼]|unusual|moved|compared|forming/i)
+  })
+})

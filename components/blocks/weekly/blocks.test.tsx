@@ -195,3 +195,117 @@ describe('WR6 · what changed, and what is ours', () => {
     expect(text).toContain('The first comparison read the same way')
   })
 })
+
+// ---- every section, every mode, every state: one case each -------------------
+
+const CASES = STATES.flatMap((data, s) => weeklyBlocksFor().flatMap((block) => MODES.map((mode) => ({ name: `${block.key} [${mode}] state ${s}`, block, mode, data }))))
+
+describe.each(CASES)('$name', ({ block, mode, data }) => {
+  it('keeps the copy contract and draws a BlockFrame with no meta and no footer note', () => {
+    const el = block.render(data, mode, ctx)
+    assertCopyContract(render(el))
+    expect(isValidElement(el) && el.type === BlockFrame).toBe(true)
+    const props = (el as { props: { meta?: unknown; footerNote?: unknown } }).props
+    expect(props.meta).toBeUndefined()
+    expect(props.footerNote).toBeUndefined()
+  })
+})
+
+describe('the weekly’s pure helpers', () => {
+  it('addedCell: "+N" for a counted subject, "·" for none', async () => {
+    const { addedCell } = await import('./subjects')
+    expect(addedCell(weeklyFixture(), 's-looks')).toBe('+73')
+    expect(addedCell(weeklyFixture(), 's-repair')).toBe('·')
+    expect(addedCell(octoberUpdateFixture(), 's-looks')).toBe('·')
+  })
+
+  it('changeDays: every September change on the day it was made, none twice', () => {
+    const lines = weeklyFixture().changes!
+    const days = changeDays(lines, '2026-09-01')
+    expect(days.reduce((n, d) => n + d.parts.length, 0)).toBe(lines.length)
+    expect(days.map((d) => d.day)).toEqual(['2026-09-09', '2026-09-13', '2026-09-17', '2026-09-20'])
+  })
+
+  it('changeDays: a change that touched nothing in the month carries no reach clause', () => {
+    const sep9 = changeDays(weeklyFixture().changes!, '2026-09-01').find((d) => d.day === '2026-09-09')!
+    expect(sep9.parts.filter((p) => p.reach == null).length).toBeGreaterThan(0)
+    expect(sep9.parts.find((p) => p.words.startsWith('7 search terms out'))!.reach).toBe('159 of September’s 654 videos came from them')
+  })
+
+  it('changeDays: the words after a day’s first change start in lower case, and no trailing full stop', () => {
+    const sep20 = changeDays(weeklyFixture().changes!, '2026-09-01').find((d) => d.day === '2026-09-20')!
+    expect(sep20.parts[0].words).toBe('An update gathered less than usual because a spending cap was reached')
+    const sep17 = changeDays(weeklyFixture().changes!, '2026-09-01').find((d) => d.day === '2026-09-17')!
+    expect(sep17.parts.slice(1).every((p) => p.words.charAt(0) === p.words.charAt(0).toLowerCase())).toBe(true)
+  })
+
+  it('nextWords: the first pair read the same way, and none for a paused tenant', async () => {
+    const { nextWords } = await import('./change')
+    const block = weeklyFixture().overview.change!
+    expect(nextWords(block)).toMatch(/^October against November, from the \d+ \w{3} update, if nothing we search changes\.$/)
+    expect(nextWords({ ...block, paused: true })).toBeNull()
+    expect(nextWords({ ...block, next: null })).toBeNull()
+  })
+
+  it('reachClause: none where the month was not measured', async () => {
+    const { reachClause } = await import('./change')
+    const line = weeklyFixture().changes!.find((l) => l.words === '4 search terms added')!
+    expect(reachClause(line, '2026-09-01')).toBe('182 of September’s 654 videos came from them')
+    expect(reachClause(line, '2026-10-01')).toBeNull()
+  })
+})
+
+describe('WR1 in its other states', () => {
+  it('says "in September", never "so far", once the month has ended', () => {
+    const d = weeklyFixture()
+    const ended = { ...d, overview: { ...d.overview, reading: { ...d.overview.reading, state: 'ended' as const } } }
+    expect(email(weeklyWeek, ended)).toBe('Your market in September: 654 videos. The 20 Sep update brought in 436 of them, with 9,471 comments.')
+  })
+
+  it('says the level is not counted where the month rows could not be read, and still says what came in', () => {
+    const text = email(weeklyWeek, weeklyFixture({ market: null }))
+    expect(text).toContain('Your market in September so far is not counted here yet.')
+    expect(text).toContain('The 20 Sep update brought 436 videos and 9,471 comments into your market’s September.')
+  })
+
+  it('prints the level alone where the update’s counts are not there', () => {
+    expect(email(weeklyWeek, weeklyFixture({ cameIn: null }))).toBe('Your market in September so far: 654 videos.')
+  })
+
+  it('declares the reading month’s market once, and the update’s counts under their own month', () => {
+    const f = weeklyWeek.figures!(octoberUpdateFixture())
+    expect(f.weekly_market_videos.label).toContain('September')
+    expect(f.came_in_market_videos.label).toContain('October')
+  })
+})
+
+describe('WR1’s table and WR2 to WR6 when their reads are missing', () => {
+  it('the came-in table says it is not counted, and why where the update covered no window', () => {
+    expect(weeklyCameIn.emptyState(weeklyFixture({ cameIn: null }))).toBe('What this update brought into your market is not counted here yet.')
+    expect(weeklyCameIn.emptyState(weeklyFixture({ window: null }))).toContain('covered no window')
+  })
+
+  it('the brands row is absent for a tenant that tracks none', () => {
+    const d = weeklyFixture()
+    const text = email(weeklyCameIn, { ...d, cameIn: { ...d.cameIn!, brands: null, market: d.cameIn!.category } })
+    expect(text).not.toContain('Brands you track')
+    expect(text).toContain('Your market 421 9,271')
+  })
+
+  it('WR3 prints no "New with this update" after an update that re-grouped the themes', () => {
+    const d = weeklyFixture()
+    const text = email(weeklyThemes, { ...d, heard: { ...d.heard!, rows: [], seen: 0, regrouped: { update: '2026-09-20T08:33:47.358Z', themes: 468 } } })
+    expect(text).not.toContain('New with this update')
+    expect(text).toContain('What your market talked about')
+  })
+
+  it('WR5 says there is nothing to answer where the queue is empty', () => {
+    const d = weeklyFixture()
+    expect(email(weeklyContent, { ...d, replies: { ...d.replies, rows: [], counts: [], total: 0 } })).toContain('Nothing in the days this update covered reads as a question')
+  })
+
+  it('WR4 says there is nothing to take to a customer where no objection was heard', () => {
+    const d = weeklyFixture()
+    expect(email(forSales, { ...d, sales: { ...d.sales, objections: [], rivalComplaints: [] } })).toContain('Nothing this update read was an objection')
+  })
+})

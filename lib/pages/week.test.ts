@@ -892,3 +892,55 @@ describe('comparableBaselineFrom (WP3.7): the unusual-week baseline on comparabl
     expect(monthsAfter('2026-10-01', 3)).toBe('2027-01-01')
   })
 })
+
+describe('marketCameIn and heardBlockOf, their edges (WP3.7)', () => {
+  it('counts a retired brand out of the market (the tracked list is the market)', () => {
+    const m = marketCameIn({ month: '2026-09-01', update: '2026-09-20T08:33:47.358Z', read: SEALAND_20_SEP_WINDOW, rivalAudiences: ['competitor:Patagonia'], monthVideos: 654, updates: 3, now: '2026-09-22T12:00:00.000Z' })!
+    expect(m.brands).toEqual({ videos: 5, comments: 97 })
+    expect(m.market).toEqual({ videos: 426, comments: 9368 })
+  })
+
+  it('reads a missing comment count as none, never as a gap in the sum', () => {
+    const m = marketCameIn({ month: '2026-09-01', update: '2026-09-20T08:33:47.358Z', read: [{ audience: 'industry-other', videos: 10 }], rivalAudiences: [], monthVideos: null, updates: null, now: '2026-09-22T12:00:00.000Z' })!
+    expect(m.category).toEqual({ videos: 10, comments: 0 })
+    expect(m.monthVideos).toBeNull()
+  })
+
+  it('keys the month to its first day, whatever instant it is handed', () => {
+    const m = marketCameIn({ month: '2026-09-20T04:02:57.874Z', update: '2026-09-20T08:33:47.358Z', read: [], rivalAudiences: [], monthVideos: 0, updates: 0, now: '2026-09-22T12:00:00.000Z' })!
+    expect(m.month).toBe('2026-09-01')
+  })
+
+  it('updatesInto counts no update from before the month or after the page’s own', () => {
+    expect(updatesInto('2026-09-01', ['2026-08-31T23:59:00.000Z', '2026-09-27T06:00:00.000Z'], '2026-09-20T08:33:47.358Z')).toBe(0)
+  })
+
+  it('heardBlockOf groups an off-topic-led theme as set aside, not as makers', () => {
+    const h = heardBlockOf({
+      month: '2026-09-01',
+      fresh: { seen: 3, shown: [{ id: 'r1', label: 'Poker night', videos: 12 }], regrouped: null },
+      segments: { maker: new Map([['r1', 0]]), noise: new Map([['r1', 0.8]]) },
+      segmentsState: 'measured',
+      provenance: new Map(),
+    })
+    expect(h.rows).toEqual([])
+    expect(h.setAside?.count).toBe(1)
+    expect(h.makers).toBeNull()
+  })
+
+  it('heardBlockOf lists every theme where nothing was measured (no maker rule)', () => {
+    const h = heardBlockOf({
+      month: '2026-09-01',
+      fresh: { seen: 93, shown: [{ id: '19c24f49-be3f-4a9c-8acb-1072de3078d4', label: 'Brand boycott over politics', videos: 16 }], regrouped: null },
+      segments: null,
+      segmentsState: 'no_rule',
+      provenance: new Map(),
+    })
+    expect(h.rows.map((r) => r.k)).toEqual([16])
+    expect(h.segments).toBe('no_rule')
+  })
+
+  it('replyContextWords leaves an own post’s words alone', () => {
+    expect(replyContextWords('under your post · 41 likes')).toBe('under your post · 41 likes')
+  })
+})

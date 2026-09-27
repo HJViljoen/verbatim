@@ -109,3 +109,30 @@ describe('isWeeklyData', () => {
     expect(isWeeklyData({ ...snapshot(), version: 2 })).toBe(true)
   })
 })
+
+describe.each([
+  ['Sealand', weeklyFixture],
+  ['Össur', ossurWeeklyFixture],
+])('the weekly email for %s', (name, fixture) => {
+  it('names the tenant in the masthead and the closing line', () => {
+    const text = words(snapshot(fixture()))
+    expect(text).toContain(`Verbatim ${name} Your market this week`)
+    expect(text).toContain(`Prepared for ${name} with Verbatim`)
+  })
+
+  it('prints every section’s title once ("With this update" is also a column head of WR2’s)', () => {
+    const text = words(snapshot(fixture()))
+    for (const title of ['The market by subject', 'What your market talked about', 'For sales', 'Worth a reply', 'What changed, and what is ours']) {
+      expect(text.split(title).length - 1, title).toBe(1)
+    }
+    expect(text).toContain('With this update')
+  })
+})
+
+describe.each([1, 2])('a stored version %i row', (version) => {
+  it('prints the stale line in the email, never a section', () => {
+    const text = words({ ...snapshot(), version })
+    expect(text).toContain(STALE_ARTEFACT_LINE)
+    expect(text).not.toContain('The market by subject')
+  })
+})
