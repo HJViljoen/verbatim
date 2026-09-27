@@ -148,7 +148,10 @@ describe('B3 · asked under their content', () => {
     expect(t).toContain('under Cotopaxi’s content, last 90 days')
     expect(t).toContain('13 in August · 8 in September')
     expect(t).toContain('Asked most videos Carry-on size compliance anxiety 12 Questions on product details 5 Feature-by-feature bag scrutiny 2')
-    expect(t).toContain('Show all 21 →')
+    // The link counts what it opens: the six question themes, not the 21
+    // question videos.
+    expect(t).toContain('Show all 6 →')
+    expect(t).not.toContain('Show all 21')
     expect(render(brandsAsked.render(brandsFixture(), 'app', ctx))).toContain('asked=all')
   })
 

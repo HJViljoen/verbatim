@@ -85,7 +85,10 @@ export const brandsAsked: Block<CompetitiveSurfaceData> = {
     const a = b.asked
     const empty = a ? askedEmpty(a) : 'No brand you track had a video in the last 90 days.'
     const href = a ? competitiveSurfaceHref(a.label, { ...(ctx.params ?? {}), [ASKED_PARAM]: 'all' }) : null
-    const footer = a && !empty && a.more > 0 && href ? openLink(mode, `${ctx.appUrl}${href}`, `Show all ${fmtInt(a.videos)} →`) : null
+    // THE LINK COUNTS WHAT IT OPENS: every question theme under the brand's
+    // content (`?asked=all`), not its question videos (a recorded deviation
+    // from the preview's "Show all 21", whose target listed the videos).
+    const footer = a && !empty && a.more > 0 && href ? openLink(mode, `${ctx.appUrl}${href}`, `Show all ${fmtInt(a.themes.length + a.more)} →`) : null
     return (
       <BlockFrame title={ASKED_TITLE} mode={mode} footer={footer} roomy>
         {empty || !a ? <InnerLine mode={mode}>{empty}</InnerLine> : <Body a={a} mode={mode} />}
