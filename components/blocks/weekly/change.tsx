@@ -36,9 +36,17 @@ function Lead({ body, figures, email }: { body: string; figures: FigureTable; em
     : <>{words(body)}</>
 }
 
-/** "182 of September's 654 videos came from them" where the change's reach in
- *  the month was measured and touched any. One denominator. */
+/** The changes that bring videos in, because they add what we search: the
+ *  only ones a video can have "come from" (the preview draws the clause on
+ *  search changes alone). A relevance, filing or marking change's reach is
+ *  Settings › What we changed's figure, never "came from" (WP3.7 check). */
+const BRINGS_VIDEOS_IN: readonly LedgerLine['surface'][] = ['terms', 'subreddits', 'rivals', 'handles']
+
+/** "182 of September's 654 videos came from them" where the change adds what
+ *  we search and its reach in the month was measured and touched any. One
+ *  denominator. */
 function reachClause(line: LedgerLine, month: string): string | null {
+  if (!BRINGS_VIDEOS_IN.includes(line.surface)) return null
   const m = (line.months ?? []).find((x) => x.month === month) ?? (line.reach?.month === month ? line.reach : null)
   if (!m || !(m.touched > 0)) return null
   return `${fmtInt(m.touched)} of ${longMonth(month)}’s ${fmtInt(m.of)} videos came from ${m.touched === 1 ? 'it' : 'them'}`

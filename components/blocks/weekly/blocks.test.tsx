@@ -253,6 +253,24 @@ describe('the weekly’s pure helpers', () => {
     expect(reachClause(line, '2026-09-01')).toBe('182 of September’s 654 videos came from them')
     expect(reachClause(line, '2026-10-01')).toBeNull()
   })
+
+  it('reachClause: never "came from" a change that adds no search (WP3.7 check)', async () => {
+    const { reachClause } = await import('./change')
+    // Staging's 26 Sep relevance-check change, read at a 2 Oct clock: 65 of
+    // September's 654 market videos. A relevance check brings no video in, so
+    // its figure stays Settings › What we changed's.
+    const gate = {
+      changeId: 'staging-gate-rule-26-sep',
+      date: '2026-09-26T16:43:53.937022+00:00',
+      surface: 'gate_rule' as const,
+      words: 'How we check relevance',
+      detail: null,
+      reach: { month: '2026-09-01', touched: 65, of: 654, readWith: '2026-09-20T08:33:47.358+00:00' },
+      months: [{ month: '2026-09-01', touched: 65, of: 654, readWith: '2026-09-20T08:33:47.358+00:00' }],
+    }
+    expect(reachClause(gate, '2026-09-01')).toBeNull()
+    expect(changeDays([gate], '2026-09-01')[0].parts[0]).toEqual({ words: 'How we check relevance', reach: null })
+  })
 })
 
 describe('WR1 in its other states', () => {
