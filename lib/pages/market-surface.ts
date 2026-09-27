@@ -499,6 +499,10 @@ export interface QuestionsBlock {
   windowPosts: number | null
   subjects: QuestionSubjectRow[]
   empty: string | null
+  /** Whether the makers rule was read for the month's themes (`measured`),
+   *  so "not led by makers" is known rather than assumed. OPTIONAL: a copy
+   *  stored before the hero read it has none, and says nothing about makers. */
+  segments?: ThemeBoard['segments']
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -1106,6 +1110,7 @@ export function buildQuestions(input: {
     windowPosts: input.posts ? input.posts.length : null,
     subjects,
     empty: themes.length === 0 && subjects.length === 0 ? questionsEmpty(month) : null,
+    segments: input.segments,
   }
 }
 

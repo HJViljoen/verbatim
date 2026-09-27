@@ -178,14 +178,15 @@ describe('the tiles are as tall as what they draw', () => {
     }
   })
 
-  it('draws the page in the preview’s order: questions, advice, say and hear, the moves pair, then the tail (WP3.6)', () => {
+  it('draws the page in the preview’s order: in one line, questions, advice, say and hear, the moves pair, then the tail (WP3.6)', () => {
     // The readings are one full-width row each; your moves and the month's
     // card sit side by side from xl, each as tall as it draws.
     expect(render(<MarketSurfacePage data={marketFixture()} />)).toContain('xl:items-start')
     const grid = tileGrid()
-    expect(grid['market.questions'].rowStart).toBe(1)
-    expect(grid['market.advice'].rowStart).toBe(2)
-    expect(grid['market.sayhear'].rowStart).toBe(3)
+    expect(grid['market.line'].rowStart).toBe(1)
+    expect(grid['market.questions'].rowStart).toBe(2)
+    expect(grid['market.advice'].rowStart).toBe(3)
+    expect(grid['market.sayhear'].rowStart).toBe(4)
     expect(grid['market.conclusions'].rowStart).toBe(1)
     expect(grid['market.unlocks']).toBeUndefined()
     expect(MOVES_STACKS.map((st) => st.keys)).toEqual([['market.moves'], ['market.card']])
@@ -193,7 +194,7 @@ describe('the tiles are as tall as what they draw', () => {
     const markup = render(<MarketSurfacePage data={sealandMovesFixture()} />)
     expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-6')
     const at = (title: string) => markup.indexOf(title)
-    const order = ['Questions to answer', 'The advice, and what you decided', 'What you say, and what your market says back', 'What we concluded', 'Plans re-checked', 'How a move is made']
+    const order = ['In one line', 'Questions to answer', 'The advice, and what you decided', 'What you say, and what your market says back', 'What we concluded', 'Plans re-checked', 'How a move is made']
     expect(order.map(at).every((i) => i >= 0)).toBe(true)
     expect([...order.map(at)].sort((a, b) => a - b)).toEqual(order.map(at))
     // The moves pair sits between say-and-hear and the conclusions.
