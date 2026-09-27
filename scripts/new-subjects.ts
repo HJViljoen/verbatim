@@ -40,7 +40,10 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 //   3. the cap: more than NEW_SUBJECTS_CAP active subjects raises, and the
 //      transaction rolls back. The editor enforces SUBJECTS_MAX; this paste
 //      does not go through the editor, so it carries the cap itself;
-//   4. a closing select that shows each confirmed name with its status.
+//   4. every name in the file must be active by then, or it raises and rolls
+//      back, naming them (a proposed row whose description is not the file's
+//      is left alone, and a kept name with no live row has nothing to confirm);
+//   5. a closing select that shows each confirmed name with its status.
 //
 // Heinrich pastes it into production's SQL editor by Sat 17 Oct, after the
 // membership spend yes. Nothing is counted for a new subject until
@@ -167,8 +170,19 @@ export function activationSql(set: ConfirmedSet, clientId: string): string[] {
     `do $$ begin if (select count(*) from public.subjects where client_id = ${c} and status = 'active') > ${NEW_SUBJECTS_CAP} ` +
     `then raise exception '${NAME}: more than ${NEW_SUBJECTS_CAP} active subjects; nothing written'; end if; end $$;`,
   )
-  out.push('commit;')
+  // EVERY NAMED SUBJECT IS ACTIVE, OR NOTHING IS WRITTEN. A proposed row of the
+  // name whose description differs from the file's is neither activated nor
+  // shadowed by an insert, and a kept name with no live row confirms nothing;
+  // both used to COMMIT quietly and show only in the closing select. The file
+  // is then corrected (the stored description, or the row retired) and pasted
+  // again.
   const names = set.subjects.map((s) => `lower(trim(${sqlText(s.name)}))`).join(', ')
+  out.push(
+    `do $$ declare v_missing text; begin select string_agg(n, ', ') into v_missing from unnest(array[${names}]) as n ` +
+    `where not exists (select 1 from public.subjects s where s.client_id = ${c} and s.status = 'active' and lower(trim(s.name)) = n); ` +
+    `if v_missing is not null then raise exception '${NAME}: not active after the paste: %; nothing written', v_missing; end if; end $$;`,
+  )
+  out.push('commit;')
   out.push(
     `select s.name, s.status, s.origin, exists (select 1 from public.config_changes x where x.client_id = s.client_id and x.surface = 'subjects' ` +
     `and x.field = 'confirmed' and x.after ->> 'id' = s.id::text) as confirmed from public.subjects s where s.client_id = ${c} ` +

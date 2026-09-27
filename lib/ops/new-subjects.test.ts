@@ -88,7 +88,7 @@ describe('activationSql', () => {
   })
 
   it('inserts nothing for a kept subject, and confirms it', () => {
-    const kept = lines.filter((l) => l.includes("'Looks & style'") && !l.startsWith('select'))
+    const kept = lines.filter((l) => l.includes("'Looks & style'") && !l.startsWith('select') && !l.startsWith('do $$'))
     expect(kept).toHaveLength(1)
     expect(kept[0]).toMatch(/^insert into public\.config_changes/)
   })
@@ -107,6 +107,14 @@ describe('activationSql', () => {
     const cap = lines.find((l) => l.startsWith('do $$'))!
     expect(cap).toContain(`> ${NEW_SUBJECTS_CAP} then raise exception`)
     expect(lines.indexOf(cap)).toBeLessThan(lines.indexOf('commit;'))
+  })
+
+  it('rolls back unless every named subject is active, naming the ones that are not', () => {
+    const guard = lines.filter((l) => l.startsWith('do $$'))[1]
+    expect(guard).toContain("unnest(array[lower(trim('Travel fit & carry-on')), lower(trim('Materials & origin')), lower(trim('Looks & style'))])")
+    expect(guard).toContain("s.status = 'active'")
+    expect(guard).toContain("raise exception 'new-subjects: not active after the paste: %; nothing written'")
+    expect(lines.indexOf(guard)).toBeLessThan(lines.indexOf('commit;'))
   })
 
   it('quotes an apostrophe', () => {
