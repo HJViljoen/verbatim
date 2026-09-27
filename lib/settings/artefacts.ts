@@ -33,9 +33,13 @@ export const ARTEFACT_COPY: Record<Artefact, { label: string; what: string }> = 
     label: 'The weekly report',
     what: 'What came in this week, and anything unusual in it.',
   },
+  // MARKET-FIRST (WP2.1, WP3.10): the monthly is "{Month} in your market",
+  // always the month that has just ended, read one update past its end
+  // (lib/reports/monthly.ts MONTHLY_UPDATES_PAST_END); the approved Reports
+  // artboard calls it "The monthly report".
   monthly: {
-    label: 'The monthly reading',
-    what: 'Where you stand this month and what it means, with the month named on every figure.',
+    label: 'The monthly report',
+    what: 'Your market in the month that has just ended, read one update past its end.',
   },
   quarterly: {
     label: 'The quarterly review',

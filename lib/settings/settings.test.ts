@@ -614,3 +614,17 @@ describe('termDates', () => {
     expect(other.size).toBe(0)
   })
 })
+
+// ---- the monthly's name on Reports and recipients (market-first WP3.10) ------
+
+describe('the monthly, as Settings names it', () => {
+  it('is "The monthly report" on your market in the month just ended, read one update past its end', async () => {
+    const { ARTEFACT_COPY } = await import('./artefacts')
+    const { MONTHLY_UPDATES_PAST_END } = await import('../reports/monthly')
+    expect(MONTHLY_UPDATES_PAST_END).toBe(1)
+    expect(ARTEFACT_COPY.monthly).toEqual({
+      label: 'The monthly report',
+      what: 'Your market in the month that has just ended, read one update past its end.',
+    })
+  })
+})
