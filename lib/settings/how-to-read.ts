@@ -126,6 +126,10 @@ export const READING_CARDS: readonly ReadingCard[] = [
     read: [],
     cannot: [
       'Platforms and how deeply we read each video drive cost and quality, so they are set with you and changed on request. Your search terms are yours: owners and admins edit them here.',
+      // WEEKLY, ON SUNDAY, AND NOT A SETTING (27 Sep, Heinrich: "remove cadence
+      // from settings, and always have it weekly on sunday"). The Cadence
+      // section left Tracking; lib/update-rhythm.ts holds the rule.
+      'How often you are updated, and on which day, is not a setting: every workspace is updated weekly, on Sunday.',
     ],
   },
 ]
@@ -137,7 +141,7 @@ export const READING_PATH: readonly { when: string; what: string[] }[] = [
   {
     when: 'Each week',
     what: [
-      'Open This week. Most weeks it says nothing is unusual, and that is the answer.',
+      'Once Sunday’s update has landed, open This week. Most weeks it says nothing is unusual, and that is the answer.',
       'Answer what is worth a reply while the comments are still warm.',
     ],
   },
@@ -193,6 +197,14 @@ export const DEFINITIONS: readonly Definition[] = [
     id: 'read-at-setup',
     title: 'Read at setup',
     body: 'Months that had already closed when we started were read back at setup. They are a reading of what we hold today, not what we would have reported at the time, and a chart marks them.',
+  },
+  {
+    // The rhythm, said once (27 Sep): the Cadence section that used to carry
+    // it left Settings › Tracking. SLOT_HOUR in lib/pipeline/schedule-due.ts
+    // is the 06:00; the dispatcher fires then for every workspace.
+    id: 'updates',
+    title: 'When updates land',
+    body: 'Every workspace is updated once a week, on Sunday. The update starts at 06:00 South African time, and the pages move to it once it has finished. The day and the hour are the same for everyone, and neither is a setting. The bar on each page names the update it reads.',
   },
   {
     id: 'reddit',

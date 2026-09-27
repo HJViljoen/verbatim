@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { GLOSSARY, THIRTEEN_WORDS } from '../calibration'
 import { DIRECTION_WORDS } from '../calibration'
 import { SURFACES } from '../nav'
+import { SLOT_HOUR } from '../pipeline/schedule-due'
 import { DEFINITIONS, READING_CARDS, READING_PATH } from './how-to-read'
 
 describe('how to read', () => {
@@ -43,6 +44,18 @@ describe('how to read', () => {
     expect(words).not.toContain('changed by us on request, not from this page')
     // The true half survives, and the correction with it.
     expect(words).toContain('Your search terms are yours')
+  })
+
+  it('says the rhythm once, as weekly on Sunday, and offers no choice of it (27 Sep)', () => {
+    const settings = READING_CARDS.find((c) => c.key === 'settings')!
+    expect(settings.cannot.join(' ')).toContain('every workspace is updated weekly, on Sunday')
+    const updates = DEFINITIONS.find((d) => d.id === 'updates')!
+    expect(updates.body).toContain('once a week, on Sunday')
+    expect(updates.body).toContain(`${String(SLOT_HOUR).padStart(2, '0')}:00 South African time`)
+    expect(READING_PATH[0].what[0]).toContain('Sunday’s update')
+    // Nothing here names a cadence to choose, or a pause.
+    const all = [...READING_CARDS.flatMap((c) => [c.tells, ...c.cannot]), ...READING_PATH.flatMap((p) => p.what), ...DEFINITIONS.map((d) => `${d.title} ${d.body}`)].join(' ')
+    expect(all).not.toMatch(/\bcadence\b|\bmonthly update|\bfortnight|\bpaused?\b|the day it lands/i)
   })
 
   it('never calls a month "complete" (plan §4.0: ended or final, never complete; deploy 2 review)', () => {
