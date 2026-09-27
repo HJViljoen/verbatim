@@ -318,9 +318,23 @@ describe('Settings › What we changed: the rules and why September is not compa
   it('titles the section by the month and prints the one figure in Settings’ form (the SettingsRecord artboard)', () => {
     const why = whyNotCompared(block())
     expect(why?.title).toBe('Why September is not compared')
-    expect(why?.body).toBe(`About half of September came from searches we added in September: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]], measured on 30 Sep.`)
+    expect(why?.body).toBe(`About half of September came from searches we added in September: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]], read with the 27 Sep update.`)
     expect(why?.figures).toEqual(changeLead(block())?.figures)
     expect(addedOnlyRecordSentence(block())?.body).toBe(why?.body)
+  })
+
+  it('dates Settings’ sentence as the front page dates it, by the update it was read with, never "measured on" (wording read item 32)', () => {
+    // The row was computed on 30 Sep, read through the 27 Sep update: the
+    // sentence names the update, as the group heading and the front page do.
+    const settings = addedOnlyRecordSentence(block())?.body ?? ''
+    expect(settings).toContain(', read with the 27 Sep update.')
+    expect(settings).not.toMatch(/measured on|30 Sep/)
+    expect(changeLead(block())?.body).toContain('read with the 27 Sep update')
+    // A re-run's row read through a later update says that update, not the day it ran.
+    const rerun = block({ pair: pair('ended', { ...ROW, computedAt: '2026-10-05T09:00:00.000Z' }), readWith: '2026-10-04T06:00:00.000Z' })
+    expect(addedOnlyRecordSentence(rerun)?.body).toBe(`About half of September came from searches we added in September: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]], read with the 4 Oct update.`)
+    // The row's update unknown: no date at all, as the front page.
+    expect(addedOnlyRecordSentence(block({ readWith: null }))?.body).toBe(`About half of September came from searches we added in September: [[${CHANGE_NEW}]] of [[${CHANGE_OF}]].`)
   })
 })
 

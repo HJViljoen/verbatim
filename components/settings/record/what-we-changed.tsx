@@ -301,8 +301,9 @@ function SearchAsideBox({ aside }: { aside: SearchAside }) {
           {aside.figure ? (
             // THE ARTBOARD'S SENTENCE (the 26 Sep ruling: Settings prints
             // "About half of September came from searches we added in
-            // September: 356 of 654, measured on 26 Sep."), its figures as
-            // tokens from the one builder the front page's sentence shares.
+            // September: 356 of 654, read with the 20 Sep update.", the one
+            // date form of wording read item 32), its figures as tokens from
+            // the one builder the front page's sentence shares.
             <TokenProse body={aside.figure.body} figures={aside.figure.figures} mode="app" figureFace="mono" figureClassName="font-semibold text-foreground" className="m-0 text-[13px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]" />
           ) : null}
           {aside.since ? <span className="text-[13px] leading-[1.5] text-secondary-foreground">Since {shortDate(aside.since)} nothing we search has changed.</span> : null}

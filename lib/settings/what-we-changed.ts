@@ -591,7 +591,8 @@ export interface SearchAside {
   /** The month's one figure in the `SettingsRecord` artboard's words, as the
    *  26 Sep ruling has Settings print it (`addedOnlyRecordSentence`): "About
    *  half of September came from searches we added in September: 356 of 654,
-   *  measured on 26 Sep." Its figures are tokens. Null where the front page
+   *  read with the 20 Sep update." (wording read item 32: the one date form,
+   *  never "measured on"). Its figures are tokens. Null where the front page
    *  prints no figure either. */
   figure: { body: string; figures: FigureTable } | null
   /** Since when the searches have run unchanged: the first update after the
@@ -758,9 +759,9 @@ export function recordView(input: {
   }
   const groups: RecordGroup[] = []
   if (searchLines.length > 0) {
-    // The aside's sentence is dated by when the figure was measured (the
-    // artboard's "measured on"), so the cells' update is said beside the
-    // group's heading, as for the other group.
+    // The cells' update is said once beside the group's heading, as for the
+    // other group; the aside's sentence names the update its figure was read
+    // with in the same words (wording read item 32).
     groups.push({ key: 'search', title: RECORD_GROUP_TITLE.search, lines: searchLines, readWith: oneUpdate(searchLines) })
   }
   if (grouped.check.length > 0) {
