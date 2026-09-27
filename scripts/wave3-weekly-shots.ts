@@ -23,7 +23,7 @@ import { EMAIL } from '../lib/email/theme'
 import { WeeklyEmail } from '../components/email/weekly'
 import { WEEKLY_BLOCK_KEYS, weeklySubject } from '../lib/reports/weekly'
 import { WEEKLY_SNAPSHOT_VERSION, type WeeklySnapshotData } from '../lib/reports/weekly-build'
-import { weeklyFixture, formingFixture } from '../components/blocks/weekly/fixture'
+import { weeklyFixture, ossurWeeklyFixture as formingFixture } from '../components/blocks/weekly/fixture'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -50,7 +50,7 @@ function snapshot(reading = weeklyFixture()): WeeklySnapshotData {
     keys: [...WEEKLY_BLOCK_KEYS],
     reading,
     figures: {},
-    subject: weeklySubject('Sealand', reading.section1.check),
+    subject: weeklySubject('Sealand', reading.cameIn),
   }
 }
 

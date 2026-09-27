@@ -1,8 +1,7 @@
 import { weekdayDate } from '@/lib/format'
 import { loadWeek, type WeekData } from '@/lib/pages/week'
 import type { PageModule, Renderable, Slide } from '@/lib/renderables/types'
-import { WEEK_BLOCKS, weekContext } from '.'
-import { isFlaggedQuiet, weekFlagged } from './flagged'
+import { WEEK_BLOCKS, WEEK_RETIRED_BLOCKS, weekContext } from '.'
 
 /**
  * This week as a page module — what an export addresses (Block D wave 2,
@@ -28,8 +27,10 @@ import { isFlaggedQuiet, weekFlagged } from './flagged'
  * pipeline's own rule).
  */
 
+// A KEY AN EXPORT STORED BEFORE WP3.7 STILL RESOLVES: the retired tiles stay
+// renderable, and are never a slide of a new export.
 const renderables: Record<string, Renderable<WeekData>> = Object.fromEntries(
-  WEEK_BLOCKS.map((block) => [block.key, {
+  [...WEEK_BLOCKS, ...WEEK_RETIRED_BLOCKS].map((block) => [block.key, {
     key: block.key,
     title: block.title,
     // THE PAGE'S OWN CONTEXT, so a printed tile's links are the app's relative
@@ -38,12 +39,8 @@ const renderables: Record<string, Renderable<WeekData>> = Object.fromEntries(
   } satisfies Renderable<WeekData>]),
 )
 
-function weekSlides(data: WeekData): Slide[] {
-  // An empty "Flagged for awareness" is a line inside "Worth a reply" on paper
-  // too, never a sheet of its own.
-  return WEEK_BLOCKS
-    .filter((block) => !(block.key === weekFlagged.key && isFlaggedQuiet(data)))
-    .map((block) => ({ title: block.title, keys: [block.key], layout: 'single' as const }))
+function weekSlides(_data: WeekData): Slide[] {
+  return WEEK_BLOCKS.map((block) => ({ title: block.title, keys: [block.key], layout: 'single' as const }))
 }
 
 export const weekPage: PageModule<WeekData> = {

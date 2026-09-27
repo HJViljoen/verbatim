@@ -42,8 +42,10 @@ describe('viewerHref', () => {
 // snapshot does not have. This is the page count that branch reports.
 describe('weeklyViewerPages', () => {
   it('is one sheet per block the report names', () => {
-    expect(weeklyViewerPages([...WEEKLY_BLOCK_KEYS])).toBe(6)
-    expect(weeklyViewerPages(['weekly.week', 'weekly.coverage'])).toBe(2)
+    expect(weeklyViewerPages([...WEEKLY_BLOCK_KEYS])).toBe(7)
+    expect(weeklyViewerPages(['weekly.week', 'weekly.came-in'])).toBe(2)
+    // A key WP3.7 retired is one this build no longer knows.
+    expect(weeklyViewerPages(['weekly.week', 'weekly.coverage'])).toBe(1)
   })
 
   it('drops a key this build no longer knows, as the deck does', () => {

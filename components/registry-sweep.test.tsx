@@ -7,7 +7,7 @@ import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render } from '@/lib/test/render'
 
 import { PAGES } from '@/components/pages/registry'
-import { WEEKLY_BLOCKS } from '@/components/blocks/weekly'
+import { ALL_WEEKLY_BLOCKS, WEEKLY_BLOCKS } from '@/components/blocks/weekly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS } from '@/components/blocks/monthly'
 import { QUARTERLY_BLOCKS } from '@/components/blocks/quarterly'
 import { CONTENT_BRIEF_BLOCKS } from '@/components/blocks/content-brief'
@@ -25,9 +25,7 @@ import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/
 import { competitiveFixture, quietRivalFixture } from '@/components/pages/competitive-surface/fixture'
 import { brandsFixture, ossurBrandsFixture } from '@/components/pages/competitive-surface/brands/fixture'
 import { marketWeekFixture, ossurWeeksFixture, weekFixture } from '@/components/pages/week/fixture'
-import { weekSubjects } from '@/components/pages/week/subjects'
-import { weekWeeks } from '@/components/pages/week/weeks'
-import { weeklyFixture } from '@/components/blocks/weekly/fixture'
+import { octoberUpdateFixture, ossurWeeklyFixture, weeklyFixture } from '@/components/blocks/weekly/fixture'
 import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from '@/components/blocks/monthly/fixture'
 import { quarterlyFixture } from '@/components/blocks/quarterly/fixture'
 import {
@@ -88,7 +86,7 @@ const GROUPS: [string, Record<string, Renderish> | readonly (Renderish & { key: 
   // in the page's own test (components/pages/competitive-surface/brands).
   ['competitive-surface', COMPETITIVE_BLOCKS as never, [competitiveFixture(), quietRivalFixture(), brandsFixture(), ossurBrandsFixture()]],
   ['week', WEEK_BLOCKS as never, [weekFixture(), marketWeekFixture(), ossurWeeksFixture()]],
-  ['weekly', WEEKLY_BLOCKS as never, [weeklyFixture()]],
+  ['weekly', WEEKLY_BLOCKS as never, [weeklyFixture(), ossurWeeklyFixture(), octoberUpdateFixture()]],
   // Two states here (the stubbed skeleton and every slot filled); the monthly's
   // own test sweeps all four through the contract (components/blocks/monthly).
   ['monthly', MONTHLY_BLOCKS as never, [monthlyFixture(), filledSlotsFixture()]],
@@ -155,9 +153,11 @@ const REBUILT: [string, readonly { key: string; render: (d: never, m: RenderMode
   ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture(), marketArrivalsFixture(), ossurArrivalsFixture()]],
   // "September in your market" (market-first WP2.1, deploy 3).
   ['the monthly', ALL_MONTHLY_BLOCKS as never, [monthlyFixture(), unmeasuredMonthlyFixture(), ossurMonthlyFixture(), filledSlotsFixture()]],
-  // This week's blocks rebuilt on the market at deploy 3 (WP2.7, WP2.9); the rest of
-  // the page is rebuilt at deploy 5 (WP3.7).
-  ['this week', [weekSubjects, weekWeeks] as never, [marketWeekFixture(), ossurWeeksFixture()]],
+  // This week, rebuilt on the approved preview (WP2.7 and WP2.9 at deploy 3,
+  // the rest of the page with WP3.7 at deploy 5).
+  ['this week', WEEK_BLOCKS as never, [marketWeekFixture(), ossurWeeksFixture()]],
+  // "Your market this week", the weekly report (WP3.7, deploy 5).
+  ['the weekly', ALL_WEEKLY_BLOCKS as never, [weeklyFixture(), ossurWeeklyFixture(), octoberUpdateFixture()]],
 ]
 
 describe('the 25 Sep rulings on rebuilt pages', () => {

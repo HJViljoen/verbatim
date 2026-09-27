@@ -1,298 +1,286 @@
-import { risingMovers, type WeeklyData } from '@/lib/pages/weekly'
-import type { WeekFlag } from '@/lib/reports/weekly'
-import { weekCheck, weekSentence } from '@/lib/reports/weekly'
-import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
-import { quoteRef } from '@/lib/renderables/quotes-freeze'
+import type { WeeklyData } from '@/lib/pages/weekly'
+import type { LedgerLine } from '@/lib/pages/overview-market'
+import { marketArrivalsFixture, ossurArrivalsFixture } from '@/components/pages/overview/fixture'
+import { marketWeekFixture, ossurWeeksFixture } from '@/components/pages/week/fixture'
 
-// The weekly report's fixtures (Phase 1 WP17).
+// "Your market this week" fixtures (market-first WP3.7). Real figures only.
 //
-// THREE STATES, ALL REAL. `weeklyFixture()` is a week that flagged, over a
-// month that read — the shape the mock draws. `quietFixture()` is the ordinary
-// week, which the coverage report says is nearly every week: nothing unusual,
-// and that is the right answer rather than a failure. `formingFixture()` is
-// SEALAND TODAY — under three months of baseline, subjects not recorded,
-// nothing to quote — and it is the one the WP's "done when" asks for, because
-// it is what a new workspace actually receives.
-//
-// The subjects, movers and record come from Overview's own fixtures, because
-// WR2, WR5's rising line and WR6 are Overview's blocks at report width and a
-// second fixture for them would be a second reading.
+// THE WEEKLY IS TWO PAGES' READINGS, SO ITS FIXTURE IS TWO PAGES' FIXTURES:
+//   · the front page on September (`marketArrivalsFixture`: production's 24
+//     Sep figures, 655 market videos and 626 in the category; plan §2.2) for
+//     WR2's subjects, WR3's board and WR6's change block;
+//   · This week on Sealand's 20 Sep update (`marketWeekFixture`: staging, read
+//     27 Sep) for what the update brought in (436 videos, 9,471 comments), the
+//     themes it first heard (2 of 374), For sales and Worth a reply;
+//   · the market's level and "With this update" per subject, and our changes
+//     in September, as staging's `loadWeekly` read them at a 22 Sep clock
+//     (654 videos and 16,204 comments; Looks & style +73, Comfort +28,
+//     Durability +20, Waterproofing +16, Price +13 on the 20 Sep update's
+//     days; the change log to 22 Sep).
+// So the two halves carry two sources' counts (655 against 654); each is real
+// and each block prints its own source's.
 
-const MONTH = '2026-09-01'
-const NOW = '2026-09-18T09:00:00.000Z'
-const WINDOW = { from: '2026-09-06', to: '2026-09-13' }
+const SEP = '2026-09-01'
+const AT = '2026-09-22T12:00:00.000Z'
 
-export const weekFlag = (over: Partial<WeekFlag> = {}): WeekFlag => ({
-  objectKind: 'kind',
-  label: 'Objections',
-  denominator: 'every audience together',
-  weekK: 29,
-  weekN: 205,
-  baselineK: 38,
-  baselineN: 1089,
-  changePts: 10.7,
-  bandPts: 5,
-  sentences: ['People are asking the same question about the zip before they buy, and asking it under other brands’ videos.'],
-  quotes: [{ ref: 'e:1', text: 'Zip gave out after eleven months.', lang: 'en', english: null }],
-  href: '/dashboard/week',
-  ...over,
-})
+/** Staging's change log, September, to 22 Sep (`loadWhatWeChanged`'s lines). */
+export const SEALAND_SEPTEMBER_CHANGES: LedgerLine[] = [
+ {
+  "changeId": "507750e5-5686-4521-8166-e06fb372b86f",
+  "date": "2026-09-20T04:18:34.305242+00:00",
+  "surface": "other",
+  "words": "An update gathered less than usual because a spending cap was reached.",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "703065c0-c602-4034-a48d-36299f5c3f07",
+  "date": "2026-09-17T16:24:22.289181+00:00",
+  "surface": "handles",
+  "words": "A TikTok account added for The North Face",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "1120cb35-34d5-44d1-b401-1c08e10e71a0",
+  "date": "2026-09-17T16:02:56.854932+00:00",
+  "surface": "handles",
+  "words": "Accounts added for Freedom of Movement, Old School, Patagonia and The North Face",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "515cc98d-0f30-4b4f-8dba-34bd92aa7e4c",
+  "date": "2026-09-17T16:02:56.854932+00:00",
+  "surface": "rivals",
+  "words": "4 rivals added",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "62042dd6-0ed5-4cca-9120-7238010dd931",
+  "date": "2026-09-17T16:02:56.854932+00:00",
+  "surface": "terms",
+  "words": "5 search terms added; 9 exclusions added",
+  "detail": null,
+  "reach": {
+   "month": "2026-09-01",
+   "touched": 33,
+   "of": 654,
+   "readWith": "2026-09-20T08:33:47.358+00:00"
+  },
+  "months": [
+   {
+    "month": "2026-07-01",
+    "touched": 0,
+    "of": 27,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-08-01",
+    "touched": 0,
+    "of": 377,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-09-01",
+    "touched": 33,
+    "of": 654,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   }
+  ]
+ },
+ {
+  "changeId": "1bf52851-7cc0-48c3-adfa-135588bbfeab",
+  "date": "2026-09-13T10:00:58.467+00:00",
+  "surface": "terms",
+  "words": "4 search terms added",
+  "detail": null,
+  "reach": {
+   "month": "2026-09-01",
+   "touched": 182,
+   "of": 654,
+   "readWith": "2026-09-20T08:33:47.358+00:00"
+  },
+  "months": [
+   {
+    "month": "2026-07-01",
+    "touched": 0,
+    "of": 27,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-08-01",
+    "touched": 0,
+    "of": 377,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-09-01",
+    "touched": 182,
+    "of": 654,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   }
+  ]
+ },
+ {
+  "changeId": "3c22ae27-d26a-4f42-91d0-53ada2c2fd72",
+  "date": "2026-09-09T18:21:36.570181+00:00",
+  "surface": "handles",
+  "words": "Accounts added for Cotopaxi, Freitag and Rareform",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "0e7e4ac7-c45b-4dfa-a42f-4baa43c51b35",
+  "date": "2026-09-09T18:17:56.893748+00:00",
+  "surface": "terms",
+  "words": "7 search terms out and 7 in",
+  "detail": null,
+  "reach": {
+   "month": "2026-09-01",
+   "touched": 159,
+   "of": 654,
+   "readWith": "2026-09-20T08:33:47.358+00:00"
+  },
+  "months": [
+   {
+    "month": "2026-07-01",
+    "touched": 9,
+    "of": 27,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-08-01",
+    "touched": 167,
+    "of": 377,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-09-01",
+    "touched": 159,
+    "of": 654,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   }
+  ]
+ },
+ {
+  "changeId": "4e74fb1b-d7d6-4d23-99ec-b157f430508a",
+  "date": "2026-09-09T18:10:00+00:00",
+  "surface": "entity_retag",
+  "words": "Stored videos filed again under the brand they are about",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "94d0dcb7-d37a-4267-b494-4779a2ab4050",
+  "date": "2026-09-09T16:24:15+00:00",
+  "surface": "rivals",
+  "words": "3 rivals out and 1 in",
+  "detail": null,
+  "reach": null,
+  "months": []
+ },
+ {
+  "changeId": "495024e2-5aa6-4496-a8ec-908a28f12020",
+  "date": "2026-09-09T00:00:00+00:00",
+  "surface": "subreddits",
+  "words": "2 communities added",
+  "detail": null,
+  "reach": {
+   "month": "2026-09-01",
+   "touched": 12,
+   "of": 654,
+   "readWith": "2026-09-20T08:33:47.358+00:00"
+  },
+  "months": [
+   {
+    "month": "2026-07-01",
+    "touched": 0,
+    "of": 27,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-08-01",
+    "touched": 2,
+    "of": 377,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   },
+   {
+    "month": "2026-09-01",
+    "touched": 12,
+    "of": 654,
+    "readWith": "2026-09-20T08:33:47.358+00:00"
+   }
+  ]
+ }
+]
 
-function base(overview = overviewFixture()): WeeklyData {
+/** Sealand's "your market this week" on the 20 Sep update. */
+export function weeklyFixture(over: Partial<WeeklyData> = {}): WeeklyData {
+  const overview = marketArrivalsFixture()
+  const week = marketWeekFixture()
+  const data: WeeklyData = {
+    brand: overview.brand,
+    month: SEP,
+    monthStatus: 'filling',
+    readingAt: AT,
+    runId: week.update.id,
+    window: { from: '2026-09-10', to: '2026-09-20' },
+    update: { date: week.update.date, previous: week.update.previous },
+    barLine: 'as at the 20 Sep update · next update Sun 27 Sep',
+    market: { videos: 654, comments: 16204 },
+    cameIn: week.cameIn.market ?? null,
+    overview,
+    contributions: { 's-looks': 73, 's-comfort': 28, 's-durability': 20, 's-waterproofing': 16, 's-price': 13 },
+    heard: week.heard ?? null,
+    sales: week.sales,
+    replies: week.replies,
+    changes: SEALAND_SEPTEMBER_CHANGES,
+  }
+  return { ...data, ...over }
+}
+
+/** The same on 11 Oct, when every page reads September (ended) and the
+ *  update's days fall in October: the came-in line names October, and no
+ *  subject's "with this update" is counted into September. */
+export function octoberUpdateFixture(): WeeklyData {
+  const d = weeklyFixture()
+  return {
+    ...d,
+    readingAt: '2026-10-11T12:00:00.000Z',
+    cameIn: d.cameIn ? { ...d.cameIn, month: '2026-10-01', update: '2026-10-11T08:30:00.000Z' } : null,
+    contributions: null,
+  }
+}
+
+/** Össur's on its 13 Sep update (paused, §2.13): no subject named, no maker
+ *  rule; 168 of September's 362 market videos came in with it (staging). */
+export function ossurWeeklyFixture(): WeeklyData {
+  const overview = ossurArrivalsFixture()
+  const week = ossurWeeksFixture()
   return {
     brand: overview.brand,
-    month: MONTH,
+    month: SEP,
     monthStatus: 'filling',
-    readingAt: NOW,
-    runId: 'run-1',
-    window: WINDOW,
-    // The masthead's two dates: this update, and the one behind it.
-    update: { date: '2026-09-13T06:00:00.000Z', previous: '2026-09-05T06:00:00.000Z' },
-    method: overview.method,
-    section1: {
-      month: MONTH,
-      daysIn: 18,
-      window: WINDOW,
-      sentence: weekSentence({
-        month: MONTH,
-        daysIn: 18,
-        label: 'Will it survive a wet commute',
-        objectId: 't1',
-        audience: 'the category',
-        k: 130,
-        n: 1388,
-        atLastMonth: { k: 96, n: 1290 },
-      }),
-      check: weekCheck({ state: 'nothing_unusual', flags: [] }),
-    },
-    subjects: overview.subjects,
-    contributions: { s1: 7, s2: 3 },
-    contributionsNote: 'How much of each subject arrived since the last update is not recorded for this workspace yet.',
-    incoming: {
-      gathered: 271,
-      analysed: 264,
-      platforms: [
-        { platform: 'tiktok', videos: 94 },
-        { platform: 'youtube', videos: 122 },
-        { platform: 'instagram', videos: 48 },
-        { platform: 'reddit', videos: 7 },
-      ],
-      monthVideos: 2359,
-      // FIVE HEARD, THREE SHOWN — the shape the count printed off the slice
-      // made invisible. The stat row prints `newThemesTotal`; the cards below
-      // are the largest few.
-      newThemes: [
-        { label: 'Zips failing after a year', videos: 12 },
-        { label: 'Laptop sleeve sizing', videos: 6 },
-        { label: 'Strap hardware rattle', videos: 4 },
-      ],
-      newThemesTotal: 5,
-      newThemesNote: null,
-      rivalPosts: [
-        { rival: 'Freitag', account: '@freitag', platform: 'instagram', views: 41000, commentsRead: 310, uploadDate: '2026-09-09', href: 'https://instagram.com/p/x' },
-      ],
-      rivalPostsNote: null,
-      // NEW ON YOUR SUBJECTS — the mock's three quotes, which this artefact
-      // printed none of. Three shown of 41 counted, which is the shape the
-      // block has to print honestly.
-      quotes: [
-        { subject: 'Durability', quote: { ref: quoteRef.evidence('ev-w1'), text: 'Third winter on mine and the strap has not given at all' }, cite: 'YouTube · 9 Sep', href: 'https://www.youtube.com/watch?v=w1' },
-        // A REAL DUTCH QUOTE WITH A REAL TRANSLATION. The `english` was a copy of
-        // the `text`, so the render printed the same sentence twice under
-        // "Dutch · machine translation" and the evidence read as a duplication
-        // bug that is not one.
-        { subject: 'Waterproofing', quote: { ref: quoteRef.evidence('ev-w2'), text: 'Een uur door de regen gereden en de laptop kwam er droog uit', lang: 'nl', english: 'Rode through an hour of rain and the laptop came out dry' }, cite: 'Instagram · 10 Sep', href: 'https://www.instagram.com/p/w2' },
-        { subject: 'Repair and warranty', quote: { ref: quoteRef.evidence('ev-w3'), text: 'They fixed the zip for free eighteen months in' }, cite: 'TikTok · 11 Sep', href: 'https://www.tiktok.com/@x/video/w3' },
-      ],
-      quotesTotal: 41,
-      quotesNote: null,
-    },
-    // §4 IS `ForSalesData` — the counted shape This week's loader produces,
-    // which this artefact now calls rather than reading the month a second
-    // time (block D wave 2).
-    sales: {
-      window: WINDOW,
-      // VIDEOS DATED IN THE WINDOW, not videos gathered. `incoming.gathered`
-      // is 271 — what this update LOOKED at — and this is
-      // `window_denominators` over the same days, dated by the comment. They
-      // are different measures and the fixture keeps them different numbers,
-      // because a fixture in which they agree teaches a reviewer that they
-      // are one thing. 205 is the n the flag's own week side rests on.
-      videos: 205,
-      grouping: 'theme',
-      objections: [
-        {
-          id: 't-price',
-          label: 'Price against longevity',
-          videos: 96,
-          quotes: [
-            { quote: { ref: 'e:2', text: 'Beautiful, but I cannot justify that for a bag.', lang: 'en', english: null }, cite: 'TikTok · 12 Sep · under a category video', href: 'https://www.tiktok.com/@x/video/1' },
-          ],
-        },
-        { id: 't-recycled', label: 'Is it really recycled', videos: 41, quotes: [] },
-        { id: 't-zips', label: 'Zips', videos: 22, quotes: [] },
-      ],
-      // SEVEN GROUPS, THREE SHOWN — the shape `objections.slice(1).length`
-      // made invisible by always answering "2 more objections".
-      objectionsTotal: 7,
-      praise: [
-        { quote: { ref: 'e:3', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'TikTok · 11 Sep · under a category video', href: null },
-      ],
-      // Two shown of twelve counted — the shape a slice-then-count made
-      // invisible, and the reason `switchingTotal` is taken before the cap.
-      switching: [
-        { quote: { ref: 'e:9', text: 'Moving off Freitag after the strap went', lang: 'en', english: null }, cite: 'Reddit · 12 Sep · under a Freitag video', href: null },
-      ],
-      switchingTotal: 12,
-      rivalComplaints: [
-        { id: 'competitor:Freitag', label: 'Freitag', videos: 41, quotes: [] },
-      ],
-      brief: { href: '/dashboard/reports', label: 'Open the sales brief →' },
-      unread: null,
-    },
-    content: {
-      worthAReply: [
-        {
-          ref: 'm:1',
-          text: 'Does the strap come off?',
-          lang: 'en',
-          english: null,
-          context: 'under your post · 41 likes',
-          intentLabel: 'Question',
-          href: 'https://www.youtube.com/watch?v=x&lc=1',
-        },
-      ],
-      worthAReplyNote: null,
-      // WHAT THE QUEUE SURFACED, and the split by intent. Both are bounded by
-      // `rankEngageCandidates` (three a kind, twelve in all, plus three
-      // flagged), which is why the row is headed "Surfaced" and says so.
-      surfaced: 12,
-      surfacedCounts: [
-        { label: 'question', count: 7 },
-        { label: 'objection', count: 3 },
-        { label: 'buying signal', count: 2 },
-      ],
-      // THROUGH THE LOADER'S OWN FUNCTION, with §1's lead object — so the
-      // fixture cannot show a shape `buildContent` would never produce. §1's
-      // sentence leads with `t1`, so §5 draws the movers that are not it.
-      rising: risingMovers(overview, 't1'),
-      risingNote: null,
-      format: { label: 'Talking head', multiple: 2.4, videos: 31, of: 402 },
-      runnerUp: { label: 'Commute POV', multiple: 1.8, videos: 24 },
-      weekHref: '/dashboard/week',
-      briefHref: '/dashboard/reports',
-    },
-    coverage: { line: overview.record.line, refused: 2, href: '/dashboard/settings' },
-  }
-}
-
-/** A week that flagged, over a month that read. */
-export function weeklyFixture(over: Partial<WeeklyData> = {}): WeeklyData {
-  const data = base()
-  return {
-    ...data,
-    section1: {
-      ...data.section1,
-      check: weekCheck({ state: 'flagged', flags: [weekFlag()], flaggedCount: 1 }),
-    },
-    ...over,
-  }
-}
-
-/** The ordinary week: the check ran and nothing cleared. */
-export function quietFixture(over: Partial<WeeklyData> = {}): WeeklyData {
-  return { ...base(), ...over }
-}
-
-/** Sealand today: baseline forming, subjects not recorded, nothing to quote. */
-export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
-  const overview = refusedFixture()
-  const data = base(overview)
-  return {
-    ...data,
-    subjects: overview.subjects,
+    readingAt: AT,
+    runId: week.update.id,
+    window: week.window ? { from: week.window.from.slice(0, 10), to: week.window.to.slice(0, 10) } : null,
+    update: { date: week.update.date, previous: week.update.previous },
+    barLine: 'as at the 13 Sep update',
+    market: { videos: 362, comments: 10726 },
+    cameIn: week.cameIn.market ?? null,
+    overview,
     contributions: null,
-    section1: {
-      ...data.section1,
-      sentence: weekSentence({
-        month: MONTH,
-        daysIn: 18,
-        label: 'Will it survive a wet commute',
-        objectId: 't1',
-        audience: 'the category',
-        k: 130,
-        n: 1388,
-        atLastMonth: null,
-      }),
-      check: weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 1 }),
-    },
-    // SEALAND TODAY: subjects are not recorded, so there are no quotes to be
-    // new ON — and the section says which of those two things is true rather
-    // than printing nothing.
-    incoming: {
-      ...data.incoming,
-      analysed: null,
-      newThemes: [],
-      newThemesTotal: 0,
-      newThemesNote: 'No theme was heard for the first time in this update.',
-      rivalPosts: [],
-      rivalPostsNote: 'No tracked rival posted in this update’s window.',
-      quotes: [],
-      quotesTotal: null,
-      quotesNote: 'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.',
-    },
-    // The degraded arm: the window was read and nothing in it was an
-    // objection, a switch or a piece of praise — and `videos` is null, so
-    // `forSalesEmpty` says which of those two facts is the reason.
-    sales: {
-      ...data.sales,
-      videos: null,
-      grouping: 'theme',
-      objections: [],
-      objectionsTotal: 0,
-      praise: [],
-      switching: [],
-      switchingTotal: null,
-      rivalComplaints: [],
-    },
-    content: {
-      ...data.content,
-      worthAReply: [],
-      worthAReplyNote: 'Nothing is waiting for a reply from this update.',
-      surfaced: null,
-      surfacedCounts: [],
-      rising: risingMovers(overview, 't1'),
-      risingNote: overview.category.moversNote,
-      format: null,
-      runnerUp: null,
-    },
-    coverage: { line: overview.record.line, refused: 0, href: '/dashboard/settings' },
-    ...over,
-  }
-}
-
-/** A thin update: the check is suppressed and the reason is printed. */
-export function thinFixture(over: Partial<WeeklyData> = {}): WeeklyData {
-  const data = base()
-  return {
-    ...data,
-    section1: {
-      ...data.section1,
-      check: weekCheck({
-        state: 'suppressed',
-        flags: [],
-        suppression: {
-          reason: 'thin',
-          note: 'This update read well under its usual number of videos, so this week is not compared with the months behind it.',
-        },
-      }),
-    },
-    incoming: { ...data.incoming, gathered: 38, analysed: 34, platforms: [{ platform: 'tiktok', videos: 38 }] },
-    // THE WHOLE UPDATE IS THIN, NOT HALF OF IT. The thin state overrode
-    // `incoming` alone and left §4 on the base window's 205, so one email said
-    // "38 videos gathered" in WR3 and "of 205 videos dated in the window"
-    // twice in WR4, five inches apart. A fixture state is a whole reading.
-    sales: { ...data.sales, videos: 31 },
-    ...over,
+    heard: week.heard ?? null,
+    sales: week.sales,
+    replies: week.replies,
+    changes: [],
   }
 }

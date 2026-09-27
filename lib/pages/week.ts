@@ -16,18 +16,20 @@ import { audienceLabel } from '../readiness/types'
 import {
   BASELINE_MONTHS,
   baselineStateOf,
+  baselineStepOf,
+  comparableBaseline,
   type BaselineState,
   type DenominatorMonth,
 } from '../reading/anomaly'
 import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
-import { loadChanges, loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadPairRows, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { marketAudiences, pooledDenominators, type MarketCount } from '../reading/market'
 import { pairedVerdict } from '../reading/bands'
-import { pairOnVerdict } from '../reading/comparability'
+import { nextComparablePair, pairOnVerdict } from '../reading/comparability'
 import type { PairOn } from '../reading/pairs'
-import { pairSentence } from '../calibration'
+import { pairChipWords, pairSentence } from '../calibration'
 import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
@@ -48,9 +50,13 @@ import { fetchThemedRunId, pickThemedRunId, type ThemedRunRow } from './themed-r
 import { citationsUntranslated } from './evidence-untranslated'
 import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
 import type { FormatMatrix } from '../reading/formats'
-import type { SideReading } from './overview'
+import { addedSearchesRead, loadThemeSegmentRows, loadThemesProvenance, makerRuleEnabled, themeSegmentsOf, type SideReading } from './overview'
+import { segmentOf } from './overview-market/board'
+import { segmentRulesEnabled } from '../segments/rules'
+import { brandCountState, noiseWords, OTHER_MEANING } from '../brands/precision'
+import { loadMarketMakers, makerKOf } from './subjects'
 import { marketSubjectSide } from './overview-market/subjects'
-import { noiseComments, noiseCommentsOf, noiseVideos, skipNoise } from './noise'
+import { noiseCommentsOf, noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
 import type { ConfigChange } from '../config-log'
 import type { ScheduleConfig } from '../pipeline/schedule-due'
 import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
@@ -150,7 +156,8 @@ export const NEW_THEME_FLOOR = 10
 /** Formats and hooks shown in "What worked". */
 export const WORKED_SHOWN = 4
 
-/** Quotes shown under §4's "new quotes on your subjects". */
+/** Quotes the weekly's "new quotes on your subjects" prints (the weekly
+ *  stays on deploy 3's template: reports paused, 27 Sep). */
 export const NEW_QUOTES_SHOWN = 4
 
 /**
@@ -187,11 +194,12 @@ export const RIVAL_CAPTION_CHARS = 90
 /**
  * Rows the reply block shows before the footer takes over.
  *
- * FOUR, the mock's own row count. The digest itself picks at most twelve
+ * THREE, the approved preview's row count (market-first WP3.7; the weekly's
+ * WR5 shows the same three). The digest itself picks at most twelve
  * (`rankEngageCandidates`' total cap, three per category), and `RepliesBlock.
- * total` carries that number so "4 shown" never reads as "4 found".
+ * total` carries that number so "3 shown" never reads as "3 found".
  */
-export const REPLIES_SHOWN = 4
+export const REPLIES_SHOWN = 3
 
 /** Awareness rows shown. Three, which is also the digest's own cap on the
  *  misinformation category, so this is a display limit that never bites. */
@@ -313,6 +321,16 @@ export interface UnusualBlock {
    * bandPts`) is in percentage points.
    */
   series: UpdateSeries | null
+  /**
+   * The baseline on comparable months only (market-first WP3.7; decision D:
+   * "the unusual-week check uses comparable months only"), the rule the run's
+   * check reads since WP3.4 (`comparableBaseline`, `baselineStepOf`): how many
+   * of the three months behind the week's month are kept, and the first month
+   * whose weeks can be flagged if nothing we search changes. OPTIONAL: a copy
+   * stored before WP3.7 has none, and a page that could not read the pair rows
+   * prints the forming sentence alone.
+   */
+  comparable?: { kept: number; required: number; flagsFrom: string | null } | null
 }
 
 /** One subject, month-to-date, with what this update put into it. */
@@ -367,6 +385,11 @@ export interface SubjectWeekRow {
    * renders as it was sent.
    */
   market?: { monthSoFar: SideReading; thisUpdate: number | null }
+  /** The share of its market videos in the month that are makers' (the
+   *  Subjects rail's and the front page's rule, `loadMarketMakers`), for the
+   *  preview's "over a third makers" tag (WP3.7). Null where it was not
+   *  measured; absent on a stored copy. */
+  makerShare?: number | null
 }
 
 export interface WeekSubjectsBlock {
@@ -468,6 +491,10 @@ export interface RisingBlock {
    */
   pooledBaseline: boolean
   unread: string | null
+  /** The refused month pair as the "not read as a change" chip's words
+   *  (`pairChipWords`), where the rule refused the comparison: "Checks on this
+   *  update" prints it (WP3.7). Optional, so a stored copy carries none. */
+  chip?: string | null
 }
 
 /** One audience's share of what came in. */
@@ -576,6 +603,10 @@ export interface RivalPost {
    * comparable with `AudienceRow.comments` beside it.
    */
   comments: number
+  /** Posted on the brand's own account (`videos.source = 'competitor_owned'`):
+   *  "their most-commented post" is picked from these. Optional, so a stored
+   *  copy carries none. */
+  own?: boolean
 }
 
 /** A rival's posts this update, with the distinction the design leaves unsaid
@@ -620,6 +651,17 @@ export interface RivalPosts {
   /** Present when the tenant has no handle for this rival, so `byThem` is 0
    *  because nothing is read and not because nothing was posted. */
   ownPostsUnread: boolean
+  /** When we started tracking the brand (`competitors.first_seen_at`, M1), for
+   *  the preview's "tracked since 6 Jul". Optional, so a stored copy carries
+   *  none; null where the identity row is not there. */
+  trackedSince?: string | null
+  /** "mostly the German word for Friday · not counted" where the brand's name
+   *  has another meaning and production's hand check MEASURED it as noise
+   *  (lib/brands/precision.ts, the front page's rule): its "about them" count
+   *  is not printed. Never on an unmeasured name (the lead's R2 of 26 Sep:
+   *  Freitag's note is gone everywhere; the Brands page prints its filed
+   *  count plainly). Optional, so a stored copy carries none. */
+  nameNote?: string | null
 }
 
 export interface CameInBlock {
@@ -655,6 +697,82 @@ export interface CameInBlock {
   /** Why there are none, when the reason is the instrument and not the week. */
   quotesUnread: string | null
   playbookHref: string
+  /** "With this update" on the market (WP3.7). Optional: a copy stored before
+   *  WP3.7 has none, and prints its Phase 1 rows. */
+  market?: MarketCameIn | null
+}
+
+/**
+ * "With this update" on the market (market-first WP3.7; the approved
+ * preview's This week and the weekly's WR1): what this update's days brought
+ * into the month, by part of the market.
+ *
+ * THE MARKET IS THE CATEGORY AND THE BRANDS YOU TRACK (decision E): your own
+ * posts are not in it. Each part is the window's reading clipped to `month`
+ * (`window_denominators` per audience): videos with a comment dated in the
+ * update's days in the month, and those comments. Counts that add to the
+ * month, never a week alone (§9.1 #5): the lead line hands them back to the
+ * month ("436 of the 654 videos September holds so far").
+ *
+ * ONE BUILDER, TWO SURFACES: This week and the weekly both call
+ * `marketCameIn`, so the page and the email print the same counts for the same
+ * update (WP3.7's done-when).
+ */
+export interface MarketCameIn {
+  /** The month the counts are into: the one the update's window ends in. */
+  month: string
+  /** The update's date. */
+  update: string
+  category: { videos: number; comments: number }
+  /** Null where the tenant tracks no brand. */
+  brands: { videos: number; comments: number } | null
+  /** The two together. */
+  market: { videos: number; comments: number }
+  /** The month's market so far (category and tracked brands pooled), or null
+   *  where the month rows could not be read. */
+  monthVideos: number | null
+  /** Updates that have read the month so far, this one included. */
+  updates: number | null
+  /** Has the month ended at the reading? "holds so far" or "holds". */
+  ended: boolean
+}
+
+/** One theme heard for the first time, as "Heard for the first time" prints it. */
+export interface HeardTheme {
+  registryId: string
+  label: string
+  /** Videos in the month, in the category, where themes are grouped (decision
+   *  E). A theme heard for the first time has no earlier month by definition
+   *  (Conversation's New, WP2.4), so it carries no month before. */
+  k: number
+  /** `theme_maker_shares`' maker share; null where not measured. */
+  makerShare: number | null
+  noiseShare: number | null
+  /** Videos found only by searches first run in the month, of the theme's
+   *  videos; null where not measured (never a zero). */
+  provenance: { fromNewSearches: number; of: number } | null
+}
+
+/**
+ * "Heard for the first time" (market-first WP3.7, `week.heard`; the weekly's
+ * "New with this update"): the themes this update first heard that reached
+ * the floor in the month, with where their videos came from and their maker
+ * share, and the ones led by makers or set aside grouped (decision F).
+ */
+export interface HeardBlock {
+  month: string
+  prevMonth: string
+  /** Themes first heard with the update, before the floor. */
+  seen: number
+  /** At the floor, not led by makers or set aside, largest first. */
+  rows: HeardTheme[]
+  makers: { count: number; lead: HeardTheme[] } | null
+  setAside: { count: number; lead: HeardTheme[] } | null
+  /** Set where the update opened a new clustering regime (WP1.9). */
+  regrouped: Regrouped | null
+  /** 'no_rule' for a tenant with no maker rule (Össur), 'unknown' where the
+   *  shares could not be read. */
+  segments: 'measured' | 'unknown' | 'no_rule'
 }
 
 /** One format or hook, with its n. */
@@ -729,6 +847,10 @@ export interface ReplyRow {
    *  under someone else's post is an argument, not an answer. */
   href: string | null
   insightId: string
+  /** The comment sits under a maker's own post (decision F, the segments_v1
+   *  reader precedence): the preview's "a maker's own post" tag. Optional, so
+   *  a stored copy carries none. */
+  maker?: boolean
 }
 
 /** §2 and §8: the work queue, and the claims that are not one. */
@@ -783,6 +905,9 @@ export interface WeekData {
   weeks?: WeekVolumesBlock
   rising: RisingBlock
   cameIn: CameInBlock
+  /** Heard for the first time (WP3.7, `week.heard`). Absent on a copy stored
+   *  before it. */
+  heard?: HeardBlock
   /** The reply inbox and the awareness flag — the mock's §2 and §8, read here
    *  since Block D wave 2 and still read on Content until that page retires. */
   replies: RepliesBlock
@@ -970,6 +1095,138 @@ export function newThemesLine(
  * for the first time would print the regrouping as news, so they are counted
  * here and named nowhere.
  */
+// ---- "With this update" and "Heard for the first time" (WP3.7) ----------------
+
+/** One audience's row of a window read, as `window_denominators` answers it. */
+export interface AudienceCount {
+  audience: string
+  videos: number
+  comments?: number | null
+}
+
+/**
+ * "With this update" on the market, from the window read clipped to the month
+ * (`MarketCameIn`). Null where the windowed read is not there: no count is
+ * printed that nothing counted.
+ *
+ * YOUR OWN POSTS ARE NOT THE MARKET (decision E): the client's row is dropped,
+ * and a brand is in only while it is tracked (`rivalAudiences`, the retired
+ * left out), so the parts add up to the market row.
+ */
+export function marketCameIn(input: {
+  month: string
+  update: string
+  read: readonly AudienceCount[] | null
+  rivalAudiences: readonly string[]
+  monthVideos: number | null
+  updates: number | null
+  now: string
+}): MarketCameIn | null {
+  if (!input.read) return null
+  const rivals = new Set(input.rivalAudiences)
+  const part = (keep: (audience: string) => boolean) => input.read!
+    .filter((r) => keep(r.audience))
+    .reduce((t, r) => ({ videos: t.videos + (r.videos ?? 0), comments: t.comments + (r.comments ?? 0) }), { videos: 0, comments: 0 })
+  const category = part((a) => a === INDUSTRY_AUDIENCE)
+  const brands = rivals.size > 0 ? part((a) => rivals.has(a)) : null
+  const month = monthStartOf(input.month)
+  return {
+    month,
+    update: input.update,
+    category,
+    brands,
+    market: { videos: category.videos + (brands?.videos ?? 0), comments: category.comments + (brands?.comments ?? 0) },
+    monthVideos: input.monthVideos,
+    updates: input.updates,
+    ended: monthStartOf(input.now) > month,
+  }
+}
+
+/** How many updates have read `month` so far: those that finished in it, up to
+ *  and including `upTo` (the update the page is about). */
+export function updatesInto(month: string, instants: readonly string[], upTo: string): number {
+  const from = Date.parse(`${monthStartOf(month)}T00:00:00.000Z`)
+  const to = Date.parse(upTo)
+  return instants.filter((i) => {
+    const t = Date.parse(i)
+    return Number.isFinite(t) && t >= from && t <= to
+  }).length
+}
+
+/** How many grouped themes a group line names before it counts the rest. */
+export const HEARD_GROUP_LEAD = 2
+
+/**
+ * "Heard for the first time", from the themes an update first heard at the
+ * floor: the market's own conversations listed largest first, the ones half or
+ * more makers' (or set aside as off-topic) grouped and counted (decision F, the
+ * board's rule, `segmentOf`), each listed row with its maker share and how many
+ * of its videos came from searches first run in the month. Pure.
+ */
+export function heardBlockOf(input: {
+  month: string
+  fresh: { seen: number; shown: readonly NewTheme[]; regrouped: Regrouped | null }
+  segments: { maker: ReadonlyMap<string, number | null>; noise: ReadonlyMap<string, number | null> } | null
+  segmentsState: HeardBlock['segments']
+  provenance: ReadonlyMap<string, { fromNewSearches: number; of: number } | null>
+}): HeardBlock {
+  const month = monthStartOf(input.month)
+  const base: HeardBlock = {
+    month,
+    prevMonth: previousMonthOf(month),
+    seen: input.fresh.seen,
+    rows: [],
+    makers: null,
+    setAside: null,
+    regrouped: input.fresh.regrouped,
+    segments: input.segmentsState,
+  }
+  if (input.fresh.regrouped) return { ...base, seen: 0 }
+  const rows: HeardTheme[] = []
+  const makers: HeardTheme[] = []
+  const setAside: HeardTheme[] = []
+  const ordered = [...input.fresh.shown].sort((a, b) => b.videos - a.videos || a.id.localeCompare(b.id))
+  for (const t of ordered) {
+    const theme: HeardTheme = {
+      registryId: t.id,
+      label: t.label,
+      k: t.videos,
+      makerShare: input.segments?.maker.get(t.id) ?? null,
+      noiseShare: input.segments?.noise.get(t.id) ?? null,
+      provenance: input.provenance.get(t.id) ?? null,
+    }
+    const seg = input.segments ? segmentOf(theme) : null
+    if (seg === 'makers') makers.push(theme)
+    else if (seg === 'noise') setAside.push(theme)
+    else rows.push(theme)
+  }
+  const group = (list: HeardTheme[]) => (list.length > 0 ? { count: list.length, lead: list.slice(0, HEARD_GROUP_LEAD) } : null)
+  return { ...base, rows, makers: group(makers), setAside: group(setAside) }
+}
+
+/** Every theme the block names or groups: the floor's whole count. */
+export const heardAtFloor = (h: HeardBlock): number => h.rows.length + (h.makers?.count ?? 0) + (h.setAside?.count ?? 0)
+
+/**
+ * A reply row's context in the market's words (WP3.7; the approved preview):
+ * a Reddit community is named as itself ("r/onebag"), not as an account's
+ * post, and a video filed under a tracked brand says so ("filed under a brand
+ * you track"), never "competitor".
+ */
+export function replyContextWords(context: string): string {
+  return context
+    .replace(/under @(r\/[^’']+)[’']s post/, '$1')
+    .replace(/ · competitor\b/, ' · filed under a brand you track')
+}
+
+/** The month three months after `month`: where a baseline of three months
+ *  that starts at `month` first answers. */
+export function monthsAfter(month: string, n: number): string {
+  let m = monthStartOf(month)
+  for (let i = 0; i < n; i += 1) m = nextMonth(m)
+  return m
+}
+
 export function regroupedLine(r: Regrouped): string {
   return `Re-grouped with the ${shortDate(r.update)} update: ${fmtInt(r.themes)} ${r.themes === 1 ? 'theme' : 'themes'}.`
 }
@@ -1117,11 +1374,11 @@ export function pooledSubjectCounts(
  * applied, or no window), never zeros.
  *
  * AND NULL WHERE NO DAY OF THE WINDOW FALLS IN THE MONTH (the deploy-3
- * review): the weekly reads the calendar month, so on 1-3 Oct, after the 27
- * Sep update, the window lies wholly in September and "+0 videos since the
- * last update" on every October row would say the market was silent while that
- * update brought September dozens. The row then prints no count, and the
- * weekly says the arrivals are not recorded for it.
+ * review; both ends since the WP3.7 check): the weekly reads the reading
+ * month, so from 1 to 15 Oct it reads September while the 11 Oct update's days
+ * are all October's, and "+N" there would print October's arrivals beside
+ * September's rows (a "+0" on every row, the other way round, would say the
+ * market was silent). The row then prints "·".
  */
 export async function marketSubjectArrivals(
   reading: ReadingHandle,
@@ -1138,11 +1395,15 @@ export async function marketSubjectArrivals(
 }
 
 /** An update's days inside a month, or null when none fall there: the window
- *  from the month's first day, so a count read over it adds to that month. */
+ *  from the month's first day to the next month's, so a count read over it
+ *  adds to that month. BOTH ENDS (WP3.7 check): the weekly reads the reading
+ *  month, which on 1 to 15 of a month is the month BEFORE the update's days,
+ *  and an unclipped end printed October's arrivals beside September's rows. */
 export function clipToMonth(window: { from: string; to: string }, month: string): { from: string; to: string } | null {
   const m = monthStartOf(month)
-  if (window.to <= m) return null
-  return { from: window.from < m ? m : window.from, to: window.to }
+  const next = nextMonth(m)
+  if (window.to <= m || window.from >= next) return null
+  return { from: window.from < m ? m : window.from, to: window.to > next ? next : window.to }
 }
 
 /** What `marketSubjectsOf` takes: the month's stored subject rows and this
@@ -1557,7 +1818,8 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // clock, the weeks of the update's month and the month before through the
   // current week. One read of MF4 beside the sections; the runs and the change
   // log are the memoised reads the page's readers already made.
-  const weeksAhead = Promise.all([loadDeliveredRuns(supabase, clientId), loadChanges(reading.client, clientId)])
+  const deliveredAhead = loadDeliveredRuns(supabase, clientId)
+  const weeksAhead = Promise.all([deliveredAhead, loadChanges(reading.client, clientId)])
     .then(([delivered, changeRows]) => loadWeekVolumes({
       client: reading.client,
       clientId,
@@ -1572,6 +1834,31 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       console.error(`[pages] week.weeks: ${(error as { message?: string })?.message ?? String(error)}; not drawn`)
       return null
     })
+  // HEARD FOR THE FIRST TIME (WP3.7, `week.heard`), beside the sections: §4's
+  // lead line counts its themes, so it is started here and taken there.
+  const heardAhead = loadHeard({
+    supabase, client: reading.client, clientId, runId: anchor.id, month, themedRunId,
+    regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
+  })
+  // "WITH THIS UPDATE" ON THE MARKET (WP3.7): the window read clipped to the
+  // month, pooled over the market's audiences (decision E), handed back to the
+  // month's market so far and the updates that have read it. No new read: the
+  // window read, the month rows and the delivered runs are the page's own.
+  const rivalAudiences = marketRivalAudiences(rivals)
+  const marketCount = pooledDenominators(denominators, rivalAudiences).get(month) ?? null
+  const delivered = await deliveredAhead.catch(() => null)
+  const market = marketCameIn({
+    month,
+    update: update.date,
+    read: contributionRead,
+    rivalAudiences,
+    monthVideos: marketCount?.videos ?? null,
+    updates: delivered ? updatesInto(month, delivered.map(updateInstant), update.date) : null,
+    now: readingAt,
+  })
+  // The unusual-week check's baseline on comparable months (WP3.7): the
+  // memoised pair rows and change log the judge read.
+  const comparableAhead = comparableBaselineOf(reading, clientId, month, readingAt)
   const [unusual, subjectsBlock, risingRead, cameIn, replies, sales, ownPublished] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
@@ -1599,15 +1886,14 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     // ── §4 · what came in ────────────────────────────────────────────────
     buildCameIn({
       supabase, clientId, runId: anchor.id, window, month, videos, rivals,
-      // What the re-grouped rule reads (WP1.9): this update's regime, when it
-      // started (the bound for "the themed update before it") and its date.
-      regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
       windowRead,
       // The window clipped to the month where it crosses one, and the window
       // itself where it does not — per audience, which is what the plan's
       // per-row contribution line needs and what the RPC already returns.
       contributionRead,
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
+      heard: heardAhead,
+      market,
     }),
     // ── §2 · worth a reply, and §8 · flagged for awareness ───────────────
     // Started beside wave 2 (above): it reads the corpus's current insights,
@@ -1642,7 +1928,19 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     privacy: PRIVACY_LINE,
   }
 
-  const weeks = await weeksAhead
+  const [weeks, heard, comparable] = await Promise.all([weeksAhead, heardAhead, comparableAhead])
+  // THE SUBJECTS' MAKER SHARES (WP3.7; the preview's row tag), as the Subjects
+  // rail and the front page read them: the month's market videos, their
+  // segments and the lens over the makers' (three reads), only where a market
+  // row prints and the tenant has a maker rule.
+  if (subjectsBlock.market && subjectsBlock.rows.some((r) => (r.market?.monthSoFar.k ?? 0) > 0) && segmentRulesEnabled(clientId)) {
+    const makers = await loadMarketMakers(reading.client, clientId, subjectsBlock.market.month).catch(() => null)
+    for (const r of subjectsBlock.rows) {
+      const k = r.market?.monthSoFar.k ?? 0
+      const makerK = makers?.lens && k > 0 ? makerKOf(makers.lens, r.id, rivalAudiences) : null
+      r.makerShare = makerK != null ? makerK / k : null
+    }
+  }
 
   return {
     brand,
@@ -1654,11 +1952,12 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     windowVideos,
     nextUpdate: clock.nextUpdate,
     paused: clock.paused,
-    unusual,
+    unusual: { ...unusual, comparable },
     subjects: subjectsBlock,
     ...(weeks ? { weeks } : {}),
     rising: risingRead.block,
     cameIn,
+    heard,
     replies,
     sales,
     worked,
@@ -1675,6 +1974,86 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     notes: mergeSeriesNotes([...monthSet.series, ...risingRead.series])
       .filter((n) => n.kind !== 'still_filling' && n.kind !== 'no_change_record_before'),
   }
+}
+
+// ---- the weekly's share of this page (WP3.7) ------------------------------------
+
+/** What the weekly report prints of This week: the same builders over the
+ *  same update, so the email and the page print one set of counts. */
+export interface WeekParts {
+  update: WeekUpdate
+  window: WeekWindow | null
+  /** The month the window ends in: This week's month. */
+  month: string
+  cameIn: MarketCameIn | null
+  heard: HeardBlock
+  sales: ForSalesData
+  replies: RepliesBlock
+}
+
+/**
+ * This week's "With this update", "Heard for the first time", "For sales" and
+ * "Worth a reply", for the weekly report (market-first WP3.7): the page's own
+ * builders and reads, without the sections the weekly does not print (the
+ * update series, the risers, the rivals' posts, what worked, week by week). The
+ * weekly's done-when: it and This week print the same counts for one update.
+ * Null for a tenant nothing has been delivered to.
+ */
+export async function loadWeekParts(scope: Scope): Promise<WeekParts | null> {
+  const supabase = scope.supabase as SupabaseClient
+  const { clientId } = scope
+  const reading: ReadingHandle = scope.reading
+  const readingAt = new Date().toISOString()
+  const [runsRes, runningIds, rivals, delivered] = await Promise.all([
+    supabase.from('pipeline_runs').select('*')
+      .eq('client_id', clientId).in('status', ['completed', 'partial'])
+      .order('started_at', { ascending: false }).limit(2),
+    fetchRunningRunIds(supabase, clientId, 'week'),
+    loadRivals(supabase, clientId),
+    loadDeliveredRuns(supabase, clientId).catch(() => null),
+  ])
+  const runsRaw = rows<RunRow>(runsRes, 'week.parts.runs')
+  const anchor = runsRaw[0]
+  if (!anchor) return null
+  const update: WeekUpdate = {
+    id: anchor.id,
+    date: anchor.completed_at ?? anchor.started_at ?? readingAt,
+    previous: runsRaw[1]?.completed_at ?? runsRaw[1]?.started_at ?? null,
+    status: anchor.status,
+  }
+  const stored = rowWindow(anchor)
+  const window: WeekWindow | null = stored?.start && stored.end ? { from: stored.start, to: stored.end, basis: stored.basis } : null
+  const month = monthStartOf(window?.to ?? update.date)
+  const rivalAudiences = marketRivalAudiences(rivals)
+  const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
+
+  const [monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects] = await Promise.all([
+    loadMonthSeries(reading.client, clientId, { from: month, to: month, audiences }),
+    window ? loadWindowReading(reading.client, clientId, { from: window.from, to: window.to }) : null,
+    window && window.from < month ? loadWindowReading(reading.client, clientId, { from: month, to: window.to }) : null,
+    loadUpdateVideos(supabase, clientId, anchor.id),
+    fetchThemedRunId(supabase, clientId, runningIds, 'week'),
+    loadSubjects(supabase, clientId),
+  ])
+  const contributionRead = (monthWindowRead ?? windowRead)?.denominators ?? null
+  const cameIn = marketCameIn({
+    month,
+    update: update.date,
+    read: contributionRead,
+    rivalAudiences,
+    monthVideos: pooledDenominators(monthSet.denominators, rivalAudiences).get(month)?.videos ?? null,
+    updates: delivered ? updatesInto(month, delivered.map(updateInstant), update.date) : null,
+    now: readingAt,
+  })
+  const [heard, sales, replies] = await Promise.all([
+    loadHeard({
+      supabase, client: reading.client, clientId, runId: anchor.id, month, themedRunId,
+      regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
+    }),
+    buildSales({ supabase, clientId, window, windowVideos: totalVideos(windowRead?.denominators ?? null), subjects }),
+    buildReplies({ supabase, clientId, runId: anchor.id, window, videos: Promise.resolve(videos) }),
+  ])
+  return { update, window, month, cameIn, heard, sales, replies }
 }
 
 // ---- §2 · worth a reply, and §8 · flagged for awareness -----------------------
@@ -1740,8 +2119,10 @@ async function buildReplies(input: {
     }>(configRes, 'week.replyConfig')
     // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7): the
     // queue is picked from the rest, so a skipped row is replaced, not a gap.
-    const noise = await noiseComments(supabase, clientId, candidates.map((c) => c.comment.id))
-    const pool = skipNoise(candidates, (c) => c.comment.id, noise)
+    // AND A COMMENT UNDER A MAKER'S OWN POST IS TAGGED SO (WP3.7; decision F):
+    // the same two reads answer both.
+    const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment.id))
+    const pool = skipNoise(candidates, (c) => c.comment.id, segments.noise)
     const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
     const ownHandles = new Set(
       Object.values(config?.own_handles ?? {})
@@ -1783,7 +2164,7 @@ async function buildReplies(input: {
     // the reply queue printed a comment's raw words, so a Korean question read
     // untranslated where the same words elsewhere carried their English.
     const translations = await readTranslations(supabase, shaped.map((r) => r.src.comment.text ?? ''))
-    const all = shaped.map((r) => toReplyRow(r, translations))
+    const all = shaped.map((r) => toReplyRow(r, translations, segments.maker))
     const rowsOut = all.filter((r) => r.intent !== 'misinformation')
     return {
       rows: rowsOut,
@@ -1805,6 +2186,7 @@ async function buildReplies(input: {
 function toReplyRow(
   shaped: InboxRow<EngageCandidate & InboxSource>,
   translations: Map<string, { lang: string; english: string | null }> = new Map(),
+  makers: ReadonlySet<string> = new Set(),
 ): ReplyRow {
   const c = shaped.src
   const link = c.category === 'misinformation' ? { href: null } : engageDeepLink(c.comment)
@@ -1812,12 +2194,13 @@ function toReplyRow(
     id: c.comment.id,
     intent: shaped.intent,
     date: c.comment.commentDate,
-    context: shaped.context,
+    context: replyContextWords(shaped.context),
     reason: cap(pretty(c.theme)),
     platform: c.comment.platform,
     quote: { ref: quoteRef.message(c.comment.id), text: cleanQuote(c.comment.text), ...readingOf(translations, c.comment.text) },
     href: link.href,
     insightId: c.insightId,
+    ...(makers.has(c.comment.id) ? { maker: true } : {}),
   }
 }
 
@@ -2089,7 +2472,7 @@ async function buildRising(input: {
   // comparison that was not drawn.
   const monthPair = input.pair(baselineMonths[0] ?? month, month, INDUSTRY_AUDIENCE)
   const pairNote = pairOnVerdict(monthPair).note
-  if (pairNote?.mode === 'refuse') return nothing(pairSentence(pairNote))
+  if (pairNote?.mode === 'refuse') return { ...nothing(pairSentence(pairNote)), block: { ...base, unread: pairSentence(pairNote), chip: pairChipWords(pairNote) } }
   const summedBaselineOf = baselineMonths.reduce((t, m) => t + sumAudienceMonth(input.denominators, m, INDUSTRY_AUDIENCE), 0)
 
   // THE BASELINE IS READ OVER ITS WINDOW WHERE THE WINDOW CAN BE READ.
@@ -2258,14 +2641,18 @@ async function buildCameIn(input: {
   windowRead: Awaited<ReturnType<typeof loadWindowReading>> | null
   /** The window clipped to the month, per audience — the contribution's
    *  numerator, and never a sum of month rows. */
-  contributionRead: { audience: string; videos: number }[] | null
+  contributionRead: AudienceCount[] | null
   contributionVideos: number | null
   /** Every stored month row, for the contribution's per-audience denominator. */
   denominators: readonly { month: string; audience: string; videos: number }[]
   monthVideos: number
   subjects: Subject[] | null
   themedRunId: string | null
-  regime: { clusteringKey: string | null | undefined; startedAt: string | null; date: string }
+  /** "Heard for the first time" (WP3.7), read beside this block: the
+   *  first-heard count and names here are its own, on the category. */
+  heard: Promise<HeardBlock>
+  /** "With this update" on the market (WP3.7). */
+  market: MarketCameIn | null
 }): Promise<CameInBlock> {
   const { supabase, clientId, runId, window, month, videos, rivals, windowRead } = input
 
@@ -2323,11 +2710,15 @@ async function buildCameIn(input: {
   // so the candidates are picked first (by reach, which is the only "notable"
   // the row holds) and counted once, together — never a count per rival per
   // post in sequence.
+  //
+  // THEIR OWN POSTS ONLY (WP3.7; the approved preview's "What brands you track
+  // posted"): the block names each brand's most-commented post of its own,
+  // and a post about the brand by somebody else is counted, never named.
   const candidates = window
     ? rivals.flatMap((r) => {
       const audience = rivalKey(r.name)
       return videos
-        .filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience)
+        .filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience && v.source === 'competitor_owned')
         .sort((a, b) => (b.views ?? -1) - (a.views ?? -1) || (b.upload_date ?? '').localeCompare(a.upload_date ?? ''))
         .slice(0, RIVAL_POSTS_CONSIDERED)
         .map((v) => ({ audience, video: v }))
@@ -2339,7 +2730,9 @@ async function buildCameIn(input: {
   // (27 Sep) the owned-rival read, the comment counts, the new themes and the
   // subject quotes ran end to end for 4.6 s behind a wave that had already
   // finished everything else.
-  const [everOwned, postComments, postText, newThemes, subjectQuotes] = await Promise.all([
+  // (The first-heard themes are "Heard for the first time"'s one read now, and
+  // the subject quotes are no longer printed: WP3.7.)
+  const [everOwned, postComments, postText] = await Promise.all([
     // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
     // "notable rival posts" does not say which. Both are printed, named: Össur
     // has zero competitor-owned videos in production, so the first is empty on
@@ -2347,10 +2740,6 @@ async function buildCameIn(input: {
     loadOwnedRivalAudiences(supabase, clientId),
     windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window),
     loadPostText(supabase, clientId, candidates.map((c) => c.video.id)),
-    loadNewThemes(supabase, clientId, runId, month, input.regime),
-    window
-      ? loadSubjectQuotes(supabase, clientId, input.subjects, window)
-      : { shown: [], total: null, unread: QUOTES_NO_WINDOW },
   ])
   const weighedBy = new Map<string, number>()
   const postsBy = new Map<string, RivalPost[]>()
@@ -2364,6 +2753,7 @@ async function buildCameIn(input: {
       caption: postCaption(postText.get(c.video.id)?.caption ?? null),
       href: postText.get(c.video.id)?.video_url ?? null,
       comments: postComments.get(`${c.video.platform}::${c.video.video_id}`) ?? 0,
+      own: true,
     })
     postsBy.set(c.audience, list)
   }
@@ -2397,6 +2787,8 @@ async function buildCameIn(input: {
       // EVER captured a post of this rival's: never, and their own posts are
       // not being read; sometimes, and a zero this update is a real zero.
       ownPostsUnread: !everOwned.has(audience),
+      trackedSince: r.firstSeenAt ?? null,
+      nameNote: OTHER_MEANING[r.name] && brandCountState(clientId, r.name) === 'noise' ? noiseWords(r.name) : null,
       retired: r.retiredAt != null,
     }
   })
@@ -2413,6 +2805,14 @@ async function buildCameIn(input: {
   .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0))
   .map(({ retired: _retired, ...r }) => r)
 
+  // THE FIRST-HEARD THEMES ARE "HEARD FOR THE FIRST TIME"'S (WP3.7): one read,
+  // on the category, so the lead line, the block and the weekly count the same
+  // themes.
+  const heard = await input.heard
+  // NEW QUOTES ON YOUR SUBJECTS ARE NO LONGER PRINTED (WP3.7; the approved
+  // preview's This week has no such block, and the weekly's WR3 is the
+  // market's themes), so they are not read.
+
   return {
     window,
     rows: audienceRows,
@@ -2423,14 +2823,17 @@ async function buildCameIn(input: {
       ? { videos: input.contributionVideos, of: input.monthVideos }
       : null,
     crossesInto: window && window.from < month ? previousMonthOf(month) : null,
-    newThemes: newThemes.shown,
-    newThemesSeen: newThemes.seen,
-    regrouped: newThemes.regrouped,
+    // The market's own first-heard themes; the ones led by makers or set
+    // aside are counted by the heard block (`heardAtFloor`).
+    newThemes: heard.rows.map((t) => ({ id: t.registryId, label: t.label, videos: t.k })),
+    newThemesSeen: heard.seen,
+    regrouped: heard.regrouped,
     rivals: rivalRows,
-    quotes: subjectQuotes.shown,
-    quotesTotal: subjectQuotes.total,
-    quotesUnread: subjectQuotes.unread,
+    quotes: [],
+    quotesTotal: null,
+    quotesUnread: null,
     playbookHref: '/dashboard/market',
+    market: input.market,
   }
 }
 
@@ -3087,6 +3490,127 @@ export async function loadNewThemes(
     .filter((t) => t.videos >= NEW_THEME_FLOOR)
     .sort((a, b) => b.videos - a.videos)
   return { seen: firstHeard.length, shown, regrouped: null }
+}
+
+/**
+ * "Heard for the first time" for an update, on the month (WP3.7): the themes
+ * it first heard, on the CATEGORY, where themes are grouped (decision E; the
+ * front page's arrivals read the same audience), each with its maker share
+ * (`theme_maker_shares`, one read) and, for the ones the block lists, how many
+ * of its videos came from searches first run in the month (the board's
+ * provenance reads). A failed read degrades to what the others answer: no
+ * shares means nothing grouped and "not measured", no provenance means none.
+ */
+export async function loadHeard(input: {
+  supabase: SupabaseClient
+  client: SupabaseClient
+  clientId: string
+  runId: string
+  month: string
+  themedRunId: string | null
+  regime: { clusteringKey: string | null | undefined; startedAt: string | null; date: string }
+}): Promise<HeardBlock> {
+  const { supabase, client, clientId, runId } = input
+  const month = monthStartOf(input.month)
+  const [fresh, segmentRows] = await Promise.all([
+    loadNewThemes(supabase, clientId, runId, month, input.regime, { audience: INDUSTRY_AUDIENCE }).catch((error: unknown) => {
+      console.error(`[pages] week.heard: ${(error as { message?: string })?.message ?? String(error)}; none named`)
+      return { seen: 0, shown: [] as NewTheme[], regrouped: null }
+    }),
+    loadThemeSegmentRows(client, clientId, month, input.themedRunId).catch(() => null),
+  ])
+  const segmentsState: HeardBlock['segments'] = !makerRuleEnabled(clientId) ? 'no_rule' : segmentRows ? 'measured' : 'unknown'
+  const segments = segmentRows ? themeSegmentsOf(segmentRows) : null
+  const first = heardBlockOf({ month, fresh, segments, segmentsState, provenance: new Map() })
+  if (first.rows.length === 0) return first
+  const provenance = await loadThemesProvenance(client, clientId, month, first.rows.map((r) => r.registryId), addedSearchesRead(client, clientId, month))
+    .catch(() => new Map<string, { fromNewSearches: number; of: number } | null>())
+  return heardBlockOf({ month, fresh, segments, segmentsState, provenance })
+}
+
+/**
+ * The reply queue's comments that sit under a video marked noise, and under a
+ * maker's own post (WP3.7), by the segments reader precedence
+ * (`segments_for_videos`: an override, else a judge, else a stored rule row,
+ * else the segments_v1 rule inline). The noise filter's own reads
+ * (lib/pages/noise.ts), taken once for both answers: each comment's video,
+ * then the segments. Only for a tenant with the rule switched on; fails open
+ * (nothing skipped, nothing tagged), and says so in the log.
+ */
+async function replySegments(
+  supabase: SupabaseClient,
+  clientId: string,
+  commentIds: readonly string[],
+): Promise<{ noise: Set<string>; maker: Set<string> }> {
+  const out = { noise: new Set<string>(), maker: new Set<string>() }
+  const ids = [...new Set(commentIds.filter(Boolean))]
+  if (!segmentRulesEnabled(clientId) || ids.length === 0) return out
+  try {
+    const comments = (await Promise.all(chunk(ids, UUID_IN_CHUNK).map(async (part) => {
+      const res = await supabase.from('comments').select('id, platform, video_id').eq('client_id', clientId).in('id', part)
+      if (res.error) throw res.error
+      return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
+    }))).flat()
+    const native = [...new Set(comments.map((c) => c.video_id).filter(Boolean))]
+    const videos = (await Promise.all(chunk(native, UUID_IN_CHUNK).map(async (part) => {
+      const res = await supabase.from('videos').select('id, platform, video_id').eq('client_id', clientId).in('video_id', part)
+      if (res.error) throw res.error
+      return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
+    }))).flat()
+    const uuidOf = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v.id]))
+    if (uuidOf.size === 0) return out
+    const res = await supabase.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...new Set(uuidOf.values())] })
+    if (res.error) throw res.error
+    const segment = new Map(((res.data ?? []) as { video_id: string; segment: string | null }[]).map((r) => [String(r.video_id), r.segment]))
+    for (const c of comments) {
+      const s = segment.get(uuidOf.get(`${c.platform}::${c.video_id}`) ?? '')
+      if (s === 'noise') out.noise.add(c.id)
+      else if (s === 'maker') out.maker.add(c.id)
+    }
+    return out
+  } catch (error) {
+    console.error(`[pages] week.replySegments: ${(error as { message?: string })?.message ?? String(error)}; no quote skipped or tagged`)
+    return out
+  }
+}
+
+/**
+ * The unusual-week check's baseline on comparable months only (WP3.7, the
+ * rule the run's check reads since WP3.4): how many of the three months behind
+ * `month` sit in it, and the first month whose weeks can be flagged, if
+ * nothing we search changes (the first pair read the same way starts a run of
+ * comparable months; three of them make a baseline). Off the pair rows and the
+ * change log the page's month-pair judge already read (memoised: no new read).
+ * Null where either cannot be read.
+ */
+export async function comparableBaselineOf(
+  reading: ReadingHandle,
+  clientId: string,
+  month: string,
+  now: string,
+): Promise<{ kept: number; required: number; flagsFrom: string | null } | null> {
+  try {
+    const [log, rows] = await Promise.all([loadChanges(reading.client, clientId), loadPairRows(reading.client, clientId, null)])
+    return comparableBaselineFrom({ month, now, changes: ourChangesWithoutGatherFlags(log), rows })
+  } catch (error) {
+    console.error(`[pages] week.comparableBaseline: ${(error as { message?: string })?.message ?? String(error)}; the forming line alone`)
+    return null
+  }
+}
+
+/** `comparableBaselineOf`'s arithmetic, pure. */
+export function comparableBaselineFrom(input: {
+  month: string
+  now: string
+  changes: Parameters<typeof baselineStepOf>[1]
+  rows: Parameters<typeof baselineStepOf>[0]
+}): { kept: number; required: number; flagsFrom: string | null } {
+  const month = monthStartOf(input.month)
+  const trailing = [1, 2, 3].map((n) => backMonths(month, n)).slice(0, BASELINE_MONTHS)
+  const { kept } = comparableBaseline(trailing, month, baselineStepOf(input.rows, input.changes))
+  if (kept.length >= BASELINE_MONTHS) return { kept: kept.length, required: BASELINE_MONTHS, flagsFrom: null }
+  const next = nextComparablePair(input.now, input.changes, input.rows, { view: 'market' })
+  return { kept: kept.length, required: BASELINE_MONTHS, flagsFrom: next ? monthsAfter(next.prevMonth, BASELINE_MONTHS) : null }
 }
 
 /** The citations behind one theme, as quotes with their cite line. */
