@@ -124,6 +124,7 @@ export const marketWays: Block<MarketSurfaceData> = {
         title={marketWays.title}
         question={marketWays.question}
         mode={mode}
+        roomy
         // NO META (25 Sep rulings; WP3.6): each way says for itself whether
         // it works today.
       >

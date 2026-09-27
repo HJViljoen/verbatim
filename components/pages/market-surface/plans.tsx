@@ -119,7 +119,7 @@ export const marketPlans: Block<MarketSurfaceData> = {
     const empty = marketPlans.emptyState(data)
     if (!card) {
       return (
-        <BlockFrame title={marketPlans.title} question={marketPlans.question} mode={mode}>
+        <BlockFrame title={marketPlans.title} question={marketPlans.question} mode={mode} roomy>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
@@ -133,6 +133,7 @@ export const marketPlans: Block<MarketSurfaceData> = {
         title={marketPlans.title}
         question={marketPlans.question}
         mode={mode}
+        roomy
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>See the claim-by-claim verdicts →</a>
           : <Link href={href} className="hover:underline">See the claim-by-claim verdicts →</Link>}

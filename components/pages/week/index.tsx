@@ -1,7 +1,6 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext, figureCount } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
@@ -123,7 +122,7 @@ export function WeekPage({
     // THE EXPORT SCOPE NAMES THE TILES, so the per-tile control and the page
     // export address exactly the keys the block list above declares.
     <ExportScope page="week" params={params} tiles={WEEK_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}>
-      <PageFrame>
+      <PageFrame className="gap-6">
         <SurfacePageBar
           nav="week"
           params={params}
@@ -140,8 +139,10 @@ export function WeekPage({
             paused: data.paused ?? false,
           }}
         >
-          <HowToRead items={WEEK_LEGEND} basePath="/dashboard/week" anchor="week" />
-          <ExportMenu />
+          {/* EXPORT ALONE AT THE RIGHT-HAND END, the preview's 40px button, as
+              on Your market (deploy 5): no "How to read this page" pill; Week
+              by week's footer and Settings › How to read keep the words. */}
+          <ExportMenu variant="button" />
         </SurfacePageBar>
         {/* THE PREVIEW'S RHYTHM: 24px between tiles, each block drawing its
             own 32px inset (`flush` here, `roomy` on the block's frame). A

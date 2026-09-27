@@ -48,14 +48,14 @@ export const marketLine: Block<MarketSurfaceData> = {
     const voice = surface('voice')
     if (!line) {
       return (
-        <BlockFrame title={marketLine.title} mode={mode}>
+        <BlockFrame title={marketLine.title} mode={mode} roomy>
           <BlockEmpty mode={mode}>{marketLine.emptyState(data)}</BlockEmpty>
         </BlockFrame>
       )
     }
     const support = supportParts(line)
     return (
-      <BlockFrame title={marketLine.title} mode={mode} footer={openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)}>
+      <BlockFrame title={marketLine.title} mode={mode} roomy footer={openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)}>
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-4 pt-1'}>
           <p
             className={email ? undefined : 'm-0 max-w-[780px] text-[22px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground [text-wrap:balance] sm:text-[28px]'}

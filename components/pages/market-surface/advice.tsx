@@ -479,6 +479,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         title={marketAdvice.title}
         question={marketAdvice.question}
         mode={mode}
+        roomy
         // THE TOTAL ONCE (copy slip 4a): where the footer says "12 of 67
         // shown", the meta does not say "67 recommendations" as well. And no
         // order words: the ledger is no longer oldest first (WP1.9), and the

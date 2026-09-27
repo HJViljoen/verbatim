@@ -269,7 +269,7 @@ export const marketQuestions: Block<MarketSurfaceData> = {
     const footer = openLink(mode, `${ctx.appUrl}${subjects.href}`, `Open ${subjects.label} →`)
     const empty = marketQuestions.emptyState(data)
     return (
-      <BlockFrame title={marketQuestions.title} mode={mode} footer={q && !q.empty ? footer : undefined}>
+      <BlockFrame title={marketQuestions.title} mode={mode} roomy footer={q && !q.empty ? footer : undefined}>
         {empty || !q ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Questions q={q} mode={mode} />}
       </BlockFrame>
     )

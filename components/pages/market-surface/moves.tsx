@@ -357,7 +357,7 @@ export const marketMoves: Block<MarketSurfaceData> = {
     // its Phase 1 reading (`readings`), as it was sent.
     if (m.market) {
       return (
-        <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} footer={footer}>
+        <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} roomy footer={footer}>
           {/* The one-line answer, at the preview's weight: "No move dated yet." */}
           {empty
             ? email
@@ -387,7 +387,7 @@ export const marketMoves: Block<MarketSurfaceData> = {
     const unscored = m.rows.filter((row) => !scored.has(row.id))
 
     return (
-      <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} footer={footer}>
+      <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} roomy footer={footer}>
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {readings.length > 0 ? (
           <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>

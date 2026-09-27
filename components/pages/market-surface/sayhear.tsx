@@ -160,7 +160,7 @@ export const marketSayHear: Block<MarketSurfaceData> = {
     const subjects = w.claimSubjects ?? null
 
     return (
-      <BlockFrame title={marketSayHear.title} question={marketSayHear.question} mode={mode} footer={footer}>
+      <BlockFrame title={marketSayHear.title} question={marketSayHear.question} mode={mode} roomy footer={footer}>
         {subjects && subjects.claims > 0 ? <SubjectsLine c={subjects} mode={mode} /> : null}
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {w.claims.length > 0 ? (

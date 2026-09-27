@@ -192,7 +192,7 @@ describe('the tiles are as tall as what they draw', () => {
     expect(MOVES_STACKS.map((st) => st.keys)).toEqual([['market.moves'], ['market.card']])
     expect(MOVES_STACKS.reduce((n, st) => n + st.col, 0)).toBe(12)
     const markup = render(<MarketSurfacePage data={sealandMovesFixture()} />)
-    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-6')
+    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-6 xl:col-span-6')
     const at = (title: string) => markup.indexOf(title)
     const order = ['In one line', 'Questions to answer', 'The advice, and what you decided', 'What you say, and what your market says back', 'What we concluded', 'Plans re-checked', 'How a move is made']
     expect(order.map(at).every((i) => i >= 0)).toBe(true)

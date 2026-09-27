@@ -1,12 +1,10 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
-import type { GlossaryKey } from '@/lib/calibration'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
@@ -228,9 +226,10 @@ export function startClasses(place: TilePlacement): string {
   return `${COL_START[place.colStart] ?? 'xl:col-start-1'} ${ROW_START[place.rowStart] ?? 'xl:row-start-auto'}`
 }
 
-/** The words this page is measured against, for "How to read this page". Every
- *  one of them is printed somewhere on it. */
-const LEGEND: GlossaryKey[] = ['update', 'month', 'video', 'audience', 'subject', 'theme', 'move', 'level', 'change']
+// NO "HOW TO READ THIS PAGE" PILL IN THE BAR (deploy 5): the approved preview
+// draws Your moves' bar as the month line and the green "Date a move", as Your
+// market, Conversation and Brands dropped theirs. How to read stays one click
+// away in Settings.
 
 /** The app's context: RELATIVE links, so `next/link` navigates on the client
  *  instead of reloading the application to reach its own next page. */
@@ -273,6 +272,12 @@ export function MarketSurfacePage({
         // pinned: a pinned row start over a line that is not drawn (no plan,
         // no claim) would open an empty 116px row.
         className={place.col < 12 ? startClasses(place) : undefined}
+        // THE PREVIEW'S RHYTHM (deploy 5, as Your market and Brands): each
+        // block draws its own 32px inset and full-width footer rule (`roomy`
+        // on its frame), so the tile adds none, and the block fills the tile
+        // so its footer sits on the floor.
+        flush
+        bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
         distribute="between"
       >
         {block.render(data, 'app', ctx)}
@@ -281,13 +286,12 @@ export function MarketSurfacePage({
   }
 
   return (
-    <PageFrame>
+    <PageFrame className="gap-6">
       <SurfacePageBar
         nav="market"
         params={params}
         context={barContext(data)}
       >
-        <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
         {/* The preview's green "Date a move" in the bar (WP3.6 wave 2), the
             same sheet as the one under Your moves; from sm up, where the bar
             has the room beside the title. */}
@@ -298,16 +302,16 @@ export function MarketSurfacePage({
           forwarded document, in its method sheet, and in Settings › How to
           read; it is cut from the in-app pages (copy de-clutter L6). */}
 
-      <PageGrid>{READINGS.filter((b) => drawnOnMarket(b.key, data)).map(tile)}</PageGrid>
+      <PageGrid className="gap-6">{READINGS.filter((b) => drawnOnMarket(b.key, data)).map(tile)}</PageGrid>
 
-      <PageGrid className="xl:items-start">
+      <PageGrid className="gap-6 xl:items-start">
         {MOVES_STACKS.map((stack) => (
-          <div key={stack.keys.join()} className={`contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 ${STACK_SPAN[stack.col]}`}>
+          <div key={stack.keys.join()} className={`contents xl:flex xl:min-w-0 xl:flex-col xl:gap-6 ${STACK_SPAN[stack.col]}`}>
             {stack.keys.map((key) => {
               const block = MOVES.find((b) => b.key === key)
               if (!block || !drawnOnMarket(key, data)) return null
               return (
-                <Tile key={block.key} col={12} row={1} className={`${MOBILE_ORDER[key] ?? ''} xl:order-none`} distribute="between">
+                <Tile key={block.key} col={12} row={1} className={`${MOBILE_ORDER[key] ?? ''} xl:order-none`} flush bodyClassName="[&>section]:min-h-0 [&>section]:flex-1" distribute="between">
                   {block.render(data, 'app', ctx)}
                 </Tile>
               )
@@ -316,7 +320,7 @@ export function MarketSurfacePage({
         ))}
       </PageGrid>
 
-      <PageGrid>{TAIL.filter((b) => drawnOnMarket(b.key, data)).map(tile)}</PageGrid>
+      <PageGrid className="gap-6">{TAIL.filter((b) => drawnOnMarket(b.key, data)).map(tile)}</PageGrid>
 
       {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings put
           no explanatory footnote under a block). The record is Settings'; the

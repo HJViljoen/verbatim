@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { ReadingContext } from '@/components/shell/page-bar'
 import type { ReadingMonth } from '@/lib/reading/reading-month'
-import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
 import { surface } from '@/lib/nav'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
@@ -64,7 +63,6 @@ export function AskShell({
     <PageFrame>
       <div className="flex shrink-0 flex-col gap-1.5">
         <PageBar title={s.label} line={line}>
-          <HowToRead items={ASK_LEGEND} basePath={s.href} anchor="ask" />
           <ExportMenu />
         </PageBar>
       </div>

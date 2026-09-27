@@ -203,6 +203,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
         title={marketConclusions.title}
         question={marketConclusions.question}
         mode={mode}
+        roomy
         // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep
         // rulings, rebuilt with WP3.6): the tier counts ride with the row tag
         // (plan §2.6 Y5), and the rows below the bar are a section of the

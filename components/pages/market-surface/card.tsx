@@ -152,7 +152,7 @@ export const marketCard: Block<MarketSurfaceData> = {
     const empty = marketCard.emptyState(data)
     if (!card) {
       return (
-        <BlockFrame title={marketCard.title} question={marketCard.question} mode={mode}>
+        <BlockFrame title={marketCard.title} question={marketCard.question} mode={mode} roomy>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
@@ -183,6 +183,7 @@ export const marketCard: Block<MarketSurfaceData> = {
         title={`${longMonth(card.month)}’s card`}
         question={marketCard.question}
         mode={mode}
+        roomy
         // THE HEADER IS THE TITLE ALONE AND THE FOOTER HOLDS LINKS ONLY (25
         // Sep rulings; Your moves is rebuilt with WP3.6): the title already
         // names the month, and the press that is not built is said in the
