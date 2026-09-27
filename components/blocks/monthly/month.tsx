@@ -71,9 +71,12 @@ function monthEmail(data: MonthlyData): ReactNode {
   const cut = hero && hero.top.length > 0 ? splitClause(view.parts) : null
   const voices = (o.heroVoices ?? []).filter(hasQuote)
   const lead = hero?.lead ?? null
+  // A theme the month before did not read declares no August figure
+  // (`prevReadK`), so its cell prints the preview's "·", as the board's does
+  // (./themes.tsx), never an empty cell under "Aug of N".
   const cell = (key: string, isPrev = false) => {
     const text = figureText(view.figures[key])
-    return text ? <Num prev={isPrev}>{text}</Num> : null
+    return text ? <Num prev={isPrev}>{text}</Num> : isPrev ? <Num prev>·</Num> : null
   }
   return (
     <>

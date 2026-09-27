@@ -21,6 +21,7 @@ import { renderMonthlyEmail } from '@/lib/email/monthly'
 import { MonthlyEmail } from './monthly'
 import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 import { sealandReading } from '@/lib/test/reading-fixture'
+import { buildThemeBoard, heroLead } from '@/lib/pages/overview-market'
 
 const APP = 'https://app.verbatimintel.com'
 const ctx = blockContext(APP, EMAIL)
@@ -95,6 +96,25 @@ describe('the monthly email: "September in your market"', () => {
     expect(text).toMatch(/September 2026[\s·]*read to the 11 Oct update/)
     expect(text).not.toContain('read to the 4 Oct update')
     expect(text).toMatch(/Next: “October in your market”\s*, read to the 1 Nov update, on Tue 3 Nov\./)
+  })
+
+  // A theme August did not read (the lead's "·" ruling of 27 Sep; the
+  // deploy-3 fresh review): Össur's staging themes with "Brand boycott over
+  // politics" (16, no August row) among the three named. The board prints
+  // "·" for it and the page's line "none"; the month's table did too little,
+  // an empty cell under "Aug of 537".
+  it('marks a named theme August did not read "·" in the month’s table, never an empty cell', () => {
+    const base = ossurMonthlyFixture()
+    const o = base.overview
+    const three = ['Admiration for personal resilience', 'Questions about prosthetic function', 'Brand boycott over politics']
+    const board = { ...buildThemeBoard(o.themes!.rows.filter((t) => three.includes(t.label)), 338, o.month, 'no_rule', { month: '2026-08-01', n: 537 }), chip: o.themes!.chip }
+    const hero = heroLead(board, [], new Set())
+    expect(hero.kind === 'themes' && hero.top.map((t) => t.label)).toEqual(three)
+    const data = ossurMonthlyFixture({ overview: { ...o, themes: board, hero } })
+    const text = words(snapshot(data))
+    const table = text.slice(text.indexOf('Admiration for personal resilience'), text.indexOf('Brand boycott over politics') + 40)
+    expect(table).toMatch(/Admiration for personal resilience\s+34\s+16%/)
+    expect(table).toMatch(/Brand boycott over politics\s+16\s+·/)
   })
 
   it('leads the inbox with the market, never a change (the subject line)', () => {
