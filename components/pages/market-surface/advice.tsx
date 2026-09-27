@@ -338,7 +338,9 @@ function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode
         <div data-copy="stored" data-slot="pass_d_b_recommendation" style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, marginTop: 4 }}>{row.title}</div>
         <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 4 }}>
           {repeated}{grounded != null ? <> · <span data-copy="figure">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it</> : null}
-          {' · '}<StatusCell row={row} mode={mode} />
+          {' · '}{row.status === 'new'
+            ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.ink2 }}>{LEAD_UNDECIDED}</span>
+            : <StatusCell row={row} mode={mode} />}
         </div>
         {folded ? null : <div style={{ marginTop: 4 }}><AfterwardsCell row={row} mode={mode} shared={shared} /></div>}
       </div>

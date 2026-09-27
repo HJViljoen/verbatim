@@ -24,8 +24,9 @@ import { LEAD_SQUARE, LEAD_UNDECIDED } from './lead-words'
 // because this row is not in the table under the card and a mistaken "Mark
 // done" would otherwise have no way back from the page.
 //
-// APP ONLY. Print and email print the decision as words (`StatusCell`), and an
-// export never draws a button nobody can press.
+// APP ONLY. Print draws the same word and day (advice.tsx `LeadWord`), the
+// email the word in the card's line, and an export never draws a button
+// nobody can press.
 
 const wordOf = (s: RecStatus): string => (s === 'new' ? LEAD_UNDECIDED : REC_STATUS_LABEL[s])
 

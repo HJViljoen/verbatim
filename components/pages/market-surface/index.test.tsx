@@ -1102,6 +1102,12 @@ describe('The advice · what you decided about the current recommendation, and M
     expect(text).toContain('Not decided yet')
     expect(text).not.toContain('you marked it on')
     expect(card).toContain('Mark done')
+    // The email's card says the same word, not the ledger pill's "New".
+    const undecided = withLead({ status: 'new', statusLabel: 'New', decidedAt: null })
+    const email = renderText(marketAdvice.render(undecided, 'email', ctx))
+    const emailCard = email.slice(0, email.indexOf(undecided.advice.rows[1].title))
+    expect(emailCard).toContain('· Not decided yet')
+    expect(emailCard).not.toMatch(/\bNew\b/)
   })
 
   it('prints the same words on paper, with nothing to press', () => {
