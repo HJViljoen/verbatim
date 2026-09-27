@@ -220,9 +220,12 @@ export const segmentSummary = (r: SegmentBatchResult): string =>
  * The judge as the step calls it: mf/s3-segments' pinned per-batch function
  * (lib/segments/judge.ts judgeSegmentBatch), a batch of at most
  * SEGMENT_JUDGE_BATCH videos a call, each call logged to ai_call_log. A batch
- * that fails labels nothing (never fail open) and its videos are judged again
- * next run. Built by the pipeline only where SEGMENT_JUDGE_ENABLED is on for
- * the tenant; the client is handed in, so a test passes a mock.
+ * that fails labels nothing (never fail open). The step is NOT a retry: it
+ * judges only the videos it gives a first segments_v1 row, so a video a failed
+ * batch left unjudged keeps its rule row (the reader's fallback) until
+ * `label-segments --rule segments_v2 --apply` judges what is left. Built by
+ * the pipeline only where SEGMENT_JUDGE_ENABLED is on for the tenant; the
+ * client is handed in, so a test passes a mock.
  */
 export function segmentJudgeFor(admin: SupabaseClient, args: {
   clientId: string
