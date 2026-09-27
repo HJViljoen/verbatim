@@ -7,6 +7,7 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { MakerMark } from '@/components/pages/overview/market'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
+import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import type { WordsKind, WordsQuote } from '@/lib/pages/voice-surface-words'
 
@@ -75,7 +76,14 @@ function Quote({ q, mode }: { q: WordsQuote; mode: RenderMode }) {
 /** A card with nothing to quote says so in one line (decision B 2). */
 const NONE = 'No comment of this kind from a theme at 10 or more can be quoted.'
 
+/** The card's quotes that still have words. A stored export resolves its
+ *  quotes live, and one whose comment was withdrawn after the freeze comes
+ *  back as `{ quote: null, … }` inside its wrapper (`hasQuote`): it is left
+ *  out, never read as `q.quote.ref`. */
+const kept = (k: WordsKind): WordsQuote[] => k.quotes.filter(hasQuote)
+
 function Card({ k, mode }: { k: WordsKind; mode: RenderMode }) {
+  const quotes = kept(k)
   const count = <><span data-copy="figure" className={mode === 'email' ? undefined : 'font-medium tabular-nums text-secondary-foreground'}>{fmtInt(k.videos)}</span> videos</>
   if (mode === 'email') {
     return (
@@ -83,8 +91,8 @@ function Card({ k, mode }: { k: WordsKind; mode: RenderMode }) {
         <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>
           {k.label} <span style={{ fontFamily: FONT.mono, fontWeight: 400, color: EMAIL.muted }}>{count}</span>
         </div>
-        {k.quotes.length > 0
-          ? k.quotes.map((q) => <Quote key={q.quote.ref} q={q} mode={mode} />)
+        {quotes.length > 0
+          ? quotes.map((q) => <Quote key={q.quote.ref} q={q} mode={mode} />)
           : <BlockEmpty mode={mode}>{NONE}</BlockEmpty>}
       </div>
     )
@@ -95,8 +103,8 @@ function Card({ k, mode }: { k: WordsKind; mode: RenderMode }) {
         <h3 className="m-0 text-[15px] font-semibold text-foreground">{k.label}</h3>
         <span className="whitespace-nowrap font-mono text-[13px] text-muted-foreground">{count}</span>
       </div>
-      {k.quotes.length > 0
-        ? k.quotes.map((q) => <Quote key={q.quote.ref} q={q} mode={mode} />)
+      {quotes.length > 0
+        ? quotes.map((q) => <Quote key={q.quote.ref} q={q} mode={mode} />)
         : <p className="m-0 font-mono text-[13px] leading-[1.6] text-muted-foreground">{NONE}</p>}
     </div>
   )
@@ -135,7 +143,7 @@ export const voiceWords: Block<VoiceSurfaceData> = {
   },
 
   quotes(data): QuoteRef[] {
-    return (data.words?.kinds ?? []).flatMap((k) => k.quotes.map((q) => q.quote.ref))
+    return (data.words?.kinds ?? []).flatMap((k) => kept(k).map((q) => q.quote.ref))
   },
 
   emptyState(data) {

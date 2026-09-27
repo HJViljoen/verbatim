@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { blockContext, type RenderMode } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { EMAIL } from '@/lib/email/theme'
+import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '@/lib/renderables/quotes-freeze'
 import { copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { ossurVoiceFixture, refusedVoiceFixture, voiceFixture } from './fixture'
@@ -49,6 +50,23 @@ describe('voiceWords (C5)', () => {
     const refs = voiceWords.quotes?.(voiceFixture()) ?? []
     expect(refs.length).toBe(18)
     expect(refs.every((r) => r.startsWith('c:'))).toBe(true)
+  })
+
+  it('leaves out a quote withdrawn after a stored export froze it, and never throws on it', () => {
+    // A stored export freezes the refs and resolves them live: a comment
+    // erased in between comes back as `{ quote: null, … }` inside its wrapper.
+    const data = voiceFixture()
+    const { data: frozen } = freezeQuotes(data)
+    const gone = data.words!.kinds[0].quotes[0].quote.ref
+    const texts = new Map(collectQuoteRefs(data).filter((r) => r !== gone).map((r) => [r, 'words']))
+    const resolved = resolveQuotes(frozen, texts)
+    expect(resolved.words!.kinds[0].quotes[0].quote).toBeNull()
+    for (const mode of MODES) expect(() => render(voiceWords.render(resolved, mode, ctx)), mode).not.toThrow()
+    expect(voiceWords.quotes?.(resolved)).toHaveLength(17)
+    expect(voiceWords.quotes?.(resolved)).not.toContain(gone)
+    // Every one withdrawn: each card says so in its one line.
+    const none = resolveQuotes(frozen, new Map())
+    expect(renderText(voiceWords.render(none, 'app', ctx)).split('No comment of this kind from a theme at 10 or more can be quoted.').length - 1).toBe(6)
   })
 
   it('says a card with nothing to quote in one line inside the card', () => {
