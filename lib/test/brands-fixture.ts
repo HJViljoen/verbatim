@@ -1,3 +1,4 @@
+import { BRAND_RULE_VERSION } from '../brands/aliases'
 import type { BRAND_HAND_CHECKS } from '../brands/precision'
 import { SEALAND_CLIENT_ID } from '../config'
 import { buildBrandsBlock, type BrandCountIn, type BrandsRead } from '../pages/overview-market/brands'
@@ -67,7 +68,7 @@ export const AUGUST_BRANDS: readonly BrandCountIn[] = [
  */
 export const STAND_IN_CHECKS: typeof BRAND_HAND_CHECKS = {
   [SEALAND_CLIENT_ID]: Object.fromEntries(([['Cotopaxi', 16, 14], ['Patagonia', 16, 14], ['The North Face', 15, 15], ['Sealand', 9, 9]] as const)
-    .map(([brand, read, yes]) => [brand, { read, brand: yes, on: '2026-10-05', where: 'production' as const, of: 'test stand-in', source: 'lib/test/brands-fixture.ts' }])),
+    .map(([brand, read, yes]) => [brand, { read, brand: yes, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'test stand-in', source: 'lib/test/brands-fixture.ts' }])),
 }
 
 /** Staging's September block, as the page builds it once production's hand

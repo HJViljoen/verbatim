@@ -1,5 +1,5 @@
 import { SEALAND_CLIENT_ID } from '../config'
-import { BRAND_PRECISION_FLOOR, brandRulesFor } from './aliases'
+import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandRulesFor } from './aliases'
 
 // What the hand checks found (market-first WP2.6): which brands the page may
 // count, and whether the name line may print. The page reads these and never
@@ -29,6 +29,13 @@ import { BRAND_PRECISION_FLOOR, brandRulesFor } from './aliases'
 // reach the page through a commit, the gates and a tag. Until then deploy 3
 // prints every brand, and the name line, as "not counted yet".
 //
+// AN ENTRY HOLDS FOR THE RULES IT WAS READ UNDER (the deploy-3 fresh review):
+// each names its `ruleVersion`, and `brandCountState` reads an entry only
+// while it equals BRAND_RULE_VERSION. A change to an alias or an exclusion is
+// a new version (lib/brands/aliases.ts), whose matches nobody has read, so
+// every brand goes back to "not counted yet" until a check under the new
+// rules lands here.
+//
 // THE NAME LINE (plan WP2.6's done-when): it prints only once the client's own
 // name holds a production entry here (the Mon 5 check reads every match of it)
 // AND every match of the name outside the client's own posts in the month has
@@ -46,7 +53,10 @@ export interface BrandHandCheck {
   on: string
   /** Production only: a staging or research sample is not an entry. */
   where: 'production'
-  /** What the matches were: the rule version and the window. */
+  /** The rules the matches were planned under (BRAND_RULE_VERSION when it
+   *  was read): an entry for other rules is read as no entry. */
+  ruleVersion: string
+  /** What the matches were: the window. */
   of: string
   source: string
 }
@@ -86,10 +96,12 @@ export type BrandCountState = 'counted' | 'noise' | 'not_yet'
 
 /** Whether a brand's counts may print: its production hand check's precision
  *  against the floor, or "not counted yet" where production has not checked
- *  it (an entry from anywhere else is read as no entry). */
+ *  it under the rules the page counts with (an entry from anywhere else, or
+ *  read under other rules, is read as no entry). */
 export function brandCountState(clientId: string, brand: string, checks: typeof BRAND_HAND_CHECKS = BRAND_HAND_CHECKS): BrandCountState {
   const c = checks[clientId]?.[brand]
-  if (!c || c.where !== 'production' || !(c.read > 0) || !(c.brand >= 0) || c.brand > c.read) return 'not_yet'
+  if (!c || c.where !== 'production' || c.ruleVersion !== BRAND_RULE_VERSION) return 'not_yet'
+  if (!(c.read > 0) || !(c.brand >= 0) || c.brand > c.read) return 'not_yet'
   return c.brand / c.read >= BRAND_PRECISION_FLOOR ? 'counted' : 'noise'
 }
 

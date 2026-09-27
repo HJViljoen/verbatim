@@ -370,7 +370,7 @@ async function main() {
     writeNew(args.values['hand-check'], handCheckMarkdown(entries, brands.map((b) => b.rule.brand),
       `# Brand mentions: the hand check (${args.project === PRODUCTION ? 'production' : 'staging'}, ${BRAND_RULE_VERSION}, window ${from} to ${to}, read ${now.toISOString().slice(0, 16)}Z)\n\n` +
       `All ${brands.length} brands: every match of your name, and ${sample} matches per other brand. Mark each "the brand?" yes or no. ` +
-      'Each brand read becomes one production entry in lib/brands/precision.ts (read, yes, the date); only a production entry lets the page count a brand. Excerpts are for this check only.'))
+      `Each brand read becomes one production entry in lib/brands/precision.ts (read, yes, the date, ruleVersion '${BRAND_RULE_VERSION}'); only a production entry under the rules the page counts with lets it count a brand. Excerpts are for this check only.`))
     console.log(`  hand-check list written: ${args.values['hand-check']} (${entries.length} matches)`)
   }
 

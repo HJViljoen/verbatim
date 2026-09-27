@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { BRAND_RULE_VERSION } from '../../brands/aliases'
 import { SEALAND_CLIENT_ID } from '../../config'
 import { SEPTEMBER_BRANDS, STAND_IN_CHECKS, emptyBrandsRead, shippedBrandsRead, stagingBrandsRead } from '../../test/brands-fixture'
 import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, buildBrandsBlock, isBrandsRead, nameLineParts, organicBase, topicNote, brandsBlockFor, NINETY_DAY_NOTE } from './brands'
@@ -91,7 +92,7 @@ describe('buildBrandsBlock', () => {
   })
 
   it('prints a brand measured under the floor as mostly another word, with no count', () => {
-    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-10-05', where: 'production' as const, of: 'brands_v1, September', source: 'a test check' } } }
+    const checks = { [SEALAND_CLIENT_ID]: { Freitag: { read: 39, brand: 9, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'a test check' } } }
     const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })
     const freitag = b.topics.find((t) => t.label === 'Freitag')!
     expect(freitag).toMatchObject({ noise: true, kAny: null, count: 'noise' })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../config'
-import { BRAND_PRECISION_FLOOR } from './aliases'
+import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION } from './aliases'
 import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameChecked, noiseWords, type BrandHandCheck } from './precision'
 
 // Which brands the page may count (WP2.6; the lead's rulings of 26 and 27
@@ -11,7 +11,7 @@ import { BRAND_HAND_CHECKS, NAME_READS, brandCountState, clientBrandName, nameCh
 
 const EIGHT = ['Sealand', 'Cotopaxi', 'Freitag', 'Rareform', 'The North Face', 'Patagonia', 'Freedom of Movement', 'Old School']
 const prod = (read: number, brand: number): BrandHandCheck =>
-  ({ read, brand, on: '2026-10-05', where: 'production', of: 'brands_v1, September', source: 'the Mon 5 Oct hand check' })
+  ({ read, brand, on: '2026-10-05', where: 'production', ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'the Mon 5 Oct hand check' })
 
 describe('brandCountState', () => {
   it('counts no brand as shipped: all eight wait for the Mon 5 Oct production check, the research sample’s three included', () => {
@@ -32,6 +32,17 @@ describe('brandCountState', () => {
     expect(brandCountState(SEALAND_CLIENT_ID, 'Freitag', checks)).toBe('noise')
     expect(noiseWords('Freitag')).toBe('mostly the German word for Friday · not counted')
     expect(noiseWords('Old School')).toBe('mostly another word · not counted')
+  })
+
+  it('never counts on a check read under other rules: an alias or exclusion change sends the brand back to not counted yet', () => {
+    expect(BRAND_RULE_VERSION).toBe('brands_v1')
+    const older = { [SEALAND_CLIENT_ID]: { Cotopaxi: { ...prod(20, 20), ruleVersion: 'brands_v0' } } }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', older)).toBe('not_yet')
+    const unnamed = { [SEALAND_CLIENT_ID]: { Cotopaxi: { ...prod(20, 20), ruleVersion: undefined } as unknown as BrandHandCheck } }
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Cotopaxi', unnamed)).toBe('not_yet')
+    // A mostly-another-word reading under other rules is no reading either.
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Freitag', { [SEALAND_CLIENT_ID]: { Freitag: { ...prod(20, 3), ruleVersion: 'brands_v0' } } })).toBe('not_yet')
+    expect(nameChecked(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: { Sealand: { ...prod(9, 9), ruleVersion: 'brands_v2' } } })).toBe(false)
   })
 
   it('never counts on a malformed check, or for another tenant', () => {
