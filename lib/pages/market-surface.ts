@@ -931,6 +931,29 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     return [] as PlanCheckCard[]
   })
 
+  // ── MK4's card and readings, started here and awaited below ───────────
+  // Everything they take is in hand now: the moves, the subjects and the
+  // registry labels off the wave above, and the month-pair judge. They were
+  // awaited after MK1 and MK2's evidence chain (the older insights, the cited
+  // insights, the month read, the quotes), which they take nothing from, and
+  // then made four sequential reads of their own: 0.9 s at the end of the page
+  // on staging (27 Sep, Sealand). The catch only keeps a failure that
+  // lands before the await from being an unhandled rejection; the await
+  // still rejects with it.
+  const subjectsActive = (subjects ?? []).filter((x) => x.status === 'active')
+  const extrasAhead = judgeAhead.then((pair) => loadMovesExtras({
+    supabase,
+    reading,
+    clientId,
+    month,
+    moves,
+    subjectNames: new Map(subjectsActive.map((x) => [x.id, x.name])),
+    subjectCalibrations: new Map(subjectsActive.map((x) => [x.id, subjectCalibration(x)])),
+    themeLabels,
+    pair,
+  }))
+  extrasAhead.catch(() => {})
+
   // ── the ledger's rows, decided BEFORE the evidence is fetched ──────────
   //
   // THE ORDER IS THE POINT. MK2's rows are pure (`buildAdviceRows`,
@@ -1117,17 +1140,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // composition here would be a second way to count one month. This surface
   // holds no verdicts of its own, so it passes no `movementFor` and the helper
   // bands the matched subject's own two months with `monthChange`.
-  const extras = await loadMovesExtras({
-    supabase,
-    reading,
-    clientId,
-    month,
-    moves,
-    subjectNames: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, x.name])),
-    subjectCalibrations: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, subjectCalibration(x)])),
-    themeLabels,
-    pair,
-  })
+  const extras = await extrasAhead
   const movesBlock: MovesBlock = {
     rows: moveRows,
     masthead: MOVES_MASTHEAD,
