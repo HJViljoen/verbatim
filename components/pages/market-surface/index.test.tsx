@@ -452,8 +452,10 @@ describe('MK2 · the ledger', () => {
     // Its clock rides as the chip's tooltip (copy de-clutter B57).
     expect(text).not.toContain('First time marks a row')
     expect(render(marketAdvice.render(data, 'app', ctx))).toContain('the update’s clock, not the comment’s')
-    // "New" survives exactly where the status column puts it.
-    expect((text.match(/\bNew\b/g) ?? [])).toHaveLength(1)
+    // And no "New" beside it: the one undecided row here is the current
+    // recommendation, whose card says "Not decided yet" (WP3.6 wave 2).
+    expect(text).toContain('Not decided yet')
+    expect((text.match(/\bNew\b/g) ?? [])).toHaveLength(0)
   })
 
   // THE LEAD'S R10: a column that would be the chip on every visible row says
@@ -521,9 +523,14 @@ describe('MK2 · the ledger', () => {
     expect(renderText(markup)).not.toContain('Repair and warranty questions arrive as questions')
   })
 
-  it('prints the status word on a row still marked New, where the parked page prints nothing', () => {
+  it('prints a word for a recommendation nobody has decided on, where the parked page prints nothing', () => {
+    // The current recommendation leads as its card, and says so in words.
     const text = renderText(marketAdvice.render(marketFixture(), 'print', ctx))
-    expect(text).toContain('New')
+    expect(text).toContain('Not decided yet')
+    // A table row still undecided prints the pill's word.
+    const base = marketFixture()
+    const undecided = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r, i) => (i === 1 ? { ...r, status: 'new' as const, statusLabel: 'New', decidedAt: null } : r)) } }
+    expect(renderText(marketAdvice.render(undecided, 'print', ctx))).toMatch(/\bNew\b/)
   })
 
   it('survives a snapshot frozen before the Afterwards column existed', () => {
@@ -1057,6 +1064,58 @@ describe('Your moves · a move on a subject being re-described', () => {
       const text = renderText(marketMoves.render(data, mode, ctx))
       expect(text).toContain(MOVE_SUBJECT_FAILED)
       expect(text).not.toContain('too few readings')
+    }
+  })
+})
+
+// WP3.6 wave 2: the lead card's decision, as the approved preview draws it:
+// the word behind its square, the day you marked it, and "Mark done".
+describe('The advice · what you decided about the current recommendation, and Mark done', () => {
+  // Sealand's lead (§2.6's print): Working on it, marked on 15 Sep.
+  const lead = () => sealandMovesFixture()
+  const withLead = (over: Partial<AdviceRow>) => {
+    const d = lead()
+    return { ...d, advice: { ...d.advice, rows: d.advice.rows.map((r, i) => (i === 0 ? { ...r, ...over } : r)) } }
+  }
+  const leadCard = (markup: string) => markup.slice(0, markup.indexOf('<table'))
+
+  it('says what you decided and when, with Mark done beside it (app)', () => {
+    const card = leadCard(render(marketAdvice.render(lead(), 'app', ctx)))
+    const text = markupOf(card)
+    expect(text).toContain('Working on it')
+    expect(text).toContain('you marked it on 15 Sep')
+    expect(card).toMatch(/<button[^>]*type="button"[^>]*>[\s\S]*?Mark done<\/button>/)
+    // The word is the ledger's five statuses behind a quiet chevron, not a pill.
+    expect(card).toContain('title="Change what you decided"')
+    expect(card).not.toContain('h-[30px]') // the ledger pill's height
+  })
+
+  it('offers no Mark done once it is done', () => {
+    const card = leadCard(render(marketAdvice.render(withLead({ status: 'acted_on', statusLabel: 'Done' }), 'app', ctx)))
+    expect(markupOf(card)).toContain('Done')
+    expect(card).not.toContain('Mark done')
+  })
+
+  it('says "Not decided yet" and no day where nobody has decided, and still offers Mark done', () => {
+    const card = leadCard(render(marketAdvice.render(withLead({ status: 'new', statusLabel: 'New', decidedAt: null }), 'app', ctx)))
+    const text = markupOf(card)
+    expect(text).toContain('Not decided yet')
+    expect(text).not.toContain('you marked it on')
+    expect(card).toContain('Mark done')
+  })
+
+  it('prints the same words on paper, with nothing to press', () => {
+    const card = leadCard(render(marketAdvice.render(lead(), 'print', ctx)))
+    expect(markupOf(card)).toContain('Working on it you marked it on 15 Sep')
+    expect(card).not.toContain('<button')
+    const email = render(marketAdvice.render(lead(), 'email', ctx))
+    expect(email).not.toContain('<button')
+    expect(renderText(email)).toContain('Working on it · 15 Sep')
+  })
+
+  it('keeps the copy contract in each decision state and mode', () => {
+    for (const over of [{}, { status: 'acted_on' as const, statusLabel: 'Done' }, { status: 'new' as const, statusLabel: 'New', decidedAt: null }]) {
+      for (const mode of MODES) assertCopyContract(render(marketAdvice.render(withLead(over), mode, ctx)))
     }
   })
 })

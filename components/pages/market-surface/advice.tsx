@@ -18,6 +18,9 @@ import {
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
 import { GROUNDED_BASIS, type Afterwards } from '@/lib/reading/afterwards'
+import { REC_STATUS_LABEL } from '@/lib/calibration'
+import { LeadDecision } from './lead-decision'
+import { LEAD_SQUARE, LEAD_UNDECIDED, leadStamp } from './lead-words'
 
 // MK2 · The advice, and what you decided — the ledger (design §3 MK2; ported to
 // the artboard, Block D wave 2).
@@ -359,9 +362,28 @@ function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode
         {folded ? null : <span className="text-[12px] text-muted-foreground"><AfterwardsCell row={row} mode={mode} shared={shared} /></span>}
       </div>
       <div className="flex min-w-0 flex-col items-start gap-1.5 md:border-l md:border-border md:pl-8">
-        <StatusCell row={row} mode={mode} />
+        {/* WHAT YOU DECIDED, AND "MARK DONE" (the preview's column, WP3.6
+            wave 2): the control in the app, the same words on paper. */}
+        {mode === 'app'
+          ? <LeadDecision id={row.recommendationId} status={row.status} stamp={leadStamp(row.decidedAt)} />
+          : <LeadWord row={row} />}
       </div>
     </div>
+  )
+}
+
+/** The lead card's decision on paper: the word behind its square and the
+ *  day you marked it, as the app's control shows them, with nothing to press. */
+function LeadWord({ row }: { row: AdviceRow }) {
+  const stamp = leadStamp(row.decidedAt)
+  return (
+    <span className="flex flex-col gap-1">
+      <span className="flex items-center gap-2.5 text-[15px] font-semibold text-foreground">
+        <span aria-hidden className={`inline-block size-2 flex-none rounded-[2px] ${LEAD_SQUARE[row.status]}`} />
+        {row.status === 'new' ? LEAD_UNDECIDED : REC_STATUS_LABEL[row.status]}
+      </span>
+      {stamp ? <span className="pl-[18px] font-mono text-[13px] text-muted-foreground">{stamp}</span> : null}
+    </span>
   )
 }
 
