@@ -153,6 +153,11 @@ export const ANOMALY_CHECKS_TABLE = 'anomaly_checks'
  *  year does not make every recent week look large. */
 export const TRAILING_RUNS = 8
 
+/** The stored sentence of an update the check did not compare because our own
+ *  changes left fewer than three comparable months behind it (WP3.4): This
+ *  week's own words for a refusal (components/pages/week/unusual.tsx). */
+export const NOT_COMPARED_NOTE = 'This update was not compared with the months behind it.'
+
 /** Whether a pooled baseline was read under one clustering. `not_grouped` is
  *  the answer for an object that has no grouping to be like-for-like about —
  *  a kind is the enum Pass A wrote, and a re-grouping cannot move an insight
@@ -1099,6 +1104,21 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
 
   if (reading.flags.length === 0) {
     const clearing = reading.baselines[0]?.monthsClearing ?? 0
+    // A BASELINE OUR OWN CHANGES CUT SHORT IS A REFUSAL, NOT A READING. The
+    // surfaces judge "forming" off their own count of the three months behind
+    // the week (lib/pages/week.ts pooledBaseline, lib/pages/weekly.ts), which
+    // knows nothing of comparability: stored as 'nothing_unusual', a week this
+    // check could not compare would print "Nothing unusual in this update" from
+    // the 8 Nov update on. So when a refused pair left fewer than three months,
+    // the row says the update was not compared (anomaly_checks' own rule: a
+    // refusal is never stored as a reading), in the words This week already
+    // prints for one; the run log keeps "forming: {n} of 3 comparable months".
+    // No suppression is passed, so no thin-gate median is stored beside it.
+    if (clearing < BASELINE_MONTHS && baseline.dropped.length > 0) {
+      const note = comparableBaselineLabel(clearing)
+      await recordCheck({ status: 'suppressed', note: NOT_COMPARED_NOTE, window, reading })
+      return { ...empty, status: 'suppressed', reading, registration, suppression, note, baseline }
+    }
     const note = clearing < BASELINE_MONTHS
       ? comparableBaselineLabel(clearing)
       : `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`

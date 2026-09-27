@@ -4,7 +4,7 @@ import { baselineStepOf, comparableBaseline, comparableBaselineLabel } from '../
 import { CHANGES, SEALAND_LOG } from '../test/sealand-pairs'
 import { AUG_SEP, SEP_OCT, sameWay, storedPair } from '../test/s3-run-pairs'
 import { fakeAdmin } from '../test/s3-run-fake-admin'
-import { runAnomalyCheck } from './anomaly-check'
+import { NOT_COMPARED_NOTE, runAnomalyCheck } from './anomaly-check'
 
 // The unusual-week check on comparable months only (decision D; WP3.4). On
 // Sealand's real change log (lib/test/sealand-pairs.ts) and its pair rows
@@ -61,7 +61,7 @@ describe('the check prints it', () => {
     { month: '2026-10-01', audience: 'industry-other', videos: 377, status: 'filling' },
   ])
 
-  it('the 8 Nov update on Sealand: "forming: 1 of 3 comparable months", nothing flagged', async () => {
+  it('the 8 Nov update on Sealand: "forming: 1 of 3 comparable months" in the log, nothing flagged, and the row a refusal', async () => {
     const f = fakeAdmin({
       tables: {
         pipeline_runs: t([
@@ -81,9 +81,54 @@ describe('the check prints it', () => {
       window: { start: '2026-11-01T08:30:00.000Z', end: '2026-11-08T07:00:00.000Z' }, now: '2026-11-08T07:20:00.000Z',
       explainer: async () => { throw new Error('no model call on a forming baseline') },
     })
-    expect(r.status).toBe('nothing_unusual')
     expect(r.note).toBe('forming: 1 of 3 comparable months')
     expect(r.baseline).toEqual({ weekMonth: '2026-11-01', kept: ['2026-10-01'], dropped: ['2026-08-01', '2026-09-01'] })
-    expect(f.tables.anomaly_checks.map((c) => c.note)).toEqual(['forming: 1 of 3 comparable months'])
+    // Stored as the refusal it is, never as a reading: This week judges
+    // "forming" off its own count of the months behind the week (all three
+    // clear it here), so a 'nothing_unusual' row would print "Nothing unusual
+    // in this update" for a week nothing was compared against.
+    expect(r.status).toBe('suppressed')
+    expect(f.tables.anomaly_checks).toHaveLength(1)
+    const row = f.tables.anomaly_checks[0]
+    expect(row.outcome).toBe('suppressed')
+    expect(row.note).toBe(NOT_COMPARED_NOTE)
+    expect(row.reason).toBeNull()
+    expect(row.median_videos).toBeNull()
+    expect(row.set_size).toBeNull()
+  })
+
+  it('a baseline short of videos alone, with every pair comparable, is still the reading it was', async () => {
+    // The 10 Jan 2027 update (the week from 3 Jan): October to December read
+    // the same way (HYPOTHETICAL, as above), and October too few to clear the
+    // floor (July's real 35, re-dated). Nothing is left out on a change of
+    // ours, so the row stays 'nothing_unusual' and the surfaces' own count of
+    // the months says "forming", as it did before deploy 4.
+    const f = fakeAdmin({
+      tables: {
+        pipeline_runs: t([
+          { id: 'run-2027-01-10', status: 'running', stalled: false, videos_scraped: null, started_at: '2027-01-10T04:00:00Z' },
+          ...['2026-12-06', '2026-12-13', '2026-12-20', '2026-12-27', '2027-01-03'].map((d) => ({ id: `run-${d}`, status: 'completed', stalled: false, videos_scraped: 655, started_at: `${d}T04:00:00Z` })),
+        ]),
+        config_changes: SEALAND_LOG.map((r) => ({ ...r, client_id: SEALAND })),
+        month_pair_comparability: ROWS.map((r) => storedPair(r, SEALAND)),
+        month_denominators: t([
+          { month: '2026-10-01', audience: 'industry-other', videos: 35, status: 'frozen' },
+          { month: '2026-11-01', audience: 'industry-other', videos: 377, status: 'filling' },
+          { month: '2026-12-01', audience: 'industry-other', videos: 377, status: 'filling' },
+        ]),
+        month_kind_readings: [], month_subject_readings: [], month_theme_readings: [],
+        subjects: [], theme_registry: [], anomaly_checks: [],
+      },
+      rpc: { window_denominators: () => [{ audience: 'industry-other', videos: 244 }], window_kind_readings: () => [], window_subject_readings: () => [], window_theme_readings: () => [] },
+    })
+    const r = await runAnomalyCheck({
+      clientId: SEALAND, runId: 'run-2027-01-10', admin: f.client, updateVideos: 655,
+      window: { start: '2027-01-03T08:30:00.000Z', end: '2027-01-10T07:00:00.000Z' }, now: '2027-01-10T07:20:00.000Z',
+      explainer: async () => { throw new Error('no model call on a forming baseline') },
+    })
+    expect(r.baseline).toEqual({ weekMonth: '2027-01-01', kept: ['2026-10-01', '2026-11-01', '2026-12-01'], dropped: [] })
+    expect(r.status).toBe('nothing_unusual')
+    expect(r.note).toBe('forming: 2 of 3 comparable months')
+    expect(f.tables.anomaly_checks.map((c) => c.outcome)).toEqual(['nothing_unusual'])
   })
 })
