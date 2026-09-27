@@ -36,6 +36,8 @@ import { surface } from '../nav'
 import { loadAskFrame, namedObjects } from '../agent/answer'
 import { loadObjectReadings, type ObjectReading } from '../agent/movement'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '../agent/scope'
+import { starterQuestions, type StarterQuestion } from '../agent/starters'
+import { loadOverview } from './overview'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -387,6 +389,25 @@ export function askReads(r: AskReading, window: AskWindowChoice | null): AskRead
 // ── "Earlier questions" — the rail's history tile ────────────────────────────
 
 /** One earlier thread, as the rail prints it. */
+/**
+ * Ask's starter questions, off the front page's own load (WP3.9, plan §2.8).
+ *
+ * `marketFront` IS WHAT BUILDS THE OBJECTS THEY ARE WRITTEN FROM. Without it
+ * `loadOverview` returns the Phase 1 page, which carries no board, no hero and
+ * no asks, so `starterQuestions` had nothing to write from and the Ask index
+ * drew no starter at all (the staging render, 27 Sep). The same flag the
+ * front page's route passes, so a starter cannot name an object or a count
+ * that page does not print. Null is the first-run empty state.
+ */
+export async function loadAskFront(scope: Pick<Scope, 'supabase' | 'clientId' | 'reading'>): Promise<{ brand: string; starters: StarterQuestion[] } | null> {
+  const overview = await loadOverview({ ...scope, params: {} }, { marketFront: true })
+  if (!overview) return null
+  return {
+    brand: overview.brand,
+    starters: starterQuestions({ themes: overview.themes, hero: overview.hero, asks: overview.asks, subjects: overview.subjects.rows }),
+  }
+}
+
 export interface AskHistoryRow {
   threadId: string
   /** The thread's title — `ask_extract_title`, a model slot. */

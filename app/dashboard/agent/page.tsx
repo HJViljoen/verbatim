@@ -5,10 +5,8 @@ import { canAsk } from '@/lib/agent/access'
 import { loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 import { loadNotAnswered } from '@/lib/agent/measure'
 import { ASK_WINDOW_PARAM, parseAskWindow, type AskWindowChoice } from '@/lib/agent/scope'
-import { starterQuestions } from '@/lib/agent/starters'
 import { loadPlanChecks, type PlanCheckCard } from '@/lib/ask/plan-cards'
-import { askPlanChip, askReads, loadAskHistory, loadAskReading, NO_ASK_READING } from '@/lib/pages/agent-thread'
-import { loadOverview } from '@/lib/pages/overview'
+import { askPlanChip, askReads, loadAskFront, loadAskHistory, loadAskReading, NO_ASK_READING } from '@/lib/pages/agent-thread'
 import { surface } from '@/lib/nav'
 import { AgentComposer } from '@/components/agent-composer'
 import { AskBoxTile, StarterCards } from '@/components/pages/agent/ask-box'
@@ -64,7 +62,7 @@ export default async function AgentPage({
   // never a second identical one beside it).
   const plansP = loadPlanChecks(scope).catch(() => [] as PlanCheckCard[])
 
-  const [canSend, basis, history, plans, notAnswered, askReading, overview, clientRes] = await Promise.all([
+  const [canSend, basis, history, plans, notAnswered, askReading, front, clientRes] = await Promise.all([
     // Computed server-side and passed down — never a client-side check.
     canAsk(role, userId),
     // Whether anything is searchable at all (AS3): the composer is switched
@@ -74,7 +72,7 @@ export default async function AgentPage({
     plansP,
     loadNotAnswered(scope).catch(() => null),
     loadAskReading(supabase, reading, nowIso).catch(() => NO_ASK_READING),
-    loadOverview({ supabase, clientId, reading, params: {} }).catch((e: unknown) => {
+    loadAskFront({ supabase, clientId, reading }).catch((e: unknown) => {
       console.error(`[ask] starters: ${(e as { message?: string })?.message ?? String(e)}`)
       return null
     }),
@@ -87,10 +85,8 @@ export default async function AgentPage({
   // has been stored, which means after it has taken one of the month's forty
   // slots. The composer is switched off before the reader spends the turn.
   const blocked = nothingSearchable(basis)
-  const brand = overview?.brand ?? (clientRes.data?.company_name as string | undefined) ?? 'Your brand'
-  const starters = overview
-    ? starterQuestions({ themes: overview.themes, hero: overview.hero, asks: overview.asks, subjects: overview.subjects.rows })
-    : []
+  const brand = front?.brand ?? (clientRes.data?.company_name as string | undefined) ?? 'Your brand'
+  const starters = front?.starters ?? []
   const startersFrom = askReading.reading
     ? `written from ${surface('overview').label} · ${longMonth(askReading.reading.month)}${askReading.reading.state === 'so_far' ? ' so far' : ''}`
     : null

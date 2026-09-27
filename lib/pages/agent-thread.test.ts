@@ -1,11 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+// `loadAskFront` is the one I/O function tested here: the front page's loader
+// is replaced by a spy, so the test reads what Ask asked it for. Everything
+// else in the module is the real one.
+vi.mock('./overview', async (importOriginal) => ({ ...(await importOriginal<typeof import('./overview')>()), loadOverview: vi.fn() }))
 import { freezeQuotes, resolveQuotes } from '../renderables/quotes-freeze'
 import { agentFixture, refusedFixture } from '../../components/pages/agent/fixture'
 import type { PlanCheckCard } from '../ask/plan-cards'
 import {
   agentThreadSlides, answerFindings, askHistory, askPlanChip, askReadingFrom, askReads,
   claimsCrossed, documentPages, findingKey, NO_ASK_READING, type AgentThreadData,
+  loadAskFront,
 } from './agent-thread'
+import { loadOverview } from './overview'
+import { marketFrontFixture } from '../../components/pages/overview/fixture'
 import { SEALAND_ASK_READING } from '../../components/pages/agent/fixture'
 import { CHANGES } from '../test/sealand-pairs'
 
@@ -301,5 +309,27 @@ describe('the ask box’s plan chip', () => {
 
   it('is absent where no plan has been checked', () => {
     expect(askPlanChip([])).toBeNull()
+  })
+})
+
+// WP3.9: the starters are written from the front page's biggest objects, and
+// only the market front page carries them. Without `marketFront` the loader
+// returned the Phase 1 page and the staging render (27 Sep) drew no starter.
+describe('loadAskFront', () => {
+  const scope = { supabase: {}, clientId: 'c1', reading: { client: {}, clientId: 'c1' } as never }
+
+  it('asks the front page for its market blocks and writes the starters from them', async () => {
+    vi.mocked(loadOverview).mockResolvedValueOnce(marketFrontFixture())
+    const front = await loadAskFront(scope)
+    expect(vi.mocked(loadOverview)).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'c1', params: {} }), { marketFront: true })
+    expect(front?.brand).toBe('Sealand')
+    expect(front?.starters.length).toBeGreaterThan(0)
+    // The lead theme's question, with Sealand's September count under it.
+    expect(front?.starters.map((c) => c.question)).toContain('What does my market ask about airline bag sizes?')
+  })
+
+  it('is null on the first-run empty state', async () => {
+    vi.mocked(loadOverview).mockResolvedValueOnce(null)
+    expect(await loadAskFront(scope)).toBeNull()
   })
 })
