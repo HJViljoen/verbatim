@@ -256,6 +256,12 @@ describe('the starter questions (WP3.9)', () => {
     expect(render(<StarterCards starters={starters} source={null} />)).toContain('/dashboard/agent?ask=What%20makes%20people%20ready%20to%20buy%3F')
   })
 
+  it('keeps a reader who switched to all time on all time', () => {
+    const all = render(<StarterCards starters={starters} source={null} window="all" />)
+    expect(all).toContain('/dashboard/agent?ask=What%20makes%20people%20ready%20to%20buy%3F&amp;window=all')
+    expect(render(<StarterCards starters={starters} source={null} />)).not.toContain('window=all')
+  })
+
   it('draws nothing where the front page has nothing', () => {
     expect(render(<StarterCards starters={[]} source={null} />)).toBe('')
   })

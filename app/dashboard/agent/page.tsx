@@ -90,7 +90,15 @@ export default async function AgentPage({
   const startersFrom = askReading.reading
     ? `written from ${surface('overview').label} · ${longMonth(askReading.reading.month)}${askReading.reading.state === 'so_far' ? ' so far' : ''}`
     : null
-  const href = (w: AskWindowChoice) => (w === 'all' ? `${surface('ask').href}?${ASK_WINDOW_PARAM}=all` : surface('ask').href)
+  // Each window is an address. A question another page sent (`?ask=`) stays
+  // in the box when the reader switches window.
+  const href = (w: AskWindowChoice) => {
+    const q = new URLSearchParams()
+    if (ask) q.set('ask', ask)
+    if (w === 'all') q.set(ASK_WINDOW_PARAM, 'all')
+    const s = q.toString()
+    return s ? `${surface('ask').href}?${s}` : surface('ask').href
+  }
 
   return (
     <AskShell bar={{ brand, reading: askReading.reading }} params={sp}>
@@ -106,7 +114,7 @@ export default async function AgentPage({
             row={ASK_TILE_ROW}
             window={{ current: window, href: { days90: href('days90'), all: href('all') }, reachesBack: askReading.earliest ? askReading.earliest.slice(0, 4) : null }}
             asked={notAnswered ? { asked: notAnswered.asked, cap: notAnswered.cap } : null}
-            starters={<StarterCards starters={starters} source={startersFrom} />}
+            starters={<StarterCards starters={starters} source={startersFrom} window={window} />}
             composer={
               <AgentComposer
                 canSend={canSend && !blocked}

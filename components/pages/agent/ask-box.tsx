@@ -92,8 +92,11 @@ function WindowSwitch({ w }: { w: AskWindowSwitch }) {
 }
 
 /** Where a starter card sends the reader: Ask, with the question in the box
- *  (`?ask=`). Nothing is asked, and nothing spent, until they press Ask. */
-export const starterHref = (question: string): string => `/dashboard/agent?ask=${encodeURIComponent(question)}`
+ *  (`?ask=`). Nothing is asked, and nothing spent, until they press Ask. A
+ *  reader who switched to all time stays on it (`?window=all`), so the
+ *  question is asked over the window the page said. */
+export const starterHref = (question: string, window: AskWindowChoice = 'days90'): string =>
+  `/dashboard/agent?ask=${encodeURIComponent(question)}${window === 'all' ? '&window=all' : ''}`
 
 /**
  * "Start from what your market talked about" (WP3.9; the approved preview).
@@ -102,7 +105,7 @@ export const starterHref = (question: string): string => `/dashboard/agent?ask=$
  * (lib/agent/starters.ts). Each card names the objects it was written from,
  * with their videos, and the tags the front page prints beside the same rows.
  */
-export function StarterCards({ starters, source }: { starters: readonly StarterQuestion[]; source: string | null }) {
+export function StarterCards({ starters, source, window = 'days90' }: { starters: readonly StarterQuestion[]; source: string | null; window?: AskWindowChoice }) {
   if (starters.length === 0) return null
   return (
     <section className="flex flex-col gap-3 border-t border-border/70 pt-4" aria-label="Start from what your market talked about">
@@ -113,7 +116,7 @@ export function StarterCards({ starters, source }: { starters: readonly StarterQ
       <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3">
         {starters.map((c) => (
           <li key={c.question}>
-            <Link href={starterHref(c.question)} className="flex h-full flex-col gap-3 rounded-lg bg-inner p-4 hover:bg-inner/70">
+            <Link href={starterHref(c.question, window)} className="flex h-full flex-col gap-3 rounded-lg bg-inner p-4 hover:bg-inner/70">
               <span className="flex items-start justify-between gap-3">
                 <span className="text-[13.5px] font-semibold leading-[1.4] text-foreground">{c.question}</span>
                 <ArrowRight className="mt-0.5 size-4 flex-none text-muted-foreground" aria-hidden />
