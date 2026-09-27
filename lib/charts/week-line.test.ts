@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
-import { WEEK_LINE_FIXTURE, WEEK_LINE_FIXTURE_AXIS, WEEK_LINE_FIXTURE_FIRST } from '../test/week-line-fixture'
-import type { WeekLineBlock } from '../reading/week-line'
 import {
-  evenColumns, WEEK_LINE_ROW, WEEK_PAIR_REASON_WORDS, weekLineFigureLine, weekLineHover, weekLineLayout, weekLineLevel, weekLineTable,
+  WEEK_LINE_FIXTURE, WEEK_LINE_FIXTURE_AXIS, WEEK_LINE_FIXTURE_FIRST, WEEK_LINE_FIXTURE_FIRST_PAIR, WEEK_LINE_FIXTURE_FIRST_PAIR_AXIS,
+} from '../test/week-line-fixture'
+import type { WeekLineBlock } from '../reading/week-line'
+import type { WeekVolume } from '../reading/weeks'
+import { weekBarsLayout } from './week-bars'
+import {
+  evenColumns, WEEK_LINE_BEFORE_LINES, WEEK_LINE_ROW, WEEK_PAIR_REASON_WORDS, weekLineFigureLine, weekLineHover, weekLineLayout, weekLineLevel,
+  weekLinePairChips, weekLineStripLayout, weekLineTable,
 } from './week-line'
 
 // The same-age line's geometry and words (WP3.13 "Design of the line"), on the
@@ -155,5 +160,72 @@ describe('the words', () => {
     expect(t.head).toEqual(['28 Sep', '5 Oct', '12 Oct', '19 Oct'])
     expect(t.rows[0].cells).toEqual(['43% · 80 of 187', '57% · 131 of 229', '62% · 250 of 404', '61% · 195 of 318'])
     expect(t.rows[6]).toMatchObject({ label: 'Looks & style', provisional: true, verdict: null })
+  })
+})
+
+// ---- The strip (WP3.13 display, deploy 3w) -----------------------------------------------
+
+describe('weekLineStripLayout: the rows on the page\'s own week axis', () => {
+  const FIRST = weekLineStripLayout(WEEK_LINE_FIXTURE_FIRST_PAIR, WEEK_LINE_FIXTURE_FIRST_PAIR_AXIS)
+  const LATER = weekLineStripLayout(WEEK_LINE_FIXTURE, WEEK_LINE_FIXTURE_AXIS)
+
+  it('puts every week where WP2.9\'s bars put it, so each point sits under its bar', () => {
+    const volumes = WEEK_LINE_FIXTURE_FIRST_PAIR_AXIS.map((week): WeekVolume => ({
+      week, state: 'settled', updatesSince: 2, videos: 1, comments: 1, category: 1, rivalFiled: 0, commentsNextMonth: 0,
+      medianDated: null, under5: 0, olderVideos: 0, unchecked: 0,
+    }))
+    const bars = weekBarsLayout(volumes, [], { size: 'large', ticks: 'top' })
+    expect(FIRST.columns.map((c) => c.week)).toEqual(bars.columns.map((c) => c.week))
+    FIRST.columns.forEach((c, i) => expect(c.cx).toBeCloseTo(bars.columns[i].cx, 4))
+    for (const row of FIRST.rows) for (const p of row.points) expect(p.cx).toBe(FIRST.columns.find((c) => c.week === p.week)!.cx)
+  })
+
+  it('says what each slot holds on 27 Oct: three weeks before the first, 21 Sep left out, two kept, three due', () => {
+    expect(FIRST.slots.map((s) => [s.week, s.state, s.due])).toEqual([
+      ['2026-08-31', 'before', null], ['2026-09-07', 'before', null], ['2026-09-14', 'before', null],
+      ['2026-09-21', 'left_out', null],
+      ['2026-09-28', 'kept', null], ['2026-10-05', 'kept', null],
+      ['2026-10-12', 'due', '1 Nov'], ['2026-10-19', 'due', '8 Nov'], ['2026-10-26', 'due', '15 Nov'],
+    ])
+    // The axis labels as the bars print them: the day, and the month under its first week.
+    expect(FIRST.slots.map((s) => s.day)).toEqual(['31', '7', '14', '21', '28', '5', '12', '19', '26'])
+    expect(FIRST.slots.map((s) => s.month)).toEqual(['Aug', 'Sep', null, null, null, 'Oct', null, null, null])
+    expect(FIRST.before).toMatchObject({ from: '2026-08-31', to: '2026-09-14', lines: WEEK_LINE_BEFORE_LINES })
+  })
+
+  it('names a week that passed its age with nothing kept "not kept", and joins nothing across it', () => {
+    // The week of 5 Oct missed: kept weeks 28 Sep, 12 Oct and 19 Oct.
+    const missed: WeekLineBlock = {
+      ...WEEK_LINE_FIXTURE,
+      reads: WEEK_LINE_FIXTURE.reads!.filter((r) => r.week !== '2026-10-05'),
+      rows: WEEK_LINE_FIXTURE.rows.map((r) => ({ ...r, points: r.points.filter((p) => p.week !== '2026-10-05') })),
+    }
+    const S = weekLineStripLayout(missed, WEEK_LINE_FIXTURE_AXIS)
+    expect(S.slots.find((s) => s.week === '2026-10-05')?.state).toBe('not_kept')
+    // The two pairs through 5 Oct are the missed week's to explain, in its slot; no chip names them.
+    expect(S.chips).toEqual([])
+  })
+
+  it('names the pairs not read the same way in one chip per reason, and none where every pair was read the same way', () => {
+    expect(LATER.chips).toEqual(['28 Sep and 5 Oct · 5 Oct and 12 Oct not read the same way: read to different depths'])
+    expect(FIRST.chips).toEqual([])
+    expect(weekLinePairChips(WEEK_LINE_FIXTURE, ['2026-10-12', '2026-10-19'])).toEqual([])
+  })
+
+  it('keeps the latest reading and the verdict of each row, and gives the axis row a text alternative', () => {
+    expect(FIRST.rows.map((r) => r.latest?.level)).toEqual([
+      '61% · 195 of 318', '41% · 130 of 318', '47% · 148 of 318', '31% · 100 of 318', '19% · 61 of 318', '16% · 50 of 318', '12% · 38 of 318',
+    ])
+    expect(FIRST.rows[0].latest?.verdict?.state).toBe('no_clear_change')
+    expect(FIRST.rows[6]).toMatchObject({ provisional: true, latest: { verdict: null } })
+    expect(FIRST.axisAria).toBe(
+      'Read at the same age, weeks of 31 Aug to 26 Oct. Kept: the weeks of 28 Sep and 5 Oct. The week of 12 Oct is due with the 1 Nov update. '
+      + 'The week of 19 Oct is due with the 8 Nov update. The week of 26 Oct is due with the 15 Nov update. Left out: 21 Sep. '
+      + 'Weeks before 28 Sep were read on changing searches, so they get no point.',
+    )
+    for (const t of [FIRST.axisAria, ...FIRST.chips, ...LATER.chips, ...FIRST.rows.map((r) => r.aria)]) {
+      expect(t).not.toMatch(directionRe())
+      expect(t).not.toContain('—')
+    }
   })
 })

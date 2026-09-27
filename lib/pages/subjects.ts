@@ -69,6 +69,8 @@ import { accountKey } from './overview-market/voices'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { captionOurChanges } from './change-caveats'
+import { loadWeekStrip, weekStripFor, type WeekStrip } from './overview-market/weeks'
+import { weekLineConfigFor } from '../week-line-config'
 
 // Subjects — "how are we seen on this subject?" (Phase 1 WP12, design §3
 // SU1–SU3, the mock's Subjects.dc.html).
@@ -499,6 +501,10 @@ export interface SubjectPane {
    *  ("final", "ended · still filling until the 1 Nov update", "so far from
    *  16 Oct · ended from 1 Nov"). Optional. */
   monthStates?: Record<string, string>
+  /** Week by week, read at the same age (WP3.13, §2.3 S6): the subject's row
+   *  on the page's own week axis, once `WEEK_LINE` says print (deploy 3w at
+   *  the earliest). Null or absent: no strip (deploy 3 draws none). */
+  weekStrip?: WeekStrip | null
   index: number
   of: number
   sides: SubjectSide[]
@@ -2049,6 +2055,22 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // this costs no read.
   const marketRivals = marketRivalAudiences(rivals)
   const changes = await loadChanges(reading.client, clientId)
+  // WEEK BY WEEK, READ AT THE SAME AGE (WP3.13, §2.3 S6): the kept line, read
+  // only once WEEK_LINE says print, and only when a subject opens.
+  const weekStripAhead = opensOne
+    ? loadWeekStrip(reading.client, {
+        clientId,
+        cfg: weekLineConfigFor(clientId),
+        reading: rm,
+        now: readingAt,
+        asAt: rm.asAt,
+        rivalAudiences: marketRivals,
+        changes: ourChangesWithoutGatherFlags(changes),
+        objects: selectable.map((s) => ({ objectKind: 'subject' as const, objectId: s.id, label: s.name, calibration: calibrationOf.get(s.id) })),
+        nextUpdateAfter: schedule ? scheduledUpdateAfter(schedule) : null,
+      })
+    : null
+  weekStripAhead?.catch(() => {})
   const writtenAt = monthsWrittenAt(history.denominators, new Set(marketAudiences(marketRivals)))
   const countedFrom = new Map(active.map((s) => [s.id, subjectCountedFrom(s as CountedSubject, changes)]))
   const cited = new Map<string, Set<string>>()
@@ -2361,6 +2383,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       kindsIn,
       nextPair,
       monthStates,
+      weekStrip: weekStripFor(weekStripAhead ? await weekStripAhead.catch(() => null) : null, subject.id),
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,

@@ -1,7 +1,8 @@
 import { SEALAND_CLIENT_ID } from '../config'
 import { changesFromLog } from '../reading/comparability'
 import {
-  buildWeekLine, pooledMix, WEEK_DEPTH_BANDS, WEEK_LINE_KINDS, weekAgeCutoff, type WeekLineBlock, type WeekPoint, type WeekRead,
+  buildWeekLine, pooledMix, WEEK_DEPTH_BANDS, WEEK_LINE_KINDS, weekAgeCutoff, type WeekLineBlock, type WeekLineObject, type WeekPoint,
+  type WeekRead,
 } from '../reading/week-line'
 import { weekAxis } from '../reading/weeks'
 import { WEEK_LINE } from '../week-line-config'
@@ -79,3 +80,59 @@ export const WEEK_LINE_FIXTURE_FIRST: WeekLineBlock = buildWeekLine(
 
 /** The line printed with nothing kept yet: the rows' empty state. */
 export const WEEK_LINE_FIXTURE_EMPTY: WeekLineBlock = buildWeekLine([], [], [], { ...WEEK_LINE[SEALAND_CLIENT_ID], print: true })
+
+// ---- The first print (deploy 3w; WP3.13 display) ---------------------------------------
+//
+// The line as it would first print, with deploy 3w (target Tue 27 Oct): the
+// weeks of 28 Sep and 5 Oct, kept with the 18 Oct and 25 Oct updates (Mon 19
+// and Mon 26 Oct), read on Tue 27 Oct with October so far on the axis (the
+// weeks of 31 Aug to 26 Oct). HYPOTHETICAL DATES, REAL NUMBERS: staging's weeks
+// of 7 and 14 Sep stand in for them, the one staging pair read the same way
+// (depth 0.88 and 0.95), so the pair is joined and reads "no clear change", as
+// decision M expects of the first comparison (praise 250 of 404 against 195 of
+// 318). The weeks of 12, 19 and 26 Oct are due with the 1, 8 and 15 Nov updates.
+
+const FIRST_PAIR_STAGING = ['2026-09-07', '2026-09-14'] as const
+/** Tue 27 Oct, the day after the 26 Oct capture: deploy 3w's target. */
+export const WEEK_LINE_FIXTURE_FIRST_PAIR_NOW = '2026-10-27T09:00:00.000Z'
+/** The axis Your market draws on Tue 27 Oct (October so far): the weeks of 31 Aug to 26 Oct. */
+export const WEEK_LINE_FIXTURE_FIRST_PAIR_AXIS = weekAxis({ month: '2026-10-01' }, WEEK_LINE_FIXTURE_FIRST_PAIR_NOW)
+
+const firstPairReads: WeekRead[] = FIRST_PAIR_STAGING.map((stagingWeek, i) => {
+  const week = WEEK_LINE_FIXTURE_WEEKS[i]
+  const run = RUNS[3 + i]
+  return readFromStaging(stagingWeek, {
+    week, capturedBefore: weekAgeCutoff(week, 14), readThroughRun: run.id, readThroughAt: run.finishedAt, unchecked: 0,
+    computedAt: `${weekAgeCutoff(week, 14).slice(0, 10)}T09:00:00.000Z`,
+  })
+})
+
+const firstPairPoints: WeekPoint[] = FIRST_PAIR_STAGING.flatMap((stagingWeek, i) => [...WEEK_LINE_KINDS, 'looks'].map((kind): WeekPoint => ({
+  week: WEEK_LINE_FIXTURE_WEEKS[i],
+  ageDays: 14,
+  objectKind: kind === 'looks' ? 'subject' : 'kind',
+  objectId: kind === 'looks' ? STAGING_LOOKS_ID : kind,
+  bands: WEEK_DEPTH_BANDS.map((band, j) => ({ band, k: STAGING_BAND_K[stagingWeek][kind][j], n: STAGING_BAND_N[stagingWeek][j] })),
+})))
+
+/** The kept reads and points of the first print, as a loader reads them back
+ *  (`loadKeptWeekLine`'s `line`, the subject named as the page names it), for
+ *  the page fixtures and renders. */
+export const WEEK_LINE_FIXTURE_FIRST_PAIR_KEPT: { reads: WeekRead[]; points: WeekPoint[]; objects: WeekLineObject[] } = {
+  reads: firstPairReads,
+  points: firstPairPoints,
+  objects: [{ objectKind: 'subject', objectId: STAGING_LOOKS_ID, label: 'Looks & style', calibration: 'provisional' }],
+}
+
+/** The line as the first print draws it: two weeks, one pair, read the same way. */
+export const WEEK_LINE_FIXTURE_FIRST_PAIR: WeekLineBlock = buildWeekLine(
+  firstPairReads,
+  firstPairPoints,
+  changesFromLog(STAGING_CHANGES),
+  { ...WEEK_LINE[SEALAND_CLIENT_ID], print: true, mix: pooledMix(firstPairReads) },
+  {
+    objects: [{ objectKind: 'subject', objectId: STAGING_LOOKS_ID, label: 'Looks & style', calibration: 'provisional' }],
+    axis: WEEK_LINE_FIXTURE_FIRST_PAIR_AXIS,
+    nextUpdateAfter: SEALAND_NEXT_UPDATE,
+  },
+)

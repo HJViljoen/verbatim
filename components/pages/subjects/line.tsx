@@ -13,6 +13,10 @@ import type { MonthPoint } from '@/lib/reading/series'
 import { PairChip } from '@/components/blocks/pair-chip'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
+import { InnerBlock } from '@/components/charts/week-bars'
+import { WeekLineStrip } from '@/components/charts/week-line'
+import { WEEK_LINE_EMPTY } from '@/lib/charts/week-line'
+import { WEEK_STRIP_TOO_FEW } from '@/lib/pages/overview-market/weeks'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -298,7 +302,9 @@ function MonthCard({ month, state, point, current, future, mode }: {
  * the pages move on, the pair bracketed as "the first step joined as a line";
  * the pair's one chip sits under the months read. From the third month a line
  * is drawn, and a step whose pair is refused is drawn broken (WP1.3). No
- * weekly strip at deploy 3 (§2.3 S6).
+ * weekly strip at deploy 3 (§2.3 S6); from the deploy that prints the
+ * same-age line (WP3.13, deploy 3w at the earliest) the subject's weeks sit
+ * in a strip under the months (`SubjectWeekStrip`).
  */
 function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: RenderMode; appUrl: string; ctx: Parameters<typeof subjectsLine.render>[2] }) {
   const pane = data.selected
@@ -334,6 +340,7 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
           endLabels={mode !== 'print'}
         />
         {chip}
+        <SubjectWeekStrip pane={pane} mode={mode} />
       </BlockFrame>
     )
   }
@@ -359,6 +366,7 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
         </table>
         {chip}
         {next && bracket ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, paddingTop: 6 }}>{`the first step joined as a line: ${longMonth(next.prevMonth)} to ${longMonth(next.month)}, ${nextPairNote(next)}`}</div> : null}
+        <SubjectWeekStrip pane={pane} mode={mode} />
       </BlockFrame>
     )
   }
@@ -384,6 +392,32 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
           </p>
         ) : null}
       </div>
+      <SubjectWeekStrip pane={pane} mode={mode} />
     </BlockFrame>
+  )
+}
+
+/**
+ * WEEK BY WEEK, READ AT THE SAME AGE, ON SUBJECTS (WP3.13, §2.3 S6): the
+ * selected subject's weeks in a thin strip under the months, on the strip's
+ * own week axis and never on the month axis, drawn as Your market draws its
+ * rows (`WeekLineStrip`). Nothing at deploy 3, nor while the line is kept and
+ * not shown (`pane.weekStrip` is null). A provisional subject (decision C) gets
+ * its points and no verdict; a subject that does not clear 10 videos in both
+ * weeks of a pair prints one line, "Too few videos a week to read."
+ */
+export function SubjectWeekStrip({ pane, mode }: { pane: SubjectPane; mode: RenderMode }) {
+  const strip = pane.weekStrip ?? null
+  if (!strip) return null
+  const line = strip.line
+  const words = line.rows.length > 0 ? null : (line.reads?.length ?? 0) === 0 ? WEEK_LINE_EMPTY : WEEK_STRIP_TOO_FEW
+  return (
+    <InnerBlock title="Read at the same age" mode={mode}>
+      {words
+        ? mode === 'email'
+          ? <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.ink2 }}>{words}</div>
+          : <p className="m-0 text-[15px] leading-[1.6] text-secondary-foreground">{words}</p>
+        : <WeekLineStrip block={line} axis={strip.axis} mode={mode} surface="inner" />}
+    </InnerBlock>
   )
 }
