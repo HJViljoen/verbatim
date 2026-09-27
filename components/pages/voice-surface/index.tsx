@@ -14,20 +14,25 @@ import { voiceAudience } from './audience'
 import { voiceBoard } from './board'
 import { voiceTheme } from './theme'
 import { voiceCast } from './cast'
+import { voiceWords } from './words'
+import { voiceWhere } from './where'
 
-// Conversation — the page (market-first WP2.4, plan §2.4 C1–C4; it was Voice,
-// Phase 1 WP13, and keeps the key `voice`).
+// Conversation — the page (market-first WP2.4 and WP3.8, plan §2.4 C1–C6; it
+// was Voice, Phase 1 WP13, and keeps the key `voice`).
 //
-// FOUR BLOCKS, IN THE ORDER A READER ASKS: how big was the market and where
+// SIX BLOCKS, IN THE ORDER A READER ASKS: how big was the market and where
 // are its themes grouped (C1) · every theme it talked about at 10 or more (C2)
-// · one of them in full (C3) · who is talking (C4). A row on the board opens
-// its theme in C3.
+// · one of them in full (C3) · who is talking (C4) · the market's words, kind
+// by kind (C5) · where it talks, account by account (C6). A row on the board
+// opens its theme in C3.
 
 export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
   voiceAudience,
   voiceBoard,
   voiceTheme,
   voiceCast,
+  voiceWords,
+  voiceWhere,
 ]
 
 /** The anchor each block's section carries: the board's rows open the pane
@@ -38,7 +43,7 @@ const ANCHORS: Readonly<Record<string, string>> = { 'voice.theme': 'theme' }
  * NO FIXED-HEIGHT TILES ON THIS PAGE. `Tile` is `overflow-hidden`, and a tile
  * is only as tall as the row span it asks for, so a bounded tile CUTS what is
  * past it: the first production render of Voice lost half a block that way.
- * None of these four blocks has a bounded height (the board grows with the
+ * None of these six blocks has a bounded height (the board grows with the
  * month's themes: 21 on staging's September, 23 on production's), so the page
  * is a column of full-width sections wearing the tile's own surface.
  *
