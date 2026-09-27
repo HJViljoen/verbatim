@@ -2840,12 +2840,6 @@ async function buildCameIn(input: {
 const QUOTES_UNREAD =
   'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted.'
 
-/** §4's own sentence for a run with no window. It used to borrow §5's, which
- *  is about objections, and printed it under the heading "New on your
- *  subjects" — one string, wrong noun. */
-const QUOTES_NO_WINDOW =
-  'This update covered no window.'
-
 /**
  * The comments this update's window carried that sit under one of the client's
  * subjects.
