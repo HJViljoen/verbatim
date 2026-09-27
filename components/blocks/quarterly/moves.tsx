@@ -143,8 +143,8 @@ function MoveCard({ move, reading, sideOf, mode }: { move: MoveRow; reading: Mov
               key={`${v.objectKind}:${v.objectId}:${v.audience}`}
               mode={mode}
               // THE SIDE IS NAMED. One object is read on several audiences, so
-              // the label alone put "Repair & warranty · 33 of 626" above the
-              // same subject on another audience with nothing between them. A
+              // the label alone put "Repair & warranty · 153 of 1,388" above
+              // "Repair & warranty · 41 of 142" with nothing between them. A
               // side this workspace does not name is absent from `sideOf` and
               // the row keeps its label rather than inventing one.
               label={sideOf[v.audience] ? `${v.objectLabel} · ${sideOf[v.audience]}` : v.objectLabel}

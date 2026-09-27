@@ -40,7 +40,7 @@ import { CLIENT_AUDIENCE } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
 import { STALE_SECTION_LINE } from '../stale'
 import { fold } from '../../gather/util'
-import type { BriefLead, DocBriefSection, DocumentRole, DocumentSlideFigures } from './types'
+import type { DocBriefSection, DocumentRole, DocumentSlideFigures } from './types'
 
 /**
  * The I/O half of a brief's reading (Phase 1 WP19).
@@ -82,21 +82,8 @@ export const blocksFor = (surface: BriefSurface): readonly Block<never>[] => BLO
 
 type SurfaceLoader = (scope: Scope) => Promise<unknown | null>
 
-/**
- * The brief's front page is YOUR MARKET, built as the front page's route
- * builds it (WP3.11, plan §2.9). `marketFront` is what carries the board, the
- * hero and the asks: the new market-first sections (`mk.themes`, `mk.asks`,
- * `ld.themes`, `sl.asks`, `ct.themes`, `ct.asks`) draw them, and the first In
- * short tile is the hero's lead (`briefLead`). Without it every one of those
- * sections drew its empty state and the lead tile fell back to the gap, while
- * the tests, built on the market fixture, passed. The borrowed Phase 1 blocks
- * take the front page's form with it (`overview.category` draws the market's
- * kinds, `overview.subjects` the market side), as the page itself does.
- */
-export const loadBriefOverview = (scope: Scope) => loadOverview(scope, { marketFront: true })
-
 const LOADERS: Record<BriefSurface, SurfaceLoader> = {
-  overview: loadBriefOverview as SurfaceLoader,
+  overview: loadOverview as SurfaceLoader,
   subjects: loadSubjectsPage as SurfaceLoader,
   voice: loadVoiceSurface as SurfaceLoader,
   market: loadMarketSurface as SurfaceLoader,
@@ -245,8 +232,6 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     // rule this module exists to keep: a brief's numbers are the numbers the
     // reader saw.
     gaps: Object.values(overview.subjects.gaps).filter((g): g is Gap => g != null),
-    // WP3.11: the market's lead level, off the front page's own lead.
-    lead: briefLead(overview),
     denominators: denominatorsOf(record?.coverage ?? null, audienceInLabel),
     platformMix: record?.coverage ? totalPlatformMix(record.coverage) : {},
     notes: overview.notes.map((n) => n.text).filter(Boolean),
@@ -477,29 +462,6 @@ export async function briefSlideFigures(
     line,
     untracked: a.untracked,
   }
-}
-
-/**
- * The market's lead level, off the front page this brief already loaded
- * (WP3.11, plan §2.9; AD F36). Pure.
- *
- * THE FRONT PAGE'S OWN LEAD, NEVER A SECOND ONE. The lead theme the page
- * quotes (a measured maker share of a quarter or less, `heroLead`); where no
- * theme may lead (Össur: no maker rule) the biggest of the three the page
- * names; a ready subject where the page leads on one; the market's own
- * videos where nothing leads. Null where the page carries no market reading
- * at all (a snapshot shape from before WP1.6): the tiles then keep the order
- * they had.
- */
-export function briefLead(o: Pick<OverviewData, 'hero' | 'market' | 'month'>): BriefLead | null {
-  const hero = o.hero
-  if (hero?.kind === 'themes') {
-    const t = hero.lead ?? hero.top[0] ?? null
-    if (t) return { kind: 'theme', label: t.label, k: t.k, n: t.n }
-  }
-  if (hero?.kind === 'subject') return { kind: 'subject', label: hero.label, k: hero.k, n: hero.n }
-  const size = o.market?.find((c) => c.month === o.month)?.videos ?? null
-  return size != null ? { kind: 'size', label: null, k: size, n: null } : null
 }
 
 /**

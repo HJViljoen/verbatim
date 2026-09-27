@@ -14,9 +14,7 @@ const concern = (id: string, label: string, total: number, description = ''): Me
 const signals = {
   company: 'Ossur',
   industryKeywords: ['amputee', 'prosthetic leg', 'prosthetic arm', '#runningblade', '#prosthetics'],
-  // Ottobock clears as a topic on Össur's market (WP3.11): 86 to 88 of its
-  // videos over 90 days on staging (plan §2.13).
-  competitors: [{ name: 'Ottobock', thin: false, topic: true }],
+  competitors: [{ name: 'Ottobock', thin: false }],
   concerns: [
     concern('S1', 'Questions about fit and features', 99, 'Viewers want to know how it fits.'),
     concern('S2', 'Cost puts prosthetics out of reach', 27),
@@ -28,14 +26,6 @@ const signals = {
 }
 
 describe('marketPhrase', () => {
-  it('takes the stored one-sentence market description first (WP3.11)', () => {
-    expect(marketPhrase('Sealand', ['eco backpack', 'handmade bag', 'recycled bag'], 'bags and packs for people who travel light and care what they are made of.'))
-      .toBe('bags and packs for people who travel light and care what they are made of')
-    // Absent or empty (before MF3): today's words, from the first three keywords.
-    expect(marketPhrase('Sealand', ['eco backpack', 'handmade bag', 'recycled bag'], null)).toBe("products like Sealand's (eco backpack, handmade bag, recycled bag)")
-    expect(marketPhrase('Sealand', ['eco backpack'], '   ')).toBe("products like Sealand's (eco backpack)")
-  })
-
   it('names the products in the corpus\'s words, hashtags dropped, three at most', () => {
     expect(marketPhrase('Ossur', signals.industryKeywords)).toBe("products like Ossur's (amputee, prosthetic leg, prosthetic arm)")
     expect(possessive('Adidas')).toBe("Adidas'")
@@ -68,34 +58,9 @@ describe('composeQuestions', () => {
   })
 
   it('asks about at most two competitors and none when none is tracked', () => {
-    const many = { ...signals, competitors: [{ name: 'A', thin: false, topic: true }, { name: 'B', thin: false, topic: true }, { name: 'C', thin: true, topic: true }] }
+    const many = { ...signals, competitors: [{ name: 'A', thin: false }, { name: 'B', thin: false }, { name: 'C', thin: true }] }
     expect(composeQuestions(SALES_BRIEF, many, DEFAULT_DOCUMENT_SETTINGS, 10).filter((q) => q.purpose === 'competitor').map((q) => q.competitor)).toEqual(['A', 'B'])
     expect(composeQuestions(SALES_BRIEF, { ...signals, competitors: [] }, DEFAULT_DOCUMENT_SETTINGS, 10).filter((q) => q.purpose === 'competitor')).toHaveLength(0)
-  })
-
-  // WP3.11 (plan §2.9): per-rival questions go only to the brands that clear
-  // as topics. On Sealand's September (staging raw, BC F35) Patagonia, The
-  // North Face and Cotopaxi clear; Freitag, mostly the German word for Friday,
-  // does not; and before MF3 nothing is known to clear.
-  it('asks only about the brands that clear as topics in the market', () => {
-    const sealand = {
-      ...signals,
-      company: 'Sealand',
-      competitors: [
-        { name: 'Freitag', thin: false, topic: false },
-        { name: 'Cotopaxi', thin: false, topic: true },
-        { name: 'Patagonia', thin: false, topic: true },
-      ],
-    }
-    expect(composeQuestions(SALES_BRIEF, sealand, DEFAULT_DOCUMENT_SETTINGS, 10).filter((q) => q.purpose === 'competitor').map((q) => q.competitor)).toEqual(['Cotopaxi', 'Patagonia'])
-    const unknown = { ...sealand, competitors: sealand.competitors.map((c) => ({ ...c, topic: null })) }
-    expect(composeQuestions(SALES_BRIEF, unknown, DEFAULT_DOCUMENT_SETTINGS, 10).filter((q) => q.purpose === 'competitor')).toHaveLength(0)
-  })
-
-  it('fills {market} from the stored description where it exists', () => {
-    const qs = composeQuestions(SALES_BRIEF, { ...signals, marketDescription: 'prosthetic limbs and the people who live with them' }, DEFAULT_DOCUMENT_SETTINGS, 8)
-    expect(qs.find((q) => q.id === 'stops')?.text).toBe('What stops people from buying or getting prosthetic limbs and the people who live with them, or makes them hesitate before they commit?')
-    expect(qs.map((q) => q.text).join(' ')).not.toContain("products like Ossur's")
   })
 })
 

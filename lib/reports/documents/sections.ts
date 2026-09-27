@@ -119,7 +119,7 @@ export interface BriefBlockSection {
    *
    * WHY A PANE NEEDS ITS OWN WORDS. The first pass gave `confidence` one body
    * — the reading's denominators, then the dots — so three sheets running
-   * carried an identical card: "WHAT THIS RESTS ON · 626 the category · …"
+   * carried an identical card: "WHAT THIS RESTS ON · 1,388 the category · …"
    * verbatim on p3 and p4, and the same confidence sentence on p2, p3 and p4.
    * A panel that says the same thing three sheets running reads as chrome and
    * a reader stops looking at it, which is the opposite of what a confidence
@@ -237,32 +237,8 @@ const page = (p: DocPageKind): BriefEntry => ({ kind: 'page', page: p })
  * anomaly line with its band, the top recommendation with its ledger meta, the
  * dual-mention caveat. They are kept.
  */
-// ── MARKET-FIRST (WP3.11, plan §2.9) ───────────────────────────────────────
-//
-// EVERY MAP NOW OPENS ON THE MARKET: what it talked about and what it asked,
-// complained about and wished for, in the front page's own blocks, before the
-// client's subjects and rivals. THE IDS ARE NEW (`*.themes`, `*.asks`),
-// because a section id names a slide inside a built brief and an edit in
-// `report_edits`: a stored brief keeps the ids and the order it was built
-// with, and draws them as it was built. What "for you" the front page will
-// carry (`overview.foryou`, deploy 3) joins each map with the deploy that
-// ships that block, as its own new id.
-//
-// The framings name no month: a brief is frozen, and "this month" on a sheet
-// opened in March names the wrong one.
-
 export const MARKETING_MAP: readonly BriefEntry[] = [
   page('in_short'),
-  block({
-    id: 'mk.themes', block: 'overview.themes', surface: 'overview',
-    title: 'What your market talked about', framing: 'The biggest conversations in your market, makers named as makers.',
-    needs: ['months-of-history'],
-  }),
-  block({
-    id: 'mk.asks', block: 'overview.asks', surface: 'overview',
-    title: 'Asked, complained about, wished for', framing: 'What your market asked, complained about and wished for, each with a voice from that conversation.',
-    needs: ['months-of-history'],
-  }),
   block({
     id: 'mk.subjects', block: 'overview.subjects', surface: 'overview',
     title: 'Your subjects', framing: 'Each subject this month, against the month before and against the category.',
@@ -316,13 +292,6 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
   block({
     id: 'ld.month', block: 'overview.sentence', surface: 'overview',
     title: 'The month', framing: 'The month in one reading.',
-    needs: ['months-of-history'],
-  }),
-  // MARKET-FIRST (WP3.11): what the market talked about, before the category
-  // block and where the company stands.
-  block({
-    id: 'ld.themes', block: 'overview.themes', surface: 'overview',
-    title: 'What your market talked about', framing: 'The biggest conversations in your market, makers named as makers.',
     needs: ['months-of-history'],
   }),
   block({
@@ -382,14 +351,6 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
 
 export const SALES_MAP: readonly BriefEntry[] = [
   page('in_short'),
-  // MARKET-FIRST (WP3.11): what the market asks, complains about and wishes
-  // for opens the brief, before the objections by subject.
-  block({
-    id: 'sl.asks', block: 'overview.asks', surface: 'overview',
-    title: 'What buyers ask, complain about and wish for', framing: 'The questions, complaints and wishes your market raised, each with a voice from that conversation.',
-    context: 'Your market', eyebrow: 'Biggest first',
-    needs: ['months-of-history'],
-  }),
   page('finding'),
   block({
     id: 'sl.unanswered', block: 'subjects.unanswered', surface: 'subjects',
@@ -452,18 +413,6 @@ export const SALES_MAP: readonly BriefEntry[] = [
 
 export const CONTENT_MAP: readonly BriefEntry[] = [
   page('in_short'),
-  // MARKET-FIRST (WP3.11): what the market talked about and asked opens the
-  // brief the people who make the videos read.
-  block({
-    id: 'ct.themes', block: 'overview.themes', surface: 'overview',
-    title: 'What your market talked about', framing: 'The biggest conversations in your market, makers named as makers.',
-    needs: ['months-of-history'],
-  }),
-  block({
-    id: 'ct.asks', block: 'overview.asks', surface: 'overview',
-    title: 'What your market asks', framing: 'What your market asked, complained about and wished for, each with a voice from that conversation.',
-    needs: ['months-of-history'],
-  }),
   page('finding'),
   // THE ARTBOARD'S PAGE 2, AND THE LEDGER BEHIND IT — two sections over one
   // body of data (Block D wave 2, E-content). `ct.make` draws the ledger's

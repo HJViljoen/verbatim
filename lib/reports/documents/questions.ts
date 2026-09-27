@@ -29,23 +29,9 @@ export interface ResearchQuestion {
   concernId?: string
 }
 
-/**
- * The market the brief asks about (`{market}`).
- *
- * THE STORED ONE-SENTENCE DESCRIPTION FIRST (WP3.11, plan §2.9; GA F41–F42):
- * `tracking_configs.market_description` (MF3), the market in the operator's
- * own words, read as a noun phrase with its closing stop taken off. The first
- * three industry keywords stood in for it, and their stored order moved the
- * phrase three times in a fortnight ("sustainable backpack, recycled bag,
- * upcycled bag", then "upcycled bag, recycled bag, sailcloth bag", then "eco
- * backpack, handmade bag, recycled bag"), twice leading with a maker's term.
- * Until the column exists, or where it is empty, the words are today's:
- * "products like Össur's (prosthetic leg, prosthetic arm)". A hashtag is a
- * search term, not a noun.
- */
-export function marketPhrase(company: string, industryKeywords: string[], description?: string | null): string {
-  const said = (description ?? '').trim().replace(/[.!?]+$/, '').trim()
-  if (said) return said
+/** What the reader sells, in words the corpus uses: "products like Össur's
+ *  (prosthetic leg, prosthetic arm)". A hashtag is a search term, not a noun. */
+export function marketPhrase(company: string, industryKeywords: string[]): string {
   const words = industryKeywords
     .map((k) => k.trim())
     .filter((k) => k && !k.startsWith('#'))
@@ -60,21 +46,11 @@ export const possessive = (name: string): string => (/s$/i.test(name) ? `${name}
 
 export function composeQuestions(
   template: DocumentTemplate,
-  s: {
-    company: string
-    industryKeywords: string[]
-    /** `tracking_configs.market_description` (MF3); null or absent until it
-     *  exists, and `{market}` then keeps today's words. */
-    marketDescription?: string | null
-    /** `topic`: whether the brand clears as a topic in the market this month
-     *  (`month_brand_readings`, MF3). Only `true` earns a per-rival question. */
-    competitors: { name: string; thin: boolean; topic?: boolean | null }[]
-    concerns: MergedConcern[]
-  },
+  s: { company: string; industryKeywords: string[]; competitors: { name: string; thin: boolean }[]; concerns: MergedConcern[] },
   settings: DocumentSettings,
   max: number,
 ): ResearchQuestion[] {
-  const market = marketPhrase(s.company, s.industryKeywords, s.marketDescription)
+  const market = marketPhrase(s.company, s.industryKeywords)
   const fill = (text: string, competitor?: string) =>
     text.replace(/\{market\}/g, market).replace(/\{company\}/g, s.company).replace(/\{competitor\}/g, competitor ?? '')
 
@@ -87,13 +63,7 @@ export function composeQuestions(
   const perCompetitor = template.anchors.find((a) => a.perCompetitor)
   if (perCompetitor) {
     // Two at most: a third competitor's card is written from the signals alone.
-    // AND ONLY A BRAND THAT CLEARS AS A TOPIC (WP3.11, plan §2.9): the market
-    // names it in 10 or more of 100 or more videos this month. A rival the
-    // market barely mentions (Freitag, mostly the German word for Friday; a
-    // brand of 6 videos) gets no question of its own, whatever its place in
-    // the tracked list; where the brand readings are not there yet, no brand
-    // is known to clear and none is asked about.
-    for (const c of s.competitors.filter((x) => x.topic === true).slice(0, COMPETITOR_QUESTIONS_MAX)) {
+    for (const c of s.competitors.slice(0, COMPETITOR_QUESTIONS_MAX)) {
       out.push({ id: `${perCompetitor.id}:${slug(c.name)}`, text: fill(perCompetitor.text, c.name), purpose: 'competitor', competitor: c.name })
     }
   }

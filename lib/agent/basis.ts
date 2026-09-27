@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, shortDate } from '../format'
 import { isRivalAudience } from '../rivals'
-import { floorClearingMonths } from '../reports/quarterly'
+import { pooledDenominators } from '../reading/market'
+import { SHARE_BAND } from '../report-bands'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 
 // What an answer was answered AGAINST (design AS3, Phase 1 WP21).
@@ -194,9 +195,35 @@ export function readableMonthCount(rows: readonly MonthRow[]): number {
  * argues with itself. So the LIST is the primitive and the count reads off it:
  * they cannot disagree, whatever a later filter does to either.
  */
+/**
+ * The months of the market (the category pooled with the videos filed under a
+ * tracked brand, the client's own posts left out) whose pooled denominator
+ * clears the band's floor, `SHARE_BAND.minN` videos, up to `to` (inclusive).
+ * Ascending, `YYYY-MM-01`.
+ *
+ * WP3.11 (H19) wrote this in lib/reports/quarterly.ts so the quarterly's gate,
+ * its Reports card and Ask would count one set of months. The quarterly
+ * redesign is paused (Heinrich, 27 Sep) and that file is deploy 3's again, so
+ * Ask keeps the rule here; the quarterly takes it back when it is redesigned.
+ */
+export function floorClearingMonths(
+  rows: readonly { month: string; audience: string; videos: number | null; comments?: number | null }[],
+  rivalAudiences: readonly string[],
+  to?: string | null,
+): string[] {
+  const pooled = pooledDenominators(
+    rows.map((r) => ({ month: r.month, audience: r.audience, videos: r.videos ?? Number.NaN, comments: r.comments ?? 0 })),
+    rivalAudiences,
+  )
+  const last = to ? `${to.slice(0, 7)}-01` : null
+  return [...pooled.values()]
+    .filter((c) => c.videos != null && c.videos >= (SHARE_BAND.minN ?? 100) && (last == null || c.month <= last))
+    .map((c) => c.month)
+}
+
 export function readableMonths(rows: readonly MonthRow[]): string[] {
-  // THE MARKET'S MONTHS OVER THE FLOOR (WP3.11, H19; decision E). One rule for
-  // Ask, the quarterly review and its Reports card: the category pooled with
+  // THE MARKET'S MONTHS OVER THE FLOOR (WP3.11, H19; decision E). The rule WP3.11
+  // gives Ask, the quarterly review and its Reports card: the category pooled with
   // the videos filed under a tracked brand, the client's own posts left out,
   // at SHARE_BAND.minN or more. Before market-first this counted the client's
   // and the category's months separately and dropped every rival's, because

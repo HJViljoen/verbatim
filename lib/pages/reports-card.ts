@@ -14,26 +14,14 @@ import { loadActiveSubjects } from '../subjects/membership'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
 import { loadDeliveredRuns, loadMarketRivalAudiences, readingViewFrom } from '../reading/reading-view'
-import type { ReadingMonth } from '../reading/reading-month'
-import { pooledDenominators } from '../reading/market'
-import { pairOnVerdict } from '../reading/comparability'
-import { loadAppPairOn } from '../reading/gather-flags'
-import type { PairOn } from '../reading/pairs'
-import { isRivalAudience } from '../rivals'
 import {
   firstQuarterVerdictMonth,
-  floorClearingMonths,
-  nextQuarter,
   previousQuarter,
   QUARTER_READINGS_NEEDED,
   quarterGateSentence,
   quarterLabel,
-  quarterOfIn,
-  quarterPairOf,
-  quarterPairSentence,
   quarterToReview,
   type Quarter,
-  type QuarterPair,
 } from '../reports/quarterly'
 
 /**
@@ -89,79 +77,6 @@ export interface QuarterlyCard {
   href: string
   /** Never a promised date. */
   ready: null
-  /**
-   * The quarter the pages read, as LEVELS (WP3.11, plan §2.9: "the Reports
-   * card draws Q3's levels again with one line"). Below the gate the card
-   * used to carry one line and nothing else; it now draws the market's videos
-   * in each month of the quarter the pages read, with one line under them.
-   * Optional: a card built before it draws as it did.
-   */
-  levels?: QuarterLevels | null
-}
-
-/** One month of the quarter the pages read: the market's videos (decision E,
- *  the category pooled with the brands tracked), and the state a reader needs
- *  beside the bar. Null where nothing was read, never zero. */
-export interface QuarterLevelMonth {
-  month: string
-  videos: number | null
-  /** `read`: over the floor; `too_few`: under `SHARE_BAND.minN`; `so_far`:
-   *  the month in progress; `none`: no row. */
-  state: 'read' | 'too_few' | 'so_far' | 'none'
-}
-
-export interface QuarterLevels {
-  quarter: { label: string; from: string; to: string }
-  months: QuarterLevelMonth[]
-  /** The floor a month is read from, drawn as a rule across the bars. */
-  floor: number
-  /** The ONE line under the bars: the next quarter pair's refusal in its own
-   *  words where a change of ours refuses it ("Q4 2026 against Q3 2026 is not
-   *  read as a change: we changed our searches in September."), else when the
-   *  first quarter comparison arrives. */
-  line: string | null
-}
-
-/**
- * The quarter the pages read, as levels, and its one line. Pure.
- *
- * THE QUARTER IS THE READING MONTH'S (decision A): on 1–15 October the pages
- * read September, so the card draws Q3; from 16 October, Q4 so far. Each bar
- * is one month's market, never a quarter summed from months (a quarter is one
- * window, which the rows above the gate compare).
- */
-export function quarterLevels(input: {
-  reading: ReadingMonth | null
-  readingAt: string
-  denominators: readonly { month: string; audience: string; videos: number; comments?: number | null }[]
-  rivalAudiences: readonly string[] | null
-  /** The pair judge; null reads no pair and prints the first-comparison line. */
-  pair: PairOn | null
-  readings: number
-}): QuarterLevels {
-  const month = input.reading?.month ?? monthStartOf(input.readingAt)
-  const quarter = quarterOfIn(`${monthStartOf(month)}T12:00:00.000Z`)
-  const rivals = input.rivalAudiences ?? [...new Set(input.denominators.map((d) => d.audience).filter(isRivalAudience))]
-  const pooled = pooledDenominators(input.denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })), rivals)
-  const floor = SHARE_BAND.minN ?? 100
-  const months: QuarterLevelMonth[] = quarter.months.map((m) => {
-    const videos = pooled.get(m)?.videos ?? null
-    const soFar = input.reading != null && monthStartOf(input.reading.month) === m && input.reading.state === 'so_far'
-    return { month: m, videos, state: videos == null ? 'none' : soFar ? 'so_far' : videos < floor ? 'too_few' : 'read' }
-  })
-  let line: string | null = null
-  if (input.pair) {
-    const judge = input.pair
-    const next: QuarterPair = quarterPairOf(quarter, nextQuarter(quarter), (a, b) => judge(a, b, 'market'))
-    const note = next.refusedBy ? pairOnVerdict(next.refusedBy).note : null
-    if (note && (note.cause === 'searches' || note.cause === 'ours')) line = quarterPairSentence(next)
-  }
-  return {
-    quarter: { label: quarterLabel(quarter, false), from: quarter.from, to: quarter.to },
-    months,
-    floor,
-    line: line ?? firstComparisonLine(input.readings, input.reading?.month ?? null),
-  }
 }
 
 /** What the pure half is handed. Every field is something a caller read; none
@@ -189,8 +104,6 @@ export interface QuarterlyCardInput {
    *  from. */
   readingMonth?: string | null
   href?: string
-  /** The quarter the pages read, as levels (WP3.11). */
-  levels?: QuarterLevels | null
 }
 
 /** Which audience the card's rows are read on. The CATEGORY: it is the only
@@ -220,7 +133,6 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
     gate,
     href,
     ready: null as null,
-    ...(input.levels ? { levels: input.levels } : {}),
   }
 
   // M3 UNAPPLIED IS NOT AN EMPTY QUARTER. The window pair answers null when
@@ -362,16 +274,12 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
   const subjects = await loadActiveSubjects(admin, clientId).catch(() => [])
   if (subjects.length === 0) return null
 
-  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, era, judge] = await Promise.all([
+  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, era] = await Promise.all([
     loadWindowReading(admin, clientId, { from: quarter.from, to: nextDay(quarter.to) }).catch(guardWindow),
     loadWindowReading(admin, clientId, { from: prior.from, to: nextDay(prior.to) }).catch(guardWindow),
     readSubjectWindow(admin, clientId, { from: quarter.from, to: nextDay(quarter.to) }).catch(guardSubjects),
     readSubjectWindow(admin, clientId, { from: prior.from, to: nextDay(prior.to) }).catch(guardSubjects),
     readEra(admin, clientId, quarter, readingAt),
-    // The month-pair judge, for the one line under the levels. It fails
-    // closed (`loadAppPairOn`), so a read error names no change of ours and
-    // the line falls back to when the first comparison arrives.
-    loadAppPairOn(scope.reading, readingAt),
   ])
 
   return buildQuarterlyCard({
@@ -385,9 +293,6 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     monthsInQuarter: era.monthsInQuarter,
     readings: era.readings,
     readingMonth: era.readingMonth ?? monthStartOf(readingAt),
-    levels: era.inputs
-      ? quarterLevels({ reading: era.inputs.reading, readingAt, denominators: era.inputs.denominators, rivalAudiences: era.inputs.rivalAudiences, pair: judge, readings: era.readings })
-      : null,
   })
 }
 
@@ -435,12 +340,7 @@ async function readEra(
   clientId: string,
   quarter: Quarter,
   readingAt: string,
-): Promise<{
-  readings: number
-  readingMonth: string | null
-  monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[]
-  inputs?: { reading: ReadingMonth; denominators: DenominatorPoint[]; rivalAudiences: string[] | null }
-}> {
+): Promise<{ readings: number; readingMonth: string | null; monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[] }> {
   const empty = { readings: 0, readingMonth: null, monthsInQuarter: [] as { month: string; videos: number | null; backRead: boolean }[] }
   try {
     const runRes = await admin
@@ -453,24 +353,16 @@ async function readEra(
     if (!firstRun) return empty
     const firstRunMonth = monthStartOf(firstRun)
     const [set, runs, rivalAudiences] = await Promise.all([
-      // THE WHOLE HISTORY, as the pages' own reading view reads it: a month
-      // read back at setup that clears the floor is a reading the gate counts
-      // (H19), and Ask and the artefact count it too.
-      loadMonthSeries(admin, clientId, { from: '2019-01-01', to: eraTo(firstRunMonth, readingAt) }),
+      loadMonthSeries(admin, clientId, { from: firstRunMonth, to: eraTo(firstRunMonth, readingAt) }),
       loadDeliveredRuns(admin, clientId),
       // The one market every page pools (`marketRivalAudiences`).
       loadMarketRivalAudiences(admin, clientId),
     ])
-    const reading = readingViewFrom({ now: readingAt, runs, denominators: set.denominators, rivalAudiences }).reading
-    const readingMonth = reading.month
+    const readingMonth = readingViewFrom({ now: readingAt, runs, denominators: set.denominators, rivalAudiences }).reading.month
     return {
-      // THE GATE COUNTS FLOOR-CLEARING MONTHS (WP3.11, H19): the market's
-      // months at the floor or over, to the month the pages read, the rule
-      // the artefact and Ask count by (`floorClearingMonths`).
-      readings: floorClearingMonths(set.denominators, rivalAudiences ?? [...new Set(set.denominators.map((d) => d.audience).filter(isRivalAudience))], readingMonth).length,
+      readings: countReadings(set.denominators, firstRunMonth, readingMonth),
       readingMonth,
       monthsInQuarter: quarterMonths(set.denominators, quarter),
-      inputs: { reading, denominators: set.denominators, rivalAudiences },
     }
   } catch (error) {
     if (!isMissingMonthlyReading(error)) console.error(`[reports-card] era: ${(error as { message?: string })?.message ?? String(error)}`)
@@ -491,6 +383,18 @@ async function readEra(
 export function eraTo(firstRunMonth: string, readingAt: string): string {
   const readingMonth = monthStartOf(readingAt)
   return readingMonth >= firstRunMonth ? readingMonth : firstRunMonth
+}
+
+/** Overview's rule, verbatim: months of the gathered era carrying a
+ *  denominator row, pooled across audiences (a video sits in exactly one), up
+ *  to the month the pages read (`to`, inclusive) where one is given. */
+export function countReadings(denominators: readonly DenominatorPoint[], firstRunMonth: string, to?: string | null): number {
+  const months = new Set<string>()
+  for (const d of denominators) {
+    const m = monthStartOf(d.month)
+    if (m >= firstRunMonth && (to == null || m <= monthStartOf(to))) months.add(m)
+  }
+  return months.size
 }
 
 /** Each month of the quarter, with what it carried and whether it was read

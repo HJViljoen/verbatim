@@ -15,9 +15,6 @@ import { loadBriefReading, type BriefReadingResult, type BriefSlideFigures } fro
 import type { BriefReading } from './reading'
 import type { BriefEntry, BriefSurface, MissingInput } from './sections'
 import { readingHandle } from '../../reading/read'
-import { isMissingColumnError } from '../../supabase-admin'
-import { loadCompetitors } from '../../rivals'
-import { SHARE_BAND } from '../../report-bands'
 
 /**
  * The researcher's reading of an update, in code, before a single question is
@@ -50,10 +47,6 @@ export interface CompetitorSignal {
   shareAll: number | null
   videosNow: number
   thin: boolean
-  /** Does the brand clear as a topic in the market this month (WP3.11): named
-   *  in 10 or more of 100 or more of the market's videos, off
-   *  `month_brand_readings` (MF3)? Null where the readings are not there yet. */
-  topic?: boolean | null
 }
 
 export interface PersonaSignal extends Persona {
@@ -69,8 +62,6 @@ export interface Signals {
   company: string
   brandKeywords: string[]
   industryKeywords: string[]
-  /** `tracking_configs.market_description` (MF3), or null until it exists. */
-  marketDescription: string | null
   trackedCompetitors: string[]
   updatesCount: number
   run: {
@@ -298,16 +289,6 @@ export async function loadSignals(
     return null
   })
 
-  // WP3.11: the market in the operator's own words, and which tracked brands
-  // clear as topics in the brief's month. Both are MF3's; before it the first
-  // reads as null (`{market}` keeps today's words) and the second as unknown
-  // (no brand earns a question of its own).
-  const [marketDescription, topics] = await Promise.all([
-    readMarketDescription(admin, clientId),
-    readBrandTopics(admin, clientId, brief?.reading?.month ?? null),
-  ])
-  for (const c of competitors) c.topic = topics ? topics.has(c.name.trim().toLowerCase()) : null
-
   const rawPersonas = ((profileRes.data?.personas ?? []) as Partial<Persona & { bucketMix: Record<string, number>; themeIds: string[] }>[])
   const personas: PersonaSignal[] = rawPersonas
     .map((p) => {
@@ -339,7 +320,6 @@ export async function loadSignals(
     company,
     brandKeywords,
     industryKeywords,
-    marketDescription,
     trackedCompetitors,
     updatesCount: runDates.size,
     run: {
@@ -413,62 +393,4 @@ interface ThemeDbRow {
   single_source: boolean | null
   first_seen: boolean | null
   embedding: unknown
-}
-
-
-/** `tracking_configs.market_description` (MF3), or null: before MF3 the column
- *  is not there, which is a null and not a failure; any other failure is logged
- *  and read as null too, since `{market}` has words to fall back to. */
-export async function readMarketDescription(admin: SupabaseClient, clientId: string): Promise<string | null> {
-  const { data, error } = await admin.from('tracking_configs').select('market_description').eq('client_id', clientId).maybeSingle()
-  if (error) {
-    if (!isMissingColumnError(error, 'market_description')) console.error(`[documents] market description: ${error.message}`)
-    return null
-  }
-  const v = (data as { market_description?: string | null } | null)?.market_description
-  return typeof v === 'string' && v.trim() ? v.trim() : null
-}
-
-/**
- * The tracked brands that clear as a topic in the market in `month`, by name
- * (lower-cased), or null where the brand readings cannot say (MF3 not applied,
- * or no month to read). A brand clears when the market names it in at least
- * `SHARE_BAND.minK` of at least `SHARE_BAND.minN` videos (decision E: the
- * category and the brands tracked, pooled; the client's own posts are not the
- * market). `brand_key` is the competitor's id (plan §4.2).
- */
-export async function readBrandTopics(admin: SupabaseClient, clientId: string, month: string | null): Promise<Set<string> | null> {
-  if (!month) return null
-  const [rowsRes, competitors] = await Promise.all([
-    admin.from('month_brand_readings').select('month, audience, brand_key, k_any, n').eq('client_id', clientId).eq('month', month.slice(0, 10)),
-    loadCompetitors(admin, clientId).catch(() => []),
-  ])
-  if (rowsRes.error) {
-    const text = rowsRes.error.message ?? ''
-    if (!/month_brand_readings/.test(text) || !/(does not exist|schema cache)/i.test(text)) console.error(`[documents] brand topics: ${text}`)
-    return null
-  }
-  return brandsClearingAsTopics((rowsRes.data ?? []) as BrandTopicRow[], competitors)
-}
-
-export interface BrandTopicRow { audience: string; brand_key: string; k_any: number | null; n: number | null }
-
-/** The pure half: which brands clear, pooled over the market's audiences (a
- *  pooled row of its own is taken as it is), by lower-cased name. */
-export function brandsClearingAsTopics(rows: readonly BrandTopicRow[], competitors: readonly { id: string; name: string }[]): Set<string> {
-  const minK = SHARE_BAND.minK ?? 10
-  const minN = SHARE_BAND.minN ?? 100
-  const out = new Set<string>()
-  for (const c of competitors) {
-    const mine = rows.filter((r) => r.brand_key === c.id && r.audience !== 'client')
-    if (mine.length === 0) continue
-    // A pooled row (an audience that is not an audience key) is the market's
-    // own reading and is taken alone; per-audience rows are summed.
-    const pooled = mine.filter((r) => r.audience !== 'industry-other' && !r.audience.startsWith('competitor:'))
-    const use = pooled.length > 0 ? pooled : mine
-    const k = use.reduce((sum, r) => sum + (Number(r.k_any) || 0), 0)
-    const n = use.reduce((sum, r) => sum + (Number(r.n) || 0), 0)
-    if (k >= minK && n >= minN) out.add(c.name.trim().toLowerCase())
-  }
-  return out
 }

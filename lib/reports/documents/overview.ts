@@ -2,7 +2,7 @@ import { concludedBasisLine, GAP_WORDS, gapLevels, gapLine, type Gap } from '../
 import { fmtInt, round1 } from '../../format'
 import { denominatorLine } from './reading'
 import type { Verdict } from '../../reading/verdicts'
-import type { BriefLead, DocumentSnapshotData } from './types'
+import type { DocumentSnapshotData } from './types'
 
 /**
  * What the overview says, derived from the document itself (T10, 2026-08-31).
@@ -43,7 +43,7 @@ export interface OverviewTile {
    * THE SIDE THAT KNOWS SAYS SO. `StatTile` decided this with
    * `/\bof\s[\d]/.test(label)`, a regex over rendered copy: the contract's own
    * `DENOMINATOR_RE` is `\bof\s+[\d]`, so a label with two spaces, or one
-   * phrased "of the 626", dropped the `data-copy="level"` marker and the
+   * phrased "of the 1,388", dropped the `data-copy="level"` marker and the
    * tile silently stopped being checked — the node-declares-itself discipline
    * the contract is built on, inverted. The composer below builds each label
    * and knows which of them is a measurement of a population.
@@ -139,8 +139,8 @@ const readingSignature = (v: Verdict) =>
  * `changePts` across the merged list meant that where two readings of one
  * measurement differed, the LOUDER one won the most prominent tile on the
  * brief, over a sheet whose table prints the other. Measured on this package's
- * own fixture (its volumes are the mock's, research F12): a tile reading
- * Durability at 24.5% one line under a paragraph reading "22% of its videos".
+ * own fixture: "▲ 5.5 pts · Durability — 24.5%, 340 of 1,388" one line under a
+ * paragraph reading "22% of its videos".
  *
  * On production the two surfaces should agree, and where they do this collapses
  * them to one reading and changes nothing. Where they do not, the brief cannot
@@ -241,24 +241,6 @@ function objectionPopulation(r: DocumentSnapshotData['reading']): string {
   return r ? `videos in ${label} in ${r.monthLabel}` : `videos in ${label}\u2019s month`
 }
 
-/**
- * The market's lead level as a tile (WP3.11). A theme's level is over the
- * CATEGORY's videos, because themes are grouped per audience (decision E); a
- * subject's over the market's; the market's size is its own count. The "of N"
- * travels in the label, so the tile is a level.
- */
-export function leadTile(lead: BriefLead, monthLabel: string): OverviewTile {
-  if (lead.kind === 'size' || lead.n == null) {
-    return { value: fmtInt(lead.k), label: `videos in your market in ${monthLabel}` }
-  }
-  const population = lead.kind === 'theme' ? 'category videos' : 'videos in your market'
-  return {
-    value: fmtInt(lead.k),
-    label: `of ${fmtInt(lead.n)} ${population} in ${monthLabel}: ${lead.label ?? ''}`.replace(/: $/, ''),
-    level: true,
-  }
-}
-
 export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   const f = data.figures
   const r = data.reading
@@ -268,7 +250,7 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   // THE POOL IS THE VALUE AND THE LEAN IS THE LABEL, which is the mock's own
   // tile read honestly: "12 · videos name a switch between brands · 7 toward
   // Sealand · 5 away". The lean carries its own "of N" because 7 of 12 and
-  // 7 of 626 are different sentences.
+  // 7 of 1,388 are different sentences.
   // AND THE BASIS AND THE AUDIENCE TRAVEL WITH IT (fix pass).
   // `SwitchingFigure.basis` is declared "Printed beside it, never omitted"
   // (figures.ts) and `audience` is CLIENT_AUDIENCE — the brand's OWN posts — so
@@ -296,7 +278,7 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   // KIND, counted by `month_kind_readings` over ONE denominator — the CATEGORY
   // audience's videos in the month this brief reads — and the label emitted
   // the integer alone: "28 · of 205 videos carry pushing back", on a sheet
-  // whose own footer says "626 videos in the category". A reader could
+  // whose own footer says "1,388 videos in the category". A reader could
   // compute 13.7% or 2.0% and had nothing anywhere in the document to choose
   // between them, which defeats the "of N" rule from inside it. The crosscheck
   // line already states the rule in as many words ("Two populations, two
@@ -342,18 +324,6 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
           label: `${r.monthLabel}: ${denominatorLine(r.denominators)}`,
           word: true,
         }
-    // MARKET-FIRST (WP3.11, plan §2.9; AD F36): the first tile is the
-    // market's lead level, the front page's own lead, and a gap prints only
-    // where it CONCLUDED a difference: its refusal ("too few to compare") was
-    // the first number of every Sealand brief. A brief frozen before the lead
-    // existed carries none, and keeps the order it was built with (below).
-    if (r.lead !== undefined) {
-      const lead = r.lead ? leadTile(r.lead, r.monthLabel) : null
-      const concluded = gap && gap.state === 'apart' ? gapTile(gap) : null
-      return [lead, verdict ? verdictTile(verdict) : null, basis, switchingTile, objectionTile, concluded]
-        .filter(Boolean)
-        .slice(0, 3) as OverviewTile[]
-    }
     // The order is the merge's decision — see the header. A concluded gap and
     // a banded change lead where the month earned them; the basis follows;
     // E-sales's two measures fill whatever is left.

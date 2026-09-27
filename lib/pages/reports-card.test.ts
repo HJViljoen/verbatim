@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildQuarterlyCard, eraTo, firstComparisonLine, monthsBetween, quarterCaveat, quarterLevels, quarterMonths, type QuarterlyCardInput } from './reports-card'
-import { floorClearingMonths } from '../reports/quarterly'
+import { buildQuarterlyCard, countReadings, eraTo, firstComparisonLine, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import type { DenominatorPoint } from '../reading/series'
 import type { WindowReading } from '../reading/read'
@@ -169,15 +168,13 @@ describe('the gathered era', () => {
     run_id: null,
   })
 
-  it('counts a month once however many audiences carried it, and never the client’s own (H19)', () => {
+  it('counts a month once however many audiences carried it', () => {
     const months = [point('2026-07-01', 'live'), { ...point('2026-07-01', 'live'), audience: 'client' }, point('2026-08-01', 'live')]
-    expect(floorClearingMonths(months, [])).toEqual(['2026-07-01', '2026-08-01'])
+    expect(countReadings(months, '2026-07-01')).toBe(2)
   })
 
-  it('counts the floor-clearing months, whichever era they were read in (H19)', () => {
-    // A month read back at setup that clears the floor is a reading; a month
-    // under the floor is not, however it was read.
-    expect(floorClearingMonths([point('2026-03-01', 'back_read'), point('2026-07-01', 'live', 36)], [])).toEqual(['2026-03-01'])
+  it('counts only the gathered era', () => {
+    expect(countReadings([point('2026-03-01', 'back_read'), point('2026-07-01', 'live')], '2026-07-01')).toBe(1)
   })
 
   it('reads the era to the month in hand, not to the end of the quarter under review', () => {
@@ -185,12 +182,16 @@ describe('the gathered era', () => {
     // months behind the reading. Bounding there put "you have 4" on the card
     // and "you have 7" on the artefact the card links to.
     expect(eraTo('2026-01-01', '2026-09-18T09:00:00.000Z')).toBe('2026-09-01')
+    const months = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'].map((m) => point(m, 'live'))
+    expect(countReadings(months, '2026-06-01')).toBe(4)
   })
 
   it('stops at the month the pages read, not at the clock’s month (market-first WP1.2)', () => {
+    // On 5 October the pages read September (decision A) while October already
+    // has a row; the card's count is Overview's, so it stops at September.
     const months = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01'].map((m) => point(m, 'live'))
-    expect(floorClearingMonths(months, [], '2026-09-01')).toHaveLength(4)
-    expect(floorClearingMonths(months, [])).toHaveLength(5)
+    expect(countReadings(months, '2026-06-01', '2026-09-01')).toBe(4)
+    expect(countReadings(months, '2026-06-01')).toBe(5)
   })
 
   it('never reads the era backwards', () => {
@@ -279,47 +280,5 @@ describe('buildQuarterlyCard under the three calibration states', () => {
 
   it('a subject with no calibration given is read as before', () => {
     expect(buildQuarterlyCard(input())?.rows.map((r) => r.label)).toEqual(['Durability'])
-  })
-})
-
-// ── WP3.11: the card draws Q3's levels with one line ─────────────────────────
-
-import { pairOn } from '../reading/pairs'
-import { sealandJudge } from '../test/sealand-pairs'
-import { sealandReading } from '../test/reading-fixture'
-
-describe('the quarter the pages read, as levels (WP3.11)', () => {
-  // Sealand's market by month (decision E): July 36 (35 in the category, 1
-  // Cotopaxi), August 377 (351, 22 Cotopaxi, 4 Freitag; DR F11), September 655
-  // (626, 29; prod). Read on 25 Sep: September so far.
-  const den = (month: string, audience: string, videos: number) => ({ month, audience, videos, comments: 0 })
-  const denominators = [
-    den('2026-07-01', 'industry-other', 35), den('2026-07-01', 'competitor:Cotopaxi', 1),
-    den('2026-08-01', 'industry-other', 351), den('2026-08-01', 'competitor:Cotopaxi', 22), den('2026-08-01', 'competitor:Freitag', 4),
-    den('2026-09-01', 'industry-other', 626), den('2026-09-01', 'competitor:Cotopaxi', 29),
-  ]
-  const ON = '2026-09-25T09:00:00.000Z'
-  const levels = quarterLevels({
-    reading: sealandReading(ON), readingAt: ON, denominators, rivalAudiences: ['competitor:Cotopaxi', 'competitor:Freitag'],
-    pair: pairOn(sealandJudge(ON)), readings: 2,
-  })
-
-  it('draws Q3’s months: July too few to read, August, September so far', () => {
-    expect(levels.quarter.label).toBe('Q3 2026')
-    expect(levels.months).toEqual([
-      { month: '2026-07-01', videos: 36, state: 'too_few' },
-      { month: '2026-08-01', videos: 377, state: 'read' },
-      { month: '2026-09-01', videos: 655, state: 'so_far' },
-    ])
-    expect(levels.floor).toBe(100)
-  })
-
-  it('carries one line: Q4 against Q3 refused, in the pair rule’s own words', () => {
-    expect(levels.line).toBe('Q4 2026 against Q3 2026 is not read as a change: we changed our searches in September.')
-  })
-
-  it('falls back to when the first comparison arrives where no change of ours refuses the next pair', () => {
-    const noJudge = quarterLevels({ reading: sealandReading(ON), readingAt: ON, denominators, rivalAudiences: null, pair: null, readings: 2 })
-    expect(noJudge.line).toContain('The first quarter-on-quarter comparison arrives with the')
   })
 })

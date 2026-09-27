@@ -144,9 +144,7 @@ export const LEADERSHIP_BRIEF: DocumentTemplate = {
   key: 'leadership_brief',
   name: 'Leadership one-pager',
   audience: 'leadership',
-  // REVERTED (WP3.11, plan §2.9): 2b148b25 moved this from market framing to
-  // brand framing on the day market-first was decided (AD F39).
-  description: 'Three readings of what the market is saying, what moved since last time, and where the company stands against the names it is measured against. Short on purpose: the pages a board member will actually read.',
+  description: 'Gives leadership a fast, honest read on where the company stands with its customers and against its rivals, so decisions start from what people actually say rather than from assumptions.',
   role:
     `You are the company's consumer researcher. ${READ} and you are writing the short brief the executive team reads. You report what the conversation shows and what it means for the business: demand, reputation, and where the company sits against the alternatives. You do not recommend a strategy; you give the reading the strategy would have to answer to.`,
   brief:

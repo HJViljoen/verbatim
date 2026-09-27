@@ -1,4 +1,3 @@
-import type { BriefLead } from './types'
 import { fmtInt, fullDate, longMonth, platformLabel, shortDate } from '../../format'
 import { blockAnswers, mergeFigures } from '../../blocks/types'
 import type { Block } from '../../blocks/types'
@@ -81,9 +80,6 @@ export interface BriefReading {
    * names it and this module holds no sentence.
    */
   gaps: Gap[]
-  /** The market's lead level (WP3.11): the first "In short" tile. Optional:
-   *  a reading built without the front page's market blocks has none. */
-  lead?: BriefLead | null
   denominators: BriefDenominator[]
   platformMix: PlatformMix
   /** The reading layer's own caveats, said once (collapsed upstream). */
