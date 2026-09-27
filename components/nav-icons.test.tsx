@@ -59,8 +59,10 @@ describe('the sidebar’s icons', () => {
     // of text in it, not two people.
     expect(draw('voice')).toContain('lucide-message-square-text')
     expect(draw('voice')).not.toContain('lucide-users')
-    // M6 20v-5 / M12 20V8 / M18 20v-9 / M3 20h18 — three columns on an axis.
-    expect(draw('competitive')).toContain('M13 17V5')
+    // Brands (design-mf2): a tag, `M12.6 2.6A2 2 0 0 0 11.2 2H4 … z` with a
+    // dot, not three columns on an axis (deploy 5).
+    expect(draw('competitive')).toContain('lucide-tag')
+    expect(draw('competitive')).not.toContain('M13 17V5')
     expect(draw('competitive')).not.toContain('lucide-swords')
     // circle r9 + a question hook + M12 17h.01 — a question, not a sparkle.
     expect(draw('ask')).toContain('M12 17h.01')

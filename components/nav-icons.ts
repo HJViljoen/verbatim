@@ -1,4 +1,4 @@
-import { Globe, Target, MessageSquareText, ChartColumn, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { Globe, Target, MessageSquareText, Tag, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
 
 import type { NavKey } from "@/lib/nav"
 
@@ -57,15 +57,16 @@ import type { NavKey } from "@/lib/nav"
  * polish): Your market is the market, a globe (`circle r9 · M3 12h18` and two
  * meridians), not a dashboard grid, and Conversation is talk, a speech square
  * with two lines of text in it (`M21 15a2 2 … z · M8 9h8 · M8 13h5`), not two
- * people. Each glyph follows its label: Competitive keeps its columns until
- * deploy 5 renames it Brands (the preview's tag).
+ * people. Each glyph follows its label: Brands, Competitive until deploy 4
+ * renamed it, is the preview's tag (`M12.6 2.6A2 2 0 0 0 11.2 2H4 … z` and a
+ * dot at 7.5, 7.5; deploy 5), no longer three columns.
  */
 export const NAV_ICON: Record<NavKey, LucideIcon> = {
   overview: Globe,
   subjects: List,
   voice: MessageSquareText,
   market: Target,
-  competitive: ChartColumn,
+  competitive: Tag,
   week: CalendarDays,
   ask: CircleHelp,
   reports: FileText,
