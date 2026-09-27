@@ -18,10 +18,13 @@
 /** §2.11, the rows a reader needs: when each kind of statement becomes
  *  possible. `from` is the day the row starts to hold (an update's day or the
  *  month's first). The weekly line's row is not here: whether it prints was
- *  Heinrich's call on 26 Oct (decision M), and the page does not know it. */
+ *  Heinrich's call on 26 Oct (decision M), and the page does not know it.
+ *  The re-check is the 4 Oct update's, not the preview's 11 Oct: the fast
+ *  track (plan §3.7, accepted 26 Sep) brings deploy 3 on Mon 5 Oct and reads
+ *  the re-check "with the 4 Oct update". */
 export const PAGES_CAN_SAY: readonly { when: string; from: string; says: string }[] = [
   { when: 'to 31 Oct', from: '2026-09-25', says: 'Each month in full, with the month before beside it, not read as a change.' },
-  { when: '11 Oct update', from: '2026-10-11', says: 'The re-check on the searches both months ran, without makers or off-topic videos. Provisional.' },
+  { when: '4 Oct update', from: '2026-10-04', says: 'The re-check on the searches both months ran, without makers or off-topic videos. Provisional.' },
   { when: '1 Nov', from: '2026-11-01', says: 'October, ended, leads. September against October is not compared.' },
   { when: '6 Dec update', from: '2026-12-06', says: 'October against November at the same age: the first comparison read the same way.' },
   { when: 'about 3 Jan', from: '2027-01-03', says: 'October against November in full, once November has filled. November against December at the same age.' },

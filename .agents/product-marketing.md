@@ -173,8 +173,8 @@ category conversation where the brand is not named. It may claim:
     ceiling of 120. Any part whose record is not there says "not measured".
   - **The search set is held still until January:** a change a client saves
     to its terms, rivals or accounts is queued and lands on the 1st of a
-    month, the first no earlier than 1 January 2027, applied by the update
-    that runs that day. Communities, a rival rename and the report day are
+    month, the first no earlier than 1 January 2027, applied by the first
+    update that runs on or after that day. Communities, a rival rename and the report day are
     not queued: they are held, and the client is told to ask.
   - **Subjects are something the market talks about that the client chose to
     follow**, named the way a buyer would say it; up to ten; a subject nobody

@@ -37,6 +37,9 @@ describe('What the pages can say, and when', () => {
     expect(text).toContain('Levels now. The first change we can stand behind comes in December, if nothing we search changes.')
     expect(text).toContain('6 Dec update October against November at the same age: the first comparison read the same way.')
     expect(text).toContain('April 2027 The first quarter comparison')
+    // The fast track (§3.7): the re-check reads with the 4 Oct update.
+    expect(text).toContain('4 Oct update The re-check on the searches both months ran')
+    expect(text).not.toContain('11 Oct')
   })
   it('marks the next row by the clock', () => {
     expect(timelineRows('2026-11-22T09:00:00Z').find((r) => r.state === 'next')?.when).toBe('6 Dec update')
