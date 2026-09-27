@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { lineClaims, topicOf } from './market-line'
+import { lineClaims } from './market-line'
 import type { ClaimSubjects } from './market-surface'
 
 // The hero's pure pieces. The sentences on Sealand's and Össur's real months
@@ -42,21 +42,5 @@ describe('lineClaims', () => {
     // A three-way tie at the top names neither.
     expect(lineClaims({ ...PREVIEW_CLAIMS, subjects: [{ ...a, k: 13 }, { ...b, k: 13 }, ...rest] })).toBeNull()
     expect(lineClaims({ ...PREVIEW_CLAIMS, subjects: PREVIEW_CLAIMS.subjects.map((x) => ({ ...x, k: 0 })) })).toBeNull()
-  })
-})
-
-describe('topicOf', () => {
-  it('reads a label as a topic inside a sentence', () => {
-    expect(topicOf('Confusion over airline bag sizes')).toBe('airline bag sizes')
-    expect(topicOf('Questions about buying and shipping')).toBe('buying and shipping')
-    expect(topicOf('Confusion about airline size rules')).toBe('airline size rules')
-    expect(topicOf('Price and sale questions')).toBe('price and sale')
-    expect(topicOf('Laundry planning for travel')).toBe('laundry planning for travel')
-    expect(topicOf('Buying interest and ordering questions')).toBe('buying interest and ordering')
-  })
-
-  it('keeps a name’s capital', () => {
-    expect(topicOf('TikTok sizing questions')).toBe('TikTok sizing')
-    expect(topicOf('Questions about USB-C charging')).toBe('USB-C charging')
   })
 })

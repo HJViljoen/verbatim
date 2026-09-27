@@ -82,4 +82,13 @@ describe('starter questions, written by code from the front page’s biggest obj
     expect(topicOf('Buying interest and ordering questions')).toBe('buying interest and ordering')
     expect(topicOf('Questions and answers on sizing')).toBe('questions and answers on sizing')
   })
+
+  // Your moves' "In one line" names its themes with the same function
+  // (lib/pages/market-line.ts), so its cases are here.
+  it('reads a label as a topic inside a sentence, and keeps a name’s capital', () => {
+    expect(topicOf('Confusion over airline bag sizes')).toBe('airline bag sizes')
+    expect(topicOf('Laundry planning for travel')).toBe('laundry planning for travel')
+    expect(topicOf('TikTok sizing questions')).toBe('TikTok sizing')
+    expect(topicOf('Questions about USB-C charging')).toBe('USB-C charging')
+  })
 })

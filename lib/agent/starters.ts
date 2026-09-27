@@ -55,9 +55,14 @@ const TRAILING = /\s+(questions?)$/i
  *  sizes" → "airline bag sizes"; on staging's 20 Sep update, "Confusion about
  *  airline size rules" → "airline size rules" and "Price and sale questions"
  *  → "price and sale", where the card had read "ask about confusion about
- *  airline size rules" and "ask about price and sale questions". */
+ *  airline size rules" and "ask about price and sale questions". A first word
+ *  that is a name ("TikTok", "USB-C") keeps its capital: it carries another
+ *  capital after its first letter. The one copy: Your moves' "In one line"
+ *  (lib/pages/market-line.ts) names its themes with it too. */
 export function topicOf(label: string): string {
   const t = label.trim().replace(LEADING, '').replace(TRAILING, '')
+  const first = t.split(/\s/)[0] ?? ''
+  if (/[A-Z]/.test(first.slice(1))) return t
   return t.charAt(0).toLowerCase() + t.slice(1)
 }
 

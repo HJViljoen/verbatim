@@ -1,4 +1,5 @@
 import { fmtInt, longMonth, shortDate } from '../format'
+import { topicOf } from '../agent/starters'
 import { THEME_FLOOR } from './overview-market/board'
 import type { ClaimSubjects, MarketSurfaceData } from './market-surface'
 
@@ -57,26 +58,6 @@ export interface MarketLine {
   makersRead: boolean
   moves: LineMoves
   claims: LineClaims | null
-}
-
-// A LEAF COPY of mf/s3-ask-reports' `topicOf` (lib/agent/starters.ts, Ask's
-// starter cards), which is not on this base: one theme label, one topic, on
-// both pages once the two merge. Fold into the one function at that merge.
-const LEADING = /^(confusion|questions?|interest|curiosity|frustrations?|praise|love|requests?|needs?|demand|worries|concerns?|complaints?|appreciation|admiration|respect|excitement|doubts?)\s+(over|about|in|with|for|on|around|regarding)\s+/i
-const TRAILING = /\s+(questions?)$/i
-
-/**
- * A theme label's topic, for the middle of a sentence: without its leading
- * noun phrase or a trailing "questions", first letter lowered. "Confusion over
- * airline bag sizes" → "airline bag sizes", "Price and sale questions" →
- * "price and sale". A first word that is a name ("TikTok", "USB-C") keeps its
- * capital: it carries another capital after its first letter.
- */
-export function topicOf(label: string): string {
-  const t = label.trim().replace(LEADING, '').replace(TRAILING, '')
-  const first = t.split(/\s/)[0] ?? ''
-  if (/[A-Z]/.test(first.slice(1))) return t
-  return t.charAt(0).toLowerCase() + t.slice(1)
 }
 
 /** The date a move is read from: the day it was dated, else the day it was
