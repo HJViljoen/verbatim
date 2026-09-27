@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import type { KeywordRow } from '../../provenance/searches'
-import { fromNewSearches, searchesAddedIn } from './provenance'
+import { foundSplit, fromNewSearches, searchesAddedIn, type ThemeEvidence } from './provenance'
 
 // Sealand's gathers as keyword_performance holds them on staging (the WP0.1
 // export and the 26 Sep ruling's first runs): era A from July; r/backpacks
@@ -60,5 +60,56 @@ describe('a theme’s videos found only by searches added in the month', () => {
   it('is not measured (null) with no provenance at all, never zero', () => {
     expect(fromNewSearches(['v1'], { provenance: [], videos: [video('v1', ['handmade bag'])], verdicts: [] }, added)).toBeNull()
     expect(fromNewSearches([], { provenance: [{ video_id: 'v1', first_terms: ['frtg'], first_subreddits: [] }], videos: [], verdicts: [] }, added)).toBeNull()
+  })
+})
+
+describe('where a subject’s videos were found: before the month, only on its added searches, or no record', () => {
+  const video = (id: string, source_keywords: string[] | null, platform = 'tiktok') => ({ id, platform, video_id: `p-${id}`, source_keywords })
+  // The six videos above, and three more: one with no evidence at all, one
+  // found by a term keyword_performance never logged, one by r/backpacks and
+  // the 13 Sep travel gear together.
+  const EVIDENCE: ThemeEvidence = {
+    provenance: [
+      { video_id: 'v1', first_terms: ['handmade bag'], first_subreddits: [], method: 'exact' },
+      { video_id: 'v2', first_terms: ['travel gear'], first_subreddits: [], method: 'exact' },
+      { video_id: 'v3', first_terms: [], first_subreddits: ['r/onebag'], method: 'exact' },
+      { video_id: 'v4', first_terms: [], first_subreddits: ['r/backpacks'], method: 'exact' },
+      { video_id: 'v5', first_terms: ['frtg'], first_subreddits: [], method: 'ambiguous' },
+      { video_id: 'v6', first_terms: ['sailcloth bag'], first_subreddits: [], method: 'reconstructed' },
+      { video_id: 'v8', first_terms: ['sealand gear'], first_subreddits: [], method: 'reconstructed' },
+      { video_id: 'v9', first_terms: ['travel gear'], first_subreddits: ['r/Backpacks'], method: 'exact' },
+    ],
+    videos: [
+      video('v1', ['handmade bag']), video('v2', ['travel gear', 'upcycled bag']), video('v3', null, 'reddit'), video('v4', null, 'reddit'),
+      video('v5', ['frtg']), video('v6', ['sailcloth bag']), video('v7', null), video('v8', ['sealand gear']), video('v9', null, 'reddit'),
+    ],
+    verdicts: [{ platform: 'tiktok', video_id: 'p-v6', keyword: 'poler' }, { platform: 'tiktok', video_id: 'p-v1', keyword: 'Handmade Bag' }],
+  }
+  const IDS = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9']
+
+  it('splits September three ways, the parts adding up to the subject’s videos', () => {
+    // added: v1 and v3. before: v2 (upcycled bag), v4 (r/backpacks, run since
+    // 17 Aug), v6 (poler, removed on 9 Sep), v9 (r/backpacks beside travel
+    // gear). no record: v5 (ambiguous), v7 (no evidence), v8 (a term
+    // keyword_performance never logged).
+    expect(foundSplit(IDS, EVIDENCE, KP, '2026-09-01')).toEqual({ of: 9, before: 4, added: 2, unrecorded: 3 })
+  })
+
+  it('counts as added exactly what the front page’s rule counts, over the same evidence', () => {
+    const split = foundSplit(IDS, EVIDENCE, KP, '2026-09-01')!
+    expect(split.added).toBe(fromNewSearches(IDS, EVIDENCE, searchesAddedIn('2026-09-01', KP))!.fromNewSearches)
+    expect(split.before + split.added + split.unrecorded).toBe(split.of)
+  })
+
+  it('reads each month against its own added searches: August added only r/backpacks', () => {
+    // In August r/backpacks is the added search, so v4 is added; the 9 and 13
+    // Sep terms had not run yet and prove nothing ran before August.
+    expect(foundSplit(['v2', 'v4', 'v1'], EVIDENCE, KP, '2026-08-01')).toEqual({ of: 3, before: 1, added: 1, unrecorded: 1 })
+  })
+
+  it('is null where there is nothing to split against: no search added in the month, no provenance, no video', () => {
+    expect(foundSplit(IDS, EVIDENCE, KP, '2026-10-01')).toBeNull()
+    expect(foundSplit(IDS, { ...EVIDENCE, provenance: [] }, KP, '2026-09-01')).toBeNull()
+    expect(foundSplit([], EVIDENCE, KP, '2026-09-01')).toBeNull()
   })
 })

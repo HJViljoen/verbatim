@@ -64,6 +64,8 @@ import {
 import { selectAll } from '../supabase-admin'
 import { segmentRulesEnabled } from '../segments/rules'
 import { marketKindLabel, marketLevel } from './overview-market/kinds'
+import type { FoundSplit } from './overview-market/provenance'
+import { loadKeywordRuns, loadSubjectFound } from './subjects-found'
 import { accountKey } from './overview-market/voices'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
@@ -478,6 +480,12 @@ export interface SubjectPane {
   /** The subject's market videos this month that are makers', and the base
    *  (the pane's "Who posted them"). Null where not measured. */
   makers?: { k: number; of: number } | null
+  /** WHERE WE FOUND THEM (the approved preview's pane): the same videos (`of`
+   *  is the headline's k) on searches we ran before the month, and those
+   *  found only on searches we added in it, by the front page's added-only
+   *  rule (`foundSplit`). Null where not measured, or where the month added
+   *  no search. Optional: absent on a stored pane. */
+  found?: FoundSplit | null
   /**
    * WHAT PEOPLE SAY ABOUT IT (§2.3 S3): the kinds of the subject's own member
    * insights, as videos in the reading month, by the month rule (a member
@@ -1967,6 +1975,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         return { occupies: null, makers: null, lens: null }
       })
     : Promise.resolve({ occupies: null, makers: null, lens: null })
+  // When each search first ran (`keyword_performance`), for the pane's "Where
+  // we found them", beside the month reads.
+  const keywordRunsAhead = opensOne ? loadKeywordRuns(reading.client, clientId) : Promise.resolve(null)
   // The next pair read the same way, for the Month by month cards: the judge's
   // own pair rows (memoised, so no second read).
   const pairRowsAhead = opensOne ? loadPairRows(reading.client, clientId, null).catch(() => null) : Promise.resolve(null)
@@ -2202,6 +2213,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       ? members.filter((m) => m.evidence.some((e) => e.source === 'comment' && inMonth(e.commentDate, month))).map((m) => m.insightId)
       : null
     const themedRunId = themedRunAhead ? await themedRunAhead : null
+    // WHERE WE FOUND THEM, read beside the voices and the questions: the
+    // subject's market videos this month, the set its kinds are read on
+    // (printed below only where that set is the headline's k).
+    const foundAhead = members && readIn(subject.id, month) === 'read'
+      ? makersAhead
+          .then((m) => loadSubjectFound(reading.client, clientId, month, [...subjectMonthVideos(members, month, m.occupies).videos], keywordRunsAhead))
+          .catch(() => null)
+      : Promise.resolve(null)
     const [voices, unanswered] = await Promise.all([
       // Dated in the reading month, the market first, never the video's own
       // account (§2.3 S5), a maker's video marked.
@@ -2327,6 +2346,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       marketLine,
       chip,
       makers: makerK != null && railRow?.market ? { k: makerK, of: railRow.market.k } : null,
+      // Where we found them, on the kinds' set: printed only where it is the headline's k.
+      found: kindsIn ? await foundAhead : null,
       kindsIn,
       nextPair,
       monthStates,
