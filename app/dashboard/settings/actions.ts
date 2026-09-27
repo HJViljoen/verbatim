@@ -322,10 +322,12 @@ const termList = (what: string) =>
     })
 
 const termsSchema = z.object({
-  brand_keywords: termList('terms for your brand').min(1, 'keep at least one term for your brand'),
-  competitor_keywords: termList('competitor terms'),
-  industry_keywords: termList('category terms'),
-  exclude_terms: termList('exclusions'),
+  // The groups by the page's names (WP3.10): "keep at most 20 terms for the
+  // category".
+  brand_keywords: termList('terms for your name').min(1, 'keep at least one term for your name'),
+  competitor_keywords: termList('terms for brands you track'),
+  industry_keywords: termList('terms for the category'),
+  exclude_terms: termList('terms under Not these'),
 })
 
 export async function updateSearchTerms(
@@ -415,7 +417,7 @@ export async function updateSearchTerms(
     // column does not exist yet. Everything else is ours to chase, not theirs.
     return isMissingColumn(exclErr, 'exclude_terms')
       ? { ok: true, message: 'Saved. Exclusions need a database update that hasn’t shipped yet.' }
-      : { ok: true, message: 'Saved, except the “Not this” list, which we could not store. Try that part again.' }
+      : { ok: true, message: 'Saved, except the “Not these” list, which we could not store. Try that part again.' }
   }
   return { ok: true, message: 'Saved. Your next update searches these terms.' }
 }

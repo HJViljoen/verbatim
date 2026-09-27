@@ -2,11 +2,14 @@ import { SettingsFrame } from '@/components/settings-frame'
 import { LastSaveStrip } from '@/components/settings/save-state-strip'
 import { CommunitiesSection } from '@/components/settings/tracking/communities'
 import { HeldStillSection } from '@/components/settings/tracking/held-still'
-import { WhereItCameFrom, WhereWeReadIt, YourMarketSize } from '@/components/settings/tracking/your-market'
+import { MakersSection, NotMyMarketSection } from '@/components/settings/tracking/market-marks'
+import { marketSplit, WhereItCameFrom, WhereWeReadIt, YourMarketSize } from '@/components/settings/tracking/your-market'
 import { redditDiscoveryEnabled } from '@/lib/config'
 import { PlatformsSection } from '@/components/settings/tracking/platforms'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { shortDate } from '@/lib/format'
+import { surface } from '@/lib/nav'
+import { prevMonth } from '@/lib/reading/month-key'
 import { readingHandle } from '@/lib/reading/read'
 import { communityRows, tableRows, unconfiguredShare } from '@/lib/settings/communities'
 import { platformRows } from '@/lib/settings/connections'
@@ -20,11 +23,15 @@ import { termDateShort } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { tenantLocked } from '@/lib/tenant-locks'
+import { marketPairChip, notMyMarketCount, ownPostsIn, prevMarketSplit } from './market-read'
 import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
 import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
 
-// Settings › Tracking (Phase 1 WP16, design ST2 and ST4; ported to the
+// Settings › What we read (the key and the address stay `tracking`; the label
+// is the approved preview's, WP3.10, and like The record the pane carries no
+// title of its own: the lit rail entry names it) — was Tracking (Phase 1 WP16,
+// design ST2 and ST4; ported to the
 // artboard in Block D wave 2) — everything about what we look at for this
 // workspace, in one sub-page: the terms, what each one brought back, the
 // communities, the rivals and the platforms.
@@ -84,6 +91,19 @@ export default async function SettingsTrackingPage() {
     return null
   })
   const plan = searchPlan((inputs.config ?? {}) as Parameters<typeof searchPlan>[0], redditDiscoveryEnabled())
+  // THE PREVIEW'S WORDS FOR YOUR MARKET (WP3.10): the month before as counts,
+  // the pair's chip, your own posts in the month and the videos you marked
+  // "not my market". Each read that fails leaves its part out.
+  const before = prevMonth(inputs.censusMonth)
+  const [prevSplit, chip, ownPosts, byYou] = await Promise.all([
+    market?.market ? prevMarketSplit(createAdminClient(), clientId, before) : Promise.resolve(null),
+    market?.market ? marketPairChip(clientId, before, inputs.censusMonth, new Date().toISOString()) : Promise.resolve(null),
+    ownPostsIn(supabase, clientId, inputs.censusMonth),
+    notMyMarketCount(supabase, clientId),
+  ])
+  const moves = surface('market')
+  const front = surface('overview')
+  const conversation = surface('voice')
 
   const c = inputs.config as TrackingConfig | null
   const terms = inputs.config as SearchTermsConfig | null
@@ -127,7 +147,6 @@ export default async function SettingsTrackingPage() {
       title="Settings"
       context={context}
       bar={oneLineBar(inputs.tenant, inputs.reading)}
-      contentTitle="Tracking"
       counts={{
         tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
         ...(inputs.railCounts.subjects != null
@@ -148,9 +167,29 @@ export default async function SettingsTrackingPage() {
         <p className="text-[12.5px] text-muted-foreground">No tracking config for this workspace. Nothing is tracked until this is set up with you.</p>
       ) : (
         <>
-        <YourMarketSize month={inputs.censusMonth} videos={market?.market?.length ?? null} />
+        <YourMarketSize
+          month={inputs.censusMonth}
+          soFar={inputs.reading?.state === 'so_far'}
+          videos={market?.market?.length ?? null}
+          split={market?.market ? marketSplit(market.market) : null}
+          prev={prevSplit ? { month: before, split: prevSplit } : null}
+          chip={chip}
+          ownPosts={ownPosts}
+          movesLabel={moves.label}
+          movesHref={moves.href}
+          marketLabel={front.label}
+          marketHref={front.href}
+        />
         <WhereItCameFrom month={inputs.censusMonth} marketVideos={market?.market?.length ?? null} terms={market?.terms ?? null} makers={market?.makers ?? 'not_measured'} />
         <WhereWeReadIt month={inputs.censusMonth} marketVideos={market?.market?.length ?? null} mix={market?.mix ?? null} plan={plan} />
+        <MakersSection
+          month={inputs.censusMonth}
+          makers={market?.makers ?? 'not_measured'}
+          counts={market?.segmentCounts ?? null}
+          conversationLabel={conversation.label}
+          conversationHref={conversation.href}
+        />
+        <NotMyMarketSection month={inputs.censusMonth} byYou={byYou} counts={market?.segmentCounts ?? null} makers={market?.makers ?? 'not_measured'} />
         {locked ? (
           <HeldStillSection
             line={heldStillLine(queue?.state === 'available' ? 'available' : 'unavailable')}

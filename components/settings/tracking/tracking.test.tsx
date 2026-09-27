@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { CommunitiesSection } from './communities'
+import { CommunitiesSection, keptCell, unconfiguredLine } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
@@ -13,7 +13,7 @@ import { gridIntrinsic, ICON_TARGET, ROW_CONTROL } from '@/components/settings/c
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { TermPerformance } from '@/app/dashboard/settings/term-performance'
-import type { TermYield } from '@/lib/settings/terms'
+import { TERM_YIELD_BASIS, type TermYield } from '@/lib/settings/terms'
 import type { TermSummary } from '@/lib/keywords/value'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
 import type { CommunityRow } from '@/lib/settings/communities'
@@ -78,7 +78,11 @@ describe('the search terms section', () => {
 
   it('heads the section with its title alone, and prints every bucket, the fourth one included (the 25 Sep rulings, WP3.10)', () => {
     expect(words).not.toContain('4 terms · brand 2')
-    expect(words).toContain('Not this')
+    // The preview's words for the four groups and the section (WP3.10).
+    expect(words).toContain('The search set')
+    for (const w of ['Your name', 'Brands you track', 'The category', 'Not these']) expect(words).toContain(w)
+    expect(words).toContain('how people write it')
+    expect(words).toContain('other meanings of the names we track')
   })
 
   it('leaves the chips bare where the log holds no date at all', () => {
@@ -589,12 +593,12 @@ describe('the save state', () => {
 
   it('carries the pending half at the save row, where the form knows it', () => {
     const state = saveState({
-      pending: [{ field: 'Category terms', from: '12 entries', to: '13 entries' }],
+      pending: [{ field: 'Terms for the category', from: '12 entries', to: '13 entries' }],
       lastChange: change,
       affectsRecorded: false,
     })
     const words = renderText(<SaveStateLine state={state} />)
-    expect(words).toContain('1 change waiting to be saved: category terms')
+    expect(words).toContain('1 change waiting to be saved: terms for the category')
     expect(words).toContain('last saved 3 Sep')
     // M3: the break half is the rail's, and it is drawn once.
     expect(words).not.toContain('was not written down')
@@ -629,9 +633,46 @@ describe('How they are doing (the term table), WP3.10 check', () => {
     expect(text).not.toMatch(/\d\.\d%/)
   })
 
+  it('says its clock in the column head, not in a footnote under the table (25 Sep rulings, WP3.10)', () => {
+    expect(text).toContain('Month by month, by update')
+    expect(text).not.toContain(TERM_YIELD_BASIS)
+    expect(render(<TermPerformance rows={[term('sealand bag', 448, 75)]} updates={8} months={months} />)).toContain(`title="${TERM_YIELD_BASIS}"`)
+  })
+
   it('names each month, never its ISO key, with a count under 100', () => {
     expect(text).toContain('Sep 6 of 66')
     expect(text).toContain('Sep 17%')
     expect(text).not.toMatch(/\d{4}-\d{2}/)
+  })
+})
+
+// ---- the watched communities' kept cell (WP3.10; §4.0 "of N" through levelText) --
+
+describe('a community’s kept cell', () => {
+  // Real counts (staging, 2 Oct clock): Sealand's watched r/backpacks, 64
+  // kept of 67 looked at, and r/buyitforlife, 4 of 4 (the render printed "96%"
+  // and "100%" for them); and r/prosthetics' 25 kept of 100 found, Össur's
+  // term record, for the one row at the floor. No watched community has 100
+  // looked at yet.
+  it('prints "kept of found" under 100 looked at, never a share', () => {
+    expect(keptCell({ keptPct: (64 / 67) * 100, found: 67, kept: 64 })).toBe('64 of 67')
+    expect(keptCell({ keptPct: 100, found: 4, kept: 4 })).toBe('4 of 4')
+  })
+  it('prints the share at 100 or more, and nothing where the record is closed', () => {
+    expect(keptCell({ keptPct: 25, found: 100, kept: 25 })).toBe('25%')
+    expect(keptCell({ keptPct: null, found: null, kept: null })).toBe('—')
+    // A row whose kept count is not known prints no share under 100.
+    expect(keptCell({ keptPct: (64 / 67) * 100, found: 67 })).toBe('—')
+  })
+})
+
+describe('the Reddit posts no list named', () => {
+  // Staging, 2 Oct clock: Sealand holds 375 Reddit posts, 246 of them from
+  // communities no list named; Össur 149, 99 of them. Neither holds under 100,
+  // so the count case is the arithmetic on fombrand's real 6 of 66 (above).
+  it('carries its base: a count under 100 posts, a share of N from 100', () => {
+    expect(unconfiguredLine({ posts: 66, fromUnconfigured: 6 })).toBe('6 of 66 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
+    expect(unconfiguredLine({ posts: 375, fromUnconfigured: 246 })).toBe('66% of the 375 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
+    expect(unconfiguredLine({ posts: 149, fromUnconfigured: 99 })).toBe('66% of the 149 Reddit posts we hold for you came from communities nobody put on the list; the search found them.')
   })
 })

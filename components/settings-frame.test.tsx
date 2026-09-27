@@ -13,8 +13,10 @@ describe('the settings rail', () => {
     )
     for (const s of SETTINGS_SUBPAGES) expect(text).toContain(s.label)
     expect(SETTINGS_SUBPAGES.map((s) => s.label)).toEqual([
-      'Tracking', 'Subjects', 'Readiness', 'The record',
-      'Reports and recipients', 'Team and billing', 'How to read',
+      // The approved preview's labels (WP3.10): "What we read" and "Team".
+      // Readiness stays (lib/settings/rail.ts says why).
+      'What we read', 'Subjects', 'Readiness', 'The record',
+      'Reports and recipients', 'Team', 'How to read',
     ])
   })
 
@@ -61,7 +63,7 @@ describe('the settings rail', () => {
     expect(markup).toContain('min-h-10')
   })
 
-  it('keeps Billing under the Team and billing entry rather than giving it its own', () => {
+  it('keeps Billing under the Team entry rather than giving it its own', () => {
     const entry = SETTINGS_SUBPAGES.find((s) => s.key === 'team')!
     expect(entry.href).toBe('/dashboard/team')
     expect(entry.under).toEqual(['/dashboard/billing'])

@@ -4,9 +4,23 @@ import { describe, expect, it } from 'vitest'
 
 import { GLOSSARY, THIRTEEN_WORDS } from '../calibration'
 import { DIRECTION_WORDS } from '../calibration'
+import { ASK_MONTHLY_CAP } from '../config'
 import { SURFACES } from '../nav'
 import { SLOT_HOUR } from '../pipeline/schedule-due'
+import { NEW_THEME_FLOOR } from '../pages/week'
+import { BASELINE_MONTHS } from '../reading/anomaly'
+import { TOUCH_MIN_WORDS } from '../reading/own-posts'
+import { LEAD_MAX_MAKER_SHARE, MAKER_GROUP_SHARE, MAKER_NOTE_SHARE } from '../pages/overview-market/board'
+import { NINETY_DAY_NOTE } from '../pages/overview-market/brands'
+import { COMPARE_RULES } from '../pages/overview-market/change'
+import { COMPARE_FLAG_SHARE, COMPARE_REFUSE_SHARE, DEPTH_RATIO_MIN } from '../reading/comparability'
+import { CHECK_MIN_VIDEOS, DENSE_MIN_DATED } from '../reading/recheck'
+import { MONTH_READABLE_VIDEOS, READING_SWITCH_FRACTION, READING_SWITCH_UPDATES } from '../reading/reading-month'
+import { MONTHLY_UPDATES_PAST_END } from '../reports/monthly'
+import { SUBJECT_PRECISION_FLOOR } from '../subjects/types'
 import { DEFINITIONS, READING_CARDS, READING_PATH } from './how-to-read'
+import { QUEUE_FLOOR } from './queue'
+import { TERM_YIELD_BASIS } from './terms'
 
 describe('how to read', () => {
   it('describes every surface the shell has, and no other', () => {
@@ -119,6 +133,139 @@ describe('how to read', () => {
     expect(nw).toHaveLength(1)
     expect(nw[0].body).toContain('no earlier month in our record')
     expect(GLOSSARY.new[1]).toContain('no earlier month in our record')
+  })
+})
+
+// ---- market-first (WP3.10, plan §2.10 D5, decision K) -----------------------
+
+const card = (key: string) => READING_CARDS.find((c) => c.key === key)!
+const def = (id: string) => DEFINITIONS.find((d) => d.id === id)!
+const cardText = (key: string) => { const c = card(key); return [c.tells, ...c.cannot].join(' ') }
+const everything = [
+  ...READING_CARDS.flatMap((c) => [c.tells, ...c.cannot]),
+  ...DEFINITIONS.flatMap((d) => [d.title, d.body]),
+  ...READING_PATH.flatMap((p) => [p.when, ...p.what]),
+]
+
+describe('how to read, market-first', () => {
+  it('reads every page on the market first', () => {
+    for (const c of READING_CARDS) expect(c.tells.toLowerCase(), c.key).toContain('market')
+  })
+
+  it('carries no em dash, no "how sound" and no "complete" month anywhere a reader sees (§4.0)', () => {
+    for (const t of everything) {
+      expect(t).not.toContain('—')
+      expect(t.toLowerCase()).not.toContain('how sound')
+      expect(t).not.toMatch(/\bcomplete\b/i)
+    }
+  })
+
+  it('says "five to eight" nowhere: a workspace follows up to ten subjects now (WP3.1)', () => {
+    for (const t of everything) expect(t).not.toMatch(/five to eight|5.8 subjects/i)
+  })
+
+  it('describes Your subjects as yours, not as "picked for you" (decision G)', () => {
+    expect(card('subjects').tells).toContain('each of your subjects')
+    expect(cardText('subjects')).not.toContain('picked for you')
+  })
+
+  it('holds the method the pages stopped printing under their blocks, once each (25 Sep rulings)', () => {
+    for (const id of ['reading-month', 'the-market', 'makers', 'provisional', 'not-read-as-a-change', 're-check', 'from-added-searches', 'brands', 'with-this-update']) {
+      expect(def(id), id).toBeDefined()
+    }
+  })
+
+  it('states the reading month on the rule reading-month.ts applies (decision A)', () => {
+    expect(READING_SWITCH_FRACTION).toBe(0.5)
+    expect(READING_SWITCH_UPDATES).toBe(2)
+    expect(MONTH_READABLE_VIDEOS).toBe(100)
+    const b = def('reading-month').body
+    expect(b).toContain('half over, has had two updates')
+    expect(b).toContain('under 100 videos in your market')
+    expect(b).toContain('never today’s date')
+  })
+
+  it('states the maker rules at the shares board.ts applies (decision F)', () => {
+    expect([MAKER_GROUP_SHARE, MAKER_NOTE_SHARE, LEAD_MAX_MAKER_SHARE]).toEqual([0.5, 0.2, 0.25])
+    const b = def('makers').body
+    expect(b).toContain('half or more of the videos are makers’ is grouped into one makers line')
+    expect(b).toContain('a fifth or more are makers’ prints its maker share')
+    expect(b).toContain('a quarter makers or fewer')
+    expect(b).toContain('stay in every count')
+  })
+
+  it('states the subject check at SUBJECT_PRECISION_FLOOR (decision C)', () => {
+    expect(SUBJECT_PRECISION_FLOOR).toBe(0.85)
+    const b = def('provisional').body
+    expect(b.match(/0\.85/g)?.length).toBe(3)
+    expect(b).toContain('marked provisional')
+    expect(b).toContain('“being re-described”')
+  })
+
+  it('states when two months are compared at the shares comparability.ts applies, and points at The record for the four rules (decision D)', () => {
+    expect([COMPARE_REFUSE_SHARE, COMPARE_FLAG_SHARE, DEPTH_RATIO_MIN]).toEqual([0.1, 0.01, 0.8])
+    expect(COMPARE_RULES).toHaveLength(4)
+    const b = def('not-read-as-a-change').body
+    expect(b).toContain('a tenth or more of either')
+    expect(b).toContain('from 1% to 9%')
+    expect(b).toContain('four fifths')
+    expect(b).toContain('“When two months are compared”')
+  })
+
+  it('states the re-check at recheck.ts’s floors, and never promises an outcome (WP2.3)', () => {
+    expect([CHECK_MIN_VIDEOS, DENSE_MIN_DATED]).toEqual([100, 20])
+    const b = def('re-check').body
+    expect(b).toContain('20 or more comments')
+    expect(b).toContain('each month holds 100 videos')
+    expect(b).toContain('always marked provisional')
+  })
+
+  it('says S17’s ninety-day note in the words the brands block carries for it, on the Brands card and its definition', () => {
+    expect(card('competitive').cannot).toContain(NINETY_DAY_NOTE)
+    expect(def('brands').body).toContain(NINETY_DAY_NOTE)
+  })
+
+  it('counts a brand in every video, never its own posts, and names the other meanings (decision E)', () => {
+    const b = def('brands').body
+    expect(b).toContain('every video it comes up in')
+    expect(b).toContain('own posts are its posts')
+    expect(b).toContain('Freitag is German for Friday')
+  })
+
+  it('states the Ask cap and the monthly’s read at their constants', () => {
+    expect(ASK_MONTHLY_CAP).toBe(40)
+    expect(cardText('ask')).toContain('40 questions a month')
+    expect(MONTHLY_UPDATES_PAST_END).toBe(1)
+    expect(cardText('reports')).toContain('one update past its end')
+  })
+
+  it('says a held-still edit is queued, and claims nothing lands before the queue’s floor (decision I)', () => {
+    expect(QUEUE_FLOOR).toBe('2027-01-01')
+    const t = cardText('settings')
+    expect(t).toContain('queued for the 1st of a month, no earlier than 1 January 2027')
+    expect(t).not.toMatch(/can still be compared/)
+  })
+
+  it('holds the run clock of what a search term found, which What we read no longer prints under its table', () => {
+    expect(TERM_YIELD_BASIS).toContain('Dated by the update that searched, not by when the comments were written')
+    expect(cardText('settings')).toContain('dated by the update that searched, not by when the comments were written')
+  })
+
+  it('states This week’s and Your moves’ floors at the constants that apply them', () => {
+    // "named only once they carry 10 videos in the month" (week.ts), "needs
+    // three months read the same way" (anomaly.ts), "two or more of the
+    // question’s words" (own-posts.ts's word check, which Your moves reads).
+    expect(NEW_THEME_FLOOR).toBe(10)
+    expect(cardText('week')).toContain('once they carry 10 videos in the month')
+    expect(BASELINE_MONTHS).toBe(3)
+    expect(cardText('week')).toContain('needs three months read the same way')
+    expect(TOUCH_MIN_WORDS).toBe(2)
+    expect(cardText('market')).toContain('two or more of the question’s words')
+  })
+
+  it('names Your moves by its current sidebar label on the path (§4.0)', () => {
+    const month = READING_PATH.find((p) => p.when.startsWith('Each month'))!
+    expect(month.what.join(' ')).toContain(`on ${SURFACES.find((s) => s.key === 'market')!.label},`)
   })
 })
 

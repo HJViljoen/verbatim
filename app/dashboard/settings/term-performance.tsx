@@ -15,10 +15,12 @@ import { TERM_YIELD_BASIS, type TermYield } from '@/lib/settings/terms'
 // printed as DROP-CANDIDATE, and it opens to show the three numbers behind it
 // (MASTER rule 5 — a claim is clickable evidence). The client decides.
 
+// The search set's group names (WP3.10), as the chips above and the queue
+// print them: one name per group on the page.
 const BUCKET_LABEL: Record<string, string> = {
-  brand: 'Your brand',
-  competitor: 'Competitors',
-  industry: 'Your category',
+  brand: 'Your name',
+  competitor: 'Brands you track',
+  industry: 'The category',
 }
 
 const n = (x: number) => x.toLocaleString('en-US')
@@ -40,7 +42,8 @@ function Row({ t, months, rate }: { t: TermSummary; months?: TermYield; rate: (r
           printed, and it was a render change all along. */}
       <td className="py-1.5 pr-3 text-right font-mono tabular-nums" data-v={Math.round(t.keptRate * 1000)}>{rate({ found: t.found, kept: t.kept, keptPct: t.keptRate * 100 })}</td>
       {/* Month by month, on the UPDATE's clock — the one figure in this product
-          that is honestly run-dated (TERM_YIELD_BASIS, printed once below). */}
+          that is honestly run-dated (TERM_YIELD_BASIS, the column head's hover and
+          How to read's Settings card; WP3.10). */}
       <td className="py-1.5 pr-3 font-mono text-[10px] text-muted-foreground">
         {months ? months.months.map((m) => `${monthShort(m.month)} ${levelText(m.kept, m.found)?.text ?? '—'}`).join(' · ') : '—'}
       </td>
@@ -73,7 +76,15 @@ function Row({ t, months, rate }: { t: TermSummary; months?: TermYield; rate: (r
   )
 }
 
+/** "Month by month, by update": the column is dated by the update that
+ *  searched, the one figure here not dated by the comment. */
+const MONTHS_HEAD = 'Month by month, by update'
+
 const HEAD_HELP: Readonly<Record<string, string>> = {
+  // The one run-dated column's clock is its head's (a column head carries its
+  // base, the 25 Sep rulings), and How to read's Settings card says it in
+  // full; it is no longer a footnote under the table (WP3.10).
+  [MONTHS_HEAD]: TERM_YIELD_BASIS,
   Found: 'posts the term surfaced',
   Kept: 'the ones about your market',
   'With comments': 'the ones worth reading',
@@ -116,7 +127,7 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
           <table className="w-full min-w-[860px] text-[11.5px]">
             <thead>
               <tr className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-                {([['Term', 'str'], ['Group', 'str'], ['Where', null], ['Found', 'num'], ['Kept', 'num'], ['Kept rate', 'num'], ['Month by month', null], ['With comments', 'num'], ['Insights', 'num'], ['Worth reviewing', 'num']] as [string, string | null][]).map(([h, sort], i) => (
+                {([['Term', 'str'], ['Group', 'str'], ['Where', null], ['Found', 'num'], ['Kept', 'num'], ['Kept rate', 'num'], [MONTHS_HEAD, null], ['With comments', 'num'], ['Insights', 'num'], ['Worth reviewing', 'num']] as [string, string | null][]).map(([h, sort], i) => (
                   <th
                     key={h}
                     // Column definitions are header hovers (copy de-clutter C110).
@@ -138,7 +149,6 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
           </table>
         </EnhancedTable>
       )}
-      {rows.length > 0 && <p className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{TERM_YIELD_BASIS}</p>}
     </div>
   )
 }

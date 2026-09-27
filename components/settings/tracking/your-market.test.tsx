@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { searchPlan, type TermShare } from '@/lib/settings/your-market'
 
-import { SEARCH_ROWS, WhereItCameFrom, WhereWeReadIt, YourMarketSize } from './your-market'
+import { marketSplit, SEARCH_ROWS, WhereItCameFrom, WhereWeReadIt, YourMarketSize } from './your-market'
 
 // Settings › Tracking › Your market (WP3.10): the market's platform mix, the
 // search cap as used of 120, and each search's share of the market with its
@@ -32,10 +32,94 @@ const PLAN = searchPlan({
   subreddits: [{ name: 'backpacks', status: 'active' }, { name: 'onebag', status: 'active' }, { name: 'travelgear', status: 'active' }],
 }, true)
 
-describe('Your market', () => {
-  it('prints the market\'s size, or "not measured" before MF1', () => {
-    expect(renderText(<YourMarketSize month={MONTH} videos={654} />)).toContain('Everything we read except your own posts: 654 videos in September.')
+// Staging, read-only, 27 Sep 2026 (Sealand; WP3.10's probe of the page's own
+// reads): September's market 654 = 625 in the category + 29 filed under a
+// brand you track; August's 377 = 351 + 26; 20 own posts in September.
+const SEP = marketSplit([
+  ...Array.from({ length: 625 }, () => ({ audience: 'industry-other' })),
+  ...Array.from({ length: 12 }, () => ({ audience: 'competitor:Cotopaxi' })),
+  ...Array.from({ length: 6 }, () => ({ audience: 'competitor:Freitag' })),
+  ...Array.from({ length: 6 }, () => ({ audience: 'competitor:The North Face' })),
+  ...Array.from({ length: 5 }, () => ({ audience: 'competitor:Patagonia' })),
+])
+const AUG = marketSplit([
+  ...Array.from({ length: 351 }, () => ({ audience: 'industry-other' })),
+  ...Array.from({ length: 22 }, () => ({ audience: 'competitor:Cotopaxi' })),
+  ...Array.from({ length: 4 }, () => ({ audience: 'competitor:Freitag' })),
+])
+const CHIP = 'not read as a change: we changed our searches in September'
+/** renderText spaces every tag boundary; a reader sees no space before a
+ *  comma, a stop or a closing bracket, or after an opening one. */
+const read = (t: string): string => t.replace(/\s+([,.)])/g, '$1').replace(/\(\s+/g, '(')
+const hero = (over: Partial<Parameters<typeof YourMarketSize>[0]> = {}) => (
+  <YourMarketSize
+    month={MONTH}
+    soFar={false}
+    videos={654}
+    split={SEP}
+    prev={{ month: '2026-08-01', split: AUG }}
+    chip={CHIP}
+    ownPosts={20}
+    movesLabel="Your moves"
+    movesHref="/dashboard/market"
+    marketLabel="Your market"
+    marketHref="/dashboard"
+    {...over}
+  />
+)
+
+describe('Your market, in the preview\'s words (WP3.10)', () => {
+  it('splits the market into the category and the brands you track, as counts of one market', () => {
+    expect(SEP).toEqual({ videos: 654, category: 625, brands: 29, byBrand: [
+      { name: 'Cotopaxi', videos: 12 }, { name: 'Freitag', videos: 6 }, { name: 'The North Face', videos: 6 }, { name: 'Patagonia', videos: 5 },
+    ] })
+  })
+
+  it('says what the market is and its size, "so far" only while the month runs', () => {
+    expect(renderText(hero())).toContain('Your market is everything we read except your own posts: 654 videos in September.')
+    expect(renderText(hero({ soFar: true }))).toContain('654 videos in September so far.')
+  })
+
+  it('prints the split, the month before as counts, the chip and what is not in it', () => {
+    const t = read(renderText(hero()))
+    expect(t).toContain('625 in the category')
+    expect(t).toContain('not filed under any brand')
+    expect(t).toContain('29 filed under brands you track')
+    expect(t).toContain('Cotopaxi 12, Freitag 6, The North Face 6, Patagonia 5')
+    expect(t).toContain('August: 377 · 351 in the category and 26 under brands you track')
+    expect(t).toContain(CHIP)
+    expect(t).toContain('Not in it: your own posts (20 in September, read on Your moves) and the comments under brands’ own posts.')
+  })
+
+  it('has one link out, to the front page by its current label, and no share anywhere', () => {
+    const html = render(hero())
+    expect(html).toContain('href="/dashboard"')
+    expect(renderText(hero())).toContain('Read it on Your market →')
+    expect(renderText(hero())).not.toMatch(/\d%/)
+  })
+
+  it('leaves out what it could not read, and reads "not measured" before MF1', () => {
+    const t = read(renderText(hero({ prev: null, chip: null, ownPosts: null })))
+    expect(t).not.toContain('August:')
+    expect(t).not.toContain('not read as a change')
+    expect(t).toContain('Not in it: your own posts, read on Your moves, and the comments under brands’ own posts.')
     expect(renderText(<YourMarketSize month={MONTH} videos={null} />)).toContain('not measured')
+  })
+
+  it('draws Össur, whose market holds one tracked brand (staging: 362 = 338 + 24 Ottobock)', () => {
+    const ossur = marketSplit([
+      ...Array.from({ length: 338 }, () => ({ audience: 'industry-other' })),
+      ...Array.from({ length: 24 }, () => ({ audience: 'competitor:Ottobock' })),
+    ])
+    const t = renderText(hero({ videos: 362, split: ossur, prev: null, ownPosts: 109 }))
+    expect(t).toContain('338 in the category')
+    expect(t).toContain('24 filed under brands you track')
+    expect(t).toContain('Ottobock 24')
+  })
+
+  it('keeps the copy contract, with no em dash', () => {
+    assertCopyContract(hero())
+    expect(renderText(hero())).not.toContain('—')
   })
 })
 

@@ -31,9 +31,9 @@ import { cn } from '@/lib/utils'
 // hierarchy; a fourth that cannot be read is not one.
 
 /** One hairline-ruled section of a settings sub-page. */
-export function Section({ children, className }: { children: ReactNode; className?: string }) {
+export function Section({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <section className={cn('flex flex-col gap-3.5 border-t border-border pt-5 pb-6', className)}>
+    <section id={id} className={cn('flex scroll-mt-6 flex-col gap-3.5 border-t border-border pt-5 pb-6', className)}>
       {children}
     </section>
   )

@@ -31,13 +31,22 @@ export interface SettingsSubPage {
   under?: string[]
 }
 
+// THE PREVIEW'S LABELS (market-first WP3.10; the approved Settings and
+// SettingsRecord artboards draw "What we read · Subjects · The record ·
+// Reports and recipients · Team · How to read"). The key stays `tracking`, so
+// no address or stored link changes; the page it names is the market and the
+// searches that find it, which "What we read" says and "Tracking" did not.
+// "Team" is the entry's label; Billing still lights it (`under`). Readiness
+// stays in the rail although the artboards leave it out: pages still send a
+// reader to "Settings › Readiness" (lib/reading/own-posts.ts), and dropping
+// the entry is a call for Heinrich, not a label change.
 export const SETTINGS_SUBPAGES: readonly SettingsSubPage[] = [
-  { key: 'tracking', href: '/dashboard/settings', label: 'Tracking' },
+  { key: 'tracking', href: '/dashboard/settings', label: 'What we read' },
   { key: 'subjects', href: '/dashboard/settings/subjects', label: 'Subjects' },
   { key: 'readiness', href: '/dashboard/settings/readiness', label: 'Readiness' },
   { key: 'record', href: '/dashboard/settings/record', label: 'The record' },
   { key: 'reports', href: '/dashboard/settings/reports', label: 'Reports and recipients' },
-  { key: 'team', href: '/dashboard/team', label: 'Team and billing', under: ['/dashboard/billing'] },
+  { key: 'team', href: '/dashboard/team', label: 'Team', under: ['/dashboard/billing'] },
   { key: 'guide', href: '/dashboard/settings/how-to-read', label: 'How to read' },
 ]
 

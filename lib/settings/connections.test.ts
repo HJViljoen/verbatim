@@ -70,7 +70,7 @@ describe('what is waiting to be saved', () => {
 
   it('names each list that changed, by how many it now holds', () => {
     const pending = trackingPending(form(), form({ category: ['eco bag', 'wet commute bag'], exclusions: ['poker'] }))
-    expect(pending.map((p) => p.field)).toEqual(['Category terms', 'Not this'])
+    expect(pending.map((p) => p.field)).toEqual(['Terms for the category', 'Not these'])
     expect(pending[0]).toMatchObject({ from: '1 entry', to: '2 entries' })
     expect(pending[1]).toMatchObject({ from: 'nothing', to: '1 entry' })
   })
@@ -201,10 +201,10 @@ describe('what the one save row says afterwards', () => {
   it('names what was written, not the terms alone', () => {
     // m4: the composed save may change the terms, the exclusions and the
     // rival list, and answered with the terms form's own sentence whichever of
-    // them had moved.
-    expect(savedMessage(['Not this'])).toBe('Saved: not this. Your next update is the first one to use it.')
-    expect(savedMessage(['Brand terms', 'Rivals', 'Not this']))
-      .toBe('Saved: brand terms, rivals and not this. Your next update is the first one to use them.')
+    // them had moved. The groups by the page's own names (WP3.10).
+    expect(savedMessage(['Not these'])).toBe('Saved: not these. Your next update is the first one to use it.')
+    expect(savedMessage(['Terms for your name', 'Rivals', 'Not these']))
+      .toBe('Saved: terms for your name, rivals and not these. Your next update is the first one to use them.')
   })
 
   it('drops the cadence a page opened before 27 Sep still posts', () => {

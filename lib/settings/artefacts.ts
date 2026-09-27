@@ -33,9 +33,13 @@ export const ARTEFACT_COPY: Record<Artefact, { label: string; what: string }> = 
     label: 'The weekly report',
     what: 'What came in this week, and anything unusual in it.',
   },
+  // MARKET-FIRST (WP2.1, WP3.10): the monthly is "{Month} in your market",
+  // always the month that has just ended, read one update past its end
+  // (lib/reports/monthly.ts MONTHLY_UPDATES_PAST_END); the approved Reports
+  // artboard calls it "The monthly report".
   monthly: {
-    label: 'The monthly reading',
-    what: 'Where you stand this month and what it means, with the month named on every figure.',
+    label: 'The monthly report',
+    what: 'Your market in the month that has just ended, read one update past its end.',
   },
   quarterly: {
     label: 'The quarterly review',
@@ -219,7 +223,10 @@ export function sendingSummary(
     ? ''
     : ` ${stillSending.length} older schedule${stillSending.length === 1 ? ' is' : 's are'} still going out, below.`
   const sending = rows.filter((r) => r.sending)
-  if (sending.length === 0) return `None of these has a recipient yet.${older}`
+  // "IS BEING SENT", NOT "HAS A RECIPIENT" (WP3.10 check): a report switched
+  // off with addresses on it (Sealand's weekly, under the lock, decision J)
+  // has recipients and goes to none of them, and the table prints the names.
+  if (sending.length === 0) return `None of these is being sent.${older}`
   const people = new Set(sending.flatMap((r) => r.recipients.map((e) => e.toLowerCase())))
   // "REPORTS", NOT "ARTEFACTS". This module's own docblock says "Client
   // wording: no template keys, no 'starter', no cadence jargon", and then

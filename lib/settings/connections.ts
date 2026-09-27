@@ -146,8 +146,12 @@ export const PLATFORM_SHARE_UNREAD =
  *  crafted string back at the page. 'Cadence' and 'The day it lands' left with
  *  the Cadence section (27 Sep): every workspace is weekly, on Sunday, so a page
  *  opened before then that still posts them has them dropped here. */
+// THE GROUPS BY THE PAGE'S OWN NAMES (market-first WP3.10): the search set's
+// four groups are "Your name · Brands you track · The category · Not these"
+// on the page and in the queue (lib/settings/queue.ts QUEUE_FIELD_WORDS), so
+// the strip and the save sentence name them the same way.
 export const TRACKING_FIELDS = [
-  'Brand terms', 'Competitor terms', 'Category terms', 'Not this',
+  'Terms for your name', 'Terms for brands you track', 'Terms for the category', 'Not these',
   'Rivals',
 ] as const
 
@@ -182,10 +186,10 @@ export function trackingPending(
     if (a.length === b.length && a.every((x, i) => x === b[i])) return
     out.push({ field: label, from: countWords(a), to: countWords(b) })
   }
-  listed('Brand terms', before.brand, after.brand)
-  listed('Competitor terms', before.competitor, after.competitor)
-  listed('Category terms', before.category, after.category)
-  listed('Not this', before.exclusions, after.exclusions)
+  listed('Terms for your name', before.brand, after.brand)
+  listed('Terms for brands you track', before.competitor, after.competitor)
+  listed('Terms for the category', before.category, after.category)
+  listed('Not these', before.exclusions, after.exclusions)
   listed('Rivals', before.rivals, after.rivals)
   return out
 }

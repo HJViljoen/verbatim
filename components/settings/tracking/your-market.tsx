@@ -1,3 +1,6 @@
+import Link from 'next/link'
+
+import { PairChip } from '@/components/blocks/pair-chip'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { Figure, GridRow, GridTable, Section, SectionHead } from '@/components/settings/chrome'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -33,18 +36,131 @@ function level(k: number, n: number): string {
   return levelText(k, n)?.text ?? NOT_MEASURED
 }
 
-export function YourMarketSize({ month, videos }: { month: string; videos: number | null }) {
+/** The month's market, split the way the preview draws it: the category, and
+ *  the videos filed under each brand you track (`market_month_videos`'
+ *  audience). Counts only: every part is a count of the one market. */
+export interface MarketSplit {
+  videos: number
+  category: number
+  brands: number
+  /** Each tracked brand's filed videos, biggest first; none at zero. */
+  byBrand: { name: string; videos: number }[]
+}
+
+const RIVAL_PREFIX = 'competitor:'
+
+export function marketSplit(videos: readonly { audience?: string }[]): MarketSplit {
+  let category = 0
+  const by = new Map<string, number>()
+  for (const v of videos) {
+    const a = v.audience ?? 'industry-other'
+    if (a.startsWith(RIVAL_PREFIX)) {
+      const name = a.slice(RIVAL_PREFIX.length)
+      by.set(name, (by.get(name) ?? 0) + 1)
+    } else category++
+  }
+  const byBrand = [...by].map(([name, n]) => ({ name, videos: n }))
+    .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
+  return { videos: videos.length, category, brands: videos.length - category, byBrand }
+}
+
+function Fig({ n }: { n: number }) {
+  return <span data-copy="figure" className="font-mono font-semibold text-foreground">{fmtInt(n)}</span>
+}
+
+/**
+ * YOUR MARKET, IN THE PREVIEW'S WORDS (WP3.10; the approved "What we read"
+ * artboard's first block): what the market is and its size in the reading
+ * month, how it splits between the category and the brands you track, the
+ * month before as counts, the pair's chip, and what is not in it. The one link
+ * is the footer's. No figure is a share: each is a count of the one market.
+ *
+ * "The comments under brands' own posts" are not in it because a rival's own
+ * post is never read on the full lane (lib/pipeline/pass-a.ts `passALane`:
+ * claims or nothing), and `market_month_videos` reads full-lane videos only.
+ */
+export function YourMarketSize({
+  month, soFar = false, videos, split = null, prev = null, chip = null, ownPosts = null, movesLabel, movesHref, marketLabel, marketHref,
+}: {
+  month: string
+  /** The reading month is still running ("in September so far"). */
+  soFar?: boolean
+  videos: number | null
+  split?: MarketSplit | null
+  /** The month before, as counts, where it was read. */
+  prev?: { month: string; split: MarketSplit } | null
+  /** The market pair's chip ("not read as a change: …"), where refused. */
+  chip?: string | null
+  /** Your own posts dated in the month; null where they were not read. */
+  ownPosts?: number | null
+  movesLabel?: string
+  movesHref?: string
+  marketLabel?: string
+  marketHref?: string
+}) {
+  const m = longMonth(month)
+  if (videos == null) {
+    return (
+      <Section className="border-t-0 pt-0">
+        <SectionHead title="Your market" />
+        <Line>{NOT_MEASURED}</Line>
+      </Section>
+    )
+  }
+  const catPct = split && split.videos > 0 ? (split.category / split.videos) * 100 : null
+  const moves = movesLabel && movesHref
+    ? <Link href={movesHref} className="font-medium text-foreground underline underline-offset-2">{movesLabel}</Link>
+    : null
   return (
     <Section className="border-t-0 pt-0">
       <SectionHead title="Your market" />
-      {videos == null ? (
-        <Line>{NOT_MEASURED}</Line>
-      ) : (
-        <Line>
-          Everything we read except your own posts:{' '}
-          <span data-copy="figure" className="font-mono font-semibold text-foreground">{fmtInt(videos)}</span> videos in {longMonth(month)}.
-        </Line>
-      )}
+      <p className="m-0 max-w-[620px] text-[17px] font-medium leading-[1.4] tracking-[-0.01em] [text-wrap:pretty]">
+        Your market is everything we read except your own posts: <Fig n={videos} /> videos in {m}{soFar ? ' so far' : ''}.
+      </p>
+      {split && catPct != null ? (
+        <div className="flex max-w-[720px] flex-col gap-2">
+          {/* The two parts of one count, drawn in the market's ink and the
+              rivals' (MASTER.md's market-first inks). */}
+          <div aria-hidden className="flex h-2 w-full overflow-hidden rounded-[2px] bg-inner">
+            <span className="h-full bg-ink-market" style={{ width: `${catPct}%` }} />
+            {split.brands > 0 ? <span className="h-full border-l-2 border-background bg-ink-rival" style={{ width: `${100 - catPct}%` }} /> : null}
+          </div>
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 text-[13px] leading-[1.45]">
+            <span className="flex flex-col">
+              <span><Fig n={split.category} /> in the category</span>
+              <span className="font-mono text-[11.5px] text-muted-foreground">not filed under any brand</span>
+            </span>
+            {split.brands > 0 ? (
+              <span className="flex flex-col sm:items-end">
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden className="size-2 rounded-[1px] bg-ink-rival" />
+                  <span><Fig n={split.brands} /> filed under brands you track</span>
+                </span>
+                <span className="font-mono text-[11.5px] text-muted-foreground">
+                  {split.byBrand.map((b) => `${b.name} ${fmtInt(b.videos)}`).join(', ')}
+                </span>
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {prev ? (
+        <p className="m-0 font-mono text-[12px] text-muted-foreground">
+          {longMonth(prev.month)}: <Fig n={prev.split.videos} /> · <Fig n={prev.split.category} /> in the category and <Fig n={prev.split.brands} /> under brands you track
+        </p>
+      ) : null}
+      {chip ? <PairChip words={chip} mode="app" /> : null}
+      <Line>
+        <span className="font-semibold text-foreground">Not in it:</span>{' '}
+        {ownPosts != null
+          ? <>your own posts (<Fig n={ownPosts} /> in {m}{moves ? <>, read on {moves}</> : null}) and the comments under brands’ own posts.</>
+          : <>your own posts{moves ? <>, read on {moves},</> : null} and the comments under brands’ own posts.</>}
+      </Line>
+      {marketLabel && marketHref ? (
+        <p className="m-0 text-[12.5px]">
+          <Link href={marketHref} className="font-medium hover:underline">Read it on {marketLabel} →</Link>
+        </p>
+      ) : null}
     </Section>
   )
 }
