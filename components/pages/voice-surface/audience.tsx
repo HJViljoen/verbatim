@@ -6,6 +6,7 @@ import { fmtInt, longMonth } from '@/lib/format'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
+import { ViewRow } from '@/components/views/view-pill'
 
 // C1 · The market in the month (market-first WP2.4, plan §2.4 C1; key
 // `voice.audience`, reworked).
@@ -19,8 +20,10 @@ import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 // THE AUDIENCE SWITCH AND THE KIND LADDER ARE GONE (the approved preview). The
 // switch read one audience at a time, and a rival's audience holds 5 to 12
 // videos a month, too few to group; the kinds are the front page's block 4.
-// The Buyers and Makers views the preview draws beside this block arrive with
-// deploy 5 (decision F); a control that does nothing is not drawn before then.
+// The Buyers and Makers views the preview draws in this block arrive with
+// deploy 5 (decision F; WP3.3, components/views/view-pill.tsx), behind a switch
+// that stays off until WP3.2's check (lib/views/config.ts); a control that
+// does nothing is not drawn before then.
 //
 // WHERE IT WAS SAID is the category's platform mix, as counts: the base the
 // themes below are grouped in.
@@ -139,10 +142,10 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
     return (
       <BlockFrame title={title} mode={mode} roomy>
         {email ? (
-          <div>{lead}{split}{inThemes}{where}</div>
+          <div>{lead}{split}{inThemes}<ViewRow state={data.view} mode={mode} />{where}</div>
         ) : (
           <div className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_304px] xl:gap-x-[88px]">
-            <div className="flex min-w-0 flex-col gap-4 pt-1">{lead}{split}{inThemes}</div>
+            <div className="flex min-w-0 flex-col gap-4 pt-1">{lead}{split}{inThemes}<ViewRow state={data.view} mode={mode} className="mt-2" /></div>
             {where}
           </div>
         )}
