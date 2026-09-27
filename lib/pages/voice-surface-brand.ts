@@ -63,13 +63,14 @@ export interface BrandView {
  * The live tracked brand `?brand=` names: its name as Settings holds it,
  * matched without case or outer spaces (the preview writes `?brand=cotopaxi`).
  * A retired brand, or a name nobody tracks, is no filter: the page reads as it
- * does without one.
+ * does without one. So is a repeated `?brand=`, which Next hands over as a
+ * list, not a name.
  */
 export function brandNamed(
-  wanted: string | null | undefined,
+  wanted: string | readonly string[] | null | undefined,
   rivals: readonly { name: string; retiredAt: string | null }[],
 ): string | null {
-  const w = (wanted ?? '').trim().toLowerCase()
+  const w = typeof wanted === 'string' ? wanted.trim().toLowerCase() : ''
   if (!w) return null
   return rivals.find((r) => !r.retiredAt && r.name.trim().toLowerCase() === w)?.name ?? null
 }

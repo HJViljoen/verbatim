@@ -26,6 +26,10 @@ describe('brandNamed', () => {
     expect(brandNamed('', RIVALS)).toBeNull()
     expect(brandNamed(undefined, RIVALS)).toBeNull()
   })
+
+  it('is no filter, never a failed page, for a repeated ?brand= (Next hands over a list)', () => {
+    expect(brandNamed(['Cotopaxi', 'Cotopaxi'], RIVALS)).toBeNull()
+  })
 })
 
 describe('buildBrandView', () => {
