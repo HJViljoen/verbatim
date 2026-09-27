@@ -13,7 +13,7 @@ import { gridIntrinsic, ICON_TARGET, ROW_CONTROL } from '@/components/settings/c
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { TermPerformance } from '@/app/dashboard/settings/term-performance'
-import type { TermYield } from '@/lib/settings/terms'
+import { TERM_YIELD_BASIS, type TermYield } from '@/lib/settings/terms'
 import type { TermSummary } from '@/lib/keywords/value'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
 import type { CommunityRow } from '@/lib/settings/communities'
@@ -639,6 +639,12 @@ describe('How they are doing (the term table), WP3.10 check', () => {
     expect(text).toContain('6 of 66')
     expect(text).toContain('17%')
     expect(text).not.toMatch(/\d\.\d%/)
+  })
+
+  it('says its clock in the column head, not in a footnote under the table (25 Sep rulings, WP3.10)', () => {
+    expect(text).toContain('Month by month, by update')
+    expect(text).not.toContain(TERM_YIELD_BASIS)
+    expect(render(<TermPerformance rows={[term('sealand bag', 448, 75)]} updates={8} months={months} />)).toContain(`title="${TERM_YIELD_BASIS}"`)
   })
 
   it('names each month, never its ISO key, with a count under 100', () => {

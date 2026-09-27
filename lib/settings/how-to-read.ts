@@ -196,6 +196,10 @@ export const READING_CARDS: readonly ReadingCard[] = [
     cannot: [
       'Platforms and how deeply we read each video drive cost and quality, so they are set with you and changed on request. Your search terms are yours: owners and admins edit them here.',
       'While your searches are held still, a change to a search term, a brand you track or its accounts is queued for the 1st of a month, no earlier than 1 January 2027, and nothing queued is applied before then.',
+      // TERM_YIELD_BASIS (lib/settings/terms.ts), the one run-dated figure on
+      // the page: its column head says "by update", and this is the sentence
+      // that was a footnote under the table (25 Sep rulings, WP3.10).
+      'What a search term found is dated by the update that searched, not by when the comments were written.',
     ],
   },
 ]

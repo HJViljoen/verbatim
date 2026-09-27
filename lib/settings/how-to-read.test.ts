@@ -16,6 +16,7 @@ import { MONTHLY_UPDATES_PAST_END } from '../reports/monthly'
 import { SUBJECT_PRECISION_FLOOR } from '../subjects/types'
 import { DEFINITIONS, READING_CARDS, READING_PATH } from './how-to-read'
 import { QUEUE_FLOOR } from './queue'
+import { TERM_YIELD_BASIS } from './terms'
 
 describe('how to read', () => {
   it('describes every surface the shell has, and no other', () => {
@@ -219,6 +220,11 @@ describe('how to read, market-first', () => {
     const t = cardText('settings')
     expect(t).toContain('queued for the 1st of a month, no earlier than 1 January 2027')
     expect(t).not.toMatch(/can still be compared/)
+  })
+
+  it('holds the run clock of what a search term found, which What we read no longer prints under its table', () => {
+    expect(TERM_YIELD_BASIS).toContain('Dated by the update that searched, not by when the comments were written')
+    expect(cardText('settings')).toContain('dated by the update that searched, not by when the comments were written')
   })
 
   it('names Your moves by its current sidebar label on the path (§4.0)', () => {
