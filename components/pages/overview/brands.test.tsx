@@ -82,9 +82,10 @@ describe('Brands in your market (WP2.6)', () => {
     expect(markup).toContain('bg-you')
   })
 
-  it('links Competitive by its current sidebar label, and no footnote', () => {
+  it('links the brands page by its current sidebar label, and no footnote', () => {
     const t = read(overviewRivals.render(withBrands(stagingBrandsRead()), 'app', ctx))
-    expect(t).toContain('Open Competitive →')
+    // "Brands" since deploy 5 (WP3.5).
+    expect(t).toContain('Open Brands →')
     expect(t).not.toMatch(/Ninety-day|frozen months/)
   })
 

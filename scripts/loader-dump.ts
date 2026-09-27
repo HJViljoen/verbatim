@@ -68,7 +68,7 @@ const PAGES: [string, Loader][] = [
   ['subjects', (s) => loadSubjectsPage(s)],
   ['voice', (s) => loadVoiceSurface(s)],
   ['market', (s) => loadMarketSurface(s)],
-  ['competitive', (s) => loadCompetitiveSurface(s)],
+  ['competitive', (s) => loadCompetitiveSurface(s, { brands: true })],
   ['week', (s) => loadWeek(s)],
   // THE TWO MARKET-FIRST WP1.2 NAMES THAT ARE NOT A PAGE OF THEIR OWN. The
   // Reports card reads the reading month since WP1.2, and the weekly is pinned
