@@ -13,6 +13,7 @@ import { overviewThemes } from '@/components/pages/overview/themes'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor, monthlySections } from './index'
 import { splitClause } from './month'
 import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from './fixture'
+import { shippedBrandsRead } from '@/lib/test/brands-fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -140,6 +141,22 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
       }
       expect(t, mode).not.toMatch(/Freitag\s*1\b|Freitag\s*6\b|Rareform\s*0/)
     }
+  })
+
+  // Deploy 3 ships every brand "not counted yet" (the 27 Sep ruling): the
+  // heads are empty then, and the design review found their bar, 144px and
+  // 64px widths still set, so "Freedom of Movement" wrapped at 640 beside an
+  // empty area. The widths are the figures' only, where a brand is counted.
+  it('brands set the figure columns’ widths only where a brand is counted', () => {
+    const shipped = { ...filledSlotsFixture(), slots: { ...filledSlotsFixture().slots, brands: { state: 'filled' as const, value: shippedBrandsRead() } } }
+    const head = (data: ReturnType<typeof filledSlotsFixture>) => {
+      const html = render(MONTHLY_BLOCKS['monthly.brands'].render(data, 'email', ctx))
+      return html.slice(html.indexOf('<thead'), html.indexOf('</thead>'))
+    }
+    expect(head(shipped)).not.toMatch(/width:\s*\d/)
+    expect(text('monthly.brands', shipped)).toMatch(/Freedom of Movement\s*not counted yet/)
+    expect(head(filledSlotsFixture())).toMatch(/width:\s*160px/)
+    expect(head(filledSlotsFixture())).toMatch(/width:\s*144px/)
   })
 
   it('you prints the for-you line and what you published', () => {

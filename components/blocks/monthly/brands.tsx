@@ -77,11 +77,15 @@ function EmailTable({ b }: { b: MonthlyBrands }) {
       <thead>
         <tr>
           <th style={{ ...headCell('left'), paddingLeft: 0 }}>Brand</th>
-          <th className="vb-m-bar" style={headCell('left', BAR_WIDTH)}>{''}</th>
-          <th style={headCell('right', 144)}>{counted ? (nOrganic == null
+          {/* The figure columns' widths only where a brand prints figures:
+              with every brand "not counted yet" the heads are empty, and
+              fixed widths squeezed the names beside an empty area (the
+              deploy-3 design review). */}
+          <th className="vb-m-bar" style={headCell('left', counted ? BAR_WIDTH : undefined)}>{''}</th>
+          <th style={headCell('right', counted ? 144 : undefined)}>{counted ? (nOrganic == null
             ? <>{swatch(ORGANIC_HEX)}{BRANDS_HEAD_ORGANIC}</>
             : <span data-copy="level">{swatch(ORGANIC_HEX)}{BRANDS_HEAD_ORGANIC}<br />of {fmtInt(nOrganic)}</span>) : null}</th>
-          <th style={headCell('right', 64)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}{BRANDS_HEAD_ALL}<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
+          <th style={headCell('right', counted ? 64 : undefined)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}{BRANDS_HEAD_ALL}<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
         </tr>
       </thead>
       <tbody>
