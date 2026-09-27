@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthOptions, monthTitle, updateLabel, updateLine } from './bar'
+import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthOptions, monthTitle, oneLineBar, updateLabel, updateLine } from './bar'
 import { readingMonthFor } from '../reading/reading-month'
 import { sealandReading } from '../test/reading-fixture'
 import { directionHits } from '../calibration'
@@ -192,5 +192,17 @@ describe('detailHref', () => {
   it('leaves a plain page plain', () => {
     expect(detailHref('/dashboard', {}, null)).toBe('/dashboard')
     expect(detailHref('/dashboard', { item: '' }, 'record')).toBe('/dashboard?detail=record')
+  })
+})
+
+describe('oneLineBar: Settings, Ask and Reports (the 25 Sep rulings, market-first WP3.10)', () => {
+  it('is the brand and the reading month, with no other month offered', () => {
+    const reading = sealandReading('2026-10-01T00:00:00.000Z')
+    expect(oneLineBar('Sealand', reading)).toEqual({ brand: 'Sealand', reading, others: [] })
+    expect(contextLine(oneLineBar('Sealand', reading)!)).toBe('as at the 27 Sep update · next update Sun 4 Oct')
+    expect(contextLine(oneLineBar('Össur', OSSUR)!)).toBe('as at the 13 Sep update · updates paused')
+  })
+  it('is null with no reading month, so the bar is its title alone', () => {
+    expect(oneLineBar('Sealand', null)).toBeNull()
   })
 })

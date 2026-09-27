@@ -50,7 +50,7 @@ export interface PlaybookBlock {
   basisLine: string
   formats: FormatMatrix
   hooks: FormatMatrix
-  /** "Read from 569 of 1,388 videos published in September, for their format."
+  /** "Read from {k} of {n} videos published in September, for their format."
    *  — the classified n against the published one, per side.
    *
    *  ONE PER MATRIX, BECAUSE THE COVERAGE IS PER KEY. `FormatReading.of` counts
@@ -176,7 +176,7 @@ export function buildPlaybook(input: {
 }
 
 /**
- * "Read from 569 of 1,388 videos published in September", per side.
+ * "Read from {k} of {n} videos published in September", per side.
  *
  * mock-gap Competitive D6: the artboard heads this table "read from all 1,388
  * category videos" over shares the classifier reached 41% of. Both numbers are

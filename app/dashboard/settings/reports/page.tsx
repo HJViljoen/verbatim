@@ -4,6 +4,7 @@ import { fullDate } from '@/lib/format'
 import { CADENCE_COPY, type ScheduleCadence } from '@/lib/schedules/types'
 import { notBuiltYet, recipientRows, sendingSummary, unnamedSchedules } from '@/lib/settings/artefacts'
 import { loadReportsPage } from '@/lib/settings/reports-load'
+import { settingsBar } from '@/lib/settings/bar'
 import { capLine, capNote, monthStartIso } from '@/lib/ask/quota'
 import { ASK_MONTHLY_CAP } from '@/lib/config'
 import { RecipientsForm } from './recipients-form'
@@ -55,18 +56,18 @@ export default async function SettingsReportsPage() {
   // a workspace that has asked forty.
   const askedThisMonth = askedErr ? null : asked ?? 0
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
+  const bar = await settingsBar(supabase, clientId, tenant)
 
   const rows = recipientRows(inputs.schedules, inputs.period)
   const unnamed = unnamedSchedules(inputs.schedules)
-  const sending = rows.filter((r) => r.sending).length
 
   return (
     <SettingsFrame
       active="reports"
+      bar={bar}
       title="Settings"
       context={`${tenant}${!canEdit ? ' · read-only' : ''}`}
       contentTitle="Reports and recipients"
-      contentMeta={`${sending} of ${rows.length} being sent`}
     >
       <div className="flex flex-col gap-3">
 

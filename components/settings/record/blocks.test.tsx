@@ -6,7 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { deliveryRecord } from '@/lib/settings/delivery'
 
-import { ChangeLogBlock, sameRows } from './change-log'
+import { ChangeLogBlock, PREHISTORY_LINE, sameRows } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
 import { NO_EXPORT_WHY, SaveStrip, ScopeStatement } from './header'
@@ -227,6 +227,16 @@ describe('the change log', () => {
     expect(text).toContain('Reconstructed, not recorded')
   })
 
+  it('says "Reconstructed, not recorded" and "Not known" once, under the heading, not on every row (WP3.10)', () => {
+    const log = changeLogFixture()
+    const [p] = log.prehistory
+    const many = { ...log, prehistory: [p, { ...p, id: `${p.id}-b`, on: '2026-07-01', dateShort: '1 Jul', said: 'Search terms changed' }, { ...p, id: `${p.id}-c`, on: '2026-06-01', dateShort: '1 Jun', said: 'Rivals changed' }] }
+    const text = renderText(<ChangeLogBlock log={many} rows={20} now="2026-09-28T09:00:00.000Z" />)
+    expect(text.match(/Reconstructed, not recorded/g)).toHaveLength(1)
+    expect(text.match(/Not known: this change was worked out afterwards/g)).toBeNull()
+    expect(text).toContain(PREHISTORY_LINE)
+  })
+
   it('says the log is not recorded rather than drawing an empty table', () => {
     const text = renderText(
       <ChangeLogBlock
@@ -378,15 +388,14 @@ describe('the coverage grid', () => {
 
   it('carries the basis with the figures whose basis is not this window (D15)', () => {
     const text = renderText(coverage)
-    expect(text).toContain('of everything we have ever read for you, not just this window')
-    expect(text).toContain('Reddit excluded')
+    expect(text).toContain('all time, Reddit excluded')
     // No language share on the record either (2026-09-24).
     expect(text).not.toContain('not in English')
     expect(text).not.toContain('what was said on camera, not what was written in comments')
     // The two read-depth rows sit side by side and both owe a reader the
     // all-time basis; the twenty-word sentence is printed once and the second
     // row says it short (design review finding 5).
-    expect(text.match(/of everything we have ever read for you/g)).toHaveLength(1)
+    expect(text.match(/all time, Reddit excluded/g)).toHaveLength(1)
   })
 
   it('draws one grid, so the hairlines cross the gutter', () => {
@@ -413,10 +422,13 @@ describe('the coverage grid', () => {
     const text = renderText(coverage)
     // Comment-dated over run-dated is neither clock.
     expect(text).not.toContain('per update')
-    expect(text).toContain('dated by the comment, not by the update')
-    // A run's measure is not a month's.
+    // A run's measure is not a month's; the base names the update, and no
+    // method wording follows it (WP3.10).
     expect(text).not.toContain('August 2.3')
-    expect(text).toContain('an update’s own measure, never a month’s')
+    expect(text).toContain('attached per analysed video on the most recent update')
+    for (const method of ['dated by the comment, not by the update', 'which is the only span', 'and no deeper', 'which has neither audio', 'so no month before that can show it']) {
+      expect(text).not.toContain(method)
+    }
     // Audience denominators do not add, so the mix is counts.
     expect(text).toContain('TikTok')
     expect(text).not.toMatch(/TikTok \d+%/)
@@ -428,10 +440,9 @@ describe('the coverage grid', () => {
     const text = renderText(coverage)
     expect(text).toContain('trailing median')
     expect(text).toContain('Poler added as a rival, 3 Sep')
-    expect(text).toContain('under the 100 a banded reading needs')
     // Off `belowFloorTotal`, the way the route composes it: four months are
     // under the floor and three are listed (code review finding 2).
-    expect(text).toContain('and 3 other months are under it too')
+    expect(text).toContain('under 100 · 3 other months too')
   })
 
   it('prints no one-line summary of the rows under it (copy de-clutter C8)', () => {
@@ -528,16 +539,17 @@ describe('the page’s own chrome', () => {
 })
 
 describe('the reject log’s kept rates (deploy 2 review)', () => {
-  it('prints no decimal share on a base under 100: the column goes to whole percents', () => {
+  it('prints a rate under 100 looked at as its count, and the column\'s shares as whole percents (WP3.10)', () => {
     // Staging's 2 Oct rows, "of the last 1,000": made from waste 38 of 100,
     // north face backpack 48 of 91, sustainable fashion 87 of 87.
-    const rate = keptRateText([
-      { found: 100, keptPct: 38 },
-      { found: 91, keptPct: 52.747 },
-      { found: 87, keptPct: 100 },
-    ])
-    expect([rate({ keptPct: 38 }), rate({ keptPct: 52.747 }), rate({ keptPct: 100 })]).toEqual(['38%', '53%', '100%'])
+    const set = [
+      { found: 100, kept: 38, keptPct: 38 },
+      { found: 91, kept: 48, keptPct: 52.747 },
+      { found: 87, kept: 87, keptPct: 100 },
+    ]
+    const rate = keptRateText(set)
+    expect(set.map(rate)).toEqual(['38%', '48 of 91', '87 of 87'])
     // Every base at 100 or more keeps its decimal.
-    expect(keptRateText([{ found: 1840, keptPct: 76.2 }])({ keptPct: 76.2 })).toBe('76.2%')
+    expect(keptRateText([{ found: 1840, keptPct: 76.2 }])({ found: 1840, kept: 1402, keptPct: 76.2 })).toBe('76.2%')
   })
 })

@@ -6,7 +6,6 @@ import { CONTROL, Dot, FIELD, ICON_TARGET, LabelRow, MonoNote, Section, SectionH
 import { glossaryRule } from '@/lib/calibration'
 import type { TermSummary } from '@/lib/keywords/value'
 import { MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
-import { termsMeta } from '@/lib/settings/terms'
 import { cn } from '@/lib/utils'
 
 // `settings.terms.*` — the search-terms section, as the artboard draws it.
@@ -38,13 +37,6 @@ export const BUCKETS: readonly { key: Bucket; label: string; hint: string }[] = 
   { key: 'industry_keywords', label: 'Category', hint: 'What buyers type when they are talking about this kind of product.' },
   { key: 'exclude_terms', label: 'Not this', hint: 'Senses of your name that are not you: Cotopaxi the volcano, Sealand the shipping line.' },
 ]
-
-/** The sentence the add row prints. A term is not retroactive: the next update
- *  searches it, and the line it starts is a new line. */
-export const NEW_TERM_RULE = 'a new term starts a new line; the old line is kept'
-
-/** Why there is no "Keep it" beside the control that takes a term off. */
-export const REVIEW_KEEP_NOTE = 'keeping it needs nothing: it stays until you take it off'
 
 export interface TermsSectionProps {
   terms: Record<Bucket, string[]>
@@ -83,15 +75,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
 
   return (
     <Section>
-      <SectionHead
-        title={<span title={glossaryRule('search_terms')}>Search terms</span>}
-        meta={termsMeta({
-          brand: terms.brand_keywords,
-          competitor: terms.competitor_keywords,
-          category: terms.industry_keywords,
-          exclusions: terms.exclude_terms,
-        })}
-      />
+      <SectionHead title={<span title={glossaryRule('search_terms')}>Search terms</span>} />
 
       {BUCKETS.map((b) => (
         <LabelRow
@@ -161,15 +145,6 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
             {flagged.map((t) => (
               <ReviewStrip key={t.key} term={t} canEdit={canEdit} onDrop={() => onRemove(bucketOf(t.bucket), t.keyword)} />
             ))}
-            {/* ONCE, UNDER THE STRIPS — not once per strip (ST7). It is a
-                constant: the same 52 characters on every row, and inside the
-                strip it was a flex item sized by its own content, so it took
-                460px of a 716px row while the EVIDENCE beside it — the k of n
-                and the sentence that says why the term is flagged — was laid
-                out in 146px over three lines. A footnote that repeats cannot
-                outbid the thing it is a footnote to. Same argument the rivals
-                section already made for its own repeated sentence. */}
-            <MonoNote>{REVIEW_KEEP_NOTE}</MonoNote>
           </div>
         </LabelRow>
       )}
@@ -201,7 +176,6 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
               {BUCKETS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
             </select>
             <button type="button" onClick={add} disabled={!canEdit || full || draft.trim() === ''} className={CONTROL}>Add</button>
-            <MonoNote>{NEW_TERM_RULE}</MonoNote>
           </div>
           {error && <span role="alert" className="text-[11.5px] text-negative">{error}</span>}
         </div>

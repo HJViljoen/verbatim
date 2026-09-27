@@ -1,4 +1,5 @@
 import { shortDate } from '@/lib/format'
+import { printNote } from '@/lib/settings/change-log'
 import { NOTHING_PENDING, type SaveState } from '@/lib/settings/save-state'
 
 // `settings.savestate` — the strip the artboard draws under the settings rail,
@@ -48,7 +49,7 @@ export function LastSaveStrip({ state, note }: {
       {state.lastSavedAt ? (
         <>
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-            Last save {shortDate(state.lastSavedAt)}{note ? `: ${note}` : ''}
+            Last save {shortDate(state.lastSavedAt)}{printNote(note) ? `: ${printNote(note)}` : ''}
           </span>
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{breakWords(state)}</span>
         </>

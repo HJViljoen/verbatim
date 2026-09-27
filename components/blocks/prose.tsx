@@ -105,7 +105,7 @@ export function TokenProse({
   const face = figureFace ?? (hero ? 'inherit' : 'mono')
   // A FIGURE IN A HERO SENTENCE TAKES THE SENTENCE'S FACE. Mono inside 13.5px
   // sans is a deliberate signal — code's number, in code's typeface — and at
-  // 23px serif it is the opposite: tabular mono sets "1,388" as "1 , 388" and
+  // 23px serif it is the opposite: tabular mono sets "1,015" as "1 , 015" and
   // "9.4%" as "9 . 4%", so the one sentence the artefact is about reads as
   // machine output. The artboard sets its figures in the sentence's own face at
   // weight 600, which says the same thing without breaking the line.

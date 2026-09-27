@@ -1,5 +1,5 @@
 import { PlatformIcon } from '@/components/charts/platform-icon'
-import { Figure, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
 import { platformLabel } from '@/lib/format'
 import type { PlatformRow } from '@/lib/settings/connections'
 
@@ -11,33 +11,31 @@ import type { PlatformRow } from '@/lib/settings/connections'
 // page's status pill in the same cell. A switch that cannot switch is worse
 // than a word that can be read.
 //
-// THE SHARE IS THE MONTH'S, AND IT SAYS WHOSE. `month_denominators.platform_mix`
-// for the comment-dated month is the only honest source (lib/settings/
-// connections.ts explains why nothing else is), and a percentage with no
-// population named is D8's own example of a figure that cannot be checked —
-// so the basis sentence under the rows is not optional, and where the month has
-// not been read the column is blank rather than zero.
+// NO SHARE COLUMN ANY MORE (market-first WP3.10, GS F31). It printed the
+// CLIENT's own videos by platform, nine a month on Sealand, as if it were how
+// the conversation splits; the market's mix is "Where we read it" at the top
+// of this page. The head is the title alone (the 25 Sep rulings).
 
-const COLS = '200px minmax(0,1fr) 110px 110px'
-const HEAD = ['Platform', 'What we read', 'Share', ''] as const
+const COLS = '200px minmax(0,1fr) 110px'
+const HEAD = ['Platform', 'What we read', ''] as const
 // "What we read" is a sentence and its head belongs over its first word.
-const ALIGN = ['left', 'left', 'right', 'right'] as const
+const ALIGN = ['left', 'left', 'right'] as const
 
-export function PlatformsSection({ rows, basis, ownAccounts }: {
+export function PlatformsSection({ rows, ownAccounts }: {
   rows: readonly PlatformRow[]
-  /** Whose videos, in which month, at what stage of the freeze. */
-  basis: string
+  /** Unused since WP3.10 (the client's share went); kept so a caller that
+   *  still passes it compiles. */
+  basis?: string
   /** The client's own accounts, per platform — the row the artboard has no
    *  line for and the product needs, because "no account of yours is
    *  configured" is the commonest reason a brand cannot see itself. */
   ownAccounts: Readonly<Record<string, string>>
 }) {
   const mine = Object.entries(ownAccounts).filter(([, v]) => v && v.trim() !== '')
-  const on = rows.filter((r) => r.connected).length
   return (
     <Section>
-      <SectionHead title="Platforms" meta={`${on} on · ${basis}`} />
-      <GridTable cols={COLS} min={820} head={HEAD} align={ALIGN}>
+      <SectionHead title="Platforms" />
+      <GridTable cols={COLS} min={700} head={HEAD} align={ALIGN}>
         {rows.map((r) => (
           <GridRow
             key={r.platform}
@@ -50,7 +48,6 @@ export function PlatformsSection({ rows, basis, ownAccounts }: {
                 {r.label}
               </span>,
               <span key="w" className="block text-[12.5px] text-muted-foreground">{r.reads}</span>,
-              <Figure key="s" value={r.share === null ? '—' : `${r.share.toFixed(0)}%`} muted={r.share === null} />,
               <span
                 key="c"
                 className={`inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10.5px] font-medium ${r.connected ? 'bg-accent text-accent-foreground' : 'bg-warning/15 text-warning'}`}
@@ -64,7 +61,7 @@ export function PlatformsSection({ rows, basis, ownAccounts }: {
       <MonoNote className="max-w-[820px]">
         Your accounts:{' '}
         {mine.length === 0
-          ? 'none configured. The search still finds you, but nothing you publish is read as yours'
+          ? 'none configured'
           : mine.map(([p, h]) => `${platformLabel(p)} ${p === 'youtube' ? h : `@${h}`}`).join(' · ')}
       </MonoNote>
     </Section>

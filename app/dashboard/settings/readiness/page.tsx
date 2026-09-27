@@ -8,6 +8,7 @@ import { gateAccessFor } from '@/lib/gate-record'
 import { computeReadiness } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
 import { clientReadiness, NOT_BUILT } from '@/lib/settings/readiness-view'
+import { settingsBar } from '@/lib/settings/bar'
 
 // Settings › Readiness (Phase 1 WP16, design ST1, decision V) — what each part
 // of the product needs from THIS workspace, what is there, and who closes the
@@ -54,20 +55,21 @@ export default async function SettingsReadinessPage() {
     : null
 
   const view = clientReadiness(all, { by: { retention: due } })
+  const bar = await settingsBar(supabase, clientId, inputs.tenant, now.toISOString())
 
   return (
     <SettingsFrame
       active="readiness"
       title="Settings"
       context={inputs.tenant}
+      bar={bar}
       contentTitle="Readiness"
-      contentMeta={view.summary.label}
     >
       <div className="flex flex-col gap-3">
         <ReadinessTable
           rows={view.rows}
           title="What each part of the product needs from this workspace"
-          description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos, the same floor the product compares on.`}
+          description={`Read ${fullDate(now.toISOString())}.`}
         />
         <section className="rounded-md bg-inner px-4 py-3.5">
           <h3 className="text-[14px] font-semibold">Not built yet on the reading pages</h3>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { NOTHING_PENDING, type SaveState } from '@/lib/settings/save-state'
 import { shortDate } from '@/lib/format'
+import { printNote } from '@/lib/settings/change-log'
 
 /**
  * The save-state strip and the scope statement. (The sub-page's own header,
@@ -49,7 +50,7 @@ export function SaveStrip({ state, note }: { state: SaveState; note?: string | n
       </span>
       <span className="font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
         {state.lastSavedAt
-          ? `Last save ${shortDate(state.lastSavedAt)}${note ? `: ${note.replace(/\.$/, '')}.` : '.'}`
+          ? `Last save ${shortDate(state.lastSavedAt)}${printNote(note) ? `: ${printNote(note)!.replace(/\.$/, '')}.` : '.'}`
           : 'Nothing has been saved on this workspace yet.'}
         <br />
         {!state.recorded

@@ -19,6 +19,7 @@ import {
   type LabelledPair,
 } from '../lib/subjects/calibration'
 import { loadActiveSubjects } from '../lib/subjects/membership'
+import { pickSubjects, subjectNames } from './subject-membership'
 import {
   JUDGE_VERSION,
   RPC_SUBJECT_BAND,
@@ -78,6 +79,13 @@ import {
 //      only what is missing instead of logging every subject twice. --emit
 //      never overwrites a sheet (it may already hold labels).
 //
+// --subjects "<name>,<name>" (market-first WP3.1): emit, score or record only
+// the active subjects of these names (case-blind; an unknown name refuses the
+// run). The per-subject quota stays the whole set's (the sheet split across
+// every active subject: 20 each at ten), so the subjects confirmed on the 13 Oct
+// call get the 20-30 checked rows the plan budgets, and today's subjects keep
+// the figures already recorded on them.
+//
 // WHY A PERSON. Nothing here can tell whether an insight really is about
 // "comfort"; that IS the question the whole mechanism answers, so there is no
 // ground truth to compute against. The sample is hashed rather than strided so
@@ -93,13 +101,13 @@ import {
 // have already been paid for. A pair inside the band with no decision on file
 // is counted as `unknown` and printed, never scored as a miss.
 
-interface Args { clientId: string; emit: string | null; score: string | null; apply: boolean; sample: number; project: string | null }
+interface Args { clientId: string; emit: string | null; score: string | null; apply: boolean; sample: number; project: string | null; subjects: string[] | null }
 
 // `sample` is the tenant's WHOLE sheet in pairs, split across its subjects —
 // see calibrationQuota.
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { clientId: '', emit: null, score: null, apply: false, sample: SUBJECT_CALIBRATION_SAMPLE, project: null }
+  const args: Args = { clientId: '', emit: null, score: null, apply: false, sample: SUBJECT_CALIBRATION_SAMPLE, project: null, subjects: null }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client') args.clientId = argv[++i]
     else if (argv[i] === '--emit') args.emit = argv[++i]
@@ -107,6 +115,7 @@ function parseArgs(argv: string[]): Args {
     else if (argv[i] === '--apply') args.apply = true
     else if (argv[i] === '--sample') args.sample = Number(argv[++i])
     else if (argv[i] === '--project') args.project = argv[++i] ?? null
+    else if (argv[i] === '--subjects') args.subjects = subjectNames(argv[++i])
     else throw new Error(`unknown flag: ${argv[i]}`)
   }
   if (!args.clientId) throw new Error('--client <uuid> is required')
@@ -163,7 +172,7 @@ async function scoreAll(admin: Admin, clientId: string, subjectId: string) {
 }
 
 async function main() {
-  const { clientId, emit, score, apply, sample, project } = parseArgs(process.argv.slice(2))
+  const { clientId, emit, score, apply, sample, project, subjects: only } = parseArgs(process.argv.slice(2))
   // WHICH PROJECT, FIRST — before anything is read or written.
   const host = projectRefOf(process.env.NEXT_PUBLIC_SUPABASE_URL)
   console.log(`project ${host ?? 'none (NEXT_PUBLIC_SUPABASE_URL is not a Supabase project URL)'}`)
@@ -174,8 +183,10 @@ async function main() {
   // destroy the labels (and the .emitted copy is the pristine one).
   if (emit && existsSync(emit)) throw new Error(`${emit} exists; --emit never overwrites a sheet — name a new file`)
   const admin = createAdminClient()
-  const subjects = await loadActiveSubjects(admin, clientId)
-  if (subjects.length === 0) throw new Error('no active subjects for this tenant — confirm a set in Settings first')
+  const active = await loadActiveSubjects(admin, clientId)
+  if (active.length === 0) throw new Error('no active subjects for this tenant — confirm a set in Settings first')
+  const subjects = only ? pickSubjects(active, only) : active
+  if (only) console.log(`[subject-calibration] --subjects: ${subjects.map((s) => s.name).join(', ')}`)
 
   if (emit) {
     const ids = await selectAll<{ id: string; theme: string; description: string }>(() =>
@@ -187,7 +198,8 @@ async function main() {
         .order('id', { ascending: true }),
     )
     const text = new Map(ids.map((r) => [r.id, r]))
-    const quota = calibrationQuota(subjects.length, sample)
+    // The whole set's split, filtered or not: see --subjects above.
+    const quota = calibrationQuota(active.length, sample)
     const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id))
     const lines: string[] = []
     const insights = new Set<string>()
@@ -347,7 +359,9 @@ async function main() {
   if (!apply) console.log('[subject-calibration] nothing recorded — re-run with --apply to write these figures onto the subjects.')
 }
 
-main().catch((e) => {
-  console.error(e instanceof Error ? e.message : String(e))
-  process.exit(1)
-})
+if (process.argv[1]?.endsWith('subject-calibration.ts')) {
+  main().catch((e) => {
+    console.error(e instanceof Error ? e.message : String(e))
+    process.exit(1)
+  })
+}

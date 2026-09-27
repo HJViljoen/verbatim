@@ -229,7 +229,7 @@ function subjectSet(i: ReadinessInputs): ReadinessRow {
       : `${plural(defined, 'subject')} named.`
 
   return row(
-    'subject-set', 'Subjects', 'the five to eight subjects this workspace is read against',
+    'subject-set', 'Subjects', 'the five to ten subjects this workspace is read against',
     status, detail, 'engineering',
     'Phase 1 builds the subject set and the form that names them; nothing can be entered before it.',
   )

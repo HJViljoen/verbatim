@@ -99,8 +99,8 @@ const BODY_SM = 'text-[14px] leading-[1.45] text-foreground'
  * product's identity for a count and it is right wherever the number is the
  * element — a tile's value, a card's figure, a headline's count. Inside
  * RUNNING PROSE it is not: Plex Mono sets a comma in a full advance,
- * so "1,388" reads as three tokens in the middle of a sentence ("across 1 ,
- * 388 category videos" on the cover, measured against the artboard, which sets
+ * so "1,015" reads as three tokens in the middle of a sentence ("across 1 ,
+ * 015 category videos" on the cover, measured against the artboard, which sets
  * the same figure in Plex Sans in its paragraph and in Plex Mono on its tile —
  * SalesBrief.dc.html:27 against :42). `sans` keeps `tabular-nums`, so the
  * digits still align; only the face moves.
@@ -1341,11 +1341,11 @@ function LanguagePage({ page }: { page: DocPage }) {
 
 // ── who is moving, and which way (sales.p5) ────────────────────────────────
 
-/** "375 of 1,388 category videos" — the figure and the population it is a
+/** "104 of 626 category videos" — the figure and the population it is a
  *  share of, as one level node, under the artboard's dotted rule.
  *
  *  THE PAIR IS THE LEVEL, which is `FigureCell`'s rule applied to a sentence
- *  rather than to a cell: a bare "375" is a figure and "375 of 1,388 category
+ *  rather than to a cell: a bare "104" is a figure and "104 of 626 category
  *  videos" is a measurement, and rule (b) reads the whole node. The dotted
  *  underline is the artboard's own device for "this number has a denominator
  *  under it". */

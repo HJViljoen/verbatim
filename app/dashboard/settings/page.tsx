@@ -1,20 +1,26 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { LastSaveStrip } from '@/components/settings/save-state-strip'
 import { CommunitiesSection } from '@/components/settings/tracking/communities'
+import { HeldStillSection } from '@/components/settings/tracking/held-still'
+import { WhereItCameFrom, WhereWeReadIt, YourMarketSize } from '@/components/settings/tracking/your-market'
+import { redditDiscoveryEnabled } from '@/lib/config'
 import { PlatformsSection } from '@/components/settings/tracking/platforms'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { shortDate } from '@/lib/format'
-import { audienceLabel } from '@/lib/readiness/types'
 import { readingHandle } from '@/lib/reading/read'
 import { communityRows, tableRows, unconfiguredShare } from '@/lib/settings/communities'
-import { platformRows, platformShareBasis } from '@/lib/settings/connections'
+import { platformRows } from '@/lib/settings/connections'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
 import { rivalRows } from '@/lib/settings/rivals-view'
+import { heldStillLine, loadQueue, queueLines, queueSummary, type QueueColumn } from '@/lib/settings/queue'
+import { loadYourMarket, searchPlan } from '@/lib/settings/your-market'
 import { saveState } from '@/lib/settings/save-state'
+import { oneLineBar } from '@/lib/shell/bar'
 import { termDateShort } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
 import { canSeeStudio } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { tenantLocked } from '@/lib/tenant-locks'
 import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
 import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
@@ -55,6 +61,28 @@ export default async function SettingsTrackingPage() {
   // caption. Owners and admins get it through the service role, in this server
   // component; everyone else gets the table without the column and is told so.
   const inputs = await loadTrackingPage(supabase, clientId, canEdit ? createAdminClient() : null, readingHandle(clientId))
+  // HELD STILL UNTIL JANUARY (decision I, WP3.10): a locked tenant's term,
+  // rival and handle edits wait in the queue, and the page says what waits and
+  // when it lands. Before MF3 there is no queue; a read that fails otherwise
+  // prints the section without a list rather than a queue with nothing in it.
+  const locked = tenantLocked(clientId, 'tracking')
+  const queue = locked
+    ? await loadQueue(supabase, clientId).catch((error: unknown) => {
+      console.error(`[settings] tracking queue not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+      return null
+    })
+    : null
+  const queued = queue?.state === 'available' ? queueLines(queue.rows, inputs.config as Partial<Record<QueueColumn, unknown>> | null) : []
+  // YOUR MARKET (WP3.10): the market's platforms, the search cap and each
+  // search's share with its makers, on the reading month. The service role,
+  // because MF1's functions are granted to it alone; counts only, of the
+  // session's own tenant. A failed read prints "not measured", as a missing
+  // table does.
+  const market = await loadYourMarket(createAdminClient(), clientId, inputs.censusMonth).catch((error: unknown) => {
+    console.error(`[settings] your market not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+    return null
+  })
+  const plan = searchPlan((inputs.config ?? {}) as Parameters<typeof searchPlan>[0], redditDiscoveryEnabled())
 
   const c = inputs.config as TrackingConfig | null
   const terms = inputs.config as SearchTermsConfig | null
@@ -98,14 +126,8 @@ export default async function SettingsTrackingPage() {
       active="tracking"
       title="Settings"
       context={context}
+      bar={oneLineBar(inputs.tenant, inputs.reading)}
       contentTitle="Tracking"
-      contentMeta={c ? [
-        `${termCount} search term${termCount === 1 ? '' : 's'}`,
-        `${configured} communit${configured === 1 ? 'y' : 'ies'}`,
-        `${names.length} rival${names.length === 1 ? '' : 's'}`,
-        `${platforms.length} platform${platforms.length === 1 ? '' : 's'}`,
-        period,
-      ].join(' · ') : undefined}
       counts={{
         tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
         ...(inputs.railCounts.subjects != null
@@ -125,6 +147,17 @@ export default async function SettingsTrackingPage() {
       ) : !c || !terms ? (
         <p className="text-[12.5px] text-muted-foreground">No tracking config for this workspace. Nothing is tracked until this is set up with you.</p>
       ) : (
+        <>
+        <YourMarketSize month={inputs.censusMonth} videos={market?.market?.length ?? null} />
+        <WhereItCameFrom month={inputs.censusMonth} marketVideos={market?.market?.length ?? null} terms={market?.terms ?? null} makers={market?.makers ?? 'not_measured'} />
+        <WhereWeReadIt month={inputs.censusMonth} marketVideos={market?.market?.length ?? null} mix={market?.mix ?? null} plan={plan} />
+        {locked ? (
+          <HeldStillSection
+            line={heldStillLine(queue?.state === 'available' ? 'available' : 'unavailable')}
+            summary={queue?.state === 'available' ? queueSummary(queued, new Date().toISOString()) : null}
+            lines={queued}
+          />
+        ) : null}
         <TrackingForm
           canEdit={canEdit}
           terms={{
@@ -165,17 +198,11 @@ export default async function SettingsTrackingPage() {
           platforms={
             <PlatformsSection
               rows={platformRows({ platforms, communities: configured, mix: inputs.platformMix, videos: inputs.monthVideos })}
-              basis={platformShareBasis({
-                month: inputs.censusMonth,
-                status: inputs.monthStatus,
-                videos: inputs.monthVideos,
-                unread: inputs.monthUnread,
-                audience: audienceLabel('client'),
-              })}
               ownAccounts={ownHandles}
             />
           }
         />
+        </>
       )}
     </SettingsFrame>
   )

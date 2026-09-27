@@ -42,6 +42,10 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 | Mixed / early | `#E6B03C` | data only |
 | Negative | `#DB3B2E` | data only |
 | Neutral segment | `#CDD2D7` | data only |
+| **Market ink** (market-first, decision K) | `#26292C` | the market, in the main ink · `--ink-market` |
+| You ink | `#0E8A5F` | you, in the green · `--ink-you` |
+| Rival ink | `#F0742B` | rivals, in the orange · `--ink-rival` |
+| Earlier-month ink | `#9AA1A9` | the earlier month, in grey · `--ink-earlier` |
 | Retired | `#F6F1E7` cream · `#14503A` pine · `#FDFAF3` tile · all `--accent-*` bucket hues · glass/backdrop-blur | |
 
 ### Rules (decided, 2026-08-28)
@@ -139,6 +143,14 @@ Light theme:
 **Data buckets** (colour = meaning, data only): you `--you` `#0E8A5F` · competitor `--comp` `#F0742B`
 · category / rest of field `--cat` `#9AA1A9` · mixed / early `--mixed` `#E6B03C` · neutral segment
 `--neutral-seg` `#CDD2D7`.
+
+**The market-first inks** (decision K, WP3.10): who a mark belongs to, by name. The market takes the
+main ink `--ink-market` `#26292C` (dark `#ECEEF0`), you stay green `--ink-you` `#0E8A5F` (`#2FBF85`),
+rivals orange `--ink-rival` `#F0742B` (`#F58A4A`), and grey means the earlier month `--ink-earlier`
+`#9AA1A9` (`#7C838B`). Additive: each shares its value with `--foreground`, `--you`, `--comp` and
+`--cat`, and `scripts/check-design-drift.sh` (d) fails the lint when one drifts from its twin or from
+this table. Utilities: `bg-ink-market`, `text-ink-you`, `stroke-ink-rival`, `fill-ink-earlier` and the
+like.
 
 **Semantic status**: positive `#0E8A5F` (shares the green) · warning `#E6B03C` · negative/destructive `#DB3B2E`.
 

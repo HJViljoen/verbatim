@@ -27,8 +27,8 @@ import { fmtBytes } from '@/lib/reports/files'
 // is kept by construction rather than by a hand-rolled cell.
 //
 // THE ROWS ARE FIGURES AND NOT LEVELS, deliberately. `sentFigures` is keyed by
-// COVER SLOT and its values are the strings the document PRINTED ("3.4%",
-// "1,388") — the denominators behind them were spent when the table was
+// COVER SLOT and its values are the strings the document PRINTED ("17%",
+// "626") — the denominators behind them were spent when the table was
 // rendered and are not in the snapshot. So `FigureCell` is given no `of`: it
 // stamps `figure` and not `level`, which is the honest claim ("this is what
 // that report printed"), and the caption above them says which report. A level

@@ -1,6 +1,9 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
+import { PagesCanSay, SearchesHeldStill } from '@/components/settings/record/additions'
+import { loadQueue, QUEUE_COLUMNS, queueLines, type QueueColumn } from '@/lib/settings/queue'
+import { tenantLocked } from '@/lib/tenant-locks'
 import { changesFromLog } from '@/lib/reading/comparability'
 import { otherRows } from '@/lib/settings/what-we-changed'
 import { loadRecordReadingMonth, loadWhatWeChanged } from '@/lib/settings/what-we-changed-load'
@@ -22,6 +25,7 @@ import { loadRailCounts, loadRecordPage } from '@/lib/settings/record-load'
 import { gateSummary, keptByPlatform, keptByTerm, sampleHead } from '@/lib/settings/reject-log'
 import { saveState } from '@/lib/settings/save-state'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { oneLineBar } from '@/lib/shell/bar'
 import { AppealButton } from './appeal-button'
 
 // Settings › The record (Phase 1 WP16, ported to the SettingsRecord artboard in
@@ -117,6 +121,20 @@ export default async function SettingsRecordPage() {
   const stats = deliveryStats(delivery, inputs.updates)
   const thisMonth = updatesInMonth(inputs.updates, month)
   const changed = await changedAhead
+  // DEPLOY 5'S THREE SECTIONS (WP3.10). "Searches held still until January"
+  // and the timeline are a locked tenant's: they describe the lock and the
+  // clean months it keeps. Before MF3 the queue reads as not there.
+  const locked = tenantLocked(clientId, 'tracking')
+  const [queue, stored] = locked
+    ? await Promise.all([
+      loadQueue(supabase, clientId).catch((error: unknown) => {
+        console.error(`[settings] tracking queue not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+        return null
+      }),
+      supabase.from('tracking_configs').select(QUEUE_COLUMNS.join(', ')).eq('client_id', clientId).maybeSingle()
+        .then((r) => (r.data ?? null) as Partial<Record<QueueColumn, unknown>> | null),
+    ])
+    : [null, null]
   // EACH CHANGE ONCE: the changes of ours print in the dated list above, so
   // the Phase 1 log below keeps every other row (a schedule, a subject, a
   // discovery strike) under its own title.
@@ -154,6 +172,7 @@ export default async function SettingsRecordPage() {
     <SettingsFrame
       active="record"
       title="Settings"
+      bar={oneLineBar(tenant, rm)}
       // D14: the first half is EARLIEST EVIDENCE, not a start date — the same
       // caveat Settings › Tracking already prints about its rival rows.
       context={[
@@ -170,8 +189,15 @@ export default async function SettingsRecordPage() {
         {changed ? (
           <>
             <WhatWeChangedLead block={changed.block} />
+            {locked ? (
+              <SearchesHeldStill
+                state={queue?.state === 'available' ? 'available' : 'unavailable'}
+                lines={queue?.state === 'available' ? queueLines(queue.rows, stored) : []}
+              />
+            ) : null}
             <TheRecord view={changed.record} />
             <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
+            {locked ? <PagesCanSay now={nowIso} /> : null}
           </>
         ) : null}
 

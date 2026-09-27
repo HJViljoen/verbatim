@@ -131,7 +131,7 @@ them on-page as testimonials — they are not quotes about Verbatim.
 - NOT claimable: comprehensiveness ("every comment"), the 84% dark-social
   figure, scene/vision analysis, any testimonial, any client logo.
 
-## Capability map (what scope copy may claim, as of 2026-09-06)
+## Capability map (what scope copy may claim, as of 2026-09-06; market-first additions dated below)
 
 Scope copy must cover THREE audiences, not two: your brand, your competitors,
 and the wider industry/category conversation, and it must lead with the
@@ -143,14 +143,16 @@ category conversation where the brand is not named. It may claim:
   analysis and is quotable evidence; say "what's said to camera", never
   "every video transcribed") · **news context** around the market (live since
   2026-08-11; secondary, never a headline) · owned-account data (follower
-  movement, own posts, your audience's replies) · weekly delta layer (what
-  changed) · relevance filtering + evidence floors (a theme only counts with
+  movement, own posts, your audience's replies) · what each update brought
+  in (counted, never read as a change) · relevance filtering + evidence floors (a theme only counts with
   enough independent voices; off-topic, spam and lookalike brand names thrown
   out before analysis).
 - **Also live (product surfaces the site may show, verified 2026-09-06):**
   consumer profiles (personas with wants, blockers, triggers, how they talk,
-  each with its conversation count) · the theme map (themes sized by
-  conversations, gaining/fading/emerging week to week) · the face-off (you vs
+  each with its conversation count) · the themes (ranked by how many of the
+  market's videos carry them, month by month; NOT "gaining" or "fading": no
+  direction word until three comparable months exist, late January 2027 at
+  the earliest; corrected 2026-09-27) · the face-off (you vs
   a competitor vs the category: share of conversation, sentiment, unanswered
   questions, themes each side owns) · the analyst (question mode: answer +
   what the evidence says + my read + not in the evidence; never invents a
@@ -161,8 +163,33 @@ category conversation where the brand is not named. It may claim:
   content what to make next), scheduled sends with a recipient list and PDF
   attached, login-free share links with expiry and revoke, the client's name
   on the cover ("written for" free text).
-- **Units:** say "comments" for the raw count (18,440), "conversations" for
-  everything analysed. Never "voices".
+- **Market-first (deploy 5, WP3.10; verified in code 2026-09-27 on the
+  settings branch).** Claimable, in these words and no stronger:
+  - **Settings shows where the market came from:** the market's videos in the
+    month, each search's share of them and how many of those are makers'
+    (from the record of how each video was first found, which starts with the
+    Stage 1 reconstruction; a video with no record is counted as such), the
+    market's platform mix, and the searches each update uses against the
+    ceiling of 120. Any part whose record is not there says "not measured".
+  - **The search set is held still until January:** a change a client saves
+    to its terms, rivals or accounts is queued and lands on the 1st of a
+    month, the first no earlier than 1 January 2027, applied by the first
+    update that runs on or after that day. Communities, a rival rename and the report day are
+    not queued: they are held, and the client is told to ask.
+  - **Subjects are something the market talks about that the client chose to
+    follow**, named the way a buyer would say it; up to ten; a subject nobody
+    at the client confirmed says "picked for you, not yet confirmed".
+  - **What we changed says what is held and what is checked:** the search set
+    held still until January with what is queued, how videos are checked for
+    relevance, marked as makers' and filed to a brand (and when we last changed
+    each), and when the pages can say what: levels now, the first comparison
+    read the same way with the 6 Dec update, the first direction words late in
+    January, the first quarter comparison in April 2027. Say "when", never
+    "trends" or "movement" before those dates.
+- **Units:** say "videos" for what a reading page counts (a video and the
+  comments under it that month; "104 of 626 September category videos"),
+  "comments" for comments. "Conversations" survives only on the legacy pages
+  that still print it. Never "voices".
 - **In development (label it exactly that, never present tense):** nothing
   platform-level right now. Previous entries (Reddit, news) shipped in August.
 - Update this map when capabilities ship; stale claims are the cardinal sin.
