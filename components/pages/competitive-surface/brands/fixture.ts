@@ -93,12 +93,6 @@ export function sealandBrands(counted = true): BrandsPageData {
         rival: 'Cotopaxi',
         findings: [
           {
-            id: 'a802998b-d8c0-4ac4-bb24-19d6782244a2', category: 'notable_account', kindWords: 'an account shaping the talk',
-            title: 'Family Travel Psych is shaping the family-travel bag checklist',
-            quote: { ref: 'c:b07bc999-5612-46c8-9c51-4d24c2f775a6', text: 'Cotopaxi seems easier to use, with the large opening, but the material does not look as durable as the other one.', lang: 'en', english: null },
-            seen: { months: 2, of: 6 },
-          },
-          {
             id: '08ee298c-980f-4b32-a0be-92ec0822aa32', category: 'sentiment_differential', kindWords: 'how the talk differs',
             title: 'Durability praise does not remove carry-comfort concern',
             quote: { ref: 'c:0a485ab7-9f1d-4d35-964d-808fee1b42cc', text: 'I have a Cotopaxi backpack that’s about 5 year old now. I’ve used it a ton for hiking, day pack, swimming gear, whatever. I’m happy with it. It shows no signs of wear.', lang: 'en', english: null },
@@ -109,6 +103,12 @@ export function sealandBrands(counted = true): BrandsPageData {
             title: 'Organization talk becomes trip-readiness scrutiny around Cotopaxi',
             quote: { ref: 'c:13192a76-bab9-4aec-acf2-5cb541dde56b', text: 'i was just wondering if anyone had personal experiences with it.', lang: 'en', english: null },
             seen: { months: 3, of: 6 },
+          },
+          {
+            id: 'a802998b-d8c0-4ac4-bb24-19d6782244a2', category: 'notable_account', kindWords: 'an account shaping the talk',
+            title: 'Family Travel Psych is shaping the family-travel bag checklist',
+            quote: { ref: 'c:b07bc999-5612-46c8-9c51-4d24c2f775a6', text: 'Cotopaxi seems easier to use, with the large opening, but the material does not look as durable as the other one.', lang: 'en', english: null },
+            seen: { months: 2, of: 6 },
           },
         ],
       }],
@@ -197,6 +197,12 @@ export function ossurBrands(): BrandsPageData {
         rival: 'Ottobock',
         findings: [
           {
+            id: '57155fa4-23cc-43cb-96be-645c2d3aaec0', category: 'sentiment_differential', kindWords: 'how the talk differs',
+            title: 'Rehabilitation carries a warmer tone around Ottobock than around Össur',
+            quote: { ref: 'c:2f29107e-31d4-48ae-b555-5cb3a2777fd8', text: 'Que você chegue em lugares inimagináveis na sua profissão amiga,que felicidade ver a sua evolução e ver de pertinho tudo isso ❤️🥹', lang: 'pt', english: 'May you reach unimaginable places in your profession, friend, what a joy to see your progress and to see all this up close ❤️🥹' },
+            seen: { months: 5, of: 6 },
+          },
+          {
             id: '959a4f77-30c5-4072-95a5-7e6a8c75754f', category: 'content_gap', kindWords: 'where the content differs',
             title: 'Scenario-based knee education is landing outside Össur',
             quote: { ref: 'c:13528a88-e45a-437b-bd6c-9ef9cff582fa', text: 'Any tips on using my c-leg', lang: 'en', english: null },
@@ -207,12 +213,6 @@ export function ossurBrands(): BrandsPageData {
             title: 'Family and pediatric pathways are more visible around Ottobock and industry creators',
             quote: { ref: 'c:41b562da-30e0-40a7-8c23-49f00f49b952', text: 'Lo estás haciendo excelente!!! ❤️', lang: 'es', english: 'You are doing excellent!!! ❤️' },
             seen: { months: 6, of: 6 },
-          },
-          {
-            id: '57155fa4-23cc-43cb-96be-645c2d3aaec0', category: 'sentiment_differential', kindWords: 'how the talk differs',
-            title: 'Rehabilitation carries a warmer tone around Ottobock than around Össur',
-            quote: { ref: 'c:2f29107e-31d4-48ae-b555-5cb3a2777fd8', text: 'Que você chegue em lugares inimagináveis na sua profissão amiga,que felicidade ver a sua evolução e ver de pertinho tudo isso ❤️🥹', lang: 'pt', english: 'May you reach unimaginable places in your profession, friend, what a joy to see your progress and to see all this up close ❤️🥹' },
-            seen: { months: 5, of: 6 },
           },
         ],
       }],

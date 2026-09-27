@@ -266,9 +266,21 @@ describe('B4 · where a rival’s talk differs', () => {
       videos: new Map([['Cotopaxi', 32], ['Freitag', 8], ['The North Face', 6], ['Patagonia', 5]]),
       floor: 10,
     })
+    // How the talk differs before who shapes it (the preview's order).
     expect(b.groups.map((g) => [g.rival, g.findings.map((f) => f.kindWords)])).toEqual([
       ['Cotopaxi', ['how the talk differs', 'an account shaping the talk']],
     ])
+    const ordered = buildFindings({
+      rivals: ['Cotopaxi'],
+      findings: [
+        { id: 'f2', rival: 'Cotopaxi', category: 'notable_account', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
+        { id: 'f1', rival: 'Cotopaxi', category: 'sentiment_differential', title: 'Organization talk becomes trip-readiness scrutiny around Cotopaxi', quote: null, seen: null },
+        { id: 'f3', rival: 'Cotopaxi', category: 'content_gap', title: 'a', quote: null, seen: null, impact: 'high' },
+      ],
+      videos: new Map([['Cotopaxi', 32]]),
+      floor: 10,
+    })
+    expect(ordered.groups[0].findings.map((f) => f.id)).toEqual(['f3', 'f1', 'f2'])
     expect(thinLine(b)).toBe('Freitag, The North Face and Patagonia have fewer than 10 videos in the last 90 days, too few to set against the category.')
   })
 

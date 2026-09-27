@@ -175,7 +175,7 @@ describe('B4 · where a rival’s talk differs', () => {
 
   it('freezes each card’s voice by its comment ref', () => {
     expect(competitiveFindings.quotes?.(brandsFixture())).toEqual([
-      'c:b07bc999-5612-46c8-9c51-4d24c2f775a6', 'c:0a485ab7-9f1d-4d35-964d-808fee1b42cc', 'c:13192a76-bab9-4aec-acf2-5cb541dde56b',
+      'c:0a485ab7-9f1d-4d35-964d-808fee1b42cc', 'c:13192a76-bab9-4aec-acf2-5cb541dde56b', 'c:b07bc999-5612-46c8-9c51-4d24c2f775a6',
     ])
   })
 

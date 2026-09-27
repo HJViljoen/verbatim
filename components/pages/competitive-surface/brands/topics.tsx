@@ -66,8 +66,8 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
   // WIDE FROM 560px OF BLOCK: label, bar, the two counts, the month before.
   // Narrower, the bar leaves (Your market's rule for its tables).
   const cols = prev
-    ? 'grid-cols-[minmax(0,1fr)_6.5rem_3rem_3.5rem] @min-[560px]:grid-cols-[minmax(8rem,9rem)_minmax(64px,1fr)_8.5rem_3.5rem_4.5rem]'
-    : 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[560px]:grid-cols-[minmax(8rem,9rem)_minmax(64px,1fr)_8.5rem_3.5rem]'
+    ? 'grid-cols-[minmax(0,1fr)_6.5rem_3rem_3.5rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem_4.5rem]'
+    : 'grid-cols-[minmax(0,1fr)_6.5rem_3.5rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem]'
   const bar = '@max-[560px]:hidden'
   const spanAll = prev ? 'col-span-3 @min-[560px]:col-span-4' : 'col-span-2 @min-[560px]:col-span-3'
   return (
@@ -98,7 +98,7 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
           const words = topicWords(r)
           const last = i === t.tracked.length - 1
           return (
-            <div key={r.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4 py-1.5', counted ? cols : 'grid-cols-[minmax(8rem,9rem)_minmax(0,1fr)]', last ? null : 'border-b border-border/60')}>
+            <div key={r.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4 py-1.5', counted ? cols : 'grid-cols-[minmax(9rem,11.5rem)_minmax(0,1fr)]', last ? null : 'border-b border-border/60')}>
               <span role="rowheader" className="min-w-0 text-[15px] leading-[1.35] text-foreground [overflow-wrap:anywhere]">{r.label}</span>
               {words ? (
                 <span role="cell" className={cn('text-[14px] leading-[1.4] text-muted-foreground', counted ? spanAll : null)}>{words}</span>

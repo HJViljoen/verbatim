@@ -444,16 +444,17 @@ interface FindingRead {
   id: string
   rival: string
   category: string
+  impact: string | null
   title: string
   quote: Quote | null
   seen: { months: number; of: number } | null
 }
 
 async function readFindings(db: SupabaseClient, clientId: string, month: string, live: readonly { name: string; audience: string }[], running: readonly string[]): Promise<FindingRead[]> {
-  const res = await db.from('competitive_insights').select('id, run_id, category, competitor_name, title, evidence, created_at')
+  const res = await db.from('competitive_insights').select('id, run_id, category, competitor_name, title, evidence, impact_level, created_at')
     .eq('client_id', clientId).order('created_at', { ascending: false }).limit(60)
   if (res.error) throw new Error(`competitive_insights: ${res.error.message}`)
-  type Row = { id: string; run_id: string | null; category: string; competitor_name: string | null; title: string; evidence: { supporting_theme_ids?: string[] } | null; created_at: string }
+  type Row = { id: string; run_id: string | null; category: string; competitor_name: string | null; title: string; evidence: { supporting_theme_ids?: string[] } | null; impact_level: string | null; created_at: string }
   const all = ((res.data ?? []) as Row[]).filter((r) => r.run_id && !running.includes(r.run_id))
   const runId = all[0]?.run_id ?? null
   if (!runId) return []
@@ -525,6 +526,7 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
       id: String(f.id),
       rival: live.find((r) => norm(r.name) === norm(f.competitor_name ?? ''))?.name ?? String(f.competitor_name),
       category: String(f.category),
+      impact: f.impact_level ?? null,
       title: String(f.title),
       quote: picked && picked.commentId
         ? { ref: quoteRef.comment(picked.commentId), text: picked.quote, lang: picked.lang ?? null, english: picked.english ?? null }

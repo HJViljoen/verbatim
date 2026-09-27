@@ -474,10 +474,15 @@ export function seenLine(s: { months: number; of: number }): string {
   return `seen in ${fmtInt(s.months)} of the last ${fmtInt(s.of)} ${s.of === 1 ? 'month' : 'months'}`
 }
 
+/** A group's cards: the update's own weight first (Pass C's impact), then how
+ *  the talk differs before who shapes it (the preview's order), then as read. */
+const IMPACT: Readonly<Record<string, number>> = { high: 0, medium: 1, low: 2 }
+const KIND_RANK = Object.keys(FINDING_KIND_WORDS)
+
 export function buildFindings(input: {
   /** Tracked brands in B2's order. */
   rivals: readonly string[]
-  findings: readonly { id: string; rival: string; category: string; title: string; quote: Quote | null; seen: { months: number; of: number } | null }[]
+  findings: readonly { id: string; rival: string; category: string; title: string; quote: Quote | null; seen: { months: number; of: number } | null; impact?: string | null }[]
   /** Each tracked brand's videos in the ninety days (B2's count). */
   videos: ReadonlyMap<string, number>
   floor: number
@@ -485,7 +490,12 @@ export function buildFindings(input: {
   const norm = (s: string) => s.trim().toLowerCase()
   const groups: FindingGroup[] = []
   for (const rival of input.rivals) {
-    const mine = input.findings.filter((f) => norm(f.rival) === norm(rival))
+    const rank = (c: string) => { const i = KIND_RANK.indexOf(c); return i < 0 ? KIND_RANK.length : i }
+    const mine = input.findings
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => norm(f.rival) === norm(rival))
+      .sort((a, b) => (IMPACT[a.f.impact ?? ''] ?? 3) - (IMPACT[b.f.impact ?? ''] ?? 3) || rank(a.f.category) - rank(b.f.category) || a.i - b.i)
+      .map(({ f }) => f)
     if (mine.length === 0) continue
     groups.push({
       rival,

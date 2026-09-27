@@ -79,7 +79,7 @@ function Body({ c, mode }: { c: ContentBlock; mode: RenderMode }) {
       <Inner mode={mode} className="flex-1 gap-4">
         <p className="m-0 text-[15px] leading-[1.5] text-secondary-foreground">{read}</p>
         <div className="@container min-w-0">
-          <div className="grid min-w-0 grid-cols-1 gap-6 @min-[520px]:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-6 @min-[400px]:grid-cols-2">
             <Table title="Format" rows={c.formats} n={c.formats[0]?.n ?? null} mode={mode} />
             <Table title="Opening" rows={c.openings} n={c.openings[0]?.n ?? null} mode={mode} />
           </div>
