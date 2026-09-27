@@ -182,11 +182,14 @@ export function WeekLine({ block, columns, mode, labelWidth = WEEK_LINE_ROW.labe
 // (88 px, 116 px from xl: `WeekBarsHover`'s 'wide') and no right gutter, and
 // never narrows under the bars' own narrowest plot (`weekPlotMin`): below it,
 // the strip scrolls sideways and opens at the latest week, exactly as the bars
-// do, so the latest weeks line up at every width. With no right gutter to
-// hold them, each row's name and latest reading sit on a line over its 24 px
-// plot, held in view while the plot scrolls (sticky, the scroll box's width),
-// the reading wrapping under the name where the two do not fit; its ticks sit
-// in the gutter beside the plot.
+// do, so the latest weeks line up at every width. The gutter stays put while
+// the plot scrolls under it (sticky, on the strip's ground), as the bars' label
+// column does, so the strip shows the same weeks as the bars above it and each
+// row's ticks stay in view. With no right gutter to hold them, each row's name
+// and latest reading sit on a line over its 24 px plot, held in view while the
+// plot scrolls (sticky, the scroll box's width), the reading wrapping under
+// the name where the two do not fit; its ticks sit in the gutter beside the
+// plot.
 //
 // Under the rows, the axis row: WP2.9's due-date labels for weeks not yet read
 // at their age, "left out", "not kept", one label over the weeks before the
@@ -225,6 +228,8 @@ export function WeekLineStrip({ block, axis, mode, surface = 'inner' }: {
   const widths = { '--wl-min': `${88 + plotMin}px`, '--wl-min-xl': `${116 + plotMin}px` } as CSSProperties
   const MONO_TEXT = { fontFamily: 'var(--font-mono)' } as const
   const halo = { stroke: `var(--${surface})`, strokeWidth: 4, strokeLinejoin: 'round' as const, paintOrder: 'stroke' as const }
+  // The gutter, held at the scroll box's start on the strip's ground, over the plot scrolling under it.
+  const gutter = `sticky left-0 z-[1] ${surface === 'tile' ? 'bg-tile' : 'bg-inner'}`
   return (
     <div className="flex min-w-0 flex-col gap-4" data-week-line-strip="">
       {/* THE SCROLL BOX ITSELF IS THE REVERSED ROW, as the bars' is: it opens
@@ -247,7 +252,7 @@ export function WeekLineStrip({ block, axis, mode, surface = 'inner' }: {
               </div>
               <div className={`grid h-6 ${cols}`}>
                 {/* The row's own scale: its highest and lowest shares, 9 px mono, beside the plot. */}
-                <span aria-hidden className="relative">
+                <span aria-hidden className={gutter}>
                   {row.ticks.map((t) => (
                     <span key={t.text} className="absolute right-2 font-mono text-[9px] leading-[9px] tabular-nums text-muted-foreground" style={{ top: t.y - 4.5 }}>{t.text}</span>
                   ))}
@@ -259,7 +264,7 @@ export function WeekLineStrip({ block, axis, mode, surface = 'inner' }: {
             </div>
           ))}
           <div className={`grid pt-2 ${cols}`}>
-            <span aria-hidden />
+            <span aria-hidden className={gutter} />
             <svg width="100%" height={AXIS_ROW.height} role="img" aria-label={S.axisAria} className="block overflow-visible">
               {S.slots.map((sl) => (
                 <g key={sl.week}>

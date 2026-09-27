@@ -146,6 +146,9 @@ describe('WeekLineStrip', () => {
     expect(m).toContain('--wl-min:608px;--wl-min-xl:636px')
     // The scroll box itself is the reversed row: it opens at the latest week.
     expect(m).toContain('flex min-w-0 flex-row-reverse overflow-x-auto overflow-y-hidden')
+    // The gutter stays put while the plot scrolls under it, as the bars' label column does:
+    // each of the seven rows' ticks and the axis row's gutter.
+    expect(m.match(/sticky left-0 z-\[1\] bg-inner/g)?.length).toBe(8)
     // The week of 28 Sep is the fifth of nine: its points at 4.5 / 9, as the bar.
     expect(m).toContain(`x="${((4.5 / 9) * 100).toFixed(3)}%"`)
   })
