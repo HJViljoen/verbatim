@@ -4,7 +4,7 @@ import { longMonth } from '@/lib/format'
 import { canAsk } from '@/lib/agent/access'
 import { loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 import { loadNotAnswered } from '@/lib/agent/measure'
-import { ASK_WINDOW_PARAM, parseAskWindow, type AskWindowChoice } from '@/lib/agent/scope'
+import { ASK_WINDOW_PARAM, parseAskWindow, sentQuestion, type AskWindowChoice } from '@/lib/agent/scope'
 import { loadPlanChecks, type PlanCheckCard } from '@/lib/ask/plan-cards'
 import { askPlanChip, askReads, loadAskFront, loadAskHistory, loadAskReading, NO_ASK_READING } from '@/lib/pages/agent-thread'
 import { surface } from '@/lib/nav'
@@ -35,9 +35,10 @@ import { ASK_TILE_ROW, AskIndexColumns, AskShell } from '@/components/pages/agen
 // front page's biggest objects, and "What an answer reads" in place of the
 // index's bookkeeping.
 
-/** `?ask=` is a question another page sent the reader here with — Subjects'
- *  "Ask about this" is the first. It fills the box and nothing else: the
- *  reader reads it, edits it, and presses Ask. */
+/** `?ask=` is a question another page sent the reader here with: Subjects'
+ *  and Conversation's "Ask about this", and this page's own starter cards. It
+ *  fills the box and nothing else: the reader reads it, edits it, and presses
+ *  Ask. */
 export default async function AgentPage({
   searchParams,
 }: {
@@ -45,7 +46,7 @@ export default async function AgentPage({
 }) {
   const { supabase, clientId, userId, role } = await getSessionContext()
   const sp = (await searchParams) ?? {}
-  const ask = sp.ask?.slice(0, 300)
+  const ask = sentQuestion(sp.ask)
   const window = parseAskWindow(sp[ASK_WINDOW_PARAM])
   const reading = readingHandle(clientId)
   // The front page's own loader, on its default month: the starter questions
@@ -116,7 +117,14 @@ export default async function AgentPage({
             asked={notAnswered ? { asked: notAnswered.asked, cap: notAnswered.cap } : null}
             starters={<StarterCards starters={starters} source={startersFrom} window={window} />}
             composer={
+              // KEYED BY THE SENT QUESTION. The box takes `ask` as its first
+              // value only, and a starter card is a link to this same page:
+              // the page re-renders in place, the box keeps its state, and
+              // the card's question never reached it. A new question opens a
+              // new box; the window switch keeps the question, so the key,
+              // and whatever the reader has typed.
               <AgentComposer
+                key={ask ?? ''}
                 canSend={canSend && !blocked}
                 disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
                 placeholder="Ask about anything your market talks about"

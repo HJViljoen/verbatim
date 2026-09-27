@@ -36,6 +36,24 @@ export function parseAskWindow(raw: unknown): AskWindowChoice {
   return raw === 'all' ? 'all' : 'days90'
 }
 
+/** The most of a sent question the Ask box takes (Conversation's link cuts
+ *  its question to the same length, lib/pages/voice-surface.ts `ASK_MAX`). */
+export const ASK_SENT_MAX = 300
+
+/**
+ * The question another page sent the reader to Ask with (`?ask=`, Subjects'
+ * and Conversation's "Ask about this", Ask's own starter cards): the first
+ * value where the address repeats it, trimmed, at most `ASK_SENT_MAX`
+ * characters. Undefined when there is none or it is blank, so the box opens
+ * empty rather than on spaces.
+ */
+export function sentQuestion(raw: unknown): string | undefined {
+  const first = Array.isArray(raw) ? raw[0] : raw
+  if (typeof first !== 'string') return undefined
+  const q = first.trim().slice(0, ASK_SENT_MAX)
+  return q ? q : undefined
+}
+
 const DAY_MS = 86_400_000
 
 /**
