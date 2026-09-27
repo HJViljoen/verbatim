@@ -6,6 +6,7 @@ import {
   type WeekPairReason,
 } from '../reading/week-line'
 import { isoWeekOf } from '../reading/weeks'
+import { weekName } from './week-bars'
 
 // The same-age weekly line's geometry and words, with no React (market-first
 // decision M, part 2; WP3.13 "Design of the line").
@@ -277,4 +278,135 @@ export function weekLineTable(block: WeekLineBlock, columns: readonly WeekLineCo
       }
     }),
   }
+}
+
+// ---- The strip: the rows on a page's own week axis (WP3.13 display, deploy 3w) -------
+//
+// Where a page draws the line: Your market's "Read at the same age", under
+// WP2.9's bars inside "With this update", and Subjects' week strip (§2.3 S6).
+// The axis is the page's (the Mondays WP2.9's bars draw, in order), each week
+// the centre of the i-th of n equal slots, exactly as the bars place it, so a
+// point sits under the bar of the week it reads.
+//
+// EVERY SLOT SAYS WHAT THE LINE HOLDS THERE: a kept week (its points), a week
+// due with a later update ("due" over "1 Nov": WP2.9's due-date labels, which
+// a week keeps until it reaches its age), the week the old and the fixed
+// relevance check both ran in ("left out"), a week whose due date passed with
+// nothing kept ("not kept": a missed capture is a gap for good), and one label
+// spanning the weeks before the line's first (read on changing searches).
+//
+// A PAIR NOT READ THE SAME WAY is drawn with both points and no segment, and
+// named in a chip under the strip, the way a refused month pair is ("28 Sep
+// and 5 Oct not read the same way: read to different depths"). The 25 Sep
+// rulings keep those chips and take every explanatory footnote away, so the
+// strip carries no figure line.
+
+export type WeekLineSlotState = 'before' | 'left_out' | 'kept' | 'not_kept' | 'due'
+
+export interface WeekLineSlot {
+  week: string
+  /** The slot's centre, a fraction of the plot. */
+  cx: number
+  /** The Monday's day ("28"), and its month ("Sep") under the first week of each month. */
+  day: string
+  month: string | null
+  state: WeekLineSlotState
+  /** A due week's update ("1 Nov"). */
+  due: string | null
+}
+
+export interface WeekLineStripLayout {
+  n: number
+  columns: WeekLineColumn[]
+  rows: WeekLineRowLayout[]
+  slots: WeekLineSlot[]
+  /** One label over the run of weeks before the line's first: two lines where
+   *  the run is three slots or more, "no point" where it is shorter. */
+  before: { from: string; to: string; cx: number; lines: readonly string[] } | null
+  /** The refused pairs on the axis, grouped by their reasons. */
+  chips: string[]
+  /** The axis row's text alternative: which weeks are kept, due, left out. */
+  axisAria: string
+}
+
+/** The label spanning the weeks before the first week (the approved Subjects
+ *  preview's words), on two lines. */
+export const WEEK_LINE_BEFORE_LINES = ['weeks read on changing', 'searches: no point'] as const
+/** Its short form, for a run of one or two weeks. */
+export const WEEK_LINE_BEFORE_SHORT = ['no point'] as const
+
+/** The weeks the line holds a kept read for. */
+function keptWeeksOf(block: WeekLineBlock): Set<string> {
+  return block.reads
+    ? new Set(block.reads.map((r) => isoWeekOf(r.week)))
+    : new Set(block.rows.flatMap((r) => r.points.map((p) => isoWeekOf(p.week))))
+}
+
+/**
+ * The chips under the strip: every pair not read the same way whose two weeks
+ * are on the axis and kept (a week not kept says so in its own slot), grouped
+ * by their reasons, oldest first: "28 Sep and 5 Oct · 5 Oct and 12 Oct not
+ * read the same way: read to different depths". Every row carries the same
+ * pairs (a pair's conditions are about its two weeks, never the object), so
+ * the first row speaks for the strip.
+ */
+export function weekLinePairChips(block: WeekLineBlock, axis: readonly string[]): string[] {
+  if (block.rows.length === 0) return []
+  const onAxis = new Set(axis.map(isoWeekOf))
+  const kept = keptWeeksOf(block)
+  const groups = new Map<string, string[]>()
+  for (const pair of block.rows[0].pairs) {
+    if (pair.mode !== 'refuse') continue
+    if (!onAxis.has(pair.prevWeek) || !onAxis.has(pair.week) || !kept.has(pair.prevWeek) || !kept.has(pair.week)) continue
+    const why = pair.reasons.filter((r) => r !== 'not_kept' && r !== 'excluded').map((r) => WEEK_PAIR_REASON_WORDS[r])
+    if (why.length === 0) continue
+    const key = why.join(', ')
+    groups.set(key, [...(groups.get(key) ?? []), `${shortDate(pair.prevWeek)} and ${shortDate(pair.week)}`])
+  }
+  return [...groups].map(([why, pairs]) => `${pairs.join(' · ')} not read the same way: ${why}`)
+}
+
+/** The rows and the axis row of the strip, on the page's week axis. */
+export function weekLineStripLayout(block: WeekLineBlock, axis: readonly string[]): WeekLineStripLayout {
+  const weeks = axis.map(isoWeekOf)
+  const n = Math.max(1, weeks.length)
+  const columns = evenColumns(weeks)
+  const { rows } = weekLineLayout(block, columns)
+  const firstWeek = isoWeekOf(block.firstWeek ?? WEEK_LINE_FIRST_WEEK)
+  const kept = keptWeeksOf(block)
+  const due = new Map(block.due.map((d) => [isoWeekOf(d.week), d.date]))
+  const slots: WeekLineSlot[] = weeks.map((week, i) => {
+    const [day, month] = weekName(week).split(' ')
+    const prev = i > 0 ? weekName(weeks[i - 1]).split(' ')[1] : null
+    const state: WeekLineSlotState = WEEK_LINE_EXCLUDED.includes(week)
+      ? 'left_out'
+      : week < firstWeek
+        ? 'before'
+        : kept.has(week)
+          ? 'kept'
+          : due.has(week)
+            ? 'due'
+            : 'not_kept'
+    return { week, cx: columns[i].cx, day, month: prev !== month ? month : null, state, due: state === 'due' ? shortDate(due.get(week)!) : null }
+  })
+  const run = slots.filter((s) => s.state === 'before')
+  const before = run.length
+    ? {
+        from: run[0].week,
+        to: run[run.length - 1].week,
+        cx: (run[0].cx + run[run.length - 1].cx) / 2,
+        lines: run.length >= 3 ? WEEK_LINE_BEFORE_LINES : WEEK_LINE_BEFORE_SHORT,
+      }
+    : null
+  const named = (state: WeekLineSlotState) => slots.filter((s) => s.state === state).map((s) => shortDate(s.week))
+  const list = (xs: string[]): string => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+  const parts = [
+    `Read at the same age, weeks of ${shortDate(weeks[0])} to ${shortDate(weeks[weeks.length - 1])}.`,
+    named('kept').length ? `Kept: the ${named('kept').length === 1 ? 'week' : 'weeks'} of ${list(named('kept'))}.` : '',
+    ...slots.filter((s) => s.state === 'due').map((s) => `The week of ${shortDate(s.week)} is due with the ${s.due} update.`),
+    named('not_kept').length ? `Not kept at its age: ${list(named('not_kept'))}.` : '',
+    named('left_out').length ? `Left out: ${list(named('left_out'))}.` : '',
+    before ? `Weeks before ${shortDate(firstWeek)} were read on changing searches, so they get no point.` : '',
+  ]
+  return { n, columns, rows, slots, before, chips: weekLinePairChips(block, weeks), axisAria: parts.filter(Boolean).join(' ') }
 }
