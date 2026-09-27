@@ -197,8 +197,9 @@ describe('OV4 · rivals, read from outside the workspace', () => {
   })
 
   it('draws no in-app affordance on paper', () => {
-    expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Competitive')
-    expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Competitive')
+    // The page by its current sidebar label: "Brands" since deploy 5 (WP3.5).
+    expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Brands')
+    expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Brands')
   })
 })
 

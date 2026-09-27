@@ -8,6 +8,7 @@ import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { OWN_POSTS_UNREAD, OWN_POSTS_UNREAD_OUTSIDE } from '@/lib/reading/own-posts'
 import { windowDays, type RivalPost, type RivalPosts, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
+import { surface } from '@/lib/nav'
 
 // WK §5 · Notable rival posts (the mock's §5), its own tile since Block D
 // wave 2 — it was three prose lines inside §4 before.
@@ -50,7 +51,11 @@ export const weekRivalPosts: Block<WeekData> = {
     const rivals = data.cameIn.rivals
     const email = mode === 'email'
     const empty = weekRivalPosts.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/competitive`
+    // The link names the page by its current sidebar label (§4.0): Brands
+    // from deploy 5 (WP3.5).
+    const page = surface('competitive')
+    const href = `${ctx.appUrl}${page.href}`
+    const open = `Open ${page.label} →`
     const days = windowDays(data.cameIn.window)
 
     return (
@@ -60,8 +65,8 @@ export const weekRivalPosts: Block<WeekData> = {
         mode={mode}
         meta={days ?? 'this update covered no window'}
         footer={email
-          ? <a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>
-          : <Link href={href} className="hover:underline">Open Competitive →</Link>}
+          ? <a href={href} style={{ color: EMAIL.ink }}>{open}</a>
+          : <Link href={href} className="hover:underline">{open}</Link>}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {/* THE PICK RULE, ONCE FOR THE TILE. Two stages, because on production

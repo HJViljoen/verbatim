@@ -14,10 +14,13 @@ describe('the nine surfaces', () => {
     ])
   })
 
-  it('carry deploy 3’s labels: "Your market", "Conversation" and "Your moves", never "Your market" beside "Market" (§2.1)', () => {
+  it('carry deploy 5’s labels: "Your market", "Conversation", "Brands" and "Your moves", never "Your market" beside "Market" (§2.1)', () => {
     expect(SURFACES.map((s) => s.label)).toEqual([
-      'Your market', 'Subjects', 'Conversation', 'Competitive', 'Your moves', 'This week', 'Ask', 'Reports', 'Settings',
+      'Your market', 'Subjects', 'Conversation', 'Brands', 'Your moves', 'This week', 'Ask', 'Reports', 'Settings',
     ])
+    // WP3.5: the brands that come up in the market (§2.1).
+    expect(surface('competitive').question).toBe('Which brands come up in your market, and what is said around them?')
+    expect(SURFACES.map((s) => s.label)).not.toContain('Competitive')
     expect(surface('overview').question).toBe('What is your market saying this month, and what changed?')
     // WP2.4: the page is every theme at 10+, read on the market (§2.1).
     expect(surface('voice').question).toBe('Everything your market talked about, in full')
@@ -51,7 +54,8 @@ describe('the nine surfaces', () => {
     // Conversation reads the reading month in every block (WP2.4), so it
     // offers none from deploy 3. Subjects draws no pills either (27 Sep ruling:
     // the bar is the selector and one line); it still reads `?horizon=`.
-    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['competitive'])
+    // Brands draws none from deploy 5 (WP3.5, the approved preview's bar).
+    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual([])
     expect(SURFACES.find((s) => s.key === 'market')?.bar).toBe('reading')
   })
 
