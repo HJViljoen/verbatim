@@ -651,9 +651,11 @@ export interface RivalPosts {
    *  none; null where the identity row is not there. */
   trackedSince?: string | null
   /** "mostly the German word for Friday · not counted" where the brand's name
-   *  is mostly another word and production's hand check does not hold it
-   *  (lib/brands/precision.ts): its "about them" count is not printed.
-   *  Optional, so a stored copy carries none. */
+   *  has another meaning and production's hand check MEASURED it as noise
+   *  (lib/brands/precision.ts, the front page's rule): its "about them" count
+   *  is not printed. Never on an unmeasured name (the lead's R2 of 26 Sep:
+   *  Freitag's note is gone everywhere; the Brands page prints its filed
+   *  count plainly). Optional, so a stored copy carries none. */
   nameNote?: string | null
 }
 
@@ -2741,7 +2743,7 @@ async function buildCameIn(input: {
       // not being read; sometimes, and a zero this update is a real zero.
       ownPostsUnread: !everOwned.has(audience),
       trackedSince: r.firstSeenAt ?? null,
-      nameNote: OTHER_MEANING[r.name] && brandCountState(clientId, r.name) !== 'counted' ? noiseWords(r.name) : null,
+      nameNote: OTHER_MEANING[r.name] && brandCountState(clientId, r.name) === 'noise' ? noiseWords(r.name) : null,
       retired: r.retiredAt != null,
     }
   })

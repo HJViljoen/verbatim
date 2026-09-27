@@ -15,9 +15,10 @@ import { RULE, SCALE } from '@/components/pages/overview/market'
 // most-commented post of the update with the comments written under it in the
 // update's days.
 //
-// A BRAND'S NAME THAT IS MOSTLY ANOTHER WORD IS NOT COUNTED (the approved
-// preview's Freitag; lib/brands/precision.ts): until production's hand check
-// holds it, its "videos about them" prints "·" and the row says why.
+// A BRAND'S NAME MEASURED AS MOSTLY ANOTHER WORD IS NOT COUNTED (the approved
+// preview's Freitag; lib/brands/precision.ts): once production's hand check
+// finds it noise, its "videos about them" prints "·" and the row says why.
+// Unmeasured, the count prints plainly (the lead's R2 of 26 Sep).
 //
 // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep rulings):
 // the window is the page bar's, and the footer names the brands' page by its

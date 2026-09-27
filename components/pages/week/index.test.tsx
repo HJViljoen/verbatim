@@ -572,16 +572,25 @@ describe('What worked (market-first WP3.7, week.worked)', () => {
 describe('What brands you track posted (market-first WP3.7, week.rival-posts)', () => {
   it('lists each brand by the comments under its own most-commented post, the brand not counted last', () => {
     const text = flat(renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx)))
-    const order = ['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Rareform', 'Freitag'].map((n) => text.indexOf(`${n}tracked since`) >= 0 ? text.indexOf(`${n}tracked since`) : text.indexOf(`${n} tracked since`))
+    const order = ['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Freitag', 'Rareform'].map((n) => text.indexOf(`${n}tracked since`) >= 0 ? text.indexOf(`${n}tracked since`) : text.indexOf(`${n} tracked since`))
     expect(order.every((x) => x >= 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
     expect(text).toContain('The North Face tracked since 20 Sep 23 33 “Aimé Leon Dore / The North Face 2026. @aimeleondore @thenorthface” Instagram · 14 Sep 98')
   })
 
-  it('does not count a name that is mostly another word, and says why', () => {
+  it('prints an unmeasured name’s count plainly, with no note (the lead’s R2)', () => {
     const text = renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx))
+    expect(text).toContain('Freitag tracked since 28 Jun 6 149')
+    expect(text).not.toContain('German')
+  })
+
+  it('does not count a name production measured as mostly another word, says why, and lists it last', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, nameNote: 'mostly the German word for Friday · not counted' } : r))
+    const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
     expect(text).toContain('Freitag tracked since 28 Jun 6 ·')
     expect(text).toContain('149 videos matched the name, mostly the German word for Friday · not counted')
+    expect(text.indexOf('Freitag')).toBeGreaterThan(text.indexOf('Rareform'))
   })
 
   it('opens the brands’ page under its current sidebar label', () => {
@@ -876,7 +885,10 @@ describe('This week’s pure helpers (WP3.7)', () => {
   })
 
   it('brandsPostedOrder: by the comments under their top post, the name not counted last', () => {
-    expect(brandsPostedOrder(marketWeekFixture().cameIn.rivals).map((r) => r.label)).toEqual(['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Rareform', 'Freitag'])
+    const rivals = marketWeekFixture().cameIn.rivals
+    expect(brandsPostedOrder(rivals).map((r) => r.label)).toEqual(['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Freitag', 'Rareform'])
+    const measured = rivals.map((r) => (r.label === 'Freitag' ? { ...r, nameNote: 'mostly the German word for Friday · not counted' } : r))
+    expect(brandsPostedOrder(measured).map((r) => r.label)).toEqual(['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Rareform', 'Freitag'])
   })
 
   it('topOwnPost: the brand’s own post, never one about it', () => {

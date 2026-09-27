@@ -1420,7 +1420,7 @@ export const SEALAND_20_SEP_BRANDS: WeekData['cameIn']['rivals'] = [
   "postsConsidered": 6,
   "ownPostsUnread": false,
   "trackedSince": "2026-06-28T14:49:44.45009+00:00",
-  "nameNote": "mostly the German word for Friday · not counted"
+  "nameNote": null
  },
  {
   "audience": "competitor:Old School",
