@@ -38,6 +38,19 @@ describe('Brands in your market (WP2.6)', () => {
     }
   })
 
+  // Finish-list item 24: the route frames the front page, and the name line
+  // then says "the market you sell into", never "your market’s".
+  it('says "the market you sell into" on the framed front page, in every mode', () => {
+    const frame = { subject: 'The market Sealand sells into', lede: 'x' }
+    for (const mode of MODES) {
+      const data = { ...withBrands(stagingBrandsRead()), frame }
+      const t = read(overviewRivals.render(data, mode, ctx))
+      expect(t, mode).toContain('In September your name came up in none of the 654 videos from the market you sell into. The 8 videos that name you are your own posts.')
+      expect(t, mode).not.toContain('your market’s')
+      assertCopyContract(render(overviewRivals.render(data, mode, ctx)))
+    }
+  })
+
   it('prints "not counted yet" for a brand nobody measured, never 0 and never its count', () => {
     for (const mode of MODES) {
       const t = read(overviewRivals.render(withBrands(stagingBrandsRead()), mode, ctx))

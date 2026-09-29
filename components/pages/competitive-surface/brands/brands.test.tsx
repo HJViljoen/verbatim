@@ -74,10 +74,11 @@ describe('Brands · every block, every mode, every state', () => {
 describe('B1 · your name in your market', () => {
   it('prints the name line and where it came up once production has checked it', () => {
     const t = text(competitiveName.render(brandsFixture(), 'app', ctx))
-    expect(t).toContain('In September your name came up in none of your market’s 654 videos.')
+    expect(t).toContain('In September your name came up in none of the 654 videos from the market you sell into.')
     expect(t).toContain('The 8 videos that name you are your own posts.')
     expect(t).toContain('Where your name came up')
-    expect(t).toContain('In your market’s 654 videos 0')
+    expect(t).toContain('In 654 videos from the market you sell into 0')
+    expect(t).not.toContain('your market’s')
     expect(t).toContain('In your own posts 8')
     expect(t).toContain('One September comment named you, under one of your own posts.')
     expect(t).toContain('See your own posts on Your moves →')
@@ -85,7 +86,7 @@ describe('B1 · your name in your market', () => {
 
   it('is "not counted yet" until then, with nothing beside it', () => {
     const t = text(competitiveName.render(brandsFixture(false), 'app', ctx))
-    expect(t).toContain('Your name in your market in September: not counted yet.')
+    expect(t).toContain('Your name in the market you sell into, in September: not counted yet.')
     expect(t).not.toContain('Where your name came up')
   })
 })

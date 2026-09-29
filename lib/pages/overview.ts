@@ -123,6 +123,7 @@ import {
 } from './overview-market'
 import type { MarketCount } from '../reading/market'
 import type { PairRow } from '../reading/comparability'
+import type { MarketFrame } from './market-frame'
 
 export { monthPhrase }
 
@@ -864,6 +865,10 @@ export interface OverviewData {
   // byte (the parity gate for deploys 1 and 2).
   /** The pooled market by month: the reading month and the one before. */
   market?: MarketCount[]
+  /** What "Your market" is, in plain words (finish-list item 24). Set by the
+   *  front page's route only, never by the loader, so the monthly prints as
+   *  it did (lib/pages/market-frame.ts). */
+  frame?: MarketFrame
   themes?: ThemeBoard
   hero?: HeroLead
   /** The lead theme's voices: evidence quotes of its own insights, of its

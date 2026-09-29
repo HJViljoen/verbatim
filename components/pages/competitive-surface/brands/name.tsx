@@ -26,7 +26,9 @@ function Aside({ b, mode }: { b: NameBlock; mode: RenderMode }) {
   if (!c) return null
   const line = nameCommentsLine(b)
   const rows = [
-    { label: <>In your market’s {fmtInt(c.n)} videos</>, value: c.k, ink: 'bg-foreground' },
+    // "from the market you sell into", never "your market’s": a client read
+    // that as her own customers (finish-list item 24).
+    { label: <>In {fmtInt(c.n)} videos from the market you sell into</>, value: c.k, ink: 'bg-foreground' },
     { label: 'In your own posts', value: c.ownPosts, ink: 'bg-you' },
   ]
   if (mode === 'email') {

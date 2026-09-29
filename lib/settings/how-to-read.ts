@@ -274,7 +274,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // here is why there are two.
     id: 'the-market',
     title: 'Your market, and the category inside it',
-    body: 'Your market is everything we read except your own posts: the category, plus the videos filed under a brand you track, counted once as one market. Its size, subjects, kinds of comment, mood and brands are read on the whole of it. Themes are grouped within the category, because themes are grouped per audience, so a theme is a share of the category’s videos, never of the whole market. Your own posts are read on your pages about you, never counted as your market.',
+    body: 'Your market is the wider market you sell into: what people buying and talking about what you sell say on Instagram, TikTok, YouTube and Reddit, worldwide, not only your own customers. It is everything we read except your own posts: the category, plus the videos filed under a brand you track, counted once as one market. Its size, subjects, kinds of comment, mood and brands are read on the whole of it. Themes are grouped within the category, because themes are grouped per audience, so a theme is a share of the category’s videos, never of the whole market. Your own posts are read on your pages about you, never counted as your market.',
   },
   {
     // DECISION F (lib/pages/overview-market/board.ts: MAKER_GROUP_SHARE,

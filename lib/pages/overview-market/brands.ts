@@ -226,15 +226,20 @@ export function buildBrandsBlock(input: {
 
 /** The name line's words, as parts: figures apart from words, so each is its
  *  own node. "In September your name came up in none of your market’s 654
- *  videos. The 8 videos that name you are your own posts." */
-export function nameLineParts(b: BrandsRead): ({ t: 'text'; s: string } | { t: 'figure'; value: number })[] {
+ *  videos. The 8 videos that name you are your own posts."
+ *
+ *  `wider` (the front page, finish-list item 24) says "of the 654 videos from
+ *  the market you sell into", as the Brands page does: "your market’s" read as
+ *  a client's own customers. The monthly passes nothing and prints as it did. */
+export function nameLineParts(b: BrandsRead, opts: { wider?: boolean } = {}): ({ t: 'text'; s: string } | { t: 'figure'; value: number })[] {
   const l = b.nameLine
   const month = longMonth(b.window)
-  if (!l) return [{ t: 'text', s: `Your name in your market in ${month}: not counted yet.` }]
+  if (!l) return [{ t: 'text', s: opts.wider ? `Your name in the market you sell into, in ${month}: not counted yet.` : `Your name in your market in ${month}: not counted yet.` }]
   const parts: ({ t: 'text'; s: string } | { t: 'figure'; value: number })[] = [{ t: 'text', s: `In ${month} your name came up in ` }]
   if (l.k === 0) parts.push({ t: 'text', s: 'none' })
   else parts.push({ t: 'figure', value: l.k })
-  parts.push({ t: 'text', s: ' of your market’s ' }, { t: 'figure', value: l.n }, { t: 'text', s: ' videos.' })
+  if (opts.wider) parts.push({ t: 'text', s: ' of the ' }, { t: 'figure', value: l.n }, { t: 'text', s: ' videos from the market you sell into.' })
+  else parts.push({ t: 'text', s: ' of your market’s ' }, { t: 'figure', value: l.n }, { t: 'text', s: ' videos.' })
   if (l.ownPosts > 0) {
     parts.push({ t: 'text', s: ' The ' }, { t: 'figure', value: l.ownPosts },
       { t: 'text', s: l.ownPosts === 1 ? ' video that names you is your own post.' : ' videos that name you are your own posts.' })

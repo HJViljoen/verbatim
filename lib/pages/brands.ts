@@ -123,14 +123,16 @@ export function buildNameBlock(input: {
  *  is its own node. */
 export type Part = { t: 'text'; s: string } | { t: 'figure'; value: number }
 
-/** "In September your name came up in none of your market’s 655 videos." */
+/** "In September your name came up in none of the 655 videos from the market
+ *  you sell into." Not "your market’s 655 videos", which a client read as her
+ *  own customers (finish-list item 24). */
 export function nameLeadParts(b: NameBlock): Part[] {
   const month = longMonth(b.month)
   const c = b.counted
-  if (!c) return [{ t: 'text', s: `Your name in your market in ${month}: not counted yet.` }]
+  if (!c) return [{ t: 'text', s: `Your name in the market you sell into, in ${month}: not counted yet.` }]
   const out: Part[] = [{ t: 'text', s: `In ${month} your name came up in ` }]
   out.push(c.k === 0 ? { t: 'text', s: 'none' } : { t: 'figure', value: c.k })
-  out.push({ t: 'text', s: ' of your market’s ' }, { t: 'figure', value: c.n }, { t: 'text', s: ' videos.' })
+  out.push({ t: 'text', s: ' of the ' }, { t: 'figure', value: c.n }, { t: 'text', s: ' videos from the market you sell into.' })
   return out
 }
 

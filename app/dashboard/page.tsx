@@ -2,6 +2,7 @@ import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadOverview } from '@/lib/pages/overview'
 import { OverviewPage } from '@/components/pages/overview'
+import { marketFrame } from '@/lib/pages/market-frame'
 
 // Overview — "what is this month's reading?" (Phase 1 WP11). The front page is
 // now the comment-dated monthly reading: lib/pages/overview.ts loads it and
@@ -27,5 +28,7 @@ export default async function Page({
   // YOUR MARKET (market-first WP1.6): the one caller, with its export, that
   // builds the page's market blocks and pays for their reads.
   const data = await loadOverview({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { marketFront: true })
-  return <OverviewPage data={data} params={sp} />
+  // WHAT "YOUR MARKET" IS (finish-list item 24): the page's own framing, set
+  // here and not in the loader, so the monthly prints as it did.
+  return <OverviewPage data={data ? { ...data, frame: marketFrame(clientId, data.brand) } : data} params={sp} />
 }

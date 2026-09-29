@@ -393,10 +393,10 @@ export function brandAxis(b: BrandsRead): number {
 }
 
 /** The name line's words and figures, each figure its own node. */
-function NameWords({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
+function NameWords({ b, mode, wider }: { b: BrandsRead; mode: RenderMode; wider?: boolean }) {
   return (
     <>
-      {nameLineParts(b).map((p, i) => p.t === 'text'
+      {nameLineParts(b, { wider }).map((p, i) => p.t === 'text'
         ? <span key={i}>{p.s}</span>
         : (
             <span
@@ -414,14 +414,14 @@ function NameWords({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
 
 /** The name line, first (heinrich-fidelity must-fix 2): the preview's inner
  *  block with your green mark. */
-export function BrandsNameLine({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
+export function BrandsNameLine({ b, mode, wider }: { b: BrandsRead; mode: RenderMode; wider?: boolean }) {
   if (mode === 'email') {
-    return <div style={{ fontFamily: FONT.sans, fontSize: 13.5, lineHeight: '21px', color: EMAIL.ink, background: EMAIL.inner, borderRadius: 6, padding: '12px 16px' }}><NameWords b={b} mode={mode} /></div>
+    return <div style={{ fontFamily: FONT.sans, fontSize: 13.5, lineHeight: '21px', color: EMAIL.ink, background: EMAIL.inner, borderRadius: 6, padding: '12px 16px' }}><NameWords b={b} mode={mode} wider={wider} /></div>
   }
   return (
     <div className="flex items-baseline gap-3 rounded-md bg-inner px-4 py-4 sm:px-6">
       <span aria-hidden className="relative -top-px size-2 flex-none rounded-[2px] bg-you" />
-      <p className="m-0 max-w-[76ch] text-[15px] leading-[1.6] text-foreground [text-wrap:pretty]"><NameWords b={b} mode={mode} /></p>
+      <p className="m-0 max-w-[76ch] text-[15px] leading-[1.6] text-foreground [text-wrap:pretty]"><NameWords b={b} mode={mode} wider={wider} /></p>
     </div>
   )
 }
@@ -533,12 +533,13 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   )
 }
 
-/** Deploy 3's body: the name line first, then the topics. */
-export function MarketBrandsBody({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
-  if (mode === 'email') return <><BrandsNameLine b={b} mode={mode} /><BrandsTable b={b} mode={mode} /></>
+/** Deploy 3's body: the name line first, then the topics. `wider`: the front
+ *  page's words for the market (finish-list item 24); the monthly passes none. */
+export function MarketBrandsBody({ b, mode, wider }: { b: BrandsRead; mode: RenderMode; wider?: boolean }) {
+  if (mode === 'email') return <><BrandsNameLine b={b} mode={mode} wider={wider} /><BrandsTable b={b} mode={mode} /></>
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      <BrandsNameLine b={b} mode={mode} />
+      <BrandsNameLine b={b} mode={mode} wider={wider} />
       <BrandsTable b={b} mode={mode} />
     </div>
   )
@@ -555,7 +556,7 @@ function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string
   const b = data.brands ?? brandsBlockFor(data.reading?.asAt ?? null, { paused: data.reading?.paused ?? false })
   return (
     <BlockFrame title={MARKET_BRANDS_TITLE} mode={mode} footer={footer} roomy>
-      {isBrandsRead(b) ? <MarketBrandsBody b={b} mode={mode} /> : <InnerLine mode={mode}>{brandsLine(b, nav.label)}</InnerLine>}
+      {isBrandsRead(b) ? <MarketBrandsBody b={b} mode={mode} wider={data.frame != null} /> : <InnerLine mode={mode}>{brandsLine(b, nav.label)}</InnerLine>}
     </BlockFrame>
   )
 }
