@@ -367,3 +367,73 @@ describe('the parts', () => {
     expect(v.ok && v.relevance > 0 && v.thread === 'reddit::1w2ked1').toBe(true)
   })
 })
+
+describe('the check pass (29 Sep): what the gate turned away that the market said', () => {
+  const ONEBAG_HEAVY: QuoteVideo = { platform: 'reddit', videoId: '1wq1heavy', accountName: 'r/onebag', caption: 'Question for those with heavier bags.. For those of you who have heavier bags, what do you carry?', hashtags: [], topics: [], segment: 'market' }
+  const OSPREY_QUASAR: QuoteVideo = { platform: 'reddit', videoId: '1wosprey', accountName: 'r/backpacks', caption: 'Loving my new Osprey Quasar 26L. Really enjoying my first Osprey backpack', hashtags: [], topics: [], segment: 'market' }
+  const RYANAIR_42L: QuoteVideo = { platform: 'reddit', videoId: '1wa0if5', accountName: 'r/Ryanair', caption: 'Cotopaxi Allpa 42L as my only bag on Ryanair — will it work?', hashtags: [], topics: [], segment: 'market', isCompetitor: true, competitorName: 'Cotopaxi' }
+  // A travel couple's backpack test, and a packing video with a sponsor line:
+  // the description's sponsor and link blocks are the channel's, not a sale.
+  const EXPENSIVE_BACKPACKS: QuoteVideo = {
+    platform: 'youtube', videoId: '9x7h5BT7Uao', accountName: 'Away Together w/ Nik and Allie', segment: 'market',
+    caption: 'We Tested If Expensive Backpacks Are ACTUALLY Better Is spending more on a travel backpack worth it? We compared four bags.\n\nGo to https://quince.yt.link/PN4qyTJ for free shipping on your order and 365-day returns.',
+    hashtags: [], topics: ['travel backpack', 'backpack review'],
+  }
+  const PARIS_PACKING: QuoteVideo = {
+    platform: 'youtube', videoId: 'RI8rLkGVvbA', accountName: 'ITSCAROLYNGRAY', segment: 'market',
+    caption: 'WHAT IM PACKING FOR PARIS! | Outfits, Travel Essentials + NEW Luggage Thank you Quince for sponsoring this video! #Ad\n\nQuince offers free shipping on all orders and 365-day returns!',
+    hashtags: [], topics: ['packing', 'luggage'],
+  }
+  const YOUTUBE_SELLER_SHORT: QuoteVideo = { platform: 'youtube', videoId: 'short-1', accountName: 'Bag corner', caption: 'Handmade tote in olive. Available to order, PRICE: 2500 #shorts', hashtags: [], topics: ['tote bag'], segment: 'market' }
+  const BIFL_WORK: QuoteVideo = { platform: 'reddit', videoId: '1wbifl', accountName: 'r/BuyItForLife', caption: 'Work backpack that is sustainably made and professional?', hashtags: [], topics: [], segment: 'market' }
+  const LUX_EVENT: QuoteVideo = { platform: 'youtube', videoId: 'lux-1', accountName: 'Luxury Handbag Edit', caption: 'I’m Invited to an Exclusive Louis Vuitton NYC Event! What Am I Going to wear and which bag', hashtags: [], topics: ['luxury handbags'], segment: 'market' }
+
+  it('reads a YouTube description’s sponsor block as the channel’s, and a seller’s Short by its first line', () => {
+    expect(isSellerPost(EXPENSIVE_BACKPACKS)).toBe(false)
+    expect(isSellerPost(PARIS_PACKING)).toBe(false)
+    expect(isSellerPost(YOUTUBE_SELLER_SHORT)).toBe(true)
+    expect(whyNot(q('Got that same toctoc bag after finding your YouTube channel and your review on it and i love it awesome bag', EXPENSIVE_BACKPACKS), SEALAND)).toBeNull()
+  })
+
+  it('reads a link in a Reddit comment as a recommendation, and the same link under a post as an ad', () => {
+    const text = 'This is my go to right now. https://www.timbuk2.com/products/3550-scheme-convertible-briefcase-backpack?'
+    expect(whyNot(q(text, BIFL_WORK), SEALAND)).toBeNull()
+    expect(whyNot(q(text, { ...BIFL_WORK, platform: 'tiktok' }), SEALAND)).toBe('sale_ad')
+    // A Reddit comment that is a seller's offer is still one.
+    expect(whyNot(q('I have one with authentic material up for rehome, DM me if interested https://i.redd.it/x.jpg', BIFL_WORK), SEALAND)).toBe('sale_ad')
+  })
+
+  it('reads English the detector tagged as another language, and still no romanised Telugu', () => {
+    expect(readableEnglish({ text: 'because of that I bought a pink backpack yesterday and I loved ittt', lang: 'tl', english: 'because of that I bought a pink backpack yesterday and I loved ittt' }))
+      .toBe('because of that I bought a pink backpack yesterday and I loved ittt')
+    expect(readableEnglish({ text: 'Super kani cost akuba, andaru use cheileru😢😢😢😢', lang: 'or', english: 'Super kani cost akuba, andaru use cheileru😢😢😢😢' })).toBeNull()
+  })
+
+  it('requires relevance only where the claim reads as a concept it knows (Össur’s resilience theme)', () => {
+    const OSSUR: GateOptions = { market: null, makerRule: false }
+    const video: QuoteVideo = { platform: 'instagram', videoId: 'x', caption: 'A day at the hospital', segment: 'market' }
+    expect(whyNot(q('You are an example of strength! 👏👏❤️', video), { ...OSSUR, claim: 'Admiration for personal resilience', requireRelevance: true })).toBeNull()
+    // A claim the gate can read still requires it.
+    expect(whyNot(q('You are an example of strength! 👏👏❤️', video), { ...OSSUR, claim: 'Price of prosthetic care', requireRelevance: true })).toBe('not_relevant')
+  })
+
+  it('counts a bag brand as the market under a bag video, a heavy bag as a bag, and a fee as no charger', () => {
+    expect(whyNot(q('7kg is incredibly easy to hit with the Aer. I had a tp3s and would hit 8-8.5kg on my 5-day set-up.', ONEBAG_HEAVY), SEALAND)).toBeNull()
+    expect(whyNot(q('Ospreys have a pretty good air circulation system. I have their Daylite and Daylite 26+6, Airscape back on both, work great', OSPREY_QUASAR), SEALAND)).toBeNull()
+    expect(whyNot(q('The trick is to not buy a heavy bag.', ONEBAG_HEAVY), SEALAND)).toBeNull()
+    expect(whyNot(q('If you get checked, you will be charged the oversized fee. A 42l is generally too big for a carry on for the low cost airlines.', RYANAIR_42L), SEALAND)).toBeNull()
+    // Under a video about no carry good, a brand is not enough.
+    expect(whyNot(q('7kg is incredibly easy to hit with the Aer. I had a tp3s and would hit 8-8.5kg on my 5-day set-up.', NEWS_BEARS_EARS), SEALAND)).toBe('off_topic')
+  })
+
+  it('reads a compliment to the person as off the market, and one to the bag as on it', () => {
+    expect(whyNot(q('Love the look, Diane!!', LUX_EVENT), SEALAND)).toBe('off_topic')
+    expect(whyNot(q('That strap looks great on that!', LUX_EVENT), SEALAND)).toBeNull()
+  })
+
+  it('asks a maker’s question of makers only where the tenant has makers', () => {
+    const video: QuoteVideo = { platform: 'tiktok', videoId: 'y', caption: 'First run on the new blade', segment: 'market' }
+    expect(whyNot(q('How do you do it? I am two months in and still scared of stairs', video), { market: null, makerRule: false })).toBeNull()
+    expect(whyNot(q('How do you do it? I am two months in and still scared of stairs', video), SEALAND)).toBe('maker_praise')
+  })
+})

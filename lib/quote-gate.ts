@@ -173,8 +173,13 @@ const fold = (s: string): string => s.normalize('NFKC').toLowerCase().replace(/[
  * The cache's answer where it has one: English as written, or another language
  * with an English rendering that is not the original back again (the
  * translator returns a text it could not read unchanged, and the page printed
- * "Super kani cost akuba…" twice). Unread text falls back to the heuristic the
- * one English gate uses (`readsAsHeroQuote` without a reading).
+ * "Super kani cost akuba…" twice). Unread text — and a text the cache gave
+ * back unchanged or left untranslated — falls back to the heuristic the one
+ * English gate uses (`readsAsHeroQuote` without a reading): the detector
+ * tags plenty of English as something else ("because of that I bought a pink
+ * backpack yesterday and I loved ittt", "Jaune Ambre and Jaune Poussaine are
+ * my favourite."), and the words themselves say so, where romanised Telugu
+ * reads as no English at all.
  */
 export function readableEnglish(q: Pick<GateInput, 'text' | 'lang' | 'english'>): string | null {
   const text = (q.text ?? '').replace(/\s+/g, ' ').trim()
@@ -182,8 +187,7 @@ export function readableEnglish(q: Pick<GateInput, 'text' | 'lang' | 'english'>)
   if (q.lang != null) {
     if (isEnglishTag(q.lang)) return text
     const english = (q.english ?? '').replace(/\s+/g, ' ').trim()
-    if (!english || fold(english) === fold(text)) return null
-    return english
+    if (english && fold(english) !== fold(text)) return english
   }
   return readsAsHeroQuote(text) || (text.length > 170 && englishHits(text) >= 4) ? text : null
 }
@@ -206,8 +210,16 @@ const BOT = /\boriginal copy of (the )?post|\bi am a bot\b|\bautomoderator\b|\bt
  *  few it leaves to the page — a giveaway, "check out my page", a code. */
 const SALE_WORDS = /\bgive-?aways?\b|\bcheck (out )?(my|our) (page|shop|store|profile|bio|account)\b|\b(visit|follow) (my|our) (page|shop|store)\b|\b(use|with) (my |our |the )?code\b|\bdiscount code\b|\bwe (sell|ship worldwide|deliver)\b|\b(up )?for rehome\b|\brehoming\b|\bselling (mine|my|one)\b|\bi have (one|a few|some)\b.{0,40}\b(for sale|to sell|up for)\b|\b(dm|message|pm|inbox) me if (you'?re |you are )?interested\b|\bchat request\b/i
 
-export const readsAsSaleAd = (text: string | null | undefined): boolean =>
-  readsAsOffer(text) || SALE_WORDS.test(text ?? '')
+/** An address in a comment. On Reddit a link is a recommendation or a photo
+ *  ("This is my go to right now. https://www.timbuk2.com/…", a preview.redd.it
+ *  image), not a shop window, so there it is read past; everywhere else it is
+ *  `readsAsOffer`'s link signal. */
+const LINK = /\[([^\]]*)\]\([^)]*\)|\bhttps?:\/\/\S+|\bwww\.\S+|\b[a-zA-Z0-9][a-zA-Z0-9-]+\.(?:com|net|org|store|shop|site|online|io|ly|link)\b\S*/g
+
+export const readsAsSaleAd = (text: string | null | undefined, community = false): boolean => {
+  const t = community ? (text ?? '').replace(LINK, (_m, label: string | undefined) => ` ${label ?? ''} `) : text
+  return readsAsOffer(t) || SALE_WORDS.test(t ?? '')
+}
 
 /** A post that is a seller's sale ad: a price label, an order instruction, a
  *  giveaway, a shop pointer. Reddit is a community thread, not a shop window,
@@ -223,10 +235,23 @@ const COMMUNITY = (platform: string | null | undefined): boolean => (platform ??
 
 const videoWords = (v: QuoteVideo): string => `${v.caption ?? ''} ${(v.hashtags ?? []).map((h) => `#${h}`).join(' ')}`
 
-/** Is this video a seller's sale post? */
+/** How much of a YouTube caption is the post's own pitch: its first line
+ *  (the title and the description's opening), at most this long. */
+const YOUTUBE_HEAD = 200
+
+/** Is this video a seller's sale post? A YouTube description carries the
+ *  channel's sponsor and affiliate blocks ("Quince offers free shipping on
+ *  all orders", "Best Price: https://…", an Etsy shop among the partner
+ *  links) under reviews and packing videos that are the market's own, so
+ *  there only the first line and the tags are read: a seller's Short says
+ *  "available to order" up front. */
 export function isSellerPost(v: QuoteVideo): boolean {
   if (COMMUNITY(v.platform)) return false
-  return SELLER_POST.test(videoWords(v)) || (QUOTE_DEFAULTS.widerMakerWords && SELLER_ACCOUNT.test(v.accountName ?? ''))
+  const youtube = (v.platform ?? '').toLowerCase() === 'youtube'
+  const words = youtube
+    ? `${(v.caption ?? '').split('\n')[0].slice(0, YOUTUBE_HEAD)} ${(v.hashtags ?? []).map((h) => `#${h}`).join(' ')}`
+    : videoWords(v)
+  return SELLER_POST.test(words) || (QUOTE_DEFAULTS.widerMakerWords && SELLER_ACCOUNT.test(v.accountName ?? ''))
 }
 
 // ---- 5. Makers -------------------------------------------------------------------------
@@ -340,8 +365,10 @@ function otherBrandsNamed(texts: readonly string[], except: string): string[] {
 
 // ---- 7. On the market: carry goods -------------------------------------------------
 
-/** Bag words that are not a bag anyone carries. Removed before the test. */
-const NOT_A_CARRY_BAG = /\b(trash|garbage|bin|rubbish|plastic|paper|grocery|zip-?lock|ziploc|tea|sleeping|body|punching|boxing|heavy|speed|bean|air|sand|money|goody|grab|mixed|dirt|douche|scum|sad)[ -]?bags?\b|\bbags? (of|under)\b|\bin the bag\b|\bbag lad(y|ies)\b|\bbackpacking\b/gi
+/** Bag words that are not a bag anyone carries. Removed before the test. (A
+ *  "heavy bag" is not among them: in this market it is a bag's weight — "The
+ *  trick is to not buy a heavy bag" — far more often than a punching bag.) */
+const NOT_A_CARRY_BAG = /\b(trash|garbage|bin|rubbish|plastic|paper|grocery|zip-?lock|ziploc|tea|sleeping|body|punching|boxing|speed|bean|air|sand|money|goody|grab|mixed|dirt|douche|scum|sad)[ -]?bags?\b|\bbags? (of|under)\b|\bin the bag\b|\bbag lad(y|ies)\b|\bbackpacking\b/gi
 
 /** The carry goods Sealand's market is: bags, luggage, backpacks and the
  *  things that carry with them. Word-bounded, on English. A STRONG word names
@@ -356,7 +383,7 @@ const CARRY_TAG = /(bags?|backpack|luggage|purse|tote|wallet|suitcase|carryon|on
 const NOT_A_CARRY_TAG = /(garbage|cabbage|bagel|baguette|baggy|bagpipe|sleepingbag|teabag|trashbag|punchingbag|beanbag|backpacking)/i
 
 /** A product outside the market, named where no carry good is. */
-const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa|tees?|charg\w*|adapters?|batter(y|ies)|cables?|steam ?deck|magsafe|razors?|invest\w*|hair\w*|makeup|lipstick|nails?|eyeliner|helmets?)\b/i
+const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa|tees?|charg(ing|ers?)|recharg\w*|charge(?= (your|my|the|a|multiple) (phones?|iphones?|laptops?|devices?|ipads?|tablets?|batter(y|ies)|power ?banks?))|adapters?|batter(y|ies)|cables?|steam ?deck|magsafe|razors?|invest\w*|hair\w*|makeup|lipstick|nails?|eyeliner|helmets?)\b/i
 
 /** Idioms that name a product and mean something else ("the straight jacket
  *  feature" of a harness). Taken off before the off-market test. */
@@ -382,8 +409,31 @@ function distinctMatches(re: RegExp, text: string): number {
 /** Does the text name a carry good itself (a bag, a backpack, luggage)? */
 export const namesCarryGood = (text: string): boolean => CARRY_STRONG.test(carryText(text))
 
-/** Does it name a part or an act of carrying (a strap, a pocket, packing)? */
-const namesCarryPart = (text: string): boolean => CARRY_WEAK.test(carryText(text))
+/** A bag brand named in a comment ("Went from a Patagonia MLC Mini to the
+ *  Black Hole 32", "7kg is incredibly easy to hit with the Aer", "Ospreys
+ *  have a pretty good air circulation system"): the known bag brands and
+ *  their aliases, plural or possessive, never a brand that is an everyday
+ *  word. Like a strap or a pocket, it counts only under a video about a
+ *  carry good, and a product outside the market still sinks it. */
+const BAG_BRAND_NAMED: RegExp = (() => {
+  const forms = new Set<string>()
+  for (const b of KNOWN_BAG_BRANDS) {
+    const key = b.trim().toLowerCase()
+    if (DICTIONARY_BRANDS.has(fold(b))) continue
+    for (const f of [key, key.replace(/^the\s+/, ''), ...(BRAND_ALIASES[key] ?? []), ...(BRAND_ALIASES[key.replace(/^the\s+/, '')] ?? [])]) if (fold(f).length >= 3) forms.add(f)
+  }
+  const alts = [...forms].map((f) => escapeRe(f).replace(/\\?\s+/g, '\\s*'))
+  return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?:['’]?s)?(?![\\p{L}\\p{N}])`, 'iu')
+})()
+
+/** Does it name a part or an act of carrying (a strap, a pocket, packing), or
+ *  a bag brand? */
+const namesCarryPart = (text: string): boolean => CARRY_WEAK.test(carryText(text)) || BAG_BRAND_NAMED.test(text)
+
+/** A compliment to the person, not the thing ("Love the look, Diane!!", "Our
+ *  Taeri is cute and pretty", "looks perfect on you"). Read only where no
+ *  carry good is named: the market's line on a bag names the bag. */
+const PERSONAL_LOOK = /\b(you|u)('re| are| r)? (look|looking|looked) (so |really |absolutely )*(great|good|amazing|fantastic|beautiful|gorgeous|stunning|lovely|cute|fab\w*|pretty|perfect|incredible|awesome|fire|chic|stylish)\b|\blooks? (so |really )?(great|good|perfect|amazing|fantastic|beautiful|gorgeous|stunning|lovely|cute|fab\w*) on (you|u|her|him|them)\b|\blove (the|your|ur) (look|outfit|style|hair|vibe)\b|\bsuits? (you|u|her|him)\b|\b(you|u)('re| are| r) (so |really |such an? )*(pretty|cute|beautiful|gorgeous|stunning|lovely|handsome)\b|\bis (so |really )*(cute|pretty|beautiful|gorgeous) and (so |really )*(pretty|cute|beautiful|gorgeous)\b/i
 
 /** Is the video about a carry good (its caption, hashtags or topics)? */
 export function isCarryVideo(v: QuoteVideo): boolean {
@@ -505,7 +555,13 @@ export function relevanceTo(claim: ClaimReading, english: string): number {
   return r
 }
 
-const claimHasWords = (c: ClaimReading): boolean => c.concepts.length > 0 || c.stems.size > 0
+/** Whether a claim can REQUIRE relevance: only where it reads as one of the
+ *  concepts above, whose words are known. A claim in words the gate has no
+ *  vocabulary for ("Admiration for personal resilience", "Rehabilitation
+ *  carries a warmer tone around Ottobock") would otherwise require a shared
+ *  stem, and "You are an example of strength!" shares none: every voice of
+ *  the theme refused, and the block empty. Its stems still rank. */
+const claimCanRequire = (c: ClaimReading): boolean => c.concepts.length > 0
 
 // ---- The gate ------------------------------------------------------------------------------
 
@@ -525,12 +581,15 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   if (!english) return { ok: false, reason: 'unreadable' }
   if (!hasSubstance(english)) return { ok: false, reason: 'too_short' }
   if (BOT.test(q.text) || BOT.test(english)) return { ok: false, reason: 'bot' }
-  if (readsAsSaleAd(q.text) || readsAsSaleAd(english)) return { ok: false, reason: 'sale_ad' }
-  if (readsAsMakerPraise(q.text, english)) return { ok: false, reason: 'maker_praise' }
-
   const v = q.video
-  if (v === null) return { ok: false, reason: 'no_video' }
+  const community = COMMUNITY(v?.platform)
+  if (readsAsSaleAd(q.text, community) || readsAsSaleAd(english, community)) return { ok: false, reason: 'sale_ad' }
   const makerRule = o.makerRule ?? o.market != null
+  // A line to a maker is a maker's audience; a tenant with no maker rule has
+  // no makers to speak to ("how do you do it?" to an amputee athlete).
+  if (makerRule && readsAsMakerPraise(q.text, english)) return { ok: false, reason: 'maker_praise' }
+
+  if (v === null) return { ok: false, reason: 'no_video' }
   if (v) {
     if (isMakerPost(v, makerRule)) return { ok: false, reason: 'maker_video' }
     if (isSellerPost(v)) return { ok: false, reason: 'seller_post' }
@@ -570,12 +629,12 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   if (o.market === 'carry' && !carry) {
     const aboutIt = v ? isCarryVideo(v) : false
     const pointsAtIt = said.length <= POINTER_MAX && POINTS_AT_IT.test(said)
-    if (!aboutIt || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || !(namesCarryPart(said) || pointsAtIt || relevance > 0)) {
+    if (!aboutIt || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || !(namesCarryPart(said) || pointsAtIt || relevance > 0)) {
       return { ok: false, reason: 'off_topic' }
     }
   }
 
-  if (o.requireRelevance && claimHasWords(claim) && relevance === 0) return { ok: false, reason: 'not_relevant' }
+  if (o.requireRelevance && claimCanRequire(claim) && relevance === 0) return { ok: false, reason: 'not_relevant' }
 
   const len = english.length
   const score = relevance * 4 + (carry ? 2 : 0) + (len >= 30 && len <= 220 ? 1 : 0) + (english === q.text.replace(/\s+/g, ' ').trim() ? 1 : 0)
