@@ -244,7 +244,7 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   if (mode === 'email') {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.ink2, marginTop: 8 }}>
-        Read at the same age: pending.{promise ? <> The first comparison is due with the {dueLabel(firstComparison).replace(/^due /, '')} update, if a check on real data passes.</> : null}
+        Read at the same age: pending.{promise ? <> The first week-on-week comparison is due with the {dueLabel(firstComparison).replace(/^due /, '')} update, if a check on real data passes.</> : null}
       </div>
     )
   }
@@ -268,13 +268,15 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   const circleY = 64
   const base = 112.5
   const date = (d: string): string => dueLabel(d).replace(/^due /, '')
-  const firstWords = `first comparison, with the ${date(firstComparison)} update`
+  // WEEK-ON-WEEK, SAID (finish-list item 9): Your market names two first
+  // comparisons, this one and the month pair's (the 6 Dec update).
+  const firstWords = `first week-on-week comparison, with the ${date(firstComparison)} update`
   const said = (w: string, d: string): string => {
     const st = stateOf(w, d)
     return st === 'kept' ? `is kept with the ${date(d)} update` : st === 'not kept' ? `was not kept with the ${date(d)} update` : `is due with the ${date(d)} update`
   }
   const plot = (
-    <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} ${said(s.w, s.date as string)}.`).join(' ')}${promise ? ` The first comparison is due with the ${date(firstComparison)} update.` : ''}`} className="relative block overflow-visible">
+    <svg width="100%" height={H} role="img" aria-label={`Read at the same age, pending. ${dueSlots.map((s) => `The week of ${weekName(s.w)} ${said(s.w, s.date as string)}.`).join(' ')}${promise ? ` The first week-on-week comparison is due with the ${date(firstComparison)} update.` : ''}`} className="relative block overflow-visible">
       <g transform={`translate(0 ${TOP})`}>
       {/* One line where the strip is wide; two where it scrolls (under
           640px), so the words fit the strip's first view. */}

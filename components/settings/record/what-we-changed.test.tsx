@@ -26,7 +26,7 @@ describe('What we changed', () => {
   it('says the pair in one sentence and names the first pair read the same way, the pair set in weight', () => {
     const t = read(lead)
     expect(t).toContain('August and September sit side by side, not read as a change: we changed our searches in September.')
-    expect(t).toContain('The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
+    expect(t).toContain('The first month-on-month comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
     expect(render(lead)).toContain('<span class="font-semibold text-foreground">October against November, from the 6 Dec update</span>')
     assertCopyContract(render(lead))
   })

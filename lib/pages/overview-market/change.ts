@@ -406,7 +406,9 @@ export function nextPairParts(block: ChangeBlock): { lead: string; pair: string;
   const pair = block.pair
   if (pair && joins(pair) && monthStartOf(next.prevMonth) === monthStartOf(pair.prevMonth) && monthStartOf(next.month) === monthStartOf(pair.month)) return null
   return {
-    lead: 'The first comparison read the same way: ',
+    // MONTH-ON-MONTH, SAID (finish-list item 9): Your market also names the
+    // first week-on-week comparison (the 25 Oct update).
+    lead: 'The first month-on-month comparison read the same way: ',
     pair: `${longMonth(next.prevMonth)} against ${longMonth(next.month)}, from the ${shortDate(next.sameAgeFrom)} update`,
     tail: ', if nothing we search changes.',
   }

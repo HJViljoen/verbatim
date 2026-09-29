@@ -174,7 +174,7 @@ describe('what changed, and what is ours (plan §2.2 block 10)', () => {
 
   it('names October against November, from the 6 Dec update, as the first pair read the same way', () => {
     expect(nextPairLine(block())).toBe(
-      'The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.',
+      'The first month-on-month comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.',
     )
   })
 
@@ -246,7 +246,7 @@ describe('a pair flagged only by a capped update is read the same way (deploy 2 
   it('still names the next pair where the pair read is a different one, or is refused', () => {
     const b = at(capped('2026-10-01', '2026-11-01', 'market'))
     expect(nextPairLine({ ...b, next: { ...b.next!, prevMonth: '2026-11-01', month: '2026-12-01', sameAgeFrom: '2027-01-03T04:00:00.000Z' } })).toBe(
-      'The first comparison read the same way: November against December, from the 3 Jan update, if nothing we search changes.',
+      'The first month-on-month comparison read the same way: November against December, from the 3 Jan update, if nothing we search changes.',
     )
     expect(nextPairLine(block())).toContain('October against November')
   })

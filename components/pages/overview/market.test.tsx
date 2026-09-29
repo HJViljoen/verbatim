@@ -78,9 +78,9 @@ describe('the change strip once October leads: each month once', () => {
     expect(drawsStrip(aug)).toBe(false)
     const markup = change({ ...marketFrontFixture(), change: aug })
     expect(markup).not.toContain('>Jul</span>')
-    expect(markup).not.toContain('the first comparison read the same way</span>')
+    expect(markup).not.toContain('the first month-on-month comparison read the same way</span>')
     expect(read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...marketFrontFixture(), change: aug }, 'app', ctx)))
-      .toContain('The first comparison read the same way: October against November')
+      .toContain('The first month-on-month comparison read the same way: October against November')
   })
 
   it('18 Oct: the bar reads October, as at the 18 Oct update', () => {
@@ -165,7 +165,7 @@ describe('the change block at the 6 Dec update, with a capped October update', (
     for (const mode of MODES) {
       const text = read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...marketFrontFixture(), change }, mode, ctx))
       expect(text, mode).toContain('October and November were read the same way.')
-      expect(text, mode).not.toContain('The first comparison read the same way')
+      expect(text, mode).not.toContain('The first month-on-month comparison read the same way')
     }
   })
 
@@ -174,7 +174,7 @@ describe('the change block at the 6 Dec update, with a capped October update', (
     expect(text).toContain('October and November were read the same way.')
     expect(text).not.toContain('sit side by side')
     expect(text).not.toContain('is not compared')
-    expect(text).not.toContain('The first comparison read the same way')
+    expect(text).not.toContain('The first month-on-month comparison read the same way')
   })
 })
 
@@ -319,7 +319,7 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
 
   it('what changed: the refusal, the first pair read the same way, and the link to the dated list', () => {
     expect(text).toContain('Not read as a change: we changed our searches in September.')
-    expect(text).toContain('The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
+    expect(text).toContain('The first month-on-month comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
     expect(render(<OverviewPage data={marketFrontFixture()} />)).toContain(`href="${WHAT_WE_CHANGED_HREF}"`)
   })
 
@@ -368,7 +368,7 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(markup).toContain('left:55.00%')
     expect(markup.match(/left:78\.33%/g)?.length).toBe(2)
     // The words sit above the bracket, not inside it.
-    const words = markup.indexOf('the first comparison read the same way</span>')
+    const words = markup.indexOf('the first month-on-month comparison read the same way</span>')
     const bracket = markup.indexOf('border-x border-t border-secondary-foreground')
     expect(words).toBeGreaterThan(0)
     expect(bracket).toBeGreaterThan(words)
@@ -406,7 +406,7 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     const data = marketFrontFixture()
     const bare = { ...data, change: { ...data.change!, asAt: undefined, searchChanges: undefined } }
     const t = read(<OverviewPage data={bare} />)
-    expect(t).toContain('the first comparison read the same way')
+    expect(t).toContain('the first month-on-month comparison read the same way')
     expect(t).not.toContain('our search change')
     expect(t).not.toContain('as at 24 Sep')
   })

@@ -136,7 +136,7 @@ describe('read at the same age, pending', () => {
     expect(t).toContain('due 18 Oct')
     expect(t).toContain('due 25 Oct')
     expect(t).toContain('left out')
-    expect(t).toContain('first comparison, with the 25 Oct update')
+    expect(t).toContain('first week-on-week comparison, with the 25 Oct update')
     expect(t).toContain('Kept points none yet')
     expect(t).toContain('Each week is kept for Praising it · Asking how it works · Ready to buy · Hitting a problem · Asking for something · Pushing back.')
   })
@@ -145,7 +145,7 @@ describe('read at the same age, pending', () => {
     const t = renderText(<WeekPendingRow weeks={OCT02.weeks} pending={OCT02.line as PendingWeekLine} mode="app" surface="inner" />)
     expect(t).toContain('due 18 Oct')
     expect(t).not.toContain('due 25 Oct')
-    expect(t).toContain('first comparison, with the 25 Oct update')
+    expect(t).toContain('first week-on-week comparison, with the 25 Oct update')
     // No bracket with one leg running off the plot: it waits for both weeks.
     const bracketLines = (m: string) => (m.match(/<line[^>]*y1="26"/g) ?? []).length
     expect(bracketLines(render(<WeekPendingRow weeks={OCT02.weeks} pending={OCT02.line as PendingWeekLine} mode="app" surface="inner" />))).toBe(0)
@@ -162,7 +162,7 @@ describe('read at the same age, pending', () => {
 
   it('is one waiting line in an email', () => {
     const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={OCT11.line as PendingWeekLine} mode="email" surface="inner" />)
-    expect(t).toBe('Read at the same age: pending. The first comparison is due with the 25 Oct update, if a check on real data passes.')
+    expect(t).toBe('Read at the same age: pending. The first week-on-week comparison is due with the 25 Oct update, if a check on real data passes.')
   })
 
   // THE DATES EXPIRE (the deploy-3 review): as at an update after a due date,
@@ -174,7 +174,7 @@ describe('read at the same age, pending', () => {
     const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={asAt('2026-10-18T08:30:00.000Z', { keptRead: true })} mode="app" surface="inner" />)
     expect(t).toContain('due 18 Oct')
     expect(t).toContain('due 25 Oct')
-    expect(t).toContain('first comparison, with the 25 Oct update')
+    expect(t).toContain('first week-on-week comparison, with the 25 Oct update')
   })
 
   it('as at the 1 Nov update, a week missing from the kept reads is not kept, and the bracket\'s promise is gone', () => {
