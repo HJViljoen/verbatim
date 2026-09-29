@@ -54,10 +54,13 @@ function Filed({ b, mode }: { b: InFullBlock; mode: RenderMode }) {
         </div>
         {b.rows.map((r, i) => (
           <div key={r.audience} role="row" className={cn('grid min-h-11 items-center gap-x-4', FILED_COLS, i === b.rows.length - 1 ? null : RULE.row)}>
-            <span role="rowheader" className={cn('min-w-0 truncate', SCALE.row, r.selected ? 'font-semibold' : null)}>
-              {mode === 'app' && !r.selected
-                ? <Link href={r.href} className="underline decoration-border underline-offset-[5px] hover:decoration-foreground">{r.label}</Link>
-                : r.label}
+            <span role="rowheader" className={cn('flex min-w-0 flex-col', SCALE.row, r.selected ? 'font-semibold' : null)}>
+              <span className="min-w-0 truncate">
+                {mode === 'app' && !r.selected && r.videos > 0
+                  ? <Link href={r.href} className="underline decoration-border underline-offset-[5px] hover:decoration-foreground">{r.label}</Link>
+                  : r.label}
+              </span>
+              {r.note ? <span className="font-mono text-[12px] font-normal text-muted-foreground">{r.note}</span> : null}
             </span>
             <span role="cell" data-copy="figure" className={cn(SCALE.num, 'font-semibold')}>{fmtInt(r.videos)}</span>
             <span role="cell" data-copy="figure" className={cn(SCALE.num, 'text-secondary-foreground')}>{fmtInt(r.comments)}</span>
@@ -102,7 +105,7 @@ function EmailBody({ b }: { b: InFullBlock }) {
         <tbody>
           {b.rows.map((r) => (
             <tr key={r.audience}>
-              <td style={emailCell}>{r.label}</td>
+              <td style={emailCell}>{r.label}{r.note ? <div style={{ fontSize: 12, color: EMAIL.muted }}>{r.note}</div> : null}</td>
               <td style={{ ...emailCell, textAlign: 'right' }}><span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600 }}>{fmtInt(r.videos)}</span></td>
               <td style={{ ...emailCell, textAlign: 'right' }}><span data-copy="figure" style={{ fontFamily: FONT.mono }}>{fmtInt(r.comments)}</span></td>
             </tr>
@@ -125,6 +128,9 @@ function EmailBody({ b }: { b: InFullBlock }) {
 
 export const IN_FULL_EMPTY = 'No brand you track had a video filed under it in the last 90 days.'
 
+/** Nothing filed under any brand: every brand is listed, each with a zero. */
+const inFullEmpty = (b: InFullBlock): boolean => b.rows.every((r) => r.videos === 0)
+
 /**
  * "Open {brand}'s videos →" (the approved preview's B2 footer): Conversation
  * filtered to the brand read in full, over the same ninety days, on the month
@@ -142,7 +148,7 @@ export const brandsInFull: Block<CompetitiveSurfaceData> = {
   render(data, mode = 'app', ctx) {
     const b = data.brands?.inFull
     if (!b) return competitiveRivals.render(data, mode, ctx)
-    const empty = b.rows.length === 0 ? IN_FULL_EMPTY : null
+    const empty = inFullEmpty(b) ? IN_FULL_EMPTY : null
     const footer = b.selected ? openLink(mode, `${ctx.appUrl}${brandVideosHref(b.selected.label, ctx.params)}`, `Open ${b.selected.label}’s videos →`) : null
     if (mode === 'email') {
       return <BlockFrame title={IN_FULL_TITLE} mode={mode} footer={footer}>{empty ? <InnerLine mode={mode}>{empty}</InnerLine> : <EmailBody b={b} />}</BlockFrame>
@@ -171,6 +177,6 @@ export const brandsInFull: Block<CompetitiveSurfaceData> = {
   emptyState(data) {
     const b = data.brands?.inFull
     if (!b) return competitiveRivals.emptyState?.(data) ?? null
-    return b.rows.length === 0 ? IN_FULL_EMPTY : null
+    return inFullEmpty(b) ? IN_FULL_EMPTY : null
   },
 }

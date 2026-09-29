@@ -94,7 +94,7 @@ describe('B1 · brands in your market', () => {
   it('counts each checked brand, the headline without any video our rival searches found, August beside', () => {
     const t = text(competitiveTopics.render(brandsFixture(), 'app', ctx))
     expect(t).toContain('Brands we track videos each came up in')
-    expect(t).toContain('Without any video our rival searches found of 516')
+    expect(t).toContain('Outside our brand searches of 516')
     expect(t).toContain('In all of 654')
     expect(t).toContain('In all of 377')
     expect(t).toContain('Patagonia 13 45 24')
@@ -127,6 +127,16 @@ describe('B2 · a brand in full, last 90 days', () => {
     expect(t).toContain('What people did Videos Praising it 25 Asking how it works 21 Ready to buy 20 Hitting a problem 11')
     // Freitag prints plainly (the lead's R2): no homonym note on its filed counts.
     expect(t).not.toMatch(/German|Friday/)
+  })
+
+  it('lists a brand with nothing filed at zero, unlinked, saying why where we do not search for it (finish-list item 20)', () => {
+    const d = brandsFixture()
+    const inFull = d.brands!.inFull!
+    const rows = [...inFull.rows, { audience: 'competitor:Old School', label: 'Old School', videos: 0, comments: 0, href: '/dashboard/competitive?vs=Old+School', selected: false, note: 'no search term: we read its own posts' }]
+    const data = { ...d, brands: { ...d.brands!, inFull: { ...inFull, rows } } }
+    const t = text(brandsInFull.render(data, 'app', ctx))
+    expect(t).toContain('Old School no search term: we read its own posts 0 0')
+    expect(render(brandsInFull.render(data, 'app', ctx))).not.toContain('vs=Old+School')
   })
 
   it('opens another brand in full from its name, in the app only', () => {

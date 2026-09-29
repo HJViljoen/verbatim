@@ -32,7 +32,7 @@ describe('Brands in your market (WP2.6)', () => {
       expect(t, mode).toMatch(/Cotopaxi\s*3\s*28/)
       // Each count's head carries its base: the headline count's one base,
       // and the market's.
-      expect(t, mode).toMatch(/Without any video our rival searches found\s*(·\s*)?of 516/)
+      expect(t, mode).toMatch(/Outside our brand searches\s*(·\s*)?of 516/)
       expect(t, mode).toMatch(/In all\s*(·\s*)?of 654/)
       assertCopyContract(render(overviewRivals.render(withBrands(stagingBrandsRead()), mode, ctx)))
     }
@@ -79,12 +79,12 @@ describe('Brands in your market (WP2.6)', () => {
     for (const mode of MODES) {
       const t = read(overviewRivals.render(withBrands(noneFoundBrandsRead()), mode, ctx))
       for (const brand of ['Rareform', 'Freedom of Movement', 'Old School']) {
-        expect(t, mode).toMatch(new RegExp(`${brand}\\s*none found`))
+        expect(t, mode).toMatch(new RegExp(`${brand}\\s*no video names it`))
       }
       for (const brand of ['Cotopaxi', 'Patagonia', 'The North Face', 'Freitag']) {
         expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))
       }
-      expect((t.match(/none found/g) ?? []).length, mode).toBe(3)
+      expect((t.match(/no video names it/g) ?? []).length, mode).toBe(3)
       expect(t, mode).toContain('Your name in your market in September: not counted yet.')
       // A word, not a 0, and no figure heads over a table with no figure.
       expect(t, mode).not.toMatch(/\b0\b|\bof 516\b|In all/)

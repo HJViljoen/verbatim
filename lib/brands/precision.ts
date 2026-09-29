@@ -251,5 +251,9 @@ export const noiseWords = (brand: string): string => `mostly ${OTHER_MEANING[bra
 export const NOT_COUNTED_YET = 'not counted yet'
 
 /** A brand production's hand-check list held no match of, in a month the
- *  mention layer holds none of either (the lead's ruling of 27 Sep). */
-export const NONE_FOUND = 'none found'
+ *  mention layer holds none of either (the lead's ruling of 27 Sep). It read
+ *  "none found", which beside a video FILED under the brand (found by our
+ *  search for it, without naming it: Freedom of Movement, 1 over 90 days)
+ *  read as a contradiction; what the rule found none of is a video naming it
+ *  (finish-list item 20, 29 Sep). */
+export const NONE_FOUND = 'no video names it'

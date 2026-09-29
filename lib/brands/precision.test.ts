@@ -139,7 +139,7 @@ describe('a brand with no match (the lead’s ruling of 27 Sep)', () => {
 
   it('reads a production entry of no match as none, which the page prints "none found"', () => {
     expect(brandCountState(SEALAND_CLIENT_ID, 'Rareform', { [SEALAND_CLIENT_ID]: { Rareform: none() } })).toBe('none')
-    expect(NONE_FOUND).toBe('none found')
+    expect(NONE_FOUND).toBe('no video names it')
   })
 
   it('reads no match from anywhere but production, or under other rules, as no entry', () => {

@@ -41,7 +41,7 @@ describe('Brands you track', () => {
   })
 
   it('prints the preview\'s columns: searched as, tracked since, filed, came up in (two ways) and its own posts', () => {
-    expect(t).toContain('Brand Searched as Tracked since Filed under it Sep Came up in, Sep without our rival searches in all Its own posts Sep')
+    expect(t).toContain('Brand Searched as Tracked since Filed under it Sep Came up in, Sep outside our brand searches in all Its own posts Sep')
     expect(t).toContain('Patagonia patagonia black hole 17 Sep 5 13 45 19')
     expect(t).toContain('Cotopaxi cotopaxi backpack by 28 Jun 12 3 28 21')
     expect(t).toContain('Freitag freitag bag · frtg by 28 Jun 6 mostly the German word for Friday · not counted 14')

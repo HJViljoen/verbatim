@@ -260,7 +260,7 @@ export const competitiveTopics: Block<CompetitiveSurfaceData> = {
       const id = r.brandKey.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
       out[`brand_${id}_any`] = { value: r.kAny, unit: 'videos', label: `videos naming ${r.label} in ${longMonth(t.month)}` }
       if (r.kOrganic != null && t.watched?.every((w) => w.brandKey !== r.brandKey)) {
-        out[`brand_${id}_organic`] = { value: r.kOrganic, unit: 'videos', label: `videos naming ${r.label} in ${longMonth(t.month)}, without any video our rival searches found` }
+        out[`brand_${id}_organic`] = { value: r.kOrganic, unit: 'videos', label: `videos naming ${r.label} in ${longMonth(t.month)}, outside our brand searches` }
       }
     }
     return out

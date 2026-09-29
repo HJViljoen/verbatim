@@ -80,7 +80,7 @@ describe('the page and the monthly print one sentence each', () => {
       for (const words of [
         'In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.',
         'not counted yet',
-        'Without any video our rival searches found',
+        'Outside our brand searches',
       ]) {
         expect(page).toContain(words)
         expect(monthly, mode).toContain(words)
@@ -111,7 +111,7 @@ describe('the page and the monthly print one sentence each', () => {
     const none = { ...base.overview, brands: noneFoundBrandsRead() }
     const sent = { ...base, overview: none, slots: monthlySlotsFrom(none) }
     expect(monthlySections(MONTHLY_BLOCK_KEYS, sent).map((b) => b.key)).toContain('monthly.brands')
-    for (const mode of MODES) expect(read(MONTHLY_BLOCKS['monthly.brands'].render(sent, mode, ctx)), mode).toMatch(/Rareform\s*none found/)
+    for (const mode of MODES) expect(read(MONTHLY_BLOCKS['monthly.brands'].render(sent, mode, ctx)), mode).toMatch(/Rareform\s*no video names it/)
   })
 
   it('every slot reads the page’s own block: change, arrivals, you and brands all filled from one Overview', () => {

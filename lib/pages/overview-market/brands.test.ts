@@ -33,7 +33,7 @@ describe('buildBrandsBlock', () => {
   })
 
   it('heads the headline column with exactly what it leaves out', () => {
-    expect(BRANDS_HEAD_ORGANIC).toBe('Without any video our rival searches found')
+    expect(BRANDS_HEAD_ORGANIC).toBe('Outside our brand searches')
     expect(BRANDS_HEAD_ALL).toBe('In all')
   })
 
@@ -88,7 +88,7 @@ describe('buildBrandsBlock', () => {
     const read = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: reads })
     expect(read.nameLine).toEqual({ month: '2026-09-01', n: 654, k: 0, ownPosts: 8 })
     const yes = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 }, nameReads: { [SEALAND_CLIENT_ID]: [{ ...reads[SEALAND_CLIENT_ID][0], brand: true }] } })
-    expect(words(yes)).toBe('In September your name came up in 1 of your market’s 654 videos. The 8 videos that name you are your own posts.')
+    expect(words(yes)).toBe('In September your name came up in 1 of your market’s 654 videos, and in 8 of your own posts.')
   })
 
   it('prints production’s September name line from the shipped entries: the one video outside your own posts, read as you', () => {
@@ -126,7 +126,7 @@ describe('buildBrandsBlock', () => {
       ['Patagonia', 'not_yet', null, null],
       ['The North Face', 'not_yet', null, null],
     ])
-    expect(b.topics.slice(0, 3).map(topicNote)).toEqual(['none found', 'none found', 'none found'])
+    expect(b.topics.slice(0, 3).map(topicNote)).toEqual(['no video names it', 'no video names it', 'no video names it'])
     expect(b.topics.slice(3).every((t) => topicNote(t) === 'not counted yet')).toBe(true)
     // Your name has matches (its own posts) and no production check: held.
     expect(words(b)).toBe('Your name in your market in September: not counted yet.')
@@ -151,7 +151,7 @@ describe('buildBrandsBlock', () => {
     expect(topicNote(rareform)).toBe('not counted yet')
     // A month with none still prints none found, though another month holds a match.
     const other = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-08-01', n: 377, nOrganic: 249, rivals: SEPTEMBER_BRANDS.map((r) => (r.label === 'Rareform' ? { ...r, hasRows: true } : r)), name: { hasRows: true, outside: [], ownPosts: 0 }, checks: NO_MATCH_CHECKS, mentionsRead: true })
-    expect(topicNote(other.topics.find((t) => t.label === 'Rareform')!)).toBe('none found')
+    expect(topicNote(other.topics.find((t) => t.label === 'Rareform')!)).toBe('no video names it')
   })
 
   it('prints no "none found" where the mention layer could not be read: nothing found there is no zero', () => {

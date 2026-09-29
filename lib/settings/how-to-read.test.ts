@@ -63,7 +63,7 @@ describe('how to read', () => {
   it('says what the brands rule counts, so "none found" reads as a zero by that rule (the lead’s ruling of 27 Sep)', () => {
     const line = READING_CARDS.find((c) => c.key === 'overview')!.cannot.find((l) => l.startsWith('Under Brands in your market'))!
     expect(line).toContain('the rule counts the brand’s name, its handles and its phrases')
-    expect(line).toContain('“None found” means the rule found no such video that month')
+    expect(line).toContain('“No video names it” means the rule found no such video that month')
     expect(line).toContain('“not counted yet” means we have not yet checked its matches by hand')
     expect(line).not.toMatch(/[0-9—]/)
   })

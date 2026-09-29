@@ -42,6 +42,12 @@ describe('B1 · your name in your market', () => {
     expect(nameCommentsLine(b)).toBe('One September comment named you, under one of your own posts.')
   })
 
+  it('never says every video naming you is your own post where the market named you too (finish-list item 20)', () => {
+    const b = { month: '2026-09-01', counted: { n: 852, k: 1, ownPosts: 9, ownPostComments: 1, ownPostCommentPosts: 1 } }
+    expect(words(nameLeadParts(b))).toBe('In September your name came up in 1 of your market’s 852 videos.')
+    expect(words(nameOwnParts(b))).toBe('It also came up in 9 of your own posts.')
+  })
+
   it('waits for a match outside your own posts that nobody has read by hand', () => {
     expect(buildNameBlock({ ...base, outside: ['v-unread'], checks: STAND_IN_CHECKS }).counted).toBeNull()
   })
@@ -95,7 +101,7 @@ describe('B1 · the brands in your market', () => {
       tracked: SEPTEMBER_BRANDS.map(monthIn), watched: null, chip: null, read: 'live', checks: NO_MATCH_CHECKS, mentionsRead,
     })
     const words = (b: ReturnType<typeof read>) => Object.fromEntries(b.tracked.map((r) => [r.label, topicWords(r)]))
-    expect(words(read(true))).toMatchObject({ 'Freedom of Movement': 'none found', 'Old School': 'none found', Rareform: 'none found', Cotopaxi: 'not counted yet' })
+    expect(words(read(true))).toMatchObject({ 'Freedom of Movement': 'no video names it', 'Old School': 'no video names it', Rareform: 'no video names it', Cotopaxi: 'not counted yet' })
     // A layer that could not be read proves nothing: "not counted yet".
     expect(words(read(false))).toMatchObject({ 'Freedom of Movement': 'not counted yet', 'Old School': 'not counted yet' })
   })
@@ -172,12 +178,24 @@ describe('B2 · a brand in full, last 90 days', () => {
     hrefFor: (name) => `/dashboard/competitive?vs=${encodeURIComponent(name)}`,
   })
 
-  it('lists the brands filed with a video in the window, most first, never your own or the category', () => {
+  it('lists the brands filed with a video in the window, most first, never your own or the category; then every other brand we track, at zero', () => {
     const b = block(null)
     expect(b.rows.map((r) => [r.label, r.videos, r.comments])).toEqual([
       ['Cotopaxi', 32, 613], ['Freitag', 8, 133], ['The North Face', 6, 44], ['Patagonia', 5, 122],
+      ['Freedom of Movement', 0, 0], ['Old School', 0, 0], ['Rareform', 0, 0],
     ])
     expect(b.rows[0].selected).toBe(true)
+  })
+
+  it('says why a brand we do not search for has nothing filed (finish-list item 20: Old School was missing)', () => {
+    const b = buildInFull({
+      window: { from: '2026-06-23', to: '2026-09-21' }, rivals: RIVALS, denominators: DEN, kinds: KINDS, wanted: 'Old School',
+      hrefFor: () => '', unsearched: new Set(['old school']),
+    })
+    expect(b.rows.find((r) => r.label === 'Old School')?.note).toBe('no search term: we read its own posts')
+    expect(b.rows.find((r) => r.label === 'Freedom of Movement')?.note).toBeNull()
+    // Nothing to read in full: the biggest is read instead.
+    expect(b.selected?.label).toBe('Cotopaxi')
   })
 
   it('reads the biggest in full by default: what people did, as counts (research F33)', () => {
@@ -196,7 +214,7 @@ describe('B2 · a brand in full, last 90 days', () => {
 
   it('reads none where no brand had a video in the window', () => {
     const b = buildInFull({ window: { from: '2026-06-23', to: '2026-09-21' }, rivals: RIVALS, denominators: [], kinds: [], wanted: null, hrefFor: () => '' })
-    expect(b.rows).toEqual([])
+    expect(b.rows.every((r) => r.videos === 0)).toBe(true)
     expect(b.selected).toBeNull()
   })
 })

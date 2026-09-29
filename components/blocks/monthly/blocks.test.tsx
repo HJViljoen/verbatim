@@ -130,7 +130,7 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
       const t = text('monthly.brands', filledSlotsFixture(), mode)
       expect(t, mode).toContain('In September your name came up in none of your market’s 654 videos.')
       expect(t, mode).toContain('The 8 videos that name you are your own posts.')
-      expect(t, mode).toMatch(/Without any video our rival searches found\s*(·\s*)?of 516/)
+      expect(t, mode).toMatch(/Outside our brand searches\s*(·\s*)?of 516/)
       expect(t, mode).toMatch(/In all\s*(·\s*)?of 654/)
       expect(t, mode).toMatch(/Patagonia\s*13\s*45/)
       expect(t, mode).toMatch(/The North Face\s*6\s*36/)
@@ -165,7 +165,7 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     const data = { ...filledSlotsFixture(), slots: { ...filledSlotsFixture().slots, brands: { state: 'filled' as const, value: noneFoundBrandsRead() } } }
     for (const mode of MODES) {
       const t = text('monthly.brands', data, mode)
-      for (const brand of ['Rareform', 'Freedom of Movement', 'Old School']) expect(t, mode).toMatch(new RegExp(`${brand}\\s*none found`))
+      for (const brand of ['Rareform', 'Freedom of Movement', 'Old School']) expect(t, mode).toMatch(new RegExp(`${brand}\\s*no video names it`))
       for (const brand of ['Cotopaxi', 'Patagonia', 'The North Face', 'Freitag']) expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))
       expect(t, mode).not.toMatch(/\b0\b|of 516/)
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.brands'].render(data, mode, ctx)))

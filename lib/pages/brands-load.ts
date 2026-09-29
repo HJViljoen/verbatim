@@ -30,6 +30,7 @@ import { marketMonthIds } from './overview-brands'
 import { pickQuotes, type QuoteCandidate } from './overview-market/voices'
 import { pairChip } from './overview'
 import type { PlaybookBlock } from './playbook'
+import { searchedAs } from '../settings/search-set'
 import { fetchThemedRunId } from './themed-run'
 
 // The Brands page's reads (market-first WP3.5, deploy 5). Everything the page
@@ -120,6 +121,7 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     kinds: windowReads?.kinds ?? [],
     wanted: input.params.vs ?? null,
     hrefFor: input.hrefFor,
+    unsearched: b1?.unsearched,
   })
   const selected = inFull.selected ? { name: inFull.selected.label, audience: inFull.selected.audience } : null
   const asked = selected && windowReads && questions
@@ -134,9 +136,10 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
       })
     : null
 
-  const videosIn = new Map(inFull.rows.map((r) => [r.label, r.videos]))
+  const filed = inFull.rows.filter((r) => r.videos > 0)
+  const videosIn = new Map(filed.map((r) => [r.label, r.videos]))
   const findings = buildFindings({
-    rivals: inFull.rows.map((r) => r.label),
+    rivals: filed.map((r) => r.label),
     findings: findingsRaw,
     videos: videosIn,
     floor: COMPETITIVE_MIN_VIDEOS,
@@ -250,7 +253,7 @@ async function readBrandCounts(
   month: string,
   prev: string,
   live: readonly { name: string; audience: string }[],
-): Promise<{ name: BrandsPageData['name']; topics: NonNullable<BrandsPageData['topics']> } | null> {
+): Promise<{ name: BrandsPageData['name']; topics: NonNullable<BrandsPageData['topics']>; unsearched: ReadonlySet<string> } | null> {
   const { db, clientId } = input
   if (brandRulesFor(clientId).length === 0) return null
   const audiences = marketAudiences(live.map((r) => r.audience))
@@ -357,7 +360,14 @@ async function readBrandCounts(
   const ownComments = own.filter((r) => r.source === 'comment' && r.comment_month === month)
 
   const chip = input.pair ? pairChip(input.pair(prev, month, BRANDS_PANEL)) : null
+  // The brands no "Brands you track" search looks for (Settings' "no search
+  // term", lib/settings/search-set.ts): read by their own posts only.
+  const rules = brandRulesFor(clientId)
+  const unsearched = new Set(tracked
+    .filter((t) => searchedAs(t.brand, rules.find((r) => r.key.kind === 'rival' && r.brand.toLowerCase() === norm(t.brand)) ?? null, tc.competitor_keywords ?? []).length === 0)
+    .map((t) => norm(t.brand)))
   return {
+    unsearched,
     name: buildNameBlock({
       clientId,
       month,
