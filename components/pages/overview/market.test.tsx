@@ -18,6 +18,7 @@ import { overviewSentence } from './sentence'
 import { overviewThemes } from './themes'
 import { WHAT_WE_CHANGED_HREF, drawsStrip, stripMonths } from './change'
 import { OCTOBER_ENDED_AT, OCTOBER_LEADS_AT, marketBeforeMakersFixture, marketFrontFixture, octoberLeadsFixture, ossurFrontFixture, overviewFixture } from './fixture'
+import { prevCountTag } from './market-subjects'
 
 // Your market (market-first WP1.6): the done-when checks that a render can
 // make, on plan §2.2's print (production's figures as at the 24 Sep update).
@@ -298,8 +299,12 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   })
 
   it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
-    expect(text).toContain('Price provisional 23 4% 5')
+    expect(text).toContain('Price provisional · August under 10, a count 23 4% 5')
     expect(text).not.toContain('Price provisional 23 4% ·')
+    // Said on the row, so the count cannot read as a share (finish-list item 9).
+    expect(prevCountTag(7, { month: '2026-08-01', n: 378 })).toBe('August under 10, a count')
+    expect(prevCountTag(70, { month: '2026-08-01', n: 378 })).toBeNull()
+    expect(prevCountTag(null, { month: '2026-08-01', n: 378 })).toBeNull()
   })
 
   it('prints no page footnote under the blocks (25 Sep rulings)', () => {

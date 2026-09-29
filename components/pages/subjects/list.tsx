@@ -4,7 +4,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { BaseHead, InnerLine, MakerMark, RULE, SCALE } from '@/components/pages/overview/market'
-import { prevCell } from '@/components/pages/overview/market-subjects'
+import { prevCell, prevCountTag } from '@/components/pages/overview/market-subjects'
 import { surface } from '@/lib/nav'
 import { makerWords } from '@/lib/pages/overview-market/board'
 import { marketLevel as marketLevelOf } from '@/lib/pages/overview-market/kinds'
@@ -118,7 +118,7 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
           {l.rows.map((r) => {
             const t = railTags(r, n)
             const figure = !isFailed(r.calibration) && r.status === 'active' && r.market != null
-            const tag = [t.word, t.maker, t.count ? 'under 10, a count' : null].filter(Boolean).join(' · ')
+            const tag = [t.word, t.maker, t.count ? 'under 10, a count' : null, figure ? prevCountTag(r.marketPrev?.k, prev) : null].filter(Boolean).join(' · ')
             return (
               <tr key={r.id}>
                 <td style={c}>{r.name}{tag ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{tag}</div> : null}</td>
@@ -148,11 +148,13 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
         const t = railTags(r, n)
         const failed = isFailed(r.calibration)
         const figure = !failed && r.status === 'active' && r.market != null
+        const prevCount = figure ? prevCountTag(r.marketPrev?.k, prev) : null
         const tags = (
           <span className={`col-span-full flex flex-wrap items-center gap-x-1.5 pt-0.5 ${SCALE.tag}`}>
             {t.word ? <span>{t.word}</span> : null}
             {t.maker ? <>{t.word ? <span aria-hidden>·</span> : null}<span className="inline-flex items-center gap-1.5 whitespace-nowrap"><MakerMark />{t.maker}</span></> : null}
             {t.count ? <>{t.word || t.maker ? <span aria-hidden>·</span> : null}<span>under 10, a count</span></> : null}
+            {prevCount ? <>{t.word || t.maker || t.count ? <span aria-hidden>·</span> : null}<span>{prevCount}</span></> : null}
           </span>
         )
         const body = (
@@ -164,7 +166,7 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
             {/* THE ROW'S TAGS UNDER THE WHOLE ROW, as the preview sets them
                 ("provisional · ▨ over a third makers"), never squeezed into
                 the name's column. */}
-            {t.word || t.maker || t.count ? tags : null}
+            {t.word || t.maker || t.count || prevCount ? tags : null}
           </>
         )
         const rowClass = `${cols} items-baseline py-3 ${RULE.row} last:border-b-0`

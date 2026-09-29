@@ -555,7 +555,10 @@ function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: R
   const monthsRead = read > 0 ? inner(
     <span className={email ? undefined : 'flex items-baseline gap-3'} style={email ? { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2 } : undefined}>
       <span data-copy="figure" className={email ? undefined : 'font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground'}>{fmtInt(read)}</span>
-      <span className={email ? undefined : 'text-[15px] text-secondary-foreground'}>{read === 1 ? ' month read' : ' months read'}</span>
+      {/* FOR THIS SUBJECT, SAID (finish-list item 9): "2 months read" read
+          against the 4 monthly readings Reports and the record count; a
+          subject is read from the month it was first counted. */}
+      <span className={email ? undefined : 'text-[15px] text-secondary-foreground'}>{read === 1 ? ' month read for this subject' : ' months read for this subject'}</span>
     </span>,
   ) : null
 
