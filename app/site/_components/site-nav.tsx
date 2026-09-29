@@ -25,7 +25,9 @@ export function SiteNav({ variant, current }: { variant: 'dark' | 'light'; curre
             Use cases
           </Link>
           )}
-          <a href={`${APP_URL}/login`}>Sign in</a>
+          {/* The one link that survives on a phone: the header is the only way
+              in, and a client arriving on the apex has nowhere else to sign in. */}
+          <a href={`${APP_URL}/login`} className="signin">Sign in</a>
           <a className="btn btn-green" href="#early-access">
             Get early access
           </a>

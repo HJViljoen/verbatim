@@ -546,7 +546,11 @@
   .pb-nav .next { text-align: right; }
 
   @media (max-width: 900px) {
-    .nav-links a:not(.btn) { display: none; }
+    /* Sign in stays: without it a phone had no way into the app from the
+       site. How it works and Use cases fold away (the footer carries them). */
+    .nav-links { gap: 16px; font-size: 14px; }
+    .nav-links a:not(.btn):not(.signin) { display: none; }
+    .nav .btn { height: 38px; padding: 0 12px; font-size: 14px; }
     .nav .wordmark span { display: none; }
     .access .fields { grid-template-columns: 1fr; }
     .pb-row { grid-template-columns: 1fr; gap: 6px; padding: 24px 0; }
@@ -555,5 +559,10 @@
     .pb-step { grid-template-columns: 44px minmax(0, 1fr); padding: 28px 0; }
     .pb-nav { flex-direction: column; gap: 12px; }
     .pb-nav .next { text-align: left; }
+  }
+  /* Below an iPhone's 390: the header keeps the wordmark and Sign in, and the
+     early-access button gives way (the hero and the closing band both carry it). */
+  @media (max-width: 379px) {
+    .nav .btn { display: none; }
   }
 }
