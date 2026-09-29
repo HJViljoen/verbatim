@@ -125,7 +125,7 @@ describe('the page and the monthly print one sentence each', () => {
     const data = builtFull()
     const page = pageText('overview.arrivals', data.overview, 'app')
     const words = [
-      'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more September comments came in.',
+      'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more September comments stored, whenever they were written. This week counts only those written in the update’s days.',
       'With 10+ videos in September:',
     ]
     for (const mode of MODES) {

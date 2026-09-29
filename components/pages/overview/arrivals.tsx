@@ -29,6 +29,9 @@ import { OverviewWeeks, WEEK_BY_WEEK_HREF } from './weeks'
 
 export const ARRIVALS_TITLE = 'With this update'
 
+/** Why This week's figures for the same update differ (finish-list item 9). */
+export const ARRIVALS_CLOCK_NOTE = 'This week counts only those written in the update’s days.'
+
 const fig = (n: number, mode: RenderMode): ReactNode => (
   <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono font-semibold tabular-nums text-foreground'} style={mode === 'email' ? { fontFamily: FONT.mono, fontWeight: 600, color: EMAIL.ink } : undefined}>{fmtInt(n)}</span>
 )
@@ -44,7 +47,11 @@ export function ArrivalsCameIn({ a, month, mode }: { a: ArrivalsBlock; month: st
   return (
     <>
       {read ? (
-        <>With the {shortDate(a.run.date)} update: {fig(read.videosFirstRead, mode)} {read.videosFirstRead === 1 ? 'video' : 'videos'} read in your market for the first time, and {fig(read.commentsCaptured, mode)} more {name} {read.commentsCaptured === 1 ? 'comment' : 'comments'} came in.</>
+        // BY WHEN WE STORED THEM, SAID (finish-list item 9): This week counts
+        // the same update by when its comments were WRITTEN (274 videos and
+        // 4,777 comments against 185 and 5,199 here), and the two read as a
+        // contradiction until each said its clock.
+        <>With the {shortDate(a.run.date)} update: {fig(read.videosFirstRead, mode)} {read.videosFirstRead === 1 ? 'video' : 'videos'} read in your market for the first time, and {fig(read.commentsCaptured, mode)} more {name} {read.commentsCaptured === 1 ? 'comment' : 'comments'} stored, whenever {read.commentsCaptured === 1 ? 'it was' : 'they were'} written. {ARRIVALS_CLOCK_NOTE}</>
       ) : (
         <>Nothing more of {name} came in with the {shortDate(a.run.date)} update.</>
       )}
