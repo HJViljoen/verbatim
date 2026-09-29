@@ -227,7 +227,7 @@ export function isMakerPost(v: QuoteVideo, makerRule: boolean): boolean {
 
 /** A line to the maker, not about the thing: "bless your hands", "you're so
  *  talented", "how do you make it", "tutorial please". */
-const MAKER_PRAISE = /\bbless (your|ur) hands\b|\bellerinize sağlık|\beline sağlık|\bemeğine sağlık|\bellerine sağlık|\b(you('re| are)|ur|so) (so )?talented\b|\b(love|amazing|beautiful|great|nice|incredible|awesome|lovely|gorgeous) (your|ur) (work|craft|craftsmanship|talent|skills?|creativity|creation)\b|\b(your|ur) (work|craft|craftsmanship|talent|skills?|creativity) (is|are)\b|\byou made (this|it|these|that)\b|\bdid you make\b|\bhow (did|do|can) (you|i) make\b|\bhow to make\b|\btutorial\b|\bpattern (please|pls|link)\b|\bwhere (is|can i (get|find)) the pattern\b|\bhow do you do (it|this|that)\b|\bwhat (material|fabric|machine|thread)s? (did|do) you use\b|\bsewing machine\b|\bteach me\b/i
+const MAKER_PRAISE = /\bbless (your|ur) hands\b|\bellerinize sağlık|\beline sağlık|\bemeğine sağlık|\bellerine sağlık|\b(you('re| are)|ur|so) (so )?talented\b|\b(love|amazing|beautiful|great|nice|incredible|awesome|lovely|gorgeous) (your|ur) (work|craft|craftsmanship|talent|skills?|creativity|creation)\b|\b(your|ur) (work|craft|craftsmanship|talent|skills?|creativity) (is|are)\b|\byou made (this|it|these|that)\b|\bdid you make\b|\bhow (did|do|can) (you|i) make\b|\bhow to make\b|\btutorial\b|\bpattern (please|pls|link)\b|\bwhere (is|can i (get|find)) the pattern\b|\bhow do you do (it|this|that)\b|\b(is there a|any) (way|tutorial|video) (to|on how to) (do|make) (it|this|that|one)\b|\bwhat (material|fabric|machine|thread)s? (did|do) you use\b|\bsewing machine\b|\bteach me\b/i
 
 export const readsAsMakerPraise = (...texts: (string | null | undefined)[]): boolean =>
   texts.some((t) => t != null && MAKER_PRAISE.test(t))
@@ -319,34 +319,48 @@ function otherBrandsNamed(texts: readonly string[], except: string): string[] {
 // ---- 7. On the market: carry goods -------------------------------------------------
 
 /** Bag words that are not a bag anyone carries. Removed before the test. */
-const NOT_A_CARRY_BAG = /\b(trash|garbage|bin|rubbish|plastic|paper|grocery|zip-?lock|ziploc|tea|sleeping|body|punching|bean|air|sand|money|goody|grab|mixed|dirt|douche|scum|sad)[ -]?bags?\b|\bbags? (of|under)\b|\bin the bag\b|\bbag lad(y|ies)\b|\bbackpacking\b/gi
+const NOT_A_CARRY_BAG = /\b(trash|garbage|bin|rubbish|plastic|paper|grocery|zip-?lock|ziploc|tea|sleeping|body|punching|boxing|heavy|speed|bean|air|sand|money|goody|grab|mixed|dirt|douche|scum|sad)[ -]?bags?\b|\bbags? (of|under)\b|\bin the bag\b|\bbag lad(y|ies)\b|\bbackpacking\b/gi
 
 /** The carry goods Sealand's market is: bags, luggage, backpacks and the
- *  things that carry with them. Word-bounded, on English. */
-const CARRY_WORD = /\b(bags?|baggage|backpacks?|back ?packs?|rucksacks?|knapsacks?|day ?packs?|packs?|packing|packed|duffels?|duffles?|totes?|totepacks?|purses?|handbags?|clutch(es)?|wallets?|pouch(es)?|slings?|cross-?body|fanny ?packs?|bum ?bags?|belt ?bags?|hip ?packs?|waist ?bags?|messenger|satchels?|briefcases?|luggage|suitcases?|carry-?ons?|carryon|personal items?|roller ?bags?|trolley|packing cubes?|organi[sz]ers?|laptop sleeves?|straps?|zippers?|zips?|pockets?|compartments?|hip ?belts?|sternum|lit(er|re)s?|\d+ ?l|one ?bag|keychains?|key ?holders?|carry|carrying|carried|shopper)\b/i
+ *  things that carry with them. Word-bounded, on English. A STRONG word names
+ *  the thing itself and carries a quote on its own; a WEAK one (a strap, a
+ *  pocket, packing) is also a dress's, a runway look's or a trip's, and only
+ *  counts under a video about a carry good. */
+const CARRY_STRONG = /\b(bags?|baggage|backpacks?|back ?packs?|rucksacks?|knapsacks?|day ?packs?|duffels?|duffles?|totes?|tote ?bags?|totepacks?|purses?|handbags?|clutch(es)?|wallets?|pouch(es)?|sling ?bags?|cross-?body|fanny ?packs?|bum ?bags?|belt ?bags?|hip ?packs?|waist ?bags?|messenger bags?|satchels?|briefcases?|luggage|suitcases?|carry-?ons?|carryon|personal items?|roller ?bags?|packing cubes?|laptop sleeves?|one ?bag|keychains?|key ?holders?|shopper)\b/i
+const CARRY_WEAK = /\b(packs?|packing|packed|slings?|messenger|trolley|organi[sz]ers?|straps?|zippers?|zips?|pockets?|compartments?|hip ?belts?|sternum|lit(er|re)s?|\d+ ?l|carry|carrying|carried)\b/i
 
 /** Hashtags run words together ("#bagtok", "#totebagaesthetic"). */
 const CARRY_TAG = /(bags?|backpack|luggage|purse|tote|wallet|suitcase|carryon|onebag|handbag|daypack|duffel|duffle|rucksack|crossbody|fannypack|beltbag|pouch)/i
 const NOT_A_CARRY_TAG = /(garbage|cabbage|bagel|baguette|baggy|bagpipe|sleepingbag|teabag|trashbag|punchingbag|beanbag|backpacking)/i
 
 /** A product outside the market, named where no carry good is. */
-const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa)\b/i
+const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa|tees?|charging|adapters?|batter(y|ies)|cables?|steam ?deck|invest\w*)\b/i
 
 /** Idioms that name a product and mean something else ("the straight jacket
  *  feature" of a harness). Taken off before the off-market test. */
 const NOT_A_PRODUCT = /\bstra(igh)?t ?-?jackets?\b/gi
 
-/** A pointer at the thing shown: "it", "this", "that one". */
+/** A pointer at the thing shown: "it", "this", "that one". Read only in a
+ *  short comment: a long one that says "that" is usually about something else
+ *  (a move to Vietnam, the laundry), and has to name the thing or the claim. */
 const POINTS_AT_IT = /\b(it|its|it's|this|that|these|those|them|one|ones)\b/i
+const POINTER_MAX = 120
+
+/** An emoji the translator wrote out ("[Red heart]") is not the commenter's word. */
+const WRITTEN_EMOJI = /\[[^\]]{1,30}\]/g
 
 const carryText = (s: string): string => s.replace(NOT_A_CARRY_BAG, ' ')
 
-/** Does the text name a carry good? */
-export const namesCarryGood = (text: string): boolean => CARRY_WORD.test(carryText(text))
+/** Does the text name a carry good itself (a bag, a backpack, luggage)? */
+export const namesCarryGood = (text: string): boolean => CARRY_STRONG.test(carryText(text))
+
+/** Does it name a part or an act of carrying (a strap, a pocket, packing)? */
+const namesCarryPart = (text: string): boolean => CARRY_WEAK.test(carryText(text))
 
 /** Is the video about a carry good (its caption, hashtags or topics)? */
 export function isCarryVideo(v: QuoteVideo): boolean {
-  if (CARRY_WORD.test(carryText(`${v.caption ?? ''} ${(v.topics ?? []).join(' · ')}`))) return true
+  const words = carryText(`${v.caption ?? ''} ${(v.topics ?? []).join(' · ')}`)
+  if (CARRY_STRONG.test(words) || CARRY_WEAK.test(words)) return true
   return (v.hashtags ?? []).some((h) => CARRY_TAG.test(h) && !NOT_A_CARRY_TAG.test(h))
 }
 
@@ -409,7 +423,7 @@ const CONCEPTS: readonly { claim: RegExp; quote: RegExp }[] = [
   },
   { // product details and questions
     claim: /\bdetail|\bcurio|\bquestion|\bhow it works|\bfeatured/i,
-    quote: /\?|\bwhat (is|size|brand|bag|kind|colou?r|material)\b|\bwhere (is|did|can)\b|\bhow (much|big|does|do|is)\b|\bmaterials?\b|\bfabric\b|\bmade of\b|\bdetails?\b/i,
+    quote: /\bwhat (is (it|this|that)|size|brand|bag|kind|colou?r|material|model|make)\b|\bwhere (is it|did you (get|buy|find)|can i (get|buy|find))\b|\bhow (much|big|heavy|long|wide|tall|many|does it|do you (use|pack|carry))\b|\bwhich (one|model|size|colou?r|version)\b|\bmaterials?\b|\bfabric\b|\bmade of\b|\bdetails?\b|\bdimensions?\b|\bis (it|this|that) (the|a)\b/i,
   },
 ]
 
@@ -509,12 +523,14 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   }
 
   // On the market.
+  const said = english.replace(WRITTEN_EMOJI, ' ')
   const claim = readClaim(o.claim)
-  const relevance = o.claim ? relevanceTo(claim, english) : 0
-  const carry = o.market === 'carry' ? namesCarryGood(english) : false
+  const relevance = o.claim ? relevanceTo(claim, said) : 0
+  const carry = o.market === 'carry' ? namesCarryGood(said) : false
   if (o.market === 'carry' && !carry) {
     const aboutIt = v ? isCarryVideo(v) : false
-    if (!aboutIt || OFF_MARKET.test(english.replace(NOT_A_PRODUCT, ' ')) || !(POINTS_AT_IT.test(english) || relevance > 0)) {
+    const pointsAtIt = said.length <= POINTER_MAX && POINTS_AT_IT.test(said)
+    if (!aboutIt || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || !(namesCarryPart(said) || pointsAtIt || relevance > 0)) {
       return { ok: false, reason: 'off_topic' }
     }
   }

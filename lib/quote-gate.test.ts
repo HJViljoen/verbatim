@@ -220,6 +220,34 @@ describe('the known-bad quotes no longer print (walkthrough, 29 Sep)', () => {
   })
 })
 
+describe('staging’s second look (29 Sep): what the first cut of the gate still let through', () => {
+  const RUNWAY: QuoteVideo = { platform: 'reddit', videoId: '1wfdxbq', accountName: 'r/ProjectRunway', caption: 'Anna reveals her collection’s second look is made of upcycled materials from shopping throughout the season', hashtags: [], topics: [], segment: 'market' }
+  const TRAVEL_TALK: QuoteVideo = { platform: 'youtube', videoId: 'nomad-1', accountName: 'Nomads Nation', caption: 'One bag travel for a year: what I packed in my 35L backpack', hashtags: [], topics: ['one bag travel'], segment: 'market' }
+  const BOTTLE_BAG: QuoteVideo = { platform: 'tiktok', videoId: '7679766371944746260', accountName: 'Ni na', caption: 'กระเป๋าขวดน้ำดื่ม#กระเป๋าถือผู้หญิง #ขยะรีไซเคิล', hashtags: [], topics: ['recycled bottle bag'], segment: 'market' }
+
+  it('a strap on a runway look is not a bag', () => {
+    expect(whyNot(q('The trash bags that looks like trash bags and the cheap straps, if she had tailored the straps and used better materials it could have been great', RUNWAY), SEALAND)).toBe('off_topic')
+    expect(whyNot(q('I like Jude but I wish Anna won. She’s so unique', RUNWAY), SEALAND)).toBe('off_topic')
+  })
+
+  it('a long comment under a bag video has to be about the bag, not say "that"', () => {
+    expect(whyNot(q('Vietnam 🇻🇳 would be my home at that time. None of the limitations that exist in the Philippines. None of the unpredictability, instability or the heat that I had there for years.', TRAVEL_TALK), SEALAND)).toBe('off_topic')
+    expect(whyNot(q('a steamdeck in that anker travel adapter is going to be slow charging due it only doing 20w', TRAVEL_TALK), SEALAND)).toBe('off_topic')
+    // A boxing bag is not a carry good; "use it" under a packing video still
+    // points at the thing shown, and stays.
+    expect(whyNot(q('The boxing bags at my gym are the heaviest thing I own', undefined), SEALAND)).toBe('off_topic')
+  })
+
+  it('an emoji the translator wrote out is not a colour, and a question mark alone is not a product question', () => {
+    expect(whyNot(q('Perfect walk through and post! Thank you! [Red heart]', TRAVEL_TALK), { ...SEALAND, claim: 'Praise for beautiful bag design' })).toBe('off_topic')
+    expect(whyNot(q('Forget shark tank, where can I invest?', TRAVEL_TALK), { ...SEALAND, claim: 'Shopping interest from featured items' })).toBe('off_topic')
+  })
+
+  it('"is there a way to do it?" is asking the maker', () => {
+    expect(whyNot(q('มีวิธีทำมั้ยคะ', BOTTLE_BAG, { lang: 'th', english: 'Is there a way to do it?' }), SEALAND)).toBe('maker_praise')
+  })
+})
+
 describe('the market’s own voices still print', () => {
   it('a strap complaint, a carry-on sizing question, a return, a price objection, a translated question', () => {
     expect(whyNot(q('I do not like the yoke/carry handle type design on the top part of the straps. I’m short and like to wear my bags high and it just digs into your neck.', ROLLERBLADE_BAGS),
