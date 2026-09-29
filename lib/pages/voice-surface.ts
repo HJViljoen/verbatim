@@ -839,8 +839,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // second, and the biggest theme, which the pane opens where nothing may
   // lead), and every label naming a brand, whose evidence decides whether the
   // name stays (`stripUnevidencedBrand`, §5.3). What people did in the pane's
-  // theme's comments is read beside them, for the theme it will most likely
-  // open.
+  // theme's comments is read beside them, for each theme it may open on.
   const brandNames = [brand, ...rivals.map((r) => r.name)].filter(Boolean)
   const deepSlugs = new Set((params.themes ?? '').split(',').map((s) => s.trim()).filter(Boolean))
   const asked = params.theme && themes.some((t) => t.registryId === params.theme) ? params.theme : null
@@ -856,10 +855,13 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const wanted = new Map<string, string | null>(paneIds.map((id) => [id, kindOf(id)]))
   const branded = themes.filter((t) => namesABrand(t.label, brandNames)).map((t) => t.registryId)
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
-  const likelyOpen = paneIds[0] ?? null
+  // Every theme the pane may open on, not only the likeliest: the lead can
+  // move past a theme the quote gate leaves no voice (below), and a kinds read
+  // started only then is a hop of its own (two small reads each, beside the
+  // quotes).
   const kindsFor = (id: string) => loadThemeKinds(supabase, clientId, themedRunId, id, refs.get(id) ?? [])
-  const likelyKinds = likelyOpen ? kindsFor(likelyOpen) : Promise.resolve(null)
-  likelyKinds.catch(() => {})
+  const kindsAhead = new Map(paneIds.map((id) => [id, kindsFor(id)]))
+  for (const k of kindsAhead.values()) k.catch(() => {})
   const quotes = await loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(paneIds))
   if (branded.length > 0) {
     themes = themes.map((t) => {
@@ -929,7 +931,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? loadThemeQuotes(supabase, clientId, themedRunId, new Map([[open.registryId, open.kind]]), month, new Set([open.registryId]))
     : Promise.resolve(quotes)
   const [kinds, cast, voicesRead] = await Promise.all([
-    !open ? Promise.resolve(null) : open.registryId === likelyOpen ? likelyKinds : kindsFor(open.registryId),
+    !open ? Promise.resolve(null) : kindsAhead.get(open.registryId) ?? kindsFor(open.registryId),
     castAhead,
     openQuotes,
   ])
@@ -1127,15 +1129,19 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
   const ids = [...new Set(personas.flatMap((p) => p.insightIds.slice(0, CAST_INSIGHTS)))]
   const evidenceByInsight = new Map<string, { id: string; quote: string; commentId: string | null; platform: string | null; videoId: string | null }[]>()
   if (ids.length > 0) {
-    // Paged: one insight can carry a hundred excerpts, and fifty of them can
-    // pass PostgREST's thousand-row cap.
-    // With each comment's video embedded, so the gate's context read below
-    // starts at the videos.
+    // Only the first few excerpts of each insight: `relevance_rank` is the
+    // excerpt's rank within its insight (Pass A writes 1..n), and one insight
+    // can carry a hundred, so the whole list for fifty insights was thousands
+    // of rows for the three each keeps (the check pass, 29 Sep: the cast was
+    // the Conversation page's long pole). Two spare, for an empty excerpt.
+    // Paged all the same. With each comment's video embedded, so the gate's
+    // context read below starts at the videos.
     type CastRow = EvidenceRow & { comment_id: string | null; comments?: { platform: string | null; video_id: string | null }[] | { platform: string | null; video_id: string | null } | null }
     const rowsIn = await selectAll<CastRow>(() => input.supabase
       .from('insight_evidence')
       .select('id, audience_insight_id, quote, relevance_rank, redacted, comment_id, comments(platform, video_id)')
       .in('audience_insight_id', ids)
+      .lte('relevance_rank', CAST_EXCERPTS_PER_INSIGHT + 2)
       .order('relevance_rank', { ascending: true }).order('id')).catch((error: unknown) => {
       console.error(`[pages] voice.castEvidence: ${error instanceof Error ? error.message : String(error)}`)
       return [] as CastRow[]
