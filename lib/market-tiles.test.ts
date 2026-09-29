@@ -161,6 +161,10 @@ describe('tier counts + news chips', () => {
     expect(groundedTier('early_signal', Math.max(1, floor - 1))).toBe('early_signal')
     expect(groundedTier('archive', floor + 10)).toBe('archive')
   })
+  it('reads the 27 Sep Sealand conclusions the way the walkthrough needs', () => {
+    expect(groundedTier('confirmed', 9)).toBe('early_signal')
+    expect(groundedTier('confirmed', 41)).toBe('confirmed')
+  })
   it('ring → entity chip', () => {
     expect(newsRingChip(0)).toEqual({ label: 'Your brand', tone: 'positive' })
     expect(newsRingChip(1)).toEqual({ label: 'Competitor', tone: 'clay' })

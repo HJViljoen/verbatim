@@ -16,8 +16,10 @@ export const CURATION_GATE = {
    *  count are the model's own bookkeeping; "Strong evidence" printed beside
    *  "9 of 1,782 videos behind it" (Sealand, 27 Sep) is the badge claiming a
    *  volume the count beside it disproves. Below the floor a confirmed
-   *  conclusion reads as an early signal. 1 is the rule before this floor. */
-  confirmedMinVideos: 1,
+   *  conclusion reads as an early signal. 25 is a default (walkthrough, 29
+   *  Sep): on Sealand's 27 Sep update it keeps the five conclusions on 41 to
+   *  258 videos and moves the one on 9; 1 is the rule before this floor. */
+  confirmedMinVideos: 25,
   /** Early signal: below the confirmed gate but scored at least this. Also the
    *  bar a single-source THEME must clear to be badged "Early signal" on the
    *  pages — without it the term diluted to nothing (2026-07-04: 127 of 140
