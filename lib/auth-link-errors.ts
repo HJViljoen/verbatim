@@ -35,3 +35,16 @@ export function codelessCallbackTarget(params: URLSearchParams, next: string): s
   const failed = params.has('error') || params.has('error_code')
   return failed && next.startsWith('/reset') ? '/reset?error=link_expired' : '/login?error=link_invalid'
 }
+
+/**
+ * The `next` a callback link may forward to: a path on this site, or the
+ * fallback. `next` rides the emailed URL, so it is attacker-shaped input. A
+ * leading `//` is protocol-relative; a browser reads a backslash as a slash
+ * and drops tabs and newlines, so `/\evil.com` and `/<tab>/evil.com` are the
+ * same escape. Anything carrying either, or not starting with one `/`, gets
+ * the fallback.
+ */
+export function sameSitePath(raw: string | null, fallback: string): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || /[\\\u0000-\u001f\u007f]/.test(raw)) return fallback
+  return raw
+}

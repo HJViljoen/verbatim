@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { linkNotice, codelessCallbackTarget } from './auth-link-errors'
+import { linkNotice, codelessCallbackTarget, sameSitePath } from './auth-link-errors'
 
 describe('linkNotice', () => {
   it('says nothing when the page arrived without an error', () => {
@@ -32,5 +32,18 @@ describe('codelessCallbackTarget', () => {
   it('sends a link that is simply missing its code to sign in', () => {
     expect(codelessCallbackTarget(new URLSearchParams(''), '/reset/confirm')).toBe('/login?error=link_invalid')
     expect(codelessCallbackTarget(new URLSearchParams('error=x'), '/dashboard')).toBe('/login?error=link_invalid')
+  })
+})
+
+describe('sameSitePath', () => {
+  it('keeps a path on this site', () => {
+    expect(sameSitePath('/reset/confirm', '/x')).toBe('/reset/confirm')
+    expect(sameSitePath('/dashboard?tab=a', '/x')).toBe('/dashboard?tab=a')
+  })
+
+  it('refuses every way off the site', () => {
+    for (const raw of [null, '', 'https://evil.com', '//evil.com', '/\\evil.com', '/\t/evil.com', '/\n/evil.com', 'evil.com']) {
+      expect(sameSitePath(raw, '/reset/confirm'), JSON.stringify(raw)).toBe('/reset/confirm')
+    }
   })
 })

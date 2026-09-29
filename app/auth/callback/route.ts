@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { codelessCallbackTarget } from '@/lib/auth-link-errors'
+import { codelessCallbackTarget, sameSitePath } from '@/lib/auth-link-errors'
 
 /**
  * Supabase auth code exchange (fresh-eyes review, 2026-08-18).
@@ -19,8 +19,7 @@ export async function GET(request: Request): Promise<Response> {
   const code = url.searchParams.get('code')
   // Only same-origin paths: `next` comes off a URL, so it is attacker-shaped
   // input and must never become an open redirect.
-  const raw = url.searchParams.get('next') ?? '/reset/confirm'
-  const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/reset/confirm'
+  const next = sameSitePath(url.searchParams.get('next'), '/reset/confirm')
 
   if (!code) redirect(codelessCallbackTarget(url.searchParams, next))
 
