@@ -120,14 +120,14 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // label follows lib/nav.ts). The counting rules are decision E's and the
     // code's (lib/brands/mentions.ts, lib/brands/owners.ts,
     // lib/pages/overview-market/brands.ts): every video a brand comes up in,
-    // its other meanings checked first, its own posts never counted as the
+    // counted once its hand check has passed, its own posts never counted as the
     // market naming it, and the headline count without the videos our brand
     // searches found, named by its column head (BRANDS_HEAD_ORGANIC). S17's
     // ninety-day note is said here, never under a block.
     tells: 'Which brands your market names and what is said around them: how many of the market’s videos named each brand you track, one brand in full over the last 90 days, what your market asks under their content, and what they post and say about themselves.',
     read: ['brand', 'rival', 'market', 'video', 'level'],
     cannot: [
-      'A brand is counted in every video that names it, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. Each name is checked for its other meanings first, and a name that mostly means something else is not counted.',
+      'A brand is counted in every video that names it, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. It is counted only once a hand check of its matches has passed, because some names mean other things: until then it reads “not counted yet”, and a name that mostly means something else is not counted.',
       'A brand’s own posts are its posts, never your market naming it, so they are counted apart.',
       `The first count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count; the count “${BRANDS_HEAD_ALL}” sits beside it.`,
       'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',

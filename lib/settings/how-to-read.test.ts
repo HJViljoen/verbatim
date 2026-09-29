@@ -247,10 +247,12 @@ describe('how to read, market-first', () => {
   })
 
   it('promises no check it does not make: a brand counts only once its hand check has passed', () => {
-    const b = def('brands').body
-    expect(b).not.toContain('Each name is checked for its other meanings first')
-    expect(b).toContain('only once a hand check of its matches has passed')
-    expect(b).toContain('“not counted yet”')
+    // The definition and the Brands card say it the same way.
+    for (const b of [def('brands').body, card('competitive').cannot.join(' ')]) {
+      expect(b).not.toContain('Each name is checked for its other meanings first')
+      expect(b).toContain('only once a hand check of its matches has passed')
+      expect(b).toContain('“not counted yet”')
+    }
   })
 
   it('gives the level an example that is plainly one, not a figure no page prints', () => {
