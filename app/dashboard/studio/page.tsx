@@ -1,5 +1,7 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
+import { studioRedirect } from '@/lib/studio-visibility'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody, PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
 import { BuildButton } from '@/components/reports/build-button'
@@ -44,7 +46,11 @@ const pagesOf = (sections: { page: string }[]) => [...new Set(sections.map((s) =
 
 export default async function StudioPage({ searchParams }: { searchParams?: Promise<{ item?: string; view?: string }> }) {
   const sp = (await searchParams) ?? {}
-  const { supabase, clientId, role, email } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant user who types the address is sent to Reports (finish-list 16).
+  const away = studioRedirect(session)
+  if (away) redirect(away)
+  const { supabase, clientId, role, email } = session
   const canManage = canManageTenant(role)
 
   const [{ data: reportData }, { data: scheduleData }, { data: sendData }, { data: runData }] = await Promise.all([

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canSeeStudio, STUDIO_HREF, STUDIO_TENANT_VISIBLE } from './studio-visibility'
+import { canSeeStudio, studioRedirect, STUDIO_AWAY_HREF, STUDIO_HREF, STUDIO_TENANT_VISIBLE } from './studio-visibility'
 import type { OperatorView } from './auth'
 
 // The gate that hides the Studio from tenant users (owner's call 2026-09-17).
@@ -45,5 +45,22 @@ describe('canSeeStudio', () => {
 
   it('names one route, the one every surface links to', () => {
     expect(STUDIO_HREF).toBe('/dashboard/studio')
+  })
+})
+
+// Finish-list item 16: `/dashboard/studio` opened for a tenant who typed it.
+describe('studioRedirect', () => {
+  it('sends a tenant user to Reports while the flag is off', () => {
+    expect(studioRedirect(tenant, false)).toBe(STUDIO_AWAY_HREF)
+    expect(studioRedirect(tenant)).toBe('/dashboard/reports')
+  })
+
+  it('lets an operator in, on their own workspace and viewing a tenant', () => {
+    expect(studioRedirect(operatorHome)).toBeNull()
+    expect(studioRedirect(operatorViewingTenant)).toBeNull()
+  })
+
+  it('lets everyone in once the flag is flipped back on', () => {
+    expect(studioRedirect(tenant, true)).toBeNull()
   })
 })

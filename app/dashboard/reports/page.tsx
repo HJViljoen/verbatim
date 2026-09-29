@@ -18,6 +18,8 @@ import { rows as readRows } from '@/lib/pages/read'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveTile, type ArchiveColumn, type ArchiveItem } from '@/components/reports/archive-lists'
 import { StudioCard } from '@/components/reports/studio-card'
+import { ReportsSetupTile, briefCardsFor } from '@/components/reports/setup-tile'
+import { quarterUnlocked } from '@/lib/reports/quarterly'
 import { QuarterlyAbsentTile, QuarterlyCardTile } from '@/components/blocks/reports-card/card'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
@@ -599,6 +601,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <PaneEmpty>Select a file.</PaneEmpty>
   )
 
+  const shownCards = briefCardsFor(cards, studio)
+
   const selected = selectedSend != null || selectedLegacy != null || selectedBuild != null || selectedExport != null
   // The reader named an item and it is not here. The master-detail printed
   // "Select a file." into its third pane; with the pane gone the page drew
@@ -629,7 +633,12 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         {studio && <Link href={STUDIO_HREF}><BarPill>Open the Studio</BarPill></Link>}
       </PageBar>
 
-      <BriefCards cards={cards} meta={BRIEFS_META} studio={studio} basePath={BASE} />
+      {/* A CLIENT SEES THE BRIEFS THAT WERE BUILT, AND OTHERWISE ONE HONEST
+          LINE (finish-list item 16). The Studio is hidden from tenants, so a
+          card saying "Building one takes a few minutes" was a dead end. */}
+      {shownCards.length > 0
+        ? <BriefCards cards={shownCards} meta={BRIEFS_META} studio={studio} basePath={BASE} />
+        : <PageGrid className="xl:auto-rows-min"><ReportsSetupTile /></PageGrid>}
 
       {/* THE ROWS GROW WITH THEIR CONTENT, as the artboard's do: its cards are
           `min-height:248px`, not a fixed grid track. `PageGrid`'s 116px row
@@ -643,12 +652,21 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           where no subject is confirmed — the state both live workspaces are in
           — and a page advertising documents may not go silent about the one it
           was built to advertise. */}
-      <PageGrid className="xl:auto-rows-min">
-        {quarterly
-          ? <QuarterlyCardTile card={quarterly} col={studio ? 7 : 12} row={2} />
-          : <QuarterlyAbsentTile col={studio ? 7 : 12} row={2} />}
-        {studio && <StudioCard pages={catalogueChips()} col={5} row={2} />}
-      </PageGrid>
+      {/* THE QUARTERLY CARD, FOR A CLIENT, ONLY ONCE IT HAS A QUARTER TO SET
+          AGAINST ANOTHER (finish-list item 16): before that it was a large
+          card with one sentence in it, and the setup line above covers it. */}
+      {studio ? (
+        <PageGrid className="xl:auto-rows-min">
+          {quarterly
+            ? <QuarterlyCardTile card={quarterly} col={7} row={2} />
+            : <QuarterlyAbsentTile col={7} row={2} />}
+          <StudioCard pages={catalogueChips()} col={5} row={2} />
+        </PageGrid>
+      ) : quarterly && quarterUnlocked(quarterly.readings) ? (
+        <PageGrid className="xl:auto-rows-min">
+          <QuarterlyCardTile card={quarterly} col={12} row={2} />
+        </PageGrid>
+      ) : null}
 
       <PageGrid className="xl:auto-rows-min">
         <ArchiveTile
