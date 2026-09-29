@@ -54,8 +54,21 @@ describe('adviceShortlist', () => {
     expect(list.alsoRaised.has('fit-working')).toBe(false)
   })
 
-  it('caps the list at a handful, in the ledger’s order', () => {
-    expect(adviceShortlist(ledger, ideas, { shown: 2 }).lineages).toEqual(['proof-now', 'comfort'])
+  it('caps the undecided ideas at a handful, in the ledger’s order, and never cuts what you decided on', () => {
+    expect(adviceShortlist(ledger, ideas, { shown: 2 }).lineages).toEqual(['proof-now', 'comfort', 'fit-working'])
+    expect(adviceShortlist(ledger, ideas, { shown: 1 }).lineages).toEqual(['proof-now', 'fit-working'])
+  })
+
+  it('draws advice you decided on in an earlier update, even where the latest did not raise it', () => {
+    const decidedEarlier = [...ledger, row('july-done', { status: 'acted_on' }), row('june-dismissed', { status: 'dismissed' })]
+    const list = adviceShortlist(decidedEarlier, ideas)
+    expect(list.lineages).toContain('july-done')
+    expect(list.lineages).toContain('june-dismissed')
+    expect(list.alsoRaised.has('july-done')).toBe(false)
+    // Never folded, even into a row saying the same thing.
+    const sameIdea = adviceShortlist(decidedEarlier, vectors({ 'proof-now': 'proof', 'july-done': 'proof' }))
+    expect(sameIdea.lineages).toContain('july-done')
+    expect(sameIdea.alsoRaised.get('proof-now') ?? 0).toBe(0)
   })
 
   it('draws the current advice unmerged where there are no vectors', () => {

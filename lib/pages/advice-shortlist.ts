@@ -12,13 +12,17 @@ import { cosine, embedTexts } from '../pipeline/cluster'
 //
 // SO THE DEFAULT IS THE CURRENT ADVICE, ONE ROW PER IDEA, AND A HANDFUL:
 //
-//   - CURRENT is what the latest update that carried advice raised, plus what
-//     you have said you are working on. Everything else was not raised again
-//     by the latest update: it is kept, one quiet link away, never deleted.
+//   - CURRENT is what the latest update that carried advice raised, plus
+//     every piece of advice you have decided on ("Working on it", "Done",
+//     any status but undecided), which is never hidden. Everything else was
+//     not raised again by the latest update: it is kept, one quiet link away,
+//     never deleted.
 //   - ONE ROW PER IDEA. Two pieces of current advice that say the same thing
 //     are one row, the one the ledger ranks higher. Older advice that says the
 //     same thing as a current row is counted on it ("also raised in other
 //     words"), which is what "Why we keep raising it" is about.
+//   - A HANDFUL of undecided ideas; decided advice is drawn on top of the
+//     handful and never cut by it.
 //   - "The same thing" is a cosine between embeddings of the title and its
 //     argument, at or above `ADVICE_SAME_IDEA`. Advice you decided on is never
 //     folded into another row.
@@ -68,10 +72,10 @@ export interface AdviceShortlist {
   earlier: number
 }
 
-/** The rows current enough to draw: raised by the latest update, or being
- *  worked on. In the ledger's order. */
+/** The rows current enough to draw: raised by the latest update, or decided
+ *  on (any status but 'new'). In the ledger's order. */
 export function currentAdvice<R extends ShortlistRow>(rows: readonly R[]): R[] {
-  return rows.filter((r) => r.inLatest === true || r.status === 'in_progress')
+  return rows.filter((r) => r.inLatest === true || r.status !== 'new')
 }
 
 /**
@@ -118,7 +122,12 @@ export function adviceShortlist<R extends ShortlistRow>(
       if (best) count(best)
     }
   }
-  const lineages = reps.slice(0, shown).map((r) => r.lineageId)
+  // THE CAP IS ON UNDECIDED IDEAS ONLY. The ledger runs current-first, so
+  // "Working on it" from an earlier update sorts after the latest update's
+  // advice, and a cap over every row would cut exactly the advice you decided
+  // on; it is drawn on top of the handful instead, in the ledger's order.
+  const undecided = new Set(reps.filter((r) => !decided(r)).slice(0, shown).map((r) => r.lineageId))
+  const lineages = reps.filter((r) => decided(r) || undecided.has(r.lineageId)).map((r) => r.lineageId)
   return { lineages, alsoRaised, earlier: rows.length - lineages.length }
 }
 
