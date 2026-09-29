@@ -373,6 +373,12 @@ const WRITTEN_EMOJI = /\[[^\]]{1,30}\]/g
 
 const carryText = (s: string): string => s.replace(NOT_A_CARRY_BAG, ' ')
 
+/** How many different words of a pattern a text uses. */
+function distinctMatches(re: RegExp, text: string): number {
+  const all = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`)
+  return new Set((text.match(all) ?? []).map((m) => m.toLowerCase())).size
+}
+
 /** Does the text name a carry good itself (a bag, a backpack, luggage)? */
 export const namesCarryGood = (text: string): boolean => CARRY_STRONG.test(carryText(text))
 
@@ -552,8 +558,14 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   // A carry good named in passing, in a line about products outside the
   // market, under a video about none (an 'Alumu Wallet for Apple Tag' in a
   // gadget reviewer's iPhone thread), is not about the market.
-  if (o.market === 'carry' && carry && v && !isCarryVideo(v) && OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' '))) {
-    return { ok: false, reason: 'off_topic' }
+  //
+  // And a line that names more products outside the market than carry goods
+  // is about those ("Charge your iPhone … Alumu Wallet for Apple Tag").
+  if (o.market === 'carry' && carry) {
+    const offWords = distinctMatches(OFF_MARKET, said.replace(NOT_A_PRODUCT, ' '))
+    if (offWords > 0 && ((v && !isCarryVideo(v)) || offWords > distinctMatches(CARRY_STRONG, carryText(said)))) {
+      return { ok: false, reason: 'off_topic' }
+    }
   }
   if (o.market === 'carry' && !carry) {
     const aboutIt = v ? isCarryVideo(v) : false
