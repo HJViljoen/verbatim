@@ -147,8 +147,8 @@ export type GateVerdict = { ok: true; score: number; relevance: number; thread: 
  *                       reply and Your moves still take them (`allowOwn`).
  */
 export const QUOTE_DEFAULTS: Readonly<{ widerMakerWords: boolean; ownPostsOutOfMarket: boolean }> = {
-  widerMakerWords: false,
-  ownPostsOutOfMarket: false,
+  widerMakerWords: true,
+  ownPostsOutOfMarket: true,
 }
 
 /** Which tenants' quotes carry a market lexicon: Sealand's, bags. */
