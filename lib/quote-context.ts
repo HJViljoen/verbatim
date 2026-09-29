@@ -32,6 +32,10 @@ import { pickEligible, quoteGate, quoteMarketFor, type GateOptions, type QuoteVi
 
 export const RPC_SEGMENTS_FOR_VIDEOS = 'segments_for_videos'
 const SEGMENT_CHUNK = 500
+/** Videos per read. A video row here carries its caption, and a YouTube
+ *  caption is the whole description (thousands of characters), so a chunk of
+ *  250 was one slow response; smaller chunks go out side by side. */
+const VIDEO_CHUNK = 60
 
 type VideoRow = {
   id: string
@@ -175,10 +179,10 @@ export async function readQuoteContext(
   if (toRead.length > 0 || uuidsToRead.length > 0) {
     const [byNative, byUuid] = await Promise.all([
       toRead.length > 0
-        ? readChunks<VideoRow>(toRead, UUID_IN_CHUNK, (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('video_id', part), 'quote-context videos')
+        ? readChunks<VideoRow>(toRead, VIDEO_CHUNK, (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('video_id', part), 'quote-context videos')
         : Promise.resolve([] as VideoRow[]),
       uuidsToRead.length > 0
-        ? readChunks<VideoRow>(uuidsToRead, UUID_IN_CHUNK, (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('id', part), 'quote-context videos by id')
+        ? readChunks<VideoRow>(uuidsToRead, VIDEO_CHUNK, (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('id', part), 'quote-context videos by id')
         : Promise.resolve([] as VideoRow[]),
     ])
     const rows = [...byNative, ...byUuid]
