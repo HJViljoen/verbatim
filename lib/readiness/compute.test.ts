@@ -693,6 +693,17 @@ describe('delivery', () => {
     expect(row.notes).toEqual(['Weekly digest: off, no addresses'])
   })
 
+  // Finish-list item 17: Sealand's digest holds two addresses and is off.
+  it('says a schedule with addresses is switched off, never that none has an address', () => {
+    const inputs = ossur({ delivery: { period: 'weekly', schedules: [{ name: 'Weekly digest', active: false, recipients: 2, lastSentAt: null }] } })
+    const row = find(computeReadiness(inputs), 'delivery')
+    expect(row.status).toBe('missing')
+    expect(row.detail).toBe('Weekly digest has 2 addresses on it but is switched off, so nothing is sent.')
+    expect(row.notes).toEqual(['Weekly digest: off, 2 addresses'])
+    const none = ossur({ delivery: { period: 'weekly', schedules: [{ name: 'Weekly digest', active: true, recipients: 0, lastSentAt: null }] } })
+    expect(find(computeReadiness(none), 'delivery').detail).toBe('No schedule has an address on it, so nothing is sent.')
+  })
+
   it('is only partly there when a live schedule has never sent', () => {
     const inputs = ossur({ delivery: { period: 'weekly', schedules: [{ name: 'Weekly digest', active: true, recipients: 2, lastSentAt: null }] } })
     const row = find(computeReadiness(inputs), 'delivery')

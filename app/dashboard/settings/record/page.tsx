@@ -19,6 +19,7 @@ import { recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
 import { recordLines, recordRows } from '@/lib/reading/record'
 import { changeNote, readChangeLog } from '@/lib/settings/change-log'
+import { clientChangeLog, withoutQuickCheck } from '@/lib/settings/client-record'
 import { deliveryRecord, deliveryStats, updatesInMonth } from '@/lib/settings/delivery'
 import { loadReadings } from '@/lib/settings/readings'
 import { loadRecordPage } from '@/lib/settings/record-load'
@@ -60,8 +61,13 @@ import { AppealButton } from './appeal-button'
 // five sections are in that state, so it is the common arm and not the edge.
 
 export default async function SettingsRecordPage() {
-  const { supabase, clientId, role, userId } = await getSessionContext()
-  const canSeeExcerpt = canManageTenant(role)
+  const { supabase, clientId, role, userId, operator } = await getSessionContext()
+  // THE CLIENT'S RECORD (finish-list item 17): a tenant user reads the record
+  // in plain words, without our notes to ourselves or the stranger's captions
+  // the gate threw away (lib/settings/client-record.ts). The operator, here
+  // through the switcher or at home, keeps it as written.
+  const clientView = operator === null
+  const canSeeExcerpt = canManageTenant(role) && !clientView
 
   const now = new Date()
   const nowIso = now.toISOString()
@@ -134,7 +140,8 @@ export default async function SettingsRecordPage() {
   // the Phase 1 log below keeps every other row (a schedule, a subject, a
   // discovery strike) under its own title.
   const logRows = changed ? otherRows(inputs.changes.rows, changesFromLog(changed.changeRows)) : inputs.changes.rows
-  const log = readChangeLog({ rows: logRows, viewerUserId: userId, emails: inputs.emails })
+  const written = readChangeLog({ rows: logRows, viewerUserId: userId, emails: inputs.emails })
+  const log = clientView ? clientChangeLog(written) : written
   const save = saveState({
     lastChange: inputs.changes.rows[0] ?? null,
     affectsRecorded: inputs.changes.affectsRecorded,
@@ -142,7 +149,7 @@ export default async function SettingsRecordPage() {
   // The totals are exact (head counts); the rates are over the most recent
   // sample of judgements, and the block says so when the two differ.
   const totals = inputs.gate.totals
-  const lines = recordLines(inputs.coverage)
+  const lines = recordLines(inputs.coverage).map((l) => (clientView ? withoutQuickCheck(l) : l))
   const floor = readings.belowFloor[0] ?? null
   const rows = recordRows(inputs.coverage, {
     trailingMedian: readings.trailingMedian,
@@ -161,7 +168,7 @@ export default async function SettingsRecordPage() {
     // client-language ban list. The default lives in lib/reading/record.ts,
     // inside the pipeline's import closure, so the page passes its words.
     refusedElsewhere: 'Counted by the page that draws the comparisons.',
-  })
+  }).map((r) => (clientView ? { ...r, rest: withoutQuickCheck(r.rest) } : r))
 
   return (
     <SettingsFrame
@@ -205,7 +212,9 @@ export default async function SettingsRecordPage() {
         ) : null}
 
         <DeliveryBlock
-          record={delivery}
+          // Which update served a scheduled slot and which was run by hand is
+          // ours to know (finish-list item 17).
+          record={clientView ? { ...delivery, scheduledServed: null } : delivery}
           stats={stats}
           updates={thisMonth}
           month={monthName(`${month}-01`)}
@@ -248,10 +257,15 @@ export default async function SettingsRecordPage() {
           byPlatform={keptByPlatform(inputs.gate.verdicts)}
           lookedAt={sampleHead(inputs.gate.verdicts.length, totals.found)}
           withheld={
-            canSeeExcerpt
+            canSeeExcerpt || clientView
               ? null
               : 'The posts themselves are shown to owners and admins only.'
           }
+          // COUNTS ONLY FOR A CLIENT (finish-list item 17): the twenty posts
+          // were news, cricket and recipes a place-name search brought back,
+          // each with "This should have been kept" beside it. The rates per
+          // term say the same thing without them.
+          countsOnly={clientView}
           control={(r) => <AppealButton runId={r.runId} platform={r.platform} videoId={r.videoId} filed={r.appealed} />}
         />
 

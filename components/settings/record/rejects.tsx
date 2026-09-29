@@ -76,7 +76,7 @@ export function keptRateText(rates: readonly Pick<KeptRate, 'found' | 'keptPct'>
 }
 
 export function RejectLogBlock({
-  rows, summary, unavailable, unjudged, byTerm, byPlatform, lookedAt = 'Looked at', withheld, control,
+  rows, summary, unavailable, unjudged, byTerm, byPlatform, lookedAt = 'Looked at', withheld, control, countsOnly = false,
 }: {
   rows: readonly RejectRow[]
   /** "N of M candidates were set aside (38.0%) · recorded from 9 Sep 2026". */
@@ -93,6 +93,9 @@ export function RejectLogBlock({
   /** The sentence a member reads in place of the posts themselves. */
   withheld?: string | null
   control?: (row: RejectRow) => ReactNode
+  /** The counts and the rates per term, and no posts (finish-list item 17):
+   *  a client's view. The posts are an operator's to judge. */
+  countsOnly?: boolean
 }) {
   if (unavailable) {
     return (
@@ -108,7 +111,7 @@ export function RejectLogBlock({
       {summary ? <p className="m-0 text-[15px] leading-[1.5]">{summary}</p> : null}
       {unjudged ? <p className="m-0 text-[13px] text-muted-foreground">{unjudged}</p> : null}
 
-      {withheld ? (
+      {countsOnly ? null : withheld ? (
         <p className="m-0 text-[15px] text-muted-foreground">{withheld}</p>
       ) : rows.length === 0 ? (
         <p className="m-0 text-[15px] text-muted-foreground">Nothing has been set aside yet.</p>

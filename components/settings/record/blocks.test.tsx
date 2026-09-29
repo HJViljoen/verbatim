@@ -548,6 +548,33 @@ describe('the page’s own chrome', () => {
   })
 })
 
+// Finish-list item 17: a client read twenty news, cricket and recipe titles,
+// each with "This should have been kept" beside it.
+describe('the reject log, as a client reads it', () => {
+  const counts = (
+    <RejectLogBlock
+      rows={rejectRowsFixture()}
+      summary={gateSummaryFixture()}
+      unjudged={null}
+      byTerm={keptByTermFixture()}
+      byPlatform={keptByPlatformFixture()}
+      lookedAt={lookedAtFixture()}
+      countsOnly
+      control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
+    />
+  )
+
+  it('prints the counts and the rates per term, and no posts and no control', () => {
+    const text = renderText(counts)
+    expect(text).toContain(gateSummaryFixture())
+    expect(text).toContain('What each term brings back')
+    expect(text).not.toContain('Sealand sardines recipe')
+    expect(text).not.toContain('Thrown away')
+    expect(text).not.toContain(APPEAL_ASK)
+    expect(text).not.toContain('Nothing has been set aside yet.')
+  })
+})
+
 describe('the reject log’s kept rates (deploy 2 review)', () => {
   it('prints a rate under 100 looked at as its count, and the column\'s shares as whole percents (WP3.10)', () => {
     // Staging's 2 Oct rows, "of the last 1,000": made from waste 38 of 100,
