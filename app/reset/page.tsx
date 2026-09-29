@@ -1,19 +1,27 @@
 'use client'
 
-import { useActionState } from 'react'
+import { use, useActionState } from 'react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { linkNotice } from '@/lib/auth-link-errors'
 import { AuthCard, AUTH_INPUT, AUTH_BUTTON } from '@/components/auth/auth-card'
 import { requestReset, type ResetState } from './actions'
 
 const idle: ResetState = { ok: false, message: '' }
 
-export default function ResetRequestPage() {
+export default function ResetRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string | string[] }>
+}) {
   const [state, formAction, pending] = useActionState(requestReset, idle)
+  // Once a new link is on its way, the old link's notice has said its piece.
+  const { error } = use(searchParams)
+  const notice = state.ok ? null : linkNotice('reset', error)
 
   return (
-    <AuthCard subtitle="Reset your password">
+    <AuthCard subtitle="Reset your password" notice={notice}>
       <form action={formAction} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium">Work email</label>

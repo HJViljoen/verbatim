@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { codelessCallbackTarget } from '@/lib/auth-link-errors'
 
 /**
  * Supabase auth code exchange (fresh-eyes review, 2026-08-18).
@@ -21,7 +22,7 @@ export async function GET(request: Request): Promise<Response> {
   const raw = url.searchParams.get('next') ?? '/reset/confirm'
   const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/reset/confirm'
 
-  if (!code) redirect('/login?error=link_invalid')
+  if (!code) redirect(codelessCallbackTarget(url.searchParams, next))
 
   const supabase = await createServerSupabaseClient()
   const { error } = await supabase.auth.exchangeCodeForSession(code)

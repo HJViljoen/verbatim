@@ -26,6 +26,12 @@ describe('AuthCard', () => {
     expect(renderText(AuthCard({ subtitle: 'Reset your password', children: null }))).toBe('Verbatim Reset your password')
   })
 
+  it('prints the notice a broken link brought, above the form, and nothing when there is none', () => {
+    const html = render(AuthCard({ notice: 'That reset link has expired.', children: <form /> }))
+    expect(html).toMatch(/role="status"[^>]*>That reset link has expired\.<\/p><form>/)
+    expect(render(AuthCard({ notice: null, children: null }))).not.toContain('role="status"')
+  })
+
   it('frames every signed-out page', () => {
     for (const page of PAGES) {
       const src = readFileSync(join(ROOT, page), 'utf8')

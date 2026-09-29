@@ -1,17 +1,23 @@
 'use client'
 
-import { useActionState } from 'react'
+import { use, useActionState } from 'react'
 import Link from 'next/link'
+import { linkNotice } from '@/lib/auth-link-errors'
 import { AuthCard } from '@/components/auth/auth-card'
 import { login, type LoginState } from './actions'
 
 const idle: LoginState = { message: '' }
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string | string[] }>
+}) {
   const [state, formAction, pending] = useActionState(login, idle)
+  const notice = linkNotice('login', use(searchParams).error)
 
   return (
-    <AuthCard subtitle="Consumer intelligence, in their own words.">
+    <AuthCard subtitle="Consumer intelligence, in their own words." notice={notice}>
       <form action={formAction} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-foreground mb-1.5">Email</label>

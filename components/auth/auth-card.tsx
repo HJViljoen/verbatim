@@ -14,10 +14,14 @@ export const AUTH_BUTTON = 'h-auto w-full rounded-xl py-2.5 text-sm font-semibol
 
 export function AuthCard({
   subtitle,
+  notice,
   children,
 }: {
   /** The line under the name: what this page is for. */
   subtitle?: ReactNode
+  /** Why the reader landed here, when a link brought them broken
+   *  (lib/auth-link-errors.ts). Sits above the form. */
+  notice?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -30,6 +34,11 @@ export function AuthCard({
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Verbatim</h1>
         </div>
         {subtitle ? <p className="text-muted-foreground mb-7 text-sm">{subtitle}</p> : <div className="mb-6" />}
+        {notice ? (
+          <p role="status" className="mb-5 rounded-xl bg-muted px-3.5 py-2.5 text-sm text-foreground">
+            {notice}
+          </p>
+        ) : null}
         {children}
       </div>
     </div>
