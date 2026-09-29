@@ -56,8 +56,12 @@ describe('What it means for you (overview.foryou)', () => {
     expect(t).toContain(FOR_YOU_TITLE)
     expect(t).toContain('Waterproofing provisional')
     expect(t).toContain('16 videos your market asked about it, over the last 3 months')
-    expect(t).toContain('0 of your 56 posts shared two or more of its words, in that time')
-    expect(t).toContain('checked: waterproofing · zippers · rain · coated · …')
+    // Walkthrough B8: what a post did, not the test it passed; the words
+    // looked for ride as a tooltip in the app.
+    expect(t).toContain('0 of your 56 posts touched on it, in that time')
+    expect(t).not.toContain('shared two or more of its words')
+    expect(t).not.toContain('checked:')
+    expect(render(overviewForYou.render(marketFrontFixture(), 'app', ctx))).toContain('We looked in your posts for: waterproofing, zippers, rain, coated, …')
   })
 
   it('writes the same line as a sentence on paper and in an email', () => {
@@ -68,8 +72,13 @@ describe('What it means for you (overview.foryou)', () => {
   it('puts the lead conversation against the month\'s posts, and says what it checked', () => {
     const t = text(overviewForYou.render(stagingFixture(), 'app', ctx))
     expect(t).toMatch(/“ ?Price and sale questions ?”/)
-    expect(t).toContain('The market’s biggest conversation with few makers. None of your 20 September posts shared two or more of its words.')
-    expect(t).toContain('checked: price · sale')
+    expect(t).toContain('The market’s biggest conversation with few makers. None of your 20 September posts touched on it.')
+    expect(t).not.toContain('checked:')
+    expect(render(overviewForYou.render(stagingFixture(), 'app', ctx))).toContain('We looked in your posts for: price, sale')
+    // Paper keeps the sentence and the words it checked.
+    const paper = text(overviewForYou.render(stagingFixture(), 'print', ctx))
+    expect(paper).toContain('None of your 20 September posts shared two or more of its words.')
+    expect(paper).toContain('checked: price · sale')
   })
 
   it('names the posts a line matched on, where one did', () => {
@@ -84,7 +93,7 @@ describe('What it means for you (overview.foryou)', () => {
     // Board row 1, "Audience identities and amputation types" (44), is a kind
     // never quoted, so the lead is row 2: never "the market's biggest".
     const t = text(overviewForYou.render(ossurFrontFixture(), 'app', ctx))
-    expect(t).toContain('The market’s second biggest conversation. None of your 109 September posts shared two or more of its words.')
+    expect(t).toContain('The market’s second biggest conversation. None of your 109 September posts touched on it.')
     expect(t).not.toContain('The market’s biggest')
     expect(t).not.toContain('makers')
   })

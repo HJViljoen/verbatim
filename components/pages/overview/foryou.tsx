@@ -24,10 +24,15 @@ import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
 export const FOR_YOU_TITLE = 'What it means for you'
 
 /** The line's words under its figures: "checked: waterproof · rain · zip ·
- *  …", or the words the matching posts shared. */
+ *  …", or the words the matching posts shared. IN THE APP a "none" carries its
+ *  words as a tooltip (`lookedFor`) rather than a line: "checked: shipping ·
+ *  availability · ready · size" read as a word-matching test (walkthrough
+ *  B8), and Your moves says it the same way. Paper and email have no tooltip
+ *  and print the line. */
 function Words({ line, mode }: { line: ForYouLine; mode: RenderMode }) {
   const w = forYouWords(line)
   if (w.words.length === 0) return null
+  if (mode === 'app' && !w.matched) return null
   const text = `${w.matched ? `${fmtInt(line.matchedPosts.length)} ${line.matchedPosts.length === 1 ? 'post' : 'posts'} on` : 'checked:'} ${w.words.join(' · ')}${w.more ? ' · …' : ''}`
   if (mode === 'email') return <div style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 4 }}>{text}</div>
   return <span className="font-mono text-[12px] leading-[1.5] text-muted-foreground">{text}</span>
@@ -59,9 +64,9 @@ function Head({ line, mode }: { line: ForYouLine; mode: RenderMode }) {
 /** One inner cell of the questions line: a big figure and the words under it
  *  (the preview's "16 videos / your market asked about it, over the last 3
  *  months"). */
-function Cell({ figure, unit, under }: { figure: number; unit: React.ReactNode; under: string }) {
+function Cell({ figure, unit, under, title }: { figure: number; unit: React.ReactNode; under: string; title?: string }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-inner p-6">
+    <div className="flex flex-col gap-2 rounded-md bg-inner p-6" title={title}>
       <span className="flex flex-wrap items-baseline gap-x-2">
         <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-foreground">{fmtInt(figure)}</span>
         <span className="text-[15px] text-secondary-foreground">{unit}</span>
@@ -71,6 +76,22 @@ function Cell({ figure, unit, under }: { figure: number; unit: React.ReactNode; 
     </div>
   )
 }
+
+/** A "none"'s words, as the tooltip the app carries them in: the same words
+ *  paper prints after "checked:". Undefined where a post matched (its words
+ *  are printed) or nothing was checked. */
+function lookedFor(line: ForYouLine): string | undefined {
+  const w = forYouWords(line)
+  if (w.matched || w.words.length === 0) return undefined
+  return `We looked in your posts for: ${w.words.join(', ')}${w.more ? ', …' : ''}`
+}
+
+/** THE APP'S WORDS FOR A MATCH (walkthrough B8): a post "touched on it".
+ *  "Shared two or more of its words" named the test rather than what it
+ *  found; the test is How to read's to explain. The shared sentences keep
+ *  their words for paper and the monthly, which print them as sent. */
+export const APP_TOUCHED = 'touched on it'
+const appTouch = (body: string): string => body.split('shared two or more of its words').join(APP_TOUCHED)
 
 function figureValue(figures: FigureTable, key: string): number {
   return figures[key]?.value ?? 0
@@ -102,16 +123,17 @@ function Line({ line, month, mode }: { line: ForYouLine; month: string; mode: Re
         <Cell
           figure={touched}
           unit={<>of your <span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(posts)}</span> posts</>}
-          under="shared two or more of its words, in that time"
+          under={`${APP_TOUCHED}, in that time`}
+          title={lookedFor(line)}
         />
         <Words line={line} mode={mode} />
       </div>
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2" title={mode === 'app' ? lookedFor(line) : undefined}>
       <Head line={line} mode={mode} />
-      <TokenProse body={body} figures={line.figures} mode={mode} className="m-0 text-[15px] leading-[1.55] text-secondary-foreground [text-wrap:pretty]" />
+      <TokenProse body={mode === 'app' ? appTouch(body) : body} figures={line.figures} mode={mode} className="m-0 text-[15px] leading-[1.55] text-secondary-foreground [text-wrap:pretty]" />
       <Words line={line} mode={mode} />
     </div>
   )
