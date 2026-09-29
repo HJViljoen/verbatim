@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { citationLink } from '../evidence-cite'
 import { cleanQuote } from '../quotes'
+import { quoteGate, type GateOptions, type QuoteVideo } from '../quote-gate'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote } from '../renderables/types'
 import { marketAudiences, pooledSide, type MarketCount } from '../reading/market'
@@ -67,10 +68,12 @@ export const WORDS_KINDS = ['praise', 'purchase_intent', 'question', 'pain_point
 export const WORDS_PER_KIND = 3
 
 /** Candidates per kind that reach the translation read, and per theme among
- *  them: enough that the English gate and the offer rule can each drop some
- *  and still leave three themes to choose from. */
-export const WORDS_SHORTLIST = 24
-export const WORDS_SHORTLIST_PER_THEME = 4
+ *  them: enough that the English gate, the offer rule and the quote gate
+ *  (lib/quote-gate.ts: makers, sellers, off the market) can each drop some and
+ *  still leave three themes to choose from (walkthrough, 29 Sep: 24 and 4
+ *  before the quote gate). */
+export const WORDS_SHORTLIST = 48
+export const WORDS_SHORTLIST_PER_THEME = 8
 
 /** One quote the bank may print: an evidence excerpt on a comment, with what
  *  the rules and the cite need. */
@@ -207,6 +210,10 @@ export function buildWords(input: {
   themes: ReadonlyMap<string, WordsTheme>
   anchors: ReadonlyMap<string, ReadonlySet<string>> | null
   segments: WordsBlock['segments']
+  /** The quote gate (walkthrough, 29 Sep; lib/quote-gate.ts): a quote prints
+   *  only where it passes, ranked by the card's order as before, and a card
+   *  takes one quote per video. Absent, the bank is drawn as it was. */
+  gate?: GateOptions
 }): WordsBlock {
   const month = monthStartOf(input.month)
   const kinds = WORDS_KINDS
@@ -220,6 +227,7 @@ export function buildWords(input: {
   const out: WordsKind[] = []
   for (const { kind, videos } of kinds) {
     const themes = new Set<string>()
+    const threads = new Set<string>()
     const quotes: WordsQuote[] = []
     const ordered = input.candidates
       .filter((c) => c.insightKind === kind && input.themes.has(c.themeId) && eligible(c, month, input.anchors))
@@ -231,6 +239,20 @@ export function buildWords(input: {
       if (readsAsOffer(c.quote) || readsAsOffer(c.english)) continue
       const words = cleanQuote(c.quote).toLowerCase()
       if (usedWords.has(words)) continue
+      if (input.gate) {
+        const theme = input.themes.get(c.themeId) as WordsTheme
+        const verdict = quoteGate({
+          text: c.quote,
+          lang: c.lang ?? null,
+          english: c.english ?? null,
+          video: c.context === undefined ? undefined : c.context === null ? null : { ...c.context, segment: c.segment ?? c.context.segment ?? null },
+        }, { ...input.gate, claim: theme.label })
+        if (!verdict.ok) continue
+        if (verdict.thread) {
+          if (threads.has(verdict.thread)) continue
+          threads.add(verdict.thread)
+        }
+      }
       themes.add(c.themeId)
       usedComments.add(c.commentId as string)
       usedWords.add(words)
@@ -309,7 +331,11 @@ export async function loadKindRows(
 type EvidenceRead = {
   id: string
   category: string | null
-  videos: { id: string; video_url: string | null; account_name: string | null } | null
+  videos: {
+    id: string; video_url: string | null; account_name: string | null
+    platform?: string | null; video_id?: string | null; caption?: string | null; hashtags?: string[] | null; topics?: string[] | null
+    is_client?: boolean | null; is_competitor?: boolean | null; competitor_name?: string | null; source?: string | null
+  } | null
   insight_evidence: {
     id: string
     quote: string | null
@@ -338,10 +364,20 @@ type EvidenceRead = {
  */
 const WORDS_SELECT = [
   'id, category,',
-  'videos(id, video_url, account_name),',
+  'videos(id, video_url, account_name, platform, video_id, caption, hashtags, topics, is_client, is_competitor, competitor_name, source),',
   'insight_evidence!inner(id, quote, relevance_rank, comment_id,',
   'comments!inner(id, comment_date, likes, author, platform, native:comment_id, insight_evidence(id, quote)))',
 ].join(' ')
+
+/** The insight's video as the quote gate reads it; null where it has none. */
+function gateVideo(v: EvidenceRead['videos']): QuoteVideo | null {
+  if (!v) return null
+  return {
+    platform: v.platform ?? null, videoId: v.video_id ?? null, caption: v.caption ?? null, hashtags: v.hashtags ?? null,
+    topics: v.topics ?? null, accountName: v.account_name, isClient: v.is_client ?? null, isCompetitor: v.is_competitor ?? null,
+    competitorName: v.competitor_name ?? null, source: v.source ?? null, segment: null,
+  }
+}
 
 /** The first unredacted excerpt a `c:` ref resolves to (lowest evidence id). */
 export function firstExcerpt(rowsIn: readonly { id: string; quote: string | null }[]): { id: string; quote: string | null } | null {
@@ -430,6 +466,7 @@ export async function loadWordsCandidates(
           videoId: insight.videos?.id ?? null,
           videoUrl: insight.videos?.video_url ?? null,
           resolves,
+          context: gateVideo(insight.videos),
         })
       }
     }

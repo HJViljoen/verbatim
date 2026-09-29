@@ -239,3 +239,31 @@ describe('firstExcerpt (what a c: ref resolves to)', () => {
     expect(firstExcerpt([])).toBeNull()
   })
 })
+
+describe('the bank through the quote gate (walkthrough, 29 Sep; lib/quote-gate.ts)', () => {
+  const gate = { market: 'carry' as const, makerRule: true }
+  const IBADAN = { platform: 'tiktok', videoId: '7686980095516462356', accountName: 'SLIPPERS/SHOES/BAGS IN IBADAN.', caption: 'Viral TASSEL bag in nude colour combo. Available to order.  PRICE: 25,000', hashtags: ['handmadebagsinibadan'], topics: ['handmade bags', 'sales'] }
+  const ONEBAG = { platform: 'reddit', videoId: '1wiu2cf', accountName: 'r/onebag', caption: 'PSA: Osprey Sojourn Porter 46 $99 on Sierra. Very duffel like bag with a tuckable harness.', hashtags: [], topics: [] }
+  const LAURIE = { platform: 'youtube', videoId: 'laurie-1', accountName: 'Travel Tips by Laurie', caption: 'Best travel bags for Europe', hashtags: [], topics: ['travel bag'] }
+  const WORK_BAG = { platform: 'youtube', videoId: '7nSE0b5iiSc', accountName: '조은fine', caption: '보부상 직장인 가방 추천', hashtags: [], topics: ['work bag'] }
+
+  it('drops a seller’s post, keeps the market’s own, and takes one quote per video in a card', () => {
+    const b = build([
+      { ...PINK, context: IBADAN },
+      { ...BLACK, context: null },
+      { ...WEIGHT, context: ONEBAG },
+      { ...BENTO, context: LAURIE },
+      { ...SHOULDER, context: WORK_BAG },
+      // A second pain line from the r/onebag thread, in another theme: the card's one per video.
+      { ...BIN, themeId: 'daf7426d', commentId: '4a13f62x', context: ONEBAG },
+    ], { gate })
+    expect(texts(b, 'feature_request')).toEqual([])
+    expect(texts(b, 'pain_point')).toEqual([WEIGHT.quote, SHOULDER.quote])
+  })
+
+  it('prints no quote under a maker’s video now, marked or not', () => {
+    const b = build([{ ...WEIGHT, segment: 'maker', context: ONEBAG }, { ...SHOULDER, context: WORK_BAG }], { gate })
+    expect(texts(b, 'pain_point')).toEqual([SHOULDER.quote])
+    expect(card(b, 'pain_point')?.quotes.some((q) => q.maker)).toBe(false)
+  })
+})
