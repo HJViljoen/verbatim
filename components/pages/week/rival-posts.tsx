@@ -41,9 +41,10 @@ export function trackedLine(r: RivalPosts): string | null {
 }
 
 /** "of 7 in Sep": the month's figure the update's count sits inside, the
- *  Brands page's "in all". Null where there is none to print. */
+ *  Brands page's "in all". Null where there is none to print, or it is 0 (a
+ *  bare 0 says it). */
 export function namingMonthLine(r: RivalPosts, month: string): string | null {
-  if (notCounted(r) || r.aboutMonth == null) return null
+  if (notCounted(r) || r.aboutMonth == null || r.aboutMonth === 0) return null
   return `of ${fmtInt(r.aboutMonth)} in ${monthName(month).split(' ')[0]}`
 }
 
