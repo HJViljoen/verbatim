@@ -29,6 +29,17 @@ describe.each(pages)('the %s page', (_name, page) => {
     }
   })
 
+  // Checked against the app's page code (CHECK, 29 Sep): This week has no
+  // "what we'd do"; a group shows a line, where it talks, a count read to date
+  // and one voice (no wants, stops or tips, no share of a month); Brands reads
+  // what is done under a brand for rivals only; news is shown on none of the
+  // nine pages; the short read lives only on a parked page.
+  it('shows nothing the nine pages do not', () => {
+    for (const banned of [/what we.d do/i, /short read/i, /news around it/i, /stops them/i, /tips them/i, /of the month.s [\d,]+ videos/i, /where yours does/i, /where you do/i]) {
+      expect(text, String(banned)).not.toMatch(banned)
+    }
+  })
+
   it('never uses an em dash', () => {
     expect(text).not.toContain('—')
   })

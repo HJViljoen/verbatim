@@ -20,7 +20,11 @@ export const metadata: Metadata = {
 // cannot drift from it again; counts are in videos; nothing gains, fades or
 // emerges (levels now, comparisons once months compare); no weekly email is
 // promised and the Studio is not shown, because reports are on hold and being
-// redesigned, one for each department.
+// redesigned, one for each department. And (the check pass, same day): no
+// news block, since news is gathered but shown on none of the nine pages; no
+// "short read", which lives only on a parked page; a group is counted over
+// everything read to date, never as a share of a month; what is done under a
+// brand is read for rivals only; own accounts are daily for followers alone.
 const SETTINGS_LINE = 'What we read for you, where your market’s videos come from, and your team.'
 export default function HowItWorks() {
   return (
@@ -57,8 +61,7 @@ export default function HowItWorks() {
             <div className="pf"><b>Reddit</b><ul><li>Posts and comments in the communities where your category is discussed</li><li>Communities found per category, not hand-picked</li></ul></div>
           </div>
           <div className="also">
-            <div><b>The news around it</b>Headlines about your brand, your competitors and the category, so a spike in the conversation can be read against what caused it.</div>
-            <div><b>Your own accounts</b>Your public TikTok, Instagram and YouTube profiles, checked daily: followers, recent posts, and your audience’s replies.</div>
+            <div><b>Your own accounts</b>Your public TikTok, Instagram and YouTube profiles: followers checked daily, and your recent posts and your audience’s replies with every weekly update.</div>
           </div>
 
           <div className="hiw-sub">
@@ -142,7 +145,7 @@ export default function HowItWorks() {
               <div className="n">2</div>
               <div>
                 <h4>Find the themes, and keep them.</h4>
-                <p>Insights are grouped by meaning within each bucket: yours, each competitor’s, the rest of the category. A theme stands once it’s in 10 or more of the month’s videos; below that it’s shown as a count only and never acted on.</p>
+                <p>Insights are grouped by meaning within each bucket: yours, each competitor’s, the rest of the category. A theme gets its own place on the page once it’s in 10 or more of the month’s videos; below that it’s listed by its count alone.</p>
                 <p className="never"><b>Themes keep their identity month to month,</b> so this month’s count can be set against a later one. Until there are months that compare fairly, a theme says how big it is and nothing about which way it’s heading.</p>
               </div>
               <div className="demo">
@@ -161,7 +164,7 @@ export default function HowItWorks() {
               <div className="n">3</div>
               <div>
                 <h4>Compare you to the field.</h4>
-                <p>With the themes in place, the buckets are read against each other: how many videos each brand comes up in, what people do under them, where a rival’s talk stands out from the category, and the questions asked under each side’s content.</p>
+                <p>With the themes in place, the buckets are read against each other: how many videos each brand comes up in, and for each rival you track, what people do under its videos, the questions asked there, and where its talk stands out from the category.</p>
                 <p className="never"><b>Mood is read video by video,</b> and shown as a share of videos, never as a score.</p>
               </div>
               <div className="demo">
@@ -169,9 +172,8 @@ export default function HowItWorks() {
                   <span>Videos in the month</span><div><div className="bar you"><i style={{ width: '3%' }} /></div></div>
                   <span /><div><div className="bar them"><i style={{ width: '8%' }} /></div></div>
                   <span /><div><div className="bar cat"><i style={{ width: '87%' }} /></div></div>
-                  <span>Where they stand out</span><span>Durability on trail</span>
-                  <span>Where you do</span><span>Hip belt comfort</span>
-                  <span>Gap</span><span>Sizing questions under your videos go unanswered. Under theirs, other owners answer.</span>
+                  <span>Where theirs stands out</span><span>Durability on trail</span>
+                  <span>Asked under theirs</span><span>Torso length, and whether the frame creaks by day three.</span>
                 </div>
               </div>
             </div>
@@ -180,14 +182,14 @@ export default function HowItWorks() {
               <div className="n">4</div>
               <div>
                 <h4>Analyse the market.</h4>
-                <p>From all of it: the kinds of person in the conversation and what moves each of them, the market insights, a short read, and ranked recommendations grounded in the quotes retrieved for them. A separate check compares what you say in your own videos with what the audience hears back.</p>
-                <p className="never"><b>Everything is said in calibrated words.</b> A count of videos, with what it’s out of, and a plain label: strong evidence or early signal. No scores, no magnitudes the data can’t back.</p>
+                <p>From all of it: the kinds of person in the conversation, the market insights, and ranked recommendations grounded in the quotes retrieved for them. A separate check compares what you say in your own videos with what the audience hears back.</p>
+                <p className="never"><b>Everything is said in calibrated words.</b> A count of videos, with what it’s out of, and on each conclusion a plain label: strong evidence or early signal. No scores, no magnitudes the data can’t back.</p>
               </div>
               <div className="demo">
-                <div className="kv"><span className="k">Profile</span><span><b>The long-trip planner</b> · in 508 of 1,240 videos</span></div>
-                <div className="kv"><span className="k">Wants</span><span>One bag for ten days that doesn’t punish them on day six.</span></div>
+                <div className="kv"><span className="k">Profile</span><span><b>The long-trip planner</b> · 508 videos, read to date</span></div>
+                <div className="kv"><span className="k">In their words</span><span>“which one for a 10 day trip? genuinely torn between the two”</span></div>
                 <div className="kv"><span className="k">You say</span><span>“Built for ten-day trips.”</span></div>
-                <div className="kv"><span className="k">They hear</span><span><span className="chip a">Contradicted</span> The ten-day question is answered by a competitor’s owners, not yours.</span></div>
+                <div className="kv"><span className="k">They hear</span><span><span className="chip a">Pushed back</span> Owners call it right for a weekend and too small for ten days.</span></div>
                 <div className="row"><span>Sizing confusion</span><span className="chip g">Strong evidence</span></div>
                 <div className="row"><span>Strap width</span><span className="chip">Early signal</span></div>
               </div>
@@ -222,7 +224,7 @@ export default function HowItWorks() {
           <div className="hiw-sub">
             <div>
               <h3>This week.</h3>
-              <p className="body">Each weekly update reads the new videos and comments into your market, and This week says what that update brought: what came in, what people asked, what was heard for the first time, and the comments worth a reply.</p>
+              <p className="body">Each weekly update reads the new videos and comments into your market, and This week says what that update brought: what came in, what was heard for the first time, what stood between buyers and a yes, and the comments worth a reply.</p>
               <p className="fine">A week is read as part of its month, never as a movement on its own.</p>
             </div>
             <div className="mail">
@@ -231,7 +233,7 @@ export default function HowItWorks() {
                 <div className="d"><i className="up">+</i><span>312 videos and 4,950 comments came in, into a September that now holds 1,240 videos.</span></div>
                 <div className="d"><i className="up">?</i><span>Fit and sizing questions came up under 63 videos. None of your posts answered one.</span></div>
                 <div className="d"><i className="up">↩</i><span>14 comments are worth a reply, 6 of them from people ready to buy.</span></div>
-                <p className="lede">Fit and sizing is the biggest theme in your market this month, and the questions are landing under your videos, where nobody is answering them yet.</p>
+                <div className="d"><i className="up">+</i><span>Heard for the first time: airline carry-on limits, in 37 videos, most of them from one Reddit thread.</span></div>
                 <div className="foot">Open any line for the comments behind it</div>
               </div>
             </div>

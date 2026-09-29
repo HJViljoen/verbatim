@@ -105,10 +105,10 @@ export default function MarketingHome() {
         <div className="wrap">
           <div className="text">
             <h3 id="who-h">Who they are.</h3>
-            <p className="body">The people in the conversation, sorted into the few kinds they turn out to be. For each one: what they want, what stops them, and the exact phrases they use.</p>
+            <p className="body">The people in the conversation, sorted into the few kinds they turn out to be. For each one: who they are, where they talk, how many videos they turn up in, and one of them in their own words.</p>
           </div>
           <Reveal className="panel">
-            <div className="panel-title"><b>Who&rsquo;s in your market</b><span>Example market &middot; three of its profiles</span></div>
+            <div className="panel-title"><b>Who&rsquo;s in your market</b><span>Example market &middot; three of its groups</span></div>
             <div className="personas">
               {personas.map((p, i) => (
                 <PersonaCard key={p.name} persona={p} index={i} />
@@ -137,7 +137,7 @@ export default function MarketingHome() {
         <div className="wrap">
           <div className="text">
             <h3 id="stand-h">Where you stand.</h3>
-            <p className="body">Every brand that comes up in your market, yours and your rivals&rsquo;, counted the same way: how many videos each one comes up in, what people do under them, and where a rival&rsquo;s talk stands out from the rest of the category.</p>
+            <p className="body">Every brand that comes up in your market, yours and your rivals&rsquo;, counted the same way: how many videos each one comes up in. For each rival, what people do under its videos and where its talk stands out from the rest of the category.</p>
           </div>
           <Reveal className="panel">
             <div className="panel-title"><b>You and one rival</b><span>Example market &middot; one month</span></div>
@@ -155,14 +155,10 @@ export default function MarketingHome() {
             {brief.filter((l) => l.kind !== 'do').map((l, i) => (
               <BriefRow key={i} line={l} />
             ))}
-            <hr />
-            {brief.filter((l) => l.kind === 'do').map((l, i) => (
-              <BriefRow key={`do-${i}`} line={l} />
-            ))}
           </div>
           <div className="text">
             <h3 id="weekly-h">And every week, what came in.</h3>
-            <p className="body">Each update reads the week&rsquo;s new videos and comments into your market. This week shows what came in, what people asked, what was heard for the first time, and the comments worth a reply. Open any of it and the comments are there.</p>
+            <p className="body">Each update reads the week&rsquo;s new videos and comments into your market. This week shows what came in, what was heard for the first time, what stood between buyers and a yes, and the comments worth a reply. Open any of it and the comments are there.</p>
           </div>
         </div>
       </section>

@@ -2,7 +2,7 @@ import {
   themes,
   faceOff,
   faceOffOwns,
-  EXAMPLE_MONTH_VIDEOS,
+  personas,
   type Theme,
   type FaceOffRow,
   type BriefLine,
@@ -110,10 +110,12 @@ export function FaceOffLegendRows({ rows = faceOff, staticReveal = false }: { ro
         <div className="row" key={row.label}>
           <span className="lbl">{row.label}</span>
           <div className="bars">
-            <div className="bar you">
-              <i style={{ ['--w' as string]: `${row.you.pct}%`, ['--i' as string]: ri * 3, ...(staticReveal ? { width: `${row.you.pct}%` } : {}) }} />
-              <em>{row.you.text}</em>
-            </div>
+            {row.you && (
+              <div className="bar you">
+                <i style={{ ['--w' as string]: `${row.you.pct}%`, ['--i' as string]: ri * 3, ...(staticReveal ? { width: `${row.you.pct}%` } : {}) }} />
+                <em>{row.you.text}</em>
+              </div>
+            )}
             <div className="bar them">
               <i style={{ ['--w' as string]: `${row.them.pct}%`, ['--i' as string]: ri * 3 + 1, ...(staticReveal ? { width: `${row.them.pct}%` } : {}) }} />
               <em>{row.them.text}</em>
@@ -131,18 +133,22 @@ export function FaceOffLegendRows({ rows = faceOff, staticReveal = false }: { ro
   )
 }
 
-/** The face-off "theme they own / theme you own" pair (`.face .owns`). */
+/** Where the rival's talk stands out (`.face .owns`). Brands reads this for
+ *  the brands you track, so there is no "yours" beside it unless a caller
+ *  passes one. */
 export function FaceOffOwnsBlock({ owns = faceOffOwns }: { owns?: typeof faceOffOwns }) {
   return (
     <div className="owns">
-      <div className="own">
+      <div className={owns.you ? 'own' : 'own wide'}>
         <b>{owns.them.title}</b>
         <span className="voice">“{owns.them.quote}”</span>
       </div>
-      <div className="own">
-        <b>{owns.you.title}</b>
-        <span className="voice">“{owns.you.quote}”</span>
-      </div>
+      {owns.you && (
+        <div className="own">
+          <b>{owns.you.title}</b>
+          <span className="voice">“{owns.you.quote}”</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -157,29 +163,22 @@ export function FaceOffPanel({ staticReveal = false }: { staticReveal?: boolean 
   )
 }
 
-/** One `.persona` card: the profile's videos, of the month's. */
+/** One `.persona` card, as Conversation's "Who is talking" draws a group:
+ *  name, videos (the bar against the largest group, never a share of a
+ *  month), the one line, where they talk, and one voice. */
 export function PersonaCard({ persona, index = 0, staticReveal = false }: { persona: Persona; index?: number; staticReveal?: boolean }) {
-  const w = `${Math.round((persona.videos / EXAMPLE_MONTH_VIDEOS) * 100)}%`
+  const max = Math.max(...personas.map((p) => p.videos))
+  const w = `${Math.round((persona.videos / max) * 100)}%`
   return (
     <div className="persona">
       <div className="name">{persona.name}</div>
       <div className="share">
         <i style={{ ['--w' as string]: w, ['--i' as string]: index, ...(staticReveal ? { width: w } : {}) }} />
       </div>
-      <div className="pct">In {persona.videos} of the month’s {EXAMPLE_MONTH_VIDEOS.toLocaleString('en-GB')} videos</div>
-      <dl>
-        <dt>Wants</dt>
-        <dd>{persona.wants}</dd>
-        <dt>Stops them</dt>
-        <dd>{persona.stops}</dd>
-        <dt>Tips them</dt>
-        <dd>{persona.tips}</dd>
-      </dl>
-      <div className="talk">
-        {persona.talk.map((t) => (
-          <span key={t}>{t}</span>
-        ))}
-      </div>
+      <div className="pct">{persona.videos.toLocaleString('en-GB')} videos, read to date</div>
+      <p className="line">{persona.line}</p>
+      <div className="mix">{persona.platforms}</div>
+      <p className="said">“{persona.quote}”</p>
     </div>
   )
 }

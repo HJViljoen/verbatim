@@ -250,7 +250,7 @@ export const playbooks: Playbook[] = [
       'Someone in the room asks why you’re losing the long-trip buyer, and the answer is a shrug, because every number on the slide is about you, and the question is about them.',
     ],
     panel: { kind: 'faceOff' },
-    panelCaption: `Videos in the month: ${faceOff[0].you.text} yours, ${faceOff[0].them.text} Ridgeway’s, ${faceOff[0].cat?.text} the rest of the category. Praising it, of your videos: ${faceOff[1].you.text}; of Ridgeway’s: ${faceOff[1].them.text}.`,
+    panelCaption: `Videos in the month: ${faceOff[0].you?.text} yours, ${faceOff[0].them.text} Ridgeway’s, ${faceOff[0].cat?.text} the rest of the category. Praising Ridgeway over 90 days: ${faceOff[1].them.text} of its videos.`,
     steps: [
       {
         verb: 'Pick the competitor the meeting is about.',

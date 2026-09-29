@@ -77,21 +77,29 @@ export const streamQuotes: StreamQuote[] = [
   { text: 'forty comments asking about torso length and not one answer', src: 'Under your own TikTok, last week.' },
 ]
 
+// A group as Conversation's "Who is talking" draws it (components/pages/
+// voice-surface/cast.tsx): a name, the model's one line about them, where they
+// talk, how many videos they turn up in, and one voice. The count is a count,
+// over everything read to date, never a share of a month: the groups overlap,
+// and the product refuses that denominator.
 export interface Persona {
   name: string
-  /** Videos in the example month this kind of person shows up in. They
-   *  overlap, as the product's profiles do. */
+  /** Videos this group turns up in, over everything read to date. */
   videos: number
-  wants: string
-  stops: string
-  tips: string
+  /** The one line about them. */
+  line: string
+  /** Where they talk: the platform mix, as the product prints it. */
+  platforms: string
+  /** One of them, in their own words. */
+  quote: string
+  /** Phrase chips: only the hidden playbooks draw them (USE_CASES_PUBLIC). */
   talk: string[]
 }
 
 export const personas: Persona[] = [
-  { name: 'The long-trip planner', videos: 508, wants: "One bag for ten days that doesn't punish them on day six.", stops: 'Nobody will say which size they need.', tips: 'A creator they trust naming a specific model.', talk: ['which one for a 10 day trip', 'genuinely torn', 'by hour six'] },
-  { name: 'The upgrader who got burned', videos: 396, wants: 'Proof it holds up, from someone who owns it.', stops: 'Paid more once and the cheap one lasted longer.', tips: 'A warranty story with a happy ending.', talk: ['held up better', 'did not expect', 'sold mine'] },
-  { name: 'The first-timer sizing blind', videos: 334, wants: 'A straight answer on fit before they order.', stops: 'Sizing guides that assume you already know.', tips: 'One reply from the brand under the video.', talk: ['nobody could explain', 'ended up guessing', 'too small'] },
+  { name: 'The long-trip planner', videos: 508, line: 'Plans ten days at a time and wants one bag that doesn’t punish them by day six.', platforms: 'YouTube 44% · Reddit 31% · TikTok 25%', quote: 'which one for a 10 day trip? genuinely torn between the two', talk: ['which one for a 10 day trip', 'genuinely torn', 'by hour six'] },
+  { name: 'The upgrader who got burned', videos: 396, line: 'Paid more once, watched the cheap one outlast it, and now wants proof from an owner.', platforms: 'Reddit 48% · YouTube 33% · Instagram 19%', quote: 'held up better on the trail, did not expect that', talk: ['held up better', 'did not expect', 'sold mine'] },
+  { name: 'The first-timer sizing blind', videos: 334, line: 'Buying a first proper pack and can’t tell which size fits before ordering.', platforms: 'TikTok 52% · Instagram 30% · YouTube 18%', quote: 'nobody could explain the sizing, ended up guessing', talk: ['nobody could explain', 'ended up guessing', 'too small'] },
 ]
 
 export interface Theme {
@@ -121,28 +129,33 @@ export const themes: Theme[] = [
 
 export interface FaceOffRow {
   label: string
-  you: { pct: number; text: string }
+  /** Absent where the product reads rivals only (what is done under a
+   *  brand's videos is read for the brands you track, never your own). */
+  you?: { pct: number; text: string }
   them: { pct: number; text: string }
   cat?: { pct: number; text: string }
 }
 
 // Counts, each with its "of N", never a score: the old rows printed a
 // "sentiment" percentage the product does not compute. Row one is the site's
-// argument in miniature: most of the month's videos name nobody.
+// argument in miniature: most of the month's videos name nobody. Rows two and
+// three are the rival alone, over 90 days, as Brands reads a brand in full:
+// the page prints no "you against them" figure.
 export const faceOff: FaceOffRow[] = [
   { label: 'Videos in the month, of 1,240', you: { pct: 3, text: '38' }, them: { pct: 8, text: '96' }, cat: { pct: 87, text: '1,081' } },
-  { label: 'Praising it, of their videos', you: { pct: 71, text: '27 of 38' }, them: { pct: 64, text: '61 of 96' } },
-  { label: 'A question under it, of their videos', you: { pct: 55, text: '21 of 38' }, them: { pct: 31, text: '30 of 96' } },
+  { label: 'Praising the rival, of its videos in 90 days', them: { pct: 61, text: '171 of 280' } },
+  { label: 'A question under its videos, of the same', them: { pct: 30, text: '84 of 280' } },
 ]
 
-export const faceOffOwns = {
-  them: { title: 'Where their talk stands out: durability', quote: 'the cheaper one held up better on the trail' },
-  you: { title: 'Where yours does: the hip belt', quote: "the reason I'd never go back to the old one" },
+export const faceOffOwns: { them: { title: string; quote: string }; you?: { title: string; quote: string } } = {
+  them: { title: 'Where the rival’s talk stands out: durability', quote: 'the cheaper one held up better on the trail' },
 }
 
 // This week, as the app draws it: what the update brought in, what was asked,
 // what is worth a reply, what was heard for the first time. No arrows: a week
-// is a contribution to its month, never a movement.
+// is a contribution to its month, never a movement. The `do` line is the
+// hidden playbooks' only: This week has no "what we'd do", so the home page
+// does not draw it.
 export interface BriefLine {
   kind: 'in' | 'ask' | 'reply' | 'new' | 'do'
   parts: (string | { u: string })[]
@@ -232,7 +245,7 @@ export const analyst: AnalystItem[] = [
     claims: [
       { k: 'ok', b: 'Supported', t: 'The hip belt is your most-cited strength, in 41 videos, almost none of them your own.' },
       { k: 'no', b: 'Contradicted', t: 'Price is not the objection. Durability and the zip are, in 143 videos this month. Price only ever appears beside them.' },
-      { k: 'ok', b: 'Supported, and bigger than you think', t: 'Sizing is the largest theme in the market, in 412 videos. A FAQ will not reach where they are asking.' },
+      { k: 'ok', b: 'Supported', t: 'Sizing is the largest theme in the market, in 412 videos. A FAQ will not reach where they are asking.' },
       { k: 'ok', b: 'Supported', t: 'The 40L is the size owners recommend to each other, in 58 videos.' },
       { k: 'silent', b: 'Untested', t: 'The market has nothing to say about colours or the creator placements. Left unmarked.' },
     ],
