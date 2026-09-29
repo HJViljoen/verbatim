@@ -5,7 +5,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { fmtInt, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { surface } from '@/lib/nav'
-import { JUDGE_NOT_CHECKED, followersCount, followersOnly, type ClaimEcho } from '@/lib/reading/own-posts'
+import { followersCount, followersOnly, type ClaimEcho } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { ClaimRow, ClaimSubjects, MarketSurfaceData } from '@/lib/pages/market-surface'
 import { RULE, SCALE } from '@/components/pages/overview/market'
@@ -90,15 +90,13 @@ function SubjectsLine({ c, mode }: { c: ClaimSubjects; mode: RenderMode }) {
     </span>
   )
   const shown = c.state === 'checked' ? c.subjects : c.subjects.filter((x) => x.k > 0)
-  const parts = c.state === 'unchecked'
-    ? [<span key="un">which subject each is about: {JUDGE_NOT_CHECKED}</span>]
-    : [
+  const parts = [
         ...shown.map((x) => (
           <span key={x.subjectId} className={email ? undefined : 'whitespace-nowrap'}>
             <span data-copy="figure" className={email ? undefined : 'font-mono font-semibold tabular-nums text-foreground'}>{fmtInt(x.k)}</span> {x.name.toLowerCase()}
           </span>
         )),
-        ...(c.state === 'partial' ? [<span key="rest"><span data-copy="figure">{fmtInt(c.unfiled)}</span> {JUDGE_NOT_CHECKED}</span>] : []),
+        ...(c.state === 'partial' ? [<span key="rest"><span data-copy="figure">{fmtInt(c.unfiled)}</span> still to be read</span>] : []),
       ]
   if (email) {
     return (
@@ -178,7 +176,10 @@ export const marketSayHear: Block<MarketSurfaceData> = {
 
     return (
       <BlockFrame title={marketSayHear.title} question={marketSayHear.question} mode={mode} roomy footer={footer}>
-        {subjects && subjects.claims > 0 ? <SubjectsLine c={subjects} mode={mode} /> : null}
+        {/* NOTHING TO SAY UNTIL THE CLAIMS ARE READ FOR THEIR SUBJECT
+            (walkthrough B8): "which subject each is about: not checked yet"
+            was our backlog, not a reading. */}
+        {subjects && subjects.claims > 0 && subjects.state !== 'unchecked' ? <SubjectsLine c={subjects} mode={mode} /> : null}
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {w.claims.length > 0 ? (
           email ? (
@@ -186,7 +187,7 @@ export const marketSayHear: Block<MarketSurfaceData> = {
           ) : (
             <div role="table" className="flex min-w-0 flex-col">
               <span className="text-[15px] font-semibold text-foreground">
-                {claimsHead(w.claims.length, Boolean(subjects && subjects.claims > 0))}
+                {claimsHead(w.claims.length, Boolean(subjects && subjects.claims > 0 && subjects.state !== 'unchecked'))}
               </span>
               <div role="row" className={`mt-3 hidden grid-cols-[minmax(0,1.3fr)_150px_minmax(0,1.3fr)] gap-6 md:grid ${RULE.head}`}>
                 <span role="columnheader" className={SCALE.head}>You say</span>
