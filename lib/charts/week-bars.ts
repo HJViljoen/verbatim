@@ -393,7 +393,7 @@ export const pendingBlankLabel = (firstWeek: string): string =>
 
 /** The one waiting line above the pending row (decision B). */
 export const pendingWaitingLine = (firstComparisonDate: string): string =>
-  `Pending: the first comparison is due with the ${shortDay(firstComparisonDate)} update, if a check on real data passes.`
+  `Pending: the first week-on-week comparison is due with the ${shortDay(firstComparisonDate)} update, if a check on real data passes.`
 
 // ---- The responsive layout (the component step, WP2.9) ---------------------------
 //

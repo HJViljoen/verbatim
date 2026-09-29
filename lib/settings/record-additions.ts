@@ -15,6 +15,15 @@
 
 // ---- What the pages can say, and when ------------------------------------------------
 
+/** The first quarter-on-quarter comparison read the same way: the record's
+ *  timeline row, and the Reports card's line (finish-list item 9: the card
+ *  said "with the November 2026 reading", counting six monthly readings,
+ *  while the record said April 2027; searches changed in September, so the
+ *  first two quarters read the same way are the last of 2026 and the first
+ *  of 2027). The Reports card prints it on the tenant whose record this is
+ *  (lib/pages/reports-card.ts, `tenantLocked`). */
+export const FIRST_QUARTER_COMPARISON = { when: 'April 2027', from: '2027-04-01', pair: 'the first quarter of 2027 against the last of 2026' } as const
+
 /** §2.11, the rows a reader needs: when each kind of statement becomes
  *  possible. `from` is the day the row starts to hold (an update's day or the
  *  month's first). The weekly line's row is not here: whether it prints was
@@ -30,7 +39,7 @@ export const PAGES_CAN_SAY: readonly { when: string; from: string; says: string 
   { when: 'about 3 Jan', from: '2027-01-03', says: 'October against November in full, once November has filled. November against December at the same age.' },
   { when: 'January', from: '2027-01-10', says: 'The first unusual-week flags.' },
   { when: 'late January', from: '2027-01-24', says: 'The first direction words, once December has filled.' },
-  { when: 'April 2027', from: '2027-04-01', says: 'The first quarter comparison: the first quarter of 2027 against the last of 2026.' },
+  { when: FIRST_QUARTER_COMPARISON.when, from: FIRST_QUARTER_COMPARISON.from, says: `The first quarter comparison: ${FIRST_QUARTER_COMPARISON.pair}.` },
 ]
 
 export const PAGES_CAN_SAY_LEAD = 'Levels now. The first change we can stand behind comes in December, if nothing we search changes.'

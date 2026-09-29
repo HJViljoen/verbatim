@@ -159,7 +159,7 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
       <div aria-hidden className="flex min-w-0 flex-col">
         <div className={cn('grid gap-x-3', cols)}>
           <div className={cn(under, 'flex flex-col')}>
-            <span className="text-center text-[13px] font-semibold leading-4 text-foreground [text-wrap:balance]">the first comparison read the same way</span>
+            <span className="text-center text-[13px] font-semibold leading-4 text-foreground [text-wrap:balance]">the first month-on-month comparison read the same way</span>
             <span className="mt-1.5 h-2 border-x border-t border-secondary-foreground" />
           </div>
         </div>

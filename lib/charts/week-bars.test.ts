@@ -136,7 +136,7 @@ describe('the pending row', () => {
 
   it('says what is pending, and when', () => {
     expect(pendingWaitingLine(firstComparisonDue(WEEK_LINE[SEALAND_CLIENT_ID], SEALAND_NEXT_UPDATE))).toBe(
-      'Pending: the first comparison is due with the 25 Oct update, if a check on real data passes.',
+      'Pending: the first week-on-week comparison is due with the 25 Oct update, if a check on real data passes.',
     )
   })
 })

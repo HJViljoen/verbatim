@@ -246,7 +246,7 @@ export function monthsLead(line: SubjectPane['marketLine']): string | null {
   const read = monthsReadOf(line).length
   if (read >= LINE_FROM) return null
   if (read === 0) return 'No month read yet.'
-  return `${COUNT_WORDS[read]} month${read === 1 ? '' : 's'} read, not yet a line.`
+  return `${COUNT_WORDS[read]} month${read === 1 ? '' : 's'} read for this subject, not yet a line.`
 }
 
 /** The note under the next pair's cards: "once November has filled, about

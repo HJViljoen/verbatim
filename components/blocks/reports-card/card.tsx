@@ -99,7 +99,10 @@ export function QuarterlyCardTile({
       // the card, and the footnote states it where the gate bites, so a third
       // printing bought nothing and left the eyebrow no air (it truncated to
       // "THE …" on a phone).
-      meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
+      // BELOW THE GATE, NOT THE QUARTER UNDER REVIEW (finish-list item 9): "Q2
+      // 2026 · Apr–Jun" headed a card with nothing to review, on a workspace
+      // read from 28 Jun; it names when the first comparison lands instead.
+      meta={formingOnly && card.firstWhen ? `first in ${card.firstWhen}` : `${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
       distribute="between"
       className="xl:min-h-[248px]"
       // 32px OF TARGET (M7's floor for this page): this was a 15px line, the

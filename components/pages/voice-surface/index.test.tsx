@@ -96,11 +96,11 @@ describe('VoiceSurfacePage', () => {
     expect(markup).toContain('id="where"')
   })
 
-  it('names the military-dog channel only under "set aside" on the whole page (WP3.8 done-when)', () => {
+  it('never names the military-dog channel on the whole page: it is counted as set aside (WP3.8; default of 29 Sep)', () => {
     for (const data of [voiceFixture(), allAccountsVoiceFixture()]) {
       const text = renderText(<VoiceSurfacePage data={data} params={{}} />)
-      expect(text.split('Mike Ritland').length - 1).toBe(1)
-      expect(text.indexOf('Mike Ritland')).toBeGreaterThan(text.indexOf('Set aside, off-topic'))
+      expect(text).not.toContain('Mike Ritland')
+      expect(text).toContain('Set aside as off-topic:')
     }
   })
 

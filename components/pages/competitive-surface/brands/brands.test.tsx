@@ -95,7 +95,7 @@ describe('B1 · brands in your market', () => {
   it('counts each checked brand, the headline without any video our rival searches found, August beside', () => {
     const t = text(competitiveTopics.render(brandsFixture(), 'app', ctx))
     expect(t).toContain('Brands we track videos each came up in')
-    expect(t).toContain('Without any video our rival searches found of 516')
+    expect(t).toContain('Outside our brand searches of 516')
     expect(t).toContain('In all of 654')
     expect(t).toContain('In all of 377')
     expect(t).toContain('Patagonia 13 45 24')
@@ -128,6 +128,16 @@ describe('B2 · a brand in full, last 90 days', () => {
     expect(t).toContain('What people did Videos Praising it 25 Asking how it works 21 Ready to buy 20 Hitting a problem 11')
     // Freitag prints plainly (the lead's R2): no homonym note on its filed counts.
     expect(t).not.toMatch(/German|Friday/)
+  })
+
+  it('lists a brand with nothing filed at zero, unlinked, saying why where we do not search for it (finish-list item 20)', () => {
+    const d = brandsFixture()
+    const inFull = d.brands!.inFull!
+    const rows = [...inFull.rows, { audience: 'competitor:Old School', label: 'Old School', videos: 0, comments: 0, href: '/dashboard/competitive?vs=Old+School', selected: false, note: 'no search term: we read its own posts' }]
+    const data = { ...d, brands: { ...d.brands!, inFull: { ...inFull, rows } } }
+    const t = text(brandsInFull.render(data, 'app', ctx))
+    expect(t).toContain('Old School no search term: we read its own posts 0 0')
+    expect(render(brandsInFull.render(data, 'app', ctx))).not.toContain('vs=Old+School')
   })
 
   it('opens another brand in full from its name, in the app only', () => {
@@ -189,18 +199,28 @@ describe('B3 · asked under their content', () => {
 })
 
 describe('B4 · where a rival’s talk differs', () => {
-  it('draws each finding as a card with its voice and its months, and names the brands too thin', () => {
+  it('draws the picked brand’s findings as cards with their voice, and no recurrence Readiness says is not built (finish-list item 20)', () => {
     const markup = render(competitiveFindings.render(brandsFixture(), 'app', ctx))
     const t = text(competitiveFindings.render(brandsFixture(), 'app', ctx))
     expect(t).toContain('Cotopaxi against the category')
     expect(t).toContain('an account shaping the talk')
     expect(t).toContain('Durability praise does not remove carry-comfort concern')
-    expect(t).toContain('seen in 3 of the last 6 months')
-    expect(t).toContain('Freitag, The North Face and Patagonia have fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(t).not.toContain('seen in')
     expect(markup).toContain('data-slot="pass_c_finding"')
     expect(markup).toContain('data-copy="quote"')
     expect(t).toContain('Ask about Cotopaxi →')
     expect(markup).toContain('/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20Cotopaxi%3F')
+  })
+
+  it('follows the brand picked above: its cards, its line and its Ask link (finish-list item 20)', () => {
+    const d = brandsFixture()
+    const inFull = d.brands!.inFull!
+    const pick = (label: string) => ({ ...d, brands: { ...d.brands!, inFull: { ...inFull, selected: { ...inFull.selected!, label, audience: `competitor:${label}` } } } })
+    const t = text(competitiveFindings.render(pick('Freitag'), 'app', ctx))
+    expect(t).not.toContain('Cotopaxi against the category')
+    expect(t).toContain('Freitag has fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(t).toContain('Ask about Freitag →')
+    expect(competitiveFindings.quotes?.(pick('Freitag'))).toEqual([])
   })
 
   it('freezes each card’s voice by its comment ref', () => {
@@ -243,7 +263,7 @@ describe('B5 · what they post and say about themselves', () => {
 describe('B6 · how the market makes content', () => {
   it('prints the category’s formats and openings, each a share of those read', () => {
     const t = text(brandsContent.render(brandsFixture(), 'app', ctx))
-    expect(t).toContain('The formats and openings of the category videos posted in September.')
+    expect(t).toContain('The formats and openings of the category videos posted in September, counted by the day they were posted, not by September’s comments. 1,947 of the 2,192 have their format read.')
     expect(t).toContain('1,947 of the 2,192 have their format read.')
     expect(t).toContain('Format of 1,947 Promotional 27%')
     expect(t).toContain('Opening of 1,776 Bold claim 42%')

@@ -49,16 +49,19 @@ function Head({ top, under, align = 'right' }: { top: string; under: string; ali
 
 const cellOf = (p: HeardTheme['provenance']): string => (p ? fmtInt(p.fromNewSearches) : '·')
 
-/** "9 of the 468 themes first heard with this update reached 10 videos this
- *  month." The level and its of-N, one denominator. */
+/** "1 theme first heard with this update reached 10 videos this month." The
+ *  count alone (finish-list item 9): "1 of the 347 themes first heard" read
+ *  as noise, and its 347 is every audience's new names, most of them one or
+ *  two videos, while the 1 is the category's at the floor, so it was no
+ *  base the count sat on. */
 export function heardLead(h: HeardBlock, when: string): { level: string | null; rest: string } {
   if (h.regrouped) return { level: null, rest: regroupedLine(h.regrouped) }
   const at = heardAtFloor(h)
   if (h.seen === 0) return { level: null, rest: 'Nothing was heard for the first time with this update.' }
   if (at === 0) {
-    return { level: null, rest: `${fmtInt(h.seen)} ${h.seen === 1 ? 'theme was' : 'themes were'} first heard with this update, and none reached ${fmtInt(NEW_THEME_FLOOR)} videos ${when}.` }
+    return { level: null, rest: `No theme first heard with this update reached ${fmtInt(NEW_THEME_FLOOR)} videos ${when}.` }
   }
-  return { level: `${fmtInt(at)} of the ${fmtInt(h.seen)}`, rest: ` themes first heard with this update reached ${fmtInt(NEW_THEME_FLOOR)} videos ${when}.` }
+  return { level: fmtInt(at), rest: ` ${at === 1 ? 'theme' : 'themes'} first heard with this update reached ${fmtInt(NEW_THEME_FLOOR)} videos ${when}.` }
 }
 
 /** "Makers and DIY, grouped: 3 themes, led by handmade craftsmanship (65) and
@@ -189,8 +192,7 @@ export const weekHeard: Block<WeekData> = {
       <BlockFrame title={HEARD_TITLE} mode={mode} footer={footer} roomy card>
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-6'}>
           <p className={email ? undefined : 'm-0 max-w-[720px] text-[16px] font-semibold leading-[1.55] text-foreground [text-wrap:pretty]'} style={email ? { fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, margin: '0 0 8px' } : undefined}>
-            {/* "2 of the 374 themes": the preview's words, a count and its base
-                in one sentence, marked as code's figures. */}
+            {/* "2 themes": a count, marked as code's figure. */}
             {lead.level ? <span data-copy="figure">{lead.level}</span> : null}{lead.rest}
           </p>
           {h.rows.length > 0 ? <HeardTable h={h} mode={mode} /> : null}

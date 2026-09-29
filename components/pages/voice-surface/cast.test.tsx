@@ -35,7 +35,9 @@ describe('voiceCast (C4)', () => {
   it('prints each group’s platforms as whole shares where its count carries one', () => {
     const bagLover = voiceFixture().cast.personas.find((p) => p.key === 'bag-lover')!
     expect(platformLine(bagLover)).toBe('TikTok 48% · Instagram 26% · YouTube 22% · Reddit 4%')
-    expect(platformLine({ platformMix: [{ platform: 'reddit', label: 'Reddit', videos: 4, pct: 57.1 }, { platform: 'tiktok', label: 'TikTok', videos: 3, pct: 42.9 }] })).toBe('Reddit 4 · TikTok 3')
+    expect(platformLine({ platformMix: [{ platform: 'reddit', label: 'Reddit', videos: 4, pct: 57.1 }, { platform: 'tiktok', label: 'TikTok', videos: 3, pct: 42.9 }] })).toBe('Reddit 4 · TikTok 3 (videos, too few for shares)')
+    // The Supporter group of 27 Sep: 90 videos, counts said to be counts (finish-list item 9).
+    expect(platformLine({ platformMix: [{ platform: 'youtube', label: 'YouTube', videos: 29, pct: 32 }, { platform: 'tiktok', label: 'TikTok', videos: 26, pct: 29 }, { platform: 'instagram', label: 'Instagram', videos: 20, pct: 22 }, { platform: 'reddit', label: 'Reddit', videos: 15, pct: 17 }] })).toBe('YouTube 29 · TikTok 26 · Instagram 20 · Reddit 15 (videos, too few for shares)')
   })
 
   it('prints no share of the month, no floor note and no overlap footnote (25 Sep rulings; How to read says it)', () => {

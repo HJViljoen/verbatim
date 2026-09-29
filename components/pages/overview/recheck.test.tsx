@@ -67,7 +67,7 @@ describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
   it('sits under the refusal, in its column (the preview), before the first pair read the same way', () => {
     const t = read(block.render(withRecheck('read'), 'app', ctx))
     expect(t.indexOf('Not read as a change')).toBeLessThan(t.indexOf('Re-checked'))
-    expect(t.indexOf('Re-checked')).toBeLessThan(t.indexOf('The first comparison read the same way'))
+    expect(t.indexOf('Re-checked')).toBeLessThan(t.indexOf('The first month-on-month comparison read the same way'))
   })
 
   it('prints no re-check on a block without one (deploy 2’s, a stored copy, Össur paused)', () => {

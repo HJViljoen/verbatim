@@ -8,7 +8,7 @@ import type { BRAND_HAND_CHECKS } from '../brands/precision'
 import {
   askedMonthsLine, buildAsked, buildContent, buildFindings, buildInFull, buildNameBlock, buildPosts, buildShare, buildTopics,
   findingKindWords, leadTheme, levelWords, nameCommentsLine, nameLeadParts, nameOwnParts, ninetyDays, recurrenceMonths,
-  seenLine, shareWaiting, thinLine, topicWords, topicsCounted, type BrandMonthIn, type Part,
+  shareWaiting, noFindingLine, topicWords, topicsCounted, type BrandMonthIn, type Part,
 } from './brands'
 import { competitiveFixture } from '../../components/pages/competitive-surface/fixture'
 
@@ -40,6 +40,12 @@ describe('B1 · your name in your market', () => {
     expect(words(nameLeadParts(b))).toBe('In September your name came up in none of the 654 videos from the market you sell into.')
     expect(words(nameOwnParts(b))).toBe('The 8 videos that name you are your own posts.')
     expect(nameCommentsLine(b)).toBe('One September comment named you, under one of your own posts.')
+  })
+
+  it('never says every video naming you is your own post where the market named you too (finish-list item 20)', () => {
+    const b = { month: '2026-09-01', counted: { n: 852, k: 1, ownPosts: 9, ownPostComments: 1, ownPostCommentPosts: 1 } }
+    expect(words(nameLeadParts(b))).toBe('In September your name came up in 1 of the 852 videos from the market you sell into.')
+    expect(words(nameOwnParts(b))).toBe('It also came up in 9 of your own posts.')
   })
 
   it('waits for a match outside your own posts that nobody has read by hand', () => {
@@ -95,7 +101,7 @@ describe('B1 · the brands in your market', () => {
       tracked: SEPTEMBER_BRANDS.map(monthIn), watched: null, chip: null, read: 'live', checks: NO_MATCH_CHECKS, mentionsRead,
     })
     const words = (b: ReturnType<typeof read>) => Object.fromEntries(b.tracked.map((r) => [r.label, topicWords(r)]))
-    expect(words(read(true))).toMatchObject({ 'Freedom of Movement': 'none found', 'Old School': 'none found', Rareform: 'none found', Cotopaxi: 'not counted yet' })
+    expect(words(read(true))).toMatchObject({ 'Freedom of Movement': 'no video names it', 'Old School': 'no video names it', Rareform: 'no video names it', Cotopaxi: 'not counted yet' })
     // A layer that could not be read proves nothing: "not counted yet".
     expect(words(read(false))).toMatchObject({ 'Freedom of Movement': 'not counted yet', 'Old School': 'not counted yet' })
   })
@@ -172,12 +178,24 @@ describe('B2 · a brand in full, last 90 days', () => {
     hrefFor: (name) => `/dashboard/competitive?vs=${encodeURIComponent(name)}`,
   })
 
-  it('lists the brands filed with a video in the window, most first, never your own or the category', () => {
+  it('lists the brands filed with a video in the window, most first, never your own or the category; then every other brand we track, at zero', () => {
     const b = block(null)
     expect(b.rows.map((r) => [r.label, r.videos, r.comments])).toEqual([
       ['Cotopaxi', 32, 613], ['Freitag', 8, 133], ['The North Face', 6, 44], ['Patagonia', 5, 122],
+      ['Freedom of Movement', 0, 0], ['Old School', 0, 0], ['Rareform', 0, 0],
     ])
     expect(b.rows[0].selected).toBe(true)
+  })
+
+  it('says why a brand we do not search for has nothing filed (finish-list item 20: Old School was missing)', () => {
+    const b = buildInFull({
+      window: { from: '2026-06-23', to: '2026-09-21' }, rivals: RIVALS, denominators: DEN, kinds: KINDS, wanted: 'Old School',
+      hrefFor: () => '', unsearched: new Set(['old school']),
+    })
+    expect(b.rows.find((r) => r.label === 'Old School')?.note).toBe('no search term: we read its own posts')
+    expect(b.rows.find((r) => r.label === 'Freedom of Movement')?.note).toBeNull()
+    // Nothing to read in full: the biggest is read instead.
+    expect(b.selected?.label).toBe('Cotopaxi')
   })
 
   it('reads the biggest in full by default: what people did, as counts (research F33)', () => {
@@ -196,7 +214,7 @@ describe('B2 · a brand in full, last 90 days', () => {
 
   it('reads none where no brand had a video in the window', () => {
     const b = buildInFull({ window: { from: '2026-06-23', to: '2026-09-21' }, rivals: RIVALS, denominators: [], kinds: [], wanted: null, hrefFor: () => '' })
-    expect(b.rows).toEqual([])
+    expect(b.rows.every((r) => r.videos === 0)).toBe(true)
     expect(b.selected).toBeNull()
   })
 })
@@ -265,7 +283,6 @@ describe('B4 · where a rival’s talk differs', () => {
   it('looks back six months, never before the first', () => {
     expect(recurrenceMonths('2026-09-01', '2026-06-01')).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
     expect(recurrenceMonths('2026-11-01', '2026-01-01')).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01'])
-    expect(seenLine({ months: 2, of: 4 })).toBe('seen in 2 of the last 4 months')
   })
 
   it('groups the findings by brand in B2’s order, and names the brands too thin to set against the category', () => {
@@ -273,19 +290,19 @@ describe('B4 · where a rival’s talk differs', () => {
       rivals: ['Cotopaxi', 'Freitag', 'The North Face', 'Patagonia'],
       findings: [
         { id: 'f1', rival: 'Cotopaxi', category: 'sentiment_differential', title: 'Organization talk becomes trip-readiness scrutiny around Cotopaxi', quote: null, seen: { months: 2, of: 4 } },
-        { id: 'f2', rival: 'Cotopaxi', category: 'notable_account', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
+        { id: 'f2', rival: 'Cotopaxi', category: 'topic_ownership', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
       ],
       videos: new Map([['Cotopaxi', 32], ['Freitag', 8], ['The North Face', 6], ['Patagonia', 5]]),
       floor: 10,
     })
     // How the talk differs before who shapes it (the preview's order).
     expect(b.groups.map((g) => [g.rival, g.findings.map((f) => f.kindWords)])).toEqual([
-      ['Cotopaxi', ['how the talk differs', 'an account shaping the talk']],
+      ['Cotopaxi', ['how the talk differs', 'a topic it holds']],
     ])
     const ordered = buildFindings({
       rivals: ['Cotopaxi'],
       findings: [
-        { id: 'f2', rival: 'Cotopaxi', category: 'notable_account', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
+        { id: 'f2', rival: 'Cotopaxi', category: 'topic_ownership', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
         { id: 'f1', rival: 'Cotopaxi', category: 'sentiment_differential', title: 'Organization talk becomes trip-readiness scrutiny around Cotopaxi', quote: null, seen: null },
         { id: 'f3', rival: 'Cotopaxi', category: 'content_gap', title: 'a', quote: null, seen: null, impact: 'high' },
       ],
@@ -293,7 +310,22 @@ describe('B4 · where a rival’s talk differs', () => {
       floor: 10,
     })
     expect(ordered.groups[0].findings.map((f) => f.id)).toEqual(['f3', 'f1', 'f2'])
-    expect(thinLine(b)).toBe('Freitag, The North Face and Patagonia have fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(noFindingLine(b, 'Freitag')).toBe('Freitag has fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(noFindingLine({ ...b, thin: [] }, 'Freitag')).toBe('The latest update did not set Freitag against the category.')
+  })
+
+  it('holds back the kinds whose titles are the model’s shorthand (default of 29 Sep, finish-list item 20)', () => {
+    const b = buildFindings({
+      rivals: ['Cotopaxi'],
+      findings: [
+        { id: 'f1', rival: 'Cotopaxi', category: 'content_gap', title: 'Organization, measurements, and packing proof', quote: null, seen: null },
+        { id: 'f2', rival: 'Cotopaxi', category: 'engagement_benchmark', title: 'Shopping-mode responses versus affiliation-mode responses', quote: null, seen: null },
+        { id: 'f3', rival: 'Cotopaxi', category: 'notable_account', title: 'InsaneWaves translates utility into shopper language', quote: null, seen: null },
+      ],
+      videos: new Map([['Cotopaxi', 32]]),
+      floor: 10,
+    })
+    expect(b.groups[0].findings.map((f) => f.id)).toEqual(['f1'])
   })
 
   it('words every Pass C category plainly', () => {

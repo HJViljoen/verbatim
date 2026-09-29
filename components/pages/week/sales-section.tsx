@@ -36,10 +36,31 @@ export const SALES_TITLE = 'For sales'
 /** How many of their own voices the section prints: the preview's two. */
 export const SALES_VOICES = 2
 
-/** The voices: the first of each objection group's, in the groups' order,
- *  up to `SALES_VOICES`. */
+/** The fewest videos an objection is printed under (finish-list item 9): the
+ *  27 Sep update printed four one-video near-duplicates ("Aesthetic appeal
+ *  1", "Aesthetic considerations 1", "Ai technology rejection 1"), nothing a
+ *  sales team could take to a customer. */
+export const SALES_OBJECTION_FLOOR = 2
+
+/** The objections printed: those heard in `SALES_OBJECTION_FLOOR` videos or
+ *  more, largest first (the loader's order). */
+export function salesShown(s: ForSalesData): SalesGroup[] {
+  return s.objections.filter((g) => g.videos >= SALES_OBJECTION_FLOOR)
+}
+
+/** The honest line where objections were heard but none reached the floor:
+ *  "Too few this update to group: 9 objections, none heard in more than one
+ *  video." Null where one is printed, or none was heard. */
+export function salesTooFew(s: ForSalesData): string | null {
+  if (s.objections.length === 0 || salesShown(s).length > 0) return null
+  const n = s.objectionsTotal ?? s.objections.length
+  return `Too few this update to group: ${fmtInt(n)} ${n === 1 ? 'objection' : 'objections'}, none heard in more than one video.`
+}
+
+/** The voices: the first of each printed objection group's, in the groups'
+ *  order, up to `SALES_VOICES`; none where no objection reached the floor. */
 export function salesVoices(s: ForSalesData): SalesQuote[] {
-  return s.objections.flatMap((g) => g.quotes.slice(0, 1)).slice(0, SALES_VOICES)
+  return salesShown(s).flatMap((g) => g.quotes.slice(0, 1)).slice(0, SALES_VOICES)
 }
 
 /** An objection group's label: the insight's own theme (`groupCitations`
@@ -73,11 +94,12 @@ function Email({ s, voices }: { s: ForSalesData; voices: SalesQuote[] }) {
   const head = { ...cell, borderTop: 0, fontSize: 11, fontWeight: 600, color: EMAIL.muted, padding: '0 0 8px' }
   return (
     <div>
-      {s.objections.length > 0 ? (
+      {salesTooFew(s) ? <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2 }}>{salesTooFew(s)}</div> : null}
+      {salesShown(s).length > 0 ? (
         <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead><tr><th style={{ ...head, textAlign: 'left' }}>Objections with this update</th><th style={{ ...head, textAlign: 'right' }}>Videos</th></tr></thead>
           <tbody>
-            {s.objections.map((g) => (
+            {salesShown(s).map((g) => (
               <tr key={g.id}>
                 <td style={cell}><Label s={s} g={g} /></td>
                 <td style={{ ...cell, fontFamily: FONT.mono, fontWeight: 600, textAlign: 'right' }}><span data-copy="figure">{fmtInt(g.videos)}</span></td>
@@ -104,13 +126,14 @@ function Email({ s, voices }: { s: ForSalesData; voices: SalesQuote[] }) {
 function App({ s, voices, mode }: { s: ForSalesData; voices: SalesQuote[]; mode: RenderMode }) {
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {s.objections.length > 0 ? (
+      {salesTooFew(s) ? <p className="m-0 text-[15px] leading-[1.5] text-secondary-foreground">{salesTooFew(s)}</p> : null}
+      {salesShown(s).length > 0 ? (
         <div role="table" className="flex min-w-0 flex-col">
           <div role="row" className={`grid grid-cols-[minmax(0,1fr)_64px] items-end gap-x-3 ${RULE.head}`}>
             <span role="columnheader" className={SCALE.head}>Objection</span>
             <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
           </div>
-          {s.objections.map((g) => (
+          {salesShown(s).map((g) => (
             <div key={g.id} role="row" className={`grid grid-cols-[minmax(0,1fr)_64px] min-h-11 items-center gap-x-3 py-1.5 ${RULE.row}`}>
               <span role="rowheader" className={`min-w-0 ${SCALE.row}`}><Label s={s} g={g} /></span>
               <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(g.videos)}</span></span>
@@ -174,7 +197,7 @@ export function salesSection<D>(key: string, pick: (data: D) => ForSalesData, op
     figures(data): FigureTable {
       const s = pick(data)
       const out: FigureTable = {}
-      s.objections.forEach((g, i) => {
+      salesShown(s).forEach((g, i) => {
         out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label}: videos carrying it this update` }
       })
       s.rivalComplaints.forEach((g, i) => {
@@ -193,6 +216,8 @@ export function salesSection<D>(key: string, pick: (data: D) => ForSalesData, op
       if (empty) return empty
       // Only praise or switching, which the section no longer prints.
       if (s.objections.length === 0 && s.rivalComplaints.length === 0) return 'Nothing this update read was an objection worth taking to a customer.'
+      // Objections heard, none at the floor, and no rival complaint: the line.
+      if (salesShown(s).length === 0 && s.rivalComplaints.length === 0) return salesTooFew(s)
       return null
     },
   }

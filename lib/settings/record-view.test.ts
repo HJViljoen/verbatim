@@ -43,7 +43,9 @@ describe('the delivery stat cells', () => {
     // among them — so it may not be captioned "delivered" (code review
     // finding 1). 22 on record, 21 delivered, and the strip says the other.
     expect(stats[1].figure).toBe('22')
-    expect(stats[1].caption).toBe('on record')
+    // Run, and how many finished: Readiness and Reports' archive count the
+    // finished ones (finish-list item 9).
+    expect(stats[1].caption).toBe('run, 21 finished')
     expect(stats.some((s) => /delivered/.test(s.caption))).toBe(false)
     expect(stats.some((s) => /next/.test(s.caption))).toBe(false)
     expect(stats[2].caption).toBe('longest gap, in May')
@@ -196,8 +198,11 @@ describe('the record as rows', () => {
 
   it('refuses the per-update comment ratio, because it divides two clocks', () => {
     expect(row('comments').figure).toBe('11,840')
-    // WP3.10: a Coverage base names what the figure is of, never the method.
-    expect(row('comments').rest).toBe('')
+    // WP3.10: a Coverage base names what the figure is of, never the method;
+    // finish-list item 9: split into your market and your own posts, so the
+    // record's total cannot read against the market's figure on every page.
+    expect(row('comments').rest).toMatch(/^[\d,]+ in your market, [\d,]+ under your own posts$/)
+    expect(row('videos').rest).toMatch(/^[\d,]+ in your market, [\d,]+ of your own posts · /)
     expect(rows().some((r) => /per update/.test(`${r.rest} ${r.basis}`))).toBe(false)
   })
 

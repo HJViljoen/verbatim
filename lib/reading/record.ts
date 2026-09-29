@@ -906,6 +906,22 @@ export function totalVideos(coverage: readonly CoverageRecord[]): number {
   return coverage.reduce((n, c) => n + c.videos, 0)
 }
 
+/**
+ * The window's videos and comments split into your own posts (the `client`
+ * audience) and the rest, which is your market (finish-list item 9): the
+ * record counts every audience, 862 videos and 21,713 comments in September,
+ * where every reading page counts the market, 852 and 21,468. Said beside the
+ * total, the two cannot read as a contradiction.
+ */
+export function ownPostsSplit(coverage: readonly CoverageRecord[]): { own: { videos: number; comments: number }; market: { videos: number; comments: number } } {
+  const own = coverage.filter((c) => c.audience === 'client')
+  const rest = coverage.filter((c) => c.audience !== 'client')
+  return {
+    own: { videos: totalVideos(own), comments: own.reduce((n, c) => n + c.comments, 0) },
+    market: { videos: totalVideos(rest), comments: rest.reduce((n, c) => n + c.comments, 0) },
+  }
+}
+
 /** The platform mix of every denominator, pooled the same way. */
 export function totalPlatformMix(coverage: readonly CoverageRecord[]): PlatformMix {
   const out: PlatformMix = {}
@@ -1036,7 +1052,9 @@ export function recordLines(input: RecordInputs): string[] {
   else if (input.coverage.length > 0) {
     const videos = totalVideos(input.coverage)
     const mix = platformMixLine(totalPlatformMix(input.coverage))
-    lines.push(`${plural(videos, 'video')} carried conversation in this window${mix ? `: ${mix}` : ''}.`)
+    const split = ownPostsSplit(input.coverage)
+    const parts = split.own.videos > 0 ? `, ${fmtInt(split.market.videos)} in your market and ${fmtInt(split.own.videos)} of your own posts` : ''
+    lines.push(`${plural(videos, 'video')} carried conversation in this window${parts}${mix ? `: ${mix}` : ''}.`)
     const dual = input.coverage.reduce((n, c) => n + c.dualMention, 0)
     if (dual > 0) lines.push(`${plural(dual, 'video')} of your own named a tracked rival as well as you.`)
     const undated = input.coverage.reduce((n, c) => n + c.excludedUndated, 0)
@@ -1318,10 +1336,13 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     // COVERAGE BASES CARRY NO METHOD WORDING (market-first WP3.10, a copy
     // debt found after deploy 1): a row says what its figure is OF, and how
     // the rule works is Settings › How to read's to say (the 25 Sep rulings).
-    push('comments', 'Comments read', fmtInt(comments), '', { dash: true })
+    const split = ownPostsSplit(input.coverage)
+    const own = split.own.videos > 0
+    push('comments', 'Comments read', fmtInt(comments), own ? `${fmtInt(split.market.comments)} in your market, ${fmtInt(split.own.comments)} under your own posts` : '', { dash: true })
+    const median = extra.trailingMedian != null ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))}` : 'no trailing median yet'
     push(
       'videos', 'Videos analysed', fmtInt(videos),
-      extra.trailingMedian != null ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))}` : 'no trailing median yet',
+      own ? `${fmtInt(split.market.videos)} in your market, ${fmtInt(split.own.videos)} of your own posts · ${median}` : median,
       { dash: true, basis: extra.trailingMedian != null ? 'over the months gathered' : '' },
     )
     push('dual', 'Dual-mention videos', fmtInt(dual), '', { dash: true })

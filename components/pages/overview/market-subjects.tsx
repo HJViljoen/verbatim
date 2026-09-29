@@ -29,6 +29,14 @@ const share = (k: number | null | undefined, n: number | null | undefined): stri
  *  prints as a count with no share), and a dot only where there is no reading. */
 export const prevCell = (k: number | null | undefined, n: number | null | undefined): string => marketLevel(k ?? null, n ?? null)?.text ?? '·'
 
+/** The row's word for a month-before cell that prints a count in a share
+ *  column: "August under 10, a count" (finish-list item 9: Price's August "7"
+ *  read as 7%). Null where the cell prints a share or nothing. */
+export function prevCountTag(k: number | null | undefined, prev: { month: string; n: number | null } | null): string | null {
+  if (!prev || k == null) return null
+  return marketLevel(k, prev.n ?? null)?.kind === 'count' ? `${longMonth(prev.month)} under 10, a count` : null
+}
+
 /**
  * A row's tag: its calibration word, or that it has no reading yet.
  *
@@ -126,8 +134,8 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
           </thead>
           <tbody>
             {rows.map((r) => {
-              const tag = [rowTag(r), rowMakers(r)].filter(Boolean).join(' · ')
               const figures = printsFigures(r)
+              const tag = [rowTag(r), rowMakers(r), figures ? prevCountTag(r.marketPrev?.k, prev) : null].filter(Boolean).join(' · ')
               return (
                 <tr key={r.id}>
                   <td style={c}>{r.label}{tag ? <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}> · {tag}</span> : null}</td>
@@ -162,9 +170,9 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
           </div>
           {rows.map((r) => {
-            const tag = rowTag(r)
-            const makers = rowMakers(r)
             const figures = printsFigures(r)
+            const tag = [rowTag(r), figures ? prevCountTag(r.marketPrev?.k, prev) : null].filter(Boolean).join(' · ') || null
+            const makers = rowMakers(r)
             const k = r.market?.k ?? null
             const under = figures && k != null && marketLevel(k, n)?.kind === 'count'
             return (

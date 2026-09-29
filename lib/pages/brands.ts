@@ -136,10 +136,17 @@ export function nameLeadParts(b: NameBlock): Part[] {
   return out
 }
 
-/** "The 8 videos that name you are your own posts." Null where none does. */
+/** "The 8 videos that name you are your own posts." where the market named
+ *  you in none; "It also came up in 9 of your own posts." where it named you
+ *  in some (that first sentence was written for the none case, and beside
+ *  "1 of 852" read as a contradiction: finish-list item 20). Null where no
+ *  own post names you. */
 export function nameOwnParts(b: NameBlock): Part[] | null {
   const c = b.counted
   if (!c || c.ownPosts === 0) return null
+  if (c.k > 0) {
+    return [{ t: 'text', s: 'It also came up in ' }, { t: 'figure', value: c.ownPosts }, { t: 'text', s: ' of your own posts.' }]
+  }
   return [
     { t: 'text', s: 'The ' }, { t: 'figure', value: c.ownPosts },
     { t: 'text', s: c.ownPosts === 1 ? ' video that names you is your own post.' : ' videos that name you are your own posts.' },
@@ -287,6 +294,9 @@ export interface FiledRow {
   label: string
   videos: number
   comments: number
+  /** Why nothing is filed under a brand we track, where we know: "no search
+   *  term" (Old School: we read its own posts only). Optional. */
+  note?: string | null
   /** The page with this brand read in full (`?vs=`). */
   href: string
   selected: boolean
@@ -328,13 +338,28 @@ export function buildInFull(input: {
   /** `?vs=`, as the URL carried it. */
   wanted: string | null
   hrefFor: (name: string) => string
+  /** The brands we track with no search term (read by their own posts only). */
+  unsearched?: ReadonlySet<string>
 }): InFullBlock {
   const byAudience = new Map(input.denominators.map((d) => [d.audience, d]))
-  const rows = input.rivals
+  const rows: FiledRow[] = input.rivals
     .map((r) => ({ r, d: byAudience.get(r.audience) }))
     .filter((x): x is { r: { name: string; audience: string }; d: { audience: string; videos: number; comments: number } } => x.d != null && x.d.videos > 0)
     .map(({ r, d }) => ({ audience: r.audience, label: r.name, videos: d.videos, comments: d.comments, href: input.hrefFor(r.name), selected: false }))
     .sort((a, b) => b.videos - a.videos || b.comments - a.comments || a.label.localeCompare(b.label))
+  // EVERY BRAND WE TRACK IS LISTED (finish-list item 20): one with nothing
+  // filed over the window prints its zero, last, and says why where we know
+  // (no search term), rather than dropping out of the list. It is never read
+  // in full: there is nothing to read.
+  const listed = new Set(rows.map((r) => r.audience))
+  const empty: FiledRow[] = input.rivals
+    .filter((r) => !listed.has(r.audience))
+    .map((r) => ({
+      audience: r.audience, label: r.name, videos: 0, comments: byAudience.get(r.audience)?.comments ?? 0,
+      href: input.hrefFor(r.name), selected: false,
+      note: input.unsearched?.has(r.name.trim().toLowerCase()) ? 'no search term: we read its own posts' : null,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label))
   const wanted = (input.wanted ?? '').trim().toLowerCase()
   const hit = wanted ? rows.findIndex((r) => r.label.toLowerCase() === wanted || r.audience.toLowerCase() === wanted) : -1
   const at = hit >= 0 ? hit : rows.length > 0 ? 0 : -1
@@ -348,7 +373,7 @@ export function buildInFull(input: {
     : []
   return {
     window: input.window,
-    rows,
+    rows: [...rows, ...empty],
     selected: sel ? { audience: sel.audience, label: sel.label, videos: sel.videos, kinds } : null,
   }
 }
@@ -424,6 +449,13 @@ export const FINDING_KIND_WORDS: Readonly<Record<string, string>> = {
   engagement_benchmark: 'how its videos are met',
 }
 
+/** Kinds not printed (a recommended default, 29 Sep; finish-list item 20):
+ *  their titles compare response "modes" and name accounts in the model's own
+ *  shorthand ("Shopping-mode responses versus affiliation-mode responses",
+ *  "InsaneWaves translates utility into shopper language"), which a reader
+ *  cannot act on. Revert this set to print them again. */
+export const FINDING_KINDS_HELD = new Set(['engagement_benchmark', 'notable_account'])
+
 export const findingKindWords = (category: string): string =>
   FINDING_KIND_WORDS[category] ?? category.replace(/_/g, ' ')
 
@@ -489,10 +521,6 @@ export function recurrenceMonths(month: string, firstMonth: string | null, span:
   return out
 }
 
-export function seenLine(s: { months: number; of: number }): string {
-  return `seen in ${fmtInt(s.months)} of the last ${fmtInt(s.of)} ${s.of === 1 ? 'month' : 'months'}`
-}
-
 /** A group's cards: the update's own weight first (Pass C's impact), then how
  *  the talk differs before who shapes it (the preview's order), then as read. */
 const IMPACT: Readonly<Record<string, number>> = { high: 0, medium: 1, low: 2 }
@@ -512,7 +540,7 @@ export function buildFindings(input: {
     const rank = (c: string) => { const i = KIND_RANK.indexOf(c); return i < 0 ? KIND_RANK.length : i }
     const mine = input.findings
       .map((f, i) => ({ f, i }))
-      .filter(({ f }) => norm(f.rival) === norm(rival))
+      .filter(({ f }) => norm(f.rival) === norm(rival) && !FINDING_KINDS_HELD.has(f.category))
       .sort((a, b) => (IMPACT[a.f.impact ?? ''] ?? 3) - (IMPACT[b.f.impact ?? ''] ?? 3) || rank(a.f.category) - rank(b.f.category) || a.i - b.i)
       .map(({ f }) => f)
     if (mine.length === 0) continue
@@ -526,13 +554,15 @@ export function buildFindings(input: {
   return { groups, thin, floor: input.floor }
 }
 
-/** "Freitag, The North Face and Patagonia have fewer than 10 videos in the
- *  last 90 days, too few to set against the category." (plan §2.5 B4, IO
- *  F35: "the others have fewer than 10 analysed videos"). */
-export function thinLine(b: FindingsBlock): string | null {
-  if (b.thin.length === 0) return null
-  const names = b.thin.length === 1 ? b.thin[0] : `${b.thin.slice(0, -1).join(', ')} and ${b.thin[b.thin.length - 1]}`
-  return `${names} ${b.thin.length === 1 ? 'has' : 'have'} fewer than ${fmtInt(b.floor)} videos in the last ${WINDOW_DAYS} days, too few to set against the category.`
+/** The brand picked above, where it has no finding (the block follows the
+ *  pick, finish-list item 20): "Freitag has fewer than 10 videos in the last
+ *  90 days, too few to set against the category." (plan §2.5 B4, IO F35), or
+ *  that the latest update did not set it against the category. */
+export function noFindingLine(b: FindingsBlock, brand: string): string {
+  const thin = b.thin.some((t) => t.trim().toLowerCase() === brand.trim().toLowerCase())
+  return thin
+    ? `${brand} has fewer than ${fmtInt(b.floor)} videos in the last ${WINDOW_DAYS} days, too few to set against the category.`
+    : `The latest update did not set ${brand} against the category.`
 }
 
 // ---- B5 · what they post and say about themselves ----------------------------------

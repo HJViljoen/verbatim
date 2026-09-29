@@ -103,7 +103,10 @@ export function brandsLine(b: BrandsArriving, competitiveLabel: string): string 
  *  its base, §1 B ruling 3): the headline count says exactly what it leaves
  *  out, every video any of our rival searches found, so every brand's count
  *  sits over the one base printed under it (the 27 Sep ruling). */
-export const BRANDS_HEAD_ORGANIC = 'Without any video our rival searches found'
+//
+// FINISH-LIST ITEM 20 (29 Sep): the headline head read "Without any video our
+// rival searches found", which did not parse; the same base, said plainly.
+export const BRANDS_HEAD_ORGANIC = 'Outside our brand searches'
 export const BRANDS_HEAD_ALL = 'In all'
 
 /** The headline column's base, where the block read one. */
@@ -238,8 +241,20 @@ export function nameLineParts(b: BrandsRead, opts: { wider?: boolean } = {}): ({
   const parts: ({ t: 'text'; s: string } | { t: 'figure'; value: number })[] = [{ t: 'text', s: `In ${month} your name came up in ` }]
   if (l.k === 0) parts.push({ t: 'text', s: 'none' })
   else parts.push({ t: 'figure', value: l.k })
-  if (opts.wider) parts.push({ t: 'text', s: ' of the ' }, { t: 'figure', value: l.n }, { t: 'text', s: ' videos from the market you sell into.' })
-  else parts.push({ t: 'text', s: ' of your market’s ' }, { t: 'figure', value: l.n }, { t: 'text', s: ' videos.' })
+  // Wide (the front page) says "of the 852 videos from the market you sell
+  // into"; the monthly keeps "of your market’s 852 videos". The closing words
+  // stay one text node, as the monthly email draws them (reports are on hold).
+  const videos = opts.wider ? ' videos from the market you sell into' : ' videos'
+  if (opts.wider) parts.push({ t: 'text', s: ' of the ' }, { t: 'figure', value: l.n })
+  else parts.push({ t: 'text', s: ' of your market’s ' }, { t: 'figure', value: l.n })
+  // "The 9 videos that name you are your own posts" was written for the none
+  // case; beside "1 of 852" it read as a contradiction (finish-list item 20).
+  if (l.ownPosts > 0 && l.k > 0) {
+    parts.push({ t: 'text', s: `${videos}, and in ` }, { t: 'figure', value: l.ownPosts },
+      { t: 'text', s: ' of your own posts.' })
+    return parts
+  }
+  parts.push({ t: 'text', s: `${videos}.` })
   if (l.ownPosts > 0) {
     parts.push({ t: 'text', s: ' The ' }, { t: 'figure', value: l.ownPosts },
       { t: 'text', s: l.ownPosts === 1 ? ' video that names you is your own post.' : ' videos that name you are your own posts.' })

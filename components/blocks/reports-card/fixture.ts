@@ -3,6 +3,7 @@ import type { WindowReading } from '@/lib/reading/read'
 import type { SubjectWindowReading } from '@/lib/subjects/types'
 import { previousQuarter, quarterFor } from '@/lib/reports/quarterly'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { FIRST_QUARTER_COMPARISON } from '@/lib/settings/record-additions'
 
 // The quarterly card's fixtures (Block D wave 1, package D7).
 //
@@ -70,15 +71,18 @@ export function quarterlyCardFixture(over: Partial<QuarterlyCardInput> = {}): Qu
 }
 
 /** Three readings — the gate bites, every row is `baseline_forming`, and the
- *  quarter holds one month that was read back at setup rather than gathered. */
-export function formingCardFixture(): QuarterlyCard {
+ *  quarter holds one month that was read back at setup rather than gathered.
+ *  Sealand's: its record names the first quarter pair read the same way. */
+export function formingCardFixture(over: Partial<QuarterlyCardInput> = {}): QuarterlyCard {
   return quarterlyCardFixture({
     readings: 3,
+    sameWay: FIRST_QUARTER_COMPARISON,
     monthsInQuarter: [
       { month: '2026-07-01', videos: 1290, backRead: true },
       { month: '2026-08-01', videos: 62, backRead: false },
       { month: '2026-09-01', videos: 1448, backRead: false },
     ],
+    ...over,
   })
 }
 

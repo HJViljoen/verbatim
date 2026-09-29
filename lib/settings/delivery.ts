@@ -46,6 +46,11 @@ export interface DeliveryRecord {
    *  the monthly-readings strip is what asks it. Nothing that prints this
    *  number may caption it "delivered" (code review finding 1). */
   total: number
+  /** Of `total`, the ones that finished (`completed` or `partial`): the
+   *  count Readiness and Reports' archive print as the workspace's updates.
+   *  Said beside `total` (finish-list item 9: 25 on the record, 19 on
+   *  Readiness, both right, neither saying which it was). */
+  finished: number
   /** The first update, `YYYY-MM-DD`. */
   since: string | null
   /** The most recent update that started, `YYYY-MM-DD`. */
@@ -76,6 +81,7 @@ export function deliveryRecord(args: {
   // Oldest first for the ends; the loader hands them newest first.
   const byTime = [...updates].sort((a, b) => (a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0))
   const total = byTime.length
+  const finished = byTime.filter((u) => FINISHED.has(u.status)).length
   const since = byTime[0]?.startedAt.slice(0, 10) ?? null
   const lastOn = byTime[total - 1]?.startedAt.slice(0, 10) ?? null
   const head = [...updates].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)).slice(0, recent)
@@ -103,13 +109,14 @@ export function deliveryRecord(args: {
   const line = total === 0
     ? 'No update has run for this workspace yet.'
     : [
-        `${total} update${total === 1 ? '' : 's'}${since ? ` since ${fullDate(since)}` : ''}`,
+        `${total} update${total === 1 ? '' : 's'}${since ? ` since ${fullDate(since)}` : ''}${finished < total ? `, ${fmtInt(finished)} finished` : ''}`,
         args.updates.length >= 2 ? `longest gap ${longestGapDays(byTime.map((u) => ({ status: u.status, startedAt: u.startedAt })))} days` : null,
         lastOn ? `last on ${fullDate(lastOn)}` : null,
       ].filter(Boolean).join(' · ')
 
   return {
     total,
+    finished,
     since,
     lastOn,
     longestGapDays: total >= 2 ? longestGapDays(byTime.map((u) => ({ status: u.status, startedAt: u.startedAt }))) : null,
@@ -224,7 +231,7 @@ export function deliveryStats(record: DeliveryRecord, updates: readonly UpdateIn
     id: 'delivered',
     figure: fmtInt(record.total),
     unit: record.total === 1 ? 'update' : 'updates',
-    caption: 'on record',
+    caption: record.finished < record.total ? `run, ${fmtInt(record.finished)} finished` : 'on record',
   })
   const gap = gapFigure(record.longestGapDays)
   if (gap) {

@@ -80,7 +80,7 @@ describe('the page and the monthly print one sentence each', () => {
       for (const words of [
         'In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.',
         'not counted yet',
-        'Without any video our rival searches found',
+        'Outside our brand searches',
       ]) {
         expect(page).toContain(words)
         expect(monthly, mode).toContain(words)
@@ -111,7 +111,7 @@ describe('the page and the monthly print one sentence each', () => {
     const none = { ...base.overview, brands: noneFoundBrandsRead() }
     const sent = { ...base, overview: none, slots: monthlySlotsFrom(none) }
     expect(monthlySections(MONTHLY_BLOCK_KEYS, sent).map((b) => b.key)).toContain('monthly.brands')
-    for (const mode of MODES) expect(read(MONTHLY_BLOCKS['monthly.brands'].render(sent, mode, ctx)), mode).toMatch(/Rareform\s*none found/)
+    for (const mode of MODES) expect(read(MONTHLY_BLOCKS['monthly.brands'].render(sent, mode, ctx)), mode).toMatch(/Rareform\s*no video names it/)
   })
 
   it('every slot reads the page’s own block: change, arrivals, you and brands all filled from one Overview', () => {
@@ -125,7 +125,7 @@ describe('the page and the monthly print one sentence each', () => {
     const data = builtFull()
     const page = pageText('overview.arrivals', data.overview, 'app')
     const words = [
-      'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more September comments came in.',
+      'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in.',
       'With 10+ videos in September:',
     ]
     for (const mode of MODES) {
@@ -134,8 +134,10 @@ describe('the page and the monthly print one sentence each', () => {
         expect(page).toContain(w)
         expect(monthly, mode).toContain(w)
       }
-      // The monthly carries no weekly volume bars (plan §2.9).
+      // The monthly carries no weekly volume bars (plan §2.9), and not the
+      // page's word on how This week counts the update (finish-list item 9).
       expect(monthly, mode).not.toMatch(/week by week/i)
+      expect(monthly, mode).not.toContain('This week counts')
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.arrivals'].render(data, mode, ctx)))
     }
   })

@@ -11,6 +11,10 @@ import { HORIZON_LABEL } from '@/lib/reading/horizon'
 import { allRedescribed, periodPhrase, QUESTIONS_PARAM, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
 import { RULE, SCALE } from '@/components/pages/overview/market'
 
+/** The other subjects' list's head: which subjects people asked about most,
+ *  not this subject's questions (finish-list item 9). */
+export const ASKED_MOST_HEAD = 'Subjects asked about most, last 3 months'
+
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
 // the mock's (d)).
 //
@@ -283,12 +287,15 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
     )
   ) : null
   // THE SUBJECTS ASKED ABOUT MOST OVER THE LAST 3 MONTHS (the preview), where
-  // this subject's own list does not open: where the questions are.
+  // this subject's own list does not open: where the questions are. SAID TO
+  // BE OTHER SUBJECTS (finish-list item 9): headed "Asked most" under "4
+  // videos asked about Comfort", "Buying & delivery 79, Price 17, Comfort 9"
+  // read as Comfort's own questions.
   const most = !listed ? (data.askedMost ?? []) : []
   const askedMost = most.length > 0 ? (
     email ? (
       <div style={{ marginTop: 12 }}>
-        <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>Asked most, last 3 months</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{ASKED_MOST_HEAD}</div>
         {most.map((a) => (
           <div key={a.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
             {a.name} · <span data-copy="figure">{fmtInt(a.videos)}</span>
@@ -300,7 +307,7 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
       // taller tile gives its spare height above the list, not under it.
       <div className="mt-auto flex min-w-0 flex-col">
         <div className={`flex items-baseline justify-between gap-4 ${RULE.head}`}>
-          <span className="text-[15px] font-semibold">Asked most, last 3 months</span>
+          <span className="text-[15px] font-semibold">{ASKED_MOST_HEAD}</span>
           <span className={SCALE.head}>videos</span>
         </div>
         {most.map((a) => (

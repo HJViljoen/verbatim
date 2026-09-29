@@ -529,7 +529,8 @@ describe('deliveryRecord', () => {
     // and the longest gap is measured between the updates that produced
     // something, so it runs 28 June → 6 September, straight past it.
     expect(rec.recentSettled).toBe(3)
-    expect(rec.line).toBe('4 updates since 28 Jun 2026 · longest gap 70 days · last on 13 Sep 2026')
+    expect(rec.line).toBe('4 updates since 28 Jun 2026, 3 finished · longest gap 70 days · last on 13 Sep 2026')
+    expect(rec.finished).toBe(3)
   })
 
   it('says the slot is unrecorded rather than printing a ratio it cannot compute', () => {

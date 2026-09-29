@@ -55,6 +55,18 @@ function Table({ title, rows, n, mode }: { title: string; rows: ContentBlock['fo
   )
 }
 
+/**
+ * The lead, saying its base (finish-list item 9): the videos POSTED in the
+ * month that our category searches found, every one of them (3,015 in
+ * September), not the market's videos, which are those with a comment dated
+ * in the month (814 in the category). "2,623 of the 3,015" beside "814"
+ * elsewhere read as a contradiction while the lead said only "the category
+ * videos posted in September".
+ */
+export function contentLead(month: string): string {
+  return `The formats and openings of the category videos posted in ${longMonth(month)}, counted by the day they were posted, not by ${longMonth(month)}’s comments.`
+}
+
 function Body({ c, mode }: { c: ContentBlock; mode: RenderMode }) {
   const read = (
     <>
@@ -64,7 +76,7 @@ function Body({ c, mode }: { c: ContentBlock; mode: RenderMode }) {
   if (mode === 'email') {
     return (
       <div>
-        <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink }}>The formats and openings of the category videos posted in {longMonth(c.month)}.</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink }}>{contentLead(c.month)}</div>
         <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, marginTop: 6 }}>{read}</div>
         <Table title="Format" rows={c.formats} n={c.formats[0]?.n ?? null} mode={mode} />
         <Table title="Opening" rows={c.openings} n={c.openings[0]?.n ?? null} mode={mode} />
@@ -74,7 +86,7 @@ function Body({ c, mode }: { c: ContentBlock; mode: RenderMode }) {
   return (
     <>
       <p className="m-0 max-w-[480px] text-[17px] font-medium leading-[1.5] tracking-[-0.01em] text-foreground [text-wrap:pretty]">
-        The formats and openings of the category videos posted in {longMonth(c.month)}.
+        {contentLead(c.month)}
       </p>
       <Inner mode={mode} className="flex-1 gap-4">
         <p className="m-0 text-[15px] leading-[1.5] text-secondary-foreground">{read}</p>

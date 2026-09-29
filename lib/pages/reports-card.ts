@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, longMonth } from '../format'
 import { SHARE_BAND } from '../report-bands'
 import { quarterChange } from '../reading/bands'
+import { FIRST_QUARTER_COMPARISON } from '../settings/record-additions'
+import { tenantLocked } from '../tenant-locks'
 import { loadMonthSeries, loadWindowReading, type WindowReading } from '../reading/read'
 import { isMissingMonthlyReading, monthStartOf } from '../reading/monthly'
 import type { DenominatorPoint } from '../reading/series'
@@ -74,6 +76,9 @@ export interface QuarterlyCard {
    *  quarter-on-quarter comparison lands, as a reading MONTH (never a day —
    *  see `ready`). Null once the gate is open. */
   firstComparison: string | null
+  /** The month that line names ("April 2027"), for the card's head below the
+   *  gate; null where it names none. */
+  firstWhen: string | null
   href: string
   /** Never a promised date. */
   ready: null
@@ -103,6 +108,11 @@ export interface QuarterlyCardInput {
    *  month of the clock — and what `firstQuarterVerdictMonth` counts forward
    *  from. */
   readingMonth?: string | null
+  /** The first quarter pair read the same way, where this workspace's record
+   *  names one (Sealand, whose searches changed in September:
+   *  `FIRST_QUARTER_COMPARISON`, the record timeline's row). Null or absent:
+   *  the artefact's six-readings arithmetic. */
+  sameWay?: { when: string; pair: string } | null
   href?: string
 }
 
@@ -145,6 +155,7 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
       series: [],
       note: 'The quarter-on-quarter reading is not recorded for this workspace yet, so there is nothing to compare across it.',
       firstComparison: null,
+      firstWhen: null,
     }
   }
 
@@ -199,7 +210,8 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
     rows,
     series,
     note: quarterCaveat(input.monthsInQuarter, rows.length === 0, !subjectsRead),
-    firstComparison: firstComparisonLine(input.readings, input.readingMonth ?? null),
+    firstComparison: firstComparisonLine(input.readings, input.readingMonth ?? null, input.sameWay ?? null),
+    firstWhen: firstComparisonWhen(input.readings, input.readingMonth ?? null, input.sameWay ?? null),
   }
 }
 
@@ -208,17 +220,32 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
  * every row there reads "not enough months yet", so the rows say nothing a
  * single line cannot, and the line says the one thing a reader wants — when.
  *
- * A MONTH, NOT A DATE. It is the artefact's own arithmetic
- * (`firstQuarterVerdictMonth`, one reading a month), the same the quarterly's
- * last page prints; the quarterly itself still fires on an update, not a day.
+ * THE RECORD'S DATE WHERE IT HAS ONE (finish-list item 9): on Sealand the card
+ * said "with the November 2026 reading", counting six monthly readings, while
+ * the record's timeline says the first quarters read the same way are
+ * compared in April 2027; one date, from one place
+ * (lib/settings/record-additions.ts). Elsewhere, A MONTH, NOT A DATE: the
+ * artefact's own arithmetic (`firstQuarterVerdictMonth`, one reading a
+ * month), the same the quarterly's last page prints.
  */
-export function firstComparisonLine(readings: number, readingMonth: string | null): string | null {
+export function firstComparisonLine(readings: number, readingMonth: string | null, sameWay: { when: string; pair: string } | null = null): string | null {
   if (readings >= QUARTER_READINGS_NEEDED) return null
+  if (sameWay) {
+    return `The first quarter-on-quarter comparison read the same way arrives in ${sameWay.when}: ${sameWay.pair}. You have ${readings} monthly ${readings === 1 ? 'reading' : 'readings'} so far.`
+  }
   const month = firstQuarterVerdictMonth(readings, readingMonth)
   const have = `it needs six monthly readings and you have ${readings}`
   return month
     ? `The first quarter-on-quarter comparison arrives with the ${monthWithYear(month)} reading: ${have}.`
     : `The first quarter-on-quarter comparison arrives once six monthly readings stand behind it: you have ${readings}.`
+}
+
+/** The month `firstComparisonLine` names, or null where it names none. */
+export function firstComparisonWhen(readings: number, readingMonth: string | null, sameWay: { when: string; pair: string } | null = null): string | null {
+  if (readings >= QUARTER_READINGS_NEEDED) return null
+  if (sameWay) return sameWay.when
+  const month = firstQuarterVerdictMonth(readings, readingMonth)
+  return month ? monthWithYear(month) : null
 }
 
 /**
@@ -293,6 +320,9 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     monthsInQuarter: era.monthsInQuarter,
     readings: era.readings,
     readingMonth: era.readingMonth ?? monthStartOf(readingAt),
+    // The record's timeline (and so its April 2027 row) is the locked
+    // tenant's (app/dashboard/settings/record/page.tsx `PagesCanSay`).
+    sameWay: tenantLocked(clientId, 'tracking') ? FIRST_QUARTER_COMPARISON : null,
   })
 }
 

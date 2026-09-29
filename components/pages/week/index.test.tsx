@@ -467,7 +467,7 @@ describe('Your market’s subjects carry their maker share (market-first WP3.7)'
 describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
   it('leads with how many of the themes first heard reached the floor, one denominator', () => {
     for (const mode of MODES) {
-      expect(renderText(weekHeard.render(marketWeekFixture(), mode, ctx)), mode).toContain('2 of the 374 themes first heard with this update reached 10 videos this month.')
+      expect(renderText(weekHeard.render(marketWeekFixture(), mode, ctx)), mode).toContain('2 themes first heard with this update reached 10 videos this month.')
     }
   })
 
@@ -497,7 +497,7 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
 
   it('says so where nothing reached the floor, or the update re-grouped', () => {
     const d = marketWeekFixture()
-    expect(weekHeard.emptyState({ ...d, heard: { ...d.heard!, rows: [] } })).toBe('374 themes were first heard with this update, and none reached 10 videos this month.')
+    expect(weekHeard.emptyState({ ...d, heard: { ...d.heard!, rows: [] } })).toBe('No theme first heard with this update reached 10 videos this month.')
     expect(weekHeard.emptyState({ ...d, heard: { ...d.heard!, rows: [], seen: 0, regrouped: { update: '2026-09-10T07:17:02.291Z', themes: 592 } } })).toBe('Re-grouped with the 10 Sep update: 592 themes.')
     expect(weekHeard.emptyState(weekFixture())).toContain('not counted here yet')
   })
@@ -506,11 +506,28 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
 describe('For sales (market-first WP3.7, week.sales and the weekly’s WR4)', () => {
   it('counts the update’s objections in videos, two of their own voices, and the complaints about brands you track', () => {
     const text = renderText(weekSales.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Objection Videos Price concern 2 Price too high 2 Aesthetic and materials 1 Ai skepticism 1')
+    // One-video objections are not printed (finish-list item 9's floor).
+    expect(text).toContain('Objection Videos Price concern 2 Price too high 2 “')
+    expect(text).not.toContain('Aesthetic and materials')
     expect(text).toContain('Man, I’ve really been underwhelmed with mine')
     expect(text).toContain('It does look decent')
     expect(text).toContain('What they complain about in a rival videos Patagonia 4 The North Face 1')
     expect(text).toContain('Open the sales brief →')
+  })
+
+  it('says too few, and prints no table and no voice, where no objection reached two videos (the 27 Sep update)', () => {
+    const d = marketWeekFixture()
+    const ones = d.sales.objections.map((g) => ({ ...g, videos: 1 }))
+    const sales = { ...d.sales, objections: ones, objectionsTotal: 9 }
+    for (const mode of MODES) {
+      const text = renderText(weekSales.render({ ...d, sales }, mode, ctx))
+      expect(text, mode).toContain('Too few this update to group: 9 objections, none heard in more than one video.')
+      expect(text, mode).not.toContain('Price concern')
+      expect(text, mode).not.toContain('Man, I’ve really been underwhelmed with mine')
+    }
+    // With no rival complaint either, the line is the whole block.
+    const alone = { ...sales, rivalComplaints: [] }
+    expect(renderText(weekSales.render({ ...d, sales: alone }, 'app', ctx))).toContain('Too few this update to group: 9 objections')
   })
 
   it('prints no switching count while off-topic talk is still in it, and no praise', () => {
@@ -592,6 +609,25 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     expect(text).toContain('Freitag tracked since 28 Jun 6 ·')
     expect(text).toContain('149 videos matched the name, mostly the German word for Friday · not counted')
     expect(text.indexOf('Freitag')).toBeGreaterThan(text.indexOf('Rareform'))
+  })
+
+  it('prints the videos naming each brand on the Brands page’s basis, against the month, and Settings’ tracked-since date (finish-list 7, 9)', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) =>
+      r.label === 'Freitag' ? { ...r, aboutThem: 2, aboutMonth: 7, foundByName: 149, aboutNote: null, since: 'by 28 Jun' }
+        : r.label === 'The North Face' ? { ...r, aboutThem: 11, aboutMonth: 54, aboutNote: null, since: '17 Sep' }
+          : r.label === 'Rareform' ? { ...r, aboutThem: 0, aboutMonth: null, aboutNote: 'not counted yet', since: '9 Sep' }
+            : r)
+    const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx)))
+    expect(text).toContain('Videos naming them')
+    expect(text).not.toContain('about them')
+    expect(text).toContain('Freitag tracked by 28 Jun 6 2 of 7 in Sep')
+    expect(text).not.toContain('149')
+    expect(text).toContain('The North Face tracked since 17 Sep 23 11 of 54 in Sep')
+    expect(text).toContain('Videos naming them: not counted yet')
+    // A month of none prints the 0 alone, never "of 0".
+    const none = rivals.map((r) => (r.label === 'Old School' ? { ...r, aboutThem: 0, aboutMonth: 0, aboutNote: null } : r))
+    expect(flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals: none } }, 'app', ctx)))).not.toContain('of 0 in Sep')
   })
 
   it('opens the brands’ page under its current sidebar label', () => {
@@ -772,7 +808,7 @@ describe('This week on a clock past the update’s month', () => {
     const past: WeekData = { ...ossurWeeksFixture(), readingAt: '2026-10-02T06:00:00.000Z' }
     for (const mode of MODES) {
       const text = renderText(weekHeard.render(past, mode, ctx))
-      expect(text).toContain('1 of the 93 themes first heard with this update reached 10 videos in September.')
+      expect(text).toContain('1 theme first heard with this update reached 10 videos in September.')
       expect(text).not.toMatch(/videos( or more)? this month/)
       assertCopyContract(render(weekHeard.render(past, mode, ctx)))
     }
@@ -947,12 +983,12 @@ describe('This week’s pure helpers (WP3.7)', () => {
 
   it('heardLead: the level and its base, then the floor', () => {
     const h = marketWeekFixture().heard!
-    expect(heardLead(h, 'this month')).toEqual({ level: '2 of the 374', rest: ' themes first heard with this update reached 10 videos this month.' })
+    expect(heardLead(h, 'this month')).toEqual({ level: '2', rest: ' themes first heard with this update reached 10 videos this month.' })
   })
 
   it('heardLead: nothing first heard, or none at the floor', () => {
     const h = marketWeekFixture().heard!
     expect(heardLead({ ...h, seen: 0, rows: [] }, 'this month').rest).toBe('Nothing was heard for the first time with this update.')
-    expect(heardLead({ ...h, seen: 1, rows: [] }, 'in September').rest).toBe('1 theme was first heard with this update, and none reached 10 videos in September.')
+    expect(heardLead({ ...h, seen: 1, rows: [] }, 'in September').rest).toBe('No theme first heard with this update reached 10 videos in September.')
   })
 })

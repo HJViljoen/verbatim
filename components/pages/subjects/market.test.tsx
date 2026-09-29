@@ -161,7 +161,7 @@ describe('S2 · the subject in your market', () => {
     expect(t).toContain('Its 103 September videos')
     expect(t).toContain('34% makers’ videos')
     expect(t).toContain('66% everyone else')
-    expect(t).toContain('2 months read')
+    expect(t).toContain('2 months read for this subject')
     for (const gone of ['Track this', 'apart', 'too few to compare', 'You ·', 'rival']) expect(t).not.toContain(gone)
   })
 
@@ -267,13 +267,13 @@ describe('S4 · questions people ask on it', () => {
 
   it('under the list\'s floor, points at the subjects asked about most over the last 3 months (staging: 16, 12, 7)', () => {
     const t = text(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toMatch(/Asked most, last 3 months videos Waterproofing 16 Price 12 Comfort 7/)
+    expect(t).toMatch(/Subjects asked about most, last 3 months videos Waterproofing 16 Price 12 Comfort 7/)
     // The pane's own period, never the page's `?horizon=` (the deploy-3
     // fresh review): the link moves the questions pane and nothing else.
     expect(render(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))).toContain('/dashboard/subjects?item=s-water&amp;questions=last_3"')
     expect(render(subjectsUnanswered.render(marketSubjectsFixture(), 'app', ctx))).not.toContain('horizon=')
     // Where the subject's own list opens, it is the list.
-    expect(text(subjectsUnanswered.render(waterproofingFixture(), 'app', ctx))).not.toContain('Asked most, last 3 months')
+    expect(text(subjectsUnanswered.render(waterproofingFixture(), 'app', ctx))).not.toContain('Subjects asked about most, last 3 months')
   })
 
   it('over the last 3 months lists Waterproofing\'s 16 question videos, and says none of your 56 posts shared two of its words', () => {
@@ -318,8 +318,8 @@ describe('S6 · month by month on the market', () => {
   it('under three months, prints each month read as a card, and the months to the next pair as cards to come', () => {
     const data = marketSubjectsFixture()
     const t = text(subjectsLine.render(data, 'app', ctx))
-    expect(monthsLead(data.selected!.marketLine)).toBe('Two months read, not yet a line.')
-    expect(t).toContain('Two months read, not yet a line.')
+    expect(monthsLead(data.selected!.marketLine)).toBe('Two months read for this subject, not yet a line.')
+    expect(t).toContain('Two months read for this subject, not yet a line.')
     expect(t).toContain('ended · still filling until the 1 Nov update')
     expect(t).toContain('38 of 377')
     expect(t).toContain('103 of 654')

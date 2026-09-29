@@ -450,8 +450,11 @@ function updateRecord(i: ReadinessInputs): ReadinessRow {
 
   const detail = settled.length === 0
     ? 'No update has finished for this workspace yet.'
+    // THE RECORD'S COUNT BESIDE THIS ONE (finish-list item 9): Readiness said
+    // "19 updates" and the record "25 on record"; both are right, and each now
+    // says which it counts.
     : `${recentSettled.length} of the last ${recent.length} updates finished · ` +
-      `${plural(settled.length, 'update')} since ${first ? fullDate(first.startedAt) : '—'}` +
+      `${settled.length < all.length ? `${fmtInt(settled.length)} of ${plural(all.length, 'update')}` : plural(settled.length, 'update')} since ${fullDate((settled.length < all.length ? all.at(-1) ?? first : first)?.startedAt ?? '') || '—'}${settled.length < all.length ? ' finished' : ''}` +
       (gap === null ? '.' : `, longest gap ${plural(gap, 'day')}.`)
 
   // The recent updates one line each, newest first — the shape of a run of

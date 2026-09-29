@@ -74,7 +74,7 @@ export function BrandsYouTrackCard({ month, rows, brandsLabel, brandsHref }: {
                 <span className="col-span-3 flex flex-col items-end gap-0.5 whitespace-nowrap">
                   <span className="text-[13px] font-medium leading-[1.35] text-muted-foreground">Came up in, {mon}</span>
                   <span className="inline-flex items-center gap-3 font-mono text-[12px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5"><Swatch className="bg-ink-rival" />without our rival searches</span>
+                    <span className="inline-flex items-center gap-1.5"><Swatch className="bg-ink-rival" />outside our brand searches</span>
                     <span className="inline-flex items-center gap-1.5"><Swatch className="bg-ink-rival/45" />in all</span>
                   </span>
                 </span>
