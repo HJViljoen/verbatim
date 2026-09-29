@@ -23,9 +23,11 @@ export const VERDICTS: readonly Verdict[] = ['echoes', 'contradicts', 'silent'] 
  *
  * A verdict needs real support. Until this floor the rule was one quotable
  * comment, so a claim read "Contradicted" on one or two videos and flipped
- * back the next week. Below the floor a claim reads untested.
+ * back the next week. Below the floor a claim reads untested. Five is a
+ * default (walkthrough, 29 Sep), and the number the approved mock printed as
+ * "verdict floor 5 videos per claim"; 1 is the rule before it.
  */
-export const PLAN_VERDICT_MIN_VIDEOS = 1
+export const PLAN_VERDICT_MIN_VIDEOS = 5
 
 /**
  * How much of a changed verdict's evidence has to be NEW for the change to be
