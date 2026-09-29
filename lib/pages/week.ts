@@ -54,6 +54,9 @@ import { addedSearchesRead, loadThemeSegmentRows, loadThemesProvenance, makerRul
 import { segmentOf } from './overview-market/board'
 import { segmentRulesEnabled } from '../segments/rules'
 import { brandCountState, noiseWords, OTHER_MEANING } from '../brands/precision'
+import { trackedSince } from '../settings/search-set'
+import type { BrandLayer } from './overview-brands'
+import { loadUpdateBrandLayer, updateBrandCounts } from './week-brands'
 import { loadMarketMakers, makerKOf } from './subjects'
 import { marketSubjectSide } from './overview-market/subjects'
 import { noiseCommentsOf, noiseVideos, RPC_SEGMENTS_FOR_VIDEOS, skipNoise } from './noise'
@@ -616,8 +619,23 @@ export interface RivalPosts {
   label: string
   /** Posts on the rival's own tracked accounts. */
   byThem: number
-  /** Posts by anybody else that our search found under their name. */
+  /** Videos this update read that NAME the brand, counted as the Brands page
+   *  counts "came up in" (lib/pages/week-brands.ts): the mention layer, in the
+   *  month's market, the brand's own posts out. 0 where `aboutNote` says why
+   *  no figure prints. It was every video the rival searches gathered, before
+   *  the relevance and brand checks (Freitag 149 against 7 on Brands). */
   aboutThem: number
+  /** Why "videos naming them" prints no figure: "not counted yet", or the
+   *  name's other meaning. Optional, so a stored copy carries none. */
+  aboutNote?: string | null
+  /** The month's figure beside it, the Brands page's "in all" for the month
+   *  the update is into: This week states an update count again against its
+   *  month. Optional, so a stored copy carries none. */
+  aboutMonth?: number | null
+  /** The videos our rival searches gathered under the brand's name this
+   *  update, before any check: the "matched the name" note's count only.
+   *  Optional, so a stored copy carries none. */
+  foundByName?: number
   /**
    * Comments dated inside the window under THE POSTS NAMED BELOW, and under no
    * others.
@@ -655,6 +673,11 @@ export interface RivalPosts {
    *  the preview's "tracked since 6 Jul". Optional, so a stored copy carries
    *  none; null where the identity row is not there. */
   trackedSince?: string | null
+  /** Settings' "Tracked since", word for word ("17 Sep", or "by 28 Jun"): the
+   *  day the list last took the brand in, from the change log
+   *  (lib/settings/search-set.ts `trackedSince`), so the two pages print one
+   *  date. Optional, so a stored copy carries none and prints `trackedSince`. */
+  since?: string | null
   /** "mostly the German word for Friday · not counted" where the brand's name
    *  has another meaning and production's hand check MEASURED it as noise
    *  (lib/brands/precision.ts, the front page's rule): its "about them" count
@@ -1894,6 +1917,8 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
       heard: heardAhead,
       market,
+      brandLayer: loadUpdateBrandLayer(supabase, clientId, month, marketAudiences(rivalAudiences)),
+      changes: loadChanges(reading.client, clientId),
     }),
     // ── §2 · worth a reply, and §8 · flagged for awareness ───────────────
     // Started beside wave 2 (above): it reads the corpus's current insights,
@@ -2653,6 +2678,11 @@ async function buildCameIn(input: {
   heard: Promise<HeardBlock>
   /** "With this update" on the market (WP3.7). */
   market: MarketCameIn | null
+  /** The month's brand mention layer (lib/pages/week-brands.ts), for "Videos
+   *  naming them"; null where it cannot be read. */
+  brandLayer: Promise<BrandLayer | null>
+  /** The change log, for Settings' "Tracked since" (memoised read). */
+  changes: Promise<readonly ConfigChange[]>
 }): Promise<CameInBlock> {
   const { supabase, clientId, runId, window, month, videos, rivals, windowRead } = input
 
@@ -2732,7 +2762,7 @@ async function buildCameIn(input: {
   // finished everything else.
   // (The first-heard themes are "Heard for the first time"'s one read now, and
   // the subject quotes are no longer printed: WP3.7.)
-  const [everOwned, postComments, postText] = await Promise.all([
+  const [everOwned, postComments, postText, brandLayer, changes] = await Promise.all([
     // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
     // "notable rival posts" does not say which. Both are printed, named: Össur
     // has zero competitor-owned videos in production, so the first is empty on
@@ -2740,7 +2770,19 @@ async function buildCameIn(input: {
     loadOwnedRivalAudiences(supabase, clientId),
     windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window),
     loadPostText(supabase, clientId, candidates.map((c) => c.video.id)),
+    input.brandLayer,
+    input.changes.catch(() => [] as readonly ConfigChange[]),
   ])
+  // "VIDEOS NAMING THEM" ON THE BRANDS PAGE'S BASIS (finish-list item 7): the
+  // update's videos in the month's market that name the brand, off the mention
+  // layer, gated by production's hand check; never every video the rival
+  // searches gathered, before the relevance and brand checks.
+  const named = updateBrandCounts({
+    clientId,
+    layer: brandLayer,
+    updateVideos: videos.map((v) => v.id),
+    brands: rivals.map((r) => r.name),
+  })
   const weighedBy = new Map<string, number>()
   const postsBy = new Map<string, RivalPost[]>()
   for (const c of candidates) {
@@ -2767,11 +2809,15 @@ async function buildCameIn(input: {
     const audience = rivalKey(r.name)
     const mine = videos.filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience)
     const posts = postsBy.get(audience) ?? []
+    const about = named.get(r.name) ?? null
     return {
       audience,
       label: r.name,
       byThem: mine.filter((v) => v.source === 'competitor_owned').length,
-      aboutThem: mine.filter((v) => v.source !== 'competitor_owned').length,
+      aboutThem: about?.videos ?? 0,
+      aboutNote: about?.note ?? null,
+      aboutMonth: about?.monthVideos ?? null,
+      foundByName: mine.filter((v) => v.source !== 'competitor_owned').length,
       // THE SUM OVER THE POSTS NAMED, AND NOTHING WIDER. It was hard-coded to
       // zero, which is a claim about a rival's week; this is a claim about
       // three posts, and `postsTotal` beside it says how many there were.
@@ -2788,6 +2834,9 @@ async function buildCameIn(input: {
       // not being read; sometimes, and a zero this update is a real zero.
       ownPostsUnread: !everOwned.has(audience),
       trackedSince: r.firstSeenAt ?? null,
+      // Settings' date, off the same change log and rule (lib/settings/
+      // search-set.ts), so the two pages print one "tracked since".
+      since: trackedSince(r.name, changes, r.firstSeenAt ?? null),
       nameNote: OTHER_MEANING[r.name] && brandCountState(clientId, r.name) === 'noise' ? noiseWords(r.name) : null,
       retired: r.retiredAt != null,
     }
@@ -2802,7 +2851,7 @@ async function buildCameIn(input: {
   // rule, `listedRivals` in lib/rivals.ts): a retired rival is off every
   // reading surface, and one with nothing this update and no post of theirs
   // ever captured has nothing to read. Settings › Tracking lists them.
-  .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0))
+  .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0 && (r.foundByName ?? 0) === 0))
   .map(({ retired: _retired, ...r }) => r)
 
   // THE FIRST-HEARD THEMES ARE "HEARD FOR THE FIRST TIME"'S (WP3.7): one read,

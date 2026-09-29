@@ -594,6 +594,22 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     expect(text.indexOf('Freitag')).toBeGreaterThan(text.indexOf('Rareform'))
   })
 
+  it('prints the videos naming each brand on the Brands page’s basis, against the month, and Settings’ tracked-since date (finish-list 7, 9)', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) =>
+      r.label === 'Freitag' ? { ...r, aboutThem: 2, aboutMonth: 7, foundByName: 149, aboutNote: null, since: 'by 28 Jun' }
+        : r.label === 'The North Face' ? { ...r, aboutThem: 11, aboutMonth: 54, aboutNote: null, since: '17 Sep' }
+          : r.label === 'Rareform' ? { ...r, aboutThem: 0, aboutMonth: null, aboutNote: 'not counted yet', since: '9 Sep' }
+            : r)
+    const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx)))
+    expect(text).toContain('Videos naming them')
+    expect(text).not.toContain('about them')
+    expect(text).toContain('Freitag tracked by 28 Jun 6 2 of 7 in Sep')
+    expect(text).not.toContain('149')
+    expect(text).toContain('The North Face tracked since 17 Sep 23 11 of 54 in Sep')
+    expect(text).toContain('Videos naming them: not counted yet')
+  })
+
   it('opens the brands’ page under its current sidebar label', () => {
     expect(renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx))).toContain(`Open ${surface('competitive').label} →`)
   })

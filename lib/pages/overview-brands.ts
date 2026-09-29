@@ -34,7 +34,7 @@ import { buildBrandsBlock, type BrandsRead } from './overview-market/brands'
 
 export const TABLE_BRAND_MENTIONS = 'brand_mentions'
 
-interface MentionRow {
+export interface MentionRow {
   video_id: string
   brand_key: string
   source: 'content' | 'comment'
@@ -103,7 +103,7 @@ async function mentionRows(client: SupabaseClient, clientId: string): Promise<Me
 }
 
 const IDENTITY = 'id, platform, source, account_name, is_client, is_competitor, competitor_name, upload_date'
-type Identity = IdentityRow & { upload_date: string | null }
+export type Identity = IdentityRow & { upload_date: string | null }
 
 /** Identity and upload date of the matched videos. */
 async function identities(client: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, Identity>> {
@@ -116,17 +116,33 @@ async function identities(client: SupabaseClient, clientId: string, ids: readonl
   return out
 }
 
-/**
- * The block for the reading month, or null where the page keeps deploy 2's
- * line: a tenant with no brand rules, or a month whose market cannot be read.
- */
-export async function loadBrandsBlock(
+/** The mention layer for one month, read as Your market and Brands count it:
+ *  the month's market videos, the tracked rivals by identity, the mention rows
+ *  as planned mentions, whose own post each matched video is, and (where
+ *  asked for) which videos our rival searches found. Null where the tenant
+ *  has no brand rules or the month's market cannot be read. This week counts
+ *  an update's brands off the same layer (lib/pages/week-brands.ts), so its
+ *  figures sit inside the Brands page's. */
+export interface BrandLayer {
+  month: string
+  market: string[]
+  rivals: { name: string; brandKey: string }[]
+  mentions: MentionRow[]
+  planned: PlannedMention[]
+  /** Was the mention layer read? A layer read as no rows proves no zero. */
+  layerRead: boolean
+  withRows: ReadonlySet<string>
+  identity: ReadonlyMap<string, Identity>
+  ownerOf: (videoId: string) => string | null
+  rivalFound: ReadonlySet<string> | null
+}
+
+export async function readBrandLayer(
   client: SupabaseClient,
   clientId: string,
   month: string,
-  /** The month's market videos, where the page has read them already. */
-  opts: { market?: Promise<string[] | null> | null } = {},
-): Promise<BrandsRead | null> {
+  opts: { market?: Promise<string[] | null> | null; rivalFound?: boolean } = {},
+): Promise<BrandLayer | null> {
   const rules = brandRulesFor(clientId)
   if (rules.length === 0) return null
   const m = monthStartOf(month)
@@ -156,7 +172,10 @@ export async function loadBrandsBlock(
   // Whose own post each matched video is, and which videos our rival searches
   // found (every brand's one base).
   const matched = [...new Set(mentions.map((r) => r.video_id))].sort()
-  const [rows, rivalFound] = await Promise.all([identities(client, clientId, matched), readRivalFound(client, clientId, tc.competitor_keywords)])
+  const [rows, rivalFound] = await Promise.all([
+    identities(client, clientId, matched),
+    opts.rivalFound === false ? Promise.resolve(null) : readRivalFound(client, clientId, tc.competitor_keywords),
+  ])
   const ownerOf = ownerOfVideos({
     rows,
     owned,
@@ -165,18 +184,47 @@ export async function loadBrandsBlock(
     rivalKey: new Map(rivals.map((r) => [norm(r.name), r.brandKey])),
   })
 
-  // The month's counts, by the script's own function.
   const planned: PlannedMention[] = mentions.map((r) => ({
     brand: r.brand_key,
     excerpt: null,
     row: { client_id: clientId, video_id: r.video_id, brand_key: r.brand_key, source: r.source, field: null, comment_id: null, comment_month: r.comment_month, method: 'rule', rule_version: BRAND_RULE_VERSION },
   }))
+  return {
+    month: m,
+    market,
+    rivals,
+    mentions,
+    planned,
+    layerRead: layer != null,
+    withRows: new Set(mentions.map((r) => r.brand_key)),
+    identity: rows,
+    ownerOf,
+    rivalFound: rivalFound?.videos ?? null,
+  }
+}
+
+/**
+ * The block for the reading month, or null where the page keeps deploy 2's
+ * line: a tenant with no brand rules, or a month whose market cannot be read.
+ */
+export async function loadBrandsBlock(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  /** The month's market videos, where the page has read them already. */
+  opts: { market?: Promise<string[] | null> | null } = {},
+): Promise<BrandsRead | null> {
+  const layer = await readBrandLayer(client, clientId, month, { market: opts.market })
+  if (layer == null) return null
+  const { month: m, market, rivals, mentions, planned, ownerOf, withRows } = layer
+  const rivalFound = layer.rivalFound ?? new Set<string>()
+
+  // The month's counts, by the script's own function.
   const counts = monthBrandCounts(planned, rivals.map((r) => ({ brand: r.name, brandKey: r.brandKey })), {
     markets: new Map([[m, market]]),
     ownerOf,
-    rivalFound: rivalFound.videos,
+    rivalFound,
   })
-  const withRows = new Set(mentions.map((r) => r.brand_key))
 
   // Your name: the market's videos naming you, and your own posts dated in the
   // month that name you (uploaded in it, or named in a comment dated in it).
@@ -185,7 +233,7 @@ export async function loadBrandsBlock(
   const outside = [...new Set(mine.filter((r) => inMarket.has(r.video_id) && ownerOf(r.video_id) !== 'client').map((r) => r.video_id))].sort()
   const commentedIn = new Set(mine.filter((r) => r.source === 'comment').map((r) => r.video_id))
   const inMonth = (id: string): boolean => {
-    const up = rows.get(id)?.upload_date
+    const up = layer.identity.get(id)?.upload_date
     return commentedIn.has(id) || (up != null && up >= m && up < nextMonth(m))
   }
   const ownPosts = new Set(mine.filter((r) => ownerOf(r.video_id) === 'client' && inMonth(r.video_id)).map((r) => r.video_id)).size
@@ -194,12 +242,12 @@ export async function loadBrandsBlock(
     clientId,
     month: m,
     n: market.length,
-    nOrganic: withoutRivalSearches(market, rivalFound.videos).length,
+    nOrganic: withoutRivalSearches(market, rivalFound).length,
     rivals: rivals.map((r) => {
       const c = counts.find((x) => x.brandKey === r.brandKey)
       return { brandKey: r.brandKey, label: r.name, hasRows: withRows.has(r.brandKey), kAny: c?.kAny ?? 0, kOrganic: c?.kOrganic ?? 0 }
     }),
     name: { hasRows: withRows.has('client'), outside, ownPosts },
-    mentionsRead: layer != null,
+    mentionsRead: layer.layerRead,
   })
 }
