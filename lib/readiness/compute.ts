@@ -492,10 +492,19 @@ function delivery(i: ReadinessInputs): ReadinessRow {
       : lastSent === null ? 'partial'
         : 'exists'
 
+  // A SCHEDULE THAT HOLDS ADDRESSES AND IS SWITCHED OFF IS NOT "NO ADDRESS"
+  // (finish-list item 17). Sealand's weekly digest carries two addresses and
+  // is off; the row read "No schedule has an address on it" over a note
+  // saying "Weekly digest: off, 2 addresses".
+  const listed = i.delivery.schedules.filter((s) => s.recipients > 0)
   const detail = paused
     ? 'Updates are paused for this workspace, so nothing is sent.'
     : live.length === 0
-      ? 'No schedule has an address on it, so nothing is sent.'
+      ? listed.length === 1
+        ? `${listed[0].name} has ${plural(listed[0].recipients, 'address', 'addresses')} on it but is switched off, so nothing is sent.`
+        : listed.length > 1
+          ? `${plural(listed.length, 'schedule')} have addresses on them but are switched off, so nothing is sent.`
+          : 'No schedule has an address on it, so nothing is sent.'
       : `${plural(live.length, 'schedule')} · ${plural(addresses, 'address', 'addresses')} · ` +
         (lastSent ? `last sent ${fullDate(lastSent)}.` : 'nothing sent yet.')
 

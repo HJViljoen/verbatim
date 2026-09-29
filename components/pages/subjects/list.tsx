@@ -17,7 +17,7 @@ import { fmtInt, fmtPct, fullDate, longMonth, shortDate } from '@/lib/format'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectRail, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { calibrationWord, isFailed } from '@/lib/subjects/calibration-state'
+import { calibrationWord, FAILED_EXPLAINED, isFailed } from '@/lib/subjects/calibration-state'
 import { levelText } from '@/lib/reading/level'
 
 // SU1 · The subjects, and editing them (design §3 SU1; the mock's first rail
@@ -101,6 +101,10 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
   const email = mode === 'email'
   const n = base.n
   const prev = base.prev
+  // ONE PLAIN LINE UNDER THE RAIL where a subject is being re-described
+  // (finish-list item 21), never on a rail without one. On the page only: the
+  // briefs that borrow this block are on hold and print as they did.
+  const explained = mode === 'app' && l.rows.some((r) => isFailed(r.calibration)) ? FAILED_EXPLAINED : null
   if (email) {
     const c = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 10px 4px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
     const num = { ...c, fontFamily: FONT.mono, textAlign: 'right' as const }
@@ -133,7 +137,7 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
     )
   }
   const cols = 'grid grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3'
-  return (
+  const table = (
     <div role="table" className="flex min-w-0 flex-col">
       <div role="row" className={`${cols} items-end ${RULE.head}`}>
         <span role="columnheader" className="flex flex-col leading-[1.35]">
@@ -182,6 +186,14 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
       })}
     </div>
   )
+  // The wrapper only where the line is drawn, so a rail without one (and every
+  // printed rail) keeps the markup it had.
+  return explained ? (
+    <div className="flex min-w-0 flex-col gap-3">
+      {table}
+      <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground [text-wrap:pretty]">{explained}</p>
+    </div>
+  ) : table
 }
 
 export const subjectsList: Block<SubjectsData> = {

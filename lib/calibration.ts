@@ -144,10 +144,12 @@ export const GLOSSARY = {
   // MARKET-FIRST (WP3.10, decision K): the rest of the reading words say the
   // market, and a change is read only between two months read the same way
   // (decision D). Real figures: §2.3's September category read.
-  level: ['Level', 'what a figure is running at, always printed with what it is out of: "Looks & style came up in 104 of 626 September category videos"'],
+  // AN EXAMPLE, SAID AS ONE (finish-list item 19): the Looks & style figure
+  // it quoted matched no page any more.
+  level: ['Level', 'what a figure is running at, always printed with what it is out of, as in a subject that "came up in 30 of 250 category videos" (an example, not a reading)'],
   change: ['Change', 'the difference between two levels, banded with each side’s video count as n, and read only between two months read the same way: where a change of ours touched a tenth or more of either month, the pair is "not read as a change". Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
   // ---- Market-first (WP1.6, decision K): the market and the brands in it --
-  market: ['Market', 'everything we read except your own posts: the category, plus the videos filed under a brand you track, pooled into one count. Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market'],
+  market: ['Market', 'the wider market you sell into, worldwide, not only your own customers. It is everything we read except your own posts: the category, plus the videos filed under a brand you track, pooled into one count. Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market'],
   brand: ['Brand', 'a company your market talks about: you, the rivals you track, and others it names. A brand’s own posts are its posts, never the market talking about it'],
   maker: ['Makers', 'videos where people make the thing themselves (sewing, crochet, DIY), marked by a word check on caption, hashtags and topics where a maker rule is switched on for your workspace. They stay in every count of your market; a theme where a fifth or more of the videos are makers’ says so'],
   off_topic: ['Off-topic', 'videos a bare brand or rival name found that turned out to be about something else, such as poker or a volcano. Marked, never taken out of a count'],

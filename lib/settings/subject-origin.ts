@@ -20,7 +20,10 @@ import { shortDate } from '../format'
 // whatever its stored `origin` says: three of them carry 'client' and two came
 // from the invented mock (decision G's why).
 
-export const ORIGIN_UNCONFIRMED = 'picked for you, not yet confirmed'
+// COUNTED, AND SAID SO (finish-list item 21): "picked for you, not yet
+// confirmed" beside "Nothing here is counted until you confirm it" read as
+// eight subjects nobody counts, while five were counted on Subjects.
+export const ORIGIN_UNCONFIRMED = 'picked for you and counted, not yet confirmed by you'
 
 /** One change-log row, as the Settings page reads it. */
 export interface SubjectChangeRow {

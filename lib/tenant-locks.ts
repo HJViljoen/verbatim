@@ -47,6 +47,8 @@
 // and the cadence (sending, not searching: its own words, CADENCE_HELD). Before
 // MF3 there is no queue, and the deploy-1 refusal stands for all of them.
 
+import { CONTACT_EMAIL } from './legal'
+
 export type TenantLockKind = 'sends' | 'tracking'
 
 /** Sealand: `ac16988e-c4f3-4baf-b388-73895852a554` (research DR, the fixture
@@ -56,15 +58,17 @@ export const TENANT_LOCKS: Readonly<Record<string, { sends: boolean; tracking: b
 }
 
 /** The refusal a locked tenant reads, in the plan's words. */
+// Each names who handles it and how to reach him (finish-list item 18): a
+// refusal that says "tell us" with no address is a dead end.
 export const TENANT_LOCK_REFUSAL: Readonly<Record<TenantLockKind, string>> = {
-  sends: 'Sending is switched on by Verbatim during your trial.',
-  tracking: 'Searches are held still until January so October and November can be compared; tell us and we will note it for then.',
+  sends: `Sending is switched on by Heinrich during your trial. Write to ${CONTACT_EMAIL} to change it.`,
+  tracking: `Searches are held still until January so October and November can be compared; write to ${CONTACT_EMAIL} and we will note it for then.`,
 }
 
 /** A cadence-only change from a locked tenant, in its own words (the copy debt
  *  WP1.2 left: it was refused with the searches' sentence). The report day and
  *  period are Verbatim's during the trial (decision J), as sending is. */
-export const CADENCE_HELD = 'Your report day and cadence are set by Verbatim during your trial; tell us what you would like.'
+export const CADENCE_HELD = `Your report day and cadence are set by Heinrich during your trial; write to ${CONTACT_EMAIL} with what you would like.`
 
 /** Whether this tenant is locked for this kind of change. */
 export function tenantLocked(clientId: string, kind: TenantLockKind): boolean {

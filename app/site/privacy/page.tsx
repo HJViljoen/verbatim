@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { CONTACT_EMAIL } from '@/lib/legal'
 import { LegalPage } from '../legal-page'
 
 export const metadata: Metadata = {
@@ -6,13 +7,11 @@ export const metadata: Metadata = {
   description: 'What Verbatim collects, why, how long it is kept, and how to have it removed.',
 }
 
-const CONTACT = 'heinrichjviljoen@gmail.com'  // A rights channel that does not receive mail is worse than none: this is
-// the address that actually reaches a human today. Change it only to another
-// mailbox someone reads.
+const CONTACT = CONTACT_EMAIL
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="23 August 2026">
+    <LegalPage title="Privacy" updated="29 September 2026">
       <p>
         Verbatim reads public conversation on social platforms so a brand can understand what its
         market is saying. This page says exactly what that means for the people whose comments we
@@ -102,9 +101,9 @@ export default function PrivacyPage() {
       <h2>Who else touches it</h2>
       <p>
         We use processors to run the service: Supabase (database), Vercel (hosting), Inngest
-        (job orchestration), OpenAI (analysis), Apify (collection), Resend (email) and Stripe
-        (billing). They act on our instructions only. Some process data outside South Africa and
-        the EEA, under the standard contractual clauses.
+        (job orchestration), OpenAI (analysis and translation), AssemblyAI (speech-to-text), Apify
+        (collection), Resend (email) and Stripe (billing). They act on our instructions only. Some
+        process data outside South Africa and the EEA, under the standard contractual clauses.
       </p>
 
       <h2>Your rights</h2>

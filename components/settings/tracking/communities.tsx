@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '@/lib/legal'
 import { Dot, Figure, gridIntrinsic, GridRow, GridTable, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { shortDate } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
@@ -104,9 +105,9 @@ export function CommunitiesSection({
                 // to, and a button that opened nothing would be the same lie
                 // one step further on.
                 r.status === 'rejected' ? (
-                  <span key="a" className="block text-right text-[11px] leading-[1.3] text-muted-foreground">
+                  <a key="a" href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Look again at r/${r.key}`)}`} className="block text-right text-[11px] leading-[1.3] text-muted-foreground underline underline-offset-2">
                     Ask us to look again
-                  </span>
+                  </a>
                 ) : (
                   <CommunityAction
                     key="a"

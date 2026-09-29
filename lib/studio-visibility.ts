@@ -9,9 +9,12 @@ import type { SessionContext } from './auth'
 // was, including while viewing a tenant through the workspace switcher, because
 // building and sending a client's reports is how the work gets done today.
 //
-// Nothing is guarded at the route: `/dashboard/studio` still answers for anyone
-// who types it, which is deliberate. The owner asked for the button, not a
-// wall, and the links already sitting in sent emails have to keep working.
+// AND THE ROUTE IS GUARDED (finish-list item 16, 29 Sep 2026). Until then
+// `/dashboard/studio` answered anyone who typed it, with Build, Delete and
+// Start sending live on a page the client was told nothing about. Every Studio
+// page now asks `studioRedirect` first and sends a tenant user to Reports; an
+// operator, including one viewing a tenant, keeps it. Nothing has ever been
+// sent from production, so no link in an inbox points into the Studio.
 //
 // To bring the Studio back for clients, flip this one constant to true. Every
 // surface reads `canSeeStudio`, so that is the whole change.
@@ -38,4 +41,19 @@ export function canSeeStudio(
   tenantVisible: boolean = STUDIO_TENANT_VISIBLE,
 ): boolean {
   return tenantVisible || session.operator !== null
+}
+
+/** Where a session that may not see the Studio lands instead: Reports. */
+export const STUDIO_AWAY_HREF = '/dashboard/reports'
+
+/**
+ * The Studio pages' route guard (finish-list item 16): null for a session that
+ * may see the Studio, else where to send it. Pure, so both answers are tested;
+ * each page calls it before it reads anything, and redirects on a non-null.
+ */
+export function studioRedirect(
+  session: Pick<SessionContext, 'operator'>,
+  tenantVisible: boolean = STUDIO_TENANT_VISIBLE,
+): string | null {
+  return canSeeStudio(session, tenantVisible) ? null : STUDIO_AWAY_HREF
 }

@@ -7,8 +7,10 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { recipientsBySchedule } from '@/lib/schedules/default'
 import { getBaseUrl } from '@/lib/site'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { InviteForm, RevokeButton, MemberControls, CopyLinkButton } from './team-ui'
+import { InviteForm, RevokeButton, ResendButton, MemberControls, CopyLinkButton } from './team-ui'
+import { canResendInvite, inviteState } from '@/lib/team-copy'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 // Team management — list members + pending invites, invite teammates, manage
 // roles. Owners/admins can invite + revoke; only owners change roles or remove
@@ -19,6 +21,12 @@ interface MemberRow { id: string; full_name: string | null; email: string; role:
 interface InviteRow { id: string; email: string; role: 'owner' | 'admin' | 'member'; expires_at: string; token: string | null }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Heinrich's address, as a link (finish-list item 18): "ask us" with no way
+ *  to reach anyone is a dead end. */
+function ContactLink() {
+  return <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
+}
 
 function RoleBadge({ role }: { role: string }) {
   return (
@@ -88,6 +96,10 @@ export default async function TeamPage() {
   }
 
   const memberRows = (members as MemberRow[] | null) ?? []
+  // EXPIRED IS NOT PENDING (29 Sep): the database keeps an expired invite as
+  // `pending`, and five that expired on 24 Sep were listed as pending.
+  const nowIso = new Date().toISOString()
+  const waiting = invites.filter((inv) => !inviteState(inv.expires_at, nowIso).expired).length
   const membersOffReport = memberRows.filter((m) => !activeRecipientSet.has((m.email ?? '').toLowerCase()))
 
   // Team and billing are ONE rail entry over two routes (WP16): they have
@@ -154,7 +166,7 @@ export default async function TeamPage() {
                   or invite a teammate, they join the Weekly digest when they accept.
                 </>
               ) : (
-                <>Nobody yet. Invite a teammate and they join the Weekly digest when they accept, or ask us to add an address.</>
+                <>Nobody yet. Heinrich sets up who gets the update with you: write to <ContactLink />.</>
               )}
             </p>
           ) : (
@@ -184,7 +196,7 @@ export default async function TeamPage() {
                     <Link href={STUDIO_HREF} className="underline underline-offset-2">the Studio</Link>.
                   </>
                 ) : (
-                  <> Ask us to add them to a list.</>
+                  <> Heinrich adds them once your reports are set up: write to <ContactLink />.</>
                 )
               ) : null}
             </p>
@@ -194,18 +206,27 @@ export default async function TeamPage() {
 
       {canManage && (
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Clock className="size-4 text-muted-foreground" aria-hidden /> Pending invites ({invites.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Clock className="size-4 text-muted-foreground" aria-hidden /> Invites ({waiting} pending{invites.length > waiting ? `, ${invites.length - waiting} expired` : ''})</CardTitle></CardHeader>
           <CardContent className="divide-y">
             {invites.length === 0 ? (
               <p className="py-3 text-sm text-muted-foreground first:pt-0">No pending invites.</p>
-            ) : invites.map((inv) => (
+            ) : invites.map((inv) => {
+              const state = inviteState(inv.expires_at, nowIso)
+              return (
               <div key={inv.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{inv.email}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {cap(inv.role)} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                  <p className="flex items-center gap-2 truncate text-sm font-medium">
+                    <span className="truncate">{inv.email}</span>
+                    {state.expired ? <span className="shrink-0 rounded-full bg-inner px-1.5 py-px text-[10.5px] font-medium text-secondary-foreground">Expired</span> : null}
                   </p>
-                  {inv.token ? (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {cap(inv.role)} · {state.line}
+                  </p>
+                  {state.expired ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground/70">
+                      This link no longer works. Resend sends a fresh one.
+                    </p>
+                  ) : inv.token ? (
                     <code className="mt-1 block truncate text-[11px] text-muted-foreground/70">
                       {baseUrl}/invite/{inv.token}
                     </code>
@@ -215,10 +236,12 @@ export default async function TeamPage() {
                     </p>
                   )}
                 </div>
-                {inv.token && <CopyLinkButton url={`${baseUrl}/invite/${inv.token}`} />}
+                {inv.token && !state.expired && <CopyLinkButton url={`${baseUrl}/invite/${inv.token}`} />}
+                {canResendInvite(role, inv.role) && <ResendButton id={inv.id} />}
                 <RevokeButton id={inv.id} />
               </div>
-            ))}
+              )
+            })}
           </CardContent>
         </Card>
       )}

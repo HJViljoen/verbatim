@@ -145,12 +145,14 @@ export function movesSentence(m: LineMoves): LinePart[] {
   return [...(count ? [`${count}`] : [{ figure: m.count }]), ' moves are dated, the latest ', ...title, day]
 }
 
-/** The hero's sentence: what your market asked most, then your moves. */
+/** The hero's sentence: what your market asked most, then your moves. "People
+ *  in the market you sell into", never "your market asked": a client read that
+ *  as her own customers (finish-list item 24). */
 export function headlineParts(line: MarketLine): LinePart[] {
   const month = longMonth(line.month)
   const asked: LinePart[] = line.themes.length > 0
-    ? [`In ${month} your market asked most about `, ...listOf(line.themes.map((t) => [{ topic: t.topic }]), 'about'), '.']
-    : [`In ${month} no question your market asked reached `, { figure: THEME_FLOOR }, ' videos.']
+    ? [`In ${month} people in the market you sell into asked most about `, ...listOf(line.themes.map((t) => [{ topic: t.topic }]), 'about'), '.']
+    : [`In ${month} no question asked in the market you sell into reached `, { figure: THEME_FLOOR }, ' videos.']
   const moves = movesSentence(line.moves)
   return moves.length > 0 ? [...asked, ' ', ...moves] : asked
 }

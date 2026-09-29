@@ -20,7 +20,7 @@ import {
   sampleHead, GATE_SAMPLE, REJECT_ROWS,
   type GateVerdict,
 } from './reject-log'
-import { clientReadiness, NOT_BUILT } from './readiness-view'
+import { clientReadiness, NOT_BUILT, READINESS_CONTACT } from './readiness-view'
 import { termDates, termDateWords } from './terms'
 
 // ---- artefacts --------------------------------------------------------------
@@ -604,6 +604,20 @@ describe('clientReadiness', () => {
     expect(view.rows.find((r) => r.id === 'tracked-terms')!.unlocks).not.toMatch(/Apply/)
     expect(view.rows.find((r) => r.id === 'tracked-terms')!.ownerWords).toBe('We do this')
     expect(view.rows.find((r) => r.id === 'rival-accounts')!.ownerWords).toBe('Yours to change')
+  })
+
+  // Finish-list item 18: "Yours to change" beside a switch the client cannot
+  // reach, with no way to reach anyone who can.
+  it('says Heinrich sets delivery up, and how to reach him', () => {
+    const view = clientReadiness([readyRow({ id: 'delivery', owner: 'client', status: 'missing', unlocks: 'Add the people who should get it in Settings, under Reports and recipients, and turn it on.' })])
+    const d = view.rows[0]
+    expect(d.ownerWords).toBe('Set up with Heinrich')
+    expect(d.unlocks).toContain('heinrichviljoen@verbatimintel.com')
+    expect(d.unlocks).not.toContain('turn it on')
+    expect(READINESS_CONTACT).toContain('heinrichviljoen@verbatimintel.com')
+    // Not "anything here goes through Heinrich": marking a recommendation is
+    // the client's own to do, and its row says so.
+    expect(READINESS_CONTACT).toMatch(/^Where a row asks you to tell us or give us something/)
   })
 
   it('prints a "by when" only where a date was supplied', () => {

@@ -232,6 +232,25 @@ describe('how to read, market-first', () => {
     expect(b).toContain('Freitag is German for Friday')
   })
 
+  // Finish-list item 19: three lines had gone stale.
+  it('says Sunday is the rhythm now, and that earlier updates ran on other days', () => {
+    expect(def('updates').body).toContain('now updated once a week, on Sunday')
+    expect(def('updates').body).toContain('Earlier updates ran on other days')
+  })
+
+  it('promises no check it does not make: a brand counts only once its hand check has passed', () => {
+    const b = def('brands').body
+    expect(b).not.toContain('Each name is checked for its other meanings first')
+    expect(b).toContain('only once a hand check of its matches has passed')
+    expect(b).toContain('“not counted yet”')
+  })
+
+  it('gives the level an example that is plainly one, not a figure no page prints', () => {
+    const level = GLOSSARY.level[1]
+    expect(level).not.toContain('104 of 626')
+    expect(level).toContain('an example, not a reading')
+  })
+
   it('states the Ask cap and the monthly’s read at their constants', () => {
     expect(ASK_MONTHLY_CAP).toBe(40)
     expect(cardText('ask')).toContain('40 questions a month')

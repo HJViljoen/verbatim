@@ -17,6 +17,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { PairChip } from '@/components/blocks/pair-chip'
 import { surface } from '@/lib/nav'
 import { heroView, voicesHeading } from '@/lib/pages/overview-market'
+import { framedHeadline } from '@/lib/pages/market-frame'
 import { InnerLine, isMarketPage, Parts } from './market'
 
 // OV1 · In one sentence, anything unusual, and the one thing to do
@@ -189,18 +190,28 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   // and a sentence with no such clause stays one paragraph.
   const headClass = 'm-0 text-[24px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground sm:text-[28px]'
   const headFigure = 'font-semibold tracking-[-0.04em]'
-  const colon = s.body.indexOf(': ')
-  const split = !email && colon > 0 && !s.body.slice(0, colon).includes('[[')
+  // WHAT "YOUR MARKET" IS (finish-list item 24): where the route framed the
+  // page, the size headline names the market Sealand sells into and a line
+  // under it says whose words these are. Absent on the monthly and on a stored
+  // copy, which print as they did.
+  const body = framedHeadline(s.body, data.frame)
+  const colon = body.indexOf(': ')
+  const split = !email && colon > 0 && !body.slice(0, colon).includes('[[')
   const size = email ? (
-    <TokenProse body={s.body} figures={s.figures} mode={mode} figureFace="inherit" />
+    <TokenProse body={body} figures={s.figures} mode={mode} figureFace="inherit" />
   ) : split ? (
     <div className="flex max-w-[700px] flex-col">
-      <p className={headClass}>{s.body.slice(0, colon + 1)}</p>
-      <TokenProse body={s.body.slice(colon + 2)} figures={s.figures} mode={mode} figureFace="mono" figureClassName={headFigure} className={`${headClass} [text-wrap:balance]`} />
+      <p className={headClass}>{body.slice(0, colon + 1)}</p>
+      <TokenProse body={body.slice(colon + 2)} figures={s.figures} mode={mode} figureFace="mono" figureClassName={headFigure} className={`${headClass} [text-wrap:balance]`} />
     </div>
   ) : (
-    <TokenProse body={s.body} figures={s.figures} mode={mode} figureFace="mono" figureClassName={headFigure} className={`${headClass} max-w-[700px] [text-wrap:balance]`} />
+    <TokenProse body={body} figures={s.figures} mode={mode} figureFace="mono" figureClassName={headFigure} className={`${headClass} max-w-[700px] [text-wrap:balance]`} />
   )
+  const lede = data.frame ? (
+    email
+      ? <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2, marginTop: 6 }}>{data.frame.lede}</div>
+      : <p className="m-0 max-w-[620px] text-[15px] leading-[1.55] text-secondary-foreground [text-wrap:pretty]">{data.frame.lede}</p>
+  ) : null
   const clause = view.parts.length > 0 ? (
     email
       ? <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2, marginTop: 8 }}><Parts parts={view.parts} figures={view.figures} mode={mode} /></div>
@@ -241,6 +252,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
     return (
       <BlockFrame title={MARKET_SENTENCE_TITLE} mode={mode} footer={footer}>
         <div style={{ fontFamily: FONT.sans, fontSize: 18, fontWeight: 500, color: EMAIL.ink }}>{size}</div>
+        {lede}
         {clause}
         {prev}
         {chip}
@@ -250,7 +262,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   }
   const main = (
     <div className="flex min-w-0 flex-col gap-6 pt-1">
-      <div className="flex flex-col gap-4">{size}{clause}</div>
+      <div className="flex flex-col gap-4">{lede ? <div className="flex flex-col gap-2">{size}{lede}</div> : size}{clause}</div>
       {prev || chip ? <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{prev}{chip}</div> : null}
     </div>
   )

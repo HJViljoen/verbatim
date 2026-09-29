@@ -25,12 +25,12 @@ describe('assertTenantMay', () => {
 
   it('refuses a tenant’s own user in the plan’s words', () => {
     expect(assertTenantMay({ operator: null }, SEALAND, 'sends'))
-      .toEqual({ ok: false, message: 'Sending is switched on by Verbatim during your trial.' })
+      .toEqual({ ok: false, message: 'Sending is switched on by Heinrich during your trial. Write to heinrichviljoen@verbatimintel.com to change it.' })
     // From deploy 5 a tracking "not now" also says the edit may be queued
     // (WP3.10); the message stays the refusal for what the queue does not take.
     expect(assertTenantMay({ operator: null }, SEALAND, 'tracking')).toEqual({
       ok: false,
-      message: 'Searches are held still until January so October and November can be compared; tell us and we will note it for then.',
+      message: 'Searches are held still until January so October and November can be compared; write to heinrichviljoen@verbatimintel.com and we will note it for then.',
       queue: true,
     })
   })

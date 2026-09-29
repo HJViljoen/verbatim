@@ -78,6 +78,16 @@ describe('buildBrandsBlock', () => {
     expect(words(stagingBrandsRead('2026-08-01'))).toBe('In August your name came up in none of your market’s 377 videos.')
   })
 
+  // Finish-list item 24: on the front page "your market’s 654 videos" read as
+  // a client's own customers. The monthly passes nothing and keeps its words.
+  it('says "the market you sell into" where the front page asks for it', () => {
+    const wider = (b: ReturnType<typeof stagingBrandsRead>) =>
+      nameLineParts(b, { wider: true }).map((p) => (p.t === 'text' ? p.s : String(p.value))).join('')
+    expect(wider(stagingBrandsRead())).toBe('In September your name came up in none of the 654 videos from the market you sell into. The 8 videos that name you are your own posts.')
+    const unread = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, checks: STAND_IN_CHECKS, name: { hasRows: true, outside: ['v1'], ownPosts: 8 } })
+    expect(wider(unread)).toBe('Your name in the market you sell into, in September: not counted yet.')
+  })
+
   it('holds the name line at "not counted yet" while a match outside your own posts is unread, and prints the reading once read', () => {
     const base = { clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, checks: STAND_IN_CHECKS }
     const unread = buildBrandsBlock({ ...base, name: { hasRows: true, outside: ['v1'], ownPosts: 8 } })

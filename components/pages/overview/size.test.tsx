@@ -7,7 +7,9 @@ import { render, renderText } from '@/lib/test/render'
 import { headline, sentenceBlockFor } from '@/lib/pages/overview'
 import { overviewSentence } from './sentence'
 import { LEVELS_LABEL, levelCell, levelHead, makersHead, makersTag, overviewCategory } from './category'
-import { makersMarkedFixture, marketSizeFixture, overviewFixture, SEPTEMBER_CHIP } from './fixture'
+import { makersMarkedFixture, marketFrontFixture, marketSizeFixture, overviewFixture, SEPTEMBER_CHIP } from './fixture'
+import { marketFrame } from '@/lib/pages/market-frame'
+import { SEALAND_CLIENT_ID } from '@/lib/config'
 
 // Market-first WP1.5 on the existing Overview: OV1's size headline and OV3's
 // level list, rendered on Sealand's production September (fixture.ts).
@@ -203,5 +205,28 @@ describe('OV3 · the level list', () => {
     const before = Object.keys(blockAnswers(overviewCategory, { ...marketSizeFixture(), category: { ...marketSizeFixture().category, levels: undefined } }).figures)
     const after = Object.keys(blockAnswers(overviewCategory, marketSizeFixture()).figures)
     expect(after).toEqual(before)
+  })
+})
+
+// Finish-list item 24 (29 Sep): the route frames the front page; the loader
+// does not, so the monthly and a stored copy print as they did.
+describe('OV1 · what "Your market" is', () => {
+  const framed = () => ({ ...marketFrontFixture(), frame: marketFrame(SEALAND_CLIENT_ID, 'Sealand') })
+
+  it('names the market Sealand sells into, with the line under it, in every mode and inside the copy contract', () => {
+    for (const mode of MODES) {
+      const markup = render(overviewSentence.render(framed(), mode, ctx))
+      assertCopyContract(markup)
+      const text = renderText(overviewSentence.render(framed(), mode, ctx))
+      expect(text, mode).toContain('The market Sealand sells into, in September so far: 655 videos and 16,233 comments.')
+      expect(text, mode).toContain('What people buying and talking about bags like Sealand’s say on Instagram, TikTok, YouTube and Reddit, worldwide, not only Sealand’s own customers.')
+      expect(text, mode).not.toContain('Your market in September')
+    }
+  })
+
+  it('prints as before without the route’s frame', () => {
+    const text = renderText(overviewSentence.render(marketFrontFixture(), 'app', ctx))
+    expect(text).toContain('Your market in September so far: 655 videos and 16,233 comments.')
+    expect(text).not.toContain('sells into')
   })
 })

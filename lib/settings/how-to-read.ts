@@ -274,7 +274,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // here is why there are two.
     id: 'the-market',
     title: 'Your market, and the category inside it',
-    body: 'Your market is everything we read except your own posts: the category, plus the videos filed under a brand you track, counted once as one market. Its size, subjects, kinds of comment, mood and brands are read on the whole of it. Themes are grouped within the category, because themes are grouped per audience, so a theme is a share of the category’s videos, never of the whole market. Your own posts are read on your pages about you, never counted as your market.',
+    body: 'Your market is the wider market you sell into: what people buying and talking about what you sell say on Instagram, TikTok, YouTube and Reddit, worldwide, not only your own customers. It is everything we read except your own posts: the category, plus the videos filed under a brand you track, counted once as one market. Its size, subjects, kinds of comment, mood and brands are read on the whole of it. Themes are grouped within the category, because themes are grouped per audience, so a theme is a share of the category’s videos, never of the whole market. Your own posts are read on your pages about you, never counted as your market.',
   },
   {
     // DECISION F (lib/pages/overview-market/board.ts: MAKER_GROUP_SHARE,
@@ -319,7 +319,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // sentence to it). Said once here, never under a block.
     id: 'brands',
     title: 'How a brand is counted',
-    body: 'A brand is counted in every video it comes up in, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. Each name is checked for its other meanings first: Freitag is German for Friday, Cotopaxi is a volcano and Patagonia a region. A brand’s own posts are its posts, never your market naming it. The first count leaves out every video our own rival searches found, and the count in all sits beside it. Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
+    body: 'A brand is counted in every video it comes up in, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. On Brands and on Your market a brand is counted only once a hand check of its matches has passed, because some names mean other things: Freitag is German for Friday, Cotopaxi is a volcano and Patagonia a region. Until its check passes a brand reads “not counted yet”, never a count. A brand’s own posts are its posts, never your market naming it. The first count leaves out every video our own rival searches found, and the count in all sits beside it. Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
   },
   {
     // WP2.7 (update_arrivals, MF2 part C): counts that add up to months.
@@ -356,7 +356,10 @@ export const DEFINITIONS: readonly Definition[] = [
     // is the 06:00; the dispatcher fires then for every workspace.
     id: 'updates',
     title: 'When updates land',
-    body: 'Every workspace is updated once a week, on Sunday. The update starts at 06:00 South African time, and the pages move to it once it has finished. The day and the hour are the same for everyone, and neither is a setting. The bar on each page names the update it reads.',
+    // NOW, NOT ALWAYS (finish-list item 19): the rule is from 27 Sep, and
+    // earlier updates ran on other days, some by hand; The record lists each
+    // on the day it ran.
+    body: 'Every workspace is now updated once a week, on Sunday. The update starts at 06:00 South African time, and the pages move to it once it has finished. The day and the hour are the same for everyone, and neither is a setting. Earlier updates ran on other days as well, and The record lists each one on the day it ran. The bar on each page names the update it reads.',
   },
   {
     id: 'reddit',

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { CONTACT_EMAIL } from '@/lib/legal'
 import { LegalPage } from '../legal-page'
 
 export const metadata: Metadata = {
@@ -6,13 +7,11 @@ export const metadata: Metadata = {
   description: 'The terms you agree to when you use Verbatim.',
 }
 
-const CONTACT = 'heinrichjviljoen@gmail.com'  // A rights channel that does not receive mail is worse than none: this is
-// the address that actually reaches a human today. Change it only to another
-// mailbox someone reads.
+const CONTACT = CONTACT_EMAIL
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of use" updated="18 August 2026">
+    <LegalPage title="Terms of use" updated="29 September 2026">
       <p>
         These terms cover your use of Verbatim. Using the product means you accept them. If you are
         agreeing on behalf of a company, you are confirming you may bind that company.

@@ -4,7 +4,8 @@ import { settingsBar } from '@/lib/settings/bar'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { isStripeConfigured } from '@/lib/stripe'
 import { SettingsFrame, SettingsCard, FactRow } from '@/components/settings-frame'
-import { cap } from '@/lib/format'
+import { planLabel, TRIAL_BY_AGREEMENT, TRIAL_BY_AGREEMENT_LABEL, TRIAL_BY_AGREEMENT_LINE } from '@/lib/billing-copy'
+import { CONTACT_EMAIL } from '@/lib/legal'
 import { BillingControls } from './billing-ui'
 
 // Billing — current plan + subscription state. Owners get the Stripe controls;
@@ -49,9 +50,14 @@ export default async function BillingPage({
   const access = billingAccess(client)
   const isOwner = role === 'owner'
   const hasCustomer = Boolean(client.stripe_customer_id)
+  // A FREE TRIAL PRICED WITH HEINRICH (lib/billing-copy.ts, a default): the
+  // comp stays in the database and in `billingAccess`; only the words change.
+  const byAgreement = TRIAL_BY_AGREEMENT.has(clientId)
+  const accessLabel = byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? '—')
 
   const description =
-    access.reason === 'comped' ? 'This workspace has complimentary full access and is never charged.'
+    byAgreement ? TRIAL_BY_AGREEMENT_LINE
+    : access.reason === 'comped' ? 'This workspace has complimentary full access and is never charged.'
     : access.reason === 'subscribed' ? 'Your subscription is active.'
     : access.reason === 'past_due' ? 'We couldn’t process your last payment. Update your card to keep access.'
     : access.reason === 'trialing' ? `Free trial: ${access.trialDaysLeft} day${access.trialDaysLeft === 1 ? '' : 's'} left.`
@@ -63,7 +69,7 @@ export default async function BillingPage({
   // Settings sub-page.
   const bar = await settingsBar(supabase, clientId, client.company_name ?? 'Your workspace')
   return (
-    <SettingsFrame active="team" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} bar={bar} contentTitle="Plan & billing" contentMeta={REASON_LABEL[access.reason] ?? 'Plan'} controls={<Link href="/dashboard/team" className="text-[12px] font-medium text-secondary-foreground hover:underline">Team →</Link>}>
+    <SettingsFrame active="team" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} bar={bar} contentTitle="Plan & billing" contentMeta={byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? 'Plan')} controls={<Link href="/dashboard/team" className="text-[12px] font-medium text-secondary-foreground hover:underline">Team →</Link>}>
       <div className="flex flex-col gap-3">
         {status === 'success' && (
           <p className="rounded-md bg-accent px-4 py-3 text-[12.5px] text-accent-foreground">Thanks. Your subscription is being activated. It may take a moment to reflect here.</p>
@@ -73,13 +79,18 @@ export default async function BillingPage({
         )}
 
         <SettingsCard title="Your plan" description={description}>
-          <FactRow label="Plan">{client.plan ? cap(client.plan) : '—'}</FactRow>
-          <FactRow label="Access">{REASON_LABEL[access.reason] ?? '—'}</FactRow>
+          <FactRow label="Plan">{byAgreement ? TRIAL_BY_AGREEMENT_LABEL : planLabel(client.plan)}</FactRow>
+          <FactRow label="Access">{byAgreement ? 'Full access' : accessLabel}</FactRow>
           {client.trial_ends_at && access.reason === 'trialing' && <FactRow label="Trial ends">{new Date(client.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</FactRow>}
         </SettingsCard>
 
         <SettingsCard title="Billing" description={access.reason === 'comped' ? 'No billing action needed.' : isOwner ? 'Card, invoices and cancellation are handled by Stripe.' : 'Only the workspace owner can manage billing.'}>
-          {access.reason === 'comped' ? (
+          {byAgreement ? (
+            <p className="text-[12.5px] text-muted-foreground">
+              Nothing is charged here. To talk about pricing, write to{' '}
+              <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>.
+            </p>
+          ) : access.reason === 'comped' ? (
             <p className="text-[12.5px] text-muted-foreground">Nothing to do here.</p>
           ) : isOwner ? (
             <BillingControls stripeConfigured={isStripeConfigured} hasCustomer={hasCustomer} />

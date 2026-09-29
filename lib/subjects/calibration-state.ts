@@ -53,6 +53,25 @@ export const CALIBRATION_WORDS: Record<'provisional' | 'failed', string> = {
 }
 
 /**
+ * "Being re-described", explained once in plain words (finish-list item 21):
+ * a client met the phrase on three subjects with nothing saying what it meant.
+ * True to `failed` below: the check read a hand-labelled sample and found the
+ * subject catching too much that is not about it.
+ */
+export const FAILED_EXPLAINED = 'Being re-described: a check found the subject catching comments about other things, so it shows no figure while we reword it.'
+
+/**
+ * What a counted subject's row says where it prints no level (Settings ›
+ * Subjects, finish-list item 21): counted in your market, marked provisional
+ * while its check is open, or being re-described.
+ */
+export function countedNote(state: SubjectCalibration): string {
+  if (state === 'failed') return `${CALIBRATION_WORDS.failed}: no figure while we reword it`
+  if (state === 'provisional') return 'counted in your market, marked provisional'
+  return 'counted in your market'
+}
+
+/**
  * What a withheld cell says to a screen reader (WP1.1 review, finding 6),
  * one table for every surface: a provisional subject's "you" side and change
  * are not shown until its check clears the floor; a failed one was checked and

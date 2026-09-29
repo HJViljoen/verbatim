@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import {
-  inviteMember, revokeInvitation, changeMemberRole, removeMember,
+  inviteMember, revokeInvitation, resendInvitation, changeMemberRole, removeMember,
   type ActionState,
 } from './actions'
 import type { Role } from '@/lib/auth'
@@ -94,6 +94,21 @@ export function RevokeButton({ id }: { id: string }) {
         {pending ? 'Revoking…' : 'Revoke'}
       </Button>
       {!state.ok && state.message && <span className="ml-2 text-xs text-destructive">{state.message}</span>}
+    </form>
+  )
+}
+
+// Resend in one step: the old invite is revoked and a fresh one emailed, with
+// a new 7-day link (the Sealand walkthrough, 29 Sep).
+export function ResendButton({ id }: { id: string }) {
+  const [state, formAction, pending] = useActionState(resendInvitation, idleState)
+  return (
+    <form action={formAction} className="flex items-center">
+      <input type="hidden" name="id" value={id} />
+      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+        {pending ? 'Sending…' : 'Resend'}
+      </Button>
+      {state.message && <span className={`ml-2 text-xs ${state.ok ? 'text-green-600' : 'text-destructive'}`}>{state.message}</span>}
     </form>
   )
 }

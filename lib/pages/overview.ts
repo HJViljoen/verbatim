@@ -123,6 +123,7 @@ import {
 } from './overview-market'
 import type { MarketCount } from '../reading/market'
 import type { PairRow } from '../reading/comparability'
+import type { MarketFrame } from './market-frame'
 
 export { monthPhrase }
 
@@ -864,6 +865,10 @@ export interface OverviewData {
   // byte (the parity gate for deploys 1 and 2).
   /** The pooled market by month: the reading month and the one before. */
   market?: MarketCount[]
+  /** What "Your market" is, in plain words (finish-list item 24). Set by the
+   *  front page's route only, never by the loader, so the monthly prints as
+   *  it did (lib/pages/market-frame.ts). */
+  frame?: MarketFrame
   themes?: ThemeBoard
   hero?: HeroLead
   /** The lead theme's voices: evidence quotes of its own insights, of its
@@ -3490,7 +3495,14 @@ export async function loadMovesExtras(input: {
   // the largest match with a LABEL tie-break, so on a tie the card's paired
   // movement could be a reading of one subject while `proposal.subjectId`
   // named another — with nothing on the card saying so.
-  const top = topMatchedSubject(membership)
+  //
+  // AND ONLY A SUBJECT WHOSE CLIENT SIDE PRINTS (finish-list item 21).
+  // `buildMoveCandidate` drops a subject that is not ready from the card's
+  // rows (`printsClient`), and this picked from every match, so Sealand's
+  // September card printed "Subjects matched: none" above "Community &
+  // purpose in your audience: 7 of 10", a subject being re-described that
+  // How to read says prints no figure. Same filter, same subject.
+  const top = topMatchedSubject(membership.filter((m) => printsClient(m.calibration)))
   const movement = top
     ? input.movementFor
       ? input.movementFor(top.subjectId)

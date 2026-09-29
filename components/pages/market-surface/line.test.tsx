@@ -46,7 +46,7 @@ const filed = (): MarketSurfaceData => {
 describe('In one line: the words', () => {
   it('says what Sealand’s market asked most in September, and that no move is dated yet (the preview’s words)', () => {
     expect(words(sealandMovesFixture())).toEqual({
-      head: 'In September your market asked most about airline bag sizes, buying and shipping, and bag materials. No move is dated yet.',
+      head: 'In September people in the market you sell into asked most about airline bag sizes, buying and shipping, and bag materials. No move is dated yet.',
       support: 'Questions on those three came up in 21, 20 and 11 of the 626 category videos, in themes not led by makers.',
     })
   })
@@ -65,7 +65,7 @@ describe('In one line: the words', () => {
 
   it('reads Össur: two question themes, no maker rule, so nothing said about makers', () => {
     expect(words(ossurMovesFixture())).toEqual({
-      head: 'In September your market asked most about prosthetic function, and about price and availability. No move is dated yet.',
+      head: 'In September people in the market you sell into asked most about prosthetic function, and about price and availability. No move is dated yet.',
       support: 'Questions on those two came up in 28 and 14 of the 338 category videos.',
     })
   })
@@ -79,13 +79,13 @@ describe('In one line: the words', () => {
   })
 
   it('says nothing about moves where moves are not recorded here', () => {
-    expect(words(unrecordedFixture())?.head).toBe('In September your market asked most about airline bag sizes, buying and shipping, and bag materials.')
+    expect(words(unrecordedFixture())?.head).toBe('In September people in the market you sell into asked most about airline bag sizes, buying and shipping, and bag materials.')
   })
 
   it('says so where no question reached the floor', () => {
     const base = sealandMovesFixture()
     const quiet = { ...base, questions: buildQuestions({ month: '2026-09-01', themes: [], segments: 'measured', n: 626, brandNames: ['Sealand'], posts: null, subjects: [], filings: null }) }
-    expect(words(quiet)).toEqual({ head: 'In September no question your market asked reached 10 videos. No move is dated yet.', support: '' })
+    expect(words(quiet)).toEqual({ head: 'In September no question asked in the market you sell into reached 10 videos. No move is dated yet.', support: '' })
   })
 
   it('draws nothing from a copy stored before the questions were read', () => {
@@ -110,7 +110,7 @@ describe('In one line: the block', () => {
 
   it('is the title alone over the answer, and a link alone under it (25 Sep rulings)', () => {
     const text = renderText(marketLine.render(sealandMovesFixture(), 'app', ctx))
-    expect(text.startsWith('In one line In September your market asked most about')).toBe(true)
+    expect(text.startsWith('In one line In September people in the market you sell into asked most about')).toBe(true)
     expect(text.endsWith('Open Conversation →')).toBe(true)
     // Print has no link to follow.
     expect(renderText(marketLine.render(sealandMovesFixture(), 'print', ctx))).not.toContain('Open Conversation')

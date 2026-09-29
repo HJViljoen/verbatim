@@ -30,14 +30,14 @@ describe('B1 · your name in your market', () => {
   it('is "not counted yet" until production has checked the name', () => {
     const b = buildNameBlock({ ...base, checks: { [SEALAND_CLIENT_ID]: {} } })
     expect(b.counted).toBeNull()
-    expect(words(nameLeadParts(b))).toBe('Your name in your market in September: not counted yet.')
+    expect(words(nameLeadParts(b))).toBe('Your name in the market you sell into, in September: not counted yet.')
     expect(nameOwnParts(b)).toBeNull()
     expect(nameCommentsLine(b)).toBeNull()
   })
 
   it('prints what the reading found once every match outside your own posts is read (staging: none of 654)', () => {
     const b = buildNameBlock({ ...base, checks: STAND_IN_CHECKS })
-    expect(words(nameLeadParts(b))).toBe('In September your name came up in none of your market’s 654 videos.')
+    expect(words(nameLeadParts(b))).toBe('In September your name came up in none of the 654 videos from the market you sell into.')
     expect(words(nameOwnParts(b))).toBe('The 8 videos that name you are your own posts.')
     expect(nameCommentsLine(b)).toBe('One September comment named you, under one of your own posts.')
   })
