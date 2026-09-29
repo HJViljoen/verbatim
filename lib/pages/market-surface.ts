@@ -295,7 +295,9 @@ export interface AdviceBlock {
    * idea, a handful (`adviceShortlist`), and how many rows it leaves out. The
    * page draws it in the app; `rows` above keeps the ledger's old twelve for
    * every other reader (exports, briefs, the quarterly), which are unchanged.
-   * Absent on a stored copy and on `?ledger=all`.
+   * Null on `?ledger=all` and wherever the loader was not asked for it (every
+   * caller but the page: `loadMarketSurface`'s `shortlist` option); absent on
+   * a stored copy.
    */
   shortlist?: { rows: AdviceRow[]; earlier: number } | null
 }
@@ -1291,7 +1293,14 @@ interface InsightRow {
  * conclusions, no advice and no decisions, and the page says so once rather
  * than drawing five blocks of absences.
  */
-export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData | null> {
+export async function loadMarketSurface(
+  scope: Scope,
+  /** `shortlist`: build the app's short list of current advice (walkthrough
+   *  item 6), which makes one embedding call on a cold server. OFF unless the
+   *  caller asks: only the Your moves page draws it, so briefs, the quarterly
+   *  and scripts load the ledger as they always did, with no model call. */
+  options: { shortlist?: boolean } = {},
+): Promise<MarketSurfaceData | null> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const params = scope.params as MarketSurfaceParams
@@ -1479,8 +1488,9 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // Its rows are read below with the ledger's own (grounding, afterwards, the
   // quote), so they are added to the rows read; the vectors that decide which
   // rows are one idea go out now and are taken when the block is built.
-  const currentRows = showAll ? [] : currentAdviceRows(adviceRows)
-  const vectorsAhead = showAll ? Promise.resolve(null) : adviceVectors(adviceRows)
+  const wantShortlist = options.shortlist === true && !showAll
+  const currentRows = wantShortlist ? currentAdviceRows(adviceRows) : []
+  const vectorsAhead = wantShortlist ? adviceVectors(adviceRows) : Promise.resolve(null)
   const shownIds = new Set(ledgerShown.map((r) => r.lineageId))
   const shownRows = [...ledgerShown, ...currentRows.filter((r) => !shownIds.has(r.lineageId))].sort((a, b) => a.number - b.number)
 
@@ -1623,7 +1633,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     heroByLineage.set(lineageKey(c), c.hero_quote ?? '')
   }
   const readRows = await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById)
-  const shortlist = showAll ? null : await (async () => {
+  const shortlist = !wantShortlist ? null : await (async () => {
     const vectors = await vectorsAhead
     const list = adviceShortlist(adviceRows, vectors ? (id) => vectors.get(id) : null, { shown: ADVICE_SHORTLIST })
     const byId = new Map(readRows.map((r) => [r.lineageId, r]))

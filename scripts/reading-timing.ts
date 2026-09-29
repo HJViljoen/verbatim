@@ -141,7 +141,7 @@ const PAGES: [string, Loader][] = [
   ['Overview', (s) => loadOverview(s, { marketFront: true })],
   ['Subjects', (s) => loadSubjectsPage(s)],
   ['Voice', (s) => loadVoiceSurface(s)],
-  ['Market', (s) => loadMarketSurface(s)],
+  ['Market', (s) => loadMarketSurface(s, { shortlist: true })],
   ['Competitive', (s) => loadCompetitiveSurface(s, { brands: true })],
   ['This week', (s) => loadWeek(s)],
 ]

@@ -20,6 +20,6 @@ export default async function Page({
 }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  const data = await loadMarketSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp })
+  const data = await loadMarketSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { shortlist: true })
   return <MarketSurfacePage data={data} params={sp} />
 }
