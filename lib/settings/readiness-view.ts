@@ -77,9 +77,10 @@ const CLIENT_UNLOCKS: Readonly<Record<string, string>> = {
 export const DELIVERY_OWNER = 'Set up with Heinrich'
 export const DELIVERY_UNLOCKS = `Heinrich switches the update on with you, once your reports are set up. To say who should get it, write to ${CONTACT_EMAIL}.`
 
-/** The one line over the whole table: anything on it to change goes through
- *  Heinrich, and this is how to reach him. */
-export const READINESS_CONTACT = `Anything here to change goes through Heinrich: write to ${CONTACT_EMAIL}.`
+/** The one line over the whole table: the rows that say "Tell us" or "Give us"
+ *  go to Heinrich, and this is how to reach him. Not "anything here": the
+ *  Recommendations row is the client's own to do, on Your moves. */
+export const READINESS_CONTACT = `Where a row asks you to tell us or give us something, write to Heinrich at ${CONTACT_EMAIL}.`
 
 export interface ClientReadinessRow extends ReadinessRow {
   /** The owner in the client's words. */

@@ -615,6 +615,9 @@ describe('clientReadiness', () => {
     expect(d.unlocks).toContain('heinrichviljoen@verbatimintel.com')
     expect(d.unlocks).not.toContain('turn it on')
     expect(READINESS_CONTACT).toContain('heinrichviljoen@verbatimintel.com')
+    // Not "anything here goes through Heinrich": marking a recommendation is
+    // the client's own to do, and its row says so.
+    expect(READINESS_CONTACT).toMatch(/^Where a row asks you to tell us or give us something/)
   })
 
   it('prints a "by when" only where a date was supplied', () => {
