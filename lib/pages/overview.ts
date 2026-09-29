@@ -4967,13 +4967,16 @@ async function loadMarketReads(input: {
   // call goes out inside the quotes' read as soon as their videos are known,
   // beside the English (`segmentsFor`; d3 speed pass), not after it.
   const leadIds = new Set(leadCandidates.map((t) => t.registryId))
-  const [quotes, firstProvenance] = await Promise.all([
+  // Every lead candidate's provenance in the one read beside the quotes, since
+  // a lead that cannot speak (`voicelessAhead`) moves the lead to another
+  // candidate, and a second read after the quotes would be a hop of its own.
+  const [quotes, leadProvenance] = await Promise.all([
     loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, leadIds, segments === 'measured' ? { client, themes: leadIds, known: input.marketSegments ?? undefined } : undefined),
     firstLead
       ? input.provenance
-        ? input.provenance.ask([firstLead]).then((m) => m.get(firstLead) ?? null)
-        : loadLeadProvenance(client, clientId, month, firstLead, addedSearches)
-      : Promise.resolve(null),
+        ? input.provenance.ask([...leadIds])
+        : loadThemesProvenance(client, clientId, month, [...leadIds], addedSearches)
+      : Promise.resolve(new Map<string, ThemeProvenance>()),
   ])
   if (branded.length > 0) {
     themes = themes.map((t) => {
@@ -5000,7 +5003,7 @@ async function loadMarketReads(input: {
   const leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
   const provenance = leadId == null
     ? null
-    : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
+    : leadProvenance.has(leadId) ? leadProvenance.get(leadId) ?? null : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
   const [changeRows, pairRows, recheck, brandsRead] = await Promise.all([changeRowsAhead, pairRowsAhead, recheckAhead, brandsAhead])
   return {
     themes,
