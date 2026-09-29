@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anchorClaims, type Segment } from '../ask/anchor'
-import { createCitedQuotePicker, fetchQuotesByAudience, fetchQuoteTextsByCommentId } from '../quotes'
+import { createCitedQuotePicker, fetchQuotesByAudience, fetchQuoteTextsByCommentId, readingOf, readTranslations } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
@@ -38,6 +38,9 @@ import { loadObjectReadings, type ObjectReading } from '../agent/movement'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '../agent/scope'
 import { starterQuestions, type StarterQuestion } from '../agent/starters'
 import { loadOverview } from './overview'
+import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, type AskQuoteVideo } from '../agent/floor'
+import { RPC_SEGMENTS_FOR_VIDEOS } from './noise'
+import { segmentRulesEnabled } from '../segments/rules'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -652,6 +655,11 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const citeRefs = messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.map((q) => ({ commentId: q.commentId, videoId: q.videoId }))))
   const metaP = citeRefs.length ? resolveCitations(supabase, citeRefs) : Promise.resolve(new Map<string, CitationMeta>())
   metaP.catch(() => {})
+  // WHAT EACH QUOTE'S VIDEO IS (walkthrough item 4): a maker's, off-topic, or
+  // filed under a rival. Fails open — a read error prints the quotes it
+  // always printed rather than none.
+  const quoteVideoIds = [...new Set(messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.map((q) => q.videoId).filter((v): v is string => Boolean(v)))))]
+  const quoteVideosP = loadQuoteVideos(supabase, clientId, quoteVideoIds)
 
   // AS3's index facts and the dates of the updates these answers were given
   // against. Both go out with the wave above rather than after it: round trips
@@ -818,6 +826,14 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   }
 
   const quoteText = await quoteTextP
+  // The English of every quote whose stored answer did not carry it, read
+  // once the words are known (the readability rule needs it).
+  const translations = await readTranslations(
+    supabase,
+    messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.filter((q) => q.lang == null).map((q) => q.text || (q.commentId ? quoteText.get(q.commentId) ?? '' : '')))).filter(Boolean),
+  ).catch(() => new Map<string, { lang: string; english: string | null }>())
+  const quoteVideos = await quoteVideosP
+  const quotedVideos = new Set<string>()
   const runStartedAt = new Map(
     readRows<{ id: string; started_at: string | null }>(await runsP, 'agentThread.runs')
       .map((r) => [r.id, r.started_at]),
@@ -833,11 +849,23 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     const reply = messages[i + 1]?.role === 'agent' ? messages[i + 1] : null
     let answer: ThreadAnswer | null = null
     if (reply?.result) {
+      const namedRivals = reply.result.namedRivals ?? []
       const grounded = reply.result.grounded.map((g) => ({
         ...g,
         quotes: g.quotes
           .map((q) => ({ ...q, text: q.text || (q.commentId ? quoteText.get(q.commentId) ?? '' : '') }))
+          .map((q) => (q.lang != null ? q : { ...q, ...readingOf(translations, q.text) }))
           .filter((q) => q.text)
+          // THE QUOTE RULES (item 4): readable, not a maker's or off-topic
+          // video, not a seller, the right brand, and one per video across the
+          // whole thread.
+          .filter((q) => askQuoteOk(q, q.videoId ? quoteVideos.get(q.videoId) : undefined, namedRivals))
+          .filter((q) => {
+            const key = q.videoId ?? (q.commentId ? `c:${q.commentId}` : q.text)
+            if (quotedVideos.has(key)) return false
+            quotedVideos.add(key)
+            return true
+          })
           .map((q) => {
             n += 1
             const ref = q.commentId ? quoteRef.comment(q.commentId) : quoteRef.video(q.videoId as string)
@@ -901,7 +929,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const set = await seriesP
   const seeded = set != null && set.substrate === 'seeded' && set.numeratorSubstrate === 'seeded'
   const about = await aboutP
-  const measure = withObjectVerdicts(measureAnswer({
+  const measured = withObjectVerdicts(measureAnswer({
     findings: answerFindings(turns),
     series: seeded ? (set as NonNullable<typeof set>).series : [],
     month: readMonth,
@@ -911,6 +939,25 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     ownAudience: CLIENT_AUDIENCE,
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
   }), about)
+  // ── the evidence floor (walkthrough item 4) ─────────────────────────────
+  //
+  // A finding is printed only where videos stand behind it: its measured k
+  // where it was measured (the "N of M videos" printed beside it), else the
+  // videos behind its evidence. Its quotes and the judgement resting only on
+  // it go with it, and a lead that summarised it gives way to the product's
+  // own sentence (`floorAnswer`). Taken BEFORE the scrub and the fallback, so
+  // neither can bring a dropped finding's figure back.
+  const leads = new Map<number, string>()
+  const droppedFindings = new Set<string>()
+  turns.forEach((t, i) => {
+    if (!t.answer) return
+    const findingOf = (id: string) => measured.findings.find((f) => f.findingId === findingKey(i, id)) ?? null
+    const floored = floorAnswer(t.answer, (p) => findingOf(p.id)?.value.k ?? p.conversationCount, ASK_FINDING_FLOOR)
+    t.answer = floored.answer
+    for (const id of floored.dropped) droppedFindings.add(findingKey(i, id))
+    if (floored.lead) leads.set(i, floored.lead)
+  })
+  const measure: AnswerMeasure = { ...measured, findings: measured.findings.filter((f) => !droppedFindings.has(f.findingId)) }
   const fallback = answerFallback(measure)
   // The thread's own inputs, never its output: the client's questions and the
   // theme labels the answer rests on. A product name with a digit in it
@@ -941,7 +988,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       // opinion rather than as a replacement. Both renderers print this INSTEAD
       // OF `answer` — an emptied head used to render as a blank paragraph,
       // which is a worse artefact than the prose it replaced.
-      fallback: scrubbed.answer.trim() === '' ? fallback : null,
+      fallback: leads.get(i) ?? (scrubbed.answer.trim() === '' ? fallback : null),
     }
   })
 
@@ -988,6 +1035,33 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
           : 'Nothing in the conversation analysed related to what was asked.',
     },
   }
+}
+
+/**
+ * What each quoted video is, for the quote rules (`askQuoteOk`): the rival it
+ * is filed under, and its segment where the tenant has a segment rule. Two
+ * small reads over the thread's own quotes. FAILS OPEN: a read error leaves a
+ * video unknown, and an unknown video's quote is printed as it was.
+ */
+async function loadQuoteVideos(supabase: SupabaseClient, clientId: string, videoIds: readonly string[]): Promise<Map<string, AskQuoteVideo>> {
+  const out = new Map<string, AskQuoteVideo>()
+  if (videoIds.length === 0) return out
+  const [videosRes, segmentsRes] = await Promise.all([
+    Promise.resolve(supabase.from('videos').select('id, is_competitor, competitor_name').eq('client_id', clientId).in('id', [...videoIds]))
+      .catch((e: unknown) => ({ data: null, error: e })),
+    segmentRulesEnabled(clientId)
+      ? Promise.resolve(supabase.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...videoIds] }))
+          .catch((e: unknown) => ({ data: null, error: e }))
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (videosRes.error) console.error(`[pages] agentThread.quoteVideos: ${(videosRes.error as { message?: string })?.message ?? String(videosRes.error)}`)
+  if (segmentsRes.error) console.error(`[pages] agentThread.quoteSegments: ${(segmentsRes.error as { message?: string })?.message ?? String(segmentsRes.error)}`)
+  const segmentOf = new Map(((segmentsRes.data ?? []) as { video_id: string; segment: string | null }[]).map((r) => [String(r.video_id), r.segment ?? null]))
+  for (const v of (videosRes.data ?? []) as { id: string; is_competitor: boolean | null; competitor_name: string | null }[]) {
+    out.set(v.id, { segment: segmentOf.get(v.id) ?? null, rival: v.is_competitor && v.competitor_name ? v.competitor_name : null })
+  }
+  for (const [id, segment] of segmentOf) if (!out.has(id)) out.set(id, { segment, rival: null })
+  return out
 }
 
 // ── print pagination (pure) ───────────────────────────────────────────────

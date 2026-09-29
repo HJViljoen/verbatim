@@ -465,7 +465,9 @@ function Judgement({
  * has no denominator.
  */
 function AnswerFooter({ f }: { f: FindingMeasure | null }) {
-  if (!f) return null
+  // NEVER "Open the 0 videos behind this" (walkthrough item 4): a link to
+  // nothing is the one footer this tile may not print.
+  if (!f || f.value.k <= 0) return null
   return (
     <>
       {/* THE AUDIENCE TRAVELS WITH THE FIGURE. The k is the audience's own —

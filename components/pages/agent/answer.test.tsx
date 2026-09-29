@@ -430,3 +430,27 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
     assertAboutContract(<AboutReadings readings={[ready, provisional, brand, unread]} />)
   })
 })
+
+// Walkthrough item 4: "perception is mixed…" over findings measured at "0 of
+// 360 videos", with "Open the 0 videos behind this" under them.
+describe('an answer with too little behind it', () => {
+  it('never offers the videos behind a finding that has none', () => {
+    const d = agentFixture()
+    const zero = { ...d.measure!, findings: d.measure!.findings.map((f) => ({ ...f, value: { ...f.value, k: 0 } })) }
+    const text = renderText(
+      <AnswerTile turn={d.turns[0]} turnIndex={0} measure={zero} citations={d.citations} basis={d.basis} />,
+    )
+    expect(text).not.toMatch(/Open the 0 videos/)
+  })
+
+  it('prints the product’s sentence in place of the lead, and no findings', () => {
+    const d = agentFixture()
+    const answer = d.turns[0].answer!
+    const thin = { ...d.turns[0], answer: { ...answer, answer: '', grounded: [], judgement: [], fallback: 'There is too little in your market about this to answer it.' } }
+    const text = renderText(<AnswerTile turn={thin} turnIndex={0} measure={null} citations={d.citations} basis={d.basis} />)
+    expect(text).toContain('There is too little in your market about this to answer it.')
+    expect(text).not.toContain('Open the')
+    expect(text).not.toContain('What I’d take from that')
+    expect(copyViolations(<AnswerTile turn={thin} turnIndex={0} measure={null} citations={d.citations} basis={d.basis} />)).toEqual([])
+  })
+})
