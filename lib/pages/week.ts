@@ -658,8 +658,9 @@ export interface RivalPosts {
    */
   posts: RivalPost[]
   /** How many posts this update found for this rival in all, of which `posts`
-   *  are the shown few. `byThem + aboutThem`, carried so the block never has
-   *  to add two numbers to say "3 of 94". */
+   *  are the shown few. `byThem + foundByName` (not `aboutThem`, which counts
+   *  on the Brands page's basis), carried so the block never has to add two
+   *  numbers to say "3 of 94". */
   postsTotal: number
   /** How many of those were WEIGHED — the widest-reaching `RIVAL_POSTS_CONSIDERED`,
    *  whose window comments were counted so the three with the most could be
