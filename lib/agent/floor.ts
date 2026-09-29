@@ -28,10 +28,11 @@ import { readsAsOffer } from '../pages/overview-market/offers'
 
 /**
  * The fewest videos a finding needs behind it to be printed as a finding.
- * 1 drops a finding nothing stands behind (the "0 of 360" rows); the value is
- * set by a `default:` commit.
+ * Five is a default (walkthrough, 29 Sep): the same floor a plan-check verdict
+ * stands on (`PLAN_VERDICT_MIN_VIDEOS`). 1 only drops a finding nothing
+ * stands behind (the "0 of 360" rows).
  */
-export const ASK_FINDING_FLOOR = 1
+export const ASK_FINDING_FLOOR = 5
 
 /** What the answer says where nothing it found clears the floor. */
 export const tooLittleToAnswer = (floor: number = ASK_FINDING_FLOOR): string =>
