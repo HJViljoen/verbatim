@@ -9,6 +9,7 @@ import { getBaseUrl } from '@/lib/site'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { InviteForm, RevokeButton, MemberControls, CopyLinkButton } from './team-ui'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 // Team management — list members + pending invites, invite teammates, manage
 // roles. Owners/admins can invite + revoke; only owners change roles or remove
@@ -19,6 +20,12 @@ interface MemberRow { id: string; full_name: string | null; email: string; role:
 interface InviteRow { id: string; email: string; role: 'owner' | 'admin' | 'member'; expires_at: string; token: string | null }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+/** Heinrich's address, as a link (finish-list item 18): "ask us" with no way
+ *  to reach anyone is a dead end. */
+function ContactLink() {
+  return <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
+}
 
 function RoleBadge({ role }: { role: string }) {
   return (
@@ -154,7 +161,7 @@ export default async function TeamPage() {
                   or invite a teammate, they join the Weekly digest when they accept.
                 </>
               ) : (
-                <>Nobody yet. Invite a teammate and they join the Weekly digest when they accept, or ask us to add an address.</>
+                <>Nobody yet. Heinrich sets up who gets the update with you: write to <ContactLink />.</>
               )}
             </p>
           ) : (
@@ -184,7 +191,7 @@ export default async function TeamPage() {
                     <Link href={STUDIO_HREF} className="underline underline-offset-2">the Studio</Link>.
                   </>
                 ) : (
-                  <> Ask us to add them to a list.</>
+                  <> Heinrich adds them once your reports are set up: write to <ContactLink />.</>
                 )
               ) : null}
             </p>

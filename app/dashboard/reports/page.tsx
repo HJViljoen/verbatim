@@ -35,6 +35,7 @@ import { BRIEFS_META, BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefMo
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 // Reports — the three briefs, and the archive of what went out (Phase 1 WP19,
 // design RP1 and RP4; decision R).
@@ -500,7 +501,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       <>
         <DetailHeader eyebrow={scheduleName(selectedSend)} title={selectedSend.subject ?? 'Update'} meta={sendLine(selectedSend)} />
         {(selectedSend.status === 'failed' || sendDidNotFinish(selectedSend.status, selectedSend.claimed_at)) && (
-          <DetailSection><p className="text-[12.5px] text-negative">This update did not reach anyone. {selectedSend.status === 'failed' ? sendFailureSentence(selectedSend.error) : 'The send started and never finished.'} {studio ? 'An owner or admin can send it again from the Studio.' : 'Ask your Verbatim contact to send it again.'}</p></DetailSection>
+          <DetailSection><p className="text-[12.5px] text-negative">This update did not reach anyone. {selectedSend.status === 'failed' ? sendFailureSentence(selectedSend.error) : 'The send started and never finished.'} {studio ? 'An owner or admin can send it again from the Studio.' : `Write to ${CONTACT_EMAIL} and Heinrich will send it again.`}</p></DetailSection>
         )}
         <DetailSection label="To">
           <p className="text-[12.5px] text-secondary-foreground">{selectedSend.recipients.join(' · ') || 'nobody'}</p>

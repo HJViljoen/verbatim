@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { BillingAccess } from '@/lib/billing'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 /**
  * Workspace-state banner (Tier 0 T0-2, 2026-08-18). billingAccess() gated
@@ -20,7 +21,7 @@ export function AccessBanner({ access }: { access: BillingAccess }) {
     },
     suspended: {
       title: 'This workspace is paused',
-      body: 'Updates are not running. Reply to your last update or contact us and we will switch it back on.',
+      body: `Updates are not running. Write to ${CONTACT_EMAIL} and Heinrich will switch them back on.`,
     },
     none: {
       title: 'Your trial has ended',

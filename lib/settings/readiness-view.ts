@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from '../legal'
 import { fullDate } from '../format'
 import { summarise, type ReadinessSummary } from '../readiness/compute'
 import type { ReadinessRow } from '../readiness/types'
@@ -66,6 +67,20 @@ const CLIENT_UNLOCKS: Readonly<Record<string, string>> = {
   decisions: 'Once you can mark a recommendation as taken or declined, this becomes the record of what you decided.',
 }
 
+/**
+ * WHO SWITCHES DELIVERY ON, AND HOW TO REACH HIM (finish-list item 18). The
+ * row read "Yours to change" beside "Add the people who should get it … and
+ * turn it on", while sending is Heinrich's during the trial (lib/tenant-locks.ts)
+ * and the weekly email is paused at his request. The row stays shown; its
+ * owner and its sentence say who does it.
+ */
+export const DELIVERY_OWNER = 'Set up with Heinrich'
+export const DELIVERY_UNLOCKS = `Heinrich switches the update on with you, once your reports are set up. To say who should get it, write to ${CONTACT_EMAIL}.`
+
+/** The one line over the whole table: anything on it to change goes through
+ *  Heinrich, and this is how to reach him. */
+export const READINESS_CONTACT = `Anything here to change goes through Heinrich: write to ${CONTACT_EMAIL}.`
+
 export interface ClientReadinessRow extends ReadinessRow {
   /** The owner in the client's words. */
   ownerWords: string
@@ -101,8 +116,8 @@ export function clientReadiness(
       // (Settings › The record › Coverage says it word for word); Readiness is
       // about what is missing (copy de-clutter C9).
       notes: r.id === 'read-depth' ? [] : r.notes,
-      unlocks: r.owner === 'client' ? r.unlocks : (CLIENT_UNLOCKS[r.id] ?? r.unlocks),
-      ownerWords: OWNER_WORDS[r.owner],
+      unlocks: r.id === 'delivery' ? DELIVERY_UNLOCKS : r.owner === 'client' ? r.unlocks : (CLIENT_UNLOCKS[r.id] ?? r.unlocks),
+      ownerWords: r.id === 'delivery' ? DELIVERY_OWNER : OWNER_WORDS[r.owner],
       by: by ? fullDate(by) : null,
     }
   })
