@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { VerbatimMark } from '@/components/brand/mark'
 import { USE_CASES_PUBLIC } from '../_data/playbooks'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 const APP_URL = 'https://app.verbatimintel.com'
 
@@ -19,7 +20,7 @@ export function SiteFooter() {
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
           <a href={`${APP_URL}/login`}>Sign in</a>
-          <a href="mailto:heinrichviljoen@verbatimintel.com">heinrichviljoen@verbatimintel.com</a>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </span>
         <span>Cape Town. Runs weekly.</span>
       </div>

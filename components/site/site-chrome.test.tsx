@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { render } from '@/lib/test/render'
 import { SiteNav } from '@/app/site/_components/site-nav'
 import { SiteFooter } from '@/app/site/_components/site-footer'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 // The marketing chrome's way into the app (finish-list item 25). Below 900px
 // the header used to hide every text link, Sign in with them, and the footer
@@ -32,6 +33,8 @@ describe('the site header and footer', () => {
   it('the footer names the mailbox someone reads, not hello@', () => {
     const html = render(SiteFooter())
     expect(html).toContain('href="mailto:heinrichviljoen@verbatimintel.com"')
+    // One address across the site, the legal pages and the app (lib/legal).
+    expect(html).toContain(`href="mailto:${CONTACT_EMAIL}"`)
     expect(html).not.toContain('hello@verbatimintel.com')
   })
 })

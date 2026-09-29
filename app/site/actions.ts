@@ -1,6 +1,7 @@
 'use server'
 
 import { sendLeadEmail } from '@/lib/email'
+import { CONTACT_EMAIL } from '@/lib/legal'
 
 export interface LeadState {
   status: 'idle' | 'sent' | 'error'
@@ -40,7 +41,7 @@ export async function submitLead(_prev: LeadState, formData: FormData): Promise<
     return {
       status: 'error',
       message:
-        "That didn't send. Try again in a minute, or email heinrichviljoen@verbatimintel.com directly.",
+        `That didn't send. Try again in a minute, or email ${CONTACT_EMAIL} directly.`,
     }
   }
   return { status: 'sent', message: '' }
