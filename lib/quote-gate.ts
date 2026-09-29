@@ -129,6 +129,28 @@ export type GateReason =
 
 export type GateVerdict = { ok: true; score: number; relevance: number; thread: string | null } | { ok: false; reason: GateReason }
 
+/**
+ * Two rules the brief did not ask for in so many words, chosen on Heinrich's
+ * behalf and switched on in a `default:` commit of their own, so either can be
+ * turned off by reverting it (BUILD-RULES, 29 Sep):
+ *
+ *   widerMakerWords     a creator's post whose own words say a maker made the
+ *                       thing ("handmade", "I made this", a knitting account,
+ *                       custom orders) is a maker's for quotes, beyond the
+ *                       segments_v1 labels (which production holds for all
+ *                       6,379 videos and which missed the Turkish knitter, the
+ *                       Ibadan shop and La Sana Rana); and a shop's account
+ *                       name ("… BAGS IN IBADAN.") marks a seller's post.
+ *                       Quotes only: nothing counted moves.
+ *   ownPostsOutOfMarket a comment under the client's own post is not the
+ *                       market's voice in a market block (decision E); Worth a
+ *                       reply and Your moves still take them (`allowOwn`).
+ */
+export const QUOTE_DEFAULTS: Readonly<{ widerMakerWords: boolean; ownPostsOutOfMarket: boolean }> = {
+  widerMakerWords: false,
+  ownPostsOutOfMarket: false,
+}
+
 /** Which tenants' quotes carry a market lexicon: Sealand's, bags. */
 export function quoteMarketFor(clientId: string): QuoteMarket | null {
   return segmentRulesEnabled(clientId) ? 'carry' : null
@@ -204,7 +226,7 @@ const videoWords = (v: QuoteVideo): string => `${v.caption ?? ''} ${(v.hashtags 
 /** Is this video a seller's sale post? */
 export function isSellerPost(v: QuoteVideo): boolean {
   if (COMMUNITY(v.platform)) return false
-  return SELLER_POST.test(videoWords(v)) || SELLER_ACCOUNT.test(v.accountName ?? '')
+  return SELLER_POST.test(videoWords(v)) || (QUOTE_DEFAULTS.widerMakerWords && SELLER_ACCOUNT.test(v.accountName ?? ''))
 }
 
 // ---- 5. Makers -------------------------------------------------------------------------
@@ -221,7 +243,7 @@ export function isMakerPost(v: QuoteVideo, makerRule: boolean): boolean {
   if (v.segment === 'maker') return true
   if (!makerRule) return false
   if (v.segment == null && makerWordIn(makerHaystack(v)) != null) return true
-  if (COMMUNITY(v.platform)) return false
+  if (COMMUNITY(v.platform) || !QUOTE_DEFAULTS.widerMakerWords) return false
   return MAKER_POST.test(`${videoWords(v)} ${(v.topics ?? []).join(' · ')} ${v.accountName ?? ''}`)
 }
 
@@ -516,7 +538,7 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
     if (!filed && !named) return { ok: false, reason: 'wrong_brand' }
     if (!named && otherBrandsNamed(words, o.brand).length > 0) return { ok: false, reason: 'wrong_brand' }
   } else if (v) {
-    if (v.isClient === true && !o.allowOwn) return { ok: false, reason: 'own_post' }
+    if (QUOTE_DEFAULTS.ownPostsOutOfMarket && v.isClient === true && !o.allowOwn) return { ok: false, reason: 'own_post' }
     if (v.source === 'competitor_owned' || (v.isClient !== true && brandOfAccount(v.accountName) != null)) {
       return { ok: false, reason: 'brand_post' }
     }

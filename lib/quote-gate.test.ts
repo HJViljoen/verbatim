@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  brandOfAccount, isCarryVideo, isMakerPost, isSellerPost, pickEligible, quoteGate, readableEnglish, readClaim,
+  brandOfAccount, isCarryVideo, isMakerPost, isSellerPost, pickEligible, quoteGate, QUOTE_DEFAULTS, readableEnglish, readClaim,
   relevanceTo, whyNot, type GateInput, type GateOptions, type QuoteVideo,
 } from './quote-gate'
 
@@ -175,11 +175,16 @@ describe('the known-bad quotes no longer print (walkthrough, 29 Sep)', () => {
     const o = { ...SEALAND, claim: 'Price and sale status questions', requireRelevance: true }
     expect(whyNot(q('Ellerinize sağlık model çok güzel fiyat nedir ? 😍', TURKISH_KNIT_BAG,
       { lang: 'tr', english: 'Bless your hands, the model is very beautiful, what is the price? 😍' }), o)).toBe('maker_praise')
-    // Without the praise, the post is still a maker's (handmade, a knitting account).
+    // The Ibadan post is a sale ad on its own words (a price label, "Available to order").
+    expect(whyNot(q('Wow so your bags cost K363 in Zambia? Definitely adding this to my future purchases', IBADAN_SELLER), o))
+      .toBe(QUOTE_DEFAULTS.widerMakerWords ? 'maker_video' : 'seller_post')
+    expect(isSellerPost(IBADAN_SELLER)).toBe(true)
+  })
+
+  it.runIf(QUOTE_DEFAULTS.widerMakerWords)('(default: wider maker words) a handmade knitting account’s post is a maker’s even without the praise', () => {
+    const o = { ...SEALAND, claim: 'Price and sale status questions', requireRelevance: true }
     expect(whyNot(q('Çok şık zarif bir çanta fiyat nedir 😍', TURKISH_KNIT_BAG,
       { lang: 'tr', english: 'Very stylish elegant bag what is the price 😍' }), o)).toBe('maker_video')
-    expect(whyNot(q('Wow so your bags cost K363 in Zambia? Definitely adding this to my future purchases', IBADAN_SELLER), o)).toBe('maker_video')
-    expect(isSellerPost(IBADAN_SELLER)).toBe(true)
     expect(isMakerPost(TURKISH_KNIT_BAG, true)).toBe(true)
   })
 
@@ -211,8 +216,10 @@ describe('the known-bad quotes no longer print (walkthrough, 29 Sep)', () => {
 
   it('Subjects › Buying & delivery: hype under a maker’s shop post, and hype that says nothing about buying', () => {
     const o = { ...SEALAND, claim: 'Buying & delivery. Comments about buying, ordering, shipping and delivery.', requireRelevance: true }
-    expect(whyNot(q('GIVE IT TO ME RIGHT NOW', LA_SANA_RANA), o)).toBe('maker_video')
-    expect(whyNot(q('I will sell my first born I couldn’t be more serious', LA_SANA_RANA), o)).toBe('maker_video')
+    // Hype that says nothing about buying; with the wider maker words, under a
+    // handmade shop's post as well.
+    expect(whyNot(q('GIVE IT TO ME RIGHT NOW', LA_SANA_RANA), o)).toBe(QUOTE_DEFAULTS.widerMakerWords ? 'maker_video' : 'not_relevant')
+    expect(whyNot(q('I will sell my first born I couldn’t be more serious', LA_SANA_RANA), o)).toBe(QUOTE_DEFAULTS.widerMakerWords ? 'maker_video' : 'off_topic')
     expect(whyNot(q('YOUR BAG IS SOOOO COOL', COTOPAXI_ALLPA_TIKTOK), o)).toBe('not_relevant')
     expect(whyNot(q('What kind of bag is thatttt😍😍😍 i need to knoww', COTOPAXI_ALLPA_TIKTOK), o)).toBe('not_relevant')
     // …and a voice that does speak to it prints.
