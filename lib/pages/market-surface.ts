@@ -44,6 +44,8 @@ import { row } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { quotesUntranslated } from './evidence-untranslated'
+import { quoteGate } from '../quote-gate'
+import { gateFor, readQuoteContext } from '../quote-context'
 import { earliestMoveDay } from '../subjects/move-day'
 import type { MoveDating } from './date-move'
 
@@ -1590,7 +1592,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     heroByLineage.set(lineageKey(c), c.hero_quote ?? '')
   }
   const advice: AdviceBlock = {
-    rows: await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById),
+    rows: await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById, clientId),
     // The ledger's first row: `buildAdviceRows` sorts this same answer first.
     current: currentTopLineage(recRows),
     highlight: requestedRow?.lineageId ?? null,
@@ -2380,6 +2382,7 @@ async function attachQuotes(
   heroByLineage: Map<string, string>,
   evidenceByInsight: Map<string, string[]>,
   themeSlugById: Map<string, string>,
+  clientId: string,
 ): Promise<AdviceRow[]> {
   const audienceIdsFor = (r: AdviceRow) => [...new Set(r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? []))]
   const heroOf = (r: AdviceRow) => (heroByLineage.get(r.lineageId) ?? '').trim()
@@ -2391,7 +2394,7 @@ async function attachQuotes(
     return new Map<string, QuoteRow[]>()
   })
   const pick = createCitedQuotePicker(byAudience, themeSlugById)
-  return rows.map((r) => {
+  const vouchedRows = rows.map((r) => {
     const hero = heroOf(r)
     if (!hero) return r
     // THE HERO AND NOTHING ELSE — see `HERO_ONLY`. Asking for one quote made
@@ -2402,6 +2405,29 @@ async function attachQuotes(
     const picked = pick(audienceIdsFor(r), HERO_ONLY, r.title, hero)[0]
     const vouched = picked != null && cleanQuote(picked.text).toLowerCase() === cleanQuote(hero).toLowerCase()
     return { ...r, quote: vouched ? picked : null }
+  })
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): a vouched hero
+  // is printed only where it is a buyer's or a commenter's on the market —
+  // not a maker's audience, not a seller's post, readable — and the list
+  // prints one quote per thread. A comment under the client's own post may
+  // stand (advice is often about the client's own audience).
+  const evidenceIds = vouchedRows.map((r) => (r.quote?.ref.startsWith('e:') ? r.quote.ref.slice(2) : null))
+  if (!evidenceIds.some(Boolean)) return vouchedRows
+  const ctx = await readQuoteContext(supabase, clientId, { evidenceIds }).catch((error: unknown) => {
+    console.error(`[pages] market-surface.adviceQuoteContext: ${error instanceof Error ? error.message : String(error)}; no quote printed`)
+    return null
+  })
+  const threads = new Set<string>()
+  return vouchedRows.map((r, i) => {
+    const q = r.quote
+    const id = evidenceIds[i]
+    if (!q || !id) return r
+    const verdict = ctx
+      ? quoteGate({ text: q.text, lang: q.lang ?? null, english: q.english ?? null, video: ctx.forEvidence(id) }, gateFor(clientId, { claim: r.title, allowOwn: true }))
+      : null
+    if (!verdict?.ok || (verdict.thread && threads.has(verdict.thread))) return { ...r, quote: null }
+    if (verdict.thread) threads.add(verdict.thread)
+    return r
   })
 }
 
