@@ -3,7 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ASK_THEMES_PER_CLAIM } from '../config'
 import { fmtInt, shortDate } from '../format'
 import { rows as readRows } from '../pages/read'
-import { createCitedQuotePicker, fetchQuotesByAudience } from '../quotes'
+import { gateCitedQuotes, gateFor, readPoolContext, type QuoteContext } from '../quote-context'
+import { createCitedQuotePicker, fetchQuotesByAudience, type QuoteRow } from '../quotes'
 import type { Quote } from '../renderables/types'
 import type { Scope } from '../renderables/types'
 import { isMissingColumnError } from '../supabase-admin'
@@ -317,6 +318,38 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
   }
 }
 
+/** Candidates the picker offers per claim before the quote gate chooses one
+ *  (the old Market page's depth, lib/pages/market.ts `pickQuotes`). */
+export const PLAN_QUOTE_CANDIDATES = 12
+
+/**
+ * One quote per claim, through the quote gate (walkthrough, 29 Sep;
+ * lib/quote-gate.ts), as the old Market page runs it: a deeper pick, then the
+ * gate. Readable, on the market, not a maker's audience, a seller's post or a
+ * brand's own post, and speaking to the claim where the ranking can tell.
+ *
+ * A FRESH PICKER PER CLAIM, ONE SET OF PRINTED WORDS FOR THE PAGE. The cited
+ * picker marks every quote it offers as used, so one shared picker asked for
+ * twelve would spend the next claim's candidates on quotes that never printed;
+ * the gate's `used` carries only what printed, so no voice prints twice across
+ * the cards. `ctx` null (the context could not be read) prints no quote:
+ * nothing the gate cannot place prints.
+ */
+export function planQuotePicker(
+  byAudience: ReadonlyMap<string, QuoteRow[]>,
+  ctx: QuoteContext | null,
+  clientId: string,
+): (c: ClaimResult) => Quote | null {
+  const printed = new Set<string>()
+  const pool = new Map(byAudience)
+  return (c) => {
+    if (!ctx || !c.insightIds?.length) return null
+    const claim = `${c.claim}. ${c.theySay ?? ''}`
+    const offered = createCitedQuotePicker(pool, new Map())(c.insightIds.slice(0, ASK_THEMES_PER_CLAIM), PLAN_QUOTE_CANDIDATES, claim)
+    return gateCitedQuotes(offered, ctx, 1, gateFor(clientId, { claim, used: printed }))[0] ?? null
+  }
+}
+
 // ---- the loader ---------------------------------------------------------------
 
 interface CheckRow {
@@ -393,9 +426,9 @@ export async function loadPlanChecks(scope: Scope, corpusVideos: number | null =
     evalsByCheck.set(e.plan_check_id, arr)
   }
 
-  // ONE QUOTE PASS FOR EVERY CARD, not one per claim. The picker de-duplicates
-  // across cards as it does across tiles, so a quote shown under one claim is
-  // not shown again under another.
+  // ONE QUOTE PASS FOR EVERY CARD, not one per claim: one fetch and one
+  // context read, and a quote shown under one claim is not shown again under
+  // another (`planQuotePicker`).
   const claimsOf = (c: CheckRow) => (c.claims ?? []).filter((x) => x && typeof x.claim === 'string')
   // THE QUOTES ARE RESOLVED AGAINST THE PRINTED READING, not the upload's. A
   // re-evaluation re-runs the whole verdict pass, so its claims carry their own
@@ -412,12 +445,12 @@ export async function loadPlanChecks(scope: Scope, corpusVideos: number | null =
       ),
     ),
   ]
-  const byAudience = insightIds.length ? await fetchQuotesByAudience(supabase, insightIds) : new Map()
-  const pick = createCitedQuotePicker(byAudience, new Map())
-  const quoteFor = (c: ClaimResult): Quote | null => {
-    if (!c.insightIds?.length) return null
-    return pick(c.insightIds.slice(0, ASK_THEMES_PER_CLAIM), 1, `${c.claim}. ${c.theySay ?? ''}`)[0] ?? null
-  }
+  const byAudience: Map<string, QuoteRow[]> = insightIds.length ? await fetchQuotesByAudience(supabase, insightIds) : new Map()
+  const ctx = byAudience.size === 0 ? null : await readPoolContext(supabase, clientId, byAudience).catch((error: unknown) => {
+    console.error(`[planCards] quote context not read for ${clientId}: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  })
+  const quoteFor = planQuotePicker(byAudience, ctx, clientId)
 
   return checks.map((c) =>
     planCard({

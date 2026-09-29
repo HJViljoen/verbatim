@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest'
 
 import {
   PLAN_CLAIM_BASIS, PLAN_CLAIM_BASIS_UNCOUNTED, PLAN_FLOOR_LINE, PLAN_VERDICT_FLOOR, PLAN_VERDICT_LABEL,
-  currentReading, movedSinceUpload, planCard, type PlanEvaluation,
+  PLAN_QUOTE_CANDIDATES, currentReading, movedSinceUpload, planCard, planQuotePicker, type PlanEvaluation,
 } from './plan-cards'
+import type { QuoteContext } from '../quote-context'
+import type { QuoteVideo } from '../quote-gate'
+import { createCitedQuotePicker, type QuoteRow } from '../quotes'
 import type { ClaimResult } from './types'
 import { validateVerdicts, type AskTheme } from './verdicts'
 
@@ -272,5 +275,54 @@ describe('planCard', () => {
 
   it('says nothing has re-read the document by leaving checkedOn null', () => {
     expect(planCard({ ...base, claims: [claim('C1', 'echoes', 9)], summary: null }).checkedOn).toBeNull()
+  })
+})
+
+// The plan cards' quotes go through the quote gate, as the old Market page's
+// do (walkthrough, 29 Sep): a deeper pick, then the gate.
+describe('planQuotePicker — a plan claim’s quote passes the quote gate', () => {
+  const CLIENT = '00000000-0000-4000-8000-000000000001'
+  const market: QuoteVideo = { platform: 'tiktok', videoId: 'v-market', accountName: 'someone', caption: 'my trip', source: 'discovered', isClient: false, isCompetitor: false }
+  const row = (evidenceId: string, quote: string, rank: number): QuoteRow => ({ quote, rank, evidenceId })
+  const ctxOf = (videos: Record<string, QuoteVideo | null>): QuoteContext => ({
+    forEvidence: (id) => (id ? videos[id] ?? null : null),
+    forComment: () => null,
+    forVideo: () => null,
+    forVideoUuid: () => null,
+    commentOfEvidence: () => null,
+  })
+  const withQuote = (ref: string) => ({ ...claim(ref, 'echoes', 9, ['i1']), claim: `claim ${ref} about the bag lasting` })
+
+  it('skips a quote the gate refuses and prints the next that passes', () => {
+    const byAudience = new Map([['i1', [
+      row('ev-brand', 'My bag has been lasting through three years of daily commuting now', 1),
+      row('ev-market', 'Mine is lasting well too, the bag still looks new after a year', 2),
+    ]]])
+    const videos = {
+      // A competitor's own post: never the market's word (the gate's brand_post).
+      'ev-brand': { ...market, videoId: 'v-brand', source: 'competitor_owned', isCompetitor: true, competitorName: 'Rival' },
+      'ev-market': market,
+    }
+    // Ungated, the picker's first choice is the brand's post.
+    expect(createCitedQuotePicker(byAudience, new Map())(['i1'], 1, `${withQuote('C1').claim}. the conversation says something`)[0]?.ref).toBe('e:ev-brand')
+    expect(planQuotePicker(byAudience, ctxOf(videos), CLIENT)(withQuote('C1'))?.ref).toBe('e:ev-market')
+  })
+
+  it('prints no quote where the video behind it cannot be placed, or the context was not read', () => {
+    const byAudience = new Map([['i1', [row('ev-1', 'My bag has been lasting through three years of daily commuting now', 1)]]])
+    expect(planQuotePicker(byAudience, ctxOf({}), CLIENT)(withQuote('C1'))).toBeNull()
+    expect(planQuotePicker(byAudience, null, CLIENT)(withQuote('C1'))).toBeNull()
+  })
+
+  it('never prints one voice twice across claims, and a claim’s unprinted candidates stay for the next', () => {
+    const rows = Array.from({ length: PLAN_QUOTE_CANDIDATES }, (_, i) =>
+      row(`ev-${i}`, `My bag has been lasting through ${i + 2} years of daily commuting now`, i + 1))
+    const videos = Object.fromEntries(rows.map((r, i) => [r.evidenceId, { ...market, videoId: `v-${i}` }]))
+    const pick = planQuotePicker(new Map([['i1', rows]]), ctxOf(videos), CLIENT)
+    const first = pick(withQuote('C1'))
+    const second = pick(withQuote('C2'))
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    expect(second?.text).not.toBe(first?.text)
   })
 })
