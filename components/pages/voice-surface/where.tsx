@@ -107,25 +107,27 @@ function Row({ a, w }: { a: WhereAccount; w: WhereBlock }) {
   )
 }
 
-function Aside({ w }: { w: WhereBlock }) {
+/**
+ * THE FILTER WORKING, SAID ONCE, NAMING NOBODY (a recommended default of 29
+ * Sep; finish-list item 9): the set-aside accounts were listed by name with
+ * the search that found them ("Mike Ritland, found by 'sealand gear'", "The
+ * Poker Academy, found by 'poler'", a search the client never asked for),
+ * which read as noise in the client's market rather than noise kept out of
+ * it. The count stays; the names and searches are the operator's.
+ */
+export function asideLine(w: WhereBlock): string | null {
   if (w.setAside.length === 0) return null
+  const accounts = w.setAside.length
+  const videos = w.setAside.reduce((n, a) => n + a.videos, 0)
+  return `Set aside as off-topic: ${fmtInt(accounts)} ${accounts === 1 ? 'account' : 'accounts'} with ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} that a name search found but that ${accounts === 1 ? 'is' : 'are'} about something else. Not in the list above.`
+}
+
+function Aside({ w }: { w: WhereBlock }) {
+  const line = asideLine(w)
+  if (!line) return null
   return (
     <aside className="flex min-w-0 max-w-[560px] flex-col gap-3 rounded-md bg-inner p-6 xl:max-w-none">
-      <div className="flex flex-col gap-1">
-        <h3 className="m-0 text-[15px] font-semibold text-foreground">Set aside, off-topic</h3>
-        <span className="font-mono text-[12px] text-muted-foreground">not in the list above</span>
-      </div>
-      <div role="table" className="flex flex-col">
-        {w.setAside.map((a) => (
-          <div key={a.key} role="row" className={`grid min-h-[60px] grid-cols-[minmax(0,1fr)_40px] items-center gap-x-4 py-3 ${RULE.row} last:border-b-0 last:pb-0`}>
-            <span role="rowheader" className="flex min-w-0 flex-col gap-0.5">
-              <span data-copy="quote" className={`min-w-0 [overflow-wrap:anywhere] ${SCALE.row}`}>{a.name}</span>
-              {a.foundBy ? <span className="text-[13px] leading-[1.4] text-muted-foreground">found by “<span data-copy="quote">{a.foundBy}</span>”</span> : null}
-            </span>
-            <span className="text-right font-mono text-[15px] font-medium tabular-nums text-secondary-foreground"><span data-copy="figure">{fmtInt(a.videos)}</span></span>
-          </div>
-        ))}
-      </div>
+      <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground [text-wrap:pretty]">{line}</p>
     </aside>
   )
 }
@@ -157,13 +159,8 @@ function EmailWhere({ w }: { w: WhereBlock }) {
           </tbody>
         </table>
       ) : null}
-      {w.setAside.length > 0 ? (
-        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 10 }}>
-          Set aside, off-topic:{' '}
-          {w.setAside.map((a, i) => (
-            <span key={a.key}>{i > 0 ? ' · ' : ''}<span data-copy="quote">{a.name}</span> <span data-copy="figure" style={{ fontFamily: FONT.mono }}>{fmtInt(a.videos)}</span></span>
-          ))}
-        </div>
+      {asideLine(w) ? (
+        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 10 }}>{asideLine(w)}</div>
       ) : null}
     </div>
   )

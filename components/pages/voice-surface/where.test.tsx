@@ -36,14 +36,17 @@ describe('voiceWhere (C6)', () => {
     expect(at).toEqual([...at].sort((a, b) => a - b))
   })
 
-  it('names the military-dog channel only under "set aside", with how it was found (WP3.8 done-when)', () => {
+  it('keeps the military-dog channel out of the list and counts it as set aside, naming neither it nor the search (WP3.8; default of 29 Sep)', () => {
     for (const data of [voiceFixture(), allAccountsVoiceFixture()]) {
       const w = data.where!
       expect(w.rows.map((r) => r.name)).not.toContain('Mike Ritland')
       expect(w.setAside.map((r) => r.name)).toContain('Mike Ritland')
-      const text = renderText(voiceWhere.render(data, 'app', ctx))
-      expect(text.split('Mike Ritland').length - 1).toBe(1)
-      expect(text).toMatch(/Set aside, off-topic\s*not in the list above\s*Mike Ritland\s*found by “\s*sealand gear\s*”\s*8/)
+      for (const mode of ['app', 'email'] as const) {
+        const text = renderText(voiceWhere.render(data, mode, ctx))
+        expect(text).not.toContain('Mike Ritland')
+        expect(text).not.toContain('sealand gear')
+        expect(text).toMatch(/Set aside as off-topic: \d+ accounts? with \d+ videos? that a name search found but that (is|are) about something else\. Not in the list above\./)
+      }
     }
   })
 
