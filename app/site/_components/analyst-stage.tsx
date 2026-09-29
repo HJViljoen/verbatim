@@ -87,7 +87,7 @@ export function AnalystStage() {
   return (
     <div ref={sectionRef} className="wrap">
       <h2 id="ask-h">Then ask it anything.</h2>
-      <p className="under">An analyst that has read what your market said, and remembers it. Ask it a question, or hand it a plan and it checks the claims in it against the conversation.</p>
+      <p className="under">An analyst that has read what your market said, and remembers it. Ask it a question, or hand it a plan and it checks the claims in it against the conversation. Below, it answers for the example market.</p>
 
       <div className="prompt" role="group" aria-label="Ask the analyst">
         <div className="typed-q">

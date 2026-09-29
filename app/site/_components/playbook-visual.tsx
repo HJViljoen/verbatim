@@ -85,7 +85,7 @@ export function PlaybookPanel({ panel }: { panel: PanelKind }) {
         <div className="panel">
           <div className="panel-title">
             <b>What your market talks about</b>
-            <span>Sized by conversations this week</span>
+            <span>Example market · sized by videos this month</span>
           </div>
           <ThemeMapGrid staticReveal />
         </div>

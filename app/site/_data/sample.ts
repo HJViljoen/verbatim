@@ -4,6 +4,29 @@
 // product's promise is that the same fact reads the same everywhere. Nothing
 // here is a client, a testimonial or a real brand. Copy contract:
 // .agents/product-marketing.md.
+//
+// THE SITE SAYS SO (finish-list item 25): a bag brand read the home page's
+// backpack market as its own data, or as a claim about someone's. The notes
+// below label the example on each page, and every mock panel's caption starts
+// with "Example market". The one measured figure on the site, 4 brand mentions
+// in 18,440 comments (.agents/product-marketing.md, "Proof points"), is NOT
+// from this market, and the home page says so right where the example starts.
+//
+// UNITS ARE THE PRODUCT'S (AGENTS.md, "New reading surfaces say videos"): a
+// theme, a profile and a brand are counted in videos, a level carries its
+// "of N", and nothing carries a direction word (gaining, fading, emerging, an
+// up or down arrow): the product reports levels, and compares months only once
+// they compare.
+
+export const EXAMPLE_NOTE =
+  'Every example on this page comes from a made-up hiking-backpack market: invented brands, quotes and numbers, there to show what Verbatim does. None of it is a client’s data.'
+
+/** The home page's version: its count beat is the one measured figure. */
+export const HOME_EXAMPLE_NOTE =
+  'The count above is measured, in one real brand’s market. Every other example on this page comes from a made-up hiking-backpack market: invented brands, quotes and numbers, there to show what Verbatim does. None of it is a client’s data.'
+
+/** Every video the example market's month holds: the "of N" its levels print. */
+export const EXAMPLE_MONTH_VIDEOS = 1240
 
 export const murmurLines = [
   'the strap absolutely digs in by hour six', 'which one for a 10 day trip? genuinely torn', 'nobody could explain the sizing',
@@ -56,7 +79,9 @@ export const streamQuotes: StreamQuote[] = [
 
 export interface Persona {
   name: string
-  share: number
+  /** Videos in the example month this kind of person shows up in. They
+   *  overlap, as the product's profiles do. */
+  videos: number
   wants: string
   stops: string
   tips: string
@@ -64,17 +89,15 @@ export interface Persona {
 }
 
 export const personas: Persona[] = [
-  { name: 'The long-trip planner', share: 41, wants: "One bag for ten days that doesn't punish them on day six.", stops: 'Nobody will say which size they need.', tips: 'A creator they trust naming a specific model.', talk: ['which one for a 10 day trip', 'genuinely torn', 'by hour six'] },
-  { name: 'The upgrader who got burned', share: 32, wants: 'Proof it holds up, from someone who owns it.', stops: 'Paid more once and the cheap one lasted longer.', tips: 'A warranty story with a happy ending.', talk: ['held up better', 'did not expect', 'sold mine'] },
-  { name: 'The first-timer sizing blind', share: 27, wants: 'A straight answer on fit before they order.', stops: 'Sizing guides that assume you already know.', tips: 'One reply from the brand under the video.', talk: ['nobody could explain', 'ended up guessing', 'too small'] },
+  { name: 'The long-trip planner', videos: 508, wants: "One bag for ten days that doesn't punish them on day six.", stops: 'Nobody will say which size they need.', tips: 'A creator they trust naming a specific model.', talk: ['which one for a 10 day trip', 'genuinely torn', 'by hour six'] },
+  { name: 'The upgrader who got burned', videos: 396, wants: 'Proof it holds up, from someone who owns it.', stops: 'Paid more once and the cheap one lasted longer.', tips: 'A warranty story with a happy ending.', talk: ['held up better', 'did not expect', 'sold mine'] },
+  { name: 'The first-timer sizing blind', videos: 334, wants: 'A straight answer on fit before they order.', stops: 'Sizing guides that assume you already know.', tips: 'One reply from the brand under the video.', talk: ['nobody could explain', 'ended up guessing', 'too small'] },
 ]
-
-export type Movement = 'gaining' | 'fading' | 'emerging' | 'steady'
 
 export interface Theme {
   label: string
-  conversations: number
-  movement?: Movement
+  /** Videos in the example month that carry the theme. */
+  videos: number
   /** grid spans on the 12-column desktop theme map */
   col: number
   row: number
@@ -83,17 +106,17 @@ export interface Theme {
 }
 
 export const themes: Theme[] = [
-  { label: 'Fit and sizing', conversations: 412, movement: 'gaining', col: 5, row: 3, big: true },
-  { label: 'Hip belt comfort', conversations: 288, movement: 'gaining', col: 4, row: 3, big: true, you: true },
-  { label: 'Durability on trail', conversations: 251, col: 3, row: 2 },
-  { label: 'Rain cover', conversations: 88, col: 3, row: 1 },
-  { label: 'Price vs the cheaper one', conversations: 197, movement: 'fading', col: 4, row: 2 },
-  { label: 'Zips and noise', conversations: 143, movement: 'emerging', col: 3, row: 2 },
-  { label: 'Capacity for long trips', conversations: 131, col: 3, row: 2 },
-  { label: 'Warranty', conversations: 64, col: 2, row: 2 },
-  { label: 'Colours', conversations: 41, col: 4, row: 1 },
-  { label: 'Airline carry-on', conversations: 37, movement: 'emerging', col: 4, row: 1 },
-  { label: 'Water bottle pocket', conversations: 29, col: 4, row: 1 },
+  { label: 'Fit and sizing', videos: 412, col: 5, row: 3, big: true },
+  { label: 'Hip belt comfort', videos: 288, col: 4, row: 3, big: true, you: true },
+  { label: 'Durability on trail', videos: 251, col: 3, row: 2 },
+  { label: 'Rain cover', videos: 88, col: 3, row: 1 },
+  { label: 'Price vs the cheaper one', videos: 197, col: 4, row: 2 },
+  { label: 'Zips and noise', videos: 143, col: 3, row: 2 },
+  { label: 'Capacity for long trips', videos: 131, col: 3, row: 2 },
+  { label: 'Warranty', videos: 64, col: 2, row: 2 },
+  { label: 'Colours', videos: 41, col: 4, row: 1 },
+  { label: 'Airline carry-on', videos: 37, col: 4, row: 1 },
+  { label: 'Water bottle pocket', videos: 29, col: 4, row: 1 },
 ]
 
 export interface FaceOffRow {
@@ -103,28 +126,34 @@ export interface FaceOffRow {
   cat?: { pct: number; text: string }
 }
 
+// Counts, each with its "of N", never a score: the old rows printed a
+// "sentiment" percentage the product does not compute. Row one is the site's
+// argument in miniature: most of the month's videos name nobody.
 export const faceOff: FaceOffRow[] = [
-  { label: 'Share of the conversation', you: { pct: 34, text: '18%' }, them: { pct: 51, text: '27%' }, cat: { pct: 100, text: '55%' } },
-  { label: 'Sentiment towards you', you: { pct: 100, text: '71%' }, them: { pct: 90, text: '64%' }, cat: { pct: 82, text: '58%' } },
-  { label: 'Questions left unanswered this week', you: { pct: 100, text: '63' }, them: { pct: 19, text: '12' } },
+  { label: 'Videos in the month, of 1,240', you: { pct: 3, text: '38' }, them: { pct: 8, text: '96' }, cat: { pct: 87, text: '1,081' } },
+  { label: 'Praising it, of their videos', you: { pct: 71, text: '27 of 38' }, them: { pct: 64, text: '61 of 96' } },
+  { label: 'A question under it, of their videos', you: { pct: 55, text: '21 of 38' }, them: { pct: 31, text: '30 of 96' } },
 ]
 
 export const faceOffOwns = {
-  them: { title: 'Theme they own: durability', quote: 'the cheaper one held up better on the trail' },
-  you: { title: 'Theme you own: the hip belt', quote: "the reason I'd never go back to the old one" },
+  them: { title: 'Where their talk stands out: durability', quote: 'the cheaper one held up better on the trail' },
+  you: { title: 'Where yours does: the hip belt', quote: "the reason I'd never go back to the old one" },
 }
 
+// This week, as the app draws it: what the update brought in, what was asked,
+// what is worth a reply, what was heard for the first time. No arrows: a week
+// is a contribution to its month, never a movement.
 export interface BriefLine {
-  kind: 'up' | 'down' | 'new' | 'do'
+  kind: 'in' | 'ask' | 'reply' | 'new' | 'do'
   parts: (string | { u: string })[]
 }
 
 export const brief: BriefLine[] = [
-  { kind: 'up', parts: ['Fit and sizing questions doubled after the two biggest creators reviewed the new range. ', { u: '63 conversations' }, ' asked and nobody answered.'] },
-  { kind: 'up', parts: ['Zips are the new complaint: ', { u: '143 conversations' }, ', most of them under competitor reviews, and rising for the second week.'] },
-  { kind: 'down', parts: ['Rain cover complaints fell for the second week.'] },
-  { kind: 'new', parts: ['New this week: airline carry-on limits, ', { u: '37 conversations' }, ', most of them in one Reddit thread.'] },
-  { kind: 'do', parts: ["What we'd do: put a sizing answer in the first comment under every fit video, and answer the zip complaints before the competitor does. The hip belt is your strongest unprompted selling point and none of that talk is under your own videos."] },
+  { kind: 'in', parts: ['This update brought ', { u: '312 videos' }, ' and ', { u: '4,950 comments' }, ' into your market’s September, which now holds 1,240 videos.'] },
+  { kind: 'ask', parts: ['Fit and sizing questions came up under ', { u: '63 videos' }, '. None of your posts answered one.'] },
+  { kind: 'reply', parts: [{ u: '14 comments' }, ' are worth a reply, 6 of them from people ready to buy.'] },
+  { kind: 'new', parts: ['Heard for the first time: airline carry-on limits, in ', { u: '37 videos' }, ', most of them from one Reddit thread.'] },
+  { kind: 'do', parts: ["What we'd do: put a sizing answer in the first comment under every fit video. The hip belt is what people praise without being asked, and almost none of that talk is under your own videos."] },
 ]
 
 export interface Evidence {
@@ -165,9 +194,9 @@ export const analyst: AnalystItem[] = [
     q: 'We’re about to spend the Q4 budget on creator placements. Who does our audience actually listen to?',
     answer: 'Three creators, and none of them are on your list.',
     evidence: [
-      { text: 'One creator’s sizing video is cited more than your own size guide.', n: 1, quote: '“the sizing video from that one creator saved me, the official guide did not”', src: 'A Reddit thread. One of 27 conversations.' },
-      { text: 'Long-trip planners decide on comparisons, and two channels carry almost all of them.', n: 2, quote: '“this review sold me on it, I’d been torn for weeks”', src: 'Under a YouTube comparison. One of 19 conversations.' },
-      { text: 'The three creators you placed with last quarter are not cited once in a buying conversation.', n: 3, quote: '“saw the ad, went and watched the comparison instead”', src: 'Under a creator’s TikTok. One of 14 conversations.' },
+      { text: 'One creator’s sizing video is cited more than your own size guide.', n: 1, quote: '“the sizing video from that one creator saved me, the official guide did not”', src: 'A Reddit thread. One of 27 videos.' },
+      { text: 'Long-trip planners decide on comparisons, and two channels carry almost all of them.', n: 2, quote: '“this review sold me on it, I’d been torn for weeks”', src: 'Under a YouTube comparison. One of 19 videos.' },
+      { text: 'The three creators you placed with last quarter are not cited once in a buying conversation.', n: 3, quote: '“saw the ad, went and watched the comparison instead”', src: 'Under a creator’s TikTok. One of 14 videos.' },
     ],
     read: 'Put the budget behind the sizing video and the two comparison channels. Your audience has already told you who it trusts. Sponsoring the list you have buys reach in rooms where no one is deciding.',
     silent: 'Nothing on Instagram creators in the buying conversations. That is not a verdict on them. I have no evidence either way.',
@@ -178,9 +207,9 @@ export const analyst: AnalystItem[] = [
     q: 'Which of our competitors is winning the long-trip buyer, and why?',
     answer: 'The cheaper one, on durability stories told by people who own both.',
     evidence: [
-      { text: 'Long-trip planners decide on comparisons, and the comparisons are being won on durability. Most of them name the zip.', n: 1, quote: '“carried it 800km this summer, still going. the frame creaks but it’s fine”', src: 'A Reddit trip report. One of 31 conversations from people who own both.' },
-      { text: 'Their sizing questions get answered by other owners. Yours don’t get answered at all.', n: 2, quote: '“asked in the thread and three people replied with their torso length, sorted”', src: 'A Reddit thread under their name. One of 27 conversations.' },
-      { text: 'Price comes up in 197 conversations, and never on its own. Every one of them names durability or the zip beside it.', n: 3, quote: '“I’d pay more for a quieter zip, that’s genuinely it”', src: 'Under a competitor’s Instagram post. One of 197 conversations.' },
+      { text: 'Long-trip planners decide on comparisons, and the comparisons are being won on durability. Most of them name the zip.', n: 1, quote: '“carried it 800km this summer, still going. the frame creaks but it’s fine”', src: 'A Reddit trip report. One of 31 videos where people own both.' },
+      { text: 'Their sizing questions get answered by other owners. Yours don’t get answered at all.', n: 2, quote: '“asked in the thread and three people replied with their torso length, sorted”', src: 'A Reddit thread under their name. One of 27 videos.' },
+      { text: 'Price comes up in 197 videos, and never on its own. Every one of them names durability or the zip beside it.', n: 3, quote: '“I’d pay more for a quieter zip, that’s genuinely it”', src: 'Under a competitor’s Instagram post. One of 197 videos.' },
     ],
     read: 'The long-trip buyer is going to the stories other owners tell, in threads where your owners are silent. Features and price barely come into it. Fix the zip, then get your owners talking where the planners are reading.',
     silent: 'Nothing on their warranty. If they have a good one, nobody mentions it.',
@@ -190,7 +219,7 @@ export const analyst: AnalystItem[] = [
     chip: 'Q4 launch brief.pdf',
     file: 'Q4 launch brief.pdf',
     meta: '9 claims found',
-    answer: 'Nine claims. Four the market backs, one it contradicts, four it has nothing to say about.',
+    answer: 'Nine claims. Four the market backs, one it contradicts, four it has nothing to test them against.',
     title: 'Q4 launch brief',
     paragraphs: [
       [
@@ -201,11 +230,11 @@ export const analyst: AnalystItem[] = [
       ],
     ],
     claims: [
-      { k: 'ok', b: 'Supported', t: 'The hip belt is your most-cited strength. 41 conversations, none of them under your own videos.' },
-      { k: 'no', b: 'Contradicted', t: 'Price is not the objection. Durability and the zip are, 143 conversations this week. Price only ever appears beside them.' },
-      { k: 'ok', b: 'Supported, and bigger than you think', t: 'Sizing is the largest theme in the market, 412 conversations. A FAQ will not reach where they are asking.' },
-      { k: 'ok', b: 'Supported', t: 'The 40L is the size owners recommend to each other. 58 conversations.' },
-      { k: 'silent', b: 'Silent', t: 'The market has nothing to say about colours or the creator placements. Left unmarked.' },
+      { k: 'ok', b: 'Supported', t: 'The hip belt is your most-cited strength, in 41 videos, almost none of them your own.' },
+      { k: 'no', b: 'Contradicted', t: 'Price is not the objection. Durability and the zip are, in 143 videos this month. Price only ever appears beside them.' },
+      { k: 'ok', b: 'Supported, and bigger than you think', t: 'Sizing is the largest theme in the market, in 412 videos. A FAQ will not reach where they are asking.' },
+      { k: 'ok', b: 'Supported', t: 'The 40L is the size owners recommend to each other, in 58 videos.' },
+      { k: 'silent', b: 'Untested', t: 'The market has nothing to say about colours or the creator placements. Left unmarked.' },
     ],
   },
 ]
@@ -219,6 +248,26 @@ export interface ReportCover {
   send: { before: string; bold: string; after: string }
   tiles: ('' | 'g' | 'w' | 'g w')[]
 }
+
+// THE HOME PAGE'S REPORTS ARE GENERAL (Heinrich, 29 Sep): reports are on hold
+// and being redesigned as one for each department, so the site names the
+// teams and what each reads, and promises no cadence, schedule or format.
+// `reportCovers` below is the old five-starter set; only the hidden playbooks
+// (USE_CASES_PUBLIC, off in production) still draw it.
+export interface TeamReport {
+  title: string
+  audience: string
+  about: { before: string; bold: string; after: string }
+  tiles: ReportCover['tiles']
+}
+
+export const teamReports: TeamReport[] = [
+  { title: 'For leadership', audience: 'The people who decide', about: { before: '', bold: 'Leadership', after: ' reads where the market stands and what it means for the plan.' }, tiles: ['g w', 'w', '', '', '', 'g'] },
+  { title: 'For marketing', audience: 'The people who act on it', about: { before: '', bold: 'Marketing', after: ' reads each subject, the wider category and every rival.' }, tiles: ['w', 'g', '', '', 'g w', ''] },
+  { title: 'For sales', audience: 'The people who talk to customers', about: { before: '', bold: 'Sales', after: ' reads the objections and who you lose to, in the market’s own words.' }, tiles: ['', 'g', 'g', '', 'w', 'w'] },
+  { title: 'For content', audience: 'The people who make things', about: { before: '', bold: 'Content', after: ' reads what the market asked for, and what to make next.' }, tiles: ['w', 'w', 'g', '', '', 'g'] },
+  { title: 'For product', audience: 'The people who build it', about: { before: '', bold: 'Product', after: ' reads what people complain about and wish for.' }, tiles: ['g w', '', '', '', 'g', 'w'] },
+]
 
 export const reportCovers: ReportCover[] = [
   { title: 'Weekly digest', audience: 'Written for the team', sections: 8, pages: 9, send: { before: 'Goes out with ', bold: 'every update', after: ' to the marketing team. PDF attached, link inside.' }, tiles: ['g w', '', '', '', 'g', 'w'] },
