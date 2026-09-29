@@ -610,7 +610,7 @@ describe('clientReadiness', () => {
   // Finish-list item 18: "Yours to change" beside a switch the client cannot
   // reach, with no way to reach anyone who can.
   it('says Heinrich sets delivery up, and how to reach him', () => {
-    const view = clientReadiness([readyRow({ id: 'delivery', owner: 'client', status: 'missing', unlocks: 'Add the people who should get it in Settings, under Reports and recipients, and turn it on.' })])
+    const view = clientReadiness([readyRow({ id: 'delivery', owner: 'client', status: 'missing', unlocks: 'Add the people who should get it in Settings, under Reports and recipients, and turn it on.' })], { sendingLocked: true })
     const d = view.rows[0]
     expect(d.ownerWords).toBe('Set up with Heinrich')
     expect(d.unlocks).toContain('heinrichviljoen@verbatimintel.com')
@@ -619,6 +619,16 @@ describe('clientReadiness', () => {
     // Not "anything here goes through Heinrich": marking a recommendation is
     // the client's own to do, and its row says so.
     expect(READINESS_CONTACT).toMatch(/^Where a row asks you to tell us or give us something/)
+  })
+
+  // Only the tenant whose sending is Heinrich's (the tenant lock) reads that
+  // he sets delivery up; Össur has no sending lock and turns its own on.
+  it('keeps the Delivery row’s own owner and sentence where sending is not locked', () => {
+    const row = readyRow({ id: 'delivery', owner: 'client', status: 'missing', unlocks: 'Add the people who should get it in Settings, under Reports and recipients, and turn it on.' })
+    for (const view of [clientReadiness([row]), clientReadiness([row], { sendingLocked: false })]) {
+      expect(view.rows[0].ownerWords).toBe('Yours to change')
+      expect(view.rows[0].unlocks).toBe(row.unlocks)
+    }
   })
 
   it('prints a "by when" only where a date was supplied', () => {

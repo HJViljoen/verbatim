@@ -9,6 +9,7 @@ import { computeReadiness } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
 import { clientReadiness, NOT_BUILT, READINESS_CONTACT } from '@/lib/settings/readiness-view'
 import { settingsBar } from '@/lib/settings/bar'
+import { tenantLocked } from '@/lib/tenant-locks'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 import { settingsSubPage } from '@/lib/settings/rail'
@@ -61,7 +62,9 @@ export default async function SettingsReadinessPage() {
       .toISOString().slice(0, 10)
     : null
 
-  const view = clientReadiness(all, { by: { retention: due } })
+  // Delivery reads "Set up with Heinrich" only where sending is his (the
+  // tenant lock); any other tenant turns its own delivery on.
+  const view = clientReadiness(all, { by: { retention: due }, sendingLocked: tenantLocked(clientId, 'sends') })
   const bar = await settingsBar(supabase, clientId, inputs.tenant, now.toISOString())
 
   return (

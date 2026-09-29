@@ -73,6 +73,12 @@ const CLIENT_UNLOCKS: Readonly<Record<string, string>> = {
  * turn it on", while sending is Heinrich's during the trial (lib/tenant-locks.ts)
  * and the weekly email is paused at his request. The row stays shown; its
  * owner and its sentence say who does it.
+ *
+ * ONLY WHERE SENDING IS HIS. The owner and sentence below are true of a tenant
+ * whose sending is locked to Heinrich (`tenantLocked(clientId, 'sends')`, the
+ * same tenant lock that gives the quarterly card its April 2027 date). A
+ * tenant without it (Össur) turns its own delivery on in Settings, and keeps
+ * the row's own owner and sentence.
  */
 export const DELIVERY_OWNER = 'Set up with Heinrich'
 export const DELIVERY_UNLOCKS = `Heinrich switches the update on with you, once your reports are set up. To say who should get it, write to ${CONTACT_EMAIL}.`
@@ -105,8 +111,14 @@ export interface ClientReadinessView {
 
 export function clientReadiness(
   rows: readonly ReadinessRow[],
-  opts: { by?: Readonly<Record<string, string | null>> } = {},
+  opts: {
+    by?: Readonly<Record<string, string | null>>
+    /** The tenant's sending is Heinrich's (`tenantLocked(clientId, 'sends')`):
+     *  the Delivery row says he sets it up. Off, the row keeps its own words. */
+    sendingLocked?: boolean
+  } = {},
 ): ClientReadinessView {
+  const heinrichSends = opts.sendingLocked === true
   const shown = rows.filter((r) => !(r.status === 'missing' && r.owner !== 'client'))
   const view = shown.map((r): ClientReadinessRow => {
     const by = opts.by?.[r.id] ?? null
@@ -117,8 +129,8 @@ export function clientReadiness(
       // (Settings › The record › Coverage says it word for word); Readiness is
       // about what is missing (copy de-clutter C9).
       notes: r.id === 'read-depth' ? [] : r.notes,
-      unlocks: r.id === 'delivery' ? DELIVERY_UNLOCKS : r.owner === 'client' ? r.unlocks : (CLIENT_UNLOCKS[r.id] ?? r.unlocks),
-      ownerWords: r.id === 'delivery' ? DELIVERY_OWNER : OWNER_WORDS[r.owner],
+      unlocks: r.id === 'delivery' && heinrichSends ? DELIVERY_UNLOCKS : r.owner === 'client' ? r.unlocks : (CLIENT_UNLOCKS[r.id] ?? r.unlocks),
+      ownerWords: r.id === 'delivery' && heinrichSends ? DELIVERY_OWNER : OWNER_WORDS[r.owner],
       by: by ? fullDate(by) : null,
     }
   })
