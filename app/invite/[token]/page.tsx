@@ -58,8 +58,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <Shell title={`Join ${company}`}>
       <p className="mb-5 text-sm text-muted-foreground">
-        You’ve been invited to join <strong>{company}</strong> on Verbatim as{' '}
-        {/^[aeiou]/i.test(invite.role) ? 'an' : 'a'} <strong>{invite.role}</strong>.
+        You’ve been invited to join <strong>{company}</strong> on Verbatim as a{' '}
+        <strong>{invite.role}</strong>.
       </p>
       {user
         ? <AcceptButton token={token} />
