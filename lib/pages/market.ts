@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { gateCitedQuotes, gateFor, readPoolContext, type QuoteContext } from '../quote-context'
 import { CURATION_GATE, type GateTier } from '../curation'
 import { recStatus, type GlossaryKey, type RecStatus } from '../calibration'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToClientVoices, cleanQuote, type ThemeBucketRow, type CitedQuote } from '../quotes'
@@ -335,12 +336,16 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
    *  nulls by string match — same words, same guarantee. */
   function pickQuotes(
     pick: (ids: string[], n: number, claim: string, hero?: string | null) => CitedQuote[],
-    ids: string[], claim: string, hero: string | null, heroTable: HeroTable, heroId: string,
+    ids: string[], claim: string, hero: string | null, heroTable: HeroTable, heroId: string, ctx: QuoteContext,
   ): Quote[] {
-    const cited = pick(ids, 3, claim, hero)
+    // A deeper pick, then the quote gate (walkthrough, 29 Sep;
+    // lib/quote-gate.ts): readable, on the market, not a maker's audience or a
+    // seller's post, one per thread, three at most.
+    const cited = pick(ids, 12, claim, hero)
     const h = hero ? cleanQuote(hero) : ''
     const heroCited = h && cited.some((q) => q.text.toLowerCase() === h.toLowerCase())
-    return h && !heroCited ? [{ ref: quoteRef.hero(heroTable, heroId), text: h }, ...cited].slice(0, 3) : cited
+    const offered: Quote[] = h && !heroCited ? [{ ref: quoteRef.hero(heroTable, heroId), text: h }, ...cited] : cited
+    return gateCitedQuotes(offered, ctx, 3, gateFor(clientId, { claim }))
   }
 
   // ── say vs hear ─────────────────────────────────────────────────────────
@@ -377,7 +382,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
     const pool = rankByTheme(spec.ids, spec.claim, themeSlugById).slice(0, QUOTE_POOL_CAP)
     const quotesByAudience = await fetchQuotesByAudience(supabase, pool)
     const pick = createCitedQuotePicker(quotesByAudience, themeSlugById)
-    quotes = pickQuotes(pick, spec.ids, spec.claim, spec.hero, spec.heroTable, spec.heroId)
+    quotes = pickQuotes(pick, spec.ids, spec.claim, spec.hero, spec.heroTable, spec.heroId, await readPoolContext(supabase, clientId, quotesByAudience))
   }
 
   // ── detail: exactly one of the four kinds, or empty ─────────────────────
@@ -440,9 +445,10 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       })
       const quotesByAudience = await fetchQuotesByAudience(supabase, [...new Set(wanted.flatMap((w) => w.pool))])
       const pick = createCitedQuotePicker(quotesByAudience, themeSlugById)
+      const ctx = await readPoolContext(supabase, clientId, quotesByAudience)
       fullItems = wanted.map((w) => {
         const { voices: v, platforms: p } = voicesAndPlatforms(w.ids)
-        const q = pickQuotes(pick, w.ids, w.claim, w.a.rec.hero_quote, 'recommendations', w.a.rec.id)
+        const q = pickQuotes(pick, w.ids, w.claim, w.a.rec.hero_quote, 'recommendations', w.a.rec.id, ctx)
         return recDetail(w.a, w.idx, agenda.length, v, p, q)
       })
     } else if (group === 'insights') {
@@ -453,9 +459,10 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       })
       const quotesByAudience = await fetchQuotesByAudience(supabase, [...new Set(wanted.flatMap((w) => w.pool))])
       const pick = createCitedQuotePicker(quotesByAudience, themeSlugById)
+      const ctx = await readPoolContext(supabase, clientId, quotesByAudience)
       fullItems = wanted.map((w) => {
         const { voices: v, platforms: p } = voicesAndPlatforms(w.ids)
-        const q = pickQuotes(pick, w.ids, w.claim, w.mi.hero_quote, 'market_insights', w.mi.id)
+        const q = pickQuotes(pick, w.ids, w.claim, w.mi.hero_quote, 'market_insights', w.mi.id, ctx)
         return insightDetail(w.mi, tierById.get(w.mi.id) ?? 'archive', v, p, q)
       })
     } else if (group === 'claims') {

@@ -28,6 +28,7 @@ import {
 import { fetchRunningRunIds } from './latest-video-run'
 import { marketMonthIds } from './overview-brands'
 import { pickQuotes, type QuoteCandidate } from './overview-market/voices'
+import { gateFor, readQuoteContext } from '../quote-context'
 import { pairChip } from './overview'
 import type { PlaybookBlock } from './playbook'
 import { searchedAs } from '../settings/search-set'
@@ -535,6 +536,13 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
   const refOf = (l: { registryId: string; audience: string }, m: string) =>
     refs.find((r) => monthStartOf(String(r.month)) === m && r.audience === l.audience && r.object_id === l.registryId)
   const quotes = await readQuotes(db, clientId, [...leads.values()].flatMap((l) => (refOf(l, month)?.comment_ids ?? []).map(String)))
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): each finding's
+  // voice is the rival's own (under a video filed under it, or naming it, and
+  // never naming only another brand), speaks to the finding ("What kind of
+  // bag is thatttt" does not illustrate "Organization, measurements, and
+  // packing proof"), and is readable and on the market.
+  const ctx = await readQuoteContext(db, clientId, { commentIds: quotes.map((q) => q.commentId) }, db)
+  for (const q of quotes) q.context = ctx.forComment(q.commentId)
 
   // ONE VOICE PER CARD, NEVER THE SAME ONE TWICE: two findings may share a
   // lead theme, and the second takes the next eligible voice.
@@ -546,14 +554,20 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
     // lead theme's month could sit under a heading it does not bear out
     // ("Organization, measurements, and packing proof" over "What kind of bag
     // is thatttt"), so a voice prints only where it is evidence of an insight
-    // the finding itself cites; else the card prints none.
+    // the finding itself cites; else the card prints none. The quote gate
+    // (lib/quote-gate.ts) then holds it to the rival's own voice and the
+    // finding's claim.
     const cited = new Set((f.evidence?.supporting_theme_ids ?? []).map(String))
-    const eligible = pickQuotes(quotes.filter((q) => q.commentId != null && comments.has(q.commentId) && q.insightId != null && cited.has(q.insightId)), { month, kind: null, count: comments.size })
+    const rival = live.find((r) => norm(r.name) === norm(f.competitor_name ?? ''))?.name ?? String(f.competitor_name)
+    const eligible = pickQuotes(quotes.filter((q) => q.commentId != null && comments.has(q.commentId) && q.insightId != null && cited.has(q.insightId)), {
+      month, kind: null, count: comments.size,
+      gate: gateFor(clientId, { brand: rival, claim: String(f.title), requireRelevance: true }),
+    })
     const picked = eligible.find((q) => q.commentId != null && !used.has(q.commentId)) ?? null
     if (picked?.commentId) used.add(picked.commentId)
     return {
       id: String(f.id),
-      rival: live.find((r) => norm(r.name) === norm(f.competitor_name ?? ''))?.name ?? String(f.competitor_name),
+      rival,
       category: String(f.category),
       impact: f.impact_level ?? null,
       title: String(f.title),

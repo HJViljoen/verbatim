@@ -6,6 +6,8 @@ import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type Quote
 import { citationLink } from '../evidence-cite'
 import type { EvidenceSource } from '../pipeline/pass-a'
 import { quoteRef } from '../renderables/quotes-freeze'
+import { pickEligible, type GateOptions, type QuoteVideo } from '../quote-gate'
+import { gateFor } from '../quote-context'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
@@ -2345,7 +2347,15 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     const [voices, unanswered] = await Promise.all([
       // Dated in the reading month, the market first, never the video's own
       // account (§2.3 S5), a maker's video marked.
-      loadVoices(supabase, clientId, voiceIds ?? [], { month, marketFirst: true, makers: makersAhead.then((m) => m.makers) }),
+      // And through the quote gate (walkthrough, 29 Sep; lib/quote-gate.ts):
+      // a voice speaks to the subject, sits under a video on the market (no
+      // Patagonia Provisions sardines under Durability), comes from a buyer
+      // or commenter and not a maker's audience or a seller's post, and one
+      // video gives the subject one voice.
+      loadVoices(supabase, clientId, voiceIds ?? [], {
+        month, marketFirst: true, makers: makersAhead.then((m) => m.makers),
+        gate: gateFor(clientId, { claim: [subject.name, subject.description].filter(Boolean).join('. '), requireRelevance: true }),
+      }),
       loadUnanswered(supabase, clientId, memberIds ?? [], {
         window: { from: questionsWindow.from, to: questionsWindow.to },
         period: periodPhrase(questionsHorizon, month),
@@ -2844,6 +2854,11 @@ export interface VoiceReadOptions {
    *  one is marked (decision F). A promise is awaited only after the voices'
    *  own reads, so the two run side by side. */
   makers?: ReadonlySet<string> | null | Promise<ReadonlySet<string> | null>
+  /** The quote gate (walkthrough, 29 Sep; lib/quote-gate.ts), read on each
+   *  voice's video: what fails it is not drawn, what passes is ranked by it
+   *  inside each audience, and one video gives one voice. Absent (the monthly
+   *  report's call), the voices are drawn as they were. */
+  gate?: GateOptions
 }
 
 /**
@@ -2931,12 +2946,19 @@ async function loadVoicesMany(
   // the row id is what the reading month's maker set is keyed by.
   const accountByKey = new Map<string, string>()
   const idByKey = new Map<string, string>()
+  // What the quote gate reads of each video, where a gate is asked for.
+  const gateVideoByKey = new Map<string, QuoteVideo>()
   if (nativeIds.length > 0) {
-    type V = { id?: string | null; platform: string | null; video_id: string | null; video_url: string | null; source: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null; account_name?: string | null }
+    type V = {
+      id?: string | null; platform: string | null; video_id: string | null; video_url: string | null; source: string | null; is_client: boolean | null
+      is_competitor: boolean | null; competitor_name: string | null; account_name?: string | null
+      caption?: string | null; hashtags?: string[] | null; topics?: string[] | null
+    }
     const read = await readByIds<V>(nativeIds, (part) =>
       supabase
         .from('videos')
-        .select('id, platform, video_id, video_url, source, is_client, is_competitor, competitor_name, account_name')
+        // caption, hashtags and topics are the quote gate's (lib/quote-gate.ts).
+        .select('id, platform, video_id, video_url, source, is_client, is_competitor, competitor_name, account_name, caption, hashtags, topics')
         .eq('client_id', clientId)
         .in('video_id', part)
         .order('video_id', { ascending: true }),
@@ -2948,6 +2970,13 @@ async function loadVoicesMany(
       if (v.source === 'owned') ownPostKeys.add(key)
       if (v.account_name) accountByKey.set(key, v.account_name)
       if (v.id) idByKey.set(key, String(v.id))
+      if (opts?.gate) {
+        gateVideoByKey.set(key, {
+          platform: v.platform, videoId: v.video_id, caption: v.caption ?? null, hashtags: v.hashtags ?? null, topics: v.topics ?? null,
+          accountName: v.account_name ?? null, isClient: v.is_client, isCompetitor: v.is_competitor, competitorName: v.competitor_name,
+          source: v.source, segment: null,
+        })
+      }
       audienceByKey.set(
         key,
         v.is_client ? CLIENT_AUDIENCE : v.is_competitor ? rivalKey(v.competitor_name ?? 'unknown') : INDUSTRY_AUDIENCE,
@@ -2989,7 +3018,22 @@ async function loadVoicesMany(
     // Grouped by the audience the quote was HEARD in, then drawn round-robin so
     // one loud side cannot fill the list. On the market (S5) your own audience
     // is not drawn at all (`voicePools`).
+    //
+    // THROUGH THE QUOTE GATE where one is asked for: each audience's voices
+    // are the ones that pass, best first, one per video (a video is filed
+    // under one audience, so one per video in each is one per video in all).
+    const gate = opts?.gate
+    const gateView = (c: QuoteCitation) => {
+      const m = c.commentId ? meta.get(c.commentId) : undefined
+      const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
+      const video = key ? gateVideoByKey.get(key) ?? null : null
+      const maker = makerSet && key && idByKey.has(key) ? makerSet.has(idByKey.get(key)!) : false
+      return { text: c.quote, lang: c.lang ?? null, english: c.english ?? null, video: video ? { ...video, segment: maker ? 'maker' : video.segment } : null }
+    }
+    const used = new Set<string>()
     const pools = voicePools(considered, audienceOf, opts?.marketFirst === true)
+      .map((pool) => (gate ? { ...pool, items: pickEligible(pool.items, gateView, pool.items.length, { ...gate, used }) } : pool))
+      .filter((pool) => pool.items.length > 0)
     const heard = pools.reduce((n, x) => n + x.items.length, 0)
     if (heard === 0) {
       out.set(p.key, { voices: [], from: 0, sampled: p.sampled, readable: p.considered.length })

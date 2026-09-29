@@ -3,6 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { fmtInt, longMonth, platformLabel } from '../format'
 import { cleanQuote, fetchInsightsByIds, readTranslations, readingOf } from '../quotes'
+import { pickEligible } from '../quote-gate'
+import { selectAll } from '../supabase-admin'
+import { gateFor, readQuoteContext } from '../quote-context'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { normalisePersona, type Persona } from '../profile-tiles'
@@ -40,6 +43,7 @@ import {
   buildConversationBoard,
   buildThemeBoard,
   heroLead,
+  voicelessAhead,
   makerShareSentence,
   marketKindLabel,
   mayLead,
@@ -103,6 +107,9 @@ import { ninetyDays } from './brands'
 
 /** How many voices the theme pane prints (the preview's three). */
 export const THEME_VOICES = 3
+
+/** How many of the rows that may lead have their quotes read for the pane. */
+const LEAD_CANDIDATES = 4
 
 /** The Ask box takes 300 characters of `?ask=` (app/dashboard/agent/page.tsx). */
 const ASK_MAX = 300
@@ -734,9 +741,14 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     const anchors = refComments.size > 0 ? refComments : null
     const known = new Map(bankIds.map((id) => [id, { kind: obs.get(id)?.kind ?? null, k: kById.get(id) ?? 0 }]))
     const short = shortlistWords(candidates.map((c) => ({ ...c, segment: c.videoId ? segmentOf?.get(c.videoId) ?? null : null })), month, anchors, known)
-    const translations = await readTranslations(supabase, short.map((c) => c.quote))
+    // The quote gate's videos (lib/quote-gate.ts), by the rows the shortlist
+    // already names, read beside the English.
+    const [translations, ctx] = await Promise.all([
+      readTranslations(supabase, short.map((c) => c.quote)),
+      readQuoteContext(supabase, clientId, { videoUuids: short.map((c) => c.videoId) }).catch(() => null),
+    ])
     return {
-      candidates: short.map((c) => ({ ...c, ...readingOf(translations, c.quote) })),
+      candidates: short.map((c) => ({ ...c, ...readingOf(translations, c.quote), context: ctx ? ctx.forVideoUuid(c.videoId) : null })),
       anchors,
       segments: (mv?.segmentsState ?? (makerRule ? 'unknown' : 'no_rule')) as WordsBlock['segments'],
     }
@@ -756,6 +768,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // THE CAST (C4): its profile was read in wave 3.
   const castAhead = buildCast({
     supabase,
+    clientId,
     params,
     profile: row<{ personas: Partial<Persona>[]; run_date: string; run_id: string; insight_population: number | null; theme_population: number | null }>(profileRes, 'voice.consumerProfile'),
     newestRunId: row<{ id: string }>(newestRunRes, 'voice.newestRun')?.id ?? null,
@@ -826,24 +839,29 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // second, and the biggest theme, which the pane opens where nothing may
   // lead), and every label naming a brand, whose evidence decides whether the
   // name stays (`stripUnevidencedBrand`, §5.3). What people did in the pane's
-  // theme's comments is read beside them, for the theme it will most likely
-  // open.
+  // theme's comments is read beside them, for each theme it may open on.
   const brandNames = [brand, ...rivals.map((r) => r.name)].filter(Boolean)
   const deepSlugs = new Set((params.themes ?? '').split(',').map((s) => s.trim()).filter(Boolean))
   const asked = params.theme && themes.some((t) => t.registryId === params.theme) ? params.theme : null
   const byK = [...themes].sort((a, b) => b.k - a.k || a.registryId.localeCompare(b.registryId))
   const linked = deepSlugs.size > 0 && !asked ? await loadLinkedTheme(supabase, clientId, deepSlugs, byK.map((t) => t.registryId)) : null
   const tenBoard = buildThemeBoard(atTen(themes), n, month, segments, null)
-  const candidates = tenBoard.rows.filter((t) => mayLead(t, segments, excluded)).slice(0, 2).map((t) => t.registryId)
+  // The lead and the next three (two before the walkthrough's quote gate, 29
+  // Sep): a stripped label, or a theme the gate leaves no voice, moves the
+  // lead down the board, as on the front page.
+  const candidates = tenBoard.rows.filter((t) => mayLead(t, segments, excluded)).slice(0, LEAD_CANDIDATES).map((t) => t.registryId)
   const paneIds = asked ? [asked] : linked ? [linked] : [...new Set([...candidates, ...(tenBoard.rows[0] ? [tenBoard.rows[0].registryId] : [])])]
   const kindOf = (id: string) => themes.find((t) => t.registryId === id)?.kind ?? null
   const wanted = new Map<string, string | null>(paneIds.map((id) => [id, kindOf(id)]))
   const branded = themes.filter((t) => namesABrand(t.label, brandNames)).map((t) => t.registryId)
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
-  const likelyOpen = paneIds[0] ?? null
+  // Every theme the pane may open on, not only the likeliest: the lead can
+  // move past a theme the quote gate leaves no voice (below), and a kinds read
+  // started only then is a hop of its own (two small reads each, beside the
+  // quotes).
   const kindsFor = (id: string) => loadThemeKinds(supabase, clientId, themedRunId, id, refs.get(id) ?? [])
-  const likelyKinds = likelyOpen ? kindsFor(likelyOpen) : Promise.resolve(null)
-  likelyKinds.catch(() => {})
+  const kindsAhead = new Map(paneIds.map((id) => [id, kindsFor(id)]))
+  for (const k of kindsAhead.values()) k.catch(() => {})
   const quotes = await loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(paneIds))
   if (branded.length > 0) {
     themes = themes.map((t) => {
@@ -852,7 +870,33 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       return stripped.stripped ? { ...t, label: stripped.label, labelStripped: true } : t
     })
   }
-  const hero = heroLead(buildThemeBoard(atTen(themes), n, month, segments, null), [], excluded)
+  // THE LEAD HAS TO BE ABLE TO SPEAK (the walkthrough's quote gate, 29 Sep;
+  // `voicelessAhead`, as `loadMarketReads` does): where the pane opens on the
+  // lead, a candidate whose every voice the gate turns away is passed over for
+  // the next that gives one. The candidates' videos' segments are read first,
+  // in one call for all of them, since the lead's voices come only from the
+  // market's videos; the open theme's own call below is then skipped.
+  const leadBoard = buildThemeBoard(atTen(themes), n, month, segments, null)
+  const leadRows = leadBoard.rows.filter((t) => mayLead(t, segments, excluded))
+  const marked = new Set<string>()
+  let leadExcluded: ReadonlySet<string> = excluded
+  if (!asked && !linked && leadRows.length > 1) {
+    const read = leadRows.filter((t) => candidates.includes(t.registryId))
+    if (segments === 'measured' || cv.readsSegments) {
+      await markVideoSegments(db, clientId, read.flatMap((t) => quotes.get(t.registryId)?.candidates ?? []))
+      for (const t of read) marked.add(t.registryId)
+    }
+    const voiceless = voicelessAhead(leadRows, (t) => {
+      const theme = read.find((x) => x.registryId === t.registryId)
+      if (!theme) return undefined
+      return pickQuotes(cv.voices(quotes.get(theme.registryId)?.candidates ?? []), {
+        month, kind: theme.kind, count: THEME_VOICES, marketVideosOnly: segments === 'measured', skipOffers: true,
+        gate: gateFor(clientId, { claim: theme.label, requireRelevance: true }),
+      }).length
+    })
+    if (voiceless.size > 0) leadExcluded = new Set([...excluded, ...voiceless])
+  }
+  const hero = heroLead(leadBoard, [], leadExcluded)
   const leadId = hero.kind === 'themes' ? hero.lead?.registryId ?? null : null
 
   // THE FLAGS AND THE PROVENANCE, IN.
@@ -887,7 +931,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? loadThemeQuotes(supabase, clientId, themedRunId, new Map([[open.registryId, open.kind]]), month, new Set([open.registryId]))
     : Promise.resolve(quotes)
   const [kinds, cast, voicesRead] = await Promise.all([
-    !open ? Promise.resolve(null) : open.registryId === likelyOpen ? likelyKinds : kindsFor(open.registryId),
+    !open ? Promise.resolve(null) : kindsAhead.get(open.registryId) ?? kindsFor(open.registryId),
     castAhead,
     openQuotes,
   ])
@@ -899,7 +943,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const isLead = open != null && open.registryId === leadId
   const marketVoicesOnly = isLead && segments === 'measured'
   const openCandidates = open ? voicesRead.get(open.registryId)?.candidates ?? [] : []
-  if (marketVoicesOnly || cv.readsSegments) await markVideoSegments(db, clientId, openCandidates)
+  if ((marketVoicesOnly || cv.readsSegments) && !(open && marked.has(open.registryId))) await markVideoSegments(db, clientId, openCandidates)
   const theme: ThemeBlock = open
     ? {
         state: 'ready',
@@ -915,7 +959,11 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         provenance: open.provenance,
         kinds: cv.kinds(kinds),
         // Never a sale offer or an ad (default M-c): the next eligible voice.
-        voices: pickQuotes(cv.voices(openCandidates), { month, kind: open.kind, count: THEME_VOICES, marketVideosOnly: marketVoicesOnly, skipOffers: true })
+        // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): the
+        // theme's voices speak to it, one per video, from the market's buyers
+        // and commenters — never a maker's audience or a seller's post, on
+        // the lead or on a theme the reader opened.
+        voices: pickQuotes(cv.voices(openCandidates), { month, kind: open.kind, count: THEME_VOICES, marketVideosOnly: marketVoicesOnly, skipOffers: true, gate: gateFor(clientId, { claim: open.label, requireRelevance: true }) })
           .map((c) => voiceOf(c as Parameters<typeof voiceOf>[0])),
         chip,
         isLead,
@@ -966,6 +1014,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         themes: bankThemes,
         anchors: wordsRead.anchors,
         segments: wordsRead.segments,
+        gate: gateFor(clientId),
       })
     : null
 
@@ -1005,6 +1054,11 @@ function previousMonthOf(month: string): string {
  *  floor Pass E writes under (design §3 VO4). */
 export const PERSONA_VIDEO_FLOOR = 3
 
+/** How deep a group's voice is looked for: its first ten insights, three
+ *  excerpts each (the quote gate needs a pool; lib/quote-gate.ts). */
+const CAST_INSIGHTS = 10
+const CAST_EXCERPTS_PER_INSIGHT = 3
+
 type EvidenceRow = {
   id: string
   audience_insight_id: string
@@ -1015,6 +1069,7 @@ type EvidenceRow = {
 
 interface CastInput {
   supabase: SupabaseClient
+  clientId: string
   params: VoiceSurfaceParams
   profile: {
     personas: Partial<Persona>[]; run_date: string; run_id: string
@@ -1064,25 +1119,65 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
   // One voice per group, from the evidence the group already cites. Read by
   // evidence id off the BASE table so a row a newer in-flight update has
   // superseded still resolves (AGENTS.md).
-  const ids = [...new Set(personas.flatMap((p) => p.insightIds.slice(0, 4)))]
-  const quoteByInsight = new Map<string, { id: string; quote: string }>()
+  //
+  // THROUGH THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): the
+  // group's first voice that is readable, on the market and not a maker's
+  // audience or a seller's post. It read the first four insights' first
+  // excerpts before, and printed a Goodwill line under "Supporter"; it reads
+  // the first ten now, so the gate has a pool, and prints none rather than a
+  // bad one.
+  const ids = [...new Set(personas.flatMap((p) => p.insightIds.slice(0, CAST_INSIGHTS)))]
+  const evidenceByInsight = new Map<string, { id: string; quote: string; commentId: string | null; platform: string | null; videoId: string | null }[]>()
   if (ids.length > 0) {
-    const res = await input.supabase
+    // Only the first few excerpts of each insight: `relevance_rank` is the
+    // excerpt's rank within its insight (Pass A writes 1..n), and one insight
+    // can carry a hundred, so the whole list for fifty insights was thousands
+    // of rows for the three each keeps (the check pass, 29 Sep: the cast was
+    // the Conversation page's long pole). Two spare, for an empty excerpt.
+    // Paged all the same. With each comment's video embedded, so the gate's
+    // context read below starts at the videos.
+    type CastRow = EvidenceRow & { comment_id: string | null; comments?: { platform: string | null; video_id: string | null }[] | { platform: string | null; video_id: string | null } | null }
+    const rowsIn = await selectAll<CastRow>(() => input.supabase
       .from('insight_evidence')
-      .select('id, audience_insight_id, quote, relevance_rank, redacted')
+      .select('id, audience_insight_id, quote, relevance_rank, redacted, comment_id, comments(platform, video_id)')
       .in('audience_insight_id', ids)
-      .order('relevance_rank', { ascending: true }).order('id')
-    for (const ev of readRows<EvidenceRow>(res, 'voice.castEvidence')) {
+      .lte('relevance_rank', CAST_EXCERPTS_PER_INSIGHT + 2)
+      .order('relevance_rank', { ascending: true }).order('id')).catch((error: unknown) => {
+      console.error(`[pages] voice.castEvidence: ${error instanceof Error ? error.message : String(error)}`)
+      return [] as CastRow[]
+    })
+    for (const ev of rowsIn) {
       if (ev.redacted || !ev.quote) continue
-      if (quoteByInsight.has(ev.audience_insight_id)) continue
-      quoteByInsight.set(ev.audience_insight_id, { id: ev.id, quote: cleanQuote(ev.quote) })
+      const list = evidenceByInsight.get(ev.audience_insight_id) ?? []
+      if (list.length >= CAST_EXCERPTS_PER_INSIGHT) continue
+      const c = Array.isArray(ev.comments) ? ev.comments[0] : ev.comments
+      list.push({ id: ev.id, quote: cleanQuote(ev.quote), commentId: ev.comment_id ?? null, platform: c?.platform ?? null, videoId: c?.video_id ?? null })
+      evidenceByInsight.set(ev.audience_insight_id, list)
     }
   }
-  const readings = await readTranslations(input.supabase, [...quoteByInsight.values()].map((q) => q.quote))
+  const all = [...evidenceByInsight.values()].flat()
+  const [readings, ctx] = await Promise.all([
+    readTranslations(input.supabase, all.map((q) => q.quote)),
+    readQuoteContext(input.supabase, input.clientId, {
+      commentIds: all.map((q) => q.commentId),
+      commentVideos: all.map((q) => ({ commentId: q.commentId, platform: q.platform, videoId: q.videoId })),
+      evidenceIds: all.filter((q) => !q.commentId).map((q) => q.id),
+    }),
+  ])
+  const used = new Set<string>()
+  const gate = gateFor(input.clientId, { used })
+  const quoteFor = (p: Persona) => {
+    const pool = p.insightIds.slice(0, CAST_INSIGHTS).flatMap((id) => evidenceByInsight.get(id) ?? [])
+    return pickEligible(pool, (q) => ({
+      text: q.quote,
+      ...readingOf(readings, q.quote),
+      video: q.commentId ? ctx.forComment(q.commentId) : ctx.forEvidence(q.id),
+    }), 1, gate)[0] ?? null
+  }
 
   const selectedKey = personas.find((p) => p.key === input.params.persona)?.key ?? personas[0].key
   const cast: CastPersona[] = personas.map((p) => {
-    const hit = p.insightIds.map((id) => quoteByInsight.get(id)).find(Boolean) ?? null
+    const hit = quoteFor(p)
     const mix = p.platformMix ?? null
     const mixTotal = mix ? Object.values(mix).reduce((n, v) => n + Number(v), 0) : 0
     return {

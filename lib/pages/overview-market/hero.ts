@@ -71,6 +71,36 @@ export function heroLead(
 }
 
 /**
+ * The themes the lead passes over because they cannot speak (the walkthrough's
+ * quote gate, 29 Sep): `heroLead` takes the largest row "that may supply
+ * voices", and a theme whose every candidate the gate turns away — a maker's
+ * audience the segment rule did not mark, a seller's post, a line off the
+ * market — supplies none (staging, 29 Sep: Sealand's "Price and sale
+ * questions", all six of its September voices asking makers and sellers for a
+ * price, left Your market with no voices at all).
+ *
+ * `rows` are the rows that may lead, in board order; `voices` says how many
+ * voices the gate gives one of them (`undefined` where its candidates were
+ * not read, which ends the search: an unread row is never passed over). The
+ * first row with any voice leads; where none read has one, nothing is passed
+ * over and the lead stays the largest. Returns the ids ahead of it, for
+ * `heroLead`'s exclusions. PURE.
+ */
+export function voicelessAhead(
+  rows: readonly Pick<MarketTheme, 'registryId'>[],
+  voices: (row: Pick<MarketTheme, 'registryId'>) => number | undefined,
+): Set<string> {
+  const ahead: string[] = []
+  for (const r of rows) {
+    const n = voices(r)
+    if (n === undefined) return new Set()
+    if (n > 0) return new Set(ahead)
+    ahead.push(r.registryId)
+  }
+  return new Set()
+}
+
+/**
  * Kinds whose evidence is counted and never quoted: a demographic signal is
  * verified, then counted (Pass A, 2026-08-22; `insight_evidence.redacted`),
  * so a theme of that kind can never supply a voice. It stays on the board and

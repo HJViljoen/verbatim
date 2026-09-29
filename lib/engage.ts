@@ -47,6 +47,9 @@ export interface EngageComment {
   account: string | null
   /** Platform-native comment id (YouTube's is deep-linkable). */
   platformCommentId: string
+  /** The platform's id of the video it sits under (`comments.video_id`), where
+   *  the read had it: the quote gate's context read starts at the videos. */
+  videoId?: string | null
 }
 
 export interface EngageCandidate {
@@ -323,6 +326,7 @@ export async function loadEngageCandidates(
         videoUrl: video?.video_url ?? null,
         account: video?.account_name ?? null,
         platformCommentId: comment.comment_id,
+        videoId: comment.video_id ?? null,
       },
     })
   }

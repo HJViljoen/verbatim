@@ -11,7 +11,9 @@ import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
-import { cleanQuote, fetchQuoteCitationsByAudience, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
+import { cleanQuote, fetchQuoteCitationsByAudience, readableQuote, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
+import { pickEligible, quoteGate, type GateOptions } from '../quote-gate'
+import { engageContextWant, gateEngage, gateFor, readQuoteContext } from '../quote-context'
 import { audienceLabel } from '../readiness/types'
 import {
   BASELINE_MONTHS,
@@ -1771,7 +1773,10 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // 2 plus the longer of the two (Sealand on staging, 27 Sep: 4.4 s; started
   // here, 3.8 s).
   const videosAhead = loadUpdateVideos(supabase, clientId, anchor.id)
-  const repliesAhead = buildReplies({ supabase, clientId, runId: anchor.id, window, videos: videosAhead })
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts) on This week's
+  // quotes: the reply queue, the flagged-for-awareness rows and For Sales.
+  // The weekly report's own calls (`loadWeekParts`) do not pass it.
+  const repliesAhead = buildReplies({ supabase, clientId, runId: anchor.id, window, videos: videosAhead, gate: true })
   const salesCitationsAhead = window ? loadSalesCitations(supabase, clientId, window) : undefined
   // Awaited in the sections' wave; this only keeps a failure that lands before
   // then from being an unhandled rejection. That wave still rejects with it.
@@ -1929,7 +1934,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     // any section above it.
     repliesAhead,
     // ── §5 · for sales ───────────────────────────────────────────────────
-    buildSales({ supabase, clientId, window, windowVideos, subjects, citations: salesCitationsAhead }),
+    buildSales({ supabase, clientId, window, windowVideos, subjects, citations: salesCitationsAhead, gate: true }),
     // ── §6's own side ────────────────────────────────────────────────────
     // ONE NARROW READ, IN THE WAVE. The client's own posts in the month are
     // tens of rows on every tenant we have, and §6 is the only section that
@@ -2122,6 +2127,13 @@ async function buildReplies(input: {
    *  queue starts reading before wave 2 has them and needs them only at the
    *  end (`loadWeek`). */
   videos: PromiseLike<readonly VideoRow[]>
+  /** The quote gate (walkthrough, 29 Sep; lib/quote-gate.ts): a row is a
+   *  comment the market wrote that the client could answer — readable, not
+   *  under a maker's or a seller's post, not under another brand's own post
+   *  (the Wotancraft line under Think Tank's), on the market — and one comment
+   *  thread gives the queue one row. Comments under the client's own posts
+   *  stay: those are the ones most worth answering. */
+  gate?: boolean
 }): Promise<RepliesBlock> {
   const { supabase, clientId, runId, window } = input
   const empty: RepliesBlock = { rows: [], counts: [], total: 0, flagged: [], window, unread: null }
@@ -2149,8 +2161,30 @@ async function buildReplies(input: {
     // queue is picked from the rest, so a skipped row is replaced, not a gap.
     // AND A COMMENT UNDER A MAKER'S OWN POST IS TAGGED SO (WP3.7; decision F):
     // the same two reads answer both.
+    // THE TRANSLATION CACHE, read once for the whole pool (the gate reads the
+    // English, and the rows print it), and the gate's videos: both beside the
+    // segments' read rather than after it.
+    //
+    // ONLY FOR WHAT THE QUEUE COULD PRINT. The ranking keeps a comment only
+    // where it reads as English on its own words and runs to twelve
+    // characters (`rankEngageCandidates`), so nothing else is worth a read:
+    // on staging's 27 Sep window that is the difference between 1,456
+    // comments' English and videos and the few hundred the queue can take.
+    const printable = candidates.filter((c) => {
+      const text = cleanQuote(c.comment.text ?? '')
+      return text.length >= 12 && readableQuote({ text })
+    })
+    const translationsAhead = readTranslations(supabase, (input.gate ? printable : candidates).map((c) => c.comment.text ?? ''))
+    const contextAhead = input.gate
+      ? readQuoteContext(supabase, clientId, engageContextWant(printable)).catch(() => null)
+      : Promise.resolve(null)
     const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment.id))
-    const pool = skipNoise(candidates, (c) => c.comment.id, segments.noise)
+    const unGated = skipNoise(candidates, (c) => c.comment.id, segments.noise)
+    const [translations] = await Promise.all([translationsAhead, contextAhead])
+    // The context read above is memoised on the client, so the gate's own read
+    // of the same comments is answered from it.
+    const printableIds = new Set(printable.map((c) => c.comment.id))
+    const pool = input.gate ? await gateEngage(supabase, clientId, unGated.filter((c) => printableIds.has(c.comment.id)), translations, segments.maker) : unGated
     const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
     const ownHandles = new Set(
       Object.values(config?.own_handles ?? {})
@@ -2191,7 +2225,6 @@ async function buildReplies(input: {
     // THE TRANSLATION CACHE, like every other quote path (sweep 2026-09-24):
     // the reply queue printed a comment's raw words, so a Korean question read
     // untranslated where the same words elsewhere carried their English.
-    const translations = await readTranslations(supabase, shaped.map((r) => r.src.comment.text ?? ''))
     const all = shaped.map((r) => toReplyRow(r, translations, segments.maker))
     const rowsOut = all.filter((r) => r.intent !== 'misinformation')
     return {
@@ -2645,7 +2678,7 @@ async function buildRising(input: {
   const risers = moved.slice(0, RISERS_SHOWN)
   if (risers.length > 0 && input.themedRunId) {
     const quoted = await Promise.all(
-      risers.map((r) => loadThemeQuotes(input.supabase, clientId, input.themedRunId as string, r.id, 2)),
+      risers.map((r) => loadThemeQuotes(input.supabase, clientId, input.themedRunId as string, r.id, 2, r.label)),
     )
     risers.forEach((r, i) => { r.quotes = quoted[i] })
   }
@@ -3000,6 +3033,13 @@ export async function buildSales(input: {
    *  label this block) are in. The weekly report passes none and it is read
    *  here. */
   citations?: Promise<SalesCitation[] | null>
+  /** The quote gate (walkthrough, 29 Sep; lib/quote-gate.ts), on what is
+   *  QUOTED, never on what is counted: a quote under a maker's or a seller's
+   *  post, off the market or too short to read ("Bahut ganda hai → Very
+   *  dirty") is not printed; a rival's complaint must be that rival's; one
+   *  thread gives a group or a list one quote. The weekly report's call does
+   *  not pass it. */
+  gate?: boolean
 }): Promise<ForSalesData> {
   const { supabase, clientId, window } = input
   // GROUPED BY THEME UNTIL SUBJECTS EXIST, AND THE BLOCK SAYS SO. A heading a
@@ -3027,14 +3067,32 @@ export async function buildSales(input: {
 
   // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7). Only the
   // quotes skip: every count below is still of what was read.
-  const noise = await noiseVideos(supabase, clientId, cited.map((c) => c.videoUuid))
-  const quotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid)
-  const objections = groupCitations(cited.filter((c) => c.category === 'objection'), undefined, quotable)
+  const [noise, gated] = await Promise.all([
+    noiseVideos(supabase, clientId, cited.map((c) => c.videoUuid)),
+    input.gate ? salesGate(supabase, clientId, cited) : Promise.resolve(null),
+  ])
+  const quotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid) && (gated ? gated.ok(c) : true)
+  const rivalQuotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid) && (gated ? gated.ok(c, rivalNameOf(c.audience)) : true)
+  const threadOf = gated ? gated.thread : undefined
+  const objections = groupCitations(cited.filter((c) => c.category === 'objection'), undefined, quotable, threadOf)
   const rivalComplaints = groupCitations(
     cited.filter((c) => c.category === 'objection' && c.audience.startsWith('competitor:')),
     (c) => ({ id: c.audience, label: rivalNameOf(c.audience) ?? c.audience }),
-    quotable,
+    rivalQuotable,
+    threadOf,
   )
+  // One quote per thread in a list, where the gate is asked for.
+  const onePerThread = (list: readonly SalesCitation[]): SalesCitation[] => {
+    if (!threadOf) return [...list]
+    const seen = new Set<string>()
+    return list.filter((c) => {
+      const t = threadOf(c)
+      if (!t) return true
+      if (seen.has(t)) return false
+      seen.add(t)
+      return true
+    })
+  }
   // COUNTED BEFORE IT IS CAPPED. Slicing first and counting the slice is how
   // "2 comments · someone said they were moving between brands" came to be
   // printed on both tenants whatever the real number was.
@@ -3052,8 +3110,8 @@ export async function buildSales(input: {
     objections: objections.slice(0, SALES_GROUPS_SHOWN),
     // COUNTED BEFORE IT IS CAPPED, so "N more objections" can name a real N.
     objectionsTotal: objections.length,
-    praise: cited.filter((c) => c.category === 'praise' && quotable(c)).slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
-    switching: switching.filter(quotable).slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
+    praise: onePerThread(cited.filter((c) => c.category === 'praise' && quotable(c))).slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
+    switching: onePerThread(switching.filter(quotable)).slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
     switchingTotal: switchingComments,
     rivalComplaints: rivalComplaints.slice(0, SALES_GROUPS_SHOWN),
   }
@@ -3075,6 +3133,31 @@ interface SalesCitation {
   platform: string
   commentDate: string | null
   href: string | null
+}
+
+/**
+ * For Sales' quotes through the quote gate (lib/quote-gate.ts): each
+ * citation's comment's video read once, and a verdict per citation — a market
+ * quote by default, a rival's where `brand` is named.
+ */
+async function salesGate(
+  supabase: SupabaseClient,
+  clientId: string,
+  cited: readonly SalesCitation[],
+): Promise<{ ok: (c: SalesCitation, brand?: string | null) => boolean; thread: (c: SalesCitation) => string | null }> {
+  // By the video's own row id, which each citation carries: one hop.
+  const ctx = await readQuoteContext(supabase, clientId, { videoUuids: cited.map((c) => c.videoUuid) })
+  const verdict = (c: SalesCitation, brand?: string | null) => quoteGate(
+    { text: c.quote, lang: c.lang, english: c.english, video: ctx.forVideoUuid(c.videoUuid) },
+    gateFor(clientId, brand ? { brand } : {}),
+  )
+  return {
+    ok: (c, brand) => verdict(c, brand).ok,
+    thread: (c) => {
+      const v = ctx.forVideoUuid(c.videoUuid)
+      return v?.videoId ? `${(v.platform ?? '').toLowerCase()}::${v.videoId}` : null
+    },
+  }
 }
 
 function toSalesQuote(c: SalesCitation): SalesQuote {
@@ -3103,13 +3186,20 @@ function groupCitations(
   keyOf: (c: SalesCitation) => { id: string; label: string } = (c) => ({ id: c.themeId, label: c.themeLabel }),
   /** Whether a citation may be QUOTED (never whether it is counted). */
   quotable: (c: SalesCitation) => boolean = () => true,
+  /** The thread a quote sits in, where a group takes one quote per thread
+   *  (the quote gate's rule); absent, no such cap. */
+  threadOf?: (c: SalesCitation) => string | null,
 ): SalesGroup[] {
-  const held = new Map<string, { label: string; videos: Set<string>; quotes: SalesQuote[] }>()
+  const held = new Map<string, { label: string; videos: Set<string>; quotes: SalesQuote[]; threads: Set<string> }>()
   for (const c of cited) {
     const { id, label } = keyOf(c)
-    const group = held.get(id) ?? { label, videos: new Set<string>(), quotes: [] }
+    const group = held.get(id) ?? { label, videos: new Set<string>(), quotes: [], threads: new Set<string>() }
     group.videos.add(c.videoUuid)
-    if (group.quotes.length < SALES_QUOTES_PER_GROUP && quotable(c)) group.quotes.push(toSalesQuote(c))
+    const thread = threadOf ? threadOf(c) : null
+    if (group.quotes.length < SALES_QUOTES_PER_GROUP && quotable(c) && !(thread && group.threads.has(thread))) {
+      group.quotes.push(toSalesQuote(c))
+      if (thread) group.threads.add(thread)
+    }
     held.set(id, group)
   }
   return [...held.entries()]
@@ -3666,6 +3756,9 @@ async function loadThemeQuotes(
   themedRunId: string,
   registryId: string,
   limit: number,
+  /** The theme's label: its quotes pass the quote gate (lib/quote-gate.ts)
+   *  and speak to it. */
+  label: string | null = null,
 ): Promise<{ quote: Quote; cite: string; href: string | null }[]> {
   const themeRes = await supabase
     .from('themes').select('supporting_insight_ids')
@@ -3686,7 +3779,29 @@ async function loadThemeQuotes(
       pool.push({ ...c, quote: text })
     }
   }
-  return citeQuotes(supabase, clientId, pool.slice(0, limit))
+  return citeQuotes(supabase, clientId, await gateCitations(supabase, clientId, pool, limit, gateFor(clientId, { claim: label, requireRelevance: true })))
+}
+
+/** Citations through the quote gate (lib/quote-gate.ts): the first `n` that
+ *  pass, best first, one per thread. */
+async function gateCitations(
+  supabase: SupabaseClient,
+  clientId: string,
+  pool: readonly QuoteCitation[],
+  n: number,
+  gate: GateOptions,
+): Promise<QuoteCitation[]> {
+  if (pool.length === 0) return []
+  const ctx = await readQuoteContext(supabase, clientId, {
+    commentIds: pool.map((c) => c.commentId),
+    evidenceIds: pool.filter((c) => !c.commentId).map((c) => c.evidenceId),
+  })
+  return pickEligible(pool, (c) => ({
+    text: c.quote,
+    lang: c.lang ?? null,
+    english: c.english ?? null,
+    video: c.commentId ? ctx.forComment(c.commentId) : ctx.forEvidence(c.evidenceId),
+  }), n, gate)
 }
 
 /** Turn citations into quotes with a platform · date · link cite. */
@@ -3797,7 +3912,9 @@ async function resolveRefs(
       if (text) pool.push({ ...c, quote: text })
     }
   }
-  return citeQuotes(supabase, clientId, pool.slice(0, refs.length))
+  // Through the quote gate (walkthrough, 29 Sep): a flag's evidence is
+  // printed only where it is a quote the market could be read by.
+  return citeQuotes(supabase, clientId, await gateCitations(supabase, clientId, pool, refs.length, gateFor(clientId)))
 }
 
 /** Of these insight ids, the ones that belong to this tenant. `audience_insights`
