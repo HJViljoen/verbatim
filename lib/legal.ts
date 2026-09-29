@@ -15,3 +15,12 @@ const ORIGIN =
 
 export const PRIVACY_URL = `${ORIGIN}/privacy`
 export const TERMS_URL = `${ORIGIN}/terms`
+
+/**
+ * The one mailbox a client or a commenter can write to (29 Sep 2026). A
+ * rights channel that does not receive mail is worse than none: this is the
+ * address that reaches Heinrich today. The legal pages print it, and so does
+ * every in-app line that tells a client to ask for something. Change it only
+ * to another mailbox someone reads.
+ */
+export const CONTACT_EMAIL = 'heinrichviljoen@verbatimintel.com'
