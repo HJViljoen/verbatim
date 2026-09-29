@@ -119,7 +119,8 @@ export function asideLine(w: WhereBlock): string | null {
   if (w.setAside.length === 0) return null
   const accounts = w.setAside.length
   const videos = w.setAside.reduce((n, a) => n + a.videos, 0)
-  return `Set aside as off-topic: ${fmtInt(accounts)} ${accounts === 1 ? 'account' : 'accounts'} with ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} that a name search found but that ${accounts === 1 ? 'is' : 'are'} about something else. Not in the list above.`
+  // No claim about how they were found: `foundBy` is null for some.
+  return `Set aside as off-topic: ${fmtInt(accounts)} ${accounts === 1 ? 'account' : 'accounts'} with ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} about something else, left out of the list above.`
 }
 
 function Aside({ w }: { w: WhereBlock }) {

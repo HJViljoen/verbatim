@@ -262,7 +262,7 @@ describe('B5 · what they post and say about themselves', () => {
 describe('B6 · how the market makes content', () => {
   it('prints the category’s formats and openings, each a share of those read', () => {
     const t = text(brandsContent.render(brandsFixture(), 'app', ctx))
-    expect(t).toContain('The formats and openings of every category video our searches found that was posted in September, not only those in your market, which are the videos with September comments. 1,947 of the 2,192 have their format read.')
+    expect(t).toContain('The formats and openings of the category videos posted in September, counted by the day they were posted, not by September’s comments. 1,947 of the 2,192 have their format read.')
     expect(t).toContain('1,947 of the 2,192 have their format read.')
     expect(t).toContain('Format of 1,947 Promotional 27%')
     expect(t).toContain('Opening of 1,776 Bold claim 42%')

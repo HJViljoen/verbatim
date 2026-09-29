@@ -1342,7 +1342,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     const median = extra.trailingMedian != null ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))}` : 'no trailing median yet'
     push(
       'videos', 'Videos analysed', fmtInt(videos),
-      own ? `${fmtInt(split.market.videos)} in your market, ${fmtInt(split.own.videos)} your own posts · ${median}` : median,
+      own ? `${fmtInt(split.market.videos)} in your market, ${fmtInt(split.own.videos)} of your own posts · ${median}` : median,
       { dash: true, basis: extra.trailingMedian != null ? 'over the months gathered' : '' },
     )
     push('dual', 'Dual-mention videos', fmtInt(dual), '', { dash: true })

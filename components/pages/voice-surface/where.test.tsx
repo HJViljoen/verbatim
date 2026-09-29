@@ -45,7 +45,7 @@ describe('voiceWhere (C6)', () => {
         const text = renderText(voiceWhere.render(data, mode, ctx))
         expect(text).not.toContain('Mike Ritland')
         expect(text).not.toContain('sealand gear')
-        expect(text).toMatch(/Set aside as off-topic: \d+ accounts? with \d+ videos? that a name search found but that (is|are) about something else\. Not in the list above\./)
+        expect(text).toMatch(/Set aside as off-topic: \d+ accounts? with \d+ videos? about something else, left out of the list above\./)
       }
     }
   })

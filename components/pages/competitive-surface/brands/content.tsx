@@ -64,7 +64,7 @@ function Table({ title, rows, n, mode }: { title: string; rows: ContentBlock['fo
  * videos posted in September".
  */
 export function contentLead(month: string): string {
-  return `The formats and openings of every category video our searches found that was posted in ${longMonth(month)}, not only those in your market, which are the videos with ${longMonth(month)} comments.`
+  return `The formats and openings of the category videos posted in ${longMonth(month)}, counted by the day they were posted, not by ${longMonth(month)}’s comments.`
 }
 
 function Body({ c, mode }: { c: ContentBlock; mode: RenderMode }) {

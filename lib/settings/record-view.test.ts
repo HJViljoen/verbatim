@@ -202,7 +202,7 @@ describe('the record as rows', () => {
     // finish-list item 9: split into your market and your own posts, so the
     // record's total cannot read against the market's figure on every page.
     expect(row('comments').rest).toMatch(/^[\d,]+ in your market, [\d,]+ under your own posts$/)
-    expect(row('videos').rest).toMatch(/^[\d,]+ in your market, [\d,]+ your own posts · /)
+    expect(row('videos').rest).toMatch(/^[\d,]+ in your market, [\d,]+ of your own posts · /)
     expect(rows().some((r) => /per update/.test(`${r.rest} ${r.basis}`))).toBe(false)
   })
 
