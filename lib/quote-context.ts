@@ -240,6 +240,16 @@ export function gateFor(clientId: string, block: Omit<GateOptions, 'market' | 'm
   return { market: quoteMarketFor(clientId), makerRule: segmentRulesEnabled(clientId), ...block }
 }
 
+/** What the gate's context read needs for engage candidates: their comments,
+ *  with the video each sits under where the candidate carries it, so the
+ *  comments hop is skipped for those. */
+export function engageContextWant(pool: readonly EngageCandidate[]): Parameters<typeof readQuoteContext>[2] {
+  return {
+    commentIds: pool.map((c) => c.comment.id),
+    commentVideos: pool.filter((c) => c.comment.videoId).map((c) => ({ commentId: c.comment.id, platform: c.comment.platform, videoId: c.comment.videoId })),
+  }
+}
+
 /**
  * A reply queue's candidates through the quote gate (This week's Worth a reply
  * and Flagged for awareness; the Content page's inbox): a comment the market
@@ -258,7 +268,7 @@ export async function gateEngage<T extends EngageCandidate>(
   makers: ReadonlySet<string> = new Set(),
 ): Promise<T[]> {
   if (pool.length === 0) return []
-  const ctx = await readQuoteContext(db, clientId, { commentIds: pool.map((c) => c.comment.id) })
+  const ctx = await readQuoteContext(db, clientId, engageContextWant(pool))
   const gate = gateFor(clientId, { allowOwn: true })
   const threadOf = new Map<string, string | null>()
   const passed = pool.filter((c) => {

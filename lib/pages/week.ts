@@ -13,7 +13,7 @@ import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
 import { cleanQuote, fetchQuoteCitationsByAudience, readableQuote, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
 import { pickEligible, quoteGate, type GateOptions } from '../quote-gate'
-import { gateEngage, gateFor, readQuoteContext } from '../quote-context'
+import { engageContextWant, gateEngage, gateFor, readQuoteContext } from '../quote-context'
 import { audienceLabel } from '../readiness/types'
 import {
   BASELINE_MONTHS,
@@ -2148,7 +2148,7 @@ async function buildReplies(input: {
     })
     const translationsAhead = readTranslations(supabase, (input.gate ? printable : candidates).map((c) => c.comment.text ?? ''))
     const contextAhead = input.gate
-      ? readQuoteContext(supabase, clientId, { commentIds: printable.map((c) => c.comment.id) }).catch(() => null)
+      ? readQuoteContext(supabase, clientId, engageContextWant(printable)).catch(() => null)
       : Promise.resolve(null)
     const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment.id))
     const unGated = skipNoise(candidates, (c) => c.comment.id, segments.noise)
