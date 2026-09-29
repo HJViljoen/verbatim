@@ -182,7 +182,13 @@ export async function resendInvitation(_prev: ActionState, formData: FormData): 
     .eq('status', 'pending')
   if (error) return { ok: false, message: `Could not resend: ${error.message}` }
 
-  return createInvite(session, inv.email, inv.role)
+  // The old invite is revoked whatever happens next, so the list is redrawn
+  // on every answer: `createInvite` redraws it only when the new one is made,
+  // and a refusal ("already on your team") would otherwise leave the revoked
+  // row on screen with a Resend beside it.
+  const result = await createInvite(session, inv.email, inv.role)
+  revalidatePath('/dashboard/team')
+  return result
 }
 
 const roleChangeSchema = z.object({
