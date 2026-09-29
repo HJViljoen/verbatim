@@ -1917,7 +1917,9 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
       heard: heardAhead,
       market,
-      brandLayer: loadUpdateBrandLayer(supabase, clientId, month, marketAudiences(rivalAudiences)),
+      // On the reading client, as Your market and Brands read it: the market
+      // RPC is not granted to a tenant's own session (lib/pages/week-brands.ts).
+      brandLayer: loadUpdateBrandLayer(reading.client, clientId, month, marketAudiences(rivalAudiences)),
       changes: loadChanges(reading.client, clientId),
     }),
     // ── §2 · worth a reply, and §8 · flagged for awareness ───────────────

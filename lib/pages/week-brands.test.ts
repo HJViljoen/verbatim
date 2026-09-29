@@ -85,6 +85,13 @@ describe('updateBrandCounts (This week, "Videos naming them")', () => {
     }
   })
 
+  it('prints no figure for a checked brand the mention layer holds no row of, as Brands does (never a 0)', () => {
+    const l = layer({ planned: layer().planned.filter((p) => p.row.brand_key !== 'k-freitag'), withRows: new Set(['k-cotopaxi']) })
+    const out = updateBrandCounts({ clientId: SEALAND_CLIENT_ID, layer: l, updateVideos: UPDATE, brands: BRANDS })
+    expect(out.get('Freitag')).toEqual({ videos: null, monthVideos: null, note: 'not counted yet' })
+    expect(out.get('Cotopaxi')).toEqual({ videos: 1, monthVideos: 1, note: null })
+  })
+
   it('prints no figure for a brand production has not hand-checked', () => {
     const l = layer({ rivals: [...layer().rivals, { name: 'Rareform', brandKey: 'k-rare' }] })
     const out = updateBrandCounts({ clientId: SEALAND_CLIENT_ID, layer: l, updateVideos: UPDATE, brands: [...BRANDS, 'Rareform'], checks: {} })

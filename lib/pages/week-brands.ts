@@ -67,16 +67,23 @@ export function updateBrandCounts(input: {
     // and a match found since is not counted until it is read by hand (the
     // Brands page's rule, lib/pages/brands.ts `topicRow`).
     if (state === 'none') { out.set(name, m.kAny === 0 ? { videos: 0, monthVideos: 0, note: null } : { ...none, note: NOT_COUNTED_YET }); continue }
-    if (state !== 'counted') { out.set(name, { ...none, note: NOT_COUNTED_YET }); continue }
+    // A checked brand with no mention row at all has no count, never a 0 (the
+    // Brands page's rule, `topicRow`).
+    if (state !== 'counted' || !layer.withRows.has(rival.brandKey)) { out.set(name, { ...none, note: NOT_COUNTED_YET }); continue }
     out.set(name, { videos: c.kAny, monthVideos: m.kAny, note: null })
   }
   return out
 }
 
 /** The layer for the update's month, or null where it cannot be read (the
- *  column then prints "not counted yet"; never the page). */
+ *  column then prints "not counted yet"; never the page).
+ *
+ *  THE READING CLIENT (`scope.reading.client`, the service role), as Your
+ *  market and Brands read it: `market_month_videos` is revoked from
+ *  `authenticated`, so on a tenant's own session client the market read fails
+ *  and every brand would print "not counted yet". */
 export async function loadUpdateBrandLayer(
-  supabase: SupabaseClient,
+  client: SupabaseClient,
   clientId: string,
   month: string,
   /** The market's audiences (`marketAudiences`), as Your market and Brands
@@ -84,7 +91,14 @@ export async function loadUpdateBrandLayer(
   audiences: readonly string[],
 ): Promise<BrandLayer | null> {
   try {
-    return await readBrandLayer(supabase, clientId, month, { rivalFound: false, market: marketMonthIds(supabase, clientId, month, audiences) })
+    return await readBrandLayer(client, clientId, month, {
+      rivalFound: false,
+      // Only the market's matched videos need an owner here: the count never
+      // reaches outside the month's market (one identity read, not one per
+      // 250 videos the whole mention layer names).
+      identities: 'market',
+      market: marketMonthIds(client, clientId, month, audiences),
+    })
   } catch (error) {
     console.error(`[pages] week.brands: ${(error as { message?: string })?.message ?? String(error)}`)
     return null

@@ -141,7 +141,14 @@ export async function readBrandLayer(
   client: SupabaseClient,
   clientId: string,
   month: string,
-  opts: { market?: Promise<string[] | null> | null; rivalFound?: boolean } = {},
+  opts: {
+    market?: Promise<string[] | null> | null
+    rivalFound?: boolean
+    /** 'market': read the identity of the matched videos in the month's market
+     *  only (This week, whose counts never leave it); default, every matched
+     *  video (Your market's own-post count reaches outside the market). */
+    identities?: 'all' | 'market'
+  } = {},
 ): Promise<BrandLayer | null> {
   const rules = brandRulesFor(clientId)
   if (rules.length === 0) return null
@@ -171,7 +178,8 @@ export async function readBrandLayer(
 
   // Whose own post each matched video is, and which videos our rival searches
   // found (every brand's one base).
-  const matched = [...new Set(mentions.map((r) => r.video_id))].sort()
+  const inMarket = opts.identities === 'market' ? new Set(market) : null
+  const matched = [...new Set(mentions.map((r) => r.video_id))].filter((id) => !inMarket || inMarket.has(id)).sort()
   const [rows, rivalFound] = await Promise.all([
     identities(client, clientId, matched),
     opts.rivalFound === false ? Promise.resolve(null) : readRivalFound(client, clientId, tc.competitor_keywords),
