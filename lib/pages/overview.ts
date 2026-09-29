@@ -3495,7 +3495,14 @@ export async function loadMovesExtras(input: {
   // the largest match with a LABEL tie-break, so on a tie the card's paired
   // movement could be a reading of one subject while `proposal.subjectId`
   // named another — with nothing on the card saying so.
-  const top = topMatchedSubject(membership)
+  //
+  // AND ONLY A SUBJECT WHOSE CLIENT SIDE PRINTS (finish-list item 21).
+  // `buildMoveCandidate` drops a subject that is not ready from the card's
+  // rows (`printsClient`), and this picked from every match, so Sealand's
+  // September card printed "Subjects matched: none" above "Community &
+  // purpose in your audience: 7 of 10", a subject being re-described that
+  // How to read says prints no figure. Same filter, same subject.
+  const top = topMatchedSubject(membership.filter((m) => printsClient(m.calibration)))
   const movement = top
     ? input.movementFor
       ? input.movementFor(top.subjectId)

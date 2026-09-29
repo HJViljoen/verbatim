@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   CALIBRATION_WORDS,
   calibrationWord,
+  countedNote,
   earnsVerdict,
+  FAILED_EXPLAINED,
   isFailed,
   printsClient,
   printsMarket,
@@ -166,5 +168,20 @@ describe('withheldLabel (WP1.1 review, finding 6)', () => {
   it('a provisional subject is not shown until its check clears, in the product\'s own words', () => {
     expect(withheldLabel('provisional')).toBe('not shown until its check clears')
     expect(withheldLabel('calibrating')).toBe('not shown until its check clears')
+  })
+})
+
+// Finish-list item 21: Settings › Subjects said "no reading yet" on subjects
+// the Subjects page counted.
+describe('countedNote', () => {
+  it('says a counted subject is counted, in the words its check allows', () => {
+    expect(countedNote('ready')).toBe('counted in your market')
+    expect(countedNote('provisional')).toBe('counted in your market, marked provisional')
+    expect(countedNote('failed')).toBe('being re-described: no figure while we reword it')
+  })
+
+  it('explains "being re-described" without a digit or a direction word', () => {
+    expect(FAILED_EXPLAINED).toMatch(/^Being re-described: /)
+    expect(FAILED_EXPLAINED).not.toMatch(/\d/)
   })
 })

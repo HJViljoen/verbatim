@@ -6,6 +6,7 @@ import { confirmedSubjects, subjectOriginWords, type SubjectChangeRow } from '@/
 import { settingsBar } from '@/lib/settings/bar'
 import { subjectSetVerdict } from '@/lib/subjects/moves'
 import { isMissingSubjects, SUBJECTS_MAX, SUBJECTS_MIN, TABLE_SUBJECTS, type Subject } from '@/lib/subjects/types'
+import { countedNote, subjectCalibration } from '@/lib/subjects/calibration-state'
 
 // Settings › Subjects (Phase 1 WP16, design items 4 and 22, decision E) — the
 // five to ten things this workspace follows in its market, named as a buyer would,
@@ -69,6 +70,10 @@ export default async function SettingsSubjectsPage() {
     namedAt: s.named_at,
     status: s.status,
     because: subjectOriginWords(s, confirmed, originLine(s.origin)),
+    // NOT "no reading yet" ON A COUNTED SUBJECT (finish-list item 21): this
+    // page reads no levels, so every row said "no reading yet" while five were
+    // counted on Subjects. The row says what its check allows instead.
+    note: s.status === 'active' ? countedNote(subjectCalibration(s)) : null,
     // NO LINK ON A STOPPED SUBJECT. `loadSubjectRows` excludes retired subjects
     // from the rail and `selectSubject` falls back to rail[0] with no notice —
     // the defect aa32043 fixed for `?themes=` — so this href opened a DIFFERENT
@@ -113,7 +118,7 @@ export default async function SettingsSubjectsPage() {
 
             <SettingsCard
               title="Waiting for you"
-              description="Drawn from what your own videos say and what the category keeps talking about. Nothing here is counted until you confirm it."
+              description="Suggestions drawn from what your own videos say and what the category keeps talking about. A suggestion is not counted until you confirm it; the subjects above are."
             >
               {candidates.length === 0 ? (
                 <p className="text-[12px] text-muted-foreground">

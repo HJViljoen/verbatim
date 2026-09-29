@@ -7,6 +7,7 @@ import { render, renderText } from '@/lib/test/render'
 import { surface } from '@/lib/nav'
 import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
 import { NO_SUBJECTS_LINE, subjectsList } from './list'
+import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import { subjectsOwnPosts } from './own-posts'
 import { subjectsSayHear } from './say-hear'
 import { MARKET_PANE_TITLE, subjectsSubject } from './subject'
@@ -106,6 +107,16 @@ describe('S1 · the rail reads the market', () => {
     expect(t).toMatch(/Repair & warranty being re-described/)
     expect(t).not.toMatch(/Repair & warranty 36/)
     expect(t).toMatch(/Community & purpose no reading yet/)
+  })
+
+  // Finish-list item 21: "being re-described" was printed with nothing
+  // saying what it meant.
+  it('explains "being re-described" in one plain line on the page, and not on paper', () => {
+    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
+    expect(t).toContain(FAILED_EXPLAINED)
+    expect(t.split(FAILED_EXPLAINED).length - 1).toBe(1)
+    assertCopyContract(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx)))
+    for (const mode of ['print', 'email'] as const) expect(text(subjectsList.render(marketSubjectsFixture(), mode, ctx))).not.toContain(FAILED_EXPLAINED)
   })
 
   it('draws no editing control (a rename or a stop is Settings\')', () => {
