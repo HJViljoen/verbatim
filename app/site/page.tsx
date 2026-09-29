@@ -174,7 +174,7 @@ export default function MarketingHome() {
           <div className="head">
             <h2 id="rooms-h" className="lead">The same market, written for whoever is in the room.</h2>
             <div>
-              <p className="body">Leadership, marketing, sales, content and product each act on a different part of the same market. Verbatim writes reports for your team from it, so the people who never open the app still hear what the market said.</p>
+              <p className="body">Reports for each team: leadership, marketing, sales, content and product. Each acts on a different part of the same market, and its report is for the people who never open the app.</p>
               <p className="body">Every quote in them still traces to the comment it came from.</p>
             </div>
           </div>

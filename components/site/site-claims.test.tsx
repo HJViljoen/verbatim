@@ -40,6 +40,12 @@ describe.each(pages)('the %s page', (_name, page) => {
     }
   })
 
+  // Reports are on hold and none has been sent: the site describes them, it
+  // does not say Verbatim is writing them for you now.
+  it('does not say reports are being written or sent today', () => {
+    expect(text).not.toMatch(/writes reports|sends reports|reports go out/i)
+  })
+
   it('never uses an em dash', () => {
     expect(text).not.toContain('—')
   })
