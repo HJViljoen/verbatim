@@ -146,7 +146,8 @@ describe('the old pages', () => {
 
     const content = oldPageBanner(OLD_PAGES[2])
     expect(content.title).toBe('Content is being replaced by This week')
-    expect(content.body).toBe('This page stays available until 30 Nov 2026. Comments worth a reply stay here for now.')
+    // Comments worth a reply are on This week now, so nothing stays behind.
+    expect(content.body).toBe('This page stays available until 30 Nov 2026.')
   })
 })
 

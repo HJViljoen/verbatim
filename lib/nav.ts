@@ -189,10 +189,9 @@ export const OLD_PAGES: readonly OldPage[] = [
     href: '/dashboard/videos',
     label: 'Content',
     replacedBy: 'week',
-    // WK2 (comments worth a reply) is Phase 2 by the design's own boundary, so
-    // the inbox is the one thing on this page with nowhere to go yet. A banner
-    // that named This week and stopped would be read as "everything moved".
-    caveat: 'Comments worth a reply stay here for now.',
+    // NO CAVEAT NOW. It said "Comments worth a reply stay here for now" while
+    // WK2 had nowhere to go; the worth-a-reply block is on This week
+    // (components/pages/week/reply.tsx), so everything on this page has moved.
   },
 ]
 
