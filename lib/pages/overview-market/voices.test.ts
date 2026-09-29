@@ -109,4 +109,23 @@ describe('the quote rule (plan §4.0 Quotes)', () => {
     // The asks do not take the rule: their four rules alone.
     expect(pickQuotes(candidates, opts).map((p) => p.evidenceId)).toEqual(['ev-ad', 'ev-zambia'])
   })
+
+  // THE WALKTHROUGH'S QUOTE GATE (29 Sep, lib/quote-gate.ts). Production's
+  // two voices on "Price and sale status questions" were a Turkish knitter's
+  // audience ("Bless your hands… what is the price?") and a comment under an
+  // Ibadan seller's sale post; both videos read 'market' to the segment rule.
+  it('with the gate, the two voices come from the market and not from a maker\u2019s or a seller\u2019s post', () => {
+    const KNITTER = { platform: 'instagram', videoId: 'DdmFVg0uuDH', accountName: 'trend_orgu4', caption: 'Pullu çanta modeli #handmade #handmadebag', hashtags: ['handmade', 'handmadebag'], topics: ['handmade bag'], segment: 'market' }
+    const SELLER = { platform: 'tiktok', videoId: '7686980095516462356', accountName: 'SLIPPERS/SHOES/BAGS IN IBADAN.', caption: 'Viral TASSEL bag in nude colour combo. Available to order.  PRICE: 25,000', hashtags: ['handmadebagsinibadan'], topics: ['handmade bags', 'sales'], segment: 'market' }
+    const RYANAIR = { platform: 'reddit', videoId: '1wa0if5', accountName: 'r/Ryanair', caption: 'Cotopaxi Allpa 42L as my only bag on Ryanair — will it work?', hashtags: [], topics: ['carry-on luggage'], segment: 'market' }
+    const candidates = [
+      c({ evidenceId: 'ev-knit', rank: 1, quote: 'Ellerinize sağlık model çok güzel fiyat nedir ? 😍', lang: 'tr', english: 'Bless your hands, the model is very beautiful, what is the price? 😍', segment: 'market', context: KNITTER }),
+      c({ evidenceId: 'ev-zambia', rank: 2, quote: 'Wow so your bags cost K363 in Zambia? Definitely adding this to my future purchases', segment: 'market', context: SELLER }),
+      c({ evidenceId: 'ev-price', rank: 3, quote: 'Paid way too much for mine, the price for this bag is steep', segment: 'market', context: RYANAIR }),
+      c({ evidenceId: 'ev-price-2', rank: 4, quote: 'Is the price worth it for a bag like this on budget airlines', segment: 'market', context: RYANAIR }),
+    ]
+    const gate = { market: 'carry' as const, makerRule: true, claim: 'Price and sale status questions', requireRelevance: true }
+    // One per thread: the Ryanair thread gives one voice, and nothing pads the second.
+    expect(pickQuotes(candidates, { month: '2026-09-01', kind: null, count: 2, marketVideosOnly: true, skipOffers: true, gate }).map((p) => p.evidenceId)).toEqual(['ev-price'])
+  })
 })

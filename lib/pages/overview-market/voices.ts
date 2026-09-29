@@ -1,4 +1,5 @@
 import { cleanQuote, readsAsHeroQuote } from '../../quotes'
+import { pickEligible, type GateOptions, type QuoteVideo } from '../../quote-gate'
 import { monthStartOf, nextMonth } from '../../reading/month-key'
 import { readsAsOffer } from './offers'
 
@@ -60,6 +61,10 @@ export interface QuoteCandidate {
    *  'maker', 'noise' or 'market'), where it was read. Absent or null where it
    *  was not; `marketVideosOnly` then refuses it. */
   segment?: string | null
+  /** The video behind the quote as the quote gate reads it (lib/quote-gate.ts):
+   *  its words, filing and segment. Absent where the loader did not read it;
+   *  null where it looked and found none. */
+  context?: QuoteVideo | null
 }
 
 /**
@@ -100,13 +105,20 @@ export function quotable(c: QuoteCandidate, month: string, kind: string | null):
  *  quote only from a video whose segment was read as 'market'. `skipOffers`
  *  (the headline's voices, default M-c) skips a quote that reads as a sale
  *  offer or an ad, in its own words or its English (`readsAsOffer`), and the
- *  next eligible one is used. */
-export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month: string; kind: string | null; count: number; marketVideosOnly?: boolean; skipOffers?: boolean }): QuoteCandidate[] {
+ *  next eligible one is used.
+ *
+ *  `gate` (the walkthrough's quote rule, lib/quote-gate.ts): every candidate
+ *  also passes the shared gate on its `context` — readable, not a maker's or a
+ *  seller's, the right brand, on the market, relevant where the block asks —
+ *  and the ones that pass are ranked by it, one per thread. Fewer come back
+ *  where fewer pass. */
+export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month: string; kind: string | null; count: number; marketVideosOnly?: boolean; skipOffers?: boolean; gate?: GateOptions }): QuoteCandidate[] {
   const seen = new Set<string>()
   const out: QuoteCandidate[] = []
   const ordered = [...candidates].sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
+  const limit = opts.gate ? ordered.length : opts.count
   for (const c of ordered) {
-    if (out.length >= opts.count) break
+    if (out.length >= limit) break
     if (opts.marketVideosOnly && c.segment !== 'market') continue
     if (opts.skipOffers && (readsAsOffer(c.quote) || readsAsOffer(c.english))) continue
     if (!quotable(c, opts.month, opts.kind)) continue
@@ -115,5 +127,11 @@ export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month:
     seen.add(key)
     out.push(c)
   }
-  return out
+  if (!opts.gate) return out
+  return pickEligible(out, (c) => ({
+    text: c.quote,
+    lang: c.lang ?? null,
+    english: c.english ?? null,
+    video: c.context === undefined ? undefined : c.context === null ? null : { ...c.context, segment: c.context.segment ?? c.segment ?? null },
+  }), opts.count, opts.gate)
 }

@@ -24,6 +24,8 @@ import {
 import { audienceLabel } from '../readiness/types'
 import { groundingFor, type Grounding } from '../reading/afterwards'
 import { fetchInsightsByIds } from '../quotes'
+import { pickEligible, type QuoteVideo } from '../quote-gate'
+import { gateFor, readQuoteContext } from '../quote-context'
 import {
   isMissingKindMoodAttention,
   attentionRowsOf,
@@ -2706,6 +2708,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // ── Your market (market-first WP1.6) ───────────────────────────────────
   const front = marketReadsAhead
     ? marketFrontPage(await marketReadsAhead, {
+        clientId,
         month,
         prevMonth,
         marketRivals,
@@ -4074,7 +4077,21 @@ async function loadVoices(
       pool.push({ ...c, quote: text })
     }
   }
-  const shown = pool.slice(0, VOICES_SHOWN)
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): the voices speak
+  // to the lead theme, one per video, from the market's buyers and commenters
+  // and never a maker's audience or a seller's post. `from` counts the voices
+  // that pass it.
+  const ctx = await readQuoteContext(supabase, clientId, {
+    commentIds: pool.map((c) => c.commentId),
+    evidenceIds: pool.filter((c) => !c.commentId).map((c) => c.evidenceId),
+  })
+  const eligible = pickEligible(pool, (c) => ({
+    text: c.quote,
+    lang: c.lang ?? null,
+    english: c.english ?? null,
+    video: c.commentId ? ctx.forComment(c.commentId) : ctx.forEvidence(c.evidenceId),
+  }), pool.length, gateFor(clientId, { claim: theme?.label ?? null, requireRelevance: true }))
+  const shown = eligible.slice(0, VOICES_SHOWN)
   const commentIds = shown.map((c) => c.commentId).filter((id): id is string => Boolean(id))
   type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
   const meta = new Map<string, CommentMeta>()
@@ -4173,7 +4190,7 @@ async function loadVoices(
       href: citationLink(m?.platform ?? null, v?.video_url ?? null, m?.comment_id ?? null).href,
     }
   })
-  return { voices, from: pool.length }
+  return { voices, from: eligible.length }
 }
 
 // ---- the new front page's reads (market-first WP1.6) ----------------------------
@@ -4311,8 +4328,11 @@ export type CiteCandidate = QuoteCandidate & { platform: string | null; nativeCo
 
 /** How many candidates per theme reach the translation and video reads: the
  *  best-ranked of those already dated in the month and of the right kind.
- *  Two voices and one ask quote are the most any theme prints. */
-const QUOTE_CANDIDATES_PER_THEME = 8
+ *  Two voices and one ask quote are the most any theme prints, but the quote
+ *  gate (lib/quote-gate.ts) turns away a maker's audience, a seller's post and
+ *  whatever is off the market, so the pool it chooses from is deeper than the
+ *  eight it once was (walkthrough, 29 Sep). */
+const QUOTE_CANDIDATES_PER_THEME = 30
 
 /**
  * The quotes the page may print for these themes, as candidates the pure rule
@@ -4439,7 +4459,7 @@ export async function loadThemeQuotes(
     const parts = await Promise.all(chunk(nativeIds, UUID_IN_CHUNK).map((part) =>
       supabase
         .from('videos')
-        .select('id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name')
+        .select('id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name, caption, hashtags, topics, source')
         .eq('client_id', clientId)
         .in('video_id', part)))
     for (const res of parts) {
@@ -4495,6 +4515,10 @@ export async function loadThemeQuotes(
         platform: meta.platform,
         nativeCommentId: meta.comment_id,
         video,
+        // What the quote gate reads of the video (lib/quote-gate.ts). The
+        // segment rides on the candidate where it was read (the leads), and
+        // the gate reads the v1 rule off the words where it was not.
+        context: video ? gateVideoOf(video, meta) : null,
       }
     })
   }
@@ -4527,7 +4551,8 @@ export async function markVideoSegments(client: SupabaseClient, clientId: string
   for (const c of candidates) c.segment = c.video?.id ? byVideo.get(c.video.id) ?? null : null
 }
 
-/** The video behind a quote, for its cite and link. */
+/** The video behind a quote, for its cite and link, and the words the quote
+ *  gate reads (caption, hashtags, topics, source). */
 interface VideoCite {
   id?: string | null
   video_url: string | null
@@ -4535,6 +4560,19 @@ interface VideoCite {
   is_client?: boolean | null
   is_competitor?: boolean | null
   competitor_name?: string | null
+  caption?: string | null
+  hashtags?: string[] | null
+  topics?: string[] | null
+  source?: string | null
+}
+
+/** A cite's video as the quote gate reads it. */
+function gateVideoOf(v: VideoCite, meta: { platform: string | null; video_id: string | null }): QuoteVideo {
+  return {
+    platform: meta.platform, videoId: meta.video_id, caption: v.caption ?? null, hashtags: v.hashtags ?? null, topics: v.topics ?? null,
+    accountName: v.account_name, isClient: v.is_client ?? null, isCompetitor: v.is_competitor ?? null, competitorName: v.competitor_name ?? null,
+    source: v.source ?? null, segment: null,
+  }
 }
 
 /** How many of a theme's insights the quote read looks at: the same bound the
@@ -5033,6 +5071,7 @@ async function loadArrivals(input: {
  * a page built this way).
  */
 function marketFrontPage(reads: MarketReads, input: {
+  clientId: string
   month: string
   prevMonth: string
   marketRivals: readonly string[]
@@ -5061,14 +5100,20 @@ function marketFrontPage(reads: MarketReads, input: {
   }))
   const hero = heroLead(board, subjects, reads.excluded)
   const lead = hero.kind === 'themes' ? hero.lead : null
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): the two voices
+  // speak to the lead theme and come from buyers and commenters on the
+  // market, never a maker's audience or a seller's post; an ask's quote
+  // passes the same gate, ranked by its theme without requiring it. One
+  // wording is printed once on the page.
+  const used = new Set<string>()
   const heroVoices = lead
     // Never a sale offer or an ad (default M-c): the next eligible voice.
-    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured', skipOffers: true }).map((c) => voiceOf(c as CiteCandidate))
+    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured', skipOffers: true, gate: gateFor(input.clientId, { claim: lead.label, requireRelevance: true, used }) }).map((c) => voiceOf(c as CiteCandidate))
     : []
   const askQuotes = new Map<string, Quote | null>()
   for (const id of askIds(themes, reads.segments)) {
     const t = themes.find((x) => x.registryId === id)
-    const q = pickQuotes(reads.quotes.get(id)?.candidates ?? [], { month, kind: t?.kind ?? null, count: 1 })[0]
+    const q = pickQuotes(reads.quotes.get(id)?.candidates ?? [], { month, kind: t?.kind ?? null, count: 1, gate: gateFor(input.clientId, { claim: t?.label ?? null, used }) })[0]
     askQuotes.set(id, q ? askQuoteOf(q) : null)
   }
   const change = buildChangeBlock({

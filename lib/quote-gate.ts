@@ -109,13 +109,18 @@ export interface GateOptions {
   /** Print only a quote that speaks to `claim` (a subject's voices, a rival's
    *  claim). Where the claim carries no word to match, nothing is required. */
   requireRelevance?: boolean
-  /** A brand's block: the quote must be that brand's. */
+  /** A brand's block: the quote must be that brand's. Without one the block
+   *  is the market's, and never quotes from under a brand's own post. */
   brand?: string | null
-  /** A market block (the default): never under a brand's own post. */
   /** Comments under the client's own posts may print (Worth a reply, Your
    *  moves). Off by default: the client's audience is not the market
    *  (decision E). */
   allowOwn?: boolean
+  /** Wordings already printed on the page: `pickEligible` skips them and adds
+   *  its own, so no voice is printed twice. */
+  used?: Set<string>
+  /** Quotes one thread (video) may give a block. One. */
+  perThread?: number
 }
 
 export type GateReason =
@@ -325,7 +330,7 @@ const CARRY_TAG = /(bags?|backpack|luggage|purse|tote|wallet|suitcase|carryon|on
 const NOT_A_CARRY_TAG = /(garbage|cabbage|bagel|baguette|baggy|bagpipe|sleepingbag|teabag|trashbag|punchingbag|beanbag|backpacking)/i
 
 /** A product outside the market, named where no carry good is. */
-const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|tsa)\b/i
+const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa)\b/i
 
 /** Idioms that name a product and mean something else ("the straight jacket
  *  feature" of a harness). Taken off before the off-market test. */
@@ -533,7 +538,7 @@ export function pickEligible<T>(
   items: readonly T[],
   view: (item: T) => GateInput,
   n: number,
-  o: GateOptions & { used?: Set<string>; perThread?: number } = {},
+  o: GateOptions = {},
 ): T[] {
   const judged: { item: T; score: number; thread: string | null; key: string; at: number }[] = []
   items.forEach((item, at) => {
