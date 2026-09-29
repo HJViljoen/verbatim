@@ -426,9 +426,12 @@ describe('the check pass (29 Sep): what the gate turned away that the market sai
     expect(whyNot(q('7kg is incredibly easy to hit with the Aer. I had a tp3s and would hit 8-8.5kg on my 5-day set-up.', NEWS_BEARS_EARS), SEALAND)).toBe('off_topic')
   })
 
-  it('reads a compliment to the person as off the market, and one to the bag as on it', () => {
+  it('reads a compliment to the person or the channel as off the market, and one to the bag as on it', () => {
     expect(whyNot(q('Love the look, Diane!!', LUX_EVENT), SEALAND)).toBe('off_topic')
     expect(whyNot(q('That strap looks great on that!', LUX_EVENT), SEALAND)).toBeNull()
+    const community = { ...SEALAND, claim: 'Community & purpose. Comments about the brand\u2019s community initiatives and purpose.', requireRelevance: true }
+    expect(whyNot(q('Love this and all of your content Jenna! So helpful to share this with other moms in the community! Thank you! Happy back to school ❤', LUX_EVENT), community)).toBe('off_topic')
+    expect(whyNot(q('As usual, you do a good job with your reviews. I have tended to avoid the Aer, although I know you\u2019re a big fan of that company', EXPENSIVE_BACKPACKS), SEALAND)).toBeNull()
   })
 
   it('asks a maker’s question of makers only where the tenant has makers', () => {

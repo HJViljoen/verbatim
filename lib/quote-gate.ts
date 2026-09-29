@@ -430,6 +430,13 @@ const BAG_BRAND_NAMED: RegExp = (() => {
  *  a bag brand? */
 const namesCarryPart = (text: string): boolean => CARRY_WEAK.test(carryText(text)) || BAG_BRAND_NAMED.test(text)
 
+/** Praise for the channel, not the thing ("Love this and all of your content
+ *  Jenna! So helpful to share this with other moms in the community!"). Read
+ *  only where the line names no carry good, part or brand: "As usual, you do
+ *  a good job with your reviews, I have tended to avoid the Aer" is still the
+ *  market talking. */
+const CREATOR_PRAISE = /\b(your|ur) (content|videos?|vids?|channel|reviews?|podcast|episodes?)\b|\b(great|good|awesome|amazing|excellent|fantastic|lovely|helpful|fun|nice) (video|vid|content|review|episode|interview|podcast)\b|\b(love|enjoy|enjoyed) (watching|your)\b/i
+
 /** A compliment to the person, not the thing ("Love the look, Diane!!", "Our
  *  Taeri is cute and pretty", "looks perfect on you"). Read only where no
  *  carry good is named: the market's line on a bag names the bag. */
@@ -629,7 +636,8 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   if (o.market === 'carry' && !carry) {
     const aboutIt = v ? isCarryVideo(v) : false
     const pointsAtIt = said.length <= POINTER_MAX && POINTS_AT_IT.test(said)
-    if (!aboutIt || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || !(namesCarryPart(said) || pointsAtIt || relevance > 0)) {
+    const part = namesCarryPart(said)
+    if (!aboutIt || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || (!part && CREATOR_PRAISE.test(said)) || !(part || pointsAtIt || relevance > 0)) {
       return { ok: false, reason: 'off_topic' }
     }
   }
