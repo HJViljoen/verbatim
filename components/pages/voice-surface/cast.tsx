@@ -23,13 +23,18 @@ import type { CastBlock, CastPersona, VoiceSurfaceData } from '@/lib/pages/voice
 // block (25 Sep rulings).
 
 /** "YouTube 37% · TikTok 31% · …": a share where the group's platform counts
- *  can carry one, the counts where they cannot. */
+ *  can carry one, the counts where they cannot, SAID TO BE COUNTS (finish-list
+ *  item 9: the Supporter group's "YouTube 29 · TikTok 26" sat among the other
+ *  groups' percentages and read as shares): "…, in videos: too few for
+ *  shares". */
 export function platformLine(p: Pick<CastPersona, 'platformMix'>): string | null {
   if (p.platformMix.length === 0) return null
   const total = p.platformMix.reduce((n, x) => n + x.videos, 0)
-  return p.platformMix
-    .map((x) => `${x.label} ${carriesShare(total) && x.pct != null ? `${Math.round(x.pct)}%` : fmtInt(x.videos)}`)
+  const shares = carriesShare(total) && p.platformMix.every((x) => x.pct != null)
+  const line = p.platformMix
+    .map((x) => `${x.label} ${shares ? `${Math.round(x.pct as number)}%` : fmtInt(x.videos)}`)
     .join(' · ')
+  return shares ? line : `${line}, in videos: too few for shares`
 }
 
 /** The Group column's head: when the groups were drawn, and over what. */
