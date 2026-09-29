@@ -55,11 +55,22 @@ function Lead({ w, mode }: { w: WhereBlock; mode: RenderMode }) {
               ? <><span data-copy="figure" className={email ? undefined : figure}>{largest.text}</span> of <N value={w.comments} mode={mode} /></>
               : <><N value={w.largest.comments} mode={mode} /> of <N value={w.comments} mode={mode} /></>}
           </span>{' '}
-          comments in {month}.
+          {/* THE CATEGORY'S COMMENTS, SAID (finish-list item 9): the 20,782 are
+              the category's 814 videos' comments, not the market's 21,468. */}
+          category comments in {month}.
         </>
       ) : null}
     </p>
   )
+}
+
+/** The "Seen in" column's base: "months, of the last 3" (finish-list item 9).
+ *  It read "months read", which beside "2 of 3" said this workspace had read
+ *  three months, where Reports and the record count four: it is a look-back
+ *  over the reading month and the two before it, not the months held. */
+export function seenHead(w: WhereBlock): string {
+  const of = w.rows.find((r) => r.seen)?.seen?.of ?? null
+  return of == null ? 'months' : `months, of the last ${fmtInt(of)}`
 }
 
 /** "2 of 3", or "·" where the memory was not read. */
@@ -132,7 +143,7 @@ function EmailWhere({ w }: { w: WhereBlock }) {
             <tr>
               <th style={{ ...head, textAlign: 'left' }}>Account</th>
               <th style={{ ...head, textAlign: 'right' }}>Videos</th>
-              <th style={{ ...head, textAlign: 'right' }}>Seen in, months read</th>
+              <th style={{ ...head, textAlign: 'right' }}>Seen in, {seenHead(w)}</th>
             </tr>
           </thead>
           <tbody>
@@ -193,7 +204,7 @@ export const voiceWhere: Block<VoiceSurfaceData> = {
           <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
           <span role="columnheader" className={`flex flex-col items-end text-right ${SCALE.head}`}>
             Seen in
-            <span className="whitespace-nowrap font-mono text-[12px] font-normal">months read</span>
+            <span className="whitespace-nowrap font-mono text-[12px] font-normal">{seenHead(w)}</span>
           </span>
         </div>
         {w.rows.map((a) => <Row key={a.key} a={a} w={w} />)}

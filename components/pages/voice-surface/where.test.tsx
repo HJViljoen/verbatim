@@ -21,7 +21,10 @@ describe('voiceWhere (C6)', () => {
     const text = renderText(voiceWhere.render(voiceFixture(), 'app', ctx))
     expect(text).toContain('469 accounts behind the category’s September videos; 19 of them with 3 or more videos.')
     // r/onebag: 701 of 15,792 category comments in September.
-    expect(text).toContain('The largest holds 4% of 15,792 comments in September.')
+    expect(text).toContain('The largest holds 4% of 15,792 category comments in September.')
+    // The look-back's base, not "months read" (finish-list item 9).
+    expect(text).toMatch(/Seen in\s*months, of the last \d/)
+    expect(text).not.toContain('months read')
   })
 
   it('lists the accounts at the floor by videos, per month, each with the months read it was seen in', () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 
 import {
+  ownPostsSplit,
   countRefused,
   discardCounts,
   languageOf,
@@ -21,6 +22,7 @@ import {
   refusedSentence,
   totalPlatformMix,
   totalVideos,
+  type CoverageRecord,
   type RecordInputs,
 } from './record'
 import type { Verdict } from './verdicts'
@@ -413,5 +415,18 @@ describe('discardCounts', () => {
     expect(c.clearedByHeuristic).toBeNull()
     expect(c.gateOff).toBeNull()
     expect(c.failedOpen).toBeNull()
+  })
+})
+
+describe('ownPostsSplit (finish-list item 9)', () => {
+  // Production's September at the 27 Sep update: the record's 862 videos and
+  // 21,713 comments are the market's 852 and 21,468 plus your own 10 and 245.
+  const coverage: CoverageRecord[] = [
+    { audience: 'client', videos: 10, comments: 245, platformMix: { instagram: 10 }, dualMention: 0, excludedUndated: 0 },
+    { audience: 'industry-other', videos: 814, comments: 20_782, platformMix: { youtube: 359 }, dualMention: 0, excludedUndated: 0 },
+    { audience: 'competitor:Patagonia', videos: 38, comments: 686, platformMix: { youtube: 7 }, dualMention: 0, excludedUndated: 0 },
+  ]
+  it('splits the window into your market and your own posts', () => {
+    expect(ownPostsSplit(coverage)).toEqual({ own: { videos: 10, comments: 245 }, market: { videos: 852, comments: 21_468 } })
   })
 })
