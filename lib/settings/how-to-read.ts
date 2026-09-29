@@ -1,5 +1,6 @@
 import type { GlossaryKey } from '../calibration'
 import { surface, type NavKey } from '../nav'
+import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC } from '../pages/overview-market/brands'
 
 /**
  * How to read (Phase 1 WP16, design ST9; market-first WP3.10, plan §2.10 D5
@@ -120,14 +121,15 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // code's (lib/brands/mentions.ts, lib/brands/owners.ts,
     // lib/pages/overview-market/brands.ts): every video a brand comes up in,
     // its other meanings checked first, its own posts never counted as the
-    // market naming it, and the headline count without the videos our rival
-    // searches found. S17's ninety-day note is said here, never under a block.
+    // market naming it, and the headline count without the videos our brand
+    // searches found, named by its column head (BRANDS_HEAD_ORGANIC). S17's
+    // ninety-day note is said here, never under a block.
     tells: 'Which brands your market names and what is said around them: how many of the market’s videos named each brand you track, one brand in full over the last 90 days, what your market asks under their content, and what they post and say about themselves.',
     read: ['brand', 'rival', 'market', 'video', 'level'],
     cannot: [
       'A brand is counted in every video that names it, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. Each name is checked for its other meanings first, and a name that mostly means something else is not counted.',
       'A brand’s own posts are its posts, never your market naming it, so they are counted apart.',
-      'The first count leaves out every video our own rival searches found, so our searching for a brand does not add to its count; the count in all sits beside it.',
+      `The first count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count; the count “${BRANDS_HEAD_ALL}” sits beside it.`,
       'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
       'Share here is share of the videos our searches found, never market share.',
       'A video that names both you and a rival is counted in your audience only, so it is in no rival\'s share.',
@@ -319,7 +321,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // sentence to it). Said once here, never under a block.
     id: 'brands',
     title: 'How a brand is counted',
-    body: 'A brand is counted in every video it comes up in, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. On Brands and on Your market a brand is counted only once a hand check of its matches has passed, because some names mean other things: Freitag is German for Friday, Cotopaxi is a volcano and Patagonia a region. Until its check passes a brand reads “not counted yet”, never a count. A brand’s own posts are its posts, never your market naming it. The first count leaves out every video our own rival searches found, and the count in all sits beside it. Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
+    body: `A brand is counted in every video it comes up in, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. On Brands and on Your market a brand is counted only once a hand check of its matches has passed, because some names mean other things: Freitag is German for Friday, Cotopaxi is a volcano and Patagonia a region. Until its check passes a brand reads “not counted yet”, never a count. A brand’s own posts are its posts, never your market naming it. The first count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, and the count “${BRANDS_HEAD_ALL}” sits beside it. Ninety-day counts read today’s tags; frozen months keep the tags they froze with.`,
   },
   {
     // WP2.7 (update_arrivals, MF2 part C): counts that add up to months.

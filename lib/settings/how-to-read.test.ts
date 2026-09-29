@@ -11,7 +11,7 @@ import { NEW_THEME_FLOOR } from '../pages/week'
 import { BASELINE_MONTHS } from '../reading/anomaly'
 import { TOUCH_MIN_WORDS } from '../reading/own-posts'
 import { LEAD_MAX_MAKER_SHARE, MAKER_GROUP_SHARE, MAKER_NOTE_SHARE } from '../pages/overview-market/board'
-import { NINETY_DAY_NOTE } from '../pages/overview-market/brands'
+import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, NINETY_DAY_NOTE } from '../pages/overview-market/brands'
 import { COMPARE_RULES } from '../pages/overview-market/change'
 import { COMPARE_FLAG_SHARE, COMPARE_REFUSE_SHARE, DEPTH_RATIO_MIN } from '../reading/comparability'
 import { CHECK_MIN_VIDEOS, DENSE_MIN_DATED } from '../reading/recheck'
@@ -223,6 +223,14 @@ describe('how to read, market-first', () => {
   it('says S17’s ninety-day note in the words the brands block carries for it, on the Brands card and its definition', () => {
     expect(card('competitive').cannot).toContain(NINETY_DAY_NOTE)
     expect(def('brands').body).toContain(NINETY_DAY_NOTE)
+  })
+
+  it('names the brand table’s first count by its column head, never “our own rival searches”', () => {
+    for (const t of [def('brands').body, card('competitive').cannot.join(' ')]) {
+      expect(t).toContain(`“${BRANDS_HEAD_ORGANIC}”`)
+      expect(t).toContain(`“${BRANDS_HEAD_ALL}”`)
+      expect(t).not.toContain('rival searches')
+    }
   })
 
   it('counts a brand in every video, never its own posts, and names the other meanings (decision E)', () => {
