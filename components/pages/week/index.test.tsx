@@ -467,7 +467,7 @@ describe('Your market’s subjects carry their maker share (market-first WP3.7)'
 describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
   it('leads with how many of the themes first heard reached the floor, one denominator', () => {
     for (const mode of MODES) {
-      expect(renderText(weekHeard.render(marketWeekFixture(), mode, ctx)), mode).toContain('2 of the 374 themes first heard with this update reached 10 videos this month.')
+      expect(renderText(weekHeard.render(marketWeekFixture(), mode, ctx)), mode).toContain('2 themes first heard with this update reached 10 videos this month.')
     }
   })
 
@@ -497,7 +497,7 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
 
   it('says so where nothing reached the floor, or the update re-grouped', () => {
     const d = marketWeekFixture()
-    expect(weekHeard.emptyState({ ...d, heard: { ...d.heard!, rows: [] } })).toBe('374 themes were first heard with this update, and none reached 10 videos this month.')
+    expect(weekHeard.emptyState({ ...d, heard: { ...d.heard!, rows: [] } })).toBe('No theme first heard with this update reached 10 videos this month.')
     expect(weekHeard.emptyState({ ...d, heard: { ...d.heard!, rows: [], seen: 0, regrouped: { update: '2026-09-10T07:17:02.291Z', themes: 592 } } })).toBe('Re-grouped with the 10 Sep update: 592 themes.')
     expect(weekHeard.emptyState(weekFixture())).toContain('not counted here yet')
   })
@@ -805,7 +805,7 @@ describe('This week on a clock past the update’s month', () => {
     const past: WeekData = { ...ossurWeeksFixture(), readingAt: '2026-10-02T06:00:00.000Z' }
     for (const mode of MODES) {
       const text = renderText(weekHeard.render(past, mode, ctx))
-      expect(text).toContain('1 of the 93 themes first heard with this update reached 10 videos in September.')
+      expect(text).toContain('1 theme first heard with this update reached 10 videos in September.')
       expect(text).not.toMatch(/videos( or more)? this month/)
       assertCopyContract(render(weekHeard.render(past, mode, ctx)))
     }
@@ -980,12 +980,12 @@ describe('This week’s pure helpers (WP3.7)', () => {
 
   it('heardLead: the level and its base, then the floor', () => {
     const h = marketWeekFixture().heard!
-    expect(heardLead(h, 'this month')).toEqual({ level: '2 of the 374', rest: ' themes first heard with this update reached 10 videos this month.' })
+    expect(heardLead(h, 'this month')).toEqual({ level: '2', rest: ' themes first heard with this update reached 10 videos this month.' })
   })
 
   it('heardLead: nothing first heard, or none at the floor', () => {
     const h = marketWeekFixture().heard!
     expect(heardLead({ ...h, seen: 0, rows: [] }, 'this month').rest).toBe('Nothing was heard for the first time with this update.')
-    expect(heardLead({ ...h, seen: 1, rows: [] }, 'in September').rest).toBe('1 theme was first heard with this update, and none reached 10 videos in September.')
+    expect(heardLead({ ...h, seen: 1, rows: [] }, 'in September').rest).toBe('No theme first heard with this update reached 10 videos in September.')
   })
 })
