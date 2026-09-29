@@ -16,12 +16,14 @@ import { chartMonths, DEFAULT_HORIZON, horizonWindow, HORIZON_LABEL, parseHorizo
 import { hasHorizon, surface } from '../nav'
 import { KIND_ORDER, kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
+  followersLine,
   ownCensusWithClaims,
   type ClaimEcho,
   type OwnPostCensus,
   type OwnPostInput,
 } from '../reading/own-posts'
-import { claimCounts, ledgerRows, type ClaimCounts } from '../market-tiles'
+import { claimCounts, claimVerdictFor, ledgerRows, type ClaimCounts } from '../market-tiles'
+import { loadClaimEchoes } from './claim-echo'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { freezeBoundary, freezeStateFor } from '../reading/monthly'
 import { daysInMonth, MONTH_PARAM, READING_SWITCH_FRACTION, readingAnchor, scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
@@ -143,12 +145,58 @@ export interface SayHearClaim {
   /** `run_summary.say_vs_hear.you_say`, Pass D-a's line for what you claimed. */
   claim: string
   state: 'echoed' | 'pushed_back' | 'silent'
+  /**
+   * The chip's word, Your moves' own (walkthrough item 8): the claim counted in
+   * the market by `loadClaimEchoes`, the one counting both pages read, so the
+   * two cannot print "Echoed" and "Not talked about" for one claim. OPTIONAL:
+   * a copy stored before it prints the state's word.
+   */
+  label?: string
+  /** A `pushed_back` whose words ask rather than argue ("Questioned"). */
+  questioned?: boolean
+  /** Where the reading rests on your own followers and not on the market,
+   *  that said in words (`followersLine`). */
+  note?: string | null
 }
 
 /** The ledger's stance as the tile's state: the tally's own three buckets
  *  (`claimCounts`), so a row and the count under it use one rule. */
 export const claimState = (audience: string): SayHearClaim['state'] =>
   audience === 'echoes' ? 'echoed' : audience === 'contradicts' ? 'pushed_back' : 'silent'
+
+/**
+ * One ledger claim as the tile prints it, off its market echo where it was
+ * counted (walkthrough item 8) and off the stored stance where it was not.
+ * Pure.
+ */
+export function sayHearClaimOf(e: Pick<SayVsHearEntry, 'you_say' | 'audience' | 'they_say'>, echo: ClaimEcho | null): SayHearClaim {
+  // Not counted (the market could not be read): the stance as stored, in the
+  // same words, and nothing said about whose it was.
+  if (!echo || echo.state === 'not_tracked') {
+    const state = claimState(e.audience)
+    return { claim: e.you_say, state, ...(echo ? { label: claimVerdictFor(e.audience, e.they_say).label } : {}) }
+  }
+  const state: SayHearClaim['state'] = echo.state === 'echoed' ? 'echoed' : echo.state === 'pushed_back' ? 'pushed_back' : 'silent'
+  return {
+    claim: e.you_say,
+    state,
+    label: echo.label,
+    ...(echo.questioned ? { questioned: true } : {}),
+    note: followersLine(echo, e.audience, e.they_say),
+  }
+}
+
+/** The tally over the rows as printed: the same states, so the count under
+ *  the rows and the rows cannot disagree. */
+export function sayHearCounts(rows: readonly SayHearClaim[]): ClaimCounts {
+  return {
+    total: rows.length,
+    echoed: rows.filter((r) => r.state === 'echoed').length,
+    pushedBack: rows.filter((r) => r.state === 'pushed_back').length,
+    silent: rows.filter((r) => r.state === 'silent').length,
+    questioned: rows.filter((r) => r.state === 'pushed_back' && r.questioned).length,
+  }
+}
 
 export const UNANSWERED_SHOWN = 3
 
@@ -2002,6 +2050,15 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // state and this tile stays quiet about the set.
   const ownPostsAhead = loadOwnPosts(supabase, clientId, month, subjectRows == null ? null : active)
   const sayHearAhead = loadSayHear(supabase, clientId, latestRunId)
+  // EACH CLAIM COUNTED THE WAY YOUR MOVES COUNTS IT (walkthrough item 8): in
+  // the month's market, with your own followers apart. A failure here prints
+  // the ledger's stances as before rather than losing the tile.
+  const echoesAhead: Promise<ClaimEcho[] | null> = sayHearAhead
+    .then((sh) => loadClaimEchoes({ supabase, reading, clientId, month, entries: sh.entries }))
+    .catch((e: unknown) => {
+      console.error(`[pages] subjects.claimEchoes: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    })
   ownPostsAhead.catch(() => {})
   sayHearAhead.catch(() => {})
 
@@ -2449,6 +2506,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // ── SU4 · your own posts, and the claims ledger ───────────────────────
   const census = await ownPostsAhead
   const sayHear = await sayHearAhead
+  const echoes = await echoesAhead
+  const sayHearClaims: SayHearClaim[] = sayHear.entries.map((e, i) => sayHearClaimOf(e, echoes?.[i] ?? null))
   // THE CENSUS IS PRINTED BY "Your own posts" AND NOT RE-READ HERE. Say vs hear
   // lists the LEDGER's claims (`sayHearClaims`), the same rows its tally counts;
   // matching the census's `video_claims` sentences to the ledger by exact text
@@ -2483,8 +2542,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     list,
     selected,
     ownPosts,
-    sayHear: sayHear.counts,
-    sayHearClaims: sayHear.entries.map((e) => ({ claim: e.you_say, state: claimState(e.audience) })),
+    sayHear: echoes && sayHear.counts ? sayHearCounts(sayHearClaims) : sayHear.counts,
+    sayHearClaims,
   }
 }
 

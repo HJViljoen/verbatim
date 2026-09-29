@@ -47,13 +47,27 @@ const STATE_DOT: Record<SayHearClaim['state'], { app: string; email: string }> =
 const VERDICT: Record<SayHearClaim['state'], { word: string; square: string }> = {
   echoed: { word: 'Echoed', square: 'bg-you' },
   pushed_back: { word: 'Pushed back', square: 'bg-warning' },
-  silent: { word: 'Not taken up', square: 'shadow-[inset_0_0_0_1.5px_var(--cat)]' },
+  // YOUR MOVES' WORD, which is `claimVerdict`'s (walkthrough item 8): one
+  // claim, one word on both pages.
+  silent: { word: 'Not talked about', square: 'shadow-[inset_0_0_0_1.5px_var(--cat)]' },
 }
 
+/** A "Questioned" row's square: neither agreement nor argument. */
+const QUESTIONED_SQUARE = 'shadow-[inset_0_0_0_1.5px_var(--warning)]'
+
 /** The whole ledger in the app, in the rows' own words: "13 claims · 3
- *  echoed · 2 pushed back · 8 not taken up". */
-const appTally = (c: { total: number; echoed: number; pushedBack: number; silent: number }): string =>
-  `${c.total} claim${c.total === 1 ? '' : 's'} · ${c.echoed} echoed · ${c.pushedBack} pushed back · ${c.silent} not taken up`
+ *  echoed · 2 pushed back · 8 not talked about", with questions apart from
+ *  pushback where the rows told them apart. */
+const appTally = (c: { total: number; echoed: number; pushedBack: number; silent: number; questioned?: number }): string => {
+  const questioned = c.questioned ?? 0
+  return [
+    `${c.total} claim${c.total === 1 ? '' : 's'}`,
+    `${c.echoed} echoed`,
+    `${c.pushedBack - questioned} pushed back`,
+    ...(questioned > 0 ? [`${questioned} questioned`] : []),
+    `${c.silent} not talked about`,
+  ].join(' · ')
+}
 
 /** The app's two columns, the preview's: what you said, and what came back. */
 const SAY_HEAR_COLS = 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 sm:grid-cols-[minmax(0,1fr)_112px]'
@@ -62,10 +76,16 @@ function AppClaimRow({ row }: { row: SayHearClaim }) {
   const v = VERDICT[row.state]
   return (
     <div className={`${SAY_HEAR_COLS} items-baseline border-b border-border/60 py-6 last:border-b-0 last:pb-0`}>
-      <BrandClaim mode="app" copy="stored" slot="pass_d_a_say_vs_hear" className="text-[15px] leading-[1.55] [text-wrap:pretty]">{row.claim}</BrandClaim>
+      <span className="flex min-w-0 flex-col gap-1.5">
+        <BrandClaim mode="app" copy="stored" slot="pass_d_a_say_vs_hear" className="text-[15px] leading-[1.55] [text-wrap:pretty]">{row.claim}</BrandClaim>
+        {/* WHOSE READING IT IS (walkthrough item 8): where your followers took
+            it up and the market did not, the row says so rather than letting
+            the market's word stand alone. */}
+        {row.note ? <span className="text-[13px] leading-[1.45] text-muted-foreground">{row.note}</span> : null}
+      </span>
       <span className="inline-flex items-center gap-2.5 justify-self-end whitespace-nowrap text-[15px] font-semibold text-foreground">
-        <span aria-hidden className={`inline-block size-2 flex-none rounded-[2px] ${v.square}`} />
-        {v.word}
+        <span aria-hidden className={`inline-block size-2 flex-none rounded-[2px] ${row.questioned ? QUESTIONED_SQUARE : v.square}`} />
+        {row.label ?? v.word}
       </span>
     </div>
   )
@@ -82,12 +102,16 @@ function ClaimRow({ row, mode }: { row: SayHearClaim; mode: RenderMode }) {
       {email ? (
         <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>
           <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 9999, background: dot.email, marginRight: 6 }} />
-          {STATE_WORD[row.state]}
+          {row.questioned ? 'questioned' : STATE_WORD[row.state]}
+          {row.note ? <div style={{ marginTop: 2 }}>{row.note}</div> : null}
         </div>
       ) : (
-        <span className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: dot.app }} />
-          {STATE_WORD[row.state]}
+        <span className="flex flex-col gap-0.5 text-[11.5px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: dot.app }} />
+            {row.questioned ? 'questioned' : STATE_WORD[row.state]}
+          </span>
+          {row.note ? <span>{row.note}</span> : null}
         </span>
       )}
     </div>

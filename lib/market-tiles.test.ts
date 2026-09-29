@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { CURATION_GATE } from './curation'
 import {
   insightTiers, confirmedCompetitiveIds, recEvidenceTier, orderAgenda, openAgendaId, priorityDot, distinctVideos,
-  claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, groundedTier, newsRingChip,
+  claimVerdict, claimVerdictFor, readsAsQuestions, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, groundedTier, newsRingChip,
   labelsBySlug, themeChips,
 } from './market-tiles'
 
@@ -226,5 +226,26 @@ describe('grounding chips', () => {
     const m = labelsBySlug([])
     expect(themeChips(['a', 'b', 'c', 'd', 'e'], m)).toHaveLength(4)
     expect(themeChips(['a', 'b', 'c'], m, 2)).toHaveLength(2)
+  })
+})
+
+// Walkthrough item 8: "Pushed back" on a claim whose explanation was people
+// ASKING what materials are used. Questions are not pushback.
+describe('readsAsQuestions / claimVerdictFor', () => {
+  const asked = 'People love upcycling ideas and anti-waste design, but they also ask what materials are used, where they come from, and whether an upcycling claim is genuine.'
+  const argued = 'People do talk about confidence and self-expression, but they also describe prosthetic use as burdensome when fit, pain, and fatigue are not resolved.'
+  it('reads a sentence of questions as questions', () => {
+    expect(readsAsQuestions(asked)).toBe(true)
+    expect(claimVerdictFor('contradicts', asked)).toEqual({ label: 'Questioned', tone: 'sand' })
+  })
+  it('keeps "Pushed back" where the words argue, or ask and argue', () => {
+    expect(readsAsQuestions(argued)).toBe(false)
+    expect(claimVerdictFor('contradicts', argued).label).toBe('Pushed back')
+    expect(readsAsQuestions('They ask whether it is real and call out the brand for greenwashing.')).toBe(false)
+    expect(claimVerdictFor('contradicts', null).label).toBe('Pushed back')
+  })
+  it('leaves the other stances their own words', () => {
+    expect(claimVerdictFor('echoes', asked).label).toBe('Echoed')
+    expect(claimVerdictFor('silent', asked).label).toBe('Not talked about')
   })
 })

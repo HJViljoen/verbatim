@@ -5,7 +5,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { fmtInt, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { surface } from '@/lib/nav'
-import { JUDGE_NOT_CHECKED, type ClaimEcho } from '@/lib/reading/own-posts'
+import { JUDGE_NOT_CHECKED, followersCount, followersOnly, type ClaimEcho } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { ClaimRow, ClaimSubjects, MarketSurfaceData } from '@/lib/pages/market-surface'
 import { RULE, SCALE } from '@/components/pages/overview/market'
@@ -52,20 +52,33 @@ const EMAIL_DOT: Record<ClaimEcho['state'], string> = {
 const stateOf = (claim: ClaimRow): ClaimEcho['state'] =>
   claim.echo?.state ?? (claim.audience === 'echoes' ? 'echoed' : claim.audience === 'contradicts' ? 'pushed_back' : 'silent')
 
-/** "89 of 654 videos in September", or why nothing was counted. */
+/** "89 of 654 videos in September", or why nothing was counted — and, apart,
+ *  your own posts behind the same evidence (walkthrough item 8). */
 function EchoCount({ echo, month, mode }: { echo: ClaimEcho | undefined; month: string; mode: RenderMode }) {
   if (!echo) return null
   const email = mode === 'email'
+  const own = followersCount(echo)
+  const ownLine = own
+    ? email
+      ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{own}</div>
+      : <span className={`block ${SCALE.tag}`}>{own}</span>
+    : null
   if (echo.state === 'not_tracked') {
     return email
-      ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{echo.why}</div>
-      : <span className="mt-1 block text-[12px] leading-[1.4] text-muted-foreground">{echo.why}</span>
+      ? <><div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{echo.why}</div>{ownLine}</>
+      : <><span className="mt-1 block text-[12px] leading-[1.4] text-muted-foreground">{echo.why}</span>{ownLine}</>
   }
   const words = `${fmtInt(echo.value.k)} of ${fmtInt(echo.value.n)} videos in ${longMonth(month)}`
   return email
-    ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{words}</div>
-    : <span data-copy="level" className={`mt-1 block ${SCALE.tag}`}>{words}</span>
+    ? <><div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{words}</div>{ownLine}</>
+    : <><span data-copy="level" className={`mt-1 block ${SCALE.tag}`}>{words}</span>{ownLine}</>
 }
+
+/** Whose words the sentence summarises, where it is your followers' and not
+ *  your market's (walkthrough item 8): "People respond to Sealand as a
+ *  community-rooted label…" came off Sealand's own comment sections, under a
+ *  market count of 0. */
+const FOLLOWERS_SAID = 'Said by your own followers, not your market:'
 
 /** Your claims read to date, by subject: the judge's filing, or "not checked
  *  yet" where it has not filed them. */
@@ -118,6 +131,8 @@ export function claimsHead(claims: number, underCount: boolean): string {
 function Claim({ claim, month, mode }: { claim: ClaimRow; month: string; mode: RenderMode }) {
   const state = stateOf(claim)
   const label = claim.echo?.label ?? claim.verdictLabel
+  const dot = claim.echo?.questioned ? 'var(--warning)' : DOT[state]
+  const followers = followersOnly(claim.echo)
   if (mode === 'email') {
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
@@ -126,6 +141,7 @@ function Claim({ claim, month, mode }: { claim: ClaimRow; month: string; mode: R
           <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 9999, background: EMAIL_DOT[state], marginRight: 6 }} />
           {label}
         </div>
+        {claim.theySay && followers ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{FOLLOWERS_SAID}</div> : null}
         {claim.theySay ? <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
         <EchoCount echo={claim.echo} month={month} mode={mode} />
       </div>
@@ -135,10 +151,11 @@ function Claim({ claim, month, mode }: { claim: ClaimRow; month: string; mode: R
     <div role="row" className={`grid min-w-0 grid-cols-1 gap-2 py-4 md:grid-cols-[minmax(0,1.3fr)_150px_minmax(0,1.3fr)] md:gap-6 ${RULE.row}`}>
       <BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear" className="block text-[14px] leading-[1.5]">{claim.youSay}</BrandClaim>
       <span className="flex items-center gap-2 self-start text-[14px] font-semibold text-foreground">
-        <span aria-hidden className="size-2 shrink-0 rounded-[2px]" style={{ background: DOT[state] }} />
+        <span aria-hidden className="size-2 shrink-0 rounded-[2px]" style={{ background: dot }} />
         {label}
       </span>
       <span className="min-w-0">
+        {claim.theySay && followers ? <span className="mb-1 block text-[12px] font-medium text-muted-foreground">{FOLLOWERS_SAID}</span> : null}
         {claim.theySay ? <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{claim.theySay}</p> : null}
         <EchoCount echo={claim.echo} month={month} mode={mode} />
       </span>

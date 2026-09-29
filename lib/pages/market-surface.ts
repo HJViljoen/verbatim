@@ -4,8 +4,9 @@ import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
 import { currentTopLineage, recommendationOrder, recUpdateOf, recUpdateTimes } from '../dashboard-tiles'
 import { fmtInt, monthName, shortDate } from '../format'
-import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
+import { claimVerdictFor, distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
+import { loadClaimEchoes, loadMarketMonthVideos } from './claim-echo'
 import { cleanQuote, createCitedQuotePicker, fetchInsightsByIds, readingOf, readTranslations, type QuoteRow, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { methodLines, type MethodLines } from '../reading/method'
@@ -35,7 +36,7 @@ import { levelText } from '../reading/level'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
 import {
-  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, marketClaimEcho, marketEchoReading, ownPostFilings, postsTouching, touchWords,
+  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, ownPostFilings, postsTouching, touchWords,
   type ClaimEcho, type OwnPostFilings, type OwnPostSubjectRow, type TouchPost,
 } from '../reading/own-posts'
 import { INDUSTRY_AUDIENCE } from '../rivals'
@@ -1704,27 +1705,18 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // ── MK5 · how a move is made ───────────────────────────────────────────
   const claimEntries = ledgerRows(summary?.say_vs_hear ?? [], CLAIM_ROWS)
   // Y3 · EACH CLAIM COUNTED IN THE MARKET (IO F48): the videos behind the
-  // evidence Pass D-a cited for it, inside the month's market videos.
-  const supportIds = [...new Set(claimEntries.flatMap((e) => e.supporting_theme_ids ?? []))]
-  const supportVideo = supportIds.length > 0 && marketVideos != null
-    ? new Map((await fetchInsightsByIds<{ id: string; source_video_id: string | null }>(supabase, supportIds, 'id, source_video_id')
-        .catch(logAs('claims.support', [] as { id: string; source_video_id: string | null }[])))
-        .map((r) => [r.id, r.source_video_id]))
-    : new Map<string, string | null>()
+  // evidence Pass D-a cited for it, inside the month's market videos — and,
+  // apart, your own posts behind the same evidence (walkthrough item 8). The
+  // ONE counting Subjects reads too (`loadClaimEchoes`).
+  const echoes = await loadClaimEchoes({ supabase, reading, clientId, month, entries: claimEntries, marketVideos })
   const claims: ClaimRow[] = claimEntries.map((e, i) => ({
     id: `c${i}`,
     youSay: e.you_say,
     theySay: e.they_say,
     gap: e.gap,
     audience: e.audience,
-    verdictLabel: e.audience === 'echoes' ? 'Echoed' : e.audience === 'contradicts' ? 'Pushed back' : 'Not taken up',
-    echo: marketClaimEcho({
-      stance: e.audience,
-      reading: marketEchoReading(
-        (e.supporting_theme_ids ?? []).map((id) => supportVideo.get(id)).filter((v): v is string => Boolean(v)),
-        marketVideos,
-      ),
-    }),
+    verdictLabel: e.audience === 'echoes' ? 'Echoed' : e.audience === 'contradicts' ? claimVerdictFor(e.audience, e.they_say).label : 'Not taken up',
+    echo: echoes[i],
   }))
   const claimSubjects = buildClaimSubjects({
     claims: clientClaims,
@@ -1985,16 +1977,6 @@ async function loadClientClaims(supabase: SupabaseClient, clientId: string): Pro
       .eq('entity', 'client')
       .order('id', { ascending: true }),
   )
-}
-
-/** The reading month's market videos (MF1 `market_month_videos`), as a set.
- *  Null where the function is not there or the read failed: Y3 then counts
- *  nothing and says so. */
-async function loadMarketMonthVideos(reading: ReadingHandle, clientId: string, month: string): Promise<Set<string> | null> {
-  const rows = await selectAll<{ video_id: string }>(() =>
-    reading.client.rpc('market_month_videos', { p_client: clientId, p_month: month }).select('video_id').order('video_id', { ascending: true }) as never,
-  )
-  return new Set(rows.map((r) => String(r.video_id)))
 }
 
 /**

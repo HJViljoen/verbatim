@@ -129,7 +129,45 @@ export function claimVerdict(audience: ClaimAudience | string): ClaimVerdict {
   return { label: 'Not talked about', tone: 'sand' }
 }
 
-export interface ClaimCounts { total: number; echoed: number; pushedBack: number; silent: number }
+/**
+ * Does what came back read as people ASKING, rather than arguing?
+ *
+ * "PUSHED BACK" OVERCLAIMED (walkthrough item 8). Pass D-a's `contradicts`
+ * covers two different things: people rejecting a claim, and people asking
+ * whether it is true. On Sealand's "acts of defiance…" claim what came back
+ * was "they also ask what materials are used, where they come from, and
+ * whether an upcycling claim is genuine" — questions, and a page that calls
+ * questions pushback has overclaimed. A `contradicts` whose words ask and do
+ * not argue reads `QUESTIONED_LABEL` instead. Pure, and deliberately narrow:
+ * a sentence that both asks and argues keeps "Pushed back".
+ */
+export function readsAsQuestions(theySay: string | null | undefined): boolean {
+  const t = (theySay ?? '').toLowerCase()
+  if (!t) return false
+  const asking = /\b(ask|asks|asked|asking|question|questions|questioning|wonder|wonders|wondering|want to know|wants to know|curious)\b/.test(t)
+  const arguing = /\b(reject|rejects|rejected|dismiss|dismisses|mock|mocks|mocked|criticis\w*|criticiz\w*|complain\w*|call out|calls out|accus\w*|doubt\w*|sceptic\w*|skeptic\w*|disagree\w*|push back|pushes back|pushed back|backlash|angry|anger|hate|hates|distrust\w*|greenwash\w*)\b/.test(t)
+  return asking && !arguing
+}
+
+/** The chip word for a `contradicts` that reads as questions. */
+export const QUESTIONED_LABEL = 'Questioned'
+
+/** `claimVerdict`, reading the words that came back: a `contradicts` made of
+ *  questions is "Questioned", in the neutral tone (`readsAsQuestions`). */
+export function claimVerdictFor(audience: ClaimAudience | string, theySay: string | null | undefined): ClaimVerdict {
+  if (audience === 'contradicts' && readsAsQuestions(theySay)) return { label: QUESTIONED_LABEL, tone: 'sand' }
+  return claimVerdict(audience)
+}
+
+export interface ClaimCounts {
+  total: number
+  echoed: number
+  pushedBack: number
+  silent: number
+  /** Of `pushedBack`, the ones whose words ask rather than argue ("Questioned",
+   *  `readsAsQuestions`). Absent where a caller did not tell them apart. */
+  questioned?: number
+}
 
 export function claimCounts(entries: { audience: string }[]): ClaimCounts {
   const c: ClaimCounts = { total: entries.length, echoed: 0, pushedBack: 0, silent: 0 }

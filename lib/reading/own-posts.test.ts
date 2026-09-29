@@ -21,6 +21,9 @@ import {
   claimEcho,
   isMissingOwnPostSubjects,
   marketClaimEcho,
+  followersCount,
+  followersLine,
+  followersOnly,
   marketEchoReading,
   ownCensusWithClaims,
   ownPostFilings,
@@ -491,5 +494,37 @@ describe('the market echo (WP3.6 Y3: market counts, not the client audience)', (
     const unread = marketClaimEcho({ stance: 'echoes', reading: marketEchoReading(cited(89, 0), null) })
     expect(unread.state).toBe('not_tracked')
     expect(unread.why).toBe(ECHO_MARKET_UNREAD)
+  })
+})
+
+// Walkthrough item 8. "Protect Our Paths": Echoed on Subjects, "Not talked
+// about · 0 of 852" on Your moves — the evidence was Sealand's own followers.
+describe('a claim your followers took up and your market did not', () => {
+  const theySay = 'People respond to Sealand as a community-rooted label, praising the cleanup work and expressing interest in showing up for events.'
+  const echo = marketClaimEcho({ stance: 'echoes', reading: { k: 0, n: 852 }, theySay, followers: 3 })
+  it('reads as not talked about in the market, and says whose reading it is', () => {
+    expect(echo.state).toBe('silent')
+    expect(echo.label).toBe('Not talked about')
+    expect(followersOnly(echo)).toBe(true)
+    expect(followersLine(echo, 'echoes', theySay)).toBe('Your own followers echoed it, under 3 of your posts; your market did not take it up this month.')
+    expect(followersCount(echo)).toBe('raised under 3 of your own posts')
+  })
+  it('says nothing about followers where the market carried it, or nobody did', () => {
+    const market = marketClaimEcho({ stance: 'echoes', reading: { k: 40, n: 852 }, theySay, followers: 3 })
+    expect(followersOnly(market)).toBe(false)
+    expect(followersLine(market, 'echoes', theySay)).toBeNull()
+    expect(followersCount(market)).toBe('raised under 3 of your own posts')
+    const nobody = marketClaimEcho({ stance: 'echoes', reading: { k: 0, n: 852 }, theySay, followers: 0 })
+    expect(followersLine(nobody, 'echoes', theySay)).toBeNull()
+    expect(followersCount(nobody)).toBeNull()
+  })
+  it('calls a contradiction made of questions "Questioned"', () => {
+    const asked = 'People love upcycling ideas, but they also ask what materials are used and whether an upcycling claim is genuine.'
+    const q = marketClaimEcho({ stance: 'contradicts', reading: { k: 125, n: 852 }, theySay: asked })
+    expect(q.state).toBe('pushed_back')
+    expect(q.label).toBe('Questioned')
+    expect(q.questioned).toBe(true)
+    expect(followersLine(marketClaimEcho({ stance: 'contradicts', reading: { k: 0, n: 852 }, theySay: asked, followers: 2 }), 'contradicts', asked))
+      .toContain('Your own followers questioned it')
   })
 })

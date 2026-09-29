@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest'
 
 import { blockAnswers, blockContext, figureCount, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { assertCopyContract } from '@/lib/test/copy-contract'
+import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { marketClaimEcho } from '@/lib/reading/own-posts'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
@@ -785,6 +786,39 @@ describe('MK5 · how a move is made', () => {
       expect(slot, slot).toContain('items-start')
     }
     expect(markup).toContain('max-w-[260px]')
+  })
+})
+
+describe('MK5b · say vs hear, whose reading it is (walkthrough item 8)', () => {
+  const asked = 'People love upcycling ideas and anti-waste design, but they also ask what materials are used, where they come from, and whether an upcycling claim is genuine.'
+  const followers = 'People respond to Sealand as a community-rooted label, praising the cleanup work and expressing interest in showing up for events.'
+  const d = (() => {
+    const base = marketFixture()
+    return {
+      ...base,
+      ways: {
+        ...base.ways,
+        claims: [
+          { ...base.ways.claims[0], theySay: asked, audience: 'contradicts', echo: marketClaimEcho({ stance: 'contradicts', reading: { k: 125, n: 852 }, theySay: asked }) },
+          { ...base.ways.claims[1], theySay: followers, audience: 'echoes', echo: marketClaimEcho({ stance: 'echoes', reading: { k: 0, n: 852 }, theySay: followers, followers: 3 }) },
+        ],
+      },
+    }
+  })()
+
+  it('calls questions questions, not pushback', () => {
+    const text = renderText(marketSayHear.render(d, 'app', ctx))
+    expect(text).toContain('Questioned')
+    expect(text).not.toContain('Pushed back')
+  })
+
+  it('says a sentence is your followers’ where the market carried none of it', () => {
+    const text = renderText(marketSayHear.render(d, 'app', ctx))
+    expect(text).toContain('Not talked about')
+    expect(text).toContain('0 of 852 videos in')
+    expect(text).toContain('Said by your own followers, not your market:')
+    expect(text).toContain('raised under 3 of your own posts')
+    expect(copyViolations(marketSayHear.render(d, 'app', ctx))).toEqual([])
   })
 })
 
