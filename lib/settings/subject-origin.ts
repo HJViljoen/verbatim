@@ -22,8 +22,10 @@ import { shortDate } from '../format'
 
 // COUNTED, AND SAID SO (finish-list item 21): "picked for you, not yet
 // confirmed" beside "Nothing here is counted until you confirm it" read as
-// eight subjects nobody counts, while five were counted on Subjects.
-export const ORIGIN_UNCONFIRMED = 'picked for you and counted, not yet confirmed by you'
+// eight subjects nobody counts, while five were counted on Subjects. The row's
+// own note says it is counted ("counted in your market", `countedNote`), so the
+// origin does not say it again: "counted" twice on one row read as padding.
+export const ORIGIN_UNCONFIRMED = 'picked for you, not yet confirmed by you'
 
 /** One change-log row, as the Settings page reads it. */
 export interface SubjectChangeRow {

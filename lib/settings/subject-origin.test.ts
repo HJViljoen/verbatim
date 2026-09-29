@@ -15,7 +15,9 @@ describe('subjectOriginWords', () => {
     for (const id of ['waterproofing', 'repair', 'looks', 'durability', 'price', 'comfort', 'community']) {
       expect(subjectOriginWords({ id, status: 'active', created_by: null }, none, CANDIDATE)).toBe(ORIGIN_UNCONFIRMED)
     }
-    expect(ORIGIN_UNCONFIRMED).toBe('picked for you and counted, not yet confirmed by you')
+    expect(ORIGIN_UNCONFIRMED).toBe('picked for you, not yet confirmed by you')
+    // The row's note already says "counted in your market" (countedNote).
+    expect(ORIGIN_UNCONFIRMED).not.toContain('counted')
   })
 
   it('says when the client confirmed it', () => {
