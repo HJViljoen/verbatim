@@ -290,19 +290,19 @@ describe('B4 · where a rival’s talk differs', () => {
       rivals: ['Cotopaxi', 'Freitag', 'The North Face', 'Patagonia'],
       findings: [
         { id: 'f1', rival: 'Cotopaxi', category: 'sentiment_differential', title: 'Organization talk becomes trip-readiness scrutiny around Cotopaxi', quote: null, seen: { months: 2, of: 4 } },
-        { id: 'f2', rival: 'Cotopaxi', category: 'notable_account', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
+        { id: 'f2', rival: 'Cotopaxi', category: 'topic_ownership', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
       ],
       videos: new Map([['Cotopaxi', 32], ['Freitag', 8], ['The North Face', 6], ['Patagonia', 5]]),
       floor: 10,
     })
     // How the talk differs before who shapes it (the preview's order).
     expect(b.groups.map((g) => [g.rival, g.findings.map((f) => f.kindWords)])).toEqual([
-      ['Cotopaxi', ['how the talk differs', 'an account shaping the talk']],
+      ['Cotopaxi', ['how the talk differs', 'a topic it holds']],
     ])
     const ordered = buildFindings({
       rivals: ['Cotopaxi'],
       findings: [
-        { id: 'f2', rival: 'Cotopaxi', category: 'notable_account', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
+        { id: 'f2', rival: 'Cotopaxi', category: 'topic_ownership', title: 'Family Travel Psych is shaping the family-travel bag checklist', quote: null, seen: null },
         { id: 'f1', rival: 'Cotopaxi', category: 'sentiment_differential', title: 'Organization talk becomes trip-readiness scrutiny around Cotopaxi', quote: null, seen: null },
         { id: 'f3', rival: 'Cotopaxi', category: 'content_gap', title: 'a', quote: null, seen: null, impact: 'high' },
       ],
@@ -312,6 +312,20 @@ describe('B4 · where a rival’s talk differs', () => {
     expect(ordered.groups[0].findings.map((f) => f.id)).toEqual(['f3', 'f1', 'f2'])
     expect(noFindingLine(b, 'Freitag')).toBe('Freitag has fewer than 10 videos in the last 90 days, too few to set against the category.')
     expect(noFindingLine({ ...b, thin: [] }, 'Freitag')).toBe('The latest update did not set Freitag against the category.')
+  })
+
+  it('holds back the kinds whose titles are the model’s shorthand (default of 29 Sep, finish-list item 20)', () => {
+    const b = buildFindings({
+      rivals: ['Cotopaxi'],
+      findings: [
+        { id: 'f1', rival: 'Cotopaxi', category: 'content_gap', title: 'Organization, measurements, and packing proof', quote: null, seen: null },
+        { id: 'f2', rival: 'Cotopaxi', category: 'engagement_benchmark', title: 'Shopping-mode responses versus affiliation-mode responses', quote: null, seen: null },
+        { id: 'f3', rival: 'Cotopaxi', category: 'notable_account', title: 'InsaneWaves translates utility into shopper language', quote: null, seen: null },
+      ],
+      videos: new Map([['Cotopaxi', 32]]),
+      floor: 10,
+    })
+    expect(b.groups[0].findings.map((f) => f.id)).toEqual(['f1'])
   })
 
   it('words every Pass C category plainly', () => {

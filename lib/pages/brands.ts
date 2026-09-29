@@ -447,6 +447,13 @@ export const FINDING_KIND_WORDS: Readonly<Record<string, string>> = {
   engagement_benchmark: 'how its videos are met',
 }
 
+/** Kinds not printed (a recommended default, 29 Sep; finish-list item 20):
+ *  their titles compare response "modes" and name accounts in the model's own
+ *  shorthand ("Shopping-mode responses versus affiliation-mode responses",
+ *  "InsaneWaves translates utility into shopper language"), which a reader
+ *  cannot act on. Revert this set to print them again. */
+export const FINDING_KINDS_HELD = new Set(['engagement_benchmark', 'notable_account'])
+
 export const findingKindWords = (category: string): string =>
   FINDING_KIND_WORDS[category] ?? category.replace(/_/g, ' ')
 
@@ -531,7 +538,7 @@ export function buildFindings(input: {
     const rank = (c: string) => { const i = KIND_RANK.indexOf(c); return i < 0 ? KIND_RANK.length : i }
     const mine = input.findings
       .map((f, i) => ({ f, i }))
-      .filter(({ f }) => norm(f.rival) === norm(rival))
+      .filter(({ f }) => norm(f.rival) === norm(rival) && !FINDING_KINDS_HELD.has(f.category))
       .sort((a, b) => (IMPACT[a.f.impact ?? ''] ?? 3) - (IMPACT[b.f.impact ?? ''] ?? 3) || rank(a.f.category) - rank(b.f.category) || a.i - b.i)
       .map(({ f }) => f)
     if (mine.length === 0) continue
