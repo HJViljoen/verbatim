@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ConfigChange } from '../config-log'
-import { readChangeLog } from './change-log'
+import { changeNote, readChangeLog } from './change-log'
 import { clientChangeLog, clientNote, withoutQuickCheck } from './client-record'
 
 // Finish-list item 17: Settings › The record, as a client reads it. Every row
@@ -67,6 +69,19 @@ describe('clientChangeLog', () => {
     const digest = client.recorded[0]
     expect(digest.before).toBeNull()
     expect(digest.after).toBeNull()
+  })
+
+  // The coverage row's "Tracking changes · 71 · the newest …" clause names its
+  // change off the same log the page prints, so a tenant never reads it naming
+  // the 27 Sep communities row the log below leaves out. The operator keeps
+  // the record as written, in both places.
+  it('gives the coverage row a newest change the client log keeps', () => {
+    const window = { from: '2026-09-01', to: '2026-09-30' }
+    expect(changeNote(written, window, { counted: 71 })).toMatch(/^the newest Communities.* changed, 27 Sep$/)
+    expect(changeNote(client, window, { counted: 71 })).toBe('the newest Weekly digest now sends the weekly report, 24 Sep')
+    const page = readFileSync(join(process.cwd(), 'app/dashboard/settings/record/page.tsx'), 'utf8')
+    expect(page).toContain('const log = clientView ? clientChangeLog(written) : written')
+    expect(page).toContain('changeNote(log, ')
   })
 
   it('keeps a real before→after', () => {
