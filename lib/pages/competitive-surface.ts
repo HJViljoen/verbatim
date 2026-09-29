@@ -5,6 +5,8 @@ import { CONFIG_CHANGES_TABLE, isMissingConfigLog, isTrackingChange, type Config
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
+import { pickEligible } from '../quote-gate'
+import { gateFor, readQuoteContext } from '../quote-context'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -1453,9 +1455,22 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
     mix[p] = (mix[p] ?? 0) + 1
   }
   let quotes = 0
-  const rows: QuestionRow[] = kept.slice(0, QUESTIONS_SHOWN).map((i) => {
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts) on the quotes
+  // shown, never on the counts: the rival's own audience (never a line naming
+  // only another brand), readable, on the market, one per thread.
+  const shownRows = kept.slice(0, QUESTIONS_SHOWN)
+  const ctx = await readQuoteContext(input.supabase, input.clientId, {
+    commentIds: shownRows.flatMap((i) => citedInWindow(i.id).map((c) => c.commentId)),
+  }, input.reading.client)
+  const used = new Set<string>()
+  const rows: QuestionRow[] = shownRows.map((i) => {
     const window = citedInWindow(i.id)
-    const cited = window.slice().sort((a, b) => a.rank - b.rank).slice(0, QUOTES_PER_QUESTION)
+    const cited = pickEligible(window.slice().sort((a, b) => a.rank - b.rank), (c) => ({
+      text: c.quote,
+      lang: c.lang ?? null,
+      english: c.english ?? null,
+      video: ctx.forComment(c.commentId),
+    }), QUOTES_PER_QUESTION, gateFor(input.clientId, { brand: input.rival, claim: i.description, used }))
     quotes += window.length
     const video = i.source_video_id ? videoById.get(i.source_video_id) ?? null : null
     return {
