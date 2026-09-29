@@ -10,6 +10,7 @@ import {
   THEME_N,
   THEME_PREV_N,
   themeToken,
+  voicelessAhead,
   type HeroPart,
 } from './hero'
 import type { FigureTable } from '../../reading/verdicts'
@@ -231,5 +232,24 @@ describe('the hero’s words', () => {
 
   it('the size alone adds nothing', () => {
     expect(heroView({ kind: 'size' }, board(), SEPTEMBER)).toEqual({ parts: [], prev: null, newSearch: null, figures: {} })
+  })
+})
+
+describe('voicelessAhead (the walkthrough’s quote gate, 29 Sep)', () => {
+  const rows = [{ registryId: 'price' }, { registryId: 'weight' }, { registryId: 'airline' }, { registryId: 'unread' }]
+  const count = (m: Record<string, number>) => (r: { registryId: string }) => m[r.registryId]
+
+  it('passes over the themes the gate leaves no voice for, to the first that speaks', () => {
+    expect([...voicelessAhead(rows, count({ price: 0, weight: 0, airline: 2 }))]).toEqual(['price', 'weight'])
+    expect([...voicelessAhead(rows, count({ price: 0, weight: 1, airline: 2 }))]).toEqual(['price'])
+  })
+
+  it('passes nothing over where the lead speaks, even with one voice, or where nothing read speaks', () => {
+    expect(voicelessAhead(rows, count({ price: 1, weight: 2, airline: 2 })).size).toBe(0)
+    expect(voicelessAhead(rows, count({ price: 0, weight: 0, airline: 0 })).size).toBe(0)
+  })
+
+  it('never passes over a row whose voices were not read', () => {
+    expect(voicelessAhead([{ registryId: 'price' }, { registryId: 'x' }, { registryId: 'weight' }], count({ price: 0, weight: 2 })).size).toBe(0)
   })
 })

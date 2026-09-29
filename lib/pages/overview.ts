@@ -102,6 +102,7 @@ import {
   fromNewSearches,
   heroLead,
   leadRank,
+  voicelessAhead,
   marketCalibration,
   marketSubjectSide,
   mayLead as mayLeadTheme,
@@ -4805,6 +4806,23 @@ export function themeSegmentsOf(rowsIn: readonly ThemeMakerShareRow[]): { maker:
   return { maker, noise }
 }
 
+/** How many of the rows that may lead have their quotes (and their videos'
+ *  segments) read: the lead, and the next three, since a stripped label or a
+ *  theme that cannot speak (`voicelessAhead`) moves the lead down the board.
+ *  Two before the walkthrough's quote gate (29 Sep). */
+const LEAD_CANDIDATES = 4
+
+/** The front page's voices on a lead theme: dated in the month, of the
+ *  theme's kind, from a video read as the market's, never an offer, and
+ *  through the quote gate on the theme's own words. One definition, so the
+ *  loader's choice of lead (`voicelessAhead`) and the page's pick agree. */
+function leadVoiceOptions(clientId: string, month: string, theme: Pick<MarketTheme, 'kind' | 'label'>, segments: ThemeBoard['segments'], used?: Set<string>) {
+  return {
+    month, kind: theme.kind, count: VOICES_SHOWN, marketVideosOnly: segments === 'measured', skipOffers: true,
+    gate: gateFor(clientId, { claim: theme.label, requireRelevance: true, used }),
+  }
+}
+
 /** What the front page reads on its own, started as soon as the themed run is
  *  known and taken at the end (`loadOverview`): nothing in it waits on the
  *  page's other reads, so it runs beside them. */
@@ -4813,6 +4831,9 @@ interface MarketReads {
   segments: ThemeBoard['segments']
   n: number
   prev: ThemeBoard['prev']
+  /** The themes that may not lead: the operator's exclusions, and any lead
+   *  candidate passed over because the quote gate leaves it no voice
+   *  (`voicelessAhead`). */
   excluded: Set<string>
   quotes: Map<string, { candidates: CiteCandidate[]; texts: string[] }>
   /** The lead the board gives (subjects never lead while a theme can), and its
@@ -4928,7 +4949,7 @@ async function loadMarketReads(input: {
   // evidence decides whether the name stays). The lead's provenance is read
   // beside them.
   const draft = buildThemeBoard(themes, n, month, segments, prev)
-  const leadCandidates = draft.rows.filter((t) => mayLeadTheme(t, segments, excluded)).slice(0, 2)
+  const leadCandidates = draft.rows.filter((t) => mayLeadTheme(t, segments, excluded)).slice(0, LEAD_CANDIDATES)
   const branded = themes.filter((t) => namesABrand(t.label, brandNames)).map((t) => t.registryId)
   const asked = askIds(themes, segments)
   const wanted = new Map<string, string | null>()
@@ -4962,7 +4983,21 @@ async function loadMarketReads(input: {
     })
   }
   const final = buildThemeBoard(themes, n, month, segments, prev)
-  const leadId = final.rows.find((t) => mayLeadTheme(t, segments, excluded))?.registryId ?? null
+  // THE LEAD HAS TO BE ABLE TO SPEAK (the walkthrough's quote gate, 29 Sep):
+  // a candidate whose voices the gate turns away, every one, is passed over
+  // for the next that gives one, by the same pick the front page makes
+  // (`marketFrontPage`); `heroLead` then takes them as excluded.
+  const voiceless = voicelessAhead(
+    final.rows.filter((t) => mayLeadTheme(t, segments, excluded)),
+    (t) => {
+      const read = leadIds.has(t.registryId) ? quotes.get(t.registryId) : undefined
+      if (!read) return undefined
+      const theme = final.rows.find((x) => x.registryId === t.registryId) as MarketTheme
+      return pickQuotes(read.candidates, leadVoiceOptions(clientId, month, theme, segments)).length
+    },
+  )
+  const leadExcluded = voiceless.size > 0 ? new Set([...excluded, ...voiceless]) : excluded
+  const leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
   const provenance = leadId == null
     ? null
     : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
@@ -4972,7 +5007,7 @@ async function loadMarketReads(input: {
     segments,
     n,
     prev,
-    excluded,
+    excluded: leadExcluded,
     quotes,
     lead: leadId ? { registryId: leadId, provenance } : null,
     changeRows,
@@ -5108,7 +5143,7 @@ function marketFrontPage(reads: MarketReads, input: {
   const used = new Set<string>()
   const heroVoices = lead
     // Never a sale offer or an ad (default M-c): the next eligible voice.
-    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured', skipOffers: true, gate: gateFor(input.clientId, { claim: lead.label, requireRelevance: true, used }) }).map((c) => voiceOf(c as CiteCandidate))
+    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], leadVoiceOptions(input.clientId, month, lead, reads.segments, used)).map((c) => voiceOf(c as CiteCandidate))
     : []
   const askQuotes = new Map<string, Quote | null>()
   for (const id of askIds(themes, reads.segments)) {

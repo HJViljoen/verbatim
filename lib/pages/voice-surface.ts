@@ -43,6 +43,7 @@ import {
   buildConversationBoard,
   buildThemeBoard,
   heroLead,
+  voicelessAhead,
   makerShareSentence,
   marketKindLabel,
   mayLead,
@@ -106,6 +107,9 @@ import { ninetyDays } from './brands'
 
 /** How many voices the theme pane prints (the preview's three). */
 export const THEME_VOICES = 3
+
+/** How many of the rows that may lead have their quotes read for the pane. */
+const LEAD_CANDIDATES = 4
 
 /** The Ask box takes 300 characters of `?ask=` (app/dashboard/agent/page.tsx). */
 const ASK_MAX = 300
@@ -843,7 +847,10 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const byK = [...themes].sort((a, b) => b.k - a.k || a.registryId.localeCompare(b.registryId))
   const linked = deepSlugs.size > 0 && !asked ? await loadLinkedTheme(supabase, clientId, deepSlugs, byK.map((t) => t.registryId)) : null
   const tenBoard = buildThemeBoard(atTen(themes), n, month, segments, null)
-  const candidates = tenBoard.rows.filter((t) => mayLead(t, segments, excluded)).slice(0, 2).map((t) => t.registryId)
+  // The lead and the next three (two before the walkthrough's quote gate, 29
+  // Sep): a stripped label, or a theme the gate leaves no voice, moves the
+  // lead down the board, as on the front page.
+  const candidates = tenBoard.rows.filter((t) => mayLead(t, segments, excluded)).slice(0, LEAD_CANDIDATES).map((t) => t.registryId)
   const paneIds = asked ? [asked] : linked ? [linked] : [...new Set([...candidates, ...(tenBoard.rows[0] ? [tenBoard.rows[0].registryId] : [])])]
   const kindOf = (id: string) => themes.find((t) => t.registryId === id)?.kind ?? null
   const wanted = new Map<string, string | null>(paneIds.map((id) => [id, kindOf(id)]))
@@ -861,7 +868,33 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       return stripped.stripped ? { ...t, label: stripped.label, labelStripped: true } : t
     })
   }
-  const hero = heroLead(buildThemeBoard(atTen(themes), n, month, segments, null), [], excluded)
+  // THE LEAD HAS TO BE ABLE TO SPEAK (the walkthrough's quote gate, 29 Sep;
+  // `voicelessAhead`, as `loadMarketReads` does): where the pane opens on the
+  // lead, a candidate whose every voice the gate turns away is passed over for
+  // the next that gives one. The candidates' videos' segments are read first,
+  // in one call for all of them, since the lead's voices come only from the
+  // market's videos; the open theme's own call below is then skipped.
+  const leadBoard = buildThemeBoard(atTen(themes), n, month, segments, null)
+  const leadRows = leadBoard.rows.filter((t) => mayLead(t, segments, excluded))
+  const marked = new Set<string>()
+  let leadExcluded: ReadonlySet<string> = excluded
+  if (!asked && !linked && leadRows.length > 1) {
+    const read = leadRows.filter((t) => candidates.includes(t.registryId))
+    if (segments === 'measured' || cv.readsSegments) {
+      await markVideoSegments(db, clientId, read.flatMap((t) => quotes.get(t.registryId)?.candidates ?? []))
+      for (const t of read) marked.add(t.registryId)
+    }
+    const voiceless = voicelessAhead(leadRows, (t) => {
+      const theme = read.find((x) => x.registryId === t.registryId)
+      if (!theme) return undefined
+      return pickQuotes(cv.voices(quotes.get(theme.registryId)?.candidates ?? []), {
+        month, kind: theme.kind, count: THEME_VOICES, marketVideosOnly: segments === 'measured', skipOffers: true,
+        gate: gateFor(clientId, { claim: theme.label, requireRelevance: true }),
+      }).length
+    })
+    if (voiceless.size > 0) leadExcluded = new Set([...excluded, ...voiceless])
+  }
+  const hero = heroLead(leadBoard, [], leadExcluded)
   const leadId = hero.kind === 'themes' ? hero.lead?.registryId ?? null : null
 
   // THE FLAGS AND THE PROVENANCE, IN.
@@ -908,7 +941,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const isLead = open != null && open.registryId === leadId
   const marketVoicesOnly = isLead && segments === 'measured'
   const openCandidates = open ? voicesRead.get(open.registryId)?.candidates ?? [] : []
-  if (marketVoicesOnly || cv.readsSegments) await markVideoSegments(db, clientId, openCandidates)
+  if ((marketVoicesOnly || cv.readsSegments) && !(open && marked.has(open.registryId))) await markVideoSegments(db, clientId, openCandidates)
   const theme: ThemeBlock = open
     ? {
         state: 'ready',
