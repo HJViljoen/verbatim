@@ -140,7 +140,7 @@ export const marketWays: Block<MarketSurfaceData> = {
                 <span key={way.key} className={SLOT}>
                   <AcceptAdviceButton lineageId={w.acceptable.lineageId} title={w.acceptable.title} />
                   <span className="text-[11px] leading-[1.35] text-muted-foreground">
-                    The oldest you have not decided on: <span data-copy="stored" data-slot="pass_d_b_recommendation">{w.acceptable.title}</span>
+                    {w.acceptable.current ? 'The current advice you have not decided on' : 'The oldest you have not decided on'}: <span data-copy="stored" data-slot="pass_d_b_recommendation">{w.acceptable.title}</span>
                   </span>
                 </span>
               ) : <Way key={way.key} way={way} mode={mode} appUrl={ctx.appUrl} />

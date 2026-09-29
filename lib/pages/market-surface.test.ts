@@ -667,9 +667,17 @@ describe('MK2 · the current recommendation first, then the newest (market-first
     expect(buildAdviceRows([], [])).toEqual([])
   })
 
-  it('offers the oldest undecided row to accept, whatever order the ledger runs in', () => {
+  // Walkthrough item 6: "The oldest you have not decided on" named June's
+  // "Develop Brand Loyalty and Product Enthusiasm Campaigns" (061f442e).
+  it('offers the current advice to accept, and the oldest undecided only where nothing is current', () => {
     const rows = buildAdviceRows(SEALAND_COPIES, [])
-    expect(acceptableRow(rows, null)!.lineageId).toBe('061f442e')
+    const offered = acceptableRow(rows, null)!
+    expect(offered.lineageId).not.toBe('061f442e')
+    expect(offered.inLatest).toBe(true)
+    expect(offered.status).toBe('new')
+    expect(offered.lineageId).toBe(rows.find((r) => r.inLatest && r.status === 'new')!.lineageId)
+    const nothingCurrent = rows.map((r) => ({ ...r, inLatest: false }))
+    expect(acceptableRow(nothingCurrent, null)!.lineageId).toBe('061f442e')
   })
 })
 

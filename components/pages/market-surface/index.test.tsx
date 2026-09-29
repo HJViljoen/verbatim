@@ -12,7 +12,7 @@ import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
 import { MARKET_BLOCKS, MOVES_STACKS, MarketSurfacePage, drawnOnMarket, startClasses, tileGrid } from './index'
 import { marketConclusions } from './conclusions'
-import { CURRENT_TAG, marketAdvice } from './advice'
+import { CURRENT_TAG, EARLIER_ADVICE, marketAdvice, whyHeading } from './advice'
 import { marketCard } from './card'
 import { marketMoves } from './moves'
 import { marketPlans } from './plans'
@@ -504,11 +504,13 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/Afterwards\s+—/)
   })
 
-  it('says the evidence was replaced rather than printing zero videos behind a row', () => {
+  it('says the evidence is an earlier read rather than printing zero videos behind a row', () => {
     // Every cited `audience_insights` row of Sealand's twelve drawn rows has
     // been pruned, so the column would otherwise read "0 videos" down the page.
+    // It said "evidence replaced" on 51 rows, which is our bookkeeping (B8).
     const text = renderText(marketAdvice.render(unrecordedFixture(), 'app', ctx))
-    expect(text).toContain('evidence replaced')
+    expect(text).toContain('an earlier read')
+    expect(text).not.toContain('evidence replaced')
     expect(text).not.toContain('0 videos')
   })
 
@@ -1158,5 +1160,41 @@ describe('The advice · what you decided about the current recommendation, and M
     for (const over of [{}, { status: 'acted_on' as const, statusLabel: 'Done' }, { status: 'new' as const, statusLabel: 'New', decidedAt: null }]) {
       for (const mode of MODES) assertCopyContract(render(marketAdvice.render(withLead(over), mode, ctx)))
     }
+  })
+})
+
+// Walkthrough item 6: "Show all 79" under 12 rows, several of them one idea.
+describe('MK2 · the short list in the app', () => {
+  const base = marketFixture()
+  const [first, second, third] = base.advice.rows
+  const d = { ...base, advice: { ...base.advice, shortlist: { rows: [first, { ...second, alsoRaised: 4 }], earlier: base.advice.total - 2 } } }
+
+  it('draws the short list, with the rest one quiet link away', () => {
+    const text = renderText(marketAdvice.render(d, 'app', ctx))
+    expect(text).toContain(second.title)
+    expect(text).not.toContain(third.title)
+    expect(text).toContain(EARLIER_ADVICE)
+    expect(text).not.toMatch(/Show all \d/)
+    expect(render(marketAdvice.render(d, 'app', ctx))).toContain('ledger=all')
+  })
+
+  it('says when an idea came back in other words', () => {
+    expect(renderText(marketAdvice.render(d, 'app', ctx))).toContain('also raised 4 times in other words')
+  })
+
+  it('leaves exports and briefs the ledger they always drew', () => {
+    const email = renderText(marketAdvice.render(d, 'email', ctx))
+    expect(email).toContain(third.title)
+    expect(email).toMatch(/Show all \d/)
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(marketAdvice.render(d, 'app', ctx))
+  })
+
+  it('does not say "Why we keep raising it" over advice raised once', () => {
+    expect(whyHeading({ timesMade: 1 })).toBe('Why we recommend it')
+    expect(whyHeading({ timesMade: 1, alsoRaised: 2 })).toBe('Why we keep raising it')
+    expect(whyHeading({ timesMade: 3 })).toBe('Why we keep raising it')
   })
 })
