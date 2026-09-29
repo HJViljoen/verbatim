@@ -243,6 +243,11 @@ describe('staging’s second look (29 Sep): what the first cut of the gate still
     expect(whyNot(q('Forget shark tank, where can I invest?', TRAVEL_TALK), { ...SEALAND, claim: 'Shopping interest from featured items' })).toBe('off_topic')
   })
 
+  it('a reseller\u2019s offer in a comment is a sale ad, and a helmet is not a bag', () => {
+    expect(whyNot(q('Hi I\u2019m unable to DM you, could you send me a chat request please I have one with authentic material up for rehome. I\u2019ll show you pictures. I\u2019m from EU', TRAVEL_TALK), SEALAND)).toBe('sale_ad')
+    expect(whyNot(q('Can I have the location of the helmet please?', TRAVEL_TALK), { ...SEALAND, claim: 'Where to buy the items in the video' })).toBe('off_topic')
+  })
+
   it('"is there a way to do it?" is asking the maker', () => {
     expect(whyNot(q('มีวิธีทำมั้ยคะ', BOTTLE_BAG, { lang: 'th', english: 'Is there a way to do it?' }), SEALAND)).toBe('maker_praise')
   })

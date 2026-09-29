@@ -182,7 +182,7 @@ const BOT = /\boriginal copy of (the )?post|\bi am a bot\b|\bautomoderator\b|\bt
 
 /** A sale ad in the comment's own words: `readsAsOffer`'s five shapes, and the
  *  few it leaves to the page — a giveaway, "check out my page", a code. */
-const SALE_WORDS = /\bgive-?aways?\b|\bcheck (out )?(my|our) (page|shop|store|profile|bio|account)\b|\b(visit|follow) (my|our) (page|shop|store)\b|\b(use|with) (my |our |the )?code\b|\bdiscount code\b|\bwe (sell|ship worldwide|deliver)\b/i
+const SALE_WORDS = /\bgive-?aways?\b|\bcheck (out )?(my|our) (page|shop|store|profile|bio|account)\b|\b(visit|follow) (my|our) (page|shop|store)\b|\b(use|with) (my |our |the )?code\b|\bdiscount code\b|\bwe (sell|ship worldwide|deliver)\b|\b(up )?for rehome\b|\brehoming\b|\bselling (mine|my|one)\b|\bi have (one|a few|some)\b.{0,40}\b(for sale|to sell|up for)\b|\b(dm|message|pm|inbox) me if (you'?re |you are )?interested\b|\bchat request\b/i
 
 export const readsAsSaleAd = (text: string | null | undefined): boolean =>
   readsAsOffer(text) || SALE_WORDS.test(text ?? '')
@@ -334,7 +334,7 @@ const CARRY_TAG = /(bags?|backpack|luggage|purse|tote|wallet|suitcase|carryon|on
 const NOT_A_CARRY_TAG = /(garbage|cabbage|bagel|baguette|baggy|bagpipe|sleepingbag|teabag|trashbag|punchingbag|beanbag|backpacking)/i
 
 /** A product outside the market, named where no carry good is. */
-const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa|tees?|charging|adapters?|batter(y|ies)|cables?|steam ?deck|invest\w*)\b/i
+const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa|tees?|charg\w*|adapters?|batter(y|ies)|cables?|steam ?deck|magsafe|razors?|invest\w*|hair\w*|makeup|lipstick|nails?|eyeliner|helmets?)\b/i
 
 /** Idioms that name a product and mean something else ("the straight jacket
  *  feature" of a harness). Taken off before the off-market test. */
