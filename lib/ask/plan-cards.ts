@@ -8,7 +8,7 @@ import type { Quote } from '../renderables/types'
 import type { Scope } from '../renderables/types'
 import { isMissingColumnError } from '../supabase-admin'
 import type { Counted } from '../reading/verdicts'
-import type { AskSummary, ClaimResult, Verdict as ClaimVerdict } from './types'
+import { PLAN_VERDICT_MIN_VIDEOS, type AskSummary, type ClaimResult, type Verdict as ClaimVerdict } from './types'
 
 // "Plans re-checked" — the card Market names absent twice (Phase 1 Block D, D4).
 //
@@ -45,26 +45,28 @@ import type { AskSummary, ClaimResult, Verdict as ClaimVerdict } from './types'
 export const PLAN_CARDS_SHOWN = 2
 
 /**
- * The floor a non-silent verdict stands on: at least this many quotable
- * comments behind it.
+ * The floor a non-silent verdict stands on: at least this many distinct
+ * videos, each with a comment we can show.
  *
- * ONE, NOT FIVE. `validateVerdicts` (lib/ask/verdicts.ts) drops a supported or
- * contradicted verdict to `silent` when `quotable.length` is zero and at no
- * other count — so the floor IS one, and `plan-cards.test.ts` proves it by
- * running the engine's own validator at zero and at one rather than by
- * asserting this line.
+ * THE ENGINE'S NUMBER, NOT A FOOTER'S. `validateVerdicts` (lib/ask/verdicts.ts)
+ * drops a supported or contradicted verdict to `silent` below
+ * `PLAN_VERDICT_MIN_VIDEOS`, and this is that constant re-exported, so the
+ * line below cannot print a floor the engine does not hold.
+ * `plan-cards.test.ts` runs the validator either side of it.
  */
-export const PLAN_VERDICT_FLOOR = 1
+export const PLAN_VERDICT_FLOOR: number = PLAN_VERDICT_MIN_VIDEOS
 
 export const PLAN_FLOOR_LINE =
-  `A claim reads as supported or contradicted only where at least ${fmtInt(PLAN_VERDICT_FLOOR)} real comment stands behind it ` +
+  `A claim reads as supported or contradicted only where at least ${fmtInt(PLAN_VERDICT_FLOOR)} ` +
+  `${PLAN_VERDICT_FLOOR === 1 ? 'video with a real comment stands' : 'videos with a real comment stand'} behind it ` +
   'and we can show you the words. Everything else reads untested.'
 
-/** The hold this card does not have — the same shape as MK5's `CLAIMS_CAVEAT`,
- *  for the same reason and on harder evidence. */
+/** How a verdict is held across updates (`holdVerdicts`, walkthrough item 5):
+ *  said once, in the card's own words, because it is why a verdict does not
+ *  move every week. */
 export const PLAN_HOLD_CAVEAT =
-  'Each claim is read fresh against every update. A verdict that moved last time can move back, and nothing here is held ' +
-  'across two updates before it is printed.'
+  'Each claim is re-read with every update, and its verdict changes only when the evidence behind it does: a verdict ' +
+  'stays until new videos say otherwise, and an untested claim takes a verdict only when two updates in a row agree.'
 
 /**
  * What the claims are counted over, and what the count is NOT.

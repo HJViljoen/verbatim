@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PLAN_VERDICT_MIN_VIDEOS,
+  VERDICT_NEW_EVIDENCE_SHARE,
   diffVerdicts,
+  holdVerdicts,
   shortlistThemes,
   summarise,
   validateJudgement,
@@ -33,6 +36,11 @@ const groundingFor = (themes: AskTheme[]) => ({
   quotedInsightIds: new Set(themes.flatMap((t) => t.insightIds)),
   videoByInsightId: new Map(themes.flatMap((t) => t.insightIds.map((id, i) => [id, t.videoIds[i % t.videoIds.length]]))),
 })
+
+/** The register's rules below are about grounding, not volume: they run with
+ *  the video floor at one, and the floor has its own describe block. */
+const validateAtOne = (...args: Parameters<typeof validateVerdicts>) =>
+  validateVerdicts(args[0], args[1], args[2], args[3], { minVideos: 1 })
 
 const claims: ExtractedClaim[] = [
   { ref: 'C1', claim: 'price is the main barrier' },
@@ -81,7 +89,7 @@ describe('validateVerdicts — the grounded register', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C1', verdict: 'echoes', they_say: 'cost comes up constantly', theme_refs: ['T1', 'T2'] },
     ]
-    const [c1] = validateVerdicts(raw, claims, pool)
+    const [c1] = validateAtOne(raw, claims, pool)
     expect(c1.verdict).toBe('echoes')
     expect(c1.themeRefs.map((t) => t.themeId)).toEqual(['a', 'b'])
     // 2 videos per theme, no overlap -> 4 conversations. The model is never
@@ -96,7 +104,7 @@ describe('validateVerdicts — the grounded register', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C1', verdict: 'silent', they_say: 'people definitely say this', theme_refs: ['T1'] },
     ]
-    const [c1] = validateVerdicts(raw, claims, pool)
+    const [c1] = validateAtOne(raw, claims, pool)
     expect(c1).toMatchObject({ verdict: 'silent', theySay: null, conversationCount: 0 })
     expect(c1.themeRefs).toEqual([])
   })
@@ -107,14 +115,14 @@ describe('validateVerdicts — the grounded register', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C1', verdict: 'echoes', they_say: 'lots of people agree', theme_refs: ['T99'] },
     ]
-    const [c1] = validateVerdicts(raw, claims, pool)
+    const [c1] = validateAtOne(raw, claims, pool)
     expect(c1.verdict).toBe('silent')
     expect(c1.theySay).toBeNull()
   })
 
   it('downgrades a non-silent verdict with no audience voice', () => {
     const raw: RawVerdict[] = [{ claim_ref: 'C1', verdict: 'contradicts', they_say: '  ', theme_refs: ['T1'] }]
-    expect(validateVerdicts(raw, claims, pool)[0].verdict).toBe('silent')
+    expect(validateAtOne(raw, claims, pool)[0].verdict).toBe('silent')
   })
 
   it('answers every submitted claim, including ones the model skipped', () => {
@@ -123,7 +131,7 @@ describe('validateVerdicts — the grounded register', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C1', verdict: 'echoes', they_say: 'cost comes up', theme_refs: ['T1'] },
     ]
-    const out = validateVerdicts(raw, claims, pool)
+    const out = validateAtOne(raw, claims, pool)
     expect(out.map((c) => c.ref)).toEqual(['C1', 'C2'])
     expect(out[1].verdict).toBe('silent')
   })
@@ -133,7 +141,7 @@ describe('validateVerdicts — the grounded register', () => {
       const raw: RawVerdict[] = [
         { claim_ref: form, verdict: 'echoes', they_say: 'cost comes up', theme_refs: ['T1'] },
       ]
-      expect(validateVerdicts(raw, claims, pool)[0].verdict, `ref form ${form}`).toBe('echoes')
+      expect(validateAtOne(raw, claims, pool)[0].verdict, `ref form ${form}`).toBe('echoes')
     }
   })
 
@@ -141,7 +149,7 @@ describe('validateVerdicts — the grounded register', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C9', verdict: 'echoes', they_say: 'invented', theme_refs: ['T1'] },
     ]
-    expect(validateVerdicts(raw, claims, pool).every((c) => c.verdict === 'silent')).toBe(true)
+    expect(validateAtOne(raw, claims, pool).every((c) => c.verdict === 'silent')).toBe(true)
   })
 
   it('takes one verdict per claim and drops a second opinion', () => {
@@ -149,14 +157,14 @@ describe('validateVerdicts — the grounded register', () => {
       { claim_ref: 'C1', verdict: 'echoes', they_say: 'cost comes up', theme_refs: ['T1'] },
       { claim_ref: 'C1', verdict: 'contradicts', they_say: 'actually no', theme_refs: ['T2'] },
     ]
-    expect(validateVerdicts(raw, claims, pool)[0].verdict).toBe('echoes')
+    expect(validateAtOne(raw, claims, pool)[0].verdict).toBe('echoes')
   })
 
   it('treats an unrecognised verdict word as silence', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C1', verdict: 'probably-ish', they_say: 'hedge', theme_refs: ['T1'] },
     ]
-    expect(validateVerdicts(raw, claims, pool)[0].verdict).toBe('silent')
+    expect(validateAtOne(raw, claims, pool)[0].verdict).toBe('silent')
   })
 
   it('counts a shared video once across two themes', () => {
@@ -164,7 +172,7 @@ describe('validateVerdicts — the grounded register', () => {
     const raw: RawVerdict[] = [
       { claim_ref: 'C1', verdict: 'echoes', they_say: 'x', theme_refs: ['T1', 'T2'] },
     ]
-    expect(validateVerdicts(raw, [claims[0]], overlap)[0].conversationCount).toBe(3)
+    expect(validateAtOne(raw, [claims[0]], overlap)[0].conversationCount).toBe(3)
   })
 })
 
@@ -237,7 +245,7 @@ describe('grounding — a verdict must rest on something a person actually said'
     // a counted number beside it. Supported-with-nothing-to-show is the shape a
     // bluff takes.
     const g = { ...groundingFor([a]), quotedInsightIds: new Set<string>() }
-    const [c1] = validateVerdicts(echo, claims, pool, g)
+    const [c1] = validateAtOne(echo, claims, pool, g)
     expect(c1.verdict).toBe('silent')
     expect(c1.theySay).toBeNull()
   })
@@ -246,7 +254,7 @@ describe('grounding — a verdict must rest on something a person actually said'
     // themes outlive their insights (prune-stale-analysis), so re-evaluating
     // an older run must not count rows that are gone.
     const g = { ...groundingFor([a]), liveInsightIds: new Set<string>() }
-    expect(validateVerdicts(echo, claims, pool, g)[0].verdict).toBe('silent')
+    expect(validateAtOne(echo, claims, pool, g)[0].verdict).toBe('silent')
   })
 
   it('counts conversations from the cited insights’ own videos, not the theme’s whole breadth', () => {
@@ -262,7 +270,7 @@ describe('grounding — a verdict must rest on something a person actually said'
       quotedInsightIds: new Set(['i1', 'i2']),
       videoByInsightId: new Map([['i1', 'v1'], ['i2', 'v1']]),
     }
-    const [c1] = validateVerdicts(echo, claims, new Map([['c1', [broad]]]), g)
+    const [c1] = validateAtOne(echo, claims, new Map([['c1', [broad]]]), g)
     expect(c1.conversationCount).toBe(1)
   })
 
@@ -272,11 +280,11 @@ describe('grounding — a verdict must rest on something a person actually said'
       quotedInsightIds: new Set(['i-a-1']),
       videoByInsightId: new Map([['i-a-1', 'v-a-1']]),
     }
-    expect(validateVerdicts(echo, claims, pool, g)[0].insightIds).toEqual(['i-a-1'])
+    expect(validateAtOne(echo, claims, pool, g)[0].insightIds).toEqual(['i-a-1'])
   })
 
   it('still works with no grounding supplied (the pure-logic path)', () => {
-    expect(validateVerdicts(echo, claims, pool)[0].verdict).toBe('echoes')
+    expect(validateAtOne(echo, claims, pool)[0].verdict).toBe('echoes')
   })
 })
 
@@ -291,5 +299,94 @@ describe('diffVerdicts — a run must never be diffed against itself', () => {
     // query excludes the current run; this pins what that protects.
     const current = [mk('C1', 'contradicts')]
     expect(diffVerdicts(current, current)).toEqual([])
+  })
+})
+
+// Walkthrough item 5: the mock plan's verdicts moved "Contradicted → Untested",
+// "Supported → Untested" within days on no new evidence. A re-reading
+// proposes; `holdVerdicts` decides, against the verdict printed last.
+describe('holdVerdicts — a verdict moves only when its evidence does', () => {
+  const floor = Math.max(PLAN_VERDICT_MIN_VIDEOS, 3)
+  const vids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i}`)
+  const c = (ref: string, verdict: ClaimResult['verdict'], videos: string[], over: Partial<ClaimResult> = {}): ClaimResult => ({
+    ref, claim: `claim ${ref}`, verdict,
+    theySay: verdict === 'silent' ? null : `they say ${verdict}`,
+    conversationCount: verdict === 'silent' ? 0 : videos.length,
+    themeRefs: [], insightIds: verdict === 'silent' ? [] : videos.map((v) => `ins-${v}`), source: null,
+    ...over,
+  })
+  // The caller resolves insights to videos; here the insight id names its video.
+  const videosOf = (x: ClaimResult) => new Set(x.insightIds.map((id) => id.replace(/^ins-/, '')))
+
+  it('keeps a standing verdict when a re-reading goes untested', () => {
+    const before = c('C1', 'echoes', vids('a', floor + 2))
+    const [held] = holdVerdicts([before], [c('C1', 'silent', [])], videosOf)
+    expect(held.verdict).toBe('echoes')
+    expect(held.insightIds).toEqual(before.insightIds)
+    expect(diffVerdicts([before], [held])).toEqual([])
+  })
+
+  it('keeps a standing verdict when the opposite reading rests on the same videos', () => {
+    const before = c('C1', 'contradicts', vids('a', floor + 4))
+    const flip = c('C1', 'echoes', vids('a', floor + 2))
+    expect(holdVerdicts([before], [flip], videosOf)[0].verdict).toBe('contradicts')
+  })
+
+  it('prints the opposite reading once enough of its videos are new', () => {
+    const before = c('C1', 'contradicts', vids('a', floor + 1))
+    const total = floor * 2
+    const newShare = Math.ceil(total * VERDICT_NEW_EVIDENCE_SHARE)
+    const flip = c('C1', 'echoes', [...vids('a', total - newShare), ...vids('b', newShare)])
+    expect(holdVerdicts([before], [flip], videosOf)[0].verdict).toBe('echoes')
+  })
+
+  it('takes a fresh reading of the same verdict, with its newer evidence', () => {
+    const before = c('C1', 'echoes', vids('a', floor))
+    const again = c('C1', 'echoes', vids('b', floor + 1))
+    expect(holdVerdicts([before], [again], videosOf)[0]).toEqual(again)
+  })
+
+  it('gives an untested claim a verdict only when two re-readings in a row agree', () => {
+    const untested = c('C1', 'silent', [])
+    const first = holdVerdicts([untested], [c('C1', 'contradicts', vids('a', floor))], videosOf)[0]
+    expect(first.verdict).toBe('silent')
+    expect(first.pending).toEqual({ verdict: 'contradicts' })
+    const second = holdVerdicts([first], [c('C1', 'contradicts', vids('a', floor))], videosOf)[0]
+    expect(second.verdict).toBe('contradicts')
+    expect(second.pending).toBeUndefined()
+    // A disagreeing second reading starts the count again.
+    const other = holdVerdicts([first], [c('C1', 'echoes', vids('a', floor))], videosOf)[0]
+    expect(other.verdict).toBe('silent')
+    expect(other.pending).toEqual({ verdict: 'echoes' })
+    // And an untested one clears what was pending.
+    expect(holdVerdicts([first], [c('C1', 'silent', [])], videosOf)[0].pending).toBeUndefined()
+  })
+
+  it('lets a verdict under the floor go untested, and never prints it as one', () => {
+    if (PLAN_VERDICT_MIN_VIDEOS < 2) return
+    const weak = c('C1', 'contradicts', vids('a', PLAN_VERDICT_MIN_VIDEOS - 1))
+    expect(holdVerdicts([weak], [c('C1', 'silent', [])], videosOf)[0].verdict).toBe('silent')
+    const proposed = holdVerdicts([weak], [c('C1', 'echoes', vids('b', PLAN_VERDICT_MIN_VIDEOS))], videosOf)[0]
+    expect(proposed.verdict).toBe('silent')
+    expect(proposed.pending).toEqual({ verdict: 'echoes' })
+  })
+
+  it('reads a claim with no earlier reading as it comes', () => {
+    const fresh = c('C9', 'echoes', vids('a', floor))
+    expect(holdVerdicts([], [fresh], videosOf)).toEqual([fresh])
+  })
+})
+
+describe('validateVerdicts — the video floor', () => {
+  it('reads a verdict on fewer videos than the floor as untested', () => {
+    if (PLAN_VERDICT_MIN_VIDEOS < 2) return
+    const t = theme('T', {
+      insightIds: Array.from({ length: PLAN_VERDICT_MIN_VIDEOS }, (_, i) => `i-${i}`),
+      videoIds: Array.from({ length: PLAN_VERDICT_MIN_VIDEOS - 1 }, (_, i) => `v-${i}`),
+    })
+    const g = groundingFor([t])
+    const raw: RawVerdict[] = [{ claim_ref: 'C1', verdict: 'contradicts', they_say: 'they disagree', theme_refs: ['T1'] }]
+    const out = validateVerdicts(raw, [claims[0]], new Map([['c1', [t]]]), g)
+    expect(out[0].verdict).toBe('silent')
   })
 })

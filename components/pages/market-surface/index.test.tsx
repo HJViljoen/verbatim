@@ -915,7 +915,8 @@ describe('MK6 · plans re-checked', () => {
   it('says what a claim count is a count of, and what the floor is', () => {
     const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
     expect(text).toContain('not out of one month')
-    expect(text).toContain('nothing here is held')
+    // The hold is real since the walkthrough (item 5), and the card says how.
+    expect(text).toContain('changes only when the evidence behind it does')
   })
 
   it('says how many plans have been checked when it is drawing one of several', () => {

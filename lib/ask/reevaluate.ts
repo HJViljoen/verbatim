@@ -1,6 +1,7 @@
 import { ASK_REEVALUATE_MAX_CHECKS } from '../config'
+import { fetchInsightsByIds } from '../quotes'
 import { verdictPass } from './engine'
-import { diffVerdicts, summarise } from './verdicts'
+import { diffVerdicts, holdVerdicts, summarise } from './verdicts'
 import type { ClaimResult, ExtractedClaim } from './types'
 
 // Re-test stored plans against each new run.
@@ -92,8 +93,15 @@ export async function reevaluatePlanChecks(
       continue
     }
 
-    const summary = summarise(result.claims)
-    const moved = diffVerdicts(previous, result.claims)
+    // THE HOLD (walkthrough item 5): a re-reading proposes, and a verdict
+    // changes only where the evidence behind it moved (`holdVerdicts`). The
+    // videos behind both readings are resolved here; a read that fails falls
+    // back to the insight ids, which can only count MORE evidence as new, so
+    // the worst a failure does is let one change through as before.
+    const videosOf = await videoResolver(admin, [...previous, ...result.claims])
+    const claimsHeld = holdVerdicts(previous, result.claims, videosOf)
+    const summary = summarise(claimsHeld)
+    const moved = diffVerdicts(previous, claimsHeld)
 
     const { error } = await admin.from('plan_check_evaluations').upsert(
       {
@@ -101,7 +109,7 @@ export async function reevaluatePlanChecks(
         client_id: clientId,
         run_id: runId,
         run_date: runDate,
-        claims: result.claims,
+        claims: claimsHeld,
         summary,
         moved,
       },
@@ -116,4 +124,26 @@ export async function reevaluatePlanChecks(
   }
 
   return out
+}
+
+/**
+ * The videos behind a claim's evidence, for the hold. One read per check, over
+ * the base table (a plan check's ids are protected from pruning, so they
+ * resolve). Fail-soft: a read that fails keys each claim on its insight ids.
+ */
+async function videoResolver(
+  admin: ReturnType<typeof import('../supabase-admin').createAdminClient>,
+  claims: readonly ClaimResult[],
+): Promise<(c: ClaimResult) => ReadonlySet<string>> {
+  const ids = [...new Set(claims.flatMap((c) => c.insightIds ?? []))]
+  let videoOf = new Map<string, string>()
+  if (ids.length > 0) {
+    try {
+      const rows = await fetchInsightsByIds<{ id: string; source_video_id: string | null }>(admin, ids, 'id, source_video_id')
+      videoOf = new Map(rows.filter((r) => r.source_video_id).map((r) => [r.id, r.source_video_id as string]))
+    } catch (e) {
+      console.error(`[ask-reevaluate] evidence videos unread, holding on insight ids: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  return (c) => new Set((c.insightIds ?? []).map((id) => videoOf.get(id) ?? `insight:${id}`))
 }

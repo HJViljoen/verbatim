@@ -984,8 +984,8 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).toContain('The plan, re-checked')
     expect(t).toContain('Untested → Supported')
     // The basis only; the floor and the hold are How to read material (E86).
-    expect(t).not.toContain('at least 1 real comment stands behind it')
-    expect(t).not.toContain('nothing here is held across two updates before it is printed')
+    expect(t).not.toContain('with a real comment stand')
+    expect(t).not.toContain('changes only when the evidence behind it does')
   })
 
   it('qr.p7.method · the record as four paragraphs, in order, with every word kept', () => {
