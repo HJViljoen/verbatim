@@ -116,6 +116,26 @@ export function floorAnswer<P extends FloorPoint, A extends FloorAnswer<P>>(
   }
 }
 
+/** What a stored answer carries that the floor reads, where no measurement is
+ *  to hand (the Ask rail's month of answers, `notAnsweredFrom`). */
+export interface StoredFloorAnswer {
+  silent?: boolean
+  grounded?: readonly { conversationCount?: number | null }[]
+}
+
+/**
+ * Would this stored answer read "too little to answer"? The floor on the
+ * videos behind each point's own evidence (`conversationCount`), which is
+ * `floorAnswer`'s support wherever a point was not measured. A thread page
+ * holds its own answers to the measured count it prints and says so to the
+ * rail; this is for the month's other answers. A result that is silent, or
+ * carries no list of points at all, is not called thin.
+ */
+export function storedAnswerThin(result: StoredFloorAnswer | null | undefined, floor: number = ASK_FINDING_FLOOR): boolean {
+  if (!result || result.silent || !Array.isArray(result.grounded)) return false
+  return !result.grounded.some((p) => (p?.conversationCount ?? 0) >= Math.max(1, floor))
+}
+
 /** What the loader knows about the video behind one quote. */
 export interface AskQuoteVideo {
   /** `segments_for_videos`: 'maker', 'noise' or 'market'. Null where it was
@@ -138,6 +158,11 @@ export interface AskQuoteVideo {
  *
  * One quote per video is the caller's, across the whole thread.
  */
+/** A rival's name as retrieval compares it (`scopeAdmits`, lib/agent/retrieve.ts):
+ *  accents, case and edge spaces folded, so the rival the question named is
+ *  the rival its quotes are filed under. */
+const foldName = (s: string): string => s.normalize('NFD').replace(/\p{M}+/gu, '').trim().toLowerCase()
+
 export function askQuoteOk(
   q: { text: string; lang?: string | null; english?: string | null },
   video: AskQuoteVideo | undefined,
@@ -147,8 +172,8 @@ export function askQuoteOk(
   if (readsAsOffer(q.text) || readsAsOffer(q.english)) return false
   if (video?.segment === 'maker' || video?.segment === 'noise') return false
   if (video?.rival) {
-    const named = new Set(namedRivals.map((r) => r.trim().toLowerCase()))
-    if (!named.has(video.rival.trim().toLowerCase())) return false
+    const named = new Set(namedRivals.map(foldName))
+    if (!named.has(foldName(video.rival))) return false
   }
   return true
 }

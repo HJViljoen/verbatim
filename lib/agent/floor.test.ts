@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, partlyAnswered, tooLittleToAnswer } from './floor'
+import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, partlyAnswered, storedAnswerThin, tooLittleToAnswer } from './floor'
 
 // Walkthrough item 4. "What's people's perception of Sealand?" was answered
 // "perception is mixed…" over findings measured at 0, 1 and 0 of 360 videos.
@@ -111,5 +111,30 @@ describe('askQuoteOk — the quotes an answer may print', () => {
     const patagonia = { text: 'I just don’t know about spending my money on a 300 dollar shirt from them', lang: 'en' }
     expect(askQuoteOk(patagonia, { segment: 'market', rival: 'Patagonia' })).toBe(false)
     expect(askQuoteOk(patagonia, { segment: 'market', rival: 'Patagonia' }, ['patagonia'])).toBe(true)
+  })
+
+  it('matches the named rival as retrieval does: accents and case folded', () => {
+    const q = { text: 'The knee from them fits better than anything I tried before', lang: 'en' }
+    expect(askQuoteOk(q, { segment: 'market', rival: 'Össur' }, ['ossur'])).toBe(true)
+    expect(askQuoteOk(q, { segment: 'market', rival: ' Ottobock' }, ['OTTOBOCK'])).toBe(true)
+    expect(askQuoteOk(q, { segment: 'market', rival: 'Ottobock' }, ['Össur'])).toBe(false)
+  })
+})
+
+describe('storedAnswerThin — the rail’s word for an answer it did not measure', () => {
+  it('is thin where no point has the floor’s videos behind its evidence', () => {
+    expect(storedAnswerThin({ silent: false, grounded: [{ conversationCount: 1 }, { conversationCount: ASK_FINDING_FLOOR - 1 }] })).toBe(ASK_FINDING_FLOOR > 1)
+    expect(storedAnswerThin({ silent: false, grounded: [{ conversationCount: 1 }, { conversationCount: ASK_FINDING_FLOOR }] })).toBe(false)
+  })
+
+  it('agrees with floorAnswer on the same stored counts', () => {
+    const thin = answer([point('G1', 1), point('G2', Math.max(0, floor - 1))])
+    expect(storedAnswerThin(thin, floor)).toBe(floorAnswer(thin, (p) => p.conversationCount, floor).state === 'thin')
+  })
+
+  it('never calls silence, or a result with no points listed, thin', () => {
+    expect(storedAnswerThin({ silent: true, grounded: [] })).toBe(false)
+    expect(storedAnswerThin({})).toBe(false)
+    expect(storedAnswerThin(null)).toBe(false)
   })
 })

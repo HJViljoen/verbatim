@@ -10,7 +10,7 @@ import type { PlanCheckCard } from '../ask/plan-cards'
 import {
   agentThreadSlides, answerFindings, askHistory, askPlanChip, askReadingFrom, askReads,
   claimsCrossed, documentPages, findingKey, NO_ASK_READING, type AgentThreadData,
-  loadAskFront,
+  loadAskFront, numberThreadQuotes, type Turn,
 } from './agent-thread'
 import { loadOverview } from './overview'
 import { marketFrontFixture } from '../../components/pages/overview/fixture'
@@ -331,5 +331,36 @@ describe('loadAskFront', () => {
   it('is null on the first-run empty state', async () => {
     vi.mocked(loadOverview).mockResolvedValueOnce(null)
     expect(await loadAskFront(scope)).toBeNull()
+  })
+})
+
+// Walkthrough item 4: the quotes are numbered after the floor, so a dropped
+// finding leaves no gap in the numbers, no line in the appendix and no video
+// taken from a finding that stands.
+describe('numberThreadQuotes', () => {
+  const q = (ref: string, videoId: string | null) => ({ ref, text: `words ${ref}`, commentId: ref, videoId, n: 0 })
+  const turn = (points: { id: string; quotes: ReturnType<typeof q>[] }[]): Turn => ({
+    question: 'q', askedAt: '2026-09-10T00:00:00Z', prose: null, outcome: 'answered', updateAt: null,
+    answer: {
+      answer: 'a', judgement: [], nearest: [], silent: false, runId: 'r', costUsd: 0,
+      grounded: points.map((p) => ({ id: p.id, text: 't', insightIds: [], conversationCount: 9, themeRefs: [], quotes: p.quotes })),
+    } as unknown as Turn['answer'],
+  })
+
+  it('numbers what is printed, in reading order, one per video across the thread', () => {
+    // The floor has already taken turn 0's other finding: its quotes are not here.
+    const turns = [
+      turn([{ id: 'G2', quotes: [q('c3', 'v3'), q('c4', 'v4')] }]),
+      turn([{ id: 'G1', quotes: [q('c5', 'v3'), q('c6', 'v6')] }]),
+    ]
+    const cited = numberThreadQuotes(turns)
+    expect(cited.map((c) => [c.ref, c.n])).toEqual([['c3', 1], ['c4', 2], ['c6', 3]])
+    expect(turns[0].answer!.grounded[0].quotes.map((x) => x.n)).toEqual([1, 2])
+    expect(turns[1].answer!.grounded[0].quotes.map((x) => x.n)).toEqual([3])
+  })
+
+  it('lists nothing for a thread whose answers the floor emptied', () => {
+    const turns = [turn([])]
+    expect(numberThreadQuotes(turns)).toEqual([])
   })
 })
