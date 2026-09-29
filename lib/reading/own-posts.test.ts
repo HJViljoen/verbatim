@@ -518,6 +518,12 @@ describe('a claim your followers took up and your market did not', () => {
     expect(followersLine(nobody, 'echoes', theySay)).toBeNull()
     expect(followersCount(nobody)).toBeNull()
   })
+  it('says nothing about the market where the market was not counted', () => {
+    const unread = marketClaimEcho({ stance: 'echoes', reading: null, theySay, followers: 3 })
+    expect(unread.state).toBe('not_tracked')
+    expect(followersOnly(unread)).toBe(false)
+    expect(followersLine(unread, 'echoes', theySay)).toBeNull()
+  })
   it('calls a contradiction made of questions "Questioned"', () => {
     const asked = 'People love upcycling ideas, but they also ask what materials are used and whether an upcycling claim is genuine.'
     const q = marketClaimEcho({ stance: 'contradicts', reading: { k: 125, n: 852 }, theySay: asked })

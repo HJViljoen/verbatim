@@ -851,7 +851,10 @@ export function marketClaimEcho(input: { stance: string | null; reading: Counted
  * and "Not talked about" on the other cannot read as a contradiction.
  */
 export const followersOnly = (echo: ClaimEcho | null | undefined): boolean =>
-  echo != null && (echo.state === 'silent' || echo.state === 'not_tracked') && (echo.followers ?? 0) > 0
+  // SILENT ONLY: "your market did not take it up" is a count of the market,
+  // and `not_tracked` is the market going uncounted (its videos unread), about
+  // which nothing may be said.
+  echo != null && echo.state === 'silent' && (echo.followers ?? 0) > 0
 
 /** What your own followers did with the claim, where the market did nothing
  *  with it: the stance Pass D-a read, said about your followers. Null where
