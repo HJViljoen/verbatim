@@ -2,6 +2,12 @@ import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadSubjectsPage } from '@/lib/pages/subjects'
 import { SubjectsPage } from '@/components/pages/subjects'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('subjects').label }
 
 // Subjects — "how are we seen on this subject?" A new address in Phase 1
 // (there has never been a /dashboard/subjects). WP12 fills it from

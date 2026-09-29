@@ -33,6 +33,11 @@ import { marketPairChip, notMyMarketCount, ownPostsIn, prevMarketSplit } from '.
 import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
 import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('settings').label }
 
 // Settings › What we read (the key and the address stay `tracking`), as the
 // approved preview's "What we read" artboard draws it (market-first WP3.10):

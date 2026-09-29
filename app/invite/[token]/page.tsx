@@ -4,6 +4,9 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { loadInvite } from './data'
 import { AcceptButton, SignupAcceptForm } from './invite-ui'
 import { AuthCard } from '@/components/auth/auth-card'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Join a workspace' }
 
 // Public invite-acceptance page. Validates the token, then renders the right
 // action based on the visitor's session. All authorization lives in

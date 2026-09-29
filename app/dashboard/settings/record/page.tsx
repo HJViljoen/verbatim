@@ -27,6 +27,13 @@ import { saveState } from '@/lib/settings/save-state'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { oneLineBar } from '@/lib/shell/bar'
 import { AppealButton } from './appeal-button'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('record').label} · ${surface('settings').label}` }
 
 // Settings › The record (Phase 1 WP16, ported to the SettingsRecord artboard in
 // block E wave 2) — everything the product can say about how it read this

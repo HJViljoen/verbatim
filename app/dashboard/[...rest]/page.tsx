@@ -1,4 +1,7 @@
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+
+export const metadata: Metadata = { title: 'Page not found' }
 
 // Any /dashboard address no page claims. Unmatched URLs otherwise reach only
 // the root not-found, outside the shell; throwing here renders

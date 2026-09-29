@@ -6,6 +6,12 @@ import { isStripeConfigured } from '@/lib/stripe'
 import { SettingsFrame, SettingsCard, FactRow } from '@/components/settings-frame'
 import { cap } from '@/lib/format'
 import { BillingControls } from './billing-ui'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `Plan & billing · ${surface('settings').label}` }
 
 // Billing — current plan + subscription state. Owners get the Stripe controls;
 // everyone else sees a read-only summary (billing is owner-only). Entitlement is

@@ -4,6 +4,11 @@ import { loadContent, type ContentParams } from '@/lib/pages/content'
 import { ContentPage } from '@/components/pages/content'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
 import { oldPage } from '@/lib/nav'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: oldPage('/dashboard/videos').label }
 
 // Content, retiring (WP9, decision C). It keeps its own address — the label
 // and the route never matched — and the banner names This week, which takes

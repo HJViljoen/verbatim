@@ -2,6 +2,12 @@ import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadCompetitiveSurface } from '@/lib/pages/competitive-surface'
 import { CompetitiveSurfacePage } from '@/components/pages/competitive-surface'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('competitive').label }
 
 // Brands (market-first WP3.5, deploy 5; was Competitive, Phase 1 WP14). The
 // address Competitive Intelligence used to hold; that page is parked at

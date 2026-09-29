@@ -33,6 +33,11 @@ import { BRIEFS_META, BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefMo
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('reports').label }
 
 // Reports — the three briefs, and the archive of what went out (Phase 1 WP19,
 // design RP1 and RP4; decision R).

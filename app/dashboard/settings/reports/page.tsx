@@ -8,6 +8,13 @@ import { settingsBar } from '@/lib/settings/bar'
 import { capLine, capNote, monthStartIso } from '@/lib/ask/quota'
 import { ASK_MONTHLY_CAP } from '@/lib/config'
 import { RecipientsForm } from './recipients-form'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('reports').label} · ${surface('settings').label}` }
 
 // Settings › Reports and recipients (Phase 1 WP16, design ST6's recipient
 // half) — one row per artefact per workspace, whether or not anything sends it.

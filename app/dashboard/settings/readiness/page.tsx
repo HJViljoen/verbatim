@@ -9,6 +9,13 @@ import { computeReadiness } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
 import { clientReadiness, NOT_BUILT } from '@/lib/settings/readiness-view'
 import { settingsBar } from '@/lib/settings/bar'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('readiness').label} · ${surface('settings').label}` }
 
 // Settings › Readiness (Phase 1 WP16, design ST1, decision V) — what each part
 // of the product needs from THIS workspace, what is there, and who closes the

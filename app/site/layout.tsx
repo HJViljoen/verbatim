@@ -18,10 +18,12 @@ const bricolage = Bricolage_Grotesque({
   display: 'swap',
 })
 
+// Absolute, with a pass-through template: the root layout's "%s · Verbatim"
+// is the app's, and the site's pages already write their own full titles.
 export const metadata: Metadata = {
-  title: 'Verbatim · They hear your name. We hear the market.',
+  title: { absolute: 'Verbatim · They hear your name. We hear the market.', template: '%s' },
   description:
-    'Your name is 0.02% of the conversation. Verbatim reads the comment threads on TikTok, Instagram, YouTube and Reddit around your category and builds a working model of your market.',
+    'Your name is 0.02% of the conversation. Verbatim reads the bigger market you sell into: what people buying and talking about products like yours say on TikTok, Instagram, YouTube and Reddit, and where your rivals stand.',
 }
 
 export default function MarketingLayout({

@@ -6,6 +6,13 @@ import { confirmedSubjects, subjectOriginWords, type SubjectChangeRow } from '@/
 import { settingsBar } from '@/lib/settings/bar'
 import { subjectSetVerdict } from '@/lib/subjects/moves'
 import { isMissingSubjects, SUBJECTS_MAX, SUBJECTS_MIN, TABLE_SUBJECTS, type Subject } from '@/lib/subjects/types'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('subjects').label} · ${surface('settings').label}` }
 
 // Settings › Subjects (Phase 1 WP16, design items 4 and 22, decision E) — the
 // five to ten things this workspace follows in its market, named as a buyer would,
