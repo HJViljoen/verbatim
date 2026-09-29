@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { selectAll } from '../supabase-admin'
+import { gateCitedQuotes, gateFor, readPoolContext, type QuoteContext } from '../quote-context'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToCompetitor, cleanQuote, type ThemeBucketRow } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { rivalKey } from '../rivals'
@@ -320,15 +321,19 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
 
   // The finding's own quotes + hero-quote lead, cited so a snapshot can freeze
   // the words and resolve them live (dashboard.ts's heroCited pattern).
-  const shapeFinding = (ci: CompetitiveInsight, ids: string[], pick: ReturnType<typeof createCitedQuotePicker>): FindingDetail => {
+  const shapeFinding = (ci: CompetitiveInsight, ids: string[], pick: ReturnType<typeof createCitedQuotePicker>, ctx: QuoteContext): FindingDetail => {
     const byPlatform = new Map<string, number>()
     for (const id of ids) { const pl = platformById.get(id) ?? 'other'; byPlatform.set(pl, (byPlatform.get(pl) ?? 0) + 1) }
     const platforms = [...byPlatform.entries()].sort((a, b) => b[1] - a[1]).map(([pl, count]) => ({ label: pl === 'other' ? 'Other' : cap(pl), count }))
     const claim = claimOf(ci)
-    const cited = pick(ids, 3, claim, ci.hero_quote)
+    // A deeper pick, then the quote gate (walkthrough, 29 Sep;
+    // lib/quote-gate.ts): the finding's rival's own voices, readable, on the
+    // market, one per thread, three at most.
+    const cited = pick(ids, 12, claim, ci.hero_quote)
     const hero = ci.hero_quote ? cleanQuote(ci.hero_quote) : ''
     const heroCited = hero !== '' && cited.some((q) => q.text.toLowerCase() === hero.toLowerCase())
-    const quotes: Quote[] = hero && !heroCited ? [{ ref: quoteRef.hero('competitive_insights', ci.id), text: hero }, ...cited].slice(0, 3) : cited
+    const offered: Quote[] = hero && !heroCited ? [{ ref: quoteRef.hero('competitive_insights', ci.id), text: hero }, ...cited] : cited
+    const quotes = gateCitedQuotes(offered, ctx, 3, gateFor(clientId, { brand: ci.competitor_name, claim }))
     return {
       id: ci.id, category: ci.category, title: ci.title, competitorName: ci.competitor_name,
       coverage: coverageFor(ci), impact: impactWord(ci.impact_level), finding: ci.finding,
@@ -343,7 +348,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
     const pool = rankByTheme(ids, claimOf(selected), themeSlugById).slice(0, 120)
     const quotesByAudience = await fetchQuotesByAudience(supabase, pool)
     const pick = createCitedQuotePicker(quotesByAudience, themeSlugById)
-    detail = shapeFinding(selected, ids, pick)
+    detail = shapeFinding(selected, ids, pick, await readPoolContext(supabase, clientId, quotesByAudience))
   }
 
   // `full` (print): every finding under the current filter, in full — one
@@ -357,7 +362,8 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
     const allIds = [...new Set(idsByFinding.flat())]
     const quotesByAudience = await fetchQuotesByAudience(supabase, allIds)
     const pick = createCitedQuotePicker(quotesByAudience, themeSlugById)
-    allFindings = wanted.map((ci, i) => shapeFinding(ci, idsByFinding[i], pick))
+    const ctx = await readPoolContext(supabase, clientId, quotesByAudience)
+    allFindings = wanted.map((ci, i) => shapeFinding(ci, idsByFinding[i], pick, ctx))
   }
 
   const emptyFindingsReason = competitors.length === 0

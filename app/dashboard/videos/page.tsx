@@ -16,7 +16,8 @@ import { oldPage } from '@/lib/nav'
 export default async function Page({ searchParams }: { searchParams?: Promise<ContentParams> }) {
   const { supabase, clientId } = await getSessionContext()
   const sp = (await searchParams) ?? {}
-  const data = await loadContent({ supabase, clientId, reading: readingHandle(clientId), params: sp })
+  // The quote gate on the inbox (lib/quote-gate.ts); the weekly report's call does not pass it.
+  const data = await loadContent({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { gate: true })
   return (
     <>
       <OldPageBanner page={oldPage('/dashboard/videos')} />

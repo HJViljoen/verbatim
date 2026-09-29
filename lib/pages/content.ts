@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { selectAll } from '../supabase-admin'
-import { cleanQuote } from '../quotes'
+import { cleanQuote, readTranslations } from '../quotes'
+import { gateEngage } from '../quote-context'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { fmtInt, weekdayDate } from '../format'
@@ -175,7 +176,7 @@ interface EngageDigest {
 /** The digest's data, ready to shape — null before the first completed update.
  *  Its own anchor (latest completed/partial run), separate from the video
  *  tiles' `latestVideoRun` — see the file header. */
-async function loadEngageDigest(supabase: SupabaseClient, clientId: string): Promise<EngageDigest | null> {
+async function loadEngageDigest(supabase: SupabaseClient, clientId: string, gate = false): Promise<EngageDigest | null> {
   const run = row<{ id: string; started_at: string }>(await supabase
     .from('pipeline_runs')
     .select('id, started_at')
@@ -200,7 +201,13 @@ async function loadEngageDigest(supabase: SupabaseClient, clientId: string): Pro
   const windowStart = new Date(Date.parse(run.started_at as string) - windowDays * 86_400_000).toISOString()
   const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
 
-  const candidates = await loadEngageCandidates(supabase, clientId, run.id as string)
+  const read = await loadEngageCandidates(supabase, clientId, run.id as string)
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts) where the page
+  // asks for it: the inbox takes only comments the market wrote that the
+  // client could answer, one per thread. The weekly report's call does not.
+  const candidates = gate
+    ? await gateEngage(supabase, clientId, read, await readTranslations(supabase, read.map((c) => c.comment.text ?? '')))
+    : read
   const engage = rankEngageCandidates(
     candidates.filter((c) => c.category !== 'misinformation'),
     { windowStart, vocab },
@@ -332,7 +339,7 @@ interface OwnPostRow extends OwnPost {
   competitor_name: string | null
 }
 
-export async function loadContent(scope: Scope): Promise<ContentData | ContentEmpty> {
+export async function loadContent(scope: Scope, opts: { gate?: boolean } = {}): Promise<ContentData | ContentEmpty> {
   const supabase = scope.supabase as SupabaseClient
   const clientId = scope.clientId
   const sp = scope.params as ContentParams
@@ -349,7 +356,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
     fetchRunningRunIds(supabase, clientId, 'content'),
     supabase.from('tracking_configs').select('own_handles').eq('client_id', clientId).maybeSingle(),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    loadEngageDigest(supabase, clientId),
+    loadEngageDigest(supabase, clientId, opts.gate === true),
     // Daily follower snapshots (three platforms cross the 1000-row cap in ~11 months).
     selectAll<SnapshotRow>(() =>
       supabase.from('account_snapshots').select('platform, snapshot_date, followers').eq('client_id', clientId).order('snapshot_date', { ascending: true }),

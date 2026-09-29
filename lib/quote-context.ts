@@ -22,8 +22,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, UUID_IN_CHUNK } from './chunk'
+import { rankEngageCandidates, type EngageCandidate } from './engage'
+import { readingOf } from './quotes'
 import { segmentRulesEnabled } from './segments/rules'
-import { quoteMarketFor, type GateOptions, type QuoteVideo } from './quote-gate'
+import { pickEligible, quoteGate, quoteMarketFor, type GateOptions, type QuoteVideo } from './quote-gate'
 
 export const RPC_SEGMENTS_FOR_VIDEOS = 'segments_for_videos'
 const SEGMENT_CHUNK = 500
@@ -198,4 +200,77 @@ export async function readQuoteContext(
 /** The gate's options for this tenant, plus what the block asks. */
 export function gateFor(clientId: string, block: Omit<GateOptions, 'market' | 'makerRule'> = {}): GateOptions {
   return { market: quoteMarketFor(clientId), makerRule: segmentRulesEnabled(clientId), ...block }
+}
+
+/**
+ * A reply queue's candidates through the quote gate (This week's Worth a reply
+ * and Flagged for awareness; the Content page's inbox): a comment the market
+ * wrote that the client could answer — readable, not under a maker's or a
+ * seller's post, not under another brand's own post, on the market — and one
+ * candidate per comment thread, the thread's first in the queue's own order
+ * (`rankEngageCandidates` uncapped), so the ranking decides which one stays.
+ * Comments under the client's own posts stay: those are the most worth
+ * answering. `makers` are comment ids already read as under a maker's video.
+ */
+export async function gateEngage<T extends EngageCandidate>(
+  db: SupabaseClient,
+  clientId: string,
+  pool: readonly T[],
+  translations: Map<string, { lang: string; english: string | null }>,
+  makers: ReadonlySet<string> = new Set(),
+): Promise<T[]> {
+  if (pool.length === 0) return []
+  const ctx = await readQuoteContext(db, clientId, { commentIds: pool.map((c) => c.comment.id) })
+  const gate = gateFor(clientId, { allowOwn: true })
+  const threadOf = new Map<string, string | null>()
+  const passed = pool.filter((c) => {
+    const video = ctx.forComment(c.comment.id)
+    const verdict = quoteGate({
+      text: c.comment.text ?? '',
+      ...readingOf(translations, c.comment.text ?? ''),
+      video: video ? { ...video, segment: makers.has(c.comment.id) ? 'maker' : video.segment } : null,
+    }, gate)
+    if (verdict.ok) threadOf.set(c.comment.id, verdict.thread)
+    return verdict.ok
+  })
+  const ordered = rankEngageCandidates([...passed], { windowStart: '1970-01-01T00:00:00.000Z', perCategoryCap: Infinity, totalCap: Infinity })
+  const threads = new Set<string>()
+  const keep = new Set<string>()
+  for (const c of ordered) {
+    const t = threadOf.get(c.comment.id) ?? null
+    if (t && threads.has(t)) continue
+    if (t) threads.add(t)
+    keep.add(c.comment.id)
+  }
+  return passed.filter((c) => keep.has(c.comment.id))
+}
+
+/**
+ * Quotes a cited picker chose (`createCitedQuotePicker`, the legacy pages'),
+ * through the quote gate: the first `n` that pass, one per thread. An `e:`
+ * quote is judged on its evidence's video; any other ref (a hero copy, `h:`)
+ * on its words alone, which under a market lexicon means it must name a carry
+ * good. `ctx` is the pool's context, read once per page.
+ */
+export function gateCitedQuotes<Q extends { ref: string; text: string; lang?: string | null; english?: string | null }>(
+  quotes: readonly Q[],
+  ctx: QuoteContext,
+  n: number,
+  gate: GateOptions,
+): Q[] {
+  return pickEligible(quotes, (q) => ({
+    text: q.text,
+    lang: q.lang ?? null,
+    english: q.english ?? null,
+    video: q.ref.startsWith('e:') ? ctx.forEvidence(q.ref.slice(2)) : undefined,
+  }), n, gate)
+}
+
+/** The context for every evidence row a cited picker may choose from. */
+export function readPoolContext(
+  db: SupabaseClient,
+  clientId: string,
+  quotesByAudience: ReadonlyMap<string, readonly { evidenceId: string }[]>,
+): Promise<QuoteContext> {
+  return readQuoteContext(db, clientId, { evidenceIds: [...quotesByAudience.values()].flat().map((q) => q.evidenceId) })
 }

@@ -13,7 +13,7 @@ import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
 import { cleanQuote, fetchQuoteCitationsByAudience, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
 import { pickEligible, quoteGate, type GateOptions } from '../quote-gate'
-import { gateFor, readQuoteContext } from '../quote-context'
+import { gateEngage, gateFor, readQuoteContext } from '../quote-context'
 import { audienceLabel } from '../readiness/types'
 import {
   BASELINE_MONTHS,
@@ -2138,7 +2138,7 @@ async function buildReplies(input: {
     // THE TRANSLATION CACHE, read once for the whole pool: the gate reads the
     // English, and the rows print it.
     const translations = await readTranslations(supabase, unGated.map((c) => c.comment.text ?? ''))
-    const pool = input.gate ? await gateReplies(supabase, clientId, unGated, translations, segments.maker) : unGated
+    const pool = input.gate ? await gateEngage(supabase, clientId, unGated, translations, segments.maker) : unGated
     const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
     const ownHandles = new Set(
       Object.values(config?.own_handles ?? {})
@@ -2193,46 +2193,6 @@ async function buildReplies(input: {
     console.error(`[pages] week.replies: ${(error as { message?: string })?.message ?? String(error)}`)
     return { ...empty, unread: REPLIES_UNREAD }
   }
-}
-
-/**
- * The reply queue's pool through the quote gate (lib/quote-gate.ts), one
- * candidate per comment thread: the thread's first in the queue's own order
- * (`rankEngageCandidates` uncapped), so the ranking decides which one stays.
- */
-async function gateReplies(
-  supabase: SupabaseClient,
-  clientId: string,
-  pool: readonly (EngageCandidate & { comment: EngageCandidate['comment'] })[],
-  translations: Map<string, { lang: string; english: string | null }>,
-  makers: ReadonlySet<string>,
-): Promise<EngageCandidate[]> {
-  if (pool.length === 0) return []
-  const ctx = await readQuoteContext(supabase, clientId, { commentIds: pool.map((c) => c.comment.id) })
-  const gate = gateFor(clientId, { allowOwn: true })
-  const threadOf = new Map<string, string | null>()
-  const passed = pool.filter((c) => {
-    const video = ctx.forComment(c.comment.id)
-    const verdict = quoteGate({
-      text: c.comment.text ?? '',
-      ...readingOf(translations, c.comment.text ?? ''),
-      video: video ? { ...video, segment: makers.has(c.comment.id) ? 'maker' : video.segment } : null,
-    }, gate)
-    if (verdict.ok) threadOf.set(c.comment.id, verdict.thread)
-    return verdict.ok
-  })
-  // One per thread, in the queue's own order: rank everything, keep each
-  // thread's first, and let the caller rank the survivors with its caps.
-  const ordered = rankEngageCandidates(passed, { windowStart: '1970-01-01T00:00:00.000Z', perCategoryCap: Infinity, totalCap: Infinity })
-  const threads = new Set<string>()
-  const keep = new Set<string>()
-  for (const c of ordered) {
-    const t = threadOf.get(c.comment.id) ?? null
-    if (t && threads.has(t)) continue
-    if (t) threads.add(t)
-    keep.add(c.comment.id)
-  }
-  return passed.filter((c) => keep.has(c.comment.id))
 }
 
 /** One shaped candidate as this page's row: a date where Content has an age,
