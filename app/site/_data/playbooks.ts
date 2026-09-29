@@ -58,7 +58,7 @@ export interface ContentPlanRow {
 export const contentPlan: ContentPlanRow[] = [
   { post: 'Sizing answer', note: 'Answer torso length in the first comment under every fit video.' },
   { post: 'Hip belt', note: '41 conversations, none of them under your own videos.' },
-  { post: 'Zip fix statement', note: `${themes[5].conversations} conversations this week, emerging.` },
+  { post: 'Zip fix statement', note: `${themes[5].videos} conversations this week, emerging.` },
   { post: 'Ten-day comparison', note: 'The format the category already watches before buying.' },
   { post: 'Warranty story', note: 'One replacement, told straight.' },
 ]
@@ -71,7 +71,7 @@ export interface ObjectionRow {
 
 export const objectionSheet: ObjectionRow[] = [
   { objection: 'Durability, the zip', answer: 'The fix, and the warranty story: one replacement, no questions asked.' },
-  { objection: 'Price', answer: `${themes[4].conversations} conversations mention price, and every one names durability or the zip beside it.` },
+  { objection: 'Price', answer: `${themes[4].videos} conversations mention price, and every one names durability or the zip beside it.` },
   { objection: 'Sizing', answer: 'The sizing answer: torso length, in the first comment under every fit video.' },
 ]
 
@@ -149,7 +149,7 @@ export const playbooks: Playbook[] = [
       'The research behind it is a survey of people who already bought, answering questions the brief chose to ask. Nobody checks what the wider market is arguing about this week, so the campaign launches answering an objection nobody in the market is actually making.',
     ],
     panel: { kind: 'themeMap' },
-    panelCaption: `What the category talked about this week, sized by conversations. ${themes[0].label} is gaining at ${themes[0].conversations}. ${themes[5].label} is emerging at ${themes[5].conversations}.`,
+    panelCaption: `What the category talked about this week, sized by conversations. ${themes[0].label} is gaining at ${themes[0].videos}. ${themes[5].label} is emerging at ${themes[5].videos}.`,
     steps: [
       {
         verb: 'Read the short read first.',
@@ -158,7 +158,7 @@ export const playbooks: Playbook[] = [
       },
       {
         verb: 'Open the theme that’s gaining.',
-        body: `${themes[0].label} is the biggest mover this week, at ${themes[0].conversations} conversations. Open it and read past the count to the comment underneath it: someone asked three shops and nobody could explain the sizing.`,
+        body: `${themes[0].label} is the biggest mover this week, at ${themes[0].videos} conversations. Open it and read past the count to the comment underneath it: someone asked three shops and nobody could explain the sizing.`,
         show: { kind: 'quote', quote: streamQuotes[1] },
       },
       {
@@ -200,7 +200,7 @@ export const playbooks: Playbook[] = [
       'Nobody reads the questions sitting under a competitor’s video, because nobody on the team is watching there. Forty people ask about torso length across three different videos, and the week’s content is about colours.',
     ],
     panel: { kind: 'replyInbox' },
-    panelCaption: `${faceOff[2].you.text} questions went unanswered this week, across your own videos and your competitors’, sorted by what they are: a question, a buying signal, an objection.`,
+    panelCaption: 'Comments worth a reply, across your own videos and your competitors’, sorted by what they are: a question, a buying signal, an objection.',
     steps: [
       {
         verb: 'Start with the questions, not the hooks.',
@@ -250,7 +250,7 @@ export const playbooks: Playbook[] = [
       'Someone in the room asks why you’re losing the long-trip buyer, and the answer is a shrug, because every number on the slide is about you, and the question is about them.',
     ],
     panel: { kind: 'faceOff' },
-    panelCaption: `Share of tracked videos: ${faceOff[0].you.text} you, ${faceOff[0].them.text} Ridgeway, ${faceOff[0].cat?.text} the rest of the category. Sentiment towards you: ${faceOff[1].you.text}, against Ridgeway’s ${faceOff[1].them.text}. Unanswered questions this week: ${faceOff[2].you.text} against Ridgeway’s ${faceOff[2].them.text}.`,
+    panelCaption: `Videos in the month: ${faceOff[0].you?.text} yours, ${faceOff[0].them.text} Ridgeway’s, ${faceOff[0].cat?.text} the rest of the category. Praising Ridgeway over 90 days: ${faceOff[1].them.text} of its videos.`,
     steps: [
       {
         verb: 'Pick the competitor the meeting is about.',
@@ -309,12 +309,12 @@ export const playbooks: Playbook[] = [
       },
       {
         verb: 'Read the contradicted claim first.',
-        body: `‘The main objection at checkout is price’ is the one the market pushes back on. Durability and the zip are driving the objection, in ${themes[5].conversations} conversations this week.`,
+        body: `‘The main objection at checkout is price’ is the one the market pushes back on. Durability and the zip are driving the objection, in ${themes[5].videos} conversations this week.`,
         show: { kind: 'claimRow', claim: 1 },
       },
       {
         verb: 'Take the supported claims further.',
-        body: `Sizing confusion is bigger than the brief assumes: ${themes[0].conversations} conversations, most of them nowhere near a FAQ page.`,
+        body: `Sizing confusion is bigger than the brief assumes: ${themes[0].videos} conversations, most of them nowhere near a FAQ page.`,
         show: { kind: 'claimRow', claim: 2 },
       },
       {
@@ -349,7 +349,7 @@ export const playbooks: Playbook[] = [
       'A rep answers price, because that’s what the battlecard says, while the buyer actually meant the zip broke on the one they had before.',
     ],
     panel: { kind: 'profile', persona: 1 },
-    panelCaption: `The upgrader who got burned: ${personas[1].share}% of the conversation, in their own words: ${personas[1].talk.join(', ')}.`,
+    panelCaption: `The upgrader who got burned: in ${personas[1].videos} videos, in their own words: ${personas[1].talk.join(', ')}.`,
     steps: [
       {
         verb: 'Find the people who left.',
@@ -368,7 +368,7 @@ export const playbooks: Playbook[] = [
       },
       {
         verb: 'Write the answer in their register.',
-        body: `Three pairs: durability and the zip get the fix and the warranty story. Price gets the real number: ${themes[4].conversations} conversations mention it, and every one names durability or the zip beside it. Sizing gets the sizing answer, in their words, not yours.`,
+        body: `Three pairs: durability and the zip get the fix and the warranty story. Price gets the real number: ${themes[4].videos} conversations mention it, and every one names durability or the zip beside it. Sizing gets the sizing answer, in their words, not yours.`,
         show: { kind: 'objectionSheet' },
       },
       {

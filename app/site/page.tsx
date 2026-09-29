@@ -6,13 +6,18 @@ import { AnalystStage } from './_components/analyst-stage'
 import { ReportCovers } from './_components/report-covers'
 import { LeadForm } from './lead-form'
 import { QuoteCard, BriefRow, ThemeMapGrid, FaceOffPanel, PersonaCard } from './_components/mocks'
-import { streamQuotes, personas, brief } from './_data/sample'
+import { streamQuotes, personas, brief, HOME_EXAMPLE_NOTE } from './_data/sample'
 
 // The marketing home page. Design contract: DESIGN.md ("The murmur"). Copy
 // contract: .agents/product-marketing.md. The page has one job per screen:
 // stop them, make them curious, move them on. Specifics live on /how-it-works.
 // Sample data (an illustrative backpack market) comes from _data/sample.ts so
-// every number reads the same everywhere it appears. Shared surface markup
+// every number reads the same everywhere it appears, and the page SAYS it is
+// an example where the example starts (HOME_EXAMPLE_NOTE, finish-list item 25): a
+// bag brand read it as its own data. The claims are the product's as it is
+// (29 Sep): the market a brand sells into, counted in videos, levels before
+// any comparison, no direction words, reports described only in general
+// terms while they are redesigned. Shared surface markup
 // (theme map, face-off, brief rows, persona cards, quote cards) lives in
 // _components/mocks.tsx, reused by the playbook articles.
 
@@ -36,7 +41,7 @@ export default function MarketingHome() {
             <a className="btn btn-green" href="#early-access">Get early access</a>
             <a className="btn btn-ghost" href="#model">See how it works</a>
           </div>
-          <p className="from">Read from TikTok, Instagram, YouTube and Reddit. Comments, threads, and what people say to camera.</p>
+          <p className="from">Verbatim reads the bigger market you sell into: what people buying and talking about products like yours say on TikTok, Instagram, YouTube and Reddit, and where your rivals stand.</p>
         </div>
       </header>
 
@@ -65,10 +70,11 @@ export default function MarketingHome() {
       <section className="s-tight saying" aria-labelledby="saying-h">
         <div className="wrap">
           <div className="sticky">
-            <h2 id="saying-h" className="lead">This is what the other 18,436 were saying.</h2>
+            <h2 id="saying-h" className="lead">What the other 99.98% sound like.</h2>
             <p className="body" style={{ marginTop: 24 }}>
               What&rsquo;s wrong with the product they own. What they&rsquo;d switch for. What the creator they trust said to camera. The thread where forty people compared notes. None of it was asked for, and almost none of it says a brand&rsquo;s name.
             </p>
+            <p className="example-note">{HOME_EXAMPLE_NOTE}</p>
           </div>
           <div className="stream">
             <div className="col a">
@@ -86,10 +92,10 @@ export default function MarketingHome() {
       {/* The model */}
       <section className="s model-intro" id="model" aria-labelledby="model-h">
         <div className="wrap">
-          <h2 id="model-h" className="lead">From all of that, Verbatim builds a working model of your market.</h2>
+          <h2 id="model-h" className="lead">From all of that, Verbatim builds a working model of the market you sell into.</h2>
           <div>
-            <p className="body">A model, not a feed of mentions: who the people in the conversation are, what they care about, and where you stand against your competitors. Rebuilt from what people said this week.</p>
-            <p className="body">And every week, what changed.</p>
+            <p className="body">A model, not a feed of mentions: who is buying and talking about products like yours, what they talk about, and where your rivals stand. Counted in videos, with the comments under them, month by month.</p>
+            <p className="body">Every week it reads in what&rsquo;s new. It tells you how big each thing is now, and only calls something a change once there are months that compare fairly.</p>
           </div>
         </div>
       </section>
@@ -99,10 +105,10 @@ export default function MarketingHome() {
         <div className="wrap">
           <div className="text">
             <h3 id="who-h">Who they are.</h3>
-            <p className="body">The people in the conversation, sorted into the few kinds they turn out to be. For each one: what they want, what stops them, and the exact phrases they use.</p>
+            <p className="body">The people in the conversation, sorted into the few kinds they turn out to be. For each one: who they are, where they talk, how many videos they turn up in, and one of them in their own words.</p>
           </div>
           <Reveal className="panel">
-            <div className="panel-title"><b>Who&rsquo;s in your market</b><span>Three profiles from this week&rsquo;s conversation</span></div>
+            <div className="panel-title"><b>Who&rsquo;s in your market</b><span>Example market &middot; three of its groups</span></div>
             <div className="personas">
               {personas.map((p, i) => (
                 <PersonaCard key={p.name} persona={p} index={i} />
@@ -116,12 +122,12 @@ export default function MarketingHome() {
       <section className="surface flip" aria-labelledby="what-h">
         <div className="wrap">
           <Reveal className="panel">
-            <div className="panel-title"><b>What your market talks about</b><span>Sized by conversations this week</span></div>
+            <div className="panel-title"><b>What your market talks about</b><span>Example market &middot; sized by videos this month</span></div>
             <ThemeMapGrid />
           </Reveal>
           <div className="text">
             <h3 id="what-h">What they talk about.</h3>
-            <p className="body">The themes in the conversation, sized by how many people raised it and tracked week to week. Open any block and the people behind it are there, quoted exactly.</p>
+            <p className="body">The themes in your market, sized by how many of its videos carry them, month by month. Open any one and the people behind it are there, quoted exactly.</p>
           </div>
         </div>
       </section>
@@ -131,10 +137,10 @@ export default function MarketingHome() {
         <div className="wrap">
           <div className="text">
             <h3 id="stand-h">Where you stand.</h3>
-            <p className="body">You against each competitor and against the category as a whole, theme by theme. Which themes they own, which you own, and the questions under your videos that nobody answered.</p>
+            <p className="body">Every brand that comes up in your market, yours and your rivals&rsquo;, counted the same way: how many videos each one comes up in. For each rival, what people do under its videos and where its talk stands out from the rest of the category.</p>
           </div>
           <Reveal className="panel">
-            <div className="panel-title"><b>The face-off</b><span>This week, against your closest competitor</span></div>
+            <div className="panel-title"><b>You and one rival</b><span>Example market &middot; one month</span></div>
             <FaceOffPanel />
           </Reveal>
         </div>
@@ -144,19 +150,15 @@ export default function MarketingHome() {
       <section className="surface flip" aria-labelledby="weekly-h">
         <div className="wrap">
           <div className="brief">
-            <div className="h"><b>Your market this week</b><span>Week 36. Ten minutes.</span></div>
+            <div className="h"><b>This week</b><span>Example market &middot; one update</span></div>
             <hr />
             {brief.filter((l) => l.kind !== 'do').map((l, i) => (
               <BriefRow key={i} line={l} />
             ))}
-            <hr />
-            {brief.filter((l) => l.kind === 'do').map((l, i) => (
-              <BriefRow key={`do-${i}`} line={l} />
-            ))}
           </div>
           <div className="text">
-            <h3 id="weekly-h">And every week, what changed.</h3>
-            <p className="body">The model is rebuilt from the week&rsquo;s conversation, and one page lands in your inbox: what moved and what we&rsquo;d do about it. Every line links to the exact words behind it.</p>
+            <h3 id="weekly-h">And every week, what came in.</h3>
+            <p className="body">Each update reads the week&rsquo;s new videos and comments into your market. This week shows what came in, what was heard for the first time, what stood between buyers and a yes, and the comments worth a reply. Open any of it and the comments are there.</p>
           </div>
         </div>
       </section>
@@ -172,16 +174,11 @@ export default function MarketingHome() {
           <div className="head">
             <h2 id="rooms-h" className="lead">The same market, written for whoever is in the room.</h2>
             <div>
-              <p className="body">Leadership gets one page. Sales gets the objections and who they lose to. Build a report once, schedule it to go out with every update, and share it with a link that needs no login.</p>
-              <p className="body">It goes out as your work, with Verbatim in the footer.</p>
+              <p className="body">Leadership, marketing, sales, content and product each act on a different part of the same market. Verbatim writes reports for your team from it, so the people who never open the app still hear what the market said.</p>
+              <p className="body">Every quote in them still traces to the comment it came from.</p>
             </div>
           </div>
           <ReportCovers />
-          <div className="rules">
-            <p><b>Scheduled.</b> Every update or monthly, to a recipient list you control, PDF attached.</p>
-            <p><b>Shared by link.</b> Read-only, no account needed, expires when you say, one click to revoke.</p>
-            <p><b>Yours.</b> Your company on every page, written for anyone you name. Every quote still traces to its source.</p>
-          </div>
         </div>
       </section>
 
@@ -189,7 +186,7 @@ export default function MarketingHome() {
       <section className="s band" id="early-access" aria-labelledby="line-h">
         <div className="wrap">
           <h2 id="line-h">They hear your name. <span>We hear the market.</span></h2>
-          <p>Listening tools are built to find a name. In a market that rarely says it, they return nothing and call it quiet. Verbatim starts from the category.</p>
+          <p>Listening tools are built to find a name. In a market that rarely says it, they return nothing and call it quiet. Verbatim starts from the market you sell into.</p>
           <LeadForm />
         </div>
       </section>

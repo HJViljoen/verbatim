@@ -3,6 +3,12 @@ import { readingHandle } from '@/lib/reading/read'
 import { loadOverview } from '@/lib/pages/overview'
 import { OverviewPage } from '@/components/pages/overview'
 import { marketFrame } from '@/lib/pages/market-frame'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('overview').label }
 
 // Overview — "what is this month's reading?" (Phase 1 WP11). The front page is
 // now the comment-dated monthly reading: lib/pages/overview.ts loads it and

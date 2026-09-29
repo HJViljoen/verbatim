@@ -8,6 +8,11 @@ import { fullDate } from '@/lib/format'
 import { computeReadiness, summarise } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
 import { createAdminClient } from '@/lib/supabase-admin'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: 'Readiness' }
 
 // Readiness (Phase 0 WP10, design item 18, decision D9) — for the workspace the
 // switcher is currently viewing, one row per block of the product: the inputs

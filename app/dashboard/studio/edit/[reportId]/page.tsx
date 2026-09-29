@@ -16,6 +16,11 @@ import { figuresFor, mergeFigures } from '@/lib/reports/figures'
 import { methodOf, type ReportRow, type ReportSnapshotData } from '@/lib/reports/types'
 import { REPORT_SLIDES_WARN } from '@/lib/config'
 import { DocumentStudioPage } from './document'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: 'Studio' }
 
 // The Report Studio (Stage 2, spec §4): outline left, the print deck right.
 // The preview is server-rendered from the saved definition at the tenant's

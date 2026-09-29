@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { OnboardingForm } from './onboarding-form'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = { title: 'Set up your workspace' }
 
 // Workspace setup for a signed-in user who has no membership yet (just signed
 // up, or abandoned an invite). Owners land here once; everyone with a workspace

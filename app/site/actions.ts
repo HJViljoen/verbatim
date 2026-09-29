@@ -40,7 +40,7 @@ export async function submitLead(_prev: LeadState, formData: FormData): Promise<
     return {
       status: 'error',
       message:
-        "That didn't send. Try again in a minute, or email heinrich@verbatimintel.com directly.",
+        "That didn't send. Try again in a minute, or email heinrichviljoen@verbatimintel.com directly.",
     }
   }
   return { status: 'sent', message: '' }

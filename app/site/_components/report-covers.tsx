@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { reportCovers } from '../_data/sample'
+import { teamReports as reportCovers } from '../_data/sample'
 
-// Five report covers. One lifts at a time on a timer while the section is in
-// view; hovering, focusing or tapping a cover picks it and stops the cycle.
+// Five report covers, one for each team. One lifts at a time on a timer while
+// the section is in view; hovering, focusing or tapping a cover picks it and
+// stops the cycle. Reports are being redesigned, one for each department
+// (Heinrich, 29 Sep), so a cover names the team and what it reads, and says
+// nothing about sections, pages, schedules or sends.
 export function ReportCovers() {
   const [on, setOn] = useState(0)
   const [manual, setManual] = useState(false)
@@ -49,15 +52,11 @@ export function ReportCovers() {
             <div className="tiles">
               {c.tiles.map((t, j) => <i key={j} className={t || undefined} />)}
             </div>
-            <div className="foot">
-              <span>{c.sections} {c.sections === 1 ? 'section' : 'sections'}</span>
-              <span>{c.pages} pages</span>
-            </div>
           </div>
         ))}
       </div>
       <p className="sending">
-        {active.send.before}<b>{active.send.bold}</b>{active.send.after}
+        {active.about.before}<b>{active.about.bold}</b>{active.about.after}
       </p>
     </>
   )

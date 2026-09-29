@@ -11,6 +11,13 @@ import { InviteForm, RevokeButton, ResendButton, MemberControls, CopyLinkButton 
 import { canResendInvite, inviteState } from '@/lib/team-copy'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
 import { CONTACT_EMAIL } from '@/lib/legal'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('team').label} · ${surface('settings').label}` }
 
 // Team management — list members + pending invites, invite teammates, manage
 // roles. Owners/admins can invite + revoke; only owners change roles or remove

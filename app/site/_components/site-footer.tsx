@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { VerbatimMark } from '@/components/brand/mark'
 import { USE_CASES_PUBLIC } from '../_data/playbooks'
 
+const APP_URL = 'https://app.verbatimintel.com'
+
 export function SiteFooter() {
   return (
     <footer className="site-footer">
@@ -16,7 +18,8 @@ export function SiteFooter() {
           {USE_CASES_PUBLIC && <Link href="/use-cases">Use cases</Link>}
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
-          <a href="mailto:hello@verbatimintel.com">hello@verbatimintel.com</a>
+          <a href={`${APP_URL}/login`}>Sign in</a>
+          <a href="mailto:heinrichviljoen@verbatimintel.com">heinrichviljoen@verbatimintel.com</a>
         </span>
         <span>Cape Town. Runs weekly.</span>
       </div>

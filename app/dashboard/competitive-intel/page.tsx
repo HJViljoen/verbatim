@@ -4,6 +4,11 @@ import { loadCompetitive, type CompetitiveParams } from '@/lib/pages/competitive
 import { CompetitivePage } from '@/components/pages/competitive'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
 import { oldPage } from '@/lib/nav'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: oldPage('/dashboard/competitive-intel').label }
 
 // Competitive Intelligence, PARKED at /dashboard/competitive-intel (WP9,
 // decision C). Nothing on this page writes.

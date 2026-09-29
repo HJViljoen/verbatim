@@ -6,7 +6,12 @@ import { weekdayDate } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
-import { PARKED_INITIATIVES } from '@/lib/nav'
+import { PARKED_INITIATIVES, surface } from '@/lib/nav'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${PARKED_INITIATIVES.label} · ${surface('settings').label}` }
 
 // Settings › Initiatives — the list of what this workspace declared it is
 // trying to move, and the only place to rename, finish or stop one. Declaring

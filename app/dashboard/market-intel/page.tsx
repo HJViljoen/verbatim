@@ -4,6 +4,11 @@ import { loadMarket, type MarketParams } from '@/lib/pages/market'
 import { MarketPage } from '@/components/pages/market'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
 import { oldPage } from '@/lib/nav'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: oldPage('/dashboard/market-intel').label }
 
 // Market Intelligence, PARKED at /dashboard/market-intel (WP9, decision C).
 // The new Market takes /dashboard/market and reads the same recommendation

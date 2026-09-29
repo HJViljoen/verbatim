@@ -2,6 +2,12 @@ import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadVoiceSurface, type VoiceSurfaceParams } from '@/lib/pages/voice-surface'
 import { VoiceSurfacePage } from '@/components/pages/voice-surface'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('voice').label }
 
 // Conversation — "everything your market talked about, in full" (market-first
 // WP2.4, plan §2.4; the page was Voice, Phase 1 WP13).

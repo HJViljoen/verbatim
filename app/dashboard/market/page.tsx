@@ -2,6 +2,12 @@ import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadMarketSurface } from '@/lib/pages/market-surface'
 import { MarketSurfacePage } from '@/components/pages/market-surface'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('market').label }
 
 // Market — "what should we do, and is it working?" (Phase 1 WP14). The address
 // Market Intelligence used to hold; that page is parked at

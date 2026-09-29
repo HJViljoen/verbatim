@@ -4,6 +4,7 @@ import { useActionState } from 'react'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { AuthCard, AUTH_INPUT, AUTH_BUTTON } from '@/components/auth/auth-card'
 import { updatePassword, type ResetState } from '../actions'
 
 const idle: ResetState = { ok: false, message: '' }
@@ -15,31 +16,26 @@ export default function ResetConfirmPage() {
   const [state, formAction, pending] = useActionState(updatePassword, idle)
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-background p-8 shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight">Verbatim</h1>
-        <p className="mb-6 text-sm text-muted-foreground">Choose a new password</p>
+    <AuthCard subtitle="Choose a new password">
+      <form action={formAction} className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium">New password</label>
+          <Input className={AUTH_INPUT}
+            name="password" type="password" autoComplete="new-password"
+            required minLength={8} placeholder="At least 8 characters" disabled={pending}
+          />
+        </div>
 
-        <form action={formAction} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium">New password</label>
-            <Input
-              name="password" type="password" autoComplete="new-password"
-              required minLength={8} placeholder="At least 8 characters" disabled={pending}
-            />
-          </div>
+        {state.message && <p className="text-sm text-destructive">{state.message}</p>}
 
-          {state.message && <p className="text-sm text-destructive">{state.message}</p>}
+        <Button type="submit" disabled={pending} className={AUTH_BUTTON}>
+          {pending ? 'Saving…' : 'Set password'}
+        </Button>
+      </form>
 
-          <Button type="submit" disabled={pending} className="w-full cursor-pointer">
-            {pending ? 'Saving…' : 'Set password'}
-          </Button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Need a new link? <Link href="/reset" className="text-foreground underline">Start over</Link>
-        </p>
-      </div>
-    </div>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Need a new link? <Link href="/reset" className="text-foreground underline">Start over</Link>
+      </p>
+    </AuthCard>
   )
 }

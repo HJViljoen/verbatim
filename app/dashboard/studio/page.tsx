@@ -24,6 +24,11 @@ import { artefactTitle, scheduleArtefact, sendsArtefact } from '@/lib/schedules/
 import { sendFailureSentence } from '@/lib/schedules/copy'
 import { claimDecision } from '@/lib/schedules/claim'
 import { cn } from '@/lib/utils'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: 'Studio' }
 
 // The Studio (Heinrich, 2026-08-30): your reports down the left, the one you
 // picked on the right. A report is a template of your own (pages, tiles,

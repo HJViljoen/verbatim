@@ -2,6 +2,12 @@ import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadWeek } from '@/lib/pages/week'
 import { WeekPage } from '@/components/pages/week'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('week').label }
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P).
 //

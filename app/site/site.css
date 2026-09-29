@@ -96,7 +96,7 @@
   .hero .sub { margin-top: 34px; max-width: 32ch; font-size: clamp(19px, 1.7vw, 25px); line-height: 1.35; color: #C9D8CF; font-weight: 400; }
   .hero .sub b { color: #fff; font-weight: 600; }
   .hero .cta { margin-top: 40px; display: flex; gap: 14px; flex-wrap: wrap; }
-  .hero .from { margin-top: 56px; font-size: 14px; color: #8FA79A; }
+  .hero .from { margin-top: 56px; max-width: 64ch; font-size: 14px; line-height: 1.5; color: #8FA79A; }
 
   /* ── section rhythm ── */
   .lead-xl { font-size: clamp(44px, 6.6vw, 104px); font-weight: 700; line-height: .96; letter-spacing: -0.045em; }
@@ -114,6 +114,9 @@
   .saying { background: var(--paper-2); }
   .saying .wrap { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 72px; align-items: center; }
   .saying .sticky { position: static; padding-top: 24px; }
+  /* Where the made-up example starts (finish-list item 25): a plain label, not
+     fine print, so nobody reads the backpack market as real data. */
+  .example-note { margin-top: 28px; max-width: 52ch; padding: 14px 18px; border-left: 3px solid var(--green); background: var(--paper); border-radius: 0 6px 6px 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
   .stream { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; height: 520px; overflow: hidden; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%); }
   .col { display: flex; flex-direction: column; gap: 14px; will-change: transform; animation: flow 46s linear infinite; }
   .col.b { animation-duration: 34s; }
@@ -149,11 +152,9 @@
   .persona .share i { display: block; height: 100%; width: 0; background: var(--green); border-radius: 3px; transition: width 1.2s cubic-bezier(.2,.7,.2,1); transition-delay: calc(var(--i, 0) * 120ms); }
   .is-on .persona .share i { width: var(--w); }
   .persona .pct { font-size: 13px; color: var(--muted); margin-top: -8px; }
-  .persona dl { margin: 0; display: grid; gap: 8px; font-size: 14px; line-height: 1.4; }
-  .persona dt { color: var(--muted); }
-  .persona dd { margin: 0; color: var(--ink); }
-  .persona .talk { display: flex; flex-wrap: wrap; gap: 6px; }
-  .persona .talk span { font-family: var(--voice); font-style: italic; font-size: 14px; color: var(--ink-2); background: var(--paper); padding: 4px 9px; border-radius: 4px; }
+  .persona .line { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink); }
+  .persona .mix { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .persona .said { margin: 0; font-family: var(--voice); font-style: italic; font-size: 15px; line-height: 1.4; color: var(--ink-2); background: var(--paper); padding: 10px 12px; border-radius: 4px; }
 
   /* theme map */
   .tmap { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 58px; gap: 8px; }
@@ -177,8 +178,9 @@
   .face .bar i { display: block; height: 14px; border-radius: 3px; width: 0; transition: width 1.1s cubic-bezier(.2,.7,.2,1); transition-delay: calc(var(--i, 0) * 60ms); }
   .is-on .face .bar i { width: var(--w); }
   .face .bar.you i { background: var(--green); } .bar.them i { background: var(--orange); } .bar.cat i { background: #C5CBD1; }
-  .face .bar em { font-style: normal; font-size: 14px; color: var(--ink-2); text-align: right; }
+  .face .bar em { font-style: normal; font-size: 14px; color: var(--ink-2); text-align: right; white-space: nowrap; }
   .face .owns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 6px; }
+  .face .own.wide { grid-column: 1 / -1; }
   .own { background: var(--paper-2); border-radius: 6px; padding: 16px 18px; font-size: 15px; line-height: 1.45; }
   .own b { display: block; margin-bottom: 4px; }
   .own .voice { color: var(--ink-2); }
@@ -270,13 +272,14 @@
 
   /* weekly */
   .brief { background: var(--paper); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 36px 40px; display: grid; gap: 18px; }
-  .brief .h { display: flex; justify-content: space-between; align-items: baseline; }
+  .brief .h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; }
   .brief .h b { font-size: 19px; font-weight: 600; }
   .brief .h span { font-size: 14px; color: var(--muted); }
   .brief hr { border: 0; border-top: 1px solid #EBEDF0; margin: 0; }
   .brief .d { display: grid; grid-template-columns: 22px 1fr; gap: 12px; font-size: 16px; line-height: 1.45; }
   .brief .d i { font-style: normal; font-weight: 600; }
   .brief .d i.up { color: var(--green); } .brief .d i.down { color: var(--red); }
+  .brief .d i.mark { color: var(--green); }
   .brief .d u { text-decoration: none; border-bottom: 1px dotted var(--faint); color: var(--ink-2); }
 
   /* the line */
@@ -310,7 +313,7 @@
     .stream { grid-template-columns: 1fr; height: 560px; }
     .saying .sticky { position: static; }
     .personas { grid-template-columns: 1fr; }
-    .tmap { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 64px; }
+    .tmap { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: auto; }
     .face .row, .face .head { grid-template-columns: 1fr; gap: 8px; }
     .face .owns { grid-template-columns: 1fr; }
         .panel { padding: 22px; }
@@ -336,6 +339,9 @@
   .hiw-head h1 { font-size: clamp(52px, 7.6vw, 124px); font-weight: 700; line-height: .96; letter-spacing: -0.045em; }
   .hiw-head h1 span { display: block; color: var(--green); }
   .hiw-head p { margin-top: 32px; max-width: 52ch; font-size: 21px; line-height: 1.45; }
+  .hiw-head .example-note { margin-top: 24px; font-size: 15px; background: var(--paper-2); }
+  .nf { min-height: 56vh; }
+  .nf-links { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 12px; }
   .index { margin-top: 56px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
   .index a { display: grid; grid-template-columns: 44px 1fr; gap: 16px; align-items: start; padding: 22px 24px; background: var(--paper-2); border-radius: 8px; transition: background .2s; }
   .index a:hover { background: var(--green-tint); }
@@ -377,6 +383,7 @@
   .also { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   .also div { background: var(--paper); border-radius: 8px; box-shadow: var(--shadow); padding: 20px 24px; font-size: 15.5px; line-height: 1.45; color: var(--ink-2); }
   .also div b { display: block; color: var(--ink); font-size: 17px; margin-bottom: 4px; }
+  .also div:only-child { grid-column: 1 / -1; }
 
   .seed { display: grid; grid-template-columns: 1fr 60px 1fr; gap: 0; align-items: center; }
   .lists { display: grid; gap: 10px; }
@@ -450,7 +457,6 @@
   .mail .mb { padding: 22px 24px; display: grid; gap: 12px; font-size: 15.5px; line-height: 1.5; }
   .mail .mb .d { display: grid; grid-template-columns: 20px 1fr; gap: 10px; }
   .mail .mb .d i { font-style: normal; font-weight: 600; } .mail .mb .d i.up { color: var(--green); } .mail .mb .d i.down { color: var(--red); }
-  .mail .mb .cover { color: var(--ink-2); }
   .mail .mb .foot { font-size: 13.5px; color: var(--muted); border-top: 1px solid #EBEDF0; padding-top: 12px; }
   .reports { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   .rp { background: var(--paper); border-radius: 6px; box-shadow: var(--shadow); padding: 16px 16px 14px; min-height: 120px; display: flex; flex-direction: column; justify-content: space-between; }
@@ -546,7 +552,11 @@
   .pb-nav .next { text-align: right; }
 
   @media (max-width: 900px) {
-    .nav-links a:not(.btn) { display: none; }
+    /* Sign in stays: without it a phone had no way into the app from the
+       site. How it works and Use cases fold away (the footer carries them). */
+    .nav-links { gap: 16px; font-size: 14px; }
+    .nav-links a:not(.btn):not(.signin) { display: none; }
+    .nav .btn { height: 38px; padding: 0 12px; font-size: 14px; }
     .nav .wordmark span { display: none; }
     .access .fields { grid-template-columns: 1fr; }
     .pb-row { grid-template-columns: 1fr; gap: 6px; padding: 24px 0; }
@@ -555,5 +565,10 @@
     .pb-step { grid-template-columns: 44px minmax(0, 1fr); padding: 28px 0; }
     .pb-nav { flex-direction: column; gap: 12px; }
     .pb-nav .next { text-align: left; }
+  }
+  /* Below an iPhone's 390: the header keeps the wordmark and Sign in, and the
+     early-access button gives way (the hero and the closing band both carry it). */
+  @media (max-width: 379px) {
+    .nav .btn { display: none; }
   }
 }

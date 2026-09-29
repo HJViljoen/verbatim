@@ -12,6 +12,11 @@ import { AgentComposer } from '@/components/agent-composer'
 import { AskBoxTile, StarterCards } from '@/components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '@/components/pages/agent/rail'
 import { ASK_TILE_ROW, AskIndexColumns, AskShell } from '@/components/pages/agent/surface'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('ask').label }
 
 // Ask — "what does the conversation say about this?" (Block D wave 2, E-ask).
 //

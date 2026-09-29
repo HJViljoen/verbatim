@@ -7,6 +7,11 @@ import { PaneHeader, PaneBody } from '@/components/shell/master-list'
 import { CUSTOM_KEY, DOCUMENT_STARTERS } from '@/lib/reports/documents/templates'
 import { AUDIENCES } from '@/lib/reports/types'
 import { createReport } from '@/app/dashboard/studio/actions'
+import type { Metadata } from 'next'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: 'New report · Studio' }
 
 // New report (Heinrich, 2026-08-30): pick a template to start from, or go
 // custom and arrange it yourself. A template only arranges existing pages

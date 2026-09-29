@@ -14,6 +14,12 @@ import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '@/components/pages/agent/rail'
 import { ASK_TILE_ROW, AskColumns, AskShell } from '@/components/pages/agent/surface'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: surface('ask').label }
 
 // One thread, at its own URL — and, since Block D wave 2, the SAME surface the
 // Ask index is: the page bar, a left column of tiles and the rail beside them.

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { acceptInvitation, type AcceptState } from './actions'
+import { AUTH_INPUT, AUTH_BUTTON } from '@/components/auth/auth-card'
 import { LegalConsent } from '@/components/legal-consent'
 
 const idleAccept: AcceptState = { ok: false, message: '' }
@@ -30,7 +31,7 @@ export function AcceptButton({ token }: { token: string }) {
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="token" value={token} />
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending} className={AUTH_BUTTON}>
         {pending ? 'Joining…' : 'Accept invitation'}
       </Button>
       <ErrorMsg message={state.message} needsLogin={state.needsLogin} />
@@ -46,18 +47,18 @@ export function SignupAcceptForm({ token, email }: { token: string; email: strin
       <input type="hidden" name="token" value={token} />
       <div>
         <label className="mb-1 block text-sm font-medium">Email</label>
-        <Input value={email} readOnly disabled className="bg-muted/40" />
+        <Input value={email} readOnly disabled className={`${AUTH_INPUT} bg-muted/40`} />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium">Your name</label>
-        <Input name="full_name" required placeholder="Jordan Lee" disabled={pending} />
+        <Input className={AUTH_INPUT} name="full_name" required placeholder="Jordan Lee" disabled={pending} />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium">Set a password</label>
-        <Input name="password" type="password" required minLength={8} placeholder="At least 8 characters" disabled={pending} />
+        <Input className={AUTH_INPUT} name="password" type="password" required minLength={8} placeholder="At least 8 characters" disabled={pending} />
       </div>
       <LegalConsent disabled={pending} />
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending} className={AUTH_BUTTON}>
         {pending ? 'Creating account…' : 'Accept & create account'}
       </Button>
       <ErrorMsg message={state.message} needsLogin={state.needsLogin} />

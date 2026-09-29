@@ -46,11 +46,16 @@ const ORIGIN =
     ? `https://${process.env.VERCEL_URL}`
     : "https://verbatimintel.com");
 
+// Every tab used to read "Verbatim · Consumer Intelligence", whichever page it
+// held. A page now names itself and the template adds the product ("Your
+// market · Verbatim"); the marketing layout opts out with its own absolute
+// title. The description is what a link to the app unfurls with, so it says
+// what the product reads today: the bigger market a brand sells into.
 export const metadata: Metadata = {
   metadataBase: new URL(ORIGIN),
-  title: "Verbatim · Consumer Intelligence",
+  title: { default: "Verbatim", template: "%s · Verbatim" },
   description:
-    "Media-based consumer intelligence for D2C brands: market research-grade insights from real audience conversations.",
+    "The bigger market your brand sells into: what people buying and talking about products like yours say on Instagram, TikTok, YouTube and Reddit, and where your rivals stand.",
 };
 
 export default function RootLayout({

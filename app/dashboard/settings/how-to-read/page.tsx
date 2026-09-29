@@ -3,6 +3,13 @@ import { HowToReadBody } from '@/components/settings/how-to-read'
 import { ListSearch } from '@/components/shell/list-search'
 import { getSessionContext } from '@/lib/auth'
 import { settingsBar } from '@/lib/settings/bar'
+import type { Metadata } from 'next'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('guide').label} · ${surface('settings').label}` }
 
 // Settings › How to read (Phase 1 WP16, design ST9; market-first WP3.10) — one
 // card per page, the reading words, the definitions and a path through the

@@ -2,6 +2,7 @@ import {
   themes,
   faceOff,
   faceOffOwns,
+  personas,
   type Theme,
   type FaceOffRow,
   type BriefLine,
@@ -45,14 +46,16 @@ export function QuoteCard({ q, dup }: { q: StreamQuote; dup?: boolean }) {
   )
 }
 
+const BRIEF_ICON: Record<BriefLine['kind'], string> = { in: '+', ask: '?', reply: '↩', new: '+', do: '' }
+
 /** One `.brief .d` row. `do`-kind lines render their parts as plain text (no
  * underline), every other kind wraps the highlighted parts in `<u>` — matching
- * the home page's two separate render passes exactly. */
+ * the home page's two separate render passes exactly. No row carries an arrow:
+ * the product reports what came in, never that something went up or down. */
 export function BriefRow({ line }: { line: BriefLine }) {
-  const icon = line.kind === 'up' ? '↑' : line.kind === 'down' ? '↓' : line.kind === 'new' ? '+' : ''
   return (
     <div className="d">
-      <i className={line.kind === 'up' ? 'up' : line.kind === 'down' ? 'down' : undefined}>{icon}</i>
+      <i className={line.kind === 'do' ? undefined : 'mark'}>{BRIEF_ICON[line.kind]}</i>
       <span>
         {line.kind === 'do'
           ? line.parts.map((p) => (typeof p === 'string' ? p : p.u))
@@ -62,7 +65,8 @@ export function BriefRow({ line }: { line: BriefLine }) {
   )
 }
 
-/** The desktop theme map (`.tmap`), sized by conversations. */
+/** The desktop theme map (`.tmap`), sized by videos. Levels only: no theme
+ *  carries a direction word. */
 export function ThemeMapGrid({ items = themes, staticReveal = false }: { items?: Theme[]; staticReveal?: boolean }) {
   return (
     <div className="tmap">
@@ -80,10 +84,9 @@ export function ThemeMapGrid({ items = themes, staticReveal = false }: { items?:
           <b>{t.label}</b>
           <small>
             <span>
-              {t.conversations}
-              {i === 0 ? ' conversations' : ''}
+              {t.videos}
+              {i === 0 ? ' videos' : ''}
             </span>
-            {t.movement && <span className={t.movement === 'fading' ? 'down' : 'up'}>{t.movement}</span>}
           </small>
         </div>
       ))}
@@ -99,18 +102,20 @@ export function FaceOffLegendRows({ rows = faceOff, staticReveal = false }: { ro
         <span />
         <span className="legend">
           <span><i style={{ background: 'var(--green)' }} />You</span>
-          <span><i style={{ background: 'var(--orange)' }} />Competitor</span>
-          <span><i style={{ background: '#C5CBD1' }} />Whole category</span>
+          <span><i style={{ background: 'var(--orange)' }} />A rival</span>
+          <span><i style={{ background: '#C5CBD1' }} />The category</span>
         </span>
       </div>
       {rows.map((row, ri) => (
         <div className="row" key={row.label}>
           <span className="lbl">{row.label}</span>
           <div className="bars">
-            <div className="bar you">
-              <i style={{ ['--w' as string]: `${row.you.pct}%`, ['--i' as string]: ri * 3, ...(staticReveal ? { width: `${row.you.pct}%` } : {}) }} />
-              <em>{row.you.text}</em>
-            </div>
+            {row.you && (
+              <div className="bar you">
+                <i style={{ ['--w' as string]: `${row.you.pct}%`, ['--i' as string]: ri * 3, ...(staticReveal ? { width: `${row.you.pct}%` } : {}) }} />
+                <em>{row.you.text}</em>
+              </div>
+            )}
             <div className="bar them">
               <i style={{ ['--w' as string]: `${row.them.pct}%`, ['--i' as string]: ri * 3 + 1, ...(staticReveal ? { width: `${row.them.pct}%` } : {}) }} />
               <em>{row.them.text}</em>
@@ -128,18 +133,22 @@ export function FaceOffLegendRows({ rows = faceOff, staticReveal = false }: { ro
   )
 }
 
-/** The face-off "theme they own / theme you own" pair (`.face .owns`). */
+/** Where the rival's talk stands out (`.face .owns`). Brands reads this for
+ *  the brands you track, so there is no "yours" beside it unless a caller
+ *  passes one. */
 export function FaceOffOwnsBlock({ owns = faceOffOwns }: { owns?: typeof faceOffOwns }) {
   return (
     <div className="owns">
-      <div className="own">
+      <div className={owns.you ? 'own' : 'own wide'}>
         <b>{owns.them.title}</b>
         <span className="voice">“{owns.them.quote}”</span>
       </div>
-      <div className="own">
-        <b>{owns.you.title}</b>
-        <span className="voice">“{owns.you.quote}”</span>
-      </div>
+      {owns.you && (
+        <div className="own">
+          <b>{owns.you.title}</b>
+          <span className="voice">“{owns.you.quote}”</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -154,28 +163,22 @@ export function FaceOffPanel({ staticReveal = false }: { staticReveal?: boolean 
   )
 }
 
-/** One `.persona` card. */
+/** One `.persona` card, as Conversation's "Who is talking" draws a group:
+ *  name, videos (the bar against the largest group, never a share of a
+ *  month), the one line, where they talk, and one voice. */
 export function PersonaCard({ persona, index = 0, staticReveal = false }: { persona: Persona; index?: number; staticReveal?: boolean }) {
+  const max = Math.max(...personas.map((p) => p.videos))
+  const w = `${Math.round((persona.videos / max) * 100)}%`
   return (
     <div className="persona">
       <div className="name">{persona.name}</div>
       <div className="share">
-        <i style={{ ['--w' as string]: `${persona.share}%`, ['--i' as string]: index, ...(staticReveal ? { width: `${persona.share}%` } : {}) }} />
+        <i style={{ ['--w' as string]: w, ['--i' as string]: index, ...(staticReveal ? { width: w } : {}) }} />
       </div>
-      <div className="pct">{persona.share}% of the conversation</div>
-      <dl>
-        <dt>Wants</dt>
-        <dd>{persona.wants}</dd>
-        <dt>Stops them</dt>
-        <dd>{persona.stops}</dd>
-        <dt>Tips them</dt>
-        <dd>{persona.tips}</dd>
-      </dl>
-      <div className="talk">
-        {persona.talk.map((t) => (
-          <span key={t}>{t}</span>
-        ))}
-      </div>
+      <div className="pct">{persona.videos.toLocaleString('en-GB')} videos, read to date</div>
+      <p className="line">{persona.line}</p>
+      <div className="mix">{persona.platforms}</div>
+      <p className="said">“{persona.quote}”</p>
     </div>
   )
 }
