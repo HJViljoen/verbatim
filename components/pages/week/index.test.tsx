@@ -506,11 +506,28 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
 describe('For sales (market-first WP3.7, week.sales and the weekly’s WR4)', () => {
   it('counts the update’s objections in videos, two of their own voices, and the complaints about brands you track', () => {
     const text = renderText(weekSales.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Objection Videos Price concern 2 Price too high 2 Aesthetic and materials 1 Ai skepticism 1')
+    // One-video objections are not printed (finish-list item 9's floor).
+    expect(text).toContain('Objection Videos Price concern 2 Price too high 2 “')
+    expect(text).not.toContain('Aesthetic and materials')
     expect(text).toContain('Man, I’ve really been underwhelmed with mine')
     expect(text).toContain('It does look decent')
     expect(text).toContain('What they complain about in a rival videos Patagonia 4 The North Face 1')
     expect(text).toContain('Open the sales brief →')
+  })
+
+  it('says too few, and prints no table and no voice, where no objection reached two videos (the 27 Sep update)', () => {
+    const d = marketWeekFixture()
+    const ones = d.sales.objections.map((g) => ({ ...g, videos: 1 }))
+    const sales = { ...d.sales, objections: ones, objectionsTotal: 9 }
+    for (const mode of MODES) {
+      const text = renderText(weekSales.render({ ...d, sales }, mode, ctx))
+      expect(text, mode).toContain('Too few this update to group: 9 objections, none heard in more than one video.')
+      expect(text, mode).not.toContain('Price concern')
+      expect(text, mode).not.toContain('Man, I’ve really been underwhelmed with mine')
+    }
+    // With no rival complaint either, the line is the whole block.
+    const alone = { ...sales, rivalComplaints: [] }
+    expect(renderText(weekSales.render({ ...d, sales: alone }, 'app', ctx))).toContain('Too few this update to group: 9 objections')
   })
 
   it('prints no switching count while off-topic talk is still in it, and no praise', () => {
