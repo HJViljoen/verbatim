@@ -527,6 +527,12 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   const claim = readClaim(o.claim)
   const relevance = o.claim ? relevanceTo(claim, said) : 0
   const carry = o.market === 'carry' ? namesCarryGood(said) : false
+  // A carry good named in passing, in a line about products outside the
+  // market, under a video about none (an 'Alumu Wallet for Apple Tag' in a
+  // gadget reviewer's iPhone thread), is not about the market.
+  if (o.market === 'carry' && carry && v && !isCarryVideo(v) && OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' '))) {
+    return { ok: false, reason: 'off_topic' }
+  }
   if (o.market === 'carry' && !carry) {
     const aboutIt = v ? isCarryVideo(v) : false
     const pointsAtIt = said.length <= POINTER_MAX && POINTS_AT_IT.test(said)

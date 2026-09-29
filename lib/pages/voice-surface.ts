@@ -737,9 +737,14 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     const anchors = refComments.size > 0 ? refComments : null
     const known = new Map(bankIds.map((id) => [id, { kind: obs.get(id)?.kind ?? null, k: kById.get(id) ?? 0 }]))
     const short = shortlistWords(candidates.map((c) => ({ ...c, segment: c.videoId ? segmentOf?.get(c.videoId) ?? null : null })), month, anchors, known)
-    const translations = await readTranslations(supabase, short.map((c) => c.quote))
+    // The quote gate's videos (lib/quote-gate.ts), by the rows the shortlist
+    // already names, read beside the English.
+    const [translations, ctx] = await Promise.all([
+      readTranslations(supabase, short.map((c) => c.quote)),
+      readQuoteContext(supabase, clientId, { videoUuids: short.map((c) => c.videoId) }).catch(() => null),
+    ])
     return {
-      candidates: short.map((c) => ({ ...c, ...readingOf(translations, c.quote) })),
+      candidates: short.map((c) => ({ ...c, ...readingOf(translations, c.quote), context: ctx ? ctx.forVideoUuid(c.videoId) : null })),
       anchors,
       segments: (mv?.segmentsState ?? (makerRule ? 'unknown' : 'no_rule')) as WordsBlock['segments'],
     }
@@ -1087,30 +1092,38 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
   // the first ten now, so the gate has a pool, and prints none rather than a
   // bad one.
   const ids = [...new Set(personas.flatMap((p) => p.insightIds.slice(0, CAST_INSIGHTS)))]
-  const evidenceByInsight = new Map<string, { id: string; quote: string; commentId: string | null }[]>()
+  const evidenceByInsight = new Map<string, { id: string; quote: string; commentId: string | null; platform: string | null; videoId: string | null }[]>()
   if (ids.length > 0) {
     // Paged: one insight can carry a hundred excerpts, and fifty of them can
     // pass PostgREST's thousand-row cap.
-    const rowsIn = await selectAll<EvidenceRow & { comment_id: string | null }>(() => input.supabase
+    // With each comment's video embedded, so the gate's context read below
+    // starts at the videos.
+    type CastRow = EvidenceRow & { comment_id: string | null; comments?: { platform: string | null; video_id: string | null }[] | { platform: string | null; video_id: string | null } | null }
+    const rowsIn = await selectAll<CastRow>(() => input.supabase
       .from('insight_evidence')
-      .select('id, audience_insight_id, quote, relevance_rank, redacted, comment_id')
+      .select('id, audience_insight_id, quote, relevance_rank, redacted, comment_id, comments(platform, video_id)')
       .in('audience_insight_id', ids)
       .order('relevance_rank', { ascending: true }).order('id')).catch((error: unknown) => {
       console.error(`[pages] voice.castEvidence: ${error instanceof Error ? error.message : String(error)}`)
-      return [] as (EvidenceRow & { comment_id: string | null })[]
+      return [] as CastRow[]
     })
     for (const ev of rowsIn) {
       if (ev.redacted || !ev.quote) continue
       const list = evidenceByInsight.get(ev.audience_insight_id) ?? []
       if (list.length >= CAST_EXCERPTS_PER_INSIGHT) continue
-      list.push({ id: ev.id, quote: cleanQuote(ev.quote), commentId: ev.comment_id ?? null })
+      const c = Array.isArray(ev.comments) ? ev.comments[0] : ev.comments
+      list.push({ id: ev.id, quote: cleanQuote(ev.quote), commentId: ev.comment_id ?? null, platform: c?.platform ?? null, videoId: c?.video_id ?? null })
       evidenceByInsight.set(ev.audience_insight_id, list)
     }
   }
   const all = [...evidenceByInsight.values()].flat()
   const [readings, ctx] = await Promise.all([
     readTranslations(input.supabase, all.map((q) => q.quote)),
-    readQuoteContext(input.supabase, input.clientId, { commentIds: all.map((q) => q.commentId), evidenceIds: all.filter((q) => !q.commentId).map((q) => q.id) }),
+    readQuoteContext(input.supabase, input.clientId, {
+      commentIds: all.map((q) => q.commentId),
+      commentVideos: all.map((q) => ({ commentId: q.commentId, platform: q.platform, videoId: q.videoId })),
+      evidenceIds: all.filter((q) => !q.commentId).map((q) => q.id),
+    }),
   ])
   const used = new Set<string>()
   const gate = gateFor(input.clientId, { used })

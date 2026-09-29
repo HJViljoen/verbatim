@@ -11,7 +11,7 @@ import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
-import { cleanQuote, fetchQuoteCitationsByAudience, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
+import { cleanQuote, fetchQuoteCitationsByAudience, readableQuote, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
 import { pickEligible, quoteGate, type GateOptions } from '../quote-gate'
 import { gateEngage, gateFor, readQuoteContext } from '../quote-context'
 import { audienceLabel } from '../readiness/types'
@@ -2133,12 +2133,30 @@ async function buildReplies(input: {
     // queue is picked from the rest, so a skipped row is replaced, not a gap.
     // AND A COMMENT UNDER A MAKER'S OWN POST IS TAGGED SO (WP3.7; decision F):
     // the same two reads answer both.
+    // THE TRANSLATION CACHE, read once for the whole pool (the gate reads the
+    // English, and the rows print it), and the gate's videos: both beside the
+    // segments' read rather than after it.
+    //
+    // ONLY FOR WHAT THE QUEUE COULD PRINT. The ranking keeps a comment only
+    // where it reads as English on its own words and runs to twelve
+    // characters (`rankEngageCandidates`), so nothing else is worth a read:
+    // on staging's 27 Sep window that is the difference between 1,456
+    // comments' English and videos and the few hundred the queue can take.
+    const printable = candidates.filter((c) => {
+      const text = cleanQuote(c.comment.text ?? '')
+      return text.length >= 12 && readableQuote({ text })
+    })
+    const translationsAhead = readTranslations(supabase, (input.gate ? printable : candidates).map((c) => c.comment.text ?? ''))
+    const contextAhead = input.gate
+      ? readQuoteContext(supabase, clientId, { commentIds: printable.map((c) => c.comment.id) }).catch(() => null)
+      : Promise.resolve(null)
     const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment.id))
     const unGated = skipNoise(candidates, (c) => c.comment.id, segments.noise)
-    // THE TRANSLATION CACHE, read once for the whole pool: the gate reads the
-    // English, and the rows print it.
-    const translations = await readTranslations(supabase, unGated.map((c) => c.comment.text ?? ''))
-    const pool = input.gate ? await gateEngage(supabase, clientId, unGated, translations, segments.maker) : unGated
+    const [translations] = await Promise.all([translationsAhead, contextAhead])
+    // The context read above is memoised on the client, so the gate's own read
+    // of the same comments is answered from it.
+    const printableIds = new Set(printable.map((c) => c.comment.id))
+    const pool = input.gate ? await gateEngage(supabase, clientId, unGated.filter((c) => printableIds.has(c.comment.id)), translations, segments.maker) : unGated
     const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
     const ownHandles = new Set(
       Object.values(config?.own_handles ?? {})
@@ -2997,8 +3015,10 @@ export async function buildSales(input: {
 
   // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7). Only the
   // quotes skip: every count below is still of what was read.
-  const noise = await noiseVideos(supabase, clientId, cited.map((c) => c.videoUuid))
-  const gated = input.gate ? await salesGate(supabase, clientId, cited) : null
+  const [noise, gated] = await Promise.all([
+    noiseVideos(supabase, clientId, cited.map((c) => c.videoUuid)),
+    input.gate ? salesGate(supabase, clientId, cited) : Promise.resolve(null),
+  ])
   const quotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid) && (gated ? gated.ok(c) : true)
   const rivalQuotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid) && (gated ? gated.ok(c, rivalNameOf(c.audience)) : true)
   const threadOf = gated ? gated.thread : undefined
@@ -3073,15 +3093,16 @@ async function salesGate(
   clientId: string,
   cited: readonly SalesCitation[],
 ): Promise<{ ok: (c: SalesCitation, brand?: string | null) => boolean; thread: (c: SalesCitation) => string | null }> {
-  const ctx = await readQuoteContext(supabase, clientId, { commentIds: cited.map((c) => c.commentUuid) })
+  // By the video's own row id, which each citation carries: one hop.
+  const ctx = await readQuoteContext(supabase, clientId, { videoUuids: cited.map((c) => c.videoUuid) })
   const verdict = (c: SalesCitation, brand?: string | null) => quoteGate(
-    { text: c.quote, lang: c.lang, english: c.english, video: ctx.forComment(c.commentUuid) },
+    { text: c.quote, lang: c.lang, english: c.english, video: ctx.forVideoUuid(c.videoUuid) },
     gateFor(clientId, brand ? { brand } : {}),
   )
   return {
     ok: (c, brand) => verdict(c, brand).ok,
     thread: (c) => {
-      const v = ctx.forComment(c.commentUuid)
+      const v = ctx.forVideoUuid(c.videoUuid)
       return v?.videoId ? `${(v.platform ?? '').toLowerCase()}::${v.videoId}` : null
     },
   }

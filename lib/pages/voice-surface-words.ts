@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { citationLink } from '../evidence-cite'
 import { cleanQuote } from '../quotes'
-import { quoteGate, type GateOptions, type QuoteVideo } from '../quote-gate'
+import { quoteGate, type GateOptions } from '../quote-gate'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote } from '../renderables/types'
 import { marketAudiences, pooledSide, type MarketCount } from '../reading/market'
@@ -331,11 +331,7 @@ export async function loadKindRows(
 type EvidenceRead = {
   id: string
   category: string | null
-  videos: {
-    id: string; video_url: string | null; account_name: string | null
-    platform?: string | null; video_id?: string | null; caption?: string | null; hashtags?: string[] | null; topics?: string[] | null
-    is_client?: boolean | null; is_competitor?: boolean | null; competitor_name?: string | null; source?: string | null
-  } | null
+  videos: { id: string; video_url: string | null; account_name: string | null } | null
   insight_evidence: {
     id: string
     quote: string | null
@@ -364,20 +360,10 @@ type EvidenceRead = {
  */
 const WORDS_SELECT = [
   'id, category,',
-  'videos(id, video_url, account_name, platform, video_id, caption, hashtags, topics, is_client, is_competitor, competitor_name, source),',
+  'videos(id, video_url, account_name),',
   'insight_evidence!inner(id, quote, relevance_rank, comment_id,',
   'comments!inner(id, comment_date, likes, author, platform, native:comment_id, insight_evidence(id, quote)))',
 ].join(' ')
-
-/** The insight's video as the quote gate reads it; null where it has none. */
-function gateVideo(v: EvidenceRead['videos']): QuoteVideo | null {
-  if (!v) return null
-  return {
-    platform: v.platform ?? null, videoId: v.video_id ?? null, caption: v.caption ?? null, hashtags: v.hashtags ?? null,
-    topics: v.topics ?? null, accountName: v.account_name, isClient: v.is_client ?? null, isCompetitor: v.is_competitor ?? null,
-    competitorName: v.competitor_name ?? null, source: v.source ?? null, segment: null,
-  }
-}
 
 /** The first unredacted excerpt a `c:` ref resolves to (lowest evidence id). */
 export function firstExcerpt(rowsIn: readonly { id: string; quote: string | null }[]): { id: string; quote: string | null } | null {
@@ -466,7 +452,6 @@ export async function loadWordsCandidates(
           videoId: insight.videos?.id ?? null,
           videoUrl: insight.videos?.video_url ?? null,
           resolves,
-          context: gateVideo(insight.videos),
         })
       }
     }

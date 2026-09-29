@@ -45,7 +45,7 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { quotesUntranslated } from './evidence-untranslated'
 import { quoteGate } from '../quote-gate'
-import { gateFor, readQuoteContext } from '../quote-context'
+import { gateFor, readQuoteContext, type QuoteContext } from '../quote-context'
 import { earliestMoveDay } from '../subjects/move-day'
 import type { MoveDating } from './date-move'
 
@@ -2389,7 +2389,15 @@ async function attachQuotes(
   const ids = [...new Set(rows.filter((r) => heroOf(r).length > 0).flatMap(audienceIdsFor))]
   if (ids.length === 0) return [...rows]
 
-  const byAudience = await heroEvidence(supabase, ids, rows.map(heroOf)).catch((error: unknown) => {
+  // The gate's context for the rows that can vouch for a hero is read beside
+  // their English (`heroEvidence`), not after the pick.
+  let contextAhead: Promise<QuoteContext | null> = Promise.resolve(null)
+  const byAudience = await heroEvidence(supabase, ids, rows.map(heroOf), (vouchingIds) => {
+    contextAhead = readQuoteContext(supabase, clientId, { evidenceIds: vouchingIds }).catch((error: unknown) => {
+      console.error(`[pages] market-surface.adviceQuoteContext: ${error instanceof Error ? error.message : String(error)}; no quote printed`)
+      return null
+    })
+  }).catch((error: unknown) => {
     console.error(`[pages] market-surface.adviceQuotes: ${error instanceof Error ? error.message : String(error)}`)
     return new Map<string, QuoteRow[]>()
   })
@@ -2413,10 +2421,7 @@ async function attachQuotes(
   // stand (advice is often about the client's own audience).
   const evidenceIds = vouchedRows.map((r) => (r.quote?.ref.startsWith('e:') ? r.quote.ref.slice(2) : null))
   if (!evidenceIds.some(Boolean)) return vouchedRows
-  const ctx = await readQuoteContext(supabase, clientId, { evidenceIds }).catch((error: unknown) => {
-    console.error(`[pages] market-surface.adviceQuoteContext: ${error instanceof Error ? error.message : String(error)}; no quote printed`)
-    return null
-  })
+  const ctx = await contextAhead
   const threads = new Set<string>()
   return vouchedRows.map((r, i) => {
     const q = r.quote
@@ -2455,13 +2460,22 @@ async function heroEvidence(
   supabase: SupabaseClient,
   ids: string[],
   heroes: readonly string[],
+  /** Handed the evidence ids of the rows that can vouch for a hero, as soon as
+   *  they are known (the quote gate's context read starts there). */
+  onVouching: (evidenceIds: string[]) => void = () => {},
 ): Promise<Map<string, QuoteRow[]>> {
   const untranslated = await quotesUntranslated(supabase, ids)
   const wanted = new Set(heroes.filter(Boolean).map((h) => cleanQuote(h).toLowerCase()))
   const vouching: string[] = []
+  const vouchingIds: string[] = []
   for (const list of untranslated.values()) {
-    for (const q of list) if (wanted.has(cleanQuote(q.quote).toLowerCase())) vouching.push(q.quote)
+    for (const q of list) {
+      if (!wanted.has(cleanQuote(q.quote).toLowerCase())) continue
+      vouching.push(q.quote)
+      vouchingIds.push(q.evidenceId)
+    }
   }
+  onVouching(vouchingIds)
   const translations = await readTranslations(supabase, vouching)
   return new Map([...untranslated].map(([id, list]) => [id, list.map((q) => ({ ...q, ...readingOf(translations, q.quote) }))]))
 }

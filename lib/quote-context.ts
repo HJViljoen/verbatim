@@ -59,11 +59,13 @@ interface Cache {
   bare: Map<string, QuoteVideo>
   /** Native video ids asked for and not found. */
   missing: Set<string>
+  /** videos.id → the video. */
+  uuid: Map<string, QuoteVideo>
 }
 
 const CACHES = new WeakMap<object, Cache>()
 function cacheOf(db: unknown): Cache {
-  const fresh = (): Cache => ({ comment: new Map(), evidence: new Map(), video: new Map(), bare: new Map(), missing: new Set() })
+  const fresh = (): Cache => ({ comment: new Map(), evidence: new Map(), video: new Map(), bare: new Map(), missing: new Set(), uuid: new Map() })
   if (!db || (typeof db !== 'object' && typeof db !== 'function')) return fresh()
   let c = CACHES.get(db as object)
   if (!c) CACHES.set(db as object, (c = fresh()))
@@ -88,6 +90,8 @@ export interface QuoteContext {
   forEvidence(evidenceId: string | null | undefined): QuoteVideo | null
   /** A video by platform and its own id (platform optional). */
   forVideo(platform: string | null | undefined, videoId: string | null | undefined): QuoteVideo | null
+  /** A video by its row id (`videos.id`). */
+  forVideoUuid(uuid: string | null | undefined): QuoteVideo | null
   /** The comment an evidence row quotes, where it quotes one. */
   commentOfEvidence(evidenceId: string | null | undefined): string | null
 }
@@ -105,18 +109,32 @@ export async function readQuoteContext(
     commentIds?: readonly (string | null | undefined)[]
     evidenceIds?: readonly (string | null | undefined)[]
     videos?: readonly { platform?: string | null; videoId: string | null | undefined }[]
+    /** Comments whose video the caller already read: seeds the memo, so the
+     *  comments hop is skipped for them. */
+    commentVideos?: readonly { commentId: string | null | undefined; platform: string | null | undefined; videoId: string | null | undefined }[]
+    /** Videos by their row id (`videos.id`). */
+    videoUuids?: readonly (string | null | undefined)[]
   },
   admin?: SupabaseClient | null,
 ): Promise<QuoteContext> {
   const cache = cacheOf(db)
   const clean = (xs: readonly (string | null | undefined)[] | undefined): string[] => [...new Set((xs ?? []).filter((x): x is string => typeof x === 'string' && x.length > 0))]
+  for (const c of want.commentVideos ?? []) {
+    if (c.commentId && !cache.comment.has(c.commentId)) cache.comment.set(c.commentId, c.videoId ? videoKey(c.platform, c.videoId) : null)
+  }
 
-  // 1. Evidence → its comment and its own video.
+  // 1. Evidence → its comment (with the comment's video, embedded: one hop,
+  //    not two) and its own video.
   const evidenceIds = clean(want.evidenceIds).filter((id) => !cache.evidence.has(id))
   if (evidenceIds.length > 0) {
-    const rows = await readChunks<{ id: string; comment_id: string | null; source_video_id: string | null }>(evidenceIds, UUID_IN_CHUNK,
-      (part) => db.from('insight_evidence').select('id, comment_id, source_video_id').in('id', part), 'quote-context evidence')
-    for (const r of rows) cache.evidence.set(String(r.id), { commentId: r.comment_id ? String(r.comment_id) : null, videoId: r.source_video_id ? String(r.source_video_id) : null })
+    type EvidenceRow = { id: string; comment_id: string | null; source_video_id: string | null; comments?: { platform: string | null; video_id: string | null } | null }
+    const rows = await readChunks<EvidenceRow>(evidenceIds, UUID_IN_CHUNK,
+      (part) => db.from('insight_evidence').select('id, comment_id, source_video_id, comments(platform, video_id)').in('id', part), 'quote-context evidence')
+    for (const r of rows) {
+      cache.evidence.set(String(r.id), { commentId: r.comment_id ? String(r.comment_id) : null, videoId: r.source_video_id ? String(r.source_video_id) : null })
+      const c = Array.isArray(r.comments) ? r.comments[0] : r.comments
+      if (r.comment_id && c && !cache.comment.has(String(r.comment_id))) cache.comment.set(String(r.comment_id), c.video_id ? videoKey(c.platform, String(c.video_id)) : null)
+    }
     for (const id of evidenceIds) if (!cache.evidence.has(id)) cache.evidence.set(id, { commentId: null, videoId: null })
   }
 
@@ -144,9 +162,17 @@ export async function readQuoteContext(
     else if (e?.videoId) nativeIds.add(e.videoId)
   }
   const toRead = [...nativeIds].filter((id) => !cache.bare.has(id) && !cache.missing.has(id))
-  if (toRead.length > 0) {
-    const rows = await readChunks<VideoRow>(toRead, UUID_IN_CHUNK,
-      (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('video_id', part), 'quote-context videos')
+  const uuidsToRead = clean(want.videoUuids).filter((id) => !cache.uuid.has(id))
+  if (toRead.length > 0 || uuidsToRead.length > 0) {
+    const [byNative, byUuid] = await Promise.all([
+      toRead.length > 0
+        ? readChunks<VideoRow>(toRead, UUID_IN_CHUNK, (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('video_id', part), 'quote-context videos')
+        : Promise.resolve([] as VideoRow[]),
+      uuidsToRead.length > 0
+        ? readChunks<VideoRow>(uuidsToRead, UUID_IN_CHUNK, (part) => db.from('videos').select(VIDEO_COLUMNS).eq('client_id', clientId).in('id', part), 'quote-context videos by id')
+        : Promise.resolve([] as VideoRow[]),
+    ])
+    const rows = [...byNative, ...byUuid]
     const fresh: { row: VideoRow; video: QuoteVideo }[] = []
     for (const r of rows) {
       if (!r.video_id) continue
@@ -155,8 +181,10 @@ export async function readQuoteContext(
         accountName: r.account_name, isClient: r.is_client, isCompetitor: r.is_competitor, competitorName: r.competitor_name,
         source: r.source, segment: null,
       }
+      if (cache.uuid.has(String(r.id))) continue
       cache.video.set(videoKey(r.platform, String(r.video_id)), video)
       if (!cache.bare.has(String(r.video_id))) cache.bare.set(String(r.video_id), video)
+      cache.uuid.set(String(r.id), video)
       fresh.push({ row: r, video })
     }
     for (const id of toRead) if (!cache.bare.has(id)) cache.missing.add(id)
@@ -188,6 +216,7 @@ export async function readQuoteContext(
   return {
     forComment,
     forVideo,
+    forVideoUuid: (uuid) => (uuid ? cache.uuid.get(uuid) ?? null : null),
     forEvidence: (evidenceId) => {
       const e = evidenceId ? cache.evidence.get(evidenceId) : undefined
       if (!e) return null

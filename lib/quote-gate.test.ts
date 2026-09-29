@@ -248,6 +248,13 @@ describe('staging’s second look (29 Sep): what the first cut of the gate still
     expect(whyNot(q('Can I have the location of the helmet please?', TRAVEL_TALK), { ...SEALAND, claim: 'Where to buy the items in the video' })).toBe('off_topic')
   })
 
+  it('a wallet named in passing in a gadget thread is not the market', () => {
+    const GADGETS: QuoteVideo = { platform: 'youtube', videoId: 'gadget-1', accountName: 'jon gadget', caption: 'Best Apple accessories for travel: chargers, trackers and cases', hashtags: [], topics: ['apple accessories', 'chargers'], segment: 'market' }
+    expect(whyNot(q('Interesting but why the total focus on Apple? ... Ugreen Magflow ("Charge your iPhone and Air pods"). JLab (Apple Find my Tracking) and Alumu Wallet for Apple Tag and case for iPod 3 Pro.', GADGETS), SEALAND)).toBe('off_topic')
+    // …while the same wallet under a video about wallets is a carry good.
+    expect(whyNot(q('That wallet fits my phone and three cards, love it', { ...GADGETS, caption: 'My everyday wallet and slim card holder' }), SEALAND)).toBeNull()
+  })
+
   it('"is there a way to do it?" is asking the maker', () => {
     expect(whyNot(q('มีวิธีทำมั้ยคะ', BOTTLE_BAG, { lang: 'th', english: 'Is there a way to do it?' }), SEALAND)).toBe('maker_praise')
   })
