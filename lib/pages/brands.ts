@@ -512,10 +512,6 @@ export function recurrenceMonths(month: string, firstMonth: string | null, span:
   return out
 }
 
-export function seenLine(s: { months: number; of: number }): string {
-  return `seen in ${fmtInt(s.months)} of the last ${fmtInt(s.of)} ${s.of === 1 ? 'month' : 'months'}`
-}
-
 /** A group's cards: the update's own weight first (Pass C's impact), then how
  *  the talk differs before who shapes it (the preview's order), then as read. */
 const IMPACT: Readonly<Record<string, number>> = { high: 0, medium: 1, low: 2 }
@@ -549,13 +545,15 @@ export function buildFindings(input: {
   return { groups, thin, floor: input.floor }
 }
 
-/** "Freitag, The North Face and Patagonia have fewer than 10 videos in the
- *  last 90 days, too few to set against the category." (plan §2.5 B4, IO
- *  F35: "the others have fewer than 10 analysed videos"). */
-export function thinLine(b: FindingsBlock): string | null {
-  if (b.thin.length === 0) return null
-  const names = b.thin.length === 1 ? b.thin[0] : `${b.thin.slice(0, -1).join(', ')} and ${b.thin[b.thin.length - 1]}`
-  return `${names} ${b.thin.length === 1 ? 'has' : 'have'} fewer than ${fmtInt(b.floor)} videos in the last ${WINDOW_DAYS} days, too few to set against the category.`
+/** The brand picked above, where it has no finding (the block follows the
+ *  pick, finish-list item 20): "Freitag has fewer than 10 videos in the last
+ *  90 days, too few to set against the category." (plan §2.5 B4, IO F35), or
+ *  that the latest update did not set it against the category. */
+export function noFindingLine(b: FindingsBlock, brand: string): string {
+  const thin = b.thin.some((t) => t.trim().toLowerCase() === brand.trim().toLowerCase())
+  return thin
+    ? `${brand} has fewer than ${fmtInt(b.floor)} videos in the last ${WINDOW_DAYS} days, too few to set against the category.`
+    : `The latest update did not set ${brand} against the category.`
 }
 
 // ---- B5 · what they post and say about themselves ----------------------------------

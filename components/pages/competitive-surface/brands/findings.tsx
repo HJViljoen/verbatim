@@ -5,17 +5,19 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { surface } from '@/lib/nav'
-import { FINDINGS_TITLE, seenLine, thinLine, type FindingGroup, type FindingsBlock } from '@/lib/pages/brands'
+import { FINDINGS_TITLE, noFindingLine, type FindingGroup, type FindingsBlock } from '@/lib/pages/brands'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import { Line } from './parts'
 
 // B4 · Where a rival's talk differs (market-first WP3.5, plan §2.5 B4; CO6 at
 // last; the approved preview's full-width cards).
 //
-// PASS C'S FINDINGS FROM THE LATEST UPDATE, BY BRAND, each a card: how it
-// differs (the category, in plain words), its title (stored model prose,
-// `pass_c_finding`), one voice from its own evidence, and in how many of the
-// last six months its theme was read. The voice and the months come from the
+// PASS C'S FINDINGS FROM THE LATEST UPDATE, FOR THE BRAND PICKED ABOVE, each a
+// card: how it differs (the category, in plain words), its title (stored
+// model prose, `pass_c_finding`) and one voice from its own evidence. "Seen in
+// N of the last 6 months" is not printed (finish-list item 20): it counted the
+// lead theme's months, not the finding's, and Readiness lists a finding's
+// recurrence as not built yet. The voice and the months come from the
 // month readings (`month_evidence_refs`), anchored on the finding's lead
 // registry theme, so they survive the pruning of the insights the finding
 // cites (S14, F33). A brand too thin for the comparison is named once.
@@ -32,7 +34,6 @@ function Card({ f, mode }: { f: FindingGroup['findings'][number]; mode: RenderMo
         <div style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted }}>{f.kindWords}</div>
         <div data-copy="stored" data-slot="pass_c_finding" style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, marginTop: 4 }}>{f.title}</div>
         {f.quote ? <BlockQuote quote={f.quote} mode={mode} ground="inner" /> : null}
-        {f.seen ? <div style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}>{seenLine(f.seen)}</div> : null}
       </div>
     )
   }
@@ -45,7 +46,6 @@ function Card({ f, mode }: { f: FindingGroup['findings'][number]; mode: RenderMo
           <BlockQuote quote={f.quote} mode={mode} ground="inner" />
         </div>
       ) : null}
-      {f.seen ? <span className="mt-auto pt-1 font-mono text-[13px] text-muted-foreground">{seenLine(f.seen)}</span> : null}
     </article>
   )
 }
@@ -74,6 +74,23 @@ function Group({ g, mode }: { g: FindingGroup; mode: RenderMode }) {
 
 const emptyOf = (b: FindingsBlock): string | null => (b.groups.length === 0 && b.thin.length === 0 ? FINDINGS_NONE : null)
 
+/**
+ * THE BRAND PICKED ABOVE, AND ONLY IT (finish-list item 20): the block and its
+ * "Ask about …" link follow the brand read in full (`?vs=`), as the blocks
+ * above do; they printed Patagonia's and Cotopaxi's cards and "Ask about
+ * Patagonia" whichever brand was picked. With no brand picked, the first
+ * group. `null` group: the picked brand has no finding (the line says why).
+ */
+export function findingsFor(data: CompetitiveSurfaceData): { brand: string | null; group: FindingGroup | null } {
+  const b = data.brands?.findings
+  const picked = data.brands?.inFull?.selected?.label ?? null
+  if (!b) return { brand: picked, group: null }
+  if (!picked) return { brand: b.groups[0]?.rival ?? null, group: b.groups[0] ?? null }
+  const key = picked.trim().toLowerCase()
+  return { brand: picked, group: b.groups.find((g) => g.rival.trim().toLowerCase() === key) ?? null }
+}
+
+
 export const competitiveFindings: Block<CompetitiveSurfaceData> = {
   key: 'competitive.findings',
   title: FINDINGS_TITLE,
@@ -82,23 +99,22 @@ export const competitiveFindings: Block<CompetitiveSurfaceData> = {
   render(data, mode = 'app', ctx) {
     const b = data.brands?.findings
     if (!b) return <BlockFrame title={FINDINGS_TITLE} mode={mode} roomy><InnerLine mode={mode}>{FINDINGS_UNREAD}</InnerLine></BlockFrame>
-    const first = b.groups[0]?.rival ?? null
-    const footer = first
-      ? openLink(mode, `${ctx.appUrl}${surface('ask').href}?ask=${encodeURIComponent(`What does my market say about ${first}?`)}`, `Ask about ${first} →`)
+    const { brand, group } = findingsFor(data)
+    const footer = brand
+      ? openLink(mode, `${ctx.appUrl}${surface('ask').href}?ask=${encodeURIComponent(`What does my market say about ${brand}?`)}`, `Ask about ${brand} →`)
       : null
-    const thin = thinLine(b)
     const empty = emptyOf(b)
     return (
       <BlockFrame title={FINDINGS_TITLE} mode={mode} footer={footer} roomy>
         {empty ? <InnerLine mode={mode}>{empty}</InnerLine> : null}
-        {b.groups.map((g) => <Group key={g.rival} g={g} mode={mode} />)}
-        {thin ? <Line mode={mode} className="text-[14px] text-muted-foreground">{thin}</Line> : null}
+        {group ? <Group key={group.rival} g={group} mode={mode} /> : null}
+        {!empty && !group && brand ? <Line mode={mode} className="text-[14px] text-muted-foreground">{noFindingLine(b, brand)}</Line> : null}
       </BlockFrame>
     )
   },
 
   quotes(data) {
-    return (data.brands?.findings.groups ?? []).flatMap((g) => g.findings.flatMap((f) => (f.quote ? [f.quote.ref] : [])))
+    return (findingsFor(data).group?.findings ?? []).flatMap((f) => (f.quote ? [f.quote.ref] : []))
   },
 
   emptyState(data) {

@@ -198,18 +198,28 @@ describe('B3 · asked under their content', () => {
 })
 
 describe('B4 · where a rival’s talk differs', () => {
-  it('draws each finding as a card with its voice and its months, and names the brands too thin', () => {
+  it('draws the picked brand’s findings as cards with their voice, and no recurrence Readiness says is not built (finish-list item 20)', () => {
     const markup = render(competitiveFindings.render(brandsFixture(), 'app', ctx))
     const t = text(competitiveFindings.render(brandsFixture(), 'app', ctx))
     expect(t).toContain('Cotopaxi against the category')
     expect(t).toContain('an account shaping the talk')
     expect(t).toContain('Durability praise does not remove carry-comfort concern')
-    expect(t).toContain('seen in 3 of the last 6 months')
-    expect(t).toContain('Freitag, The North Face and Patagonia have fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(t).not.toContain('seen in')
     expect(markup).toContain('data-slot="pass_c_finding"')
     expect(markup).toContain('data-copy="quote"')
     expect(t).toContain('Ask about Cotopaxi →')
     expect(markup).toContain('/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20Cotopaxi%3F')
+  })
+
+  it('follows the brand picked above: its cards, its line and its Ask link (finish-list item 20)', () => {
+    const d = brandsFixture()
+    const inFull = d.brands!.inFull!
+    const pick = (label: string) => ({ ...d, brands: { ...d.brands!, inFull: { ...inFull, selected: { ...inFull.selected!, label, audience: `competitor:${label}` } } } })
+    const t = text(competitiveFindings.render(pick('Freitag'), 'app', ctx))
+    expect(t).not.toContain('Cotopaxi against the category')
+    expect(t).toContain('Freitag has fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(t).toContain('Ask about Freitag →')
+    expect(competitiveFindings.quotes?.(pick('Freitag'))).toEqual([])
   })
 
   it('freezes each card’s voice by its comment ref', () => {

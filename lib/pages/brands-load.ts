@@ -541,11 +541,14 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
   const used = new Set<string>()
   return rows.map((f) => {
     const lead = leads.get(f.id) ?? null
-    const seen = lead
-      ? { months: span.filter((m) => (refOf(lead, m)?.video_ids ?? []).length > 0).length, of: span.length }
-      : null
     const comments = lead ? new Set((refOf(lead, month)?.comment_ids ?? []).map(String)) : new Set<string>()
-    const eligible = pickQuotes(quotes.filter((q) => q.commentId != null && comments.has(q.commentId)), { month, kind: null, count: comments.size })
+    // THE FINDING'S OWN EVIDENCE ONLY (finish-list item 20): any voice of the
+    // lead theme's month could sit under a heading it does not bear out
+    // ("Organization, measurements, and packing proof" over "What kind of bag
+    // is thatttt"), so a voice prints only where it is evidence of an insight
+    // the finding itself cites; else the card prints none.
+    const cited = new Set((f.evidence?.supporting_theme_ids ?? []).map(String))
+    const eligible = pickQuotes(quotes.filter((q) => q.commentId != null && comments.has(q.commentId) && q.insightId != null && cited.has(q.insightId)), { month, kind: null, count: comments.size })
     const picked = eligible.find((q) => q.commentId != null && !used.has(q.commentId)) ?? null
     if (picked?.commentId) used.add(picked.commentId)
     return {
@@ -557,7 +560,11 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
       quote: picked && picked.commentId
         ? { ref: quoteRef.comment(picked.commentId), text: picked.quote, lang: picked.lang ?? null, english: picked.english ?? null }
         : null,
-      seen: seen && seen.months > 0 ? seen : null,
+      // "SEEN IN N OF THE LAST 6 MONTHS" IS NOT PRINTED (finish-list item 20):
+      // it counts the months the lead THEME was read, not the finding, and
+      // Readiness lists a finding's recurrence as not built yet (it needs a
+      // finding identity that survives an update).
+      seen: null,
     }
   })
 }
@@ -571,17 +578,17 @@ async function firstMonthWithRows(db: SupabaseClient, clientId: string): Promise
 
 /** The quote candidates behind a set of comments: their evidence (never a
  *  redacted row), the comment's date and author, and the video's own account. */
-async function readQuotes(db: SupabaseClient, clientId: string, commentIds: readonly string[]): Promise<QuoteCandidate[]> {
+async function readQuotes(db: SupabaseClient, clientId: string, commentIds: readonly string[]): Promise<(QuoteCandidate & { insightId: string | null })[]> {
   const ids = [...new Set(commentIds)]
   if (ids.length === 0) return []
-  const evidence: { id: string; comment_id: string | null; quote: string | null; relevance_rank: number | null }[] = []
+  const evidence: { id: string; comment_id: string | null; quote: string | null; relevance_rank: number | null; audience_insight_id: string | null }[] = []
   // `comments.video_id` is the platform's own id, so the video is found by
   // (platform, video_id), as Your market's voices find it.
   type CommentMeta = { id: string; platform: string | null; comment_date: string | null; author: string | null; video_id: string | null }
   const comments = new Map<string, CommentMeta>()
   for (const part of chunk(ids, UUID_IN_CHUNK)) {
     const [ev, cm] = await Promise.all([
-      db.from('insight_evidence').select('id, comment_id, quote, relevance_rank').in('comment_id', part).eq('redacted', false).order('id'),
+      db.from('insight_evidence').select('id, comment_id, quote, relevance_rank, audience_insight_id').in('comment_id', part).eq('redacted', false).order('id'),
       db.from('comments').select('id, platform, comment_date, author, video_id').eq('client_id', clientId).in('id', part),
     ])
     if (ev.error) throw new Error(`insight_evidence: ${ev.error.message}`)
@@ -611,6 +618,7 @@ async function readQuotes(db: SupabaseClient, clientId: string, commentIds: read
         commentDate: c?.comment_date ?? null,
         author: c?.author ?? null,
         videoAccount: c?.video_id ? accounts.get(`${c.platform}::${c.video_id}`) ?? null : null,
+        insightId: e.audience_insight_id ? String(e.audience_insight_id) : null,
       }
     })
 }

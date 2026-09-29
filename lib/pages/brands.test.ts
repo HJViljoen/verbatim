@@ -8,7 +8,7 @@ import type { BRAND_HAND_CHECKS } from '../brands/precision'
 import {
   askedMonthsLine, buildAsked, buildContent, buildFindings, buildInFull, buildNameBlock, buildPosts, buildShare, buildTopics,
   findingKindWords, leadTheme, levelWords, nameCommentsLine, nameLeadParts, nameOwnParts, ninetyDays, recurrenceMonths,
-  seenLine, shareWaiting, thinLine, topicWords, topicsCounted, type BrandMonthIn, type Part,
+  shareWaiting, noFindingLine, topicWords, topicsCounted, type BrandMonthIn, type Part,
 } from './brands'
 import { competitiveFixture } from '../../components/pages/competitive-surface/fixture'
 
@@ -283,7 +283,6 @@ describe('B4 · where a rival’s talk differs', () => {
   it('looks back six months, never before the first', () => {
     expect(recurrenceMonths('2026-09-01', '2026-06-01')).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
     expect(recurrenceMonths('2026-11-01', '2026-01-01')).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01'])
-    expect(seenLine({ months: 2, of: 4 })).toBe('seen in 2 of the last 4 months')
   })
 
   it('groups the findings by brand in B2’s order, and names the brands too thin to set against the category', () => {
@@ -311,7 +310,8 @@ describe('B4 · where a rival’s talk differs', () => {
       floor: 10,
     })
     expect(ordered.groups[0].findings.map((f) => f.id)).toEqual(['f3', 'f1', 'f2'])
-    expect(thinLine(b)).toBe('Freitag, The North Face and Patagonia have fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(noFindingLine(b, 'Freitag')).toBe('Freitag has fewer than 10 videos in the last 90 days, too few to set against the category.')
+    expect(noFindingLine({ ...b, thin: [] }, 'Freitag')).toBe('The latest update did not set Freitag against the category.')
   })
 
   it('words every Pass C category plainly', () => {
