@@ -70,13 +70,24 @@ describe('the quarterly card', () => {
     expect(text).toMatch(/of 3,810/)
   })
 
-  // Where no month is known the line falls back to the count alone, and it
-  // is the only line in the body.
   it('names the record’s first comparison, and heads the card with it rather than a quarter with nothing to review (finish-list item 9)', () => {
     const text = renderText(<QuarterlyCardTile card={formingCardFixture()} />)
     expect(text).toContain('arrives in April 2027: the first quarter of 2027 against the last of 2026. You have 3 monthly readings so far.')
     expect(text).toContain('The quarterly review first in April 2027')
     expect(text).not.toMatch(/Q\d 2026 ·/)
+  })
+
+  // A workspace whose record names no pair (Össur): the artefact's own
+  // arithmetic, never Sealand's April 2027; where no month is known the line
+  // falls back to the count alone, under the quarter's own head.
+  it('keeps the six-readings month on a workspace with no record timeline', () => {
+    const month = renderText(<QuarterlyCardTile card={formingCardFixture({ sameWay: null, readingMonth: '2026-09-01' })} />)
+    expect(month).toContain('arrives with the December 2026 reading: it needs six monthly readings and you have 3.')
+    expect(month).toContain('The quarterly review first in December 2026')
+    expect(month).not.toContain('April 2027')
+    const count = renderText(<QuarterlyCardTile card={formingCardFixture({ sameWay: null })} />)
+    expect(count).toContain('arrives once six monthly readings stand behind it: you have 3.')
+    expect(count).toContain('Q3 2026 · Jul–Sep')
   })
 
   // ONE NUMBER, THREE PLACES, AND THEY AGREE. The pill was the gate CONSTANT

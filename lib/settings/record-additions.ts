@@ -15,6 +15,15 @@
 
 // ---- What the pages can say, and when ------------------------------------------------
 
+/** The first quarter-on-quarter comparison read the same way: the record's
+ *  timeline row, and the Reports card's line (finish-list item 9: the card
+ *  said "with the November 2026 reading", counting six monthly readings,
+ *  while the record said April 2027; searches changed in September, so the
+ *  first two quarters read the same way are the last of 2026 and the first
+ *  of 2027). The Reports card prints it on the tenant whose record this is
+ *  (lib/pages/reports-card.ts, `tenantLocked`). */
+export const FIRST_QUARTER_COMPARISON = { when: 'April 2027', from: '2027-04-01', pair: 'the first quarter of 2027 against the last of 2026' } as const
+
 /** §2.11, the rows a reader needs: when each kind of statement becomes
  *  possible. `from` is the day the row starts to hold (an update's day or the
  *  month's first). The weekly line's row is not here: whether it prints was
@@ -22,14 +31,6 @@
  *  The re-check is the 4 Oct update's, not the preview's 11 Oct: the fast
  *  track (plan §3.7, accepted 26 Sep) brings deploy 3 on Mon 5 Oct and reads
  *  the re-check "with the 4 Oct update". */
-/** The first quarter-on-quarter comparison read the same way: the record's
- *  timeline row, and the Reports card's line (finish-list item 9: the card
- *  said "with the November 2026 reading", counting six monthly readings,
- *  while the record said April 2027; searches changed in September, so the
- *  first two quarters read the same way are the last of 2026 and the first
- *  of 2027). */
-export const FIRST_QUARTER_COMPARISON = { when: 'April 2027', from: '2027-04-01', pair: 'the first quarter of 2027 against the last of 2026' } as const
-
 export const PAGES_CAN_SAY: readonly { when: string; from: string; says: string }[] = [
   { when: 'to 31 Oct', from: '2026-09-25', says: 'Each month in full, with the month before beside it, not read as a change.' },
   { when: '4 Oct update', from: '2026-10-04', says: 'The re-check on the searches both months ran, without makers or off-topic videos. Provisional.' },

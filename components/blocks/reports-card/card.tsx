@@ -7,7 +7,6 @@ import { Tile } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { QuarterlyCard } from '@/lib/pages/reports-card'
 import { quarterUnlocked } from '@/lib/reports/quarterly'
-import { FIRST_QUARTER_COMPARISON } from '@/lib/settings/record-additions'
 
 /**
  * The quarterly card on /dashboard/reports (Block D wave 2, package E-reports;
@@ -103,7 +102,7 @@ export function QuarterlyCardTile({
       // BELOW THE GATE, NOT THE QUARTER UNDER REVIEW (finish-list item 9): "Q2
       // 2026 · Apr–Jun" headed a card with nothing to review, on a workspace
       // read from 28 Jun; it names when the first comparison lands instead.
-      meta={formingOnly ? `first in ${FIRST_QUARTER_COMPARISON.when}` : `${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
+      meta={formingOnly && card.firstWhen ? `first in ${card.firstWhen}` : `${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
       distribute="between"
       className="xl:min-h-[248px]"
       // 32px OF TARGET (M7's floor for this page): this was a 15px line, the
