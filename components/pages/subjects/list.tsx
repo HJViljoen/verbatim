@@ -137,8 +137,7 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
     )
   }
   const cols = 'grid grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3'
-  return (
-    <div className="flex min-w-0 flex-col gap-3">
+  const table = (
     <div role="table" className="flex min-w-0 flex-col">
       <div role="row" className={`${cols} items-end ${RULE.head}`}>
         <span role="columnheader" className="flex flex-col leading-[1.35]">
@@ -186,9 +185,15 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
         )
       })}
     </div>
-    {explained ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground [text-wrap:pretty]">{explained}</p> : null}
-    </div>
   )
+  // The wrapper only where the line is drawn, so a rail without one (and every
+  // printed rail) keeps the markup it had.
+  return explained ? (
+    <div className="flex min-w-0 flex-col gap-3">
+      {table}
+      <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground [text-wrap:pretty]">{explained}</p>
+    </div>
+  ) : table
 }
 
 export const subjectsList: Block<SubjectsData> = {

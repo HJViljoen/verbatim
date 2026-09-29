@@ -117,6 +117,9 @@ describe('S1 · the rail reads the market', () => {
     expect(t.split(FAILED_EXPLAINED).length - 1).toBe(1)
     assertCopyContract(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx)))
     for (const mode of ['print', 'email'] as const) expect(text(subjectsList.render(marketSubjectsFixture(), mode, ctx))).not.toContain(FAILED_EXPLAINED)
+    // Paper keeps the markup it had: the line's wrapper is drawn only with it.
+    expect(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx))).toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
+    expect(render(subjectsList.render(marketSubjectsFixture(), 'print', ctx))).not.toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
   })
 
   it('draws no editing control (a rename or a stop is Settings\')', () => {
