@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { render, renderText } from '@/lib/test/render'
-import RootNotFound from '@/app/not-found'
-import SiteNotFound from '@/app/site/not-found'
+import RootNotFound, { metadata as rootMeta } from '@/app/not-found'
+import SiteNotFound, { metadata as siteMeta } from '@/app/site/not-found'
 import DashboardNotFound from '@/app/dashboard/not-found'
 
 // Every 404 has a way back (finish-list item 25 polish). There was no
@@ -39,5 +39,10 @@ describe('the not-found pages', () => {
       expect(existsSync(page), dir).toBe(true)
       expect(readFileSync(page, 'utf8')).toContain('notFound()')
     }
+  })
+
+  it('each names its tab: the app template adds the product, the site writes it in full', () => {
+    expect(rootMeta.title).toBe('Page not found')
+    expect(siteMeta.title).toBe('Page not found · Verbatim')
   })
 })

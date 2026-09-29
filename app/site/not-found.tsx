@@ -1,7 +1,11 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { SiteNav } from './_components/site-nav'
 
 // The marketing site's 404, on its own chrome (the layout adds the footer).
+// The site's template is a pass-through, so the title is written in full.
+export const metadata: Metadata = { title: 'Page not found · Verbatim' }
+
 export default function SiteNotFound() {
   return (
     <>

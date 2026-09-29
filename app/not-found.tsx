@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { AuthCard } from '@/components/auth/auth-card'
 
 // The 404 for any address nothing else claims (finish-list item 25 polish).
@@ -8,6 +9,9 @@ import { AuthCard } from '@/components/auth/auth-card'
 // site's own chrome); this one is the frame the signed-out pages already wear.
 // "/" is the right way back on both hosts: the app sends it to the dashboard
 // (or sign in), the apex to the home page.
+// The root template adds ' · Verbatim'.
+export const metadata: Metadata = { title: 'Page not found' }
+
 export default function NotFound() {
   return (
     <AuthCard subtitle="Page not found">
