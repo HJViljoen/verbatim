@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+import { marketClaimEcho } from '../reading/own-posts'
 import {
   answeredBy,
   axisNote,
+  sayHearClaimOf,
+  sayHearCounts,
   calibratedSides,
   endReadings,
   buildSides,
@@ -908,5 +911,31 @@ describe('subjectsHorizons', () => {
   it('moves only the questions pane with ?questions=', () => {
     expect(subjectsHorizons({ item: 's-water', questions: 'last_3' })).toEqual({ horizon: 'this_month', questions: 'last_3' })
     expect(subjectsHorizons({ questions: 'nonsense' })).toEqual({ horizon: 'this_month', questions: 'this_month' })
+  })
+})
+
+// Walkthrough item 8: the tile reads the same counting Your moves reads.
+describe('sayHearClaimOf / sayHearCounts', () => {
+  const entry = { you_say: 'Protect Our Paths is a community-driven environmental initiative.', audience: 'echoes' as const, they_say: 'People praise the cleanup work.' }
+  it('prints the market’s reading, with your followers said apart', () => {
+    const echo = marketClaimEcho({ stance: 'echoes', reading: { k: 0, n: 852 }, theySay: entry.they_say, followers: 3 })
+    const row = sayHearClaimOf(entry, echo)
+    expect(row.state).toBe('silent')
+    expect(row.label).toBe('Not talked about')
+    expect(row.note).toContain('Your own followers echoed it')
+  })
+  it('falls back to the stored stance where nothing was counted', () => {
+    expect(sayHearClaimOf(entry, null)).toEqual({ claim: entry.you_say, state: 'echoed' })
+    const unread = marketClaimEcho({ stance: 'echoes', reading: null })
+    expect(sayHearClaimOf(entry, unread).state).toBe('echoed')
+  })
+  it('counts the rows as printed, questions apart', () => {
+    const rows = [
+      { claim: 'a', state: 'echoed' as const },
+      { claim: 'b', state: 'pushed_back' as const, questioned: true },
+      { claim: 'c', state: 'pushed_back' as const },
+      { claim: 'd', state: 'silent' as const },
+    ]
+    expect(sayHearCounts(rows)).toEqual({ total: 4, echoed: 1, pushedBack: 2, silent: 1, questioned: 1 })
   })
 })

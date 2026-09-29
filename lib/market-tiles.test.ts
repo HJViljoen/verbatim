@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
+import { CURATION_GATE } from './curation'
 import {
   insightTiers, confirmedCompetitiveIds, recEvidenceTier, orderAgenda, openAgendaId, priorityDot, distinctVideos,
-  claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, groundedTier, newsRingChip,
+  claimVerdict, claimVerdictFor, readsAsQuestions, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, groundedTier, newsRingChip,
   labelsBySlug, themeChips,
 } from './market-tiles'
 
@@ -151,6 +152,19 @@ describe('tier counts + news chips', () => {
     expect(groundedTier('confirmed', 42)).toBe('confirmed')
     expect(groundedTier('archive', 0)).toBe('archive')
   })
+  // Walkthrough item 10: "Sealand owns belonging" printed "Strong evidence"
+  // beside "9 of 1,782 videos behind it". The badge needs the volume it names.
+  it('keeps "Strong evidence" off a conclusion with fewer videos than the floor', () => {
+    const floor = CURATION_GATE.confirmedMinVideos
+    expect(groundedTier('confirmed', floor)).toBe('confirmed')
+    if (floor > 1) expect(groundedTier('confirmed', floor - 1)).toBe('early_signal')
+    expect(groundedTier('early_signal', Math.max(1, floor - 1))).toBe('early_signal')
+    expect(groundedTier('archive', floor + 10)).toBe('archive')
+  })
+  it('reads the 27 Sep Sealand conclusions the way the walkthrough needs', () => {
+    expect(groundedTier('confirmed', 9)).toBe('early_signal')
+    expect(groundedTier('confirmed', 41)).toBe('confirmed')
+  })
   it('ring → entity chip', () => {
     expect(newsRingChip(0)).toEqual({ label: 'Your brand', tone: 'positive' })
     expect(newsRingChip(1)).toEqual({ label: 'Competitor', tone: 'clay' })
@@ -212,5 +226,26 @@ describe('grounding chips', () => {
     const m = labelsBySlug([])
     expect(themeChips(['a', 'b', 'c', 'd', 'e'], m)).toHaveLength(4)
     expect(themeChips(['a', 'b', 'c'], m, 2)).toHaveLength(2)
+  })
+})
+
+// Walkthrough item 8: "Pushed back" on a claim whose explanation was people
+// ASKING what materials are used. Questions are not pushback.
+describe('readsAsQuestions / claimVerdictFor', () => {
+  const asked = 'People love upcycling ideas and anti-waste design, but they also ask what materials are used, where they come from, and whether an upcycling claim is genuine.'
+  const argued = 'People do talk about confidence and self-expression, but they also describe prosthetic use as burdensome when fit, pain, and fatigue are not resolved.'
+  it('reads a sentence of questions as questions', () => {
+    expect(readsAsQuestions(asked)).toBe(true)
+    expect(claimVerdictFor('contradicts', asked)).toEqual({ label: 'Questioned', tone: 'sand' })
+  })
+  it('keeps "Pushed back" where the words argue, or ask and argue', () => {
+    expect(readsAsQuestions(argued)).toBe(false)
+    expect(claimVerdictFor('contradicts', argued).label).toBe('Pushed back')
+    expect(readsAsQuestions('They ask whether it is real and call out the brand for greenwashing.')).toBe(false)
+    expect(claimVerdictFor('contradicts', null).label).toBe('Pushed back')
+  })
+  it('leaves the other stances their own words', () => {
+    expect(claimVerdictFor('echoes', asked).label).toBe('Echoed')
+    expect(claimVerdictFor('silent', asked).label).toBe('Not talked about')
   })
 })

@@ -14,6 +14,7 @@ import { prevMonth, monthStartOf } from '../reading/month-key'
 import type { Counted, FigureTable, Verdict, VerdictFlag } from '../reading/verdicts'
 import type { Scope } from '../renderables/types'
 import { isThin, movementDirection } from './movement'
+import { storedAnswerThin, type StoredFloorAnswer } from './floor'
 import { seriesToCalendar } from '../charts/from-series'
 import type { CalendarSeries } from '../charts/calendar'
 
@@ -695,6 +696,9 @@ export interface NotAnswered {
 export const DECLINED_WHY = {
   silent: 'nothing in the conversation we read speaks to this',
   out_of_corpus: 'this asks about your own numbers, which we do not read',
+  /** The answer's own words since the evidence floor (walkthrough item 4,
+   *  `tooLittleToAnswer`): nothing it found had enough videos behind it. */
+  too_little: 'there is too little in your market about this to answer it',
 } as const
 
 /** Where "What we track →" points. Settings is where the tracked list, the
@@ -702,11 +706,14 @@ export const DECLINED_WHY = {
  *  usually about. */
 export const NOT_ANSWERED_HREF = '/dashboard/settings'
 
-interface AskRow {
+export interface AskRow {
+  /** The message's id: how a thread page names its own replies. Optional so a
+   *  row read without it still pairs. */
+  id?: string
   role: string
   content: string
   outcome: string | null
-  result: { notice?: string | null } | null
+  result: ({ notice?: string | null } & StoredFloorAnswer) | null
   created_at: string
 }
 
@@ -737,11 +744,19 @@ interface AskRow {
  * about the month, which is the truth.
  */
 export async function loadNotAnswered(scope: Scope, now: Date = new Date()): Promise<NotAnswered | null> {
+  const read = await loadNotAnsweredRows(scope, now)
+  return read ? notAnsweredFrom(read.rows, read.from) : null
+}
+
+/** `loadNotAnswered`'s read alone, for a caller that composes the tile later
+ *  (a thread page, once its own answers are held to the floor). Null on a
+ *  failed read, never an empty month. */
+export async function loadNotAnsweredRows(scope: Scope, now: Date = new Date()): Promise<{ rows: AskRow[]; from: string } | null> {
   const supabase = scope.supabase as SupabaseClient
   const from = monthStartIso(now)
   const res = await supabase
     .from('agent_messages')
-    .select('role, content, outcome, result, created_at')
+    .select('id, role, content, outcome, result, created_at')
     .eq('client_id', scope.clientId)
     .gte('created_at', from)
     .order('created_at', { ascending: true })
@@ -750,11 +765,25 @@ export async function loadNotAnswered(scope: Scope, now: Date = new Date()): Pro
   // below is what stops the page printing a zero it does not have.
   const list = readRows<AskRow>(res as { data: unknown; error: { message: string } | null }, 'agent.notAnswered')
   if (res.error) return null
-  return notAnsweredFrom(list, from)
+  return { rows: list, from }
 }
 
-/** The pure half, so the pairing rule is arguable in a test. */
-export function notAnsweredFrom(rows: readonly AskRow[], monthStart: string, cap = ASK_MONTHLY_CAP): NotAnswered {
+/**
+ * The pure half, so the pairing rule is arguable in a test.
+ *
+ * AN ANSWER WITH TOO LITTLE BEHIND IT IS NOT ANSWERED (walkthrough item 4).
+ * The thread says "There is too little in your market about this to answer
+ * it", so this tile may not count it answered. `thinOf` is the caller's word
+ * for a reply it held to the floor itself (a thread page, by the measured
+ * count it prints); where it has none (`undefined`), the reply's stored
+ * evidence decides (`storedAnswerThin`).
+ */
+export function notAnsweredFrom(
+  rows: readonly AskRow[],
+  monthStart: string,
+  cap = ASK_MONTHLY_CAP,
+  thinOf: (reply: AskRow) => boolean | undefined = () => undefined,
+): NotAnswered {
   let asked = 0
   const declined: { question: string; why: string }[] = []
   for (let i = 0; i < rows.length; i++) {
@@ -765,6 +794,7 @@ export function notAnsweredFrom(rows: readonly AskRow[], monthStart: string, cap
     if (!reply) continue
     if (reply.outcome === 'silent') declined.push({ question: m.content, why: DECLINED_WHY.silent })
     else if (reply.result?.notice) declined.push({ question: m.content, why: DECLINED_WHY.out_of_corpus })
+    else if (thinOf(reply) ?? storedAnswerThin(reply.result)) declined.push({ question: m.content, why: DECLINED_WHY.too_little })
   }
   // Nothing asked is nothing answered: "0 of 40 questions asked this month.
   // Every one was answered" printed under "No question has been asked this

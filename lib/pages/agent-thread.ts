@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { anchorClaims, type Segment } from '../ask/anchor'
-import { createCitedQuotePicker, fetchQuotesByAudience, fetchQuoteTextsByCommentId } from '../quotes'
+import { createCitedQuotePicker, fetchQuotesByAudience, fetchQuoteTextsByCommentId, readingOf, readTranslations } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
@@ -15,7 +15,8 @@ import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
 import {
   answerFallback,
   askAllowList,
-  loadNotAnswered,
+  loadNotAnsweredRows,
+  notAnsweredFrom,
   measureAnswer,
   scrubThreadAnswer,
   withObjectVerdicts,
@@ -38,6 +39,9 @@ import { loadObjectReadings, type ObjectReading } from '../agent/movement'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '../agent/scope'
 import { starterQuestions, type StarterQuestion } from '../agent/starters'
 import { loadOverview } from './overview'
+import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, type AskQuoteVideo } from '../agent/floor'
+import { RPC_SEGMENTS_FOR_VIDEOS } from './noise'
+import { segmentRulesEnabled } from '../segments/rules'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -652,6 +656,11 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const citeRefs = messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.map((q) => ({ commentId: q.commentId, videoId: q.videoId }))))
   const metaP = citeRefs.length ? resolveCitations(supabase, citeRefs) : Promise.resolve(new Map<string, CitationMeta>())
   metaP.catch(() => {})
+  // WHAT EACH QUOTE'S VIDEO IS (walkthrough item 4): a maker's, off-topic, or
+  // filed under a rival. Fails open — a read error prints the quotes it
+  // always printed rather than none.
+  const quoteVideoIds = [...new Set(messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.map((q) => q.videoId).filter((v): v is string => Boolean(v)))))]
+  const quoteVideosP = loadQuoteVideos(supabase, clientId, quoteVideoIds)
 
   // AS3's index facts and the dates of the updates these answers were given
   // against. Both go out with the wave above rather than after it: round trips
@@ -674,7 +683,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // loader both surfaces call, capped at `PLAN_CARDS_SHOWN`, and a failure is
   // a missing chip rather than a missing page — the chip is an affordance.
   const plansP = loadPlanChecks(scope).catch(() => [] as PlanCheckCard[])
-  const notAnsweredP = loadNotAnswered(scope).catch(() => null)
+  // The month's rows only: the rail is composed once this thread's own
+  // answers have been held to the floor (below), so it cannot call "answered"
+  // what this page says there was too little to answer.
+  const notAnsweredRowsP = loadNotAnsweredRows(scope).catch(() => null)
   // ONE WAVE OF PLAN READS, not two. `plansP` is already in flight for the
   // chip; the history's crossings read the same cards rather than starting a
   // second identical wave beside it.
@@ -818,6 +830,13 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   }
 
   const quoteText = await quoteTextP
+  // The English of every quote whose stored answer did not carry it, read
+  // once the words are known (the readability rule needs it).
+  const translations = await readTranslations(
+    supabase,
+    messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.filter((q) => q.lang == null).map((q) => q.text || (q.commentId ? quoteText.get(q.commentId) ?? '' : '')))).filter(Boolean),
+  ).catch(() => new Map<string, { lang: string; english: string | null }>())
+  const quoteVideos = await quoteVideosP
   const runStartedAt = new Map(
     readRows<{ id: string; started_at: string | null }>(await runsP, 'agentThread.runs')
       .map((r) => [r.id, r.started_at]),
@@ -825,28 +844,38 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
 
   // Turns: each user message with the agent message that answered it.
   const turns: Turn[] = []
-  let n = 0
-  const cited: { ref: string; commentId: string | null; videoId: string | null; text: string; n: number }[] = []
+  /** Each turn's reply, by id: how the rail finds the answers this page held
+   *  to the floor. */
+  const replyIdOf: (string | null)[] = []
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i]
     if (m.role !== 'user') continue
     const reply = messages[i + 1]?.role === 'agent' ? messages[i + 1] : null
     let answer: ThreadAnswer | null = null
     if (reply?.result) {
+      const namedRivals = reply.result.namedRivals ?? []
       const grounded = reply.result.grounded.map((g) => ({
         ...g,
         quotes: g.quotes
           .map((q) => ({ ...q, text: q.text || (q.commentId ? quoteText.get(q.commentId) ?? '' : '') }))
+          .map((q) => (q.lang != null ? q : { ...q, ...readingOf(translations, q.text) }))
           .filter((q) => q.text)
-          .map((q) => {
-            n += 1
-            const ref = q.commentId ? quoteRef.comment(q.commentId) : quoteRef.video(q.videoId as string)
-            cited.push({ ref, commentId: q.commentId, videoId: q.videoId, text: q.text, n })
-            return { ref, text: q.text, commentId: q.commentId, videoId: q.videoId, n }
-          }),
+          // THE QUOTE RULES (item 4): readable, not a maker's or off-topic
+          // video, not a seller, the right brand. One per video across the
+          // whole thread, and the numbers, are decided once the floor has
+          // said which findings are printed (below).
+          .filter((q) => askQuoteOk(q, q.videoId ? quoteVideos.get(q.videoId) : undefined, namedRivals))
+          .map((q) => ({
+            ref: q.commentId ? quoteRef.comment(q.commentId) : quoteRef.video(q.videoId as string),
+            text: q.text,
+            commentId: q.commentId,
+            videoId: q.videoId,
+            n: 0,
+          })),
       }))
       answer = { ...reply.result, grounded }
     }
+    replyIdOf.push(reply?.id ?? null)
     turns.push({
       question: m.content,
       askedAt: m.created_at,
@@ -864,12 +893,6 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     })
   }
 
-  const meta = await metaP
-  const citations: Citation[] = cited.map((c) => {
-    const m = meta.get(c.ref)
-    return { n: c.n, ref: c.ref, text: c.text, platform: m?.platform ?? null, date: m?.date ?? null, href: m?.href ?? null, commentLevel: m?.commentLevel ?? false }
-  })
-
   const facts = await factsP
   // The newest answered turn's update leads the thread. An unanswered thread
   // has no update to name and the line says nothing has been read yet, which is
@@ -877,16 +900,6 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const newestUpdateAt = [...turns].reverse().find((t) => t.updateAt)?.updateAt ?? null
 
   const silentQuestions = turns.filter((t) => t.answer?.silent).map((t) => t.question)
-  const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
-  // FINDINGS, WHICH IS WHAT THEY ARE AND WHAT THIS PAGE CALLS THEM. The set is
-  // `insightIds` — `audience_insights` rows — and the note under every printed
-  // slide used to name the table: "Findings rest on N distinct audience
-  // insights". "insight" is in neither THIRTEEN_WORDS nor GLOSSARY, and one
-  // file over `lib/agent/basis.ts` composes this same page's AS3 line as "N of
-  // M findings searchable", with a docblock at `:136` explaining exactly that
-  // choice. So the bar said `findings` and the PDF footer said `audience
-  // insights`, for one object.
-  const findings = new Set(turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => g.insightIds)))
 
   // ── D8 · the measurement, and the scrub it licenses ──────────────────────
   //
@@ -901,7 +914,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const set = await seriesP
   const seeded = set != null && set.substrate === 'seeded' && set.numeratorSubstrate === 'seeded'
   const about = await aboutP
-  const measure = withObjectVerdicts(measureAnswer({
+  const measured = withObjectVerdicts(measureAnswer({
     findings: answerFindings(turns),
     series: seeded ? (set as NonNullable<typeof set>).series : [],
     month: readMonth,
@@ -911,6 +924,53 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     ownAudience: CLIENT_AUDIENCE,
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
   }), about)
+  // ── the evidence floor (walkthrough item 4) ─────────────────────────────
+  //
+  // A finding is printed only where videos stand behind it: its measured k
+  // where it was measured (the "N of M videos" printed beside it), else the
+  // videos behind its evidence. Its quotes and the judgement resting only on
+  // it go with it, and a lead that summarised it gives way to the product's
+  // own sentence (`floorAnswer`). Taken BEFORE the scrub and the fallback, so
+  // neither can bring a dropped finding's figure back.
+  const leads = new Map<number, string>()
+  const droppedFindings = new Set<string>()
+  /** Which of this thread's replies the floor left with nothing to print. */
+  const thinReply = new Map<string, boolean>()
+  turns.forEach((t, i) => {
+    if (!t.answer) return
+    const findingOf = (id: string) => measured.findings.find((f) => f.findingId === findingKey(i, id)) ?? null
+    const floored = floorAnswer(t.answer, (p) => findingOf(p.id)?.value.k ?? p.conversationCount, ASK_FINDING_FLOOR)
+    t.answer = floored.answer
+    for (const id of floored.dropped) droppedFindings.add(findingKey(i, id))
+    if (floored.lead) leads.set(i, floored.lead)
+    const rid = replyIdOf[i]
+    if (rid) thinReply.set(rid, floored.state === 'thin')
+  })
+  const measure: AnswerMeasure = { ...measured, findings: measured.findings.filter((f) => !droppedFindings.has(f.findingId)) }
+
+  // THE QUOTES ARE NUMBERED AFTER THE FLOOR (item 4). Only a quote a printed
+  // finding carries is numbered and listed in the appendix, and "one per video
+  // across the thread" is decided among those: a dropped finding's quotes
+  // neither sit in the export's evidence list under an answer that says there
+  // was too little, nor leave gaps in the numbers, nor take a kept finding's
+  // video from it.
+  const cited = numberThreadQuotes(turns)
+  const meta = await metaP
+  const citations: Citation[] = cited.map((c) => {
+    const m = meta.get(c.ref)
+    return { n: c.n, ref: c.ref, text: c.text, platform: m?.platform ?? null, date: m?.date ?? null, href: m?.href ?? null, commentLevel: m?.commentLevel ?? false }
+  })
+  const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
+  // FINDINGS, WHICH IS WHAT THEY ARE AND WHAT THIS PAGE CALLS THEM. The set is
+  // `insightIds` — `audience_insights` rows — and the note under every printed
+  // slide used to name the table: "Findings rest on N distinct audience
+  // insights". "insight" is in neither THIRTEEN_WORDS nor GLOSSARY, and one
+  // file over `lib/agent/basis.ts` composes this same page's AS3 line as "N of
+  // M findings searchable", with a docblock at `:136` explaining exactly that
+  // choice. So the bar said `findings` and the PDF footer said `audience
+  // insights`, for one object.
+  // Counted after the floor, over the findings this answer prints.
+  const findings = new Set(turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => g.insightIds)))
   const fallback = answerFallback(measure)
   // The thread's own inputs, never its output: the client's questions and the
   // theme labels the answer rests on. A product name with a digit in it
@@ -941,7 +1001,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       // opinion rather than as a replacement. Both renderers print this INSTEAD
       // OF `answer` — an emptied head used to render as a blank paragraph,
       // which is a worse artefact than the prose it replaced.
-      fallback: scrubbed.answer.trim() === '' ? fallback : null,
+      fallback: leads.get(i) ?? (scrubbed.answer.trim() === '' ? fallback : null),
     }
   })
 
@@ -968,7 +1028,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     // rows behind it still owes the interpretation caveat wherever the model
     // argued, so a measurement carrying only caveats is still a measurement.
     measure: measure.findings.length || measure.caveats.length ? measure : null,
-    notAnswered: await notAnsweredP,
+    // THIS THREAD'S ANSWERS BY THE FLOOR THIS PAGE HELD THEM TO; the month's
+    // other answers by their stored evidence (`notAnsweredFrom`'s default).
+    notAnswered: await notAnsweredRowsP.then((r) =>
+      r ? notAnsweredFrom(r.rows, r.from, undefined, (reply) => (reply.id != null && thinReply.has(reply.id) ? thinReply.get(reply.id) === true : undefined)) : null),
     planChip,
     history: await historyP,
     reads: askReads(askReading, window),
@@ -985,9 +1048,74 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
         ? `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested.`
         : findings.size > 0
           ? `Every quoted voice is a real comment, listed in the appendix. This answer rests on ${findings.size} distinct findings; our own reading is marked as such.`
-          : 'Nothing in the conversation analysed related to what was asked.',
+          : [...thinReply.values()].some(Boolean)
+            // Held to the floor (item 4): something was found, too little of it.
+            ? 'Too little in the conversation analysed spoke to what was asked to draw a conclusion from.'
+            : 'Nothing in the conversation analysed related to what was asked.',
     },
   }
+}
+
+/**
+ * What each quoted video is, for the quote rules (`askQuoteOk`): the rival it
+ * is filed under, and its segment where the tenant has a segment rule. Two
+ * small reads over the thread's own quotes. FAILS OPEN: a read error leaves a
+ * video unknown, and an unknown video's quote is printed as it was.
+ */
+async function loadQuoteVideos(supabase: SupabaseClient, clientId: string, videoIds: readonly string[]): Promise<Map<string, AskQuoteVideo>> {
+  const out = new Map<string, AskQuoteVideo>()
+  if (videoIds.length === 0) return out
+  const [videosRes, segmentsRes] = await Promise.all([
+    Promise.resolve(supabase.from('videos').select('id, is_competitor, competitor_name').eq('client_id', clientId).in('id', [...videoIds]))
+      .catch((e: unknown) => ({ data: null, error: e })),
+    segmentRulesEnabled(clientId)
+      ? Promise.resolve(supabase.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...videoIds] }))
+          .catch((e: unknown) => ({ data: null, error: e }))
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (videosRes.error) console.error(`[pages] agentThread.quoteVideos: ${(videosRes.error as { message?: string })?.message ?? String(videosRes.error)}`)
+  if (segmentsRes.error) console.error(`[pages] agentThread.quoteSegments: ${(segmentsRes.error as { message?: string })?.message ?? String(segmentsRes.error)}`)
+  const segmentOf = new Map(((segmentsRes.data ?? []) as { video_id: string; segment: string | null }[]).map((r) => [String(r.video_id), r.segment ?? null]))
+  for (const v of (videosRes.data ?? []) as { id: string; is_competitor: boolean | null; competitor_name: string | null }[]) {
+    out.set(v.id, { segment: segmentOf.get(v.id) ?? null, rival: v.is_competitor && v.competitor_name ? v.competitor_name : null })
+  }
+  for (const [id, segment] of segmentOf) if (!out.has(id)) out.set(id, { segment, rival: null })
+  return out
+}
+
+/**
+ * Number the quotes a thread prints, one per video across the whole thread,
+ * in reading order, and return them as the appendix lists them. Run AFTER the
+ * floor (walkthrough item 4): a finding the floor dropped is no longer in
+ * `turns`, so its quotes take no number, no appendix line and no video from a
+ * finding that stands. Rewrites each turn's answer in place, as the loader's
+ * other passes do. Pure.
+ */
+export function numberThreadQuotes(turns: Turn[]): { ref: string; commentId: string | null; videoId: string | null; text: string; n: number }[] {
+  const quotedVideos = new Set<string>()
+  const cited: { ref: string; commentId: string | null; videoId: string | null; text: string; n: number }[] = []
+  for (const t of turns) {
+    if (!t.answer) continue
+    t.answer = {
+      ...t.answer,
+      grounded: t.answer.grounded.map((g) => ({
+        ...g,
+        quotes: g.quotes
+          .filter((q) => {
+            const key = q.videoId ?? (q.commentId ? `c:${q.commentId}` : q.text)
+            if (quotedVideos.has(key)) return false
+            quotedVideos.add(key)
+            return true
+          })
+          .map((q) => {
+            const numbered = { ...q, n: cited.length + 1 }
+            cited.push({ ref: q.ref, commentId: q.commentId, videoId: q.videoId, text: q.text, n: numbered.n })
+            return numbered
+          }),
+      })),
+    }
+  }
+  return cited
 }
 
 // ── print pagination (pure) ───────────────────────────────────────────────

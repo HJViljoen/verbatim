@@ -41,20 +41,27 @@ describe('the verdict floor is the engine’s, not a number typed in a footer', 
     expect(out[0].verdict).toBe('silent')
   })
 
-  it('stands at exactly the floor this card prints', () => {
-    const quoted = new Set(['i1'].slice(0, PLAN_VERDICT_FLOOR))
-    expect(quoted.size).toBe(PLAN_VERDICT_FLOOR)
-    const out = validateVerdicts(raw, asked, themes, {
-      liveInsightIds: new Set(['i1']),
-      quotedInsightIds: quoted,
-      videoByInsightId: new Map([['i1', 'v1']]),
-    })
-    expect(out[0].verdict).toBe('echoes')
+  // THE FLOOR IS VIDEOS WITH A QUOTABLE COMMENT (walkthrough item 5): the
+  // validator is run either side of `PLAN_VERDICT_FLOOR`, so the line the card
+  // prints is the rule the engine holds.
+  const atFloor = (videos: number) => {
+    const ids = Array.from({ length: Math.max(videos, 1) }, (_, i) => `i${i}`)
+    const t: AskTheme = { ...theme, insightIds: ids, videoIds: ids.map((_, i) => `v${i}`) }
+    return validateVerdicts(raw, asked, new Map([['c1', [t]]]), {
+      liveInsightIds: new Set(ids),
+      quotedInsightIds: new Set(ids),
+      videoByInsightId: new Map(ids.slice(0, videos).map((id, i) => [id, `v${i}`])),
+    })[0].verdict
+  }
+
+  it('stands at exactly the floor this card prints, and not one below it', () => {
+    expect(atFloor(PLAN_VERDICT_FLOOR)).toBe('echoes')
+    expect(atFloor(PLAN_VERDICT_FLOOR - 1)).toBe('silent')
   })
 
-  it('never prints the mock’s five', () => {
-    expect(PLAN_FLOOR_LINE).not.toMatch(/\b5\b/)
-    expect(PLAN_FLOOR_LINE).toContain('1 real comment')
+  it('prints the engine’s floor, in videos', () => {
+    expect(PLAN_FLOOR_LINE).toContain(`${PLAN_VERDICT_FLOOR} video`)
+    expect(PLAN_FLOOR_LINE).toContain('real comment')
   })
 })
 
@@ -233,7 +240,7 @@ describe('planCard', () => {
   it('carries the floor, the hold caveat and the clipping notice', () => {
     const card = planCard({ ...base, notice: 'Only the earlier part was read.', claims: [claim('C1', 'echoes', 1)], summary: null })
     expect(card.floorLine).toBe(PLAN_FLOOR_LINE)
-    expect(card.caveat).toMatch(/can move back/)
+    expect(card.caveat).toMatch(/changes only when the evidence behind it does/)
     expect(card.notice).toBe('Only the earlier part was read.')
   })
 

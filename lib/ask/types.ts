@@ -17,6 +17,26 @@ export type Verdict = 'echoes' | 'contradicts' | 'silent'
 
 export const VERDICTS: readonly Verdict[] = ['echoes', 'contradicts', 'silent'] as const
 
+/**
+ * The fewest distinct videos, each with a real comment we can show, that a
+ * supported or contradicted verdict stands on (walkthrough item 5).
+ *
+ * A verdict needs real support. Until this floor the rule was one quotable
+ * comment, so a claim read "Contradicted" on one or two videos and flipped
+ * back the next week. Below the floor a claim reads untested. Five is a
+ * default (walkthrough, 29 Sep), and the number the approved mock printed as
+ * "verdict floor 5 videos per claim"; 1 is the rule before it.
+ */
+export const PLAN_VERDICT_MIN_VIDEOS = 5
+
+/**
+ * How much of a changed verdict's evidence has to be NEW for the change to be
+ * printed: the share of its videos that were not behind the verdict it
+ * replaces. Below it the same evidence was read two ways, which is the model's
+ * variance and not the conversation moving.
+ */
+export const VERDICT_NEW_EVIDENCE_SHARE = 0.5
+
 /** A theme the verdict rests on. `registryId` is the cross-run key — the one a
  *  later re-evaluation can still resolve after labels churn. */
 export interface ThemeRef {
@@ -47,6 +67,14 @@ export interface ClaimResult {
    *  is implied rather than written — which the annotated view says out loud,
    *  because "your plan rests on this and never states it" is worth knowing. */
   source?: string | null
+  /**
+   * A verdict a re-reading proposed and the hold has not printed yet
+   * (`holdVerdicts`, lib/ask/verdicts.ts): an untested claim takes a verdict
+   * only when two re-readings in a row agree on it. Stored on the claim so the
+   * next re-reading can see the first one. Absent on every claim written
+   * before the hold, and on any claim nothing is pending for.
+   */
+  pending?: { verdict: Verdict } | null
 }
 
 export interface Judgement {

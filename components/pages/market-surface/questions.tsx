@@ -8,7 +8,6 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { JUDGE_NOT_CHECKED } from '@/lib/reading/own-posts'
 import {
   QUESTION_CHECKED_SHOWN, QUESTION_WINDOW_MONTHS,
   type MarketSurfaceData, type QuestionsBlock, type QuestionTouch,
@@ -23,14 +22,14 @@ import { LevelBar, MakerMark, RULE, SCALE } from '@/components/pages/overview/ma
 // month's question themes not led by makers, ranked by videos in the category
 // (the front page's "Asked" list), and the subjects the market asked about
 // most over the last three months. Every row says whether one of your posts
-// touched it, which post and on which words, or, where none did, the words
-// that were checked, so a "none" can be checked (DF risk 5).
+// touched it, and which post; where none did, the words that were looked for
+// ride on the "none" as a tooltip, so a "none" can still be checked (DF risk 5)
+// without the page reading as word-matching (walkthrough B8).
 //
 // A SUBJECT ROW NOBODY'S WORDS TOUCHED, AND THE JUDGE HAS NOT FILED, READS
-// "not checked yet" (WP3.6 done-when 6): the post-and-claim judge is the
-// second check, and before MF3 it has filed nothing. The word check still
-// prints beside it, so the front page's "none of your 56 posts shared two or
-// more of its words" and this row say the same thing about the words.
+// "none of N so far" with "some of your posts are still to be read for this"
+// under it (WP3.6 done-when 6, reworded in the walkthrough): never a false
+// "none", and never two statements in one cell.
 //
 // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep rulings):
 // the bases live in the column heads ("of 626", "of your 20"), the calibration
@@ -65,12 +64,21 @@ function PostLine({ post, mode }: { post: QuestionTouch['matched'][number]; mode
   const who = mode === 'app' && post.href
     ? <a href={post.href} target="_blank" rel="noreferrer" className="hover:underline">{day}</a>
     : day
+  // HOW IT WAS MATCHED IS OURS, NOT THE READER'S (walkthrough B8): "(the post
+  // check)" named the second check. The words the post shared stay: they are
+  // what it said.
   return (
     <span className="block">
-      {who}{post.by === 'judge' ? ' (the post check)' : ''}: <Words words={post.words} />
+      {who}: <Words words={post.words} />
     </span>
   )
 }
+
+/** What a "none" was checked against, where a reader can reach it without it
+ *  reading as word-matching on the page (walkthrough B8: "none of 25 ·
+ *  checked: seeking · model · recommendations"). */
+const lookedFor = (words: readonly string[], more: boolean): string | undefined =>
+  words.length > 0 ? `We looked in your posts for: ${words.join(', ')}${more ? ', …' : ''}` : undefined
 
 /** The "Your posts" cell: yes with the posts and words, none with what was
  *  checked, or not checked yet. */
@@ -99,24 +107,23 @@ function TouchCell({ touch, mode }: { touch: QuestionTouch; mode: RenderMode }) 
       </>
     )
   }
+  // ONE STATEMENT PER CELL (walkthrough B8). The unchecked cell said both
+  // "not checked yet" and "none of 61 shared two of its words"; it now says
+  // what is true in one line, and the words looked for ride as a tooltip.
+  const title = lookedFor(words, more)
   if (touch.state === 'unchecked') {
     return (
       <>
-        {lead(<>{whose}{JUDGE_NOT_CHECKED}</>)}
-        {tail(<>
-          <span data-copy="level">none of {fmtInt(touch.posts)}</span> shared two of its words
-          {words.length > 0 ? <>{WORD_SEP}checked: <Words words={words} more={more} /></> : null}
-        </>)}
+        {lead(<span title={title}>{whose}<span data-copy="level">none of {fmtInt(touch.posts)}</span> so far</span>)}
+        {tail(<>{UNCHECKED_TAIL}</>)}
       </>
     )
   }
-  return (
-    <>
-      {lead(<>{whose}<span data-copy="level">none of {fmtInt(touch.posts)}</span></>)}
-      {words.length > 0 ? tail(<>checked: <Words words={words} more={more} /></>) : null}
-    </>
-  )
+  return <>{lead(<span title={title}>{whose}<span data-copy="level">none of {fmtInt(touch.posts)}</span></span>)}</>
 }
+
+/** Said under a "none so far": the posts the closer check has not read yet. */
+export const UNCHECKED_TAIL = 'some of your posts are still to be read for this'
 
 /** A base is a level's "of N" only where a number follows "of". */
 const isLevelBase = (base: string | null): boolean => base != null && /^of \d/.test(base)
@@ -178,7 +185,7 @@ function Table({ title, videosBase, postsBase, rows, max, mode }: {
         <span role="columnheader" className="text-[15px] font-semibold leading-[1.35] text-foreground">{title}</span>
         <span role="columnheader" className={WIDE_ONLY} />
         <span role="columnheader"><Head top="Videos" base={videosBase} /></span>
-        <span role="columnheader" className={WIDE_ONLY}><Head top="Your posts" base={postsBase ? `${postsBase}${WORD_SEP}words matched` : null} align="left" /></span>
+        <span role="columnheader" className={WIDE_ONLY}><Head top="Your posts" base={postsBase} align="left" /></span>
       </div>
       {rows.map((r) => (
         <div key={r.key} role="row" className={`grid ${COLS} items-start py-2.5 ${RULE.row}`}>

@@ -2,7 +2,7 @@ import type { RenderMode } from '@/lib/blocks/types'
 import { glossaryRule } from '@/lib/calibration'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
-import type { GateTier } from '@/lib/curation'
+import { CURATION_GATE, type GateTier } from '@/lib/curation'
 
 // The evidence word, in three modes (Phase 1 WP14).
 //
@@ -26,8 +26,13 @@ const TONE: Record<GateTier, { app: string; bg: string; fg: string }> = {
   archive: { app: 'bg-inner text-muted-foreground', bg: EMAIL.inner, fg: EMAIL.muted },
 }
 
+const plural = (n: number, word: string): string => (n === 1 ? word : `${word}s`)
+
 const TIP: Record<GateTier, string> = {
-  confirmed: glossaryRule('strong_evidence'),
+  // The volume floor travels with the word (walkthrough item 10): the
+  // glossary's rule is confidence and sources, and the badge now also needs
+  // `CURATION_GATE.confirmedMinVideos` videos behind it.
+  confirmed: `${glossaryRule('strong_evidence')}, with at least ${fmtInt(CURATION_GATE.confirmedMinVideos)} ${plural(CURATION_GATE.confirmedMinVideos, 'video')} behind it`,
   early_signal: glossaryRule('early_signal'),
   archive: 'Below the evidence bar: it is shown, labelled, and not counted as a finding.',
 }

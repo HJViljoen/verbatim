@@ -100,6 +100,10 @@ import { LEAD_SQUARE, LEAD_UNDECIDED, leadStamp } from './lead-words'
  *  recommendation" (market-first WP1.9). A row tag, never header meta. */
 export const CURRENT_TAG = 'current recommendation'
 
+/** The quiet way to the rest of the ledger under the short list (walkthrough
+ *  item 6): no count, because the count was the noise. */
+export const EARLIER_ADVICE = 'Earlier advice, and other wordings of these →'
+
 /** The artboard's track widths, in order. The empty one is the title, which
  *  takes what is left. */
 const TRACKS = ['w-[22px]', '', 'w-[88px]', 'w-[96px]', 'w-[176px]', 'w-[100px]', 'w-[240px]'] as const
@@ -182,10 +186,12 @@ export function repeatColumn(rows: readonly AdviceRow[]): { shown: boolean; firs
 /** "Grounded in": a count, or the named absence that is not a zero. */
 function GroundedCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
   const g = row.grounded
+  // "an earlier read", not "evidence replaced" (walkthrough B8): 51 rows said
+  // the latter, which is our bookkeeping. The tooltip keeps the whole fact.
   const words = g == null
     ? 'not recorded'
     : g.pruned
-      ? 'evidence replaced'
+      ? 'an earlier read'
       : `${fmtInt(g.videos)} ${g.videos === 1 ? 'video' : 'videos'}`
   const title = g?.line ?? 'This advice did not record the evidence it was written from.'
   if (mode === 'email') {
@@ -281,6 +287,20 @@ function AfterwardsCell({ row, mode, folded = false, shared = null }: { row: Adv
   )
 }
 
+/** "also raised 4 times before, in other words": the older advice the short
+ *  list counted on this row (walkthrough item 6). Null where there is none. */
+export function alsoRaisedLine(row: Pick<AdviceRow, 'alsoRaised'>): string | null {
+  const n = row.alsoRaised ?? 0
+  if (n <= 0) return null
+  return `also raised ${n === 1 ? 'once' : `${fmtInt(n)} times`} in other words`
+}
+
+/** The expansion's heading. "Why we keep raising it" only where it HAS been
+ *  raised more than once, by an update or in other words: on a row marked
+ *  "First time" it said something the row beside it denied (item 6, B8). */
+export const whyHeading = (row: Pick<AdviceRow, 'timesMade' | 'alsoRaised'>): string =>
+  row.timesMade > 1 || (row.alsoRaised ?? 0) > 0 ? 'Why we keep raising it' : 'Why we recommend it'
+
 /** The artboard's expanded row: the argument, the grounding restated, and the
  *  advice's own comment as its own node. */
 function Expansion({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
@@ -288,7 +308,7 @@ function Expansion({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
   return (
     <TileBlock className="ml-[34px] flex min-w-0 flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Why we keep raising it</span>
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{whyHeading(row)}</span>
         {g && !g.pruned
           ? <span className="shrink-0 font-mono text-[11px] text-muted-foreground">grounded in <span data-copy="figure" className={FIGURE}>{fmtInt(g.videos)} {g.videos === 1 ? 'video' : 'videos'}</span></span>
           : null}
@@ -357,6 +377,7 @@ function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode
           {row.timesMade > 1
             ? <>repeated across <span data-copy="figure" className="font-semibold text-foreground">{fmtInt(row.timesMade)}</span> updates</>
             : repeated}
+          {alsoRaisedLine(row) ? <>{' · '}{alsoRaisedLine(row)}</> : null}
           {grounded != null
             ? <>{' · '}<span data-copy="figure" className="font-semibold text-foreground">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it</>
             : <>{' · '}<GroundedCell row={row} mode={mode} /></>}
@@ -395,12 +416,19 @@ export const marketAdvice: Block<MarketSurfaceData> = {
   question: 'What were we told to do, and what did we do about it?',
 
   render(data, mode = 'app', ctx?: BlockContext) {
-    const a = data.advice
+    // THE SHORT LIST IN THE APP (walkthrough item 6): the current advice, one
+    // row per idea, with the rest one quiet link away. Every other mode draws
+    // the ledger as it always did, so exports and briefs are unchanged.
+    const list = mode === 'app' ? data.advice.shortlist ?? null : null
+    const a = list ? { ...data.advice, rows: list.rows } : data.advice
     const email = mode === 'email'
     const empty = marketAdvice.emptyState(data)
-    const more = a.total - a.rows.length
+    const more = list ? list.earlier : a.total - a.rows.length
     const hrefFor = (lineageId: string) => `${ctx?.appUrl ?? ''}${marketSurfaceHref(lineageId, ctx?.params ?? {})}`
-    const showAll = openLink(mode, `${ctx?.appUrl ?? ''}${marketSurfaceHref(null, { ...(ctx?.params ?? {}), [LEDGER_ALL_PARAM]: LEDGER_ALL_VALUE })}`, `Show all ${fmtInt(a.total)} →`)
+    const allHref = `${ctx?.appUrl ?? ''}${marketSurfaceHref(null, { ...(ctx?.params ?? {}), [LEDGER_ALL_PARAM]: LEDGER_ALL_VALUE })}`
+    const showAll = list
+      ? <Link href={allHref} className="text-[12px] text-muted-foreground hover:text-foreground hover:underline">{EARLIER_ADVICE}</Link>
+      : openLink(mode, allHref, `Show all ${fmtInt(a.total)} →`)
     // THE LEAD CARD IS THE CURRENT RECOMMENDATION WHERE IT IS THE FIRST ROW
     // (it always is on a live page, WP1.9); a stored copy with no `current`
     // draws its table as it was sent.
@@ -559,6 +587,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                           </span>
                           {row.lineageId === a.current
                             ? <span className="block text-[11px] font-normal text-muted-foreground">{CURRENT_TAG}</span>
+                            : null}
+                          {alsoRaisedLine(row)
+                            ? <span className="block text-[11px] font-normal text-muted-foreground">{alsoRaisedLine(row)}</span>
                             : null}
                         </td>
                         <td className="py-1.5 pr-3">

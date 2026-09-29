@@ -35,12 +35,11 @@ import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 // translation sits under it, which is `BlockQuote`'s rule, not this block's.
 //
 // THE DATE IS THE RE-READING'S, AND THE ARTBOARD'S "held 2 updates" IS NOT
-// PRINTED. A verdict held across two updates has no field — the card's own
-// `caveat` says nothing here is held before it is printed, which is the
-// measured position (`PLAN_HOLD_CAVEAT`, and Össur's C1 went contradicts →
-// silent → contradicts → silent over four consecutive re-readings). What makes
-// the chips checkable instead is `checkedOn`: the update these verdicts were
-// last read on, printed as the footer note.
+// PRINTED. Since the walkthrough (item 5) a verdict IS held — it changes only
+// when the evidence behind it does (`holdVerdicts`, lib/ask/verdicts.ts, and
+// the card's `caveat` says so) — but the card has no per-claim count of
+// updates to print. What makes the chips checkable is `checkedOn`: the update
+// these verdicts were last read on, printed as the footer note.
 
 const SEGMENT: { key: 'supported' | 'contradicted' | 'untested'; label: string; colour: string }[] = [
   { key: 'supported', label: 'Supported', colour: 'var(--you)' },

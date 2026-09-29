@@ -4,8 +4,10 @@ import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
 import { currentTopLineage, recommendationOrder, recUpdateOf, recUpdateTimes } from '../dashboard-tiles'
 import { fmtInt, monthName, shortDate } from '../format'
-import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
+import { claimVerdictFor, distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
+import { loadClaimEchoes, loadMarketMonthVideos } from './claim-echo'
+import { ADVICE_SHORTLIST, adviceShortlist, adviceVectors, currentAdvice as currentAdviceRows } from './advice-shortlist'
 import { cleanQuote, createCitedQuotePicker, fetchInsightsByIds, readingOf, readTranslations, type QuoteRow, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { methodLines, type MethodLines } from '../reading/method'
@@ -35,7 +37,7 @@ import { levelText } from '../reading/level'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
 import {
-  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, marketClaimEcho, marketEchoReading, ownPostFilings, postsTouching, touchWords,
+  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, ownPostFilings, postsTouching, touchWords,
   type ClaimEcho, type OwnPostFilings, type OwnPostSubjectRow, type TouchPost,
 } from '../reading/own-posts'
 import { INDUSTRY_AUDIENCE } from '../rivals'
@@ -212,6 +214,13 @@ export interface AdviceRow {
    * with no chip.
    */
   firstInLatest?: boolean
+  /** The latest update that carried advice raised it (its newest copy is that
+   *  update's): what makes it current advice (walkthrough item 6,
+   *  `currentAdvice`). OPTIONAL, like `firstInLatest`. */
+  inLatest?: boolean
+  /** Other pieces of advice that said the same thing in other words, counted
+   *  on this row by the short list (`adviceShortlist`). Absent where none. */
+  alsoRaised?: number
   /** How many CALENDAR MONTHS have carried it — the design's column. Two
    *  updates three days apart is one month, and the ledger says one. */
   monthsRepeated: number
@@ -281,6 +290,16 @@ export interface AdviceBlock {
   /** What this ledger cannot say yet, named on the block. */
   unlock: string
   empty: string | null
+  /**
+   * THE DEFAULT LIST (walkthrough item 6): the current advice, one row per
+   * idea, a handful (`adviceShortlist`), and how many rows it leaves out. The
+   * page draws it in the app; `rows` above keeps the ledger's old twelve for
+   * every other reader (exports, briefs, the quarterly), which are unchanged.
+   * Null on `?ledger=all` and wherever the loader was not asked for it (every
+   * caller but the page: `loadMarketSurface`'s `shortlist` option); absent on
+   * a stored copy.
+   */
+  shortlist?: { rows: AdviceRow[]; earlier: number } | null
 }
 
 export interface MoveRow {
@@ -398,7 +417,7 @@ export interface WaysBlock {
   /** The hold MK5's per-month verdict does not have, said once. */
   claimsCaveat: string
   /** The lineage "accept this advice" acts on, when there is one to accept. */
-  acceptable: { lineageId: string; recommendationId: string; title: string } | null
+  acceptable: { lineageId: string; recommendationId: string; title: string; current?: boolean } | null
   empty: string | null
   /** WP3.6 Y3: your claims by subject. OPTIONAL: absent on a stored copy, and
    *  null where your claims could not be read. */
@@ -655,6 +674,7 @@ export function buildAdviceRows(
       firstMade: (oldest.created_at ?? '').slice(0, 10),
       timesMade: runs,
       firstInLatest: latestUpdate != null && group.every((c) => recUpdateOf(c) === latestUpdate),
+      inLatest: latestUpdate != null && recUpdateOf(newest) === latestUpdate,
       monthsRepeated: months.length,
       repeatedWithinMonth: runs > 1 && months.length <= 1,
       status,
@@ -810,9 +830,16 @@ export function acceptableRow(
   requested: AdviceRow | null,
 ): AdviceRow | null {
   if (requested && requested.status === 'new') return requested
-  // THE OLDEST BY AGE, NOT THE LEDGER'S FIRST. MK5 prints "The oldest you have
-  // not decided on", and since WP1.9 the ledger runs current-first, so the age
-  // order is taken here rather than inherited from the rows' order.
+  // THE CURRENT ADVICE FIRST (walkthrough item 6). "The oldest you have not
+  // decided on" named June's "Develop Brand Loyalty and Product Enthusiasm
+  // Campaigns", which no update since has raised. The first undecided row the
+  // latest update raised is offered, in the ledger's order (the current
+  // recommendation leads it); the oldest only where the latest raised none.
+  const current = rows.find((r) => r.inLatest === true && r.status === 'new')
+  if (current) return current
+  // THE OLDEST BY AGE, NOT THE LEDGER'S FIRST, where nothing is current: since
+  // WP1.9 the ledger runs current-first, so the age order is taken here rather
+  // than inherited from the rows' order.
   const byAge = [...rows].sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
   return byAge.find((r) => r.status === 'new') ?? null
 }
@@ -1266,7 +1293,14 @@ interface InsightRow {
  * conclusions, no advice and no decisions, and the page says so once rather
  * than drawing five blocks of absences.
  */
-export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData | null> {
+export async function loadMarketSurface(
+  scope: Scope,
+  /** `shortlist`: build the app's short list of current advice (walkthrough
+   *  item 6), which makes one embedding call on a cold server. OFF unless the
+   *  caller asks: only the Your moves page draws it, so briefs, the quarterly
+   *  and scripts load the ledger as they always did, with no model call. */
+  options: { shortlist?: boolean } = {},
+): Promise<MarketSurfaceData | null> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const params = scope.params as MarketSurfaceParams
@@ -1449,7 +1483,16 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     : null
   // "Show all" (the preview's footer link): every identity, to a cap.
   const showAll = params.ledger === LEDGER_ALL_VALUE
-  const shownRows = ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null, showAll ? LEDGER_ALL_CAP : LEDGER_SHOWN)
+  const ledgerShown = ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null, showAll ? LEDGER_ALL_CAP : LEDGER_SHOWN)
+  // THE SHORT LIST (walkthrough item 6): the current advice, one row per idea.
+  // Its rows are read below with the ledger's own (grounding, afterwards, the
+  // quote), so they are added to the rows read; the vectors that decide which
+  // rows are one idea go out now and are taken when the block is built.
+  const wantShortlist = options.shortlist === true && !showAll
+  const currentRows = wantShortlist ? currentAdviceRows(adviceRows) : []
+  const vectorsAhead = wantShortlist ? adviceVectors(adviceRows) : Promise.resolve(null)
+  const shownIds = new Set(ledgerShown.map((r) => r.lineageId))
+  const shownRows = [...ledgerShown, ...currentRows.filter((r) => !shownIds.has(r.lineageId))].sort((a, b) => a.number - b.number)
 
   // The market insights the drawn rows follow from. BY ID, not by run: a piece
   // of advice first made in June cites June's insights, and reading only the
@@ -1589,8 +1632,21 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   for (const c of [...recRows].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id))) {
     heroByLineage.set(lineageKey(c), c.hero_quote ?? '')
   }
+  const readRows = await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById)
+  const shortlist = !wantShortlist ? null : await (async () => {
+    const vectors = await vectorsAhead
+    const list = adviceShortlist(adviceRows, vectors ? (id) => vectors.get(id) : null, { shown: ADVICE_SHORTLIST })
+    const byId = new Map(readRows.map((r) => [r.lineageId, r]))
+    const drawn = list.lineages.map((id) => byId.get(id)).filter((r): r is AdviceRow => Boolean(r))
+    // The row a link named is drawn whether or not it made the list.
+    const named = requestedRow && !list.lineages.includes(requestedRow.lineageId) ? byId.get(requestedRow.lineageId) ?? null : null
+    const rows = (named ? [...drawn, named].sort((a, b) => a.number - b.number) : drawn)
+      .map((r) => (list.alsoRaised.get(r.lineageId) ? { ...r, alsoRaised: list.alsoRaised.get(r.lineageId) } : r))
+    return { rows, earlier: adviceRows.length - rows.length }
+  })()
   const advice: AdviceBlock = {
-    rows: await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById),
+    rows: readRows.filter((r) => shownIds.has(r.lineageId)),
+    shortlist,
     // The ledger's first row: `buildAdviceRows` sorts this same answer first.
     current: currentTopLineage(recRows),
     highlight: requestedRow?.lineageId ?? null,
@@ -1704,27 +1760,18 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // ── MK5 · how a move is made ───────────────────────────────────────────
   const claimEntries = ledgerRows(summary?.say_vs_hear ?? [], CLAIM_ROWS)
   // Y3 · EACH CLAIM COUNTED IN THE MARKET (IO F48): the videos behind the
-  // evidence Pass D-a cited for it, inside the month's market videos.
-  const supportIds = [...new Set(claimEntries.flatMap((e) => e.supporting_theme_ids ?? []))]
-  const supportVideo = supportIds.length > 0 && marketVideos != null
-    ? new Map((await fetchInsightsByIds<{ id: string; source_video_id: string | null }>(supabase, supportIds, 'id, source_video_id')
-        .catch(logAs('claims.support', [] as { id: string; source_video_id: string | null }[])))
-        .map((r) => [r.id, r.source_video_id]))
-    : new Map<string, string | null>()
+  // evidence Pass D-a cited for it, inside the month's market videos — and,
+  // apart, your own posts behind the same evidence (walkthrough item 8). The
+  // ONE counting Subjects reads too (`loadClaimEchoes`).
+  const echoes = await loadClaimEchoes({ supabase, reading, clientId, month, entries: claimEntries, marketVideos })
   const claims: ClaimRow[] = claimEntries.map((e, i) => ({
     id: `c${i}`,
     youSay: e.you_say,
     theySay: e.they_say,
     gap: e.gap,
     audience: e.audience,
-    verdictLabel: e.audience === 'echoes' ? 'Echoed' : e.audience === 'contradicts' ? 'Pushed back' : 'Not taken up',
-    echo: marketClaimEcho({
-      stance: e.audience,
-      reading: marketEchoReading(
-        (e.supporting_theme_ids ?? []).map((id) => supportVideo.get(id)).filter((v): v is string => Boolean(v)),
-        marketVideos,
-      ),
-    }),
+    verdictLabel: e.audience === 'echoes' ? 'Echoed' : e.audience === 'contradicts' ? claimVerdictFor(e.audience, e.they_say).label : 'Not taken up',
+    echo: echoes[i],
   }))
   const claimSubjects = buildClaimSubjects({
     claims: clientClaims,
@@ -1745,7 +1792,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
       ? 'Nothing you have said in your own posts has been read against the conversation this update.'
       : `${fmtInt(claims.length)} ${claims.length === 1 ? 'claim' : 'claims'} of yours, read against what the conversation said back.`,
     claimsCaveat: CLAIMS_CAVEAT,
-    acceptable: acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title } : null,
+    acceptable: acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title, current: acceptable.inLatest === true } : null,
     empty: null,
     claimSubjects,
   }
@@ -1985,16 +2032,6 @@ async function loadClientClaims(supabase: SupabaseClient, clientId: string): Pro
       .eq('entity', 'client')
       .order('id', { ascending: true }),
   )
-}
-
-/** The reading month's market videos (MF1 `market_month_videos`), as a set.
- *  Null where the function is not there or the read failed: Y3 then counts
- *  nothing and says so. */
-async function loadMarketMonthVideos(reading: ReadingHandle, clientId: string, month: string): Promise<Set<string> | null> {
-  const rows = await selectAll<{ video_id: string }>(() =>
-    reading.client.rpc('market_month_videos', { p_client: clientId, p_month: month }).select('video_id').order('video_id', { ascending: true }) as never,
-  )
-  return new Set(rows.map((r) => String(r.video_id)))
 }
 
 /**

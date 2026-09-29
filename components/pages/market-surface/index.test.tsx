@@ -2,16 +2,17 @@ import { describe, it, expect } from 'vitest'
 
 import { blockAnswers, blockContext, figureCount, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { assertCopyContract } from '@/lib/test/copy-contract'
+import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { marketClaimEcho } from '@/lib/reading/own-posts'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
 import { MARKET_BLOCKS, MOVES_STACKS, MarketSurfacePage, drawnOnMarket, startClasses, tileGrid } from './index'
 import { marketConclusions } from './conclusions'
-import { CURRENT_TAG, marketAdvice } from './advice'
+import { CURRENT_TAG, EARLIER_ADVICE, marketAdvice, whyHeading } from './advice'
 import { marketCard } from './card'
 import { marketMoves } from './moves'
 import { marketPlans } from './plans'
@@ -503,11 +504,13 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/Afterwards\s+—/)
   })
 
-  it('says the evidence was replaced rather than printing zero videos behind a row', () => {
+  it('says the evidence is an earlier read rather than printing zero videos behind a row', () => {
     // Every cited `audience_insights` row of Sealand's twelve drawn rows has
     // been pruned, so the column would otherwise read "0 videos" down the page.
+    // It said "evidence replaced" on 51 rows, which is our bookkeeping (B8).
     const text = renderText(marketAdvice.render(unrecordedFixture(), 'app', ctx))
-    expect(text).toContain('evidence replaced')
+    expect(text).toContain('an earlier read')
+    expect(text).not.toContain('evidence replaced')
     expect(text).not.toContain('0 videos')
   })
 
@@ -788,6 +791,39 @@ describe('MK5 · how a move is made', () => {
   })
 })
 
+describe('MK5b · say vs hear, whose reading it is (walkthrough item 8)', () => {
+  const asked = 'People love upcycling ideas and anti-waste design, but they also ask what materials are used, where they come from, and whether an upcycling claim is genuine.'
+  const followers = 'People respond to Sealand as a community-rooted label, praising the cleanup work and expressing interest in showing up for events.'
+  const d = (() => {
+    const base = marketFixture()
+    return {
+      ...base,
+      ways: {
+        ...base.ways,
+        claims: [
+          { ...base.ways.claims[0], theySay: asked, audience: 'contradicts', echo: marketClaimEcho({ stance: 'contradicts', reading: { k: 125, n: 852 }, theySay: asked }) },
+          { ...base.ways.claims[1], theySay: followers, audience: 'echoes', echo: marketClaimEcho({ stance: 'echoes', reading: { k: 0, n: 852 }, theySay: followers, followers: 3 }) },
+        ],
+      },
+    }
+  })()
+
+  it('calls questions questions, not pushback', () => {
+    const text = renderText(marketSayHear.render(d, 'app', ctx))
+    expect(text).toContain('Questioned')
+    expect(text).not.toContain('Pushed back')
+  })
+
+  it('says a sentence is your followers’ where the market carried none of it', () => {
+    const text = renderText(marketSayHear.render(d, 'app', ctx))
+    expect(text).toContain('Not talked about')
+    expect(text).toContain('0 of 852 videos in')
+    expect(text).toContain('Said by your own followers, not your market:')
+    expect(text).toContain('raised under 3 of your own posts')
+    expect(copyViolations(marketSayHear.render(d, 'app', ctx))).toEqual([])
+  })
+})
+
 describe('MK5b · say vs hear', () => {
   it('is its own card, with the verdicts and the hold they do not have', () => {
     const text = renderText(marketSayHear.render(marketFixture(), 'app', ctx))
@@ -915,7 +951,8 @@ describe('MK6 · plans re-checked', () => {
   it('says what a claim count is a count of, and what the floor is', () => {
     const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
     expect(text).toContain('not out of one month')
-    expect(text).toContain('nothing here is held')
+    // The hold is real since the walkthrough (item 5), and the card says how.
+    expect(text).toContain('changes only when the evidence behind it does')
   })
 
   it('says how many plans have been checked when it is drawing one of several', () => {
@@ -1123,5 +1160,41 @@ describe('The advice · what you decided about the current recommendation, and M
     for (const over of [{}, { status: 'acted_on' as const, statusLabel: 'Done' }, { status: 'new' as const, statusLabel: 'New', decidedAt: null }]) {
       for (const mode of MODES) assertCopyContract(render(marketAdvice.render(withLead(over), mode, ctx)))
     }
+  })
+})
+
+// Walkthrough item 6: "Show all 79" under 12 rows, several of them one idea.
+describe('MK2 · the short list in the app', () => {
+  const base = marketFixture()
+  const [first, second, third] = base.advice.rows
+  const d = { ...base, advice: { ...base.advice, shortlist: { rows: [first, { ...second, alsoRaised: 4 }], earlier: base.advice.total - 2 } } }
+
+  it('draws the short list, with the rest one quiet link away', () => {
+    const text = renderText(marketAdvice.render(d, 'app', ctx))
+    expect(text).toContain(second.title)
+    expect(text).not.toContain(third.title)
+    expect(text).toContain(EARLIER_ADVICE)
+    expect(text).not.toMatch(/Show all \d/)
+    expect(render(marketAdvice.render(d, 'app', ctx))).toContain('ledger=all')
+  })
+
+  it('says when an idea came back in other words', () => {
+    expect(renderText(marketAdvice.render(d, 'app', ctx))).toContain('also raised 4 times in other words')
+  })
+
+  it('leaves exports and briefs the ledger they always drew', () => {
+    const email = renderText(marketAdvice.render(d, 'email', ctx))
+    expect(email).toContain(third.title)
+    expect(email).toMatch(/Show all \d/)
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(marketAdvice.render(d, 'app', ctx))
+  })
+
+  it('does not say "Why we keep raising it" over advice raised once', () => {
+    expect(whyHeading({ timesMade: 1 })).toBe('Why we recommend it')
+    expect(whyHeading({ timesMade: 1, alsoRaised: 2 })).toBe('Why we keep raising it')
+    expect(whyHeading({ timesMade: 3 })).toBe('Why we keep raising it')
   })
 })

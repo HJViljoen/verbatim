@@ -417,6 +417,21 @@ describe('notAnsweredFrom', () => {
     expect(n.line.startsWith('40 of 40 questions asked this month.')).toBe(true)
   })
 
+  it('does not call an answer with too little behind it answered (walkthrough item 4)', () => {
+    const thin = [
+      { role: 'user', content: 'What do people think of Sealand?', outcome: null, result: null, created_at: at(5) },
+      { id: 'r5', role: 'agent', content: '…', outcome: 'answered', result: { silent: false, grounded: [{ conversationCount: 1 }, { conversationCount: 1 }] }, created_at: at(5) },
+      { role: 'user', content: 'What about fit?', outcome: null, result: null, created_at: at(6) },
+      { id: 'r6', role: 'agent', content: '…', outcome: 'answered', result: { silent: false, grounded: [{ conversationCount: 40 }] }, created_at: at(6) },
+    ]
+    const n = notAnsweredFrom(thin, '2026-09-01T00:00:00.000Z', 40)
+    expect(n.declined).toEqual([{ question: 'What do people think of Sealand?', why: DECLINED_WHY.too_little }])
+    expect(n.line).toBe('2 of 40 questions asked this month. 1 of them could not be answered from the conversation.')
+    // A thread page's own floor, where it has one, decides over the stored count.
+    const page = notAnsweredFrom(thin, '2026-09-01T00:00:00.000Z', 40, (r) => (r.id === 'r6' ? true : r.id === 'r5' ? false : undefined))
+    expect(page.declined).toEqual([{ question: 'What about fit?', why: DECLINED_WHY.too_little }])
+  })
+
   it('counts an unanswered question as asked — it was, and it was paid for', () => {
     const n = notAnsweredFrom(
       [{ role: 'user', content: 'in flight', outcome: null, result: null, created_at: at(4) }],

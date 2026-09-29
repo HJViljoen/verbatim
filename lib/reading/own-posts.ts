@@ -1,6 +1,6 @@
-import { longMonth } from '../format'
+import { fmtInt, longMonth } from '../format'
 import { printsClient, type SubjectCalibration } from '../subjects/calibration-state'
-import { claimVerdict } from '../market-tiles'
+import { claimVerdictFor, readsAsQuestions } from '../market-tiles'
 import { PASS_A_MIN_COMMENTS_DEFAULT } from '../config'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { monthStartOf } from './month-key'
@@ -75,6 +75,17 @@ export interface ClaimEcho {
   label: string
   /** Why nothing was counted, for `not_tracked` and `silent`. */
   why: string | null
+  /** A `pushed_back` whose words ask rather than argue: its label is
+   *  "Questioned" (`readsAsQuestions`, walkthrough item 8). */
+  questioned?: boolean
+  /**
+   * The client's OWN posts behind the evidence the claim's reading rests on
+   * (walkthrough item 8). The market count above is the market's; this is
+   * your followers', counted separately so a sentence written off your own
+   * comment sections is never read as the market's. Absent where it was not
+   * counted.
+   */
+  followers?: number
 }
 
 export interface OwnClaimRow {
@@ -355,6 +366,11 @@ export interface ClaimEchoInput {
   tracked?: boolean
   /** Overrides the reason sentence, for a caller that knows a better one. */
   why?: string | null
+  /** What came back, in Pass D-a's words: decides "Questioned" over "Pushed
+   *  back" (`readsAsQuestions`). */
+  theySay?: string | null
+  /** Your own posts behind the claim's evidence (`ClaimEcho.followers`). */
+  followers?: number
 }
 
 /**
@@ -369,8 +385,8 @@ export interface ClaimEchoInput {
  * point the stance picks which.
  */
 export function claimEcho(input: ClaimEchoInput): ClaimEcho {
-  const word = (a: 'echoes' | 'contradicts' | 'silent'): string => claimVerdict(a).label
-  const base = { audience: input.audience, audienceLabel: input.audienceLabel }
+  const word = (a: 'echoes' | 'contradicts' | 'silent'): string => claimVerdictFor(a, input.theySay).label
+  const base = { audience: input.audience, audienceLabel: input.audienceLabel, ...(input.followers != null ? { followers: input.followers } : {}) }
   if (input.tracked === false) {
     return { ...base, state: 'not_tracked', value: { k: 0, n: 0 }, label: 'not tracked', why: input.why ?? OWN_POSTS_UNREADABLE }
   }
@@ -387,6 +403,7 @@ export function claimEcho(input: ClaimEchoInput): ClaimEcho {
     value: input.reading,
     label: word(pushed ? 'contradicts' : 'echoes'),
     why: null,
+    ...(pushed && readsAsQuestions(input.theySay) ? { questioned: true } : {}),
   }
 }
 
@@ -813,13 +830,42 @@ export function marketEchoReading(
   return { k, n: monthMarketVideos.size }
 }
 
-/** A say-vs-hear claim's echo, counted in the market. */
-export function marketClaimEcho(input: { stance: string | null; reading: Counted | null }): ClaimEcho {
+/** A say-vs-hear claim's echo, counted in the market. `followers` is your
+ *  own posts behind the same evidence, counted apart (walkthrough item 8). */
+export function marketClaimEcho(input: { stance: string | null; reading: Counted | null; theySay?: string | null; followers?: number }): ClaimEcho {
   return claimEcho({
     audience: MARKET_ECHO_AUDIENCE,
     audienceLabel: MARKET_ECHO_LABEL,
     reading: input.reading,
     stance: input.stance,
+    theySay: input.theySay ?? null,
+    followers: input.followers,
     why: input.reading == null ? ECHO_MARKET_UNREAD : null,
   })
 }
+
+/**
+ * The claim's reading rests on your own followers and not on the market: the
+ * market carried none of it this month, and your own posts carried some.
+ * Both pages say so in these words (walkthrough item 8), so "Echoed" on one
+ * and "Not talked about" on the other cannot read as a contradiction.
+ */
+export const followersOnly = (echo: ClaimEcho | null | undefined): boolean =>
+  // SILENT ONLY: "your market did not take it up" is a count of the market,
+  // and `not_tracked` is the market going uncounted (its videos unread), about
+  // which nothing may be said.
+  echo != null && echo.state === 'silent' && (echo.followers ?? 0) > 0
+
+/** What your own followers did with the claim, where the market did nothing
+ *  with it: the stance Pass D-a read, said about your followers. Null where
+ *  the reading is not your followers' alone. */
+export function followersLine(echo: ClaimEcho | null | undefined, stance: string | null | undefined, theySay?: string | null): string | null {
+  if (!followersOnly(echo) || !stance || stance === 'silent') return null
+  const did = stance === 'contradicts' ? (readsAsQuestions(theySay) ? 'questioned it' : 'pushed back on it') : 'echoed it'
+  return `Your own followers ${did}, under ${fmtInt(echo?.followers ?? 0)} of your posts; your market did not take it up this month.`
+}
+
+/** "raised under 3 of your own posts" — the follower count beside the
+ *  market's, where there is one. */
+export const followersCount = (echo: ClaimEcho | null | undefined): string | null =>
+  echo && (echo.followers ?? 0) > 0 ? `raised under ${fmtInt(echo.followers as number)} of your own posts` : null

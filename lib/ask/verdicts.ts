@@ -11,7 +11,9 @@
 import { cosine } from '../pipeline/cluster'
 import { CITATION_RELEVANCE_FLOOR } from '../config'
 import type { ClaimResult, ExtractedClaim, Judgement, ThemeRef, Verdict } from './types'
-import { VERDICTS } from './types'
+import { PLAN_VERDICT_MIN_VIDEOS, VERDICT_NEW_EVIDENCE_SHARE, VERDICTS } from './types'
+
+export { PLAN_VERDICT_MIN_VIDEOS, VERDICT_NEW_EVIDENCE_SHARE }
 
 /** A theme as the engine handles it: identity, prose, grounding, embedding. */
 export interface AskTheme {
@@ -115,7 +117,9 @@ export function validateVerdicts(
   claims: ExtractedClaim[],
   themesByClaimRef: Map<string, AskTheme[]>,
   grounding?: Grounding,
+  opts: { minVideos?: number } = {},
 ): ClaimResult[] {
+  const minVideos = opts.minVideos ?? PLAN_VERDICT_MIN_VIDEOS
   const byRef = new Map(claims.map((c) => [normaliseRef(c.ref), c]))
   const seen = new Set<string>()
   const results = new Map<string, ClaimResult>()
@@ -167,6 +171,11 @@ export function validateVerdicts(
     const videos = grounding
       ? new Set(quotable.map((id) => grounding.videoByInsightId.get(id)).filter(Boolean) as string[])
       : new Set(picked.flatMap((t) => t.videoIds))
+    // THE FLOOR (item 5): a verdict on fewer videos than this is not one.
+    if (videos.size < minVideos) {
+      results.set(key, silentResult(claim))
+      continue
+    }
 
     results.set(key, {
       ref: claim.ref,
@@ -199,6 +208,74 @@ function silentResult(claim: ExtractedClaim): ClaimResult {
     insightIds: [],
     source: claim.source ?? null,
   }
+}
+
+/** A claim's verdict stands on real support: supported or contradicted, on
+ *  at least the floor's videos. */
+export const verdictStands = (c: ClaimResult): boolean =>
+  c.verdict !== 'silent' && c.conversationCount >= PLAN_VERDICT_MIN_VIDEOS
+
+/**
+ * Hold each claim's verdict unless the evidence behind it has moved
+ * (walkthrough item 5).
+ *
+ * THE RE-READING IS A FRESH MODEL CALL, AND IT FLIPPED ON NO NEW EVIDENCE.
+ * Sealand's mock plan went Contradicted → Supported → Untested → Contradicted
+ * on one claim in three weeks, and "Supported → Untested" on four others,
+ * while the videos behind them had not changed. So a re-reading proposes and
+ * this decides, per claim, against the verdict printed last:
+ *
+ *   - the same verdict: the fresh reading is taken (its count and evidence are
+ *     the newer);
+ *   - the last one was untested, or under the floor: a fresh untested stands,
+ *     and a fresh verdict is printed only when the re-reading before it
+ *     proposed the same one (`pending`) — two readings in a row agree;
+ *   - the last one stood on real support and the fresh one is untested: the
+ *     last one is kept. Plan-check evidence is protected from pruning
+ *     (AGENTS.md), so the videos it stood on are still there;
+ *   - it stood and the fresh one says the opposite: printed only where at
+ *     least `VERDICT_NEW_EVIDENCE_SHARE` of the fresh verdict's videos are
+ *     new, else the last one is kept.
+ *
+ * `videosOf` names the videos behind a claim's evidence; the caller resolves
+ * them (a re-read of a video mints new insight ids, so the ids alone would
+ * read as new evidence).
+ */
+export function holdVerdicts(
+  previous: readonly ClaimResult[],
+  fresh: readonly ClaimResult[],
+  videosOf: (c: ClaimResult) => ReadonlySet<string>,
+): ClaimResult[] {
+  const prev = new Map(previous.map((c) => [normaliseRef(c.ref), c]))
+  return fresh.map((f) => {
+    const p = prev.get(normaliseRef(f.ref))
+    const freshClaim = withoutPending(f)
+    if (!p) return freshClaim
+    if (p.verdict === f.verdict) return freshClaim
+    if (!verdictStands(p)) {
+      if (f.verdict === 'silent') return freshClaim
+      if (p.pending?.verdict === f.verdict) return freshClaim
+      const base = p.verdict === 'silent' ? p : { ...silentResult(p), source: p.source ?? null }
+      return { ...base, claim: f.claim, pending: { verdict: f.verdict } }
+    }
+    if (f.verdict === 'silent') return keep(p, f)
+    const before = videosOf(p)
+    const after = [...videosOf(f)]
+    const fresher = after.length === 0 ? 0 : after.filter((v) => !before.has(v)).length / after.length
+    return fresher >= VERDICT_NEW_EVIDENCE_SHARE ? freshClaim : keep(p, f)
+  })
+}
+
+/** The printed verdict carried forward: its evidence, the claim's current
+ *  words, and nothing pending. */
+function keep(p: ClaimResult, f: ClaimResult): ClaimResult {
+  return { ...withoutPending(p), claim: f.claim }
+}
+
+function withoutPending(c: ClaimResult): ClaimResult {
+  const out = { ...c }
+  delete out.pending
+  return out
 }
 
 export function summarise(claims: ClaimResult[]) {

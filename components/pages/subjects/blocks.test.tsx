@@ -1009,10 +1009,33 @@ describe('SU5 · say vs hear', () => {
     expect(text).not.toContain('not tracked')
     // Thirteen claims and three rows, so the whole ledger is counted under
     // them, in the rows' words.
-    expect(text).toContain('13 claims · 3 echoed · 2 pushed back · 8 not taken up')
+    expect(text).toContain('13 claims · 3 echoed · 2 pushed back · 8 not talked about')
     expect(renderText(subjectsSayHear.render(subjectsFixture(), 'email', ctx))).toContain('13 claims · 3 echoed · 2 pushed back · 8 silent')
     const all = renderText(subjectsSayHear.render({ ...subjectsFixture(), sayHear: { total: 3, echoed: 1, pushedBack: 1, silent: 1 } }, 'app', ctx))
     expect(all).not.toContain('3 claims')
+  })
+
+  // Walkthrough item 8: Subjects printed "Echoed" for Protect Our Paths while
+  // Your moves printed "Not talked about · 0 of 852"; both now read one
+  // counting, and a reading that is your followers' says so.
+  it('prints the market’s word and your followers’ reading apart, as Your moves does', () => {
+    const base = subjectsFixture()
+    const d = {
+      ...base,
+      sayHear: { total: 2, echoed: 0, pushedBack: 1, silent: 1, questioned: 1 },
+      sayHearClaims: [
+        { claim: 'Our products are acts of defiance against overconsumption.', state: 'pushed_back' as const, label: 'Questioned', questioned: true, note: null },
+        { claim: 'Protect Our Paths is a community-driven environmental initiative.', state: 'silent' as const, label: 'Not talked about', note: 'Your own followers echoed it, under 3 of your posts; your market did not take it up this month.' },
+      ],
+    }
+    const text = renderText(subjectsSayHear.render(d, 'app', ctx))
+    expect(text).toContain('Questioned')
+    expect(text).not.toContain('Pushed back')
+    expect(text).toContain('Not talked about')
+    expect(text).not.toContain('Echoed')
+    expect(text).toContain('Your own followers echoed it')
+    expect(copyViolations(subjectsSayHear.render(d, 'app', ctx))).toEqual([])
+    expect(renderText(subjectsSayHear.render(d, 'email', ctx))).toContain('questioned')
   })
 
   it('sets a claim as plain text, never as a quotation', () => {
