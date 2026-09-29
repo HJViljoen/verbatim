@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { articleFor } from '@/lib/team-copy'
 import { loadInvite } from './data'
 import { AcceptButton, SignupAcceptForm } from './invite-ui'
 
@@ -57,8 +58,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <Shell title={`Join ${company}`}>
       <p className="mb-5 text-sm text-muted-foreground">
-        You’ve been invited to join <strong>{company}</strong> on Verbatim as a{' '}
-        <strong>{invite.role}</strong>.
+        You’ve been invited to join <strong>{company}</strong> on Verbatim as{' '}
+        {articleFor(invite.role)} <strong>{invite.role}</strong>.
       </p>
       {user
         ? <AcceptButton token={token} />

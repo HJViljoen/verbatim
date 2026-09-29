@@ -7,6 +7,7 @@ import { getSessionContext, canManageTenant, ROLES } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
 import { sendInviteEmail } from '@/lib/email'
+import { canResendInvite } from '@/lib/team-copy'
 
 // State shape (a type, erased at build) — the idle value lives in the client
 // component, since a 'use server' module may only export async functions.
@@ -28,7 +29,8 @@ const inviteSchema = z.object({
 // and RLS on invitations is the backstop. The invite link is returned so it can
 // be shared manually until an email provider is wired.
 export async function inviteMember(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { supabase, clientId, role, userId, email: inviterEmail } = await getSessionContext()
+  const session = await getSessionContext()
+  const { role } = session
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to invite people.' }
   }
@@ -45,6 +47,20 @@ export async function inviteMember(_prev: ActionState, formData: FormData): Prom
   if (role === 'admin' && grantRole !== 'member') {
     return { ok: false, message: 'Admins can only invite members. Ask an owner to grant elevated roles.' }
   }
+
+  return createInvite(session, email, grantRole)
+}
+
+/** The invite itself, once the caller has checked who may send it: the row,
+ *  the email, and the link back. Shared by `inviteMember` and
+ *  `resendInvitation`, so a resent invite is exactly a new one. Not exported:
+ *  a 'use server' module's exports are POST-reachable actions. */
+async function createInvite(
+  session: Awaited<ReturnType<typeof getSessionContext>>,
+  email: string,
+  grantRole: (typeof ROLES)[number],
+): Promise<ActionState> {
+  const { supabase, clientId, userId, email: inviterEmail } = session
 
   // Already a teammate? (RLS lets owners/admins see their tenant's users.)
   const { data: existing } = await supabase
@@ -65,7 +81,7 @@ export async function inviteMember(_prev: ActionState, formData: FormData): Prom
   if (error) {
     // Unique partial index → a pending invite for this email already exists.
     if (error.code === '23505') {
-      return { ok: false, message: 'There’s already a pending invite for that email. Revoke it first to re-send.' }
+      return { ok: false, message: 'There’s already a pending invite for that email. Use Resend beside it to send a fresh one.' }
     }
     return { ok: false, message: `Could not create invite: ${error.message}` }
   }
@@ -131,6 +147,42 @@ export async function revokeInvitation(_prev: ActionState, formData: FormData): 
 
   revalidatePath('/dashboard/team')
   return { ok: true, message: 'Invite revoked.' }
+}
+
+// Owner/admin resends an invite in one step (the Sealand walkthrough, 29 Sep):
+// five invites expired on 24 Sep and re-inviting meant a Revoke, then a new
+// invite by hand. The old row is revoked and a fresh one is created and
+// emailed through `createInvite`, with the same role and a new 7-day link.
+// Revoked first because the pending-invite unique index allows one per email.
+// The inviter may resend only what they could have sent (`canResendInvite`).
+export async function resendInvitation(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to do that.' }
+  }
+  const parsed = idSchema.safeParse({ id: formData.get('id') })
+  if (!parsed.success) return { ok: false, message: 'Invalid invite.' }
+
+  const { data: invite } = await supabase
+    .from('invitations').select('id, email, role')
+    .eq('id', parsed.data.id).eq('client_id', clientId).eq('status', 'pending')
+    .maybeSingle()
+  if (!invite) return { ok: false, message: 'That invite is no longer pending.' }
+  const inv = invite as { id: string; email: string; role: (typeof ROLES)[number] }
+  if (!canResendInvite(role, inv.role)) {
+    return { ok: false, message: 'Admins can only invite members. Ask an owner to resend this one.' }
+  }
+
+  const { error } = await supabase
+    .from('invitations')
+    .update({ status: 'revoked' })
+    .eq('id', inv.id)
+    .eq('client_id', clientId)
+    .eq('status', 'pending')
+  if (error) return { ok: false, message: `Could not resend: ${error.message}` }
+
+  return createInvite(session, inv.email, inv.role)
 }
 
 const roleChangeSchema = z.object({
