@@ -11,6 +11,13 @@ export const CURATION_GATE = {
   confirmedMinScore: 7,
   /** Confirmed: minimum distinct supporting references (themes, insights). */
   confirmedMinSources: 2,
+  /** Confirmed ALSO needs this many distinct videos behind it once they are
+   *  counted (`groundedTier`, lib/market-tiles.ts). Confidence and a source
+   *  count are the model's own bookkeeping; "Strong evidence" printed beside
+   *  "9 of 1,782 videos behind it" (Sealand, 27 Sep) is the badge claiming a
+   *  volume the count beside it disproves. Below the floor a confirmed
+   *  conclusion reads as an early signal. 1 is the rule before this floor. */
+  confirmedMinVideos: 1,
   /** Early signal: below the confirmed gate but scored at least this. Also the
    *  bar a single-source THEME must clear to be badged "Early signal" on the
    *  pages — without it the term diluted to nothing (2026-07-04: 127 of 140

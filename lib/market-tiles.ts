@@ -204,7 +204,14 @@ export function tierCounts(tierById: Map<string, GateTier>): { confirmed: number
  * hidden.
  */
 export function groundedTier(tier: GateTier, videos: number): GateTier {
-  return videos <= 0 ? 'archive' : tier
+  if (videos <= 0) return 'archive'
+  // AND "STRONG EVIDENCE" NEEDS THE VOLUME IT NAMES (walkthrough item 10). The
+  // badge came off confidence ≥ 7 and two sources, so a conclusion resting on
+  // 9 of 1,782 videos printed "Strong evidence" beside that very count. Under
+  // the floor it keeps its place as an early signal: worth watching, not yet
+  // confirmed.
+  if (tier === 'confirmed' && videos < CURATION_GATE.confirmedMinVideos) return 'early_signal'
+  return tier
 }
 
 // ── news ──────────────────────────────────────────────────────────────────

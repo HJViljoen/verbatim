@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { CURATION_GATE } from './curation'
 import {
   insightTiers, confirmedCompetitiveIds, recEvidenceTier, orderAgenda, openAgendaId, priorityDot, distinctVideos,
   claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, groundedTier, newsRingChip,
@@ -150,6 +151,15 @@ describe('tier counts + news chips', () => {
     expect(groundedTier('early_signal', 1)).toBe('early_signal')
     expect(groundedTier('confirmed', 42)).toBe('confirmed')
     expect(groundedTier('archive', 0)).toBe('archive')
+  })
+  // Walkthrough item 10: "Sealand owns belonging" printed "Strong evidence"
+  // beside "9 of 1,782 videos behind it". The badge needs the volume it names.
+  it('keeps "Strong evidence" off a conclusion with fewer videos than the floor', () => {
+    const floor = CURATION_GATE.confirmedMinVideos
+    expect(groundedTier('confirmed', floor)).toBe('confirmed')
+    if (floor > 1) expect(groundedTier('confirmed', floor - 1)).toBe('early_signal')
+    expect(groundedTier('early_signal', Math.max(1, floor - 1))).toBe('early_signal')
+    expect(groundedTier('archive', floor + 10)).toBe('archive')
   })
   it('ring → entity chip', () => {
     expect(newsRingChip(0)).toEqual({ label: 'Your brand', tone: 'positive' })
