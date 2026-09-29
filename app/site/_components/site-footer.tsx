@@ -19,7 +19,7 @@ export function SiteFooter() {
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
           <a href={`${APP_URL}/login`}>Sign in</a>
-          <a href="mailto:hello@verbatimintel.com">hello@verbatimintel.com</a>
+          <a href="mailto:heinrichviljoen@verbatimintel.com">heinrichviljoen@verbatimintel.com</a>
         </span>
         <span>Cape Town. Runs weekly.</span>
       </div>

@@ -28,4 +28,10 @@ describe('the site header and footer', () => {
   it('carries a sign-in link in the footer too', () => {
     expect(render(SiteFooter())).toContain(`href="${LOGIN}"`)
   })
+
+  it('the footer names the mailbox someone reads, not hello@', () => {
+    const html = render(SiteFooter())
+    expect(html).toContain('href="mailto:heinrichviljoen@verbatimintel.com"')
+    expect(html).not.toContain('hello@verbatimintel.com')
+  })
 })
