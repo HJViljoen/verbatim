@@ -98,8 +98,18 @@ export async function reevaluatePlanChecks(
     // videos behind both readings are resolved here; a read that fails falls
     // back to the insight ids, which can only count MORE evidence as new, so
     // the worst a failure does is let one change through as before.
-    const videosOf = await videoResolver(admin, [...previous, ...result.claims])
-    const claimsHeld = holdVerdicts(previous, result.claims, videosOf)
+    // AND THE HOLD CAN NEVER COST THE CHECK: a throw anywhere in it (a stored
+    // claim of an unexpected shape) prints the fresh reading, which is exactly
+    // what this step wrote before the hold, rather than failing the step into
+    // retries that would pay for every check's verdict call again.
+    let claimsHeld: ClaimResult[]
+    try {
+      const videosOf = await videoResolver(admin, [...previous, ...result.claims])
+      claimsHeld = holdVerdicts(previous, result.claims, videosOf)
+    } catch (e) {
+      console.error(`[ask-reevaluate] hold skipped for ${check.id}, the fresh reading is printed: ${e instanceof Error ? e.message : String(e)}`)
+      claimsHeld = result.claims
+    }
     const summary = summarise(claimsHeld)
     const moved = diffVerdicts(previous, claimsHeld)
 
