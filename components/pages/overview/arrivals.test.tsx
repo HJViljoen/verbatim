@@ -44,7 +44,10 @@ describe('With this update (WP2.7)', () => {
     for (const mode of MODES) {
       const t = text(marketArrivalsFixture(), mode)
       expect(t).toContain('Came in')
-      expect(t).toContain('With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more September comments stored, whenever they were written. This week counts only those written in the update’s days.')
+      expect(t).toContain('With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in.')
+      // Your market says how This week counts the same update (the monthly,
+      // which borrows the line, does not: slots-parity.test.tsx).
+      expect(t).toContain('With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in. This week counts only those written in the update’s days.')
       // The month in progress is the month read: no "so far" clause.
       expect(t).not.toContain('so far:')
     }
@@ -54,7 +57,7 @@ describe('With this update (WP2.7)', () => {
     const withOctober = { ...marketArrivalsFixture(), arrivals: { ...SEALAND_20_SEP_ARRIVALS, current: { month: '2026-10-01', videos: 118, updates: 2 } } }
     expect(text(withOctober)).toContain('October so far: 118 videos after 2 updates.')
     const t = text(ossurArrivalsFixture())
-    expect(t).toContain('With the 13 Sep update: 139 videos read in your market for the first time, and 4,722 more September comments stored, whenever they were written. This week counts only those written in the update’s days.')
+    expect(t).toContain('With the 13 Sep update: 139 videos read in your market for the first time, and 4,722 more comments written in September came in.')
     expect(t).not.toContain('October so far')
   })
 

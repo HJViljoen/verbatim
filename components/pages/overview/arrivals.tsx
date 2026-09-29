@@ -29,7 +29,9 @@ import { OverviewWeeks, WEEK_BY_WEEK_HREF } from './weeks'
 
 export const ARRIVALS_TITLE = 'With this update'
 
-/** Why This week's figures for the same update differ (finish-list item 9). */
+/** Why This week's figures for the same update differ (finish-list item 9).
+ *  Your market's only (`clock`): the monthly borrows the line, and its reader
+ *  is not on This week. */
 export const ARRIVALS_CLOCK_NOTE = 'This week counts only those written in the update’s days.'
 
 const fig = (n: number, mode: RenderMode): ReactNode => (
@@ -38,20 +40,22 @@ const fig = (n: number, mode: RenderMode): ReactNode => (
 
 /**
  * "With the 20 Sep update: 395 videos read in your market for the first time,
- * and 11,999 more September comments came in." and, where the month in
+ * and 11,999 more comments written in September came in." (the page adds how
+ * This week counts them) and, where the month in
  * progress is another, "October so far: {V} videos after 2 updates."
  */
-export function ArrivalsCameIn({ a, month, mode }: { a: ArrivalsBlock; month: string; mode: RenderMode }) {
+export function ArrivalsCameIn({ a, month, mode, clock = false }: { a: ArrivalsBlock; month: string; mode: RenderMode; clock?: boolean }) {
   const read = a.months.find((m) => m.month.slice(0, 7) === month.slice(0, 7)) ?? null
   const name = longMonth(month)
   return (
     <>
       {read ? (
-        // BY WHEN WE STORED THEM, SAID (finish-list item 9): This week counts
-        // the same update by when its comments were WRITTEN (274 videos and
-        // 4,777 comments against 185 and 5,199 here), and the two read as a
-        // contradiction until each said its clock.
-        <>With the {shortDate(a.run.date)} update: {fig(read.videosFirstRead, mode)} {read.videosFirstRead === 1 ? 'video' : 'videos'} read in your market for the first time, and {fig(read.commentsCaptured, mode)} more {name} {read.commentsCaptured === 1 ? 'comment' : 'comments'} stored, whenever {read.commentsCaptured === 1 ? 'it was' : 'they were'} written. {ARRIVALS_CLOCK_NOTE}</>
+        // EACH CLOCK SAID (finish-list item 9): these are the comments written
+        // on any day of the month that came in with the update; This week
+        // counts only those written in the update's own days (4,777 there
+        // against 5,199 here), and the two read as a contradiction until each
+        // said its clock.
+        <>With the {shortDate(a.run.date)} update: {fig(read.videosFirstRead, mode)} {read.videosFirstRead === 1 ? 'video' : 'videos'} read in your market for the first time, and {fig(read.commentsCaptured, mode)} more {read.commentsCaptured === 1 ? 'comment' : 'comments'} written in {name} came in.{clock ? <> {ARRIVALS_CLOCK_NOTE}</> : null}</>
       ) : (
         <>Nothing more of {name} came in with the {shortDate(a.run.date)} update.</>
       )}
@@ -130,7 +134,7 @@ export function ArrivalsHeard({ a, month, mode }: { a: ArrivalsBlock; month: str
 
 /** Came in, and heard for the first time: two columns on a wide block, one
  *  under the other on a narrow one; a two-cell table in an email. */
-export function ArrivalsColumns({ a, month, mode }: { a: ArrivalsBlock; month: string; mode: RenderMode }) {
+export function ArrivalsColumns({ a, month, mode, clock = false }: { a: ArrivalsBlock; month: string; mode: RenderMode; clock?: boolean }) {
   if (mode === 'email') {
     const col = (title: string, words: ReactNode) => (
       <td className="vb-m-col" style={{ width: '50%', verticalAlign: 'top', paddingRight: 12 }}>
@@ -140,7 +144,7 @@ export function ArrivalsColumns({ a, month, mode }: { a: ArrivalsBlock; month: s
     )
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
-        <tbody><tr>{col('Came in', <ArrivalsCameIn a={a} month={month} mode={mode} />)}{col('Heard for the first time', <ArrivalsHeard a={a} month={month} mode={mode} />)}</tr></tbody>
+        <tbody><tr>{col('Came in', <ArrivalsCameIn a={a} month={month} mode={mode} clock={clock} />)}{col('Heard for the first time', <ArrivalsHeard a={a} month={month} mode={mode} />)}</tr></tbody>
       </table>
     )
   }
@@ -148,7 +152,7 @@ export function ArrivalsColumns({ a, month, mode }: { a: ArrivalsBlock; month: s
     <div className="grid grid-cols-1 gap-x-22 gap-y-6 md:grid-cols-2" data-print-cols="2">
       <div className="flex min-w-0 flex-col gap-2">
         <p className="m-0 text-[15px] font-semibold">Came in</p>
-        <p className="m-0 max-w-[62ch] text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><ArrivalsCameIn a={a} month={month} mode={mode} /></p>
+        <p className="m-0 max-w-[62ch] text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><ArrivalsCameIn a={a} month={month} mode={mode} clock={clock} /></p>
       </div>
       <div className="flex min-w-0 flex-col gap-2">
         <p className="m-0 text-[15px] font-semibold">Heard for the first time</p>
@@ -199,7 +203,7 @@ export const overviewArrivals: Block<OverviewData> = {
     const a = data.arrivals ?? null
     return (
       <BlockFrame title={ARRIVALS_TITLE} mode={mode} footer={footer} roomy>
-        {a ? <ArrivalsColumns a={a} month={data.month} mode={mode} /> : empty && !data.weeks ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {a ? <ArrivalsColumns a={a} month={data.month} mode={mode} clock /> : empty && !data.weeks ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {/* Week by week, inside this block (WP2.9; 25 Sep rulings). */}
         <OverviewWeeks data={data} mode={mode} />
       </BlockFrame>

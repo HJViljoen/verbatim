@@ -125,7 +125,7 @@ describe('the page and the monthly print one sentence each', () => {
     const data = builtFull()
     const page = pageText('overview.arrivals', data.overview, 'app')
     const words = [
-      'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more September comments stored, whenever they were written. This week counts only those written in the update’s days.',
+      'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in.',
       'With 10+ videos in September:',
     ]
     for (const mode of MODES) {
@@ -134,8 +134,10 @@ describe('the page and the monthly print one sentence each', () => {
         expect(page).toContain(w)
         expect(monthly, mode).toContain(w)
       }
-      // The monthly carries no weekly volume bars (plan §2.9).
+      // The monthly carries no weekly volume bars (plan §2.9), and not the
+      // page's word on how This week counts the update (finish-list item 9).
       expect(monthly, mode).not.toMatch(/week by week/i)
+      expect(monthly, mode).not.toContain('This week counts')
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.arrivals'].render(data, mode, ctx)))
     }
   })
