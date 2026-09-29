@@ -29,9 +29,11 @@ import { cosine, embedTexts } from '../pipeline/cluster'
 // unmerged: the stale rows are still gone and nothing that should show is
 // hidden.
 
-/** How many ideas the default list draws. The value is set by a `default:`
- *  commit; 12 is the ledger's old page size. */
-export const ADVICE_SHORTLIST = 12
+/** How many ideas the default list draws: a handful. Five is a default
+ *  (walkthrough, 29 Sep): Pass D-b raises five or six per update, so this is
+ *  about one update's advice with its near-copies folded; 12 is the ledger's
+ *  old page size. */
+export const ADVICE_SHORTLIST = 5
 
 /**
  * The cosine at or above which two pieces of advice are one idea, on
