@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { FIRST_QUARTER_COMPARISON, PAGES_CAN_SAY } from '../settings/record-additions'
 import { buildQuarterlyCard, countReadings, eraTo, firstComparisonLine, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import type { DenominatorPoint } from '../reading/series'
@@ -243,22 +244,22 @@ describe('the wave-2 fixtures', () => {
 })
 
 describe('firstComparisonLine', () => {
-  it('names the reading month the sixth reading lands in, never a day', () => {
+  it('names the record’s first quarter comparison read the same way, never the six-readings count (finish-list item 9)', () => {
     expect(firstComparisonLine(4, '2026-09-01')).toBe(
-      'The first quarter-on-quarter comparison arrives with the November 2026 reading: it needs six monthly readings and you have 4.',
+      'The first quarter-on-quarter comparison read the same way arrives in April 2027: the first quarter of 2027 against the last of 2026. You have 4 monthly readings so far.',
     )
-    expect(firstComparisonLine(4, '2026-09-01')).not.toMatch(/\b\d{1,2} (Nov|November)\b/)
+    expect(firstComparisonLine(4, '2026-09-01')).not.toContain('November')
+    // The record's timeline says the same.
+    expect(PAGES_CAN_SAY.find((r) => r.when === FIRST_QUARTER_COMPARISON.when)?.says).toContain(FIRST_QUARTER_COMPARISON.pair)
   })
 
-  it('is null once the gate is open, and says the count where no month is known', () => {
+  it('is null once the gate is open', () => {
     expect(firstComparisonLine(QUARTER_UNLOCKS_AT, '2026-09-01')).toBeNull()
-    expect(firstComparisonLine(3, null)).toBe(
-      'The first quarter-on-quarter comparison arrives once six monthly readings stand behind it: you have 3.',
-    )
+    expect(firstComparisonLine(1, null)).toContain('You have 1 monthly reading so far.')
   })
 
   it('rides on the built card below the gate and not above it', () => {
-    expect(buildQuarterlyCard(input({ readings: 4, readingMonth: '2026-09-01' }))?.firstComparison).toContain('November 2026')
+    expect(buildQuarterlyCard(input({ readings: 4, readingMonth: '2026-09-01' }))?.firstComparison).toContain('April 2027')
     expect(buildQuarterlyCard(input({ readings: 9, readingMonth: '2026-09-01' }))?.firstComparison).toBeNull()
   })
 })

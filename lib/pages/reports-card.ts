@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, longMonth } from '../format'
 import { SHARE_BAND } from '../report-bands'
 import { quarterChange } from '../reading/bands'
+import { FIRST_QUARTER_COMPARISON } from '../settings/record-additions'
 import { loadMonthSeries, loadWindowReading, type WindowReading } from '../reading/read'
 import { isMissingMonthlyReading, monthStartOf } from '../reading/monthly'
 import type { DenominatorPoint } from '../reading/series'
@@ -15,7 +16,6 @@ import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
 import { loadDeliveredRuns, loadMarketRivalAudiences, readingViewFrom } from '../reading/reading-view'
 import {
-  firstQuarterVerdictMonth,
   previousQuarter,
   QUARTER_READINGS_NEEDED,
   quarterGateSentence,
@@ -207,18 +207,15 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
  * The card's whole body below the gate (Heinrich's three-month-user test):
  * every row there reads "not enough months yet", so the rows say nothing a
  * single line cannot, and the line says the one thing a reader wants — when.
- *
- * A MONTH, NOT A DATE. It is the artefact's own arithmetic
- * (`firstQuarterVerdictMonth`, one reading a month), the same the quarterly's
- * last page prints; the quarterly itself still fires on an update, not a day.
  */
-export function firstComparisonLine(readings: number, readingMonth: string | null): string | null {
+export function firstComparisonLine(readings: number, _readingMonth: string | null): string | null {
   if (readings >= QUARTER_READINGS_NEEDED) return null
-  const month = firstQuarterVerdictMonth(readings, readingMonth)
-  const have = `it needs six monthly readings and you have ${readings}`
-  return month
-    ? `The first quarter-on-quarter comparison arrives with the ${monthWithYear(month)} reading: ${have}.`
-    : `The first quarter-on-quarter comparison arrives once six monthly readings stand behind it: you have ${readings}.`
+  // THE RECORD'S DATE, NOT THE ARTEFACT'S COUNT (finish-list item 9): "with
+  // the November 2026 reading" counted six monthly readings, while the
+  // record's timeline says the first quarters read the same way are compared
+  // in April 2027. One date, from one place (lib/settings/record-additions.ts).
+  const q = FIRST_QUARTER_COMPARISON
+  return `The first quarter-on-quarter comparison read the same way arrives in ${q.when}: ${q.pair}. You have ${readings} monthly ${readings === 1 ? 'reading' : 'readings'} so far.`
 }
 
 /**

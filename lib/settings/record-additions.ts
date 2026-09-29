@@ -22,6 +22,14 @@
  *  The re-check is the 4 Oct update's, not the preview's 11 Oct: the fast
  *  track (plan §3.7, accepted 26 Sep) brings deploy 3 on Mon 5 Oct and reads
  *  the re-check "with the 4 Oct update". */
+/** The first quarter-on-quarter comparison read the same way: the record's
+ *  timeline row, and the Reports card's line (finish-list item 9: the card
+ *  said "with the November 2026 reading", counting six monthly readings,
+ *  while the record said April 2027; searches changed in September, so the
+ *  first two quarters read the same way are the last of 2026 and the first
+ *  of 2027). */
+export const FIRST_QUARTER_COMPARISON = { when: 'April 2027', from: '2027-04-01', pair: 'the first quarter of 2027 against the last of 2026' } as const
+
 export const PAGES_CAN_SAY: readonly { when: string; from: string; says: string }[] = [
   { when: 'to 31 Oct', from: '2026-09-25', says: 'Each month in full, with the month before beside it, not read as a change.' },
   { when: '4 Oct update', from: '2026-10-04', says: 'The re-check on the searches both months ran, without makers or off-topic videos. Provisional.' },
@@ -30,7 +38,7 @@ export const PAGES_CAN_SAY: readonly { when: string; from: string; says: string 
   { when: 'about 3 Jan', from: '2027-01-03', says: 'October against November in full, once November has filled. November against December at the same age.' },
   { when: 'January', from: '2027-01-10', says: 'The first unusual-week flags.' },
   { when: 'late January', from: '2027-01-24', says: 'The first direction words, once December has filled.' },
-  { when: 'April 2027', from: '2027-04-01', says: 'The first quarter comparison: the first quarter of 2027 against the last of 2026.' },
+  { when: FIRST_QUARTER_COMPARISON.when, from: FIRST_QUARTER_COMPARISON.from, says: `The first quarter comparison: ${FIRST_QUARTER_COMPARISON.pair}.` },
 ]
 
 export const PAGES_CAN_SAY_LEAD = 'Levels now. The first change we can stand behind comes in December, if nothing we search changes.'
