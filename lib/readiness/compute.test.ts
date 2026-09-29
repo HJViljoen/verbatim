@@ -612,6 +612,9 @@ describe('the update record', () => {
     const row = find(computeReadiness(ossur()), 'update-record')
     expect(row.status).toBe('partial')
     expect(row.detail).toContain('6 of the last 8 updates finished')
+    // The record's count beside it: "N of M updates since … finished", so the
+    // record's "M on record" never reads as a second count (finish-list item 9).
+    expect(row.detail).toMatch(/· \d+ of \d+ updates since .+ finished/)
     expect(row.notes.slice(0, 3)).toEqual([
       '13 Sep 2026: finished',
       '6 Sep 2026: finished',

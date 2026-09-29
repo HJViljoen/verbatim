@@ -43,7 +43,9 @@ describe('the delivery stat cells', () => {
     // among them — so it may not be captioned "delivered" (code review
     // finding 1). 22 on record, 21 delivered, and the strip says the other.
     expect(stats[1].figure).toBe('22')
-    expect(stats[1].caption).toBe('on record')
+    // Run, and how many finished: Readiness and Reports' archive count the
+    // finished ones (finish-list item 9).
+    expect(stats[1].caption).toBe('run, 21 finished')
     expect(stats.some((s) => /delivered/.test(s.caption))).toBe(false)
     expect(stats.some((s) => /next/.test(s.caption))).toBe(false)
     expect(stats[2].caption).toBe('longest gap, in May')
