@@ -355,7 +355,8 @@ function clausesOf(sentence: string): string[] {
  * WIRED as of Phase 1 WP7: pass_c_finding, pass_d_a_insight,
  * pass_d_a_consumer_summary, pass_d_a_brief (through validateBrief),
  * pass_d_a_say_vs_hear, pass_d_b_recommendation, pass_e_persona,
- * step_2c_event_explanation, report_cover, document_write. `pass_b_theme` and
+ * step_2c_event_explanation, report_cover, document_write; and, from the
+ * written read (lib/written/scrub.ts), week_read. `pass_b_theme` and
  * `agent_interpret` are `none` and need no wiring.
  *
  * NOT WIRED YET, and each for a stated reason: `pass_a_audience_insight` is
@@ -432,6 +433,7 @@ export const PROSE_SLOTS = [
   'ask_judge',
   'report_cover',
   'document_write',
+  'week_read',
   'interpretation_monthly',
   'interpretation_quarterly',
   'interpretation_anomaly',
@@ -535,6 +537,10 @@ export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   ask_judge: 'digits',
   report_cover: 'both',
   document_write: 'digits',
+  // The written week (plan "writing back", T3): prose about a reading, written
+  // with NO verdicts, so any direction word drops its sentence. The ladder's
+  // change and direction words are code's, in the standing line beside it.
+  week_read: 'both',
   interpretation_monthly: 'both',
   interpretation_quarterly: 'both',
   interpretation_anomaly: 'both',

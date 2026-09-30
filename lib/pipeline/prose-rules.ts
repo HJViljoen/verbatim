@@ -40,6 +40,7 @@ const DELIVERABLE: Partial<Record<ProseSlot, string>> = {
   step_2c_event_explanation: 'the explanation',
   report_cover: 'the cover',
   document_write: 'the document',
+  week_read: 'the read',
   agent_answer: 'an answer',
 }
 

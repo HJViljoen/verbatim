@@ -212,6 +212,7 @@ describe('the policy table — every prose slot is listed with its policy', () =
     ask_judge: 'digits',
     report_cover: 'both',
     document_write: 'digits',
+    week_read: 'both',
     interpretation_monthly: 'both',
     interpretation_quarterly: 'both',
     interpretation_anomaly: 'both',

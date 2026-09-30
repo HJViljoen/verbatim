@@ -119,3 +119,78 @@ export interface TokenSentence {
   body: string
   figures: FigureTable
 }
+
+// ---- The stored read (plan T3) -------------------------------------------------
+
+/** The departments a read speaks to, in the order they print. */
+export const DEPARTMENTS: readonly Department[] = ['sales', 'marketing', 'content', 'leadership']
+
+/**
+ * What prints about how sure a finding is (plan T3: "no confidence words").
+ * A finding that is not at least `reasonable` on the document engine's rule
+ * (`calibrateSure`, counted in distinct gated videos) does not print at all;
+ * of those that do, only `strong` shows anything: the product's existing
+ * "Strong evidence" marker, at `CURATION_GATE.confirmedMinVideos` videos.
+ */
+export type SureWord = 'strong' | 'reasonable'
+
+export interface WeekReadFinding {
+  headline: string
+  saw: string
+  means: string
+  for: Partial<Record<Department, string>>
+  /** The cited candidates' theme ids (`theme_registry.id`): a candidate's
+   *  `C#` is stable only inside one read, the registry id across reads. */
+  basedOn: string[]
+  quote: QuoteRef | null
+  /** The lead candidate's week and its month to date: one object, two reads
+   *  of the same measure (AGENTS.md's week-against-month rule). */
+  videos: { week: number; month: number }
+  /** The subject the cited candidates name, where they name exactly one;
+   *  null where none does or where they name two (a price finding resting on
+   *  a comfort theme too is part of neither). */
+  subjectId: string | null
+  /** Every cited candidate was first heard this month (themeFlags 'new'). */
+  isNew: boolean
+  sure: SureWord
+  /** ADDITIVE. The evidence line, a code sentence with `[[keys]]` in
+   *  `figures`: "[[f1_week]] videos this week · [[f1_month]] in September so
+   *  far". Frozen here so no renderer re-derives it. */
+  evidence: string
+  /** ADDITIVE. The context line (T2 plus isNew): "Part of Comfort: [[…]] of
+   *  [[…]] videos in your market in September, the fourth biggest subject."
+   *  and/or "First heard in September.", or '' where neither is true. Printed
+   *  in a verdict node: a direction word here is code's, earned. */
+  context: string
+}
+
+/**
+ * One tracked subject in "Where your market stands". The pinned shape is
+ * `{ subjectId, sentence }`; the rest is ADDITIVE, because a renderer must not
+ * re-read a live figure to print a stored read (numbers freeze with it).
+ * `line` is `standingLine`'s body ('' unless ready), `sentence` the writer's
+ * ('' where it wrote none), `quote` the subject's gated ref. A subject with no
+ * line, no sentence and no quote is name only: renderers list those in one
+ * quiet "Also following" line and never say why.
+ */
+export interface WeekReadStanding {
+  subjectId: string
+  sentence: string
+  name: string
+  calibration: StandingCalibration
+  rung: StandingRung
+  line: string
+  quote: QuoteRef | null
+}
+
+export interface WeekReadData {
+  version: 1
+  window: { from: string; to: string }; month: string
+  inShort: string
+  findings: WeekReadFinding[]
+  standing: WeekReadStanding[]
+  figures: FigureTable
+  /** Dropped findings, for the Studio's workings view only. */
+  held: { reason: string; headline: string }[]
+  model: string; promptVersion: 'week_read_v1'; costUsd: number
+}
