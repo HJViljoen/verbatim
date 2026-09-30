@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { sendAlertEmail } from '../email'
 import { checkWeekRead, type WeekCheck } from './check'
+import { loadCompanyContext, type CompanyContext } from './company'
 import { composeWeekRead } from './compose'
 import { loadTrackedBrands } from './evidence'
 import { fitQuotes, type FitParagraph, type QuoteFit } from './fit'
@@ -65,6 +66,9 @@ export interface WeekReadInputs {
   pool: WeekPool
   standing: StandingFact[]
   previous: { headlines: string[] } | null
+  /** What the company sells, says about itself and whether it posted (v3).
+   *  Absent in inputs saved before it existed: the script reads it then. */
+  context?: CompanyContext | null
 }
 
 export async function loadWeekReadInputs(
@@ -78,7 +82,8 @@ export async function loadWeekReadInputs(
   const pool = await loadWeekPool(admin, { clientId, runId, brands })
   const standing = await loadStanding(admin, { clientId, month: pool.month, window: pool.window, asOf: opts.asOf ?? new Date(), brands })
   const previous = pool.thin ? null : await loadPreviousHeadlines(admin, clientId, runId, pool.window.from)
-  return { company, pool, standing, previous }
+  const context = pool.thin ? null : await loadCompanyContext(admin, { clientId, window: pool.window })
+  return { company, pool, standing, previous, context }
 }
 
 export async function buildWeekRead(
@@ -90,7 +95,7 @@ export async function buildWeekRead(
   },
 ): Promise<BuiltWeekRead> {
   const { clientId, runId } = opts
-  const { company, pool, standing, previous } = opts.inputs ?? (await loadWeekReadInputs(admin, opts))
+  const { company, pool, standing, previous, context } = opts.inputs ?? (await loadWeekReadInputs(admin, opts))
   const figures = writerFigures(pool)
 
   if (pool.thin) {
@@ -98,7 +103,7 @@ export async function buildWeekRead(
     return { status: 'thin', data, pool, standing, called: false, raw: null, scrub: null, check: null, fit: null }
   }
 
-  const call = await generateWeekRead(admin, { company, pool, standing, previous, figures, clientId, runId, log: opts.log, client: opts.client })
+  const call = await generateWeekRead(admin, { company, pool, standing, previous, figures, context, clientId, runId, log: opts.log, client: opts.client })
   const scrubbed = scrubWeekRead(call.written, figures, weekAllowTokens(pool.candidates, standing), { company })
   const check = await checkWeekRead(admin, { clientId, runId, companyName: company, headlines: checkableHeadlines(pool, scrubbed.output), persist: opts.log })
   // Which quote fits each finding, and each story paragraph that points to a

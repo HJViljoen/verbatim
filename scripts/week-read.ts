@@ -50,6 +50,7 @@ import { rankOptions } from '../lib/written/compose'
 import type { QuoteFit } from '../lib/written/fit'
 import { buildWeekRead, finishWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead, type WeekReadInputs } from '../lib/written/step'
 import { loadWeekReadRow, saveWeekRead, weekReadsApplied } from '../lib/written/store'
+import { companyLines, loadCompanyContext } from '../lib/written/company'
 import { quoteValue } from '../lib/written/substance'
 import { firstHeardThisWeek, type PoolCandidate, type QuoteRef, type WeekReadDataV2 } from '../lib/written/types'
 import { buildWeekReadPrompts, writerFigures } from '../lib/written/write'
@@ -124,7 +125,7 @@ function choiceLines(
   return out
 }
 
-function render(company: string, runId: string, built: BuiltWeekRead, words: Map<string, QuoteResolution>, mode: string): string {
+function render(company: string, runId: string, built: BuiltWeekRead, words: Map<string, QuoteResolution>, mode: string, context: WeekReadInputs['context']): string {
   const d = built.data
   const month = longMonth(d.month)
   const cand = new Map(built.pool.candidates.map((c) => [c.themeId, c]))
@@ -250,6 +251,10 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
     if (c.description) out.push('', `_${c.description}_`)
     out.push('', ...c.notes.map((n) => `- ${n}`), '')
   }
+  out.push(`### About ${company} (the writer's context for "What it means")`, '')
+  if (context) {
+    out.push(companyLines(company, context, d.month), '', `<sub>Own posts (dated by the post): ${context.posts.week ?? '—'} this week, ${context.posts.month ?? '—'} in ${month} so far.</sub>`, '')
+  } else out.push('_(none: the writer was told nothing about the company)_', '')
   out.push('### The subjects', '')
   for (const f of built.standing) {
     out.push(`- **${f.name}** [${f.calibration}, rung ${f.rung}, rank ${f.rank || '-'}] level ${f.level ? `${f.level.k} of ${f.level.n}` : 'none'} · contents: ${f.contents.join(' · ') || 'none'} · ${f.notes.length} note(s)`)
@@ -283,14 +288,21 @@ async function main() {
   if (again && write) throw new Error('--recompose never writes: store a read built by a real call')
   const saved = again ? '' : flag('inputs')
   type SavedFit = Omit<QuoteFit, 'scores' | 'story'> & { scores: [number, [string, number][]][]; story?: [number, [string, number][]][] }
-  type SavedRun = { data: WeekReadDataV2; workings: { pool: WeekReadInputs['pool']; standing: WeekReadInputs['standing']; raw: BuiltWeekRead['raw']; check: (Omit<WeekCheck, 'contradicted'> & { contradicted: [string, string | null][] }) | null; fit?: SavedFit | null } }
+  type SavedRun = { data: WeekReadDataV2; workings: { pool: WeekReadInputs['pool']; standing: WeekReadInputs['standing']; context?: WeekReadInputs['context']; raw: BuiltWeekRead['raw']; check: (Omit<WeekCheck, 'contradicted'> & { contradicted: [string, string | null][] }) | null; fit?: SavedFit | null } }
   const prior = again ? (JSON.parse(readFileSync(resolve(process.cwd(), again), 'utf8')) as SavedRun) : null
   const inputs: WeekReadInputs = prior
-    ? { company, pool: prior.workings.pool, standing: prior.workings.standing, previous: null }
+    ? { company, pool: prior.workings.pool, standing: prior.workings.standing, previous: null, context: prior.workings.context ?? null }
     : saved
       ? (JSON.parse(readFileSync(resolve(process.cwd(), saved), 'utf8')) as WeekReadInputs)
       : await loadWeekReadInputs(db, { clientId, runId })
   if (saved && (inputs.pool.clientId !== clientId || inputs.pool.runId !== runId)) throw new Error(`${saved} holds another client or run`)
+  // Inputs saved before the company context existed: read it now (a few light
+  // reads) and extend the saved file, so the next build reads nothing again.
+  if (saved && inputs.context === undefined && !inputs.pool.thin) {
+    inputs.context = await loadCompanyContext(db, { clientId, window: inputs.pool.window })
+    writeFileSync(resolve(process.cwd(), saved), `${JSON.stringify(inputs, null, 2)}\n`)
+    console.log(`Read the company context and added it to ${saved}`)
+  }
   if (flag('save-inputs')) {
     writeFileSync(resolve(process.cwd(), flag('save-inputs')), `${JSON.stringify(inputs, null, 2)}\n`)
     console.log(`Saved the inputs to ${flag('save-inputs')}`)
@@ -300,7 +312,7 @@ async function main() {
     console.log(`\nPool: ${pool.candidates.length} candidate(s)${pool.thin ? ' (THIN: no call would be made)' : ''}; standing: ${inputs.standing.length} subject(s); last week: ${inputs.previous ? inputs.previous.headlines.length : 'none'}`)
     for (const c of pool.candidates) console.log(`  ${c.id} "${c.label}" lenient ${c.lenientVideos} (month ${c.monthVideoIds.length}) · strict ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} · mostly ${c.dominantKind ?? '-'} · subject ${c.subjectId ?? 'none'} · ${c.quoteRefs.length} quote(s)`)
     for (const f of inputs.standing) console.log(`  ${f.name} [${f.calibration}, ${f.rung}] level ${f.level ? `${f.level.k} of ${f.level.n}` : 'none'} · ${f.contents.length} theme(s) · ${f.notes.length} note(s) · quote ${f.quoteRef ? 'yes' : 'no'}`)
-    const { system, user } = buildWeekReadPrompts({ company: inputs.company, pool, standing: inputs.standing, previous: inputs.previous, figures: writerFigures(pool) })
+    const { system, user } = buildWeekReadPrompts({ company: inputs.company, pool, standing: inputs.standing, previous: inputs.previous, figures: writerFigures(pool), context: inputs.context })
     console.log(`\n=== SYSTEM (${system.length} chars) ===\n${system}\n\n=== USER (${user.length} chars) ===\n${user}`)
     return
   }
@@ -336,11 +348,11 @@ async function main() {
   ].filter((r): r is string => Boolean(r))
   const words = refs.length ? await fetchQuoteResolutionsByRefs(db, [...new Set(refs)], { onReadError: 'throw' }) : new Map<string, QuoteResolution>()
 
-  const text = render(company, runId, built, words, write ? 'WRITTEN' : again ? 'DRY RUN, not stored; composed again from the saved call' : 'DRY RUN, not stored')
+  const text = render(company, runId, built, words, write ? 'WRITTEN' : again ? 'DRY RUN, not stored; composed again from the saved call' : 'DRY RUN, not stored', inputs.context)
   console.log(`\n${text}\n`)
 
   const fit = built.fit && { ...built.fit, scores: [...built.fit.scores].map(([i, x]) => [i, [...x]]), story: [...(built.fit.story ?? new Map())].map(([i, x]) => [i, [...x]]) }
-  const json = JSON.stringify({ status: built.status, data: built.data, workings: { pool: built.pool, standing: built.standing, raw: built.raw, scrub: built.scrub, check: built.check && { ...built.check, contradicted: [...built.check.contradicted] }, fit } }, null, 2)
+  const json = JSON.stringify({ status: built.status, data: built.data, workings: { pool: built.pool, standing: built.standing, context: inputs.context ?? null, raw: built.raw, scrub: built.scrub, check: built.check && { ...built.check, contradicted: [...built.check.contradicted] }, fit } }, null, 2)
   const outPath = flag('out')
   if (outPath) {
     const md = resolve(process.cwd(), outPath)

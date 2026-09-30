@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { directionHits } from '../calibration'
 import { SEALAND_CLIENT_ID } from '../config'
+import type { CompanyContext } from './company'
 import { candidate, fact, pool, ref, WINDOW } from './test-fixtures'
 import {
   buildWeekReadPrompts, DELETED_WORDS, weekReadSchema, WEEK_READ_PROMPT_VERSION, writerFigures, type WeekWriterArgs,
@@ -183,7 +184,7 @@ describe('the prompt', () => {
   it('writes its own example in the house style: no digit, no deleted word, no magnitude word, no advice', () => {
     const example = system.slice(system.indexOf('An example of the register'))
     expect(example).toContain('A story paragraph:')
-    expect(example).toContain('An implication:')
+    expect(example).toContain('An implication, where the company says its machines last a decade:')
     expect(example).toContain('A watch line:')
     expect(example).toContain('A week line:')
     expect(example).not.toMatch(/\d/)
@@ -195,7 +196,7 @@ describe('the prompt', () => {
     expect(example).not.toMatch(/\b(very|many|most|strong|huge|significant)\b/i)
     // Its one advice line is the one it marks as wrong.
     expect(example.match(/\bshould\b/g)).toHaveLength(1)
-    expect(example).toContain('Not: "The company should show the clean in its videos."')
+    expect(example).toContain('Not, advice: "The company should show the clean in its videos."')
   })
 
   it('lists every word the direction rule deletes, and only those', () => {
@@ -258,5 +259,39 @@ describe('the prompt', () => {
     expect(user).not.toContain('secret-evidence-id')
     expect(user).not.toMatch(/\be:\S/) // no quote ref
     expect(`${system}\n${user}`).not.toMatch(/[—–]/)
+  })
+})
+
+describe('what it means for the company (the lead, 30 Sep: about Sealand, not the category)', () => {
+  const context: CompanyContext = {
+    sells: { noun: 'bags', description: null, keywords: ['backpack', 'travel bag'] },
+    claims: ['Bags are made from upcycled materials.'],
+    posts: { week: 0, month: 4 },
+  }
+  const { system, user } = buildWeekReadPrompts(args({ context }))
+
+  it("hands the writer the company's own context, as its own voice and never the market's", () => {
+    expect(user).toContain('About Sealand (context for "What it means for Sealand"; none of this is what the market said):')
+    expect(user).toContain('  - Bags are made from upcycled materials.')
+    expect(user).toContain('Sealand published no post of its own this week. Sealand published posts of its own in September so far.')
+    expect(user).not.toMatch(/\b4\b/)
+    expect(system).toContain("This is Sealand's own voice, not the market's: never present it as anything buyers said.")
+    expect(buildWeekReadPrompts(args()).user).toContain('About Sealand: nothing recorded beyond its name.')
+  })
+
+  it('asks for implications about the company, connected to what it sells and claims, else to a company that sells what it sells', () => {
+    expect(system).toContain('about Sealand in particular, never about the category in general')
+    expect(system).toContain("Connect the week's findings to what Sealand sells and to what it says about itself")
+    expect(system).toContain('Where the week bears on none of Sealand\'s claims, say what the finding means for a company that sells what Sealand sells.')
+    expect(system).toContain('A line that would be as true of any rival is not an implication for Sealand')
+    expect(system).toContain('Never say how a claim was received or whether buyers believe it unless a candidate says so')
+    expect(system).toContain('never say the market ignores, overlooks or does not mention something')
+    // With the product's noun, the fallback names what it sells.
+    expect(buildWeekReadPrompts(args({ clientId: SEALAND_CLIENT_ID })).system).toContain("a company that sells bags like Sealand's")
+  })
+
+  it('asks for literal words, naming the idioms the first dry v3 read used', () => {
+    expect(system).toContain('Literal words, never an idiom or a figure of speech')
+    for (const idiom of ['credible in the hand', 'right on the eye', 'a tool that still has to please', 'blunt tests', 'in the same breath']) expect(system).toContain(`"${idiom}"`)
   })
 })

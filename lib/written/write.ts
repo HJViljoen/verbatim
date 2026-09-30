@@ -6,6 +6,7 @@ import { WHAT_THEY_SELL } from '../pages/market-frame'
 import { CALIBRATED_PROSE_RULE, noDirectionRule } from '../pipeline/prose-rules'
 import { noDashes } from '../reports/documents/scrub'
 import type { FigureTable } from '../reports/types'
+import { companyLines, type CompanyContext } from './company'
 import { standsAlone } from './sure'
 import { firstHeardThisWeek, type PoolCandidate, type StandingFact, type WeekPool } from './types'
 
@@ -183,6 +184,10 @@ export interface WeekWriterArgs {
   previous: { headlines: string[] } | null
   /** The table the writer may cite (`writerFigures`). */
   figures: FigureTable
+  /** What the company sells, says about itself and whether it posted
+   *  (lib/written/company.ts): what "What it means for {company}" connects
+   *  the week to. Absent: the writer is told nothing about the company. */
+  context?: CompanyContext | null
 }
 
 /** The rank's words for the writer (the standing line's own). */
@@ -231,6 +236,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     'What you are given, in the user message:',
     '- The week\'s candidates (C1, C2 and so on), best evidenced first: themes the market talked about this week. Each has its label and description, the kinds of comment behind it (praise, objections, questions and so on) and the kind most of them were, whether its evidence can carry a finding alone, the subject it is part of where it is one, whether it was first heard this week, and paraphrases of what people said. The paraphrases are notes, not quotations: never put them in quotation marks and never present them as anyone\'s words.',
     `- The subjects ${co} follows (S1, S2 and so on), with the themes inside each this month and paraphrases of what people said about it.`,
+    `- About ${co}: what it sells, what it says about itself in its own videos (its claims, in paraphrase) and whether it posted this week. This is ${co}'s own voice, not the market's: never present it as anything buyers said.`,
     '- Last week\'s headlines, where there was a read last week.',
     '',
     'What you write, in this order. Work out the findings first: the report is built on them.',
@@ -253,7 +259,9 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     '  - The same rule as the headlines: no contrast the candidates do not show ("selection, not brand attachment").',
     `  - quote_from: at most ${WEEK_READ_MAX.storyQuotes} paragraphs point to a voice, where hearing one would help the reader: the id of a candidate that paragraph cites whose people say its point most directly. Code prints a real quote from that candidate after the paragraph. Otherwise null. Never write a quotation yourself.`,
     '',
-    `3. implications: "What it means for ${co}", two or three lines (at most ${WEEK_READ_MAX.implications}), each at most two short sentences. What the week, taken as a whole, says about ${co}'s business: how its products are judged and compared, what makes its price acceptable or not, what its buyers need to see, where its rivals stand in the buyer's mind. Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Each rests on the week's candidates (based_on) and follows from them, not from general knowledge about the category. Each is checked against the conversation on its own, like a headline.`,
+    `3. implications: "What it means for ${co}", two or three lines (at most ${WEEK_READ_MAX.implications}), each at most two short sentences, about ${co} in particular, never about the category in general. Connect the week's findings to what ${co} sells and to what it says about itself (under About ${co}): where a finding bears on one of ${co}'s own claims or on what it sells, name the claim or the product and say what the finding means for it, in the market's terms. Where the week bears on none of ${co}'s claims, say what the finding means for a company that sells ${what}. A line that would be as true of any rival is not an implication for ${co}: make it specific or leave it out.`,
+    `  - ${co}'s claims are its own words, not evidence about the market. Never say how a claim was received or whether buyers believe it unless a candidate says so, and never say the market ignores, overlooks or does not mention something: the candidates are not everything people said.`,
+    `  - Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Each rests on the week's candidates (based_on) and follows from them, not from general knowledge about the category. Each is checked against the conversation on its own, like a headline.`,
     '',
     `4. new_this_week: conversations first heard this week. ONLY candidates marked "First heard this week: yes", at most ${WEEK_READ_MAX.newItems}; for each, one or two short sentences on what it is about. When no candidate is marked so, the list is empty: never present anything else as first heard. Do not write the word "new": code prints the heading.`,
     '',
@@ -265,6 +273,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     '',
     'House style:',
     `- Plain language, for a busy person at ${co} reading on a phone. Short sentences. Concrete nouns: the thing people name (the straps, the laptop sleeve, the zips, the colour, the price) in the market's own words. No consultant abstractions: never "a fit problem", "legible", "positioning", "is tested against", "lens", "value proposition", "use case", "consideration", "resonates", "narrative", "friction", "ecosystem", "landscape", "journey". Name the thing instead.`,
+    '- Literal words, never an idiom or a figure of speech: not "credible in the hand", "right on the eye", "a tool that still has to please", "earns its place", "the case for paying more disappears", "blunt tests", "in the same breath". Say the literal thing: "buyers want to see the stitching and the zips before they accept the price", "buyers want the bag to look good and to work".',
     `- A research report, not a memo: the analytical third person ("buyers describe", "owners report", "people ask", "${co} is compared"), claims rather than hedges. Never "we", "our", "us" or "you"; never address the reader. No headings, no bullet points inside a field, no exclamation marks, no greeting, no sign-off.`,
     '- Name products, brands and themes plainly. Never name a person or an account.',
     '- The market only. Never mention how anything was found, gathered, collected, searched, read, counted or checked. Never mention data, sources, samples, coverage, searches, updates, platforms, this service, a tool, a model, AI or Verbatim, and never write "this read", "this report", "this week\'s read" or "this brief". Never explain why something is not said or cannot be compared: if something cannot be said, leave it out. A sentence that does any of this is deleted before anyone reads it.',
@@ -284,7 +293,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     'An example of the register, for a different company and market (coffee machines); do not reuse its content:',
     '- A finding. Too broad, two ideas joined: "Machines earn their price when they are easy to live with". One idea, written right: headline "Owners judge a machine by how long the daily clean takes"; saw "Owners describe the clean in detail: the drip tray, the milk wand, and how often the machine asks to be descaled. Those who need a brush or a tablet every week complain about it, even when they like the coffee.\\n\\nBuyers ask about the clean before they ask about the taste."; means "The clean is the cost owners feel every day. It decides whether they still praise the machine a year after buying it.". The price doubt would be a second finding of its own, if its candidates carry it.',
     '- A story paragraph: "The week\'s talk was about living with a machine. Owners described the daily clean in detail, the drip tray, the milk wand and the descale, and they judged the price in the same terms: by how long a machine keeps working and what it asks of them each morning. For these owners the machine is the routine around the cup."',
-    '- An implication: "The machine is judged a year after purchase, on its upkeep and on how long it keeps working." Not: "The company should show the clean in its videos."',
+    '- An implication, where the company says its machines last a decade: "The company sells its machines on a decade of use. Owners this week judged a machine by the clean it asks for each morning, so the decade is judged on the daily upkeep." Not, true of any rival: "Machines are judged on upkeep." Not, advice: "The company should show the clean in its videos."',
     '- A watch line: "Whether owners who complain about descaling name the tablets or the time it takes."',
     '- A week line: "Owners judged their machines this week by the daily upkeep they live with."',
   ].filter((l) => l !== null).join('\n').replace(/\n{3,}/g, '\n\n')
@@ -329,6 +338,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
       ? `First heard this week: ${firstHeard.join(', ')}. Only these may go under new_this_week.`
       : 'First heard this week: none. new_this_week is empty.',
     subjectLines.length ? `Subjects ${co} follows:\n${subjectLines.join('\n\n')}` : `Subjects ${co} follows: none with anything said this month.`,
+    companyLines(co, a.context, a.pool.month) || `About ${co}: nothing recorded beyond its name.`,
   ].join('\n\n')
   return { system, user, subjects }
 }
