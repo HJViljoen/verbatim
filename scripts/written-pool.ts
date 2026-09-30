@@ -79,9 +79,9 @@ function printPool(pool: WeekPool): void {
   for (const c of pool.candidates) {
     console.log(
       `  ${c.id.padEnd(4)} ${c.label}\n` +
-        `       gated ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN}` +
+        `       lenient ${c.lenientVideos} (month ${c.monthVideoIds.length}) · strict ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN}` +
         ` · kinds ${c.kinds.join(', ') || '—'} (mostly ${c.dominantKind ?? '—'}) · lenses ${c.lenses.join(', ')}` +
-        ` · subject ${c.subjectId ?? 'none'} · ${c.isNew ? 'NEW' : 'heard before'} · ${c.quoteRefs.length} quote(s) · ${c.notes.length} note(s)`,
+        ` · subject ${c.subjectId ?? 'none'} · ${c.isNew ? 'NEW' : 'heard before'} · ${c.quoteRefs.length} quote(s) of ${c.quoteOptions.length} option(s) · ${c.notes.length} note(s)`,
     )
   }
 }

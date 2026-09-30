@@ -348,7 +348,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   embedded". **The rule is about `audience_insights.embedding` in
   particular**: that table's vectors are reached through the RPCs
   (`set_insight_embeddings`, `match_insights`), which filter server-side, and
-  are never bulk-selected or counted from application code.
+  are never bulk-selected or counted from application code. One bounded
+  id-set read exists and is not bulk: the written read's quote fit
+  (`lib/written/fit.ts`) selects `id, embedding` on the base table for at most
+  `FIT_MAX_INSIGHTS` (120) option insights by id, a few dozen in practice,
+  never a scan and never a count.
   `themes.embedding` and `theme_registry.embedding` are a different case and
   ARE read directly today — `lib/pipeline/themes.ts` (one run's themes, and
   the whole tenant's registry), `lib/ask/engine.ts`,

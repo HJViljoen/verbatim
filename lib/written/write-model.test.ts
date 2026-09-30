@@ -42,7 +42,7 @@ const p = pool([candidate({ id: 'C1' }), candidate({ id: 'C2' }), candidate({ id
 const base = { company: 'Sealand', pool: p, standing: [fact({ subjectId: 's1', name: 'Comfort', notes: ['Straps.'] })], previous: null, figures: writerFigures(p), clientId: 'client-1', runId: 'run-27' }
 
 describe('generateWeekRead', () => {
-  it('makes one strict call on the synthesis model and logs it as week_read, week_read_v1', async () => {
+  it('makes one strict call on the synthesis model and logs it as week_read, week_read_v2', async () => {
     const { admin, rows } = fakeAdmin()
     const { client, calls } = fakeClient([ANSWER])
     const out = await generateWeekRead(admin, { ...base, client })
@@ -55,7 +55,7 @@ describe('generateWeekRead', () => {
     expect((calls[0].response_format as { json_schema: { strict: boolean } }).json_schema.strict).toBe(true)
     expect(rows).toHaveLength(1)
     expect(rows[0].table).toBe('ai_call_log')
-    expect(rows[0].row).toMatchObject({ pass: 'week_read', prompt_version: 'week_read_v1', model: 'gpt-5.4', run_id: 'run-27', client_id: 'client-1', validation_status: 'ok' })
+    expect(rows[0].row).toMatchObject({ pass: 'week_read', prompt_version: 'week_read_v2', model: 'gpt-5.4', run_id: 'run-27', client_id: 'client-1', validation_status: 'ok' })
   })
 
   it('retries once, logging both attempts, and throws after the second failure', async () => {

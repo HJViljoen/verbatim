@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { CURATION_GATE } from '../curation'
 import { substituteFigures } from '../reports/cover'
-import { composeWeekRead, contextLine, evidenceOf, pickFindingQuote, sureOf, type ComposeWeekArgs } from './compose'
+import { composeWeekRead, contextLine, evidenceOf, monthEvidenceOf, pickFindingQuote, sureOf, type ComposeWeekArgs } from './compose'
 import type { ScrubbedWeekRead } from './scrub'
-import { candidate, fact, pool, ref, SEP } from './test-fixtures'
+import { candidate, fact, option, pool, ref, SEP } from './test-fixtures'
 import type { PoolCandidate } from './types'
 import { writerFigures, writerSubjects } from './write'
 
@@ -37,10 +37,16 @@ function compose(candidates: PoolCandidate[], findings: Finding[], over: Partial
 }
 
 describe('evidence and how sure', () => {
-  it('counts distinct gated videos across the cited candidates: a shared video once', () => {
-    const a = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4'] })
-    const b = candidate({ id: 'C2', videoIds: ['v3', 'v4', 'v5'] })
-    expect(evidenceOf([a, b])).toBe(5)
+  it('counts distinct lenient-gated videos across the cited candidates: a shared video once, never a sum', () => {
+    const a = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4'], monthVideoIds: ['v1', 'v2', 'v3', 'v4', 'm1', 'm2'] })
+    const b = candidate({ id: 'C2', videoIds: ['v3', 'v4', 'v5'], monthVideoIds: ['v3', 'v4', 'v5', 'm2', 'm3'] })
+    expect(evidenceOf([a, b])).toBe(5) // not 7
+    expect(monthEvidenceOf([a, b])).toBe(8) // not 11
+  })
+
+  it('counts the lenient videos, not the strict ones', () => {
+    const c = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4', 'v5'], gatedVideoIds: ['v1'] })
+    expect(evidenceOf([c])).toBe(5)
   })
 
   it("is the document engine's rule in videos: under five does not print, and Strong evidence needs the product's line on both counts", () => {
@@ -115,20 +121,24 @@ describe('composeWeekRead: a thin week', () => {
     const standing = [fact({ subjectId: 's1', name: 'Comfort', rank: 1 }), fact({ subjectId: 's2', name: 'Repair', calibration: 'failed' })]
     const p = pool([candidate({ id: 'C1' })])
     const read = composeWeekRead({ pool: p, standing, written: null, subjects: [], writerFigures: writerFigures(p), model: '', costUsd: 0 })
-    expect(read).toMatchObject({ version: 1, inShort: '', findings: [], held: [], month: SEP, promptVersion: 'week_read_v1', costUsd: 0 })
+    expect(read).toMatchObject({ version: 1, inShort: '', findings: [], held: [], month: SEP, promptVersion: 'week_read_v2', costUsd: 0 })
     expect(read.standing.map((s) => [s.name, s.line !== '', s.sentence])).toEqual([['Comfort', true, ''], ['Repair', false, '']])
   })
 })
 
 describe('composeWeekRead: the lines code writes', () => {
-  it('the evidence line is the lead candidate\'s week and its month so far, one object', () => {
-    const lead = candidate({ id: 'C1', gated: 9, weekVideos: 14, monthK: 40, label: 'Price feels hard to justify' })
-    const read = compose([lead, candidate({ id: 'C2', gated: 5 })], [finding({ based_on: ['C2', 'C1'] })])
+  it('the evidence line counts what the finding rests on: the union of every cited candidate, this week and in the month so far', () => {
+    const c1 = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6'], monthVideoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'm1', 'm2', 'm3'], weekVideos: 14, monthK: 40, label: 'Price feels hard to justify' })
+    const c2 = candidate({ id: 'C2', videoIds: ['v5', 'v6', 'v7', 'v8'], monthVideoIds: ['v5', 'v6', 'v7', 'v8', 'm3', 'm4'], weekVideos: 9, monthK: 30 })
+    const read = compose([c1, c2], [finding({ based_on: ['C2', 'C1'], headline: 'Buyers doubt the price' })])
     const f = read.findings[0]
-    expect(f.videos).toEqual({ week: 14, month: 40 })
+    // Eight distinct videos this week (not 6 + 4), twelve in the month (not 9 + 6),
+    // and neither candidate's own theme count (14, 40).
+    expect(f.videos).toEqual({ week: 8, month: 12 })
     expect(f.evidence).toBe('[[f1_week]] videos this week · [[f1_month]] in September so far')
     const text = substituteFigures(f.evidence, read.figures).map((p) => ('text' in p ? p.text : p.figure)).join('')
-    expect(text).toBe('14 videos this week · 40 in September so far')
+    expect(text).toBe('8 videos this week · 12 in September so far')
+    expect(read.figures.f1_week.label).toBe('videos this week behind the finding "Buyers doubt the price"')
   })
 
   it('the context line is the subject\'s standing line, and First heard where every cited candidate is new', () => {
@@ -205,6 +215,45 @@ describe('composeWeekRead: quotes', () => {
     expect(by.Strongest).toBe('e:a1') // C1 is the strongest cited
     expect(by['Not cited']).toBe('e:a2') // C3 is not cited, so C1's; a1 is taken
     for (const f of read.findings) expect(f.quote?.text).toBe('')
+  })
+
+  it('with a fit, prints the option that best fits the finding, whichever cited candidate it comes from', () => {
+    const c1 = candidate({ id: 'C1', gated: 9, quoteRefs: [ref('a1', 't1'), ref('a2', 't2')] })
+    const c2 = candidate({ id: 'C2', gated: 7, quoteRefs: [ref('b1', 't3'), ref('b2', 't4')] })
+    const read = compose([c1, c2], [finding({ based_on: ['C1', 'C2'], quote_from: 'C1', headline: 'Fits' })], {
+      fit: new Map([[0, new Map([['e:a1', 0.31], ['e:a2', 0.42], ['e:b1', 0.35], ['e:b2', 0.58]])]]),
+    })
+    expect(read.findings[0].quote?.ref).toBe('e:b2') // not quote_from's first
+  })
+
+  it("the writer's quote_from breaks a tie, an unscored option ranks last, and no fit keeps the writer's order", () => {
+    const c1 = candidate({ id: 'C1', quoteRefs: [ref('a1', 't1')] })
+    const c2 = candidate({ id: 'C2', quoteRefs: [ref('b1', 't2'), ref('b2', 't3')] })
+    const used = () => ({ refs: new Set<string>(), threads: new Set<string>() })
+    const tie = new Map([['e:a1', 0.5], ['e:b1', 0.5]])
+    expect(pickFindingQuote(c2, [c1, c2], used(), tie)?.ref).toBe('e:b1')
+    expect(pickFindingQuote(c1, [c1, c2], used(), tie)?.ref).toBe('e:a1')
+    expect(pickFindingQuote(null, [c1, c2], used(), new Map([['e:b2', 0.1]]))?.ref).toBe('e:b2')
+    expect(pickFindingQuote(c2, [c1, c2], used(), new Map())?.ref).toBe('e:b1')
+    expect(pickFindingQuote(c2, [c1, c2], used(), null)?.ref).toBe('e:b1')
+  })
+
+  it('chooses among every option, not only the three listed refs', () => {
+    const refs = [ref('a1', 't1'), ref('a2', 't2'), ref('a3', 't3'), ref('a4', 't4'), ref('a5', 't5')]
+    const c = candidate({ id: 'C1', quoteRefs: refs.slice(0, 3), quoteOptions: refs.map((q) => option(q)) })
+    expect(pickFindingQuote(null, [c], { refs: new Set(), threads: new Set() }, new Map([['e:a5', 0.6], ['e:a1', 0.2]]))?.ref).toBe('e:a5')
+  })
+
+  it('holds a finding with no quote left to print: each prints a real quote', () => {
+    const c1 = candidate({ id: 'C1', gated: 9, quoteRefs: [ref('a1', 't1')] })
+    const c2 = candidate({ id: 'C2', gated: 7, quoteRefs: [] })
+    const read = compose([c1, c2], [
+      finding({ based_on: ['C1'], headline: 'First' }),
+      finding({ based_on: ['C2', 'C1'], headline: 'Second' }),
+    ])
+    // Second (16 videos) prints first and takes a1; First is left with nothing.
+    expect(read.findings.map((f) => [f.headline, f.quote?.ref])).toEqual([['Second', 'e:a1']])
+    expect(read.held).toContainEqual({ reason: 'no quote left to print', headline: 'First' })
   })
 
   it('prefers a thread not heard yet, falls back to any unused ref, and prints none rather than a repeat', () => {

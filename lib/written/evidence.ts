@@ -2,10 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { readQuoteContext } from '../quote-context'
-import type { QuoteVideo } from '../quote-gate'
+import { quoteGate, type GateOptions, type GateVerdict, type QuoteVideo } from '../quote-gate'
 import { readTranslations, readingOf } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
-import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey } from '../rivals'
 import type { QuoteRef } from './types'
 
 // The comment evidence behind a set of insights, dated in one period, with
@@ -31,6 +31,14 @@ import type { QuoteRef } from './types'
 // THE WORDS STAY IN HERE. `text` is read so the gate can judge it; nothing
 // built from these rows (`WeekPool`, `StandingFact`) carries it: a quote
 // leaves as a `QuoteRef` with `text: ''` (`refOf`).
+//
+// A BRAND'S OWN PEOPLE ARE NOT THE MARKET (T3b, 30 Sep). "I work in New
+// Zealand at Cotopaxi … they are really durable" is an employee, not a buyer.
+// Nothing in the quote gate or its context knows who a commenter works for, so
+// a narrow text rule marks it (`saysTheyWorkFor`): first person, "I work at" /
+// "I work for" one of the tracked brands (the client and its rivals), in the
+// words or their English. A marked row passes no gate here (`passes`): it
+// counts toward nothing and prints nowhere in the written read.
 
 /** One comment citation, dated in the period asked for. */
 export interface DatedEvidence {
@@ -39,6 +47,9 @@ export interface DatedEvidence {
   kind: string | null
   /** `audience_insights.description`: Pass A's paraphrase, never the comment. */
   description: string
+  /** `audience_insights.theme`: Pass A's slug, the other half of the product's
+   *  embedding text (`embedInput`, lib/pipeline/cluster.ts). */
+  theme?: string | null
   evidenceId: string
   /** `insight_evidence.relevance_rank`, 99 where absent (lib/quotes.ts). */
   rank: number
@@ -65,6 +76,9 @@ export interface DatedEvidence {
   /** What the gate reads about the video, or null where it was not found
    *  (the gate then refuses the quote: `no_video`). */
   context: QuoteVideo | null
+  /** The commenter says they work for a tracked brand (`saysTheyWorkFor`):
+   *  not a consumer's voice. Absent is false. */
+  insider?: boolean
 }
 
 type EmbeddedVideo = {
@@ -82,6 +96,7 @@ type EmbeddedInsight = {
   id: string
   category: string | null
   description: string | null
+  theme?: string | null
   videos: EmbeddedVideo | EmbeddedVideo[] | null
   insight_evidence: {
     id: string
@@ -99,7 +114,7 @@ type EmbeddedInsight = {
 }
 
 const EVIDENCE_SELECT = [
-  'id, category, description,',
+  'id, category, description, theme,',
   'videos(id, platform, video_id, analyzed_lane, is_client, is_competitor, competitor_name, account_name),',
   'insight_evidence!inner(id, quote, relevance_rank, comment_id,',
   'comments!inner(id, comment_date, platform, video_id, author))',
@@ -132,6 +147,7 @@ export function flattenEvidence(rows: readonly EmbeddedInsight[]): Omit<DatedEvi
         insightId: String(insight.id),
         kind: insight.category ?? null,
         description: (insight.description ?? '').trim(),
+        theme: insight.theme ?? null,
         evidenceId: String(e.id),
         rank: e.relevance_rank ?? 99,
         commentId: String(e.comment_id),
@@ -154,7 +170,8 @@ export function flattenEvidence(rows: readonly EmbeddedInsight[]): Omit<DatedEvi
 
 /**
  * The comment evidence of these insights dated in `[from, to)`, with each
- * quote's English (the translation cache) and its video's gate context.
+ * quote's English (the translation cache), its video's gate context, and
+ * whether its commenter says they work for one of `brands` (`insider`).
  * Throws on a read error: both callers are fail-soft one level up.
  */
 export async function loadDatedEvidence(
@@ -162,6 +179,7 @@ export async function loadDatedEvidence(
   clientId: string,
   insightIds: readonly string[],
   period: { from: string; to: string },
+  opts: { brands?: readonly string[] } = {},
 ): Promise<DatedEvidence[]> {
   const ids = [...new Set(insightIds.filter(Boolean))]
   if (ids.length === 0) return []
@@ -185,8 +203,61 @@ export async function loadDatedEvidence(
     readTranslations(admin, flat.map((e) => e.text)),
     readQuoteContext(admin, clientId, { videoUuids: [...new Set(flat.map((e) => e.video.uuid))] }, admin),
   ])
-  return flat.map((e) => ({ ...e, ...readingOf(translations, e.text), context: ctx.forVideoUuid(e.video.uuid) }))
+  const brands = opts.brands ?? []
+  return flat.map((e) => {
+    const reading = readingOf(translations, e.text)
+    return { ...e, ...reading, context: ctx.forVideoUuid(e.video.uuid), insider: saysTheyWorkFor([e.text, reading.english], brands) }
+  })
 }
+
+// ---- A brand's own people --------------------------------------------------------------
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** "I work", in the first person and the present: "I work", "I currently
+ *  work", "I'm working", "I am working"; never "I work out". A former employee
+ *  ("I used to work at") is not caught: the rule is kept narrow on purpose. */
+const I_WORK = String.raw`\bI(?:\s+(?:currently|actually|also|now|still))?\s+work\b(?!\s+out\b)|\bI(?:'m|\s+am)\s+(?:currently\s+)?working\b(?!\s+out\b)`
+
+/**
+ * Does the commenter say they work for one of these brands? First person,
+ * then "at" or "for" the brand within the same sentence and a short reach
+ * ("I work in New Zealand at Cotopaxi"), in any of the texts given (the words
+ * and their English). A brand named elsewhere in the line ("I work at a desk
+ * all day and my Cotopaxi…") is not enough. Pure.
+ */
+export function saysTheyWorkFor(texts: readonly (string | null | undefined)[], brands: readonly string[]): boolean {
+  const names = [...new Set(brands.map((b) => b.trim()).filter((b) => b.length >= 3))]
+  if (names.length === 0) return false
+  const alts = names.map((b) => escapeRe(b).replace(/\s+/g, '\\s*')).join('|')
+  const re = new RegExp(`(?:${I_WORK})[^.!?\\n]{0,40}?\\b(?:at|for)\\s+(?:the\\s+)?(?:${alts})(?![\\p{L}\\p{N}])`, 'iu')
+  return texts.some((t) => t != null && re.test(t))
+}
+
+/** The brands a commenter may work for: the client itself and every rival it
+ *  tracks or has tracked (a stopped rival's people are no more the market). */
+export async function loadTrackedBrands(admin: SupabaseClient, clientId: string): Promise<string[]> {
+  const [client, rivals] = await Promise.all([
+    admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    loadTrackedRivals(admin, clientId),
+  ])
+  if (client.error) throw new Error(`written brands: ${client.error.message}`)
+  const company = ((client.data as { company_name: string | null } | null)?.company_name ?? '').trim()
+  return [...new Set([company, ...rivals.map((r) => r.name.trim())].filter(Boolean))]
+}
+
+/** The gate's verdict, or the written read's own refusal of a brand insider. */
+export type WrittenVerdict = GateVerdict | { ok: false; reason: 'insider' }
+
+/** The gate's verdict on one citation, where a brand's own person never
+ *  passes. Every gate in the written read goes through here. */
+export function judge(e: DatedEvidence, gate: GateOptions): WrittenVerdict {
+  if (e.insider) return { ok: false, reason: 'insider' }
+  return quoteGate(gateInputOf(e), gate)
+}
+
+/** Does this citation pass the gate (and is it no brand insider)? */
+export const passes = (e: DatedEvidence, gate: GateOptions): boolean => judge(e, gate).ok
 
 /** A citation as a stored read keeps it: the ref, never the words. */
 export function refOf(e: Pick<DatedEvidence, 'evidenceId' | 'commentDate' | 'video'>): QuoteRef {

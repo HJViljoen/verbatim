@@ -13,7 +13,7 @@ import {
 // write-model.ts), pointed at the week. The reasoning model at the synthesis
 // effort, one strict structured call, one retry on a parse failure or an API
 // error, every attempt logged to `ai_call_log` as pass `week_read` with the
-// prompt version `week_read_v1`. There is no code fallback for the words: a
+// prompt version `WEEK_READ_PROMPT_VERSION`. There is no code fallback for the words: a
 // week the writer could not write is a failed read, said plainly by the
 // caller, never an empty one sent.
 

@@ -28,7 +28,7 @@ import { DEPARTMENTS, type Department, type PoolCandidate, type StandingFact, ty
 // nothing about how anything was found, and never why something is not said.
 
 export const WEEK_READ_PASS = 'week_read'
-export const WEEK_READ_PROMPT_VERSION = 'week_read_v1' as const
+export const WEEK_READ_PROMPT_VERSION = 'week_read_v2' as const
 
 /** Field caps, in characters (plan T3's schema). `inShortSentences` is the
  *  In short's sentence cap; its character cap is a backstop. */
@@ -66,26 +66,26 @@ export interface WeekReadOutput {
  * nothing true to say is '' and a finding with no voice to quote is null.
  */
 export function weekReadSchema() {
-  const line = (who: string) =>
-    z.string().describe(`What this finding means for ${who}, in at most two short sentences, under ${WEEK_READ_MAX.for} characters. What it means, never what to do. "" when it tells them nothing true.`)
+  const line = (what: string) =>
+    z.string().describe(`${what} At most two short sentences, under ${WEEK_READ_MAX.for} characters. What the market does and says, never what the team should do. "" when it tells this team nothing true, or would only restate the finding.`)
   return z.object({
     findings: z.array(z.object({
-      headline: z.string().describe(`The finding as a claim about the market or the buyer, never a topic and never an instruction. Under ${WEEK_READ_MAX.headline} characters, no full stop, no placeholder.`),
-      saw: z.string().describe(`What people said this week, in the analytical third person, in one or two short paragraphs (a blank line between them). Under ${WEEK_READ_MAX.saw} characters.`),
-      means: z.string().describe(`What it means in this market and why it matters: intelligence, not advice. Under ${WEEK_READ_MAX.means} characters. No placeholder.`),
+      headline: z.string().describe(`One claim about the market or the buyer, no broader than the cited candidates show; never a topic and never an instruction. Plain words, under ${WEEK_READ_MAX.headline} characters, no full stop, no placeholder.`),
+      saw: z.string().describe(`What people said this week about this one idea: the things they name and how they put it, in plain words and the analytical third person, in one or two short paragraphs (a blank line between them). Under ${WEEK_READ_MAX.saw} characters.`),
+      means: z.string().describe(`Why this matters in this market, in plain words: intelligence, not advice. Under ${WEEK_READ_MAX.means} characters. No placeholder.`),
       for: z.object({
-        sales: line('sales, the people who talk to buyers'),
-        marketing: line('marketing, the people who shape the message'),
-        content: line('content, the people who make the videos and posts'),
-        leadership: line('leadership, the people who decide'),
+        sales: line('For sales, the people who talk to buyers: what buyers will raise about this, and how they put it.'),
+        marketing: line('For marketing, the people who shape the message: what the market values or doubts here, in the words people use.'),
+        content: line('For content, the people who make the videos and posts: what people ask about or stop on here that the team could answer or show.'),
+        leadership: line('For leadership, the people who decide: what this says about the business (its price, its customers\' loyalty, its range, its rivals).'),
       }),
-      based_on: z.array(z.string()).describe('The candidate ids this finding rests on, e.g. ["C2", "C5"]. At least one.'),
-      quote_from: z.string().nullable().describe('The one cited candidate whose voices best carry the finding (the product attaches a real quote from it), or null.'),
-    })).describe(`Three or four findings when the week carries them, fewer when it does not. At most ${WEEK_FINDINGS_MAX}.`),
-    in_short: z.string().describe(`The week's read in at most ${WEEK_READ_MAX.inShortSentences} sentences: what the findings add up to, not a list of them. No placeholder.`),
+      based_on: z.array(z.string()).describe('The candidate ids this finding rests on, e.g. ["C2"]. Several only when they say the same thing. At least one.'),
+      quote_from: z.string().nullable().describe('The cited candidate whose voices say this finding most directly, or null. Code prints the real quote that best fits what you wrote, from the cited candidates; this breaks a tie.'),
+    })).describe(`One finding per distinct idea: three or four when the candidates hold that many, fewer only when they do not. At most ${WEEK_FINDINGS_MAX}.`),
+    in_short: z.string().describe(`The week's read in at most ${WEEK_READ_MAX.inShortSentences} short sentences, in plain words: what the findings add up to, not a list of them. No placeholder.`),
     standing: z.array(z.object({
       subject_id: z.string().describe('The subject id as listed, e.g. "S3".'),
-      sentence: z.string().describe(`One sentence on what the market says about this subject this month, under ${WEEK_READ_MAX.standing} characters. Never its size, its rank, a change or a comparison. No placeholder.`),
+      sentence: z.string().describe(`One plain sentence on what the market says about this subject this month, naming the things people talk about, under ${WEEK_READ_MAX.standing} characters. Never its size, its rank, a change or a comparison. No placeholder.`),
     })).describe('One entry per listed subject whose material says something; leave the others out.'),
   })
 }
@@ -184,17 +184,27 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     '- Last week\'s headlines, where there was a read last week.',
     '',
     'What you write:',
-    `- findings: three or four when the week carries them, fewer when it does not, never more than ${WEEK_FINDINGS_MAX}. Never stretch a thin candidate into a finding. A finding is a claim about the market that one or more candidates support: cite them in based_on. Every sentence in a finding must be traceable to the labels, descriptions and notes of the candidates it cites, and to nothing else. Two findings never rest on the same evidence: merge them. Each candidate says whether its evidence can carry a finding alone; one that cannot may still support a finding beside another candidate that makes the same point, and never beside one that makes a different point just to reach the line. Order does not matter; code orders the findings by the evidence behind them.`,
-    '  - headline: a claim about the market or the buyer ("Buyers judge a travel pack by how it opens at security"), never a topic ("Airport security") and never an instruction ("Show the opening").',
-    '  - saw: what people said this week, developed rather than listed.',
-    '  - means: why it matters in this market, read across the evidence. Intelligence, not advice.',
-    '  - for: one line per department on what the finding means for it, at most two short sentences. What it means, never what to do: no instructions, no "should". Leave a department "" when the finding tells it nothing true; an empty line is better than a stretched one. The candidates\' departments are a guide, not a rule; leadership reads every finding and is written for when the finding matters to the business.',
-    '  - quote_from: the one cited candidate whose voices best carry the finding. Code prints a real quote from it beside the finding, of the kind most of its comments were, so pick the candidate whose kind matches what the finding says.',
-    '- in_short: the week in at most three sentences: what the findings add up to. Never a list of them.',
-    '- standing: for each listed subject, one sentence on what the market says about it this month, from its themes and notes. Leave out a subject whose material says nothing. Never its size, its rank, a change or a comparison: code prints those beside your sentence.',
+    `- findings: ONE IDEA EACH. Write three or four when the candidates hold that many distinct ideas, fewer only when they do not, never more than ${WEEK_FINDINGS_MAX}. A finding is a claim about the market that one or more candidates support: cite them in based_on. Every sentence in a finding must be traceable to the labels, descriptions and notes of the candidates it cites, and to nothing else.`,
+    '  - One idea per finding. A finding about straps and back padding is not also about the price, or about one brand\'s range. Never join two ideas into one finding ("comfort, and price too", "the same holds for brand X"): write two findings, or leave the weaker one out.',
+    '  - Cite several candidates only when they say the same thing in different words. Two candidates that say different things are two findings. Each candidate supports at most one finding.',
+    '  - Each candidate says whether its evidence can carry a finding alone. One that cannot may stand beside another candidate that says the same thing, never beside one that says something else just to reach the line. Never stretch a thin candidate into a finding.',
+    '  - Order does not matter; code orders the findings by the evidence behind them.',
+    '  - headline: one claim about the market or the buyer, and no broader than the cited candidates show. If they are about straps and back padding, the headline is about straps and back padding, not about "what earns the price" or "travel bags" in general. Never a topic ("Airport security") and never an instruction ("Show the opening").',
+    '  - saw: what people said this week about this idea, developed rather than listed: the concrete things they name, and how they put it.',
+    '  - means: why it matters in this market, in plain terms. Intelligence, not advice.',
+    '  - for: one line per department on what this finding tells THAT team about its own work, at most two short sentences, concrete, and traceable to the cited candidates like everything else:',
+    '    - sales: what buyers will raise with a salesperson about this, and how they frame it (the comparison they make, the doubt they voice, the question they open with);',
+    '    - marketing: what the market values or doubts here, in the words people use for it;',
+    '    - content: what people ask about or stop on here that the content team could answer or show (the question, the detail, the comparison they want to see);',
+    '    - leadership: what the finding says about the business: where it touches the price, customers\' loyalty, the range or a rival.',
+    '    A line that only restates the finding for a department ("For content: bag talk centres on how it carries") says nothing: leave it "". Leave a department "" whenever the finding tells it nothing true; an empty line is better than a stretched one. Say what the market does and says, never what the team should do: no instructions, no "should". The candidates\' departments are a guide, not a rule.',
+    '  - quote_from: the cited candidate whose voices say this finding most directly. Code prints the real quote that best fits what you wrote, chosen from the cited candidates\' voices; your choice breaks a tie.',
+    '- in_short: the week in at most three short sentences, in plain words: what the findings add up to. Never a list of them.',
+    '- standing: for each listed subject, one plain sentence on what the market says about it this month, from its themes and notes, naming the things people talk about. Leave out a subject whose material says nothing. Never its size, its rank, a change or a comparison: code prints those beside your sentence.',
     '',
     'House style:',
-    '- A research read, not a memo: the analytical third person ("buyers describe", "owners report", "the conversation turns on"), plain English. Never "we", "our", "us" or "you"; never address the reader. No headings, no bullet points inside a field, no exclamation marks, no greeting, no sign-off.',
+    `- Plain language, for a busy person at ${a.company} reading on a phone. Short sentences. Concrete nouns: the thing people name (the straps, the laptop sleeve, the zips, the colour, the price) in the market's own words. No consultant abstractions: never "a fit problem", "legible", "positioning", "is tested against", "lens", "value proposition", "use case", "consideration", "resonates", "narrative", "friction", "ecosystem". Name the thing instead.`,
+    '- A research read, not a memo: the analytical third person ("buyers describe", "owners report", "people ask"), claims rather than hedges. Never "we", "our", "us" or "you"; never address the reader. No headings, no bullet points inside a field, no exclamation marks, no greeting, no sign-off.',
     '- Name products, brands and themes plainly. Never name a person or an account.',
     '- The market only. Never mention how anything was found, gathered, collected, searched, read, counted or checked. Never mention data, sources, samples, coverage, searches, updates, platforms, this service, a tool, a model, AI or Verbatim, and never write "this read", "this report" or "this brief". Never explain why something is not said or cannot be compared: if something cannot be said, leave it out. A sentence that does any of this is deleted before anyone reads it.',
     '- Never say how big a theme is or how it ranks against another ("the main complaint", "the top concern", "more than"): code orders the findings and prints their counts.',
@@ -210,7 +220,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     a.previous ? '- Continuity: last week\'s headlines are listed. Where a finding carries one of them still, you may say the concern continues; that is not a claim that anything moved, so never say it is more or less than last week and never compare the two weeks.' : null,
     '- No dashes between clauses (no em dash, no en dash, no spaced hyphen); use a comma, a colon or a full stop.',
     '',
-    'Example of the register (a different company and market; do not reuse its content): headline "Comfort is the test long-term users put every claim to"; saw "Long-term users judge a device by whether it can be worn through a whole day. They describe fit changing by evening, sweat and sores, and the sock changes that decide whether a device stays on.\\n\\nThe adjustable socket drew requests by name, the one component people asked for rather than about."; means "Comfort is not a feature in this market but the test every claim is put to: a buyer who has lived with a poor socket hears a performance claim as a promise about the afternoon."; for.sales "Fit through the day is the buyer\'s own measure, and the question that opens the conversation."; for.content "".',
+    'Example of one finding in the register (a different company and market; do not reuse its content). Too broad, two ideas joined: "Machines earn their price when they are easy to live with". One idea, as it should be written: headline "Owners judge a machine by how long the daily clean takes"; saw "Owners describe the clean in detail: the drip tray, the milk wand, and how often the machine asks to be descaled. Those who need a brush or a tablet every week complain about it, even when they like the coffee.\\n\\nBuyers ask about the clean before they ask about the taste."; means "The clean is the cost owners feel every day. It decides whether they still praise the machine a year after buying it."; for.sales "Buyers ask how long the clean takes and whether descaling needs tablets, often before they ask about the coffee."; for.marketing "Owners praise a milk wand they can wipe clean in one go, and they call it easy, not professional."; for.content "People ask to see the clean itself, start to finish: the drip tray, the wand and the descale."; for.leadership "What owners say a year after buying turns on upkeep rather than on the coffee.". The price doubt would be a second finding of its own, if its candidates carry it.',
   ].filter((l) => l !== null).join('\n').replace(/\n{3,}/g, '\n\n')
 
   const figureLines = Object.entries(a.figures).map(([k, f]) => `- [[${k}]]: ${f.label}`)

@@ -5,12 +5,13 @@
 //   node --env-file=.env.local --import tsx scripts/week-read.ts \
 //     --client <uuid> --run <uuid> [--out <file.md>] [--write [--replace]]
 //
-// DRY BY DEFAULT. Nothing is written to any database: the writer's and the
-// self-check's `ai_call_log` rows are NOT written (the call is still paid for,
-// about $0.20 on gpt-5.4), and no `week_reads` row. The rendering resolves each
-// quote's words for reading; the stored read keeps refs only.
+// DRY BY DEFAULT. Nothing is written to any database: the writer's, the
+// self-check's and the quote fit's `ai_call_log` rows are NOT written (the
+// calls are still paid for, about $0.10 to $0.20 on gpt-5.4, the fit's
+// embeddings a fraction of a cent), and no `week_reads` row. The rendering
+// resolves each quote's words for reading; the stored read keeps refs only.
 //
-// --write stores the run's row (status ready, or thin), logging both calls to
+// --write stores the run's row (status ready, or thin), logging every call to
 // `ai_call_log` as the step does. It is a paste for Heinrich against
 // production, and the fallback when the pipeline step failed or was not
 // deployed before a Sunday. It refuses to replace a READY row unless
@@ -43,6 +44,7 @@ import { longMonth } from '../lib/format'
 import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes'
 import { coverPlainText } from '../lib/reports/cover'
 import type { WeekCheck } from '../lib/written/check'
+import type { QuoteFit } from '../lib/written/fit'
 import { buildWeekRead, finishWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead, type WeekReadInputs } from '../lib/written/step'
 import { loadWeekReadRow, saveWeekRead, weekReadsApplied } from '../lib/written/store'
 import { DEPARTMENTS, type QuoteRef, type WeekReadData } from '../lib/written/types'
@@ -95,7 +97,7 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
   const out: string[] = [
     `# ${company}: the week's read (${mode})`,
     '',
-    `Run \`${runId}\` · window ${d.window.from} to ${d.window.to} · ${month} · status **${built.status}** · model ${d.model || 'none (no call)'} · ${d.promptVersion} · cost $${d.costUsd.toFixed(4)}${built.check ? ` (self-check $${built.check.costUsd.toFixed(4)})` : ''}`,
+    `Run \`${runId}\` · window ${d.window.from} to ${d.window.to} · ${month} · status **${built.status}** · model ${d.model || 'none (no call)'} · ${d.promptVersion} · cost $${d.costUsd.toFixed(4)}${built.check ? ` (self-check $${built.check.costUsd.toFixed(4)})` : ''}${built.fit ? ` (quote fit $${built.fit.costUsd.toFixed(6)}: ${built.fit.findings} finding(s), ${built.fit.stored} stored vector(s), ${built.fit.embedded} embedded now${built.fit.ran ? '' : `, DID NOT RUN: ${built.fit.error ?? '?'}`})` : ''}`,
     '',
     '## In short',
     '',
@@ -110,11 +112,18 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
     out.push(`**What it means.** ${f.means}`, '')
     for (const dep of DEPARTMENTS) if (f.for[dep]) out.push(`- **For ${dep}:** ${f.for[dep]}`)
     out.push('')
-    out.push(...quoteLines(f.quote, words), '')
+    out.push(...quoteLines(f.quote, words))
+    // The fit scores of the finding this quote was chosen for.
+    const scores = f.quote ? [...(built.fit?.scores.values() ?? [])].find((m) => m.has(f.quote!.ref)) : undefined
+    if (scores && f.quote) {
+      const ranked = [...scores.entries()].sort((x, y) => y[1] - x[1])
+      out.push(`> <sub>fit ${scores.get(f.quote.ref)?.toFixed(3) ?? 'unscored'} (rank ${ranked.findIndex(([r]) => r === f.quote?.ref) + 1} of ${ranked.length} options)</sub>`)
+    }
+    out.push('')
     out.push(`_${plain(f.evidence, d)}_`)
     if (f.context) out.push(`_${plain(f.context, d)}_`)
     out.push('')
-    out.push(`<sub>Based on: ${f.basedOn.map((id) => { const c = cand.get(id); return c ? `${c.id} "${c.label}" (gated ${c.gatedVideos}, week ${c.weekVideos}, mostly ${c.dominantKind ?? '?'})` : id }).join('; ')} · sure: ${f.sure} · subject: ${f.subjectId ?? 'none'} · new: ${f.isNew}</sub>`, '')
+    out.push(`<sub>Based on: ${f.basedOn.map((id) => { const c = cand.get(id); return c ? `${c.id} "${c.label}" (lenient ${c.lenientVideos}, strict ${c.gatedVideos}, week ${c.weekVideos}, mostly ${c.dominantKind ?? '?'})` : id }).join('; ')} · rests on ${f.videos.week} this week, ${f.videos.month} in the month · sure: ${f.sure} · subject: ${f.subjectId ?? 'none'} · new: ${f.isNew}</sub>`, '')
   })
   if (d.findings.length === 0) out.push('_(no findings print)_', '')
 
@@ -145,7 +154,7 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
   }
   out.push(`### The pool (${built.pool.candidates.length} candidates${built.pool.thin ? ', THIN' : ''}; the week ${built.pool.weekVideos} category videos, the month ${built.pool.monthVideos})`, '')
   for (const c of built.pool.candidates) {
-    out.push(`**${c.id} "${c.label}"** · gated ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN} · kinds ${c.kinds.join(', ') || 'none'} (mostly ${c.dominantKind ?? 'none'}) · lenses ${c.lenses.join(', ')} · subject ${c.subjectId ?? 'none'} · ${c.isNew ? 'first heard this month' : 'heard before'}`)
+    out.push(`**${c.id} "${c.label}"** · lenient ${c.lenientVideos} (month ${c.monthVideoIds.length}) · strict ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN} · ${c.quoteOptions.length} quote option(s) · kinds ${c.kinds.join(', ') || 'none'} (mostly ${c.dominantKind ?? 'none'}) · lenses ${c.lenses.join(', ')} · subject ${c.subjectId ?? 'none'} · ${c.isNew ? 'first heard this month' : 'heard before'}`)
     if (c.description) out.push('', `_${c.description}_`)
     out.push('', ...c.notes.map((n) => `- ${n}`), '')
     for (const q of c.quoteRefs) out.push(...quoteLines(q, words))
@@ -183,7 +192,8 @@ async function main() {
   const again = flag('recompose')
   if (again && write) throw new Error('--recompose never writes: store a read built by a real call')
   const saved = again ? '' : flag('inputs')
-  type SavedRun = { data: WeekReadData; workings: { pool: WeekReadInputs['pool']; standing: WeekReadInputs['standing']; raw: BuiltWeekRead['raw']; check: (Omit<WeekCheck, 'contradicted'> & { contradicted: [string, string | null][] }) | null } }
+  type SavedFit = Omit<QuoteFit, 'scores'> & { scores: [number, [string, number][]][] }
+  type SavedRun = { data: WeekReadData; workings: { pool: WeekReadInputs['pool']; standing: WeekReadInputs['standing']; raw: BuiltWeekRead['raw']; check: (Omit<WeekCheck, 'contradicted'> & { contradicted: [string, string | null][] }) | null; fit?: SavedFit | null } }
   const prior = again ? (JSON.parse(readFileSync(resolve(process.cwd(), again), 'utf8')) as SavedRun) : null
   const inputs: WeekReadInputs = prior
     ? { company, pool: prior.workings.pool, standing: prior.workings.standing, previous: null }
@@ -198,7 +208,7 @@ async function main() {
   if (has('prompt-only')) {
     const { pool } = inputs
     console.log(`\nPool: ${pool.candidates.length} candidate(s)${pool.thin ? ' (THIN: no call would be made)' : ''}; standing: ${inputs.standing.length} subject(s); last week: ${inputs.previous ? inputs.previous.headlines.length : 'none'}`)
-    for (const c of pool.candidates) console.log(`  ${c.id} "${c.label}" gated ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} · mostly ${c.dominantKind ?? '-'} · subject ${c.subjectId ?? 'none'} · ${c.quoteRefs.length} quote(s)`)
+    for (const c of pool.candidates) console.log(`  ${c.id} "${c.label}" lenient ${c.lenientVideos} (month ${c.monthVideoIds.length}) · strict ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} · mostly ${c.dominantKind ?? '-'} · subject ${c.subjectId ?? 'none'} · ${c.quoteRefs.length} quote(s)`)
     for (const f of inputs.standing) console.log(`  ${f.name} [${f.calibration}, ${f.rung}] level ${f.level ? `${f.level.k} of ${f.level.n}` : 'none'} · ${f.contents.length} theme(s) · ${f.notes.length} note(s) · quote ${f.quoteRef ? 'yes' : 'no'}`)
     const { system, user } = buildWeekReadPrompts({ company: inputs.company, pool, standing: inputs.standing, previous: inputs.previous, figures: writerFigures(pool) })
     console.log(`\n=== SYSTEM (${system.length} chars) ===\n${system}\n\n=== USER (${user.length} chars) ===\n${user}`)
@@ -214,6 +224,7 @@ async function main() {
       standing: inputs.standing,
       raw: prior.workings.raw,
       check: { ...prior.workings.check, contradicted: new Map(prior.workings.check.contradicted) },
+      fit: prior.workings.fit ? { ...prior.workings.fit, scores: new Map(prior.workings.fit.scores.map(([i, s]) => [i, new Map(s)])) } : null,
       costUsd: prior.data.costUsd,
     })
   } else {
@@ -231,7 +242,8 @@ async function main() {
   const text = render(company, runId, built, words, write ? 'WRITTEN' : again ? 'DRY RUN, not stored; composed again from the saved call' : 'DRY RUN, not stored')
   console.log(`\n${text}\n`)
 
-  const json = JSON.stringify({ status: built.status, data: built.data, workings: { pool: built.pool, standing: built.standing, raw: built.raw, scrub: built.scrub, check: built.check && { ...built.check, contradicted: [...built.check.contradicted] } } }, null, 2)
+  const fit = built.fit && { ...built.fit, scores: [...built.fit.scores].map(([i, s]) => [i, [...s]]) }
+  const json = JSON.stringify({ status: built.status, data: built.data, workings: { pool: built.pool, standing: built.standing, raw: built.raw, scrub: built.scrub, check: built.check && { ...built.check, contradicted: [...built.check.contradicted] }, fit } }, null, 2)
   const outPath = flag('out')
   if (outPath) {
     const md = resolve(process.cwd(), outPath)

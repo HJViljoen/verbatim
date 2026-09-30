@@ -35,7 +35,7 @@ function built(findings: number, called = true): BuiltWeekRead {
     model: called ? 'gpt-5.4' : '',
     costUsd: called ? 0.21 : 0,
   })
-  return { status: data.findings.length > 0 ? 'ready' : 'thin', data, pool: p, standing: [], called, raw: null, scrub: null, check: null }
+  return { status: data.findings.length > 0 ? 'ready' : 'thin', data, pool: p, standing: [], called, raw: null, scrub: null, check: null, fit: null }
 }
 
 function deps(over: Partial<WeekReadStepDeps> = {}) {

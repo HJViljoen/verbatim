@@ -3,6 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendAlertEmail } from '../email'
 import { checkWeekRead, type WeekCheck } from './check'
 import { composeWeekRead } from './compose'
+import { loadTrackedBrands } from './evidence'
+import { fitQuotes, type QuoteFit } from './fit'
 import { loadWeekPool } from './pool'
 import { scrubWeekRead, weekAllowTokens, type WeekScrubCounts } from './scrub'
 import { loadStanding } from './standing'
@@ -14,8 +16,10 @@ import { generateWeekRead, WEEK_READ_MODEL, type ParseClient } from './write-mod
 // The week's written read, built and stored (plan T4). Two entry points:
 //
 //  · `buildWeekRead`: pool (T1), standing (T2), the writer (T3), scrub, the
-//    self-check, compose. Writes nothing but the `ai_call_log` rows of its two
-//    model calls, and not those where `log` is false (the script's dry run).
+//    self-check, the quotes' fit (T3b), compose. Writes nothing but the
+//    `ai_call_log` rows of its model calls (the writer, the self-check, the
+//    fit's one embeddings request), and not those where `log` is false (the
+//    script's dry run).
 //    A THIN pool makes no model call at all: it composes the read with no
 //    findings and says `thin`;
 //  · `runWeekReadStep`: the Inngest step's body (`write-week-read`,
@@ -40,6 +44,8 @@ export interface BuiltWeekRead {
   raw: WeekReadOutput | null
   scrub: WeekScrubCounts | null
   check: WeekCheck | null
+  /** How the quotes were fitted to the findings (null on a thin week). */
+  fit: QuoteFit | null
 }
 
 /** The company's name, as the writer is told it. */
@@ -65,15 +71,21 @@ export async function loadWeekReadInputs(
 ): Promise<WeekReadInputs> {
   const { clientId, runId } = opts
   const company = await companyOf(admin, clientId)
-  const pool = await loadWeekPool(admin, { clientId, runId })
-  const standing = await loadStanding(admin, { clientId, month: pool.month, window: pool.window, asOf: opts.asOf ?? new Date() })
+  // Whose people are not the market (lib/written/evidence.ts), read once.
+  const brands = await loadTrackedBrands(admin, clientId)
+  const pool = await loadWeekPool(admin, { clientId, runId, brands })
+  const standing = await loadStanding(admin, { clientId, month: pool.month, window: pool.window, asOf: opts.asOf ?? new Date(), brands })
   const previous = pool.thin ? null : await loadPreviousHeadlines(admin, clientId, runId, pool.window.from)
   return { company, pool, standing, previous }
 }
 
 export async function buildWeekRead(
   admin: SupabaseClient,
-  opts: { clientId: string; runId: string; asOf?: Date; log: boolean; client?: ParseClient; inputs?: WeekReadInputs },
+  opts: {
+    clientId: string; runId: string; asOf?: Date; log: boolean; client?: ParseClient; inputs?: WeekReadInputs
+    /** The embedder, for a test. */
+    embed?: (texts: string[]) => Promise<number[][]>
+  },
 ): Promise<BuiltWeekRead> {
   const { clientId, runId } = opts
   const { company, pool, standing, previous } = opts.inputs ?? (await loadWeekReadInputs(admin, opts))
@@ -81,13 +93,21 @@ export async function buildWeekRead(
 
   if (pool.thin) {
     const data = composeWeekRead({ pool, standing, written: null, subjects: [], writerFigures: figures, model: '', costUsd: 0 })
-    return { status: 'thin', data, pool, standing, called: false, raw: null, scrub: null, check: null }
+    return { status: 'thin', data, pool, standing, called: false, raw: null, scrub: null, check: null, fit: null }
   }
 
   const call = await generateWeekRead(admin, { company, pool, standing, previous, figures, clientId, runId, log: opts.log, client: opts.client })
   const scrubbed = scrubWeekRead(call.written, figures, weekAllowTokens(pool.candidates, standing))
   const check = await checkWeekRead(admin, { clientId, runId, companyName: company, headlines: checkableHeadlines(pool, scrubbed.output), persist: opts.log })
-  return finishWeekRead({ pool, standing, raw: call.written, check, costUsd: call.costUsd + check.costUsd })
+  // Which quote fits each finding as it will print (after the scrub).
+  const fit = await fitQuotes(admin, {
+    clientId,
+    runId,
+    pool,
+    findings: scrubbed.output.findings.map((f, index) => ({ index, headline: f.headline, saw: f.saw, based_on: f.based_on })),
+    log: opts.log,
+  }, opts.embed ? { embed: opts.embed } : {})
+  return finishWeekRead({ pool, standing, raw: call.written, check, fit, costUsd: call.costUsd + check.costUsd + fit.costUsd })
 }
 
 /** The headlines the self-check reads: only one that could print, i.e. that
@@ -110,6 +130,8 @@ export function finishWeekRead(a: {
   standing: StandingFact[]
   raw: WeekReadOutput
   check: WeekCheck
+  /** The quotes' fit; absent, the writer's order decides each quote. */
+  fit?: QuoteFit | null
   costUsd: number
 }): BuiltWeekRead {
   const figures = writerFigures(a.pool)
@@ -121,10 +143,11 @@ export function finishWeekRead(a: {
     subjects: writerSubjects(a.standing),
     writerFigures: figures,
     contradicted: a.check.contradicted,
+    fit: a.fit?.scores,
     model: WEEK_READ_MODEL,
     costUsd: Math.round(a.costUsd * 10_000) / 10_000,
   })
-  return { status: data.findings.length > 0 ? 'ready' : 'thin', data, pool: a.pool, standing: a.standing, called: true, raw: a.raw, scrub: scrubbed.counts, check: a.check }
+  return { status: data.findings.length > 0 ? 'ready' : 'thin', data, pool: a.pool, standing: a.standing, called: true, raw: a.raw, scrub: scrubbed.counts, check: a.check, fit: a.fit ?? null }
 }
 
 /** The row a built read is stored as. */

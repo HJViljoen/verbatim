@@ -8,29 +8,36 @@ import { THEME_FLOOR, themeFlags } from '../pages/overview-market/board'
 import { accountKey } from '../pages/overview-market/voices'
 import { loadMemberInsightIdsBySubject } from '../pages/subjects'
 import { loadRegrouped } from '../pages/voice-surface'
+import { embedInput } from '../pipeline/cluster'
 import { gateFor } from '../quote-context'
-import { pickEligible, quoteGate, threadOf } from '../quote-gate'
+import { pickEligible, threadOf, type GateOptions } from '../quote-gate'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading } from '../reading/read'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import { loadActiveSubjects } from '../subjects/membership'
 import { isMissingSubjects } from '../subjects/types'
-import { gateInputOf, loadDatedEvidence, refOf, type DatedEvidence } from './evidence'
-import type { Lens, PoolCandidate, QuoteRef, WeekPool } from './types'
+import { gateInputOf, judge, loadDatedEvidence, loadTrackedBrands, passes, refOf, type DatedEvidence } from './evidence'
+import type { Lens, PoolCandidate, QuoteOption, QuoteRef, WeekPool } from './types'
 
 // The week pool (plan T1): the themes a week's written findings may be built
 // from, each with the evidence code stands behind.
 //
-// WHAT A CANDIDATE IS. A theme of the run's own clustering
-// (`theme_observations`, keyed by `theme_registry.id`) that at least three
-// distinct CATEGORY videos on the READ LANE cite in the run's window, each
-// with at least one quote the product's STRICT theme gate passes: `quoteGate`
-// with `gateFor(clientId)` and the theme block's options (`claim` the label,
-// `requireRelevance`, `kind` the theme's kind), exactly as research C replayed
-// it. A video a maker posted (`segments_for_videos` says 'maker') never
-// counts: it is set aside before the gate, which refuses it anyway. And a
-// theme whose window videos are more than a quarter makers' is not a
-// candidate at all (`isMakerLed`, the front page's own line).
+// WHAT A CANDIDATE IS (widened in T3b, 30 Sep). A theme of the run's own
+// clustering (`theme_observations`, keyed by `theme_registry.id`) that at
+// least three distinct CATEGORY videos on the READ LANE cite in the run's
+// window, each with a citation the product's LENIENT gate passes (`quoteGate`
+// with `gateFor(clientId)` and the label as the claim, no relevance required
+// and no kind: research C's "lenient" replay, 13 to 17 themes a week against
+// 6 to 9 strict ones), AND at least one video with a quote the STRICT theme
+// gate passes (the theme block's options: `claim` the label,
+// `requireRelevance`, `kind` the theme's kind), so every candidate has a quote
+// that may print. What prints stays strict: `quoteRefs` and `quoteOptions`
+// are strict-gated. A video a maker posted (`segments_for_videos` says
+// 'maker') never counts: it is set aside before the gate, which refuses it
+// anyway. A theme whose window videos are more than a quarter makers' is not
+// a candidate at all (`isMakerLed`, the front page's own line). And a
+// commenter who says they work for a tracked brand passes no gate
+// (lib/written/evidence.ts `saysTheyWorkFor`).
 //
 // COUNTED THE WAY THE PRODUCT COUNTS (research C §1), and by the product's own
 // functions where one exists:
@@ -54,8 +61,14 @@ import type { Lens, PoolCandidate, QuoteRef, WeekPool } from './types'
 // `notes` are Pass A's insight descriptions. The texts are read so the gate
 // can judge them and go no further (lib/written/evidence.ts).
 
-/** A candidate needs this many distinct videos with a quote the gate passes. */
+/** A candidate needs this many distinct videos with a citation the LENIENT
+ *  gate passes; a finding needs as many across the candidates it cites. */
 export const POOL_MIN_VIDEOS = 3
+/** …and at least this many with a quote the STRICT gate passes, so every
+ *  candidate has a quote that may print. */
+export const POOL_MIN_STRICT = 1
+/** Quotes a candidate offers a finding to choose from (by fit, T3b). */
+export const POOL_QUOTE_OPTIONS = 8
 /** The most candidates a pool carries. */
 export const POOL_CAP = 12
 /** Fewer eligible candidates than this is a thin week. */
@@ -172,10 +185,14 @@ export interface PoolTheme {
 
 export interface ThemeJudgement {
   theme: PoolTheme
+  /** Videos with a citation the lenient gate passes, and their ids, sorted. */
+  lenientVideos: number
+  lenientVideoIds: string[]
+  /** Videos with a quote the strict gate passes, and their ids, sorted. */
   gatedVideos: number
-  /** The gated videos (`videos.id`), sorted. */
   gatedVideoIds: string[]
   quoteRefs: QuoteRef[]
+  quoteOptions: QuoteOption[]
   kinds: string[]
   dominantKind: string | null
   notes: string[]
@@ -216,21 +233,53 @@ export function isOwnAccount(e: Pick<DatedEvidence, 'author' | 'video'>): boolea
   return author !== '' && author === accountKey(e.video.accountName)
 }
 
+/** The strict theme gate (the theme block's): what may print. */
+export const strictGateFor = (clientId: string, theme: Pick<PoolTheme, 'label' | 'kind'>): GateOptions =>
+  gateFor(clientId, { claim: theme.label, requireRelevance: true, kind: theme.kind })
+
+/** The lenient gate (research C's replay): the same gate with the label as the
+ *  claim, which ranks but is not required, and no kind. What counts. */
+export const lenientGateFor = (clientId: string, label: string): GateOptions => gateFor(clientId, { claim: label })
+
 /**
- * One theme's week: how many videos carry a quote the strict gate passes, the
- * quotes it may offer, and the kinds and descriptions of the insights behind
- * those quotes. `evidence` may hold other themes' rows: only this theme's
- * member insights are read. Pure.
+ * The distinct videos (`videos.id`, sorted) with a citation of these insights
+ * that counts for the period (`countsForTheWeek`: category, read lane, no
+ * maker's video) and passes the gate (no brand insider). The one count a
+ * candidate's week and its month are both made of. Pure.
+ */
+export function passingVideoIds(evidence: readonly DatedEvidence[], members: ReadonlySet<string>, gate: GateOptions): string[] {
+  const out = new Set<string>()
+  for (const e of evidence) if (members.has(e.insightId) && countsForTheWeek(e) && passes(e, gate)) out.add(e.video.uuid)
+  return [...out].sort()
+}
+
+/** A citation as a quote a finding may print, with its insight's embedding
+ *  text (the product's formula). */
+export const optionOf = (e: DatedEvidence): QuoteOption => ({
+  quote: refOf(e),
+  insightId: e.insightId,
+  insightText: embedInput({ theme: e.theme ?? '', description: e.description }),
+})
+
+/**
+ * One theme's week: how many videos carry a citation the lenient gate passes
+ * and a quote the strict gate passes, the quotes it may offer, and the kinds
+ * and descriptions of the insights behind the lenient-gated material.
+ * `evidence` may hold other themes' rows: only this theme's member insights
+ * are read. Pure.
  *
- * THE QUOTES (best first, one per thread, never the video's own account) are
- * kind-matched: those whose insight is of the theme's dominant kind first,
- * then any other kind that does not contradict it, never one that does
- * (praise against objection or pain point). Each passes the strict gate the
- * theme was judged under AND, where the dominant kind is another, the gate
- * under that kind too, so a problem-led theme never quotes pure praise.
+ * THE QUOTES (best first, one per thread, never the video's own account, never
+ * a brand insider) are strict-gated and kind-matched: those whose insight is
+ * of the theme's dominant kind first, then any other kind that does not
+ * contradict it, never one that does (praise against objection or pain point).
+ * Each passes the strict gate the theme was judged under AND, where the
+ * dominant kind is another, the gate under that kind too, so a problem-led
+ * theme never quotes pure praise. `quoteRefs` is the first `POOL_QUOTES` of
+ * `quoteOptions`.
  */
 export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonly DatedEvidence[]): ThemeJudgement {
-  const gate = gateFor(clientId, { claim: theme.label, requireRelevance: true, kind: theme.kind })
+  const gate = strictGateFor(clientId, theme)
+  const lenient = lenientGateFor(clientId, theme.label)
   const members = new Set(theme.memberIds)
   // The evidence's own order: relevance rank, then id (the theme voices' order),
   // so the choice does not depend on how the rows came back.
@@ -239,31 +288,33 @@ export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonl
     .sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
   const mine = onLane.filter(countsForTheWeek)
   const makerVideos = new Set(onLane.filter((e) => e.context?.segment === 'maker').map((e) => e.video.uuid)).size
-  const passed: { e: DatedEvidence; score: number }[] = []
+  const gatedVideoIds = passingVideoIds(mine, members, gate)
+  const counted: { e: DatedEvidence; score: number }[] = []
   for (const e of mine) {
-    const verdict = quoteGate(gateInputOf(e), gate)
-    if (verdict.ok) passed.push({ e, score: verdict.score })
+    const verdict = judge(e, lenient)
+    if (verdict.ok) counted.push({ e, score: verdict.score })
   }
-  const gatedVideoIds = [...new Set(passed.map((p) => p.e.video.uuid))].sort()
-  const gatedVideos = gatedVideoIds.length
+  const lenientVideoIds = [...new Set(counted.map((p) => p.e.video.uuid))].sort()
 
   const dominantKind = dominantKindOf(mine, theme.kind)
   const dominantGate = dominantKind && dominantKind !== theme.kind ? { ...gate, kind: dominantKind } : null
   const quotable = mine.filter((e) =>
+    !e.insider &&
     !isOwnAccount(e) &&
     !contradictsDominant(e.kind, dominantKind) &&
-    (!dominantGate || quoteGate(gateInputOf(e), dominantGate).ok))
+    (!dominantGate || passes(e, dominantGate)))
   const used = new Set<string>()
-  const first = pickEligible(quotable.filter((e) => e.kind === dominantKind), gateInputOf, POOL_QUOTES, { ...gate, used })
+  const first = pickEligible(quotable.filter((e) => e.kind === dominantKind), gateInputOf, POOL_QUOTE_OPTIONS, { ...gate, used })
   const threads = new Set(first.map((e) => threadOf(e.context) ?? e.video.uuid))
-  const rest = first.length < POOL_QUOTES
-    ? pickEligible(quotable.filter((e) => e.kind !== dominantKind && !threads.has(threadOf(e.context) ?? e.video.uuid)), gateInputOf, POOL_QUOTES - first.length, { ...gate, used })
+  const rest = first.length < POOL_QUOTE_OPTIONS
+    ? pickEligible(quotable.filter((e) => e.kind !== dominantKind && !threads.has(threadOf(e.context) ?? e.video.uuid)), gateInputOf, POOL_QUOTE_OPTIONS - first.length, { ...gate, used })
     : []
-  const quoteRefs = [...first, ...rest].map(refOf)
+  const quoteOptions = [...first, ...rest].map(optionOf)
+  const quoteRefs = quoteOptions.slice(0, POOL_QUOTES).map((o) => o.quote)
 
-  // The kinds seen in the gated material, by the videos each is seen on.
+  // The kinds seen in the counted material, by the videos each is seen on.
   const videosByKind = new Map<string, Set<string>>()
-  for (const { e } of passed) {
+  for (const { e } of counted) {
     if (!e.kind) continue
     const set = videosByKind.get(e.kind) ?? new Set<string>()
     set.add(e.video.uuid)
@@ -273,8 +324,20 @@ export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonl
     .sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]))
     .map(([kind]) => kind)
 
-  // The insights behind the gated quotes, best-fitting first: the gate's score,
-  // then the evidence's rank, then the id. One per wording.
+  // The insights behind the counted material, best-fitting first: the gate's
+  // score, then the evidence's rank, then the id. One per wording.
+  const notes = notesOf(counted)
+  return {
+    theme, lenientVideos: lenientVideoIds.length, lenientVideoIds, gatedVideos: gatedVideoIds.length, gatedVideoIds,
+    quoteRefs, quoteOptions, kinds, dominantKind, notes,
+    seenVideos: new Set(onLane.map((e) => e.video.uuid)).size, makerVideos,
+  }
+}
+
+/** Insight descriptions from gated citations, best-fitting first (the gate's
+ *  score, then the evidence's rank, then the insight id), one per wording, at
+ *  most `POOL_NOTES`. Pure. */
+export function notesOf(passed: readonly { e: Pick<DatedEvidence, 'insightId' | 'rank' | 'description'>; score: number }[]): string[] {
   const best = new Map<string, { score: number; rank: number; description: string }>()
   for (const { e, score } of passed) {
     const held = best.get(e.insightId)
@@ -291,17 +354,26 @@ export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonl
     notes.push(b.description)
     if (notes.length >= POOL_NOTES) break
   }
-  return { theme, gatedVideos, gatedVideoIds, quoteRefs, kinds, dominantKind, notes, seenVideos: new Set(onLane.map((e) => e.video.uuid)).size, makerVideos }
+  return notes
 }
 
-/** The eligible themes, ranked: gated videos, then the week's videos, then
- *  the registry id so the order never depends on how the rows came back. A
- *  maker-led theme is not eligible (`isMakerLed`). Uncapped (the cap is
- *  `buildWeekPool`'s): a thin week is judged on this whole list. Pure. */
+/** Is the theme eligible? Three lenient-gated videos, one strict-gated one,
+ *  and not maker-led. */
+export const isEligible = (j: Pick<ThemeJudgement, 'lenientVideos' | 'gatedVideos' | 'seenVideos' | 'makerVideos'>): boolean =>
+  j.lenientVideos >= POOL_MIN_VIDEOS && j.gatedVideos >= POOL_MIN_STRICT && !isMakerLed(j)
+
+/** The eligible themes, ranked: lenient-gated videos, then strict-gated ones,
+ *  then the week's videos, then the registry id so the order never depends
+ *  on how the rows came back. Uncapped (the cap is `buildWeekPool`'s): a thin
+ *  week is judged on this whole list. Pure. */
 export function rankEligible(judged: readonly ThemeJudgement[]): ThemeJudgement[] {
   return judged
-    .filter((j) => j.gatedVideos >= POOL_MIN_VIDEOS && !isMakerLed(j))
-    .sort((a, b) => b.gatedVideos - a.gatedVideos || b.theme.weekVideos - a.theme.weekVideos || a.theme.themeId.localeCompare(b.theme.themeId))
+    .filter(isEligible)
+    .sort((a, b) =>
+      b.lenientVideos - a.lenientVideos ||
+      b.gatedVideos - a.gatedVideos ||
+      b.theme.weekVideos - a.theme.weekVideos ||
+      a.theme.themeId.localeCompare(b.theme.themeId))
 }
 
 // ---- Theme → subject -------------------------------------------------------------
@@ -361,6 +433,9 @@ export interface PoolHead {
 export interface PoolFacts {
   /** Category videos citing the theme in the month to date. Absent is 0. */
   monthK: ReadonlyMap<string, number>
+  /** The lenient-gated videos citing the theme in the month to date
+   *  (`passingVideoIds` over `[month start, window end)`). Absent is none. */
+  monthVideoIds?: ReadonlyMap<string, readonly string[]>
   /** `themeFlags`' other inputs (lib/pages/overview-market/board.ts): last
    *  month's category k (null where last month has no category row), whether
    *  any earlier month in any audience held the theme, and whether a run that
@@ -385,13 +460,17 @@ export function buildWeekPool(head: PoolHead, ranked: readonly ThemeJudgement[],
       dominantKind: j.dominantKind,
       lenses: lensesOf(j.kinds),
       weekVideos: j.theme.weekVideos,
+      lenientVideos: j.lenientVideos,
+      lenientVideoIds: j.lenientVideoIds,
       gatedVideos: j.gatedVideos,
       gatedVideoIds: j.gatedVideoIds,
+      monthVideoIds: [...(facts.monthVideoIds?.get(id) ?? [])],
       monthK,
       monthN: head.monthVideos,
       subjectId: facts.subjectOf.get(id) ?? null,
       isNew: f ? themeFlags({ k: monthK, prevK: f.prevK, heardBefore: f.heardBefore, regrouped: f.regrouped }).includes('new') : false,
       quoteRefs: j.quoteRefs,
+      quoteOptions: j.quoteOptions,
       notes: j.notes,
     }
   })
@@ -405,7 +484,10 @@ export function buildWeekPool(head: PoolHead, ranked: readonly ThemeJudgement[],
  * where one exists; a read that fails throws, and the caller (the pipeline
  * step, the script) decides what a failure costs.
  */
-export async function loadWeekPool(admin: SupabaseClient, opts: { clientId: string; runId: string }): Promise<WeekPool> {
+export async function loadWeekPool(
+  admin: SupabaseClient,
+  opts: { clientId: string; runId: string; brands?: readonly string[] },
+): Promise<WeekPool> {
   const { clientId, runId } = opts
 
   // The run and its frozen window. `select('*')`, as every window reader does:
@@ -425,14 +507,16 @@ export async function loadWeekPool(admin: SupabaseClient, opts: { clientId: stri
   // Only a theme on three category videos can reach three gated ones.
   const raw = week.themes.filter((t) => t.audience === INDUSTRY_AUDIENCE && t.videos >= POOL_MIN_VIDEOS)
 
+  const brands = opts.brands ?? (await loadTrackedBrands(admin, clientId))
   const themes = await loadPoolThemes(admin, clientId, runId, raw)
-  const evidence = await loadDatedEvidence(admin, clientId, themes.flatMap((t) => t.memberIds), window)
+  const evidence = await loadDatedEvidence(admin, clientId, themes.flatMap((t) => t.memberIds), window, { brands })
   const ranked = rankEligible(themes.map((t) => judgeTheme(clientId, t, evidence)))
   const kept = ranked.slice(0, POOL_CAP).map((j) => j.theme)
 
-  const [monthRead, subjectOf] = await Promise.all([
+  const [monthRead, subjectOf, monthVideoIds] = await Promise.all([
     loadMonthFacts(admin, { clientId, runId, window, month, themes: kept }),
     loadThemeSubjects(admin, clientId, kept),
+    loadMonthVideoIds(admin, { clientId, window, month, themes: kept, brands }),
   ])
   return buildWeekPool(
     {
@@ -445,8 +529,26 @@ export async function loadWeekPool(admin: SupabaseClient, opts: { clientId: stri
       monthVideos: monthRead.monthN,
     },
     ranked,
-    { monthK: monthRead.monthK, flags: monthRead.flags, subjectOf },
+    { monthK: monthRead.monthK, flags: monthRead.flags, subjectOf, monthVideoIds },
   )
+}
+
+/**
+ * Each kept theme's lenient-gated videos over the month to date,
+ * `[month start, window end)`, counted exactly as its week is
+ * (`passingVideoIds`): the ids a finding's month figure is the union of.
+ * One evidence read for the kept themes only.
+ */
+async function loadMonthVideoIds(
+  admin: SupabaseClient,
+  a: { clientId: string; window: { from: string; to: string }; month: string; themes: readonly PoolTheme[]; brands: readonly string[] },
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>()
+  if (a.themes.length === 0) return out
+  const period = { from: `${a.month}T00:00:00.000Z`, to: a.window.to }
+  const evidence = await loadDatedEvidence(admin, a.clientId, a.themes.flatMap((t) => t.memberIds), period, { brands: a.brands })
+  for (const t of a.themes) out.set(t.themeId, passingVideoIds(evidence, new Set(t.memberIds), lenientGateFor(a.clientId, t.label)))
+  return out
 }
 
 /** The run's observation of each theme and its Pass B description. */

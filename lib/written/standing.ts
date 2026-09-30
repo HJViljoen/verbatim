@@ -6,7 +6,7 @@ import { COMMENTS_READ_LANE } from '../pipeline/pass-a'
 import { loadMemberInsightIdsBySubject } from '../pages/subjects'
 import { pickThemedRunId, type ThemedRunRow } from '../pages/themed-run'
 import { gateFor } from '../quote-context'
-import { pickEligible, quoteGate, type GateOptions } from '../quote-gate'
+import { pickEligible, type GateOptions } from '../quote-gate'
 import { DIRECTION_RUN_LABEL } from '../reading/bands'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { levelText } from '../reading/level'
@@ -22,8 +22,8 @@ import { selectAll } from '../supabase-admin'
 import { subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { loadActiveSubjects } from '../subjects/membership'
 import { isMissingSubjects, type Subject } from '../subjects/types'
-import { gateInputOf, loadDatedEvidence, refOf, type DatedEvidence } from './evidence'
-import { invertMembers, isOwnAccount, POOL_NOTES, subjectForTheme } from './pool'
+import { gateInputOf, judge, loadDatedEvidence, loadTrackedBrands, passes, refOf, type DatedEvidence } from './evidence'
+import { invertMembers, isMakerLed, isOwnAccount, notesOf, POOL_MIN_VIDEOS, subjectForTheme } from './pool'
 import type { QuoteRef, StandingCalibration, StandingFact, StandingRung, TokenSentence } from './types'
 
 // Where the market stands (plan T2): each confirmed subject's level, its place
@@ -46,6 +46,19 @@ import type { QuoteRef, StandingCalibration, StandingFact, StandingRung, TokenSe
 // Pass A's descriptions of its insights, and one quote the strict gate passes
 // (the Subjects voices' gate: the subject's name and description as the claim,
 // relevance required), from this week where there is one.
+//
+// THE MATERIAL IS THE MARKET'S (T3b, 30 Sep). The themes inside a subject and
+// the notes the writer reads come only from themes the market carried: a
+// theme of the themed run that is not maker-led (the pool's
+// `HEADLINE_MAX_MAKER_SHARE` line) and whose insights inside the subject have
+// a citation the LENIENT gate passes on at least `POOL_MIN_VIDEOS` distinct
+// market videos this month (`materialThemes`). One thread is not the market:
+// on 27 Sep the Buying & delivery notes carried Hermès's retail ritual (one
+// TikTok, a two-insight theme), "ordering for the free canvas bag" (a
+// toothpaste brand's video, a one-insight theme) and the like, each of whose
+// comments the gate passes on its own. A note is then an insight of such a
+// theme with a citation the lenient gate passes. A brand insider passes no
+// gate (lib/written/evidence.ts).
 //
 // EVERY TRACKED SUBJECT APPEARS (§0a.2, the T1/T2 fixups of 30 Sep): each
 // active subject has a fact, whatever it can print. A figure prints only for
@@ -211,6 +224,12 @@ export function subjectGate(clientId: string, s: Pick<Subject, 'name' | 'descrip
   return gateFor(clientId, { claim: [s.name, s.description].filter(Boolean).join('. '), requireRelevance: true })
 }
 
+/** The same gate, lenient (research C's replay): the claim ranks, nothing is
+ *  required. What the subject's notes and themes are judged under. */
+export function subjectLenientGate(clientId: string, s: Pick<Subject, 'name' | 'description'>): GateOptions {
+  return gateFor(clientId, { claim: [s.name, s.description].filter(Boolean).join('. ') })
+}
+
 /** May this citation speak for a subject in the market? A market video (the
  *  category or a tracked brand's, never the client's own: decision E) on the
  *  read lane that no reader has marked a maker's. */
@@ -218,43 +237,90 @@ export function speaksForTheMarket(e: DatedEvidence, market: ReadonlySet<string>
   return market.has(e.video.audience) && e.video.lane === COMMENTS_READ_LANE && e.context?.segment !== 'maker'
 }
 
+/** A theme of the themed run, as the subject's material reads it. */
+export interface MaterialTheme { label: string; memberIds: readonly string[] }
+
 /**
- * One subject's month as the writer may read it: Pass A's descriptions of the
- * insights whose quotes the subject's gate passes (best-fitting first, one per
- * wording), and the one quote to print: the best that passes from this week
- * where there is one, else from the month; the category's before a brand's,
- * as the Subjects voices take them; never the video's own account. `evidence`
- * is the month's, and may hold other subjects' rows. Pure.
+ * The themes the market carried inside this subject this month: each theme
+ * holding the subject's insights heard on the market (the category or a
+ * tracked brand, on the read lane), read on those insights' citations:
+ *  · not maker-led: makers' videos over `HEADLINE_MAX_MAKER_SHARE` of the
+ *    videos it is heard on (`isMakerLed`, the pool's own rule);
+ *  · carried: a citation the lenient gate passes (no maker's video, no brand
+ *    insider) on at least `POOL_MIN_VIDEOS` distinct videos.
+ * In the themes' own order. Pure.
  */
-export function subjectMaterial(input: {
+export function materialThemes<T extends MaterialTheme>(input: {
+  lenient: GateOptions
+  memberIds: ReadonlySet<string>
+  evidence: readonly DatedEvidence[]
+  market: ReadonlySet<string>
+  themes: readonly T[]
+}): T[] {
+  const byInsight = new Map<string, DatedEvidence[]>()
+  for (const e of input.evidence) {
+    if (!input.memberIds.has(e.insightId) || !input.market.has(e.video.audience) || e.video.lane !== COMMENTS_READ_LANE) continue
+    const rows = byInsight.get(e.insightId)
+    if (rows) rows.push(e)
+    else byInsight.set(e.insightId, [e])
+  }
+  const verdicts = new Map<string, boolean>()
+  const passesOnce = (e: DatedEvidence): boolean => {
+    let v = verdicts.get(e.evidenceId)
+    if (v === undefined) verdicts.set(e.evidenceId, (v = e.context?.segment !== 'maker' && passes(e, input.lenient)))
+    return v
+  }
+  return input.themes.filter((t) => {
+    const rows = [...new Set(t.memberIds)].flatMap((id) => byInsight.get(id) ?? [])
+    if (rows.length === 0) return false
+    const seenVideos = new Set(rows.map((e) => e.video.uuid)).size
+    const makerVideos = new Set(rows.filter((e) => e.context?.segment === 'maker').map((e) => e.video.uuid)).size
+    if (isMakerLed({ seenVideos, makerVideos })) return false
+    return new Set(rows.filter(passesOnce).map((e) => e.video.uuid)).size >= POOL_MIN_VIDEOS
+  })
+}
+
+/**
+ * One subject's month as the writer may read it, and its quote.
+ *  · notes: Pass A's descriptions of the insights with a citation the LENIENT
+ *    gate passes, best-fitting first, one per wording; where `themes` is given
+ *    (the loader always gives the themed run's), only insights of a theme the
+ *    market carried inside the subject (`materialThemes`), which are returned
+ *    as `material` for `contentsOf`;
+ *  · quoteRef: the best the STRICT subject gate passes from this week where
+ *    there is one, else from the month; the category's before a brand's, as
+ *    the Subjects voices take them; never the video's own account or a brand
+ *    insider.
+ * `evidence` is the month's, and may hold other subjects' rows. Pure.
+ */
+export function subjectMaterial<T extends MaterialTheme = MaterialTheme>(input: {
   gate: GateOptions
+  /** Default: `gate` with nothing required. */
+  lenient?: GateOptions
   memberIds: ReadonlySet<string>
   evidence: readonly DatedEvidence[]
   market: ReadonlySet<string>
   window: { from: string; to: string }
-}): { notes: string[]; quoteRef: QuoteRef | null; insights: Set<string> } {
+  themes?: readonly T[]
+}): { notes: string[]; quoteRef: QuoteRef | null; insights: Set<string>; material: T[] } {
+  const lenient = input.lenient ?? { ...input.gate, requireRelevance: false, kind: null }
   const own = input.evidence
     .filter((e) => input.memberIds.has(e.insightId) && speaksForTheMarket(e, input.market))
     .sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
-  const best = new Map<string, { score: number; rank: number; description: string }>()
+  const material = input.themes
+    ? materialThemes({ lenient, memberIds: input.memberIds, evidence: input.evidence, market: input.market, themes: input.themes })
+    : []
+  const inMaterial = input.themes ? new Set(material.flatMap((t) => t.memberIds)) : null
+  const passed: { e: DatedEvidence; score: number }[] = []
   for (const e of own) {
-    const v = quoteGate(gateInputOf(e), input.gate)
-    if (!v.ok) continue
-    const held = best.get(e.insightId)
-    if (!held || v.score > held.score || (v.score === held.score && e.rank < held.rank)) best.set(e.insightId, { score: v.score, rank: e.rank, description: e.description })
+    if (inMaterial && !inMaterial.has(e.insightId)) continue
+    const v = judge(e, lenient)
+    if (v.ok) passed.push({ e, score: v.score })
   }
-  const seen = new Set<string>()
-  const notes: string[] = []
-  for (const [, b] of [...best.entries()].sort((x, y) => y[1].score - x[1].score || x[1].rank - y[1].rank || x[0].localeCompare(y[0]))) {
-    const k = b.description.toLowerCase()
-    if (!b.description || seen.has(k)) continue
-    seen.add(k)
-    notes.push(b.description)
-    if (notes.length >= POOL_NOTES) break
-  }
+  const notes = notesOf(passed)
   const from = Date.parse(input.window.from)
   const to = Date.parse(input.window.to)
-  const quotable = own.filter((e) => !isOwnAccount(e))
+  const quotable = own.filter((e) => !isOwnAccount(e) && !e.insider)
   const thisWeek = quotable.filter((e) => Date.parse(e.commentDate) >= from && Date.parse(e.commentDate) < to)
   const pick = (pool: readonly DatedEvidence[]): DatedEvidence | null => {
     const category = pool.filter((e) => e.video.audience === INDUSTRY_AUDIENCE)
@@ -262,14 +328,15 @@ export function subjectMaterial(input: {
     return pickEligible(category, gateInputOf, 1, input.gate)[0] ?? pickEligible(brands, gateInputOf, 1, input.gate)[0] ?? null
   }
   const chosen = pick(thisWeek) ?? pick(quotable)
-  return { notes, quoteRef: chosen ? refOf(chosen) : null, insights: new Set(own.map((e) => e.insightId)) }
+  return { notes, quoteRef: chosen ? refOf(chosen) : null, insights: new Set(own.map((e) => e.insightId)), material }
 }
 
 /**
  * The themes inside a subject this month: the run's themes whose subject
  * (`subjectForTheme`, the week pool's rule) is this one and which hold at
  * least one of the subject's insights heard in the month, the most of them
- * first, ties by label. Labels only, at most `STANDING_CONTENTS`. Pure.
+ * first, ties by label. Labels only, at most `STANDING_CONTENTS`. The loader
+ * passes only the themes the market carried (`materialThemes`). Pure.
  */
 export function contentsOf(
   subjectId: string,
@@ -295,7 +362,7 @@ export function contentsOf(
  */
 export async function loadStanding(
   admin: SupabaseClient,
-  opts: { clientId: string; month: string; window: { from: string; to: string }; asOf: Date },
+  opts: { clientId: string; month: string; window: { from: string; to: string }; asOf: Date; brands?: readonly string[] },
 ): Promise<StandingFact[]> {
   const { clientId, window } = opts
   const month = monthStartOf(opts.month)
@@ -340,11 +407,12 @@ export async function loadStanding(
   if (printed.size === 0) return facts
   const bySubject = await loadMemberInsightIdsBySubject(admin, clientId, subjects.map((s) => s.id))
   if (!bySubject) return facts
+  const brands = opts.brands ?? (await loadTrackedBrands(admin, clientId))
   const [evidence, themes] = await Promise.all([
     loadDatedEvidence(admin, clientId, [...bySubject.entries()].filter(([id]) => printed.has(id)).flatMap(([, ids]) => ids), {
       from: `${month}T00:00:00.000Z`,
       to: `${nextMonth(month)}T00:00:00.000Z`,
-    }),
+    }, { brands }),
     loadThemedRunThemes(admin, clientId, asOf),
   ])
   const market = new Set(marketAudiences(rivals))
@@ -354,10 +422,18 @@ export async function loadStanding(
   for (const f of facts) {
     const s = byId.get(f.subjectId)
     if (!s || !printed.has(f.subjectId)) continue
-    const m = subjectMaterial({ gate: subjectGate(clientId, s), memberIds: new Set(bySubject.get(s.id) ?? []), evidence, market, window })
+    const m = subjectMaterial({
+      gate: subjectGate(clientId, s),
+      lenient: subjectLenientGate(clientId, s),
+      memberIds: new Set(bySubject.get(s.id) ?? []),
+      evidence,
+      market,
+      window,
+      themes,
+    })
     f.notes = m.notes
     f.quoteRef = m.quoteRef
-    f.contents = contentsOf(s.id, m.insights, themes, subjectsOf, order)
+    f.contents = contentsOf(s.id, m.insights, m.material, subjectsOf, order)
   }
   return facts
 }

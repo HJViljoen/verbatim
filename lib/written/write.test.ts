@@ -60,7 +60,20 @@ describe('the schema', () => {
   })
 
   it('records its version', () => {
-    expect(WEEK_READ_PROMPT_VERSION).toBe('week_read_v1')
+    expect(WEEK_READ_PROMPT_VERSION).toBe('week_read_v2')
+  })
+
+  it('describes each department line as what the finding tells that team, never a restatement (T3b)', () => {
+    const schema = zodResponseFormat(weekReadSchema(), 'week_read').json_schema.schema as { properties: { findings: { items: { properties: { for: { properties: Record<string, { description: string }> } } } } } }
+    const lines = schema.properties.findings.items.properties.for.properties
+    expect(lines.sales.description).toContain('what buyers will raise about this, and how they put it')
+    expect(lines.marketing.description).toContain('what the market values or doubts here, in the words people use')
+    expect(lines.content.description).toContain('what people ask about or stop on here that the team could answer or show')
+    expect(lines.leadership.description).toContain('what this says about the business')
+    for (const d of Object.values(lines)) {
+      expect(d.description).toContain('would only restate the finding')
+      expect(d.description).toContain('never what the team should do')
+    }
   })
 })
 
@@ -100,6 +113,39 @@ describe('the prompt', () => {
     expect(system).not.toMatch(/[—–]/)
   })
 
+  it('asks for one idea per finding, three or four when the candidates hold them, and headlines no broader than their evidence (T3b)', () => {
+    expect(system).toContain('ONE IDEA EACH. Write three or four when the candidates hold that many distinct ideas, fewer only when they do not')
+    expect(system).toContain('Never join two ideas into one finding')
+    expect(system).toContain('Cite several candidates only when they say the same thing in different words')
+    expect(system).toContain('Each candidate supports at most one finding.')
+    expect(system).toContain('no broader than the cited candidates show')
+  })
+
+  it('asks for plain language and names the abstractions it does not want (T3b)', () => {
+    expect(system).toContain('Plain language, for a busy person at Sealand reading on a phone. Short sentences. Concrete nouns')
+    for (const w of ['a fit problem', 'legible', 'positioning', 'is tested against', 'lens']) expect(system).toContain(`"${w}"`)
+    expect(system).toContain('A research read, not a memo: the analytical third person')
+  })
+
+  it('asks each department line for what that team hears, and "" over a restatement (T3b)', () => {
+    expect(system).toContain('what buyers will raise with a salesperson about this, and how they frame it')
+    expect(system).toContain('what the market values or doubts here, in the words people use for it')
+    expect(system).toContain('what people ask about or stop on here that the content team could answer or show')
+    expect(system).toContain('what the finding says about the business')
+    expect(system).toContain('A line that only restates the finding for a department ("For content: bag talk centres on how it carries") says nothing: leave it ""')
+    expect(system).toContain('never what the team should do')
+    // The example writes all four, for a different market.
+    for (const d of ['for.sales', 'for.marketing', 'for.content', 'for.leadership']) expect(system).toContain(d)
+    expect(system).toContain('Code prints the real quote that best fits what you wrote')
+  })
+
+  it('writes its own example in the house style: no digit, no deleted word, no magnitude word', () => {
+    const example = system.slice(system.indexOf('Example of one finding'))
+    expect(example).not.toMatch(/\d/)
+    expect(directionHits(example.replace(/"[^"]*Too broad[^"]*"/, ''))).toEqual([])
+    expect(example).not.toMatch(/\b(very|many|most|strong|huge|significant)\b/i)
+  })
+
   it('lists every word the direction rule deletes, and only those', () => {
     for (const w of DELETED_WORDS) {
       expect(directionHits(`The strap is ${w} here.`).length, w).toBeGreaterThan(0)
@@ -112,7 +158,7 @@ describe('the prompt', () => {
     expect(user).toContain('Description: People question whether a premium bag is worth it.')
     expect(user).toContain('Kinds of comment: objections (most), questions')
     expect(user).toContain('Speaks to: sales, content, leadership')
-    expect(user).toContain('Evidence: enough to carry a finding alone') // six gated videos
+    expect(user).toContain('Evidence: enough to carry a finding alone') // six lenient-gated videos
     const thin = buildWeekReadPrompts(args({ pool: pool([candidate({ id: 'C1', gated: 3 }), PRAISE, candidate({ id: 'C3' })]) }))
     expect(thin.user).toContain('C1: "Theme C1"\n  Description: What C1 is about.\n  Kinds of comment: objections (most)\n  Speaks to: sales, leadership\n  Evidence: too little to carry a finding alone')
     expect(user).toContain('Part of the subject: Price')

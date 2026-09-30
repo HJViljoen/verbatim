@@ -38,12 +38,26 @@ export interface QuoteRef {
   thread: string | null
 }
 
+/**
+ * A quote a finding may print, with the insight behind it: Pass A's slug and
+ * paraphrase (never the comment), which is what the quote's fit to a written
+ * finding is measured on (lib/written/fit.ts), through the insight's stored
+ * embedding where it has one.
+ */
+export interface QuoteOption {
+  quote: QuoteRef
+  insightId: string
+  /** The product's embedding text for the insight (`embedInput`,
+   *  lib/pipeline/cluster.ts): its slug and its description. */
+  insightText: string
+}
+
 export interface PoolCandidate {
   id: string                 // 'C1'…'C12', stable within one read
   themeId: string            // theme_registry.id
   label: string              // Pass B label
   description: string | null // Pass B description
-  kinds: string[]            // insight kinds seen in the window
+  kinds: string[]            // insight kinds seen in the window's gated (lenient) material, most videos first
   /** The most common insight kind among the theme's window evidence, counted
    *  in videos (T1/T2 fixups, 30 Sep). Its quotes prefer this kind, and never
    *  come from a kind that contradicts it (praise against objection or pain
@@ -51,17 +65,33 @@ export interface PoolCandidate {
   dominantKind: string | null
   lenses: Lens[]             // derived from kinds (purchase_intent/objection → sales; pain_point/feature_request → product; question → content; praise/switching/demographic → marketing); leadership = all
   weekVideos: number         // distinct category read-lane videos citing the theme, comment dated in the window
-  gatedVideos: number        // of those, videos with ≥1 quote passing the strict gate
-  /** The gated videos themselves (`videos.id`), sorted: `gatedVideos` is their
-   *  count. ADDITIVE to the pinned shape, for T3's compose, which counts a
-   *  finding's evidence as the DISTINCT gated videos across the candidates it
-   *  cites (a video two themes share counts once). Ids, never words. */
+  /** Of those, the videos with ≥1 citation the LENIENT gate passes (T3b: the
+   *  product's `quoteGate` without `requireRelevance` or a kind, research C's
+   *  "lenient" replay), makers' videos and brand insiders out. What a
+   *  candidate's evidence is counted in, and what a finding rests on. */
+  lenientVideos: number
+  /** Those videos (`videos.id`), sorted: `lenientVideos` is their count.
+   *  Compose counts a finding's evidence as the DISTINCT ids across the
+   *  candidates it cites (a video two themes share counts once). */
+  lenientVideoIds: string[]
+  gatedVideos: number        // of those, videos with ≥1 quote passing the STRICT gate (≥1 for every candidate: what prints is strict)
+  /** The strict-gated videos themselves (`videos.id`), sorted. */
   gatedVideoIds: string[]
+  /** The lenient-gated videos over the reading month to date,
+   *  `[month start, window end)`, counted the same way as `lenientVideoIds`
+   *  (T3b): the month half of a finding's evidence line is their union. */
+  monthVideoIds: string[]
   monthK: number; monthN: number   // category videos in the reading month to date (month_theme_readings / window read)
   subjectId: string | null   // subject holding the most of the theme's member insights (subject_memberships.member), if it holds ≥3 of them and ≥15% (SUBJECT_MIN_MEMBERS, SUBJECT_SHARE_FLOOR); else null
   isNew: boolean             // the existing themeFlags 'new' rule (not minted by a regime-opening run)
-  quoteRefs: QuoteRef[]      // strict-gated, one per thread, ≤3, text '', the dominant kind first, never a contradicting kind
-  notes: string[]            // ≤8 member insight descriptions dated in the window (Pass A paraphrases, never comment text)
+  quoteRefs: QuoteRef[]      // strict-gated, one per thread, ≤3, text '', the dominant kind first, never a contradicting kind (the first of quoteOptions)
+  /** Every quote the candidate may give a finding, in the same order and under
+   *  the same rules as `quoteRefs` (strict-gated, kind-consistent, one per
+   *  thread, never the video's own account or a brand insider), up to
+   *  `POOL_QUOTE_OPTIONS`. ADDITIVE (T3b): the finding's quote is the one of
+   *  these that fits it best (lib/written/fit.ts). */
+  quoteOptions: QuoteOption[]
+  notes: string[]            // ≤8 member insight descriptions dated in the window, from lenient-gated material (Pass A paraphrases, never comment text)
 }
 
 export interface WeekPool {
@@ -69,7 +99,7 @@ export interface WeekPool {
   window: { from: string; to: string }   // the run's frozen [window_start, window_end)
   month: string                          // reading month (YYYY-MM-01)
   weekVideos: number; weekComments: number; monthVideos: number   // category, read lane
-  candidates: PoolCandidate[]            // eligible = gatedVideos ≥ 3, maker segments excluded, maker-led themes out (maker share of the window's videos over HEADLINE_MAX_MAKER_SHARE); ranked gatedVideos, then weekVideos; cap 12
+  candidates: PoolCandidate[]            // eligible (T3b) = lenientVideos ≥ 3 AND gatedVideos ≥ 1, maker segments excluded, maker-led themes out (maker share of the window's videos over HEADLINE_MAX_MAKER_SHARE); ranked lenientVideos, then gatedVideos, then weekVideos; cap 12
   thin: boolean                          // < 3 eligible candidates
 }
 
@@ -143,8 +173,10 @@ export interface WeekReadFinding {
    *  `C#` is stable only inside one read, the registry id across reads. */
   basedOn: string[]
   quote: QuoteRef | null
-  /** The lead candidate's week and its month to date: one object, two reads
-   *  of the same measure (AGENTS.md's week-against-month rule). */
+  /** What the finding rests on (T3b): the DISTINCT lenient-gated videos across
+   *  every cited candidate this week, and the same union over the month to
+   *  date. One measure read twice (AGENTS.md's week-against-month rule),
+   *  never a sum. */
   videos: { week: number; month: number }
   /** The subject the cited candidates name, where they name exactly one;
    *  null where none does or where they name two (a price finding resting on
@@ -155,7 +187,8 @@ export interface WeekReadFinding {
   sure: SureWord
   /** ADDITIVE. The evidence line, a code sentence with `[[keys]]` in
    *  `figures`: "[[f1_week]] videos this week · [[f1_month]] in September so
-   *  far". Frozen here so no renderer re-derives it. */
+   *  far", the two halves of `videos`. Frozen here so no renderer re-derives
+   *  it. */
   evidence: string
   /** ADDITIVE. The context line (T2 plus isNew): "Part of Comfort: [[…]] of
    *  [[…]] videos in your market in September, the fourth biggest subject."
@@ -192,5 +225,5 @@ export interface WeekReadData {
   figures: FigureTable
   /** Dropped findings, for the Studio's workings view only. */
   held: { reason: string; headline: string }[]
-  model: string; promptVersion: 'week_read_v1'; costUsd: number
+  model: string; promptVersion: 'week_read_v1' | 'week_read_v2'; costUsd: number
 }

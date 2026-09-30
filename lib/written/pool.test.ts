@@ -6,9 +6,11 @@ import { quoteGate, type QuoteVideo } from '../quote-gate'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { flattenEvidence, type DatedEvidence } from './evidence'
 import { HEADLINE_MAX_MAKER_SHARE } from '../pages/overview'
+import { embedInput } from '../pipeline/cluster'
 import {
-  buildWeekPool, contradictsDominant, countsForTheWeek, dominantKindOf, invertMembers, isMakerLed, isOwnAccount, judgeTheme,
-  lensesOf, makerShareOf, POOL_CAP, rankEligible, SUBJECT_MIN_MEMBERS, SUBJECT_SHARE_FLOOR, subjectForTheme,
+  buildWeekPool, contradictsDominant, countsForTheWeek, dominantKindOf, invertMembers, isEligible, isMakerLed, isOwnAccount, judgeTheme,
+  lenientGateFor, lensesOf, makerShareOf, passingVideoIds, POOL_CAP, POOL_MIN_STRICT, POOL_MIN_VIDEOS, POOL_QUOTE_OPTIONS, POOL_QUOTES,
+  rankEligible, SUBJECT_MIN_MEMBERS, SUBJECT_SHARE_FLOOR, subjectForTheme,
   type PoolFacts, type PoolHead, type PoolTheme, type ThemeJudgement,
 } from './pool'
 
@@ -49,6 +51,8 @@ function ev(o: {
   audience?: string
   lane?: string | null
   context?: Partial<QuoteVideo> | null
+  insider?: boolean
+  date?: string
 }): DatedEvidence {
   seq += 1
   const context = o.context === null ? null : bagVideo(o.video, o.context ?? {})
@@ -56,10 +60,11 @@ function ev(o: {
     insightId: o.insight,
     kind: o.kind ?? 'pain_point',
     description: o.description ?? `Paraphrase of ${o.insight}`,
+    theme: `slug_${o.insight}`,
     evidenceId: `e${String(seq).padStart(4, '0')}`,
     rank: o.rank ?? 1,
     commentId: `c${seq}`,
-    commentDate: '2026-09-24T00:00:00+00:00',
+    commentDate: o.date ?? '2026-09-24T00:00:00+00:00',
     author: o.author ?? `viewer${seq}`,
     text: o.text,
     lang: 'en',
@@ -73,6 +78,7 @@ function ev(o: {
       accountName: context?.accountName ?? `Creator ${o.video}`,
     },
     context,
+    ...(o.insider ? { insider: true } : {}),
   }
 }
 
@@ -117,7 +123,57 @@ describe('lensesOf', () => {
   })
 })
 
-describe('judgeTheme: eligibility', () => {
+// Lines on a carry good that the LENIENT gate passes and the strict comfort
+// gate refuses: they say nothing about straps, weight or the back.
+const LENIENT_ONLY = [
+  'I bought this backpack in green last spring for my trips.',
+  'Which backpack is this one, the grey version from the video?',
+  'This backpack came in a box with a little card inside it.',
+  'My sister has this exact backpack in the navy colour too.',
+]
+
+describe('the lenient gate is the strict one without relevance or kind (fixtures sanity)', () => {
+  const strict = gateFor(SEALAND, { claim: COMFORT.label, requireRelevance: true, kind: 'pain_point' })
+  const lenient = lenientGateFor(SEALAND, COMFORT.label)
+  it('is research C\'s replay: the label as the claim, nothing required', () => {
+    expect(lenient).toEqual(gateFor(SEALAND, { claim: COMFORT.label }))
+  })
+  it('passes the carry lines the strict gate refuses, and refuses what is off the market', () => {
+    for (const text of LENIENT_ONLY) {
+      const q = { text, lang: 'en', english: null, video: bagVideo(1) }
+      expect(quoteGate(q, lenient), text).toMatchObject({ ok: true })
+      expect(quoteGate(q, strict).ok, text).toBe(false)
+    }
+    expect(quoteGate({ text: OFF_TOPIC, lang: 'en', english: null, video: bagVideo(1) }, lenient)).toMatchObject({ ok: false, reason: 'off_topic' })
+  })
+})
+
+describe('judgeTheme: eligibility (T3b: three lenient videos and one strict)', () => {
+  it('the rule, pinned', () => {
+    expect(POOL_MIN_VIDEOS).toBe(3)
+    expect(POOL_MIN_STRICT).toBe(1)
+  })
+
+  it('a theme on three lenient-gated videos and one strict-gated one is eligible; its quotes are strict only', () => {
+    const evidence = [
+      ev({ insight: 'i1', video: 1, text: PASS[0] }),
+      ev({ insight: 'i2', video: 2, text: LENIENT_ONLY[0] }),
+      ev({ insight: 'i3', video: 3, text: LENIENT_ONLY[1] }),
+    ]
+    const j = judgeTheme(SEALAND, COMFORT, evidence)
+    expect(j).toMatchObject({ lenientVideos: 3, lenientVideoIds: ['v-1', 'v-2', 'v-3'], gatedVideos: 1, gatedVideoIds: ['v-1'] })
+    expect(rankEligible([j])).toHaveLength(1)
+    expect(j.quoteRefs.map((q) => q.ref)).toEqual([`e:${evidence[0].evidenceId}`])
+    expect(j.quoteOptions.map((o) => o.quote.ref)).toEqual([`e:${evidence[0].evidenceId}`])
+  })
+
+  it('three lenient-gated videos with no strict quote are not eligible: nothing would print', () => {
+    const j = judgeTheme(SEALAND, COMFORT, LENIENT_ONLY.slice(0, 3).map((text, i) => ev({ insight: `i${i + 1}`, video: i + 1, text })))
+    expect(j).toMatchObject({ lenientVideos: 3, gatedVideos: 0 })
+    expect(isEligible(j)).toBe(false)
+    expect(j.quoteRefs).toEqual([])
+  })
+
   it('counts distinct videos with at least one quote the strict gate passes', () => {
     const evidence = [
       ev({ insight: 'i1', video: 1, text: PASS[0] }),
@@ -129,6 +185,7 @@ describe('judgeTheme: eligibility', () => {
     ]
     const j = judgeTheme(SEALAND, COMFORT, evidence)
     expect(j.gatedVideos).toBe(3)
+    expect(j.lenientVideos).toBe(3) // the off-topic line fails the lenient gate too
     expect(rankEligible([j])).toHaveLength(1)
   })
 
@@ -139,6 +196,7 @@ describe('judgeTheme: eligibility', () => {
       ev({ insight: 'i3', video: 3, text: OFF_TOPIC }),
     ])
     expect(j.gatedVideos).toBe(2)
+    expect(j.lenientVideos).toBe(2)
     expect(rankEligible([j])).toEqual([])
   })
 
@@ -150,6 +208,23 @@ describe('judgeTheme: eligibility', () => {
       ev({ insight: 'i4', video: 4, text: PASS[3], lane: 'claims_only' }),
     ])
     expect(j.gatedVideos).toBe(1)
+    expect(j.lenientVideos).toBe(1)
+  })
+})
+
+describe('judgeTheme: a brand\'s own people (T3b)', () => {
+  it('an insider counts for nothing and never prints, however well the line passes', () => {
+    const evidence = [
+      ev({ insight: 'i1', video: 1, text: PASS[0], insider: true }),
+      ev({ insight: 'i2', video: 2, text: PASS[1] }),
+      ev({ insight: 'i3', video: 3, text: PASS[2] }),
+    ]
+    const j = judgeTheme(SEALAND, COMFORT, evidence)
+    expect(j).toMatchObject({ lenientVideos: 2, gatedVideos: 2 })
+    expect(j.quoteOptions.map((o) => o.quote.thread).sort()).toEqual(['youtube::yt2', 'youtube::yt3'])
+    expect(isEligible(j)).toBe(false)
+    // …but the video is still one the theme was heard on (the maker share's base).
+    expect(j.seenVideos).toBe(3)
   })
 })
 
@@ -177,6 +252,7 @@ describe('judgeTheme: the maker exclusion', () => {
       ev({ insight: 'i3', video: 3, text: PASS[2], context: handmade }),
     ])
     expect(j.gatedVideos).toBe(0)
+    expect(j.lenientVideos).toBe(0)
   })
 })
 
@@ -198,6 +274,18 @@ describe('judgeTheme: quotes, kinds and notes', () => {
       expect(q.date).toBe('2026-09-24')
       expect(q.platform).toBe('youtube')
     }
+  })
+
+  it(`offers up to ${POOL_QUOTE_OPTIONS} options in the same order, the first ${POOL_QUOTES} its quote refs, each with its insight's embedding text`, () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `${PASS[i % PASS.length]} Day ${'abcdefghij'[i]} of the trip.`)
+    const evidence = lines.map((text, i) => ev({ insight: `i${(i % 5) + 1}`, video: i + 1, text, description: `Straps note ${i}` }))
+    const j = judgeTheme(SEALAND, COMFORT, evidence)
+    expect(j.quoteOptions).toHaveLength(POOL_QUOTE_OPTIONS)
+    expect(new Set(j.quoteOptions.map((o) => o.quote.thread)).size).toBe(POOL_QUOTE_OPTIONS)
+    expect(j.quoteRefs).toEqual(j.quoteOptions.slice(0, POOL_QUOTES).map((o) => o.quote))
+    const first = evidence.find((e) => `e:${e.evidenceId}` === j.quoteOptions[0].quote.ref)!
+    expect(j.quoteOptions[0]).toMatchObject({ insightId: first.insightId, insightText: embedInput({ theme: first.theme ?? '', description: first.description }) })
+    for (const o of j.quoteOptions) expect(o.quote.text).toBe('')
   })
 
   it("never offers the video's own account answering under its post, but still counts the video", () => {
@@ -224,11 +312,16 @@ describe('judgeTheme: quotes, kinds and notes', () => {
   })
 })
 
-const judged = (id: string, gatedVideos: number, weekVideos: number, over: Partial<ThemeJudgement> = {}): ThemeJudgement => ({
+/** A judged theme on `lenient` lenient-gated videos, all strict-gated unless
+ *  `over.gatedVideos` says otherwise. */
+const judged = (id: string, lenient: number, weekVideos: number, over: Partial<ThemeJudgement> = {}): ThemeJudgement => ({
   theme: { ...COMFORT, themeId: id, label: `Theme ${id}`, weekVideos },
-  gatedVideos,
-  gatedVideoIds: Array.from({ length: gatedVideos }, (_, i) => `v-${id}-${i}`),
+  lenientVideos: lenient,
+  lenientVideoIds: Array.from({ length: lenient }, (_, i) => `v-${id}-${i}`),
+  gatedVideos: lenient,
+  gatedVideoIds: Array.from({ length: lenient }, (_, i) => `v-${id}-${i}`),
   quoteRefs: [],
+  quoteOptions: [],
   kinds: ['question'],
   dominantKind: 'question',
   notes: [],
@@ -238,11 +331,12 @@ const judged = (id: string, gatedVideos: number, weekVideos: number, over: Parti
 })
 
 describe('rankEligible', () => {
-  it('ranks by gated videos, then the week, then the registry id; drops what is under three', () => {
+  it('ranks by lenient videos, then strict ones, then the week, then the registry id; drops what is under three or has no strict quote', () => {
     const ranked = rankEligible([
       judged('b', 3, 9), judged('a', 3, 9), judged('c', 5, 5), judged('d', 3, 12), judged('e', 2, 40),
+      judged('f', 5, 5, { gatedVideos: 1 }), judged('g', 9, 30, { gatedVideos: 0, gatedVideoIds: [] }),
     ])
-    expect(ranked.map((j) => j.theme.themeId)).toEqual(['c', 'd', 'a', 'b'])
+    expect(ranked.map((j) => j.theme.themeId)).toEqual(['c', 'f', 'd', 'a', 'b'])
   })
 })
 
@@ -256,6 +350,25 @@ const HEAD: PoolHead = {
   monthVideos: 814,
 }
 const NO_FACTS: PoolFacts = { monthK: new Map(), flags: new Map(), subjectOf: new Map() }
+
+describe('passingVideoIds: the one count a week and its month are made of', () => {
+  it('distinct category read-lane videos, makers and insiders out, with a citation the gate passes', () => {
+    const lenient = lenientGateFor(SEALAND, COMFORT.label)
+    const members = new Set(['i1', 'i2', 'i3'])
+    const evidence = [
+      ev({ insight: 'i1', video: 1, text: PASS[0], date: '2026-09-02T00:00:00+00:00' }),
+      ev({ insight: 'i2', video: 1, text: LENIENT_ONLY[0], date: '2026-09-25T00:00:00+00:00' }), // same video: once
+      ev({ insight: 'i2', video: 2, text: LENIENT_ONLY[1] }),
+      ev({ insight: 'i3', video: 3, text: OFF_TOPIC }), // fails the gate
+      ev({ insight: 'i3', video: 4, text: PASS[1], context: { segment: 'maker' } }), // a maker's video
+      ev({ insight: 'i3', video: 5, text: PASS[2], insider: true }), // a brand's own person
+      ev({ insight: 'i3', video: 6, text: PASS[3], audience: 'competitor:Osprey' }), // not the category
+      ev({ insight: 'i3', video: 7, text: PASS[3], lane: 'claims_only' }), // not the read lane
+      ev({ insight: 'x', video: 8, text: PASS[0] }), // not a member
+    ]
+    expect(passingVideoIds(evidence, members, lenient)).toEqual(['v-1', 'v-2'])
+  })
+})
 
 describe('buildWeekPool', () => {
   it('caps at twelve, numbers in rank order, and judges thin on every eligible theme', () => {
@@ -415,6 +528,12 @@ describe('the dominant kind and kind-matched quotes (T1/T2 fixups)', () => {
     expect(new Set(j.quoteRefs.map((q) => q.thread)).size).toBe(j.quoteRefs.length)
   })
 
+  it('carries the month\'s lenient-gated videos from the facts', () => {
+    const pool = buildWeekPool(HEAD, rankEligible([judged('a', 4, 6)]), { ...NO_FACTS, monthVideoIds: new Map([['a', ['v-a-0', 'm1', 'm2']]]) })
+    expect(pool.candidates[0]).toMatchObject({ lenientVideos: 4, monthVideoIds: ['v-a-0', 'm1', 'm2'] })
+    expect(buildWeekPool(HEAD, rankEligible([judged('a', 4, 6)]), NO_FACTS).candidates[0].monthVideoIds).toEqual([])
+  })
+
   it('carries the gated videos as ids, sorted, their count the gated count', () => {
     const j = judgeTheme(SEALAND, COMFORT, [
       ev({ insight: 'i1', video: 3, text: PASS[0] }),
@@ -425,7 +544,7 @@ describe('the dominant kind and kind-matched quotes (T1/T2 fixups)', () => {
     expect(j.gatedVideoIds).toEqual(['v-1', 'v-2', 'v-3'])
     expect(j.gatedVideos).toBe(3)
     const pool = buildWeekPool(HEAD, rankEligible([j]), NO_FACTS)
-    expect(pool.candidates[0]).toMatchObject({ gatedVideoIds: ['v-1', 'v-2', 'v-3'], dominantKind: 'pain_point' })
+    expect(pool.candidates[0]).toMatchObject({ gatedVideoIds: ['v-1', 'v-2', 'v-3'], lenientVideoIds: ['v-1', 'v-2', 'v-3'], dominantKind: 'pain_point' })
   })
 })
 
@@ -447,6 +566,7 @@ describe('the no-comment-text rule', () => {
     }
     for (const c of pool.candidates) {
       for (const q of c.quoteRefs) expect(q.text).toBe('')
+      for (const o of c.quoteOptions) expect(o.quote.text).toBe('')
       expect(c.notes.every((n) => evidence.some((e) => e.description === n))).toBe(true)
     }
   })

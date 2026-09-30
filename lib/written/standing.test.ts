@@ -12,8 +12,8 @@ import type { SubjectCalibration } from '../subjects/calibration-state'
 import type { DatedEvidence } from './evidence'
 import { invertMembers } from './pool'
 import {
-  contentsOf, factsFromReadings, marketComparable, rungOf, standingKey, standingLine, subjectGate, subjectMaterial,
-  type SubjectReading,
+  contentsOf, factsFromReadings, marketComparable, materialThemes, rungOf, standingKey, standingLine, subjectGate, subjectLenientGate,
+  subjectMaterial, type SubjectReading,
 } from './standing'
 import type { StandingFact } from './types'
 
@@ -237,7 +237,7 @@ const video = (n: number, over: Partial<QuoteVideo> = {}): QuoteVideo => ({
   source: 'discovered', segment: 'market', ...over,
 })
 let seq = 0
-function ev(o: { insight: string; video: number; text: string; date?: string; audience?: string; segment?: string; author?: string; description?: string }): DatedEvidence {
+function ev(o: { insight: string; video: number; text: string; date?: string; audience?: string; segment?: string; author?: string; description?: string; insider?: boolean }): DatedEvidence {
   seq += 1
   const ctx = video(o.video, o.segment ? { segment: o.segment } : {})
   return {
@@ -246,6 +246,7 @@ function ev(o: { insight: string; video: number; text: string; date?: string; au
     lang: 'en', english: null,
     video: { uuid: `v${o.video}`, platform: 'youtube', videoId: `yt${o.video}`, audience: o.audience ?? INDUSTRY_AUDIENCE, lane: 'full', accountName: `Creator ${o.video}` },
     context: ctx,
+    ...(o.insider ? { insider: true } : {}),
   }
 }
 
@@ -305,6 +306,68 @@ describe('subjectMaterial', () => {
     expect(m.notes).toEqual(['Straps dig in.', 'No load lifters.'])
     const json = JSON.stringify({ notes: m.notes, quoteRef: m.quoteRef })
     for (const e of evidence) expect(json).not.toContain(e.text.slice(0, 24))
+  })
+})
+
+describe('the material is the market\'s (T3b)', () => {
+  const lenient = subjectLenientGate(SEALAND_CLIENT_ID, COMFORT)
+  const gate = subjectGate(SEALAND_CLIENT_ID, COMFORT)
+  // A carry line the lenient subject gate passes but the strict one refuses.
+  const ASIDE = 'I bought this backpack in green last spring for my trips.'
+
+  it('the lenient subject gate is the strict one with nothing required', () => {
+    expect(lenient).toEqual({ ...gate, requireRelevance: undefined })
+    expect(quoteGate({ text: ASIDE, lang: 'en', english: null, video: video(1) }, gate).ok).toBe(false)
+    expect(quoteGate({ text: ASIDE, lang: 'en', english: null, video: video(1) }, lenient).ok).toBe(true)
+  })
+
+  // Three themes inside Comfort: one the market carried on three videos, one
+  // a single thread (Hermès's retail ritual, 27 Sep), one mostly makers'.
+  const carried = { label: 'Straps dig in', memberIds: ['c1', 'c2', 'c3'] }
+  const oneThread = { label: 'One thread only', memberIds: ['o1', 'o2'] }
+  const makers = { label: 'Makers talk straps', memberIds: ['k1', 'k2', 'k3', 'k4'] }
+  const evidence = [
+    ev({ insight: 'c1', video: 1, text: LINES[0], description: 'Straps dig into the shoulders.' }),
+    ev({ insight: 'c2', video: 2, text: ASIDE, description: 'Bought one for trips.' }), // lenient only
+    ev({ insight: 'c3', video: 3, text: LINES[2], description: 'Hip belt too thin.' }),
+    ev({ insight: 'o1', video: 9, text: LINES[1], description: 'One thread, first.' }),
+    ev({ insight: 'o2', video: 9, text: LINES[3], description: 'One thread, second.' }),
+    ev({ insight: 'k1', video: 11, text: LINES[0], segment: 'maker' }),
+    ev({ insight: 'k2', video: 12, text: LINES[1], segment: 'maker' }),
+    ev({ insight: 'k3', video: 13, text: LINES[2], description: 'Maker theme, market video 1.' }),
+    ev({ insight: 'k4', video: 14, text: LINES[3], description: 'Maker theme, market video 2.' }),
+    ev({ insight: 'k4', video: 15, text: LINES[0], description: 'Maker theme, market video 2.' }),
+  ]
+  const members = new Set(['c1', 'c2', 'c3', 'o1', 'o2', 'k1', 'k2', 'k3', 'k4', 'loose'])
+
+  it('keeps a theme carried on three lenient-gated market videos; drops a one-thread theme and a maker-led one', () => {
+    const kept = materialThemes({ lenient, memberIds: members, evidence, market: MARKET, themes: [carried, oneThread, makers] })
+    expect(kept.map((t) => t.label)).toEqual(['Straps dig in'])
+  })
+
+  it('a brand insider does not carry a theme', () => {
+    const withInsider = evidence.map((e) => (e.insightId === 'c3' ? { ...e, insider: true } : e))
+    expect(materialThemes({ lenient, memberIds: members, evidence: withInsider, market: MARKET, themes: [carried] })).toEqual([])
+  })
+
+  it('notes come only from insights of a carried theme, on the lenient gate; the quote is still strict', () => {
+    const m = subjectMaterial({ gate, lenient, memberIds: members, evidence: [...evidence, ev({ insight: 'loose', video: 20, text: LINES[1], description: 'In no theme.' })], market: MARKET, window: WEEK, themes: [carried, oneThread, makers] })
+    expect(m.material.map((t) => t.label)).toEqual(['Straps dig in'])
+    expect(m.notes.sort()).toEqual(['Bought one for trips.', 'Hip belt too thin.', 'Straps dig into the shoulders.'])
+    expect(m.quoteRef?.ref).not.toBe(`e:${evidence[1].evidenceId}`) // the aside never prints
+  })
+
+  it('without themes, the notes are every lenient-gated insight (the pure default)', () => {
+    const m = subjectMaterial({ gate, memberIds: new Set(['c1', 'c2']), evidence, market: MARKET, window: WEEK })
+    expect(m.notes.sort()).toEqual(['Bought one for trips.', 'Straps dig into the shoulders.'])
+    expect(m.material).toEqual([])
+  })
+
+  it('never quotes or notes a brand insider', () => {
+    const inside = [ev({ insight: 'c1', video: 1, text: LINES[0], description: 'Insider praise.', insider: true, date: '2026-09-24T00:00:00+00:00' })]
+    const m = subjectMaterial({ gate, lenient, memberIds: new Set(['c1']), evidence: inside, market: MARKET, window: WEEK })
+    expect(m.quoteRef).toBeNull()
+    expect(m.notes).toEqual([])
   })
 })
 

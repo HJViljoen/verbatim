@@ -3,7 +3,7 @@ import type { FigureTable } from '../reports/types'
 import { POOL_MIN_VIDEOS } from './pool'
 import type { ScrubbedWeekRead } from './scrub'
 import { standingLine } from './standing'
-import { evidenceOf, sureOf } from './sure'
+import { evidenceOf, monthEvidenceOf, sureOf } from './sure'
 import {
   DEPARTMENTS, type Department, type PoolCandidate, type QuoteRef, type StandingFact, type TokenSentence,
   type WeekPool, type WeekReadData, type WeekReadFinding, type WeekReadStanding,
@@ -15,32 +15,37 @@ import { WEEK_FINDINGS_MAX, WEEK_READ_PROMPT_VERSION, type WriterSubject } from 
 // CODE OWNS EVERYTHING BUT THE SENTENCES:
 //  · which findings exist: a finding rests on the candidates it cites that
 //    exist (`based_on` resolved; an invented id is dropped, never thrown), on
-//    at least three DISTINCT gated videos across them, and on evidence the
+//    at least three DISTINCT lenient-gated videos across them, on evidence the
 //    document engine's own rule calls at least reasonable (`calibrateSure`,
-//    counted in videos). The self-check's contradicted findings, and a finding
-//    whose headline or body did not survive the scrub, are held;
+//    counted in videos), and on a strict-gated quote left to print. The
+//    self-check's contradicted findings, and a finding whose headline or body
+//    did not survive the scrub, are held;
 //  · the order: by that evidence, largest first, and at most four print. A
 //    thin week has fewer, and nothing says so (§0a.2);
-//  · every number: the evidence line is the lead candidate's week and its
-//    month to date, one object read twice (AGENTS.md's week-against-month
-//    rule), and the context line is T2's code sentence;
+//  · every number: the evidence line counts what the finding rests on, the
+//    distinct gated videos across EVERY cited candidate this week and the same
+//    union over the month to date (T3b), one measure read twice (AGENTS.md's
+//    week-against-month rule), never a sum; the context line is T2's code
+//    sentence;
 //  · the only mark of confidence, "Strong evidence", at the product's line
 //    (`CURATION_GATE.confirmedMinVideos`);
-//  · the quote: from the candidate the writer named where it cited it, else
-//    the strongest cited candidate; its refs are already kind-matched and
-//    strict-gated (T1), and none is printed twice.
+//  · the quote (T3b): among the cited candidates' strict-gated, kind-matched
+//    options, the one whose insight sits closest to the finding as written
+//    (`fit`, lib/written/fit.ts: embeddings of the headline and what it saw
+//    against each option's insight). The writer's `quote_from` breaks a tie,
+//    and decides alone where no fit could be measured. None is printed twice.
 
-export { evidenceOf, sureOf } from './sure'
+export { evidenceOf, monthEvidenceOf, sureOf } from './sure'
 
-/** The evidence line: the lead candidate's week, stated again as its
- *  contribution to the month (AGENTS.md: a week is never printed alone). */
-export function evidenceLine(n: number, lead: Pick<PoolCandidate, 'label' | 'weekVideos' | 'monthK'>, month: string): TokenSentence {
+/** The evidence line: what the finding rests on this week, stated again as
+ *  its month to date (AGENTS.md: a week is never printed alone). */
+export function evidenceLine(n: number, videos: WeekReadFinding['videos'], headline: string, month: string): TokenSentence {
   const name = longMonth(month)
   return {
     body: `[[f${n}_week]] videos this week · [[f${n}_month]] in ${name} so far`,
     figures: {
-      [`f${n}_week`]: { label: `videos this week in which people talked about "${lead.label}"`, value: fmtInt(lead.weekVideos), kind: 'count' },
-      [`f${n}_month`]: { label: `videos in ${name} so far in which people talked about "${lead.label}"`, value: fmtInt(lead.monthK), kind: 'count' },
+      [`f${n}_week`]: { label: `videos this week behind the finding "${headline}"`, value: fmtInt(videos.week), kind: 'count' },
+      [`f${n}_month`]: { label: `videos in ${name} so far behind the finding "${headline}"`, value: fmtInt(videos.month), kind: 'count' },
     },
   }
 }
@@ -67,29 +72,42 @@ export function contextLine(subject: StandingFact | null | undefined, isNew: boo
   return { body: parts.join(' '), figures }
 }
 
-/** The finding's quote: from `preferred` where given, else the cited in their
- *  order (strongest first), the first ref not printed yet, a thread not heard
- *  yet where there is one. Marks what it takes as used. */
+/** The quotes a candidate may give a finding: its options, or, for a pool
+ *  saved before options existed, its listed refs. */
+const optionsOf = (c: PoolCandidate): readonly QuoteRef[] => (c.quoteOptions?.length ? c.quoteOptions.map((o) => o.quote) : c.quoteRefs)
+
+/**
+ * The finding's quote. Every option of the cited candidates, best fit first
+ * where `fit` scored them (ref → similarity; an unscored option ranks after
+ * every scored one); ties, and every option where nothing was scored, in the
+ * writer's order: `preferred` (its `quote_from`) first, then the cited in
+ * their order, each candidate's options in its own. The first ref not
+ * printed yet on a thread not heard yet, else the first not printed yet, else
+ * none. Marks what it takes as used.
+ */
 export function pickFindingQuote(
   preferred: PoolCandidate | null,
   cited: readonly PoolCandidate[],
   used: { refs: Set<string>; threads: Set<string> },
+  fit: ReadonlyMap<string, number> | null = null,
 ): QuoteRef | null {
   const order = preferred ? [preferred, ...cited.filter((c) => c !== preferred)] : [...cited]
+  const seen = new Set<string>()
+  const options: QuoteRef[] = []
+  for (const c of order) for (const q of optionsOf(c)) if (!seen.has(q.ref)) { seen.add(q.ref); options.push(q) }
+  const score = (q: QuoteRef): number => fit?.get(q.ref) ?? Number.NEGATIVE_INFINITY
+  const ranked = fit && fit.size > 0
+    ? options.map((q, i) => ({ q, i, s: score(q) })).sort((a, b) => (b.s === a.s ? 0 : b.s > a.s ? 1 : -1) || a.i - b.i).map((x) => x.q)
+    : options
   const take = (q: QuoteRef): QuoteRef => {
     used.refs.add(q.ref)
     if (q.thread) used.threads.add(q.thread)
     return q
   }
-  for (const c of order) {
-    const q = c.quoteRefs.find((r) => !used.refs.has(r.ref) && !(r.thread && used.threads.has(r.thread)))
-    if (q) return take(q)
-  }
-  for (const c of order) {
-    const q = c.quoteRefs.find((r) => !used.refs.has(r.ref))
-    if (q) return take(q)
-  }
-  return null
+  const fresh = ranked.find((q) => !used.refs.has(q.ref) && !(q.thread && used.threads.has(q.thread)))
+  if (fresh) return take(fresh)
+  const unused = ranked.find((q) => !used.refs.has(q.ref))
+  return unused ? take(unused) : null
 }
 
 export interface ComposeWeekArgs {
@@ -105,6 +123,10 @@ export interface ComposeWeekArgs {
   /** The self-check's contradicted headlines (as scrubbed), with what the
    *  conversation says instead where the check said. */
   contradicted?: ReadonlyMap<string, string | null>
+  /** How well each quote option fits each written finding: the finding's
+   *  index in the writer's output → quote ref → similarity
+   *  (lib/written/fit.ts). Absent or empty: the writer's order decides. */
+  fit?: ReadonlyMap<number, ReadonlyMap<string, number>>
   model: string
   costUsd: number
 }
@@ -155,12 +177,17 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadData {
   const subjectOf = new Map(a.standing.map((f) => [f.subjectId, f]))
   const findings: WeekReadFinding[] = []
   for (const j of kept) {
-    const lead = j.cited[0]
-    const sure = sureOf(j.cited.length, j.evidence, lead.weekVideos)
+    const videos = { week: j.evidence, month: monthEvidenceOf(j.cited) }
+    const sure = sureOf(j.cited.length, videos.week, videos.week)
     if (!sure) { held.push({ reason: `below reasonable: ${j.evidence} videos`, headline: j.f.headline }); continue }
     if (findings.length >= WEEK_FINDINGS_MAX) { held.push({ reason: `past the first ${WEEK_FINDINGS_MAX} findings`, headline: j.f.headline }); continue }
+    const asked = j.f.quote_from ? byId.get(j.f.quote_from.trim().toUpperCase()) ?? null : null
+    const preferred = asked && j.cited.includes(asked) ? asked : null
+    // Every finding prints a real quote (plan: "each with a real quote").
+    const quote = pickFindingQuote(preferred, j.cited, usedQuotes, a.fit?.get(j.i) ?? null)
+    if (!quote) { held.push({ reason: 'no quote left to print', headline: j.f.headline }); continue }
     const n = findings.length + 1
-    const evidence = evidenceLine(n, lead, month)
+    const evidence = evidenceLine(n, videos, j.f.headline, month)
     // The finding's subject: the one its candidates name, where they name one.
     // Two subjects (a price finding resting on a comfort theme too) name
     // neither: "Part of Comfort" would misplace it.
@@ -169,8 +196,6 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadData {
     const isNew = j.cited.every((c) => c.isNew)
     const context = contextLine(subjectId ? subjectOf.get(subjectId) : null, isNew, month)
     Object.assign(figures, evidence.figures, context.figures)
-    const asked = j.f.quote_from ? byId.get(j.f.quote_from.trim().toUpperCase()) ?? null : null
-    const preferred = asked && j.cited.includes(asked) ? asked : null
     const forLines: Partial<Record<Department, string>> = {}
     for (const d of DEPARTMENTS) if (j.f.for[d]?.trim()) forLines[d] = j.f.for[d].trim()
     findings.push({
@@ -179,8 +204,8 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadData {
       means: j.f.means,
       for: forLines,
       basedOn: j.cited.map((c) => c.themeId),
-      quote: pickFindingQuote(preferred, j.cited, usedQuotes),
-      videos: { week: lead.weekVideos, month: lead.monthK },
+      quote,
+      videos,
       subjectId,
       isNew,
       sure,

@@ -1,5 +1,5 @@
 import { lensesOf } from './pool'
-import type { PoolCandidate, QuoteRef, StandingFact, WeekPool } from './types'
+import type { PoolCandidate, QuoteOption, QuoteRef, StandingFact, WeekPool } from './types'
 
 // Fixtures for the written read's tests (compose, write, scrub, step). Made-up
 // words and ids shaped like Sealand's 27 Sep pool; nothing here is a reading.
@@ -9,11 +9,22 @@ export const SEP = '2026-09-01'
 
 export const ref = (id: string, thread: string): QuoteRef => ({ ref: `e:${id}`, text: '', date: '2026-09-24', platform: 'youtube', thread: `youtube::${thread}` })
 
-/** A candidate with `gated` distinct gated videos (ids `v-<id>-<n>` unless
- *  `videoIds` names them). */
+/** A quote option for a ref, its insight named after it. */
+export const option = (q: QuoteRef, insightId = `ins-${q.ref.slice(2)}`): QuoteOption => ({ quote: q, insightId, insightText: `slug. The insight behind ${q.ref}.` })
+
+/**
+ * A candidate with `gated` distinct lenient-gated videos this week (ids
+ * `v-<id>-<n>` unless `videoIds` names them), all of them strict-gated unless
+ * `gatedVideoIds` says otherwise, and in the month those plus two more each
+ * (`m-<id>-<n>`) unless `monthVideoIds` names them. Its quote options are its
+ * refs unless given.
+ */
 export function candidate(o: Partial<PoolCandidate> & { id: string; gated?: number; videoIds?: string[] }): PoolCandidate {
-  const gatedVideoIds = o.videoIds ?? o.gatedVideoIds ?? Array.from({ length: o.gated ?? 6 }, (_, i) => `v-${o.id}-${i}`)
+  const lenientVideoIds = o.videoIds ?? o.lenientVideoIds ?? Array.from({ length: o.gated ?? 6 }, (_, i) => `v-${o.id}-${i}`)
+  const gatedVideoIds = o.gatedVideoIds ?? lenientVideoIds
+  const monthVideoIds = o.monthVideoIds ?? [...lenientVideoIds, ...Array.from({ length: lenientVideoIds.length * 2 }, (_, i) => `m-${o.id}-${i}`)]
   const kinds = o.kinds ?? ['objection']
+  const quoteRefs = o.quoteRefs ?? [ref(`${o.id.toLowerCase()}q1`, `${o.id.toLowerCase()}t1`), ref(`${o.id.toLowerCase()}q2`, `${o.id.toLowerCase()}t2`)]
   return {
     themeId: o.themeId ?? `th-${o.id.toLowerCase()}`,
     label: o.label ?? `Theme ${o.id}`,
@@ -21,14 +32,18 @@ export function candidate(o: Partial<PoolCandidate> & { id: string; gated?: numb
     kinds,
     dominantKind: o.dominantKind ?? kinds[0] ?? null,
     lenses: o.lenses ?? lensesOf(kinds),
-    weekVideos: o.weekVideos ?? gatedVideoIds.length + 4,
+    weekVideos: o.weekVideos ?? lenientVideoIds.length + 4,
+    lenientVideos: lenientVideoIds.length,
+    lenientVideoIds,
     gatedVideos: gatedVideoIds.length,
     gatedVideoIds,
-    monthK: o.monthK ?? gatedVideoIds.length * 3,
+    monthVideoIds,
+    monthK: o.monthK ?? lenientVideoIds.length * 3,
     monthN: o.monthN ?? 814,
     subjectId: o.subjectId ?? null,
     isNew: o.isNew ?? false,
-    quoteRefs: o.quoteRefs ?? [ref(`${o.id.toLowerCase()}q1`, `${o.id.toLowerCase()}t1`), ref(`${o.id.toLowerCase()}q2`, `${o.id.toLowerCase()}t2`)],
+    quoteRefs,
+    quoteOptions: o.quoteOptions ?? quoteRefs.map((q) => option(q)),
     notes: o.notes ?? [`People describe ${o.id}.`],
     id: o.id,
   }
