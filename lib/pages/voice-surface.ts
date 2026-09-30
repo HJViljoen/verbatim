@@ -483,8 +483,10 @@ async function loadHeardBefore(client: SupabaseClient, clientId: string, month: 
  * is the one whose observation of it is `match_kind` 'new', and the regime is
  * read per distinct update (two reads each, `loadRegimeOpened`). Read only for
  * themes no earlier month holds, so it costs nothing on most months.
+ * Exported for the written read's pool (lib/written/pool.ts), which takes the
+ * same "New" rule (`themeFlags`) for its candidates.
  */
-async function loadRegrouped(
+export async function loadRegrouped(
   supabase: SupabaseClient,
   clientId: string,
   ids: readonly string[],
