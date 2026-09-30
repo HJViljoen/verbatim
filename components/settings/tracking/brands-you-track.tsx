@@ -24,14 +24,16 @@ export interface BrandRow {
   /** The month's market videos filed under it; null where the market was not
    *  read. */
   filed: number | null
-  /** Came up in: both counts, or the words the Brands page prints instead;
-   *  null where the brands were not read at all. */
-  came: { kOrganic: number; kAny: number } | { note: string } | null
+  /** Came up in: the one count a brand prints (T0 ruling U10: never "in
+   *  all", which counted the videos our own brand searches fetched), or the
+   *  words the Brands page prints instead; null where the brands were not
+   *  read at all. */
+  came: { kOrganic: number } | { note: string } | null
   /** Its own posts dated in the month; null where none of its accounts is read. */
   ownPosts: number | null
 }
 
-const COLS = 'minmax(140px,208px) minmax(140px,1fr) 96px 96px 160px 72px 56px 96px'
+const COLS = 'minmax(140px,208px) minmax(140px,1fr) 96px 96px 160px 72px 96px'
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -55,7 +57,7 @@ export function BrandsYouTrackCard({ month, rows, brandsLabel, brandsHref }: {
   brandsHref: string
 }) {
   const mon = monthName(month).split(' ')[0]
-  const maxAny = rows.reduce((m, r) => (r.came && 'kAny' in r.came ? Math.max(m, r.came.kAny) : m), 0)
+  const maxOrganic = rows.reduce((m, r) => (r.came && 'kOrganic' in r.came ? Math.max(m, r.came.kOrganic) : m), 0)
   const sentence = lead(rows, month)
   return (
     <Card id="brands" title="Brands you track" footer={<CardLink href={brandsHref}>Open {brandsLabel}</CardLink>}>
@@ -71,12 +73,9 @@ export function BrandsYouTrackCard({ month, rows, brandsLabel, brandsHref }: {
                 <HeadCell>Searched as</HeadCell>
                 <HeadCell>Tracked since</HeadCell>
                 <HeadCell align="right" sub={mon}>Filed under it</HeadCell>
-                <span className="col-span-3 flex flex-col items-end gap-0.5 whitespace-nowrap">
+                <span className="col-span-2 flex flex-col items-end gap-0.5 whitespace-nowrap">
                   <span className="text-[13px] font-medium leading-[1.35] text-muted-foreground">Came up in, {mon}</span>
-                  <span className="inline-flex items-center gap-3 font-mono text-[12px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5"><Swatch className="bg-ink-rival" />outside our brand searches</span>
-                    <span className="inline-flex items-center gap-1.5"><Swatch className="bg-ink-rival/45" />in all</span>
-                  </span>
+                  <span className="inline-flex items-center gap-1.5 font-mono text-[12px] text-muted-foreground"><Swatch className="bg-ink-rival" />named unprompted</span>
                 </span>
                 <HeadCell align="right" sub={mon}>Its own posts</HeadCell>
               </div>
@@ -90,18 +89,15 @@ export function BrandsYouTrackCard({ month, rows, brandsLabel, brandsHref }: {
                   <span className={cn('text-right font-mono text-[15px] tabular-nums', r.filed ? 'font-semibold' : 'text-muted-foreground')}>
                     {r.filed == null ? 'not measured' : fmtInt(r.filed)}
                   </span>
-                  {r.came && 'kAny' in r.came ? (
+                  {r.came && 'kOrganic' in r.came ? (
                     <>
                       <span aria-hidden className="flex h-2 items-center pl-6">
-                        <span className="relative block h-2 rounded-[2px] bg-ink-rival/45" style={{ width: `${maxAny > 0 ? (r.came.kAny / maxAny) * 100 : 0}%` }}>
-                          <span className="absolute inset-y-0 left-0 rounded-[2px] bg-ink-rival" style={{ width: `${r.came.kAny > 0 ? (r.came.kOrganic / r.came.kAny) * 100 : 0}%` }} />
-                        </span>
+                        <span className="relative block h-2 rounded-[2px] bg-ink-rival" style={{ width: `${maxOrganic > 0 ? (r.came.kOrganic / maxOrganic) * 100 : 0}%` }} />
                       </span>
                       <span className="text-right font-mono text-[15px] font-semibold tabular-nums">{fmtInt(r.came.kOrganic)}</span>
-                      <span className="text-right font-mono text-[15px] tabular-nums text-secondary-foreground">{fmtInt(r.came.kAny)}</span>
                     </>
                   ) : (
-                    <span className="col-span-3 truncate pl-6 text-[13px] text-muted-foreground">{r.came ? r.came.note : 'not measured'}</span>
+                    <span className="col-span-2 truncate pl-6 text-[13px] text-muted-foreground">{r.came ? r.came.note : 'not measured'}</span>
                   )}
                   <span className="text-right font-mono text-[15px] font-medium tabular-nums text-secondary-foreground">{r.ownPosts == null ? '·' : fmtInt(r.ownPosts)}</span>
                 </div>

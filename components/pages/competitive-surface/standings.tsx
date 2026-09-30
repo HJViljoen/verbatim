@@ -4,8 +4,6 @@ import { BlockCalendar } from '@/components/blocks/calendar'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { sharedPairNote } from '@/lib/calibration'
 import { chartId, type CalendarRule, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 
@@ -14,7 +12,7 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 const shortMonth = (month: string): string => monthName(month).replace(/\s+\d{4}$/, '')
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from '@/lib/reading/standings'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
 import { horizonHref } from '@/lib/shell/bar'
 import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsBlock, type StandingsSeries } from '@/lib/pages/competitive-surface'
@@ -357,11 +355,11 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
       s.rows.reduce((m, r) => (r.role === 'category' ? m : Math.max(m, pick(r)?.pct ?? 0)), 0)
     const topContent = topOf((r) => r.content)
     const topAttention = topOf((r) => r.attention)
-    // ONE REFUSAL, SAID ONCE (deploy 1 review): the two change columns wrapped
-    // the same sentence to two lines in each of six cells. Refused for one
-    // pair, each cell says "not compared" and the chip under the table says
-    // why.
-    const shared = sharedPairNote(s.rows.flatMap((r) => [r.attentionVerdict, r.contentVerdict]))
+    // A REFUSED CHANGE IS NOT SHOWN AND NOT EXPLAINED (T0a, BR-35; the one
+    // condition): its cell is empty, and the two "on last month" columns are
+    // drawn only where some row carries a change that was drawn.
+    const shared = null
+    const changes = s.rows.some((r) => priorPrintable(r.attentionVerdict) || priorPrintable(r.contentVerdict))
 
     // THE APRON'S SENTENCES ARE ABOUT THE TABLE, SO TWO OF THEM WAIT FOR IT.
     // With no month read the tile printed the honest refusal ("No month has
@@ -537,12 +535,11 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                 <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                   <strong>{row.label}</strong>
                   <div style={{ marginTop: 2 }}>
-                    comments <Share share={row.attention} role={row.role} top={topAttention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} />
-                    {' · '}videos <Share share={row.content} role={row.role} top={topContent} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} />
+                    comments <Share share={row.attention} role={row.role} top={topAttention} mode={mode} />{changes ? <> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></> : null}
+                    {' · '}videos <Share share={row.content} role={row.role} top={topContent} mode={mode} />{changes ? <> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></> : null}
                   </div>
                 </div>
               ))}
-              <PairChip note={shared} mode={mode} />
             </div>
           ) : (
             <div className="-mx-1 overflow-x-auto px-1">
@@ -561,8 +558,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                     <th className="py-1 pr-3 font-semibold"><span title={BAR_BASIS} className="cursor-help">Share of comments</span></th>
                     <th className="py-1 pr-3 font-semibold"><span title={BAR_BASIS} className="cursor-help">Share of videos</span></th>
                     <th className="py-1 pr-3 font-semibold">Months in the set</th>
-                    <th className="py-1 pr-3 font-semibold">Comments, on last month</th>
-                    <th className="py-1 font-semibold">Videos, on last month</th>
+                    {changes ? <th className="py-1 pr-3 font-semibold">Comments, on last month</th> : null}
+                    {changes ? <th className="py-1 font-semibold">Videos, on last month</th> : null}
                   </tr>
                 </thead>
                 <tbody className="align-top">
@@ -579,14 +576,13 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                         <td className="py-1.5 pr-3"><Share share={row.attention} role={row.role} top={topAttention} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><Share share={row.content} role={row.role} top={topContent} mode={mode} /></td>
                         <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(months)} of {fmtInt(s.months.length)}</td>
-                        <td className="py-1.5 pr-3"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></td>
-                        <td className="py-1.5"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></td>
+                        {changes ? <td className="py-1.5 pr-3"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></td> : null}
+                        {changes ? <td className="py-1.5"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></td> : null}
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
-              <PairChip note={shared} mode={mode} className="mt-2" />
             </div>
           )
         ) : null}

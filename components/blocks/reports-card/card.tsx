@@ -7,6 +7,7 @@ import { Tile } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { QuarterlyCard } from '@/lib/pages/reports-card'
 import { quarterUnlocked } from '@/lib/reports/quarterly'
+import { priorPrintable } from '@/lib/reading/verdicts'
 
 /**
  * The quarterly card on /dashboard/reports (Block D wave 2, package E-reports;
@@ -62,7 +63,12 @@ export function QuarterlyCardTile({
   // card. The note in the body names the real cause; the pill and the footnote
   // below take their lead from this rather than from `readings`.
   const drawn = card.series.length > 0
-  const baselineOf = (label: string) => card.rows.find((r) => r.label === label)?.verdict.baseline ?? null
+  // Only beside a comparison that was drawn (T0a; the one condition): a
+  // refused quarter prints no tick and no "the quarter before" line.
+  const baselineOf = (label: string) => {
+    const v = card.rows.find((r) => r.label === label)?.verdict
+    return v && priorPrintable(v) ? v.baseline ?? null : null
+  }
   // ONE SCALE FOR EVERY BAR AND EVERY TICK ON THE CARD, and never the largest
   // bar itself. Scaled against the largest level, a card with one row drew its
   // 2.0% ("1 of 49", Sealand's Price) as a FULL bar — the one level on the card

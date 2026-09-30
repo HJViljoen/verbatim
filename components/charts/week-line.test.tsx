@@ -183,23 +183,24 @@ describe('WeekLineStrip', () => {
     expect(strip('app')).not.toMatch(/<circle[^>]*r="5"/)
   })
 
-  it('names pairs not read the same way in a chip, never a footnote under the strip', () => {
+  it('does not join pairs not read the same way, and says nothing about them: no chip, no footnote (T0a)', () => {
     const later = strip('app', WEEK_LINE_FIXTURE, WEEK_LINE_FIXTURE_AXIS)
-    expect(later).toContain('data-pair-chip')
-    expect(markupText(later)).toContain('28 Sep and 5 Oct · 5 Oct and 12 Oct not read the same way: read to different depths')
+    expect(later).not.toContain('data-pair-chip')
+    expect(markupText(later)).not.toContain('not read the same way')
     expect(markupText(later)).not.toContain('Weeks before 28 Sep were read on changing searches, so they get no point.')
     // Only 12 → 19 Oct is joined.
     expect(segments(later).filter((l) => l.includes('stroke-width="1.5"'))).toHaveLength(7)
     expect(strip('app')).not.toContain('data-pair-chip')
   })
 
-  it('draws the same in print, without hover targets, and a table with the chips in email', () => {
+  it('draws the same in print, without hover targets, and a table with no chips in email', () => {
     expect(strip('print')).not.toContain('fill="transparent"')
     expect((strip('app').match(/fill="transparent"/g) ?? []).length).toBe(14)
     const email = strip('email', WEEK_LINE_FIXTURE, WEEK_LINE_FIXTURE_AXIS)
     expect(email).not.toContain('<svg')
     expect(markupText(email)).toContain('Praising it 43% · 80 of 187 57% · 131 of 229 62% · 250 of 404 61% · 195 of 318 no clear change')
-    expect(markupText(email)).toContain('28 Sep and 5 Oct · 5 Oct and 12 Oct not read the same way: read to different depths')
+    expect(markupText(email)).not.toContain('not read the same way')
+    expect(email).not.toContain('data-pair-chip')
   })
 
   it('has an empty state in every mode, and keeps the copy contract with no direction word in any mode or state', () => {

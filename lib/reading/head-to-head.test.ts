@@ -335,7 +335,22 @@ describe('headToHead · the month-pair rule', () => {
       asked.push(`${prev}|${month}|${audience}`)
       return judge(prev, month, audience)
     })
-    expect(asked).toEqual(['2026-08-01|2026-09-01|competitor:Cotopaxi'])
+    // Each side on its own audience, and nothing else: the verdict's pair,
+    // and each side's once more for whether its month before may print
+    // (T0a: a refused side keeps its own month alone).
+    expect([...new Set(asked)].sort()).toEqual(['2026-08-01|2026-09-01|client', '2026-08-01|2026-09-01|competitor:Cotopaxi'])
+  })
+
+  it('prints no month before for a side whose pair is refused, on any measure (T0a, the one condition)', () => {
+    const input = { month: '2026-09-01', previousMonth: '2026-08-01', you: SEALAND_OWN, them: COTOPAXI, readThisMonth: 654, readPreviousMonth: 377 }
+    const h = headToHead({ ...input, pair: pairOn(sealandJudge('2026-10-02T06:00:00.000Z')) })
+    for (const m of h.measures) {
+      expect(m.them?.prev, m.key).toBeUndefined()
+      expect(m.you?.prev, m.key).toBeUndefined()
+    }
+    // With no judge, both months print as they did.
+    const open = headToHead({ ...input, pair: null })
+    expect(open.measures.some((m) => m.them?.prev != null)).toBe(true)
   })
 
   // Össur's Ottobock, the same path on the positive share: staging's real

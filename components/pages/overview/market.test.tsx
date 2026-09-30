@@ -187,13 +187,20 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).not.toContain('still filling')
   })
 
-  it('"The month": the size, then the three biggest conversations with one denominator, then August as levels and the chip', () => {
+  // T0a (OV-6/OV-7, the one condition): the fixture's September pair is
+  // refused, so "The month" prints no August line and no chip.
+  it('"The month": the size, then the three biggest conversations with one denominator, and nothing of the refused August', () => {
     expect(text).toContain('Your market in September so far: 655 videos and 16,233 comments.')
     expect(text).toContain(
       'Its three biggest conversations not led by makers, of the 626 category videos: “Ready to buy handmade bags” 69, “Love for stylish bag design” 60 and “Confusion over airline bag sizes” 21. About a third of each of the first two sits under makers’ own posts.',
     )
-    expect(text).toContain('August: 7%, 7% and 3% of 351')
-    expect(text).toContain('not read as a change: we changed our searches in September')
+    expect(text).not.toContain('August: 7%, 7% and 3% of 351')
+    expect(text).not.toContain('not read as a change: we changed our searches in September')
+    // HYPOTHETICAL: the themes pair read the same way; August prints as levels.
+    const base = marketFrontFixture()
+    const joined = { ...base, themes: base.themes ? { ...base.themes, chip: null } : base.themes }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.sentence')!
+    expect(read(block.render(joined, 'app', ctx))).toContain('August: 7%, 7% and 3% of 351')
   })
 
   it('the voice is the lead theme’s own, and the lead is a quarter makers or fewer', () => {
@@ -203,10 +210,11 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(data.hero?.kind === 'themes' && data.hero.lead?.makerShare).toBeLessThanOrEqual(LEAD_MAX_MAKER_SHARE)
   })
 
-  it('the board: ten rows not led by makers, the makers line, August as a share in its column', () => {
+  it('the board: ten rows not led by makers, the makers line, and no August beside the refused September', () => {
     expect(text).toContain('What your market talked about')
     expect(text).toContain('Sep of 626')
-    expect(text).toContain('Aug of 351')
+    // T0a (OV-12): the themes pair is refused, so no August column at all.
+    expect(text).not.toContain('Aug of 351')
     expect(text).toContain('Makers and DIY, grouped: 7 themes at 10+, led by Admiration for upcycled bag creativity (71) and Respect for handmade craftsmanship (64)')
     expect(text).toContain('about a third makers')
     expect(text).toContain('a fifth makers')
@@ -467,7 +475,11 @@ describe('nothing skipped (§5.9)', () => {
 
 describe('the first screen holds at most 30 numbers (decision B)', () => {
   it('the bar, "The month" and the board’s first five rows', () => {
-    const data = marketFrontFixture()
+    // HYPOTHETICAL: the themes pair read the same way, so the month before is
+    // on the first screen too (the most it can hold); the fixture's refused
+    // September holds fewer.
+    const base = marketFrontFixture()
+    const data = { ...base, themes: base.themes ? { ...base.themes, chip: null } : base.themes }
     const board = data.themes!
     const firstScreen = [
       blockAnswers(overviewSentence, data).figures,
@@ -553,10 +565,15 @@ describe('Össur, paused, with no maker rule and no subjects (§2.13, §5.2)', (
   // "AUG 0%" (the lead's ruling of 27 Sep): August did not read the theme, so
   // its August cell is the preview's "·", in every mode, never "0%".
   it('prints "·" in August for "Brand boycott over politics", which August did not read, never "0%"', () => {
+    // HYPOTHETICAL: the themes pair read the same way (Össur's own is refused,
+    // paused since its 13 Sep update, and then no August prints at all: T0a).
+    const base = ossurFrontFixture()
+    const joined = { ...base, themes: base.themes ? { ...base.themes, chip: null } : base.themes }
     for (const mode of MODES) {
-      const board = read(overviewThemes.render(ossurFrontFixture(), mode, ctx))
+      const board = read(overviewThemes.render(joined, mode, ctx))
       expect(board, mode).toMatch(/Brand boycott over politics 16 5% ·/)
       expect(board, mode).not.toMatch(/(^|\s)0%/)
+      expect(read(overviewThemes.render(base, mode, ctx)), mode).not.toMatch(/Brand boycott over politics 16 5% ·/)
     }
     expect(Object.values(overviewThemes.figures?.(ossurFrontFixture()) ?? {}).filter((f) => f.value === 0)).toEqual([])
   })

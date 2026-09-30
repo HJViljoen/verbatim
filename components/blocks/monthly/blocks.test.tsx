@@ -125,16 +125,22 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     }
   })
 
-  it('brands print the name line and each brand, without any video our rival searches found (one base) and in all (staging’s brands_v1 plan)', () => {
+  // T0 ruling U10: one count a brand, named unprompted, on its one base; the
+  // "in all" count took in the videos our own brand searches fetched and is
+  // never printed.
+  it('brands print the name line and each brand\'s one count, without any video our brand searches found (one base; staging’s brands_v1 plan)', () => {
     for (const mode of MODES) {
       const t = text('monthly.brands', filledSlotsFixture(), mode)
       expect(t, mode).toContain('In September your name came up in none of your market’s 654 videos.')
       expect(t, mode).toContain('The 8 videos that name you are your own posts.')
-      expect(t, mode).toMatch(/Outside our brand searches\s*(·\s*)?of 516/)
-      expect(t, mode).toMatch(/In all\s*(·\s*)?of 654/)
-      expect(t, mode).toMatch(/Patagonia\s*13\s*45/)
-      expect(t, mode).toMatch(/The North Face\s*6\s*36/)
-      expect(t, mode).toMatch(/Cotopaxi\s*3\s*28/)
+      expect(t, mode).toMatch(/Named unprompted\s*(·\s*)?of 516/)
+      expect(t, mode).not.toContain('In all')
+      expect(t, mode).not.toContain('of 654 Patagonia')
+      expect(t, mode).toMatch(/Patagonia\s*13\b/)
+      expect(t, mode).not.toMatch(/Patagonia\s*13\s*45/)
+      expect(t, mode).toMatch(/The North Face\s*6\b/)
+      expect(t, mode).toMatch(/Cotopaxi\s*3\b/)
+      expect(t, mode).not.toMatch(/Cotopaxi\s*3\s*28/)
       // No measured precision: "not counted yet", never 0 and never a count.
       for (const brand of ['Freitag', 'Rareform', 'Freedom of Movement', 'Old School']) {
         expect(t, mode).toMatch(new RegExp(`${brand}\\s*not counted yet`))
@@ -265,10 +271,14 @@ describe('1 · the month', () => {
     expect(t).toContain('655')
     expect(t).toContain('16,233')
     expect(t).toContain('Its three biggest conversations not led by makers, of the 626 category videos:')
-    expect(t).toMatch(/Ready to buy handmade bags\s*69\s*7%/)
-    expect(t).toMatch(/Confusion over airline bag sizes\s*21\s*3%/)
+    // T0a (MR-2, the one condition): the fixture's September pair is refused,
+    // so the table carries September alone, and no chip says why.
+    expect(t).toMatch(/Ready to buy handmade bags\s*69\b/)
+    expect(t).not.toMatch(/Ready to buy handmade bags\s*69\s*7%/)
+    expect(t).toMatch(/Confusion over airline bag sizes\s*21\b/)
     expect(t).toContain('About a third of each of the first two sits under makers’ own posts.')
-    expect(t).toContain('Aug of 351')
+    expect(t).not.toContain('Aug of 351')
+    expect(t).not.toContain('Not read as a change')
   })
 
   it('prints the lead theme’s voices from its own comments, and links to Your market', () => {
@@ -301,13 +311,16 @@ describe('1 · the month', () => {
 })
 
 describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
-  it('the themes print the board with both months’ bases, the makers line and the chip', () => {
+  // T0a (MR-6, the one condition): the fixture's themes pair is refused, so
+  // the board prints September alone, with no month before and no chip.
+  it('the themes print the board on this month’s base and the makers line, and nothing of a refused month before', () => {
     const t = text('monthly.themes')
     expect(t).toContain('Sep of 626')
-    expect(t).toContain('Aug of 351')
-    expect(t).toMatch(/Ready to buy handmade bags\s*about a third makers\s*69\s*11%\s*7%/)
+    expect(t).not.toContain('Aug of 351')
+    expect(t).toMatch(/Ready to buy handmade bags\s*about a third makers\s*69\s*11%/)
+    expect(t).not.toMatch(/Ready to buy handmade bags\s*about a third makers\s*69\s*11%\s*7%/)
     expect(t).toContain('Makers and DIY, grouped:')
-    expect(t).toContain('Not read as a change: we changed our searches in September.')
+    expect(t).not.toContain('Not read as a change')
     // The page's current sidebar label (plan §4.0): Conversation from WP2.4.
     expect(t).toContain('Open Conversation')
     expect(t).not.toContain('Voice')

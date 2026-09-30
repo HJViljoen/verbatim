@@ -3678,6 +3678,18 @@ export const monthsReadOf = (line: MonthSeries | null | undefined): MonthSeries[
   (line?.points ?? []).filter((p) => p.k != null && p.videos != null && p.videos > 0)
 
 /**
+ * The months read that may print side by side: those since the line's latest
+ * refused step (T0a, SB-17 and SB-33; the one condition). A month across a
+ * refused step is not set beside the reading month as a card, in a trail or
+ * in a figure list, chip or no chip.
+ */
+export function monthsShownOf(line: MonthSeries | null | undefined): MonthSeries['points'] {
+  const breaks = Object.keys(line?.refusedSteps ?? {}).map(monthStartOf).sort()
+  const since = breaks.length > 0 ? breaks[breaks.length - 1] : null
+  return monthsReadOf(line).filter((p) => since == null || monthStartOf(p.month) >= since)
+}
+
+/**
  * The pane's trail, "Aug 10% of 377 · Sep 16% of 654": the last three months
  * read, each a level on the market's base (`marketLevel`: a whole percent at
  * 100 videos and 10 of its own, the count under) with its "of N" (§4.0: every
@@ -3688,9 +3700,7 @@ export function marketTrail(line: MonthSeries | null | undefined): { month: stri
   // condition): "Aug 10% of 377 · Sep 16% of 654" across a refused pair is
   // the comparison the judge refused, chip or no chip. The line carries its
   // refused steps (`refusedSteps`, judged on the market view).
-  const breaks = Object.keys(line?.refusedSteps ?? {}).map(monthStartOf).sort()
-  const since = breaks.length > 0 ? breaks[breaks.length - 1] : null
-  return monthsReadOf(line).filter((p) => since == null || monthStartOf(p.month) >= since).slice(-3).flatMap((p) => {
+  return monthsShownOf(line).slice(-3).flatMap((p) => {
     const level = marketLevel(p.k, p.videos)
     return level ? [{ month: p.month, text: level.text, of: `of ${fmtInt(p.videos as number)}` }] : []
   })

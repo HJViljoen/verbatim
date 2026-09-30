@@ -1478,7 +1478,10 @@ describe('the Subjects page', () => {
 // kinds strip each printed "Not read as a change: we changed our searches in
 // September." The fixture's verdicts are refused as the loader refuses them
 // (WP1.3), counts kept.
-describe('Subjects · a refusal the cells share prints once, as a chip', () => {
+// T0a (plan §0a, the one condition): the chip and the "not compared" cells
+// are gone; a refused cell prints its own level alone, with no earlier month
+// beside it and nothing about why.
+describe('Subjects · a refusal the cells share prints nothing (T0a)', () => {
   const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
   const refuse = <V extends { state: string } | null | undefined>(v: V): V =>
     v ? ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair } as V) : v
@@ -1499,30 +1502,33 @@ describe('Subjects · a refusal the cells share prints once, as a chip', () => {
   }
   const CHIP = 'not read as a change: we changed our searches in September'
 
-  it('the hero says "not compared" in each cell and the reason once, in every mode', () => {
+  it('the hero prints no chip, no sentence and no "not compared", in every mode', () => {
     for (const mode of MODES) {
+      const markup = render(subjectsSubject.render(refused(), mode, ctx))
       const text = renderText(subjectsSubject.render(refused(), mode, ctx))
-      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain('Not read as a change')
-      assertCopyContract(render(subjectsSubject.render(refused(), mode, ctx)))
+      expect(text).not.toContain('not compared')
+      expect(markup).not.toContain('data-pair-chip')
+      assertCopyContract(markup)
     }
   })
 
-  // THE LEAD'S R3: a cell that already shows the earlier month in grey says
-  // nothing more; a cell without one says "not compared".
-  it('prints nothing beside a cell that already shows the earlier month, "not compared" beside one that does not', () => {
+  it('prints no earlier month beside a refused cell (it printed one in grey)', () => {
     const data = refused()
-    const sides = data.selected.sides.filter((s) => s.observed && s.pct != null && s.verdict?.state === 'refused')
-    const withPrior = sides.filter((s) => s.previous?.pct != null).length
-    expect(withPrior).toBeGreaterThan(0)
-    const text = renderText(subjectsSubject.render(data, 'app', ctx))
-    expect(text.split('not compared').length - 1).toBe(sides.length - withPrior)
+    const sides = data.selected.sides.filter((s) => s.observed && s.pct != null && s.verdict?.state === 'refused' && s.previous?.pct != null)
+    expect(sides.length).toBeGreaterThan(0)
+    const html = render(subjectsSubject.render(data, 'app', ctx))
+    // The earlier month's grey cell (`priorMonth`) is not drawn.
+    expect(html).not.toContain('text-muted-foreground/80')
+    // Where the pair joins, it is.
+    expect(render(subjectsSubject.render(subjectsFixture(), 'app', ctx))).toContain('text-muted-foreground/80')
   })
 
-  it('the kinds strip, every kind refused, is the chip alone', () => {
+  it('the kinds strip, every kind refused, is not drawn at all', () => {
     for (const mode of MODES) {
       const text = renderText(subjectsKinds.render(refused(), mode, ctx))
-      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain('Not read as a change')
       expect(text).not.toMatch(/since [A-Z][a-z]{2}:/)
       assertCopyContract(render(subjectsKinds.render(refused(), mode, ctx)))

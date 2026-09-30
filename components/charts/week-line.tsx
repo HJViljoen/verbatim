@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react'
 
-import { PairChip } from '@/components/blocks/pair-chip'
 import { MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
 import type { RenderMode } from '@/lib/blocks/types'
 import { weekPlotMin } from '@/lib/charts/week-bars'
@@ -194,7 +193,7 @@ export function WeekLine({ block, columns, mode, labelWidth = WEEK_LINE_ROW.labe
 // Under the rows, the axis row: WP2.9's due-date labels for weeks not yet read
 // at their age, "left out", "not kept", one label over the weeks before the
 // line's first, then the week and month labels as the bars print them. Pairs
-// not read the same way are chips under the strip (`weekLinePairChips`).
+// not read the same way carry no chip (T0a).
 
 /** The axis row's height and its lines, from its top. */
 const AXIS_ROW = { height: 92, dueY: 13, dateY: 31, wordY: 22, baseY: 46.5, dayY: 68, monthY: 86 } as const
@@ -217,7 +216,6 @@ export function WeekLineStrip({ block, axis, mode, surface = 'inner' }: {
     return (
       <div>
         <WeekLineEmailTable block={block} columns={S.columns} />
-        {S.chips.map((c) => <PairChip key={c} words={c} mode={mode} />)}
       </div>
     )
   }
@@ -290,7 +288,9 @@ export function WeekLineStrip({ block, axis, mode, surface = 'inner' }: {
           </div>
         </div>
       </div>
-      {S.chips.length > 0 ? <div className="flex flex-wrap gap-2">{S.chips.map((c) => <PairChip key={c} words={c} mode={mode} />)}</div> : null}
+      {/* No chip for a pair of weeks not read the same way (T0a: a refused
+          comparison is not explained). The strip is latent behind
+          `WEEK_LINE.print`. */}
     </div>
   )
 }

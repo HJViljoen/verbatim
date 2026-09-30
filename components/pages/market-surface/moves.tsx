@@ -2,14 +2,13 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { CalendarLine, type CalendarSeries } from '@/components/charts/calendar-line'
 import { MovementBadge } from '@/components/delta-badge'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { MoveReading, MoveSeries } from '@/lib/reading/moves'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
 import { MOVES_MARKET_HOW, moveMonthLevel, type MarketSurfaceData, type MoveMarketMonth, type MoveMarketRead } from '@/lib/pages/market-surface'
 import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
@@ -135,7 +134,8 @@ function Side({ verdict, mode, control = false, shared = null }: { verdict: Verd
       <span data-copy="level" className={mono} style={monoStyle}>
         {fmtInt(v.value.k)} of {fmtInt(v.value.n)} videos ({pct(v.value.k, v.value.n)})
       </span>
-      {v.baseline ? (
+      {/* Not beside a refused comparison (T0a; the one condition). */}
+      {v.baseline && priorPrintable(v) ? (
         <>
           {' '}against{' '}
           <span data-copy="level" className={mono} style={monoStyle}>
@@ -151,7 +151,7 @@ function Side({ verdict, mode, control = false, shared = null }: { verdict: Verd
   return (
     <span data-copy="verdict" className="flex items-baseline justify-between gap-3">
       <span className="min-w-0 text-[12px] text-secondary-foreground">{body}</span>
-      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null} />
+      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null && priorPrintable(v)} />
     </span>
   )
 }
@@ -220,13 +220,11 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
           <div style={{ marginTop: 4 }}>
             <Side verdict={r.verdict} mode={mode} shared={shared} />
             {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control shared={shared} />)}
-            <PairChip note={shared} mode={mode} />
           </div>
         ) : (
           <TileBlock className="flex min-w-0 flex-col gap-1">
             <Side verdict={r.verdict} mode={mode} shared={shared} />
             {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control shared={shared} />)}
-            <PairChip note={shared} mode={mode} />
           </TileBlock>
         )
       ) : (

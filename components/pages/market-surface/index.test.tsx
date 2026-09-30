@@ -397,7 +397,9 @@ describe('MK2 · the ledger', () => {
   // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): a reading
   // refused for its month pair says "not compared" in its cell, and the chip
   // under the table says why, once, in every mode.
-  it('prints a month-pair refusal once, as the chip, and "not compared" in each refused cell', () => {
+  // T0a (YM-16; plan §0a, the one condition): a refused Afterwards is not
+  // shown and not explained: no chip, no "not compared", no sentence.
+  it('prints nothing for a month-pair refusal: no chip, no "not compared" and no sentence', () => {
     const data = marketFixture()
     const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
     const sentence = 'Not read as a change: we changed our searches in September.'
@@ -410,9 +412,12 @@ describe('MK2 · the ledger', () => {
     expect(rows.length).toBeGreaterThan(2)
     for (const mode of MODES) {
       const text = renderText(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, mode, ctx))
-      expect(text.split('not read as a change: we changed our searches in September').length - 1, mode).toBe(1)
+      expect(text, mode).not.toContain('not read as a change')
       expect(text, mode).not.toContain(sentence)
-      expect(text.split('not compared').length - 1, mode).toBe(rows.length - 1)
+      expect(text, mode).not.toContain('not compared')
+      expect(render(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, mode, ctx)), mode).not.toContain('data-pair-chip')
+      // The row that was not refused still says its own thing.
+      expect(text, mode).toContain('Not decided yet.')
     }
   })
 

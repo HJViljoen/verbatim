@@ -4,13 +4,12 @@ import type { ReactNode } from 'react'
 import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { FLAG_NOT_A_CHANGE, FLAG_WORDS, prevReadK } from '@/lib/pages/overview-market'
+import { FLAG_NOT_A_CHANGE, FLAG_WORDS, prevReadK, shownFlags } from '@/lib/pages/overview-market'
 import type { ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import type { Voice } from '@/lib/pages/overview'
 
@@ -101,7 +100,9 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
     }
     const month = longMonth(data.month)
     const soFar = data.reading?.state === 'so_far'
-    const flag = t.flags[0] ?? null
+    // No flag beside a refused themes pair, and never "New" for a theme our
+    // own new searches found (T0a, CV-20; `shownFlags`).
+    const flag = shownFlags(t, { chip: t.chip })[0] ?? null
 
     const title = (
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -127,12 +128,13 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
 
     // THE MONTH BEFORE ONLY WHERE IT READ THE THEME: a theme first heard
     // this month has no August figure, not "0%" (`prevReadK`); its flag says so.
-    const prev = prevReadK(t) != null ? t.prev : null
+    // And none at all where the themes pair is refused (T0a, CV-18; the one
+    // condition): the refusal is data on the theme (`chip`), never printed.
+    const prev = !t.chip && prevReadK(t) != null ? t.prev : null
     const stats = email ? (
       <p style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, margin: '8px 0 0' }}>
         <span data-copy="level"><span data-copy="figure">{fmtInt(t.k)}</span> of {fmtInt(t.n)} category videos</span> in {month}
         {prev ? <> · <span data-copy="level"><span data-copy="figure">{fmtInt(prev.k)}</span> of {fmtInt(prev.n)}</span> in {longMonth(prev.month)}</> : null}
-        {t.provenance ? <> · <span data-copy="figure">{fmtInt(t.provenance.fromNewSearches)}</span> of the {fmtInt(t.k)} came from searches we added in {month}</> : null}
       </p>
     ) : (
       <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-3">
@@ -154,13 +156,6 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             value={<span data-copy="figure">{level(prev.k, prev.n)}</span>}
             unit={`in ${longMonth(prev.month)}`}
             base={<span data-copy="level"><span data-copy="figure" className={figure}>{fmtInt(prev.k)}</span> of {fmtInt(prev.n)} category videos</span>}
-          />
-        ) : null}
-        {t.provenance ? (
-          <Stat
-            value={<span data-copy="figure">{fmtInt(t.provenance.fromNewSearches)}</span>}
-            unit={`of the ${fmtInt(t.provenance.of)}`}
-            base={`came from searches we added in ${month}`}
           />
         ) : null}
       </div>
@@ -201,7 +196,6 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
         {email ? (
           <div>
             {title}{tagLine}{stats}<Kinds t={t} mode={mode} />
-            <PairChip words={t.chip} mode={mode} />
             {voiceHead}{voiceList}{actions}
           </div>
         ) : (
@@ -210,7 +204,6 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               <div className="flex flex-col gap-2">{title}{tagLine}</div>
               {stats}
               <Kinds t={t} mode={mode} />
-              <PairChip words={t.chip} mode={mode} />
               {actions}
             </div>
             <aside className="flex min-w-0 flex-col gap-5 rounded-md bg-inner p-6">

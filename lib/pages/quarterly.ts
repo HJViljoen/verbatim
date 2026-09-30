@@ -22,7 +22,7 @@ import type { PlatformMix } from '../reading/types'
 import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan } from '../settings/deck-record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isMissingMonthTable } from '../reading/monthly'
-import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
+import { isAnswer, priorPrintable, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { gapBasisLine, gapBetween, gapLine, inheritRefusal, GAP_WORDS, type Gap, type GapSide } from '../reading/gap'
 import type { Grounding } from '../reading/afterwards'
 import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
@@ -890,7 +890,8 @@ export function unsettledItems(
           ? `band ±${Math.round(v.bandPts * 10) / 10}`
           : MOVEMENT_WORDS[v.state as keyof typeof MOVEMENT_WORDS] ?? MOVEMENT_WORDS.too_little_data,
       body: `${v.objectLabel} read ${v.value.n > 0 ? `${fmtInt(v.value.k)} of ${fmtInt(v.value.n)} videos` : 'nothing we could count'} in this window${
-        v.baseline ? `, against ${fmtInt(v.baseline.k)} of ${fmtInt(v.baseline.n)} before it` : ''
+        // Never beside a refused comparison (T0a; the one condition).
+        v.baseline && priorPrintable(v) ? `, against ${fmtInt(v.baseline.k)} of ${fmtInt(v.baseline.n)} before it` : ''
       }.`,
     }))
 }

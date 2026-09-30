@@ -65,6 +65,7 @@ import {
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
 import { joins, pairOnVerdict, type PairComparability } from '../reading/comparability'
+import { valuesSinceBreak } from '../charts/calendar'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
@@ -5153,11 +5154,15 @@ function marketFrontPage(reads: MarketReads, input: {
   const { month, prevMonth } = input
   const counts = pooledDenominators(input.denominators, input.marketRivals)
   const themes = reads.themes.map((t) => (reads.lead && t.registryId === reads.lead.registryId ? { ...t, provenance: reads.lead.provenance } : t))
+  // THEMES ARE THE CATEGORY'S, SO THEIR PAIR IS THE THEMES VIEW (decision E,
+  // `viewForAudience`): a re-filing moves them, as it does not the market.
+  // Refused, the board carries no month before at all (T0a, OV-12 and the
+  // hero's August line, OV-7: the one condition). The refusal rides on the
+  // board as data (`chip`) and is never printed.
+  const themesPair = input.pair(prevMonth, month, INDUSTRY_AUDIENCE)
   const board: ThemeBoard = {
-    ...buildThemeBoard(themes, reads.n, month, reads.segments, reads.prev),
-    // THEMES ARE THE CATEGORY'S, SO THEIR PAIR IS THE THEMES VIEW (decision E,
-    // `viewForAudience`): a re-filing moves them, as it does not the market.
-    chip: pairChip(input.pair(prevMonth, month, INDUSTRY_AUDIENCE)),
+    ...buildThemeBoard(themes, reads.n, month, reads.segments, joins(themesPair) ? reads.prev : null),
+    chip: pairChip(themesPair),
   }
   const subjects = input.subjects.rows.map((r) => ({
     id: r.id,
@@ -5449,6 +5454,10 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   // THE MONTH-PAIR RULE (decision D, WP1.3). No judge (a fixture) is "no pair
   // applies here": nothing refused, every step joined.
   const { pairFor, comparableFor, stepBreaks, stepReasons } = pairTools(input.pair)
+  // The category's month pair, judged once: with no judge (a fixture) nothing
+  // is refused.
+  const monthPairNow = pairFor(input.prevMonth, input.month, INDUSTRY_AUDIENCE)
+  const lastMonthShown = monthPairNow == null || joins(monthPairNow)
   const readIn = subjectReadInOf(input.read, input.months)
   const kOf = subjectKOf(input.months, readIn)
   // The word's k, by the same rule over the read axis's rows (WP3.4).
@@ -5556,11 +5565,17 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       rival,
       category,
       direction: input.thin ? null : directionWord(wordPoints, { asOf: input.asOf, comparable: comparableFor(INDUSTRY_AUDIENCE) }),
-      spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
+      // THE LINE STARTS AT ITS LATEST REFUSED STEP (T0a; the one condition):
+      // a month across a refused step is a gap here, so no chart, trail or
+      // "Aug → Sep" label built from this row can set it beside the months
+      // after it (`valuesSinceBreak`).
+      spark: valuesSinceBreak(axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)), stepBreaks(sparkMonths, INDUSTRY_AUDIENCE)),
       sparkMonths,
       sparkBreaks: stepBreaks(sparkMonths, INDUSTRY_AUDIENCE),
       sparkBreakWhy: stepReasons(sparkMonths, INDUSTRY_AUDIENCE),
-      categoryAtLastMonth: atLastMonthFor(input, s.id),
+      // "At this point last month" is the month pair's comparison too: none
+      // where the judge refuses it (T0a).
+      categoryAtLastMonth: lastMonthShown ? atLastMonthFor(input, s.id) : null,
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
     }), unread)
   })
@@ -5874,7 +5889,8 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       // the same slice `SubjectRow.spark` takes, so the two lines on one
       // artefact cannot be drawn over two different windows. Read by the
       // quarterly review's mover rows; nothing else reads it yet.
-      spark: onAxis.slice(-SPARK_MONTHS).map((p) => (p ? pctOf(p.k, p.videos) : null)),
+      // Nothing before the latest refused step (T0a; `valuesSinceBreak`).
+      spark: valuesSinceBreak(onAxis.slice(-SPARK_MONTHS).map((p) => (p ? pctOf(p.k, p.videos) : null)), stepBreaks(input.axis.slice(-SPARK_MONTHS), s.audience)),
       sparkMonths: input.axis.slice(-SPARK_MONTHS),
       sparkBreaks: stepBreaks(input.axis.slice(-SPARK_MONTHS), s.audience),
       // EARLIEST EVIDENCE ON THIS AXIS, NEVER A START DATE. The axis may not
@@ -6038,7 +6054,8 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
             prevMonth: input.prevMonth,
             makerShares: input.makerShares,
           }),
-          levelsPrev: input.prevMonth
+          // No month before beside a refused pair (T0a; the one condition).
+          levelsPrev: input.prevMonth && (!input.pair || joins(input.pair(input.prevMonth, input.month, input.audience)))
             ? { month: input.prevMonth, n: input.perAudience.get(`${input.prevMonth}|${input.audience}`) ?? null }
             : null,
         }

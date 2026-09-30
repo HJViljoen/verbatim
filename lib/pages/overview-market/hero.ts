@@ -2,6 +2,7 @@ import { fmtInt, longMonth } from '../../format'
 import { carriesShare } from '../../reading/level'
 import type { FigureTable } from '../../reading/verdicts'
 import {
+  boardPrev,
   LEAD_MAX_MAKER_SHARE,
   LEAD_NEW_SEARCH_NOTE,
   THEME_FLOOR,
@@ -226,7 +227,7 @@ export function heroThemeParts(hero: Extract<HeroLead, { kind: 'themes' }>, boar
  *  it read none of the themes named, there is no line ("August: none, none
  *  and none of 537" says nothing; the deploy-3 design review). */
 export function heroPrevParts(hero: Extract<HeroLead, { kind: 'themes' }>, board: ThemeBoard): HeroPart[] | null {
-  const prev = board.prev
+  const prev = boardPrev(board)
   if (!prev || prev.n == null || prev.n <= 0 || hero.top.length === 0) return null
   if (hero.top.every((t) => prevReadK(t) == null)) return null
   const parts: HeroPart[] = [{ t: 'text', s: `${longMonth(prev.month)}: ` }]
@@ -279,7 +280,7 @@ export function themeFigures(board: ThemeBoard, rows: readonly MarketTheme[] = b
   const out: FigureTable = {
     [THEME_N]: { value: board.n, unit: 'videos', label: `category videos in ${month}` },
   }
-  const prev = board.prev
+  const prev = boardPrev(board)
   if (prev && prev.n != null && prev.n > 0) {
     out[THEME_PREV_N] = { value: prev.n, unit: 'videos', label: `category videos in ${longMonth(prev.month)}` }
   }

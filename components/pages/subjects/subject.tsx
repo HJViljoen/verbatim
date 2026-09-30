@@ -5,7 +5,6 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileColumns } from '@/components/shell/page-grid'
 import { TrackThisSubject } from '@/components/subjects/track-this'
@@ -13,7 +12,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, longMonth, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
 import { allRedescribed, marketTrail, monthsReadOf, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 import type { FoundSplit } from '@/lib/pages/overview-market/provenance'
 import { openLink } from '@/components/blocks/open-link'
@@ -97,7 +96,10 @@ export function DirectionWord({ direction, mode = 'app' }: { direction: Directio
  * figure for exactly this reason.
  */
 function priorMonth(side: SubjectSide): boolean {
-  return side.previous?.pct != null && side.verdict?.state !== 'moved'
+  // Only beside a comparison that was drawn and did not move (T0a; the one
+  // condition): a refused one, or a side with no verdict to say whether the
+  // pair joins, prints its own month alone.
+  return side.previous?.pct != null && side.verdict?.state !== 'moved' && priorPrintable(side.verdict)
 }
 
 /**
@@ -332,7 +334,6 @@ export const subjectsSubject: Block<SubjectsData> = {
             {sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
           </TileColumns>
         )}
-        <PairChip note={shared} mode={mode} className="mt-3" />
 
         {/* The axis note and the provisional line are no longer printed (Heinrich,
             2026-09-24): each cell already says "too few to compare". */}
@@ -573,7 +574,6 @@ function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: R
         )}
         {trailLine}
       </div>
-      {pane.chip ? <PairChip words={pane.chip} mode={mode} /> : null}
       {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
       {itsVideos}
       {monthsRead}

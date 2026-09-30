@@ -3,7 +3,6 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { openLink } from '@/components/blocks/open-link'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { WHAT_WE_CHANGED_HREF } from '@/components/pages/overview/change'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
@@ -14,8 +13,8 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // key; the approved preview's This week, its last tile): the three checks that
 // answer "is anything off?" side by side, each in a line:
 //
-//   · Moving now: refused until comparable months exist (decision D, §2.7);
-//     the refused pair prints its "not read as a change" chip;
+//   · Moving now: not drawn at all while its months are refused (decision D,
+//     §2.7; T0a: a refused comparison is not shown and not explained);
 //   · Unusual this week: the check's own state, and its baseline on
 //     comparable months only (WP3.4's rule): how many of three it holds, and
 //     the first month its flags can print if nothing we search changes;
@@ -108,8 +107,11 @@ export const weekChecks: Block<WeekData> = {
     const u = data.unusual
     const meter = baselineMeter(u)
     const flagged = data.replies.flagged
+    // A REFUSED PAIR IS NOT SHOWN AND NOT EXPLAINED (T0a; the one
+    // condition): where the months are not compared there is no "Moving now"
+    // column at all, and no chip saying why.
     const moving: ReactNode = rising.chip
-      ? <PairChip words={rising.chip} mode={mode} />
+      ? null
       : rising.rows.length > 0
         ? (
           <ul className={mode === 'email' ? undefined : 'm-0 flex list-none flex-col gap-1 p-0'} style={mode === 'email' ? { margin: 0, paddingLeft: 16 } : undefined}>
@@ -143,13 +145,13 @@ export const weekChecks: Block<WeekData> = {
       <BlockFrame title={CHECKS_TITLE} mode={mode} footer={footer} roomy card>
         {mode === 'email' ? (
           <div>
-            <Column title="Moving now" mode={mode}>{moving}</Column>
+            {moving ? <Column title="Moving now" mode={mode}>{moving}</Column> : null}
             <Column title="Unusual this week" mode={mode}>{unusual}</Column>
             <Column title="Flagged for awareness" mode={mode}>{awareness}</Column>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-x-12 gap-y-8 xl:grid-cols-3" data-print-cols="3">
-            <Column title="Moving now" mode={mode}>{moving}</Column>
+          <div className={`grid grid-cols-1 gap-x-12 gap-y-8 ${moving ? 'xl:grid-cols-3' : 'xl:grid-cols-2'}`} data-print-cols={moving ? '3' : '2'}>
+            {moving ? <Column title="Moving now" mode={mode}>{moving}</Column> : null}
             <Column title="Unusual this week" mode={mode}>{unusual}</Column>
             <Column title="Flagged for awareness" mode={mode}>{awareness}</Column>
           </div>

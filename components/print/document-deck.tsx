@@ -151,7 +151,7 @@ function Paragraphs({ text, figures, className, face }: { text: string; figures:
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit, zeroBase = false, rule = false, breaks }: {
+export function DeckSpark({ values: givenValues, months: givenMonths, color = 'var(--primary)', width = 104, height = 22, className, unit, zeroBase = false, rule = false, breaks }: {
   values: (number | null)[]
   /** The month-pair rule's refused steps (decision D, WP1.3), drawn broken. */
   breaks?: readonly boolean[]
@@ -182,6 +182,11 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   zeroBase?: boolean
   rule?: boolean
 }) {
+  // Only the months since the latest refused step (T0a; the one condition):
+  // the slots before it are not drawn and the line's ends are its own.
+  const cut = (breaks ?? []).lastIndexOf(true)
+  const values = cut > 0 ? givenValues.slice(cut) : givenValues
+  const months = cut > 0 && givenMonths.length === givenValues.length ? givenMonths.slice(cut) : givenMonths
   // The months that carried a reading, in order. A slot with no reading is not
   // a month this line can name.
   const read = months.filter((_, i) => values[i] != null)
@@ -206,7 +211,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   }
   return (
     <span className={`flex flex-col gap-1 ${className ?? ''}`}>
-      <Sparkline values={values} breaks={breaks} color={color} width={width} height={height} animate={false} endDot className={className} zeroBase={zeroBase} rule={rule} />
+      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} zeroBase={zeroBase} rule={rule} />
       {/* BOTH ENDS, WITH THEIR VALUE WHERE THERE IS ONE. A printed line has no
           hover and a shape with two month names under it and no magnitude
           anywhere is decoration — the artboard labels both endpoints

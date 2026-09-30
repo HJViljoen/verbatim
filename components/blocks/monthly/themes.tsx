@@ -4,10 +4,10 @@ import { barAxis, shortMonthName } from '@/components/pages/overview/market'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { MAKERS_NOT_MEASURED, THEME_N, THEME_PREV_N, figureText, makerCell, themeFigures, themeToken, type MarketTheme } from '@/lib/pages/overview-market'
+import { MAKERS_NOT_MEASURED, THEME_N, boardPrev, THEME_PREV_N, figureText, makerCell, themeFigures, themeToken, type MarketTheme } from '@/lib/pages/overview-market'
 import type { MonthlyData } from '@/lib/pages/monthly'
 import { fromFrontPage } from './adapt'
-import { Bar, ChipLine, Inner, Num, RowLabel, Table } from './email'
+import { Bar, Inner, Num, RowLabel, Table } from './email'
 
 /**
  * 2 · What your market talked about (market-first WP2.1; the front page's
@@ -44,7 +44,9 @@ function themesEmail(data: MonthlyData): ReactNode {
   const board = data.overview.themes
   if (!board) return null
   const figures = themeFigures(board)
-  const prev = board.prev && board.prev.n != null ? board.prev : null
+  // No month before beside a refused themes pair, and no chip (T0a, MR-6).
+  const shown = boardPrev(board)
+  const prev = shown && shown.n != null ? shown : null
   const measured = board.segments === 'measured'
   const axis = barAxis(board.rows.map((t) => t.k / t.n))
   // The board's own cells: a share at 100 videos or more, the count under
@@ -79,7 +81,6 @@ function themesEmail(data: MonthlyData): ReactNode {
       {board.segments === 'unknown' ? (
         <Inner marginTop={16}><div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2 }}>Makers’ videos are not marked yet; this list groups them once they are.</div></Inner>
       ) : null}
-      <ChipLine words={board.chip ?? null} />
     </>
   )
 }

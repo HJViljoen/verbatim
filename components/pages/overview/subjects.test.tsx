@@ -289,11 +289,13 @@ describe('the monthly-line column shares one scale', () => {
   })
 })
 
-// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct seven subject rows each
-// printed "Not read as a change: we changed our searches in September." in
-// both change columns. The fixture's rows are refused as the loader refuses
-// them (WP1.3), counts kept.
-describe('OV2 · a refusal every row shares prints once, as a chip', () => {
+// A REFUSAL IS NOT SHOWN AND NOT EXPLAINED (T0a; plan §0a, the one
+// condition). On 2 Oct seven subject rows each printed the refusal in both
+// change columns; the deploy-1 review folded it into one chip and "not
+// compared" cells. Now the cells are empty and nothing says why, and "at this
+// point last month" does not print beside a refused pair. The fixture's rows
+// are refused as the loader refuses them (WP1.3), counts kept.
+describe('OV2 · a refusal every row shares prints nothing (T0a)', () => {
   const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
   const refuse = (v: import('@/lib/reading/verdicts').Verdict | null) =>
     v ? { ...v, state: 'refused' as const, refusedReason: 'tracking_change' as const, changePts: null, bandPts: null, pair } : v
@@ -312,13 +314,15 @@ describe('OV2 · a refusal every row shares prints once, as a chip', () => {
     }
   }
 
-  it('says "not compared" in the cells and the reason once, in every mode', () => {
+  it('prints no chip, no sentence and no "not compared", in every mode', () => {
     for (const mode of MODES) {
+      const markup = render(overviewSubjects.render(refused(), mode, ctx))
       const text = renderText(overviewSubjects.render(refused(), mode, ctx))
-      expect(text.split('not read as a change: we changed our searches in September').length - 1).toBe(1)
+      expect(text).not.toContain('not read as a change')
       expect(text).not.toContain('Not read as a change')
-      expect(text).toContain('not compared')
-      assertCopyContract(render(overviewSubjects.render(refused(), mode, ctx)))
+      expect(text).not.toContain('not compared')
+      expect(markup).not.toContain('data-pair-chip')
+      assertCopyContract(markup)
     }
   })
 

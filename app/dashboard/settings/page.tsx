@@ -29,7 +29,7 @@ import { loadYourMarket, searchPlan } from '@/lib/settings/your-market'
 import { oneLineBar } from '@/lib/shell/bar'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { tenantLocked } from '@/lib/tenant-locks'
-import { marketPairChip, notMyMarketCount, ownPostsIn, prevMarketSplit } from './market-read'
+import { marketPairJoins, notMyMarketCount, ownPostsIn, prevMarketSplit } from './market-read'
 import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
 import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
@@ -101,9 +101,9 @@ export default async function SettingsTrackingPage({ searchParams }: { searchPar
     notMyMarketCount(supabase, clientId),
   ])
   const before = prevMonth(month)
-  const [prevSplit, chip] = await Promise.all([
+  const [prevSplit, prevJoins] = await Promise.all([
     market?.market ? prevMarketSplit(admin, clientId, before) : Promise.resolve(null),
-    market?.market ? marketPairChip(clientId, before, month, nowIso) : Promise.resolve(null),
+    market?.market ? marketPairJoins(clientId, before, month, nowIso) : Promise.resolve(false),
   ])
   const moves = surface('market')
   const front = surface('overview')
@@ -155,8 +155,8 @@ export default async function SettingsTrackingPage({ searchParams }: { searchPar
         searchedAs: searchedAs(name, rules.find((r) => r.key.kind === 'rival' && r.brand.toLowerCase() === k) ?? null, lists.competitor_keywords),
         since: trackedSince(name, inputs.setChanges, identity?.first_seen_at ?? null),
         filed: split ? split.byBrand.find((b) => b.name.toLowerCase() === k)?.videos ?? 0 : null,
-        came: topic && topic.count === 'counted' && topic.kAny != null && topic.kOrganic != null
-          ? { kOrganic: topic.kOrganic, kAny: topic.kAny }
+        came: topic && topic.count === 'counted' && topic.kOrganic != null
+          ? { kOrganic: topic.kOrganic }
           : { note: (topic ? topicNote(topic) : null) ?? NOT_COUNTED_YET },
         ownPosts: own ? own.value.k : null,
       }
@@ -191,8 +191,9 @@ export default async function SettingsTrackingPage({ searchParams }: { searchPar
             soFar={inputs.reading?.state === 'so_far'}
             videos={market?.market?.length ?? null}
             split={split}
-            prev={prevSplit ? { month: before, split: prevSplit } : null}
-            chip={chip}
+            // The month before only where the market pair joins (T0a, ST-10):
+            // no refused comparison and no chip about it.
+            prev={prevSplit && prevJoins ? { month: before, split: prevSplit } : null}
             ownPosts={ownPosts}
             movesLabel={moves.label}
             movesHref={moves.href}

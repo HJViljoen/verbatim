@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CountBadge, MovementBadge, MOVEMENT_WORDS } from './delta-badge'
 import { Delta, favourability } from './charts/stat'
-import { markupText, render, renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import type { Verdict, VerdictState } from '@/lib/reading/verdicts'
 
@@ -34,7 +34,7 @@ describe('MovementBadge', () => {
   })
 
   it('never arrows and never colours a non-answer', () => {
-    for (const state of ['no_clear_change', 'too_little_data', 'baseline_forming', 'refused'] as const) {
+    for (const state of ['no_clear_change', 'too_little_data', 'baseline_forming'] as const) {
       const markup = render(<MovementBadge verdict={verdict(state)} />)
       expect(markup).not.toContain('▲')
       expect(markup).not.toContain('▼')
@@ -51,15 +51,19 @@ describe('MovementBadge', () => {
     const words = Object.values(MOVEMENT_WORDS)
     expect(new Set(words).size).toBe(words.length)
     for (const state of Object.keys(MOVEMENT_WORDS) as (keyof typeof MOVEMENT_WORDS)[]) {
-      if (state === 'unchanged') continue
+      // A refused comparison prints nothing at all (T0a, below).
+      if (state === 'unchanged' || state === 'refused') continue
       expect(renderText(<MovementBadge verdict={verdict(state)} />)).toBe(MOVEMENT_WORDS[state])
     }
   })
 
-  it('says WHY a comparison was refused, rather than only that it was', () => {
-    const markup = render(<MovementBadge verdict={verdict('refused', { refusedReason: 'rename' })} />)
-    expect(markup).toContain('comparison refused')
-    expect(markup).toContain('two names for one rival')
+  // T0a (plan §0a, the one condition): a comparison the product will not stand
+  // behind is not shown and not explained. The badge prints nothing, and no
+  // reason rides in a tooltip.
+  it('prints nothing at all for a refused comparison, for any reason', () => {
+    for (const refusedReason of ['rename', 'clustering_changed', 'tracking_change', 'incomplete', 'depth', 'unmeasured', 'unlogged_era'] as const) {
+      expect(render(<MovementBadge verdict={verdict('refused', { refusedReason })} />), refusedReason).toBe('')
+    }
   })
 
   it("still takes the band's own three-state DeltaVerdict", () => {
@@ -73,8 +77,8 @@ describe('MovementBadge', () => {
     // print, on a keyboard and to a screen reader.
     expect(renderText(<MovementBadge verdict={{ state: 'no_clear_change', change: 0.4, band: 2 }} />)).toBe('no clear change · +0.4 · band ±2')
     // A refusal is a break in our own bookkeeping, not a reading, so it shows
-    // no numbers at all.
-    expect(renderText(<MovementBadge verdict={{ state: 'refused', changePts: 0.4, bandPts: 2, refusedReason: 'rename' } as never} />)).toBe('comparison refused')
+    // nothing at all (T0a).
+    expect(renderText(<MovementBadge verdict={{ state: 'refused', changePts: 0.4, bandPts: 2, refusedReason: 'rename' } as never} />)).toBe('')
     // P0 item 6 / mock-gap §6 D11: the thin-reading word is "too few to
     // compare" — the phrase GLOSSARY.change, the agent, the quarterly and the
     // overview note already used. Asserted against the table, so the day it
@@ -98,7 +102,7 @@ describe('MovementBadge', () => {
     // "comparison refused" needs about 117px; the quarterly standings' Change
     // track is about 100. `whitespace-nowrap` made that an overprint rather
     // than a second line — "comparison refuseCon" over "Comments per video".
-    const markup = render(<MovementBadge verdict={verdict('refused', { refusedReason: 'rename' })} />)
+    const markup = render(<MovementBadge verdict={verdict('too_little_data')} />)
     expect(markup).not.toContain('whitespace-nowrap')
     // The magnitude still may not break: the arrow and its number stay one run.
     const moved = render(<MovementBadge verdict={verdict('moved', { changePts: 3.2, bandPts: 2.4 })} unit="pts" />)
@@ -171,25 +175,24 @@ describe('favourability without its epsilon', () => {
   })
 })
 
-describe('MovementBadge: the month-pair rule (WP1.3)', () => {
-  it('prints a refused pair\'s sentence as the word, with the record\'s clause as its title', () => {
-    const markup = render(<MovementBadge verdict={verdict('refused', {
+describe('MovementBadge: the month-pair rule (WP1.3), under the one condition (T0a)', () => {
+  it('prints nothing for a refused pair: no sentence, no "not compared", no reason in a title', () => {
+    const refused = verdict('refused', {
       value: { k: 104, n: 626 }, baseline: { k: 38, n: 351 }, refusedReason: 'tracking_change',
       pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null },
-    })} />)
-    assertCopyContract(markup)
-    expect(markupText(markup)).toBe('Not read as a change: we changed our searches in September.')
-    expect(markup).toContain('title="what we track changed inside this window"')
-  })
-
-  it('a refused verdict with no pair still reads "comparison refused"', () => {
-    expect(renderText(<MovementBadge verdict={verdict('refused', { refusedReason: 'rename' })} />)).toBe(MOVEMENT_WORDS.refused)
-  })
-
-  it('the three new reasons each have the record\'s words', () => {
-    for (const reason of ['incomplete', 'depth', 'unmeasured'] as const) {
-      const markup = render(<MovementBadge verdict={verdict('refused', { refusedReason: reason })} />)
-      expect(markup).toMatch(/title="[a-z]/)
+    })
+    for (const shared of [null, refused.pair ?? null]) {
+      for (const priorShown of [false, true]) {
+        expect(render(<MovementBadge verdict={refused} sharedRefusal={shared} priorShown={priorShown} />)).toBe('')
+      }
     }
+  })
+
+  it('prints a flagged pair (a change of ours under a tenth) bare, with no note in its title (T0 ruling U4)', () => {
+    const flagged = verdict('moved', { changePts: 3.2, bandPts: 2.4, pair: { mode: 'flag', cause: 'searches', changeMonth: '2026-09-01', checkWith: null } })
+    const markup = render(<MovementBadge verdict={flagged} unit="pts" />)
+    expect(markup).toContain('▲')
+    expect(markup).not.toContain('read with a note')
+    expect(markup).not.toContain('change of ours')
   })
 })

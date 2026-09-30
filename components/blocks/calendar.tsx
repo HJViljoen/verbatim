@@ -3,8 +3,7 @@ import type { ReactNode } from 'react'
 import type { BlockContext, RenderMode } from '@/lib/blocks/types'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import type { CalendarBand, CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { brokenStepChip, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, chartReady, CHART_WAITING, drawsLine, figureLines, STATE_SHORT, undrawnLine } from '@/lib/charts/calendar'
+import { sinceLatestBreak, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, chartReady, CHART_WAITING, drawsLine, figureLines, STATE_SHORT, undrawnLine } from '@/lib/charts/calendar'
 import { monthName } from '@/lib/format'
 import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 
@@ -37,7 +36,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  * rewritten against one that may not.
  */
 export function BlockCalendar({
-  blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
+  blockKey, axis: givenAxis, series: givenSeries, rules = [], bands = [], format = (v) => `${v}`,
   annotate = null, caption, label, mode = 'app', ctx, emailMonths = 6, height,
   width, padL, padR, legend, endLabels,
 }: {
@@ -95,6 +94,12 @@ export function BlockCalendar({
    *  drawn in. */
   endLabels?: boolean
 }) {
+  // NOTHING ACROSS A REFUSED STEP, IN EVERY MODE (T0a; the one condition):
+  // the email's figures and month table take the months since each series'
+  // latest refused step, as the chart does (`sinceLatestBreak`).
+  const trimmed = sinceLatestBreak(givenAxis, givenSeries)
+  const axis = trimmed.axis
+  const series = trimmed.series
   if (!axis.length || !series.length) return null
 
   if (mode !== 'email') {
@@ -138,12 +143,6 @@ export function BlockCalendar({
     )
   }
 
-  // WHY A STEP IS NOT JOINED, IN AN EMAIL TOO (WP1.3 review fix; the lead's
-  // R11): under the picture of the line, the chart's one chip. The figures and
-  // the month table draw no line, so they carry none; a refused pair is the
-  // verdict's to say, in its own block's chip.
-  const joinsChip = brokenStepChip(series.filter(drawsLine))
-
   // TOO FEW MONTHS FOR A LINE, IN AN EMAIL TOO (2026-09-24). The app and
   // paper arms print the figures instead of a chart (`CalendarLine`); a
   // picture of those figures, or a month table of one or two columns, would
@@ -169,7 +168,6 @@ export function BlockCalendar({
     return (
       <div>
         <img src={src} alt={alt} width={544} style={{ display: 'block', width: '100%', maxWidth: 544, border: 0 }} />
-        <PairChip words={joinsChip} mode="email" />
         {caption ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 6 }}>{caption}</div> : null}
       </div>
     )

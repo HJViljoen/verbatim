@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { carriesShare } from '@/lib/reading/level'
@@ -13,10 +12,12 @@ import {
   FLAG_NOT_A_CHANGE,
   FLAG_WORDS,
   MAKERS_NOT_MEASURED,
+  boardPrev,
   groupedMakerWords,
   makerCell,
   marketKindLabel,
   prevReadK,
+  shownFlags,
   type ConversationBoard,
   type MarketTheme,
 } from '@/lib/pages/overview-market'
@@ -52,7 +53,10 @@ import { brandBoardEmpty, brandBoardFigures, renderBrandBoard } from './brand-bo
  *  before, where its videos came from, and the flag. Below 900px a row is the
  *  theme and its three figures, with the rest on a line of its own. Written
  *  out in full for Tailwind's scanner. */
-const COLS = 'grid grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 @min-[900px]:grid-cols-[32px_minmax(200px,1fr)_minmax(96px,176px)_56px_52px_52px_104px_96px] @min-[900px]:gap-x-4'
+// NO "FROM SEARCHES ADDED" COLUMN (T0a, CV-9): where a theme's count leans on
+// searches first run in the month it now simply carries no comparison and no
+// "New" flag (`shownFlags`), which is what the column used to warn about.
+const COLS = 'grid grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 @min-[900px]:grid-cols-[32px_minmax(200px,1fr)_minmax(96px,176px)_56px_52px_52px_96px] @min-[900px]:gap-x-4'
 const WIDE = '@max-[900px]:hidden'
 const NARROW = '@min-[900px]:hidden'
 
@@ -80,8 +84,8 @@ function flagBase(t: MarketTheme): string | null {
 /** The flag cell: its word, and last month's count under it. The flag is not
  *  a verdict, and it says so to every reader: on its title for the pointer,
  *  and in words for a screen reader. */
-function Flag({ t, mode }: { t: MarketTheme; mode: RenderMode }) {
-  const flag = t.flags[0]
+function Flag({ t, board, mode }: { t: MarketTheme; board: ConversationBoard; mode: RenderMode }) {
+  const flag = shownFlags(t, board)[0]
   if (!flag) return null
   const base = flagBase(t)
   if (mode === 'email') {
@@ -123,10 +127,12 @@ function RowTags({ t, board }: { t: MarketTheme; board: ConversationBoard }) {
 function Row({ t, rank, board, params, openId, axis }: {
   t: MarketTheme; rank: number; board: ConversationBoard; params: VoiceSurfaceParams; openId: string | null; axis: number
 }) {
-  const prevN = board.prev?.n ?? null
+  // No month before beside a refused themes pair (T0a, CV-10).
+  const prev = boardPrev(board)
+  const prevN = prev?.n ?? null
   const open = t.registryId === openId
-  const provenance = t.provenance ? fmtInt(t.provenance.fromNewSearches) : '·'
-  const prevMonth = board.prev ? shortMonthName(board.prev.month) : null
+  const flag = shownFlags(t, board)[0]
+  const prevMonth = prev ? shortMonthName(prev.month) : null
   return (
     <div role="row" className={`${COLS} min-h-14 items-center py-2 ${RULE.row}`}>
       <span className={`${WIDE} font-mono text-[13px] tabular-nums text-muted-foreground`}>{rank}</span>
@@ -149,15 +155,11 @@ function Row({ t, rank, board, params, openId, axis }: {
           ) : null}
         </span>
         <RowTags t={t} board={board} />
-        {/* THE NARROW LAYOUT'S THIRD LINE: where its videos came from and the
-            flag, which have no column under 900px of board. */}
-        {t.provenance || t.flags.length > 0 ? (
+        {/* THE NARROW LAYOUT'S THIRD LINE: the flag, which has no column
+            under 900px of board ("Now 10+" never splits). */}
+        {flag ? (
           <span className={`${NARROW} ${SCALE.tag} flex flex-wrap gap-x-2`}>
-            {/* Two units that each wrap whole ("Now 10+" never splits), and
-                the "·" between them only where they share a line (sm up). */}
-            {t.provenance ? <span className="whitespace-nowrap"><span data-copy="figure">{provenance}</span> from searches added in {shortMonthName(board.month)}</span> : null}
-            {t.provenance && t.flags.length > 0 ? <span aria-hidden className="max-sm:hidden">·</span> : null}
-            {t.flags[0] ? <span className="whitespace-nowrap" title={FLAG_NOT_A_CHANGE}>{FLAG_WORDS[t.flags[0]]}{flagBase(t) ? <>, <span data-copy="figure">{flagBase(t)}</span></> : null}</span> : null}
+            <span className="whitespace-nowrap" title={FLAG_NOT_A_CHANGE}>{FLAG_WORDS[flag]}{flagBase(t) ? <>, <span data-copy="figure">{flagBase(t)}</span></> : null}</span>
           </span>
         ) : null}
       </span>
@@ -167,8 +169,7 @@ function Row({ t, rank, board, params, openId, axis }: {
       <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(t.k)}</span></span>
       <span className={SCALE.num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></span>
       <span className={SCALE.prev}>{prevMonth ? <span data-copy="figure">{levelCell(prevReadK(t), prevN)}</span> : null}</span>
-      <span className={`${WIDE} text-right font-mono text-[15px] tabular-nums text-foreground`}><span data-copy="figure">{provenance}</span></span>
-      <span className={WIDE}><Flag t={t} mode="app" /></span>
+      <span className={WIDE}><Flag t={t} board={board} mode="app" /></span>
     </div>
   )
 }
@@ -208,7 +209,9 @@ function EmailBoard({ board }: { board: ConversationBoard }) {
   const cell = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 10px 4px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
   const num = { ...cell, fontFamily: FONT.mono, textAlign: 'right' as const }
   const head = { ...cell, borderTop: 0, color: EMAIL.muted, fontSize: 11 }
-  const prev = board.prev
+  const prev = boardPrev(board)
+  const flagged = groups(board).some((g) => g.rows.some((t) => shownFlags(t, board).length > 0))
+  const cols = 3 + (prev ? 1 : 0) + (flagged ? 1 : 0)
   return (
     <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
       <thead>
@@ -217,21 +220,19 @@ function EmailBoard({ board }: { board: ConversationBoard }) {
           <th style={{ ...head, textAlign: 'right' }}>Videos</th>
           <th style={{ ...num, borderTop: 0 }}><BaseHead month={board.month} n={board.n} mode="email" /></th>
           {prev ? <th style={{ ...num, borderTop: 0 }}><BaseHead month={prev.month} n={prev.n} mode="email" /></th> : null}
-          <th style={{ ...head, textAlign: 'right' }}>From searches added in {shortMonthName(board.month)}</th>
-          <th style={{ ...head, textAlign: 'left' }}>Flag</th>
+          {flagged ? <th style={{ ...head, textAlign: 'left' }}>Flag</th> : null}
         </tr>
       </thead>
       <tbody>
         {groups(board).flatMap((g) => [
-          ...(g.words ? [<tr key={`${g.key}-head`}><td colSpan={6} style={{ ...cell, fontWeight: 600 }}>{g.words} <span data-copy="figure" style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(g.rows.length)}</span></td></tr>] : []),
+          ...(g.words ? [<tr key={`${g.key}-head`}><td colSpan={cols} style={{ ...cell, fontWeight: 600 }}>{g.words} <span data-copy="figure" style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(g.rows.length)}</span></td></tr>] : []),
           ...g.rows.map((t) => (
             <tr key={t.registryId}>
               <td style={cell}><span data-copy="subject" data-slot="pass_b_theme">{t.label}</span></td>
               <td style={num}><span data-copy="figure">{fmtInt(t.k)}</span></td>
               <td style={num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></td>
               {prev ? <td style={{ ...num, color: EMAIL.muted }}><span data-copy="figure">{levelCell(prevReadK(t), prev.n)}</span></td> : null}
-              <td style={num}><span data-copy="figure">{t.provenance ? fmtInt(t.provenance.fromNewSearches) : '·'}</span></td>
-              <td style={cell}><Flag t={t} mode="email" /></td>
+              {flagged ? <td style={cell}><Flag t={t} board={board} mode="email" /></td> : null}
             </tr>
           )),
         ])}
@@ -246,11 +247,12 @@ function Board({ data, mode }: { data: VoiceSurfaceData; mode: RenderMode }) {
     return (
       <div>
         <EmailBoard board={board} />
-        <PairChip words={board.chip} mode={mode} />
       </div>
     )
   }
-  const prevN = board.prev?.n ?? null
+  const prev = boardPrev(board)
+  const prevN = prev?.n ?? null
+  const flagged = groups(board).some((g) => g.rows.some((t) => shownFlags(t, board).length > 0))
   const all = groups(board).flatMap((g) => g.rows)
   const axis = barAxis(all.flatMap((t) => [t.k / t.n, prevShareOf(t, prevN)]))
   const openId = data.theme.id
@@ -261,17 +263,12 @@ function Board({ data, mode }: { data: VoiceSurfaceData; mode: RenderMode }) {
         Theme
         <span className="font-mono text-[12px] font-normal">{board.segments === 'measured' ? 'kind · makers' : 'kind'}</span>
       </span>
-      <span role="columnheader" className={WIDE}><BarLegend month={board.month} prevMonth={board.prev?.month ?? null} /></span>
+      <span role="columnheader" className={WIDE}><BarLegend month={board.month} prevMonth={prev?.month ?? null} /></span>
       <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
       <span role="columnheader"><BaseHead month={board.month} n={board.n} mode={mode} /></span>
-      <span role="columnheader">{board.prev ? <BaseHead month={board.prev.month} n={board.prev.n} mode={mode} /> : null}</span>
-      <span role="columnheader" className={`${WIDE} flex flex-col items-end text-right ${SCALE.head}`}>
-        From searches
-        <span className="whitespace-nowrap font-mono text-[12px] font-normal">added in {shortMonthName(board.month)}</span>
-      </span>
+      <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
       <span role="columnheader" className={`${WIDE} flex flex-col ${SCALE.head}`}>
-        Flag
-        <span className="whitespace-nowrap font-mono text-[12px] font-normal">New · Now 10+</span>
+        {flagged ? <>Flag<span className="whitespace-nowrap font-mono text-[12px] font-normal">New · Now 10+</span></> : null}
       </span>
     </div>
   )
@@ -300,7 +297,6 @@ function Board({ data, mode }: { data: VoiceSurfaceData; mode: RenderMode }) {
       {board.segments === 'unknown' ? (
         <p className="m-0 rounded-md bg-inner px-4 py-4 text-[15px] leading-[1.55] text-secondary-foreground sm:px-6">Makers’ videos are not marked yet; this list groups them once they are.</p>
       ) : null}
-      <PairChip words={board.chip} mode={mode} />
     </div>
   )
 }

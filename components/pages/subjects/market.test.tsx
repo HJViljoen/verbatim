@@ -175,9 +175,10 @@ describe('S2 · the subject in your market', () => {
     expect(t).not.toContain('Aug 10% of 377')
   })
 
-  it('prints the pair\'s one chip, "who posted them" and the months read, and no gap and no side', () => {
+  it('prints "who posted them" and the months read, no refusal chip (T0a), and no gap and no side', () => {
     const t = text(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toContain('not read as a change: we changed our searches in September')
+    expect(t).not.toContain('not read as a change: we changed our searches in September')
+    expect(render(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))).not.toContain('data-pair-chip')
     expect(t).toContain('Its 103 September videos')
     expect(t).toContain('34% makers’ videos')
     expect(t).toContain('66% everyone else')
@@ -342,13 +343,18 @@ describe('S6 · month by month on the market', () => {
     expect(monthsLead(data.selected!.marketLine)).toBe('Two months read for this subject, not yet a line.')
     expect(t).toContain('Two months read for this subject, not yet a line.')
     expect(t).toContain('ended · still filling until the 1 Nov update')
-    expect(t).toContain('38 of 377')
+    // T0a (SB-33, the one condition): August against September is refused, so
+    // August's card is not set beside September's, and no chip says why.
+    expect(t).not.toContain('38 of 377')
     expect(t).toContain('103 of 654')
     expect(t).toContain('so far from 16 Oct · ended from 1 Nov')
     expect(t).toContain('settles with the 3 Jan update')
     expect(t).toContain('the first step joined as a line')
     expect(t).toContain('once November has filled, about the 3 Jan update')
-    expect(t).toContain('not read as a change: we changed our searches in September')
+    expect(t).not.toContain('not read as a change: we changed our searches in September')
+    // HYPOTHETICAL: with the pair read the same way, August's card prints.
+    const joined = { ...data, selected: { ...data.selected!, marketLine: { ...data.selected!.marketLine!, refusedSteps: {} } } }
+    expect(text(subjectsLine.render(joined, 'app', ctx))).toContain('38 of 377')
   })
 
   it('never says "complete", "so far, N days" or "still filling" in a lead', () => {
@@ -356,15 +362,24 @@ describe('S6 · month by month on the market', () => {
     for (const w of ['complete', 'so far', 'still filling']) expect(lead).not.toContain(w)
   })
 
-  it(`from the ${LINE_FROM}rd month read draws one line, a refused step broken`, () => {
+  it(`from the ${LINE_FROM}rd month read draws one line, and nothing across a refused step`, () => {
     const data = marketSubjectsFixture()
-    const line = marketLineFixture('s-looks', 'Looks & style', [
+    const points = [
       { ...data.selected!.marketLine!.points[0], month: '2026-07-01', k: 30, videos: 300, pct: 10 },
       ...data.selected!.marketLine!.points,
-    ], data.selected!.marketLine!.refusedSteps)
-    const html = render(subjectsLine.render({ ...data, chartAxis: ['2026-07-01', '2026-08-01', '2026-09-01'], selected: { ...data.selected!, marketLine: line } }, 'app', ctx))
-    expect(html).toContain('<svg')
-    expect(html).not.toContain('not yet a line')
+    ]
+    const at = (steps: Record<string, string>) => render(subjectsLine.render({
+      ...data,
+      chartAxis: ['2026-07-01', '2026-08-01', '2026-09-01'],
+      selected: { ...data.selected!, marketLine: marketLineFixture('s-looks', 'Looks & style', points, steps) },
+    }, 'app', ctx))
+    const joined = at({})
+    expect(joined).toContain('<svg')
+    expect(joined).not.toContain('not yet a line')
+    // T0a: September's step refused, so September stands alone (a card).
+    const refused = at(data.selected!.marketLine!.refusedSteps ?? {})
+    expect(refused).not.toContain('<polyline')
+    expect(renderText(refused)).not.toContain('38 of 377')
   })
 
   it('draws no weekly strip at deploy 3 (§2.3 S6)', () => {

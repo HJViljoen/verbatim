@@ -6,6 +6,7 @@ import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { Sparkline } from '@/components/charts/sparkline'
+import { valuesSinceBreak } from '@/lib/charts/calendar'
 import { panelRule } from '@/components/pages/overview/category'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
@@ -85,7 +86,8 @@ function ObjectLabel({ label, model, mode }: { label: string; model: boolean; mo
  *  "Jul 5.1 · Aug 6.8 · Sep 9.4". A month with no reading is not named, which
  *  is why this is not simply the axis. */
 function seriesLine(mover: Mover): string | null {
-  const spark = mover.spark
+  // Only the months since the latest refused step (T0a; the one condition).
+  const spark = mover.spark ? valuesSinceBreak(mover.spark, mover.sparkBreaks) : null
   const months = mover.sparkMonths
   if (!spark || !months) return null
   // WITH THE UNIT. `Mover.spark` holds the same share the `FigureCell` above
@@ -113,8 +115,9 @@ function seriesLine(mover: Mover): string | null {
  */
 function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
   const email = mode === 'email'
-  const drawn = (mover.spark ?? []).filter((v) => v != null).length >= 3
-  const label = mover.spark && mover.sparkMonths ? monthlyLineLabel(mover.spark, mover.sparkMonths) : null
+  const line = mover.spark ? valuesSinceBreak(mover.spark, mover.sparkBreaks) : null
+  const drawn = (line ?? []).filter((v) => v != null).length >= 3
+  const label = line && mover.sparkMonths ? monthlyLineLabel(line, mover.sparkMonths) : null
   const months = seriesLine(mover)
   return (
     <div
@@ -128,7 +131,7 @@ function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
           value={mover.pct == null ? '—' : fmtPct(mover.pct)}
           of={`${fmtInt(mover.k)} of ${fmtInt(mover.n)}`}
         />
-        {!email && drawn ? <Sparkline values={mover.spark as (number | null)[]} breaks={mover.sparkBreaks} color="var(--cat)" animate={false} width={72} height={22} /> : null}
+        {!email && drawn ? <Sparkline values={line as (number | null)[]} color="var(--cat)" animate={false} width={72} height={22} /> : null}
       </div>
       <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
         <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} />

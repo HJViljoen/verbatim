@@ -4,8 +4,7 @@ import type { Block, BlockContext, QuoteRef, RenderMode } from '@/lib/blocks/typ
 import { BlockEmpty, BlockFrame, NoValue } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { PAIR_NOT_COMPARED, refusalInBlock, sharedPairNote } from '@/lib/calibration'
+import { sharedPairNote } from '@/lib/calibration'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { FLAG_NOTE } from '@/lib/agent/movement'
@@ -270,10 +269,12 @@ function AfterwardsCell({ row, mode, folded = false, shared = null }: { row: Adv
     // The column says one thing about every row: it says it once, under the
     // table, and the cell carries the artboard's mark for an empty one.
     if (folded) return <NoValue mode={mode} label="nothing to report yet" />
-    // A REFUSAL FOR THE MONTH PAIR IS THE BLOCK'S CHIP, NOT THE CELL'S (deploy
-    // 1 review, the lead's R3): the cell says "not compared".
-    const refusedForPair = a?.state === 'refused' && a.pair != null && refusalInBlock({ state: 'refused', pair: a.pair }, shared)
-    const line = refusedForPair ? PAIR_NOT_COMPARED : a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
+    // A REFUSED COMPARISON IS NOT SHOWN AND NOT EXPLAINED (T0a, YM-16; the
+    // one condition): the cell is empty, with no "not compared", no refusal
+    // sentence and no chip under the table.
+    void shared
+    if (a?.state === 'refused') return null
+    const line = a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
     return email
       ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{line}</span>
       : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{line}</span>
@@ -555,7 +556,6 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></div>
               </div>
             ))}
-            <PairChip note={sharedRefusal} mode={mode} />
             {notes}
           </div>
         ) : (
@@ -638,7 +638,6 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 </tbody>
               </table>
             </div>
-            <PairChip note={sharedRefusal} mode={mode} />
             {notes}
           </>
         )}

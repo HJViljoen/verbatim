@@ -320,43 +320,43 @@ describe('OV3, ported to the artboard', () => {
   })
 })
 
-// ONE REFUSAL, SAID ONCE (deploy 1 review). On 2 Oct every kind, the mood and
-// the movers were refused for the same pair, and the sentence on each kind row
-// squeezed its label to 0px at 1440, 1280 and 390 wide.
-describe('OV3 · a refusal the block shares prints once, as a chip', () => {
+// A REFUSAL IS NOT SHOWN AND NOT EXPLAINED (T0a; plan §0a, the one
+// condition). On 2 Oct every kind, the mood and the movers were refused for the
+// same pair; the block printed one chip and "not compared" on each row (deploy
+// 1 review). Now a refused row prints its own level and nothing about the
+// comparison, and no chip stands under the block.
+describe('OV3 · a refusal the block shares prints nothing (T0a)', () => {
   const SENTENCE = 'Not read as a change: we changed our searches in September'
   const CHIP = 'not read as a change: we changed our searches in September'
-  const count = (text: string, needle: string) => text.split(needle).length - 1
 
-  it('prints the chip once and "not compared" on each row, in every mode', () => {
+  it('prints no chip, no sentence and no "not compared", in every mode', () => {
     for (const mode of MODES) {
+      const markup = render(overviewCategory.render(refusedPairFixture(), mode, ctx))
       const text = renderText(overviewCategory.render(refusedPairFixture(), mode, ctx))
-      expect(count(text, CHIP)).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain(SENTENCE)
-      expect(count(text, 'not compared')).toBeGreaterThanOrEqual(5)
-      assertCopyContract(render(overviewCategory.render(refusedPairFixture(), mode, ctx)))
+      expect(text).not.toContain('not compared')
+      expect(markup).not.toContain('data-pair-chip')
+      assertCopyContract(markup)
     }
   })
 
-  it('keeps each kind label beside its figure, with a width of its own', () => {
+  it('keeps each kind label beside its own figure, with a width of its own, and nothing after it', () => {
     const markup = render(overviewCategory.render(refusedPairFixture(), 'app', ctx))
     expect(markup).toMatch(/<span class="min-w-\[7rem\] flex-1 basis-\[7rem\]">Saying it worked<\/span>/)
     const text = renderText(overviewCategory.render(refusedPairFixture(), 'app', ctx))
-    expect(text).toMatch(/Saying it worked\s*71\.9%\s*450 of 626\s*not compared/)
+    expect(text).toMatch(/Saying it worked\s*71\.9%\s*450 of 626/)
+    expect(text).not.toMatch(/450 of 626\s*not compared/)
   })
 
-  // THE LEAD'S R3: a row never carries the sentence, and a block at most one
-  // chip. Rows refused for different reasons all say "not compared"; the chip
-  // names the reason most of them share, and each row's own reason rides in
-  // its app title.
-  it('prints one chip, the reason most rows share, where the rows are refused for different reasons', () => {
+  it('prints nothing about rows refused for different reasons either', () => {
     const data = refusedPairFixture()
     const ours = { mode: 'refuse' as const, cause: 'ours' as const, changeMonth: '2026-09-01', checkWith: null }
     data.category.kindVerdicts = { ...data.category.kindVerdicts, pain_point: { ...data.category.kindVerdicts.pain_point!, pair: ours } }
     const text = renderText(overviewCategory.render(data, 'app', ctx))
-    expect(text.split(CHIP).length - 1).toBe(1)
-    expect(text).not.toContain('Not read as a change: we changed how we check or file videos in September.')
-    expect(text).not.toContain(`${SENTENCE}.`)
-    expect(text).toMatch(/Hitting a problem\s*40\.3%\s*252 of 626\s*not compared/)
+    expect(text).not.toContain(CHIP)
+    expect(text).not.toContain('Not read as a change')
+    expect(text).toMatch(/Hitting a problem\s*40\.3%\s*252 of 626/)
+    expect(text).not.toContain('not compared')
   })
 })

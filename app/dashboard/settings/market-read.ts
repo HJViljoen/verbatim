@@ -1,15 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { marketSplit, type MarketSplit } from '@/components/settings/tracking/your-market'
-import { pairChipWords } from '@/lib/calibration'
 import { readMonthVideos, type Pages } from '@/lib/provenance/load'
-import { pairOnVerdict } from '@/lib/reading/comparability'
+import { joins } from '@/lib/reading/comparability'
 import { monthStartOf, nextMonth } from '@/lib/reading/month-key'
 import { loadPairJudge, readingHandle } from '@/lib/reading/read'
 import { isMissingVideoSegments } from '@/lib/segments/override'
 
 // The reads Settings › What we read adds for the preview's words (market-first
-// WP3.10): the month before as counts, the market pair's chip, your own posts
+// WP3.10): the month before as counts where the market pair joins, your own posts
 // in the month and the videos you marked "not my market". Each read that fails
 // returns null, and the page prints the part without it, never a zero.
 
@@ -27,15 +26,20 @@ export async function prevMarketSplit(admin: SupabaseClient, clientId: string, p
   return marketSplit(rows)
 }
 
-/** The market pair's chip for the reading month against the month before, in
- *  `pairChipWords`' one wording, where the pair is refused; null otherwise. */
-export async function marketPairChip(clientId: string, prevMonth: string, month: string, now: string): Promise<string | null> {
+/**
+ * May the month before print beside the reading month? The market pair's
+ * answer from the pair judge (T0a, ST-10; the one condition): only where the
+ * pair joins. It fails CLOSED: a judge that cannot be read prints no month
+ * before, since a read error must never let a refused comparison through.
+ * The refusal itself is never printed.
+ */
+export async function marketPairJoins(clientId: string, prevMonth: string, month: string, now: string): Promise<boolean> {
   try {
     const judge = await loadPairJudge(readingHandle(clientId), now)
-    const note = pairOnVerdict(judge(monthStartOf(prevMonth), monthStartOf(month), 'market')).note
-    return note && note.mode === 'refuse' ? pairChipWords(note) : null
+    return joins(judge(monthStartOf(prevMonth), monthStartOf(month), 'market'))
   } catch (e) {
-    return say('the market pair', clientId, e)
+    say('the market pair', clientId, e)
+    return false
   }
 }
 

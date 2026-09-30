@@ -107,7 +107,9 @@ describe('the monthly email: "September in your market"', () => {
     const base = ossurMonthlyFixture()
     const o = base.overview
     const three = ['Admiration for personal resilience', 'Questions about prosthetic function', 'Brand boycott over politics']
-    const board = { ...buildThemeBoard(o.themes!.rows.filter((t) => three.includes(t.label)), 338, o.month, 'no_rule', { month: '2026-08-01', n: 537 }), chip: o.themes!.chip }
+    // HYPOTHETICAL: the themes pair read the same way (no refusal on the
+    // board), so the month before prints and its "·" can be checked.
+    const board = { ...buildThemeBoard(o.themes!.rows.filter((t) => three.includes(t.label)), 338, o.month, 'no_rule', { month: '2026-08-01', n: 537 }), chip: null }
     const hero = heroLead(board, [], new Set())
     expect(hero.kind === 'themes' && hero.top.map((t) => t.label)).toEqual(three)
     const data = ossurMonthlyFixture({ overview: { ...o, themes: board, hero } })
@@ -115,6 +117,13 @@ describe('the monthly email: "September in your market"', () => {
     const table = text.slice(text.indexOf('Admiration for personal resilience'), text.indexOf('Brand boycott over politics') + 40)
     expect(table).toMatch(/Admiration for personal resilience\s+34\s+16%/)
     expect(table).toMatch(/Brand boycott over politics\s+16\s+·/)
+    // T0a (MR-2, the one condition): with the fixture's own refusal on the
+    // board, the table carries this month alone.
+    const refused = words(snapshot(ossurMonthlyFixture({ overview: { ...o, themes: { ...board, chip: o.themes!.chip }, hero } })))
+    const alone = refused.slice(refused.indexOf('Admiration for personal resilience'), refused.indexOf('Brand boycott over politics') + 40)
+    expect(o.themes!.chip).toBeTruthy()
+    expect(alone).not.toMatch(/Admiration for personal resilience\s+34\s+16%/)
+    expect(refused).not.toContain('of 537')
   })
 
   it('leads the inbox with the market, never a change (the subject line)', () => {

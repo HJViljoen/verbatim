@@ -6,9 +6,9 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { Sparkline } from '@/components/charts/sparkline'
+import { valuesSinceBreak } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
@@ -241,10 +241,15 @@ function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
  * highest reading any row carries, so the tallest line fills the box and every
  * other one is read against it.
  */
+/** A row's line from its latest refused step on (T0a; the one condition): a
+ *  row stored before the rule carries its refused steps, and nothing before
+ *  the latest one is drawn, labelled or scaled. */
+const lineOf = (r: SubjectRow): (number | null)[] => valuesSinceBreak(r.spark, r.sparkBreaks)
+
 export function sparkDomain(rows: readonly SubjectRow[]): [number, number] | undefined {
-  const drawn = rows.filter((r) => !monthlyLineLabel(r.spark, r.sparkMonths))
+  const drawn = rows.filter((r) => !monthlyLineLabel(lineOf(r), r.sparkMonths))
   if (drawn.length < 2) return undefined
-  const values = drawn.flatMap((r) => r.spark).filter((v): v is number => v != null)
+  const values = drawn.flatMap((r) => lineOf(r)).filter((v): v is number => v != null)
   return values.length ? [0, Math.max(...values)] : undefined
 }
 
@@ -314,7 +319,9 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
             with the n to make the comparison mean anything (design §3 OV2,
             Time). It is a LEVEL beside a level, not a change: no band is drawn
             over a part-month against a part-month. */}
-        <AtLastMonth at={row.categoryAtLastMonth} mode={mode} />
+        {/* The same point last month is the pair's comparison: none beside a
+            refused pair (T0a). */}
+        <AtLastMonth at={shared ? null : row.categoryAtLastMonth} mode={mode} />
         <SentLine line={sentLine} mode={mode} />
       </td>
       {/* THE COLUMN ANSWERS ON EVERY ROW OR IT IS NOT A COLUMN (polish pass).
@@ -342,8 +349,8 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
             same full-amplitude climb — a claim the row has not earned, under a
             column headed "Monthly line". The mock refuses the case in words
             and so does this (lib/pages/overview.ts monthlyLineLabel). */}
-        {monthlyLineLabel(row.spark, row.sparkMonths) ? (
-          <span className="font-mono text-[10.5px] text-muted-foreground">{monthlyLineLabel(row.spark, row.sparkMonths)}</span>
+        {monthlyLineLabel(lineOf(row), row.sparkMonths) ? (
+          <span className="font-mono text-[10.5px] text-muted-foreground">{monthlyLineLabel(lineOf(row), row.sparkMonths)}</span>
         ) : (
           // AND A DRAWN LINE SAYS WHICH MONTHS IT IS OF (Block D wave 3, M16).
           // The months were printed INSTEAD of the line — that is the refusal
@@ -352,8 +359,8 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
           // the one shape on this page a reader cannot date. The artboard
           // captions every line it draws.
           <span className="flex flex-col gap-0.5">
-            <Sparkline values={row.spark} breaks={row.sparkBreaks} color="var(--cat)" width={72} height={20} animate={false} domain={domain} zeroBase rule />
-            <span className="font-mono text-[10.5px] text-muted-foreground">{monthlySpanLabel(row.spark, row.sparkMonths)}</span>
+            <Sparkline values={lineOf(row)} color="var(--cat)" width={72} height={20} animate={false} domain={domain} zeroBase rule />
+            <span className="font-mono text-[10.5px] text-muted-foreground">{monthlySpanLabel(lineOf(row), row.sparkMonths)}</span>
           </span>
         )}
       </td>
@@ -435,12 +442,10 @@ export const overviewSubjects: Block<OverviewData> = {
     }
 
     const gap = leadGap(s)
-    const hasAt = s.rows.some((r) => r.categoryAtLastMonth?.pct != null)
-    // ONE REFUSAL, SAID ONCE (deploy 1 review): seven rows each printed the
-    // same sentence in both change columns. Where every refused change shares
-    // one pair's reason, the cells say "not compared" and the chip under the
-    // table says why.
     const shared = sharedPairNote(s.rows.flatMap((r) => [r.you.verdict, r.category.verdict]))
+    const hasAt = !shared && s.rows.some((r) => r.categoryAtLastMonth?.pct != null)
+    // A REFUSED PAIR IS NOT SHOWN AND NOT EXPLAINED (T0a): its change cells
+    // are empty and nothing beside them names the month before.
     if (email) {
       return frame(
         <div>
@@ -457,14 +462,13 @@ export const overviewSubjects: Block<OverviewData> = {
                   {printsClient(r.calibration) ? <>you <Side side={r.you} mode={mode} /> · </> : null}{s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
                 </div>
               )}
-              <AtLastMonth at={r.categoryAtLastMonth} mode={mode} />
+              <AtLastMonth at={shared ? null : r.categoryAtLastMonth} mode={mode} />
               <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
               <div style={{ marginTop: 2 }}>
                 <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> <DirectionWord direction={r.direction} mode={mode} />
               </div>
             </div>
           ))}
-          <PairChip note={shared} mode={mode} />
         </div>,
       )
     }
@@ -497,7 +501,6 @@ export const overviewSubjects: Block<OverviewData> = {
             </tbody>
           </table>
         </div>
-        <PairChip note={shared} mode={mode} className="mt-2" />
       </>,
     )
   },

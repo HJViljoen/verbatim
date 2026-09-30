@@ -849,7 +849,8 @@ describe('the artboard port (Block D wave 2)', () => {
   it('qr.p4.attention · the chart and the banded step, never a raw percentage', () => {
     const t = text('quarterly.category')
     expect(t).toContain('a fixed panel of 214 accounts')
-    expect(t).toContain('comparison refused')
+    // A refused step prints nothing, not "comparison refused" (T0a).
+    expect(t).not.toContain('comparison refused')
     expect(t).not.toContain('18% since June')
   })
 
@@ -1096,14 +1097,16 @@ describe('the artboard port (Block D wave 2)', () => {
 })
 
 // THE MONTH-PAIR RULE ON THE QUARTERLY'S LINES (market-first decision D, WP1.3
-// review fix). The subject line and a move's chart joined refused steps: the
-// break data existed on the Overview's row and on the move reading, and the
-// quarterly dropped it. The sentence is Sealand's (our September search
-// changes); the fixture's months are the mock's.
+// review fix; T0a, the one condition). The subject line and a move's chart
+// carry the Overview row's and the move reading's refused steps, and nothing
+// is drawn across one: the months before the latest refused step are not
+// drawn, and nothing says why. The sentence is Sealand's (our September
+// search changes); the fixture's months are the mock's.
 describe('quarterly lines under the month-pair rule', () => {
   const WHY = 'Not read as a change: we changed our searches in September.'
+  const xs = (m: string): number[] => [...m.matchAll(/<polyline[^>]*points="([^"]+)"/g)].flatMap((x) => x[1].split(' ').map((pt) => Number(pt.split(',')[0])))
 
-  it('qr.subjects · carries the Overview row\'s refused steps into the line and says why', () => {
+  it('qr.subjects · carries the Overview row\'s refused steps into the line, and draws nothing before September', () => {
     const broken = brokenStepFixture(WHY)
     const series = broken.subjects.line!.series[0]
     expect(series.breaks?.at(-1)).toBe(true)
@@ -1112,23 +1115,22 @@ describe('quarterly lines under the month-pair rule', () => {
       const markup = render(quarterlySubjects.render(broken, mode, ctx))
       const plain = render(quarterlySubjects.render(quarterlyFixture(), mode, ctx))
       assertCopyContract(markup)
-      expect(renderText(quarterlySubjects.render(broken, mode, ctx))).toContain(WHY)
-      expect(renderText(quarterlySubjects.render(quarterlyFixture(), mode, ctx))).not.toContain(WHY)
-      // September stands alone: no segment reaches its x, the rightmost.
-      const xs = (m: string): number[] => [...m.matchAll(/<polyline[^>]*points="([^"]+)"/g)].flatMap((x) => x[1].split(' ').map((pt) => Number(pt.split(',')[0])))
-      expect(xs(markup).length).toBeGreaterThan(0)
-      expect(Math.max(...xs(markup))).toBeLessThan(Math.max(...xs(plain)))
+      expect(renderText(markup)).not.toContain(WHY)
+      expect(xs(plain).length).toBeGreaterThan(0)
+      // September stands alone: no line at all, only its figure.
+      expect(xs(markup)).toHaveLength(0)
     }
   })
 
-  it('qr.moves · a move\'s chart breaks at a refused step and says why', () => {
+  it('qr.moves · a move\'s chart draws nothing across a refused step, and says nothing about it', () => {
     const q = quarterlyFixture()
     const reading = q.moves.readings[0]
     const refused = { ...reading, series: reading.series.map((s) => ({ ...s, refusedSteps: { '2026-09-01': WHY } })) }
     const broken = { ...q, moves: { ...q.moves, readings: [refused] } }
     for (const mode of ['app', 'print'] as const) {
       const text = renderText(quarterlyMoves.render(broken, mode, ctx))
-      expect(text).toContain(WHY)
+      expect(text).not.toContain(WHY)
+      expect(xs(render(quarterlyMoves.render(broken, mode, ctx)))).toHaveLength(0)
       expect(renderText(quarterlyMoves.render(q, mode, ctx))).not.toContain(WHY)
     }
   })

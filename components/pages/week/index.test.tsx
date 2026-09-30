@@ -636,9 +636,13 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
 })
 
 describe('Checks on this update (market-first WP3.7, week.checks)', () => {
-  it('prints the three checks side by side: the refusal chip, the forming baseline, nothing flagged', () => {
+  // T0a (the one condition): with the months refused, "Moving now" is not
+  // drawn at all, and no chip says why.
+  it('prints the checks side by side: no "Moving now" on a refused pair, the forming baseline, nothing flagged', () => {
     const text = renderText(weekChecks.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Moving now not read as a change: we changed our searches in September')
+    expect(text).not.toContain('Moving now')
+    expect(text).not.toContain('not read as a change')
+    expect(render(weekChecks.render(marketWeekFixture(), 'app', ctx))).not.toContain('data-pair-chip')
     expect(text).toContain('Unusual this week Not checked with this update: the baseline is forming. 0 of 3 months flags from January')
     expect(text).toContain('Flagged for awareness Nothing in these days was flagged as a claim about this space that does not hold up.')
     expect(text).toContain('What we changed, and when →')

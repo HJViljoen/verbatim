@@ -1,7 +1,5 @@
 import { favourability, type Good } from '@/components/charts/stat'
-import { PAIR_NOT_COMPARED, pairSentence, refusalInBlock } from '@/lib/calibration'
 import type { DeltaVerdict } from '@/lib/report-bands'
-import { REFUSAL_WHY } from '@/lib/reading/record'
 import type { Verdict, VerdictPairNote, VerdictState } from '@/lib/reading/verdicts'
 
 /**
@@ -65,13 +63,6 @@ export const MOVEMENT_WORDS: Record<Exclude<VerdictState, 'moved'> | 'unchanged'
   refused: 'comparison refused',
   unchanged: 'unchanged',
 }
-
-/** Why a refused comparison was refused, in the reader's words — printed as the
- *  badge's `title`, because the word alone ("comparison refused") tells a
- *  reader that something is wrong without telling them what. The SAME words
- *  the record prints in the open (lib/reading/record.ts refusedSentence): a
- *  tooltip and a paragraph about one refusal may not differ. */
-const REFUSED_WHY = REFUSAL_WHY
 
 /** THE NON-ANSWER WRAPS; IT DOES NOT OVERPRINT (Block D wave 3, SH2).
  *
@@ -174,26 +165,24 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sha
   priorShown?: boolean
 }) {
   if (!verdict) return null
-  if (priorShown && 'pair' in verdict && refusalInBlock({ state: verdict.state, pair: verdict.pair ?? null }, sharedRefusal)) return null
+  // A REFUSED COMPARISON PRINTS NOTHING (T0a; plan §0a, the one condition).
+  // No "comparison refused", no "not compared", no refusal sentence and no
+  // reason in a tooltip: a comparison the product will not stand behind is not
+  // shown and not explained. The row's own level stands beside an empty
+  // change slot, and the row prints no earlier figure (`priorPrintable`).
+  // `sharedRefusal` and `priorShown` are kept for their callers and no longer
+  // change what prints.
+  void sharedRefusal
+  void priorShown
+  if (verdict.state === 'refused') return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
-  // THE MONTH-PAIR RULE'S WORDS (WP1.3). A pair refused because the two months
-  // were not read the same way prints its own sentence in place of the word,
-  // "Not read as a change: we changed our searches in September.", because
-  // "comparison refused" tells a reader something is wrong without saying
-  // what, and that sentence is the whole point of the refusal. A pair read
-  // with a note keeps its badge and carries the note in the title.
-  const pair = 'pair' in verdict ? verdict.pair ?? null : null
+  // A pair a change of ours touched under a tenth of prints bare (T0 ruling
+  // U4): the judge allows it, and the note was process talk.
   if (verdict.state === 'moved' && change != null) {
     const moved = bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'
-    return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={pair?.mode === 'flag' ? `${moved}. ${pairSentence(pair)}` : moved} />
+    return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={moved} />
   }
-  if (verdict.state === 'refused' && pair?.mode === 'refuse') {
-    if (refusalInBlock({ state: verdict.state, pair }, sharedRefusal)) return <NonAnswer word={PAIR_NOT_COMPARED} title={pairSentence(pair)} />
-    const reason = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : pairSentence(pair)
-    return <NonAnswer word={pairSentence(pair)} title={reason} />
-  }
-  const why = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : null
   const inside = change != null && bandPts != null
     ? `moved ${change > 0 ? '+' : ''}${change}${unit ? ` ${unit}` : ''}, inside the ${bandPts} pt margin of this measurement`
     : 'not enough on both sides to compare yet'
@@ -224,8 +213,8 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sha
   //
   // The numbers stay in `title` for both, where they are an explanation and not
   // a claim.
-  const withholds = verdict.state === 'refused' || verdict.state === 'too_little_data'
-  return <NonAnswer word={word} title={why ?? inside} change={withholds ? null : change} bandPts={withholds ? null : bandPts} unit={unit} bandTip={bandTip} />
+  const withholds = verdict.state === 'too_little_data'
+  return <NonAnswer word={word} title={inside} change={withholds ? null : change} bandPts={withholds ? null : bandPts} unit={unit} bandTip={bandTip} />
 }
 
 /**

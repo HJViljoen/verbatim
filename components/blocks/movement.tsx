@@ -1,6 +1,5 @@
 import type { RenderMode } from '@/lib/blocks/types'
 import { CountBadge, MovementBadge, MOVEMENT_WORDS } from '@/components/delta-badge'
-import { PAIR_NOT_COMPARED, pairSentence, refusalInBlock } from '@/lib/calibration'
 import { favourability, type Good } from '@/components/charts/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { DeltaVerdict } from '@/lib/report-bands'
@@ -127,32 +126,21 @@ export function BlockMovement({
   priorShown?: boolean
 }) {
   if (!verdict) return null
-  if (priorShown && 'pair' in verdict && refusalInBlock({ state: verdict.state, pair: verdict.pair ?? null }, sharedRefusal)) return null
-  // THE MONTH-PAIR RULE (market-first decision D, WP1.3). A refused pair prints
-  // its sentence ("Not read as a change: we changed our searches in
-  // September."); a pair a change of ours touched under a tenth of carries its
-  // note beside whatever the band said. Both in every mode: the note is a fact
-  // about the comparison, and paper and an inbox are owed it as much as a
-  // screen.
-  const pair = 'pair' in verdict ? verdict.pair ?? null : null
-  const flagNote = pair?.mode === 'flag' && verdict.state !== 'refused'
-    ? <span className="text-xs text-muted-foreground" style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.ink2 } : undefined}> {pairSentence(pair)}</span>
-    : null
+  // A REFUSED COMPARISON PRINTS NOTHING, IN EVERY MODE (T0a; plan §0a, the one
+  // condition): no refusal sentence, no "not compared", no chip. A pair a
+  // change of ours touched under a tenth of prints bare, with no note (T0
+  // ruling U4). `sharedRefusal` and `priorShown` no longer change what prints.
+  void sharedRefusal
+  void priorShown
+  if (verdict.state === 'refused') return null
   // Ruling I: in the app the band is the badge's tooltip; print keeps it inline.
-  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} sharedRefusal={sharedRefusal} />{flagNote}</span>
+  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} /></span>
 
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
-  if (verdict.state === 'refused' && pair?.mode === 'refuse') {
-    if (refusalInBlock({ state: verdict.state, pair }, sharedRefusal)) return <span data-copy="verdict" style={chip('neutral')}>{PAIR_NOT_COMPARED}</span>
-    // A sentence, not a chip word: it wraps.
-    return <span data-copy="verdict" style={{ ...chip('neutral'), whiteSpace: 'normal', borderRadius: 6 }}>{pairSentence(pair)}</span>
-  }
   if (verdict.state !== 'moved' || change == null) {
     const word = verdict.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[verdict.state]
-    return flagNote
-      ? <span data-copy="verdict"><span style={chip('neutral')}>{word}</span>{flagNote}</span>
-      : <span data-copy="verdict" style={chip('neutral')}>{word}</span>
+    return <span data-copy="verdict" style={chip('neutral')}>{word}</span>
   }
   // AND THE BAND IN THE EMAIL TOO. The screen arm put it in a `title`, which an
   // email has no way to show and paper has none either; this arm dropped it
@@ -170,7 +158,7 @@ export function BlockMovement({
   // or a measured change would read as a refusal. `noted` is the artboards'
   // own attention tint.
   const moved = (
-    <span data-copy={flagNote ? undefined : 'verdict'} style={chip(fav === null ? 'noted' : fav ? 'up' : 'down')}>
+    <span data-copy="verdict" style={chip(fav === null ? 'noted' : fav ? 'up' : 'down')}>
       {change > 0 ? '+' : '−'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
       {/* "band ±2.1 pts", the artboard's own wording and the screen arm's
           (SH18): the ± is the whole reason a band is not a threshold, and the
@@ -178,7 +166,7 @@ export function BlockMovement({
       {band != null ? ` · band ±${Math.abs(band).toLocaleString('en-US')}${unit ? ` ${unit}` : ''}` : ''}
     </span>
   )
-  return flagNote ? <span data-copy="verdict">{moved}{flagNote}</span> : moved
+  return moved
 }
 
 /** A count's movement — no band, because a count that changed, changed. */

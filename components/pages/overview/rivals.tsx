@@ -1,17 +1,16 @@
 import type { ReactNode } from 'react'
 import { isMarketPage, InnerLine } from './market'
-import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, brandsBlockFor, brandsLine, isBrandsRead, nameLineParts, organicBase, topicNote, type BrandsRead } from '@/lib/pages/overview-market'
+import { BRANDS_HEAD_ORGANIC, brandsBlockFor, brandsLine, isBrandsRead, nameLineParts, organicBase, topicNote, type BrandsRead } from '@/lib/pages/overview-market'
 import { surface } from '@/lib/nav'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict } from '@/lib/reading/verdicts'
 import { isRivalAudience } from '@/lib/rivals'
 import { cn } from '@/lib/utils'
 import { OWN_POSTS_UNREADABLE, OWN_POSTS_UNREADABLE_OUTSIDE, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow } from '@/lib/pages/overview'
@@ -208,9 +207,12 @@ export const overviewRivals: Block<OverviewData> = {
     const cols = {
       attention: r.rows.some((x) => x.attention?.pct != null),
       content: r.rows.some((x) => x.content?.pct != null),
-      change: r.rows.some((x) => x.attentionVerdict != null),
+      // A column only where some row's change was drawn: a refused change
+      // prints nothing (T0a), so a column of them is a column of nothing.
+      change: r.rows.some((x) => x.attentionVerdict != null && priorPrintable(x.attentionVerdict)),
       own: !folded,
     }
+    const anyChange = r.rows.some((x) => x.attentionVerdict != null)
     // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): a refused
     // attention change says "not compared" and the chip under the table says
     // why, once.
@@ -219,7 +221,7 @@ export const overviewRivals: Block<OverviewData> = {
     const shares = [!cols.attention ? 'attention' : null, !cols.content ? 'content' : null].filter(Boolean)
     const absences = [
       shares.length ? `${shares.join(' and ').replace(/^./, (c) => c.toUpperCase())}: ${absentWord}` : null,
-      !cols.change ? 'Attention change: not read' : null,
+      !anyChange ? 'Attention change: not read' : null,
       !cols.own ? `On their own posts: not tracked${mode === 'print' ? '' : ' · Settings › Readiness'}` : null,
     ].filter(Boolean).join(' · ')
 
@@ -333,7 +335,6 @@ export const overviewRivals: Block<OverviewData> = {
             </div>
           </>
         )}
-        <PairChip note={shared} mode={mode} />
       </BlockFrame>
     )
   },
@@ -378,17 +379,16 @@ export const overviewRivals: Block<OverviewData> = {
 /** The front page's brands block title (market-first WP1.6). */
 export const MARKET_BRANDS_TITLE = 'Brands in your market'
 
-/** The block's inks (the approved preview): a brand's count without any
- *  video our rival searches found in the rivals' orange, in all in the same
- *  orange at 48% over the tile (`RIVAL_INKS`' third step, #F8BC99 on white),
- *  your name's mark in green. */
+/** The block's ink (the approved preview): a brand's count in the rivals'
+ *  orange, your name's mark in green. */
 const ORGANIC_INK = 'var(--comp)'
-const ALL_INK = 'color-mix(in srgb, var(--comp) 48%, var(--tile))'
 
-/** The bars' axis: a little above the largest "in all" count, so the longest
- *  bar never touches the column's edge (the preview's 47 on 50). */
+/** The bars' axis: a little above the largest count, so the longest bar never
+ *  touches the column's edge. ONE COUNT A BRAND (T0 ruling U10): the "in all"
+ *  count took in the videos our own brand searches fetched, and is never
+ *  printed or drawn. */
 export function brandAxis(b: BrandsRead): number {
-  const max = Math.max(0, ...b.topics.map((t) => t.kAny ?? 0))
+  const max = Math.max(0, ...b.topics.map((t) => t.kOrganic ?? 0))
   return Math.max(1, Math.ceil(max * 1.06))
 }
 
@@ -433,17 +433,15 @@ function Swatch({ ink }: { ink: string }) {
 
 /**
  * The topics (the approved preview's table): each brand, a bar of its count
- * in all with its headline count over it, then the two counts; a brand not
- * counted prints why in one line across the figures. EACH COUNT'S HEAD
- * CARRIES ITS BASE (the 27 Sep ruling): the headline count leaves out every
- * video any of our rival searches found, so all brands share the one base
- * under its head; the market's videos sit under "In all". In a narrow block
+ * and the count; a brand not counted prints why in one line across the
+ * figure. THE HEAD CARRIES ITS BASE (the 27 Sep ruling): the count leaves out
+ * every video any of our brand searches found, so all brands share the one
+ * base under its head. No "in all" (T0 ruling U10). In a narrow block
  * the bar leaves, as the page's other tables' do (`PHONE_HIDDEN`'s rule, at
  * this table's own width).
  */
 export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   if (b.topics.length === 0) return null
-  const n = b.topics[0].n
   const nOrganic = organicBase(b)
   const axis = brandAxis(b)
   // No figure heads over a table that prints no figure (every brand not
@@ -459,7 +457,6 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
           <tr>
             <th style={head}>Brand</th>
             <th style={{ ...head, textAlign: 'right' }}>{!counted ? null : nOrganic == null ? BRANDS_HEAD_ORGANIC : <span data-copy="level">{BRANDS_HEAD_ORGANIC} · of {fmtInt(nOrganic)}</span>}</th>
-            <th style={{ ...head, textAlign: 'right' }}>{counted ? <span data-copy="level">{BRANDS_HEAD_ALL} · of {fmtInt(n)}</span> : null}</th>
           </tr>
         </thead>
         <tbody>
@@ -469,7 +466,6 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
               <tr key={t.brandKey}>
                 <td style={cell}>{t.label}{note ? <div style={{ fontSize: 12, color: EMAIL.muted }}>{note}</div> : null}</td>
                 <td style={{ ...cell, textAlign: 'right' }}>{note || t.kOrganic == null ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600 }}>{fmtInt(t.kOrganic)}</span>}</td>
-                <td style={{ ...cell, textAlign: 'right' }}>{note || t.kAny == null ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(t.kAny)}</span>}</td>
               </tr>
             )
           })}
@@ -485,7 +481,7 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
   // The bar's floor is 72px, so the four tracks and their gaps fit from the
   // 480px the query switches at: at 96 they needed 504, and the tile's 500px
   // at 1440 (the 32px page inset, d3 polish) ran "In all" 4px past its edge.
-  const cols = 'grid-cols-[minmax(0,1fr)_7.5rem_3.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(72px,1fr)_9rem_3.5rem]'
+  const cols = 'grid-cols-[minmax(0,1fr)_7.5rem] @min-[480px]:grid-cols-[minmax(10rem,1.2fr)_minmax(72px,1fr)_9rem]'
   const bar = '@max-[480px]:hidden'
   const pct = (k: number | null) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
   return (
@@ -500,10 +496,6 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
                 <span className="[text-wrap:balance]"><Swatch ink={ORGANIC_INK} />{BRANDS_HEAD_ORGANIC}</span>
                 {nOrganic == null ? null : <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(nOrganic)}</span>}
               </span>
-              <span role="columnheader" data-copy="level" className="flex flex-col items-end text-right">
-                <span className="whitespace-nowrap"><Swatch ink={ALL_INK} />{BRANDS_HEAD_ALL}</span>
-                <span className="whitespace-nowrap font-mono text-[12px] font-normal">of {fmtInt(n)}</span>
-              </span>
             </>
           ) : null}
         </div>
@@ -514,15 +506,13 @@ export function BrandsTable({ b, mode }: { b: BrandsRead; mode: RenderMode }) {
             <div key={t.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4 py-1.5', cols, last ? null : 'border-b border-border/60')}>
               <span role="rowheader" className="min-w-0 text-[15px] leading-[1.35] text-foreground [overflow-wrap:anywhere]">{t.label}</span>
               {note ? (
-                <span role="cell" className="col-span-2 text-[13px] leading-[1.4] text-muted-foreground @min-[480px]:col-span-3">{note}</span>
+                <span role="cell" className="col-span-1 text-[13px] leading-[1.4] text-muted-foreground @min-[480px]:col-span-2">{note}</span>
               ) : (
                 <>
                   <span aria-hidden className={cn('relative block h-2', bar)}>
-                    <span className="absolute inset-y-0 left-0 rounded-[2px]" style={{ width: pct(t.kAny), background: ALL_INK }} />
-                    <span className="absolute inset-y-0 left-0 rounded-l-[2px]" style={{ width: pct(t.kOrganic), background: ORGANIC_INK }} />
+                    <span className="absolute inset-y-0 left-0 rounded-[2px]" style={{ width: pct(t.kOrganic), background: ORGANIC_INK }} />
                   </span>
                   <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(t.kOrganic ?? 0)}</span>
-                  <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] tabular-nums text-muted-foreground">{fmtInt(t.kAny ?? 0)}</span>
                 </>
               )}
             </div>

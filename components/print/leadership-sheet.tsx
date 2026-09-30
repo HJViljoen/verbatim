@@ -6,6 +6,7 @@ import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { earnsVerdict, isFailed, printsClient, withheldLabel, WITHHELD_WORDS } from '@/lib/subjects/calibration-state'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
+import { valuesSinceBreak } from '@/lib/charts/calendar'
 import { provenanceLine } from '@/components/pages/overview/sentence'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import { DeckFooter } from '@/components/print/report-deck'
@@ -284,7 +285,9 @@ function MonthLine({ spark, months, breaks, width = 200, height = 44, color = 'v
   height?: number
   color?: string
 }) {
-  const refusal = monthlyLineLabel(spark, months)
+  // Only the months since the latest refused step (T0a; the one condition).
+  const line = valuesSinceBreak(spark, breaks)
+  const refusal = monthlyLineLabel(line, months)
   if (refusal) return <p className={TRAIL}>{refusal}</p>
   // THE DRAWN PATH NAMES ITS OWN ENDS, AND NAMES THEIR VALUES. A printed line
   // has no hover, so the two ends are the only axis it can have — the artboard
@@ -296,12 +299,12 @@ function MonthLine({ spark, months, breaks, width = 200, height = 44, color = 'v
   // direction claim (AGENTS.md). With both ends valued the reader can see that
   // the climb is four points and judge it.
   const read = months
-    .map((m, i) => ({ month: m, pct: spark[i] }))
+    .map((m, i) => ({ month: m, pct: line[i] }))
     .filter((p): p is { month: string; pct: number } => p.pct != null)
   const end = (p: { month: string; pct: number }) => `${axisMonth(p.month)} ${fmtPct(p.pct, 0)}`
   return (
     <span className="flex flex-col gap-0.5">
-      <Sparkline values={spark} breaks={breaks} color={color} width={width} height={height} animate={false} endDot />
+      <Sparkline values={line} color={color} width={width} height={height} animate={false} endDot />
       <span className="flex justify-between font-mono text-[9px] text-muted-foreground" style={{ width }}>
         <span>{end(read[0])}</span>
         <span>{end(read[read.length - 1])}</span>
@@ -545,7 +548,7 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
       </div>
     )
   }
-  const trail = trailOf(row.spark, row.sparkMonths)
+  const trail = trailOf(valuesSinceBreak(row.spark, row.sparkBreaks), row.sparkMonths)
   return (
     <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
       {/* THE HERO KEEPS ITS OWN LINE. "27% of category videos" broke across two

@@ -101,6 +101,19 @@ export interface ThemeBoard {
   chip?: string | null
 }
 
+/**
+ * The month before, as a board prints it beside this month, or null.
+ *
+ * THE ONE CONDITION (T0a; OV-7, OV-12, CV-10, MR-6). The loader leaves the
+ * month before off a board wherever its themes pair is refused, so no column,
+ * cell, tick, legend entry or hero line names it. A board stored before that
+ * rule still carries the pair's refusal (`chip`): it prints no month before
+ * either, and the refusal itself is never printed.
+ */
+export function boardPrev(board: Pick<ThemeBoard, 'prev' | 'chip'>): ThemeBoard['prev'] {
+  return board.chip ? null : board.prev
+}
+
 const finiteShare = (s: number | null | undefined): number | null =>
   s != null && Number.isFinite(s) && s >= 0 && s <= 1 ? s : null
 
@@ -393,6 +406,32 @@ export function themeFlags(input: {
   if (!(input.k >= THEME_FLOOR) || input.prevK == null || !Number.isFinite(input.prevK)) return []
   if (!input.heardBefore && !input.regrouped) return ['new']
   return input.prevK < THEME_FLOOR ? ['now_10'] : []
+}
+
+/**
+ * NEW-SEARCH INFLATION (T0a, inventory §B.4). A theme whose reading-month
+ * videos come a third or more (`LEAD_NEW_SEARCH_NOTE`) from searches first
+ * run in that month is, as far as the record can tell, our search and not new
+ * talk. Such a theme is not "New", is not counted as first heard, and does not
+ * lead a page. It once printed with a note saying so; the note was process
+ * talk, so the claim goes instead of being annotated. Unmeasured provenance
+ * is not inflation (nothing is known), and a month with no search added is
+ * none by definition (`themeProvenance`).
+ */
+export function searchInflated(p: { fromNewSearches: number; of: number } | null | undefined): boolean {
+  if (!p || !(p.of > 0) || !(p.fromNewSearches >= 0) || p.fromNewSearches > p.of) return false
+  return p.fromNewSearches / p.of >= LEAD_NEW_SEARCH_NOTE
+}
+
+/**
+ * The flags a board row may print (T0a; CV-11, the one condition): none where
+ * the board's month pair is refused, since "New" and "Now 10+" are both
+ * readings against earlier months, and never "New" for a theme our own new
+ * searches found (`searchInflated`).
+ */
+export function shownFlags(t: Pick<MarketTheme, 'flags' | 'provenance'>, board: { chip?: string | null }): ThemeFlag[] {
+  if (board.chip) return []
+  return t.flags.filter((f) => f !== 'new' || !searchInflated(t.provenance))
 }
 
 /**

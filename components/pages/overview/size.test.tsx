@@ -36,11 +36,13 @@ describe('OV1 · the size headline', () => {
     }
   })
 
-  it('prints the pair’s refusal beside it, as the verdict the comparison gave', () => {
+  // T0a (plan §0a, the one condition): a refused comparison is not shown and
+  // not explained; the size headline stands alone.
+  it('prints no refusal beside it', () => {
     for (const mode of MODES) {
       const markup = render(overviewSentence.render(marketSizeFixture(), mode, ctx))
-      const chip = copyNodes(markup).find((n) => n.text === SEPTEMBER_CHIP)
-      expect(chip?.kind).toBe('verdict')
+      expect(copyNodes(markup).find((n) => n.text === SEPTEMBER_CHIP)).toBeUndefined()
+      expect(markup).not.toContain('data-pair-chip')
     }
   })
 

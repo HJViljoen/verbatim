@@ -80,13 +80,16 @@ describe('the page and the monthly print one sentence each', () => {
       for (const words of [
         'In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.',
         'not counted yet',
-        'Outside our brand searches',
+        'Named unprompted',
       ]) {
         expect(page).toContain(words)
         expect(monthly, mode).toContain(words)
       }
       expect(monthly, mode).toMatch(/of 516/)
-      expect(monthly, mode).toMatch(/Patagonia\s*13\s*45/)
+      // One count a brand (T0 ruling U10): never "in all".
+      expect(monthly, mode).toMatch(/Patagonia\s*13\b/)
+      expect(monthly, mode).not.toMatch(/Patagonia\s*13\s*45/)
+      expect(page).not.toContain('In all')
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.brands'].render(data, mode, ctx)))
     }
   })

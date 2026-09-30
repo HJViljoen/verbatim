@@ -50,6 +50,7 @@ import {
   namesABrand,
   pickQuotes,
   stripUnevidencedBrand,
+  shownFlags,
   themeFlags,
   themeProvenance,
   type ConversationBoard,
@@ -58,6 +59,7 @@ import {
   type ThemeFlag,
 } from './overview-market'
 import { row, rows as readRows } from './read'
+import { joins } from '../reading/comparability'
 import { readConversationView, viewParams } from '../views/conversation'
 import type { ViewState } from '../views/state'
 import { VIEW_PARAM } from '../views/view'
@@ -914,8 +916,15 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? new Set(tenIds.flatMap((id) => refs.get(id) ?? [])).size
     : null)
   const pair = await judgeAhead
-  const chip = pairChip(pair(prevMonth, month, INDUSTRY_AUDIENCE))
-  const board = buildConversationBoard(themes, n, month, segments, prevN != null ? { month: prevMonth, n: prevN } : null, {
+  const themesPair = pair(prevMonth, month, INDUSTRY_AUDIENCE)
+  const chip = pairChip(themesPair)
+  // A REFUSED THEMES PAIR CARRIES NO MONTH BEFORE AND NO FLAG (T0a, CV-10 and
+  // CV-11; the one condition), and a theme our own new searches found is
+  // never "New" (§B.4, `shownFlags`). The refusal is data here (`chip`) and
+  // is never printed.
+  const joined = joins(themesPair)
+  themes = themes.map((t) => ({ ...t, flags: shownFlags(t, { chip }) }))
+  const board = buildConversationBoard(themes, n, month, segments, joined && prevN != null ? { month: prevMonth, n: prevN } : null, {
     expanded,
     belowCount: pool.length - atTenIds.length,
     inThemes,

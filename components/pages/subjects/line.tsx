@@ -6,11 +6,10 @@ import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/char
 import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
-import { allRedescribed, endReadings, monthsReadOf, paneSides, sideLegend, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, endReadings, monthsReadOf, monthsShownOf, paneSides, sideLegend, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectsData } from '@/lib/pages/subjects'
 import type { CSSProperties } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import type { MonthPoint } from '@/lib/reading/series'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { InnerBlock } from '@/components/charts/week-bars'
@@ -318,9 +317,11 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
     )
   }
   const line = pane.marketLine ?? null
-  const read = monthsReadOf(line)
+  // A card per month read, and none across a refused step (T0a, SB-33): the
+  // months before the line's latest refused step are not set beside the
+  // reading month. No refusal chip.
+  const read = monthsShownOf(line)
   const lead = monthsLead(line)
-  const chip = pane.chip ? <PairChip words={pane.chip} mode={mode} /> : null
 
   if (read.length >= LINE_FROM && line) {
     const axis = data.chartAxis ?? data.axis
@@ -339,7 +340,6 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
           ctx={ctx}
           endLabels={mode !== 'print'}
         />
-        {chip}
         <SubjectWeekStrip pane={pane} mode={mode} />
       </BlockFrame>
     )
@@ -364,7 +364,6 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
             {cards.map((m) => <MonthCard key={m} month={m} state={states[m] ?? null} point={pointOf(m)} current={m === data.month.slice(0, 10)} future={!readMonths.includes(m)} mode={mode} />)}
           </tbody>
         </table>
-        {chip}
         {next && bracket ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, paddingTop: 6 }}>{`the first step joined as a line: ${longMonth(next.prevMonth)} to ${longMonth(next.month)}, ${nextPairNote(next)}`}</div> : null}
         <SubjectWeekStrip pane={pane} mode={mode} />
       </BlockFrame>
@@ -386,7 +385,6 @@ function MarketMonths({ data, mode, appUrl, ctx }: { data: SubjectsData; mode: R
           </div>
         ) : null}
         {cards.map((m) => <MonthCard key={m} month={m} state={states[m] ?? null} point={pointOf(m)} current={m === data.month.slice(0, 10)} future={!readMonths.includes(m)} mode={mode} />)}
-        {chip ? <div className="order-2 md:order-none md:row-start-3 md:[grid-column:var(--span)]" style={span(1, Math.max(2, readMonths.length + 1))}>{chip}</div> : null}
         {next && bracket ? (
           <p className="order-4 m-0 font-mono text-[13px] text-muted-foreground md:order-none md:row-start-3 md:text-center md:[grid-column:var(--span)]" style={span(from + 1, to + 2)}>
             <span className="md:hidden">the first step joined as a line: {longMonth(next.prevMonth)} to {longMonth(next.month)}, </span>

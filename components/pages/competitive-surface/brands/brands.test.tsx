@@ -92,17 +92,27 @@ describe('B1 · your name in your market', () => {
 })
 
 describe('B1 · brands in your market', () => {
-  it('counts each checked brand, the headline without any video our rival searches found, August beside', () => {
+  // T0 ruling U10 and T0a: one count a brand, named unprompted, on its one
+  // base; no "in all" (it took in our own brand searches' videos), no August
+  // beside it (a comparison the judge refuses on Sealand's September), no chip.
+  it('counts each checked brand once, without any video our brand searches found, on one base', () => {
+    for (const mode of MODES) {
+      const t = text(competitiveTopics.render(brandsFixture(), mode, ctx))
+      expect(t, mode).toContain('Brands we track')
+      expect(t, mode).toMatch(/Named unprompted\s*(·\s*)?of 516/)
+      expect(t, mode).not.toContain('In all')
+      expect(t, mode).not.toContain('of 654')
+      expect(t, mode).not.toContain('of 377')
+      expect(t, mode).toMatch(/Patagonia\s+13\b/)
+      expect(t, mode).not.toMatch(/Patagonia\s+13\s+45/)
+      expect(t, mode).toMatch(/The North Face\s+6\b/)
+      expect(t, mode).toMatch(/Cotopaxi\s+3\b/)
+      expect(t, mode).toContain('Freitag not counted yet')
+      expect(t, mode).not.toContain('not read as a change')
+      expect(render(competitiveTopics.render(brandsFixture(), mode, ctx))).not.toContain('data-pair-chip')
+    }
     const t = text(competitiveTopics.render(brandsFixture(), 'app', ctx))
     expect(t).toContain('Brands we track videos each came up in')
-    expect(t).toContain('Outside our brand searches of 516')
-    expect(t).toContain('In all of 654')
-    expect(t).toContain('In all of 377')
-    expect(t).toContain('Patagonia 13 45 24')
-    expect(t).toContain('The North Face 6 36 15')
-    expect(t).toContain('Cotopaxi 3 28 32')
-    expect(t).toContain('Freitag not counted yet')
-    expect(t).toContain('not read as a change: we changed our searches in September')
     expect(t).toContain('Ask about a brand →')
     // No watched list on staging (MF3), so no column for it.
     expect(t).not.toContain('Named, but not searched')

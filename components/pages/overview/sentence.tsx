@@ -14,7 +14,6 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { onScreenText } from '@/lib/pages/overview'
 import type { AnomalyLine, LedgerRow, OverviewData, Voice } from '@/lib/pages/overview'
 import { TokenProse } from '@/components/blocks/prose'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { surface } from '@/lib/nav'
 import { heroView, voicesHeading } from '@/lib/pages/overview-market'
 import { framedHeadline } from '@/lib/pages/market-frame'
@@ -105,19 +104,6 @@ export function decisionStamp(l: LedgerRow): string {
 export function lastUpdateMeta(data: OverviewData): string {
   const dates = data.bar.updateDates
   return dates.length > 0 ? `update of ${dates[dates.length - 1]}` : `no update yet in ${longMonth(data.bar.month)}`
-}
-
-/**
- * The month pair's refusal, under a size sentence (market-first WP1.5): "not
- * read as a change: we changed our searches in September". The preview's grey
- * pill with the ⊘ mark, on its own line under the sentence (deploy 1 review:
- * it was 12px muted text trailing the sentence on the hero, read as an
- * aside), marked `verdict` because it is the answer the comparison gave.
- */
-function RefusalChip({ chip, mode }: { chip: string; mode: RenderMode }) {
-  if (mode === 'email') return <PairChip words={chip} mode={mode} />
-  // The wrapper takes the row, so the pill keeps its own width under it.
-  return <span className="basis-full"><PairChip words={chip} mode={mode} /></span>
 }
 
 /** One voice: the quote behind its green-tinted rule, the video's own on-screen
@@ -222,7 +208,6 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
       ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><Parts parts={view.prev} figures={view.figures} mode={mode} /></div>
       : <span data-copy="level" className="font-mono text-[13px] tabular-nums text-muted-foreground"><Parts parts={view.prev} figures={view.figures} mode={mode} figureClassName="font-mono font-medium tabular-nums text-secondary-foreground" /></span>
   ) : null
-  const chip = s.chip ? <PairChip words={s.chip} mode={mode} /> : null
   const aside = lead && voices.length > 0 ? (
     email ? (
       <div style={{ marginTop: 12 }}>
@@ -255,7 +240,6 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
         {lede}
         {clause}
         {prev}
-        {chip}
         {aside}
       </BlockFrame>
     )
@@ -263,7 +247,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const main = (
     <div className="flex min-w-0 flex-col gap-6 pt-1">
       <div className="flex flex-col gap-4">{lede ? <div className="flex flex-col gap-2">{size}{lede}</div> : size}{clause}</div>
-      {prev || chip ? <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{prev}{chip}</div> : null}
+      {prev ? <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{prev}</div> : null}
     </div>
   )
   return (
@@ -327,7 +311,9 @@ export const overviewSentence: Block<OverviewData> = {
           // the column already holds the line to about that.
           className="m-0 max-w-[68ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
         />
-        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : s.chip ? <RefusalChip chip={s.chip} mode={mode} /> : null}
+        {/* No refusal chip under the size sentence (T0a: a refused
+            comparison is not shown and not explained). */}
+        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : null}
       </div>
     )
 
