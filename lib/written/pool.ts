@@ -3,13 +3,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { COMMENTS_READ_LANE } from '../pipeline/pass-a'
 import { rowWindow, type WindowColumns } from '../pipeline/run-bookkeeping'
-import { loadRegimeOpened } from '../pages/overview'
+import { HEADLINE_MAX_MAKER_SHARE, loadRegimeOpened } from '../pages/overview'
 import { THEME_FLOOR, themeFlags } from '../pages/overview-market/board'
 import { accountKey } from '../pages/overview-market/voices'
 import { loadMemberInsightIdsBySubject } from '../pages/subjects'
 import { loadRegrouped } from '../pages/voice-surface'
 import { gateFor } from '../quote-context'
-import { pickEligible, quoteGate } from '../quote-gate'
+import { pickEligible, quoteGate, threadOf } from '../quote-gate'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading } from '../reading/read'
 import { INDUSTRY_AUDIENCE } from '../rivals'
@@ -28,7 +28,9 @@ import type { Lens, PoolCandidate, QuoteRef, WeekPool } from './types'
 // with `gateFor(clientId)` and the theme block's options (`claim` the label,
 // `requireRelevance`, `kind` the theme's kind), exactly as research C replayed
 // it. A video a maker posted (`segments_for_videos` says 'maker') never
-// counts: it is set aside before the gate, which refuses it anyway.
+// counts: it is set aside before the gate, which refuses it anyway. And a
+// theme whose window videos are more than a quarter makers' is not a
+// candidate at all (`isMakerLed`, the front page's own line).
 //
 // COUNTED THE WAY THE PRODUCT COUNTS (research C §1), and by the product's own
 // functions where one exists:
@@ -62,9 +64,16 @@ export const POOL_THIN_BELOW = 3
 export const POOL_QUOTES = 3
 /** Insight descriptions kept per candidate. */
 export const POOL_NOTES = 8
-/** A theme is part of a subject when that subject holds at least this share of
- *  the theme's member insights. */
-export const SUBJECT_SHARE_FLOOR = 0.3
+/**
+ * A theme is part of a subject when the subject holding the most of the
+ * theme's member insights holds at least this many of them AND at least this
+ * share (the lead's ruling, 30 Sep). Membership is precision-first, so its
+ * recall is low: on Sealand's 27 Sep run only 3 of the 16 insights in "Price
+ * feels hard to justify" are Price members, and a 30% floor left four of six
+ * candidates with no subject at all.
+ */
+export const SUBJECT_MIN_MEMBERS = 3
+export const SUBJECT_SHARE_FLOOR = 0.15
 /** Where the month rows are read from: every stored month, so "heard before"
  *  can look at all of them (lib/reading/reading-view.ts reads from here too). */
 const FIRST_MONTH = '2019-01-01'
@@ -97,6 +106,51 @@ export function lensesOf(kinds: readonly string[]): Lens[] {
   return LENS_ORDER.filter((l) => reached.has(l))
 }
 
+// ---- Kinds -------------------------------------------------------------------------
+
+/** Kinds a quote may never come from when a theme's evidence is mostly the
+ *  other: praise against objection and pain point, both ways. The gate's own
+ *  text rule (`contradictsKind`) only guards a problem block from pure praise;
+ *  this guards the praise block too, by the insight's kind. */
+const CONTRADICTING_KINDS: Readonly<Record<string, readonly string[]>> = {
+  praise: ['objection', 'pain_point'],
+  objection: ['praise'],
+  pain_point: ['praise'],
+}
+
+/** Does a citation of kind `kind` contradict a theme whose evidence is mostly
+ *  `dominant`? */
+export function contradictsDominant(kind: string | null | undefined, dominant: string | null | undefined): boolean {
+  if (!kind || !dominant) return false
+  return (CONTRADICTING_KINDS[dominant] ?? []).includes(kind)
+}
+
+/**
+ * The most common insight kind among these citations, counted in distinct
+ * videos (the product's unit). A tie goes to the theme's own kind, then to the
+ * name, so the answer never depends on how the rows came back. Null where no
+ * citation carries a kind. Pure.
+ */
+export function dominantKindOf(evidence: readonly Pick<DatedEvidence, 'kind' | 'video'>[], themeKind: string | null = null): string | null {
+  const videosByKind = new Map<string, Set<string>>()
+  for (const e of evidence) {
+    if (!e.kind) continue
+    const set = videosByKind.get(e.kind) ?? new Set<string>()
+    set.add(e.video.uuid)
+    videosByKind.set(e.kind, set)
+  }
+  let best: string | null = null
+  let bestN = 0
+  for (const [kind, set] of [...videosByKind.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const n = set.size
+    if (n > bestN || (n === bestN && kind === themeKind)) {
+      best = kind
+      bestN = n
+    }
+  }
+  return best
+}
+
 // ---- One theme's week, judged -----------------------------------------------------
 
 /** A theme of the run, as the pool reads it. */
@@ -119,10 +173,33 @@ export interface PoolTheme {
 export interface ThemeJudgement {
   theme: PoolTheme
   gatedVideos: number
+  /** The gated videos (`videos.id`), sorted. */
+  gatedVideoIds: string[]
   quoteRefs: QuoteRef[]
   kinds: string[]
+  dominantKind: string | null
   notes: string[]
+  /** The category videos on the read lane with a citation dated in the
+   *  window, makers' included: the maker share's denominator. */
+  seenVideos: number
+  /** …of which a reader marked the video a maker's (`segments_for_videos`). */
+  makerVideos: number
 }
+
+/** A theme's maker share of its window videos (0 where none were seen). */
+export const makerShareOf = (j: Pick<ThemeJudgement, 'seenVideos' | 'makerVideos'>): number =>
+  j.seenVideos > 0 ? j.makerVideos / j.seenVideos : 0
+
+/**
+ * Is the theme maker-led? Its maker share of the window's videos over the
+ * product's own line for what may lead the front page (`HEADLINE_MAX_MAKER_SHARE`,
+ * lib/pages/overview.ts). A maker's video never counts toward a theme's gated
+ * videos anyway; this takes out the theme whose conversation is mostly makers
+ * talking to makers, however many market videos it also reaches ("Admiration
+ * for handmade bag design", 27 Sep: 25 of 42).
+ */
+export const isMakerLed = (j: Pick<ThemeJudgement, 'seenVideos' | 'makerVideos'>): boolean =>
+  makerShareOf(j) > HEADLINE_MAX_MAKER_SHARE
 
 /** May this citation count toward a theme's week at all? A category video on
  *  the read lane (M13: `analyzed_lane = 'full'`, `COMMENTS_READ_LANE`) that no
@@ -141,26 +218,48 @@ export function isOwnAccount(e: Pick<DatedEvidence, 'author' | 'video'>): boolea
 
 /**
  * One theme's week: how many videos carry a quote the strict gate passes, the
- * quotes it may offer (best first, one per thread, never the video's own
- * account), and the kinds and descriptions of the insights behind those
- * quotes. `evidence` may hold other themes' rows: only this theme's member
- * insights are read. Pure.
+ * quotes it may offer, and the kinds and descriptions of the insights behind
+ * those quotes. `evidence` may hold other themes' rows: only this theme's
+ * member insights are read. Pure.
+ *
+ * THE QUOTES (best first, one per thread, never the video's own account) are
+ * kind-matched: those whose insight is of the theme's dominant kind first,
+ * then any other kind that does not contradict it, never one that does
+ * (praise against objection or pain point). Each passes the strict gate the
+ * theme was judged under AND, where the dominant kind is another, the gate
+ * under that kind too, so a problem-led theme never quotes pure praise.
  */
 export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonly DatedEvidence[]): ThemeJudgement {
   const gate = gateFor(clientId, { claim: theme.label, requireRelevance: true, kind: theme.kind })
   const members = new Set(theme.memberIds)
   // The evidence's own order: relevance rank, then id (the theme voices' order),
   // so the choice does not depend on how the rows came back.
-  const mine = evidence
-    .filter((e) => members.has(e.insightId) && countsForTheWeek(e))
+  const onLane = evidence
+    .filter((e) => members.has(e.insightId) && e.video.audience === INDUSTRY_AUDIENCE && e.video.lane === COMMENTS_READ_LANE)
     .sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
+  const mine = onLane.filter(countsForTheWeek)
+  const makerVideos = new Set(onLane.filter((e) => e.context?.segment === 'maker').map((e) => e.video.uuid)).size
   const passed: { e: DatedEvidence; score: number }[] = []
   for (const e of mine) {
     const verdict = quoteGate(gateInputOf(e), gate)
     if (verdict.ok) passed.push({ e, score: verdict.score })
   }
-  const gatedVideos = new Set(passed.map((p) => p.e.video.uuid)).size
-  const quoteRefs = pickEligible(mine.filter((e) => !isOwnAccount(e)), gateInputOf, POOL_QUOTES, gate).map(refOf)
+  const gatedVideoIds = [...new Set(passed.map((p) => p.e.video.uuid))].sort()
+  const gatedVideos = gatedVideoIds.length
+
+  const dominantKind = dominantKindOf(mine, theme.kind)
+  const dominantGate = dominantKind && dominantKind !== theme.kind ? { ...gate, kind: dominantKind } : null
+  const quotable = mine.filter((e) =>
+    !isOwnAccount(e) &&
+    !contradictsDominant(e.kind, dominantKind) &&
+    (!dominantGate || quoteGate(gateInputOf(e), dominantGate).ok))
+  const used = new Set<string>()
+  const first = pickEligible(quotable.filter((e) => e.kind === dominantKind), gateInputOf, POOL_QUOTES, { ...gate, used })
+  const threads = new Set(first.map((e) => threadOf(e.context) ?? e.video.uuid))
+  const rest = first.length < POOL_QUOTES
+    ? pickEligible(quotable.filter((e) => e.kind !== dominantKind && !threads.has(threadOf(e.context) ?? e.video.uuid)), gateInputOf, POOL_QUOTES - first.length, { ...gate, used })
+    : []
+  const quoteRefs = [...first, ...rest].map(refOf)
 
   // The kinds seen in the gated material, by the videos each is seen on.
   const videosByKind = new Map<string, Set<string>>()
@@ -192,27 +291,27 @@ export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonl
     notes.push(b.description)
     if (notes.length >= POOL_NOTES) break
   }
-  return { theme, gatedVideos, quoteRefs, kinds, notes }
+  return { theme, gatedVideos, gatedVideoIds, quoteRefs, kinds, dominantKind, notes, seenVideos: new Set(onLane.map((e) => e.video.uuid)).size, makerVideos }
 }
 
 /** The eligible themes, ranked: gated videos, then the week's videos, then
- *  the registry id so the order never depends on how the rows came back.
- *  Uncapped (the cap is `buildWeekPool`'s): a thin week is judged on this
- *  whole list. Pure. */
+ *  the registry id so the order never depends on how the rows came back. A
+ *  maker-led theme is not eligible (`isMakerLed`). Uncapped (the cap is
+ *  `buildWeekPool`'s): a thin week is judged on this whole list. Pure. */
 export function rankEligible(judged: readonly ThemeJudgement[]): ThemeJudgement[] {
   return judged
-    .filter((j) => j.gatedVideos >= POOL_MIN_VIDEOS)
+    .filter((j) => j.gatedVideos >= POOL_MIN_VIDEOS && !isMakerLed(j))
     .sort((a, b) => b.gatedVideos - a.gatedVideos || b.theme.weekVideos - a.theme.weekVideos || a.theme.themeId.localeCompare(b.theme.themeId))
 }
 
 // ---- Theme → subject -------------------------------------------------------------
 
 /**
- * The subject a theme is part of: the one whose members hold the largest share
- * of the theme's member insights (`subject_memberships.member`), or null where
- * that share is under `SUBJECT_SHARE_FLOOR`. The share is of the theme's
- * member ids as the run stored them. A tie goes to the subject earlier in
- * `order` (the subjects' own order), then by id. Pure.
+ * The subject a theme is part of: the one holding the most of the theme's
+ * member insights (`subject_memberships.member`), where it holds at least
+ * `SUBJECT_MIN_MEMBERS` of them and at least `SUBJECT_SHARE_FLOOR` of the
+ * theme's member ids as the run stored them; else null. A tie goes to the
+ * subject earlier in `order` (the subjects' own order), then by id. Pure.
  */
 export function subjectForTheme(
   memberIds: readonly string[],
@@ -235,7 +334,7 @@ export function subjectForTheme(
       bestN = n
     }
   }
-  return best != null && bestN / members.length >= SUBJECT_SHARE_FLOOR ? best : null
+  return best != null && bestN >= SUBJECT_MIN_MEMBERS && bestN / members.length >= SUBJECT_SHARE_FLOOR ? best : null
 }
 
 /** Insight id → the subjects it is a member of, from subject → members. */
@@ -283,9 +382,11 @@ export function buildWeekPool(head: PoolHead, ranked: readonly ThemeJudgement[],
       label: j.theme.label,
       description: j.theme.description,
       kinds: j.kinds,
+      dominantKind: j.dominantKind,
       lenses: lensesOf(j.kinds),
       weekVideos: j.theme.weekVideos,
       gatedVideos: j.gatedVideos,
+      gatedVideoIds: j.gatedVideoIds,
       monthK,
       monthN: head.monthVideos,
       subjectId: facts.subjectOf.get(id) ?? null,

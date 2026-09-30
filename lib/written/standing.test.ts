@@ -61,15 +61,18 @@ const AUG_SEP = (aug: [number, number], sep: [number, number]): MarketPoint[] =>
 
 describe('the ladder: rungOf', () => {
   const base = { verdict: null, direction: null } as Pick<StandingFact, 'verdict' | 'direction'>
-  it('stops a provisional subject at the level whatever it carries', () => {
-    const moved = subjectReading({ name: 'x', points: AUG_SEP([66, 378], [196, 852]), pair: joinEveryPair }).reading.verdict
-    expect(rungOf({ calibration: 'provisional', verdict: moved, direction: 'growing' })).toBe('level')
+  it('prints nothing for anything but a ready subject, whatever it carries', () => {
+    const moved = subjectReading({ name: 'x', points: AUG_SEP([66, 378], [196, 852]), pair: joinEveryPair }).reading?.verdict ?? null
+    expect(rungOf({ calibration: 'provisional', verdict: moved, direction: 'growing' })).toBe('none')
+    expect(rungOf({ calibration: 'unread', ...base })).toBe('none')
+    expect(rungOf({ calibration: 'failed', ...base })).toBe('none')
+    expect(rungOf({ calibration: 'ready', ...base, level: null })).toBe('none')
   })
   it('is the level with no comparable pair', () => {
     expect(rungOf({ calibration: 'ready', ...base })).toBe('level')
   })
   it('flat is not a direction to print', () => {
-    const moved = subjectReading({ name: 'x', points: AUG_SEP([66, 378], [196, 852]), pair: joinEveryPair }).reading.verdict
+    const moved = subjectReading({ name: 'x', points: AUG_SEP([66, 378], [196, 852]), pair: joinEveryPair }).reading?.verdict ?? null
     expect(rungOf({ calibration: 'ready', verdict: moved, direction: 'flat' })).toBe('changed')
     expect(rungOf({ calibration: 'ready', verdict: null, direction: 'flat' })).toBe('level')
   })
@@ -83,7 +86,7 @@ describe('factsFromReadings: each rung, on the product readings', () => {
       subjectReading({ name: 'Comfort', points: AUG_SEP([27, 378], [58, 852]) }),
     ]
     // The product itself refuses it; a comparison would otherwise say "moved".
-    expect(readings[0].reading.verdict?.state).toBe('refused')
+    expect(readings[0].reading?.verdict?.state).toBe('refused')
     const facts = factsFromReadings(readings, marketComparable(refuseEveryPair, SEP))
     expect(facts.map((f) => [f.name, f.rung, f.verdict, f.direction, f.rank])).toEqual([
       ['Buying & delivery', 'level', null, null, 1],
@@ -121,23 +124,42 @@ describe('factsFromReadings: each rung, on the product readings', () => {
     expect(fact.rung).toBe('direction')
   })
 
-  it('a provisional subject keeps its level and earns nothing more; a failed or unread one is left out', () => {
+  it('every tracked subject appears: provisional keeps its level unprinted, unread has none, failed is the name alone', () => {
     const facts = factsFromReadings([
       subjectReading({ name: 'Price', calibration: 'provisional', points: AUG_SEP([6, 378], [31, 852]), pair: joinEveryPair }),
       subjectReading({ name: 'Repair & warranty', calibration: 'failed', points: AUG_SEP([15, 378], [41, 852]), pair: joinEveryPair }),
       subjectReading({ name: 'Community & purpose', points: [{ month: '2026-08-01', k: 4, n: 378 }, { month: SEP, k: null, n: 852 }] }),
+      subjectReading({ name: 'Comfort', points: AUG_SEP([27, 378], [58, 852]) }),
     ], true)
-    expect(facts.map((f) => f.name)).toEqual(['Price'])
-    expect(facts[0]).toMatchObject({ calibration: 'provisional', rung: 'level', verdict: null, direction: null, level: { k: 31, n: 852 } })
+    expect(facts.map((f) => [f.name, f.calibration, f.rung, f.rank])).toEqual([
+      ['Comfort', 'ready', 'level', 1],
+      ['Price', 'provisional', 'none', 2],
+      ['Community & purpose', 'unread', 'none', 0],
+      ['Repair & warranty', 'failed', 'none', 0],
+    ])
+    expect(facts[1]).toMatchObject({ verdict: null, direction: null, level: { k: 31, n: 852 } })
+    expect(facts[2]).toMatchObject({ level: null, verdict: null, direction: null })
+    expect(facts[2].trail).toEqual([{ month: '2026-08-01', k: 4, n: 378 }, { month: SEP, k: null, n: 852 }])
+    // Name only: no figure, no trail, no material. Nothing says why.
+    expect(facts[3]).toEqual({
+      subjectId: facts[3].subjectId, name: 'Repair & warranty', calibration: 'failed', level: null, rank: 0, trail: [],
+      verdict: null, direction: null, rung: 'none', contents: [], notes: [], quoteRef: null,
+    })
   })
 
-  it('ranks by the level, largest first, ties by name', () => {
+  it('a failed subject that was never read is still listed, by name', () => {
+    const facts = factsFromReadings([{ subject: { id: 'sf', name: 'Repair & warranty' }, calibration: 'failed', reading: null }], false)
+    expect(facts).toMatchObject([{ subjectId: 'sf', name: 'Repair & warranty', calibration: 'failed', level: null, rung: 'none' }])
+  })
+
+  it('ranks by the level among the subjects that have one, largest first, ties by name', () => {
     const facts = factsFromReadings([
       subjectReading({ name: 'b', points: AUG_SEP([1, 378], [40, 852]) }),
+      subjectReading({ name: 'd', points: [{ month: SEP, k: null, n: 852 }] }),
       subjectReading({ name: 'a', points: AUG_SEP([1, 378], [40, 852]) }),
       subjectReading({ name: 'c', calibration: 'provisional', points: AUG_SEP([1, 378], [90, 852]) }),
     ], false)
-    expect(facts.map((f) => [f.name, f.rank])).toEqual([['c', 1], ['a', 2], ['b', 3]])
+    expect(facts.map((f) => [f.name, f.rank])).toEqual([['c', 1], ['a', 2], ['b', 3], ['d', 0]])
   })
 })
 
@@ -181,9 +203,11 @@ describe('standingLine: one code sentence per rung', () => {
     expect(rendered(standingLine(f, '2026-12-01'))).toBe(`24% of 377 videos in your market in December, the biggest subject; growing, ${DIRECTION_RUN_LABEL}.`)
   })
 
-  it('a provisional subject has no sentence: its figure is not one we stand behind (§0a)', () => {
-    const f = one({ name: 'Price', calibration: 'provisional', points: AUG_SEP([6, 378], [31, 852]) }, false)
-    expect(standingLine(f, SEP)).toEqual({ body: '', figures: {} })
+  it('a provisional, unread or failed subject has no sentence: its figure is not one we stand behind (§0a)', () => {
+    const empty = { body: '', figures: {} }
+    expect(standingLine(one({ name: 'Price', calibration: 'provisional', points: AUG_SEP([6, 378], [31, 852]) }, false), SEP)).toEqual(empty)
+    expect(standingLine(one({ name: 'Community', points: [{ month: SEP, k: null, n: 852 }] }, false), SEP)).toEqual(empty)
+    expect(standingLine(one({ name: 'Repair', calibration: 'failed', points: AUG_SEP([15, 378], [41, 852]) }, false), SEP)).toEqual(empty)
   })
 
   it('past the twelfth, no rank is said', () => {
@@ -287,21 +311,21 @@ describe('subjectMaterial', () => {
 describe('contentsOf', () => {
   const subjectsOf = invertMembers(new Map([
     ['comfort', ['i1', 'i2', 'i3', 'i4', 'i5', 'i6']],
-    ['price', ['p1', 'p2']],
+    ['price', ['p1', 'p2', 'p3']],
   ]))
   it('names the themes inside the subject heard this month, the most of its insights first', () => {
     const themes = [
       { label: 'Straps and padding', memberIds: ['i1', 'i2', 'i3', 'x1'] },          // comfort 3 of 4, 2 heard
-      { label: 'Heavy packs hurt', memberIds: ['i4', 'i5', 'x2'] },                  // comfort 2 of 3, 1 heard
-      { label: 'Comfort not heard this month', memberIds: ['i6', 'x3'] },            // comfort, 0 heard
-      { label: 'Mostly about price', memberIds: ['p1', 'p2', 'i1'] },                // price's, not comfort's
-      { label: 'A little comfort', memberIds: ['i2', 'x4', 'x5', 'x6', 'x7'] },      // comfort 1 of 5: under 30%
+      { label: 'Heavy packs hurt', memberIds: ['i4', 'i5', 'i6', 'x2'] },            // comfort 3 of 4, 1 heard
+      { label: 'Comfort not heard this month', memberIds: ['i5', 'i6', 'i3', 'x3'] }, // comfort, 0 heard
+      { label: 'Mostly about price', memberIds: ['p1', 'p2', 'p3', 'i1'] },          // price's, not comfort's
+      { label: 'A little comfort', memberIds: ['i2', 'x4', 'x5', 'x6', 'x7'] },      // comfort 1 of 5: under three members
     ]
     expect(contentsOf('comfort', new Set(['i1', 'i2', 'i4']), themes, subjectsOf, ['comfort', 'price'])).toEqual(['Straps and padding', 'Heavy packs hurt'])
   })
   it('names at most five', () => {
-    const themes = Array.from({ length: 8 }, (_, i) => ({ label: `T${i}`, memberIds: [`i${i}`] }))
-    const members = invertMembers(new Map([['s', themes.map((t) => t.memberIds[0])]]))
+    const themes = Array.from({ length: 8 }, (_, i) => ({ label: `T${i}`, memberIds: [`a${i}`, `b${i}`, `c${i}`] }))
+    const members = invertMembers(new Map([['s', themes.flatMap((t) => t.memberIds)]]))
     expect(contentsOf('s', new Set(themes.map((t) => t.memberIds[0])), themes, members, ['s'])).toHaveLength(5)
   })
 })

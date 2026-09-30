@@ -80,7 +80,7 @@ function printPool(pool: WeekPool): void {
     console.log(
       `  ${c.id.padEnd(4)} ${c.label}\n` +
         `       gated ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN}` +
-        ` · kinds ${c.kinds.join(', ') || '—'} · lenses ${c.lenses.join(', ')}` +
+        ` · kinds ${c.kinds.join(', ') || '—'} (mostly ${c.dominantKind ?? '—'}) · lenses ${c.lenses.join(', ')}` +
         ` · subject ${c.subjectId ?? 'none'} · ${c.isNew ? 'NEW' : 'heard before'} · ${c.quoteRefs.length} quote(s) · ${c.notes.length} note(s)`,
     )
   }
@@ -171,11 +171,11 @@ function printStanding(facts: readonly StandingFact[], month: string): void {
   for (const f of facts) {
     const line = standingLine(f, month)
     console.log(
-      `  #${f.rank} ${f.name} [${f.calibration}] rung=${f.rung} level ${f.level.k} of ${f.level.n}` +
+      `  #${f.rank || '-'} ${f.name} [${f.calibration}] rung=${f.rung} level ${f.level ? `${f.level.k} of ${f.level.n}` : 'none'}` +
         ` · verdict ${f.verdict ? f.verdict.state : 'none (no comparable pair)'} · direction ${f.direction ?? 'none'}` +
         ` · trail ${f.trail.filter((p) => p.k != null).map((p) => `${p.month.slice(0, 7)} ${p.k}/${p.n}`).join(', ')}`,
     )
-    console.log(`       line: ${line.body ? coverPlainText(line.body, line.figures) : '(none: its figure does not print)'}`)
+    console.log(`       line: ${line.body ? coverPlainText(line.body, line.figures) : f.calibration === 'failed' ? '(name only)' : '(none: its figure does not print)'}`)
     console.log(`       contents: ${f.contents.join(' · ') || '—'} · ${f.notes.length} note(s) · quote ${f.quoteRef ? `${f.quoteRef.ref} ${f.quoteRef.date}` : 'none'}`)
   }
   const ready = facts.filter((f) => f.calibration === 'ready')
@@ -190,6 +190,7 @@ async function compareSubjectsPage(db: SupabaseClient, clientId: string, facts: 
   console.log(`\nThe Subjects page reads ${railMonth} (market n ${page.list.base?.n ?? '?'}):`)
   let mismatches = 0
   for (const f of facts) {
+    if (!f.level) continue
     const row = page.list.rows.find((r) => r.id === f.subjectId)
     const same = row?.market != null && row.market.k === f.level.k && row.market.n === f.level.n
     if (!same) mismatches++

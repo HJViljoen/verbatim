@@ -24,7 +24,7 @@ import { loadActiveSubjects } from '../subjects/membership'
 import { isMissingSubjects, type Subject } from '../subjects/types'
 import { gateInputOf, loadDatedEvidence, refOf, type DatedEvidence } from './evidence'
 import { invertMembers, isOwnAccount, POOL_NOTES, subjectForTheme } from './pool'
-import type { QuoteRef, StandingFact, StandingRung, TokenSentence } from './types'
+import type { QuoteRef, StandingCalibration, StandingFact, StandingRung, TokenSentence } from './types'
 
 // Where the market stands (plan T2): each confirmed subject's level, its place
 // among the subjects, and the highest rung of the ladder (decision D1) the
@@ -47,10 +47,16 @@ import type { QuoteRef, StandingFact, StandingRung, TokenSentence } from './type
 // (the Subjects voices' gate: the subject's name and description as the claim,
 // relevance required), from this week where there is one.
 //
-// THE CLIENT-FACING RULE ON A PROVISIONAL SUBJECT (§0a, "a figure we can't
-// stand behind … doesn't print"): its fact carries the level, as the Studio's
-// workings may read it, but `standingLine` writes no sentence for it. The
-// subject still appears, with what people say about it.
+// EVERY TRACKED SUBJECT APPEARS (§0a.2, the T1/T2 fixups of 30 Sep): each
+// active subject has a fact, whatever it can print. A figure prints only for
+// a READY subject (§0a's one condition, "a figure we can't stand behind …
+// doesn't print"): a provisional subject's fact keeps its level for the
+// Studio's workings, an unread one has none, and for both `standingLine`
+// writes nothing (`rung: 'none'`); each still appears with what people say
+// about it where it has a gated quote, contents or notes. A FAILED subject's
+// membership cannot be trusted, so its fact is the name alone: no level, no
+// trail, no material. Renderers list name-only subjects in one quiet "Also
+// following" line and never say why.
 
 /** The rank's words, "never a digit in prose". Past the twelfth nothing is
  *  said about rank. */
@@ -65,16 +71,17 @@ export const STANDING_CONTENTS = 5
 // ---- The ladder -----------------------------------------------------------------
 
 /**
- * The highest rung a subject's data earns. A provisional subject stops at the
- * level (decision C). A direction is `directionWord`'s growing or fading only
- * (flat is a reading with nothing to say, which the front page does not print
- * either). A change needs a verdict on a comparable pair that answered (moved,
- * or no clear change) and is not on a thin month: the thin month's caveat is
- * a sentence about our reading that the client does not see (§0a), so the
- * comparison is left out rather than printed without it.
+ * The highest rung a subject's data earns. Only a ready subject with a level
+ * earns any: every other state is `none` (no figure prints). A direction is
+ * `directionWord`'s growing or fading only (flat is a reading with nothing to
+ * say, which the front page does not print either). A change needs a verdict
+ * on a comparable pair that answered (moved, or no clear change) and is not on
+ * a thin month: the thin month's caveat is a sentence about our reading that
+ * the client does not see (§0a), so the comparison is left out rather than
+ * printed without it.
  */
-export function rungOf(f: Pick<StandingFact, 'calibration' | 'verdict' | 'direction'>): StandingRung {
-  if (f.calibration !== 'ready') return 'level'
+export function rungOf(f: Pick<StandingFact, 'calibration' | 'verdict' | 'direction'> & { level?: StandingFact['level'] }): StandingRung {
+  if (f.calibration !== 'ready' || f.level === null) return 'none'
   if (f.direction === 'growing' || f.direction === 'fading') return 'direction'
   if (f.verdict && isAnswer(f.verdict.state) && !f.verdict.flags.includes('thin')) return 'changed'
   return 'level'
@@ -92,13 +99,13 @@ export function standingKey(f: Pick<StandingFact, 'name' | 'subjectId'>): string
  *   changed   "… ; up on August, beyond the normal swing."  (or "down on", or "no clear change on August")
  *   direction "… ; growing, 3rd month."
  * The level prints as `levelText` prints it: a whole percent at 100 videos,
- * the count under, always "of N". A provisional subject has no sentence
- * (§0a). It is rendered in a verdict node, the only place a direction word may
- * stand.
+ * the count under, always "of N". Anything but a ready subject with a level
+ * (`rung: 'none'`) has no sentence (§0a). It is rendered in a verdict node,
+ * the only place a direction word may stand.
  */
 export function standingLine(f: StandingFact, month: string): TokenSentence {
   const empty: TokenSentence = { body: '', figures: {} }
-  if (f.calibration !== 'ready') return empty
+  if (f.calibration !== 'ready' || f.rung === 'none' || !f.level) return empty
   const level = levelText(f.level.k, f.level.n)
   if (!level) return empty
   const m = monthStartOf(month)
@@ -125,49 +132,74 @@ export function standingLine(f: StandingFact, month: string): TokenSentence {
 
 // ---- From the readings ----------------------------------------------------------------
 
-/** What `loadObjectReadings` answered for one subject, and its state. */
+/** What `loadObjectReadings` answered for one subject, and its state. A
+ *  failed subject is never read (`reading: null`): it prints nothing. */
 export interface SubjectReading {
   subject: Pick<Subject, 'id' | 'name'>
   calibration: SubjectCalibration
-  reading: ObjectReading
+  reading: ObjectReading | null
 }
 
+/** The order facts come in: the subjects with a level, largest first (the
+ *  Subjects rail's order), then the unread, then the failed, each by name. */
+const STATE_ORDER: Record<StandingCalibration, number> = { ready: 0, provisional: 0, unread: 1, failed: 2 }
+
 /**
- * The facts the readings earn, ranked, before the subject's material is read.
- * A failed subject (decision C) and a subject with no level in the month (not
- * read, or read before it was named) are left out: there is nothing true to
- * say of its size. `comparable` is the market pair judge on the month and the
- * one before: where it refuses, the verdict is null ("no comparable pair").
- * Ranked by the level, largest first, ties by name: the Subjects rail's order.
- * Pure.
+ * The facts the readings earn, one for EVERY subject handed in, ranked,
+ * before the subject's material is read.
+ *  · failed (decision C): the name only;
+ *  · no level in the month (not read, or read before it was named): `unread`,
+ *    with its trail and no level;
+ *  · provisional: its level, no verdict, no direction, `rung: 'none'`;
+ *  · ready: its level, and the verdict and direction the readings earned.
+ * `comparable` is the market pair judge on the month and the one before:
+ * where it refuses, the verdict is null ("no comparable pair"). The rank is by
+ * level among the subjects that have one (ready and provisional, as the
+ * Subjects rail ranks them), ties by name; 0 for the rest. Pure.
  */
 export function factsFromReadings(readings: readonly SubjectReading[], comparable: boolean): StandingFact[] {
   const facts: StandingFact[] = []
   for (const { subject, calibration, reading } of readings) {
-    if (calibration === 'failed') continue
-    const curr = reading.curr
-    if (reading.state !== 'read' || !curr || curr.k == null || curr.n == null || curr.n <= 0) continue
-    const verdict = calibration === 'ready' && comparable ? reading.verdict : null
-    const direction = calibration === 'ready' ? reading.direction : null
-    const fact: StandingFact = {
+    const bare: StandingFact = {
       subjectId: subject.id,
       name: subject.name,
       calibration,
-      level: { k: curr.k, n: curr.n },
+      level: null,
       rank: 0,
-      trail: reading.trail.map((p) => ({ month: monthStartOf(p.month), k: p.k, n: p.n })),
-      verdict,
-      direction,
-      rung: 'level',
+      trail: [],
+      verdict: null,
+      direction: null,
+      rung: 'none',
       contents: [],
       notes: [],
       quoteRef: null,
     }
+    if (calibration === 'failed' || !reading) {
+      facts.push({ ...bare, calibration: 'failed' })
+      continue
+    }
+    const trail = reading.trail.map((p) => ({ month: monthStartOf(p.month), k: p.k, n: p.n }))
+    const curr = reading.curr
+    if (reading.state !== 'read' || !curr || curr.k == null || curr.n == null || curr.n <= 0) {
+      facts.push({ ...bare, calibration: 'unread', trail })
+      continue
+    }
+    const fact: StandingFact = {
+      ...bare,
+      level: { k: curr.k, n: curr.n },
+      trail,
+      verdict: calibration === 'ready' && comparable ? reading.verdict : null,
+      direction: calibration === 'ready' ? reading.direction : null,
+    }
     fact.rung = rungOf(fact)
     facts.push(fact)
   }
-  facts.sort((a, b) => b.level.k - a.level.k || a.name.localeCompare(b.name))
-  facts.forEach((f, i) => { f.rank = i + 1 })
+  facts.sort((a, b) =>
+    STATE_ORDER[a.calibration] - STATE_ORDER[b.calibration] ||
+    (b.level?.k ?? 0) - (a.level?.k ?? 0) ||
+    a.name.localeCompare(b.name))
+  let rank = 0
+  for (const f of facts) f.rank = f.level ? ++rank : 0
   return facts
 }
 
@@ -276,32 +308,38 @@ export async function loadStanding(
     if (isMissingSubjects(error)) return []
     throw error
   }
-  const calibrated = subjects.map((s) => ({ s, calibration: subjectCalibration(s) })).filter((x) => x.calibration !== 'failed')
-  if (calibrated.length === 0) return []
+  if (subjects.length === 0) return []
+  const all = subjects.map((s) => ({ s, calibration: subjectCalibration(s) }))
+  // A failed subject is never read: it is the name alone.
+  const calibrated = all.filter((x) => x.calibration !== 'failed')
 
   const [pair, rivals] = await Promise.all([
     loadAppPairOn(readingHandle(clientId, admin), asOf),
     loadMarketRivalAudiences(admin, clientId).then((r) => r ?? []),
   ])
-  const readings = await loadObjectReadings(admin, {
-    clientId,
-    objects: calibrated.map(({ s, calibration }) => ({ kind: 'subject' as const, id: s.id, label: s.name, calibration })),
-    month,
-    pair,
-    asOf,
-    rivalAudiences: rivals,
-  })
+  const readings = calibrated.length > 0
+    ? await loadObjectReadings(admin, {
+        clientId,
+        objects: calibrated.map(({ s, calibration }) => ({ kind: 'subject' as const, id: s.id, label: s.name, calibration })),
+        month,
+        pair,
+        asOf,
+        rivalAudiences: rivals,
+      })
+    : []
+  const readingOf = new Map(calibrated.map(({ s }, i) => [s.id, readings[i] ?? null]))
   const facts = factsFromReadings(
-    calibrated.map(({ s, calibration }, i) => ({ subject: s, calibration, reading: readings[i] })),
+    all.map(({ s, calibration }) => ({ subject: s, calibration, reading: readingOf.get(s.id) ?? null })),
     marketComparable(pair, month),
   )
-  if (facts.length === 0) return facts
 
-  // The month's material: every printed subject's member insights, their
-  // comment evidence dated in the month, and the run's themes.
+  // The month's material: every subject's member insights but a failed one's
+  // (its membership is what cannot be trusted), their comment evidence dated
+  // in the month, and the run's themes.
+  const printed = new Set(facts.filter((f) => f.calibration !== 'failed').map((f) => f.subjectId))
+  if (printed.size === 0) return facts
   const bySubject = await loadMemberInsightIdsBySubject(admin, clientId, subjects.map((s) => s.id))
   if (!bySubject) return facts
-  const printed = new Set(facts.map((f) => f.subjectId))
   const [evidence, themes] = await Promise.all([
     loadDatedEvidence(admin, clientId, [...bySubject.entries()].filter(([id]) => printed.has(id)).flatMap(([, ids]) => ids), {
       from: `${month}T00:00:00.000Z`,
@@ -315,7 +353,7 @@ export async function loadStanding(
   const byId = new Map(subjects.map((s) => [s.id, s]))
   for (const f of facts) {
     const s = byId.get(f.subjectId)
-    if (!s) continue
+    if (!s || !printed.has(f.subjectId)) continue
     const m = subjectMaterial({ gate: subjectGate(clientId, s), memberIds: new Set(bySubject.get(s.id) ?? []), evidence, market, window })
     f.notes = m.notes
     f.quoteRef = m.quoteRef
