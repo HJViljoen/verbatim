@@ -377,3 +377,47 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
   }
   return out.sort((a, b) => a.ms - b.ms || a.surface.localeCompare(b.surface)).map(({ ms: _ms, ...r }) => r)
 }
+
+// ---- The weeks the bars may draw (T0a, mechanism 3) ----------------------------
+
+/**
+ * THE BARS NEVER SPAN OUR CHANGES (T0a, the one condition; inventory mechanism
+ * 3, OV-31/33/35 and WK-12–16). A step in the weekly counts after we changed
+ * our searches or how we check relevance is our bookkeeping, not the market,
+ * and a mark on the chart saying so is an annotation, which the product does
+ * not rely on. So the chart draws only weeks read one way:
+ *
+ *   - from the first week AFTER the week of our latest search or relevance
+ *     change on the axis (the change's own week is part before, part after);
+ *     a filing change moves no bar of the pooled market (decision E) and does
+ *     not cut;
+ *   - only the unbroken run of weeks with something gathered that ends at the
+ *     latest such week: a week with nothing gathered is off the axis, never an
+ *     empty slot that reads as a silent market;
+ *   - and no week holding videos let in before we checked relevance
+ *     (`unchecked`): its bar would count them, and so would its comments, so
+ *     the week is not drawn and the run starts after it.
+ *
+ * The weeks come back in axis order; none, where nothing is left (the caller
+ * then omits the chart). Pure, and idempotent.
+ */
+export function weeksSinceOurChanges(weeks: readonly WeekVolume[], rules: readonly WeekRule[]): WeekVolume[] {
+  const cut = rules
+    .filter((r) => {
+      const g = weekRuleGroupOf(r.surface)
+      return g === 'search' || g === 'relevance'
+    })
+    .map((r) => isoWeekOf(r.week))
+    .sort()
+    .pop() ?? null
+  const gathered = (w: WeekVolume): boolean => w.state !== 'none_gathered' && w.videos > 0
+  let end = weeks.length
+  while (end > 0 && !gathered(weeks[end - 1])) end--
+  let start = end
+  while (start > 0) {
+    const w = weeks[start - 1]
+    if (!gathered(w) || w.unchecked > 0 || (cut != null && isoWeekOf(w.week) <= cut)) break
+    start--
+  }
+  return weeks.slice(start, end)
+}

@@ -7,7 +7,7 @@ import {
   buildWeekLine, dueHasPassed, passedBeforeOf, pendingWeekLine, pooledWeekPoints, type WeekLineBlock, type WeekLineObject, type WeekPoint,
   type WeekRead,
 } from '../../reading/week-line'
-import { pooledWeekVolumes, weekAxis, weekRules, type MarketWeekRow, type WeekVolumesBlock } from '../../reading/weeks'
+import { pooledWeekVolumes, weekAxis, weekRules, weeksSinceOurChanges, type MarketWeekRow, type WeekVolumesBlock } from '../../reading/weeks'
 import { subjectCalibration } from '../../subjects/calibration-state'
 import { selectAll } from '../../supabase-admin'
 import type { WeekLineConfig } from '../../week-line-config'
@@ -91,6 +91,19 @@ export function keptLineAsAt(line: WeekLineBlock, latest: string | null, now: st
 /** Does the block have nothing to draw (every week none gathered)? */
 export const weekVolumesEmpty = (b: WeekVolumesBlock | null | undefined): boolean =>
   !b || b.weeks.every((w) => w.state === 'none_gathered')
+
+/**
+ * The block as the bars draw it (T0a, mechanism 3): only the weeks read one
+ * way since our latest search or relevance change (`weeksSinceOurChanges`),
+ * and no marks, key or "Our changes" row. Every renderer reads the block
+ * through this, so a stored copy obeys it too.
+ */
+export const weekBarsBlock = (b: WeekVolumesBlock): WeekVolumesBlock => ({ ...b, weeks: weeksSinceOurChanges(b.weeks, b.rules), rules: [] })
+
+/** Something was gathered, but no week is left to draw one way: the chart is
+ *  omitted, never placeholdered ("No week has comments yet" would be false). */
+export const weekBarsOmitted = (b: WeekVolumesBlock | null | undefined): boolean =>
+  b != null && !weekVolumesEmpty(b) && weekBarsBlock(b).weeks.length === 0
 
 // ---- The kept line's read (WP3.13 part B) ------------------------------------------------------
 

@@ -4,7 +4,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { WeekBars } from '@/components/charts/week-bars'
 import { WEEK_BY_WEEK_HREF } from '@/components/pages/overview/weeks'
 import { surface } from '@/lib/nav'
-import { WEEKS_EMPTY, weekVolumesEmpty } from '@/lib/pages/overview-market/weeks'
+import { WEEKS_EMPTY, weekBarsBlock, weekBarsOmitted, weekVolumesEmpty } from '@/lib/pages/overview-market/weeks'
 import type { WeekData } from '@/lib/pages/week'
 import { weekName } from '@/lib/charts/week-bars'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -31,6 +31,9 @@ export const weekWeeks: Block<WeekData> = {
   question: 'How many videos and comments came in each week?',
 
   render(data, mode = 'app', ctx) {
+    // No week left to draw one way since our latest change (T0a, mechanism
+    // 3): the block is omitted, never placeholdered.
+    if (weekBarsOmitted(data.weeks)) return null
     const b = data.weeks ?? null
     const empty = weekWeeks.emptyState(data)
     const howTo = openLink(mode, `${ctx.appUrl}${WEEK_BY_WEEK_HREF}`, 'How to read: Week by week →')
@@ -50,7 +53,8 @@ export const weekWeeks: Block<WeekData> = {
 
   figures(data): FigureTable {
     const out: FigureTable = {}
-    for (const w of data.weeks?.weeks ?? []) {
+    // Only the weeks the bars draw (T0a, mechanism 3).
+    for (const w of data.weeks ? weekBarsBlock(data.weeks).weeks : []) {
       if (w.state === 'none_gathered' || w.videos === 0) continue
       out[token(w.week, 'videos')] = { value: w.videos, unit: 'videos', label: `videos in your market in the week of ${weekName(w.week)}` }
       out[token(w.week, 'comments')] = { value: w.comments, unit: 'comments', label: `comments in your market dated in the week of ${weekName(w.week)}` }

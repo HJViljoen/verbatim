@@ -118,10 +118,14 @@ export function WeekPage({
   }
 
   const ctx = weekContext(params)
+  // A block with nothing true left to print renders null and is omitted,
+  // tile and export entry both (T0a: Week by week with no week left to draw
+  // one way since our latest change).
+  const shown = WEEK_BLOCKS.map((block) => ({ block, node: block.render(data, 'app', ctx) })).filter((t) => t.node != null)
   return (
     // THE EXPORT SCOPE NAMES THE TILES, so the per-tile control and the page
     // export address exactly the keys the block list above declares.
-    <ExportScope page="week" params={params} tiles={WEEK_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}>
+    <ExportScope page="week" params={params} tiles={shown.map(({ block: b }) => ({ key: b.key, title: b.title }))}>
       <PageFrame className="gap-6">
         <SurfacePageBar
           nav="week"
@@ -150,7 +154,7 @@ export function WeekPage({
             under its content, the pair sharing its top edge, as the front
             page's pairs do. */}
         <PageGrid className="gap-6 xl:auto-rows-auto">
-          {WEEK_BLOCKS.map((block) => {
+          {shown.map(({ block, node }) => {
             const col = COLS[block.key] ?? 12
             return (
               <Tile
@@ -164,7 +168,7 @@ export function WeekPage({
                 distribute="between"
               >
                 {ANCHOR[block.key] ? <span id={ANCHOR[block.key]} aria-hidden className="block scroll-mt-6" /> : null}
-                {block.render(data, 'app', ctx)}
+                {node}
               </Tile>
             )
           })}

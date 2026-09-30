@@ -159,21 +159,36 @@ describe('With this update (WP2.7)', () => {
 describe('week by week, inside With this update (WP2.9)', () => {
   const oct11 = () => ({ ...marketArrivalsFixture(), weeks: sealandWeeks('2026-10-11T06:00:00.000Z') })
 
+  // HYPOTHETICAL: staging's weeks with no change on the axis and every video
+  // checked (T0a, mechanism 3: on staging's own rows no week is left one way).
+  const clean = () => {
+    const b = sealandWeeks('2026-10-11T06:00:00.000Z')
+    return { ...oct11(), weeks: { ...b, rules: [], weeks: b.weeks.map((w) => ({ ...w, unchecked: 0 })) } }
+  }
+
   it('renders the bars inside the block, in all three modes, and the front page has no block of its own for them', () => {
     for (const mode of MODES) {
-      const t = text(oct11(), mode)
+      const t = text(clean(), mode)
       expect(t).toContain('Week by week')
       for (const n of ['244', '404', '318', '7,851']) expect(t).toContain(n)
+      assertCopyContract(render(overviewArrivals.render(clean(), mode, ctx)))
       assertCopyContract(render(overviewArrivals.render(oct11(), mode, ctx)))
     }
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.weeks')
   })
 
-  it('draws our changes on the weeks of 7 and 14 Sep, and the pending row due 18 Oct and 25 Oct', () => {
+  // T0a (mechanism 3; OV-31/33): on staging's rows the bars would span our
+  // search changes (9, 13 and 17 Sep) and the relevance check (26 Sep), and
+  // every week gathered holds videos let in before the check: "Each week, as
+  // counts" is omitted, with no mark, key or gap word. The same-age line is
+  // its own reading and keeps its pending row.
+  it('omits the bars where no week is left one way, with no mark or key, and keeps the pending row due 18 Oct and 25 Oct', () => {
     const t = text(oct11())
-    expect(t).toContain('Each week, as counts')
-    for (const d of ['9 Sep', '13 Sep', '17 Sep']) expect(t).toContain(d)
-    expect(t).toContain('We changed our searches on 9, 13 and 17 Sep')
+    expect(t).not.toContain('Each week, as counts')
+    for (const d of ['9 Sep', '13 Sep', '17 Sep']) expect(t).not.toContain(d)
+    expect(t).not.toContain('We changed our searches')
+    expect(t).not.toContain('Our changes')
+    expect(t).not.toContain('none gathered')
     expect(t).toContain('Read at the same age')
     expect(t).toContain('due 18 Oct')
     expect(t).toContain('due 25 Oct')

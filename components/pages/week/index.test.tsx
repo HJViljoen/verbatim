@@ -91,29 +91,45 @@ describe('every block on This week', () => {
   })
 })
 
+/** HYPOTHETICAL: Sealand's weeks with no change on the axis and every video
+ *  checked. On its own rows the bars would span our search changes and the
+ *  relevance check, and the weeks gathered hold videos let in before the
+ *  check, so no week is left and Week by week is omitted (T0a, mechanism 3). */
+function cleanWeekFixture(): WeekData {
+  const d = marketWeekFixture()
+  return { ...d, weeks: { ...d.weeks!, rules: [], weeks: d.weeks!.weeks.map((w) => ({ ...w, unchecked: 0 })) } }
+}
+
 describe('week by week (market-first WP2.9, week.weeks)', () => {
+  it('is omitted where no week is left one way since our latest change (T0a, mechanism 3)', () => {
+    for (const mode of MODES) expect(weekWeeks.render(marketWeekFixture(), mode, ctx), mode).toBeNull()
+    expect(weekWeeks.figures!(marketWeekFixture())).toEqual({})
+  })
+
   it('draws the market’s videos and comments for each week, as counts, with its facts panel', () => {
     for (const mode of MODES) {
-      const t = renderText(weekWeeks.render(marketWeekFixture(), mode, ctx))
+      const t = renderText(weekWeeks.render(cleanWeekFixture(), mode, ctx))
       for (const n of ['244', '226', '187', '229', '404', '318', '5,809', '7,851', '5,462']) expect(t).toContain(n)
       expect(t).not.toMatch(/%|▲|▼/)
     }
-    const app = renderText(weekWeeks.render(marketWeekFixture(), 'app', ctx))
+    const app = renderText(weekWeeks.render(cleanWeekFixture(), 'app', ctx))
     // The preview's panel: the latest week no longer so far.
     expect(app).toContain('Week of 7 Sep')
     expect(app).toContain('of them 389 in the category and 15 filed under a brand you track')
     expect(app).toContain('all dated in September')
     expect(app).toContain('filling')
     expect(app).toContain('so far')
-    expect(app).toContain('Our changes')
+    // T0a: no "Our changes" row, and no week with nothing gathered.
+    expect(app).not.toContain('Our changes')
+    expect(app).not.toContain('none gathered')
   })
 
   it('is headed by its title alone and footed by links alone, one of them to the same-age reading', () => {
-    const el = weekWeeks.render(marketWeekFixture(), 'app', ctx) as { props: { title: string; meta?: unknown; footerNote?: unknown } }
+    const el = weekWeeks.render(cleanWeekFixture(), 'app', ctx) as { props: { title: string; meta?: unknown; footerNote?: unknown } }
     expect(el.props.title).toBe('Week by week')
     expect(el.props.meta).toBeUndefined()
     expect(el.props.footerNote).toBeUndefined()
-    const t = renderText(weekWeeks.render(marketWeekFixture(), 'app', ctx))
+    const t = renderText(weekWeeks.render(cleanWeekFixture(), 'app', ctx))
     expect(t).toContain('How to read: Week by week →')
     expect(t).toContain('Read at the same age, on Your market →')
     // No same-age reading to link to where the tenant keeps none (Össur).
@@ -129,7 +145,7 @@ describe('week by week (market-first WP2.9, week.weeks)', () => {
   })
 
   it('declares the counts it draws, one token a week and a row', () => {
-    const f = weekWeeks.figures!(marketWeekFixture())
+    const f = weekWeeks.figures!(cleanWeekFixture())
     expect(f.week_2026_09_07_videos.value).toBe(404)
     expect(f.week_2026_09_07_comments.value).toBe(7851)
     expect(f.week_2026_07_27_videos).toBeUndefined()
@@ -414,8 +430,10 @@ describe('With this update (market-first WP3.7, week.came-in)', () => {
   })
 
   it('points at the tiles that hold what it counts, on screen only', () => {
-    const markup = render(weekCameIn.render(marketWeekFixture(), 'app', ctx))
+    const markup = render(weekCameIn.render(cleanWeekFixture(), 'app', ctx))
     expect(markup).toContain('href="#week-by-week"')
+    // No link to a tile that is omitted (T0a, mechanism 3).
+    expect(render(weekCameIn.render(marketWeekFixture(), 'app', ctx))).not.toContain('href="#week-by-week"')
     expect(markup).toContain('href="#heard-for-the-first-time"')
     expect(markup).toContain('href="#worth-a-reply"')
     expect(render(weekCameIn.render(marketWeekFixture(), 'print', ctx))).not.toContain('href="#')
@@ -717,7 +735,7 @@ describe('the coverage line and the two sections Phase 1 does not build', () => 
 
 describe('the page', () => {
   it('draws the preview’s nine tiles in its order, and the bar’s one line', () => {
-    const text = renderText(<WeekPage data={marketWeekFixture()} />)
+    const text = renderText(<WeekPage data={cleanWeekFixture()} />)
     expect(text).toContain('Sealand · The 20 Sep update comments written 10 to 20 Sep')
     const at = WEEK_BLOCKS.map((b) => text.indexOf(b.title.toUpperCase()) >= 0 ? text.indexOf(b.title.toUpperCase()) : text.indexOf(b.title))
     expect(at.every((x) => x >= 0)).toBe(true)
@@ -728,9 +746,13 @@ describe('the page', () => {
   })
 
   it('pairs your market’s subjects with For sales, half and half; every other tile is full width', () => {
-    const markup = render(<WeekPage data={marketWeekFixture()} />)
+    const markup = render(<WeekPage data={cleanWeekFixture()} />)
     const spans = [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])
     expect(spans).toEqual(['12', '12', '12', '6', '6', '12', '12', '12', '12'])
+    // T0a: on Sealand's own weeks Week by week is omitted, tile and all.
+    const real = render(<WeekPage data={marketWeekFixture()} />)
+    expect([...real.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])).toEqual(['12', '12', '6', '6', '12', '12', '12', '12'])
+    expect(renderText(<WeekPage data={marketWeekFixture()} />)).not.toContain('WEEK BY WEEK')
   })
 
   it('prints no footnote under a block or under the page (25 Sep rulings)', () => {
@@ -907,6 +929,9 @@ const PAGE_CASES = [marketWeekFixture, ossurWeeksFixture].flatMap((fixture) =>
 describe.each(PAGE_CASES)('$name', ({ block, mode, fixture }) => {
   it('keeps the copy contract, with its title alone in the header and links alone in the footer', () => {
     const el = block.render(fixture(), mode, ctx)
+    // T0a (mechanism 3): Week by week is omitted where no week is left one
+    // way since our latest change (Sealand's own weeks).
+    if (el == null && block.key === 'week.weeks') return
     assertCopyContract(render(el))
     expect(isValidElement(el) && el.type === BlockFrame).toBe(true)
     const props = (el as { props: { meta?: unknown; footerNote?: unknown } }).props

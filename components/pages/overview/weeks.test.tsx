@@ -52,7 +52,9 @@ describe('Read at the same age, printed (WP3.13 display)', () => {
     expect(data.weeks?.weeks.map((w) => w.week)).toEqual(WEEK_LINE_FIXTURE_FIRST_PAIR_AXIS)
     const m = html(data)
     const text = markupText(m)
-    expect(text).toContain('Each week, as counts')
+    // T0a (mechanism 3): the bars would span our changes on staging's rows,
+    // so "Each week, as counts" is omitted; the same-age line stays.
+    expect(text).not.toContain('Each week, as counts')
     expect(text).toContain('Read at the same age')
     expect(text).not.toMatch(/Read at the same age\s*pending/)
     expect(text).not.toContain('Kept points')

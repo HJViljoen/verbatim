@@ -11,7 +11,7 @@ import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, 
 import { WEEK_LINE } from '@/lib/week-line-config'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { dueHasPassed, passedBeforeOf, type PendingWeekLine } from '@/lib/reading/week-line'
-import { WeekBars, WeekBarsKey, WeekPendingRow } from './week-bars'
+import { WeekBars, WeekPendingRow } from './week-bars'
 import { weekBarsLayout, weekPlotMin } from '@/lib/charts/week-bars'
 import { weekRuleGroupOf } from '@/lib/reading/weeks'
 
@@ -34,9 +34,28 @@ const block = (now: string) => weekVolumesBlock({
 const OCT11 = block('2026-10-11T06:00:00.000Z')
 const OCT02 = block('2026-10-02T06:00:00.000Z')
 
+// T0a (mechanism 3): the bars never span our changes, and never draw a week
+// counting videos let in before we checked relevance. On staging's own rows
+// (search changes 9, 13 and 17 Sep, the relevance check 26 Sep, nothing
+// gathered after 20 Sep, and pre-check videos in the weeks of 31 Aug to 14
+// Sep) no week is left, so the chart is not drawn. HYPOTHETICAL: the same
+// rows with no change on the axis and every video checked, to show the
+// drawing itself.
+const clean = (now: string) => weekVolumesBlock({
+  reading: { month: '2026-09-01' },
+  now,
+  updates: STAGING_UPDATES,
+  rows: STAGING_WEEK_VOLUMES.map((r) => ({ ...r, unchecked: 0 })),
+  rivalAudiences: STAGING_RIVALS,
+  changes: [],
+  cfg: WEEK_LINE[SEALAND_CLIENT_ID],
+  nextUpdateAfter: SEALAND_NEXT_UPDATE,
+})
+const CLEAN11 = clean('2026-10-11T06:00:00.000Z')
+const CLEAN02 = clean('2026-10-02T06:00:00.000Z')
+
 const all = (mode: RenderMode, b = OCT11): string => render(<>
   <WeekBars block={b} mode={mode} variant="front" surface="inner" />
-  <WeekBarsKey block={b} mode={mode} />
   <WeekPendingRow weeks={b.weeks} pending={b.line as PendingWeekLine} mode={mode} surface="inner" />
   <WeekBars block={b} mode={mode} variant="week" surface="tile" />
 </>)
@@ -47,22 +66,26 @@ describe('the weekly volume bars', () => {
       '2026-07-27', '2026-08-03', '2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31',
       '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05',
     ])
-    for (const mode of MODES) assertCopyContract(all(mode))
+    for (const mode of MODES) {
+      assertCopyContract(all(mode))
+      assertCopyContract(all(mode, CLEAN11))
+    }
   })
 
-  it('print decision M’s counts: videos and comments, week by week', () => {
-    const t = renderText(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
+  it('print decision M’s counts: videos and comments, week by week, and no week with nothing gathered', () => {
+    const t = renderText(<WeekBars block={CLEAN11} mode="app" variant="front" surface="inner" />)
     for (const n of ['244', '226', '187', '229', '404', '318', '5,809', '2,646', '1,831', '3,275', '7,851', '5,462']) expect(t).toContain(n)
-    expect(t).toContain('none gathered')
+    // T0a (OV-33, WK-14): the weeks of 27 Jul and 3 Aug, and 21 Sep on, held
+    // nothing; they are off the axis, never an empty slot or a word.
+    expect(t).not.toContain('none gathered')
     expect(t).toContain('filling')
   })
 
   it('carry no share, no arrow and no movement or direction word, in the bars or the pending row, in any mode', () => {
     for (const mode of MODES) {
-      for (const b of [OCT11, OCT02]) {
+      for (const b of [OCT11, OCT02, CLEAN11, CLEAN02]) {
         const t = renderText(<>
           <WeekBars block={b} mode={mode} variant="front" surface="inner" />
-          <WeekBarsKey block={b} mode={mode} />
           <WeekPendingRow weeks={b.weeks} pending={b.line as PendingWeekLine} mode={mode} surface="inner" />
           <WeekBars block={b} mode={mode} variant="week" surface="tile" />
         </>)
@@ -73,34 +96,70 @@ describe('the weekly volume bars', () => {
     }
   })
 
-  it('draw our changes on their weeks: 9, 13 and 17 Sep on the weeks of 7 and 14 Sep, and name them once in the key', () => {
-    const t = renderText(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
-    for (const d of ['9 Sep', '13 Sep', '17 Sep']) expect(t).toContain(d)
-    const key = renderText(<WeekBarsKey block={OCT11} mode="app" />)
-    expect(key).toContain('We changed our searches on 9, 13 and 17 Sep')
-    // Staging's relevance row is the MF1 rehearsal's stand-in, dated 26 Sep.
-    expect(key).toContain('how we check relevance on 26 Sep')
-    expect(key).not.toContain('▲')
-    // A filing change moves no bar of the pooled market: not drawn, not keyed.
-    expect(key).not.toContain('file')
-    expect(render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)).not.toContain('how we file videos')
+  // T0a (mechanism 3; OV-31, WK-12/13): a step after our change is our
+  // bookkeeping, and a mark saying so is an annotation. The chart draws only
+  // the weeks after the week of our latest search or relevance change.
+  it('never span our changes: on staging’s rows no week is left and the chart is not drawn', () => {
+    for (const mode of MODES) {
+      for (const b of [OCT11, OCT02]) {
+        expect(render(<WeekBars block={b} mode={mode} variant="front" surface="inner" />), mode).toBe('')
+        expect(render(<WeekBars block={b} mode={mode} variant="week" surface="tile" />), mode).toBe('')
+      }
+    }
+  })
+
+  it('start after the week of the latest change, with no "Our changes" row, mark, key or gap word', () => {
+    // HYPOTHETICAL: staging's changes (9, 13 and 17 Sep; relevance 26 Sep)
+    // and weeks gathered after them, every video checked.
+    const after = weekVolumesBlock({
+      reading: { month: '2026-09-01' },
+      now: '2026-10-14T06:00:00.000Z',
+      updates: [...STAGING_UPDATES, '2026-10-04T08:00:00.000Z', '2026-10-11T08:00:00.000Z'],
+      rows: [
+        ...STAGING_WEEK_VOLUMES.map((r) => ({ ...r, unchecked: 0 })),
+        ...(['2026-09-28', '2026-10-05', '2026-10-12'] as const).map((week) => ({ ...STAGING_WEEK_VOLUMES[2], week, unchecked: 0 })),
+      ],
+      rivalAudiences: STAGING_RIVALS,
+      changes: changesFromLog(STAGING_CHANGES),
+      cfg: WEEK_LINE[SEALAND_CLIENT_ID],
+      nextUpdateAfter: SEALAND_NEXT_UPDATE,
+    })
+    expect(after.rules.map((r) => r.date)).toEqual(expect.arrayContaining(['2026-09-09', '2026-09-26']))
+    for (const variant of ['front', 'week'] as const) {
+      for (const mode of MODES) {
+        const markup = render(<WeekBars block={after} mode={mode} variant={variant} surface="inner" />)
+        const t = renderText(<WeekBars block={after} mode={mode} variant={variant} surface="inner" />)
+        expect(t, `${variant} ${mode}`).not.toContain('Our changes')
+        expect(t, `${variant} ${mode}`).not.toContain('none gathered')
+        for (const d of ['9 Sep', '13 Sep', '17 Sep', '26 Sep']) expect(t, `${variant} ${mode}`).not.toContain(d)
+        expect(markup).not.toContain('data-edge-x')
+        // The weeks of 28 Sep, 5 and 12 Oct only: nothing from the week of the
+        // relevance change (21 Sep) or before.
+        expect(t, `${variant} ${mode}`).not.toContain('14 Sep')
+        expect(t, `${variant} ${mode}`).not.toContain('21 Sep')
+      }
+    }
+    expect(renderText(<WeekBars block={after} mode="email" variant="front" surface="inner" />)).toMatch(/^Week of\s*28 Sep, filling\s*5 Oct, filling\s*12 Oct, so far\s*Videos/)
   })
 
   it('draw a week still being read outlined, with its word under the axis (the preview)', () => {
-    const markup = render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
+    const markup = render(<WeekBars block={CLEAN11} mode="app" variant="front" surface="inner" />)
     // Two filling weeks (7 and 14 Sep), each outlined in both rows.
     expect((markup.match(/stroke:var\(--foreground\);stroke-width:1.5/g) ?? []).length).toBe(4)
-    expect(renderText(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />).match(/filling/g)).toHaveLength(2)
+    expect(renderText(<WeekBars block={CLEAN11} mode="app" variant="front" surface="inner" />).match(/filling/g)).toHaveLength(2)
   })
 
-  it('give the chart a text alternative that reads the latest weeks', () => {
-    const markup = render(<WeekBars block={OCT02} mode="app" variant="front" surface="inner" />)
+  it('give the chart a text alternative that reads the latest weeks, with no "Our changes" and no gap word', () => {
+    const markup = render(<WeekBars block={CLEAN02} mode="app" variant="front" surface="inner" />)
     expect(markup).toContain('role="img"')
-    expect(markup).toMatch(/aria-label="Your market’s videos and comments by week\. Latest four weeks: 7 Sep 404 videos and 7,851 comments, filling/)
+    expect(markup).toMatch(/aria-label="Your market’s videos and comments by week\. Latest four weeks: 24 Aug 187 videos and 1,831 comments/)
+    expect(markup).toMatch(/14 Sep 318 and 5,462, filling\./)
+    expect(markup).not.toContain('Our changes')
+    expect(markup).not.toContain('none gathered')
   })
 
   it('scroll sideways under the plot’s narrowest width, and open at the latest week', () => {
-    const markup = render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
+    const markup = render(<WeekBars block={CLEAN11} mode="app" variant="front" surface="inner" />)
     // THE SCROLL BOX IS THE REVERSED ROW, with the plot its direct child: a
     // reversed row nested INSIDE the scroll box overflowed to the left of its
     // origin, where no browser scrolls (the deploy-3 review, 390 and 768 px).
@@ -108,26 +167,28 @@ describe('the weekly volume bars', () => {
     expect(box, 'the scroll box, then its first child').not.toBeNull()
     expect(box![1].split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-row-reverse', 'min-w-0', 'overflow-x-auto']))
     expect(box![2].split(' ')).toContain('@container')
-    // 11 weeks at 48px a slot at the least (weekPlotMin).
-    expect(box![3]).toContain('min-width:528px')
+    // Six weeks (10 Aug to 14 Sep): the plot's floor of 520px (weekPlotMin).
+    expect(box![3]).toContain('min-width:520px')
   })
 
   it('show This week’s panel on the latest week that is no longer so far (the preview’s)', () => {
-    const t = renderText(<WeekBars block={OCT11} mode="app" variant="week" surface="tile" />)
+    const t = renderText(<WeekBars block={CLEAN11} mode="app" variant="week" surface="tile" />)
     expect(t).toContain('Week of 14 Sep')
     expect(t).toMatch(/318\s*videos/)
     expect(t).toContain('of them 306 in the category and 12 filed under a brand you track')
     expect(t).toContain('all dated in September')
-    expect(t).toContain('before we checked relevance')
-    expect(t).toContain('Our changes')
+    // T0a: no week drawn holds a video let in before we checked relevance,
+    // and there is no "Our changes" row.
+    expect(t).not.toContain('before we checked relevance')
+    expect(t).not.toContain('Our changes')
   })
 
   it('are a table of week labels and counts in an email', () => {
-    const markup = render(<WeekBars block={OCT11} mode="email" variant="front" surface="inner" />)
+    const markup = render(<WeekBars block={CLEAN11} mode="email" variant="front" surface="inner" />)
     expect(markup).toContain('<table')
     expect(markup).not.toContain('class=')
     expect(markup).not.toContain('var(--')
-    const t = renderText(<WeekBars block={OCT11} mode="email" variant="front" surface="inner" />)
+    const t = renderText(<WeekBars block={CLEAN11} mode="email" variant="front" surface="inner" />)
     expect(t).toContain('14 Sep, filling')
     expect(t).toContain('7,851')
   })
@@ -250,10 +311,12 @@ describe('markInView (sw-3 item 3)', () => {
     for (const x of [0, 0.25, 0.5, 1]) expect(markInView(x, { left: 10, width: 600 }, { left: 10, right: 610 })).toBe(true)
   })
 
-  it('tags each change drawn, over the plot and in This week\'s row, with its place', () => {
-    const front = render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
-    const week = render(<WeekBars block={OCT11} mode="app" variant="week" surface="tile" />)
-    expect((front.match(/data-edge-x="/g) ?? []).length).toBe(weekBarsLayout(OCT11.weeks, OCT11.rules.filter((r) => weekRuleGroupOf(r.surface) !== 'filing'), { size: 'large', ticks: 'top' }).ticks.length)
-    expect(week).toContain('data-edge-x="')
+  // T0a: the geometry still places a change (above), but the bars draw no
+  // change at all, over the plot or in This week's row.
+  it('draws no change mark, over the plot or in This week\'s row', () => {
+    const front = render(<WeekBars block={CLEAN11} mode="app" variant="front" surface="inner" />)
+    const week = render(<WeekBars block={CLEAN11} mode="app" variant="week" surface="tile" />)
+    expect(front).not.toContain('data-edge-x="')
+    expect(week).not.toContain('data-edge-x="')
   })
 })
