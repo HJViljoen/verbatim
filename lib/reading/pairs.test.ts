@@ -23,6 +23,7 @@ import {
   BRANDS_PANEL,
   CATEGORY_AUDIENCE,
   comparableOn,
+  joinedRun,
   laterMonthOf,
   pairJudge,
   pairOn,
@@ -106,9 +107,11 @@ describe('monthChange: August against September never reads "moved"', () => {
       expect(v.refusedReason).toBe('tracking_change')
       expect(v.pair).toEqual({ mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null })
       expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed our searches in September.')
-      // The counts stay, so the levels print; no change is drawn.
+      // This month's counts stay, so its level prints; no change is drawn,
+      // and the month before does not travel with a refusal (T0a, the one
+      // condition: a refused verdict carries no baseline).
       expect(v.value).toEqual({ k: 104, n: 626 })
-      expect(v.baseline).toEqual({ k: 38, n: 351 })
+      expect(v.baseline).toBeUndefined()
       expect(v.changePts).toBeNull()
     }
   })
@@ -557,5 +560,38 @@ describe('the pair words (lib/calibration.ts)', () => {
       expect(s).not.toMatch(/\u2014/)
       expect(s).not.toMatch(/filling|how sound|complete/i)
     }
+  })
+})
+
+// T0a (the one condition): months printed side by side are a comparison, so a
+// trail or a move's read stops at a refused step.
+describe('joinedRun: the months a reader may print side by side', () => {
+  const pts = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'].map((month) => ({ month }))
+  const refusedInto = (bad: string[]) => (_prev: string, month: string) => !bad.includes(month)
+
+  it('keeps every month where every step joins', () => {
+    expect(joinedRun(pts, '2026-09-01', () => true).map((p) => p.month)).toEqual(pts.map((p) => p.month))
+  })
+
+  it('from the newest month back, stops at the latest refused step', () => {
+    expect(joinedRun(pts, '2026-09-01', refusedInto(['2026-09-01'])).map((p) => p.month)).toEqual(['2026-09-01'])
+    expect(joinedRun(pts, '2026-09-01', refusedInto(['2026-08-01'])).map((p) => p.month)).toEqual(['2026-08-01', '2026-09-01'])
+  })
+
+  it('from a move\'s month forward, stops at the first refused step', () => {
+    expect(joinedRun(pts, '2026-07-01', refusedInto(['2026-08-01'])).map((p) => p.month)).toEqual(['2026-06-01', '2026-07-01'])
+    expect(joinedRun(pts, '2026-07-01', refusedInto(['2026-09-01'])).map((p) => p.month)).toEqual(['2026-06-01', '2026-07-01', '2026-08-01'])
+  })
+
+  it('Sealand on 2 Oct: August against September is refused on the market, so September stands alone', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const run = joinedRun(pts.slice(2), '2026-09-01', (a, b) => joins(judge(a, b, 'market')))
+    expect(run.map((p) => p.month)).toEqual(['2026-09-01'])
+  })
+
+  it('does not judge a step between months that are not consecutive, and returns nothing without the anchor', () => {
+    const gap = [{ month: '2026-06-01' }, { month: '2026-08-01' }]
+    expect(joinedRun(gap, '2026-08-01', () => false).map((p) => p.month)).toEqual(['2026-06-01', '2026-08-01'])
+    expect(joinedRun(pts, '2026-10-01', () => true)).toEqual([])
   })
 })

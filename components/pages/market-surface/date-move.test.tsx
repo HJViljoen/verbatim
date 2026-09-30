@@ -5,6 +5,9 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { moveMarketReads, type MarketSurfaceData } from '@/lib/pages/market-surface'
+import { joins } from '@/lib/reading/comparability'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { headlineParts, marketLine as readLine, partsText } from '@/lib/pages/market-line'
 import { DATE_MOVE_TODAY } from '@/lib/pages/date-move'
 import { MarketSurfacePage } from './index'
@@ -115,5 +118,47 @@ describe('Date a move · a move read from the day it was made', () => {
     })
     expect(plain.datedOn).toBeUndefined()
     expect(plain.months[0]).toMatchObject({ role: 'move', month: '2026-10-01', state: 'not_yet' })
+  })
+})
+
+// T0a, YM-45 (the one condition): three levels side by side are a comparison,
+// and a search change in the month after printed as the market's answer to
+// the move. A later month prints only where every step from the move's month
+// to it is read the same way (the pair judge on the market view).
+describe('A move read in the market: no month across a refused step', () => {
+  const read = (joined?: (prev: string, month: string) => boolean) => moveMarketReads({
+    moves: [{ id: 'm-a', kind: 'subject', subject_id: 's-looks', registry_ids: null, lineage_id: null, title: 'New colourways', declared_at: '2026-08-12' }],
+    month: '2026-10-01',
+    on: () => 'on the subject Looks & style',
+    subjects: new Map([['s-looks', { name: 'Looks & style', calibration: 'ready' as const }]]),
+    themes: new Map(),
+    adviceTargets: new Map(),
+    // Looks & style: 38 of 377 in August, 103 of 654 in September; October
+    // HYPOTHETICAL.
+    levels: (_kind, _id, month) => ({ '2026-08-01': 38, '2026-09-01': 103, '2026-10-01': 90 } as Record<string, number>)[month] ?? null,
+    n: (month) => ({ '2026-08-01': 377, '2026-09-01': 654, '2026-10-01': 600 } as Record<string, number>)[month] ?? null,
+    ...(joined ? { joined } : {}),
+  })[0]
+
+  it('with every step joined, the three months print', () => {
+    expect(read(() => true).months.map((m) => m.role)).toEqual(['move', 'after', 'after_that'])
+  })
+
+  it('August against September refused (Sealand: our September searches): the move\'s month prints alone', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const r = read((a, b) => joins(judge(a, b, 'market')))
+    expect(r.months.map((m) => [m.role, m.month])).toEqual([['move', '2026-08-01']])
+    const data: MarketSurfaceData = { ...sealandMovesFixture(), moves: { ...sealandMovesFixture().moves, empty: null, market: [r] } }
+    for (const mode of MODES) {
+      const text = renderText(marketMoves.render(data, mode, ctx))
+      expect(text, mode).toContain('38 of 377')
+      expect(text, mode).not.toContain('103 of 654')
+      expect(text, mode).not.toContain('Month after')
+    }
+  })
+
+  it('a refused step later on keeps the months before it and nothing after', () => {
+    const r = read((_a, b) => b !== '2026-10-01')
+    expect(r.months.map((m) => m.role)).toEqual(['move', 'after'])
   })
 })

@@ -41,8 +41,10 @@ import { subjectCalibration, type SubjectCalibration } from '../subjects/calibra
 // a conversational turn inside a sane latency budget, which two 165-237s
 // synthesis calls would not.
 
-/** v2 (WP3.9): the market framing, and the block of what the question names. */
-export const PROMPT_VERSION_ANSWER = 'agent_answer_v2'
+/** v2 (WP3.9): the market framing, and the block of what the question names.
+ *  v3 (T0a, 30 Sep): a refused line carries its own month alone, with no
+ *  month before and no trail across the refusal (the one condition). */
+export const PROMPT_VERSION_ANSWER = 'agent_answer_v3'
 
 const AnswerSchema = z.object({
   answer: z.string(),

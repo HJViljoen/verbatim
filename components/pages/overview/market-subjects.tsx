@@ -59,6 +59,21 @@ export function rowTag(r: SubjectRow): string | null {
   return CALIBRATION_TAG[r.calibration ?? 'provisional']
 }
 
+/**
+ * The month before, as the block prints it beside this month, or null.
+ *
+ * THE ONE CONDITION (T0a, OV-45). The loader leaves the month before out
+ * wherever the market pair is refused (`withMarketSides`), so no column,
+ * tick, legend entry or count tag names it. A copy stored before that rule
+ * still carries it, and the kinds block on the same page is judged on the
+ * same market pair: where that block (or the size headline) carries the
+ * pair's refusal, the month before is not printed here either.
+ */
+export function subjectsPrev(data: Pick<OverviewData, 'subjects' | 'category' | 'sentence'>): { month: string; n: number | null } | null {
+  const refused = data.category?.market?.chip != null || data.sentence?.chip != null
+  return refused ? null : data.subjects.market?.prev ?? null
+}
+
 /** Whether a row prints figures at all. */
 export const printsFigures = (r: SubjectRow): boolean => r.calibration !== 'failed' && r.market?.k != null
 
@@ -73,7 +88,7 @@ export function marketSubjectsFigures(data: OverviewData): FigureTable {
   const out: FigureTable = {}
   const month = longMonth(data.month)
   const n = data.subjects.market?.n ?? null
-  const prevN = data.subjects.market?.prev?.n ?? null
+  const prevN = subjectsPrev(data)?.n ?? null
   for (const r of data.subjects.rows) {
     if (!printsFigures(r)) continue
     const k = r.market?.k as number
@@ -112,7 +127,7 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
   }
   const rows = [...b.rows].sort(byMarketSize)
   const n = b.market?.n ?? null
-  const prev = b.market?.prev ?? null
+  const prev = subjectsPrev(data)
   const axis = barAxis(rows.flatMap((r) => [
     printsFigures(r) && n ? (r.market?.k as number) / n : null,
     printsFigures(r) && prev?.n && r.marketPrev?.k != null ? r.marketPrev.k / prev.n : null,

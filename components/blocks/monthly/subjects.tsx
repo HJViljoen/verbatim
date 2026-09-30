@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { overviewSubjects } from '@/components/pages/overview/subjects'
-import { MARKET_SUBJECTS_TITLE, marketSubjectsLine, prevCell, printsFigures, rowMakers, rowTag } from '@/components/pages/overview/market-subjects'
+import { MARKET_SUBJECTS_TITLE, marketSubjectsLine, prevCell, printsFigures, rowMakers, rowTag, subjectsPrev } from '@/components/pages/overview/market-subjects'
 import { barAxis, shortMonthName } from '@/components/pages/overview/market'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
@@ -37,7 +37,7 @@ function subjectsEmail(data: MonthlyData): ReactNode {
   }
   const rows = [...o.subjects.rows].sort(byMarketSize)
   const n = o.subjects.market?.n ?? null
-  const prev = o.subjects.market?.prev ?? null
+  const prev = subjectsPrev(o)
   const axis = barAxis(rows.map((r) => (printsFigures(r) && n ? (r.market?.k as number) / n : null)))
   return (
     <Table

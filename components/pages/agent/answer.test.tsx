@@ -378,15 +378,17 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
   const provisional = objectReading({ object: { kind: 'subject', id: 's2', label: 'Waterproofing', calibration: 'provisional' }, points: [{ month: '2026-09-01', k: 33, n: 626 }] }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
   const brand = objectReading({ object: { kind: 'brand', id: 'b1', label: 'Cotopaxi' }, points: [], notRead: true }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
 
-  it('prints the level with its "of N", the trail and the refusal, never "moved"', () => {
+  it('prints the level with its "of N" and nothing of the refused month before, never "moved"', () => {
     const text = renderText(<AboutReadings readings={[ready]} />)
     expect(text).toContain('Looks & style')
     expect(text).toContain('104 of 626 videos')
     expect(text).toContain('in your market · September')
-    // The Subjects pane's own trail (`marketTrail`): each month a level on
-    // its own base, with its "of N".
-    expect(text).toContain('Aug 11% of 351 · Sep 17% of 626')
-    expect(text).toContain('Not read as a change: we changed our searches in September.')
+    // T0a (the one condition): the pair is refused, so no trail across it
+    // ("Aug 11% of 351 · Sep 17% of 626" was the comparison itself) and no
+    // sentence saying why.
+    expect(text).not.toContain('Aug')
+    expect(text).not.toContain('of 351')
+    expect(text).not.toContain('Not read as a change')
     expect(text).not.toMatch(/\bmoved\b/)
   })
 

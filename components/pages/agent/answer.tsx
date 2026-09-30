@@ -12,7 +12,8 @@ import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
 import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
-import { pairSentence } from '@/lib/calibration'
+import { priorPrintable } from '@/lib/reading/verdicts'
+import { monthStartOf } from '@/lib/reading/month-key'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { NO_READING_YET } from '@/lib/subjects/read-in'
@@ -89,7 +90,9 @@ function Marks({ f }: { f: FindingMeasure }) {
 function Baseline({ f }: { f: FindingMeasure }) {
   const prev = f.verdict?.baseline
   const from = f.verdict?.basis?.from
-  if (!prev || !from) return null
+  // Only beside a comparison that was drawn (T0a, AK-14): a refused one, even
+  // stored with its baseline, prints the month read alone.
+  if (!prev || !from || !priorPrintable(f.verdict)) return null
   return (
     <p className="m-0 font-mono text-[11px] text-muted-foreground">
       the month before:{' '}
@@ -231,7 +234,13 @@ function FindingChart({ f }: { f: FindingMeasure }) {
  * neither node's text is something the contract has to reason about.
  */
 function MonthTrail({ f }: { f: FindingMeasure }) {
-  const months = f.series.filter((p) => f.chart.axis.includes(p.month))
+  // THE MONTHS SINCE THE LATEST REFUSED STEP ONLY (T0a, AK-14). A finding
+  // measured today carries only those; one stored before the rule carries the
+  // refused step on its line (`brokenBefore`), and nothing before it is
+  // listed, because " → " across a refused step is the comparison itself.
+  const breaks = f.chart.line.points.filter((p) => p.brokenBefore).map((p) => monthStartOf(p.month)).sort()
+  const since = breaks.length > 0 ? breaks[breaks.length - 1] : null
+  const months = f.series.filter((p) => f.chart.axis.includes(p.month) && (since == null || monthStartOf(p.month) >= since))
   if (months.length === 0) return null
   return (
     <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
@@ -533,7 +542,10 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
         const label = aboutLabel(r)
         const failed = r.object.kind === 'subject' && r.object.calibration === 'failed'
         const unread = r.state === 'unread'
-        const trail = aboutTrail(r)
+        // A REFUSED PAIR PRINTS THE MONTH READ ALONE (T0a, AK-24): no trail
+        // across the refusal and no sentence about it.
+        const refused = r.verdict != null && !priorPrintable(r.verdict)
+        const trail = refused ? aboutTrail(r).slice(-1) : aboutTrail(r)
         const current = trail.length > 0 ? trail[trail.length - 1].month : null
         // THE SUBJECT PANE'S OWN TRAIL (S7): the last three months read, each
         // a level on its own base with its "of N", the month read in bold.
@@ -570,9 +582,6 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
                   </span>
                 </div>
                 {trailLine}
-                {r.verdict?.pair?.mode === 'refuse' ? (
-                  <p className="m-0 text-[12px] text-muted-foreground">{pairSentence(r.verdict.pair)}</p>
-                ) : null}
               </>
             )}
           </TileBlock>

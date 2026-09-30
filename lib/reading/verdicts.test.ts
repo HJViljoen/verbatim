@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bandVerdict, isAnswer, type Verdict, type VerdictWindow } from './verdicts'
+import { bandVerdict, isAnswer, priorPrintable, type Verdict, type VerdictWindow } from './verdicts'
 import { proportionDelta, SHARE_BAND, SENTIMENT_BAND } from '../report-bands'
 import { anomalyVerdict, weekVsBaseline, type AnomalyRow } from './anomaly'
 
@@ -82,7 +82,7 @@ describe('bandVerdict', () => {
     expect(v.direction).toBeUndefined()
   })
 
-  it('refuses without drawing a band, and keeps the counts so levels still print', () => {
+  it('refuses without drawing a band, and keeps this side\'s counts so its level still prints', () => {
     const v = theme({ refused: 'clustering_changed' })
     expect(v.state).toBe('refused')
     expect(v.refusedReason).toBe('clustering_changed')
@@ -90,6 +90,27 @@ describe('bandVerdict', () => {
     expect(v.bandPts).toBeNull()
     expect(v.value).toEqual({ k: 102, n: 628 })
     expect(isAnswer(v.state)).toBe(false)
+  })
+
+  // T0a (plan §0a, the one condition): a comparison the product refuses is
+  // not shown at all, so the month before does not travel on the verdict for
+  // any renderer, figure table or prompt to print beside this month.
+  it('a refused verdict carries no baseline, whatever the reason', () => {
+    for (const refused of ['clustering_changed', 'rename', 'tracking_change', 'incomplete', 'depth', 'unmeasured', 'unlogged_era'] as const) {
+      const v = theme({ refused })
+      expect(v.baseline, refused).toBeUndefined()
+      expect(v.value, refused).toEqual({ k: 102, n: 628 })
+      expect(priorPrintable(v), refused).toBe(false)
+    }
+  })
+
+  it('priorPrintable: only an unrefused verdict may print its month before', () => {
+    expect(priorPrintable(theme())).toBe(true)
+    expect(priorPrintable(theme({ value: { k: 6, n: 20 }, baseline: { k: 2, n: 8 } }))).toBe(true)
+    // A verdict stored before the rule still carries its baseline; it prints none.
+    const stored: Verdict = { ...theme(), state: 'refused', baseline: { k: 9, n: 118 } }
+    expect(priorPrintable(stored)).toBe(false)
+    expect(priorPrintable(null)).toBe(false)
   })
 
   it('a refusal beats a comparison that would otherwise have read moved', () => {

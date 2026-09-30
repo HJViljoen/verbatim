@@ -8,10 +8,11 @@ import { MAGNITUDE_RE, allowTokens, replaceOutsideQuotes, scrubProse, type Prose
 import { rows as readRows } from '../pages/read'
 import { audienceLabel } from '../readiness/types'
 import { clearsFloor, monthChange, type Direction } from '../reading/bands'
-import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
+import { joinedRun, pairTools, type PairOn } from '../reading/pairs'
+import { joins } from '../reading/comparability'
 import { isReadable, pointsByMonth, type MonthPoint, type MonthSeries } from '../reading/series'
 import { prevMonth, monthStartOf } from '../reading/month-key'
-import type { Counted, FigureTable, Verdict, VerdictFlag } from '../reading/verdicts'
+import { priorPrintable, type Counted, type FigureTable, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import type { Scope } from '../renderables/types'
 import { isThin, movementDirection } from './movement'
 import { storedAnswerThin, type StoredFloorAnswer } from './floor'
@@ -316,7 +317,9 @@ function findingFigures(
   }
   const pct = pctOf(curr.k, curr.n)
   if (pct != null) figures[`${base}_pct`] = { value: pct, unit: 'pct', label: `${label}’s share of ${who} in ${when}` }
-  if (verdict?.baseline) {
+  // THE MONTH BEFORE ONLY BESIDE A COMPARISON THE PRODUCT DREW (T0a, AK-14):
+  // a refused verdict offers the model no `_prev_*` key to name.
+  if (verdict?.baseline && priorPrintable(verdict)) {
     const prev = verdict.baseline
     figures[`${base}_prev_k`] = { value: prev.k, unit: 'videos', label: `videos naming ${label} the month before` }
     figures[`${base}_prev_n`] = { value: prev.n, unit: 'videos', label: `videos read in ${who} the month before` }
@@ -426,12 +429,15 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
     // THE LINE, THROUGH THE ONE ADAPTER. Trimmed to the month being measured
     // first, for the reason the direction word is: a chart beside an answer is
     // a chart of the months the answer was measured against.
-    // A refused step is drawn broken (decision D, WP1.3).
-    const upToSeries: MonthSeries = {
-      ...series,
-      points: upTo,
-      ...(input.pair ? { refusedSteps: refusedSteps(upTo.map((p) => p.month), (a, b) => pairFor(a, b, series.audience)) } : {}),
-    }
+    // AND TO THE MONTHS SINCE THE LATEST REFUSED STEP (T0a, AK-14; the one
+    // condition): a month on the far side of a refused step is not drawn and
+    // not listed, joined or not, because two levels on one axis are a
+    // comparison. With no judge (a fixture) nothing is refused.
+    const shown = input.pair && upTo.length > 0
+      ? joinedRun(upTo, upTo[upTo.length - 1].month, (a, b) => joins(pairFor(a, b, series.audience)))
+      : upTo
+    const shownMonths = new Set(shown.map((p) => monthStartOf(p.month)))
+    const upToSeries: MonthSeries = { ...series, points: shown }
     const line = seriesToCalendar(upToSeries, {
       color: series.audience === input.ownAudience ? 'var(--you)' : 'var(--cat)',
       label: audienceLabel(series.audience),
@@ -444,8 +450,8 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       audience: series.audience,
       audienceLabel: audienceLabel(series.audience),
       label,
-      series: measuredPoints(series, month),
-      chart: { axis: upTo.map((p) => monthStartOf(p.month)), line },
+      series: measuredPoints(series, month).filter((p) => shownMonths.has(monthStartOf(p.month))),
+      chart: { axis: shown.map((p) => monthStartOf(p.month)), line },
       ...(ownSide ? { own: ownSide } : {}),
       verdict,
       direction,
@@ -645,6 +651,8 @@ export const POINT_REMOVED_NOTE =
 function findingLine(f: FindingMeasure): string {
   const v = f.verdict
   const level = `${f.label}: ${fmtInt(f.value.k)} of ${fmtInt(f.value.n)} videos in ${f.audienceLabel.toLowerCase()}`
+  // A refused comparison is not mentioned at all (T0a): the level alone.
+  if (v && !priorPrintable(v)) return `${level}.`
   if (!v || v.changePts == null || v.bandPts == null) return `${level}, ${TOO_FEW} with the month before.`
   const sign = v.changePts > 0 ? '+' : ''
   return `${level}, ${v.state === 'moved' ? 'moved' : 'no clear change'} (${sign}${v.changePts} pts, band ${v.bandPts} pts).`

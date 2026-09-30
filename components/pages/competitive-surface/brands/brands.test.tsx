@@ -295,11 +295,15 @@ describe('B7 · share of what our searches found', () => {
 })
 
 describe('the Brands page', () => {
-  it('is titled Brands, with the month selector, its one line and Export, and no horizon pills', () => {
+  it('is titled Brands, with the month selector and its one line, no horizon pills and no Export', () => {
     const t = text(<CompetitiveSurfacePage data={brandsFixture()} />)
     expect(t.startsWith('Brands ')).toBe(true)
     expect(t).toContain('as at the 20 Sep update')
-    expect(t).toContain('Export')
+    // T0 ruling U12 (BR-2): the page key `competitive` exports the parked
+    // Competitive Intelligence page, with deltas no pair judge saw, so Brands
+    // carries no Export until it has an export module of its own.
+    expect(t).not.toContain('Export')
+    expect(render(<CompetitiveSurfacePage data={brandsFixture()} />)).not.toContain('Export this tile')
     expect(t).not.toMatch(/Last 3 months|Last 12 months|Since we started/)
   })
 

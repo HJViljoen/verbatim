@@ -387,8 +387,16 @@ export function headlineObject(data: OverviewData): {
   k: number
   n: number
   atLastMonth: { k: number; n: number } | null
+  comparable: boolean
 } | null {
   const lead = weeklyHeadline(data).lead
+  // THE CLAUSE ABOUT LAST MONTH ONLY WHERE THE PAIR JUDGE ALLOWS IT (T0a,
+  // WR-10). The headline is always on the category, and the page's own judge
+  // answered the category's month pair (`sentence.monthPair`, the themes
+  // view). Refused, and no "against … at this point in August" prints: once
+  // the window tables fill, that clause would otherwise be the one comparison
+  // on the page nothing judged.
+  const comparable = data.sentence.monthPair?.mode !== 'refuse'
   if (lead) {
     const row = data.subjects.rows.find((r) => r.id === lead.objectId)
     // ONE DENOMINATOR, OR NO COMPARISON. `SubjectRow.categoryAtLastMonth` is
@@ -408,7 +416,8 @@ export function headlineObject(data: OverviewData): {
       audience: audienceInLabel(lead.audience),
       k: lead.value.k,
       n: lead.value.n,
-      atLastMonth: last ? { k: last.k, n: last.n } : null,
+      atLastMonth: comparable && last ? { k: last.k, n: last.n } : null,
+      comparable,
     }
   }
   // NEVER A PROVISIONAL OR FAILED SUBJECT (decision C, WP1.1): neither may be
@@ -424,12 +433,13 @@ export function headlineObject(data: OverviewData): {
       audience: 'the category',
       k: best.category.k ?? 0,
       n: best.category.n ?? 0,
-      atLastMonth: best.categoryAtLastMonth ? { k: best.categoryAtLastMonth.k, n: best.categoryAtLastMonth.n } : null,
+      atLastMonth: comparable && best.categoryAtLastMonth ? { k: best.categoryAtLastMonth.k, n: best.categoryAtLastMonth.n } : null,
+      comparable,
     }
   }
   const top = [...data.category.growing, ...data.category.fading].sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))[0]
   if (top) {
-    return { label: top.label, objectId: top.id, audience: 'the category', k: top.k, n: top.n, atLastMonth: null }
+    return { label: top.label, objectId: top.id, audience: 'the category', k: top.k, n: top.n, atLastMonth: null, comparable }
   }
   return null
 }

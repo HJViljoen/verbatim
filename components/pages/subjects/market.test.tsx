@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { SubjectsData } from '@/lib/pages/subjects'
 
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
@@ -80,19 +81,35 @@ describe('S1 · the rail reads the market', () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at)
   })
 
+  // HYPOTHETICAL: the market pair read the same way (no refusal on the pane),
+  // so the rail prints the month before.
+  const joined = (): SubjectsData => {
+    const data = marketSubjectsFixture()
+    return { ...data, selected: data.selected ? { ...data.selected, chip: null } : null }
+  }
+
   it('heads its columns with the base: this month and the month before, on the market', () => {
-    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
+    const t = text(subjectsList.render(joined(), 'app', ctx))
     expect(t).toContain('ranked by September')
     expect(t).toContain('Sep of 654')
     expect(t).toContain('Aug of 377')
   })
 
   it('prints each row\'s videos, share and the month before; a month under 10 as its count', () => {
-    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
+    const t = text(subjectsList.render(joined(), 'app', ctx))
     expect(t).toMatch(/Looks & style 103 16% 10%/)
     expect(t).toMatch(/Comfort 43 7% 7%/)
     // Price's August 5 is under 10: a count, never a share (§2.12).
     expect(t).toMatch(/Price 25 4% 5/)
+  })
+
+  it('prints no month before where the market pair is refused (T0a, SB-14: the one condition)', () => {
+    for (const mode of ['app', 'email'] as const) {
+      const t = text(subjectsList.render(marketSubjectsFixture(), mode, ctx))
+      expect(t, mode).toContain('Sep of 654')
+      expect(t, mode).not.toContain('Aug of 377')
+      expect(t, mode).not.toMatch(/Looks & style 103 16% 10%/)
+    }
   })
 
   it('tags a row with its maker share at a fifth or more, and nothing under it (decision F)', () => {
@@ -152,7 +169,10 @@ describe('S2 · the subject in your market', () => {
     const t = text(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
     expect(t).toContain(MARKET_PANE_TITLE)
     expect(t).toMatch(/Looks & style came up in 103 of 654 September videos in your market \( ?16% ?\)\./)
-    expect(t).toContain('Aug 10% of 377 · Sep 16% of 654')
+    // T0a (SB-17): the Aug→Sep pair is refused, so the trail is September's
+    // level alone; August beside it was the comparison the judge refused.
+    expect(t).toContain('Sep 16% of 654')
+    expect(t).not.toContain('Aug 10% of 377')
   })
 
   it('prints the pair\'s one chip, "who posted them" and the months read, and no gap and no side', () => {
@@ -219,7 +239,8 @@ describe('S2 · the subject in your market', () => {
   it('carries the calibration word in its trail: provisional, never a verdict', () => {
     const data = marketSubjectsFixture()
     const t = text(subjectsSubject.render({ ...data, selected: { ...data.selected!, calibration: 'provisional' } }, 'app', ctx))
-    expect(t).toContain('provisional · Aug 10% of 377 · Sep 16% of 654')
+    expect(t).toContain('provisional · Sep 16% of 654')
+    expect(t).not.toContain('Aug 10% of 377')
     expect(blockAnswers(subjectsSubject, data).verdicts).toEqual([])
   })
 

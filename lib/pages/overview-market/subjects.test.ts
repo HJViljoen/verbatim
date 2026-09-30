@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { buildSubjects, withMarketSides } from '../overview'
 import { pooledDenominators } from '../../reading/market'
+import { joins } from '../../reading/comparability'
+import { pairOn } from '../../reading/pairs'
+import { sealandJudge } from '../../test/sealand-pairs'
 import { INDUSTRY_AUDIENCE, rivalKey } from '../../rivals'
 import { subjectCountedFrom, unreadWords } from '../../subjects/read-in'
 import { JUDGE_VERSION, type Subject } from '../../subjects/types'
@@ -31,7 +34,7 @@ function subject(id: string, name: string, precision: number | null, namedAt = '
 const row = (month: string, audience: string, subject_id: string, videos: number) => ({ month, audience, subject_id, videos, comments: 0 })
 const confirmed = (id: string, changedAt: string) => ({ changed_at: changedAt, surface: 'subjects', after: { id, status: 'active' } })
 
-function build(opts: { augustWritten: string; septemberWritten: string; communityConfirmed?: string }) {
+function build(opts: { augustWritten: string; septemberWritten: string; communityConfirmed?: string; prevComparable?: boolean }) {
   const subjects = [
     subject('looks', 'Looks & style', 0.8571428571428571),
     subject('repair', 'Repair & warranty', 0.3333333333333333),
@@ -89,8 +92,9 @@ function build(opts: { augustWritten: string; septemberWritten: string; communit
     prevMonth: '2026-08-01',
     marketRivals: [cotopaxi, freitag],
     read,
+    ...(opts.prevComparable != null ? { prevComparable: opts.prevComparable } : {}),
   })
-  return (id: string) => block.rows.find((r) => r.id === id)!
+  return Object.assign((id: string) => block.rows.find((r) => r.id === id)!, { block })
 }
 
 describe('withMarketSides under the three calibration states (WP1.1 with WP1.6)', () => {
@@ -134,5 +138,31 @@ describe('withMarketSides under the three calibration states (WP1.1 with WP1.6)'
     expect(early('community').unread ?? null).toBeNull()
     expect(early('community').market).toMatchObject({ k: 0, n: 643, observed: true })
     expect(early('community').marketPrev).toMatchObject({ k: 0, n: 377 })
+  })
+})
+
+// T0a, OV-45 (the one condition): "The market by subject" printed August
+// beside a search-inflated September with no pair check at all. The loader
+// now hands `withMarketSides` the market pair's answer
+// (`joins(pair(prevMonth, month, 'market'))`), and a refused pair leaves no
+// month before on the block or on any row.
+describe('withMarketSides under a refused market pair (T0a, OV-45)', () => {
+  const written = { augustWritten: '2026-09-24T12:15:41.468Z', septemberWritten: '2026-09-24T12:15:41.468Z' }
+
+  it('the judge on Sealand’s September refuses the market pair, so no month before is carried', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const prevComparable = joins(judge('2026-08-01', '2026-09-01', 'market'))
+    expect(prevComparable).toBe(false)
+    const byId = build({ ...written, prevComparable })
+    expect(byId.block.market?.prev).toBeNull()
+    for (const id of ['looks', 'repair', 'community', 'water']) expect(byId(id).marketPrev ?? null).toBeNull()
+    // This month's level stands.
+    expect(byId('looks').market).toMatchObject({ k: 103, n: 643, observed: true })
+  })
+
+  it('a pair that joins keeps the month before, as before', () => {
+    const byId = build({ ...written, prevComparable: true })
+    expect(byId.block.market?.prev).toEqual({ month: '2026-08-01', n: 377 })
+    expect(byId('looks').marketPrev).toMatchObject({ k: 38, n: 377 })
   })
 })

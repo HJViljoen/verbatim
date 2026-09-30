@@ -64,7 +64,7 @@ import {
   type Substrate,
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
-import { pairOnVerdict, type PairComparability } from '../reading/comparability'
+import { joins, pairOnVerdict, type PairComparability } from '../reading/comparability'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
@@ -2548,7 +2548,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // and E), on the front page only: the weekly's rows stay as they were.
   const pooledCounts = pooledDenominators(history.denominators, marketRivals)
   if (marketFirst) {
-    withMarketSides(subjects, { months: subjectMonths ?? [], subjects: subjectRows ?? [], counts: pooledCounts, month, prevMonth, marketRivals, read: subjectsRead })
+    withMarketSides(subjects, { months: subjectMonths ?? [], subjects: subjectRows ?? [], counts: pooledCounts, month, prevMonth, marketRivals, read: subjectsRead, prevComparable: joins(pair(prevMonth, month, 'market')) })
     const makers = subjectMakersAhead ? await subjectMakersAhead : null
     if (makers) withMakerShares(subjects, makers.lens, marketRivals)
   }
@@ -5246,8 +5246,15 @@ export function withMarketSides(block: SubjectsBlock, input: {
    *  same input `buildSubjects` took. Optional: without it every month with
    *  rows reads as read. */
   read?: SubjectsReadIn
+  /** Whether the month before may print beside this month: the market pair
+   *  joins (`joins(pair(prevMonth, month, 'market'))`, the pair judge). False
+   *  and the block carries no month before at all, on any row (T0a, OV-45:
+   *  August printed beside a search-inflated September with no chip).
+   *  Omitted (a fixture with no pair), the month before stands. */
+  prevComparable?: boolean
 }): void {
   const byId = new Map(input.subjects.map((x) => [x.id, x]))
+  const prevShown = input.prevComparable ?? true
   const readIn = subjectReadInOf(input.read, input.months)
   for (const r of block.rows) {
     const subject = byId.get(r.id)
@@ -5273,12 +5280,12 @@ export function withMarketSides(block: SubjectsBlock, input: {
       ? null
       : marketSubjectSide(input.months, input.counts, r.id, input.prevMonth, input.marketRivals, known(input.prevMonth))
     r.market = { k: side.k, n: side.n, pct: side.pct, verdict: null, observed: side.k != null }
-    r.marketPrev = prev && prev.n != null ? prev : null
+    r.marketPrev = prevShown && prev && prev.n != null ? prev : null
   }
   block.market = {
     month: input.month,
     n: input.counts.get(input.month)?.videos ?? null,
-    prev: input.counts.has(input.prevMonth) ? { month: input.prevMonth, n: input.counts.get(input.prevMonth)?.videos ?? null } : null,
+    prev: prevShown && input.counts.has(input.prevMonth) ? { month: input.prevMonth, n: input.counts.get(input.prevMonth)?.videos ?? null } : null,
   }
 }
 

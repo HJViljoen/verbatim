@@ -143,6 +143,27 @@ describe('weekSentence', () => {
     expect(Object.keys(s.figures)).toHaveLength(SENTENCE_FIGURES - 1)
   })
 
+  // T0a, WR-10 (the one condition): where the pair judge refuses the month
+  // pair, nothing about last month prints: no figure, no "against", and no
+  // sentence explaining why.
+  it('names this month alone where the pair judge refused the pair, with no clause and no last-month figure', () => {
+    const s = weekSentence({
+      month: '2026-09-01',
+      daysIn: 18,
+      label: 'Durability',
+      objectId: 'durability',
+      audience: 'the category',
+      k: 65,
+      n: 271,
+      atLastMonth: { k: 44, n: 244 },
+      comparable: false,
+    })
+    expect(s.body).toMatch(/^September, 18 days in: Durability is running at \[\[o_durability_share\]\] of \[\[o_durability_of\]\] videos read for the category\.$/)
+    expect(s.body).not.toContain('August')
+    expect(s.body).not.toContain('last month')
+    expect(s.figures.o_durability_last).toBeUndefined()
+  })
+
   it('keys a uuid-named object so the token substitutes', () => {
     const s = weekSentence({
       month: '2026-09-01',

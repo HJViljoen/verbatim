@@ -36,7 +36,7 @@ import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadChanges, loadMonthSeries, loadPairRows, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
-import { nextComparablePair, pairOnVerdict } from '../reading/comparability'
+import { joins, nextComparablePair, pairOnVerdict } from '../reading/comparability'
 import { pairChipWords } from '../calibration'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import type { MethodLines } from '../reading/method'
@@ -2227,12 +2227,18 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // every one with a figure; a subject named but not confirmed last. Each row
   // carries the month before on the same base, and its maker share (decision
   // F: printed at a fifth or more).
+  //
+  // THE MONTH BEFORE ONLY WHERE THE MARKET PAIR JOINS (T0a, SB-14). The rail
+  // printed August beside September on every row with no pair check at all;
+  // where the judge refuses the pair (Sealand's September: our searches
+  // changed), the rail carries no month before, on any row, and no column.
+  const railPrevShown = joins(pair(prevMonth, month, MARKET_LINE))
   const railRows: SubjectRail[] = [...active, ...proposed].map((s) => {
     // A proposed subject was never checked and measures nothing; its row says
     // "not counted yet" whatever the state (`railNote`).
     const calibration = calibrationOf.get(s.id) ?? subjectCalibration(s)
     const counted = s.status === 'active' && calibration !== 'failed' ? marketOf(s.id) : null
-    const before = counted ? marketOf(s.id, prevMonth) : null
+    const before = counted && railPrevShown ? marketOf(s.id, prevMonth) : null
     const unread = s.status === 'active' && readIn(s.id, month) === 'unread'
     return {
       id: s.id,
@@ -2266,7 +2272,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     base: {
       month,
       n: marketCounts.get(monthStartOf(month))?.videos ?? null,
-      prev: marketCounts.has(monthStartOf(prevMonth))
+      prev: railPrevShown && marketCounts.has(monthStartOf(prevMonth))
         ? { month: prevMonth, n: marketCounts.get(monthStartOf(prevMonth))?.videos ?? null }
         : null,
     },
@@ -3678,7 +3684,13 @@ export const monthsReadOf = (line: MonthSeries | null | undefined): MonthSeries[
  * level prints its base). Levels side by side, never a direction.
  */
 export function marketTrail(line: MonthSeries | null | undefined): { month: string; text: string; of: string }[] {
-  return monthsReadOf(line).slice(-3).flatMap((p) => {
+  // ONLY THE MONTHS SINCE THE LATEST REFUSED STEP (T0a, SB-17; the one
+  // condition): "Aug 10% of 377 · Sep 16% of 654" across a refused pair is
+  // the comparison the judge refused, chip or no chip. The line carries its
+  // refused steps (`refusedSteps`, judged on the market view).
+  const breaks = Object.keys(line?.refusedSteps ?? {}).map(monthStartOf).sort()
+  const since = breaks.length > 0 ? breaks[breaks.length - 1] : null
+  return monthsReadOf(line).filter((p) => since == null || monthStartOf(p.month) >= since).slice(-3).flatMap((p) => {
     const level = marketLevel(p.k, p.videos)
     return level ? [{ month: p.month, text: level.text, of: `of ${fmtInt(p.videos as number)}` }] : []
   })

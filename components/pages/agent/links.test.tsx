@@ -75,20 +75,23 @@ describe('Subjects: "Ask about this" lands on the subject’s own figure and tra
     expect(namedObjects(question, FRAME)).toEqual([{ kind: 'subject', id: 's-looks', label: 'Looks & style', calibration: 'ready' }])
   })
 
-  it('reads the pane’s own number and trail: 103 of 654, "Aug 10% of 377 · Sep 16% of 654"', () => {
+  it('reads the pane’s own number: 103 of 654, and neither prints the refused August beside it', () => {
     const [object] = namedObjects(question, FRAME)
     const points: MarketPoint[] = (pane.marketLine?.points ?? []).map((p) => ({ month: p.month, k: p.k, n: p.videos }))
     const reading = objectReading({ object, points }, '2026-09-01', judge, ON_2_OCT)
     expect(reading.curr).toEqual({ month: '2026-09-01', k: pane.market?.k, n: pane.market?.n })
     const paneText = renderText(subjectsSubject.render(data, 'app', ctx)).replace(/\s+/g, ' ')
+    // T0a (the one condition): the Aug→Sep pair is refused on both surfaces,
+    // so the trail is September's level alone ("Aug 10% of 377 · Sep 16% of
+    // 654" was the comparison the judge refused), with no sentence about it.
     const trail = marketTrail(pane.marketLine).map((t) => `${t.month === '2026-08-01' ? 'Aug' : 'Sep'} ${t.text} ${t.of}`).join(' · ')
-    expect(trail).toBe('Aug 10% of 377 · Sep 16% of 654')
+    expect(trail).toBe('Sep 16% of 654')
     expect(paneText).toContain(trail)
+    expect(paneText).not.toContain('of 377')
     const askText = renderText(<AboutReadings readings={[reading]} />).replace(/\s+/g, ' ')
     expect(askText).toContain('103 of 654 videos')
-    expect(askText).toContain(trail)
-    // The pair Subjects refuses, refused in its words, and never "moved".
-    expect(askText).toContain('Not read as a change: we changed our searches in September.')
+    expect(askText).not.toContain('of 377')
+    expect(askText).not.toContain('Not read as a change')
     expect(askText).not.toMatch(/\bmoved\b/)
     assertCopyContract(<AboutReadings readings={[reading]} />)
   })

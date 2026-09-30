@@ -229,6 +229,41 @@ export function refusedSteps(
 }
 
 /**
+ * The run of months a reader may print side by side (T0a, the one condition):
+ * the stretch around `anchor` that no refused step crosses.
+ *
+ * A level printed beside another month's level is a comparison, joined by a
+ * line or not. So where the judge refuses a step, the months on the far side
+ * of it from the anchor are not printed at all: a trail ending at the reading
+ * month keeps the months since the latest refused step (`anchor` = the newest
+ * month), and a move read forward from its own month keeps the months up to
+ * the first one (`anchor` = the move's month). `joined(prev, month)` judges
+ * one calendar step (`joins(pair(prev, month, audience))`); a step between two
+ * months that are not consecutive is not judged, as `refusedSteps` does not
+ * judge it. Points are taken in month order; an anchor not among them
+ * returns nothing. PURE.
+ */
+export function joinedRun<T extends { month: string }>(
+  points: readonly T[],
+  anchor: string,
+  joined: (prevMonth: string, month: string) => boolean,
+): T[] {
+  const sorted = [...points].sort((a, b) => monthStartOf(a.month).localeCompare(monthStartOf(b.month)))
+  const at = sorted.findIndex((p) => monthStartOf(p.month) === monthStartOf(anchor))
+  if (at < 0) return []
+  const steps = (i: number): boolean => {
+    const prev = monthStartOf(sorted[i - 1].month)
+    const month = monthStartOf(sorted[i].month)
+    return month !== nextMonth(prev) || joined(prev, month)
+  }
+  let from = at
+  while (from > 0 && steps(from)) from--
+  let to = at
+  while (to < sorted.length - 1 && steps(to + 1)) to++
+  return sorted.slice(from, to + 1)
+}
+
+/**
  * The three questions a page builder asks of its judge, in one place: the pair
  * for a verdict, `comparable` for a direction word, and the refused steps along
  * a sparkline's months (true where the step INTO that slot is refused). With no

@@ -100,7 +100,11 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
   const base = l.base!
   const email = mode === 'email'
   const n = base.n
-  const prev = base.prev
+  // THE ONE CONDITION (T0a, SB-14): the loader leaves the month before out
+  // where the market pair is refused. A copy stored before that rule still
+  // carries it; the pane beside the rail judged the same market pair, and
+  // where it carries the refusal the month before is not printed here.
+  const prev = data.selected?.chip ? null : base.prev
   // ONE PLAIN LINE UNDER THE RAIL where a subject is being re-described
   // (finish-list item 21), never on a rail without one. On the page only: the
   // briefs that borrow this block are on hold and print as they did.

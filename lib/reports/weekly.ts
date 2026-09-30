@@ -284,6 +284,15 @@ export interface WeekSentenceInput {
   n: number
   /** The same point last month, or null where M3 cannot answer the window. */
   atLastMonth: { k: number; n: number } | null
+  /**
+   * Whether this month may be set against the month before at all: the pair
+   * judge's answer for the audience the share is a share of (T0a, WR-10).
+   * False, and the sentence names this month's level alone, with no clause
+   * about last month: a comparison the judge refused is not shown and not
+   * explained (the one condition). Omitted (a sentence stored before the
+   * rule), the clause stands as it did.
+   */
+  comparable?: boolean
 }
 
 const pctOf = (k: number, n: number): number => (n > 0 ? Math.round((k / n) * 1000) / 10 : 0)
@@ -318,6 +327,7 @@ export function weekSentence(input: WeekSentenceInput): WeekSentence {
   // for; a fourth number here would cost a flag on the first screen.
   const head = `${stamp}: ${input.label} is running at [[${share}]] of [[${of}]] videos read for ${input.audience}`
 
+  if (input.comparable === false) return { body: `${head}.`, figures }
   if (!input.atLastMonth) {
     return { body: `${head}. At this point last month: not recorded yet.`, figures }
   }

@@ -299,8 +299,19 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   })
 
   it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
-    expect(text).toContain('Price provisional · August under 10, a count 23 4% 5')
-    expect(text).not.toContain('Price provisional 23 4% ·')
+    // HYPOTHETICAL: the market pair read the same way (no refusal on the
+    // page), so the month before prints.
+    const base = marketFrontFixture()
+    const joined = { ...base, sentence: { ...base.sentence, chip: null }, category: { ...base.category, market: base.category.market ? { ...base.category.market, chip: null } : undefined } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
+    const printed = read(block.render(joined, 'app', ctx))
+    expect(printed).toContain('Price provisional · August under 10, a count 23 4% 5')
+    expect(printed).not.toContain('Price provisional 23 4% ·')
+    // T0a (OV-45, the one condition): on the fixture's own refused September
+    // pair the block prints no month before at all: no column, no count tag.
+    const refused = read(block.render(base, 'app', ctx))
+    expect(refused).not.toContain('Aug of')
+    expect(refused).not.toContain('August under 10')
     // Said on the row, so the count cannot read as a share (finish-list item 9).
     expect(prevCountTag(7, { month: '2026-08-01', n: 378 })).toBe('August under 10, a count')
     expect(prevCountTag(70, { month: '2026-08-01', n: 378 })).toBeNull()
