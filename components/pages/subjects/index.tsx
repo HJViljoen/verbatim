@@ -11,7 +11,7 @@ import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
-import { loadSubjectsPage, type SubjectsData } from '@/lib/pages/subjects'
+import { loadSubjectsPage, selectedNotReady, type SubjectsData } from '@/lib/pages/subjects'
 import { printsMarket } from '@/lib/subjects/calibration-state'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
@@ -441,10 +441,16 @@ export const subjectsPage: PageModule<SubjectsData> = {
     // slide about itself.
     const first: Slide = { title: 'Your subjects', keys: ['subjects.list', 'subjects.ownposts', 'subjects.sayhear'], layout: 'grid' }
     if (!data.selected) return [first]
+    // A SUBJECT THAT IS NOT READY TAKES NO SLIDE ITS PAGE DOES NOT DRAW (T0a,
+    // ruling U6; review finding 3): its months, what people do in its comments
+    // and the questions counted on it rest on unverified matching. Its name,
+    // its pane and its voices stay, as on the page (`layoutFor`).
+    const withheld = selectedNotReady(data) ? new Set<string>(WITHHELD_WHEN_NOT_READY.map((b) => b.key)) : new Set<string>()
+    const keep = (keys: string[]) => keys.filter((k) => !withheld.has(k))
     return [
       first,
-      { title: data.selected.name, keys: ['subjects.subject', 'subjects.line'], layout: 'grid' },
-      { title: `${data.selected.name} · what is being said`, keys: ['subjects.kinds', 'subjects.unanswered', 'subjects.voices'], layout: 'grid' },
+      { title: data.selected.name, keys: keep(['subjects.subject', 'subjects.line']), layout: 'grid' },
+      { title: `${data.selected.name} · what is being said`, keys: keep(['subjects.kinds', 'subjects.unanswered', 'subjects.voices']), layout: 'grid' },
     ]
   },
   renderables,

@@ -6,7 +6,7 @@ import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/char
 import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
-import { allRedescribed, endReadings, monthsReadOf, monthsShownOf, paneSides, sideLegend, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, endReadings, monthsReadOf, monthsShownOf, paneSides, sideLegend, selectedNotReady, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectsData } from '@/lib/pages/subjects'
 import type { CSSProperties } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import type { MonthPoint } from '@/lib/reading/series'
@@ -94,6 +94,10 @@ export const subjectsLine: Block<SubjectsData> = {
   question: 'Where has this subject been going?',
 
   render(data, mode = 'app', ctx) {
+    // A SUBJECT THAT IS NOT READY DRAWS NOTHING HERE, WHOEVER RENDERS THE
+    // BLOCK (T0a, ruling U6; review finding 3): the page leaves it out, and so
+    // does an export or a stored section (`selectedNotReady`).
+    if (selectedNotReady(data)) return null
     const pane = data.selected
     // THE SUBJECT ON THE MARKET, MONTH BY MONTH (WP2.2): a pane the loader
     // builds; one stored before WP2.2 draws its sides' lines, as sent (below).

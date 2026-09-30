@@ -841,6 +841,19 @@ export function paneSides(pane: Pick<SubjectPane, 'sides' | 'calibration'>): Sub
 }
 
 /**
+ * Is the selected subject one whose membership-derived blocks draw nothing
+ * (T0a, ruling U6; review finding 3)? What people do in its comments, the
+ * questions counted on it and its months all rest on matching that is not
+ * verified. The page's layout leaves those blocks out (`layoutFor`), and they
+ * answer this themselves too, so an export, a stored report section or any
+ * other caller obeys the rule. A stored pane with no calibration field renders
+ * as it was sent (`printsMarket`).
+ */
+export function selectedNotReady(data: Pick<SubjectsData, 'selected'>): boolean {
+  return data.selected != null && !printsMarket(data.selected.calibration)
+}
+
+/**
  * A rail row's market side: k pooled over the market's audiences this month,
  * n the pooled market (decision E), or null where there is nothing to print.
  *

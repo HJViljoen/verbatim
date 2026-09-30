@@ -6,7 +6,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { surface } from '@/lib/nav'
-import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
+import { layoutFor, SubjectsPage, SUBJECT_BLOCKS, subjectsPage } from './index'
 import { NO_SUBJECTS_LINE, subjectsList } from './list'
 import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import { subjectsOwnPosts } from './own-posts'
@@ -411,5 +411,47 @@ describe('the market page, as a page', () => {
     const t = text(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     expect(t).not.toContain(MARKET_PANE_TITLE)
     expect(t).toContain('Durability')
+  })
+})
+
+// EXPORT THIS PAGE OBEYS THE PAGE (T0a, ruling U6; review finding 3). The
+// layout left a not-ready subject's months, kinds and questions out, but the
+// export's slides always asked for them, and "Questions people ask on it: 2
+// videos asked about Looks & style in September" printed on a provisional
+// subject's PDF. The slides leave them out, and the three blocks answer the
+// rule themselves, so a stored section or any other caller obeys it too.
+describe('the export of a subject that is not ready', () => {
+  const notReady = (calibration: 'provisional' | 'failed'): SubjectsData => {
+    const data = marketSubjectsFixture()
+    return { ...data, selected: { ...data.selected!, calibration } }
+  }
+  const WITHHELD = ['subjects.line', 'subjects.kinds', 'subjects.unanswered']
+
+  it('asks for no slide the page does not draw, and keeps the name, the pane and the voices', () => {
+    for (const calibration of ['provisional', 'failed'] as const) {
+      const keys = subjectsPage.slides(notReady(calibration), 'default').flatMap((sl) => sl.keys)
+      for (const k of WITHHELD) expect(keys, calibration).not.toContain(k)
+      for (const k of ['subjects.list', 'subjects.subject', 'subjects.voices']) expect(keys, calibration).toContain(k)
+      expect(new Set(keys)).toEqual(new Set(layoutFor(notReady(calibration)).map((l) => l.block.key)))
+    }
+    // A ready subject still exports all of them.
+    const ready = subjectsPage.slides(marketSubjectsFixture(), 'default').flatMap((sl) => sl.keys)
+    for (const k of WITHHELD) expect(ready).toContain(k)
+  })
+
+  it('draws nothing from the three blocks, in any mode, and declares nothing for them', () => {
+    const data = notReady('provisional')
+    for (const block of [subjectsLine, subjectsKinds, subjectsUnanswered]) {
+      for (const mode of MODES) expect(render(block.render(data, mode, ctx)), `${block.key} ${mode}`).toBe('')
+      const answers = blockAnswers(block, data)
+      expect(Object.keys(answers.figures), block.key).toEqual([])
+      expect(answers.verdicts, block.key).toEqual([])
+    }
+    // Nothing the review saw on the PDF: the question count, the kinds' counts
+    // and the month's share.
+    const all = SUBJECT_BLOCKS.map((b) => text(b.render(data, 'print', ctx))).join(' ')
+    expect(all).not.toContain('videos asked about Looks & style')
+    expect(all).not.toContain('Praising it')
+    expect(all).not.toContain('103 of 654')
   })
 })

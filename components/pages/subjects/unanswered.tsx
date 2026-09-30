@@ -8,7 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
-import { allRedescribed, periodPhrase, QUESTIONS_PARAM, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
+import { allRedescribed, periodPhrase, QUESTIONS_PARAM, selectedNotReady, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
 import { RULE, SCALE } from '@/components/pages/overview/market'
 import { UNCHECKED_TAIL } from '@/components/pages/market-surface/questions'
 
@@ -70,6 +70,10 @@ export const subjectsUnanswered: Block<SubjectsData> = {
   question: 'What is the category asking that we have never addressed?',
 
   render(data, mode = 'app', ctx) {
+    // A SUBJECT THAT IS NOT READY DRAWS NOTHING HERE, WHOEVER RENDERS THE
+    // BLOCK (T0a, ruling U6; review finding 3): the page leaves it out, and so
+    // does an export or a stored section (`selectedNotReady`).
+    if (selectedNotReady(data)) return null
     // QUESTIONS PEOPLE ASK ON IT (WP2.2): a pane the loader builds; one stored
     // before WP2.2 prints its Phase 1 gap list, as sent (below).
     if (data.list.base !== undefined && (!data.selected || data.selected.monthStates !== undefined)) {
@@ -167,7 +171,8 @@ export const subjectsUnanswered: Block<SubjectsData> = {
 
   figures(data): FigureTable {
     const u = data.selected?.unanswered
-    if (!u || u.rows.length === 0) return {}
+    // Nothing declared for a subject that is not ready: nothing prints.
+    if (!u || u.rows.length === 0 || selectedNotReady(data)) return {}
     const out: FigureTable = {}
     for (const r of u.rows) {
       out[`unanswered_${r.id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_videos`] = {
