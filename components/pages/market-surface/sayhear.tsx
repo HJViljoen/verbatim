@@ -105,13 +105,48 @@ function SubjectsLine({ c, mode }: { c: ClaimSubjects; mode: RenderMode }) {
       </div>
     )
   }
+  // EVERY CLAIM ACCOUNTED FOR (sw-2 item 2). The subject counts can overlap
+  // (a claim sits under two subjects) and skip the claims filed under a
+  // subject being re-described or under none, so the parts above never added
+  // up to the lead's figure. The line under them does, in the app; the email
+  // prints as it was sent (reports on hold).
+  const a = c.accounted
+  const tally = a ? claimsTally(a, shown.reduce((n, x) => n + x.k, 0)) : null
+  const appParts = a
+    ? shown.map((x) => (
+      <span key={x.subjectId} className="whitespace-nowrap">
+        <span data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(x.k)}</span> {x.name.toLowerCase()}
+      </span>
+    ))
+    : parts
   return (
-    <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[15px] leading-[1.45] text-secondary-foreground">
-      {lead}
-      {parts.length > 0 ? <span aria-hidden className="h-4 w-px self-center bg-border" /> : null}
-      {parts}
-    </p>
+    <div className="flex flex-col gap-1">
+      <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[15px] leading-[1.45] text-secondary-foreground">
+        {lead}
+        {appParts.length > 0 ? <span aria-hidden className="h-4 w-px self-center bg-border" /> : null}
+        {appParts}
+      </p>
+      {tally ? <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground [text-wrap:pretty]">{tally}</p> : null}
+    </div>
   )
+}
+
+/**
+ * The sentence under the subject counts that accounts for every claim:
+ * "27 sit under one or more of these subjects, 70 under subjects being
+ * re-described and 7 under none." Its parts add up to the lead's figure; the
+ * overlap is said only where the counts above add up past `under`. Null where
+ * nothing needs accounting for.
+ */
+export function claimsTally(a: NonNullable<ClaimSubjects['accounted']>, shownSum: number): string | null {
+  const bits: string[] = []
+  if (a.under > 0) bits.push(`${fmtInt(a.under)} sit under ${a.under === 1 ? 'one' : 'one or more'} of these subjects${shownSum > a.under ? ' (a claim can sit under more than one)' : ''}`)
+  if (a.redescribed > 0) bits.push(`${fmtInt(a.redescribed)} under subjects being re-described`)
+  if (a.outside > 0) bits.push(`${fmtInt(a.outside)} under none of them`)
+  if (a.pending > 0) bits.push(`${fmtInt(a.pending)} still to be read`)
+  if (bits.length === 0 || (bits.length === 1 && a.under > 0 && shownSum === a.under)) return null
+  const joined = bits.length === 1 ? bits[0] : `${bits.slice(0, -1).join(', ')} and ${bits.at(-1)}`
+  return `${joined.charAt(0).toUpperCase()}${joined.slice(1)}.`
 }
 
 /** Words for the claims this block can draw (`CLAIM_ROWS`, five). */

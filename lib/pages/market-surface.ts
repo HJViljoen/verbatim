@@ -397,6 +397,15 @@ export interface ClaimSubjects {
   /** Claims the judge has not filed for every one of those subjects. */
   unfiled: number
   state: 'checked' | 'partial' | 'unchecked'
+  /**
+   * Every claim once (sw-2 item 2), so the line accounts for all of them:
+   * `under` one or more of the subjects above (a claim can sit under two, so
+   * their counts can add up past it), else under a subject being re-described
+   * (`redescribed`), else still to be read for a subject (`pending`), else
+   * under `outside` all of them. The four add up to `claims`. OPTIONAL: a
+   * stored copy has none and prints as it was sent.
+   */
+  accounted?: { under: number; redescribed: number; outside: number; pending: number }
 }
 
 export interface WayRow {
@@ -1102,15 +1111,30 @@ export function buildClaimSubjects(input: {
     groups.set(key, [...(groups.get(key) ?? []), c.id])
   }
   const active = input.subjects.filter((x) => x.calibration !== 'failed')
+  const redescribing = input.subjects.filter((x) => x.calibration === 'failed')
   const f = input.filings
   let unfiled = 0
+  // EVERY CLAIM IN ONE PLACE (sw-2 item 2): the line printed "Of your 104
+  // claims: 12 · 10 · 9 · 6 · 1 still to be read", 38, with nothing said of the
+  // other 66 (most filed under a subject being re-described, a few under
+  // none) and nothing said of a claim counted under two subjects.
+  let under = 0
+  let redescribed = 0
+  let outside = 0
+  let pending = 0
   const k = new Map(active.map((x) => [x.id, 0]))
   for (const ids of groups.values()) {
     // NO SUBJECT, NOTHING TO FILE: the judge files a claim against subjects,
     // and with none named (Össur) a claim is never "not checked yet".
-    if (active.length > 0 && (!f || active.some((x) => !ids.some((id) => f.claimFiled.has(`${id}|${x.id}`))))) unfiled++
-    if (!f) continue
-    for (const x of active) if (ids.some((id) => f.claimTouches.get(id)?.has(x.id))) k.set(x.id, (k.get(x.id) ?? 0) + 1)
+    const isUnfiled = active.length > 0 && (!f || active.some((x) => !ids.some((id) => f.claimFiled.has(`${id}|${x.id}`))))
+    if (isUnfiled) unfiled++
+    const touches = (x: { id: string }) => Boolean(f) && ids.some((id) => f!.claimTouches.get(id)?.has(x.id))
+    const onActive = active.filter(touches)
+    for (const x of onActive) k.set(x.id, (k.get(x.id) ?? 0) + 1)
+    if (onActive.length > 0) under++
+    else if (redescribing.some(touches)) redescribed++
+    else if (isUnfiled) pending++
+    else outside++
   }
   const claims = groups.size
   return {
@@ -1120,6 +1144,7 @@ export function buildClaimSubjects(input: {
       .sort((a, b) => b.k - a.k || a.name.localeCompare(b.name)),
     unfiled,
     state: claims > 0 && unfiled === claims ? 'unchecked' : unfiled > 0 ? 'partial' : 'checked',
+    accounted: { under, redescribed, outside, pending },
   }
 }
 

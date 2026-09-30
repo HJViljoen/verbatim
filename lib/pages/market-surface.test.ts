@@ -792,7 +792,7 @@ describe('buildClaimSubjects (WP3.6 Y3)', () => {
   })
 
   it('with no subject named (Össur), counts the claims and leaves nothing "not checked yet"', () => {
-    expect(buildClaimSubjects({ claims, subjects: [], filings: null })).toEqual({ claims: 2, subjects: [], unfiled: 0, state: 'checked' })
+    expect(buildClaimSubjects({ claims, subjects: [], filings: null })).toEqual({ claims: 2, subjects: [], unfiled: 0, state: 'checked', accounted: { under: 0, redescribed: 0, outside: 2, pending: 0 } })
   })
 
   it('counts subjects once every claim is filed for every subject not being re-described', () => {
@@ -801,6 +801,35 @@ describe('buildClaimSubjects (WP3.6 Y3)', () => {
     expect(c).toMatchObject({ claims: 2, unfiled: 0, state: 'checked' })
     expect(c!.subjects).toEqual([{ subjectId: 's-d', name: 'Durability', k: 1 }, { subjectId: 's-w', name: 'Waterproofing', k: 0 }])
     expect(buildClaimSubjects({ claims, subjects, filings: ownPostFilings([row('c2', 's-w', false), row('c2', 's-d', true)]) })).toMatchObject({ unfiled: 1, state: 'partial' })
+  })
+
+  // sw-2 item 2: "Of your 104 claims: 12 · 10 · 9 · 6 · 1 still to be read"
+  // summed to 38 with nothing said of the other 66.
+  it('accounts for every claim once: under a subject, under one being re-described, under none, or still to be read', () => {
+    const four = [
+      ...claims,
+      { id: 'c3', source_video_id: 'p3', claim: 'A cleanup every month.' },
+      { id: 'c4', source_video_id: 'p4', claim: 'Designed in Cape Town.' },
+      { id: 'c5', source_video_id: 'p5', claim: 'Ships worldwide.' },
+    ]
+    const filings = ownPostFilings([
+      // c1: under both shown subjects.
+      row('c1', 's-w', true), row('c1', 's-d', true), row('c1', 's-r', false),
+      // c2: under one.
+      row('c2', 's-w', false), row('c2', 's-d', true), row('c2', 's-r', false),
+      // c3: only under the subject being re-described.
+      row('c3', 's-w', false), row('c3', 's-d', false), row('c3', 's-r', true),
+      // c4: under none.
+      row('c4', 's-w', false), row('c4', 's-d', false), row('c4', 's-r', false),
+      // c5: not filed for Durability yet, and under nothing it was filed for.
+      row('c5', 's-w', false),
+    ])
+    const c = buildClaimSubjects({ claims: four, subjects, filings })!
+    expect(c.accounted).toEqual({ under: 2, redescribed: 1, outside: 1, pending: 1 })
+    const a = c.accounted!
+    expect(a.under + a.redescribed + a.outside + a.pending).toBe(c.claims)
+    // The subject counts overlap (c1 sits under two): 3 against 2 claims.
+    expect(c.subjects.reduce((n, x) => n + x.k, 0)).toBe(3)
   })
 })
 

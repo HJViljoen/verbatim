@@ -12,7 +12,7 @@ import { MARKET_BLOCKS, MarketSurfacePage } from './index'
 import { UNCHECKED_TAIL, marketQuestions } from './questions'
 import { marketAdvice } from './advice'
 import { marketMoves } from './moves'
-import { claimsHead, marketSayHear } from './sayhear'
+import { claimsHead, claimsTally, marketSayHear } from './sayhear'
 import {
   deepLinkFixture, firstUpdateFixture, marketFixture, ossurMovesFixture, sealandMovesFixture, sealandQuestionsFiled, unrecordedFixture,
 } from './fixture'
@@ -182,6 +182,38 @@ describe('Y3 · what you say, counted in your market', () => {
     const unread = renderText(marketSayHear.render({ ...base, ways: { ...base.ways, claimSubjects: null } }, 'app', ctx))
     expect(unread).toContain('Your claims, with what your market said back')
     expect(unread).not.toContain('of them')
+  })
+})
+
+describe('Y3 · every claim accounted for (sw-2 item 2)', () => {
+  // Production, 30 Sep: "Of your 104 claims read to date: 12 looks & style ·
+  // 10 buying & delivery · 9 price · 6 durability · 1 still to be read" (38).
+  const base = sealandMovesFixture()
+  const claimSubjects = {
+    claims: 104,
+    subjects: [
+      { subjectId: 'l', name: 'Looks & style', k: 12 },
+      { subjectId: 'b', name: 'Buying & delivery', k: 10 },
+      { subjectId: 'p', name: 'Price', k: 9 },
+      { subjectId: 'd', name: 'Durability', k: 6 },
+    ],
+    unfiled: 1,
+    state: 'partial' as const,
+    accounted: { under: 27, redescribed: 70, outside: 7, pending: 0 },
+  }
+  const text = renderText(marketSayHear.render({ ...base, ways: { ...base.ways, claimSubjects } }, 'app', ctx))
+
+  it('says where the claims not counted under a subject are, and that they add up', () => {
+    expect(text).toContain('Of your 104 claims read to date')
+    expect(text).toContain('27 sit under one or more of these subjects (a claim can sit under more than one), 70 under subjects being re-described and 7 under none of them.')
+    const a = claimSubjects.accounted
+    expect(a.under + a.redescribed + a.outside + a.pending).toBe(claimSubjects.claims)
+    assertCopyContract(render(marketSayHear.render({ ...base, ways: { ...base.ways, claimSubjects } }, 'app', ctx)))
+  })
+
+  it('writes the tally only where something needs accounting for', () => {
+    expect(claimsTally({ under: 5, redescribed: 0, outside: 0, pending: 0 }, 5)).toBeNull()
+    expect(claimsTally({ under: 4, redescribed: 0, outside: 0, pending: 2 }, 4)).toBe('4 sit under one or more of these subjects and 2 still to be read.')
   })
 })
 
