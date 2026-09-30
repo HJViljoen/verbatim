@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
 import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
@@ -8,6 +9,11 @@ import { surface } from '@/lib/nav'
 // sidebar stays, and the one line under the bar points at the front page.
 // app/dashboard/[...rest]/page.tsx routes unmatched addresses here, and any
 // page that calls notFound() lands here too.
+// THE TAB'S NAME ON A REAL 404 (sw-2 item 8). Once the catch-all answers 404
+// (no loader above it streams a 200 first), Next renders this boundary with
+// its own segment's metadata, not the page's, and the tab read "Verbatim".
+export const metadata: Metadata = { title: 'Page not found' }
+
 export default function DashboardNotFound() {
   const front = surface('overview')
   return (

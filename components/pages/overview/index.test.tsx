@@ -8,7 +8,7 @@ import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, typ
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OverviewPage, TILE_BLOCKS, frontTile, horizonRange } from './index'
 import { overviewPage } from './page'
 import { FRONT_TILE_KEYS } from './tiles'
-import DashboardLoading from '@/app/dashboard/loading'
+import DashboardLoading from '@/app/dashboard/(front)/loading'
 import { SidebarTenant } from '@/components/sidebar-tenant-loader'
 import { PAGES } from '@/components/pages/registry'
 import { marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture, refusedFixture } from './fixture'

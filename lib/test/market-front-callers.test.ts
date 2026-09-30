@@ -19,7 +19,7 @@ const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8')
 
 describe('who builds the Overview as "Your market"', () => {
   it('the route, the page module (export, report sections, render-page), the two loader scripts, the monthly and Ask', () => {
-    for (const p of ['app/dashboard/page.tsx', 'components/pages/overview/page.tsx', 'scripts/loader-dump.ts', 'scripts/reading-timing.ts', 'lib/pages/monthly.ts', 'lib/pages/agent-thread.ts']) {
+    for (const p of ['app/dashboard/(front)/page.tsx', 'components/pages/overview/page.tsx', 'scripts/loader-dump.ts', 'scripts/reading-timing.ts', 'lib/pages/monthly.ts', 'lib/pages/agent-thread.ts']) {
       expect(read(p), p).toMatch(/loadOverview\(.*\{\s*marketFront:\s*true\s*\}\)/)
     }
   })

@@ -38,6 +38,14 @@ const SHARED: Readonly<Record<string, string>> = {
   'reports/studio/[reportId]': 'reports/studio',
 }
 
+/** Pages that must have NO loader above them (sw-2 item 8): a Suspense
+ *  boundary streams the page's shell with status 200 before its notFound()
+ *  throws, so an unknown /dashboard address answered 200. The front page's
+ *  loader lives in the (front) route group, and nothing wraps the catch-all. */
+const NO_LOADER: Readonly<Record<string, string>> = {
+  '[...rest]': 'throws notFound(); a loader above it turns the 404 into a streamed 200',
+}
+
 /** Redirect-only pages allowed to inherit whatever is above them. */
 const INHERITS: Readonly<Record<string, string>> = {
   // Both redirect to /dashboard/agent. Ask's own loaders are being redone with
@@ -63,11 +71,17 @@ const ALL = pages(ROOT).sort()
 
 describe('dashboard loading skeletons', () => {
   it('finds the dashboard pages', () => {
-    expect(ALL).toContain('')
+    expect(ALL).toContain('(front)')
     expect(ALL.length).toBeGreaterThan(20)
   })
 
   it.each(ALL.map((f) => [f || '(root)', f]))('%s has a loader of its own or a named one', (_label, folder) => {
+    if (NO_LOADER[folder]) {
+      // Nothing between the dashboard layout and this page may be a loader.
+      expect(hasLoader(folder), `${folder} must not have a loader`).toBe(false)
+      expect(hasLoader(''), 'app/dashboard/loading.tsx wraps the catch-all').toBe(false)
+      return
+    }
     if (hasLoader(folder)) return
     const shared = SHARED[folder]
     if (shared !== undefined) {
@@ -100,7 +114,7 @@ describe('dashboard loading skeletons', () => {
   })
 
   it('the root skeleton is the current Overview, not the pre-redesign dashboard', () => {
-    const src = readFileSync(join(ROOT, 'loading.tsx'), 'utf8')
+    const src = readFileSync(join(ROOT, '(front)', 'loading.tsx'), 'utf8')
     expect(src).toMatch(/nav="overview"/)
     expect(src).not.toMatch(/SkeletonStrip|title="Dashboard"/)
   })

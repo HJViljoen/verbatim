@@ -1,3 +1,8 @@
+// IN A ROUTE GROUP, WITH ITS LOADER (sw-2 item 8). Your market's skeleton was
+// app/dashboard/loading.tsx, which wrapped every dashboard address in a
+// Suspense boundary, the unknown ones too: the catch-all's notFound() came
+// after the shell had streamed, so a mistyped address answered 200. In
+// (front) the loader wraps this page alone; the URL is still /dashboard.
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadOverview } from '@/lib/pages/overview'
