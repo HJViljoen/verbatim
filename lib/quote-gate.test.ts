@@ -499,3 +499,41 @@ describe('sw-2 item 4: the quotes production still printed', () => {
     expect(whyNot(q('このバッグの色が好きです', MAKER_TOTE, { lang: 'ja', english: 'I like the color of this bag' }), o)).toBeNull()
   })
 })
+
+// ---- sw-3 item 2: a compliment to a person by name, no bag named ----------------------
+
+// Production, 30 Sep: Looks & style's first voice (a YouTube comment of 15 Sep,
+// 2 likes) under a one-bag packing video. Caption cut where the rest (sponsor
+// links) says nothing the gate reads.
+const UNBLAH_NYC: QuoteVideo = {
+  platform: 'youtube', videoId: 'R06j3wAgyTA', accountName: 'UnBlah Yourself', source: 'discovered', isClient: false, isCompetitor: false,
+  caption: 'NYC Travel Capsule Wardrobe in a Backpack Only | Personal Item Sized Bag Minimalist Packing Heading to a big city for a weekend trip? In this video, I’ll show you how to fit 3 days of stylish, versatile outfits and all your essentials into just ONE personal item bag using the Nomad Lane Bento backpack, Tomodachi sling, and Seido compression cubes.',
+  hashtags: ['NYC backpack packing', '3 day travel capsule wardrobe', 'one bag travel', 'carry on only', 'personal item sized bag packing', 'nomad lane bento backpack', 'minimalist packing'],
+  topics: ['travel packing', 'capsule wardrobe', 'minimalist travel', 'backpack packing', 'NYC travel', 'personal style', 'Nomad Lane Bento backpack'],
+  segment: 'market',
+}
+
+describe('sw-3 item 2: a bare compliment to someone by name', () => {
+  const looks = { ...SEALAND, claim: 'Looks & style. How a bag looks: colour, design, style.', requireRelevance: true }
+
+  it('"Very easy packing with all that one needs! Beautiful, Diana!" is a compliment to Diana, not the market', () => {
+    expect(whyNot(q('Very easy packing with all that one needs! Beautiful, Diana!', UNBLAH_NYC), looks)).toBe('off_topic')
+    expect(whyNot(q('Gorgeous as always, Jen ❤️', UNBLAH_NYC), SEALAND)).toBe('off_topic')
+    expect(whyNot(q('So easy to follow. Stunning Diana!', UNBLAH_NYC), SEALAND)).toBe('off_topic')
+  })
+
+  it('keeps praise that names the bag, or says what it praises', () => {
+    expect(whyNot(q('Beautiful bag, Diana!', UNBLAH_NYC), looks)).toBeNull()
+    expect(whyNot(q('Beautiful colour, Diana!', UNBLAH_NYC), looks)).toBeNull()
+    expect(whyNot(q('Love the pockets, Diana!', UNBLAH_NYC), SEALAND)).toBeNull()
+    expect(whyNot(q('That is beautiful. I love the color!', UNBLAH_NYC), looks)).toBeNull()
+    expect(whyNot(q('Beautiful, isn’t it! The Bento holds so much', UNBLAH_NYC), looks)).toBeNull()
+    // A bag brand after the compliment is not a person.
+    expect(whyNot(q('Honestly the packing in this is so good. Gorgeous Osprey!', UNBLAH_NYC), SEALAND)).toBeNull()
+  })
+
+  it('reads a person only where no carry good is named, and never for a tenant with no carry market (Össur)', () => {
+    const video: QuoteVideo = { platform: 'instagram', videoId: 'x', caption: 'A day at the hospital', segment: 'market' }
+    expect(whyNot(q('You made it look easy again! Beautiful, Diana!', video), { market: null, makerRule: false })).toBeNull()
+  })
+})

@@ -499,6 +499,30 @@ const CREATOR_PRAISE = /\b(your|ur) (content|videos?|vids?|channel|reviews?|podc
  *  carry good is named: the market's line on a bag names the bag. */
 const PERSONAL_LOOK = /\b(you|u)('re| are| r)? (look|looking|looked) (so |really |absolutely )*(great|good|amazing|fantastic|beautiful|gorgeous|stunning|lovely|cute|fab\w*|pretty|perfect|incredible|awesome|fire|chic|stylish)\b|\blooks? (so |really )?(great|good|perfect|amazing|fantastic|beautiful|gorgeous|stunning|lovely|cute|fab\w*) on (you|u|her|him|them)\b|\blove (the|your|ur) (look|outfit|style|hair|vibe)\b|\bsuits? (you|u|her|him)\b|\b(you|u)('re| are| r) (so |really |such an? )*(pretty|cute|beautiful|gorgeous|stunning|lovely|handsome)\b|\bis (so |really )*(cute|pretty|beautiful|gorgeous) and (so |really )*(pretty|cute|beautiful|gorgeous)\b/i
 
+/** A bare compliment said to someone by name ("…Beautiful, Diana!",
+ *  "Gorgeous as always, Jen", sw-3 item 2): a compliment word that stands
+ *  alone, at the start of a sentence, with nothing after it but a capitalised
+ *  name. Read only where no carry good is named. A compliment that says what
+ *  it praises ("Love the pockets, Diana!", "Beautiful colour, Diana") names
+ *  it, and stays the market's. */
+const NAMED_COMPLIMENT = /(?:^|[.!?…]\s*)(?:(?:wow|oh|omg|aww+)[,!]?\s+)?(?:(?:so|just|absolutely|really)\s+)?(?:beautiful|gorgeous|stunning|lovely|pretty|cute|fab|fabulous|amazing|awesome|perfect|wonderful|brilliant|fantastic|great|love it|love this|love you|well done|bravo)(?:\s+as\s+(?:always|ever|usual))?(?:\s*,\s*|\s+)(\p{L}[\p{L}'’-]*)(?=\s*(?:[!.…]|\p{Extended_Pictographic}|$))/giu
+/** Capitalised words after a bare compliment that are not a name ("Great,
+ *  Thanks!", a Title Case "Perfect Size!"). */
+const NOT_A_NAME = new Set([
+  'thanks', 'thank', 'thankyou', 'love', 'wow', 'yes', 'omg', 'lol', 'and', 'the', 'too', 'indeed', 'again', 'everyone', 'all', 'guys',
+  'it', 'this', 'that', 'these', 'those', 'them', 'one', 'job', 'work', 'stuff', 'video', 'content', 'idea', 'tip', 'tips',
+  'size', 'colour', 'color', 'colours', 'colors', 'design', 'style', 'look', 'looks', 'quality', 'price', 'choice', 'pick', 'find', 'fit',
+  'gift', 'combo', 'piece', 'set', 'outfit', 'outfits', 'packing', 'pack',
+])
+function complimentToName(said: string): boolean {
+  for (const m of said.matchAll(NAMED_COMPLIMENT)) {
+    const name = m[1]
+    if (!/^\p{Lu}\p{Ll}/u.test(name) || NOT_A_NAME.has(name.toLowerCase()) || namesAnyBagBrand(name)) continue
+    return true
+  }
+  return false
+}
+
 /** Is the video about a carry good (its caption, hashtags or topics)? */
 export function isCarryVideo(v: QuoteVideo): boolean {
   const words = carryText(`${v.caption ?? ''} ${(v.topics ?? []).join(' · ')}`)
@@ -719,7 +743,7 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
     // A garment in the words or in its emoji ("I bought both washes in
     // medium. 👖", a denim haul under a bag video, sw-2 item 4).
     const garment = OFF_MARKET_EMOJI.test(`${q.text} ${said}`)
-    if (!aboutIt || garment || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || (!part && CREATOR_PRAISE.test(said)) || !(part || pointsAtIt || relevance > 0)) {
+    if (!aboutIt || garment || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || complimentToName(said) || (!part && CREATOR_PRAISE.test(said)) || !(part || pointsAtIt || relevance > 0)) {
       return { ok: false, reason: 'off_topic' }
     }
   }
