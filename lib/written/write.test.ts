@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { directionHits } from '../calibration'
 import { SEALAND_CLIENT_ID } from '../config'
-import { candidate, fact, pool, ref } from './test-fixtures'
+import { candidate, fact, pool, ref, WINDOW } from './test-fixtures'
 import {
   buildWeekReadPrompts, DELETED_WORDS, weekReadSchema, WEEK_READ_PROMPT_VERSION, writerFigures, type WeekWriterArgs,
 } from './write'
@@ -38,42 +38,55 @@ function args(over: Partial<WeekWriterArgs> = {}): WeekWriterArgs {
 }
 
 describe('the schema', () => {
-  it('is strict structured output, in thinking order', () => {
-    const format = zodResponseFormat(weekReadSchema(), 'week_read')
+  const format = zodResponseFormat(weekReadSchema(), 'week_read')
+  const schema = format.json_schema.schema as { properties: Record<string, { items?: { properties: Record<string, { description?: string }> }; description?: string }>; required: string[] }
+
+  it('is strict structured output, in thinking order: the findings, then the report built on them, the one line last but the subjects', () => {
     expect(format.json_schema.strict).toBe(true)
-    const schema = format.json_schema.schema as { properties: Record<string, unknown>; required: string[] }
-    expect(Object.keys(schema.properties)).toEqual(['findings', 'in_short', 'standing'])
-    expect(schema.required).toEqual(['findings', 'in_short', 'standing'])
-    const finding = (schema.properties.findings as { items: { properties: Record<string, unknown> } }).items
-    expect(Object.keys(finding.properties)).toEqual(['headline', 'saw', 'means', 'for', 'based_on', 'quote_from'])
-    expect(Object.keys((finding.properties.for as { properties: Record<string, unknown> }).properties)).toEqual(['sales', 'marketing', 'content', 'leadership'])
+    const order = ['findings', 'story', 'implications', 'new_this_week', 'watch', 'week_in_one_line', 'standing']
+    expect(Object.keys(schema.properties)).toEqual(order)
+    expect(schema.required).toEqual(order)
+    expect(Object.keys(schema.properties.findings.items!.properties)).toEqual(['headline', 'saw', 'means', 'based_on', 'quote_from'])
+    expect(Object.keys(schema.properties.story.items!.properties)).toEqual(['paragraph', 'based_on', 'quote_from'])
+    expect(Object.keys(schema.properties.implications.items!.properties)).toEqual(['implication', 'based_on'])
+    expect(Object.keys(schema.properties.new_this_week.items!.properties)).toEqual(['candidate', 'sentence'])
+    expect(Object.keys(schema.properties.watch.items!.properties)).toEqual(['question', 'based_on'])
+  })
+
+  it('has no department lines (v3: the weekly is one general report)', () => {
+    expect(schema.properties.findings.items!.properties).not.toHaveProperty('for')
+    expect(JSON.stringify(schema)).not.toMatch(/\b(sales|marketing|leadership)\b/i)
   })
 
   it('parses a whole answer and refuses a partial one', () => {
     const ok = {
-      findings: [{ headline: 'h', saw: 's', means: 'm', for: { sales: '', marketing: '', content: '', leadership: 'l' }, based_on: ['C1'], quote_from: null }],
-      in_short: 'i',
+      findings: [{ headline: 'h', saw: 's', means: 'm', based_on: ['C1'], quote_from: null }],
+      story: [{ paragraph: 'p', based_on: ['C1'], quote_from: 'C1' }],
+      implications: [{ implication: 'i', based_on: ['C1'] }],
+      new_this_week: [],
+      watch: [{ question: 'Whether it holds', based_on: ['C1'] }],
+      week_in_one_line: 'w',
       standing: [{ subject_id: 'S1', sentence: 'x' }],
     }
     expect(weekReadSchema().safeParse(ok).success).toBe(true)
-    expect(weekReadSchema().safeParse({ ...ok, findings: [{ ...ok.findings[0], for: { sales: '' } }] }).success).toBe(false)
+    const { story: _story, ...noStory } = ok
+    expect(weekReadSchema().safeParse(noStory).success).toBe(false)
+    expect(weekReadSchema().safeParse({ ...ok, implications: [{ implication: 'i' }] }).success).toBe(false)
   })
 
   it('records its version', () => {
-    expect(WEEK_READ_PROMPT_VERSION).toBe('week_read_v2')
+    expect(WEEK_READ_PROMPT_VERSION).toBe('week_read_v3')
   })
 
-  it('describes each department line as what the finding tells that team, never a restatement (T3b)', () => {
-    const schema = zodResponseFormat(weekReadSchema(), 'week_read').json_schema.schema as { properties: { findings: { items: { properties: { for: { properties: Record<string, { description: string }> } } } } } }
-    const lines = schema.properties.findings.items.properties.for.properties
-    expect(lines.sales.description).toContain('what buyers will raise about this, and how they put it')
-    expect(lines.marketing.description).toContain('what the market values or doubts here, in the words people use')
-    expect(lines.content.description).toContain('what people ask about or stop on here that the team could answer or show')
-    expect(lines.leadership.description).toContain('what this says about the business')
-    for (const d of Object.values(lines)) {
-      expect(d.description).toContain('would only restate the finding')
-      expect(d.description).toContain('never what the team should do')
-    }
+  it('describes each report section as the owner approved it (30 Sep)', () => {
+    expect(schema.properties.story.description).toContain('the week told as ONE story in two or three paragraphs, weaving the findings together')
+    expect(schema.properties.story.description).toContain('never a list')
+    expect(schema.properties.story.items!.properties.quote_from.description).toContain('At most two paragraphs point to one')
+    expect(schema.properties.implications.items!.properties.implication.description).toContain('Intelligence, never an instruction')
+    expect(schema.properties.new_this_week.description).toContain('only candidates marked "First heard this week: yes". Empty when none is marked so.')
+    expect(schema.properties.watch.items!.properties.question.description).toContain('starting with "Whether"')
+    expect(schema.properties.watch.items!.properties.question.description).toContain('Never a forecast, a direction or advice')
+    expect(schema.properties.week_in_one_line.description).toContain("The week's headline claim, one sentence")
   })
 })
 
@@ -113,37 +126,68 @@ describe('the prompt', () => {
     expect(system).not.toMatch(/[—–]/)
   })
 
-  it('asks for one idea per finding, three or four when the candidates hold them, and headlines no broader than their evidence (T3b)', () => {
-    expect(system).toContain('ONE IDEA EACH. Write three or four when the candidates hold that many distinct ideas, fewer only when they do not')
+  it('asks for one idea per finding, headlines no broader than their evidence, and never a forced pair to reach the floor (v3)', () => {
+    expect(system).toContain('ONE IDEA EACH')
+    expect(system).toContain('Fewer findings is fine.')
+    expect(system).toContain('Never cite a second candidate just to give a finding enough evidence')
+    expect(system).toContain('a candidate about comfort and one about pockets are two ideas')
+    expect(system).toContain('A thin candidate with no such twin is not a finding')
     expect(system).toContain('Never join two ideas into one finding')
-    expect(system).toContain('Cite several candidates only when they say the same thing in different words')
     expect(system).toContain('Each candidate supports at most one finding.')
     expect(system).toContain('no broader than the cited candidates show')
+    // The floor stays: the writer still hears which candidates can carry one.
+    expect(system).toContain('Each candidate says whether its evidence can carry a finding alone.')
   })
 
   it('asks for plain language and names the abstractions it does not want (T3b)', () => {
     expect(system).toContain('Plain language, for a busy person at Sealand reading on a phone. Short sentences. Concrete nouns')
     for (const w of ['a fit problem', 'legible', 'positioning', 'is tested against', 'lens']) expect(system).toContain(`"${w}"`)
-    expect(system).toContain('A research read, not a memo: the analytical third person')
+    expect(system).toContain('A research report, not a memo: the analytical third person')
   })
 
-  it('asks each department line for what that team hears, and "" over a restatement (T3b)', () => {
-    expect(system).toContain('what buyers will raise with a salesperson about this, and how they frame it')
-    expect(system).toContain('what the market values or doubts here, in the words people use for it')
-    expect(system).toContain('what people ask about or stop on here that the content team could answer or show')
-    expect(system).toContain('what the finding says about the business')
-    expect(system).toContain('A line that only restates the finding for a department ("For content: bag talk centres on how it carries") says nothing: leave it ""')
-    expect(system).toContain('never what the team should do')
-    // The example writes all four, for a different market.
-    for (const d of ['for.sales', 'for.marketing', 'for.content', 'for.leadership']) expect(system).toContain(d)
+  it('asks for a report someone would forward, top to bottom, built on the findings (v3)', () => {
+    expect(system).toContain('it must read as a report worth forwarding: one account of the week with a point to it, not a list of topics')
+    expect(system).toContain('Work out the findings first: the report is built on them.')
+    // What happened: one story, woven, at most two voices.
+    expect(system).toContain('the week told as ONE story in two or three paragraphs')
+    expect(system).toContain('Never one paragraph per finding in turn, never a list in prose')
+    expect(system).toContain("Build it from your findings' candidates.")
+    expect(system).toContain('a paragraph that rests on no finding is deleted')
+    expect(system).toContain('at most 2 paragraphs point to a voice')
+    expect(system).toContain('Never write a quotation yourself.')
+    // What it means: intelligence, not instructions.
+    expect(system).toContain('"What it means for Sealand", two or three lines')
+    expect(system).toContain('Intelligence, not instructions: say what is true about the business, never what Sealand should do.')
+    for (const w of ['"should"', '"could"', '"needs to"', '"consider"', '"an opportunity"']) expect(system).toContain(w)
+    // New this week: only what code marked.
+    expect(system).toContain('ONLY candidates marked "First heard this week: yes"')
+    expect(system).toContain('never present anything else as first heard')
+    // Worth watching: an open question, never a forecast.
+    expect(system).toContain('Each is a short clause starting with "Whether"')
+    expect(system).toContain('Never a forecast ("will", "likely", "expect", "set to"), never a direction, never advice.')
+    // The one line.
+    expect(system).toContain("the week's headline claim in one sentence of plain words")
     expect(system).toContain('Code prints the real quote that best fits what you wrote')
   })
 
-  it('writes its own example in the house style: no digit, no deleted word, no magnitude word', () => {
-    const example = system.slice(system.indexOf('Example of one finding'))
+  it('has no department lines anywhere (v3)', () => {
+    expect(system).not.toMatch(/for\.(sales|marketing|content|leadership)/)
+    expect(system).not.toMatch(/\bdepartments?\b/i)
+    expect(user).not.toContain('Speaks to:')
+  })
+
+  it('writes its own example in the house style: no digit, no deleted word, no magnitude word, no advice', () => {
+    const example = system.slice(system.indexOf('An example of the register'))
+    expect(example).toContain('A story paragraph:')
+    expect(example).toContain('An implication:')
+    expect(example).toContain('A watch line:')
+    expect(example).toContain('A week line:')
     expect(example).not.toMatch(/\d/)
-    expect(directionHits(example.replace(/"[^"]*Too broad[^"]*"/, ''))).toEqual([])
+    expect(directionHits(example)).toEqual([])
     expect(example).not.toMatch(/\b(very|many|most|strong|huge|significant)\b/i)
+    // Its one advice line is the one it marks as wrong.
+    expect(example.match(/\bshould\b/g)).toHaveLength(1)
+    expect(example).toContain('Not: "The company should show the clean in its videos."')
   })
 
   it('lists every word the direction rule deletes, and only those', () => {
@@ -153,19 +197,33 @@ describe('the prompt', () => {
     }
   })
 
-  it('gives each candidate its id, label, description, kinds, departments, subject, the new flag and its notes', () => {
+  it('gives each candidate its id, label, description, kinds, evidence, subject, when it was first heard and its notes', () => {
     expect(user).toContain('C1: "Price feels hard to justify"')
     expect(user).toContain('Description: People question whether a premium bag is worth it.')
     expect(user).toContain('Kinds of comment: objections (most), questions')
-    expect(user).toContain('Speaks to: sales, content, leadership')
     expect(user).toContain('Evidence: enough to carry a finding alone') // six lenient-gated videos
     const thin = buildWeekReadPrompts(args({ pool: pool([candidate({ id: 'C1', gated: 3 }), PRAISE, candidate({ id: 'C3' })]) }))
-    expect(thin.user).toContain('C1: "Theme C1"\n  Description: What C1 is about.\n  Kinds of comment: objections (most)\n  Speaks to: sales, leadership\n  Evidence: too little to carry a finding alone')
+    expect(thin.user).toContain('C1: "Theme C1"\n  Description: What C1 is about.\n  Kinds of comment: objections (most)\n  Evidence: too little to carry a finding alone')
     expect(user).toContain('Part of the subject: Price')
-    expect(user).toContain('First heard this month: yes')
     expect(user).toContain('- Questions whether the bag is worth the price.')
     expect(user).toContain('C2: "Praise for practical travel"')
     expect(user).toContain('Kinds of comment: praise (most)')
+  })
+
+  it('marks first heard THIS WEEK only where the theme is new this month and first heard inside the window, and says which may go under new_this_week', () => {
+    // COTOPAXI is new this month with no first-heard date: earlier this month, not this week.
+    expect(user).toContain('  First heard earlier this month (not this week)')
+    expect(user).toContain('First heard this week: none. new_this_week is empty.')
+    const heard = candidate({ id: 'C2', label: 'Asks for a red one', isNew: true, firstHeard: '2026-09-22T10:00:00+00:00' })
+    const before = candidate({ id: 'C3', isNew: true, firstHeard: '2026-09-05T10:00:00+00:00' })
+    const old = candidate({ id: 'C4', isNew: false, firstHeard: '2026-09-22T10:00:00+00:00' })
+    const p = buildWeekReadPrompts(args({ pool: pool([COTOPAXI, heard, before, old]) }))
+    expect(p.user).toContain('C2: "Asks for a red one"')
+    expect(p.user.split('C2: "Asks for a red one"')[1].split('\n\n')[0]).toContain('  First heard this week: yes')
+    expect(p.user.split('C3: "Theme C3"')[1].split('\n\n')[0]).toContain('  First heard earlier this month (not this week)')
+    expect(p.user.split('C4: "Theme C4"')[1].split('\n\n')[0]).not.toContain('First heard')
+    expect(p.user).toContain('First heard this week: C2. Only these may go under new_this_week.')
+    expect(WINDOW.from < '2026-09-22').toBe(true)
   })
 
   it('gives the subjects as words, a rank only where the size prints, no failed subject, nothing with no material', () => {

@@ -36,6 +36,10 @@ import type { PoolCandidate, WeekPool } from './types'
 // `FIT_MAX_INSIGHTS` rows and typically a few dozen: the options of the
 // candidates the written findings cite, never the corpus.
 //
+// THE STORY'S QUOTES TOO (v3). A paragraph of "What happened" that points to a
+// candidate is measured the same way, on its own text, against that
+// candidate's options, in the same request.
+//
 // FAIL-SOFT. Any error leaves `ran: false` and no scores, and compose falls
 // back to the writer's order: a read that cannot measure fit still prints.
 // Its cost is logged to `ai_call_log` as pass `week_read_fit` (not on a dry
@@ -50,6 +54,9 @@ const VECTOR_CHUNK = 40
 export interface QuoteFit {
   /** The finding's index in the writer's output → quote ref → similarity. */
   scores: Map<number, Map<string, number>>
+  /** ADDITIVE (v3). The story paragraph's index in the writer's output →
+   *  quote ref → similarity. Absent on a fit saved before v3. */
+  story?: Map<number, Map<string, number>>
   /** Estimated from characters, as the product's embed step estimates it. */
   costUsd: number
   /** Option insights scored on their stored vector, and on one embedded now. */
@@ -57,11 +64,13 @@ export interface QuoteFit {
   embedded: number
   /** Findings scored. */
   findings: number
+  /** Story paragraphs scored (v3). */
+  paragraphs?: number
   ran: boolean
   error?: string
 }
 
-export const noFit = (error?: string): QuoteFit => ({ scores: new Map(), costUsd: 0, stored: 0, embedded: 0, findings: 0, ran: false, ...(error ? { error } : {}) })
+export const noFit = (error?: string): QuoteFit => ({ scores: new Map(), story: new Map(), costUsd: 0, stored: 0, embedded: 0, findings: 0, paragraphs: 0, ran: false, ...(error ? { error } : {}) })
 
 /** A finding as its fit is measured: the headline, then what it saw. */
 export function findingText(f: { headline: string; saw: string }): string {
@@ -89,6 +98,14 @@ export interface FitFinding {
   based_on: readonly string[]
 }
 
+/** One story paragraph the fit is measured for (v3): its text, against the
+ *  options of the candidate it points to (`based_on` holds that one). */
+export interface FitParagraph {
+  index: number
+  text: string
+  based_on: readonly string[]
+}
+
 /** The options each finding may print, by the candidates it cites. Pure. */
 export function optionsFor(pool: Pick<WeekPool, 'candidates'>, f: Pick<FitFinding, 'based_on'>): PoolCandidate['quoteOptions'] {
   const byId = new Map(pool.candidates.map((c) => [c.id.toUpperCase(), c]))
@@ -103,9 +120,9 @@ export function optionsFor(pool: Pick<WeekPool, 'candidates'>, f: Pick<FitFindin
 
 /** Similarities, from the vectors. An option whose insight has no vector is
  *  left unscored. Pure. */
-export function scoreFit(
+export function scoreFit<T extends { index: number; based_on: readonly string[]; vector: number[] }>(
   pool: Pick<WeekPool, 'candidates'>,
-  findings: readonly (FitFinding & { vector: number[] })[],
+  findings: readonly T[],
   insightVectors: ReadonlyMap<string, number[]>,
 ): Map<number, Map<string, number>> {
   const out = new Map<number, Map<string, number>>()
@@ -125,9 +142,11 @@ export interface FitDeps {
 }
 
 /**
- * How well each cited option fits each written finding. Reads the option
- * insights' stored vectors, embeds the findings (and any insight with none)
- * in one request, and logs that request where `log` is true. Never throws.
+ * How well each cited option fits each written finding, and each story
+ * paragraph's options fit that paragraph (v3). Reads the option insights'
+ * stored vectors, embeds the findings, the paragraphs (and any insight with
+ * none) in one request, and logs that request where `log` is true. Never
+ * throws.
  */
 export async function fitQuotes(
   admin: SupabaseClient,
@@ -136,17 +155,20 @@ export async function fitQuotes(
     runId: string
     pool: Pick<WeekPool, 'candidates'>
     findings: readonly FitFinding[]
+    /** Story paragraphs that point to a candidate (v3). */
+    story?: readonly FitParagraph[]
     log: boolean
   },
   deps: Partial<FitDeps> = {},
 ): Promise<QuoteFit> {
   const embed = deps.embed ?? embedTexts
   const findings = a.findings.filter((f) => f.headline.trim() && optionsFor(a.pool, f).length > 0)
-  if (findings.length === 0) return { ...noFit(), ran: true }
+  const story = (a.story ?? []).filter((p) => p.text.trim() && optionsFor(a.pool, p).length > 0)
+  if (findings.length === 0 && story.length === 0) return { ...noFit(), ran: true }
   try {
-    // The option insights, in the findings' order, bounded.
+    // The option insights, in the findings' order then the paragraphs', bounded.
     const textOf = new Map<string, string>()
-    for (const f of findings) for (const o of optionsFor(a.pool, f)) if (!textOf.has(o.insightId) && textOf.size < FIT_MAX_INSIGHTS) textOf.set(o.insightId, o.insightText)
+    for (const t of [...findings, ...story]) for (const o of optionsFor(a.pool, t)) if (!textOf.has(o.insightId) && textOf.size < FIT_MAX_INSIGHTS) textOf.set(o.insightId, o.insightText)
     const ids = [...textOf.keys()]
 
     const stored = new Map<string, number[]>()
@@ -160,7 +182,7 @@ export async function fitQuotes(
     }
 
     const missing = ids.filter((id) => !stored.has(id))
-    const texts = [...findings.map(findingText), ...missing.map((id) => textOf.get(id) ?? '')]
+    const texts = [...findings.map(findingText), ...story.map((p) => p.text.replace(/\s*\n+\s*/g, ' ').trim()), ...missing.map((id) => textOf.get(id) ?? '')]
     const startedAt = Date.now()
     const vectors = await embed(texts)
     if (vectors.length !== texts.length) throw new Error(`fit: ${vectors.length} vectors for ${texts.length} texts`)
@@ -175,7 +197,7 @@ export async function fitQuotes(
         promptVersion: 'week_read_fit_v1',
         // A summary, never the texts: the insight texts are rows of
         // audience_insights, and the findings are stored in week_reads.
-        request: { findings: findings.length, insights: missing.length, chars: texts.reduce((n, t) => n + t.length, 0), tokens_estimated: true },
+        request: { findings: findings.length, paragraphs: story.length, insights: missing.length, chars: texts.reduce((n, t) => n + t.length, 0), tokens_estimated: true },
         response: { vectors: vectors.length, dimensions: vectors[0]?.length ?? 0, stored_vectors: stored.size },
         error: null,
         usage: { prompt_tokens: embedTokenEstimate(texts), completion_tokens: 0 },
@@ -185,9 +207,11 @@ export async function fitQuotes(
     }
 
     const insightVectors = new Map(stored)
-    missing.forEach((id, i) => insightVectors.set(id, vectors[findings.length + i]))
+    const offset = findings.length + story.length
+    missing.forEach((id, i) => insightVectors.set(id, vectors[offset + i]))
     const scores = scoreFit(a.pool, findings.map((f, i) => ({ ...f, vector: vectors[i] })), insightVectors)
-    return { scores, costUsd, stored: stored.size, embedded: missing.length, findings: findings.length, ran: true }
+    const storyScores = scoreFit(a.pool, story.map((p, i) => ({ ...p, vector: vectors[findings.length + i] })), insightVectors)
+    return { scores, story: storyScores, costUsd, stored: stored.size, embedded: missing.length, findings: findings.length, paragraphs: story.length, ran: true }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     console.warn('[week_read_fit] the quotes could not be fitted; the writer\'s order decides:', message)

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import type { FigureTable } from '../reports/types'
-import { BANNED_PHRASES, bannedHits, scrubWeekRead, scrubWeekText, weekAllowTokens } from './scrub'
-import { candidate } from './test-fixtures'
-import { WEEK_READ_MAX, type WeekReadOutput } from './write'
+import { ADVICE, BANNED_PHRASES, bannedHits, FORECAST, scrubWeekRead, scrubWeekText, toldWhatToDo, weekAllowTokens, WHOLE_SLACK } from './scrub'
+import { candidate, written } from './test-fixtures'
+import { WEEK_READ_MAX } from './write'
 
 // The written read's scrub (plan T3): digits, direction, dashes, the caps, and
 // the §0a backstop, on made-up sentences.
@@ -53,28 +53,34 @@ describe('figures only in saw', () => {
   })
 
   it('drops a placeholder in every other field', () => {
-    const w: WeekReadOutput = {
+    const w = written({
       findings: [{
         headline: 'Price decides [[c1_week]] sales',
         saw: 'It reached [[c1_week]] videos. Buyers agree.',
         means: 'It matters. It reached [[c1_week]] videos.',
-        for: { sales: 'Ask about [[c1_week]] things. It is the first question.', marketing: '', content: '', leadership: '' },
         based_on: ['C1'],
         quote_from: 'C1',
       }],
-      in_short: 'The week in [[c1_week]] videos. Price is the question.',
+      story: [{ paragraph: 'The week turned on price. It reached [[c1_week]] videos.', based_on: ['C1'], quote_from: 'C1' }],
+      implications: [{ implication: 'Price is judged against lifespan. [[c1_week]] videos say so.', based_on: ['C1'] }],
+      new_this_week: [{ candidate: 'C1', sentence: 'People ask for a red one. [[c1_week]] videos.' }],
+      watch: [{ question: 'Whether [[c1_week]] buyers keep asking', based_on: ['C1'] }],
+      week_in_one_line: 'The week in [[c1_week]] videos.',
       standing: [{ subject_id: 'S1', sentence: 'Buyers talk about [[c1_week]] straps.' }],
-    }
+    })
     const { output } = scrubWeekRead(w, FIGURES)
-    expect(output.findings[0]).toMatchObject({
+    expect(output.findings[0]).toEqual({
       headline: '',
       saw: 'It reached [[c1_week]] videos. Buyers agree.',
       means: 'It matters.',
-      for: { sales: 'It is the first question.', marketing: '', content: '', leadership: '' },
       based_on: ['C1'],
       quote_from: 'C1',
     })
-    expect(output.in_short).toBe('Price is the question.')
+    expect(output.story).toEqual([{ paragraph: 'The week turned on price.', based_on: ['C1'], quote_from: 'C1' }])
+    expect(output.implications).toEqual([{ implication: 'Price is judged against lifespan.', based_on: ['C1'] }])
+    expect(output.new_this_week).toEqual([{ candidate: 'C1', sentence: 'People ask for a red one.' }])
+    expect(output.watch).toEqual([{ question: '', based_on: ['C1'] }])
+    expect(output.week_in_one_line).toBe('')
     expect(output.standing).toEqual([{ subject_id: 'S1', sentence: '' }])
   })
 })
@@ -82,15 +88,37 @@ describe('figures only in saw', () => {
 describe('the caps', () => {
   it('cuts a field at a sentence boundary', () => {
     const long = Array.from({ length: 12 }, (_, i) => `Buyers describe the thing plainly in sentence ${'abcdefghijkl'[i]}.`).join(' ')
-    const r = scrubWeekText(long, WEEK_READ_MAX.for)
-    expect(r.text.length).toBeLessThanOrEqual(WEEK_READ_MAX.for)
+    const r = scrubWeekText(long, WEEK_READ_MAX.implication)
+    expect(r.text.length).toBeLessThanOrEqual(WEEK_READ_MAX.implication)
     expect(r.text.endsWith('.')).toBe(true)
   })
 
-  it('keeps paragraphs, and the In short to three sentences', () => {
+  it('keeps paragraphs, an implication to two sentences and the week to one line', () => {
     expect(scrubWeekText('One point here.\n\nAnother point there.', 700).text).toBe('One point here.\n\nAnother point there.')
-    const w: WeekReadOutput = { findings: [], in_short: 'First. Second.\n\nThird. Fourth.', standing: [] }
-    expect(scrubWeekRead(w, {}).output.in_short).toBe('First. Second.\n\nThird.')
+    const { output } = scrubWeekRead(written({
+      implications: [{ implication: 'First point. Second point. Third point.', based_on: ['C1'] }],
+      week_in_one_line: 'Buyers judged bags by what they carry. A second sentence.',
+    }), {})
+    expect(output.implications[0].implication).toBe('First point. Second point.')
+    expect(output.week_in_one_line).toBe('Buyers judged bags by what they carry.')
+  })
+
+  it('drops a one-line field over its cap whole, never cut mid-claim', () => {
+    const long = `Buyers judged ${'bags by what they carry, '.repeat(10)}and the colour.`
+    expect(long.length).toBeGreaterThan(WEEK_READ_MAX.weekLine * WHOLE_SLACK)
+    const r = scrubWeekRead(written({ week_in_one_line: long, watch: [{ question: `Whether ${'buyers keep naming shades and '.repeat(8)}sizes`, based_on: ['C1'] }] }), {})
+    expect(r.output.week_in_one_line).toBe('')
+    expect(r.output.watch[0].question).toBe('')
+    expect(r.counts.droppedLong).toBe(2)
+    // A line a little over the stated cap still reads.
+    const near = `Buyers judged bags this week by what they carry, how long they last and whether the exact colour exists, and they said so plainly.`
+    expect(near.length).toBeGreaterThan(WEEK_READ_MAX.weekLine - 40)
+    expect(scrubWeekRead(written({ week_in_one_line: near }), {}).output.week_in_one_line).toBe(near)
+  })
+
+  it('a watch line is one clause with no full stop', () => {
+    const r = scrubWeekRead(written({ watch: [{ question: 'Whether buyers who ask for exact shades keep naming the same ones.', based_on: ['C3'] }] }), {})
+    expect(r.output.watch[0].question).toBe('Whether buyers who ask for exact shades keep naming the same ones')
   })
 
   it('a headline is one line with no full stop', () => {
@@ -167,5 +195,73 @@ describe('weekAllowTokens', () => {
     expect(allow).not.toContain('35L')
     expect(scrubWeekText('Buyers ask about the X3 frame.', 700, { allow }).text).toBe('Buyers ask about the X3 frame.')
     expect(scrubWeekText('Buyers ask whether the 35L fits.', 700, { allow }).text).toBe('')
+  })
+})
+
+describe('the report is intelligence, not instructions (v3)', () => {
+  const report = (implication: string, question = 'Whether buyers keep naming shades') =>
+    scrubWeekRead(written({ implications: [{ implication, based_on: ['C1'] }], watch: [{ question, based_on: ['C1'] }] }), {}, [], { company: 'Sealand' })
+
+  it('drops advice from an implication, sentence by sentence', () => {
+    for (const advice of [
+      'Sealand should show the straps under load.',
+      'The brand ought to show the straps.',
+      'Make sure the straps are shown under load.',
+      'There is an opportunity in showing the straps.',
+      'Show the straps under a full load.',
+      'Highlight the laptop sleeve in every video.',
+      'Consider a second colour.',
+      'Sealand could show the straps under load.',
+      'Sealand needs to answer the price question.',
+      "Sealand's team must lean into durability.",
+    ]) {
+      const r = report(`Buyers judge comfort with weight in the bag. ${advice}`)
+      expect(r.output.implications[0].implication, advice).toBe('Buyers judge comfort with weight in the bag.')
+      expect(r.counts.droppedAdvice, advice).toBe(1)
+    }
+  })
+
+  it('drops a forecast from an implication or a watch line', () => {
+    expect(report('Buyers weigh price against lifespan. Colour is likely to decide more sales.').output.implications[0].implication).toBe('Buyers weigh price against lifespan.')
+    expect(report('x', 'Whether colour requests are going to spread').output.watch[0].question).toBe('')
+    expect(report('x', 'Whether buyers will probably ask again').output.watch[0].question).toBe('')
+  })
+
+  it('leaves the market talking alone, in the words the lists step round', () => {
+    for (const line of [
+      'Sealand is judged on a shortlist beside rival brands, need by need.',
+      'Sealand can be compared with Osprey on comfort, and buyers do so by name.',
+      'Buyers consider the price against how long a bag lasts.',
+      'Owners focus on the straps and the back panel.',
+      'Buyers expect a premium bag to last for years.',
+      'Build quality is what makes the price acceptable.',
+      'Stock of the colour buyers want decides whether they wait.',
+    ]) {
+      expect(report(line).output.implications[0].implication, line).toBe(line)
+    }
+    // The one known cost: "should" drops even as the market's own word in an
+    // implication. The prompt asks for the business, not a buyer's words, there.
+    expect(report('Buyers say a bag should fit under the seat.').output.implications[0].implication).toBe('')
+    expect(report('x', 'Whether buyers who ask for exact shades keep naming the same ones').output.watch[0].question)
+      .toBe('Whether buyers who ask for exact shades keep naming the same ones')
+  })
+
+  it('applies only to the implications and the watch lines: the story and the findings may report what buyers say they will do', () => {
+    const r = scrubWeekRead(written({
+      findings: [{ headline: 'Buyers wait for a sale', saw: 'Buyers say they will probably wait for a sale.', means: 'The price should come down, buyers say.', based_on: ['C1'], quote_from: null }],
+      story: [{ paragraph: 'Buyers say they are likely to wait for a sale.', based_on: ['C1'], quote_from: null }],
+    }), {}, [], { company: 'Sealand' })
+    expect(r.output.findings[0].saw).toBe('Buyers say they will probably wait for a sale.')
+    expect(r.output.findings[0].means).toBe('The price should come down, buyers say.')
+    expect(r.output.story[0].paragraph).toBe('Buyers say they are likely to wait for a sale.')
+    expect(r.counts.droppedAdvice).toBe(0)
+  })
+
+  it('names each rule, and the company rule only for a name', () => {
+    expect(ADVICE.map((a) => a.name)).toEqual(['should', 'advice verbs', 'opportunity', 'imperative'])
+    expect(FORECAST.map((a) => a.name)).toEqual(['forecast'])
+    expect(toldWhatToDo('')).toBeNull()
+    expect(toldWhatToDo('Sealand')!.re.test('Sealand may want to show it')).toBe(true)
+    expect(toldWhatToDo('Sealand')!.re.test('Sealand may be compared with Osprey')).toBe(false)
   })
 })

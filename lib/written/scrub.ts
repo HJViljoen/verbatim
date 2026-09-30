@@ -1,7 +1,7 @@
 import { allowTokens, scrubProse, splitSentences, stripThemeRefs } from '../prose/scrub'
 import { capText, noDashes } from '../reports/documents/scrub'
 import type { FigureTable } from '../reports/types'
-import { DEPARTMENTS, type Department, type PoolCandidate, type StandingFact } from './types'
+import type { PoolCandidate, StandingFact } from './types'
 import { WEEK_READ_MAX, type WeekReadOutput } from './write'
 
 // What the writer's words go through before code composes the read (plan T3).
@@ -17,7 +17,13 @@ import { WEEK_READ_MAX, type WeekReadOutput } from './write'
 //     a sentence with a digit the model typed, or a `[[key]]` the table does
 //     not hold, drops; so does any sentence naming a direction, because
 //     nothing licensed one; magnitude words are stripped as words;
-//  5. a field cap, cut at a sentence boundary.
+//  5. in the report's implications and watch lines only (v3), advice and
+//     forecasts drop their sentence too (`ADVICE`, `FORECAST`, and the
+//     company told what it could or should do): the report is intelligence,
+//     never instructions, and a question worth watching is never a forecast;
+//  6. a field cap, cut at a sentence boundary; a one-line field (the week's
+//     line, a watch line) over its cap is dropped whole rather than cut, so
+//     no claim prints half said.
 //
 // FIGURES ONLY IN `saw`. Every other field is scrubbed against an EMPTY table,
 // so a placeholder there drops its sentence: the counts print beside each
@@ -70,6 +76,40 @@ const LOCAL_BANNED: readonly { name: string; re: RegExp }[] = [
   { name: 'AI', re: /\bAI\b|\bthe\s+(?:language\s+)?model\s+(?:wrote|read|found|says?)\b/ },
 ]
 
+/**
+ * Advice, which the report never gives ("we are the intelligence platform",
+ * not a consultant): applied to the implications and the watch lines only,
+ * where the writer is most tempted, and each entry kept to what is advice on
+ * any reading. "Buyers consider the price" and "owners focus on the straps"
+ * are the market talking, so neither verb is here: the prompt forbids them,
+ * this is the backstop.
+ */
+export const ADVICE: readonly { name: string; re: RegExp }[] = [
+  { name: 'should', re: /\bshould\b|\bought\s+to\b/i },
+  { name: 'advice verbs', re: /\bmake\s+sure\b|\blean\s+into\b|\bdouble\s+down\b|\bprioriti[sz]e\b/i },
+  { name: 'opportunity', re: /\bopportunit(?:y|ies)\b/i },
+  // A sentence that opens on a verb telling someone to act. Kept to verbs
+  // that do not also open a noun phrase ("Build quality…", "Stock levels…").
+  { name: 'imperative', re: /^(?:show|offer|add|highlight|lead\s+with|invest\s+in|launch|emphasi[sz]e|consider)\b/i },
+]
+
+/** A forecast, which a question worth watching never is: applied with
+ *  `ADVICE`. "Buyers expect a bag to last" is the market, so "expect" is not
+ *  here. */
+export const FORECAST: readonly { name: string; re: RegExp }[] = [
+  { name: 'forecast', re: /\b(?:un)?likely\b|\bprobably\b|\bforecast\w*|\bpredict\w*|\bpoised\s+to\b|\bbound\s+to\b|\b(?:is|are)\s+going\s+to\b|\bwill\s+(?:likely|probably|soon)\b/i },
+]
+
+/** The company told what it could or should do ("Sealand could show…").
+ *  "Sealand can be compared…" is a reading, not advice, so a modal before
+ *  "be" passes, but for "should" and "must". */
+export function toldWhatToDo(company: string): { name: string; re: RegExp } | null {
+  const name = company.trim()
+  if (name.length < 2) return null
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
+  return { name: 'told what to do', re: new RegExp(`\\b${escaped}(?:'s)?\\s+(?:(?:could|can|might|may)(?!\\s+be\\b)|should|must|needs?\\s+to|has\\s+to|would\\s+do\\s+well)\\b`, 'i') }
+}
+
 /** The banned phrases a text names, by name, in the order listed. Exported
  *  for the guard test that reuses `BANNED_PHRASES` on the client surfaces. */
 export function bannedHits(text: string, list: readonly { name: string; re: RegExp }[] = BANNED_PHRASES): string[] {
@@ -85,17 +125,24 @@ export interface WeekScrubCounts {
   droppedDirection: number
   /** …because they talked about how the read was made (§0a). */
   droppedBanned: number
+  /** …because they gave advice or a forecast (the report's implications and
+   *  watch lines, v3). */
+  droppedAdvice: number
+  /** One-line fields dropped whole for running over their cap (v3). */
+  droppedLong: number
   /** Something had to be removed: the flag for `ai_call_log`. */
   leaked: boolean
 }
 
-const ZERO: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, leaked: false }
+const ZERO: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
 
 const add = (a: WeekScrubCounts, b: WeekScrubCounts): WeekScrubCounts => ({
   dropped: a.dropped + b.dropped,
   droppedDigits: a.droppedDigits + b.droppedDigits,
   droppedDirection: a.droppedDirection + b.droppedDirection,
   droppedBanned: a.droppedBanned + b.droppedBanned,
+  droppedAdvice: a.droppedAdvice + b.droppedAdvice,
+  droppedLong: a.droppedLong + b.droppedLong,
   leaked: a.leaked || b.leaked,
 })
 
@@ -108,10 +155,17 @@ export interface WeekScrubOptions {
   figures?: FigureTable
   /** Names that carry digits and may be written (`allowTokens`). */
   allow?: readonly string[]
-  /** Keep at most this many sentences (the In short's three). */
+  /** Keep at most this many sentences (an implication's two, the week's
+   *  one line). */
   maxSentences?: number
   /** A headline: one line, no full stop. */
   headline?: boolean
+  /** Rules a sentence must also pass, beyond the §0a list (`ADVICE`,
+   *  `FORECAST`, `toldWhatToDo`): a hit drops the sentence, counted as advice. */
+  extra?: readonly { name: string; re: RegExp }[]
+  /** A one-line field: over `max`, it is dropped whole rather than cut, so a
+   *  claim never prints half said. */
+  whole?: boolean
 }
 
 /** One paragraph, sentence by sentence. */
@@ -124,10 +178,14 @@ function scrubParagraph(raw: string, o: WeekScrubOptions): { text: string; count
       counts = add(counts, { ...ZERO, dropped: 1, droppedBanned: 1, leaked: true })
       continue
     }
+    if (o.extra && bannedHits(sentence, o.extra).length > 0) {
+      counts = add(counts, { ...ZERO, dropped: 1, droppedAdvice: 1, leaked: true })
+      continue
+    }
     kept.push(sentence)
   }
   const r = scrubProse('week_read', kept.join(' '), { figures: o.figures ?? {}, allow: o.allow ?? [], verdicts: [] })
-  counts = add(counts, { dropped: r.dropped, droppedDigits: r.droppedDigits, droppedDirection: r.droppedDirection, droppedBanned: 0, leaked: r.leaked })
+  counts = add(counts, { ...ZERO, dropped: r.dropped, droppedDigits: r.droppedDigits, droppedDirection: r.droppedDirection, leaked: r.leaked })
   return { text: splitSentences(r.text).map(capitalised).join(' '), counts }
 }
 
@@ -159,6 +217,9 @@ export function scrubWeekText(raw: string, max: number, o: WeekScrubOptions = {}
       sentences += Math.min(ss.length, room)
     }
     out.push(text)
+  }
+  if (o.whole && out.join('\n\n').length > max) {
+    return { text: '', counts: add(counts, { ...ZERO, droppedLong: 1, leaked: true }) }
   }
   let text = capParagraphs(out, max)
   if (o.headline) text = text.replace(/\s+/g, ' ').replace(/[.!]+$/, '').trim()
@@ -193,14 +254,22 @@ export function weekAllowTokens(candidates: readonly PoolCandidate[], standing: 
   ])
 }
 
+/** Slack on a one-line field's stated cap before it is dropped whole: the
+ *  writer is told the cap, and a line a little over it still reads. */
+export const WHOLE_SLACK = 1.25
+
 /**
  * Every field through `scrubWeekText`, with its cap; figures only in `saw`.
- * Ids are passed through untouched (compose resolves them). Pure.
+ * The implications and watch lines also drop advice and forecasts (`ADVICE`,
+ * `FORECAST`, and the company told what to do where `company` is given); the
+ * week's line and each watch line are one line each, dropped whole past their
+ * cap. Ids are passed through untouched (compose resolves them). Pure.
  */
 export function scrubWeekRead(
   w: WeekReadOutput,
   figures: FigureTable,
   allow: readonly string[] = [],
+  opts: { company?: string } = {},
 ): { output: ScrubbedWeekRead; counts: WeekScrubCounts } {
   let counts = ZERO
   const run = (raw: string, max: number, o: WeekScrubOptions = {}) => {
@@ -208,15 +277,31 @@ export function scrubWeekRead(
     counts = add(counts, r.counts)
     return r.text
   }
+  const told = opts.company ? toldWhatToDo(opts.company) : null
+  const extra = [...ADVICE, ...FORECAST, ...(told ? [told] : [])]
+  const ids = (xs: readonly string[] | null | undefined): string[] => [...(xs ?? [])]
   const findings = (w.findings ?? []).map((f) => ({
     headline: run(f.headline, WEEK_READ_MAX.headline, { headline: true }),
     saw: run(f.saw, WEEK_READ_MAX.saw, { figures }),
     means: run(f.means, WEEK_READ_MAX.means),
-    for: Object.fromEntries(DEPARTMENTS.map((d) => [d, run(f.for?.[d] ?? '', WEEK_READ_MAX.for)])) as Record<Department, string>,
-    based_on: [...(f.based_on ?? [])],
+    based_on: ids(f.based_on),
     quote_from: f.quote_from ?? null,
   }))
-  const in_short = run(w.in_short ?? '', WEEK_READ_MAX.inShort, { maxSentences: WEEK_READ_MAX.inShortSentences })
+  const story = (w.story ?? []).map((p) => ({
+    paragraph: run(p.paragraph, WEEK_READ_MAX.paragraph),
+    based_on: ids(p.based_on),
+    quote_from: p.quote_from ?? null,
+  }))
+  const implications = (w.implications ?? []).map((i) => ({
+    implication: run(i.implication, WEEK_READ_MAX.implication, { maxSentences: WEEK_READ_MAX.implicationSentences, extra }),
+    based_on: ids(i.based_on),
+  }))
+  const new_this_week = (w.new_this_week ?? []).map((n) => ({ candidate: n.candidate, sentence: run(n.sentence, WEEK_READ_MAX.newItem) }))
+  const watch = (w.watch ?? []).map((q) => ({
+    question: run(q.question, Math.round(WEEK_READ_MAX.watch * WHOLE_SLACK), { maxSentences: 1, headline: true, whole: true, extra }),
+    based_on: ids(q.based_on),
+  }))
+  const week_in_one_line = run(w.week_in_one_line ?? '', Math.round(WEEK_READ_MAX.weekLine * WHOLE_SLACK), { maxSentences: 1, whole: true })
   const standing = (w.standing ?? []).map((s) => ({ subject_id: s.subject_id, sentence: run(s.sentence, WEEK_READ_MAX.standing) }))
-  return { output: { findings, in_short, standing }, counts }
+  return { output: { findings, story, implications, new_this_week, watch, week_in_one_line, standing }, counts }
 }

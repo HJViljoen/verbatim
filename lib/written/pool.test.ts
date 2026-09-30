@@ -8,11 +8,12 @@ import { flattenEvidence, type DatedEvidence } from './evidence'
 import { HEADLINE_MAX_MAKER_SHARE } from '../pages/overview'
 import { embedInput } from '../pipeline/cluster'
 import {
-  buildWeekPool, contradictsDominant, countsForTheWeek, dominantKindOf, invertMembers, isEligible, isMakerLed, isOwnAccount, judgeTheme,
-  lenientGateFor, lensesOf, makerShareOf, passingVideoIds, POOL_CAP, POOL_MIN_STRICT, POOL_MIN_VIDEOS, POOL_QUOTE_OPTIONS, POOL_QUOTES,
-  rankEligible, SUBJECT_MIN_MEMBERS, SUBJECT_SHARE_FLOOR, subjectForTheme,
+  buildWeekPool, contradictsDominant, countsForTheWeek, dominantKindOf, firstPassingDate, invertMembers, isEligible, isMakerLed, isOwnAccount, judgeTheme,
+  lenientGateFor, lensesOf, makerShareOf, marketFiguresOf, passingVideoIds, POOL_CAP, POOL_MIN_STRICT, POOL_MIN_VIDEOS, POOL_QUOTE_OPTIONS, POOL_QUOTES,
+  rankEligible, strictGateFor, SUBJECT_MIN_MEMBERS, SUBJECT_SHARE_FLOOR, subjectForTheme, substanceOf,
   type PoolFacts, type PoolHead, type PoolTheme, type ThemeJudgement,
 } from './pool'
+import { firstHeardThisWeek } from './types'
 
 // The week pool's rules, on fixtures (plan T1). No database: the loader's
 // reads are the product's own readers, and what is tested here is what the
@@ -367,6 +368,85 @@ describe('passingVideoIds: the one count a week and its month are made of', () =
       ev({ insight: 'x', video: 8, text: PASS[0] }), // not a member
     ]
     expect(passingVideoIds(evidence, members, lenient)).toEqual(['v-1', 'v-2'])
+  })
+})
+
+describe('firstPassingDate: when a theme was first heard in the period (v3)', () => {
+  it('the earliest comment among the citations passingVideoIds counts; null where none passes', () => {
+    const lenient = lenientGateFor(SEALAND, COMFORT.label)
+    const members = new Set(['i1', 'i2', 'i3'])
+    const evidence = [
+      ev({ insight: 'i3', video: 3, text: OFF_TOPIC, date: '2026-09-01T00:00:00+00:00' }), // fails the gate
+      ev({ insight: 'i3', video: 4, text: PASS[1], context: { segment: 'maker' }, date: '2026-09-02T00:00:00+00:00' }), // a maker's video
+      ev({ insight: 'x', video: 8, text: PASS[0], date: '2026-09-03T00:00:00+00:00' }), // not a member
+      ev({ insight: 'i2', video: 2, text: LENIENT_ONLY[1], date: '2026-09-22T00:00:00+00:00' }),
+      ev({ insight: 'i1', video: 1, text: PASS[0], date: '2026-09-21T00:00:00+00:00' }),
+    ]
+    expect(firstPassingDate(evidence, members, lenient)).toBe('2026-09-21T00:00:00+00:00')
+    expect(firstPassingDate(evidence.slice(0, 3), members, lenient)).toBeNull()
+  })
+
+  it('with isNew, says whether a candidate was first heard THIS WEEK (the window\'s start or after)', () => {
+    const window = { from: '2026-09-20T04:18:00+00:00' }
+    expect(firstHeardThisWeek({ isNew: true, firstHeard: '2026-09-20T04:18:00+00:00' }, window)).toBe(true)
+    expect(firstHeardThisWeek({ isNew: true, firstHeard: '2026-09-24T00:00:00+00:00' }, window)).toBe(true)
+    expect(firstHeardThisWeek({ isNew: true, firstHeard: '2026-09-19T23:00:00+00:00' }, window)).toBe(false) // heard earlier this month
+    expect(firstHeardThisWeek({ isNew: false, firstHeard: '2026-09-24T00:00:00+00:00' }, window)).toBe(false) // heard in an earlier month
+    expect(firstHeardThisWeek({ isNew: true, firstHeard: null }, window)).toBe(false)
+    expect(firstHeardThisWeek({ isNew: true }, window)).toBe(false) // a pool saved before v3
+  })
+
+  it('buildWeekPool carries it from the facts, null where absent', () => {
+    const pool = buildWeekPool(HEAD, rankEligible([judged('a', 4, 6), judged('b', 3, 5)]), { ...NO_FACTS, firstHeard: new Map([['a', '2026-09-22T00:00:00+00:00']]) })
+    expect(pool.candidates.map((c) => [c.themeId, c.firstHeard])).toEqual([['a', '2026-09-22T00:00:00+00:00'], ['b', null]])
+  })
+})
+
+describe('marketFiguresOf: the Dashboard\'s figures on the market base (v3)', () => {
+  const rivals = ['competitor:Osprey', 'competitor:Cotopaxi']
+  const row = (audience: string, videos: number, comments: number) => ({ audience, videos, comments })
+
+  it('pools the category and the tracked brands, never the client\'s own posts or an untracked brand', () => {
+    const m = marketFiguresOf({
+      week: [row(INDUSTRY_AUDIENCE, 262, 4528), row('competitor:Osprey', 12, 300), row('competitor:Cotopaxi', 7, 82), row(CLIENT_AUDIENCE, 5, 40), row('competitor:Untracked', 9, 9)],
+      month: [row(INDUSTRY_AUDIENCE, 814, 15000), row('competitor:Osprey', 30, 700), row('competitor:Cotopaxi', 8, 340)],
+      rivals,
+    })
+    expect(m).toEqual({ week: { videos: 281, comments: 4910 }, month: { videos: 852, comments: 16040 } })
+  })
+
+  it('is null where a period was not read or holds no market row, never zero', () => {
+    expect(marketFiguresOf({ week: null, month: [row(CLIENT_AUDIENCE, 5, 40)], rivals })).toEqual({ week: { videos: null, comments: null }, month: { videos: null, comments: null } })
+  })
+
+  it('a pool head carries it through buildWeekPool', () => {
+    const market = { week: { videos: 281, comments: 4910 }, month: { videos: 852, comments: 16040 } }
+    expect(buildWeekPool({ ...HEAD, market }, [], NO_FACTS).market).toEqual(market)
+  })
+})
+
+describe('substanceOf: what a quote option says on its own (v3)', () => {
+  it('reads the form from the readable English and keeps the strict gate\'s score, never the words', () => {
+    const gate = strictGateFor(SEALAND, COMFORT)
+    const e = ev({ insight: 'i1', video: 1, text: PASS[0] })
+    const s = substanceOf(e, gate)
+    expect(s.form).toBe('claim')
+    const v = quoteGate({ text: PASS[0], lang: 'en', english: null, video: e.context }, gate)
+    expect(s.gate).toBe(v.ok ? v.score : -1)
+    expect(JSON.stringify(s)).not.toContain(PASS[0].slice(0, 12))
+    const q = ev({ insight: 'i2', video: 2, text: 'Does this backpack have padded shoulder straps for a heavy load?' })
+    expect(substanceOf(q, gate).form).toBe('question')
+  })
+
+  it('judgeTheme gives every quote option its substance', () => {
+    const j = judgeTheme(SEALAND, COMFORT, [
+      ev({ insight: 'i1', video: 1, text: PASS[0] }),
+      ev({ insight: 'i2', video: 2, text: 'Does this backpack have padded shoulder straps for a heavy load?' }),
+      ev({ insight: 'i3', video: 3, text: PASS[2] }),
+    ])
+    expect(j.quoteOptions).toHaveLength(3)
+    for (const o of j.quoteOptions) expect(o.substance?.gate).toBeGreaterThan(0)
+    expect(j.quoteOptions.map((o) => o.substance?.form).sort()).toEqual(['claim', 'claim', 'question'])
   })
 })
 

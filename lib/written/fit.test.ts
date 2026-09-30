@@ -96,6 +96,23 @@ describe('fitQuotes', () => {
     expect(JSON.stringify(logged[0].request)).not.toContain('Straps decide comfort')
   })
 
+  it('measures a story paragraph against the options of the candidate it points to, in the same request (v3)', async () => {
+    const { admin } = fakeAdmin({ 'ins-a1': unit(1), 'ins-a2': unit(2), 'ins-b1': unit(3) })
+    const calls: string[][] = []
+    const embed = async (texts: string[]) => { calls.push(texts); return texts.map((_, i) => (i === 1 ? unit(1) : unit(0))) }
+    const fit = await fitQuotes(admin, {
+      clientId: 'client-1', runId: 'run-27', pool: P,
+      findings: [findings[0]],
+      story: [{ index: 1, text: 'The week turned on\nthe straps.', based_on: ['C1'] }, { index: 2, text: 'No options.', based_on: ['C9'] }],
+      log: false,
+    }, { embed })
+    expect(calls).toEqual([['Straps decide comfort. Owners describe the straps.', 'The week turned on the straps.']])
+    expect(fit).toMatchObject({ ran: true, findings: 1, paragraphs: 1 })
+    expect(fit.story?.get(1)?.get('e:a1')).toBeCloseTo(1)
+    expect(fit.story?.get(1)?.get('e:a2')).toBeCloseTo(0)
+    expect(fit.story?.has(2)).toBe(false)
+  })
+
   it('writes nothing to any database on a dry run', async () => {
     const { admin, logged } = fakeAdmin({ 'ins-a1': unit(1), 'ins-a2': unit(2), 'ins-b1': unit(3) })
     const fit = await fitQuotes(admin, { clientId: 'client-1', runId: 'run-27', pool: P, findings, log: false }, { embed: async (t) => t.map(() => unit(0)) })

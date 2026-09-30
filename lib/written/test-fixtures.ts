@@ -1,5 +1,6 @@
 import { lensesOf } from './pool'
 import type { PoolCandidate, QuoteOption, QuoteRef, StandingFact, WeekPool } from './types'
+import type { WeekReadOutput } from './write'
 
 // Fixtures for the written read's tests (compose, write, scrub, step). Made-up
 // words and ids shaped like Sealand's 27 Sep pool; nothing here is a reading.
@@ -42,6 +43,7 @@ export function candidate(o: Partial<PoolCandidate> & { id: string; gated?: numb
     monthN: o.monthN ?? 814,
     subjectId: o.subjectId ?? null,
     isNew: o.isNew ?? false,
+    firstHeard: o.firstHeard ?? null,
     quoteRefs,
     quoteOptions: o.quoteOptions ?? quoteRefs.map((q) => option(q)),
     notes: o.notes ?? [`People describe ${o.id}.`],
@@ -80,5 +82,20 @@ export function fact(o: Partial<StandingFact> & { subjectId: string; name: strin
     quoteRef: o.quoteRef ?? null,
     subjectId: o.subjectId,
     name: o.name,
+  }
+}
+
+/** A whole writer answer (v3): the report's lists empty and its line blank
+ *  unless given. */
+export function written(o: Partial<WeekReadOutput> = {}): WeekReadOutput {
+  return {
+    findings: [],
+    story: [],
+    implications: [],
+    new_this_week: [],
+    watch: [],
+    week_in_one_line: '',
+    standing: [],
+    ...o,
   }
 }

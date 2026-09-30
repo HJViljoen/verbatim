@@ -1,6 +1,7 @@
 import type { Direction } from '../reading/bands'
 import type { Verdict } from '../reading/verdicts'
 import type { FigureTable } from '../reports/types'
+import type { QuoteSubstance } from './substance'
 
 // The written read's inputs (plan "Verbatim, writing back", T1 and T2).
 //
@@ -50,6 +51,11 @@ export interface QuoteOption {
   /** The product's embedding text for the insight (`embedInput`,
    *  lib/pipeline/cluster.ts): its slug and its description. */
   insightText: string
+  /** ADDITIVE (v3). How much the quote says on its own: its form, read from
+   *  its words by the pool, and the strict gate's score
+   *  (lib/written/substance.ts). Never the words. Absent on a pool saved
+   *  before v3: the fit alone decides. */
+  substance?: QuoteSubstance
 }
 
 export interface PoolCandidate {
@@ -84,6 +90,11 @@ export interface PoolCandidate {
   monthK: number; monthN: number   // category videos in the reading month to date (month_theme_readings / window read)
   subjectId: string | null   // subject holding the most of the theme's member insights (subject_memberships.member), if it holds ≥3 of them and ≥15% (SUBJECT_MIN_MEMBERS, SUBJECT_SHARE_FLOOR); else null
   isNew: boolean             // the existing themeFlags 'new' rule (not minted by a regime-opening run)
+  /** ADDITIVE (v3). The comment date of the theme's first citation this month
+   *  that counts and the lenient gate passes (`[month start, window end)`, the
+   *  same material as `monthVideoIds`), or null. With `isNew` it says whether
+   *  the theme was first heard THIS WEEK (`firstHeardThisWeek`). */
+  firstHeard?: string | null
   quoteRefs: QuoteRef[]      // strict-gated, one per thread, ≤3, text '', the dominant kind first, never a contradicting kind (the first of quoteOptions)
   /** Every quote the candidate may give a finding, in the same order and under
    *  the same rules as `quoteRefs` (strict-gated, kind-consistent, one per
@@ -94,6 +105,18 @@ export interface PoolCandidate {
   notes: string[]            // ≤8 member insight descriptions dated in the window, from lenient-gated material (Pass A paraphrases, never comment text)
 }
 
+/**
+ * The market's size (decision E: the category plus the tracked brands'
+ * audiences, the client's own posts out; `pooledDenominators`), the same base
+ * as the standing levels ("of 852"): the week is the window read over the
+ * run's frozen window, the month the month to date as the run left it. Null
+ * where it was not read, never zero. The Dashboard's figures, frozen at the run.
+ */
+export interface WeekMarketFigures {
+  week: { videos: number | null; comments: number | null }
+  month: { videos: number | null; comments: number | null }
+}
+
 export interface WeekPool {
   clientId: string; runId: string
   window: { from: string; to: string }   // the run's frozen [window_start, window_end)
@@ -101,6 +124,19 @@ export interface WeekPool {
   weekVideos: number; weekComments: number; monthVideos: number   // category, read lane
   candidates: PoolCandidate[]            // eligible (T3b) = lenientVideos ≥ 3 AND gatedVideos ≥ 1, maker segments excluded, maker-led themes out (maker share of the window's videos over HEADLINE_MAX_MAKER_SHARE); ranked lenientVideos, then gatedVideos, then weekVideos; cap 12
   thin: boolean                          // < 3 eligible candidates
+  /** ADDITIVE (v3): the market's week and month to date. Absent on a pool
+   *  saved before v3. */
+  market?: WeekMarketFigures | null
+}
+
+/** Was this candidate first heard this week: the theme is new this month
+ *  (`isNew`) and its first counted citation this month is inside the week's
+ *  window? "New this week" lists only these (never invented novelty). */
+export function firstHeardThisWeek(c: Pick<PoolCandidate, 'isNew' | 'firstHeard'>, window: { from: string }): boolean {
+  if (!c.isNew || !c.firstHeard) return false
+  const first = Date.parse(c.firstHeard)
+  const from = Date.parse(window.from)
+  return Number.isFinite(first) && Number.isFinite(from) && first >= from
 }
 
 /** The ladder (decision D1): a level now, a change once two comparable months
@@ -152,9 +188,6 @@ export interface TokenSentence {
 
 // ---- The stored read (plan T3) -------------------------------------------------
 
-/** The departments a read speaks to, in the order they print. */
-export const DEPARTMENTS: readonly Department[] = ['sales', 'marketing', 'content', 'leadership']
-
 /**
  * What prints about how sure a finding is (plan T3: "no confidence words").
  * A finding that is not at least `reasonable` on the document engine's rule
@@ -168,7 +201,11 @@ export interface WeekReadFinding {
   headline: string
   saw: string
   means: string
-  for: Partial<Record<Department, string>>
+  /** v1 rows only (week_read_v1, v2): a line per department. Gone from v3
+   *  (Heinrich, 30 Sep: the weekly is one general report; department
+   *  interpretation lives in the monthly briefs). Optional so a stored v1 row
+   *  still reads. */
+  for?: Partial<Record<Department, string>>
   /** The cited candidates' theme ids (`theme_registry.id`): a candidate's
    *  `C#` is stable only inside one read, the registry id across reads. */
   basedOn: string[]
@@ -216,14 +253,101 @@ export interface WeekReadStanding {
   quote: QuoteRef | null
 }
 
-export interface WeekReadData {
-  version: 1
+// ---- The report (v3) ---------------------------------------------------------------
+//
+// Each report line's prose is `body`, never `text`: in a stored read `text`
+// is a quote ref's, and it is always '' (the words resolve at render).
+
+/** One paragraph of "What happened": the writer's prose, the candidates it
+ *  rests on (theme ids), and the real quote code attached where the writer
+ *  pointed to one (at most two in the story). */
+export interface WeekReadParagraph {
+  body: string
+  basedOn: string[]
+  quote: QuoteRef | null
+}
+
+/** One line of "What it means for {company}": at most two sentences of
+ *  intelligence (never an instruction), resting on the week's evidence. */
+export interface WeekReadImplication {
+  body: string
+  basedOn: string[]
+}
+
+/** One conversation first heard this week (`firstHeardThisWeek`), with the
+ *  writer's words on what it is and code's evidence line (as a finding's). */
+export interface WeekReadNewItem {
+  themeId: string
+  body: string
+  videos: { week: number; month: number }
+  evidence: string
+}
+
+/** One open question "Worth watching next week": grounded in what was seen,
+ *  never a forecast and never a direction. */
+export interface WeekReadWatchItem {
+  body: string
+  basedOn: string[]
+}
+
+/** Which part of the read a held item came from (the workings view). */
+export type HeldSection = 'finding' | 'week_line' | 'story' | 'implication' | 'new' | 'watch'
+
+/** Dropped findings and report lines, for the Studio's workings view only.
+ *  `headline` is the finding's headline, or the start of a report line. */
+export interface WeekReadHeld {
+  reason: string
+  headline: string
+  /** ADDITIVE (v3). Absent is a finding. */
+  section?: HeldSection
+}
+
+/** What every stored read has, whatever its version. */
+interface WeekReadCommon {
   window: { from: string; to: string }; month: string
-  inShort: string
+  /** The findings, in full (the This week page; the Dashboard tile names
+   *  them). */
   findings: WeekReadFinding[]
   standing: WeekReadStanding[]
   figures: FigureTable
-  /** Dropped findings, for the Studio's workings view only. */
-  held: { reason: string; headline: string }[]
-  model: string; promptVersion: 'week_read_v1' | 'week_read_v2'; costUsd: number
+  held: WeekReadHeld[]
+  model: string; costUsd: number
 }
+
+/** A read stored by week_read_v1 or v2: In short, then the findings with a
+ *  line per department. Still reads; nothing writes it now. */
+export interface WeekReadDataV1 extends WeekReadCommon {
+  version: 1
+  inShort: string
+  promptVersion: 'week_read_v1' | 'week_read_v2'
+}
+
+/**
+ * A read stored by week_read_v3 (Heinrich, 30 Sep: "I don't feel like it is
+ * really a report"): the report, top to bottom, then the findings.
+ *  · headline: the week in one line;
+ *  · story: what happened, two or three paragraphs telling the week as one
+ *    story, with at most two real quotes;
+ *  · implications: what it means for the company, two or three;
+ *  · newThisWeek: conversations first heard this week, empty (the section is
+ *    omitted) where there are none;
+ *  · watch: one or two open questions worth watching next week;
+ *  · market: the Dashboard's numbers, on the market base, also in `figures`
+ *    under `market_week_videos` and the like.
+ * Every section is empty where no finding prints (a thin week): nothing is
+ * sent from it.
+ */
+export interface WeekReadDataV2 extends WeekReadCommon {
+  version: 2
+  headline: string
+  story: WeekReadParagraph[]
+  implications: WeekReadImplication[]
+  newThisWeek: WeekReadNewItem[]
+  watch: WeekReadWatchItem[]
+  market: WeekMarketFigures | null
+  promptVersion: 'week_read_v3'
+}
+
+/** The stored read (`week_reads.data`), by version: a renderer reads
+ *  `version` and prints what that version has. */
+export type WeekReadData = WeekReadDataV1 | WeekReadDataV2

@@ -4,19 +4,21 @@ import { sendAlertEmail } from '../email'
 import { checkWeekRead, type WeekCheck } from './check'
 import { composeWeekRead } from './compose'
 import { loadTrackedBrands } from './evidence'
-import { fitQuotes, type QuoteFit } from './fit'
+import { fitQuotes, type FitParagraph, type QuoteFit } from './fit'
 import { loadWeekPool } from './pool'
 import { scrubWeekRead, weekAllowTokens, type WeekScrubCounts } from './scrub'
 import { loadStanding } from './standing'
 import { loadPreviousHeadlines, saveWeekRead, weekReadsApplied, type WeekReadRow, type WeekReadStatus } from './store'
-import type { StandingFact, WeekPool, WeekReadData } from './types'
+import type { StandingFact, WeekPool, WeekReadDataV2 } from './types'
 import { writerFigures, writerSubjects, type WeekReadOutput } from './write'
 import { generateWeekRead, WEEK_READ_MODEL, type ParseClient } from './write-model'
 
 // The week's written read, built and stored (plan T4). Two entry points:
 //
-//  · `buildWeekRead`: pool (T1), standing (T2), the writer (T3), scrub, the
-//    self-check, the quotes' fit (T3b), compose. Writes nothing but the
+//  · `buildWeekRead`: pool (T1), standing (T2), the writer (T3, v3: the
+//    report and the findings in one call), scrub, the self-check (the finding
+//    headlines and the week's one line), the quotes' fit (T3b; the story's
+//    quotes too), compose. Writes nothing but the
 //    `ai_call_log` rows of its model calls (the writer, the self-check, the
 //    fit's one embeddings request), and not those where `log` is false (the
 //    script's dry run).
@@ -35,7 +37,7 @@ import { generateWeekRead, WEEK_READ_MODEL, type ParseClient } from './write-mod
 
 export interface BuiltWeekRead {
   status: Exclude<WeekReadStatus, 'failed'>
-  data: WeekReadData
+  data: WeekReadDataV2
   pool: WeekPool
   standing: StandingFact[]
   /** Whether the writer was called (false on a thin pool). */
@@ -97,26 +99,39 @@ export async function buildWeekRead(
   }
 
   const call = await generateWeekRead(admin, { company, pool, standing, previous, figures, clientId, runId, log: opts.log, client: opts.client })
-  const scrubbed = scrubWeekRead(call.written, figures, weekAllowTokens(pool.candidates, standing))
+  const scrubbed = scrubWeekRead(call.written, figures, weekAllowTokens(pool.candidates, standing), { company })
   const check = await checkWeekRead(admin, { clientId, runId, companyName: company, headlines: checkableHeadlines(pool, scrubbed.output), persist: opts.log })
-  // Which quote fits each finding as it will print (after the scrub).
+  // Which quote fits each finding, and each story paragraph that points to a
+  // voice, as it will print (after the scrub).
   const fit = await fitQuotes(admin, {
     clientId,
     runId,
     pool,
     findings: scrubbed.output.findings.map((f, index) => ({ index, headline: f.headline, saw: f.saw, based_on: f.based_on })),
+    story: storyFitTargets(scrubbed.output),
     log: opts.log,
   }, opts.embed ? { embed: opts.embed } : {})
-  return finishWeekRead({ pool, standing, raw: call.written, check, fit, costUsd: call.costUsd + check.costUsd + fit.costUsd })
+  return finishWeekRead({ company, pool, standing, raw: call.written, check, fit, costUsd: call.costUsd + check.costUsd + fit.costUsd })
 }
 
-/** The headlines the self-check reads: only one that could print, i.e. that
- *  survived the scrub and rests on a candidate that exists. */
-export function checkableHeadlines(pool: Pick<WeekPool, 'candidates'>, scrubbed: WeekReadOutput): string[] {
+/** The story paragraphs whose quote is fitted: each that points to a voice,
+ *  measured against that one candidate's options. */
+export function storyFitTargets(scrubbed: Pick<WeekReadOutput, 'story'>): FitParagraph[] {
+  return (scrubbed.story ?? [])
+    .map((p, index) => ({ index, text: p.paragraph, based_on: p.quote_from ? [p.quote_from] : [] }))
+    .filter((p) => p.text.trim() && p.based_on.length > 0)
+}
+
+/** The claims the self-check reads: each finding headline that could print
+ *  (it survived the scrub and rests on a candidate that exists), then the
+ *  week's one line (v3) where there is one. */
+export function checkableHeadlines(pool: Pick<WeekPool, 'candidates'>, scrubbed: Pick<WeekReadOutput, 'findings' | 'week_in_one_line'>): string[] {
   const known = new Set(pool.candidates.map((c) => c.id.toUpperCase()))
-  return scrubbed.findings
+  const headlines = scrubbed.findings
     .filter((f) => f.headline && f.based_on.some((id) => known.has(String(id).trim().toUpperCase())))
     .map((f) => f.headline)
+  const line = (scrubbed.week_in_one_line ?? '').trim()
+  return headlines.length > 0 && line ? [...headlines, line] : headlines
 }
 
 /**
@@ -126,16 +141,18 @@ export function checkableHeadlines(pool: Pick<WeekPool, 'candidates'>, scrubbed:
  * call (scripts/week-read.ts --recompose).
  */
 export function finishWeekRead(a: {
+  /** The company, for the scrub's advice rule (`toldWhatToDo`). */
+  company?: string
   pool: WeekPool
   standing: StandingFact[]
   raw: WeekReadOutput
   check: WeekCheck
-  /** The quotes' fit; absent, the writer's order decides each quote. */
+  /** The quotes' fit; absent, substance then the writer's order decides. */
   fit?: QuoteFit | null
   costUsd: number
 }): BuiltWeekRead {
   const figures = writerFigures(a.pool)
-  const scrubbed = scrubWeekRead(a.raw, figures, weekAllowTokens(a.pool.candidates, a.standing))
+  const scrubbed = scrubWeekRead(a.raw, figures, weekAllowTokens(a.pool.candidates, a.standing), { company: a.company })
   const data = composeWeekRead({
     pool: a.pool,
     standing: a.standing,
@@ -144,6 +161,7 @@ export function finishWeekRead(a: {
     writerFigures: figures,
     contradicted: a.check.contradicted,
     fit: a.fit?.scores,
+    storyFit: a.fit?.story,
     model: WEEK_READ_MODEL,
     costUsd: Math.round(a.costUsd * 10_000) / 10_000,
   })

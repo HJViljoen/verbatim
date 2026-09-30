@@ -275,7 +275,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   its sentence; `lib/written/scrub.ts`), and it adds a third rule of its own:
   a sentence about how the read was made (searches, data, coverage, sources,
   updates, the tool, "this report", why something cannot be said) drops too,
-  on `BANNED_PHRASES`, which a guard over the client surfaces reuses.
+  on `BANNED_PHRASES`, which a guard over the client surfaces reuses. Since
+  `week_read_v3` (the read is a report: the week in one line, what happened,
+  what it means, new this week, worth watching, then the findings) a fourth
+  rule holds in the report's implications and watch lines only: advice and
+  forecasts drop their sentence (`ADVICE`, `FORECAST`, `toldWhatToDo`), which
+  are NOT safe on market prose and are not reused by the guard.
 - **A block renders three modes.** `render(data, mode, ctx)` for
   `app | print | email`, plus `figures()` / `verdicts()` / `quotes()` /
   `emptyState()` (`lib/blocks/types.ts`). There is exactly ONE `RenderMode` in

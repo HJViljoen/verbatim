@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { CURATION_GATE } from '../curation'
 import { substituteFigures } from '../reports/cover'
-import { composeWeekRead, contextLine, evidenceOf, monthEvidenceOf, pickFindingQuote, sureOf, type ComposeWeekArgs } from './compose'
+import { composeWeekRead, contextLine, evidenceOf, marketFigureTable, monthEvidenceOf, pickFindingQuote, sureOf, type ComposeWeekArgs } from './compose'
 import type { ScrubbedWeekRead } from './scrub'
-import { candidate, fact, option, pool, ref, SEP } from './test-fixtures'
-import type { PoolCandidate } from './types'
+import { candidate, fact, option, pool, ref, SEP, WINDOW, written } from './test-fixtures'
+import type { PoolCandidate, WeekMarketFigures } from './types'
 import { writerFigures, writerSubjects } from './write'
 
 // The composer's rules, on fixtures (plan T3): the floor, the cap, the order,
@@ -16,18 +16,17 @@ const finding = (o: Partial<Finding> & { based_on: string[] }): Finding => ({
   headline: o.headline ?? 'Buyers weigh the price against how long a bag lasts',
   saw: o.saw ?? 'Buyers describe the thing plainly.',
   means: o.means ?? 'It matters because it decides the sale.',
-  for: o.for ?? { sales: 'The objection is the first question.', marketing: '', content: '', leadership: 'It is the risk in the week.' },
   based_on: o.based_on,
   quote_from: o.quote_from ?? null,
 })
 
-function compose(candidates: PoolCandidate[], findings: Finding[], over: Partial<ComposeWeekArgs> = {}) {
-  const p = pool(candidates)
+function compose(candidates: PoolCandidate[], findings: Finding[], over: Partial<ComposeWeekArgs> & { market?: WeekMarketFigures } = {}) {
+  const p = pool(candidates, over.market ? { market: over.market } : {})
   const standing = over.standing ?? []
   return composeWeekRead({
     pool: p,
     standing,
-    written: { findings, in_short: 'The week turns on price.', standing: [] },
+    written: written({ findings, week_in_one_line: 'The week turns on price.' }),
     subjects: writerSubjects(standing),
     writerFigures: writerFigures(p),
     model: 'gpt-5.4',
@@ -111,8 +110,9 @@ describe('composeWeekRead: which findings print', () => {
       finding({ based_on: ['C2'], headline: 'No body', saw: '' }),
     ])
     expect(read.findings).toEqual([])
-    expect(read.held.map((h) => h.reason)).toEqual(['no headline survived the scrub', 'nothing it saw survived the scrub'])
-    expect(read.inShort).toBe('') // nothing printed, so nothing to sum up
+    expect(read.held.map((h) => h.reason)).toEqual(['no headline survived the scrub', 'nothing it saw survived the scrub', 'no finding printed'])
+    // Nothing printed, so nothing to sum up: the whole report is empty.
+    expect(read).toMatchObject({ headline: '', story: [], implications: [], newThisWeek: [], watch: [] })
   })
 })
 
@@ -121,7 +121,7 @@ describe('composeWeekRead: a thin week', () => {
     const standing = [fact({ subjectId: 's1', name: 'Comfort', rank: 1 }), fact({ subjectId: 's2', name: 'Repair', calibration: 'failed' })]
     const p = pool([candidate({ id: 'C1' })])
     const read = composeWeekRead({ pool: p, standing, written: null, subjects: [], writerFigures: writerFigures(p), model: '', costUsd: 0 })
-    expect(read).toMatchObject({ version: 1, inShort: '', findings: [], held: [], month: SEP, promptVersion: 'week_read_v2', costUsd: 0 })
+    expect(read).toMatchObject({ version: 2, headline: '', story: [], implications: [], newThisWeek: [], watch: [], findings: [], held: [], month: SEP, promptVersion: 'week_read_v3', costUsd: 0 })
     expect(read.standing.map((s) => [s.name, s.line !== '', s.sentence])).toEqual([['Comfort', true, ''], ['Repair', false, '']])
   })
 })
@@ -192,9 +192,9 @@ describe('composeWeekRead: the lines code writes', () => {
     expect(read.findings.map((f) => [f.headline, f.sure])).toEqual([['Big', 'strong'], ['Small', 'reasonable']])
   })
 
-  it('keeps only the department lines with something to say', () => {
+  it('stores no department lines (v3: the weekly is one general report)', () => {
     const read = compose([candidate({ id: 'C1' })], [finding({ based_on: ['C1'] })])
-    expect(read.findings[0].for).toEqual({ sales: 'The objection is the first question.', leadership: 'It is the risk in the week.' })
+    expect(read.findings[0]).not.toHaveProperty('for')
   })
 })
 
@@ -278,11 +278,11 @@ describe('composeWeekRead: where the market stands', () => {
     const read = compose([candidate({ id: 'C1' })], [finding({ based_on: ['C1'] })], {
       standing,
       subjects,
-      written: {
+      written: written({
         findings: [finding({ based_on: ['C1'] })],
-        in_short: 'x',
+        week_in_one_line: 'x',
         standing: [{ subject_id: 's2', sentence: 'Buyers weigh the price against how long a bag lasts.' }, { subject_id: 'S9', sentence: 'Nobody.' }],
-      },
+      }),
     })
     expect(read.standing.map((s) => ({ name: s.name, rung: s.rung, line: s.line !== '', sentence: s.sentence, quote: s.quote?.ref ?? null }))).toEqual([
       { name: 'Comfort', rung: 'level', line: true, sentence: '', quote: 'e:q1' },
@@ -302,12 +302,219 @@ describe('composeWeekRead: what is stored', () => {
       finding({ based_on: ['C2'] }),
     ])
     for (const f of read.findings) {
-      for (const text of [f.headline, f.saw, f.means, ...Object.values(f.for), read.inShort]) {
+      for (const text of [f.headline, f.saw, f.means, read.headline]) {
         expect(text.replace(/\[\[[a-z0-9_]+\]\]/g, '')).not.toMatch(/\d/)
         for (const m of text.matchAll(/\[\[([a-z0-9_]+)\]\]/g)) expect(read.figures[m[1]]).toBeDefined()
       }
       for (const line of [f.evidence, f.context]) for (const m of line.matchAll(/\[\[([a-z0-9_]+)\]\]/g)) expect(read.figures[m[1]]).toBeDefined()
     }
     expect(JSON.stringify(read)).not.toMatch(/"text":"[^"]/)
+  })
+})
+
+// ---- The report (v3) -------------------------------------------------------------------
+
+describe('composeWeekRead: the report rests on what prints (v3)', () => {
+  // C1 and C2 carry findings; C3 carries none (the writer left it out); C4 is
+  // too thin to carry one alone and the writer tried anyway.
+  const cs = () => [
+    candidate({ id: 'C1', gated: 8, quoteRefs: [ref('a1', 't1'), ref('a2', 't2'), ref('a3', 't3')] }),
+    candidate({ id: 'C2', gated: 6, quoteRefs: [ref('b1', 't4'), ref('b2', 't5')] }),
+    candidate({ id: 'C3', gated: 5, quoteRefs: [ref('c1', 't6'), ref('c2', 't7')] }),
+    candidate({ id: 'C4', gated: 3, quoteRefs: [ref('d1', 't8')] }),
+  ]
+  const answer = (over: Partial<ReturnType<typeof written>> = {}) => written({
+    findings: [
+      finding({ based_on: ['C1'], headline: 'Buyers test a bag with weight in it' }),
+      finding({ based_on: ['C2'], headline: 'Buyers weigh the price against lifespan' }),
+      finding({ based_on: ['C4'], headline: 'Stretched' }),
+    ],
+    story: [
+      { paragraph: 'The week was about living with a bag.', based_on: ['C1', 'C3'], quote_from: 'C1' },
+      { paragraph: 'Price came up in the same terms.', based_on: ['C2'], quote_from: 'C2' },
+      { paragraph: 'A thread nothing printed carries.', based_on: ['C3'], quote_from: 'C3' },
+    ],
+    implications: [
+      { implication: 'The bag is judged a year after purchase.', based_on: ['C1', 'C2'] },
+      { implication: 'An implication on nothing that prints.', based_on: ['C4'] },
+      { implication: 'An implication on nothing at all.', based_on: ['C9'] },
+    ],
+    watch: [{ question: 'Whether buyers keep naming the same straps', based_on: ['C1'] }, { question: 'Whether a thin thread holds', based_on: ['C4'] }],
+    week_in_one_line: 'Buyers judged bags this week by what they are like to live with.',
+    ...over,
+  })
+  const run = (over: Partial<ComposeWeekArgs> = {}, w = answer()) => {
+    const p = pool(cs())
+    return composeWeekRead({ pool: p, standing: [], written: w, subjects: [], writerFigures: writerFigures(p), model: 'gpt-5.4', costUsd: 0.12, ...over })
+  }
+
+  it('prints the week line, the story, what it means and what to watch, each only where it rests on a printed finding', () => {
+    const read = run()
+    expect(read.findings.map((f) => f.headline)).toEqual(['Buyers test a bag with weight in it', 'Buyers weigh the price against lifespan'])
+    expect(read.headline).toBe('Buyers judged bags this week by what they are like to live with.')
+    expect(read.story.map((p) => [p.body, p.basedOn])).toEqual([
+      ['The week was about living with a bag.', ['th-c1', 'th-c3']], // C3 rides along beside a printed finding
+      ['Price came up in the same terms.', ['th-c2']],
+    ])
+    expect(read.implications).toEqual([{ body: 'The bag is judged a year after purchase.', basedOn: ['th-c1', 'th-c2'] }])
+    expect(read.watch).toEqual([{ body: 'Whether buyers keep naming the same straps', basedOn: ['th-c1'] }])
+    expect(read.held).toEqual(expect.arrayContaining([
+      { reason: 'below reasonable: 3 videos', headline: 'Stretched' },
+      { reason: 'rests on no printed finding', headline: 'A thread nothing printed carries.', section: 'story' },
+      { reason: 'rests on no printed finding', headline: 'An implication on nothing that prints.', section: 'implication' },
+      { reason: 'rests on no printed finding', headline: 'An implication on nothing at all.', section: 'implication' },
+      { reason: 'rests on no printed finding', headline: 'Whether a thin thread holds', section: 'watch' },
+    ]))
+  })
+
+  it('attaches a real quote where a paragraph points to a candidate it cites, at most two, never one a finding printed', () => {
+    const read = run()
+    const findingRefs = read.findings.map((f) => f.quote?.ref)
+    expect(findingRefs).toEqual(['e:a1', 'e:b1'])
+    // Each paragraph takes its candidate's next voice, on a thread not heard yet.
+    expect(read.story.map((p) => p.quote?.ref ?? null)).toEqual(['e:a2', 'e:b2'])
+    for (const p of read.story) expect(p.quote?.text).toBe('')
+    // No quote's words anywhere in the stored read.
+    expect(JSON.stringify(read)).not.toMatch(/"text":"[^"]/)
+
+    const three = run({}, answer({
+      story: [
+        { paragraph: 'One.', based_on: ['C1'], quote_from: 'C1' },
+        { paragraph: 'Two.', based_on: ['C2'], quote_from: 'C2' },
+        { paragraph: 'Three.', based_on: ['C1'], quote_from: 'C1' },
+        { paragraph: 'Four.', based_on: ['C1'], quote_from: 'C1' },
+      ],
+    }))
+    expect(three.story.map((p) => p.quote?.ref ?? null)).toEqual(['e:a2', 'e:b2', null])
+    expect(three.held).toContainEqual({ reason: 'past the first 3 paragraphs', headline: 'Four.', section: 'story' })
+  })
+
+  it('prints no quote where the paragraph points to a candidate it does not cite, or that candidate\'s voices are used up', () => {
+    const read = run({}, answer({
+      story: [
+        { paragraph: 'Points elsewhere.', based_on: ['C1'], quote_from: 'C2' },
+        { paragraph: 'Price once.', based_on: ['C2'], quote_from: 'C2' },
+        { paragraph: 'Price again.', based_on: ['C2'], quote_from: 'C2' },
+      ],
+    }))
+    // C2's finding took b1 and the first price paragraph b2: none is left.
+    expect(read.story.map((p) => [p.body, p.quote?.ref ?? null])).toEqual([['Points elsewhere.', null], ['Price once.', 'e:b2'], ['Price again.', null]])
+  })
+
+  it("may quote a candidate that rides along beside a printed finding, from its own voices", () => {
+    const read = run({}, answer({ story: [{ paragraph: 'A detail beside the straps.', based_on: ['C4', 'C1'], quote_from: 'C4' }] }))
+    expect(read.story.map((p) => p.quote?.ref ?? null)).toEqual(['e:d1'])
+  })
+
+  it('fits a paragraph\'s quote to the paragraph, weighed with substance', () => {
+    const read = run({ storyFit: new Map([[0, new Map([['e:a2', 0.2], ['e:a3', 0.6]])]]) })
+    expect(read.story[0].quote?.ref).toBe('e:a3')
+  })
+
+  it('where the self-check contradicts the week line, the top finding\'s headline stands in', () => {
+    const line = 'Buyers judged bags this week by what they are like to live with.'
+    const read = run({ contradicted: new Map([[line, 'people talk about price first']]) })
+    expect(read.headline).toBe('Buyers test a bag with weight in it.')
+    expect(read.held).toContainEqual({ reason: 'the conversation contradicts it: people talk about price first', headline: line, section: 'week_line' })
+    // And where the scrub took it.
+    expect(run({}, answer({ week_in_one_line: '' })).headline).toBe('Buyers test a bag with weight in it.')
+  })
+
+  it('with no finding printed the whole report is empty, and the workings say why', () => {
+    const read = run({}, answer({ findings: [finding({ based_on: ['C4'], headline: 'Stretched' })] }))
+    expect(read.findings).toEqual([])
+    expect(read).toMatchObject({ headline: '', story: [], implications: [], newThisWeek: [], watch: [] })
+    expect(read.held.filter((h) => h.reason === 'no finding printed').map((h) => h.section)).toEqual(['week_line', 'story', 'story', 'story', 'implication', 'implication', 'implication', 'watch', 'watch'])
+  })
+})
+
+describe('composeWeekRead: new this week is code\'s to decide (v3)', () => {
+  const inWeek = '2026-09-23T10:00:00+00:00'
+  const earlier = '2026-09-04T10:00:00+00:00'
+  const cs = () => [
+    candidate({ id: 'C1', gated: 8 }),
+    candidate({ id: 'C2', gated: 5, isNew: true, firstHeard: inWeek, label: 'Asks for the bag in red', videoIds: ['r1', 'r2', 'r3', 'r4', 'r5'], monthVideoIds: ['r1', 'r2', 'r3', 'r4', 'r5'] }),
+    candidate({ id: 'C3', gated: 4, isNew: true, firstHeard: earlier }),
+    candidate({ id: 'C4', gated: 4, isNew: false, firstHeard: inWeek }),
+  ]
+  const run = (items: { candidate: string; sentence: string }[]) => {
+    const p = pool(cs())
+    return composeWeekRead({
+      pool: p,
+      standing: [],
+      written: written({ findings: [finding({ based_on: ['C1'] })], new_this_week: items, week_in_one_line: 'x.' }),
+      subjects: [],
+      writerFigures: writerFigures(p),
+      model: 'gpt-5.4',
+      costUsd: 0,
+    })
+  }
+
+  it('prints only a candidate first heard this week: new this month AND first heard inside the window', () => {
+    expect(WINDOW.from < inWeek && earlier < WINDOW.from).toBe(true)
+    const read = run([
+      { candidate: 'C2', sentence: 'People ask whether the bag comes in red.' },
+      { candidate: 'C3', sentence: 'Heard earlier this month.' },
+      { candidate: 'C4', sentence: 'Heard in an earlier month.' },
+      { candidate: 'C9', sentence: 'Invented.' },
+      { candidate: 'C2', sentence: 'The same again.' },
+    ])
+    expect(read.newThisWeek).toEqual([{
+      themeId: 'th-c2',
+      body: 'People ask whether the bag comes in red.',
+      videos: { week: 5, month: 5 },
+      evidence: '[[n1_week]] videos this week · [[n1_month]] in September so far',
+    }])
+    expect(read.figures.n1_week).toEqual({ label: 'videos this week behind the conversation "Asks for the bag in red"', value: '5', kind: 'count' })
+    expect(read.held.filter((h) => h.section === 'new').map((h) => [h.headline, h.reason])).toEqual([
+      ['Heard earlier this month.', 'not first heard this week'],
+      ['Heard in an earlier month.', 'not first heard this week'],
+      ['Invented.', 'names no candidate'],
+      ['The same again.', 'the same conversation twice'],
+    ])
+  })
+
+  it('is empty, and so omitted, when nothing was first heard this week', () => {
+    expect(run([]).newThisWeek).toEqual([])
+    expect(run([{ candidate: 'C3', sentence: 'Heard earlier this month.' }]).newThisWeek).toEqual([])
+  })
+
+  it('a first-heard line backs the report: a story paragraph resting on it prints', () => {
+    const p = pool(cs())
+    const read = composeWeekRead({
+      pool: p,
+      standing: [],
+      written: written({
+        findings: [finding({ based_on: ['C1'] })],
+        new_this_week: [{ candidate: 'C2', sentence: 'People ask whether the bag comes in red.' }],
+        story: [{ paragraph: 'Colour came up in its own right.', based_on: ['C2'], quote_from: null }],
+        week_in_one_line: 'x.',
+      }),
+      subjects: [],
+      writerFigures: writerFigures(p),
+      model: 'gpt-5.4',
+      costUsd: 0,
+    })
+    expect(read.story.map((s) => s.body)).toEqual(['Colour came up in its own right.'])
+  })
+})
+
+describe('composeWeekRead: the market\'s figures (v3, the Dashboard\'s)', () => {
+  const MARKET: WeekMarketFigures = { week: { videos: 281, comments: 4910 }, month: { videos: 852, comments: 16040 } }
+
+  it('stores them as numbers and as printed figures on the market base', () => {
+    const read = compose([candidate({ id: 'C1' })], [finding({ based_on: ['C1'] })], { market: MARKET })
+    expect(read.market).toEqual(MARKET)
+    expect(read.figures.market_week_videos).toEqual({ label: 'videos in your market this week', value: '281', kind: 'count' })
+    expect(read.figures.market_week_comments).toEqual({ label: 'comments in your market this week', value: '4,910', kind: 'count' })
+    expect(read.figures.market_month_videos).toEqual({ label: 'videos in your market in September so far', value: '852', kind: 'count' })
+    expect(read.figures.market_month_comments).toEqual({ label: 'comments in your market in September so far', value: '16,040', kind: 'count' })
+  })
+
+  it('prints only what was read, and a pool with none stores null', () => {
+    expect(Object.keys(marketFigureTable({ week: { videos: 281, comments: null }, month: { videos: null, comments: null } }, SEP))).toEqual(['market_week_videos'])
+    const read = compose([candidate({ id: 'C1' })], [finding({ based_on: ['C1'] })])
+    expect(read.market).toBeNull()
+    expect(Object.keys(read.figures).filter((k) => k.startsWith('market_'))).toEqual([])
   })
 })

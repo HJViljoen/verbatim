@@ -1,6 +1,8 @@
-// The week's written read for one run (plan "writing back", T4): the pool
-// (T1), where the market stands (T2), the writer (T3), scrub, self-check and
-// compose, printed as a readable rendering plus the stored JSON.
+// The week's written read for one run (plan "writing back", T4; v3 30 Sep):
+// the pool (T1), where the market stands (T2), the writer (T3: the report and
+// the findings), scrub, self-check, the quotes' fit and compose, printed as a
+// readable rendering (the report top to bottom, then the findings, then the
+// workings) plus the stored JSON.
 //
 //   node --env-file=.env.local --import tsx scripts/week-read.ts \
 //     --client <uuid> --run <uuid> [--out <file.md>] [--write [--replace]]
@@ -44,10 +46,12 @@ import { longMonth } from '../lib/format'
 import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes'
 import { coverPlainText } from '../lib/reports/cover'
 import type { WeekCheck } from '../lib/written/check'
+import { rankOptions } from '../lib/written/compose'
 import type { QuoteFit } from '../lib/written/fit'
 import { buildWeekRead, finishWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead, type WeekReadInputs } from '../lib/written/step'
 import { loadWeekReadRow, saveWeekRead, weekReadsApplied } from '../lib/written/store'
-import { DEPARTMENTS, type QuoteRef, type WeekReadData } from '../lib/written/types'
+import { quoteValue } from '../lib/written/substance'
+import { firstHeardThisWeek, type PoolCandidate, type QuoteRef, type WeekReadDataV2 } from '../lib/written/types'
 import { buildWeekReadPrompts, writerFigures } from '../lib/written/write'
 
 const args = process.argv.slice(2)
@@ -78,7 +82,7 @@ async function probe(db: SupabaseClient, clientId: string): Promise<string> {
 }
 
 /** A stored `[[key]]` body as a reader sees it. */
-const plain = (body: string, data: WeekReadData): string => (body ? coverPlainText(body, data.figures) : '')
+const plain = (body: string, data: WeekReadDataV2): string => (body ? coverPlainText(body, data.figures) : '')
 
 function quoteLines(q: QuoteRef | null, words: Map<string, QuoteResolution>): string[] {
   if (!q) return ['_(no quote)_']
@@ -90,36 +94,101 @@ function quoteLines(q: QuoteRef | null, words: Map<string, QuoteResolution>): st
   return lines
 }
 
+/** One line of words for the workings. */
+const said = (ref: string, words: Map<string, QuoteResolution>): string => {
+  const w = words.get(ref)
+  if (!w) return '(did not resolve)'
+  const t = (w.english && w.english !== w.text ? w.english : w.text).replace(/\s+/g, ' ').trim()
+  return t.length > 140 ? `${t.slice(0, 137)}…` : t
+}
+
+/** How a quote was chosen: every option of the candidates behind it, with its
+ *  fit, its form and gate score, and the value that ranked it. */
+function choiceLines(
+  title: string,
+  chosen: QuoteRef | null,
+  cited: readonly PoolCandidate[],
+  fit: ReadonlyMap<string, number> | null,
+  words: Map<string, QuoteResolution>,
+): string[] {
+  const options = cited.flatMap((c) => c.quoteOptions.map((o) => ({ c, o })))
+  if (options.length === 0) return []
+  const ranked = rankOptions(options.map((x) => ({ ...x.o, c: x.c })), fit)
+  const out = [`**${title}**`, '']
+  for (const [i, o] of ranked.entries()) {
+    const f = fit?.get(o.quote.ref)
+    const v = quoteValue(f, o.substance)
+    out.push(`${i + 1}. ${o.quote.ref === chosen?.ref ? '**chosen** ' : ''}${o.c.id} · fit ${f != null ? f.toFixed(3) : '—'} · ${o.substance ? `${o.substance.form}, gate ${o.substance.gate}` : 'no substance'} · value ${v.toFixed(3)} · "${said(o.quote.ref, words)}"`)
+  }
+  out.push('')
+  return out
+}
+
 function render(company: string, runId: string, built: BuiltWeekRead, words: Map<string, QuoteResolution>, mode: string): string {
   const d = built.data
   const month = longMonth(d.month)
   const cand = new Map(built.pool.candidates.map((c) => [c.themeId, c]))
+  const ids = (themeIds: readonly string[]) => themeIds.map((t) => cand.get(t)?.id ?? t).join(', ')
+  const fitNote = built.fit ? ` (quote fit $${built.fit.costUsd.toFixed(6)}: ${built.fit.findings} finding(s), ${built.fit.paragraphs ?? 0} paragraph(s), ${built.fit.stored} stored vector(s), ${built.fit.embedded} embedded now${built.fit.ran ? '' : `, DID NOT RUN: ${built.fit.error ?? '?'}`})` : ''
   const out: string[] = [
-    `# ${company}: the week's read (${mode})`,
+    `# ${company}: the week's report (${mode})`,
     '',
-    `Run \`${runId}\` · window ${d.window.from} to ${d.window.to} · ${month} · status **${built.status}** · model ${d.model || 'none (no call)'} · ${d.promptVersion} · cost $${d.costUsd.toFixed(4)}${built.check ? ` (self-check $${built.check.costUsd.toFixed(4)})` : ''}${built.fit ? ` (quote fit $${built.fit.costUsd.toFixed(6)}: ${built.fit.findings} finding(s), ${built.fit.stored} stored vector(s), ${built.fit.embedded} embedded now${built.fit.ran ? '' : `, DID NOT RUN: ${built.fit.error ?? '?'}`})` : ''}`,
+    `Run \`${runId}\` · window ${d.window.from} to ${d.window.to} · ${month} · status **${built.status}** · model ${d.model || 'none (no call)'} · ${d.promptVersion} · cost $${d.costUsd.toFixed(4)}${built.check ? ` (self-check $${built.check.costUsd.toFixed(4)})` : ''}${fitNote}`,
     '',
-    '## In short',
+    '<sub>The report as it reads top to bottom, then the findings (the This week page), then the workings. Words in quotes are real comments, resolved for reading; the stored read keeps refs only. Small print under a line says what it rests on and is not client copy.</sub>',
     '',
-    d.inShort || '_(none)_',
+    '## The week in one line',
     '',
-    '## This week in your market',
+    d.headline ? `**${d.headline}**` : '_(none)_',
+    '',
+    '## What happened',
     '',
   ]
+  for (const p of d.story) {
+    out.push(p.body, '', `<sub>rests on ${ids(p.basedOn)}</sub>`, '')
+    if (p.quote) out.push(...quoteLines(p.quote, words), '')
+  }
+  if (d.story.length === 0) out.push('_(no story printed)_', '')
+
+  out.push(`## What it means for ${company}`, '')
+  for (const x of d.implications) out.push(`- ${x.body} <sub>(${ids(x.basedOn)})</sub>`)
+  if (d.implications.length === 0) out.push('_(none printed)_')
+  out.push('')
+
+  if (d.newThisWeek.length > 0) {
+    out.push('## New this week', '')
+    for (const x of d.newThisWeek) out.push(`- ${x.body} _${plain(x.evidence, d)}_ <sub>(${ids([x.themeId])})</sub>`)
+    out.push('')
+  } else {
+    out.push('<sub>New this week: omitted (no candidate was first heard this week).</sub>', '')
+  }
+
+  out.push('## Worth watching next week', '')
+  for (const x of d.watch) out.push(`- ${x.body} <sub>(${ids(x.basedOn)})</sub>`)
+  if (d.watch.length === 0) out.push('_(none printed)_')
+  out.push('')
+
+  const m = d.market
+  const fig = (key: string) => d.figures[key]?.value ?? '—'
+  out.push(
+    '## The market this week (the Dashboard\'s figures)',
+    '',
+    m
+      ? `${fig('market_week_videos')} videos and ${fig('market_week_comments')} comments in your market this week · ${fig('market_month_videos')} videos and ${fig('market_month_comments')} comments in ${month} so far`
+      : '_(not read)_',
+    '',
+    `<sub>Market = the category and the tracked brands, the client's own posts out (the standing levels' base). The category alone: ${built.pool.weekVideos} videos and ${built.pool.weekComments} comments this week, ${built.pool.monthVideos} videos in the month so far.</sub>`,
+    '',
+    '---',
+    '',
+    '# The findings (the This week page)',
+    '',
+  )
   d.findings.forEach((f, i) => {
     out.push(`### ${i + 1}. ${f.headline}${f.sure === 'strong' ? '  · Strong evidence' : ''}`, '')
-    out.push(f.saw.split('\n\n').join('\n\n'), '')
+    out.push(f.saw, '')
     out.push(`**What it means.** ${f.means}`, '')
-    for (const dep of DEPARTMENTS) if (f.for[dep]) out.push(`- **For ${dep}:** ${f.for[dep]}`)
-    out.push('')
-    out.push(...quoteLines(f.quote, words))
-    // The fit scores of the finding this quote was chosen for.
-    const scores = f.quote ? [...(built.fit?.scores.values() ?? [])].find((m) => m.has(f.quote!.ref)) : undefined
-    if (scores && f.quote) {
-      const ranked = [...scores.entries()].sort((x, y) => y[1] - x[1])
-      out.push(`> <sub>fit ${scores.get(f.quote.ref)?.toFixed(3) ?? 'unscored'} (rank ${ranked.findIndex(([r]) => r === f.quote?.ref) + 1} of ${ranked.length} options)</sub>`)
-    }
-    out.push('')
+    out.push(...quoteLines(f.quote, words), '')
     out.push(`_${plain(f.evidence, d)}_`)
     if (f.context) out.push(`_${plain(f.context, d)}_`)
     out.push('')
@@ -139,26 +208,47 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
 
   out.push('---', '', '## Workings (not client copy)', '')
   out.push(`### Held (${d.held.length})`, '')
-  for (const h of d.held) out.push(`- ${h.headline || '_(no headline)_'}: ${h.reason}`)
+  for (const h of d.held) out.push(`- ${h.section ? `[${h.section}] ` : ''}${h.headline || '_(no text)_'}: ${h.reason}`)
   if (d.held.length === 0) out.push('- none')
   out.push('')
-  if (built.scrub) out.push(`### Scrub`, '', `- sentences dropped: ${built.scrub.dropped} (digits ${built.scrub.droppedDigits}, direction ${built.scrub.droppedDirection}, how-it-was-made ${built.scrub.droppedBanned})`, '')
+  if (built.scrub) out.push(`### Scrub`, '', `- sentences dropped: ${built.scrub.dropped} (digits ${built.scrub.droppedDigits}, direction ${built.scrub.droppedDirection}, how-it-was-made ${built.scrub.droppedBanned}, advice or forecast ${built.scrub.droppedAdvice ?? 0}); one-line fields dropped for length: ${built.scrub.droppedLong ?? 0}`, '')
   if (built.check) {
     out.push(`### Self-check${built.check.ran ? '' : ' (DID NOT RUN: findings kept unchecked)'}`, '')
     for (const v of built.check.verdicts) out.push(`- ${v.verdict}: ${v.headline}${built.check.contradicted.get(v.headline) ? ` (they say: ${built.check.contradicted.get(v.headline)})` : ''}`)
     out.push('')
   }
+
+  // How each quote was chosen: fit plus substance (lib/written/substance.ts).
+  out.push('### Quote choice (fit to the text + substance of the quote)', '')
+  const byCid = new Map(built.pool.candidates.map((c) => [c.id.toUpperCase(), c]))
+  const raw = built.raw
+  if (raw) {
+    // Findings, matched back to the writer's output by what they rest on
+    // (compose reorders them; the same evidence prints once).
+    const setOf = (themeIds: readonly string[]) => [...new Set(themeIds)].sort().join('|')
+    for (const [i, w] of raw.findings.entries()) {
+      const cited = w.based_on.map((x) => byCid.get(String(x).trim().toUpperCase())).filter((c): c is PoolCandidate => Boolean(c))
+      const printed = d.findings.find((f) => setOf(f.basedOn) === setOf(cited.map((c) => c.themeId)))
+      out.push(...choiceLines(`Finding: ${w.headline}`, printed?.quote ?? null, cited, built.fit?.scores.get(i) ?? null, words))
+    }
+    for (const [i, w] of raw.story.entries()) {
+      const c = w.quote_from ? byCid.get(w.quote_from.toUpperCase()) : undefined
+      if (!c) continue
+      const printed = d.story.find((p) => p.body && w.paragraph.includes(p.body.slice(0, 40)))
+      out.push(...choiceLines(`Story paragraph ${i + 1} (quote from ${c.id})`, printed?.quote ?? null, [c], built.fit?.story?.get(i) ?? null, words))
+    }
+  }
+
   if (built.raw) {
     out.push('### The writer, before scrub', '')
     out.push('```json', JSON.stringify(built.raw, null, 2), '```', '')
   }
-  out.push(`### The pool (${built.pool.candidates.length} candidates${built.pool.thin ? ', THIN' : ''}; the week ${built.pool.weekVideos} category videos, the month ${built.pool.monthVideos})`, '')
+  out.push(`### The pool (${built.pool.candidates.length} candidates${built.pool.thin ? ', THIN' : ''}; the category: the week ${built.pool.weekVideos} videos, the month ${built.pool.monthVideos}; the market: ${m ? `week ${m.week.videos ?? '—'} videos / ${m.week.comments ?? '—'} comments, month ${m.month.videos ?? '—'} / ${m.month.comments ?? '—'}` : 'not read'})`, '')
   for (const c of built.pool.candidates) {
-    out.push(`**${c.id} "${c.label}"** · lenient ${c.lenientVideos} (month ${c.monthVideoIds.length}) · strict ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN} · ${c.quoteOptions.length} quote option(s) · kinds ${c.kinds.join(', ') || 'none'} (mostly ${c.dominantKind ?? 'none'}) · lenses ${c.lenses.join(', ')} · subject ${c.subjectId ?? 'none'} · ${c.isNew ? 'first heard this month' : 'heard before'}`)
+    const heard = firstHeardThisWeek(c, built.pool.window) ? 'FIRST HEARD THIS WEEK' : c.isNew ? `first heard this month (${c.firstHeard ?? '?'})` : 'heard before'
+    out.push(`**${c.id} "${c.label}"** · lenient ${c.lenientVideos} (month ${c.monthVideoIds.length}) · strict ${c.gatedVideos} · week ${c.weekVideos} · month ${c.monthK} of ${c.monthN} · ${c.quoteOptions.length} quote option(s) · kinds ${c.kinds.join(', ') || 'none'} (mostly ${c.dominantKind ?? 'none'}) · subject ${c.subjectId ?? 'none'} · ${heard}`)
     if (c.description) out.push('', `_${c.description}_`)
     out.push('', ...c.notes.map((n) => `- ${n}`), '')
-    for (const q of c.quoteRefs) out.push(...quoteLines(q, words))
-    out.push('')
   }
   out.push('### The subjects', '')
   for (const f of built.standing) {
@@ -192,8 +282,8 @@ async function main() {
   const again = flag('recompose')
   if (again && write) throw new Error('--recompose never writes: store a read built by a real call')
   const saved = again ? '' : flag('inputs')
-  type SavedFit = Omit<QuoteFit, 'scores'> & { scores: [number, [string, number][]][] }
-  type SavedRun = { data: WeekReadData; workings: { pool: WeekReadInputs['pool']; standing: WeekReadInputs['standing']; raw: BuiltWeekRead['raw']; check: (Omit<WeekCheck, 'contradicted'> & { contradicted: [string, string | null][] }) | null; fit?: SavedFit | null } }
+  type SavedFit = Omit<QuoteFit, 'scores' | 'story'> & { scores: [number, [string, number][]][]; story?: [number, [string, number][]][] }
+  type SavedRun = { data: WeekReadDataV2; workings: { pool: WeekReadInputs['pool']; standing: WeekReadInputs['standing']; raw: BuiltWeekRead['raw']; check: (Omit<WeekCheck, 'contradicted'> & { contradicted: [string, string | null][] }) | null; fit?: SavedFit | null } }
   const prior = again ? (JSON.parse(readFileSync(resolve(process.cwd(), again), 'utf8')) as SavedRun) : null
   const inputs: WeekReadInputs = prior
     ? { company, pool: prior.workings.pool, standing: prior.workings.standing, previous: null }
@@ -219,12 +309,16 @@ async function main() {
   let built: BuiltWeekRead
   if (prior) {
     if (!prior.workings.raw || !prior.workings.check) throw new Error(`${again} holds no writer output to compose again (a thin week makes none)`)
+    const savedFit = prior.workings.fit
     built = finishWeekRead({
+      company,
       pool: inputs.pool,
       standing: inputs.standing,
       raw: prior.workings.raw,
       check: { ...prior.workings.check, contradicted: new Map(prior.workings.check.contradicted) },
-      fit: prior.workings.fit ? { ...prior.workings.fit, scores: new Map(prior.workings.fit.scores.map(([i, s]) => [i, new Map(s)])) } : null,
+      fit: savedFit
+        ? { ...savedFit, scores: new Map(savedFit.scores.map(([i, x]) => [i, new Map(x)])), story: new Map((savedFit.story ?? []).map(([i, x]) => [i, new Map(x)])) }
+        : null,
       costUsd: prior.data.costUsd,
     })
   } else {
@@ -232,17 +326,20 @@ async function main() {
   }
   console.log(`Built in ${Math.round((Date.now() - started) / 1000)} s: ${built.status}, ${built.data.findings.length} finding(s), ${built.data.held.length} held, $${built.data.costUsd.toFixed(4)}.`)
 
+  // Every quote the read prints, and every option it chose among (for the
+  // workings' quote choice).
   const refs = [
     ...built.data.findings.map((f) => f.quote?.ref),
+    ...built.data.story.map((p) => p.quote?.ref),
     ...built.data.standing.map((s) => s.quote?.ref),
-    ...built.pool.candidates.flatMap((c) => c.quoteRefs.map((q) => q.ref)),
+    ...built.pool.candidates.flatMap((c) => c.quoteOptions.map((o) => o.quote.ref)),
   ].filter((r): r is string => Boolean(r))
   const words = refs.length ? await fetchQuoteResolutionsByRefs(db, [...new Set(refs)], { onReadError: 'throw' }) : new Map<string, QuoteResolution>()
 
   const text = render(company, runId, built, words, write ? 'WRITTEN' : again ? 'DRY RUN, not stored; composed again from the saved call' : 'DRY RUN, not stored')
   console.log(`\n${text}\n`)
 
-  const fit = built.fit && { ...built.fit, scores: [...built.fit.scores].map(([i, s]) => [i, [...s]]) }
+  const fit = built.fit && { ...built.fit, scores: [...built.fit.scores].map(([i, x]) => [i, [...x]]), story: [...(built.fit.story ?? new Map())].map(([i, x]) => [i, [...x]]) }
   const json = JSON.stringify({ status: built.status, data: built.data, workings: { pool: built.pool, standing: built.standing, raw: built.raw, scrub: built.scrub, check: built.check && { ...built.check, contradicted: [...built.check.contradicted] }, fit } }, null, 2)
   const outPath = flag('out')
   if (outPath) {

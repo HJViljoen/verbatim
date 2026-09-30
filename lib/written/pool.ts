@@ -10,14 +10,17 @@ import { loadMemberInsightIdsBySubject } from '../pages/subjects'
 import { loadRegrouped } from '../pages/voice-surface'
 import { embedInput } from '../pipeline/cluster'
 import { gateFor } from '../quote-context'
-import { pickEligible, threadOf, type GateOptions } from '../quote-gate'
+import { pickEligible, quoteGate, readableEnglish, threadOf, type GateOptions } from '../quote-gate'
+import { marketAudiences, pooledDenominators } from '../reading/market'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading } from '../reading/read'
+import { loadMarketRivalAudiences } from '../reading/reading-view'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import { loadActiveSubjects } from '../subjects/membership'
 import { isMissingSubjects } from '../subjects/types'
 import { gateInputOf, judge, loadDatedEvidence, loadTrackedBrands, passes, refOf, type DatedEvidence } from './evidence'
-import type { Lens, PoolCandidate, QuoteOption, QuoteRef, WeekPool } from './types'
+import { quoteForm, type QuoteSubstance } from './substance'
+import type { Lens, PoolCandidate, QuoteOption, QuoteRef, WeekMarketFigures, WeekPool } from './types'
 
 // The week pool (plan T1): the themes a week's written findings may be built
 // from, each with the evidence code stands behind.
@@ -55,7 +58,12 @@ import type { Lens, PoolCandidate, QuoteOption, QuoteRef, WeekPool } from './typ
 //    window read `[month start, window end)` under this run: the month as this
 //    run left it;
 //  · dated by the comment, audience by the videos' CASE (client, then a
-//    tracked rival, else the category), lane `analyzed_lane = 'full'` (M13).
+//    tracked rival, else the category), lane `analyzed_lane = 'full'` (M13);
+//  · the MARKET's week and month (v3, the Dashboard's figures) are the same
+//    two reads pooled over the category and the tracked brands' audiences
+//    (`pooledDenominators`, decision E), the base the standing levels are
+//    stated on ("of 852"); the candidates stay the category's, where themes
+//    are grouped.
 //
 // NOTHING HERE IS A COMMENT'S WORDS. Quotes leave as refs with `text: ''`, and
 // `notes` are Pass A's insight descriptions. The texts are read so the gate
@@ -253,12 +261,39 @@ export function passingVideoIds(evidence: readonly DatedEvidence[], members: Rea
   return [...out].sort()
 }
 
+/** What a quote says on its own (lib/written/substance.ts): its form, read
+ *  from its readable English, and its score under the gate it passed. Read
+ *  here, where the words are, and kept beside the ref without them. Pure. */
+export function substanceOf(e: DatedEvidence, gate: GateOptions): QuoteSubstance {
+  const input = gateInputOf(e)
+  const verdict = quoteGate(input, gate)
+  return { form: quoteForm(readableEnglish(input) ?? ''), gate: verdict.ok ? verdict.score : 0 }
+}
+
+/**
+ * The first comment date among the same citations `passingVideoIds` counts:
+ * when the theme was first heard in the period, on the lenient gate. Null
+ * where none passes. Pure.
+ */
+export function firstPassingDate(evidence: readonly DatedEvidence[], members: ReadonlySet<string>, gate: GateOptions): string | null {
+  let first: string | null = null
+  let firstMs = Number.POSITIVE_INFINITY
+  for (const e of evidence) {
+    if (!members.has(e.insightId) || !countsForTheWeek(e) || !passes(e, gate)) continue
+    const ms = Date.parse(e.commentDate)
+    if (Number.isFinite(ms) && ms < firstMs) { firstMs = ms; first = e.commentDate }
+  }
+  return first
+}
+
 /** A citation as a quote a finding may print, with its insight's embedding
- *  text (the product's formula). */
-export const optionOf = (e: DatedEvidence): QuoteOption => ({
+ *  text (the product's formula) and, given the gate it passed, what it says
+ *  on its own (`substanceOf`). */
+export const optionOf = (e: DatedEvidence, gate?: GateOptions): QuoteOption => ({
   quote: refOf(e),
   insightId: e.insightId,
   insightText: embedInput({ theme: e.theme ?? '', description: e.description }),
+  ...(gate ? { substance: substanceOf(e, gate) } : {}),
 })
 
 /**
@@ -275,7 +310,9 @@ export const optionOf = (e: DatedEvidence): QuoteOption => ({
  * Each passes the strict gate the theme was judged under AND, where the
  * dominant kind is another, the gate under that kind too, so a problem-led
  * theme never quotes pure praise. `quoteRefs` is the first `POOL_QUOTES` of
- * `quoteOptions`.
+ * `quoteOptions`. Each option carries what it says on its own (its form and
+ * its score under the strict gate, `substanceOf`), which compose weighs with
+ * its fit to the finding (v3).
  */
 export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonly DatedEvidence[]): ThemeJudgement {
   const gate = strictGateFor(clientId, theme)
@@ -309,7 +346,7 @@ export function judgeTheme(clientId: string, theme: PoolTheme, evidence: readonl
   const rest = first.length < POOL_QUOTE_OPTIONS
     ? pickEligible(quotable.filter((e) => e.kind !== dominantKind && !threads.has(threadOf(e.context) ?? e.video.uuid)), gateInputOf, POOL_QUOTE_OPTIONS - first.length, { ...gate, used })
     : []
-  const quoteOptions = [...first, ...rest].map(optionOf)
+  const quoteOptions = [...first, ...rest].map((e) => optionOf(e, gate))
   const quoteRefs = quoteOptions.slice(0, POOL_QUOTES).map((o) => o.quote)
 
   // The kinds seen in the counted material, by the videos each is seen on.
@@ -427,6 +464,8 @@ export interface PoolHead {
   weekVideos: number
   weekComments: number
   monthVideos: number
+  /** The market's week and month to date (v3); absent where not read. */
+  market?: WeekMarketFigures | null
 }
 
 /** The per-theme facts read after eligibility, for the candidates kept. */
@@ -436,6 +475,9 @@ export interface PoolFacts {
   /** The lenient-gated videos citing the theme in the month to date
    *  (`passingVideoIds` over `[month start, window end)`). Absent is none. */
   monthVideoIds?: ReadonlyMap<string, readonly string[]>
+  /** The first comment date among those citations (`firstPassingDate`).
+   *  Absent is null. */
+  firstHeard?: ReadonlyMap<string, string | null>
   /** `themeFlags`' other inputs (lib/pages/overview-market/board.ts): last
    *  month's category k (null where last month has no category row), whether
    *  any earlier month in any audience held the theme, and whether a run that
@@ -469,6 +511,7 @@ export function buildWeekPool(head: PoolHead, ranked: readonly ThemeJudgement[],
       monthN: head.monthVideos,
       subjectId: facts.subjectOf.get(id) ?? null,
       isNew: f ? themeFlags({ k: monthK, prevK: f.prevK, heardBefore: f.heardBefore, regrouped: f.regrouped }).includes('new') : false,
+      firstHeard: facts.firstHeard?.get(id) ?? null,
       quoteRefs: j.quoteRefs,
       quoteOptions: j.quoteOptions,
       notes: j.notes,
@@ -500,8 +543,11 @@ export async function loadWeekPool(
   const window = { from: stored.start, to: stored.end }
   const month = monthStartOf(window.to)
 
-  // The week on the category, under this run's clustering.
-  const week = await loadWindowReading(admin, clientId, { from: window.from, to: window.to, runId, audiences: [INDUSTRY_AUDIENCE] })
+  // The week under this run's clustering, on the market's audiences: the
+  // candidates are the category's (themes are grouped within it); the
+  // market's size is the category and the tracked brands pooled (v3).
+  const rivals = (await loadMarketRivalAudiences(admin, clientId)) ?? []
+  const week = await loadWindowReading(admin, clientId, { from: window.from, to: window.to, runId, audiences: marketAudiences(rivals) })
   if (!week.denominators || !week.themes) throw new Error('written pool: the window reads are not applied here')
   const weekDen = week.denominators.find((d) => d.audience === INDUSTRY_AUDIENCE)
   // Only a theme on three category videos can reach three gated ones.
@@ -513,8 +559,8 @@ export async function loadWeekPool(
   const ranked = rankEligible(themes.map((t) => judgeTheme(clientId, t, evidence)))
   const kept = ranked.slice(0, POOL_CAP).map((j) => j.theme)
 
-  const [monthRead, subjectOf, monthVideoIds] = await Promise.all([
-    loadMonthFacts(admin, { clientId, runId, window, month, themes: kept }),
+  const [monthRead, subjectOf, monthHeard] = await Promise.all([
+    loadMonthFacts(admin, { clientId, runId, window, month, themes: kept, rivals }),
     loadThemeSubjects(admin, clientId, kept),
     loadMonthVideoIds(admin, { clientId, window, month, themes: kept, brands }),
   ])
@@ -527,28 +573,60 @@ export async function loadWeekPool(
       weekVideos: weekDen?.videos ?? 0,
       weekComments: weekDen?.comments ?? 0,
       monthVideos: monthRead.monthN,
+      market: marketFiguresOf({ week: week.denominators, month: monthRead.marketRows, rivals }),
     },
     ranked,
-    { monthK: monthRead.monthK, flags: monthRead.flags, subjectOf, monthVideoIds },
+    { monthK: monthRead.monthK, flags: monthRead.flags, subjectOf, monthVideoIds: monthHeard.ids, firstHeard: monthHeard.first },
   )
+}
+
+/**
+ * The market's week and month to date (the Dashboard's figures, v3) from
+ * per-audience denominator rows of ONE period each: pooled over the category
+ * and the tracked brands' audiences by the product's own rule
+ * (`pooledDenominators`: disjoint audiences add, the client's own posts and
+ * any untracked audience are left out). Null where a period was not read or
+ * holds no market row: never zero for "not measured". Pure.
+ */
+export function marketFiguresOf(input: {
+  week: readonly { audience: string; videos: number; comments: number }[] | null
+  month: readonly { audience: string; videos: number; comments: number }[] | null
+  rivals: readonly string[]
+}): WeekMarketFigures {
+  const pooled = (rows: typeof input.week): WeekMarketFigures['week'] => {
+    if (!rows) return { videos: null, comments: null }
+    // One period: every row under one key, so the pooling is across audiences only.
+    const key = '2000-01-01'
+    const c = pooledDenominators(rows.map((r) => ({ month: key, audience: r.audience, videos: r.videos, comments: r.comments })), input.rivals).get(key)
+    return { videos: c?.videos ?? null, comments: c?.comments ?? null }
+  }
+  return { week: pooled(input.week), month: pooled(input.month) }
 }
 
 /**
  * Each kept theme's lenient-gated videos over the month to date,
  * `[month start, window end)`, counted exactly as its week is
- * (`passingVideoIds`): the ids a finding's month figure is the union of.
- * One evidence read for the kept themes only.
+ * (`passingVideoIds`): the ids a finding's month figure is the union of; and
+ * the first comment date among them (`firstPassingDate`), which says whether
+ * a theme new this month was first heard this week. One evidence read for the
+ * kept themes only.
  */
 async function loadMonthVideoIds(
   admin: SupabaseClient,
   a: { clientId: string; window: { from: string; to: string }; month: string; themes: readonly PoolTheme[]; brands: readonly string[] },
-): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>()
-  if (a.themes.length === 0) return out
+): Promise<{ ids: Map<string, string[]>; first: Map<string, string | null> }> {
+  const ids = new Map<string, string[]>()
+  const first = new Map<string, string | null>()
+  if (a.themes.length === 0) return { ids, first }
   const period = { from: `${a.month}T00:00:00.000Z`, to: a.window.to }
   const evidence = await loadDatedEvidence(admin, a.clientId, a.themes.flatMap((t) => t.memberIds), period, { brands: a.brands })
-  for (const t of a.themes) out.set(t.themeId, passingVideoIds(evidence, new Set(t.memberIds), lenientGateFor(a.clientId, t.label)))
-  return out
+  for (const t of a.themes) {
+    const members = new Set(t.memberIds)
+    const gate = lenientGateFor(a.clientId, t.label)
+    ids.set(t.themeId, passingVideoIds(evidence, members, gate))
+    first.set(t.themeId, firstPassingDate(evidence, members, gate))
+  }
+  return { ids, first }
 }
 
 /** The run's observation of each theme and its Pass B description. */
@@ -605,8 +683,8 @@ async function loadPoolThemes(
  */
 async function loadMonthFacts(
   admin: SupabaseClient,
-  a: { clientId: string; runId: string; window: { from: string; to: string }; month: string; themes: readonly PoolTheme[] },
-): Promise<{ monthN: number; monthK: Map<string, number>; flags: PoolFacts['flags'] }> {
+  a: { clientId: string; runId: string; window: { from: string; to: string }; month: string; themes: readonly PoolTheme[]; rivals: readonly string[] },
+): Promise<{ monthN: number; monthK: Map<string, number>; flags: PoolFacts['flags']; marketRows: { audience: string; videos: number; comments: number }[] | null }> {
   const ids = a.themes.map((t) => t.themeId)
   const set = await loadMonthSeries(admin, a.clientId, {
     objectKind: 'theme',
@@ -625,15 +703,20 @@ async function loadMonthFacts(
 
   const monthK = new Map<string, number>()
   let monthN: number
+  // The market's month to date, per audience (pooled by the caller): the
+  // same rows, on the same rule, as the category's.
+  let marketRows: { audience: string; videos: number; comments: number }[] | null
   const den = denOf(a.month)
   if (den && den.run_id === a.runId) {
     monthN = den.videos
     for (const id of ids) monthK.set(id, categoryPoint(id, a.month)?.k ?? 0)
+    marketRows = set.denominators.filter((d) => monthStartOf(d.month) === a.month)
   } else {
-    const read = await loadWindowReading(admin, a.clientId, { from: `${a.month}T00:00:00.000Z`, to: a.window.to, runId: a.runId, audiences: [INDUSTRY_AUDIENCE] })
+    const read = await loadWindowReading(admin, a.clientId, { from: `${a.month}T00:00:00.000Z`, to: a.window.to, runId: a.runId, audiences: marketAudiences(a.rivals) })
     if (!read.denominators || !read.themes) throw new Error('written pool: the window reads are not applied here')
     monthN = read.denominators.find((d) => d.audience === INDUSTRY_AUDIENCE)?.videos ?? 0
     for (const id of ids) monthK.set(id, read.themes.find((t) => t.audience === INDUSTRY_AUDIENCE && String(t.theme_id) === id)?.videos ?? 0)
+    marketRows = read.denominators
   }
 
   // themeFlags' inputs, read as Conversation reads them (lib/pages/voice-surface.ts):
@@ -664,7 +747,7 @@ async function loadMonthFacts(
     const b = base.get(id) ?? { prevK: null, heardBefore: false }
     flags.set(id, { ...b, regrouped: regrouped.has(id) })
   }
-  return { monthN, monthK, flags }
+  return { monthN, monthK, flags, marketRows }
 }
 
 /** Each kept theme's subject, among the tenant's confirmed subjects. Null for

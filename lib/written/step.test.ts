@@ -4,9 +4,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 
 import { composeWeekRead } from './compose'
-import { rowOf, runWeekReadStep, type BuiltWeekRead, type WeekReadStepDeps } from './step'
+import { checkableHeadlines, rowOf, runWeekReadStep, storyFitTargets, type BuiltWeekRead, type WeekReadStepDeps } from './step'
 import type { WeekReadRow } from './store'
-import { candidate, pool } from './test-fixtures'
+import { candidate, pool, written } from './test-fixtures'
 import { writerFigures } from './write'
 
 // The `write-week-read` step (plan T4): its body never throws, a failure
@@ -24,11 +24,11 @@ function built(findings: number, called = true): BuiltWeekRead {
     pool: p,
     standing: [],
     written: called
-      ? {
-          findings: cs.slice(0, findings).map((c) => ({ headline: `On ${c.label}`, saw: 'Buyers describe it.', means: 'It matters.', for: { sales: '', marketing: '', content: '', leadership: '' }, based_on: [c.id], quote_from: null })),
-          in_short: 'The week.',
-          standing: [],
-        }
+      ? written({
+          findings: cs.slice(0, findings).map((c) => ({ headline: `On ${c.label}`, saw: 'Buyers describe it.', means: 'It matters.', based_on: [c.id], quote_from: null })),
+          story: [{ paragraph: 'The week.', based_on: ['C1'], quote_from: 'C1' }],
+          week_in_one_line: 'The week.',
+        })
       : null,
     subjects: [],
     writerFigures: writerFigures(p),
@@ -108,9 +108,40 @@ describe('runWeekReadStep', () => {
     expect(alerts).toHaveLength(1)
   })
 
-  it('rowOf keeps quotes as refs', () => {
+  it('rowOf keeps quotes as refs, the story\'s too, and stores the v3 shape', () => {
     const row = rowOf('client-1', 'run-27', built(2))
+    expect(row.data).toMatchObject({ version: 2, promptVersion: 'week_read_v3', headline: 'The week.' })
+    expect(row.data?.version === 2 && row.data.story[0].quote?.ref).toMatch(/^e:/)
     expect(JSON.stringify(row.data)).not.toMatch(/"text":"[^"]/)
+  })
+})
+
+describe('what the step hands the self-check and the fit (v3)', () => {
+  const p = pool([candidate({ id: 'C1' }), candidate({ id: 'C2' }), candidate({ id: 'C3' })])
+
+  it('the self-check reads every finding headline that could print, then the week\'s one line', () => {
+    const w = written({
+      findings: [
+        { headline: 'Straps decide comfort', saw: 's', means: 'm', based_on: ['C1'], quote_from: null },
+        { headline: 'Invented', saw: 's', means: 'm', based_on: ['C9'], quote_from: null },
+        { headline: '', saw: 's', means: 'm', based_on: ['C2'], quote_from: null },
+      ],
+      week_in_one_line: 'Buyers judged bags by how they carry.',
+    })
+    expect(checkableHeadlines(p, w)).toEqual(['Straps decide comfort', 'Buyers judged bags by how they carry.'])
+    // No finding could print: the line has nothing to stand on and is not checked.
+    expect(checkableHeadlines(p, { ...w, findings: [] })).toEqual([])
+  })
+
+  it('the fit measures each story paragraph that points to a voice, against that one candidate', () => {
+    const targets = storyFitTargets(written({
+      story: [
+        { paragraph: 'One.', based_on: ['C1', 'C2'], quote_from: 'C2' },
+        { paragraph: 'Two.', based_on: ['C1'], quote_from: null },
+        { paragraph: '', based_on: ['C1'], quote_from: 'C1' },
+      ],
+    }))
+    expect(targets).toEqual([{ index: 0, text: 'One.', based_on: ['C2'] }])
   })
 })
 
