@@ -121,9 +121,9 @@ export interface ReadinessFacts {
   inputs?: ReadinessInputs
   /** Searches are held still until January (`tenantLocked(clientId, 'tracking')`). */
   searchesHeld?: boolean
-  /** The latest change to what we search (terms, platforms, communities,
-   *  rivals, accounts): the Tracking row's date. The row printed "last change
-   *  recorded 27 Sep 2026", the day we changed how we mark makers' videos. */
+  /** The latest change to the search terms (`config_changes`, surface
+   *  `terms`): the Tracking row's date. The row printed "last change recorded
+   *  27 Sep 2026", the day we changed how we mark makers' videos. */
   searchChangedAt?: string | null
   /** Your moves' own advice count (`adviceTally`): pieces of advice (one per
    *  identity, not per copy) and those acted on. Null where it was not read. */

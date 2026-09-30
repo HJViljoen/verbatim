@@ -10,7 +10,6 @@ import { loadReadiness } from '@/lib/readiness/load'
 import { CLIENT_NEXT_LABEL, clientReadiness, NOT_BUILT, READINESS_CONTACT } from '@/lib/settings/readiness-view'
 import { adviceTally } from '@/lib/pages/market-surface'
 import { CONFIG_CHANGES_TABLE } from '@/lib/config-log'
-import { SEARCH_GROUP_SURFACES } from '@/lib/settings/what-we-changed'
 import { settingsBar } from '@/lib/settings/bar'
 import { tenantLocked } from '@/lib/tenant-locks'
 import type { Metadata } from 'next'
@@ -66,12 +65,14 @@ export default async function SettingsReadinessPage() {
     : null
 
   // WHAT THE ROWS NEED TO BE TRUE FOR A CLIENT (sw-2 item 6): Your moves' own
-  // advice count, and the day what we search last changed. Two small reads,
+  // advice count, and the day the search terms last changed. Two small reads,
   // each fail-soft (a row keeps its own words without its fact).
   const [advice, searchChangedAt] = await Promise.all([
     adviceTally(supabase, clientId),
+    // THE WORDS, the row's own subject: an update's own rewrite of the
+    // community list (a probe's figures) is not a change to what we search.
     supabase.from(CONFIG_CHANGES_TABLE).select('changed_at').eq('client_id', clientId)
-      .in('surface', [...SEARCH_GROUP_SURFACES])
+      .eq('surface', 'terms')
       .order('changed_at', { ascending: false }).limit(1).maybeSingle()
       .then((r) => (r.error ? null : ((r.data?.changed_at as string | undefined) ?? null)), () => null),
   ])
