@@ -37,3 +37,46 @@ export function canResendInvite(inviterRole: string, inviteRole: string): boolea
   if (inviterRole === 'admin') return inviteRole === 'member'
   return false
 }
+
+// ---- Who gets the update (sw-2 item 2) --------------------------------------
+//
+// The Team page counted only SWITCHED-ON schedules: "Who gets the update (0)",
+// every member "not on the update", while Readiness said "Weekly digest has 2
+// addresses" and the record showed Brayden and Daniela joining the digest. The
+// digest is paused, with both on it. The page now says who is on each list and
+// that a paused one sends nothing, and Readiness says "paused" in the same word.
+
+export interface ScheduleOnTeam {
+  name: string
+  active: boolean
+  recipients: readonly string[]
+}
+
+export type UpdateStatus = 'gets' | 'paused' | 'none'
+
+/** Where a member stands: on a schedule that sends, only on paused ones, or on none. */
+export function memberUpdateStatus(email: string | null | undefined, schedules: readonly ScheduleOnTeam[]): UpdateStatus {
+  const e = (email ?? '').toLowerCase()
+  if (!e) return 'none'
+  const on = schedules.filter((s) => s.recipients.some((r) => r.toLowerCase() === e))
+  if (on.some((s) => s.active)) return 'gets'
+  return on.length > 0 ? 'paused' : 'none'
+}
+
+export const UPDATE_STATUS_WORDS: Readonly<Record<UpdateStatus, string>> = {
+  gets: 'gets the update',
+  paused: 'on the update, which is paused',
+  none: 'not on the update',
+}
+
+/** One schedule's line under "Who gets the update": its addresses, and where
+ *  it is paused, that nothing is sent. */
+export function scheduleLine(s: ScheduleOnTeam): string {
+  const who = s.recipients.join(' · ')
+  if (!s.active) {
+    return s.recipients.length === 0
+      ? 'paused, with no addresses on it'
+      : `paused, so nothing is sent · ${s.recipients.length === 1 ? '1 address' : `${s.recipients.length} addresses`} on it: ${who}`
+  }
+  return s.recipients.length === 0 ? 'no addresses yet' : who
+}

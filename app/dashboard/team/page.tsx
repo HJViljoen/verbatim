@@ -8,7 +8,7 @@ import { recipientsBySchedule } from '@/lib/schedules/default'
 import { getBaseUrl } from '@/lib/site'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { InviteForm, RevokeButton, ResendButton, MemberControls, CopyLinkButton } from './team-ui'
-import { canResendInvite, inviteState } from '@/lib/team-copy'
+import { canResendInvite, inviteState, memberUpdateStatus, scheduleLine, UPDATE_STATUS_WORDS } from '@/lib/team-copy'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
 import { CONTACT_EMAIL } from '@/lib/legal'
 import type { Metadata } from 'next'
@@ -75,9 +75,6 @@ export default async function TeamPage() {
       : Promise.resolve({ data: null }),
   ])
   const totalRecipients = schedules.reduce((n, s) => n + s.recipients.length, 0)
-  const activeRecipientSet = new Set(
-    schedules.filter((s) => s.active).flatMap((s) => s.recipients.map((e) => e.toLowerCase())),
-  )
 
   // Pending invites + their shareable links are only fetched/built for managers.
   // The invite TOKEN is only fetched for the person who sent that invite
@@ -107,7 +104,9 @@ export default async function TeamPage() {
   // `pending`, and five that expired on 24 Sep were listed as pending.
   const nowIso = new Date().toISOString()
   const waiting = invites.filter((inv) => !inviteState(inv.expires_at, nowIso).expired).length
-  const membersOffReport = memberRows.filter((m) => !activeRecipientSet.has((m.email ?? '').toLowerCase()))
+  // ON A LIST IS NOT THE SAME AS SENT TO (sw-2 item 2): a member on the
+  // paused digest is on it, and the page says it is paused.
+  const membersOffReport = memberRows.filter((m) => memberUpdateStatus(m.email, schedules) === 'none')
 
   // Team and billing are ONE rail entry over two routes (WP16): they have
   // different gates — billing is owner-only through billingAccess(), team is
@@ -138,6 +137,7 @@ export default async function TeamPage() {
         <CardContent className="divide-y">
           {memberRows.map((m) => {
             const isSelf = m.id === userId
+            const status = memberUpdateStatus(m.email, schedules)
             return (
               <div key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1">
@@ -147,9 +147,7 @@ export default async function TeamPage() {
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {m.email}
-                    {activeRecipientSet.has((m.email ?? '').toLowerCase())
-                      ? <span className="ml-2 text-[11px] text-positive">gets the update</span>
-                      : <span className="ml-2 text-[11px] text-muted-foreground/70">not on the update</span>}
+                    <span className={`ml-2 text-[11px] ${status === 'gets' ? 'text-positive' : 'text-muted-foreground/70'}`}>{UPDATE_STATUS_WORDS[status]}</span>
                   </p>
                 </div>
                 {isOwner && !isSelf
@@ -162,7 +160,7 @@ export default async function TeamPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Mail className="size-4 text-muted-foreground" aria-hidden /> Who gets the update ({activeRecipientSet.size})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Mail className="size-4 text-muted-foreground" aria-hidden /> Who gets the update</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {totalRecipients === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -183,13 +181,7 @@ export default async function TeamPage() {
                   {s.name}
                   {s.is_default && <span className="ml-1.5 text-[10px] text-muted-foreground/70">default</span>}
                 </p>
-                {!s.active ? (
-                  <p className="text-sm text-muted-foreground">paused</p>
-                ) : s.recipients.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">no addresses yet</p>
-                ) : (
-                  <p className="text-sm">{s.recipients.join(' · ')}</p>
-                )}
+                <p className={`text-sm ${s.active && s.recipients.length > 0 ? '' : 'text-muted-foreground'}`}>{scheduleLine(s)}</p>
               </div>
             ))
           )}
