@@ -13,7 +13,9 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 
 describe('tab titles', () => {
   it.each(SURFACES.map((s) => [s.label, s]))('%s titles its tab from its own surface', (_label, s) => {
-    const file = `app${s.href}/page.tsx`
+    // Your market's page sits in the (front) route group (sw-2 item 8: its
+    // loader must not wrap the dashboard's catch-all); its URL is /dashboard.
+    const file = s.href === '/dashboard' ? 'app/dashboard/(front)/page.tsx' : `app${s.href}/page.tsx`
     const src = read(file)
     expect(src, file).toMatch(/export const metadata: Metadata = \{ title: /)
     expect(src, file).toContain(`surface('${s.key}').label`)
