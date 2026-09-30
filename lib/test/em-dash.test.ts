@@ -20,8 +20,10 @@ describe('the em-dash guard', () => {
     expect(hits).toEqual([1, 6])
   })
 
+  // A whole-repo read: 2.4 s alone, and past vitest's 5 s default under the
+  // full suite's load (sw-2 gate run), where it timed out rather than failed.
   it('finds no em dash in client-visible copy', () => {
     const hits = scanRepo(ROOT)
     expect(hits.map((h) => `${h.file}:${h.line} ${h.text}`)).toEqual([])
-  })
+  }, 30_000)
 })
