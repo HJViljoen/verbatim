@@ -314,7 +314,7 @@ describe('composeWeekRead: what is stored', () => {
 
 // ---- The report (v3) -------------------------------------------------------------------
 
-describe('composeWeekRead: the report rests on what prints (v3)', () => {
+describe('composeWeekRead: the report rests on evidence that can print, each line checked (v3)', () => {
   // C1 and C2 carry findings; C3 carries none (the writer left it out); C4 is
   // too thin to carry one alone and the writer tried anyway.
   const cs = () => [
@@ -348,7 +348,7 @@ describe('composeWeekRead: the report rests on what prints (v3)', () => {
     return composeWeekRead({ pool: p, standing: [], written: w, subjects: [], writerFigures: writerFigures(p), model: 'gpt-5.4', costUsd: 0.12, ...over })
   }
 
-  it('prints the week line, the story, what it means and what to watch, each only where it rests on a printed finding', () => {
+  it("prints the week line, the story, what it means and what to watch, each only where it rests on a finding's evidence", () => {
     const read = run()
     expect(read.findings.map((f) => f.headline)).toEqual(['Buyers test a bag with weight in it', 'Buyers weigh the price against lifespan'])
     expect(read.headline).toBe('Buyers judged bags this week by what they are like to live with.')
@@ -360,10 +360,10 @@ describe('composeWeekRead: the report rests on what prints (v3)', () => {
     expect(read.watch).toEqual([{ body: 'Whether buyers keep naming the same straps', basedOn: ['th-c1'] }])
     expect(read.held).toEqual(expect.arrayContaining([
       { reason: 'below reasonable: 3 videos', headline: 'Stretched' },
-      { reason: 'rests on no printed finding', headline: 'A thread nothing printed carries.', section: 'story' },
-      { reason: 'rests on no printed finding', headline: 'An implication on nothing that prints.', section: 'implication' },
-      { reason: 'rests on no printed finding', headline: 'An implication on nothing at all.', section: 'implication' },
-      { reason: 'rests on no printed finding', headline: 'Whether a thin thread holds', section: 'watch' },
+      { reason: "rests on no finding's evidence", headline: 'A thread nothing printed carries.', section: 'story' },
+      { reason: "rests on no finding's evidence", headline: 'An implication on nothing that prints.', section: 'implication' },
+      { reason: "rests on no finding's evidence", headline: 'An implication on nothing at all.', section: 'implication' },
+      { reason: "rests on no finding's evidence", headline: 'Whether a thin thread holds', section: 'watch' },
     ]))
   })
 
@@ -409,6 +409,54 @@ describe('composeWeekRead: the report rests on what prints (v3)', () => {
   it('fits a paragraph\'s quote to the paragraph, weighed with substance', () => {
     const read = run({ storyFit: new Map([[0, new Map([['e:a2', 0.2], ['e:a3', 0.6]])]]) })
     expect(read.story[0].quote?.ref).toBe('e:a3')
+  })
+
+  it("a finding held for its CLAIM still backs the report with its evidence; only the contradicted line is held (the first dry v3 read, 27 Sep)", () => {
+    // The lead finding's headline added "not by brand loyalty" and the check
+    // contradicted it. Its evidence is sound: the implication resting on it,
+    // which the check did not contradict, prints; the paragraph that repeated
+    // the contrast is held where it is said.
+    const w = answer({
+      findings: [
+        finding({ based_on: ['C1'], headline: 'Buyers shop by the job, not by brand loyalty' }),
+        finding({ based_on: ['C2'], headline: 'Buyers weigh the price against lifespan' }),
+      ],
+      story: [
+        { paragraph: 'The week was about selection, not brand attachment.', based_on: ['C1', 'C3'], quote_from: 'C1' },
+        { paragraph: 'Buyers put shortlisted bags through two tests: colour and price.', based_on: ['C1', 'C2'], quote_from: null },
+      ],
+      implications: [{ implication: 'The company is judged in open comparison with named rivals.', based_on: ['C1'] }],
+      watch: [{ question: 'Whether buyers keep naming rivals by model', based_on: ['C1'] }],
+    })
+    const read = run({
+      contradicted: new Map([
+        ['Buyers shop by the job, not by brand loyalty', 'people do show attachment to brands'],
+        ['The week was about selection, not brand attachment.', 'people do show attachment to brands'],
+      ]),
+    }, w)
+    expect(read.findings.map((f) => f.headline)).toEqual(['Buyers weigh the price against lifespan'])
+    expect(read.story.map((p) => p.body)).toEqual(['Buyers put shortlisted bags through two tests: colour and price.'])
+    expect(read.implications.map((x) => x.body)).toEqual(['The company is judged in open comparison with named rivals.'])
+    expect(read.watch.map((x) => x.body)).toEqual(['Whether buyers keep naming rivals by model'])
+    expect(read.held).toContainEqual({ reason: 'the conversation contradicts it: people do show attachment to brands', headline: 'The week was about selection, not brand attachment.', section: 'story' })
+  })
+
+  it('a report line the check contradicts is held where it is said, in every section', () => {
+    const read = run({
+      contradicted: new Map([
+        ['Price came up in the same terms.', null],
+        ['The bag is judged a year after purchase.', 'owners judge it on the first day'],
+        ['Whether buyers keep naming the same straps', null],
+      ]),
+    })
+    expect(read.story.map((p) => p.body)).toEqual(['The week was about living with a bag.'])
+    expect(read.implications).toEqual([])
+    expect(read.watch).toEqual([])
+    expect(read.held.filter((h) => h.reason.startsWith('the conversation contradicts it')).map((h) => [h.section, h.reason])).toEqual([
+      ['story', 'the conversation contradicts it'],
+      ['implication', 'the conversation contradicts it: owners judge it on the first day'],
+      ['watch', 'the conversation contradicts it'],
+    ])
   })
 
   it('where the self-check contradicts the week line, the top finding\'s headline stands in', () => {

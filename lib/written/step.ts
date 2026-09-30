@@ -122,16 +122,27 @@ export function storyFitTargets(scrubbed: Pick<WeekReadOutput, 'story'>): FitPar
     .filter((p) => p.text.trim() && p.based_on.length > 0)
 }
 
-/** The claims the self-check reads: each finding headline that could print
- *  (it survived the scrub and rests on a candidate that exists), then the
- *  week's one line (v3) where there is one. */
-export function checkableHeadlines(pool: Pick<WeekPool, 'candidates'>, scrubbed: Pick<WeekReadOutput, 'findings' | 'week_in_one_line'>): string[] {
+/**
+ * The claims the self-check reads: each finding headline that could print (it
+ * survived the scrub and rests on a candidate that exists), then, where one
+ * could, the report's own lines (v3): the week's one line, each story
+ * paragraph, each implication and each watch line that survived the scrub and
+ * cites a candidate that exists. Each report line is checked on its own, so a
+ * contrast the conversation contradicts is held where it is said, and nothing
+ * else is held with it.
+ */
+export function checkableHeadlines(pool: Pick<WeekPool, 'candidates'>, scrubbed: Pick<WeekReadOutput, 'findings' | 'week_in_one_line'> & Partial<Pick<WeekReadOutput, 'story' | 'implications' | 'watch'>>): string[] {
   const known = new Set(pool.candidates.map((c) => c.id.toUpperCase()))
-  const headlines = scrubbed.findings
-    .filter((f) => f.headline && f.based_on.some((id) => known.has(String(id).trim().toUpperCase())))
-    .map((f) => f.headline)
+  const cites = (ids: readonly string[] | null | undefined) => (ids ?? []).some((id) => known.has(String(id).trim().toUpperCase()))
+  const headlines = scrubbed.findings.filter((f) => f.headline && cites(f.based_on)).map((f) => f.headline)
+  if (headlines.length === 0) return []
   const line = (scrubbed.week_in_one_line ?? '').trim()
-  return headlines.length > 0 && line ? [...headlines, line] : headlines
+  const report = [
+    ...(scrubbed.story ?? []).filter((p) => cites(p.based_on)).map((p) => p.paragraph),
+    ...(scrubbed.implications ?? []).filter((x) => cites(x.based_on)).map((x) => x.implication),
+    ...(scrubbed.watch ?? []).filter((x) => cites(x.based_on)).map((x) => x.question),
+  ].map((t) => t.trim()).filter(Boolean)
+  return [...new Set([...headlines, ...(line ? [line] : []), ...report])]
 }
 
 /**

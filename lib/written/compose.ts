@@ -41,15 +41,23 @@ import { WEEK_FINDINGS_MAX, WEEK_READ_MAX, WEEK_READ_PROMPT_VERSION, type Writer
 //    breaks a tie, and decides alone where nothing could be scored. None is
 //    printed twice, findings first, then the story's.
 //
-// THE REPORT (v3) RESTS ON WHAT PRINTS. The story's paragraphs, the
-// implications and the watch lines each cite candidates; one that rests on no
-// candidate backing a printed finding or a printed "new this week" line is
-// held, so the report never tells a story about evidence the findings below it
-// do not carry. "New this week" is code's to decide: a candidate the writer
-// names prints there only where it was first heard this week
-// (`firstHeardThisWeek`). The week's one line is held where the self-check
-// contradicts it or the scrub took it, and the top finding's headline stands
-// in. With no finding printed, the whole report is empty: nothing is sent.
+// THE REPORT (v3) RESTS ON EVIDENCE THAT CAN PRINT, AND EACH LINE IS CHECKED.
+// The story's paragraphs, the implications and the watch lines each cite
+// candidates; one that cites none behind a finding whose evidence carries it
+// (at least three distinct videos, at least reasonable, whether or not that
+// finding's own headline printed) or behind a printed "new this week" line is
+// held, so the report never rests on thinner evidence than a finding may.
+// And each is a claim of its own in the self-check (lib/written/step.ts
+// `checkableHeadlines`): one the conversation contradicts is held where it is
+// said. (The first dry v3 read held every line that shared a candidate with a
+// contradicted headline instead: the headline's unsupported "not by brand
+// loyalty" took a sound implication with it, and left the next paragraph
+// opening on "that shortlist".) "New this week" is code's to decide: a
+// candidate the writer names prints there only where it was first heard this
+// week (`firstHeardThisWeek`). The week's one line is held where the
+// self-check contradicts it or the scrub took it, and the top finding's
+// headline stands in. With no finding printed, the whole report is empty:
+// nothing is sent.
 
 export { evidenceOf, monthEvidenceOf, sureOf } from './sure'
 
@@ -224,6 +232,17 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     judged.push({ i, f, cited, evidence })
   }
 
+  // The evidence the report may rest on: every written finding whose cited
+  // candidates carry a finding on their evidence (the floor and reasonable),
+  // whatever became of its headline (contradicted, scrubbed, past the cap,
+  // out of quotes). Evidence is not held for a claim made about it.
+  const backing = new Set<string>()
+  for (const f of a.written?.findings ?? []) {
+    const cited = resolve(f.based_on)
+    const evidence = evidenceOf(cited)
+    if (cited.length > 0 && evidence >= POOL_MIN_VIDEOS && sureOf(cited.length, evidence, evidence)) for (const c of cited) backing.add(c.id.toUpperCase())
+  }
+
   // Order by the evidence, then the strands, then as written; the same
   // evidence twice prints once; at most four.
   judged.sort((x, y) => y.evidence - x.evidence || y.cited.length - x.cited.length || x.i - y.i)
@@ -240,8 +259,6 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
   const usedQuotes = { refs: new Set<string>(), threads: new Set<string>() }
   const subjectOf = new Map(a.standing.map((f) => [f.subjectId, f]))
   const findings: WeekReadFinding[] = []
-  /** The candidates behind what prints: the report rests on these. */
-  const backing = new Set<string>()
   for (const j of kept) {
     const videos = { week: j.evidence, month: monthEvidenceOf(j.cited) }
     const sure = sureOf(j.cited.length, videos.week, videos.week)
@@ -262,7 +279,6 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     const isNew = j.cited.every((c) => c.isNew)
     const context = contextLine(subjectId ? subjectOf.get(subjectId) : null, isNew, month)
     Object.assign(figures, evidence.figures, context.figures)
-    for (const c of j.cited) backing.add(c.id.toUpperCase())
     findings.push({
       headline: j.f.headline,
       saw: j.f.saw,
@@ -310,7 +326,13 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     newThisWeek.push({ themeId: c.themeId, body: text, videos, evidence: evidence.body })
   }
 
-  const restsOnWhatPrints = (cited: readonly PoolCandidate[]): boolean => cited.some((c) => backing.has(c.id.toUpperCase()))
+  const restsOnEvidence = (cited: readonly PoolCandidate[]): boolean => cited.some((c) => backing.has(c.id.toUpperCase()))
+  /** The self-check's word on a report line, where it contradicted it. */
+  const contradiction = (text: string): string | null => {
+    if (!a.contradicted?.has(text)) return null
+    const theySay = a.contradicted.get(text)
+    return theySay ? `the conversation contradicts it: ${theySay}` : 'the conversation contradicts it'
+  }
 
   // What happened: the paragraphs that rest on what prints, with at most two
   // real quotes, never one already printed.
@@ -320,7 +342,9 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     const text = p.paragraph.trim()
     if (!text) { hold('nothing survived the scrub', '', 'story'); continue }
     const cited = resolve(p.based_on)
-    if (!restsOnWhatPrints(cited)) { hold('rests on no printed finding', text, 'story'); continue }
+    if (!restsOnEvidence(cited)) { hold('rests on no finding\'s evidence', text, 'story'); continue }
+    const contradicted = contradiction(text)
+    if (contradicted) { hold(contradicted, text, 'story'); continue }
     if (story.length >= WEEK_READ_MAX.storyParagraphs) { hold(`past the first ${WEEK_READ_MAX.storyParagraphs} paragraphs`, text, 'story'); continue }
     const asked = p.quote_from ? byId.get(p.quote_from.trim().toUpperCase()) ?? null : null
     let quote: QuoteRef | null = null
@@ -342,7 +366,9 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
       const text = x.text.trim()
       if (!text) { hold('nothing survived the scrub', '', section); continue }
       const cited = resolve(x.based_on)
-      if (!restsOnWhatPrints(cited)) { hold('rests on no printed finding', text, section); continue }
+      if (!restsOnEvidence(cited)) { hold('rests on no finding\'s evidence', text, section); continue }
+      const contradicted = contradiction(text)
+      if (contradicted) { hold(contradicted, text, section); continue }
       if (out.length >= max) { hold(`past the first ${max}`, text, section); continue }
       out.push({ body: text, basedOn: cited.map((c) => c.themeId) } as T)
     }
@@ -362,9 +388,9 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
   // The week in one line; where the check contradicts it or the scrub took
   // it, the top finding's headline stands in.
   let headline = report ? (a.written?.week_in_one_line ?? '').trim() : ''
-  if (headline && a.contradicted?.has(headline)) {
-    const theySay = a.contradicted.get(headline)
-    hold(theySay ? `the conversation contradicts it: ${theySay}` : 'the conversation contradicts it', headline, 'week_line')
+  const lineContradicted = headline ? contradiction(headline) : null
+  if (lineContradicted) {
+    hold(lineContradicted, headline, 'week_line')
     headline = ''
   }
   if (!headline && findings.length > 0) headline = `${findings[0].headline}.`

@@ -130,6 +130,8 @@ describe('the prompt', () => {
     expect(system).toContain('ONE IDEA EACH')
     expect(system).toContain('Fewer findings is fine.')
     expect(system).toContain('Never cite a second candidate just to give a finding enough evidence')
+    // The first dry v3 read lost its lead finding to "…not by brand loyalty".
+    expect(system).toContain('Never frame a claim by what the market does NOT do')
     expect(system).toContain('a candidate about comfort and one about pockets are two ideas')
     expect(system).toContain('A thin candidate with no such twin is not a finding')
     expect(system).toContain('Never join two ideas into one finding')
@@ -153,6 +155,8 @@ describe('the prompt', () => {
     expect(system).toContain('Never one paragraph per finding in turn, never a list in prose')
     expect(system).toContain("Build it from your findings' candidates.")
     expect(system).toContain('a paragraph that rests on no finding is deleted')
+    expect(system).toContain('each must read on its own: a reader who never sees one paragraph still follows the next')
+    expect(system).toContain('never by pointing back ("that shortlist"')
     expect(system).toContain('at most 2 paragraphs point to a voice')
     expect(system).toContain('Never write a quotation yourself.')
     // What it means: intelligence, not instructions.
@@ -184,6 +188,10 @@ describe('the prompt', () => {
     expect(example).toContain('A week line:')
     expect(example).not.toMatch(/\d/)
     expect(directionHits(example)).toEqual([])
+    // Its report lines model no contrast ("…, not by the coffee", "rather
+    // than choosing one"): the first dry v3 read copied the shape.
+    const reportLines = example.slice(example.indexOf('A story paragraph:'))
+    expect(reportLines).not.toMatch(/\brather than\b|, not (?:by|the)\b/)
     expect(example).not.toMatch(/\b(very|many|most|strong|huge|significant)\b/i)
     // Its one advice line is the one it marks as wrong.
     expect(example.match(/\bshould\b/g)).toHaveLength(1)

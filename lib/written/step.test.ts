@@ -119,17 +119,30 @@ describe('runWeekReadStep', () => {
 describe('what the step hands the self-check and the fit (v3)', () => {
   const p = pool([candidate({ id: 'C1' }), candidate({ id: 'C2' }), candidate({ id: 'C3' })])
 
-  it('the self-check reads every finding headline that could print, then the week\'s one line', () => {
+  it("the self-check reads every finding headline that could print, then the week's line and each report line on its own", () => {
     const w = written({
       findings: [
         { headline: 'Straps decide comfort', saw: 's', means: 'm', based_on: ['C1'], quote_from: null },
         { headline: 'Invented', saw: 's', means: 'm', based_on: ['C9'], quote_from: null },
         { headline: '', saw: 's', means: 'm', based_on: ['C2'], quote_from: null },
       ],
+      story: [
+        { paragraph: 'The week was about carrying weight.', based_on: ['C1'], quote_from: null },
+        { paragraph: 'On nothing.', based_on: ['C9'], quote_from: null },
+        { paragraph: '', based_on: ['C1'], quote_from: null },
+      ],
+      implications: [{ implication: 'The bag is judged loaded.', based_on: ['C2'] }],
+      watch: [{ question: 'Whether buyers keep asking about hip belts', based_on: ['C1'] }],
       week_in_one_line: 'Buyers judged bags by how they carry.',
     })
-    expect(checkableHeadlines(p, w)).toEqual(['Straps decide comfort', 'Buyers judged bags by how they carry.'])
-    // No finding could print: the line has nothing to stand on and is not checked.
+    expect(checkableHeadlines(p, w)).toEqual([
+      'Straps decide comfort',
+      'Buyers judged bags by how they carry.',
+      'The week was about carrying weight.',
+      'The bag is judged loaded.',
+      'Whether buyers keep asking about hip belts',
+    ])
+    // No finding could print: nothing has anything to stand on, and nothing is checked.
     expect(checkableHeadlines(p, { ...w, findings: [] })).toEqual([])
   })
 
