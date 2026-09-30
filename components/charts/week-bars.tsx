@@ -101,9 +101,10 @@ function Plot({ L, surface, ticks, label }: { L: WeekBarsLayout; surface: 'inner
       ))}
       {/* The marks and their days last, over the lines. Each sits in its own
           viewport at its x, so its shape and its label keep their pixel sizes
-          at every width. */}
+          at every width; `data-edge-x` lets the client leaf hide one whose
+          mark is scrolled out of view (`markInView`, sw-3 item 3). */}
       {ticks === 'top' ? L.ticks.map((t) => (
-        <svg key={`t${t.date}`} x={pct(t.x)} y={tickRowY(t.row)} width={1} height={1} overflow="visible">
+        <svg key={`t${t.date}`} x={pct(t.x)} y={tickRowY(t.row)} width={1} height={1} overflow="visible" data-edge-x={t.x}>
           <ChangeMark mark={t.mark} surface={surface} />
           <text x={t.side === 'start' ? 10 : -10} y={8} textAnchor={t.side === 'start' ? 'start' : 'end'} fontSize={12} fontWeight={t.mark === 'search' ? 500 : 400} style={{ ...MONO, fill: t.mark === 'search' ? 'var(--secondary-foreground)' : 'var(--muted-foreground)', ...HALO(surface) }}>{t.label}</text>
         </svg>
@@ -113,7 +114,7 @@ function Plot({ L, surface, ticks, label }: { L: WeekBarsLayout; surface: 'inner
         const total = widths.reduce((a, b) => a + b, 0) + (m.items.length - 1) * 6
         let x = -total / 2
         return (
-          <svg key={`m${m.cx}`} x={pct(m.cx)} y={L.axis.marksY! - 9} width={1} height={1} overflow="visible">
+          <svg key={`m${m.cx}`} x={pct(m.cx)} y={L.axis.marksY! - 9} width={1} height={1} overflow="visible" data-edge-x={m.cx}>
             {m.items.map((it, i) => {
               const at = x
               x += widths[i] + 6

@@ -64,6 +64,20 @@ export function wholeWeeksWidth(box: number, minWidth: number, slots: number): n
   return (slots * box) / k
 }
 
+/**
+ * WHETHER A CHANGE'S MARK IS IN THE STRIP'S VIEW (sw-3 item 3). Where the
+ * strip scrolls, a mark in a week scrolled out of view is clipped with it,
+ * but its day label, drawn beside it, reached into the next week: at 390 the
+ * front page opened on "13 Sep" at the box's start edge with no mark. A mark
+ * (and its label) shows only while the mark itself is in view. `x` is the
+ * mark's place as a fraction of the plot; `plot` and `box` are their boxes on
+ * screen (px).
+ */
+export function markInView(x: number, plot: { left: number; width: number }, box: { left: number; right: number }): boolean {
+  const at = plot.left + x * plot.width
+  return at >= box.left - 0.5 && at <= box.right + 0.5
+}
+
 export function WeekBarsHover({
   details,
   labels,
@@ -98,6 +112,7 @@ export function WeekBarsHover({
   const [hover, setHover] = useState<number | null>(null)
   const n = Math.max(1, details.length)
   const boxRef = useRef<HTMLDivElement>(null)
+  const plotRef = useRef<HTMLDivElement>(null)
   const [fit, setFit] = useState<number | null>(null)
   const weeks = slots ?? details.length
   useEffect(() => {
@@ -110,6 +125,31 @@ export function WeekBarsHover({
     ro.observe(box)
     return () => ro.disconnect()
   }, [minWidth, weeks])
+  // The marks the plot tags with their place (`data-edge-x`), hidden while
+  // the mark is scrolled out of the box, shown again when it scrolls back.
+  useEffect(() => {
+    const box = boxRef.current
+    const inner = plotRef.current
+    if (!box || !inner) return
+    const marks = [...inner.querySelectorAll<SVGElement>('[data-edge-x]')]
+    if (marks.length === 0) return
+    const sync = () => {
+      const b = box.getBoundingClientRect()
+      const p = inner.getBoundingClientRect()
+      for (const el of marks) {
+        el.style.visibility = markInView(Number(el.dataset.edgeX), { left: p.left, width: p.width }, { left: b.left, right: b.right }) ? '' : 'hidden'
+      }
+    }
+    sync()
+    box.addEventListener('scroll', sync, { passive: true })
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync)
+    ro?.observe(box)
+    ro?.observe(inner)
+    return () => {
+      box.removeEventListener('scroll', sync)
+      ro?.disconnect()
+    }
+  }, [fit])
   const shown = hover ?? (detail === 'panel' ? initial : null)
   const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
   const chart = (
@@ -125,7 +165,7 @@ export function WeekBarsHover({
       <div ref={boxRef} className="flex min-w-0 flex-row-reverse overflow-x-auto overflow-y-hidden">
         {/* A CONTAINER, so the chart's smallest words step down a size where
             its slots are narrow (`@max-[640px]:` on the SVG text). */}
-        <div className="relative flex-1 shrink-0 @container" style={{ minWidth: fit ?? minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
+        <div ref={plotRef} className="relative flex-1 shrink-0 @container" style={{ minWidth: fit ?? minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
           {shown != null ? (
             <span
               aria-hidden

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { wholeWeeksWidth } from './week-bars-hover'
+import { markInView, wholeWeeksWidth } from './week-bars-hover'
 
 import type { RenderMode } from '@/lib/blocks/types'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
@@ -12,6 +12,8 @@ import { WEEK_LINE } from '@/lib/week-line-config'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { dueHasPassed, passedBeforeOf, type PendingWeekLine } from '@/lib/reading/week-line'
 import { WeekBars, WeekBarsKey, WeekPendingRow } from './week-bars'
+import { weekBarsLayout, weekPlotMin } from '@/lib/charts/week-bars'
+import { weekRuleGroupOf } from '@/lib/reading/weeks'
 
 // The weekly volume bars (WP2.9), on staging's own weeks read at the two
 // clocks the renders use: 11 Oct (September read, the axis 27 Jul to 5 Oct)
@@ -221,5 +223,37 @@ describe('wholeWeeksWidth (sw-2 item 3)', () => {
     expect(wholeWeeksWidth(700, 520, 10)).toBeNull()
     expect(wholeWeeksWidth(0, 520, 10)).toBeNull()
     expect(wholeWeeksWidth(30, 520, 10)).toBeCloseTo(300, 5)
+  })
+})
+
+describe('markInView (sw-3 item 3)', () => {
+  // At 390 the front page's strip opened on the week of 14 Sep, and "13 Sep",
+  // drawn to the right of its mark in the week of 7 Sep, sat at the box's
+  // start edge with no mark. A mark shows while the mark itself is in view.
+  it('hides 9 and 13 Sep (the week of 7 Sep, scrolled out) and shows 17 Sep, at the strip\'s opening view', () => {
+    const rules = OCT11.rules.filter((r) => weekRuleGroupOf(r.surface) !== 'filing')
+    const L = weekBarsLayout(OCT11.weeks, rules, { size: 'large', ticks: 'top' })
+    const box = { left: 0, right: 238 }
+    const width = wholeWeeksWidth(238, weekPlotMin(L.n), L.n)!
+    // The strip opens at its end: the plot's right edge on the box's.
+    const plot = { left: box.right - width, width }
+    const seen = Object.fromEntries(L.ticks.map((t) => [t.label, markInView(t.x, plot, box)]))
+    expect(seen['9 Sep']).toBe(false)
+    expect(seen['13 Sep']).toBe(false)
+    expect(seen['17 Sep']).toBe(true)
+    // Scrolled back until the week of 7 Sep opens the box, its marks show.
+    const back = { left: -(6 / L.n) * width, width }
+    expect(L.ticks.filter((t) => t.label === '9 Sep' || t.label === '13 Sep').map((t) => markInView(t.x, back, box))).toEqual([true, true])
+  })
+
+  it('shows every mark where the plot fits its box', () => {
+    for (const x of [0, 0.25, 0.5, 1]) expect(markInView(x, { left: 10, width: 600 }, { left: 10, right: 610 })).toBe(true)
+  })
+
+  it('tags each change drawn, over the plot and in This week\'s row, with its place', () => {
+    const front = render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
+    const week = render(<WeekBars block={OCT11} mode="app" variant="week" surface="tile" />)
+    expect((front.match(/data-edge-x="/g) ?? []).length).toBe(weekBarsLayout(OCT11.weeks, OCT11.rules.filter((r) => weekRuleGroupOf(r.surface) !== 'filing'), { size: 'large', ticks: 'top' }).ticks.length)
+    expect(week).toContain('data-edge-x="')
   })
 })
