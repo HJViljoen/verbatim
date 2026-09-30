@@ -726,21 +726,21 @@ describe('marketSubjectsOf (market-first WP2.7)', () => {
     expect(b.market).toEqual({ month: '2026-09-01', n: 654 })
   })
 
-  it('prints a provisional subject’s market figure, marked, and never a verdict', () => {
-    const price = marketSubjectsOf(base).rows.find((r) => r.id === 'price')!
-    expect(price.calibration).toBe('provisional')
-    expect(price.market?.monthSoFar.k).toBe(25)
-    expect(price.market?.thisUpdate).toBe(13)
-    expect(price.verdict).toBeNull()
-    expect(price.market?.monthSoFar.verdict).toBeNull()
+  // T0a (WK-26; ruling U6): a provisional subject prints no figure; it is
+  // named among the withheld, as a failed one is.
+  it('names a provisional subject with no figure, never its market level', () => {
+    const b = marketSubjectsOf(base)
+    expect(b.rows.find((r) => r.id === 'price')).toBeUndefined()
+    expect(b.withheld?.find((r) => r.id === 'price')).toEqual({ id: 'price', label: 'Price', calibration: 'provisional' })
   })
 
-  it('withholds a failed subject and one the month was not read for, with their words', () => {
+  it('withholds a failed subject, a provisional one and one the month was not read for', () => {
     const b = marketSubjectsOf(base)
-    expect(b.rows.map((r) => r.id)).toEqual(['looks', 'price'])
+    expect(b.rows.map((r) => r.id)).toEqual(['looks'])
     expect(b.withheld).toEqual([
       { id: 'repair', label: 'Repair & warranty', calibration: 'failed' },
-      { id: 'community', label: 'Community & purpose', calibration: 'provisional', unread: 'no reading yet' },
+      { id: 'community', label: 'Community & purpose', calibration: 'provisional' },
+      { id: 'price', label: 'Price', calibration: 'provisional' },
     ])
   })
 
@@ -752,7 +752,7 @@ describe('marketSubjectsOf (market-first WP2.7)', () => {
 
   it('reads 0 for a read subject no market video cited this update', () => {
     const b = marketSubjectsOf({ ...base, added: [] })
-    expect(b.rows.map((r) => r.market?.thisUpdate)).toEqual([0, 0])
+    expect(b.rows.map((r) => r.market?.thisUpdate)).toEqual([0])
   })
 
   it('leaves a rival that is no longer tracked out of both counts', () => {

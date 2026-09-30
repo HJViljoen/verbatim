@@ -60,16 +60,20 @@ describe('buildForYou: the lines, in the preview\'s order', () => {
     sharing: { checked: ['waterproofing', 'zippers', 'rain', 'coated', 'canvas', 'cracking'], matched: [] },
   })
 
-  it('prints Waterproofing\'s 16 question videos and "none of your 56 posts" (staging, GR F24)', () => {
-    const b = buildForYou({ month: SEP, questions: water('provisional'), lead: null, followers: null })
+  // HYPOTHETICAL calibration `ready`: staging's Waterproofing is provisional,
+  // and a provisional subject's asked-count rests on its unverified matching,
+  // so it draws no line at all (T0a, OV-49; ruling U6).
+  it('prints Waterproofing\'s 16 question videos and "none of your 56 posts" (staging, GR F24), where it is ready', () => {
+    const b = buildForYou({ month: SEP, questions: water('ready'), lead: null, followers: null })
     expect(b.lines).toHaveLength(1)
     const [l] = b.lines
     expect(l.kind).toBe('unanswered')
     expect(l.sentenceKey).toBe('foryou.unanswered.none')
     expect(l.figures.foryou_asked.value).toBe(16)
     expect(l.figures.foryou_posts.value).toBe(56)
-    expect(l.calibration).toBe('provisional')
+    expect(l.calibration).toBe('ready')
     expect(l.matchedPosts).toEqual([])
+    expect(buildForYou({ month: SEP, questions: water('provisional'), lead: null, followers: null }).lines).toEqual([])
   })
 
   it('draws no line for a subject being re-described', () => {

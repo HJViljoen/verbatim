@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { BlockMovement } from '@/components/blocks/movement'
 import { FigureCell, NoValue } from '@/components/blocks/frame'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient, withheldLabel, WITHHELD_WORDS } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient, printsMarket, withheldLabel, WITHHELD_WORDS } from '@/lib/subjects/calibration-state'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
 import { valuesSinceBreak } from '@/lib/charts/calendar'
@@ -176,7 +176,7 @@ const SUBJECTS_BUDGET_PX = 201
 
 /** What one subject row costs on the sheet, measured (see above). */
 export function sheetRowPx(row: Pick<SubjectRow, 'calibration' | 'unread' | 'category'>): number {
-  if (isFailed(row.calibration) || row.unread) return SUBJECT_ROW_ONE_LINE_PX
+  if (!printsMarket(row.calibration) || row.unread) return SUBJECT_ROW_ONE_LINE_PX
   if (earnsVerdict(row.calibration) && row.category.verdict?.state === 'refused') return SUBJECT_ROW_REFUSED_PX
   return SUBJECT_ROW_PX
 }
@@ -727,9 +727,10 @@ function SubjectsTable({ data }: { data: OverviewData }) {
                     `overflow: hidden` body cut the truncation line in half. */}
                 <th role="rowheader" scope="row" className={`min-w-0 font-normal${isFailed(r.calibration) ? ' text-muted-foreground' : ''}`}>
                   <span className="block truncate">{r.label}</span>
-                  {isFailed(r.calibration) || r.unread ? null : <CalibrationTag calibration={r.calibration} mode="print" block />}
                 </th>
-                {isFailed(r.calibration) || r.unread ? (
+                {/* A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, PR-7;
+                    ruling U6): no figure cell, and no word. */}
+                {!printsMarket(r.calibration) || r.unread ? (
                   // One cell across the four, carrying the row's words, not
                   // a dash in each.
                   <td role="cell" className="col-span-4 min-w-0 truncate">

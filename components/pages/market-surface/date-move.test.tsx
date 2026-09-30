@@ -73,11 +73,12 @@ describe('Date a move · the control', () => {
 describe('Date a move · a move read from the day it was made', () => {
   // A move declared on 2 Oct and dated 15 Sep, on Waterproofing: staging's
   // pooled market in September (Waterproofing 29 of 654), October not read.
+  // Ready, as on staging: a provisional subject reads no level (T0a, YM-47).
   const reads = moveMarketReads({
     moves: [{ id: 'm-d', kind: 'subject', subject_id: 's-water', registry_ids: null, lineage_id: null, title: 'Zip test on every bag page', declared_at: '2026-10-02', dated_on: '2026-09-15' }],
     month: '2026-09-01',
     on: () => 'on the subject Waterproofing',
-    subjects: new Map([['s-water', { name: 'Waterproofing', calibration: 'provisional' as const }]]),
+    subjects: new Map([['s-water', { name: 'Waterproofing', calibration: 'ready' as const }]]),
     themes: new Map(),
     adviceTargets: new Map(),
     levels: (_kind, _id, month) => (month === '2026-09-01' ? 29 : null),

@@ -262,28 +262,34 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('If you made it in pink and a bigger size I would buy it immediately')
   })
 
-  it('the subjects on the market, each with its calibration word, and a subject never read says so and promises no date', () => {
+  // T0a (OV-42; ruling U6): every subject on production is provisional, so
+  // each prints its name and no figure, word or tag.
+  it('the subjects on the market, each by its name alone while none is ready', () => {
     expect(text).toContain('The market by subject')
-    expect(text).toContain('Looks & style provisional')
-    expect(text).toContain('Buying & delivery no reading yet')
+    expect(text).toMatch(/Buying & delivery Comfort Community & purpose Durability Looks & style Price Repair & warranty Waterproofing Open Subjects/)
+    expect(text).not.toContain('Looks & style provisional')
   })
 
   // THE MAKER TAG (§2.2 block 6, the approved Main artboard's "provisional ·
   // ▨ over a third makers"), at a fifth or more, as the Subjects rail prints
   // it: staging at the 11 Oct clock read Looks & style at 35 of 103 market
   // videos makers' (0.34), Durability 9 of 39 (0.23) and Price 3 of 25 (0.12).
-  it('a subject a fifth or more makers carries the rail\'s maker tag; under a fifth, or not measured, none', () => {
+  // HYPOTHETICAL `ready` on every row: a provisional subject's maker share
+  // rests on its matching and goes with its figure (T0a, ruling U6).
+  it('a READY subject a fifth or more makers carries the rail\'s maker tag; under a fifth, not measured, or not ready, none', () => {
     const base = marketFrontFixture()
     const share: Record<string, number> = { 's-looks': 35 / 103, 's-durability': 9 / 39, 's-price': 3 / 25 }
-    const rows = base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id] } : r))
+    const rows = base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id], calibration: 'ready' as const } : { ...r, calibration: 'ready' as const }))
     const data = { ...base, subjects: { ...base.subjects, rows } }
     const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
     for (const mode of MODES) {
       const t = read(block.render(data, mode, ctx))
-      expect(t, mode).toMatch(/Looks & style (· )?provisional (· )?about a third makers/)
-      expect(t, mode).toMatch(/Durability (· )?provisional (· )?about a quarter makers/)
+      expect(t, mode).toMatch(/Looks & style (· )?about a third makers/)
+      expect(t, mode).toMatch(/Durability (· )?about a quarter makers/)
       expect(t, mode).not.toMatch(/Price[^\n]*makers/)
     }
+    const provisional = { ...base, subjects: { ...base.subjects, rows: base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id] } : r)) } }
+    for (const mode of MODES) expect(read(block.render(provisional, mode, ctx)), mode).not.toContain('makers')
     // A stored copy with no maker share draws no tag.
     expect(read(block.render(base, 'app', ctx))).not.toContain('makers')
   })
@@ -293,8 +299,9 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   // while an update will still read the month, and "not read in August" once
   // none will (a month picked in the selector after it froze).
   it('a subject the month was not read for prints the row\'s own unread words, the ones every surface prints', () => {
+    // HYPOTHETICAL `ready`: a provisional subject is its name alone (T0a).
     const base = marketFrontFixture()
-    const rows = base.subjects.rows.map((r) => (r.id === 's-buying' ? { ...r, unread: 'not read in August' } : r))
+    const rows = base.subjects.rows.map((r) => (r.id === 's-buying' ? { ...r, unread: 'not read in August', calibration: 'ready' as const } : r))
     const frozen = { ...base, subjects: { ...base.subjects, rows } }
     const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
     for (const mode of MODES) {
@@ -308,16 +315,17 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
 
   it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
     // HYPOTHETICAL: the market pair read the same way (no refusal on the
-    // page), so the month before prints.
+    // page), so the month before prints, and Price checked and ready (T0a).
     const base = marketFrontFixture()
-    const joined = { ...base, sentence: { ...base.sentence, chip: null }, category: { ...base.category, market: base.category.market ? { ...base.category.market, chip: null } : undefined } }
+    const ready = { ...base, subjects: { ...base.subjects, rows: base.subjects.rows.map((r) => (r.id === 's-price' ? { ...r, calibration: 'ready' as const } : r)) } }
+    const joined = { ...ready, sentence: { ...base.sentence, chip: null }, category: { ...base.category, market: base.category.market ? { ...base.category.market, chip: null } : undefined } }
     const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
     const printed = read(block.render(joined, 'app', ctx))
-    expect(printed).toContain('Price provisional · August under 10, a count 23 4% 5')
-    expect(printed).not.toContain('Price provisional 23 4% ·')
+    expect(printed).toContain('Price August under 10, a count 23 4% 5')
+    expect(printed).not.toContain('Price 23 4% ·')
     // T0a (OV-45, the one condition): on the fixture's own refused September
     // pair the block prints no month before at all: no column, no count tag.
-    const refused = read(block.render(base, 'app', ctx))
+    const refused = read(block.render(ready, 'app', ctx))
     expect(refused).not.toContain('Aug of')
     expect(refused).not.toContain('August under 10')
     // Said on the row, so the count cannot read as a share (finish-list item 9).
@@ -508,7 +516,11 @@ describe('the 25 Sep rulings on Your market (§5.12)', () => {
       const data = make()
       for (const block of FRONT_PAGE_BLOCKS) {
         for (const mode of MODES) {
-          const root = rootOf(block.render(data, mode, ctx))
+          const node = block.render(data, mode, ctx)
+          // T0a: What it means for you is omitted where its only line rests
+          // on a provisional subject (production's Waterproofing).
+          if (node == null && block.key === 'overview.foryou') continue
+          const root = rootOf(node)
           expect(root?.type, `${name} ${block.key} ${mode}`).toBe(BlockFrame)
           expect(root?.props.meta, `${name} ${block.key} ${mode} meta`).toBeUndefined()
           expect(root?.props.footerNote, `${name} ${block.key} ${mode} footerNote`).toBeUndefined()

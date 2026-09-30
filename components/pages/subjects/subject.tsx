@@ -13,12 +13,12 @@ import { fmtInt, fmtPct, fullDate, longMonth, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
-import { allRedescribed, marketTrail, monthsReadOf, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, marketTrail, monthsReadOf, monthsShownOf, paneMarketLead, paneSides, sideCaption, sideEyebrow, sideFigures, SUBJECTS_ALL_REDESCRIBED, type SubjectPane, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 import type { FoundSplit } from '@/lib/pages/overview-market/provenance'
 import { openLink } from '@/components/blocks/open-link'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { calibrationWord, printsClient } from '@/lib/subjects/calibration-state'
+import { calibrationWord, printsClient, printsMarket } from '@/lib/subjects/calibration-state'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
 //
@@ -224,7 +224,8 @@ export const subjectsSubject: Block<SubjectsData> = {
     // and no side carries a verdict. The loader already builds it that way; a
     // pane stored with the two-state `'calibrating'` is read the same way here.
     const client = printsClient(pane.calibration)
-    const sides = paneSides(pane)
+    // No side's level for a subject that is not ready (T0a, ruling U6).
+    const sides = printsMarket(pane.calibration) ? paneSides(pane) : []
     const gapShown = client ? pane.gap : null
     const answered = (state: string) => state === 'apart' || state === 'level'
     const basis = gapShown && (answered(gapShown.state) || answered(gapShown.basis?.state ?? ''))
@@ -397,7 +398,9 @@ export const MARKET_PANE_TITLE = 'This subject in your market'
 /** The figures the market's pane prints, under their own keys. */
 export function marketPaneFigures(pane: SubjectPane): FigureTable {
   const out = sideFigures({ ...pane, sides: [] })
-  for (const p of monthsReadOf(pane.marketLine)) {
+  // Nothing resting on an unverified matching (T0a, ruling U6).
+  if (!printsMarket(pane.calibration)) return out
+  for (const p of monthsShownOf(pane.marketLine)) {
     if (p.k == null || p.videos == null) continue
     const month = monthName(p.month).split(' ')[0].toLowerCase()
     out[`subject_market_${month}_videos`] = { value: p.k, unit: 'videos', label: `${pane.name}, videos in your market in ${monthName(p.month)}` }
@@ -516,8 +519,14 @@ function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: R
   const ask = `${appUrl}/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${pane.name}?`)}`
   const footer = openLink(mode, ask, 'Ask about this →')
   const lead = paneMarketLead(pane, data.month)
-  const trail = marketTrail(pane.marketLine)
-  const read = monthsReadOf(pane.marketLine).length
+  // A SUBJECT THAT IS NOT READY PRINTS NO FIGURE RESTING ON ITS MATCHING
+  // (T0a, SB-15; ruling U6): no headline level, trail, "Its N videos", where
+  // they were found, who posted them or months read. Its name and the Ask
+  // link stay; its voices are the voices block's. A pane stored before the
+  // rule carries those figures still, and prints none of them.
+  const shown = printsMarket(pane.calibration)
+  const trail = shown ? marketTrail(pane.marketLine) : []
+  const read = shown ? monthsReadOf(pane.marketLine).length : 0
   const word = pane.unread || calibrationWord(pane.calibration)
   const current = trail.length > 0 ? trail[trail.length - 1].month : null
   const trailLine = word || trail.length > 0 ? (
@@ -537,7 +546,7 @@ function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: R
       </span>
     )
   ) : null
-  const k = pane.market?.k ?? null
+  const k = shown ? pane.market?.k ?? null : null
   const inner = (children: ReactNode) => (email
     ? <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '10px 12px', marginTop: 8 }}>{children}</div>
     : <div className="flex flex-col gap-5 rounded-md bg-inner p-6">{children}</div>)

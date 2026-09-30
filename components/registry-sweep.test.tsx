@@ -168,6 +168,10 @@ describe('the 25 Sep rulings on rebuilt pages', () => {
         for (const data of states) {
           for (const mode of MODES) {
             const el = block.render(data as never, mode, ctx)
+            // T0a: a block with nothing true left to print is omitted, not
+            // framed empty (What it means for you, where its one line rests on
+            // a provisional subject).
+            if (el == null && block.key === 'overview.foryou') continue
             if (!isValidElement(el) || el.type !== BlockFrame) { bad.push(`${page} ${block.key} [${mode}] is not drawn in a BlockFrame`); continue }
             const props = el.props as { meta?: unknown; footerNote?: unknown }
             if (props.meta != null) bad.push(`${page} ${block.key} [${mode}] passes meta`)

@@ -13,6 +13,7 @@ import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
 import { priorPrintable } from '@/lib/reading/verdicts'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
@@ -540,7 +541,9 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
       <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">In your market</h3>
       {readings.map((r) => {
         const label = aboutLabel(r)
-        const failed = r.object.kind === 'subject' && r.object.calibration === 'failed'
+        // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, AK-24; ruling
+        // U6): no level, trail, verdict or word.
+        const failed = r.object.kind === 'subject' && !printsMarket(r.object.calibration)
         const unread = r.state === 'unread'
         // A REFUSED PAIR PRINTS THE MONTH READ ALONE (T0a, AK-24): no trail
         // across the refusal and no sentence about it.
@@ -565,9 +568,7 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
               <span className="text-[13px] font-semibold text-foreground">{label}</span>
               {r.object.kind === 'subject' && !failed ? <CalibrationTag calibration={r.object.calibration ?? null} unread={unread ? r.unread ?? NO_READING_YET : null} /> : null}
             </div>
-            {failed ? (
-              <p className="m-0 text-[12.5px] text-muted-foreground">being re-described</p>
-            ) : unread ? (
+            {failed ? null : unread ? (
               trailLine
             ) : r.state === 'not_read' || !r.curr || r.curr.n == null || r.curr.k == null ? (
               <p className="m-0 text-[12.5px] text-muted-foreground">not read yet</p>

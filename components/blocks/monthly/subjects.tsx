@@ -39,14 +39,16 @@ function subjectsEmail(data: MonthlyData): ReactNode {
   const n = o.subjects.market?.n ?? null
   const prev = subjectsPrev(o)
   const axis = barAxis(rows.map((r) => (printsFigures(r) && n ? (r.market?.k as number) / n : null)))
+  // No row prints a figure (T0a, ruling U6): the figure heads go with them.
+  const heads = rows.some(printsFigures)
   return (
     <Table
       columns={[
         { head: 'Subject' },
         { head: '', width: 88, className: 'vb-m-bar' },
-        { head: 'Videos', align: 'right', width: 56 },
-        { head: <span data-copy="level">{shortMonthName(o.month)}<br />of {n == null ? '·' : fmtInt(n)}</span>, align: 'right', width: 56 },
-        ...(prev ? [{ head: <span data-copy="level">{shortMonthName(prev.month)}<br />of {prev.n == null ? '·' : fmtInt(prev.n)}</span>, align: 'right' as const, width: 56 }] : []),
+        { head: heads ? 'Videos' : '', align: 'right', width: 56 },
+        { head: heads ? <span data-copy="level">{shortMonthName(o.month)}<br />of {n == null ? '·' : fmtInt(n)}</span> : '', align: 'right', width: 56 },
+        ...(prev ? [{ head: heads ? <span data-copy="level">{shortMonthName(prev.month)}<br />of {prev.n == null ? '·' : fmtInt(prev.n)}</span> : '', align: 'right' as const, width: 56 }] : []),
       ]}
       rows={rows.map((r) => {
         const figures = printsFigures(r)

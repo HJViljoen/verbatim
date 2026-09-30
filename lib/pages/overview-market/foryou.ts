@@ -1,6 +1,7 @@
 import { longMonth } from '../../format'
 import type { FigureTable } from '../../reading/verdicts'
 import type { SubjectCalibrationWord } from './subjects'
+import { printsMarket } from '../../subjects/calibration-state'
 
 // What it means for you, and what you published (market-first WP2.5; plan
 // §2.2 blocks 7 and 8; §4.2 `ForYouBlock`).
@@ -43,6 +44,22 @@ export interface ForYouLine {
 export interface ForYouBlock {
   month: string
   lines: ForYouLine[]
+  /** A line was left out because its subject is not ready (T0a, ruling U6):
+   *  the block then has nothing true to say in place of it, so "no subject
+   *  was asked about" is never printed for it. Absent on a stored copy. */
+  withheld?: boolean
+}
+
+/**
+ * The lines a for-you block prints, and whether one was withheld: a line
+ * resting on a subject that is not ready is left out, on a copy stored before
+ * the rule too (T0a, OV-49 / MR-9; ruling U6). Where a line was withheld and
+ * none is left, the block is omitted rather than printing "nothing lines up".
+ */
+export function forYouShown<L extends Pick<ForYouLine, 'sentenceKey' | 'calibration'>>(block: { lines: readonly L[]; withheld?: boolean }): { lines: L[]; withheld: boolean } {
+  const known = block.lines.filter((l) => FOR_YOU_SENTENCES[l.sentenceKey])
+  const lines = known.filter((l) => printsMarket(l.calibration))
+  return { lines, withheld: block.withheld === true || lines.length < known.length }
 }
 
 /**
@@ -156,7 +173,10 @@ export function buildForYou(input: {
 }): ForYouBlock {
   const lines: ForYouLine[] = []
   const q = input.questions
-  if (q && q.asked > 0 && q.subject.calibration !== 'failed') {
+  // Only a READY subject's asked-count prints (T0a, OV-49; ruling U6): the
+  // count rests on its unverified matching, as the followers line's does.
+  const withheld = q != null && q.asked > 0 && q.subject.calibration !== 'ready'
+  if (q && q.asked > 0 && q.subject.calibration === 'ready') {
     const touched = q.sharing.matched.length
     lines.push({
       kind: 'unanswered',
@@ -204,7 +224,7 @@ export function buildForYou(input: {
       calibration: f.subject.calibration,
     })
   }
-  return { month: input.month, lines }
+  return withheld ? { month: input.month, lines, withheld } : { month: input.month, lines }
 }
 
 /** The words a line prints under its sentence: the words each matching post

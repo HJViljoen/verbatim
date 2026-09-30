@@ -117,18 +117,22 @@ describe('the market by subject (decision C and E)', () => {
     expect(marketCalibration('ready')).toBe('ready')
     expect(marketCalibration('failed')).toBe('failed')
     expect(marketCalibration(null)).toBe('provisional')
-    expect(CALIBRATION_TAG.failed).toBe('being re-described')
+    // T0a (ruling U6): no state prints a word; the figure goes instead.
+    expect(CALIBRATION_TAG.failed).toBeNull()
+    expect(CALIBRATION_TAG.provisional).toBeNull()
     expect(CALIBRATION_TAG.ready).toBeNull()
   })
 
-  it('ranks by the market’s size, with a failed or unread subject last', () => {
+  // T0a (ruling U6): a subject that is not ready has no rank; it follows the
+  // ready ones, by name.
+  it('ranks the ready subjects by the market’s size, every other one after them by name', () => {
     const rows = [
       { label: 'Comfort', market: { k: 43 }, calibration: 'ready' as const },
       { label: 'Repair & warranty', market: { k: 36 }, calibration: 'failed' as const },
       { label: 'Looks & style', market: { k: 103 }, calibration: 'provisional' as const },
       { label: 'Community & purpose', market: { k: null }, calibration: 'provisional' as const },
     ]
-    expect([...rows].sort(byMarketSize).map((r) => r.label)).toEqual(['Looks & style', 'Comfort', 'Community & purpose', 'Repair & warranty'])
+    expect([...rows].sort(byMarketSize).map((r) => r.label)).toEqual(['Comfort', 'Community & purpose', 'Looks & style', 'Repair & warranty'])
   })
 })
 

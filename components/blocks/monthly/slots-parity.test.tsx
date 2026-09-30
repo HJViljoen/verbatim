@@ -10,7 +10,7 @@ import { noneFoundBrandsRead, uncheckedBrandsRead, stagingBrandsRead } from '@/l
 import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
 import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview/index'
 import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
-import { marketArrivalsFixture, ossurArrivalsFixture } from '@/components/pages/overview/fixture'
+import { marketArrivalsFixture, marketFrontFixture, ossurArrivalsFixture } from '@/components/pages/overview/fixture'
 import { MONTHLY_BLOCKS, monthlySections } from './index'
 import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
 import { monthlyFixture } from './fixture'
@@ -146,7 +146,10 @@ describe('the page and the monthly print one sentence each', () => {
   })
 
   it('what it means for you and what you published: the page’s sentences and census, in every mode', () => {
-    const data = builtFull()
+    // HYPOTHETICAL: Waterproofing checked and ready, as on staging. On
+    // production it is provisional, so both the page and the monthly withhold
+    // its line (T0a, ruling U6; the next test).
+    const data = builtFull({ ...marketArrivalsFixture(), foryou: marketFrontFixture({ subjectsCalibration: 'staging' }).foryou })
     const forYou = pageText('overview.foryou', data.overview)
     const census = pageText('overview.moves', data.overview)
     const sentence = 'Your market asked about it on 16 videos over the last 3 months. None of your 56 posts in that time shared two or more of its words.'
@@ -160,6 +163,20 @@ describe('the page and the monthly print one sentence each', () => {
         expect(monthly, `${mode}: ${w}`).toContain(w)
       }
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx)))
+    }
+  })
+
+  // T0a (OV-49 / MR-9; ruling U6): a provisional subject's line is withheld
+  // on both, and where that leaves the for-you half with nothing, it is
+  // omitted, never "no subject was asked about"; the census stands.
+  it('a provisional subject’s line is withheld on the page and in the monthly, and nothing claims no subject was asked about', () => {
+    const data = builtFull()
+    expect(pageText('overview.foryou', data.overview)).toBe('')
+    for (const mode of MODES) {
+      const monthly = read(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx))
+      expect(monthly, mode).not.toContain('Waterproofing')
+      expect(monthly, mode).not.toContain(FOR_YOU_NONE)
+      expect(monthly, mode).toContain('234 comments')
     }
   })
 

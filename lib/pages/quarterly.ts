@@ -2487,18 +2487,10 @@ function buildUnsettled(a: {
   }
   for (const row of a.subjects.rows) {
     if (row.categoryQuarter || row.youQuarter) continue
-    // A PROVISIONAL OR FAILED SUBJECT IS WAITING ON ITS CHECK, not on its
-    // sides (decision C, WP1.1): "neither side read" would be false of it.
-    if (!earnsVerdict(row.calibration)) {
-      waiting.push({
-        title: `${row.label}, quarter on quarter`,
-        why: row.calibration === 'failed' ? 'being re-described' : 'provisional',
-        line: row.calibration === 'failed'
-          ? 'This subject is being re-described, so no verdict is printed for it.'
-          : 'This subject is provisional until its check clears, so no verdict is printed for it.',
-      })
-      continue
-    }
+    // A PROVISIONAL OR FAILED SUBJECT IS NOT A LINE HERE (T0a; ruling U6):
+    // "neither side read" would be false of it, and why it has no figure is
+    // ours to know, not the market's. It keeps its name on its page.
+    if (!earnsVerdict(row.calibration)) continue
     waiting.push({
       title: `${row.label}, quarter on quarter`,
       why: 'neither side read on both sides',

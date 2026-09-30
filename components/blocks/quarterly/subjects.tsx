@@ -3,7 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient, printsMarket, withheldLabel } from '@/lib/subjects/calibration-state'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -146,10 +146,11 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             key={row.id}
             mode={mode}
             template={TEMPLATE}
-            cells={isFailed(row.calibration)
+            cells={isFailed(row.calibration) || !printsMarket(row.calibration)
               // A FAILED ROW IS ITS NAME AND ITS WORD (decision C, design
               // pass): no dash in each column and no "not compared", which is
-              // the refusal's word for a pair and not what happened here.
+              // the refusal's word for a pair and not what happened here. SO
+              // IS A PROVISIONAL ONE (T0a, QR-9; ruling U6): its name alone.
               ? [
                 <div key="name" style={email ? { color: EMAIL.muted } : undefined} className={email ? undefined : 'text-muted-foreground'}>{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></div>,
                 <span key="you" />, <span key="cat" />, <span key="catq" />, <span key="youq" />,

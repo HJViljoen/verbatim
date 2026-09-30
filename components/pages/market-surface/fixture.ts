@@ -355,7 +355,10 @@ export const SUBJECTS_ASKED: SubjectAsked[] = [
 ]
 
 /** Y1 on Sealand's September, before MF3: no post is filed by the judge. */
-export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null): QuestionsBlock {
+/** `ready`: HYPOTHETICAL, every subject asked about checked and ready. On
+ *  production none is, and a subject that is not ready is no row of the
+ *  block (T0a, YM-9; ruling U6). */
+export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null, ready = false): QuestionsBlock {
   return buildQuestions({
     month: '2026-09-01',
     themes: SEP_THEMES,
@@ -363,7 +366,7 @@ export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null): Qu
     n: 626,
     brandNames: ['Sealand', 'Cotopaxi', 'Patagonia', 'The North Face', 'Freitag'],
     posts: sealandPosts(),
-    subjects: SUBJECTS_ASKED,
+    subjects: ready ? SUBJECTS_ASKED.map((x) => ({ ...x, calibration: 'ready' as const })) : SUBJECTS_ASKED,
     filings: filings ? ownPostFilings(filings) : null,
   })
 }
@@ -371,7 +374,7 @@ export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null): Qu
 /** The same, after MF3 with the judge's rows: every post filed for every
  *  subject asked about, one post filed as about Price. (The judge has not run:
  *  the rows are the shape it writes, over the 56 staging posts.) */
-export function sealandQuestionsFiled(): QuestionsBlock {
+export function sealandQuestionsFiled(ready = false): QuestionsBlock {
   const posts = sealandPosts()
   const rows: OwnPostSubjectRow[] = posts.flatMap((p) => SUBJECTS_ASKED.map((x) => ({
     video_id: p.id,
@@ -383,7 +386,7 @@ export function sealandQuestionsFiled(): QuestionsBlock {
     judge_version: 'own_post_subjects_v1',
     decided_at: '2026-11-22T09:00:00.000Z',
   })))
-  return sealandQuestions(rows)
+  return sealandQuestions(rows, ready)
 }
 
 /**

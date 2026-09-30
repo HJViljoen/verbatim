@@ -5,10 +5,11 @@ import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { FOR_YOU_SENTENCES, forYouSentence, forYouWords, type ForYouLine } from '@/lib/pages/overview-market/foryou'
+import { forYouShown, forYouSentence, forYouWords, type ForYouLine } from '@/lib/pages/overview-market/foryou'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 import { POSTS_LISTED, PostLine } from '@/components/pages/market-surface/questions'
 
 // 7 · What it means for you (market-first WP2.5; plan §2.2 block 7; the
@@ -168,7 +169,11 @@ export const overviewForYou: Block<OverviewData> = {
     const moves = surface('market')
     const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `Open ${moves.label} →`)
     const empty = overviewForYou.emptyState(data)
-    const lines = (data.foryou?.lines ?? []).filter((l) => FOR_YOU_SENTENCES[l.sentenceKey])
+    // No line resting on a subject that is not ready (T0a, OV-49; ruling U6),
+    // on a copy stored before the rule too; where that leaves nothing, the
+    // block is omitted, never "no subject was asked about".
+    const { lines, withheld } = forYouShown(data.foryou ?? { lines: [] })
+    if (withheld && lines.length === 0) return null
     return (
       <BlockFrame title={FOR_YOU_TITLE} question={overviewForYou.question} mode={mode} footer={footer} roomy>
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : mode === 'email' ? (
@@ -189,6 +194,7 @@ export const overviewForYou: Block<OverviewData> = {
   figures(data): FigureTable {
     const out: FigureTable = {}
     for (const [i, l] of (data.foryou?.lines ?? []).entries()) {
+      if (!printsMarket(l.calibration)) continue
       for (const [k, v] of Object.entries(l.figures)) out[`${l.kind}_${i}_${k}`] = v
     }
     return out
@@ -196,6 +202,7 @@ export const overviewForYou: Block<OverviewData> = {
 
   emptyState(data) {
     if (!data.foryou) return 'What it means for you is read on the market page only.'
-    return data.foryou.lines.some((l) => FOR_YOU_SENTENCES[l.sentenceKey]) ? null : FOR_YOU_NONE
+    const { lines, withheld } = forYouShown(data.foryou)
+    return lines.length > 0 || withheld ? null : FOR_YOU_NONE
   },
 }

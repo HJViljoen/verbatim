@@ -18,7 +18,7 @@ import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mo
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import { buildSales, loadSubjectQuotes, loadSubjects, marketSubjectArrivals, workedLabel } from './week'
 import { loadMarketRivalAudiences } from '../reading/reading-view'
-import { earnsVerdict } from '../subjects/calibration-state'
+import { earnsVerdict, printsMarket } from '../subjects/calibration-state'
 import {
   CONTRIBUTIONS_NOT_RECORDED,
   periodNounFor,
@@ -812,7 +812,8 @@ async function subjectArrivals(
   window: { from: string; to: string } | null,
   month: string,
 ): Promise<Record<string, number> | null> {
-  const rowsOut = subjects.rows.filter((r) => r.calibration !== 'failed' && !r.unread)
+  // Only a ready subject's arrivals (T0a, ruling U6).
+  const rowsOut = subjects.rows.filter((r) => printsMarket(r.calibration) && !r.unread)
   if (rowsOut.length === 0 || !window) return null
   try {
     const rivals = await loadMarketRivalAudiences(scope.supabase as SupabaseClient, scope.clientId)

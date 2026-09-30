@@ -154,11 +154,13 @@ describe('WK §2 · your market’s subjects (market-first WP2.7)', () => {
     }
   })
 
-  it('names a subject being re-described and one the month was not read for, with no figure', () => {
+  // T0a (WK-26; ruling U6): a subject that is not ready is its name alone.
+  it('names a failed subject and a provisional one the month was not read for, with no figure and no word', () => {
     for (const mode of MODES) {
       const text = renderText(weekSubjects.render(marketWeekFixture(), mode, ctx))
-      expect(text).toMatch(/Repair & warranty\s*being re-described/)
-      expect(text).toMatch(/Community & purpose\s*no reading yet/)
+      expect(text).toMatch(/Repair & warranty\s*Community & purpose/)
+      expect(text).not.toContain('being re-described')
+      expect(text).not.toContain('no reading yet')
       // Repair & warranty's 36 market videos and Community & purpose's window
       // rows print nowhere.
       expect(text).not.toContain('36')
@@ -834,12 +836,15 @@ describe('WK §2 under the three calibration states', () => {
     },
   }
 
-  it('names the withheld subjects with their word and no figure, in every mode', () => {
+  // T0a (ruling U6): each by its name alone, no calibration word.
+  it('names the withheld subjects with no word and no figure, in every mode', () => {
     for (const mode of MODES) {
       assertCopyContract(render(weekSubjects.render(data, mode, ctx)))
       const text = renderText(weekSubjects.render(data, mode, ctx))
-      expect(text).toContain('Repair & warranty being re-described')
-      expect(text).toContain('Community & purpose provisional')
+      expect(text).toContain('Repair & warranty')
+      expect(text).toContain('Community & purpose')
+      expect(text).not.toContain('being re-described')
+      expect(text).not.toContain('provisional')
     }
   })
 
@@ -860,7 +865,7 @@ describe('WK §2 under the three calibration states', () => {
   it('a block with only withheld subjects is not "no subjects recorded"', () => {
     const only: WeekData = { ...data, subjects: { ...data.subjects, rows: [], unread: null, lead: null } }
     const text = renderText(weekSubjects.render(only, 'app', ctx))
-    expect(text).toContain('being re-described')
+    expect(text).toContain('Repair & warranty')
     expect(text).not.toContain('No subjects are recorded')
   })
 
@@ -868,23 +873,27 @@ describe('WK §2 under the three calibration states', () => {
   // September (staging), so the month was not read for it. It says "no
   // reading yet", as Your market and the Subjects rail do, and never
   // "provisional", which is the calibration word alone.
+  // HYPOTHETICAL `ready` for Community & purpose: a provisional one is its
+  // name alone (T0a), on a copy stored with its unread words too.
   it('a subject the month was not read for says "no reading yet", not its calibration word, in every mode', () => {
-    const unread: WeekData = {
+    const words = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' })
+    const withheld = (calibration: 'ready' | 'provisional'): WeekData => ({
       ...data,
       subjects: {
         ...data.subjects,
         withheld: [
           { id: 's-repair', label: 'Repair & warranty', calibration: 'failed' },
-          { id: 's-community', label: 'Community & purpose', calibration: 'provisional', unread: unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' }) },
+          { id: 's-community', label: 'Community & purpose', calibration, unread: words },
         ],
       },
-    }
+    })
     for (const mode of MODES) {
-      assertCopyContract(render(weekSubjects.render(unread, mode, ctx)))
-      const text = renderText(weekSubjects.render(unread, mode, ctx))
+      assertCopyContract(render(weekSubjects.render(withheld('ready'), mode, ctx)))
+      const text = renderText(weekSubjects.render(withheld('ready'), mode, ctx))
       expect(text).toContain('Community & purpose no reading yet')
       expect(text).not.toContain('provisional')
-      expect(text).toContain('Repair & warranty being re-described')
+      expect(text).not.toContain('being re-described')
+      expect(renderText(weekSubjects.render(withheld('provisional'), mode, ctx))).not.toContain('no reading yet')
     }
   })
 })

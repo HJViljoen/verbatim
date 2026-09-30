@@ -183,11 +183,16 @@ export function OverviewPage({
   const ctx = overviewContext(params)
   const market = isMarketPage(data)
   const oneLine = market && marketSubjectsLine(data) != null
+  // A block with nothing true left to print renders null and is omitted,
+  // tile and export entry both (T0a: an empty block is omitted, never
+  // placeholdered).
+  const shown = TILE_BLOCKS.map((block) => ({ block, node: block.render(data, 'app', ctx) })).filter((t) => t.node != null)
+  const omitted = new Set(TILE_BLOCKS.filter((b) => !shown.some((t) => t.block.key === b.key)).map((b) => b.key))
   return (
     <ExportScope
       page="overview"
       params={params}
-      tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: MARKET_TITLES[b.key] ?? b.title }))}
+      tiles={shown.map(({ block: b }) => ({ key: b.key, title: MARKET_TITLES[b.key] ?? b.title }))}
     >
       <PageFrame className={market ? 'gap-6' : undefined}>
         <SurfacePageBar
@@ -223,10 +228,10 @@ export function OverviewPage({
             block draws its own 32px inset (`flush` here, `roomy` on the
             block's frame). */}
         <PageGrid className={market ? 'gap-6 xl:auto-rows-auto' : 'xl:auto-rows-auto'}>
-          {TILE_BLOCKS.map((block) => (
+          {shown.map(({ block, node }) => (
             <Tile
               key={block.key}
-              {...frontTile(block.key, oneLine)}
+              {...frontTile(block.key, oneLine, omitted)}
               // Only the market page's blocks draw their own insets; a page
               // built without the market reads keeps the tile's.
               flush={market}
@@ -253,7 +258,7 @@ export function OverviewPage({
               bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
               distribute="between"
             >
-              {block.render(data, 'app', ctx)}
+              {node}
             </Tile>
           ))}
         </PageGrid>

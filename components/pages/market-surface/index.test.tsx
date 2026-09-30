@@ -95,7 +95,9 @@ describe('Market · every block, every mode, every state', () => {
     const reading = new Set(['market.questions', 'market.sayhear'])
     expect(figureCount(MARKET_BLOCKS.filter((b) => !reading.has(b.key)).map((b) => blockAnswers(b, sealandMovesFixture()).figures))).toBe(0)
     const q = blockAnswers(marketQuestions, sealandMovesFixture()).figures
-    expect(Object.values(q).map((f) => f.value)).toEqual([21, 20, 11, 16, 12, 11])
+    // The three question themes; no subject, since none is ready on
+    // production (T0a, YM-9; ruling U6).
+    expect(Object.values(q).map((f) => f.value)).toEqual([21, 20, 11])
     const sh = blockAnswers(marketSayHear, sealandMovesFixture()).figures
     expect(Object.values(sh).map((f) => f.value)).toEqual([25, 89, 0])
   })

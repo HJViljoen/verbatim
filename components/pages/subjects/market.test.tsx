@@ -119,24 +119,23 @@ describe('S1 · the rail reads the market', () => {
     expect((t.match(/makers/g) ?? []).length).toBe(2)
   })
 
-  it('prints "being re-described" and no figure for a failed subject, and "no reading yet" for one not read', () => {
+  // T0a (SB-9; ruling U6): a subject that is not ready is its name alone,
+  // failed (Repair & warranty) or provisional and not read (Community &
+  // purpose): no figure, no word, no "no reading yet".
+  it('prints a failed subject and a provisional one by name alone, with no figure and no word', () => {
     const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toMatch(/Repair & warranty being re-described/)
+    expect(t).toMatch(/Community & purpose Repair & warranty The rest is on Conversation/)
+    expect(t).not.toContain('being re-described')
     expect(t).not.toMatch(/Repair & warranty 36/)
-    expect(t).toMatch(/Community & purpose no reading yet/)
+    expect(t).not.toContain('no reading yet')
   })
 
-  // Finish-list item 21: "being re-described" was printed with nothing
-  // saying what it meant.
-  it('explains "being re-described" in one plain line on the page, and not on paper', () => {
-    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toContain(FAILED_EXPLAINED)
-    expect(t.split(FAILED_EXPLAINED).length - 1).toBe(1)
+  // Finish-list item 21's line explained "being re-described". With the word
+  // gone (T0a) there is nothing for it to explain, on the page or on paper.
+  it('prints no line explaining "being re-described", in any mode', () => {
+    for (const mode of MODES) expect(text(subjectsList.render(marketSubjectsFixture(), mode, ctx)), mode).not.toContain(FAILED_EXPLAINED)
     assertCopyContract(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx)))
-    for (const mode of ['print', 'email'] as const) expect(text(subjectsList.render(marketSubjectsFixture(), mode, ctx))).not.toContain(FAILED_EXPLAINED)
-    // Paper keeps the markup it had: the line's wrapper is drawn only with it.
-    expect(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx))).toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
-    expect(render(subjectsList.render(marketSubjectsFixture(), 'print', ctx))).not.toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
+    expect(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx))).not.toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
   })
 
   it('draws no editing control (a rename or a stop is Settings\')', () => {
@@ -237,10 +236,14 @@ describe('S2 · the subject in your market', () => {
     expect(t).not.toMatch(/\d+% makers/)
   })
 
-  it('carries the calibration word in its trail: provisional, never a verdict', () => {
+  // T0a (SB-16; ruling U6): a provisional subject's trail rests on its
+  // matching; the pane prints its name and no trail, no word, no verdict.
+  it('prints no trail and no word for a provisional subject, and never a verdict', () => {
     const data = marketSubjectsFixture()
     const t = text(subjectsSubject.render({ ...data, selected: { ...data.selected!, calibration: 'provisional' } }, 'app', ctx))
-    expect(t).toContain('provisional · Sep 16% of 654')
+    expect(t).toContain('Looks & style')
+    expect(t).not.toContain('provisional')
+    expect(t).not.toContain('Sep 16% of 654')
     expect(t).not.toContain('Aug 10% of 377')
     expect(blockAnswers(subjectsSubject, data).verdicts).toEqual([])
   })

@@ -52,7 +52,7 @@ import {
   type Subject,
 } from '../subjects/types'
 import {
-  CALIBRATION_WORDS,
+  printsMarket,
   readCalibration,
   subjectCalibration,
   type StoredCalibration,
@@ -749,15 +749,14 @@ export function railNote(
 ): string | null {
   if (status === 'proposed') return 'not counted yet: confirm it and counting starts with the next update'
   const state = readCalibration(calibration)
-  // Failed first: a subject being re-described prints nothing else, read or not.
-  if (state === 'failed') return CALIBRATION_WORDS.failed
+  // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, ruling U6): no word,
+  // "provisional" or "being re-described", and no figure beside it.
+  if (state === 'failed' || state === 'provisional') return null
   // A SUBJECT THE MONTH WAS NOT READ FOR (named after its last update) says
   // so in place of a figure and of its word: "no reading yet" (`unreadWords`,
   // the one wording on every surface, default M-a), never "provisional",
   // which is the calibration word alone.
   if (unread) return unread
-  // A67: the pane says it in full; the rail says the one word.
-  if (state === 'provisional') return CALIBRATION_WORDS.provisional
   if (!read) return NO_READING_YET
   return null
 }
@@ -781,7 +780,9 @@ export function fillMakerShares(rows: SubjectRail[], makers: Pick<MarketMakers, 
  *  the rows named but not confirmed; ties by name, so the order never depends
  *  on how the rows came back. */
 export function byRailRank(a: Pick<SubjectRail, 'status' | 'market' | 'calibration' | 'name'>, b: Pick<SubjectRail, 'status' | 'market' | 'calibration' | 'name'>): number {
-  const tier = (r: typeof a) => (r.status !== 'active' ? 2 : r.market && readCalibration(r.calibration) !== 'failed' ? 0 : 1)
+  // A subject that is not ready has no rank (T0a, ruling U6): it follows the
+  // ready ones, by name.
+  const tier = (r: typeof a) => (r.status !== 'active' ? 2 : r.market && printsMarket(r.calibration) ? 0 : 1)
   const t = tier(a) - tier(b)
   if (t !== 0) return t
   return (tier(a) === 0 ? (b.market?.k ?? 0) - (a.market?.k ?? 0) : 0) || a.name.localeCompare(b.name)
@@ -2237,7 +2238,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     // A proposed subject was never checked and measures nothing; its row says
     // "not counted yet" whatever the state (`railNote`).
     const calibration = calibrationOf.get(s.id) ?? subjectCalibration(s)
-    const counted = s.status === 'active' && calibration !== 'failed' ? marketOf(s.id) : null
+    // ONLY A READY SUBJECT'S FIGURE (T0a, SB-9; ruling U6): a provisional
+    // subject's matching is unverified, so its row carries no market level,
+    // no month before, no maker share and no rank; it is its name.
+    const counted = s.status === 'active' && printsMarket(calibration) ? marketOf(s.id) : null
     const before = counted && railPrevShown ? marketOf(s.id, prevMonth) : null
     const unread = s.status === 'active' && readIn(s.id, month) === 'unread'
     return {
@@ -2428,7 +2432,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       rivalAudiences: marketRivals,
       read: (m) => readIn(subject.id, m) === 'read',
     })
-    const marketLine = line
+    // No line for a subject that is not ready (T0a, SB-15; ruling U6): its
+    // trail, month cards and chart all rest on its unverified matching.
+    const marketLine = line && printsMarket(calibration)
       ? { ...line, refusedSteps: refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, MARKET_LINE)) }
       : null
     const readMonths = new Set(monthsReadOf(marketLine).map((p) => monthStartOf(p.month)))
@@ -2542,7 +2548,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const asked = await askedMostAhead
   const askedMost = asked
     ? asked
-        .filter((a) => a.questionVideos > 0)
+        // Only a ready subject's count (T0a, ruling U6): a provisional
+        // subject's question count rests on its unverified matching.
+        .filter((a) => a.questionVideos > 0 && printsMarket(calibrationOf.get(a.subjectId) ?? 'provisional'))
         .map((a) => ({ id: a.subjectId, name: selectable.find((x) => x.id === a.subjectId)?.name ?? '', videos: a.questionVideos }))
         .filter((a) => a.name)
         .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
@@ -3840,7 +3848,7 @@ export function paneMarketLead(
   month: string,
 ): string | null {
   const m = pane.market
-  if (!m || pane.unread || readCalibration(pane.calibration) === 'failed') return null
+  if (!m || pane.unread || !printsMarket(pane.calibration)) return null
   const level = levelText(m.k, m.n)
   if (!level) return null
   const when = longMonth(month)
@@ -3854,7 +3862,7 @@ export function sideFigures(pane: SubjectPane | null): FigureTable {
   if (!pane) return out
   // The headline's market figure (default M-b), under the keys it prints.
   const m = pane.market
-  if (m && !pane.unread && readCalibration(pane.calibration) !== 'failed' && levelText(m.k, m.n)) {
+  if (m && !pane.unread && printsMarket(pane.calibration) && levelText(m.k, m.n)) {
     out.subject_market_videos = { value: m.k, unit: 'videos', label: `${pane.name}, videos in your market this month` }
     if (levelText(m.k, m.n)?.kind === 'share') {
       out.subject_market_share = { value: Math.round((m.k / m.n) * 100), unit: 'pct', label: `${pane.name}, share of your market this month` }

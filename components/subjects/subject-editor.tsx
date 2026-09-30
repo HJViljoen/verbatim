@@ -251,6 +251,11 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   </span>
                   {r.note ? <span className={cls.meta}>{r.note}</span> : null}
                 </>
+              ) : r.withheld && r.status === 'active' ? (
+                // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a; ruling
+                // U6): never "no reading yet", which would be false of a
+                // subject that was read and is held back.
+                null
               ) : (
                 // A PROPOSED ROW SAYS WHERE IT CAME FROM, not that it is not
                 // counted: the chip on the line below already says that, and

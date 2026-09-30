@@ -12,6 +12,7 @@ import { SurfacePageBar } from '@/components/shell/page-bar'
 import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { loadSubjectsPage, type SubjectsData } from '@/lib/pages/subjects'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
 import { subjectsSayHear } from './say-hear'
@@ -43,6 +44,9 @@ import { subjectsUnanswered } from './unanswered'
  *  figure, the band behind every change, and the two nouns the denominators are
  *  counted in. From `THIRTEEN_WORDS`, never invented here. */
 const GLOSSARY_ITEMS: GlossaryKey[] = ['subject', 'level', 'change', 'audience', 'video', 'month']
+
+/** The blocks a subject that is not ready does not draw (T0a, ruling U6). */
+const WITHHELD_WHEN_NOT_READY: readonly Block<SubjectsData>[] = [subjectsKinds, subjectsUnanswered, subjectsLine]
 
 export const SUBJECT_BLOCKS: readonly Block<SubjectsData>[] = [
   subjectsList,
@@ -108,6 +112,14 @@ export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col
       { block: subjectsOwnPosts, col: 6, row: 3 },
       { block: subjectsSayHear, col: 6, row: 2 },
     ]
+  }
+  // A SELECTED SUBJECT THAT IS NOT READY (T0a, SB-15; ruling U6): what people
+  // do in its comments, the questions counted on it and its months all rest
+  // on its unverified matching, so those three blocks are left out, not drawn
+  // empty. Its name, its pane and its voices stay.
+  if (isMarketSubjects(data) && data.selected && !printsMarket(data.selected.calibration)) {
+    const withheld = new Set<string>(WITHHELD_WHEN_NOT_READY.map((b) => b.key))
+    return SUBJECT_BLOCKS.filter((block) => !withheld.has(block.key)).map((block) => ({ block, ...(LAYOUT[block.key] ?? { col: 12, row: 2 }) }))
   }
   if (data.selected) {
     return SUBJECT_BLOCKS.map((block) => ({ block, ...(LAYOUT[block.key] ?? { col: 12, row: 2 }) }))
@@ -219,7 +231,14 @@ function MarketSubjectsPage({ data, params }: { data: SubjectsData; params: Reco
   )
   return (
     <div className="flex flex-col gap-6">
-      {data.selected ? (
+      {data.selected && !printsMarket(data.selected.calibration) ? (
+        // Not ready: its name, its pane and its voices (T0a, ruling U6).
+        <>
+          {row('xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]', subjectsList, subjectsSubject)}
+          {row('', subjectsVoices)}
+          {row('lg:grid-cols-2', subjectsOwnPosts, subjectsSayHear)}
+        </>
+      ) : data.selected ? (
         <>
           {row('xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]', subjectsList, subjectsSubject)}
           {row('xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]', subjectsKinds, subjectsUnanswered)}

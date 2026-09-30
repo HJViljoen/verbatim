@@ -12,7 +12,7 @@ import { pooledDenominators, pooledSide, marketAudiences, type MarketCount } fro
 import { SENTIMENT_BAND } from '../report-bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { selectAll } from '../supabase-admin'
-import { earnsVerdict, isFailed, type SubjectCalibration } from '../subjects/calibration-state'
+import { printsMarket, type SubjectCalibration } from '../subjects/calibration-state'
 import { loadChanges, loadMonthSeries, readingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint, type MonthSeries } from '../reading/series'
@@ -537,16 +537,16 @@ export function objectReading(
   const o = input.object
   const empty: ObjectReading = { object: o, state: 'not_read', trail, curr, prev, verdict: null, direction: null, filling }
   if (input.notRead || !curr || curr.n == null) return empty
-  // DECISION C. A failed subject is being re-described and prints nothing; a
-  // provisional one prints its level and earns no verdict and no word.
-  if (o.kind === 'subject' && isFailed(o.calibration)) return { ...empty, state: 'read', curr: null, prev: null, trail: [] }
+  // DECISION C, UNDER T0a (ruling U6). A subject that is not ready prints
+  // nothing that rests on its matching: a failed one never did, and a
+  // provisional one no longer prints its level. Its name stands alone.
+  if (o.kind === 'subject' && !printsMarket(o.calibration)) return { ...empty, state: 'read', curr: null, prev: null, trail: [] }
   // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1): its k is
   // no reading, never 0, and it says so in Subjects' own words.
   if (o.kind === 'subject' && curr.k == null) {
     return { ...empty, state: 'unread', unread: unreadWords({ month: m, filling, nextUpdate: input.nextUpdate ?? null }) }
   }
   const base: ObjectReading = { object: o, state: 'read', trail, curr, prev, verdict: null, direction: null, filling }
-  if (o.kind === 'subject' && !earnsVerdict(o.calibration)) return base
 
   const key = o.kind === 'brand' ? BRAND_PAIR_KEY : MARKET_PAIR_KEY
   const comparability = pair(prevKey, m, key)
@@ -585,7 +585,7 @@ export function objectReading(
 
 /** What each object is, in the reader's words, in a line of the prompt. */
 function objectNoun(o: MarketObjectRef): string {
-  if (o.kind === 'subject') return `${o.label} (a subject${o.calibration === 'provisional' ? ', provisional' : ''})`
+  if (o.kind === 'subject') return `${o.label} (a subject)`
   if (o.kind === 'kind') return `${kindLabel(o.id)} (what people were doing)`
   if (o.kind === 'mood') return 'The mood, positive of the videos judged'
   return `${o.label} (a brand, named in the video or its comments)`
@@ -598,7 +598,7 @@ const MARKET_WORDS = 'your market'
 export function objectLine(r: ObjectReading): string {
   const head = `- ${objectNoun(r.object)} · ${MARKET_WORDS}`
   if (r.state === 'not_read') return `${head}: not read yet`
-  if (r.object.kind === 'subject' && isFailed(r.object.calibration)) return `${head}: being re-described, so no figure is given`
+  if (r.object.kind === 'subject' && !printsMarket(r.object.calibration)) return `${head}: no figure is given`
   if (r.state === 'unread') return `${head}: ${r.unread ?? 'no reading yet'}, because it was named after the month's videos were read, so no figure is given`
   // Only the months read: a month with no reading is left out, never "0 of N".
   const trail = r.trail

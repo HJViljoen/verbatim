@@ -1154,19 +1154,23 @@ describe('page 3 under the three calibration states (decision C, WP1.1)', () => 
     expect(row('s6').category).not.toBeNull()
   })
 
-  it('says why each is waiting in its own words, never "neither side read"', () => {
+  // T0a (QR-9; ruling U6): a subject that is not ready is not a waiting
+  // line, and never "neither side read"; it keeps its name in the table.
+  it('lists neither as waiting, and never words either "neither side read"', () => {
     const waits = data.unsettled.waiting.filter((w) => w.title.startsWith('Repairs and warranty') || w.title.startsWith('Where the material'))
-    expect(waits.map((w) => w.why).sort()).toEqual(['being re-described', 'provisional'])
-    for (const w of waits) expect(w.line).not.toContain('Neither side')
+    expect(waits).toEqual([])
+    for (const w of data.unsettled.waiting) expect(w.line).not.toContain('Neither side')
   })
 
-  it('prints the words on the page, in all three modes, and keeps the copy contract', () => {
+  it('prints each by its name alone, in all three modes, and keeps the copy contract', () => {
     for (const mode of MODES) {
       const markup = render(quarterlySubjects.render(data, mode, ctx))
       assertCopyContract(markup)
       const text = renderText(quarterlySubjects.render(data, mode, ctx))
-      expect(text).toContain('being re-described')
-      expect(text).toContain('provisional')
+      expect(text).toContain('Repairs and warranty')
+      expect(text).toContain('Where the material comes from')
+      expect(text).not.toContain('being re-described')
+      expect(text).not.toContain('provisional')
     }
   })
 

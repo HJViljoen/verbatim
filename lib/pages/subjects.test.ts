@@ -70,9 +70,11 @@ describe('originLine', () => {
   })
 })
 
+// T0a (ruling U6): a subject that is not ready is its name alone on the rail,
+// with no word ("provisional", "being re-described") and no figure.
 describe('railNote', () => {
-  it('tells the method’s silence apart from the record’s', () => {
-    expect(railNote('calibrating', true)).toBe('provisional')
+  it('tells the record’s silence apart, and says nothing for a subject that is not ready', () => {
+    expect(railNote('calibrating', true)).toBeNull()
     expect(railNote('ready', false)).toBe('no reading yet')
     expect(railNote('ready', true)).toBeNull()
   })
@@ -83,14 +85,14 @@ describe('railNote', () => {
 })
 
 describe('railNote, under the three calibration states (decision C, WP1.1)', () => {
-  it('says "provisional" on a subject not checked yet, or not clearly under the floor', () => {
-    expect(railNote('provisional', true)).toBe('provisional')
-    expect(railNote('provisional', false)).toBe('provisional')
+  it('says nothing on a subject not checked yet, or not clearly under the floor (T0a)', () => {
+    expect(railNote('provisional', true)).toBeNull()
+    expect(railNote('provisional', false)).toBeNull()
   })
 
-  it('says "being re-described" on a failed subject, read or not', () => {
-    expect(railNote('failed', true)).toBe('being re-described')
-    expect(railNote('failed', false)).toBe('being re-described')
+  it('says nothing on a failed subject, read or not (T0a)', () => {
+    expect(railNote('failed', true)).toBeNull()
+    expect(railNote('failed', false)).toBeNull()
   })
 
   it('carries no word on a ready subject that was read', () => {
@@ -108,14 +110,14 @@ describe('railNote, under the three calibration states (decision C, WP1.1)', () 
 
 describe('railNote, for a subject the month was not read for (WP1.1 review, finding 1)', () => {
   const words = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })
-  it('says "no reading yet" in place of its word, never "provisional" (default M-a)', () => {
+  it('says "no reading yet" for a ready subject, and nothing for one that is not ready (default M-a; T0a)', () => {
     expect(words).toBe('no reading yet')
-    expect(railNote('provisional', false, 'active', words)).toBe(words)
+    expect(railNote('provisional', false, 'active', words)).toBeNull()
     expect(railNote('ready', false, 'active', words)).toBe(words)
   })
 
-  it('a failed or a proposed subject keeps its own sentence', () => {
-    expect(railNote('failed', false, 'active', words)).toBe('being re-described')
+  it('a failed subject says nothing; a proposed one keeps its own sentence', () => {
+    expect(railNote('failed', false, 'active', words)).toBeNull()
     expect(railNote('provisional', false, 'proposed', words)).toContain('not counted yet')
   })
 })
@@ -128,7 +130,9 @@ describe('paneMarketLead (the pane\'s headline on the rail\'s base, default M-b)
 
   it('prints the rail\'s "29 of 654" in your market, the share through levelText', () => {
     expect(paneMarketLead(pane, '2026-09-01')).toBe('Waterproofing came up in 29 of 654 September videos in your market (4%).')
-    expect(paneMarketLead({ ...pane, calibration: 'provisional' }, '2026-09-01')).toContain('29 of 654')
+    // Not for a subject that is not ready (T0a, SB-15; ruling U6).
+    expect(paneMarketLead({ ...pane, calibration: 'provisional' }, '2026-09-01')).toBeNull()
+    expect(paneMarketLead({ ...pane, calibration: 'failed' }, '2026-09-01')).toBeNull()
   })
 
   it('under 100 videos prints the count alone, never a percent', () => {

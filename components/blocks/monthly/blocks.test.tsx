@@ -180,10 +180,14 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     expect(Object.keys(MONTHLY_BLOCKS['monthly.brands'].figures?.(data) ?? {}).filter((k) => k.startsWith('brand_'))).toEqual([])
   })
 
-  it('you prints the for-you line and what you published', () => {
+  // T0a (MR-9; ruling U6): production's Waterproofing is provisional, so its
+  // line is withheld and the for-you half is omitted; what you published
+  // stands. The line itself prints where the subject is ready (slots-parity).
+  it('you withholds a provisional subject’s for-you line and prints what you published', () => {
     const t = text('monthly.you', filledSlotsFixture())
-    expect(t).toContain('Waterproofing')
-    expect(t).toMatch(/Your market asked about it on\s*16\s*videos over the last 3 months\. None of your\s*56\s*posts in that time shared two or more of its words\./)
+    expect(t).not.toContain('Waterproofing')
+    expect(t).not.toMatch(/asked about it on/)
+    expect(t).not.toContain('no subject was asked about')
     expect(t).toContain('What you published')
     expect(t).toMatch(/20\s*posts/)
     expect(t).toContain('30 in August')
@@ -345,20 +349,31 @@ describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
     expect(t).toContain('a comment · September')
   })
 
-  it('the subjects print the market’s rows, ranked, with their calibration words', () => {
+  // T0a (ruling U6): a subject that is not ready prints its name and nothing
+  // resting on its matching. Every subject on this fixture is provisional or
+  // failed, so the block names them and prints no figure and no column head.
+  it('the subjects name the market’s rows and print no figure for a subject that is not ready', () => {
     const t = text('monthly.subjects')
-    expect(t).toMatch(/Looks & style\s*provisional\s*104\s*17%/)
-    expect(t).toContain('no reading yet')
+    expect(t).toMatch(/Looks & style/)
+    expect(t).not.toMatch(/\b104\b|17%|provisional|of 626|Videos/)
     expect(t).toContain('Open Subjects')
+    // HYPOTHETICAL: Looks & style checked and ready prints its figures.
+    const base = monthlyFixture()
+    const rows = base.overview.subjects.rows.map((r) => (r.id === 's-looks' ? { ...r, calibration: 'ready' as const } : r))
+    expect(text('monthly.subjects', { ...base, overview: { ...base.overview, subjects: { ...base.overview.subjects, rows } } })).toMatch(/Looks & style\s*104\s*17%/)
     expect(text('monthly.subjects', ossurMonthlyFixture())).toContain('No subjects named yet')
   })
 
-  it('a subject a fifth or more makers carries the front page\'s maker tag (the MonthlyReport artboard: "provisional · over a third makers")', () => {
-    // Staging at the 11 Oct clock: Looks & style 35 of 103 market videos makers'.
+  it('a READY subject a fifth or more makers carries the front page\'s maker tag (the MonthlyReport artboard: "over a third makers")', () => {
+    // Staging at the 11 Oct clock: Looks & style 35 of 103 market videos
+    // makers'. HYPOTHETICAL `ready`: a provisional subject's maker share rests
+    // on its unverified matching and goes with its figure (T0a, ruling U6).
     const base = monthlyFixture()
-    const rows = base.overview.subjects.rows.map((r) => (r.id === 's-looks' ? { ...r, makerShare: 35 / 103 } : r))
+    const rows = base.overview.subjects.rows.map((r) => (r.id === 's-looks' ? { ...r, makerShare: 35 / 103, calibration: 'ready' as const } : r))
     const data = { ...base, overview: { ...base.overview, subjects: { ...base.overview.subjects, rows } } }
-    expect(text('monthly.subjects', data)).toMatch(/Looks & style\s*provisional · about a third makers\s*104/)
+    expect(text('monthly.subjects', data)).toMatch(/Looks & style\s*about a third makers\s*104/)
+    const provisional = base.overview.subjects.rows.map((r) => (r.id === 's-looks' ? { ...r, makerShare: 35 / 103 } : r))
+    expect(text('monthly.subjects', { ...base, overview: { ...base.overview, subjects: { ...base.overview.subjects, rows: provisional } } })).not.toContain('makers')
     expect(text('monthly.subjects')).not.toContain('makers')
   })
 })

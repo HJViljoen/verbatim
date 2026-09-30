@@ -297,17 +297,16 @@ describe('the quarterly card under the three calibration states', () => {
     readings: 6,
   })!
 
-  it('prints a provisional subject\'s bar marked "provisional", a ready one unmarked, and no failed one', () => {
-    const markup = render(<QuarterlyCardTile card={card} />)
+  // T0a (RP-26; ruling U6): a provisional subject's bar rests on its
+  // unverified matching and goes, as a failed one's always did.
+  it('prints a ready subject\'s bar unmarked, and no provisional or failed one', () => {
     const text = renderText(<QuarterlyCardTile card={card} />)
-    expect(text).toContain('12 of 875')
-    expect(text.match(/provisional/g)?.length).toBe(1)
-    const at = text.indexOf('Community & purpose')
-    expect(text.slice(at, text.indexOf('provisional', at))).not.toContain('Looks & style')
+    expect(text).toContain('136 of 875')
+    expect(text).not.toContain('Community & purpose')
+    expect(text).not.toContain('12 of 875')
+    expect(text).not.toContain('provisional')
     expect(text).not.toContain('Repair & warranty')
     expect(text).not.toContain('46 of 875')
-    // The word is a line of its own, never inside the truncating label.
-    expect(markup).toContain('<span class="min-w-0 truncate text-[12.5px]">Community &amp; purpose · the category</span>')
     assertCopyContract(<QuarterlyCardTile card={card} />)
   })
 })

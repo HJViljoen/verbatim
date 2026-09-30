@@ -1003,6 +1003,12 @@ export const QUESTION_WINDOW_MONTHS = 3
 export const questionsEmpty = (month: string): string =>
   `No question theme in your market reached ${fmtInt(THEME_FLOOR)} videos in ${longMonth(month)}, and no subject was asked about over the last three months.`
 
+/** The empty state where a subject was asked about but none is ready: the
+ *  "no subject was asked about" half would be false, so it is not said (T0a,
+ *  ruling U6). */
+export const questionsEmptyThemes = (month: string): string =>
+  `No question theme in your market reached ${fmtInt(THEME_FLOOR)} videos in ${longMonth(month)}.`
+
 /** The first month of the three the subject rows read. */
 export const questionWindowFrom = (month: string): string => monthsBack(month, QUESTION_WINDOW_MONTHS - 1)
 
@@ -1054,8 +1060,10 @@ export function buildQuestions(input: {
       touch: questionTouch({ labels: [label], posts: monthPosts }),
     }
   })
+  // ONLY A READY SUBJECT IS A ROW (T0a, YM-9; ruling U6): its count, its
+  // rank and its being here at all rest on its matching.
   const subjects: QuestionSubjectRow[] = input.subjects
-    .filter((x) => x.calibration !== 'failed' && x.videos > 0)
+    .filter((x) => x.calibration === 'ready' && x.videos > 0)
     .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
     .slice(0, QUESTION_SUBJECTS_SHOWN)
     .map((x) => {
@@ -1079,7 +1087,9 @@ export function buildQuestions(input: {
     window: { from, to: month },
     windowPosts: input.posts ? input.posts.length : null,
     subjects,
-    empty: themes.length === 0 && subjects.length === 0 ? questionsEmpty(month) : null,
+    empty: themes.length === 0 && subjects.length === 0
+      ? input.subjects.some((x) => x.videos > 0) ? questionsEmptyThemes(month) : questionsEmpty(month)
+      : null,
     segments: input.segments,
   }
 }
@@ -1199,7 +1209,9 @@ export function moveMarketReads(input: {
       subject && m.subject_id ? { kind: 'subject', id: m.subject_id }
         : themeId && (m.kind === 'advice' || (m.registry_ids ?? []).length === 1) ? { kind: 'theme', id: themeId } : null
     const label = subject?.name ?? (object?.kind === 'theme' ? input.themes.get(object.id) ?? null : null)
-    const failed = subject?.calibration === 'failed'
+    // Only a ready subject's levels (T0a, YM-47; ruling U6): a provisional
+    // one's rest on its unverified matching, as a failed one's do.
+    const failed = subject != null && subject.calibration !== 'ready'
     const roles: MoveMarketMonth['role'][] = ['move', 'after', 'after_that']
     let at = moveMonth
     const all: MoveMarketMonth[] = roles.map((role) => {

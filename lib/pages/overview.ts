@@ -3011,9 +3011,14 @@ async function loadForYouQuestions(input: {
       console.error(`[pages] overview.foryou questions: ${(error as { message?: string })?.message ?? String(error)}`)
       return null
     })
+    // A READY subject first (T0a, OV-49; ruling U6): only its count prints, so
+    // a provisional subject asked about more never hides it. A provisional one
+    // is picked only where no ready one was asked about, and its line is then
+    // withheld (`buildForYou`).
+    const unready = (id: string): number => (calibrationOf.get(id) === 'ready' ? 0 : 1)
     const top = (asked ?? [])
       .filter((a) => a.questionVideos > 0)
-      .sort((a, b) => b.questionVideos - a.questionVideos || (askable.find((x) => x.id === a.subjectId)?.name ?? '').localeCompare(askable.find((x) => x.id === b.subjectId)?.name ?? ''))[0]
+      .sort((a, b) => unready(a.subjectId) - unready(b.subjectId) || b.questionVideos - a.questionVideos || (askable.find((x) => x.id === a.subjectId)?.name ?? '').localeCompare(askable.find((x) => x.id === b.subjectId)?.name ?? ''))[0]
     if (top) {
       const named = await nameQuestions(input.supabase, input.clientId, input.themedRunId, top.insights.map((i) => i.id)).catch(() => new Map<string, { registryId: string; label: string }>())
       const groups = new Map<string, { label: string; videos: Set<string> }>()

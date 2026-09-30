@@ -6,8 +6,9 @@ import { fmtInt, longMonth } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
 import { surface } from '@/lib/nav'
 import type { MonthlyForYou, MonthlyPublished, MonthlyYou } from '@/lib/reports/monthly-slots'
-import { FOR_YOU_SENTENCES as SENTENCES, forYouSentence, forYouWords } from '@/lib/pages/overview-market/foryou'
+import { FOR_YOU_SENTENCES as SENTENCES, forYouShown, forYouSentence, forYouWords } from '@/lib/pages/overview-market/foryou'
 import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { T, presentation } from './email-table'
@@ -43,8 +44,13 @@ import { slotSection } from './slot'
 export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = SENTENCES
 
 function ForYou({ f, mode }: { f: MonthlyForYou; mode: RenderMode }) {
-  const lines = f.lines.filter((l) => FOR_YOU_SENTENCES[l.sentenceKey])
+  // No line resting on a subject that is not ready (T0a, MR-9; ruling U6),
+  // on a copy stored before the rule too.
+  const { lines, withheld } = forYouShown(f)
   const email = mode === 'email'
+  // Everything it had was withheld: the half is omitted (T0a), never "no
+  // subject was asked about".
+  if (withheld && lines.length === 0) return null
   // Nothing lines up (Össur at a month with no subject asked about and no
   // lead): the front page's one line, not a silent gap.
   if (lines.length === 0) {
@@ -171,7 +177,8 @@ function Published({ p, mode }: { p: MonthlyPublished; mode: RenderMode }) {
 }
 
 function body(v: MonthlyYou, mode: RenderMode): ReactNode {
-  const forYou = v.foryou ? <ForYou f={v.foryou} mode={mode} /> : null
+  const shown = v.foryou ? forYouShown(v.foryou) : null
+  const forYou = v.foryou && !(shown?.withheld && shown.lines.length === 0) ? <ForYou f={v.foryou} mode={mode} /> : null
   const published = v.published ? <Published p={v.published} mode={mode} /> : null
   if (mode === 'email') {
     return (
@@ -194,6 +201,7 @@ function figures(v: MonthlyYou): FigureTable {
   // Each line's figures under its own keys: two lines both hold a
   // `foryou_posts`, and they are different numbers (three months, one month).
   for (const [i, l] of (v.foryou?.lines ?? []).entries()) {
+    if (!printsMarket(l.calibration)) continue
     for (const [k, f] of Object.entries(l.figures)) out[`${l.kind}_${i}_${k}`] = f
   }
   const p = v.published

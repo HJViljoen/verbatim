@@ -19,7 +19,7 @@ import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { calibrationWord, earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
+import { calibrationWord, earnsVerdict, isFailed, printsClient, printsMarket, withheldLabel } from '@/lib/subjects/calibration-state'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -281,13 +281,16 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
   // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1) is laid
   // out as a failed row is: its name, and under it the words it prints in
   // place of figures ("no reading yet", `unreadWords`, default M-a). Its
-  // name stays a link: the Subjects page opens its pane.
-  if (row.unread) {
+  // name stays a link: the Subjects page opens its pane. SO IS A PROVISIONAL
+  // SUBJECT (T0a; ruling U6), with no words: every figure across rests on
+  // its unverified matching.
+  const provisional = !printsMarket(row.calibration)
+  if (row.unread || provisional) {
     return (
       <tr className="border-t border-border/60 first:border-t-0">
         <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium">
           <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
-          <CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block />
+          <CalibrationTag calibration={row.calibration} unread={provisional ? null : row.unread} mode={mode} block />
         </th>
         <td colSpan={6} className="py-1.5 align-top" />
       </tr>
@@ -453,20 +456,22 @@ export const overviewSubjects: Block<OverviewData> = {
           {hasAt ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{AT_LAST_MONTH_LEGEND}</div> : null}
           {s.rows.map((r) => (
             <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-              <strong>{r.label}</strong>{r.unread || (r.calibration && r.calibration !== 'ready') ? ' ' : null}<CalibrationTag calibration={r.calibration} unread={r.unread} mode={mode} />
-              {/* A failed subject prints its name and its word and nothing else,
-                  and so does one the month was not read for; a provisional one
-                  has no "you" clause (decision C). */}
-              {isFailed(r.calibration) || r.unread ? null : (
-                <div style={{ marginTop: 2 }}>
-                  {printsClient(r.calibration) ? <>you <Side side={r.you} mode={mode} /> · </> : null}{s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
-                </div>
+              <strong>{r.label}</strong>{r.unread && printsMarket(r.calibration) ? ' ' : null}<CalibrationTag calibration={r.calibration} unread={printsMarket(r.calibration) ? r.unread : null} mode={mode} />
+              {/* A subject that is not ready prints its name and nothing else
+                  (T0a; ruling U6), and one the month was not read for its
+                  name and its words. */}
+              {!printsMarket(r.calibration) || r.unread ? null : (
+                <>
+                  <div style={{ marginTop: 2 }}>
+                    {printsClient(r.calibration) ? <>you <Side side={r.you} mode={mode} /> · </> : null}{s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
+                  </div>
+                  <AtLastMonth at={shared ? null : r.categoryAtLastMonth} mode={mode} />
+                  <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
+                  <div style={{ marginTop: 2 }}>
+                    <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> <DirectionWord direction={r.direction} mode={mode} />
+                  </div>
+                </>
               )}
-              <AtLastMonth at={shared ? null : r.categoryAtLastMonth} mode={mode} />
-              <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
-              <div style={{ marginTop: 2 }}>
-                <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> <DirectionWord direction={r.direction} mode={mode} />
-              </div>
             </div>
           ))}
         </div>,
@@ -512,7 +517,8 @@ export const overviewSubjects: Block<OverviewData> = {
     // that carries the month. The other two sides are levels on the row and are
     // not figures a model may cite about movement.
     for (const r of data.subjects.rows) {
-      if (r.category.pct == null) continue
+      // No figure for a subject that is not ready (T0a, ruling U6).
+      if (r.category.pct == null || !printsMarket(r.calibration)) continue
       out[`subject_${r.id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_share`] = {
         value: r.category.pct,
         unit: 'pct',

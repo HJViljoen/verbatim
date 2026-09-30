@@ -1478,7 +1478,10 @@ export function marketSubjectsOf(input: MarketSubjectsInput): Pick<WeekSubjectsB
   const added = input.added ? pooledSubjectCounts(input.added, input.rivalAudiences) : null
   const stored = input.stored.map((r) => ({ month, audience: r.audience, subject_id: r.subject_id, videos: r.videos }))
   const active = input.subjects.filter((s) => s.status === 'active')
-  const withheldOf = (id: string): boolean => input.calibrationOf.get(id) === 'failed' || input.unread.has(id)
+  // ONLY A READY SUBJECT IS A ROW WITH FIGURES (T0a, WK-26; ruling U6): a
+  // provisional one is named among the withheld, with no figure and no word,
+  // as a failed one is.
+  const withheldOf = (id: string): boolean => input.calibrationOf.get(id) !== 'ready' || input.unread.has(id)
   const rows: SubjectWeekRow[] = active
     .filter((s) => !withheldOf(s.id))
     .map((s) => {
@@ -1513,7 +1516,7 @@ export function marketSubjectsOf(input: MarketSubjectsInput): Pick<WeekSubjectsB
       const calibration = input.calibrationOf.get(s.id) ?? 'provisional'
       // A FAILED SUBJECT SAYS "being re-described" whether or not the month
       // was read for it; one the month missed says when it will be.
-      return calibration !== 'failed' && input.unread.has(s.id)
+      return calibration === 'ready' && input.unread.has(s.id)
         ? { id: s.id, label: s.name, calibration, unread: input.unreadWords }
         : { id: s.id, label: s.name, calibration }
     })

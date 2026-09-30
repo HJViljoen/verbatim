@@ -906,23 +906,28 @@ describe('the weekly subjects block under the three calibration states (decision
     for (const mode of MODES) assertCopyContract(render(weeklySubjectsBlock.render(data, mode, ctx)))
   })
 
-  it('a failed subject prints its name and word and nothing else; a provisional one has no "you" clause', () => {
+  // T0a (WR-15; ruling U6): a subject that is not ready, failed or
+  // provisional, prints its name and nothing resting on its matching: no
+  // figure, no word, no "you" clause.
+  it('a failed or provisional subject prints its name and nothing else', () => {
     // Waterproofing read as never checked, on the same staging row.
     const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
     for (const mode of MODES) {
       const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
-      expect(text.match(/being re-described/g)?.length).toBe(1)
+      expect(text).toContain('Repair & warranty')
+      expect(text).not.toContain('being re-described')
       expect(text).not.toContain('33 of 625')
       const provisional = renderText(weeklySubjectsBlock.render(unchecked, mode, ctx))
-      expect(provisional.match(/provisional/g)?.length).toBe(1)
-      expect(provisional.slice(provisional.indexOf('Waterproofing'))).not.toMatch(/\byou\b/)
+      expect(provisional).toContain('Waterproofing')
+      expect(provisional).not.toContain('provisional')
+      expect(provisional).not.toContain('28 of 625')
     }
   })
 
-  it('marks a provisional subject\'s figure in its figure table (WP1.1 review, finding 10)', () => {
+  it('declares no figure for a provisional subject, and a ready one\'s unmarked (WP1.1 review, finding 10; T0a)', () => {
     const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
     const figures = weeklySubjectsBlock.figures!(unchecked)
-    expect(figures.subject_water_share.label).toContain('(provisional)')
+    expect(Object.keys(figures).filter((k) => k.startsWith('subject_water'))).toEqual([])
     expect(figures.subject_looks_share.label).not.toContain('provisional')
   })
 
@@ -934,8 +939,11 @@ describe('the weekly subjects block under the three calibration states (decision
   })
 
   it('a subject the month was not read for prints its name and "no reading yet", and no figure (WP1.1 review, finding 1; default M-a)', () => {
+    // HYPOTHETICAL: Community & purpose checked and ready (it has no check on
+    // staging, and a provisional subject prints its name alone, T0a).
+    const ready = { ...data, subjects: { ...data.subjects, rows: data.subjects.rows.map((r) => (r.id === 'community' ? { ...r, calibration: 'ready' as const } : r)) } }
     for (const mode of MODES) {
-      const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
+      const text = renderText(weeklySubjectsBlock.render(ready, mode, ctx))
       const row = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
       expect(row).toContain('no reading yet')
       expect(row).not.toMatch(/\d+ of \d+/)

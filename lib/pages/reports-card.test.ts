@@ -280,10 +280,11 @@ describe('firstComparisonLine', () => {
   })
 })
 
-// DECISION C (WP1.1): a failed subject is hidden everywhere; a provisional
-// one keeps its bar (a market level) and earns no verdict row.
+// DECISION C (WP1.1), UNDER T0a (RP-26; ruling U6): a failed subject is hidden
+// everywhere, and a provisional one no longer keeps its bar: its market level
+// rests on its unverified matching.
 describe('buildQuarterlyCard under the three calibration states', () => {
-  it('keeps a ready subject, bars a provisional one without a row, and hides a failed one', () => {
+  it('keeps a ready subject, and draws neither a provisional nor a failed one', () => {
     const card = buildQuarterlyCard(input({
       subjects: [
         { id: 's1', name: 'Durability', calibration: 'ready' },
@@ -292,7 +293,7 @@ describe('buildQuarterlyCard under the three calibration states', () => {
       ],
     }))
     expect(card?.rows.map((r) => r.label)).toEqual(['Durability'])
-    expect(card?.series.map((r) => r.label)).toEqual(['Durability', 'Community & purpose'])
+    expect(card?.series.map((r) => r.label)).toEqual(['Durability'])
   })
 
   it('a subject with no calibration given is read as before', () => {
