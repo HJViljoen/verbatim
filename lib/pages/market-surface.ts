@@ -2442,6 +2442,33 @@ async function heroEvidence(
   return new Map([...untranslated].map(([id, list]) => [id, list.map((q) => ({ ...q, ...readingOf(translations, q.quote) }))]))
 }
 
+/**
+ * Your moves' advice count, for another page (sw-2 item 2: Readiness said "84
+ * of 84 recommendations" beside this page's "acted on 0 of 79"). The same
+ * reads and the same fold as the ledger: every copy of a piece of advice is
+ * one identity (`buildAdviceRows`), and one is acted on once its status is
+ * anything but new. Null where the recommendations could not be read.
+ */
+export async function adviceTally(supabase: SupabaseClient, clientId: string): Promise<{ pieces: number; acted: number } | null> {
+  try {
+    const [copies, decisions] = await Promise.all([
+      selectAll<RecCopy>(() =>
+        supabase.from('recommendations')
+          .select('id, lineage_id, title, type, status, created_at, run_id')
+          .eq('client_id', clientId)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true }),
+      ),
+      loadDecisions(supabase, clientId),
+    ])
+    const rows = buildAdviceRows(copies, decisions)
+    return { pieces: rows.length, acted: rows.filter((r) => r.status !== 'new').length }
+  } catch (error) {
+    console.error(`[pages] adviceTally: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
 /** The decision ledger. NULL — never [] — when `rec_decisions` is not applied
  *  here, so the block can tell "nobody has decided anything" apart from "we are
  *  not writing decisions down", which are different sentences. */

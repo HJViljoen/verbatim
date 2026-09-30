@@ -32,7 +32,7 @@ function StatusPill({ status }: { status: ReadinessStatus }) {
  *  the operator page passes neither and reads exactly as it did. */
 export type ReadinessTableRow = ReadinessRow & { ownerWords?: string; by?: string | null }
 
-function Row({ row }: { row: ReadinessTableRow }) {
+function Row({ row, nextLabel }: { row: ReadinessTableRow; nextLabel: string }) {
   const owner = row.ownerWords ?? OWNER_LABEL[row.owner]
   return (
     <div className="flex flex-col gap-1.5 border-t border-border/70 py-3 first:border-t-0 first:pt-0 last:pb-0">
@@ -64,7 +64,7 @@ function Row({ row }: { row: ReadinessTableRow }) {
       )}
 
       <p className="text-[11.5px] text-muted-foreground">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.06em]">Unlocks</span>{' '}
+        <span className="font-mono text-[10.5px] uppercase tracking-[0.06em]">{nextLabel}</span>{' '}
         {row.unlocks}
         {row.by && <span className="text-secondary-foreground"> By {row.by}.</span>}
         <span className="sm:hidden"> · {owner}</span>
@@ -73,10 +73,12 @@ function Row({ row }: { row: ReadinessTableRow }) {
   )
 }
 
-export function ReadinessTable({ rows, title, description }: { rows: readonly ReadinessTableRow[]; title: string; description: string }) {
+/** `nextLabel`: the word before each row's last line. The operator page keeps
+ *  "Unlocks"; the client's Settings › Readiness says "Next" (sw-2 item 6). */
+export function ReadinessTable({ rows, title, description, nextLabel = 'Unlocks' }: { rows: readonly ReadinessTableRow[]; title: string; description: string; nextLabel?: string }) {
   return (
     <SettingsCard title={title} description={description}>
-      {rows.map((row) => <Row key={row.id} row={row} />)}
+      {rows.map((row) => <Row key={row.id} row={row} nextLabel={nextLabel} />)}
     </SettingsCard>
   )
 }

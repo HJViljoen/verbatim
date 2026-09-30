@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { ConfigChange } from '../config-log'
-import type { ReadinessRow } from '../readiness/types'
+import type { ReadinessInputs, ReadinessRow } from '../readiness/types'
 import type { UpdateInput } from '../readiness/types'
 import {
   ARTEFACTS, isArtefact, isBuildable, notBuiltYet, recipientRows, sendingSummary, unnamedSchedules,
@@ -20,7 +20,7 @@ import {
   sampleHead, GATE_SAMPLE, REJECT_ROWS,
   type GateVerdict,
 } from './reject-log'
-import { clientReadiness, NOT_BUILT, READINESS_CONTACT } from './readiness-view'
+import { clientReadiness, HELD_OWNER, NOT_BUILT, READINESS_CONTACT } from './readiness-view'
 import { termDates, termDateWords } from './terms'
 
 // ---- artefacts --------------------------------------------------------------
@@ -640,9 +640,97 @@ describe('clientReadiness', () => {
   it('lists what the reading pages do not do yet, once, without dates', () => {
     expect(NOT_BUILT.length).toBeGreaterThan(0)
     for (const n of NOT_BUILT) {
-      expect(['Market', 'Competitive', 'Subjects', 'This week']).toContain(n.page)
+      // The pages by their names in the menu (sw-2 item 6).
+      expect(['Your moves', 'Brands', 'Subjects', 'This week']).toContain(n.page)
       expect(n.what).not.toMatch(/\d{4}|—/)
     }
+  })
+})
+
+// ---- readiness, true and plain for a client (sw-2 item 6) ---------------------
+
+describe('clientReadiness, row by row (sw-2 item 6)', () => {
+  const inputs = {
+    rivals: [
+      { name: 'Cotopaxi', handlePlatforms: ['Instagram'], captured: 52, capturedRecently: 52, analysed: 13 },
+      { name: 'Rareform', handlePlatforms: ['Instagram', 'TikTok'], captured: 15, capturedRecently: 15, analysed: 0 },
+    ],
+    terms: { brand: 3, competitor: 7, industry: 12, exclude: 9, updatedAt: null },
+    communities: [
+      { name: 'backpacks', status: 'active', probed: true, postsStored: 93 },
+      { name: 'onebag', status: 'active', probed: false, postsStored: 38 },
+      { name: 'sailboats', status: 'rejected', probed: true, postsStored: 0 },
+    ],
+    reddit: { postsStored: 100, postsFromUnconfigured: 68 },
+    embeddings: { embedded: 4420, total: 4420, lastEmbeddedAt: '2026-09-27T05:00:00Z' },
+    changeLog: { available: true, rows: 33, reconstructed: 60, firstLoggedAt: '2026-09-15T08:00:00Z', lastChangeAt: '2026-09-27T05:00:00Z' },
+  } as unknown as ReadinessInputs
+  const rows: ReadinessRow[] = [
+    readyRow({ id: 'rival-accounts', owner: 'client', unlocks: 'Give us each rival’s account name per platform, and the next update reads what they publish themselves.', notes: ['Cotopaxi: Instagram · 52 posts captured, 52 in the last 30 days, 13 read'] }),
+    readyRow({ id: 'tracked-terms', owner: 'client', status: 'exists', detail: '3 brand terms, 7 rival terms, 12 category terms, 9 exceptions · last change recorded 27 Sep 2026.', unlocks: 'Tell us what to add or drop; the change log then carries who changed it and when.', notes: ['No change was recorded before 15 Sep 2026. Entries before it are reconstructed from what each update searched: a label, not a record.'] }),
+    readyRow({ id: 'communities', notes: ['r/onebag: 38 posts · watched by hand, never sampled'] }),
+    readyRow({ id: 'searchable-findings', status: 'exists' }),
+    readyRow({ id: 'months-of-history', detail: '2 months clear 100 videos in the category; 1 of 9 audiences clear any.', notes: ['Old School: 0 of 0 months clear 100 videos (0 clear 100 comments) · no month at all', 'Your own brand: 0 of 16 months clear 100 videos (1 clear 100 comments)'] }),
+    readyRow({ id: 'anomaly-baseline', detail: 'No audience has a baseline yet; the fullest is 1 of 3 months.', notes: ['The category: baseline forming: 1 of 3 months', 'Flags raised: none in the 2 updates compared so far. One update was not compared with the months behind it.'] }),
+    readyRow({ id: 'update-record', notes: ['27 Sep 2026: finished, with gaps · on schedule', '24 Sep 2026: finished, with gaps · by hand'] }),
+    readyRow({ id: 'delivery', owner: 'client', status: 'missing', detail: 'Weekly digest has 2 addresses on it but is switched off, so nothing is sent.', notes: ['Weekly digest: off, 2 addresses'] }),
+    readyRow({ id: 'change-record', status: 'exists', detail: '33 changes recorded · last on 27 Sep 2026. 60 earlier entries reconstructed from what each update searched.' }),
+    readyRow({ id: 'decisions', owner: 'client', status: 'missing', detail: 'No decision recorded · 84 of 84 carry a link to the one before (100.0%).', unlocks: 'Mark a recommendation done.' }),
+    readyRow({ id: 'retention', status: 'exists', notes: ['Deleting a comment changes any month it was counted in; the count stays as it was written down'] }),
+  ]
+  const view = clientReadiness(rows, { sendingLocked: true, facts: { inputs, searchesHeld: true, searchChangedAt: '2026-09-17T14:02:56Z', advice: { pieces: 79, acted: 0 } } })
+  const row = (id: string) => view.rows.find((r) => r.id === id)!
+  // What a client reads on each row, not its id.
+  const all = view.rows.map((r) => [r.input, r.detail, r.ownerWords, r.unlocks, ...r.notes].join(' | ')).join('\n')
+
+  it('asks for no rival account already given, and says searches are held until January', () => {
+    expect(row('rival-accounts').detail).toBe('All 2 rivals you track have their accounts set · 67 posts of their own collected, 13 read so far.')
+    expect(row('rival-accounts').unlocks).not.toContain('Give us')
+    expect(row('rival-accounts').notes[0]).toContain('52 posts collected,')
+    expect(row('tracked-terms').ownerWords).toBe(HELD_OWNER)
+    expect(row('tracked-terms').unlocks).toContain('no earlier than 1 Jan 2027')
+    expect(row('tracked-terms').detail).toBe('3 brand terms, 7 rival terms, 12 category terms and 9 exclusions · last changed 17 Sep 2026.')
+    expect(row('tracked-terms').notes).toEqual([])
+    // Held rows never say they are the client's to change.
+    for (const id of ['rival-accounts', 'tracked-terms']) expect(row(id).ownerWords).not.toBe('Yours to change')
+  })
+
+  it('says nothing about work in progress on a row that is complete', () => {
+    expect(row('searchable-findings').detail).toBe('All 4,420 findings can be searched by a question on Ask · the latest added 27 Sep 2026.')
+    expect(row('searchable-findings').unlocks).toBe('Nothing to do: each update makes its new findings searchable.')
+    expect(row('change-record').detail).toBe('Every change is written down as it is made, since 15 Sep 2026, the latest on 27 Sep 2026. Changes before then were worked out afterwards from what each update searched.')
+    expect(row('change-record').unlocks).toContain('Settings › The record')
+  })
+
+  it('counts advice as Your moves does, and says "paused" as Team does', () => {
+    expect(row('decisions').detail).toBe('79 pieces of advice so far; you have acted on 0 of them.')
+    expect(all).not.toContain('84 of 84')
+    expect(row('delivery').detail).toBe('Weekly digest has 2 addresses on it and is paused, so nothing is sent.')
+    expect(row('delivery').notes).toEqual(['Weekly digest: paused, 2 addresses'])
+  })
+
+  it('reads plainly: no sampling, no baselines forming, no slots, no internal notes', () => {
+    expect(row('communities').detail).toBe('2 communities watched, 1 checked and left out · 68% of the Reddit posts we hold came from searching all of Reddit, not from these communities.')
+    expect(row('communities').notes).toEqual(['r/onebag: 38 posts · added by hand'])
+    expect(row('months-of-history').detail).toBe('2 months with 100 videos or more in the category; 1 of 9 audiences have one.')
+    expect(row('months-of-history').notes).toEqual(['Old School: no month read yet', 'Your own brand: 0 of 16 months with 100 videos or more (1 with 100 comments or more)'])
+    expect(row('anomaly-baseline').detail).toBe('No audience has the 3 complete months behind it yet; the fullest has 1 of 3.')
+    expect(row('anomaly-baseline').notes).toEqual(['The category: 1 of the 3 months it needs'])
+    expect(row('update-record').notes).toEqual(['27 Sep 2026: finished, with gaps', '24 Sep 2026: finished, with gaps'])
+    expect(row('retention').notes[0]).toMatch(/^A comment the platform has removed is deleted here too/)
+    for (const word of ['sampled', 'baseline', '· on schedule', '· by hand', 'switched off', 'reconstructed', 'carry a link', 'working through']) {
+      expect(all, word).not.toContain(word)
+    }
+  })
+
+  it('names the rivals’ block by the page it is on', () => {
+    expect(clientReadiness([readyRow({ id: 'rival-accounts', block: 'Competitive', owner: 'client' })]).rows[0].block).toBe('Brands')
+  })
+
+  it('keeps each row’s own words where its fact is absent', () => {
+    const bare = clientReadiness(rows)
+    expect(bare.rows.find((r) => r.id === 'rival-accounts')!.unlocks).toContain('Give us')
+    expect(bare.rows.find((r) => r.id === 'decisions')!.detail).toBe('No decision recorded.')
   })
 })
 
