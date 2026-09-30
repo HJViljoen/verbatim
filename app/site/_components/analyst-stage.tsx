@@ -11,22 +11,41 @@ const TYPE_MS = 16
 // cycles through the items on its own while in view, holds each for HOLD, and
 // stops cycling the moment a visitor picks a chip. Every timer is owned by one
 // effect and cleared on change or unmount.
+//
+// THE FIRST ANSWER IS ON THE PAGE AS IT ENDS (sw-2 item 7). The stage used to
+// start empty and fill only when an IntersectionObserver fired, so without
+// JavaScript, in a full-page capture, or under reduced motion before the
+// section was scrolled to, "Then ask it anything" stood over an empty answer.
+// The server now renders the first item answered and its evidence shown; the
+// typing plays where motion is allowed, from empty only for a stage below the
+// fold at load (`reveal-armed` holds the evidence back while it types).
+const FIRST_MARKS = analyst[0].kind === 'document' ? 99 : 0
+
 export function AnalystStage() {
   const [current, setCurrent] = useState(0)
-  const [typed, setTyped] = useState('')
-  const [phase, setPhase] = useState<'idle' | 'typing' | 'shown'>('idle')
+  const [typed, setTyped] = useState(analyst[0].answer)
+  const [phase, setPhase] = useState<'idle' | 'typing' | 'shown'>('shown')
   const [running, setRunning] = useState(false)
   const [manual, setManual] = useState(false)
   const [started, setStarted] = useState(false)
-  const [litMarks, setLitMarks] = useState(0)
+  const [litMarks, setLitMarks] = useState(FIRST_MARKS)
   const [reduce, setReduce] = useState(false)
+  const [motion, setMotion] = useState(false)
   const sectionRef = useRef<HTMLDivElement>(null)
   const inView = useRef(false)
 
   const item: AnalystItem = analyst[current]
 
   useEffect(() => {
-    setReduce(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    const r = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    setReduce(r)
+    setMotion(!r)
+    const el = sectionRef.current
+    if (!r && el && el.getBoundingClientRect().top >= window.innerHeight) {
+      setTyped('')
+      setPhase('idle')
+      setLitMarks(0)
+    }
   }, [])
 
   // Start when the section comes into view; pause the auto-advance when it leaves.
@@ -118,7 +137,7 @@ export function AnalystStage() {
         ))}
       </div>
 
-      <div className={`stage${isDoc ? ' docmode' : ''}${phase === 'shown' ? ' is-on' : ''}`} key={current}>
+      <div className={`stage${isDoc ? ' docmode' : ''}${motion && phase !== 'shown' ? ' reveal-armed' : ''}${phase === 'shown' ? ' is-on' : ''}`} key={current}>
         <div className="answer">
           <p className="a">
             <span>{typed}</span>
