@@ -2,7 +2,7 @@ import { sameRegime } from '../pipeline/clustering'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import { pairOnVerdict, type PairComparability } from './comparability'
 import { monthEndInstant, nextMonth, monthStartOf } from './monthly'
-import { bandVerdict, type BandVerdictInput, type ObjectKind, type Verdict, type VerdictFlag, type VerdictWindow } from './verdicts'
+import { bandVerdict, type BandVerdictInput, type ObjectKind, type RefusedReason, type Verdict, type VerdictFlag, type VerdictWindow } from './verdicts'
 
 // The rules that turn a month series into a claim (design item 5, decisions
 // L and M).
@@ -147,18 +147,24 @@ export interface MonthChangeInput {
  * the same sentence a reader would want anyway.
  *
  * AND OUR OWN CHANGES REFUSE IT (decision D, WP1.3). A pair the month-pair rule
- * refuses (`comparability`) is `refused` with that rule's reason, its counts
- * kept so the levels still print and no change drawn. A rename still refuses
- * first: two names is the more specific break. A pair a change of ours
- * touched a little of carries `tracking_change` and is banded as usual.
+ * refuses (`comparability`) is `refused` with that rule's reason: this month's
+ * count kept so the level still prints, no month before, and no change drawn.
+ * A rename still refuses first: two names is the more specific break. A pair a
+ * change of ours touched a little of carries `tracking_change` and is banded
+ * as usual.
  *
- * BUT ONLY A PAIR THAT COULD HAVE BEEN COMPARED IS REFUSED FOR IT (deploy 1
- * review). Where a side is under the band's floors, or there is no earlier
- * side at all, the band itself answers `too_little_data` ("too few to
- * compare"), and that is the true reason: our search change did not stop
- * Cotopaxi's 0 of 12 being compared, and Patagonia has no August reading to
- * refuse. The pair's refusal is printed only where the band would otherwise
- * have drawn a change. Never a "moved" either way.
+ * A REFUSED PAIR IS REFUSED WHATEVER THE FLOORS SAY (T0a review, finding 1;
+ * plan §0a, the one condition). Deploy 1 let the band answer first where a
+ * side was under its floors, so that the refusal's WORDS were printed only
+ * where a change could have been drawn. No refusal is worded on a client
+ * surface any more, and that ordering had a cost the words were hiding: a thin
+ * refused pair came back `too_little_data` with its baseline kept, and every
+ * surface printed the month before beside this month (Sealand's own side,
+ * about 84 videos against a floor of 100, on every client-side comparison).
+ * So the judge's refusal wins: the verdict is `refused`, it carries the pair's
+ * note and no baseline, and the surface prints this month's level alone. A pair
+ * under the floor that the judge ACCEPTS is `too_little_data` as before: its
+ * levels print with no change claim.
  */
 export function monthChange(input: MonthChangeInput): Verdict {
   const flags = [...(input.flags ?? [])]
@@ -178,21 +184,6 @@ export function monthChange(input: MonthChangeInput): Verdict {
   if (renamed && !flags.includes('renamed')) flags.push('renamed')
 
   const refused = renamed ? ('rename' as const) : pair.refused
-  if (refused && !renamed) {
-    const band = bandVerdict({
-      objectKind: input.object.kind,
-      objectId: input.object.id,
-      objectLabel: input.object.label,
-      audience: input.audience,
-      window: monthWindowOf(input.curr.month),
-      basis: { from: monthStartOf(input.prev.month), to: nextMonth(input.prev.month) },
-      value: counted(input.curr),
-      baseline: counted(input.prev),
-      flags,
-      floor: input.floor,
-    })
-    if (band.state === 'too_little_data') return band
-  }
   const verdict = bandVerdict({
     objectKind: input.object.kind,
     objectId: input.object.id,
@@ -217,19 +208,16 @@ export function monthChange(input: MonthChangeInput): Verdict {
  * month-to-date riser against its trailing months, and the standings (the
  * brands view). The pair is the span the two sides cover (the earlier side's
  * first month against the later side's month). Refused: the verdict is
- * `refused` with the rule's reason and its words, the counts kept. Flagged: the
- * `tracking_change` flag and its note. A refusal the caller already holds wins.
+ * `refused` with the rule's reason and its note, this side's count kept and no
+ * baseline, whatever the floors say (`monthChange`; T0a review, finding 1).
+ * Flagged: the `tracking_change` flag and its note. A refusal the caller
+ * already holds wins.
  */
 export function pairedVerdict(input: BandVerdictInput, pair: PairComparability | null): Verdict {
   const judged = pairOnVerdict(pair)
   const flags = [...(input.flags ?? [])]
   if (judged.flag && !flags.includes('tracking_change')) flags.push('tracking_change')
   const refused = input.refused ?? judged.refused ?? undefined
-  // Only a pair that could have been compared is refused for it (`monthChange`).
-  if (!input.refused && judged.refused) {
-    const band = bandVerdict({ ...input, flags })
-    if (band.state === 'too_little_data') return band
-  }
   const verdict = bandVerdict({ ...input, flags, ...(refused ? { refused } : {}) })
   return judged.note && !input.refused ? { ...verdict, pair: judged.note } : verdict
 }
@@ -266,6 +254,12 @@ export interface QuarterChangeInput {
   floor?: BandOptions
   flags?: VerdictFlag[]
   unlocksAt?: number
+  /** The quarter pair is not read the same way (T0a, mechanism 1; RP-25/27,
+   *  review finding 5): a month step across the two quarters the month judge
+   *  refuses (`quarterPairJoins`), or a caller's own reason. Past the gate the
+   *  verdict is `refused` with this quarter's count alone and no quarter
+   *  before; under it, `baseline_forming` as always (it carries none). */
+  refused?: RefusedReason
 }
 
 /**
@@ -292,7 +286,7 @@ export function quarterChange(input: QuarterChangeInput): Verdict {
   if (input.readings < unlocksAt) {
     return { ...bandVerdict(base), state: 'baseline_forming' }
   }
-  return bandVerdict({ ...base, baseline: input.baseline })
+  return bandVerdict({ ...base, baseline: input.baseline, ...(input.refused ? { refused: input.refused } : {}) })
 }
 
 // ---- Thin months -------------------------------------------------------------

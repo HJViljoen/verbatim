@@ -12,7 +12,7 @@ import { joinedRun, pairTools, type PairOn } from '../reading/pairs'
 import { joins } from '../reading/comparability'
 import { isReadable, pointsByMonth, type MonthPoint, type MonthSeries } from '../reading/series'
 import { prevMonth, monthStartOf } from '../reading/month-key'
-import { priorPrintable, type Counted, type FigureTable, type Verdict, type VerdictFlag } from '../reading/verdicts'
+import { isAnswer, priorPrintable, type Counted, type FigureTable, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import type { Scope } from '../renderables/types'
 import { isThin, movementDirection } from './movement'
 import { storedAnswerThin, type StoredFloorAnswer } from './floor'
@@ -326,8 +326,14 @@ function findingFigures(
     const prevPct = pctOf(prev.k, prev.n)
     if (prevPct != null) figures[`${base}_prev_pct`] = { value: prevPct, unit: 'pct', label: `${label}’s share the month before` }
   }
-  if (verdict?.changePts != null) figures[`${base}_change`] = { value: verdict.changePts, unit: 'pts', label: `change in ${label}’s share` }
-  if (verdict?.bandPts != null) figures[`${base}_band`] = { value: verdict.bandPts, unit: 'pts', label: `the band ${label}’s change is judged against` }
+  // THE CHANGE AND ITS BAND ONLY WHERE THE COMPARISON ANSWERED (T0a review,
+  // finding 1). A pair under the floors is "too few to compare": its levels
+  // may print, but `proportionDelta` still hands back a change and a floor
+  // band for it, and a key naming them is a change claim the page withholds.
+  if (verdict && isAnswer(verdict.state)) {
+    if (verdict.changePts != null) figures[`${base}_change`] = { value: verdict.changePts, unit: 'pts', label: `change in ${label}’s share` }
+    if (verdict.bandPts != null) figures[`${base}_band`] = { value: verdict.bandPts, unit: 'pts', label: `the band ${label}’s change is judged against` }
+  }
   return figures
 }
 
@@ -653,7 +659,9 @@ function findingLine(f: FindingMeasure): string {
   const level = `${f.label}: ${fmtInt(f.value.k)} of ${fmtInt(f.value.n)} videos in ${f.audienceLabel.toLowerCase()}`
   // A refused comparison is not mentioned at all (T0a): the level alone.
   if (v && !priorPrintable(v)) return `${level}.`
-  if (!v || v.changePts == null || v.bandPts == null) return `${level}, ${TOO_FEW} with the month before.`
+  // A thin pair the judge accepted is "too few", never "no clear change" with
+  // the change the band withholds beside it (T0a review, finding 1).
+  if (!v || !isAnswer(v.state) || v.changePts == null || v.bandPts == null) return `${level}, ${TOO_FEW} with the month before.`
   const sign = v.changePts > 0 ? '+' : ''
   return `${level}, ${v.state === 'moved' ? 'moved' : 'no clear change'} (${sign}${v.changePts} pts, band ${v.bandPts} pts).`
 }

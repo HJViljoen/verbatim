@@ -445,7 +445,12 @@ export const overviewSubjects: Block<OverviewData> = {
     }
 
     const gap = leadGap(s)
-    const shared = sharedPairNote(s.rows.flatMap((r) => [r.you.verdict, r.category.verdict]))
+    // THE CATEGORY'S OWN PAIR (T0a review, finding 7): "at this point last
+    // month" is the category's comparison, so only the category side's
+    // refusal takes it off. Your own side is refused on thin data too now
+    // (finding 1), and keying on both would hide the category's line across a
+    // pair only your side's view refused.
+    const shared = sharedPairNote(s.rows.map((r) => r.category.verdict))
     const hasAt = !shared && s.rows.some((r) => r.categoryAtLastMonth?.pct != null)
     // A REFUSED PAIR IS NOT SHOWN AND NOT EXPLAINED (T0a): its change cells
     // are empty and nothing beside them names the month before.

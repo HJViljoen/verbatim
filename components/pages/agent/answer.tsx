@@ -576,7 +576,7 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <FindingLevel value={{ k: r.curr.k, n: r.curr.n }} />
-                  {r.verdict && r.verdict.state !== 'refused' ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
+                  {r.verdict && !refused ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
                   <DirectionWord direction={r.direction} />
                   <span className="font-mono text-[11px] text-muted-foreground">
                     in your market · <span data-copy="figure">{longMonth(r.curr.month)}</span>

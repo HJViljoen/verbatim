@@ -8,6 +8,7 @@ import { fmtInt, fmtPct, fullDate, longMonth } from '@/lib/format'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AdviceRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 import { madeInMonth } from '@/lib/pages/market-surface'
+import { afterwardsWithheld } from '@/lib/reading/afterwards'
 
 // The content brief's page 2 — "Three things to make, and one to stop"
 // (Block D wave 2, package E-content; artboard ContentBrief.dc.html slide 2).
@@ -343,7 +344,10 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
       <div className="mt-auto flex flex-col gap-1 pt-1">
         {/* AN UNDECIDED CARD HAS NO "AFTER" (copy de-clutter E87): its chip
             already says so, and the same sentence stacked on every card. */}
-        {row.decidedAt ? (
+        {/* NOR A COMPARISON THE PRODUCT WILL NOT DRAW (T0a; the one
+            condition): a withheld cell prints no box, no reason and no
+            month before (`afterwardsWithheld`). */}
+        {row.decidedAt && !afterwardsWithheld(row.afterwards) ? (
           <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
             <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
             <Reading verdict={row.afterwards.verdict} mode={mode} />
@@ -387,7 +391,7 @@ function EmailCard({ row, n }: { row: AdviceRow; n: number | null }) {
         {row.title}
       </div>
       <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 3 }}>{provenance(row)}</div>
-      {row.decidedAt ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{row.afterwards.line}</div> : null}
+      {row.decidedAt && !afterwardsWithheld(row.afterwards) ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{row.afterwards.line}</div> : null}
       {row.quote ? <BlockQuote quote={row.quote} mode="email" /> : null}
     </div>
   )
@@ -537,7 +541,7 @@ export const contentMake: Block<MarketSurfaceData> = {
   },
 
   verdicts(data): Verdict[] {
-    return shownRows(data).map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
+    return shownRows(data).map((r) => (afterwardsWithheld(r.afterwards) ? null : r.afterwards.verdict)).filter((v): v is Verdict => v != null)
   },
 
   quotes(data) {

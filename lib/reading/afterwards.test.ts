@@ -3,7 +3,7 @@ import { sealandJudge } from '../test/sealand-pairs'
 import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
-import { AFTERWARDS_MIN_READINGS, GROUNDED_BASIS, afterwardsFor, audiencePhrase, groundingFor } from './afterwards'
+import { AFTERWARDS_MIN_READINGS, GROUNDED_BASIS, afterwardsFor, afterwardsWithheld, audiencePhrase, groundingFor } from './afterwards'
 
 const videoMap = (pairs: [string, string | null][]) => new Map<string, string | null>(pairs)
 
@@ -114,12 +114,19 @@ describe('groundingFor', () => {
   })
 })
 
-const SERIES = [
+// THE MONTHS AS TODAY'S CORPUS HOLDS THEM: no grouping recorded on any of
+// them (every month frozen before the clustering fingerprint shipped), so no
+// comparison between two of them is drawn (T0a, YM-16).
+const UNGROUPED = [
   { month: '2026-06-01', k: 8, n: 110 },
   { month: '2026-07-01', k: 9, n: 118 },
   { month: '2026-08-01', k: 11, n: 124 },
   { month: '2026-09-01', k: 18, n: 130 },
 ]
+
+// HYPOTHETICAL: the same counts, every month grouped by one clustering on
+// record, so a comparison between two of them is like for like and is drawn.
+const SERIES = UNGROUPED.map((p) => ({ ...p, clusteringKey: 'k1' }))
 
 describe('afterwardsFor', () => {
   it('reads two months either side of the decision, banded', () => {
@@ -262,7 +269,7 @@ describe('afterwardsFor', () => {
         { month: '2026-07-01', k: 0, n: 0 },
         { month: '2026-08-01', k: 11, n: 124 },
         { month: '2026-09-01', k: 18, n: 130 },
-      ],
+      ].map((p) => ({ ...p, clusteringKey: 'k1' })),
       audience: 'client',
     })
     expect(a.state).toBe('reading')
@@ -288,16 +295,25 @@ describe('afterwardsFor', () => {
   })
 })
 
-describe('afterwardsFor — the comparison carries its caveats', () => {
-  it('flags a pair nobody recorded a grouping for, which is today’s whole corpus', () => {
-    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+// NOT LIKE FOR LIKE IS NOT SHOWN (T0a, inventory YM-16; review finding 4).
+// These comparisons printed with a caveat beside them ("we did not record how
+// themes were grouped …", "themes were re-grouped …"); the wording sweep
+// removes the caveats as process talk, and bare they would read as the
+// conversation's change. So they are not drawn at all.
+describe('afterwardsFor — a comparison that is not like for like is not drawn', () => {
+  it('draws none across a pair nobody recorded a grouping for, which is today’s whole corpus', () => {
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: UNGROUPED, audience: 'client' })
     // Every month frozen before the clustering fingerprint shipped carries no
-    // key, and two unknowns are deliberately not one regime — so `flags: []`
-    // here would be a positive claim that there is nothing to caveat.
-    expect(a.verdict?.flags).toContain('clustering_unknown')
+    // key, and two unknowns are deliberately not one regime.
+    expect(a.state).toBe('refused')
+    expect(a.verdict).toBeNull()
+    expect(a.pair).toBeNull()
+    expect(a.months).toEqual(['2026-08-01', '2026-09-01'])
+    expect(afterwardsWithheld(a)).toBe(true)
+    expect(a.line).not.toContain('against')
   })
 
-  it('flags two months grouped differently as a re-grouping, not as unknown', () => {
+  it('draws none across two months grouped differently', () => {
     const a = afterwardsFor({
       pair: null,
       decidedAt: '2026-07-04',
@@ -305,8 +321,30 @@ describe('afterwardsFor — the comparison carries its caveats', () => {
       series: SERIES.map((p, i) => ({ ...p, clusteringKey: i < 2 ? 'k-old' : 'k-new' })),
       audience: 'client',
     })
-    expect(a.verdict?.flags).toContain('clustering_changed')
-    expect(a.verdict?.flags).not.toContain('clustering_unknown')
+    expect(a.state).toBe('refused')
+    expect(a.verdict).toBeNull()
+    expect(afterwardsWithheld(a)).toBe(true)
+    // The record keeps which silence it is; no client surface prints it.
+    expect(a.line).toMatch(/grouped differently/)
+  })
+
+  it('a stored reading of either shape is withheld at render, and a like-for-like one is not', () => {
+    const drawn = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    expect(drawn.state).toBe('reading')
+    expect(afterwardsWithheld(drawn)).toBe(false)
+    const v = drawn.verdict!
+    // A reading stored before T0a: its verdict carries the flag, the cell
+    // still says 'reading'.
+    for (const flag of ['clustering_unknown', 'clustering_changed', 'renamed'] as const) {
+      expect(afterwardsWithheld({ state: 'reading', verdict: { ...v, flags: [flag] } })).toBe(true)
+    }
+    // And one across a pair the judge refused, on thin data (review finding 1).
+    const refusedPair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    expect(afterwardsWithheld({ state: 'reading', verdict: { ...v, state: 'too_little_data', pair: refusedPair } })).toBe(true)
+    // A thin reading the judge accepted is not withheld: its levels print.
+    expect(afterwardsWithheld({ state: 'reading', verdict: { ...v, state: 'too_little_data', flags: ['thin'] } })).toBe(false)
+    expect(afterwardsWithheld({ state: 'too_soon', verdict: null })).toBe(false)
+    expect(afterwardsWithheld(null)).toBe(false)
   })
 
   it('draws no comparison at all across a rename, and says which silence it is', () => {
@@ -388,15 +426,36 @@ describe('afterwardsFor under the month-pair rule (decision D, WP1.3)', () => {
     expect(a.line).toBe('Not read as a change: we changed our searches in September.')
   })
 
-  it('a pair that could not have been compared anyway reads as too few, not as our change (deploy 1 review)', () => {
-    // SERIES's June is 8 of 110, under the band's floor of 10.
+  it('a refused pair on thin data is refused too: no month before, nothing printed (T0a review, finding 1)', () => {
+    // SERIES's June is 8 of 110, under the band's floor of 10. This read as
+    // "too few to compare" with June's 8 of 110 printed beside September
+    // (deploy 1 review): a month before across a pair the judge refused.
     const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
     const a = afterwardsFor({
       pair: (prev, month) => judge(prev, month, 'client'),
       decidedAt: '2026-07-04', targetIds: ['reg-1'], objectLabel: 'Repair & warranty', series: SERIES, audience: 'client',
     })
-    expect(a.verdict?.state).toBe('too_little_data')
-    expect(a.verdict?.pair).toBeUndefined()
-    expect(a.line).not.toContain('Not read as a change')
+    expect(a.state).toBe('refused')
+    expect(a.verdict).toBeNull()
+    expect(a.pair?.mode).toBe('refuse')
+    expect(afterwardsWithheld(a)).toBe(true)
+    expect(a.line).not.toContain('8 of 110')
+  })
+
+  it('the review\'s own case: 21 of 130 against 9 of 104 across a refused May to September reads nothing', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const a = afterwardsFor({
+      pair: (prev, month) => judge(prev, month, 'client'),
+      decidedAt: '2026-06-02T10:00:00.000Z', targetIds: ['reg-repair'], objectLabel: 'Repair & warranty',
+      series: [
+        { month: '2026-05-01', k: 9, n: 104, clusteringKey: 'k1' },
+        { month: '2026-07-01', k: 11, n: 118, clusteringKey: 'k1' },
+        { month: '2026-09-01', k: 21, n: 130, clusteringKey: 'k1' },
+      ],
+      audience: 'client',
+    })
+    expect(a.state).toBe('refused')
+    expect(a.verdict).toBeNull()
+    expect(afterwardsWithheld(a)).toBe(true)
   })
 })

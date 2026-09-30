@@ -4,6 +4,7 @@ import { attentionSplit } from './attention'
 import { NOT_OBSERVED, buildStandings, standingText } from './standings'
 import { BRANDS_PANEL, pairJudge, pairOn } from './pairs'
 import { OSSUR_UPDATES } from '../test/sealand-pairs'
+import { priorPrintable } from './verdicts'
 
 // Össur's panel at a 1 June 2026 cutoff, measured read-only 2026-09-15:
 //   Aug  client 13 videos / 6 comments · Ottobock 10 / 92 · category 122 / 2,047
@@ -201,17 +202,24 @@ describe('buildStandings under the month-pair rule (decision D, WP1.3)', () => {
   const ossurPair = () =>
     pairOn(pairJudge({ now: '2026-10-02T06:00:00.000Z', changes: [], rows: [], updates: OSSUR_UPDATES }))('2026-08-01', '2026-09-01', BRANDS_PANEL)
 
-  // THE FLOOR FIRST (deploy 1 review, the lead's R5): Össur's panel sides are
-  // all under SHARE_BAND's floors, so every verdict, content and attention
-  // alike, reads "too few to compare" with no pair words. Never "moved".
-  it('reads "too few to compare" on every row under the floors, content and attention alike, keeping the shares', () => {
+  // THE JUDGE'S REFUSAL WINS OVER THE FLOORS (T0a review, finding 1; it was
+  // "the floor first", deploy 1 review, the lead's R5): Össur's panel sides
+  // are all under SHARE_BAND's floors, and the pair is refused, so every
+  // verdict, content and attention alike, is refused: this month's share
+  // kept, last month's panel not carried, no change. Never "moved", and never
+  // "too few to compare" beside last month's figure.
+  it('refuses every row under the floors too, content and attention alike, keeping this month\'s shares and dropping last month\'s', () => {
     const pair = ossurPair()
     const rows = buildStandings({ ...base, comparability: pair })
     const verdicts = rows.filter((x) => x.observed).flatMap((r) => [r.contentVerdict, r.attentionVerdict]).filter((v) => v != null)
     expect(verdicts.length).toBeGreaterThan(0)
     for (const v of verdicts) {
-      expect(v?.state).toBe('too_little_data')
-      expect(v?.pair).toBeUndefined()
+      expect(v?.state).toBe('refused')
+      expect(v?.refusedReason).toBe('incomplete')
+      expect(v?.pair?.mode).toBe('refuse')
+      expect(v?.baseline).toBeUndefined()
+      expect(v?.changePts).toBeNull()
+      expect(priorPrintable(v)).toBe(false)
     }
     for (const r of rows.filter((x) => x.observed)) expect(r.content).not.toBeNull()
   })
@@ -239,5 +247,8 @@ describe('buildStandings under the month-pair rule (decision D, WP1.3)', () => {
     expect(otto.contentVerdict?.refusedReason).toBe('tracking_change')
     expect(otto.contentVerdict?.pair).toBeUndefined()
     expect(otto.attentionVerdict?.pair).toBeUndefined()
+    // A refused verdict carries no month before, the attention one included.
+    expect(otto.contentVerdict?.baseline).toBeUndefined()
+    expect(otto.attentionVerdict?.baseline).toBeUndefined()
   })
 })

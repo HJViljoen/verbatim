@@ -264,11 +264,20 @@ export function isAnswer(state: VerdictState): boolean {
  * baseline; this is the same rule for a verdict stored before it did not, so
  * a frozen export or a saved answer renders under today's rule.
  *
+ * AND A PAIR THE JUDGE REFUSED, WHATEVER STATE THE VERDICT CARRIES (T0a
+ * review, finding 1). A refused month pair used to come back
+ * `too_little_data` wherever a side was under the band's floors, with its
+ * baseline kept, and so printed the month before on every surface that asked
+ * this question. `monthChange` and `pairedVerdict` now answer `refused` for
+ * any pair the judge refuses; a verdict whose month-pair note says `refuse`
+ * is the same refusal wherever it was stored, and obeys too.
+ *
  * A flagged pair (a change of ours touched under a tenth) is not refused and
- * prints bare (T0 ruling U4).
+ * prints bare (T0 ruling U4). A pair under the floor that the judge accepted
+ * prints its levels with no change claim, as it always has.
  */
-export function priorPrintable(verdict: Pick<Verdict, 'state'> | null | undefined): boolean {
-  return verdict != null && verdict.state !== 'refused'
+export function priorPrintable(verdict: (Pick<Verdict, 'state'> & { pair?: VerdictPairNote | null }) | null | undefined): boolean {
+  return verdict != null && verdict.state !== 'refused' && verdict.pair?.mode !== 'refuse'
 }
 
 export interface BandVerdictInput {

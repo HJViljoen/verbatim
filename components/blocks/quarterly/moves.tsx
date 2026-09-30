@@ -10,7 +10,7 @@ import type { MoveReading } from '@/lib/reading/moves'
 import { moveTail, type QuarterlyData } from '@/lib/pages/quarterly'
 import type { MoveRow } from '@/lib/pages/market-surface'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { afterwardsWithheld, GROUNDED_BASIS } from '@/lib/reading/afterwards'
 import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note, Stored } from './parts'
 
 // QR6 · Your moves, and what happened after (mock page 6).
@@ -243,7 +243,11 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                     {/* AN UNDECIDED ROW SAYS NOTHING HERE: its status chip
                         already reads "not decided", and the same sentence
                         stacked on every such row (copy de-clutter E87). */}
-                    {a.decidedAt ? <>{' '}Afterwards: {a.afterwards.line}</> : null}
+                    {/* A REFUSED COMPARISON IS NOT SHOWN AND NOT EXPLAINED
+                        (T0a review, finding 5; the one condition): no
+                        "Afterwards:" line at all, never the refusal's reason
+                        and never the month before (`afterwardsWithheld`). */}
+                    {a.decidedAt && !afterwardsWithheld(a.afterwards) ? <>{' '}Afterwards: {a.afterwards.line}</> : null}
                   </Note>
                 </span>
               </div>

@@ -5,7 +5,9 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
-import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { afterwardsFor, GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { marketClaimEcho } from '@/lib/reading/own-posts'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
@@ -503,16 +505,64 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('in 2 months')
   })
 
-  it('never leaves the afterwards cell blank, and prints the clustering caveat beside the verdict', () => {
+  it('never leaves an undecided cell blank, and draws a like-for-like comparison with both sides and the band', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    // The drawn comparison: both sides, both denominators, the band, and the
-    // badge — which refuses, so no magnitude travels with it (D2).
+    // The drawn comparison (HYPOTHETICAL: one grouping on record): both sides,
+    // both denominators, the band, and the badge — which refuses, so no
+    // magnitude travels with it (D2). No grouping caveat: there is none.
     expect(text).toContain('21 of 130 videos in your audience')
     expect(text).toContain('too few to compare')
-    expect(text).toContain('like for like')
+    expect(text).not.toContain('like for like')
     // The two silences, each its own sentence rather than a dash.
     expect(text).toContain('Not decided yet.')
     expect(text).not.toMatch(/Afterwards\s+—/)
+  })
+
+  // NOT LIKE FOR LIKE, OR REFUSED, IS NOT SHOWN (T0a, YM-16; review findings 1
+  // and 4). The same row with its months as today's corpus holds them (no
+  // grouping on record), or stored as a reading whose verdict carries the
+  // flag, or across a pair the judge refused on thin data: the cell prints
+  // nothing, with no caveat, no reason, no badge and no month before.
+  it('draws nothing for a comparison across two groupings or a refused pair, in every mode, live or stored', () => {
+    const data = marketFixture()
+    const row = data.advice.rows.find((r) => r.lineageId === 'L-old')!
+    const drawn = row.afterwards
+    const refusedPair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    const variants = [
+      // Live: today's corpus, no grouping on record.
+      afterwardsFor({
+        pair: null, decidedAt: '2026-06-02T10:00:00.000Z', targetIds: ['reg-repair'], objectLabel: 'Repair & warranty',
+        series: [{ month: '2026-05-01', k: 9, n: 104 }, { month: '2026-07-01', k: 11, n: 118 }, { month: '2026-09-01', k: 21, n: 130 }],
+        audience: 'client',
+      }),
+      // Live: the review's own case, a May to September pair the judge refuses.
+      afterwardsFor({
+        pair: (prev, month) => pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))(prev, month, 'client'),
+        decidedAt: '2026-06-02T10:00:00.000Z', targetIds: ['reg-repair'], objectLabel: 'Repair & warranty',
+        series: [{ month: '2026-05-01', k: 9, n: 104, clusteringKey: 'k1' }, { month: '2026-07-01', k: 11, n: 118, clusteringKey: 'k1' }, { month: '2026-09-01', k: 21, n: 130, clusteringKey: 'k1' }],
+        audience: 'client',
+      }),
+      // Stored before T0a: a reading whose verdict carries the flag, or the
+      // refused pair's note on a thin verdict.
+      { ...drawn, verdict: { ...drawn.verdict!, flags: ['clustering_unknown' as const] } },
+      { ...drawn, verdict: { ...drawn.verdict!, pair: refusedPair } },
+    ]
+    for (const afterwards of variants) {
+      const rows = data.advice.rows.map((r) => (r.lineageId === 'L-old' ? { ...r, afterwards } : r))
+      const shown = { ...data, advice: { ...data.advice, rows } }
+      for (const mode of ['app', 'print', 'email'] as const) {
+        const text = renderText(marketAdvice.render(shown, mode, ctx))
+        expect(text, mode).not.toContain('21 of 130')
+        expect(text, mode).not.toContain('9 of 104')
+        expect(text, mode).not.toContain('May 2026')
+        expect(text, mode).not.toContain('like for like')
+        expect(text, mode).not.toContain('grouped')
+        expect(text, mode).not.toContain('We cannot read this one')
+        expect(text, mode).not.toContain('Not read as a change')
+        expect(text, mode).not.toContain('Afterwards, on every row')
+      }
+      expect(blockAnswers(marketAdvice, shown).verdicts).toHaveLength(0)
+    }
   })
 
   it('says the evidence is an earlier read rather than printing zero videos behind a row', () => {

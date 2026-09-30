@@ -5,6 +5,7 @@ import { directionRe } from '../test/copy-contract'
 import { OSSUR_UPDATES, sealandJudge } from '../test/sealand-pairs'
 import { FACE_OFF_FLOOR, headToHead, recurrenceOf, type HeadToHeadSide } from './head-to-head'
 import { pairJudge, pairOn } from './pairs'
+import { priorPrintable } from './verdicts'
 
 // CO3 · the head-to-head, re-based on the months.
 //
@@ -379,11 +380,15 @@ describe('headToHead · the month-pair rule', () => {
       pair: judge,
     })
     // The positive share is 17 of 19 judged against 42 of 48: under the
-    // band's floor of 100 either side, so it reads "too few to compare", the
-    // true reason, and carries no pair words (deploy 1 review).
+    // band's floor of 100 either side, and the pair is refused. The judge's
+    // refusal wins (T0a review, finding 1; it read "too few to compare" with
+    // August's 42 of 48 kept beside it, deploy 1 review): refused, this
+    // month's share alone.
     const mood = r.measures.find((m) => m.key === 'sentiment')!.rivalVerdict!
-    expect(mood.state).toBe('too_little_data')
-    expect(mood.pair).toBeUndefined()
+    expect(mood.state).toBe('refused')
+    expect(mood.pair?.mode).toBe('refuse')
+    expect(mood.baseline).toBeUndefined()
+    expect(priorPrintable(mood)).toBe(false)
     // The video share, 24 of 369 against 48 of 597, clears the floors: refused
     // for the pair, with no update promised (paused).
     const share = r.measures.find((m) => m.key === 'videos')!.rivalVerdict!
