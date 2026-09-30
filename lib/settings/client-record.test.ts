@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ConfigChange } from '../config-log'
-import { changeNote, readChangeLog } from './change-log'
-import { clientChangeLog, clientNote, withoutQuickCheck } from './client-record'
+import { readChangeLog } from './change-log'
+import { clientChangeLog, clientCoverageRow, clientNote, listedChanges, listedChangesNote, listedLine, withoutQuickCheck } from './client-record'
 
 // Finish-list item 17: Settings › The record, as a client reads it. Every row
 // goes through the real `readChangeLog`, with the notes production stores.
@@ -71,17 +71,25 @@ describe('clientChangeLog', () => {
     expect(digest.after).toBeNull()
   })
 
-  // The coverage row's "Tracking changes · 71 · the newest …" clause names its
-  // change off the same log the page prints, so a tenant never reads it naming
-  // the 27 Sep communities row the log below leaves out. The operator keeps
-  // the record as written, in both places.
-  it('gives the coverage row a newest change the client log keeps', () => {
-    const window = { from: '2026-09-01', to: '2026-09-30' }
-    expect(changeNote(written, window, { counted: 71 })).toMatch(/^the newest Communities.* changed, 27 Sep$/)
-    expect(changeNote(client, window, { counted: 71 })).toBe('the newest Weekly digest now sends the weekly report, 24 Sep')
+  // sw-2 item 2: the coverage row counts the entries the page LISTS, not rows
+  // of the log ("71 changes" beside about twenty listed), and its clause is
+  // the latest listed day, not a composed "the newest A subject we set up…".
+  it('counts the changes the page lists, and dates the latest', () => {
+    const ours = [{ date: '2026-09-27T05:00:00.000Z' }, { date: '2026-09-17T14:02:56.000Z' }, { date: '2026-08-17T10:00:00.000Z' }]
+    const listed = listedChanges({ ours, log: client, from: '2026-09-01', to: '2026-09-30' })
+    // Two of ours in September, and the client log's three recorded rows.
+    expect(listed).toEqual({ count: 5, latest: '2026-09-27' })
+    expect(listedChangesNote(listed)).toBe('listed on this page, the latest on 27 Sep')
+    expect(listedChangesNote({ count: 0, latest: null })).toBeNull()
     const page = readFileSync(join(process.cwd(), 'app/dashboard/settings/record/page.tsx'), 'utf8')
-    expect(page).toContain('const log = clientView ? clientChangeLog(written) : written')
-    expect(page).toContain('changeNote(log, ')
+    expect(page).toContain('listedChanges({ ours: changed?.lines ?? [], log, ')
+    expect(page).not.toContain('changeNote(log, ')
+  })
+
+  it('says the listed count plainly in the scope statement', () => {
+    expect(listedLine('20 changes to what we track were made inside this window.')).toBe('20 changes were made inside this window, each listed on this page.')
+    expect(listedLine('1 change to what we track was made inside this window.')).toBe('1 change was made inside this window, listed on this page.')
+    expect(listedLine('Nothing about what we track changed in this window.')).toBe('Nothing about what we track changed in this window.')
   })
 
   it('keeps a real before→after', () => {
@@ -98,5 +106,9 @@ describe('withoutQuickCheck', () => {
     expect(withoutQuickCheck('it; 1 video passed the quick check and were never looked at more closely, and 3 videos came in while the check was switched off.'))
       .toBe('it; 3 videos came in while the check was switched off.')
     expect(withoutQuickCheck('nothing to strip.')).toBe('nothing to strip.')
+  })
+  it('takes the clause out of a row’s basis as well as its text (sw-2 item 1)', () => {
+    const gate = { id: 'gate', rest: 'of what was looked at', basis: 'recorded from 9 Sep 2026; 678 videos passed the quick check and were never looked at more closely' }
+    expect(clientCoverageRow(gate)).toEqual({ id: 'gate', rest: 'of what was looked at', basis: 'recorded from 9 Sep 2026' })
   })
 })

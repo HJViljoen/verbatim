@@ -18,8 +18,8 @@ import { fullDate, longMonth, monthName, shortDate } from '@/lib/format'
 import { recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
 import { recordLines, recordRows } from '@/lib/reading/record'
-import { changeNote, readChangeLog } from '@/lib/settings/change-log'
-import { clientChangeLog, withoutQuickCheck } from '@/lib/settings/client-record'
+import { readChangeLog } from '@/lib/settings/change-log'
+import { clientChangeLog, clientCoverageRow, listedChanges, listedChangesNote, listedLine, withoutQuickCheck } from '@/lib/settings/client-record'
 import { deliveryRecord, deliveryStats, updatesInMonth } from '@/lib/settings/delivery'
 import { loadReadings } from '@/lib/settings/readings'
 import { loadRecordPage } from '@/lib/settings/record-load'
@@ -156,16 +156,28 @@ export default async function SettingsRecordPage() {
   // The totals are exact (head counts); the rates are over the most recent
   // sample of judgements, and the block says so when the two differ.
   const totals = inputs.gate.totals
-  const lines = recordLines(inputs.coverage).map((l) => (clientView ? withoutQuickCheck(l) : l))
+  // THE CHANGES THIS PAGE LISTS, COUNTED AS IT LISTS THEM (sw-2 item 2). The
+  // coverage row counted rows of the change log ("71 changes") beside a page
+  // listing about twenty, and the scope statement said "60 entries were
+  // reconstructed" above a "Before the record began · 3 entries". Both now
+  // count the entries on this page: each change of ours once, and every other
+  // settings change as the log below prints it. Where the dated list could not
+  // be read the log's own rows stand in, as before.
+  const listed = inputs.changes.available
+    ? listedChanges({ ours: changed?.lines ?? [], log, from: window.from, to: window.to })
+    : null
+  const coverage = listed
+    ? { ...inputs.coverage, changes: { ...inputs.coverage.changes, inWindow: listed.count, reconstructed: 0 } }
+    : inputs.coverage
+  const lines = recordLines(coverage)
+    .map((l) => (listed ? listedLine(l) : l))
+    .map((l) => (clientView ? withoutQuickCheck(l) : l))
   const floor = readings.belowFloor[0] ?? null
-  const rows = recordRows(inputs.coverage, {
+  const rows = recordRows(coverage, {
     trailingMedian: readings.trailingMedian,
-    // The clause is handed the COUNT it will sit beside, because the two do
-    // not filter the same rows: the count includes reconstructed entries and
-    // the clause names recorded ones (code review finding 4).
-    changeNote: inputs.changes.available
-      ? changeNote(log, { from: window.from, to: window.to }, { counted: inputs.coverage.changes.inWindow })
-      : null,
+    // "listed on this page, the latest on 27 Sep": the count's own entries,
+    // so the clause and the figure beside it are one population.
+    changeNote: listed ? listedChangesNote(listed) : null,
     belowFloor: floor
       // `more` is off the TOTAL, not off the truncated list (code review
       // finding 2): the grid's BELOW THE FLOOR basis repeats this number.
@@ -175,7 +187,9 @@ export default async function SettingsRecordPage() {
     // client-language ban list. The default lives in lib/reading/record.ts,
     // inside the pipeline's import closure, so the page passes its words.
     refusedElsewhere: 'Counted by the page that draws the comparisons.',
-  }).map((r) => (clientView ? { ...r, rest: withoutQuickCheck(r.rest) } : r))
+    // The quick-check clause leaves the row's basis too (sw-2 item 1).
+  }).map((r) => (listed && r.id === 'changes' ? { ...r, label: 'Changes' } : r))
+    .map((r) => (clientView ? clientCoverageRow(r) : r))
 
   return (
     <SettingsFrame

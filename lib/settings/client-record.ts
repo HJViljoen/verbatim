@@ -1,4 +1,4 @@
-import { fullDate } from '../format'
+import { fullDate, shortDate } from '../format'
 import type { ChangeLogView, ClientChange } from './change-log'
 
 // SETTINGS › THE RECORD, AS A CLIENT READS IT (finish-list item 17, 29 Sep
@@ -91,4 +91,52 @@ export function clientChangeLog(view: ChangeLogView): ChangeLogView {
  */
 export function withoutQuickCheck(text: string): string {
   return text.replace(/; \d[\d,]* videos? passed the quick check and were never looked at more closely(, and )?/, (_m, and?: string) => (and ? '; ' : ''))
+}
+
+/**
+ * A coverage row as a client reads it (sw-2 item 1): the quick-check clause
+ * out of the row's text AND its basis. The relevance gate's row carries the
+ * clause in its basis ("recorded from 9 Sep 2026; 678 videos passed the quick
+ * check …"), which the first pass (`rest` only) missed.
+ */
+export function clientCoverageRow<R extends { rest: string; basis: string }>(row: R): R {
+  return { ...row, rest: withoutQuickCheck(row.rest), basis: withoutQuickCheck(row.basis) }
+}
+
+/**
+ * The changes the record page LISTS inside its window (sw-2 item 2): each
+ * change of ours once (the dated list, `ledgerLines`), and every other
+ * settings change and every entry from before the record began as the client
+ * log prints it. The coverage row counted rows of the change log instead: one
+ * edit writes a row per column and the reconstruction a row per term, so it
+ * printed "71 changes" beside a page listing about twenty. `ours` are ISO
+ * instants; the log's rows carry their day (`on`). `from`/`to` are days.
+ */
+export function listedChanges(input: {
+  ours: readonly { date: string }[]
+  log: Pick<ChangeLogView, 'recorded' | 'prehistory'>
+  from: string
+  to: string
+}): { count: number; latest: string | null } {
+  const days = [
+    ...input.ours.map((c) => c.date.slice(0, 10)),
+    ...input.log.recorded.map((c) => c.on),
+    ...input.log.prehistory.map((c) => c.on),
+  ].filter((d) => d >= input.from && d <= input.to)
+  return { count: days.length, latest: days.length > 0 ? days.reduce((a, b) => (b > a ? b : a)) : null }
+}
+
+/** The coverage row's words beside that count: "listed on this page, the
+ *  latest on 27 Sep". Null with nothing listed (the row says so itself). */
+export function listedChangesNote(listed: { count: number; latest: string | null }): string | null {
+  return listed.count > 0 && listed.latest ? `listed on this page, the latest on ${shortDate(`${listed.latest}T00:00:00Z`)}` : null
+}
+
+/** The scope statement's changes sentence over the listed count: the count
+ *  holds settings changes too (a teammate joining the digest), so it is not
+ *  "to what we track", and it says where the entries are. Any other line is
+ *  returned as it is. */
+export function listedLine(line: string): string {
+  return line.replace(/^(\d[\d,]*) (changes?) to what we track (was|were) made inside this window\.$/, (_m, n: string, noun: string, verb: string) =>
+    `${n} ${noun} ${verb} made inside this window, ${verb === 'was' ? 'listed' : 'each listed'} on this page.`)
 }
