@@ -121,11 +121,15 @@ export interface GateOptions {
   used?: Set<string>
   /** Quotes one thread (video) may give a block. One. */
   perThread?: number
+  /** The kind of comment the block illustrates (`praise`, `purchase_intent`,
+   *  `question`, `pain_point`, `feature_request`, `objection`): a block of
+   *  problems or pushback never quotes a line that only praises (sw-2 item 4). */
+  kind?: string | null
 }
 
 export type GateReason =
   | 'unreadable' | 'too_short' | 'bot' | 'sale_ad' | 'seller_post' | 'maker_video' | 'maker_praise'
-  | 'own_post' | 'brand_post' | 'wrong_brand' | 'off_topic' | 'not_relevant' | 'no_video'
+  | 'own_post' | 'brand_post' | 'wrong_brand' | 'off_topic' | 'not_relevant' | 'no_video' | 'wrong_kind'
 
 export type GateVerdict = { ok: true; score: number; relevance: number; thread: string | null } | { ok: false; reason: GateReason }
 
@@ -190,6 +194,52 @@ export function readableEnglish(q: Pick<GateInput, 'text' | 'lang' | 'english'>)
     if (english && fold(english) !== fold(text)) return english
   }
   return readsAsHeroQuote(text) || (text.length > 170 && englishHits(text) >= 4) ? text : null
+}
+
+/**
+ * A TRANSLATION THAT DID NOT TRANSLATE ITS FIRST WORD (sw-2 item 4). "Jeju już
+ * czekam, żeby ją dostać!" (Polish, "Jezu" misspelt) came back "Jeju I'm
+ * already waiting to get it!": the translator took the interjection for a
+ * name and printed a place in the voice. A rendering whose opening word is the
+ * original's opening word, untouched, followed straight on by the sentence (no
+ * comma or colon, which a name addressed takes), and that is neither English
+ * nor a bag brand, is a translation that went wrong at its first word.
+ */
+export function untranslatedOpening(q: Pick<GateInput, 'text' | 'lang' | 'english'>): boolean {
+  if (q.lang == null || isEnglishTag(q.lang)) return false
+  const english = (q.english ?? '').trim()
+  const text = (q.text ?? '').trim()
+  const first = (t: string) => t.match(/^[\p{L}]+(?=[^\p{L}]|$)/u)?.[0] ?? ''
+  const w = first(english)
+  if (w.length < 3 || w.toLowerCase() !== first(text).toLowerCase()) return false
+  if (/^[\p{L}]+\s*[,:;–—-]/u.test(english)) return false
+  if (englishHits(w) > 0 || COMMON_OPENERS.test(w)) return false
+  return !namesAnyBagBrand(w)
+}
+
+/** English words a comment opens with that the function-word list does not
+ *  hold, and that other languages write the same ("Super", "Hello"). */
+const COMMON_OPENERS = /^(super|hello|hi|hey|wow|omg|ok|okay|yes|yeah|love|please|thanks|thank|nice|cute|beautiful|perfect|great|amazing|bravo|mama|mom|haha|lol|oh|ah|wait)$/i
+
+/**
+ * A TRANSLITERATION, NOT A TRANSLATION (sw-2 item 4): "パプリカッ！とチェック
+ * セットスタイルっ！" came back "Paprika! And check set style!", a song's name
+ * and three loanwords, printed as a Looks & style voice. Japanese written
+ * almost wholly in katakana is loanwords, and its "English" is the loanwords
+ * again: such a rendering is a reader's English only where it carries two
+ * English function words or (for a tenant with a market lexicon) names the
+ * thing the market is about. Narrow on purpose: measured on the staging
+ * loaders, a rule on every translation's function words also dropped "Sister,
+ * which model of Vans?" and "Adidas, supporting the genocidaires.".
+ */
+const MIN_TRANSLATED_HITS = 2
+const KATAKANA_SHARE = 0.7
+
+export function mostlyKatakana(text: string): boolean {
+  const letters = text.match(/\p{L}/gu) ?? []
+  if (letters.length === 0) return false
+  const kana = letters.filter((c) => /[\u30A0-\u30FF\u31F0-\u31FF\uFF66-\uFF9F]/u.test(c)).length
+  return kana / letters.length >= KATAKANA_SHARE
 }
 
 const MIN_WORDS = 3
@@ -383,7 +433,11 @@ const CARRY_TAG = /(bags?|backpack|luggage|purse|tote|wallet|suitcase|carryon|on
 const NOT_A_CARRY_TAG = /(garbage|cabbage|bagel|baguette|baggy|bagpipe|sleepingbag|teabag|trashbag|punchingbag|beanbag|backpacking)/i
 
 /** A product outside the market, named where no carry good is. */
-const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washing|washed|dryer|tsa|tees?|charg(ing|ers?)|recharg\w*|charge(?= (your|my|the|a|multiple) (phones?|iphones?|laptops?|devices?|ipads?|tablets?|batter(y|ies)|power ?banks?))|adapters?|batter(y|ies)|cables?|steam ?deck|magsafe|razors?|invest\w*|hair\w*|makeup|lipstick|nails?|eyeliner|helmets?)\b/i
+const OFF_MARKET = /\b(food|foods|canned|cans|sardines?|tuna|curry|rice|coffee|beer|wine|snacks?|recipes?|meals?|eat|eating|tastes?|delicious|provisions|skirts?|dress|dresses|shirts?|t-?shirts?|blouses?|jackets?|coats?|parkas?|pants|trousers|jeans|shorts|leggings|sweaters?|hoodies?|fleeces?|shoes?|sneakers?|boots|sandals?|flip-?flops?|slippers?|chappals?|socks?|underwear|bras?|hats?|beanies?|garters?|suspenders?|outfits?|ootd|merino|ipads?|tablets?|iphones?|phones?|e-?sims?|sim cards?|data plans?|hotspot|printers?|headphones?|earbuds?|airpods?|chargers?|kindles?|tents?|stoves?|knives|knife|military|army|soldiers?|navy|president|trump|election|lawsuit|sues?|sued|poker|movie|episode|thrift\w*|goodwill|laundry|clothes|clothing|wash|washes|washing|washed|dryer|tsa|tees?|charg(ing|ers?)|recharg\w*|charge(?= (your|my|the|a|multiple) (phones?|iphones?|laptops?|devices?|ipads?|tablets?|batter(y|ies)|power ?banks?))|adapters?|batter(y|ies)|cables?|steam ?deck|magsafe|razors?|invest\w*|hair\w*|makeup|lipstick|nails?|eyeliner|helmets?)\b/i
+
+/** A garment or shoe as its emoji: the words of a haul comment often name
+ *  nothing but the fit ("both washes in medium") and leave the thing to 👖. */
+const OFF_MARKET_EMOJI = /[\u{1F456}\u{1F457}\u{1F455}\u{1F45A}\u{1F454}\u{1FA73}\u{1FA71}\u{1F459}\u{1F458}\u{1F97B}\u{1F45F}\u{1F460}\u{1F461}\u{1F462}\u{1F97E}\u{1F97F}\u{1F9E6}\u{1F9E5}\u{1F9E3}\u{1F9E4}\u{1F452}\u{1F9E2}]/u
 
 /** Idioms that name a product and mean something else ("the straight jacket
  *  feature" of a harness). Taken off before the off-market test. */
@@ -426,6 +480,9 @@ const BAG_BRAND_NAMED: RegExp = (() => {
   return new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?:['’]?s)?(?![\\p{L}\\p{N}])`, 'iu')
 })()
 
+/** Does this word name a bag brand (a known one or its alias)? */
+const namesAnyBagBrand = (word: string): boolean => BAG_BRAND_NAMED.test(word)
+
 /** Does it name a part or an act of carrying (a strap, a pocket, packing), or
  *  a bag brand? */
 const namesCarryPart = (text: string): boolean => CARRY_WEAK.test(carryText(text)) || BAG_BRAND_NAMED.test(text)
@@ -447,6 +504,23 @@ export function isCarryVideo(v: QuoteVideo): boolean {
   const words = carryText(`${v.caption ?? ''} ${(v.topics ?? []).join(' · ')}`)
   if (CARRY_STRONG.test(words) || CARRY_WEAK.test(words)) return true
   return (v.hashtags ?? []).some((h) => CARRY_TAG.test(h) && !NOT_A_CARRY_TAG.test(h))
+}
+
+// ---- 9. The kind a block illustrates (sw-2 item 4) ------------------------------------------
+//
+// "It also fits in EVERY overhead bin, even the smallest regional jet, which
+// is amazing." printed under "Hitting a problem": the insight it came from was
+// filed a pain point, and the line is praise. A block of problems or pushback
+// never illustrates itself with a line that praises and names no problem: a
+// positive word, and no negation, complaint, limit, wish or question.
+
+const PRAISE_WORD = /\b(amazing|awesome|love[sd]?|loving|perfect(ly)?|great|excellent|fantastic|wonderful|brilliant|incredible|obsessed|favou?rite|best|happy|glad|superb|fabulous|stunning|gorgeous|beautiful|recommend(ed)?)\b|\bworth (it|every)\b|\bno complaints\b|😍|🥰|💯|🙌|❤️/iu
+const PROBLEM_WORD = /\b(not|no|never|nothing|none|nor|don'?t|doesn'?t|didn'?t|isn'?t|aren'?t|wasn'?t|weren'?t|can'?t|cannot|couldn'?t|won'?t|wouldn'?t|shouldn'?t|but|however|though|although|except|unless|problem\w*|issue\w*|hate\w*|annoy\w*|frustrat\w*|disappoint\w*|broke|broken|break\w*|tear|tore|torn|rip|ripped|apart|hurt\w*|pain\w*|sore|ache\w*|heavy|too|wish|unfortunate\w*|sad\w*|hard|difficult|uncomfortable|worse|worst|bad|poor\w*|flimsy|leak\w*|small|tight|expensive|overpriced|pricey|fail\w*|return\w*|refund\w*|complain\w*|struggl\w*|dig\w*|sweat\w*|only|instead|why|if)\b|\?/i
+
+/** Does the line contradict the kind of comment its block illustrates? */
+export function contradictsKind(english: string, kind: string | null | undefined): boolean {
+  if (kind !== 'pain_point' && kind !== 'objection') return false
+  return PRAISE_WORD.test(english) && !PROBLEM_WORD.test(english)
 }
 
 // ---- 8. Relevance ------------------------------------------------------------------------
@@ -587,6 +661,11 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
   const english = readableEnglish(q)
   if (!english) return { ok: false, reason: 'unreadable' }
   if (!hasSubstance(english)) return { ok: false, reason: 'too_short' }
+  const translated = q.lang != null && !isEnglishTag(q.lang) && english !== (q.text ?? '').replace(/\s+/g, ' ').trim()
+  if (translated && untranslatedOpening(q)) return { ok: false, reason: 'unreadable' }
+  if (translated && mostlyKatakana(q.text) && englishHits(english) < MIN_TRANSLATED_HITS && !(o.market === 'carry' && (namesCarryGood(english) || namesCarryPart(english)))) {
+    return { ok: false, reason: 'unreadable' }
+  }
   if (BOT.test(q.text) || BOT.test(english)) return { ok: false, reason: 'bot' }
   const v = q.video
   const community = COMMUNITY(v?.platform)
@@ -637,12 +716,17 @@ export function quoteGate(q: GateInput, o: GateOptions = {}): GateVerdict {
     const aboutIt = v ? isCarryVideo(v) : false
     const pointsAtIt = said.length <= POINTER_MAX && POINTS_AT_IT.test(said)
     const part = namesCarryPart(said)
-    if (!aboutIt || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || (!part && CREATOR_PRAISE.test(said)) || !(part || pointsAtIt || relevance > 0)) {
+    // A garment in the words or in its emoji ("I bought both washes in
+    // medium. 👖", a denim haul under a bag video, sw-2 item 4).
+    const garment = OFF_MARKET_EMOJI.test(`${q.text} ${said}`)
+    if (!aboutIt || garment || OFF_MARKET.test(said.replace(NOT_A_PRODUCT, ' ')) || PERSONAL_LOOK.test(said) || (!part && CREATOR_PRAISE.test(said)) || !(part || pointsAtIt || relevance > 0)) {
       return { ok: false, reason: 'off_topic' }
     }
   }
 
   if (o.requireRelevance && claimCanRequire(claim) && relevance === 0) return { ok: false, reason: 'not_relevant' }
+
+  if (contradictsKind(said, o.kind)) return { ok: false, reason: 'wrong_kind' }
 
   const len = english.length
   const score = relevance * 4 + (carry ? 2 : 0) + (len >= 30 && len <= 220 ? 1 : 0) + (english === q.text.replace(/\s+/g, ' ').trim() ? 1 : 0)

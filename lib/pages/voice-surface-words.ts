@@ -246,7 +246,7 @@ export function buildWords(input: {
           lang: c.lang ?? null,
           english: c.english ?? null,
           video: c.context === undefined ? undefined : c.context === null ? null : { ...c.context, segment: c.segment ?? c.context.segment ?? null },
-        }, { ...input.gate, claim: theme.label })
+        }, { ...input.gate, claim: theme.label, kind })
         if (!verdict.ok) continue
         if (verdict.thread) {
           if (threads.has(verdict.thread)) continue

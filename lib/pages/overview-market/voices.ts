@@ -133,5 +133,7 @@ export function pickQuotes(candidates: readonly QuoteCandidate[], opts: { month:
     lang: c.lang ?? null,
     english: c.english ?? null,
     video: c.context === undefined ? undefined : c.context === null ? null : { ...c.context, segment: c.context.segment ?? c.segment ?? null },
-  }), opts.count, opts.gate)
+  // The block's kind rides into the gate: a problem's voices never praise
+  // alone (sw-2 item 4).
+  }), opts.count, { ...opts.gate, kind: opts.gate.kind ?? opts.kind })
 }

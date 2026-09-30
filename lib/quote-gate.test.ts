@@ -152,8 +152,10 @@ describe('the known-bad quotes no longer print (walkthrough, 29 Sep)', () => {
     const o = { ...SEALAND, claim: 'Durability', requireRelevance: true }
     expect(whyNot(q('Nenu use chesa bro flipflops type kani vanalaki tadichi padaipoyayi oka 2 months lo', CHUPPS_BILLBOARD,
       { lang: 'te', english: 'I used flipflops type bro but they got bitten and worn out in about 2 months.' }), o)).toBe('off_topic')
+    // Refused earlier now (sw-2 item 4): "Ante" is Telugu ("so"), left
+    // untranslated at the head of the rendering.
     expect(whyNot(q('Ante Waterproof కాదు కదా \nఅలా అయితే ఎవరు కొనరు', CHUPPS_BILLBOARD,
-      { lang: 'te', english: 'Ante is not waterproof, right? If it were, no one would buy it.' }), o)).toBe('off_topic')
+      { lang: 'te', english: 'Ante is not waterproof, right? If it were, no one would buy it.' }), o)).toBe('unreadable')
     expect(whyNot(q('Super kani cost akuba, andaru use cheileru😢😢😢😢', CHUPPS_BILLBOARD,
       { lang: 'or', english: 'Super kani cost akuba, andaru use cheileru😢😢😢😢' }), o)).toBe('unreadable')
   })
@@ -438,5 +440,62 @@ describe('the check pass (29 Sep): what the gate turned away that the market sai
     const video: QuoteVideo = { platform: 'tiktok', videoId: 'y', caption: 'First run on the new blade', segment: 'market' }
     expect(whyNot(q('How do you do it? I am two months in and still scared of stairs', video), { market: null, makerRule: false })).toBeNull()
     expect(whyNot(q('How do you do it? I am two months in and still scared of stairs', video), SEALAND)).toBe('maker_praise')
+  })
+})
+
+// ---- sw-2 item 4: the four quotes production still printed on 30 Sep ------------------
+
+const TIKTOK_BAG_HAUL: QuoteVideo = {
+  platform: 'tiktok', videoId: '7547000000000000001', accountName: 'bag.haul', source: 'discovered', isClient: false, isCompetitor: false,
+  caption: 'the bag everyone keeps asking about #bagtok #totebag', hashtags: ['bagtok', 'totebag'],
+  topics: ['tote bag', 'purchase intent'], segment: 'market',
+}
+const ONEBAG_THREAD: QuoteVideo = {
+  platform: 'reddit', videoId: '1n5onebag', accountName: 'r/onebag', source: 'discovered', isClient: false, isCompetitor: false,
+  caption: 'Is a 40L carry-on too big for regional flights?', hashtags: [], topics: ['carry-on size', 'airline rules', 'backpack'], segment: 'market',
+}
+const MAKER_TOTE: QuoteVideo = {
+  platform: 'tiktok', videoId: '7547000000000000002', accountName: 'studio.bags', source: 'discovered', isClient: false, isCompetitor: false,
+  caption: 'new colourway of our tote bag', hashtags: ['totebag'], topics: ['tote bag', 'colour'], segment: 'market',
+}
+
+describe('sw-2 item 4: the quotes production still printed', () => {
+  it('a denim haul is not a bag buyer: "I bought both washes in medium. 👖" under Ready to buy', () => {
+    expect(whyNot(q('I bought both washes in medium. 👖', TIKTOK_BAG_HAUL), { ...SEALAND, claim: 'Ready to buy the bag', kind: 'purchase_intent' })).toBe('off_topic')
+    // A buyer of the bag still prints.
+    expect(whyNot(q('I bought it in both colours, the green one is my favourite', TIKTOK_BAG_HAUL), { ...SEALAND, claim: 'Ready to buy the bag', kind: 'purchase_intent' })).toBeNull()
+  })
+
+  it('a problem is never illustrated with praise: "It also fits in EVERY overhead bin… which is amazing."', () => {
+    const o = { ...SEALAND, claim: 'Confusion over airline size rules', kind: 'pain_point' }
+    expect(whyNot(q('It also fits in EVERY overhead bin, even the smallest regional jet, which is amazing.', ONEBAG_THREAD), o)).toBe('wrong_kind')
+    // The same line under praise prints; a real problem under a problem prints.
+    expect(whyNot(q('It also fits in EVERY overhead bin, even the smallest regional jet, which is amazing.', ONEBAG_THREAD), { ...o, kind: 'praise' })).toBeNull()
+    expect(whyNot(q('40-45L is a big pack to be carrying every day.', ONEBAG_THREAD), o)).toBeNull()
+    expect(whyNot(q('가방 물건 많이 들어가게 되면 어깨가 무겁지는 않나여??', KOREAN_WORK_BAG,
+      { lang: 'ko', english: 'If you put a lot of things in the bag, doesn’t your shoulder get heavy??' }), { ...o, claim: 'Comfort depends on structure and straps' })).toBeNull()
+    expect(whyNot(q('Love the bag but the straps dig into my shoulders after an hour', ONEBAG_THREAD), { ...o, kind: 'objection' })).toBeNull()
+  })
+
+  it('a translation that kept its first word untranslated: "Jeju I’m already waiting to get it!"', () => {
+    const polish = q('Jeju już czekam, żeby ją dostać!🤍🌈', MAKER_TOTE, { lang: 'pl', english: 'Jeju I\'m already waiting to get it!🤍🌈' })
+    expect(whyNot(polish, SEALAND)).toBe('unreadable')
+    // The same wait, translated whole, prints; a brand or an address keeps its name.
+    expect(whyNot(q('Jezu, już czekam, żeby ją dostać!', MAKER_TOTE, { lang: 'pl', english: 'Jesus, I\'m already waiting to get it!' }), SEALAND)).toBeNull()
+    expect(whyNot(q('Freitag to najlepsza torba na rower', MAKER_TOTE, { lang: 'pl', english: 'Freitag is the best bag for the bike' }), SEALAND)).toBeNull()
+    expect(whyNot(q('Colleen, jaki to rozmiar?', MAKER_TOTE, { lang: 'pl', english: 'Colleen, what size is this?' }), SEALAND)).toBeNull()
+  })
+
+  it('loanwords are not a reader’s English: "Paprika! And check set style!"', () => {
+    const o = { ...SEALAND, claim: 'Looks & style. How a bag looks: colour, design, style.', requireRelevance: true }
+    expect(whyNot(q('パプリカッ！とチェックセットスタイルっ！', MAKER_TOTE, { lang: 'ja', english: 'Paprika! And check set style!' }), o)).toBe('unreadable')
+    // A short translated line that names the bag still prints.
+    expect(whyNot(q('Bardzo ładna torba, piękny kolor', MAKER_TOTE, { lang: 'pl', english: 'Very pretty bag, beautiful colour' }), o)).toBeNull()
+    // A Latin-script translation with few function words is still English
+    // (the staging sweep's Össur lines).
+    expect(whyNot(q('abla vans hangi model', undefined, { lang: 'tr', english: 'Sister, which model of Vans?' }), { market: null, makerRule: false })).toBeNull()
+    expect(whyNot(q('Adidas, apoyando a los genocidas.', undefined, { lang: 'es', english: 'Adidas, supporting the genocidaires.' }), { market: null, makerRule: false })).toBeNull()
+    // A Japanese line in kana and kanji is read as any translation is.
+    expect(whyNot(q('このバッグの色が好きです', MAKER_TOTE, { lang: 'ja', english: 'I like the color of this bag' }), o)).toBeNull()
   })
 })
