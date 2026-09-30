@@ -621,18 +621,29 @@ export interface RivalPosts {
   label: string
   /** Posts on the rival's own tracked accounts. */
   byThem: number
-  /** Videos this update read that NAME the brand, counted as the Brands page
-   *  counts "came up in" (lib/pages/week-brands.ts): the mention layer, in the
-   *  month's market, the brand's own posts out. 0 where `aboutNote` says why
-   *  no figure prints. It was every video the rival searches gathered, before
-   *  the relevance and brand checks (Freitag 149 against 7 on Brands). */
+  /** Videos this update read that NAME the brand unprompted, counted as the
+   *  Brands page counts "Named unprompted" (lib/pages/week-brands.ts): the
+   *  mention layer, in the month's market, the brand's own posts out, and every
+   *  video any of our rival searches found out. 0 where `aboutNote` says why no
+   *  figure prints. It was every video the rival searches gathered, before the
+   *  relevance and brand checks (Freitag 149 against 7 on Brands). Never
+   *  printed: the update's count measures our gathering (WK-42). */
   aboutThem: number
-  /** Why "videos naming them" prints no figure: "not counted yet", or the
-   *  name's other meaning. Optional, so a stored copy carries none. */
+  /** Why "Named unprompted" prints no figure: "not counted yet", or the name's
+   *  other meaning. Optional, so a stored copy carries none. */
   aboutNote?: string | null
-  /** The month's figure beside it, the Brands page's "in all" for the month
-   *  the update is into: This week states an update count again against its
-   *  month. Optional, so a stored copy carries none. */
+  /**
+   * The month's "Named unprompted" count over its one base, as Brands prints
+   * it (T0 ruling U10; T0a review, finding 2): `k` videos naming the brand,
+   * leaving out every video any of our rival searches found, of `n`, the
+   * market's videos this month leaving those out. This week states an update
+   * again against its month, so the month's figure is the one printed. Null
+   * where no figure prints; optional, so a stored copy carries none.
+   */
+  namedMonth?: { k: number; n: number } | null
+  /** The month's count "in all", which a copy stored before the U10 fix
+   *  carries. NEVER PRINTED: it counted the videos our own per-brand searches
+   *  fetched, so a brand we search harder read bigger. */
   aboutMonth?: number | null
   /** The videos our rival searches gathered under the brand's name this
    *  update, before any check: the "matched the name" note's count only.
@@ -2730,8 +2741,8 @@ async function buildCameIn(input: {
   heard: Promise<HeardBlock>
   /** "With this update" on the market (WP3.7). */
   market: MarketCameIn | null
-  /** The month's brand mention layer (lib/pages/week-brands.ts), for "Videos
-   *  naming them"; null where it cannot be read. */
+  /** The month's brand mention layer (lib/pages/week-brands.ts), for "Named
+   *  unprompted"; null where it cannot be read. */
   brandLayer: Promise<BrandLayer | null>
   /** The change log, for Settings' "Tracked since" (memoised read). */
   changes: Promise<readonly ConfigChange[]>
@@ -2868,7 +2879,7 @@ async function buildCameIn(input: {
       byThem: mine.filter((v) => v.source === 'competitor_owned').length,
       aboutThem: about?.videos ?? 0,
       aboutNote: about?.note ?? null,
-      aboutMonth: about?.monthVideos ?? null,
+      namedMonth: about?.monthVideos != null && about.monthOf != null ? { k: about.monthVideos, n: about.monthOf } : null,
       foundByName: mine.filter((v) => v.source !== 'competitor_owned').length,
       // THE SUM OVER THE POSTS NAMED, AND NOTHING WIDER. It was hard-coded to
       // zero, which is a claim about a rival's week; this is a claim about

@@ -650,9 +650,9 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
 
   it('prints an unmeasured name’s month count plainly, with no note (the lead’s R2)', () => {
     const d = marketWeekFixture()
-    const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, aboutMonth: 7 } : r))
+    const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, namedMonth: { k: 7, n: 516 } } : r))
     const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
-    expect(text).toContain('Freitag tracked since 28 Jun 7 in Sep')
+    expect(text).toContain('Freitag tracked since 28 Jun 7 “')
     expect(text).not.toContain('German')
   })
 
@@ -661,29 +661,53 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, nameNote: 'mostly the German word for Friday · not counted' } : r))
     const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
     expect(text).toContain('Freitag tracked since 28 Jun ·')
-    expect(text).toContain('Videos naming them: mostly the German word for Friday · not counted')
+    expect(text).toContain('Named unprompted: mostly the German word for Friday · not counted')
     expect(text).not.toContain('149')
     expect(text.indexOf('Freitag')).toBeGreaterThan(text.indexOf('Rareform'))
   })
 
-  it('prints the videos naming each brand on the Brands page’s basis, against the month, and Settings’ tracked-since date (finish-list 7, 9)', () => {
+  // ONE BRAND COUNT, THE BRANDS PAGE'S (T0 ruling U10; T0a review, finding
+  // 2): "Named unprompted", over its one base, as Brands, Your market, the
+  // monthly and Settings print it. It printed "Videos naming them … 54 in
+  // Sep", the count "in all", which counts the videos our own brand searches
+  // fetched.
+  it('prints each brand’s "Named unprompted" count on the Brands page’s basis, over its one base, and Settings’ tracked-since date (finish-list 7, 9; U10)', () => {
     const d = marketWeekFixture()
     const rivals = d.cameIn.rivals.map((r) =>
-      r.label === 'Freitag' ? { ...r, aboutThem: 2, aboutMonth: 7, foundByName: 149, aboutNote: null, since: 'by 28 Jun' }
-        : r.label === 'The North Face' ? { ...r, aboutThem: 11, aboutMonth: 54, aboutNote: null, since: '17 Sep' }
-          : r.label === 'Rareform' ? { ...r, aboutThem: 0, aboutMonth: null, aboutNote: 'not counted yet', since: '9 Sep' }
+      r.label === 'Freitag' ? { ...r, aboutThem: 2, namedMonth: { k: 7, n: 516 }, foundByName: 149, aboutNote: null, since: 'by 28 Jun' }
+        : r.label === 'The North Face' ? { ...r, aboutThem: 11, namedMonth: { k: 12, n: 516 }, aboutNote: null, since: '17 Sep' }
+          : r.label === 'Rareform' ? { ...r, aboutThem: 0, namedMonth: null, aboutNote: 'not counted yet', since: '9 Sep' }
             : r)
+    for (const mode of ['app', 'email'] as const) {
+      const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, mode, ctx)))
+      expect(text).toContain('Named unprompted')
+      expect(text).toContain('of 516 in Sep')
+      expect(text).not.toContain('Videos naming them')
+      expect(text).not.toContain('about them')
+      expect(text).not.toContain('149')
+      expect(text).not.toContain('11 of')
+    }
     const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx)))
-    expect(text).toContain('Videos naming them')
-    expect(text).not.toContain('about them')
-    expect(text).toContain('Freitag tracked by 28 Jun 7 in Sep')
-    expect(text).not.toContain('149')
-    expect(text).toContain('The North Face tracked since 17 Sep 54 in Sep')
-    expect(text).not.toContain('11 of 54')
-    expect(text).toContain('Videos naming them: not counted yet')
+    expect(text).toContain('Freitag tracked by 28 Jun 7 “')
+    expect(text).toContain('The North Face tracked since 17 Sep 12 “')
+    expect(text).toContain('Named unprompted: not counted yet')
+    // The figure table carries the same count, on the same label.
+    const figures = weekRivalPosts.figures!({ ...d, cameIn: { ...d.cameIn, rivals } })
+    expect(figures['brand_competitor:The North Face_naming_month']).toMatchObject({ value: 12, label: 'The North Face: named unprompted in Sep, of 516 videos' })
     // A month of none prints the 0 alone, never "of 0".
-    const none = rivals.map((r) => (r.label === 'Old School' ? { ...r, aboutThem: 0, aboutMonth: 0, aboutNote: null } : r))
+    const none = rivals.map((r) => (r.label === 'Old School' ? { ...r, aboutThem: 0, namedMonth: { k: 0, n: 516 }, aboutNote: null } : r))
     expect(flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals: none } }, 'app', ctx)))).not.toContain('of 0 in Sep')
+  })
+
+  it('never prints the count "in all" a stored copy carries (U10)', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) => (r.label === 'The North Face' ? { ...r, aboutMonth: 54, aboutNote: null } : r))
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, mode, ctx)))
+      expect(text).not.toContain('54')
+      expect(text).not.toContain('of 516')
+    }
+    expect(Object.keys(weekRivalPosts.figures!({ ...d, cameIn: { ...d.cameIn, rivals } })).some((k) => k.endsWith('_naming_month'))).toBe(false)
   })
 
   it('opens the brands’ page under its current sidebar label', () => {
