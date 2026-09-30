@@ -1,3 +1,7 @@
+import type { Direction } from '../reading/bands'
+import type { Verdict } from '../reading/verdicts'
+import type { FigureTable } from '../reports/types'
+
 // The written read's inputs (plan "Verbatim, writing back", T1 and T2).
 //
 // CODE OWNS EVERY FACT HERE. A pool candidate and a standing fact are what the
@@ -57,4 +61,34 @@ export interface WeekPool {
   weekVideos: number; weekComments: number; monthVideos: number   // category, read lane
   candidates: PoolCandidate[]            // eligible = gatedVideos ≥ 3, maker segments excluded; ranked gatedVideos, then weekVideos; cap 12
   thin: boolean                          // < 3 eligible candidates
+}
+
+/** The ladder (decision D1): a level now, a change once two comparable months
+ *  exist, a direction after three. */
+export type StandingRung = 'level' | 'changed' | 'direction'
+
+export interface StandingFact {
+  subjectId: string; name: string
+  calibration: 'ready' | 'provisional'          // failed subjects are omitted
+  level: { k: number; n: number }               // pooled market, reading month to date
+  rank: number                                  // by level among printed subjects
+  trail: { month: string; k: number | null; n: number | null }[]   // up to 12 months
+  verdict: Verdict | null                       // monthChange on the market pair view (null = no comparable pair)
+  direction: Direction | null                   // directionWord only
+  rung: StandingRung                            // highest rung the data earns
+  contents: string[]                            // ≤5 theme labels inside the subject this month (insight overlap)
+  notes: string[]                               // ≤8 member insight descriptions this month
+  quoteRef: QuoteRef | null                     // strict-gated, this week if any, else this month
+}
+
+/**
+ * A sentence code writes: figures as `[[key]]` tokens, their printed values in
+ * the table beside it (the PRINTED shape, lib/reports/types.ts, so the level
+ * reads exactly as `levelText` prints it and no second conversion decides
+ * "7%" against "7.0%"). `substituteFigures` (lib/reports/cover.ts) renders it.
+ * An empty `body` is no sentence: nothing prints.
+ */
+export interface TokenSentence {
+  body: string
+  figures: FigureTable
 }
