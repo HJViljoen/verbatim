@@ -20,10 +20,12 @@ import {
   calibrationOverviewFixture, marketArrivalsFixture, marketFrontFixture, overviewFixture, refusedFixture as overviewRefused,
 } from '@/components/pages/overview/fixture'
 import { calibrationFixture, marketSubjectsFixture, refusedFixture as subjectsRefused, subjectsFixture } from '@/components/pages/subjects/fixture'
-import { voiceFixture } from '@/components/pages/voice-surface/fixture'
-import { marketFixture, sealandMovesFixture } from '@/components/pages/market-surface/fixture'
+import { refusedVoiceFixture, voiceFixture } from '@/components/pages/voice-surface/fixture'
+import { marketFixture, sealandMovesFixture, thinRefusedMovesFixture } from '@/components/pages/market-surface/fixture'
 import { brandsFixture, ossurBrandsFixture } from '@/components/pages/competitive-surface/brands/fixture'
-import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
+import { competitiveFixture, refusedCompetitiveFixture } from '@/components/pages/competitive-surface/fixture'
+import { thinRefusedAskFixture } from '@/components/pages/agent/fixture'
+import { AboutReadings, AnswerTile } from '@/components/pages/agent/answer'
 import { marketWeekFixture, ossurWeeksFixture, weekFixture } from '@/components/pages/week/fixture'
 import { weeklyFixture } from '@/components/blocks/weekly/fixture'
 import { filledSlotsFixture, monthlyFixture } from '@/components/blocks/monthly/fixture'
@@ -33,6 +35,13 @@ import { changesFromLog } from '@/lib/reading/comparability'
 import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
 import { WEEK_LINE } from '@/lib/week-line-config'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
+import { answerFallback, groundedFallback } from '@/lib/agent/measure'
+import { movementLine, objectLine, type MovementReading } from '@/lib/agent/movement'
+import { monthChange } from '@/lib/reading/bands'
+import { pairOn } from '@/lib/reading/pairs'
+import { priorPrintable } from '@/lib/reading/verdicts'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
+import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 
 // T0a's STRUCTURAL CHECKS (research/T0-inventory.md, "Structural checks"):
 // what a phrase list cannot see. Each walks the client block registries in
@@ -49,6 +58,14 @@ import { SEALAND_CLIENT_ID } from '@/lib/config'
 //     in that subject's row.
 //  4. The week bars render no "Our changes" row and no "none gathered" label,
 //     and their axis starts after the last rule change.
+//  5. A refused month pair ON THIN DATA (a side under the band's floors)
+//     prints no month before either (T0a review, finding 1): Your moves (the
+//     card, the move readings, the advice's Afterwards), Ask (the answer, its
+//     object readings, the keys and lines the model is handed), Brands and
+//     Conversation.
+//  6. And the other way round: a READY subject keeps its current level on
+//     Your market, the Subjects rail and the weekly while its month before is
+//     dropped (the review's over-removal question).
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -112,10 +129,14 @@ describe('T0a structural check 2: a refused month pair prints no month before', 
   // Sealand's September, read on the fixtures' clocks: the market and themes
   // pairs are refused (we changed our searches in September).
   const REFUSED: [string, Renderish[], unknown[]][] = [
-    ['your market', listOf(FRONT_PAGE_BLOCKS), [marketFrontFixture(), marketArrivalsFixture()]],
+    ['your market', listOf(FRONT_PAGE_BLOCKS), [marketFrontFixture(), marketArrivalsFixture(), marketFrontFixture({ subjectsCalibration: 'staging' })]],
     ['subjects (refused)', listOf(SUBJECT_BLOCKS), [subjectsRefused(), marketSubjectsFixture()]],
     ['the monthly', listOf(ALL_MONTHLY_BLOCKS), [monthlyFixture(), filledSlotsFixture()]],
     ['this week', listOf(WEEK_BLOCKS), [marketWeekFixture()]],
+    // T0a review, finding 6: the surfaces check 2 did not reach.
+    ['conversation (refused)', listOf(VOICE_BLOCKS), [refusedVoiceFixture()]],
+    ['brands (refused, thin)', listOf(COMPETITIVE_BLOCKS), [refusedCompetitiveFixture()]],
+    ['your moves (refused, thin)', listOf(MARKET_BLOCKS), [thinRefusedMovesFixture()]],
   ]
 
   it('renders no previous-month node on any block, in any mode', () => {
@@ -271,5 +292,174 @@ describe('T0a structural check 4: the week bars never span our changes', () => {
       nextUpdateAfter: SEALAND_NEXT_UPDATE,
     })
     for (const mode of MODES) expect(render(<WeekBars block={staging} mode={mode} variant="front" surface="inner" />)).toBe('')
+  })
+})
+
+describe('T0a structural check 5: a refused pair on THIN data prints no month before (review finding 1)', () => {
+  // Each figure the review found printed across a refused pair whose earlier
+  // or later side is under the band's floors, as the page printed it. None may
+  // print, in any block or mode; the month read still does.
+
+  it('Your moves: the card, the move readings and the advice’s Afterwards print their own month alone', () => {
+    const data = thinRefusedMovesFixture()
+    // The fixture is the case: every one of these is refused, thin or not.
+    expect(data.moves.card?.movement.yours?.state).toBe('refused')
+    expect(data.moves.card?.movement.yours?.value).toEqual({ k: 26, n: 84 })
+    expect(data.moves.readings[0].verdict?.state).toBe('refused')
+    expect(data.advice.rows.find((r) => r.lineageId === 'L-old')?.afterwards.state).toBe('refused')
+    const PRIOR = [/23 of 85/, /\bof 85\b/, /6 of 82/, /\b9 of 104\b/, /May 2026/, /\bagainst\s+[\d,]+/, /before it was declared/, /too few to compare/, /Not read as a change/]
+    const bad: string[] = []
+    for (const block of listOf(MARKET_BLOCKS)) {
+      for (const mode of MODES) {
+        const text = markupText(renderOf(block, data, mode))
+        for (const re of PRIOR) {
+          const hit = re.exec(text)
+          if (hit) bad.push(`${block.key} [${mode}] ${JSON.stringify(hit[0])}`)
+        }
+      }
+    }
+    expect(bad).toEqual([])
+    // The month read still prints: September's own counts.
+    const card = markupText(renderOf(listOf(MARKET_BLOCKS).find((b) => b.key === 'market.card')!, data, 'app'))
+    expect(card).toMatch(/Durability in your audience[\s\S]*26[\s\S]*of 84 videos/)
+    const moves = markupText(renderOf(listOf(MARKET_BLOCKS).find((b) => b.key === 'market.moves')!, data, 'app'))
+    expect(moves).toMatch(/10[\s\S]*of 84/)
+  })
+
+  it('Ask: no "the month before", no month-before keys offered to the model, no August in its lines', () => {
+    const data = thinRefusedAskFixture()
+    const f = data.measure!.findings[0]
+    // The case: 4 of August's 351 against 9 of September's 626, the judge
+    // refusing the pair. It read "too few to compare" with August kept.
+    expect(f.verdict?.state).toBe('refused')
+    expect(f.verdict?.baseline).toBeUndefined()
+    expect(priorPrintable(f.verdict)).toBe(false)
+    // The keys the model is handed: this month's level alone.
+    expect(Object.keys(data.measure!.figures).filter((k) => /_prev_|_change$|_band$/.test(k))).toEqual([])
+    // The page: the answer, its object readings and its fallbacks.
+    const tile = markupText(render(
+      <AnswerTile turn={data.turns[0]} turnIndex={0} measure={data.measure} citations={data.citations} basis={data.basis} composer={null} />,
+    ))
+    const about = markupText(render(<AboutReadings readings={data.about} />))
+    const fallback = `${answerFallback(data.measure!)} ${groundedFallback(data.measure, f.findingId)}`
+    for (const [name, text] of [['answer', tile], ['about', about], ['fallback', fallback]] as const) {
+      expect(text, name).not.toMatch(/the month before/i)
+      expect(text, name).not.toContain('4 of 351')
+      expect(text, name).not.toContain('351')
+      expect(text, name).not.toMatch(/\bAug(?:ust)?\b/)
+    }
+    expect(tile).toContain('9 of 626')
+    expect(about).toContain('9 of 626')
+    // The lines the model is handed: the object reading, and a movement line
+    // built as the movement block builds it (`monthChange` under the judge).
+    expect(objectLine(data.about[0])).not.toMatch(/Aug|351/)
+    expect(objectLine(data.about[0])).toContain('9 of 626')
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const verdict = monthChange({
+      object: { kind: 'theme', id: 'reg-1', label: 'Will it survive a wet commute' },
+      audience: INDUSTRY_AUDIENCE,
+      curr: { month: '2026-09-01', videos: 626, k: 9, audience: INDUSTRY_AUDIENCE },
+      prev: { month: '2026-08-01', videos: 351, k: 4, audience: INDUSTRY_AUDIENCE },
+      comparability: judge('2026-08-01', '2026-09-01', INDUSTRY_AUDIENCE),
+    })
+    const reading: MovementReading = {
+      label: 'Will it survive a wet commute', audience: 'the category',
+      curr: { month: '2026-09-01', k: 9, n: 626 }, prev: { month: '2026-08-01', k: 4, n: 351 },
+      verdict, direction: null, readableMonths: 1, filling: false,
+    }
+    expect(movementLine(reading)).not.toMatch(/Aug|351/)
+    expect(movementLine(reading)).toContain('9')
+  })
+
+  it('Brands: no earlier month beside a refused thin panel', () => {
+    const data = refusedCompetitiveFixture()
+    const verdicts = [
+      ...(data.standings.rows ?? []).flatMap((r) => [r.contentVerdict, r.attentionVerdict]),
+      ...(data.headToHead?.measures ?? []).flatMap((m) => [m.verdict, m.rivalVerdict]),
+    ].filter((v) => v != null)
+    // The case: every comparison is refused, the thin ones included.
+    expect(verdicts.length).toBeGreaterThan(0)
+    for (const v of verdicts) expect(priorPrintable(v), `${v!.objectLabel}`).toBe(false)
+    const bad: string[] = []
+    for (const block of listOf(COMPETITIVE_BLOCKS)) {
+      for (const mode of MODES) {
+        const text = markupText(renderOf(block, data, mode))
+        for (const re of [...PREV_MONTH_NODE, /too few to compare/]) {
+          const hit = re.exec(text)
+          if (hit) bad.push(`${block.key} [${mode}] ${JSON.stringify(hit[0])}`)
+        }
+      }
+    }
+    expect(bad).toEqual([])
+  })
+
+  it('Conversation: no earlier month beside a refused pair', () => {
+    const data = refusedVoiceFixture()
+    const bad: string[] = []
+    for (const block of listOf(VOICE_BLOCKS)) {
+      for (const mode of MODES) {
+        const text = markupText(renderOf(block, data, mode))
+        for (const re of PREV_MONTH_NODE) {
+          const hit = re.exec(text)
+          if (hit) bad.push(`${block.key} [${mode}] ${JSON.stringify(hit[0])}`)
+        }
+      }
+    }
+    expect(bad).toEqual([])
+  })
+})
+
+describe('T0a structural check 6: a ready subject keeps its current level while its month before goes', () => {
+  // The review's over-removal question: "every subject shows its name only"
+  // was a fixture whose every row was provisional. Under a refused pair, with
+  // the calibration staging measured (5 ready), a READY row still prints its
+  // current level; only August goes.
+  const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/'/g, '&#x27;')
+  const find = (list: Renderish[], key: string) => list.find((b) => b.key === key)!
+
+  const cases: [string, Renderish, unknown, { label: string; now: RegExp; before: RegExp }[]][] = (() => {
+    const front = marketFrontFixture({ subjectsCalibration: 'staging' })
+    const rail = marketSubjectsFixture()
+    const ov2 = calibrationOverviewFixture()
+    const ready = <R extends { calibration?: string | null }>(rows: readonly R[]) => rows.filter((r) => r.calibration === 'ready')
+    return [
+      ['your market / the market by subject', find(listOf(FRONT_PAGE_BLOCKS), 'overview.subjects'), front,
+        ready(front.subjects.rows).map((r) => ({ label: r.label, now: new RegExp(`\\b${r.category.k}\\b`), before: /\bAug(?:ust)?\b/ }))],
+      ['subjects rail', find(listOf(SUBJECT_BLOCKS), 'subjects.list'), rail,
+        ready(rail.list.rows).map((r) => ({ label: r.name, now: new RegExp(`\\b${r.market!.k}\\b`), before: r.marketPrev ? new RegExp(`\\b${r.marketPrev.k}\\b(?![,\\d])`) : /\bAug\b/ }))],
+      ['weekly subjects', find(listOf(WEEKLY_BLOCKS), 'weekly.subjects'), { ...weeklyFixture(), subjects: ov2.subjects },
+        ready(ov2.subjects.rows).map((r) => ({ label: r.label, now: new RegExp(`${r.category.k} of ${r.category.n}`), before: / of 351\b|\bAug(?:ust)?\b/ }))],
+    ]
+  })()
+
+  it('has ready subjects under a refused pair in every case', () => {
+    for (const [name, , , rows] of cases) expect(rows.length, name).toBeGreaterThan(1)
+  })
+
+  it('prints each ready subject’s current level as a figure, and no month before, in every mode', () => {
+    const bad: string[] = []
+    let checked = 0
+    for (const [name, block, data, rows] of cases) {
+      for (const mode of MODES) {
+        const markup = renderOf(block, data, mode)
+        const all = rows.map((r) => escape(r.label))
+        for (const r of rows) {
+          const at = markup.indexOf(escape(r.label))
+          if (at < 0) { bad.push(`${name} [${mode}] ${r.label}: not printed`); continue }
+          const others = all.filter((l) => l !== escape(r.label))
+          const own = rowAround(markup, at)
+          const row = own != null && !others.some((o) => own.includes(o))
+            ? own
+            : markup.slice(at, Math.min(...others.map((o) => markup.indexOf(o, at + 1)).filter((i) => i > at), markup.length))
+          const text = markupText(row)
+          checked++
+          if (!/data-copy="(?:figure|level)"/.test(row)) bad.push(`${name} [${mode}] ${r.label}: no figure node`)
+          if (!r.now.test(text)) bad.push(`${name} [${mode}] ${r.label}: current level missing from ${JSON.stringify(text.slice(0, 120))}`)
+          if (r.before.test(text)) bad.push(`${name} [${mode}] ${r.label}: month before printed in ${JSON.stringify(text.slice(0, 120))}`)
+        }
+      }
+    }
+    expect(bad).toEqual([])
+    expect(checked).toBeGreaterThan(20)
   })
 })

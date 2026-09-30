@@ -10,6 +10,8 @@ import { methodLines } from '@/lib/reading/method'
 import { claimEcho, rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
 import { LEAD_MIN_RATED } from '@/lib/pages/content-brief'
+import { pairJudge, pairOn } from '@/lib/reading/pairs'
+import { OSSUR_UPDATES } from '@/lib/test/sealand-pairs'
 
 // Competitive's block fixtures (Phase 1 WP14).
 //
@@ -714,4 +716,38 @@ export function sealandRivalFixture(): CompetitiveSurfaceData {
       pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
     }),
   }
+}
+
+/**
+ * The page across a month pair the judge REFUSES, ON THIN DATA (T0a review,
+ * finding 1). Össur's own judge on 2 Oct (lib/test/sealand-pairs.ts
+ * `OSSUR_UPDATES`, paused since 13 Sep): its September was never read to its
+ * end, so the brands view refuses August against September, and most of
+ * Össur's panel sides are under SHARE_BAND's floors. Those verdicts read "too
+ * few to compare" with August kept beside them (the standings' change column,
+ * the head-to-head's "then" cells); refused now, they print September alone.
+ */
+export function refusedCompetitiveFixture(): CompetitiveSurfaceData {
+  const judge = pairOn(pairJudge({ now: '2026-10-02T06:00:00.000Z', changes: [], rows: [], updates: OSSUR_UPDATES }))
+  const window = horizonWindow('last_3', NOW, '2026-06-01')
+  return competitiveFixture({
+    standings: buildStandingsBlock({
+      pair: judge,
+      brand: 'Össur',
+      rivals: [{ name: 'Ottobock', retiredAt: null }],
+      denominators: OSSUR,
+      axis: window.months,
+      readAxis: window.months,
+      month: MONTH,
+      changes: [{ changed_at: '2026-09-02T00:00:00.000Z', surface: 'terms', source: 'logged', affects_months: null }],
+    }),
+    headToHead: buildHeadToHead({
+      month: MONTH,
+      brand: 'Össur',
+      rival: 'Ottobock',
+      videos: PLAYBOOK_VIDEOS,
+      denominators: OSSUR,
+      pair: judge,
+    }),
+  })
 }

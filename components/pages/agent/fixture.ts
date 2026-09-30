@@ -15,6 +15,9 @@ import { surface } from '@/lib/nav'
 import type { MonthPoint, MonthSeries } from '@/lib/reading/series'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
+import { objectReading } from '@/lib/agent/movement'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 
 // Ask's fixtures (Phase 1 Block D, package D8).
 //
@@ -454,4 +457,48 @@ export function followUpFixture(over: Partial<AgentThreadData> = {}): AgentThrea
     }),
     ...over,
   }
+}
+
+/** The instant T0a's thin-refused Ask fixture is read at: 2 Oct, when
+ *  Sealand's August against September is refused on every view. */
+const ON_2_OCT = '2026-10-02T06:00:00.000Z'
+
+/**
+ * An answer across a month pair the judge REFUSES, ON THIN DATA (T0a review,
+ * finding 1; AK-14). The finding's theme came up in 4 of August's 351
+ * category videos and 9 of September's 626: under the band's floor of 10 on
+ * the earlier side, so the band would say "too few to compare", and the judge
+ * refuses the pair for our September searches. It printed "the month before: 4
+ * of 351 videos in August" and offered the model `_prev_` keys, while the chart
+ * beside it was already cut to September. The object the question named
+ * (Looks & style, HYPOTHETICAL ready) is read the same way: 4 of 351, then 9 of
+ * 626. Read with the product's own judge (lib/test/sealand-pairs.ts).
+ */
+export function thinRefusedAskFixture(): AgentThreadData {
+  const judge = pairOn(sealandJudge(ON_2_OCT))
+  const thin = series(INDUSTRY_AUDIENCE, [
+    ['2026-07-01', 3, 330],
+    ['2026-08-01', 4, 351],
+    [MONTH, 9, 626],
+  ])
+  const measure = measureAnswer({
+    pair: judge,
+    asOf: ON_2_OCT,
+    findings: [{ findingId: '0:G1', registryIds: [REGISTRY_ID] }],
+    series: [thin],
+    month: MONTH,
+    directionWords: true,
+    ownAudience: CLIENT_AUDIENCE,
+    hasJudgement: true,
+  })
+  const about = objectReading(
+    {
+      object: { kind: 'subject', id: 'subj-looks', label: 'Looks & style', calibration: 'ready' },
+      points: [{ month: '2026-07-01', k: 3, n: 330 }, { month: '2026-08-01', k: 4, n: 351 }, { month: MONTH, k: 9, n: 626 }],
+    },
+    MONTH,
+    judge,
+    ON_2_OCT,
+  )
+  return agentFixture({ measure, about: [about] })
 }
