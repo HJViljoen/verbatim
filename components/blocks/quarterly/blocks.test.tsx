@@ -1193,3 +1193,86 @@ describe('page 3 under the three calibration states (decision C, WP1.1)', () => 
     }
   })
 })
+
+// THE QUARTERLY'S OWN QUARTER COMPARISONS PASS THE PAIR JUDGE (T0a review,
+// finding 5). The cover, "Our read" and the subjects' Q2 → Q3 columns ignored
+// the judge the Reports card obeyed. Where a month step across the two
+// quarters is refused (`joined: false`), every quarter comparison is refused:
+// this quarter's count alone, no quarter before, and nothing said about it.
+describe('a quarter pair the judge refuses (T0a review, finding 5)', () => {
+  const refused = quarterlyFixture({}, { joined: false })
+  const joined = quarterlyFixture()
+
+  it('refuses every quarter comparison past the gate, with no quarter before and no change', () => {
+    const quarter = [
+      ...refused.category.quarter,
+      ...refused.subjects.rows.flatMap((r) => [r.youQuarter, r.categoryQuarter]).filter((v): v is Verdict => v != null),
+    ]
+    expect(quarter.length).toBeGreaterThan(0)
+    for (const v of quarter) {
+      expect(v.state).toBe('refused')
+      expect(v.baseline).toBeUndefined()
+      expect(v.changePts).toBeNull()
+    }
+    // The same quarter, joined, is drawn: this is the judge's doing.
+    expect(joined.subjects.rows.some((r) => r.categoryQuarter?.state === 'moved')).toBe(true)
+    // No quarter gap is drawn across a refused pair ("comparison refused").
+    expect(refused.subjects.rows.every((r) => r.gap == null)).toBe(true)
+  })
+
+  it('prints no quarter before, no refusal and no Q2 → Q3 column on any page, in any mode', () => {
+    for (const key of ['quarterly.cover', 'quarterly.read', 'quarterly.subjects', 'quarterly.category'] as const) {
+      for (const mode of MODES) {
+        const text = renderText(QUARTERLY_BLOCKS[key].render(refused, mode, ctx))
+        // The quarter before's counts ("686 of 3,810", "3,810 in Q2 2026").
+        expect(text, `${key} ${mode}`).not.toContain('3,810')
+        expect(text, `${key} ${mode}`).not.toContain('686 of')
+        expect(text, `${key} ${mode}`).not.toMatch(/comparison refused|could have been compared|not compared/i)
+        expect(text, `${key} ${mode}`).not.toContain('Q2 2026 → Q3 2026')
+        expect(text, `${key} ${mode}`).not.toMatch(/points apart in the quarter from April/)
+      }
+    }
+    // The month's own levels stay on the subjects page.
+    const subjects = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(refused, 'app', ctx))
+    expect(subjects).toContain('305 of 1,388')
+    expect(subjects).toContain('Both columns are September on its own.')
+    // And the joined quarter keeps both columns and its sentence.
+    const drawn = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(joined, 'app', ctx))
+    expect(drawn).toContain('Q2 2026 → Q3 2026')
+    expect(drawn).toContain('The last two are this quarter against the one before it.')
+  })
+})
+
+// THE MOVES PAGE PRINTS NO REFUSAL (T0a review, finding 5; the one
+// condition). A refused row's "Afterwards:" line was the pair's sentence ("Not
+// read as a change: we changed our searches in September."), and a thin
+// refused row printed its month before. Neither prints; the row keeps its
+// grounding and its decision.
+describe('the quarterly moves page under a refused Afterwards', () => {
+  it('prints no "Afterwards:" line for a withheld comparison, live or stored', () => {
+    const data = quarterlyFixture()
+    const row = data.moves.advice.find((a) => a.lineageId === 'L-old')!
+    expect(row.afterwards.state).toBe('reading')
+    const refusedPair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    const variants = [
+      { state: 'refused' as const, verdict: null, months: row.afterwards.months, line: 'Not read as a change: we changed our searches in September.', pair: refusedPair },
+      // Stored before T0a: the thin refused pair's verdict, its month before kept.
+      { ...row.afterwards, verdict: { ...row.afterwards.verdict!, pair: refusedPair } },
+      // Stored before T0a: a comparison across two groupings (YM-16).
+      { ...row.afterwards, verdict: { ...row.afterwards.verdict!, flags: ['clustering_unknown' as const] } },
+    ]
+    const drawn = renderText(quarterlyMoves.render(data, 'app', ctx))
+    expect(drawn).toContain(`Afterwards: ${row.afterwards.line}`)
+    for (const afterwards of variants) {
+      const moves = { ...data.moves, advice: data.moves.advice.map((a) => (a.lineageId === 'L-old' ? { ...a, afterwards } : a)) }
+      for (const mode of MODES) {
+        const text = renderText(quarterlyMoves.render({ ...data, moves }, mode, ctx))
+        expect(text, mode).not.toContain('Not read as a change')
+        expect(text, mode).not.toContain(row.afterwards.line)
+        expect(text, mode).not.toContain('9 of 104')
+        // The row itself stays.
+        expect(text, mode).toContain('Lead with repairability')
+      }
+    }
+  })
+})

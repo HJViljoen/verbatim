@@ -143,13 +143,6 @@ export function quarterPairJoins(pair: PairOn, prior: Quarter, quarter: Quarter,
 const unevenQuarter = (months: readonly { videos: number | null; backRead: boolean }[] | undefined): boolean =>
   (months ?? []).some((m) => m.backRead || m.videos == null || m.videos < SHARE_BAND.minN)
 
-/** The row's verdict with the quarter before taken off: refused, this
- *  quarter's level only (`bandVerdict`'s refused shape). */
-function withoutQuarterBefore(v: Verdict, reason: NonNullable<Verdict['refusedReason']>): Verdict {
-  const { baseline: _prior, ...level } = v
-  return { ...level, state: 'refused', refusedReason: reason }
-}
-
 /** Which audience the card's rows are read on. The CATEGORY: it is the only
  *  side with the n to carry a banded quarter comparison on today's corpus, and
  *  a card that drew the tenant's own side would print six refusals. The
@@ -239,10 +232,13 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
       value: { k: value.videos, n },
       baseline: { k: baseline.videos, n: priorN },
       readings: input.readings,
+      // Refused past the gate: this quarter's level only, in `bandVerdict`'s
+      // refused shape (no quarter before, no change). Below the gate a quarter
+      // verdict carries no baseline already (`baseline_forming`), and the card
+      // says when the first one lands.
+      ...(refusedBy ? { refused: refusedBy } : {}),
     })
-    // Below the gate a quarter verdict carries no baseline already
-    // (`baseline_forming`), and the card says when the first one lands.
-    rows.push({ label: subject.name, verdict: refusedBy && verdict.state !== 'baseline_forming' ? withoutQuarterBefore(verdict, refusedBy) : verdict })
+    rows.push({ label: subject.name, verdict })
     // THE BARS ARE THE LEVEL, NOT THE CHANGE, and they carry the same n the
     // verdict divides by — so a bar and the badge beside it cannot be read off
     // two different denominators (the bar is pushed above, before the gate).

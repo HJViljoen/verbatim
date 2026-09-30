@@ -1247,6 +1247,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     subjectsBefore: a.subjectsBefore,
     readings,
     overview,
+    joined: a.joined !== false,
   })
   const windowApplied = a.thisQuarter.denominators != null
   // The theme half is its own read and its own silence: a window pair can
@@ -1374,11 +1375,23 @@ function buildQuarterVerdicts(a: {
   subjectsBefore: SubjectWindowReading[] | null
   readings: number
   overview: OverviewData
+  /** Does every month step across the two quarters join under the month judge
+   *  (`quarterPairJoins`)? Where it does not, every quarter comparison on these
+   *  pages is refused: this quarter's count alone, no quarter before, nothing
+   *  printed about it (T0a review, finding 5; the Reports card's own rule). */
+  joined: boolean
 }): Verdict[] {
   const now = a.thisQuarter.denominators
   const before = a.lastQuarter.denominators
   if (!now || !before) return []
   const out: Verdict[] = []
+  // THE PAIR JUDGE, ONCE FOR THE WHOLE ARTEFACT (T0a review, finding 5). The
+  // cover, "Our read" and the subjects' quarter columns read these verdicts,
+  // and they ignored the judge the Reports card already obeyed, so the card and
+  // the review it opens could disagree once the quarter view unlocks. Under the
+  // gate every verdict is `baseline_forming` and carries no quarter before
+  // anyway; past it, a quarter pair the judge refuses is refused here.
+  const refused = a.joined ? undefined : ('tracking_change' as const)
   // NO VERDICT ON AN AUDIENCE'S OWN VOLUME. The first cut built one per
   // audience as `value: {k: videos, n: videos}` against the same pair before
   // it — 100% against 100%, so `proportionDelta` answered 0 points and the
@@ -1405,10 +1418,10 @@ function buildQuarterVerdicts(a: {
     // none: dropped, rather than printed to a client as a raw id.
     const label = themeLabel(t.theme_id, a.overview)
     if (!was || !n || !priorN || !label) continue
-    // NOT UNDER THE MONTH-PAIR RULE YET (market-first decision D): a quarter
-    // against a quarter is WP3.11's (deploy 5). The plan's first quarter
-    // comparison is Q1 2027 against Q4 2026, in April (§2.11); Q4 against Q3
-    // is refused by comparability.
+    // UNDER THE MONTH-PAIR RULE, STEP BY STEP (`quarterPairJoins`, T0a): a
+    // quarter against a quarter is refused where any month step across the
+    // two is. The plan's first quarter comparison read the same way is Q1
+    // 2027 against Q4 2026, in April (§2.11).
     out.push(
       quarterChange({
         object: { kind: 'theme', id: t.theme_id, label },
@@ -1418,6 +1431,7 @@ function buildQuarterVerdicts(a: {
         value: { k: t.videos, n },
         baseline: { k: was.videos, n: priorN },
         readings: a.readings,
+        ...(refused ? { refused } : {}),
       }),
     )
   }
@@ -1460,6 +1474,7 @@ function buildQuarterVerdicts(a: {
           value: { k: subjectsNow.get(`${audience}:${row.id}`)?.videos ?? 0, n },
           baseline: { k: subjectsBefore.get(`${audience}:${row.id}`)?.videos ?? 0, n: priorN },
           readings: a.readings,
+          ...(refused ? { refused } : {}),
         }),
       )
     }
@@ -1749,9 +1764,14 @@ function buildRead(a: {
   // same figure the cover was calling a quarter change. A month's reading is
   // still on the pages that own it, and is still in `verdicts` below for
   // anything that audits what this artefact drew.
+  // AND NEVER A REFUSED ONE (T0a review, finding 5; the one condition): a
+  // quarter comparison the pair judge refused is not shown, so the read does
+  // not argue from it or say that it was refused ("could have been compared
+  // and were not, because …" is the reason the rule forbids). It says what it
+  // says of a quarter with no comparison drawn.
   const interpretation = composeInterpretation(
     'interpretation_quarterly',
-    a.quarterVerdicts,
+    a.quarterVerdicts.filter((v) => v.state !== 'refused'),
     proseFigures(a.cover.figures),
     quotes.map((q) => ({ ref: q.quote.ref, context: q.cite })),
     { draft: a.draft },
@@ -1859,11 +1879,13 @@ function buildSubjects(a: {
     // A refusal on EITHER column refuses the difference: if the product will
     // not say whether one side moved, it will not say how far apart they are
     // either, because both refusals are about the same break in the record.
-    // A refused column that recorded no reason draws NO gap rather than a
-    // difference beside it (`inheritRefusal`, lib/reading/gap.ts).
+    // AND A REFUSED GAP IS NOT DRAWN AT ALL (T0a; the one condition): no
+    // "comparison refused" headline, no reason and no quarter before. It was
+    // drawn refused where a reason was recorded (`inheritRefusal`,
+    // lib/reading/gap.ts), which no quarter verdict carried until the pair
+    // judge reached them.
     const inherited = inheritRefusal([you, category])
-    if (inherited.refused && !inherited.reason) return null
-    const refused = inherited.reason ?? undefined
+    if (inherited.refused) return null
     return gapBetween({
       objectKind: 'subject',
       objectId: row.id,
@@ -1874,7 +1896,6 @@ function buildSubjects(a: {
       ...(a0 && b0 && you.basis && category.basis
         ? { basis: { a: a0, b: b0, window: { kind: 'quarter' as const, from: you.basis.from, to: you.basis.to } } }
         : {}),
-      ...(refused ? { refused } : {}),
       // A subject's membership is not a clustering artefact.
       regime: 'n/a',
     })
