@@ -714,6 +714,8 @@ describe('clientReadiness, row by row (sw-2 item 6)', () => {
     expect(row('communities').notes).toEqual(['r/onebag: 38 posts · added by hand'])
     expect(row('months-of-history').detail).toBe('2 months with 100 videos or more in the category; 1 of 9 audiences have one.')
     expect(row('months-of-history').notes).toEqual(['Old School: no month read yet', 'Your own brand: 0 of 16 months with 100 videos or more (1 with 100 comments or more)'])
+    expect(clientReadiness([readyRow({ id: 'months-of-history', notes: ['Patagonia: 0 of 1 months clear 100 videos (1 clear 100 comments)'] })]).rows[0].notes)
+      .toEqual(['Patagonia: 0 of 1 month with 100 videos or more (1 with 100 comments or more)'])
     expect(row('anomaly-baseline').detail).toBe('No audience has the 3 complete months behind it yet; the fullest has 1 of 3.')
     expect(row('anomaly-baseline').notes).toEqual(['The category: 1 of the 3 months it needs'])
     expect(row('update-record').notes).toEqual(['27 Sep 2026: finished, with gaps', '24 Sep 2026: finished, with gaps'])

@@ -223,7 +223,8 @@ function clientRow(r: ReadinessRow, facts: ReadinessFacts): Partial<ClientReadin
           .replace(/^No month yet carries (\d+) videos/, 'No month yet holds $1 videos'),
         notes: r.notes.map((n) => n
           .replace(/^(.+): 0 of 0 months clear \d+ videos \(0 clear \d+ comments\) · no month at all/, '$1: no month read yet')
-          .replace(/^(.+): (\d+) of (\d+) months clear (\d+) videos \((\d+) clear (\d+) comments\)/, '$1: $2 of $3 months with $4 videos or more ($5 with $6 comments or more)')),
+          .replace(/^(.+): (\d+) of (\d+) months clear (\d+) videos \((\d+) clear (\d+) comments\)/, (_m, who: string, k: string, of: string, v: string, c: string, cv: string) =>
+            `${who}: ${k} of ${of} ${of === '1' ? 'month' : 'months'} with ${v} videos or more (${c} with ${cv} comments or more)`)),
       }
     case 'anomaly-baseline':
       return {
