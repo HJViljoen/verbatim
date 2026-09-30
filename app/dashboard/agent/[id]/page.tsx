@@ -85,7 +85,7 @@ export default async function AgentThreadPage({
 
   const rail = (
     <>
-      <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} />
+      <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} openThread />
       <ReadsTile reads={data.reads} row={ASK_TILE_ROW} />
       <NotAnsweredTile notAnswered={data.notAnswered} row={ASK_TILE_ROW} />
     </>

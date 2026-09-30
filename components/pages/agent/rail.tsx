@@ -30,7 +30,15 @@ export const TRACKED_HREF = '/dashboard/settings'
  * whole reading layer exists to stop. The rows carry what is recorded: the
  * question, when it was answered, and the one flag that is a fact.
  */
-export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: AskHistory | null; col?: number; row?: number }) {
+export function EarlierQuestionsTile({ history, col = 12, row = 2, openThread = false }: {
+  history: AskHistory | null
+  col?: number
+  row?: number
+  /** A thread is open beside the tile (its page): the empty line says "nothing
+   *  ELSE". On Ask's own page no thread is open, and "else" there reads as
+   *  though a question had been asked (sw-2 item 5). */
+  openThread?: boolean
+}) {
   /** Whether this tile has a LIST — what both halves of the footer, and the
    *  meta, are facts about. */
   const drawn = Boolean(history && history.rows.length > 0)
@@ -53,7 +61,7 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
         // (`askHistory`'s `exclude`) but still counted in the month, so on a
         // thread page "no question has been asked" would be a lie told beside
         // the question the reader is reading.
-        <TileEmpty>Nothing else has been asked in this workspace yet.</TileEmpty>
+        <TileEmpty>{openThread ? 'Nothing else has been asked in this workspace yet.' : 'Nothing has been asked in this workspace yet.'}</TileEmpty>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
           {history.rows.map((r, i) => (

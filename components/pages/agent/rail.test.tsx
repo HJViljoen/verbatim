@@ -54,8 +54,14 @@ describe('earlier questions', () => {
     // read, so the rows are empty while the workspace has asked a question.
     // "No question has been asked in this workspace yet" would be a lie told
     // beside the question the reader is reading.
-    const empty = renderText(<EarlierQuestionsTile history={{ ...measured.history!, rows: [] }} />)
+    const empty = renderText(<EarlierQuestionsTile history={{ ...measured.history!, rows: [] }} openThread />)
     expect(empty).toContain('Nothing else has been asked')
+  })
+
+  it('says "nothing has been asked" on Ask’s own page, where no thread is open (sw-2 item 5)', () => {
+    const empty = renderText(<EarlierQuestionsTile history={{ ...measured.history!, rows: [] }} />)
+    expect(empty).toContain('Nothing has been asked in this workspace yet.')
+    expect(empty).not.toContain('else')
   })
 
   it('carries no per-row figure, because nothing stores one', () => {
@@ -83,7 +89,7 @@ describe('earlier questions', () => {
     // a lone right-aligned "earliest 28 Sep" with the left half empty, under a
     // body already saying nothing else has been asked. Both halves are facts
     // about a list; neither prints without one.
-    const empty = renderText(<EarlierQuestionsTile history={refused.history} />)
+    const empty = renderText(<EarlierQuestionsTile history={refused.history} openThread />)
     expect(empty).toContain('Nothing else has been asked')
     expect(empty).not.toContain('earliest')
     expect(empty).not.toContain('All questions')
