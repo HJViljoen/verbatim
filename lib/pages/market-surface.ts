@@ -36,10 +36,8 @@ import { marketCalibration, type SubjectCalibrationWord } from './overview-marke
 import { levelText } from '../reading/level'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
-import {
-  TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects, ownPostFilings, postsTouching, touchWords,
-  type ClaimEcho, type OwnPostFilings, type OwnPostSubjectRow, type TouchPost,
-} from '../reading/own-posts'
+import { ownPostFilings, type ClaimEcho, type OwnPostFilings } from '../reading/own-posts'
+import { loadOwnPostSubjects, questionTouch, type QuestionPost, type QuestionTouch } from './own-post-touch'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { MoveCandidate, MoveReading } from '../reading/moves'
 import { row } from './read'
@@ -469,28 +467,10 @@ export interface MarketSurfaceData {
 
 // ---- Y1 · questions to answer (market-first WP3.6, plan §2.6) ---------------
 
-/** Whether your posts touched a question, and how that was checked. */
-export interface QuestionTouch {
-  /** Your posts in the period the row is read over. Null: not readable. */
-  posts: number | null
-  /** Each post that touched it, with the words it shared (`words`: the WP2.5
-   *  word check; `judge`: the post-and-claim judge's filing). */
-  matched: { id: string; postedOn: string | null; href: string | null; words: string[]; by: 'words' | 'judge' }[]
-  /** The question's words a post had to share, printed where none did. */
-  checked: string[]
-  /**
-   * `touched`: a post shared two or more of its words, or the judge filed one
-   *   as about it.
-   * `none`: no post did, and nothing is left unchecked.
-   * `unchecked`: no post shared its words, and the judge has not filed every
-   *   post for this subject (before MF3, none): "not checked yet", never a
-   *   false "none" (WP3.6 done-when 6). Subject rows only.
-   * `unread`: your posts could not be read.
-   */
-  state: 'touched' | 'none' | 'unchecked' | 'unread'
-  /** Subject rows: posts the judge has not filed for the subject. */
-  unfiled?: number
-}
+// The touch itself (the word check and the judge's filing) is shared with Your
+// market and Subjects, so the three pages count a post touching a subject one
+// way (sw-2 item 2): lib/pages/own-post-touch.ts.
+export { questionTouch, type QuestionPost, type QuestionTouch }
 
 /** A question theme the market raised in the reading month. */
 export interface QuestionThemeRow {
@@ -1013,68 +993,8 @@ export const QUESTION_WINDOW_MONTHS = 3
 export const questionsEmpty = (month: string): string =>
   `No question theme in your market reached ${fmtInt(THEME_FLOOR)} videos in ${longMonth(month)}, and no subject was asked about over the last three months.`
 
-/** One of your posts as the question rows read it: what it is about
- *  (`videos.topics`), the day it was posted, and where it lives. */
-export interface QuestionPost extends TouchPost {
-  upload_date: string | null
-  video_url: string | null
-}
-
 /** The first month of the three the subject rows read. */
 export const questionWindowFrom = (month: string): string => monthsBack(month, QUESTION_WINDOW_MONTHS - 1)
-
-/**
- * One row's touch: the word check over `labels` (a post touches on two or more
- * of one label's words), and for a subject row the judge's filing.
- *
- * Pure. `posts` null is "could not read your posts": the row says so and
- * claims nothing either way.
- */
-export function questionTouch(input: {
-  labels: readonly string[]
-  posts: readonly QuestionPost[] | null
-  /** A subject row: the subject, and the judge's filings (null: MF3 is not
-   *  applied, so nothing is filed). Absent on a theme row. */
-  judge?: { subjectId: string; filings: OwnPostFilings | null }
-}): QuestionTouch {
-  // ONE WORD ONCE ACROSS THE LABELS: "Price and sale questions" and a group
-  // naming "prices" check one word, and it prints once, as the first label
-  // spelled it (the rule's own stem, `touchWords`).
-  const stem = (w: string): string => touchWords(w)[0] ?? w
-  const merge = (held: readonly string[], more: readonly string[]): string[] => {
-    const out = [...held]
-    const seen = new Set(out.map(stem))
-    for (const w of more) if (!seen.has(stem(w))) { seen.add(stem(w)); out.push(w) }
-    return out
-  }
-  let checked: string[] = []
-  const byPost = new Map<string, string[]>()
-  for (const label of input.labels) {
-    const r = postsTouching(label, input.posts ?? [])
-    checked = merge(checked, r.checked)
-    for (const m of r.matched) byPost.set(m.id, merge(byPost.get(m.id) ?? [], m.words))
-  }
-  if (input.posts == null) return { posts: null, matched: [], checked, state: 'unread' }
-  const posts = input.posts
-  const postOf = new Map(posts.map((p) => [p.id, p]))
-  const matched: QuestionTouch['matched'] = [...byPost.entries()].map(([id, words]) => ({
-    id, postedOn: postOf.get(id)?.upload_date?.slice(0, 10) ?? null, href: postOf.get(id)?.video_url ?? null, words, by: 'words' as const,
-  }))
-  let unfiled: number | undefined
-  if (input.judge) {
-    const { subjectId, filings } = input.judge
-    const touching = filings?.touching.get(subjectId)
-    for (const p of posts) {
-      if (byPost.has(p.id)) continue
-      const words = touching?.get(p.id)
-      if (words) matched.push({ id: p.id, postedOn: p.upload_date?.slice(0, 10) ?? null, href: p.video_url ?? null, words, by: 'judge' })
-    }
-    unfiled = filings == null ? posts.length : posts.filter((p) => !filings.postFiled.has(`${p.id}|${subjectId}`)).length
-  }
-  matched.sort((a, b) => (a.postedOn ?? '').localeCompare(b.postedOn ?? '') || a.id.localeCompare(b.id))
-  const state: QuestionTouch['state'] = matched.length > 0 ? 'touched' : (unfiled ?? 0) > 0 ? 'unchecked' : 'none'
-  return { posts: posts.length, matched, checked, state, ...(unfiled != null ? { unfiled } : {}) }
-}
 
 /** A subject the market asked about in the window, as the loader reads it. */
 export interface SubjectAsked {
@@ -2001,26 +1921,6 @@ export function questionGroupsOf(
     for (const id of t.supporting_insight_ids ?? []) if (!out.has(id)) out.set(id, { registryId: t.registry_id, label: t.label.trim() })
   }
   return out
-}
-
-/** The judge's rows (MF3 `own_post_subjects`). Null before MF3: nothing is
- *  filed, which the rows read as "not checked yet". */
-async function loadOwnPostSubjects(supabase: SupabaseClient, clientId: string): Promise<OwnPostSubjectRow[] | null> {
-  try {
-    return await selectAll<OwnPostSubjectRow>(() =>
-      supabase
-        .from(TABLE_OWN_POST_SUBJECTS)
-        .select('video_id, claim_id, subject_id, touches, matched_words, method, judge_version, decided_at')
-        .eq('client_id', clientId)
-        .order('decided_at', { ascending: true })
-        .order('video_id', { ascending: true })
-        .order('subject_id', { ascending: true })
-        .order('claim_id', { ascending: true, nullsFirst: true }),
-    )
-  } catch (error) {
-    if (isMissingOwnPostSubjects(error)) return null
-    throw error
-  }
 }
 
 /** Your claims read to date (`video_claims`, entity client: the tenant's own

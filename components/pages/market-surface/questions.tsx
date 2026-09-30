@@ -185,7 +185,7 @@ function Table({ title, videosBase, postsBase, rows, max, mode }: {
         <span role="columnheader" className="text-[15px] font-semibold leading-[1.35] text-foreground">{title}</span>
         <span role="columnheader" className={WIDE_ONLY} />
         <span role="columnheader"><Head top="Videos" base={videosBase} /></span>
-        <span role="columnheader" className={WIDE_ONLY}><Head top="Your posts" base={postsBase} align="left" /></span>
+        <span role="columnheader" className={WIDE_ONLY}><Head top="Your posts that touched on it" base={postsBase} align="left" /></span>
       </div>
       {rows.map((r) => (
         <div key={r.key} role="row" className={`grid ${COLS} items-start py-2.5 ${RULE.row}`}>

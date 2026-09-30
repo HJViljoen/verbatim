@@ -10,6 +10,7 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
 import { allRedescribed, periodPhrase, QUESTIONS_PARAM, SUBJECTS_ALL_REDESCRIBED, UNANSWERED_GATE, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
 import { RULE, SCALE } from '@/components/pages/overview/market'
+import { UNCHECKED_TAIL } from '@/components/pages/market-surface/questions'
 
 /** The other subjects' list's head: which subjects people asked about most,
  *  not this subject's questions (finish-list item 9). */
@@ -221,6 +222,25 @@ export function questionsPostsLine(u: Pick<UnansweredBlock, 'rows' | 'yourPosts'
   return `Your posts shared two or more words with ${fmtInt(touched)} of these questions.`
 }
 
+/**
+ * THE APP'S LINE UNDER THE LIST (sw-2 item 2): whether your posts in the
+ * period touched the subject, counted as Your moves and Your market count it
+ * (`questionTouch`: two or more words shared with one of the questions shown,
+ * or the post-and-claim judge filed the post as about the subject), in their
+ * words, "touched on it". The email keeps `questionsPostsLine`, as sent.
+ * Without a touch (a stored pane) it is that line too.
+ */
+export function questionsTouchLine(u: Pick<UnansweredBlock, 'rows' | 'yourPosts' | 'touch'>, period: string): string {
+  const t = u.touch
+  if (!t || t.state === 'unread' || t.posts == null) return questionsPostsLine(u, period)
+  if (t.posts === 0) return `You published nothing ${period}.`
+  const posts = `${fmtInt(t.posts)} post${t.posts === 1 ? '' : 's'} ${period}`
+  const k = t.matched.length
+  if (k > 0) return `${fmtInt(k)} of your ${posts} touched on it.`
+  if (t.state === 'unchecked') return `None of your ${posts} touched on it so far: ${UNCHECKED_TAIL}.`
+  return `None of your ${posts} touched on it.`
+}
+
 function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: RenderMode; appUrl: string }) {
   const pane = data.selected
   const email = mode === 'email'
@@ -277,12 +297,14 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
           <div key={r.id} className={`flex min-h-11 items-center justify-between gap-4 ${RULE.row} last:border-b-0`}>
             <span className="flex min-w-0 flex-col">
               <span className={`min-w-0 ${SCALE.row}`}><span data-copy="subject" data-slot="pass_b_theme">{r.label}</span></span>
-              {r.answered ? <span className={SCALE.tag}>your posts shared two or more of its words</span> : null}
+              {/* A question row's touch is the word check alone, as Your
+                  moves reads a question theme; said in the same words. */}
+              {r.answered ? <span className={SCALE.tag}>your posts touched on it</span> : null}
             </span>
             <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(r.videos)}</span></span>
           </div>
         ))}
-        <p className="m-0 pt-3 text-[14px] leading-[1.5] text-secondary-foreground">{questionsPostsLine(u, period)}</p>
+        <p className="m-0 pt-3 text-[14px] leading-[1.5] text-secondary-foreground">{questionsTouchLine(u, period)}</p>
       </div>
     )
   ) : null

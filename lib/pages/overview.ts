@@ -72,6 +72,8 @@ import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '
 import { buildForYou, buildPublished, type ForYouBlock, type PublishedCensus } from './overview-market/foryou'
 import type { SubjectCalibrationWord } from './overview-market/subjects'
 import { loadMarketMakers, loadQuestionsBySubject, makerKOf, nameQuestions, postsSharing, UNANSWERED_SHOWN, type MarketMakers } from './subjects'
+import { loadOwnPostSubjects, questionTouch } from './own-post-touch'
+import { ownPostFilings } from '../reading/own-posts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
@@ -3022,19 +3024,26 @@ async function loadForYouQuestions(input: {
         groups.set(at.registryId, g)
       }
       const shown = [...groups.values()].sort((a, b) => b.videos.size - a.videos.size || a.label.localeCompare(b.label)).slice(0, UNANSWERED_SHOWN)
-      const byPost = new Map<string, Set<string>>()
-      const checked: string[] = []
-      for (const g of shown) {
-        const sharing = postsSharing(g.label, posts)
-        for (const w of sharing.checked) if (!checked.includes(w)) checked.push(w)
-        for (const mp of sharing.matched) byPost.set(mp.id, new Set([...(byPost.get(mp.id) ?? []), ...mp.words]))
-      }
+      // YOUR MOVES' TOUCH, NOT A WORD CHECK OF ITS OWN (sw-2 item 2): a post
+      // touches the subject when it shares two or more words with one of its
+      // question groups or the post-and-claim judge filed it as about the
+      // subject. The word check alone printed "0 of your 61 posts" here while
+      // Your moves printed 19 of the same 61.
+      const filings = await loadOwnPostSubjects(input.supabase, input.clientId).catch((error: unknown) => {
+        console.error(`[pages] overview.foryou filings: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      })
+      const touch = questionTouch({
+        labels: shown.map((g) => g.label),
+        posts: posts.map((p) => ({ id: p.id, topics: p.topics, upload_date: p.upload_date, video_url: null })),
+        judge: { subjectId: top.subjectId, filings: filings ? ownPostFilings(filings) : null },
+      })
       const subject = askable.find((x) => x.id === top.subjectId)!
       questions = {
         subject: { id: subject.id, name: subject.name, calibration: calibrationOf.get(subject.id) ?? 'provisional' },
         asked: top.questionVideos,
         posts: posts.length,
-        sharing: { checked, matched: [...byPost.entries()].map(([id, words]) => ({ id, words: [...words] })) },
+        sharing: { checked: touch.checked, matched: touch.matched.map((m) => ({ id: m.id, words: m.words })) },
       }
     }
   }

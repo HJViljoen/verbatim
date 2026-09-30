@@ -8,6 +8,8 @@ import type { EvidenceSource } from '../pipeline/pass-a'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { pickEligible, type GateOptions, type QuoteVideo } from '../quote-gate'
 import { gateFor } from '../quote-context'
+import { loadOwnPostSubjects, questionTouch, type QuestionTouch } from './own-post-touch'
+import { ownPostFilings } from '../reading/own-posts'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
@@ -496,6 +498,11 @@ export interface UnansweredBlock {
   claims: string | null
   reddit: string | null
   refusal: string | null
+  /** Whether your posts in the window touched the subject, counted as Your
+   *  moves counts it (`questionTouch`: the word check over the questions shown
+   *  and the judge's filing; sw-2 item 2). OPTIONAL: a stored pane has none
+   *  and prints its line as it was sent. */
+  touch?: QuestionTouch | null
 }
 
 export interface SubjectPane {
@@ -2360,6 +2367,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         window: { from: questionsWindow.from, to: questionsWindow.to },
         period: periodPhrase(questionsHorizon, month),
         themedRunId,
+        subjectId: subject.id,
       }),
     ])
 
@@ -3193,6 +3201,9 @@ interface UnansweredInput {
    *  produced themes — then there is nothing to group by and the block says so
    *  rather than printing pipeline slugs. */
   themedRunId: string | null
+  /** The subject, for the post-and-claim judge's filing (sw-2 item 2).
+   *  Optional: absent, the touch is the word check alone. */
+  subjectId?: string
 }
 
 /**
@@ -3366,7 +3377,25 @@ async function loadUnanswered(
   const shown = ranked.slice(0, UNANSWERED_SHOWN)
   const redditVideos = [...groups.values()].reduce((n, g) => n + g.reddit.size, 0)
 
+  // WHETHER YOUR POSTS TOUCHED THE SUBJECT, YOUR MOVES' WAY (sw-2 item 2): two
+  // or more words shared with one of the questions shown, or the post-and-claim
+  // judge filed the post as about the subject (`own_post_subjects`). This page
+  // said "None of your 25 posts shared two or more of its words" while Your
+  // moves counted the judge's filing too.
+  const filings = input.subjectId
+    ? await loadOwnPostSubjects(supabase, clientId).catch((error: unknown) => {
+      console.error(`[pages] subjects.unanswered filings: ${(error as { message?: string })?.message ?? String(error)}`)
+      return null
+    })
+    : null
+  const touch = questionTouch({
+    labels: shown.map((r) => r.label),
+    posts: ownVideos.map((v) => ({ id: v.id, topics: v.topics, upload_date: v.upload_date, video_url: null })),
+    ...(input.subjectId ? { judge: { subjectId: input.subjectId, filings: filings ? ownPostFilings(filings) : null } } : {}),
+  })
+
   return {
+    touch,
     rows: shown,
     questionVideos,
     yourPosts: ownVideos.length,
