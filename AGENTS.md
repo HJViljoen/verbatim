@@ -53,7 +53,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   that into freeze-months' subject hold, and the prune keeps any insight a
   membership still counts (`lib/pipeline/stale-analysis.ts`;
   `lib/pipeline/freeze-parity.test.ts` §6-7 and
-  `scripts/pg-shim/d5b-trim-checks.sh`). Re-register
+  `scripts/pg-shim/d5b-trim-checks.sh`). **Writing back (T4, `feat/writing-back`)
+  adds one, immediately before `close-run`:** `write-week-read` (63 ids, 64
+  after; `scripts/pipeline-step-ids.sh <base> --expect-before close-run
+  write-week-read` is the check, and `lib/written/step.test.ts` pins it). It
+  writes the run's `week_reads` row (`lib/written/step.ts`); its body NEVER
+  throws: a failure stores a `failed` row and alerts the operator inside the
+  step, because an alert in a `.catch` beside `step.run` is sent again on
+  every later step's replay. A thin week makes no model call, and with no
+  `week_reads` table it no-ops and spends nothing. Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
@@ -262,7 +270,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   staat vast"). A NUMBER inside a quotation is still refused — which is why a
   quote in the new slots is a sibling node with its own ref, never a span
   inside scrubbed prose. Which rules a slot gets is the policy table's answer,
-  not whichever file happened to import which helper.
+  not whichever file happened to import which helper. The written read's slot
+  is `week_read` (`both`, run with NO verdicts, so any direction word drops
+  its sentence; `lib/written/scrub.ts`), and it adds a third rule of its own:
+  a sentence about how the read was made (searches, data, coverage, sources,
+  updates, the tool, "this report", why something cannot be said) drops too,
+  on `BANNED_PHRASES`, which a guard over the client surfaces reuses.
 - **A block renders three modes.** `render(data, mode, ctx)` for
   `app | print | email`, plus `figures()` / `verdicts()` / `quotes()` /
   `emptyState()` (`lib/blocks/types.ts`). There is exactly ONE `RenderMode` in

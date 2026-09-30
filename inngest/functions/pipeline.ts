@@ -34,6 +34,7 @@ import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
+import { runWeekReadStep } from '@/lib/written/step'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
@@ -2050,6 +2051,30 @@ export const runPipeline = inngest.createFunction(
           return null
         })
     }
+
+    // The week's written read (plan "writing back", T4): the week pool, where
+    // the market stands, one writer call, scrub, self-check and compose, stored
+    // as this run's `week_reads` row (lib/written/step.ts). An ADDITIVE id in
+    // its own position, after everything it reads (themes, the month rows,
+    // the pair rows) and before close-run — never a rename, a renumber or a
+    // reorder (AGENTS.md). 63 ids before it, 64 with it.
+    //
+    // NON-FATAL, and more than that: the body never throws. A failure stores a
+    // `failed` row and alerts the operator INSIDE the step, once; an alert in
+    // this `.catch` would be sent again on every later step's replay. A thin
+    // week makes no model call. No table yet: a no-op that spends nothing.
+    // Logged, not noteError'd — the keyword-discovery precedent: a clean run
+    // must not read 'partial' because the written read had a bad week.
+    await step
+      .run('write-week-read', async () => {
+        const admin = createAdminClient()
+        const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+        return runWeekReadStep(admin, { clientId, runId, company: (client?.company_name as string | undefined) ?? undefined })
+      })
+      .catch((e) => {
+        console.error(`[write-week-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
 
     // 7. Close the run.
     await step.run('close-run', async () => {
