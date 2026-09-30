@@ -171,14 +171,15 @@ const PRUNED_LINE =
   'The evidence this was written from is no longer on record: a later update replaced it, so we cannot count the videos behind it.'
 
 /**
- * The basis every grounding count is on, said ONCE per surface (copy de-clutter
- * ruling C): on Market as the "Grounded in" column's tooltip, in a document as
- * one footer line. The per-row line below is the count alone, because the same
- * clause stacked under every row of a ledger is what a three-month reader
- * stops reading.
+ * The basis every grounding count is on, IN MARKET TERMS AND ON THE COUNT'S OWN
+ * LABEL (T0a, mechanism 6; YM-14/26, QR-12): the videos behind a piece of
+ * advice are all time, so the label says "all time" ("Behind it, all time",
+ * "157 videos behind it, all time") wherever the count prints. It was a
+ * tooltip and a footer line about "everything we have read for you", which a
+ * reader skips and a wording sweep deletes, leaving an all-time count to read
+ * as this month's.
  */
-export const GROUNDED_BASIS =
-  'Counted over everything we have read for you, not over one month.'
+export const GROUNDED_BASIS = 'all time'
 
 const prunedGrounding = (audience: string): Grounding =>
   ({ videos: 0, themes: 0, audience, pruned: true, line: PRUNED_LINE })

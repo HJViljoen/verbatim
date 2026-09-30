@@ -6,7 +6,6 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct } from '@/lib/format'
-import { inPeriod } from '@/lib/reports/weekly'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import type { Mover } from '@/lib/pages/overview'
@@ -38,39 +37,19 @@ import type { Mover } from '@/lib/pages/overview'
  * are what §4 and §5 are, and a reader crossing from one to the other should
  * not have to learn a second shape.
  */
-function CountedRow({ title, value, note, mode, children }: {
-  title: ReactNode
-  value: string
-  note?: ReactNode
-  mode: RenderMode
-  children?: ReactNode
-}) {
-  const figure = mode === 'email'
-    ? <span style={{ fontFamily: FONT.mono, fontSize: 16, fontWeight: 600, color: EMAIL.ink }}>{value}</span>
-    : <span className="font-mono text-[16px] font-semibold tabular-nums">{value}</span>
+/** "Worth a reply" over its comments: a title and no count (WR-32). */
+function ReplyRow({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   if (mode === 'email') {
     return (
       <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '11px 0' }}>
-        <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
-          <tbody>
-            <tr>
-              <td style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink }}>{title}</td>
-              <td align="right" style={{ whiteSpace: 'nowrap', paddingLeft: 14 }}>{figure}</td>
-            </tr>
-          </tbody>
-        </table>
-        {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.5, color: EMAIL.muted, marginTop: 5 }}>{note}</div> : null}
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink }}>Worth a reply</div>
         {children}
       </div>
     )
   }
   return (
     <div className="flex min-h-[44px] flex-col gap-1.5 border-t border-border/70 py-2.5">
-      <div className="flex items-baseline justify-between gap-3.5">
-        <span className="min-w-0 text-[14px]">{title}</span>
-        <span className="flex-none">{figure}</span>
-      </div>
-      {note ? <span className="font-mono text-[11px] leading-relaxed text-muted-foreground">{note}</span> : null}
+      <span className="min-w-0 text-[14px]">Worth a reply</span>
       {children}
     </div>
   )
@@ -141,10 +120,6 @@ function MoverRows({ movers, mode }: { movers: readonly Mover[]; mode: RenderMod
   )
 }
 
-/** "1.8× over 24 of 402" — a multiple with the n it was read over, on either
- *  side of the head-to-head. */
-const multipleOf = (m: number): string => `${(Math.round(m * 10) / 10).toFixed(1)}×`
-
 function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, padding: '4px 0' }}>{children}</div>
@@ -157,8 +132,6 @@ export const weeklyContent: Block<WeeklyData> = {
 
   render(data, mode = 'app', ctx) {
     const c = data.content
-    // The window's own word — Sealand's is thirty days long (`periodNounFor`).
-    const noun = data.section1.check.noun
     // ABSOLUTE IN EVERY MODE (lib/blocks/types.ts, BlockContext.appUrl): print
     // goes into a PDF and the share page is read outside the app, so a relative
     // href is a dead link there. The app passes appUrl '' and keeps the
@@ -197,28 +170,13 @@ export const weeklyContent: Block<WeeklyData> = {
             lib/pages/content.ts's method note, "the reply inbox SURFACES N
             comments the analysis already cited" — is the honest one, and the
             sub-line states the cap so the number can be weighed. */}
-        {c.surfaced != null ? (
-          <CountedRow
-            mode={mode}
-            title={`Surfaced for a reply ${inPeriod(noun)}`}
-            value={fmtInt(c.surfaced)}
-            note={
-              <>
-                {c.surfacedCounts.length > 0
-                  ? c.surfacedCounts.map((i) => `${i.label} ${fmtInt(i.count)}`).join(' · ')
-                  : 'grouped by what the comment was'}
-                {c.worthAReply.length > 0 && c.surfaced > c.worthAReply.length
-                  ? ` · ${fmtInt(c.worthAReply.length)} below in full`
-                  : ''}
-              </>
-            }
-          >
-            {/* THE INTENT GOES ON THE CITE, NOT OVER THE QUOTE. It was a mono
-                uppercase eyebrow per quote — a fourth and fifth all-caps
-                eyebrow in a section the artefact gives one each. The cite is
-                already the product's own line about a quote (WR4's card makes
-                the same move with its row names), and "Question · under your
-                post · 41 likes" says the same thing in the row's own rhythm. */}
+        {/* WORTH A REPLY: THE COMMENTS, NOT THE CAPPED COUNT (T0a, mechanism
+            6; WR-32). The surfaced count is the length of a ranked, capped
+            list (at most fifteen, three a kind), so at 16px it misstated how
+            much is waiting; the number goes, and so do the per-intent counts
+            and the empty note. The comments print under their own title. */}
+        {c.worthAReply.length > 0 ? (
+          <ReplyRow mode={mode}>
             {c.worthAReply.map((q, i) => (
               <div key={`${q.ref}:${i}`} style={mode === 'email' ? { marginTop: 6 } : undefined} className={mode === 'email' ? undefined : 'mt-1.5'}>
                 <BlockQuote
@@ -232,10 +190,8 @@ export const weeklyContent: Block<WeeklyData> = {
                 />
               </div>
             ))}
-          </CountedRow>
-        ) : (
-          <Note mode={mode}>{c.worthAReplyNote}</Note>
-        )}
+          </ReplyRow>
+        ) : null}
 
         {/* THE MOVERS, IN THE SECTION'S OWN ROW SHAPE (weekly.s5.rising).
             They were a `Rail` holding a mono uppercase eyebrow over two
@@ -258,37 +214,11 @@ export const weeklyContent: Block<WeeklyData> = {
           <Note mode={mode}>{c.risingNote}</Note>
         )}
 
-        {c.format ? (
-          <CountedRow
-            mode={mode}
-            title={c.runnerUp ? <>{c.format.label} outperformed {c.runnerUp.label}</> : <>{c.format.label}</>}
-            value={multipleOf(c.format.multiple)}
-            /* THE WINNER'S OWN n COMES FIRST (block D wave 2, fix pass). The
-               row read "Talking head outperformed Commute POV · 2.4× ·
-               Commute POV 1.8× over 24 of 402 videos · against this update's
-               median video · 31 of 402 videos carry it" — the winner's n
-               arrived LAST, after the runner-up's, and the median clause sat
-               between two n's it does not belong to either of alone. The
-               sub-line now reads in the order the title does: the winner, the
-               runner-up, then the basis both multiples are against.
-
-               D9: the median is THIS UPDATE'S, and the clause is not
-               decoration. Unlike everything above it in this block the figure
-               is run-indexed — the Content loader filters videos to the latest
-               run before it measures — so under a masthead reading "every
-               number below is this month so far" an unlabelled multiple reads
-               as the month's. */
-            note={
-              <>
-                <span data-copy="level">{fmtInt(c.format.videos)} of {fmtInt(c.format.of)} videos</span> carry it
-                {c.runnerUp ? <> · {c.runnerUp.label} <span data-copy="level">{multipleOf(c.runnerUp.multiple)} over {fmtInt(c.runnerUp.videos)} of {fmtInt(c.format.of)} videos</span></> : null}
-                {' · '}{c.runnerUp ? 'both against' : 'against'} this update’s median video
-              </>
-            }
-          />
-        ) : (
-          <Note mode={mode}>No format carried enough videos this update to be worth naming.</Note>
-        )}
+        {/* NO FORMAT ROW (T0a, mechanism 6; WR-34). Its multiple is
+            run-indexed (the latest run's videos against this update's median
+            video), and under a masthead that says every figure is the month
+            so far it read as the month's; a bare reword is not honest, and
+            it is not re-based on a dated window, so the row is omitted. */}
       </div>,
     )
   },
@@ -316,7 +246,7 @@ export const weeklyContent: Block<WeeklyData> = {
 
   emptyState(data) {
     const c = data.content
-    return c.worthAReply.length === 0 && c.rising.length === 0 && !c.format
+    return c.worthAReply.length === 0 && c.rising.length === 0
       ? 'Nothing is waiting for a reply and nothing in the category cleared its band this month.'
       : null
   },

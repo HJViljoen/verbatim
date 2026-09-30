@@ -20,6 +20,13 @@ import { RULE, SCALE } from '@/components/pages/overview/market'
 // finds it noise, its "videos about them" prints "·" and the row says why.
 // Unmeasured, the count prints plainly (the lead's R2 of 26 Sep).
 //
+// NO GATHER-DATED COUNT (T0a, mechanism 6; WK-41/42). "Own posts" counted
+// the brand's posts this update first gathered, whatever day they were
+// posted, so the count and its "No post of their own in these days" read our
+// gathering as the brand's posting: both go until they are re-based on post
+// dates. "Videos naming them" prints the month's figure only ("7 in Sep"),
+// never the update's, which measures what we gathered.
+//
 // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep rulings):
 // the window is the page bar's, and the footer names the brands' page by its
 // CURRENT sidebar label (§4.0).
@@ -40,13 +47,15 @@ export function trackedLine(r: RivalPosts): string | null {
   return r.trackedSince ? `tracked since ${shortDate(r.trackedSince)}` : null
 }
 
-/** "of 7 in Sep": the month's figure the update's count sits inside, the
- *  Brands page's "in all". Null where there is none to print, or it is 0 (a
- *  bare 0 says it). */
+/** "in Sep": the month the naming figure is of. Null where the brand prints
+ *  no figure (not counted, or the month not read). */
 export function namingMonthLine(r: RivalPosts, month: string): string | null {
-  if (notCounted(r) || r.aboutMonth == null || r.aboutMonth === 0) return null
-  return `of ${fmtInt(r.aboutMonth)} in ${monthName(month).split(' ')[0]}`
+  if (notCounted(r) || r.aboutMonth == null) return null
+  return `in ${monthName(month).split(' ')[0]}`
 }
+
+/** The month's naming figure, or null where none prints (WK-42). */
+const namingMonth = (r: RivalPosts): number | null => (notCounted(r) || r.aboutMonth == null ? null : r.aboutMonth)
 
 /** The brands in the preview's order: by the comments under their top post,
  *  the brands whose name is not counted after them. */
@@ -57,13 +66,14 @@ export function brandsPostedOrder(rows: readonly RivalPosts[]): RivalPosts[] {
 
 function PostCell({ r, mode }: { r: RivalPosts; mode: RenderMode }) {
   const post = topOwnPost(r)
-  const found = r.foundByName ?? r.aboutThem
+  // The update's name-match count is gather-dated (WK-42): the note keeps
+  // its reason, not the count.
   const note = r.nameNote
-    ? `${fmtInt(found)} ${found === 1 ? 'video' : 'videos'} matched the name, ${r.nameNote}`
+    ? `Videos naming them: ${r.nameNote}`
     : r.aboutNote ? `Videos naming them: ${r.aboutNote}` : null
   const words = post
     ? <><span className="block truncate text-[15px] text-foreground" title={post.caption}>“<span data-copy="quote">{post.caption || post.account}</span>”</span><span className="block font-mono text-[12px] text-muted-foreground">{platformLabel(post.platform)}{post.postedOn ? ` · ${shortDate(post.postedOn)}` : ''}</span></>
-    : <span className="block text-[13px] text-muted-foreground">{r.ownPostsUnread ? (mode === 'app' ? OWN_POSTS_UNREAD : OWN_POSTS_UNREAD_OUTSIDE) : 'No post of their own in these days.'}</span>
+    : r.ownPostsUnread ? <span className="block text-[13px] text-muted-foreground">{mode === 'app' ? OWN_POSTS_UNREAD : OWN_POSTS_UNREAD_OUTSIDE}</span> : null
   return (
     <span className="flex min-w-0 flex-col gap-0.5">
       {words}
@@ -92,15 +102,14 @@ export const weekRivalPosts: Block<WeekData> = {
       return (
         <BlockFrame title={BRANDS_POSTED_TITLE} mode={mode} footer={footer} roomy card>
           <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
-            <thead><tr><th style={{ ...head, textAlign: 'left' }}>Brand</th><th style={{ ...head, textAlign: 'right' }}>Own posts</th><th style={{ ...head, textAlign: 'right' }}>Videos naming them</th><th style={{ ...head, textAlign: 'right' }}>Comments on their top post</th></tr></thead>
+            <thead><tr><th style={{ ...head, textAlign: 'left' }}>Brand</th><th style={{ ...head, textAlign: 'right' }}>Videos naming them, {monthName(data.month).split(' ')[0]}</th><th style={{ ...head, textAlign: 'right' }}>Comments on their top post</th></tr></thead>
             <tbody>
               {rows.map((r) => {
                 const post = topOwnPost(r)
                 return (
                   <tr key={r.audience}>
                     <td style={cell}>{r.label}</td>
-                    <td style={num}>{r.ownPostsUnread ? '·' : <span data-copy="figure">{fmtInt(r.byThem)}</span>}</td>
-                    <td style={num}>{notCounted(r) ? '·' : <span data-copy="figure">{fmtInt(r.aboutThem)}</span>}</td>
+                    <td style={num}>{namingMonth(r) == null ? '·' : <span data-copy="figure">{fmtInt(namingMonth(r) as number)}</span>}</td>
                     <td style={num}>{post ? <span data-copy="figure">{fmtInt(post.comments)}</span> : '·'}</td>
                   </tr>
                 )
@@ -115,14 +124,13 @@ export const weekRivalPosts: Block<WeekData> = {
     // 390 the track was 64 px and "of 57 in Sep" (12 px mono, about 87 px,
     // unbroken) ran leftwards over the own-posts figure. It is wide enough for
     // "of 1,234 in Sep" now, at both widths.
-    const cols = 'grid-cols-[minmax(0,1fr)_52px_104px] gap-x-4 @min-[900px]:grid-cols-[minmax(160px,0.9fr)_72px_104px_minmax(0,2.2fr)_minmax(120px,0.6fr)]'
+    const cols = 'grid-cols-[minmax(0,1fr)_104px] gap-x-4 @min-[900px]:grid-cols-[minmax(160px,0.9fr)_104px_minmax(0,2.2fr)_minmax(120px,0.6fr)]'
     return (
       <BlockFrame title={BRANDS_POSTED_TITLE} mode={mode} footer={footer} roomy card>
         <div className="@container">
           <div role="table" className="flex min-w-0 flex-col">
             <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
               <span role="columnheader" className={SCALE.head}>Brand</span>
-              <span role="columnheader" className={`text-right ${SCALE.head}`}>Own posts</span>
               <span role="columnheader" className="flex flex-col items-end text-right leading-[1.35]"><span className="text-[13px] font-medium text-muted-foreground">Videos</span><span className="font-mono text-[12px] text-muted-foreground">naming them</span></span>
               <span role="columnheader" className={`@max-[900px]:hidden ${SCALE.head}`}>Their most-commented post</span>
               <span role="columnheader" className={`@max-[900px]:hidden text-right ${SCALE.head}`}>Comments on it</span>
@@ -136,9 +144,8 @@ export const weekRivalPosts: Block<WeekData> = {
                     {/* The date held together where the narrow column wraps ("tracked since / 17 Sep", never "17 / Sep"). */}
                     {trackedLine(r) ? <span className="font-mono text-[12px] text-muted-foreground">{trackedLine(r)!.replace(/(\d+) ([A-Z][a-z]{2})$/, '$1\u00a0$2')}</span> : null}
                   </span>
-                  <span className={`${SCALE.num} font-semibold`}>{r.ownPostsUnread ? <span className="font-normal text-muted-foreground">·</span> : <span data-copy="figure">{fmtInt(r.byThem)}</span>}</span>
                   <span className={`flex flex-col items-end ${SCALE.prev}`}>
-                    {notCounted(r) ? '·' : <span data-copy="figure">{fmtInt(r.aboutThem)}</span>}
+                    {namingMonth(r) == null ? '·' : <span data-copy="figure">{fmtInt(namingMonth(r) as number)}</span>}
                     {namingMonthLine(r, data.month) ? <span className="whitespace-nowrap font-mono text-[12px] text-muted-foreground">{namingMonthLine(r, data.month)}</span> : null}
                   </span>
                   <span className="min-w-0 @max-[900px]:col-span-full"><PostCell r={r} mode={mode} /></span>
@@ -164,7 +171,8 @@ export const weekRivalPosts: Block<WeekData> = {
     for (const r of data.cameIn.rivals) {
       const post = topOwnPost(r)
       if (post) out[`brand_${r.audience}_top_post_comments`] = { value: post.comments, unit: 'comments', label: `${r.label}: comments under their most-commented post, in the days this update covered` }
-      if (!r.ownPostsUnread) out[`brand_${r.audience}_own_posts`] = { value: r.byThem, unit: 'videos', label: `${r.label}: posts of their own this update` }
+      const named = namingMonth(r)
+      if (named != null) out[`brand_${r.audience}_naming_month`] = { value: named, unit: 'videos', label: `${r.label}: videos naming them in ${monthName(data.month).split(' ')[0]}` }
     }
     return out
   },

@@ -174,20 +174,17 @@ function Share({ share, role, top, mode }: { share: StandingShare | null; role: 
 /**
  * One of the pair, with its own label above and NO legend of its own.
  *
- * ITS SCALE IS ITS OWN, AND THAT IS THE ONE PLACE THIS DIVERGES FROM THE
- * ARTBOARD. The mock's legend says "both charts on the same 0\u201345% scale", and
- * the shared-scale note below is printed only once that is true, which it is
- * not: `CalendarLine` derives its scale from the series it is handed
- * (`valueScale`, zero-based, 12% headroom) and takes no scale from a caller,
- * and `components/charts/*` belongs to another package in this wave — a change
- * there is a prop added by its owner, not by a porter. It is also the reading
- * mock-gap argued for: on a real tenant `industry-other` runs at 86\u201393% of the
- * corpus, so a fixed 0\u201345% axis would flatten every brand line into the bottom
- * tenth of the plot and clip the category off the top of both charts.
+ * THE PAIR SHARES ONE SCALE (T0a, BR-38): each pane is handed the larger of
+ * the two charts' largest values (`pairTop`), so two charts drawn side by
+ * side can be read against each other, and no note has to warn a reader off
+ * doing it. The category is not drawn (`chartSeries`), so the brands' lines
+ * are not flattened under it.
  */
 function ChartPane({
-  label, meta, axis, series, rules, chartKey,
+  label, meta, axis, series, rules, chartKey, scaleTo,
 }: {
+  /** Both panes' largest value: the pair shares one scale (T0a, BR-38). */
+  scaleTo?: number
   label: string
   /** The artboard's mono note at the right of the chart's own title row. */
   meta: string
@@ -233,6 +230,7 @@ function ChartPane({
         // primitive is `components/charts/calendar-line.tsx` and belongs to
         // another package in this wave (shell SH1). Nothing here hides that.
         height={307}
+        scaleTo={scaleTo}
         format={(v) => fmtPct(v)}
         label={label}
         id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
@@ -306,13 +304,24 @@ function SharedLegend({ series, axis }: { series: readonly StandingsSeries[]; ax
           )
         })}
       </div>
-      <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
-        Each chart is scaled to its own highest month, so the two are read separately and never against each other.
-        {/* CATEGORY_NOT_DRAWN is not printed: the legend simply omits the
-            category (copy de-clutter B88). */}
-      </p>
+      {/* NO SCALE NOTE (T0a, BR-38): the two charts share one scale, the
+          larger of their two maxima, so they may be read against each other
+          and nothing needs saying. CATEGORY_NOT_DRAWN is not printed: the
+          legend simply omits the category (copy de-clutter B88). */}
     </div>
   )
+}
+
+/** The larger of the two charts' largest values: one scale for the pair
+ *  (T0a, BR-38), so the two may be read against each other. */
+function pairTop(s: StandingsBlock): number {
+  let top = 0
+  for (const which of ['attention', 'content'] as const) {
+    for (const x of seriesFor(chartSeries(s.series), s.months, which, s.refusedSteps)) {
+      for (const p of x.points) if (p.value != null && p.value > top) top = p.value
+    }
+  }
+  return top
 }
 
 /** One chart's worth of series, in the axis's order. A month a brand was not
@@ -342,7 +351,11 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
   question: 'How much of this conversation is each of us?',
 
   render(data, mode = 'app', ctx) {
-    const s = data.standings
+    // A COPY STORED WITH AN EARLIER MONTH'S TABLE (`behind`) draws no table
+    // and no chart, only its line (T0a, BR-32; U14, keyed on stored state).
+    const s = data.standings.behind
+      ? { ...data.standings, rows: [], series: [], denominators: [], dualMention: null }
+      : data.standings
     const email = mode === 'email'
     const empty = competitiveStandings.emptyState(data)
     const rules: CalendarRule[] = s.rules.map((r) => ({ month: r.month, label: r.label, kind: 'tracking_change' as const }))
@@ -502,6 +515,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                   series={seriesFor(chartSeries(s.series), s.months, 'attention', s.refusedSteps)}
                   rules={rules}
                   chartKey={`${competitiveStandings.key}.attention`}
+                  scaleTo={pairTop(s)}
                 />
                 <ChartPane
                   label="Content share"
@@ -510,6 +524,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                   series={seriesFor(chartSeries(s.series), s.months, 'content', s.refusedSteps)}
                   rules={rules}
                   chartKey={`${competitiveStandings.key}.content`}
+                  scaleTo={pairTop(s)}
                 />
               </div>
               <SharedLegend series={chartSeries(s.series)} axis={s.months} />

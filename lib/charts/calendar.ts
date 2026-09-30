@@ -245,11 +245,14 @@ export interface ValueScale {
  */
 export function valueScale(
   series: readonly CalendarSeries[],
-  opts: { zeroBase?: boolean; top?: number; baseline?: number } = {},
+  opts: { zeroBase?: boolean; top?: number; baseline?: number; atLeast?: number } = {},
 ): ValueScale {
   const top = opts.top ?? 12
   const baseline = opts.baseline ?? 180
   const values: number[] = []
+  // A SHARED SCALE (T0a, BR-38): two charts meant to be read side by side
+  // take the larger of their two maxima, so neither is scaled to its own.
+  if (opts.atLeast != null && Number.isFinite(opts.atLeast)) values.push(opts.atLeast)
   for (const s of series) for (const p of s.points) if (p.value != null) values.push(p.value)
   for (const s of series) for (const p of s.points) if (p.atLastMonth != null) values.push(p.atLastMonth)
   const zeroBase = opts.zeroBase ?? true

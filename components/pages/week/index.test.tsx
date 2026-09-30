@@ -641,12 +641,18 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     const order = ['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Freitag', 'Rareform'].map((n) => text.indexOf(`${n}tracked since`) >= 0 ? text.indexOf(`${n}tracked since`) : text.indexOf(`${n} tracked since`))
     expect(order.every((x) => x >= 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
-    expect(text).toContain('The North Face tracked since 20 Sep 23 33 “Aimé Leon Dore / The North Face 2026. @aimeleondore @thenorthface” Instagram · 14 Sep 98')
+    // T0a (mechanism 6; WK-41/42): no "Own posts" count (gather-dated) and
+    // no update naming count; the month's figure only, where it was read.
+    expect(text).toContain('The North Face tracked since 20 Sep · “Aimé Leon Dore / The North Face 2026. @aimeleondore @thenorthface” Instagram · 14 Sep 98')
+    expect(text).not.toContain('Own posts')
+    expect(text).not.toContain('No post of their own in these days')
   })
 
-  it('prints an unmeasured name’s count plainly, with no note (the lead’s R2)', () => {
-    const text = renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Freitag tracked since 28 Jun 6 149')
+  it('prints an unmeasured name’s month count plainly, with no note (the lead’s R2)', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, aboutMonth: 7 } : r))
+    const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
+    expect(text).toContain('Freitag tracked since 28 Jun 7 in Sep')
     expect(text).not.toContain('German')
   })
 
@@ -654,8 +660,9 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     const d = marketWeekFixture()
     const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, nameNote: 'mostly the German word for Friday · not counted' } : r))
     const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
-    expect(text).toContain('Freitag tracked since 28 Jun 6 ·')
-    expect(text).toContain('149 videos matched the name, mostly the German word for Friday · not counted')
+    expect(text).toContain('Freitag tracked since 28 Jun ·')
+    expect(text).toContain('Videos naming them: mostly the German word for Friday · not counted')
+    expect(text).not.toContain('149')
     expect(text.indexOf('Freitag')).toBeGreaterThan(text.indexOf('Rareform'))
   })
 
@@ -669,9 +676,10 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx)))
     expect(text).toContain('Videos naming them')
     expect(text).not.toContain('about them')
-    expect(text).toContain('Freitag tracked by 28 Jun 6 2 of 7 in Sep')
+    expect(text).toContain('Freitag tracked by 28 Jun 7 in Sep')
     expect(text).not.toContain('149')
-    expect(text).toContain('The North Face tracked since 17 Sep 23 11 of 54 in Sep')
+    expect(text).toContain('The North Face tracked since 17 Sep 54 in Sep')
+    expect(text).not.toContain('11 of 54')
     expect(text).toContain('Videos naming them: not counted yet')
     // A month of none prints the 0 alone, never "of 0".
     const none = rivals.map((r) => (r.label === 'Old School' ? { ...r, aboutThem: 0, aboutMonth: 0, aboutNote: null } : r))

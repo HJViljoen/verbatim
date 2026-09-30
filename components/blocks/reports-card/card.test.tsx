@@ -133,10 +133,11 @@ describe('the quarterly card', () => {
     expect(html).not.toContain('data-copy="level"')
   })
 
-  // The caveat is measured, not written: a month read back at setup and a
-  // month under the band's minimum are two different facts and the card says
-  // both.
-  it('names the months the quarter cannot stand on', () => {
+  // T0a (mechanism 1; RP-25): a quarter holding a month read back at setup is
+  // not compared at all. The quarter before goes, tick, line, legend and
+  // badge, and with it the caveat that once explained the comparison; each
+  // row keeps this quarter's level.
+  it('draws no quarter before, and no caveat, where the quarter holds a month read back at setup', () => {
     const card = quarterlyCardFixture({
       monthsInQuarter: [
         { month: '2026-07-01', videos: 1290, backRead: true },
@@ -145,8 +146,15 @@ describe('the quarterly card', () => {
       ],
     })
     const text = renderText(<QuarterlyCardTile card={card} />)
-    expect(text).toContain('read back at setup')
-    expect(text).toContain('July 2026')
+    const html = render(<QuarterlyCardTile card={card} />)
+    expect(text).not.toContain('read back at setup')
+    expect(text).not.toContain('the quarter before ·')
+    expect(html).not.toContain('h-2.5 w-0.5 rounded-[1px] bg-muted-foreground')
+    expect(text).toContain('912 of 4,147')
+    // And where the month judge refuses a step across the two quarters.
+    const refused = renderText(<QuarterlyCardTile card={quarterlyCardFixture({ joined: false })} />)
+    expect(refused).not.toContain('the quarter before ·')
+    expect(refused).toContain('912 of 4,147')
   })
 
   // THE PILL'S AMBER IS IN THE TINT AND THE RING. `bg-warning/15 text-warning`

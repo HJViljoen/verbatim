@@ -10,6 +10,7 @@ import type { MoveReading } from '@/lib/reading/moves'
 import { moveTail, type QuarterlyData } from '@/lib/pages/quarterly'
 import type { MoveRow } from '@/lib/pages/market-surface'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
+import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
 import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note, Stored } from './parts'
 
 // QR6 · Your moves, and what happened after (mock page 6).
@@ -161,10 +162,6 @@ function MoveCard({ move, reading, sideOf, mode }: { move: MoveRow; reading: Mov
   )
 }
 
-/** The basis of every "N videos behind it" above, said once under the ledger
- *  rather than on each row (copy de-clutter ruling C, 2026-09-24). */
-const GROUNDED_BASIS_LINE = 'Videos behind a piece of advice are counted over everything we have read for you, not over one month.'
-
 /** The row's grounding, without the basis clause a snapshot frozen before
  *  2026-09-24 still carries: the basis is said once, under the ledger. */
 function shortGrounded(line: string): string {
@@ -240,7 +237,9 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                     </span>
                   </span>
                   <Note mode={mode}>
-                    {a.grounded ? <span data-copy="figure">{shortGrounded(a.grounded.line)}</span> : 'Nothing was recorded as the evidence behind this.'}
+                    {/* All time, on the count itself (T0a, mechanism 6; QR-12),
+                        never a note about "everything we have read for you". */}
+                    {a.grounded ? <span data-copy="figure">{shortGrounded(a.grounded.line)}{a.grounded.pruned ? '' : `, ${GROUNDED_BASIS}`}</span> : 'Nothing was recorded as the evidence behind this.'}
                     {/* AN UNDECIDED ROW SAYS NOTHING HERE: its status chip
                         already reads "not decided", and the same sentence
                         stacked on every such row (copy de-clutter E87). */}
@@ -249,7 +248,6 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                 </span>
               </div>
             ))}
-            <Note mode={mode}>{GROUNDED_BASIS_LINE}</Note>
             <Note mode={mode} tone="body">{withoutActedTrailer(m.actedLine)}</Note>
           </>
         ) : (

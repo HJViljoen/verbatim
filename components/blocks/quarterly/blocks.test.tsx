@@ -306,6 +306,11 @@ describe('what each page owes the reader', () => {
     expect(text).toContain('4,147')
     expect(text).toContain('against 3,810 in the quarter before it')
     expect(text).not.toContain('4,147 of 4,147')
+    // T0a (QR-10): where a month step across the two quarters is refused, the
+    // quarter before's count goes; this quarter's stands.
+    const refused = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(quarterlyFixture({}, { joined: false }), 'app', ctx))
+    expect(refused).toContain('4,147')
+    expect(refused).not.toContain('3,810')
     // THE QUARTER'S OBJECT ROWS MOVED TO PAGE 2 (Block D wave 2). `countedLines`
     // prints the three largest quarter readings off the SAME list, with both
     // sides' k of n, under the paragraph that argues from them — so a second
@@ -374,10 +379,12 @@ describe('what each page owes the reader', () => {
     // to a month that has passed. "November still filling" used to be stamped
     // on a closed quarter because both clauses keyed off overview.monthStatus.
     const after = afterQuarterFixture()
-    expect(after.cover.stamp).toContain('the month-level pages read October, outside this quarter')
+    // In market terms (T0a, mechanism 6; QR-5): the pages' month, named.
+    expect(after.cover.stamp).toContain('the month pages show October, outside this quarter')
     expect(after.cover.stamp).not.toContain('still filling')
     expect(after.method.numbers[0].note).toBeUndefined()
-    expect(after.category.basis).toContain('October is outside this quarter')
+    expect(after.category.basis).toContain('These figures are October’s, a month outside this quarter.')
+    expect(after.category.basis).not.toContain('the month the product is in')
     // EVERY PAGE THAT PRINTS A MONTH FIGURE, not three of five. Page 3 named
     // its month and never said it fell outside the quarter, under a heading
     // reading "Q3 2026 against Q2 2026"; page 5 named no month at all and took
@@ -386,7 +393,7 @@ describe('what each page owes the reader', () => {
     for (const key of ['quarterly.subjects', 'quarterly.rivals'] as const) {
       const text = renderText(QUARTERLY_BLOCKS[key].render(after, 'app', ctx))
       expect(text).toContain('October')
-      expect(text).toContain('October is outside this quarter')
+      expect(text).toContain('October’s, a month outside this quarter')
     }
     expect(after.rivals.monthLabel).toBe('October')
     // And a review of the quarter it is standing in still says so.
@@ -965,9 +972,10 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p6.ledger · numbered, grounded, and what happened afterwards', () => {
     const t = text('quarterly.moves')
-    // The basis once, under the ledger, not on each row (ruling C).
-    expect(t.split('counted over everything we have read for you').length - 1).toBe(1)
-    expect(t).toContain('videos behind it')
+    // The basis on each count, in market terms (T0a, mechanism 6; QR-12),
+    // never a note about "everything we have read for you".
+    expect(t).not.toContain('Videos behind a piece of advice are counted over everything')
+    expect(t).toMatch(/videos behind it, all time/)
     expect(t).toContain('Afterwards:')
     // D12 · the ratio is the whole ledger's; the trailer is gone (ruling D).
     expect(t).toMatch(/You have acted on \d+ of \d+\./)

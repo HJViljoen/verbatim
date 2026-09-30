@@ -157,7 +157,7 @@ export function updateLabel(update: string): string {
 
 /** "10 to 20 Sep", or "28 Aug to 3 Sep" across a month. The window is
  *  half-open, so its last day is the instant before `to`. */
-function windowDays(from: string, to: string): string | null {
+export function windowDays(from: string, to: string): string | null {
   const a = Date.parse(from)
   const b = Date.parse(to) - 1
   if (Number.isNaN(a) || Number.isNaN(b) || b < a) return null

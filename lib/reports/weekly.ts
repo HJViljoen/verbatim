@@ -3,6 +3,7 @@ import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { longMonth } from '../format'
 import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
+import { windowDays } from '../shell/bar'
 import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
@@ -143,6 +144,24 @@ export const weeklyRuleFor = (noun: PeriodNoun): string =>
     ? WEEKLY_RULE
     : 'Every number below is this month so far, against the three months before it. ' +
       'This update is how much of it arrived since the last one.'
+
+/**
+ * THE RULE IN MARKET TERMS (T0a, mechanism 6; WR-7): the months named, and the
+ * week or update as the comments written in its days, never as "how much of it
+ * arrived since the last update", which is our gathering. It is the basis that
+ * stops the week's figures reading as a period of their own, so it is reworded
+ * and never dropped: with no window to name, the rule by noun stands.
+ *   "Figures are September so far, set against June to August. The week is
+ *    the comments written 14 to 20 Sep."
+ */
+export function weeklyRuleIn(input: { month: string; window: { from: string; to: string } | null }): string {
+  const days = input.window ? windowDays(input.window.from, input.window.to) : null
+  if (!days) return weeklyRuleFor(periodNounFor(input.window))
+  const before1 = prevMonth(input.month)
+  const before3 = prevMonth(prevMonth(before1))
+  const noun = periodNounFor(input.window) === 'week' ? 'The week' : 'This update'
+  return `Figures are ${longMonth(input.month)} so far, set against ${longMonth(before3)} to ${longMonth(before1)}. ${noun} is the comments written ${days}.`
+}
 
 /**
  * The first screen's budget (design §3 WR section 1: "Budget: 12 printed

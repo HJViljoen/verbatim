@@ -16,6 +16,8 @@ import { loadActiveSubjects } from '../subjects/membership'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
 import { loadDeliveredRuns, loadMarketRivalAudiences, readingViewFrom } from '../reading/reading-view'
+import { loadAppPairOn } from '../reading/gather-flags'
+import { comparableOn, type PairOn } from '../reading/pairs'
 import {
   firstQuarterVerdictMonth,
   previousQuarter,
@@ -113,7 +115,39 @@ export interface QuarterlyCardInput {
    *  `FIRST_QUARTER_COMPARISON`, the record timeline's row). Null or absent:
    *  the artefact's six-readings arithmetic. */
   sameWay?: { when: string; pair: string } | null
+  /** The prior quarter's months, as `monthsInQuarter`. Absent: not read. */
+  monthsBefore?: readonly { month: string; videos: number | null; backRead: boolean }[]
+  /** Does every month step from the prior quarter's first month to this one's
+   *  last join under the product's month-pair judge (`quarterPairJoins`)?
+   *  Absent reads as joined (a fixture, or a caller with no judge). */
+  joined?: boolean
   href?: string
+}
+
+/**
+ * IS THE QUARTER PAIR READ THE SAME WAY? (T0a, mechanism 1; RP-25/27.) Every
+ * consecutive month from the prior quarter's first to this quarter's last
+ * must join under the product's month-pair judge on the card's audience: a
+ * quarter pair that spans a refused month step is a comparison about our
+ * bookkeeping. No new judge: the month judge, step by step.
+ */
+export function quarterPairJoins(pair: PairOn, prior: Quarter, quarter: Quarter, audience: string = CARD_AUDIENCE_KEY): boolean {
+  const months = monthsBetween(prior.from, quarter.to)
+  const ok = comparableOn(pair, audience)
+  return months.every((m, i) => i === 0 || ok(months[i - 1], m))
+}
+
+/** A quarter holding a month read back at setup, under the floor, or not read
+ *  at all (`quarterCaveat`'s facts), on either side (RP-25): its comparison is
+ *  not one read the same way. */
+const unevenQuarter = (months: readonly { videos: number | null; backRead: boolean }[] | undefined): boolean =>
+  (months ?? []).some((m) => m.backRead || m.videos == null || m.videos < SHARE_BAND.minN)
+
+/** The row's verdict with the quarter before taken off: refused, this
+ *  quarter's level only (`bandVerdict`'s refused shape). */
+function withoutQuarterBefore(v: Verdict, reason: NonNullable<Verdict['refusedReason']>): Verdict {
+  const { baseline: _prior, ...level } = v
+  return { ...level, state: 'refused', refusedReason: reason }
 }
 
 /** Which audience the card's rows are read on. The CATEGORY: it is the only
@@ -121,6 +155,7 @@ export interface QuarterlyCardInput {
  *  a card that drew the tenant's own side would print six refusals. The
  *  artefact itself still prints both columns. */
 const CARD_AUDIENCE = INDUSTRY_AUDIENCE
+const CARD_AUDIENCE_KEY: string = INDUSTRY_AUDIENCE
 
 /**
  * The card, from counts alone.
@@ -176,6 +211,14 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
   const subjectsRead = input.subjectsNow != null && input.subjectsBefore != null
   const n = denomNow.get(CARD_AUDIENCE)
   const priorN = denomBefore.get(CARD_AUDIENCE)
+  // THE QUARTER BEFORE GOES WHERE THE PAIR IS NOT READ THE SAME WAY (T0a,
+  // mechanism 1; RP-25/27): a pair the month judge refuses at any step, or a
+  // quarter holding a back-read or thin month on either side. The row keeps
+  // this quarter's level only, and the caveat that once explained the
+  // comparison goes with it.
+  const refusedBy: NonNullable<Verdict['refusedReason']> | null = input.joined === false
+    ? 'tracking_change'
+    : unevenQuarter(input.monthsInQuarter) || unevenQuarter(input.monthsBefore) ? 'unlogged_era' : null
   const rows: { label: string; verdict: Verdict }[] = []
   const series: QuarterlyCard['series'] = []
   for (const subject of input.subjects) {
@@ -188,18 +231,18 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
     const baseline = { videos: beforeBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)?.videos ?? 0 }
     series.push({ label: subject.name, value: { k: value.videos, n }, ...(subject.calibration ? { calibration: subject.calibration } : {}) })
     if (!earnsVerdict(subject.calibration)) continue
-    rows.push({
-      label: subject.name,
-      verdict: quarterChange({
-        object: { kind: 'subject', id: subject.id, label: subject.name },
-        audience: CARD_AUDIENCE,
-        window: { kind: 'quarter', from: input.quarter.from, to: input.quarter.to },
-        basis: { from: input.prior.from, to: input.prior.to },
-        value: { k: value.videos, n },
-        baseline: { k: baseline.videos, n: priorN },
-        readings: input.readings,
-      }),
+    const verdict = quarterChange({
+      object: { kind: 'subject', id: subject.id, label: subject.name },
+      audience: CARD_AUDIENCE,
+      window: { kind: 'quarter', from: input.quarter.from, to: input.quarter.to },
+      basis: { from: input.prior.from, to: input.prior.to },
+      value: { k: value.videos, n },
+      baseline: { k: baseline.videos, n: priorN },
+      readings: input.readings,
     })
+    // Below the gate a quarter verdict carries no baseline already
+    // (`baseline_forming`), and the card says when the first one lands.
+    rows.push({ label: subject.name, verdict: refusedBy && verdict.state !== 'baseline_forming' ? withoutQuarterBefore(verdict, refusedBy) : verdict })
     // THE BARS ARE THE LEVEL, NOT THE CHANGE, and they carry the same n the
     // verdict divides by — so a bar and the badge beside it cannot be read off
     // two different denominators (the bar is pushed above, before the gate).
@@ -209,7 +252,9 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
     ...base,
     rows,
     series,
-    note: quarterCaveat(input.monthsInQuarter, rows.length === 0, !subjectsRead),
+    note: refusedBy && rows.some((r) => r.verdict.state === 'refused')
+      ? quarterCaveat([], false, !subjectsRead)
+      : quarterCaveat(input.monthsInQuarter, rows.length === 0, !subjectsRead),
     firstComparison: firstComparisonLine(input.readings, input.readingMonth ?? null, input.sameWay ?? null),
     firstWhen: firstComparisonWhen(input.readings, input.readingMonth ?? null, input.sameWay ?? null),
   }
@@ -306,8 +351,10 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     loadWindowReading(admin, clientId, { from: prior.from, to: nextDay(prior.to) }).catch(guardWindow),
     readSubjectWindow(admin, clientId, { from: quarter.from, to: nextDay(quarter.to) }).catch(guardSubjects),
     readSubjectWindow(admin, clientId, { from: prior.from, to: nextDay(prior.to) }).catch(guardSubjects),
-    readEra(admin, clientId, quarter, readingAt),
+    readEra(admin, clientId, quarter, readingAt, prior),
   ])
+  // The product's month-pair judge, which fails closed (`refuseEveryPair`).
+  const pair = await loadAppPairOn(scope.reading, readingAt)
 
   return buildQuarterlyCard({
     quarter,
@@ -323,6 +370,8 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     // The record's timeline (and so its April 2027 row) is the locked
     // tenant's (app/dashboard/settings/record/page.tsx `PagesCanSay`).
     sameWay: tenantLocked(clientId, 'tracking') ? FIRST_QUARTER_COMPARISON : null,
+    monthsBefore: era.monthsBefore,
+    joined: quarterPairJoins(pair, prior, quarter),
   })
 }
 
@@ -370,8 +419,9 @@ async function readEra(
   clientId: string,
   quarter: Quarter,
   readingAt: string,
-): Promise<{ readings: number; readingMonth: string | null; monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[] }> {
-  const empty = { readings: 0, readingMonth: null, monthsInQuarter: [] as { month: string; videos: number | null; backRead: boolean }[] }
+  prior: Quarter,
+): Promise<{ readings: number; readingMonth: string | null; monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[]; monthsBefore: { month: string; videos: number | null; backRead: boolean }[] }> {
+  const empty = { readings: 0, readingMonth: null, monthsInQuarter: [] as { month: string; videos: number | null; backRead: boolean }[], monthsBefore: [] as { month: string; videos: number | null; backRead: boolean }[] }
   try {
     const runRes = await admin
       .from('pipeline_runs')
@@ -393,6 +443,7 @@ async function readEra(
       readings: countReadings(set.denominators, firstRunMonth, readingMonth),
       readingMonth,
       monthsInQuarter: quarterMonths(set.denominators, quarter),
+      monthsBefore: quarterMonths(set.denominators, prior),
     }
   } catch (error) {
     if (!isMissingMonthlyReading(error)) console.error(`[reports-card] era: ${(error as { message?: string })?.message ?? String(error)}`)

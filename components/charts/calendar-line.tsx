@@ -148,8 +148,11 @@ export function CalendarLine({
   axis, series: givenSeries, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
   zeroBase = true, legend = true, maxLabels = 12, endLabels = true,
-  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS,
+  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS, scaleTo,
 }: {
+  /** The value the scale reaches at least: a caller drawing two charts on one
+   *  scale passes both charts' largest value (T0a, BR-38). */
+  scaleTo?: number
   /** Every month to draw, ascending — `monthAxis(from, to)`. */
   axis: readonly string[]
   series: readonly CalendarSeries[]
@@ -254,7 +257,7 @@ export function CalendarLine({
   // spans 183.5-188.5 and at k=2.6 about 185-187: below the baseline, which is
   // SH14's point, and clear of the labels, which is this.
   const gutterY = g.gutterY
-  const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
+  const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline, atLeast: scaleTo })
   // The same values `valueScale` measures its top from.
   const plotted: number[] = []
   for (const sr of series) for (const pt of sr.points) {

@@ -391,7 +391,7 @@ function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode
             : repeated}
           {alsoRaisedLine(row) ? <>{' · '}{alsoRaisedLine(row)}</> : null}
           {grounded != null
-            ? <>{' · '}<span data-copy="figure" className="font-semibold text-foreground">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it</>
+            ? <>{' · '}<span data-copy="figure" className="font-semibold text-foreground">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it, {GROUNDED_BASIS}</>
             : <>{' · '}<GroundedCell row={row} mode={mode} /></>}
         </span>
         {folded ? null : <span className="text-[12px] text-muted-foreground"><AfterwardsCell row={row} mode={mode} shared={shared} /></span>}
@@ -498,19 +498,10 @@ export const marketAdvice: Block<MarketSurfaceData> = {
             {state}
           </p>
         ) : null}
-        {mode !== 'app' ? (
-          // Paper and email have no tooltip, so the basis prints once here.
-          <p
-            className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-          >
-            Grounded in: {GROUNDED_BASIS.charAt(0).toLowerCase() + GROUNDED_BASIS.slice(1)}
-          </p>
-        ) : null}
-        {/* The all-time basis rides on the "Grounded in" column header as a
-            tooltip, the one place this page says it (copy de-clutter ruling
-            C); the "First time" chip carries its clock as a tooltip (B57); the
-            "How the Repeated column counts" disclosure is cut (B58). */}
+        {/* The all-time basis is the count's own label, "Behind it, all
+            time", in every mode (T0a, mechanism 6; YM-14): no tooltip and no
+            note. The "First time" chip carries its clock as a tooltip (B57);
+            the "How the Repeated column counts" disclosure is cut (B58). */}
       </div>
     )
 
@@ -550,7 +541,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     </>
                   ) : null}
                   <StatusCell row={row} mode={mode} />
-                  <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · grounded in </span>
+                  <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · behind it, {GROUNDED_BASIS}: </span>
                   <GroundedCell row={row} mode={mode} />
                 </div>
                 <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></div>
@@ -578,9 +569,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     <th className="py-1 pr-3 font-semibold">First raised</th>
                     {repeat.shown ? <th className="py-1 pr-3 font-semibold">Repeated</th> : null}
                     <th className="py-1 pr-3 font-semibold">Your decision</th>
-                    <th className="py-1 pr-3 font-semibold">
-                      <span title={GROUNDED_BASIS} className="cursor-help">Grounded in</span>
-                    </th>
+                    <th className="py-1 pr-3 font-semibold">Behind it, {GROUNDED_BASIS}</th>
                     <th className="py-1 font-semibold">Afterwards</th>
                   </tr>
                 </thead>
@@ -620,7 +609,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                         </td>
                         {repeat.shown ? <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Repeated</StackLabel><RepeatCell row={row} first={repeat.first(row)} mode={mode} /></td> : null}
                         <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Your decision</StackLabel><StatusCell row={row} mode={mode} /></td>
-                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Grounded in</StackLabel><GroundedCell row={row} mode={mode} /></td>
+                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Behind it, {GROUNDED_BASIS}</StackLabel><GroundedCell row={row} mode={mode} /></td>
                         <td className={`py-1.5 ${STACK_CELL}`}><StackLabel>Afterwards</StackLabel><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></td>
                       </tr>
                     )

@@ -72,6 +72,12 @@ describe('valueScale', () => {
     expect(valueScale(series).hi).toBeCloseTo(56, 5)
   })
 
+  // T0a (BR-38): a pair of charts drawn side by side share one scale.
+  it('reaches at least a shared top where one is given, and never shrinks below its own', () => {
+    expect(valueScale(series, { atLeast: 80 }).hi).toBeCloseTo(89.6, 5)
+    expect(valueScale(series, { atLeast: 10 }).hi).toBeCloseTo(56, 5)
+  })
+
   it('scales a still-filling month against the "at this point last month" tick too', () => {
     const withTick: CalendarSeries[] = [
       { label: 'You', color: 'a', points: [p('2026-09-01', 10, 'filling', { atLastMonth: 90 })] },

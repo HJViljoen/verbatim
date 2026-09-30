@@ -65,6 +65,8 @@ import type { HeadToHead } from '../reading/head-to-head'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
 import type { MoveReading } from '../reading/moves'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
+import { quarterPairJoins } from './reports-card'
+import { loadAppPairOn } from '../reading/gather-flags'
 
 /**
  * The quarterly review's loader (Phase 1 WP20, design item 14).
@@ -399,7 +401,7 @@ export interface CategoryPage {
    *  counts. NOT a verdict: a volume is not a share of itself, and banding one
    *  against the other prints "4,147 of 4,147 · no clear change". Null where
    *  the window read could not be taken. */
-  quarterVolume: { videos: number; before: number } | null
+  quarterVolume: { videos: number; before: number | null } | null
 }
 
 export interface RivalsPage {
@@ -765,7 +767,9 @@ export function coverBody(input: {
   if (input.lead && isAnswer(input.lead.state)) {
     parts.push(
       `The biggest banded change in ${input.monthLabel} is ${input.lead.objectLabel}, at [[lead_share]] of [[lead_of]] videos${
-        input.monthOutside ? `, the month in hand rather than a month of ${input.quarterLabel}` : ''
+        // The basis in market terms (T0a, mechanism 6; QR-7): the month is
+        // named as outside the quarter, never "the month in hand".
+        input.monthOutside ? `, a month outside ${input.quarterLabel}` : ''
       }.`,
     )
   } else {
@@ -803,7 +807,8 @@ export function coverBody(input: {
  */
 export function monthBasisClause(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
-  return `the month-level pages read ${longMonth(month)}, outside this quarter`
+  // In market terms (T0a, mechanism 6; QR-5): the pages' month, named.
+  return `the month pages show ${longMonth(month)}, outside this quarter`
 }
 
 /** The same fact as a sentence a page can print under its own rows. Null while
@@ -811,7 +816,9 @@ export function monthBasisClause(month: string, quarter: Quarter): string | null
  *  headed Q3 can let a month figure speak for itself. */
 export function monthOutsideNote(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
-  return `${longMonth(month)} is outside this quarter: it is the month the product is in now.`
+  // In market terms (T0a, mechanism 6; QR-5): whose figures these are, never
+  // "the month the product is in now".
+  return `These figures are ${longMonth(month)}’s, a month outside this quarter.`
 }
 
 /**
@@ -1011,6 +1018,8 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     changeLog,
     quiet,
     draft: options.draft ?? null,
+    // The product's month judge, which fails closed (`refuseEveryPair`).
+    joined: scope.reading ? quarterPairJoins(await loadAppPairOn(scope.reading, readingAt), prior, quarter) : false,
   })
 }
 
@@ -1208,6 +1217,10 @@ export interface ComposeQuarterlyInput {
    *  could not look" are two different sentences. */
   quiet?: QuarterQuiet[] | null
   draft?: string | null
+  /** Is the quarter pair read the same way: every month step across the two
+   *  quarters joins under the month judge (`quarterPairJoins`, T0a)? Absent
+   *  reads as joined (a fixture, or a caller with no judge). */
+  joined?: boolean
 }
 
 /**
@@ -1276,6 +1289,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     monthNote,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
+    joined: a.joined !== false,
   })
   // THE COVER IS BUILT AFTER THE PAGES IT QUOTES, NOT BEFORE THEM. Its three
   // cards are page 3's quarter gap, page 4's attention panel and the largest of
@@ -1994,6 +2008,7 @@ export function withFlags(mover: Mover): QuarterMover {
 }
 
 function buildCategory(a: {
+  joined: boolean
   overview: OverviewData
   quiet: QuarterQuiet[] | null
   quotes: { quote: Quote; cite: string }[]
@@ -2084,7 +2099,10 @@ function buildCategory(a: {
           : quarter.length === 0
             ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
             : null,
-    quarterVolume: videos != null && before != null ? { videos, before } : null,
+    // THE QUARTER BEFORE'S COUNT ONLY WHERE THE PAIR IS READ THE SAME WAY (T0a;
+    // QR-10): a video count across two quarters answers a question about our
+    // gathering where a month step between them is refused.
+    quarterVolume: videos != null ? { videos, before: a.joined ? before : null } : null,
   }
 }
 

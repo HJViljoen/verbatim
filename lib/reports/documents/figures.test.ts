@@ -61,12 +61,13 @@ describe('switchingFigure', () => {
     expect(f?.away.n).toBe(f?.pool)
   })
 
-  it('refuses below the floor and says how many it had', () => {
+  // T0a (mechanism 6; DB-15): under the floors the lean split is not
+  // printed at all, the count only, and no "too few to compare" beside it.
+  it('prints the count only below the floor, no lean split and no refusal line', () => {
     const f = switching(pool({ toward: 42, neither: 12 }))
     expect(f?.verdict).toBeNull()
-    expect(f?.unread).toContain('54')
-    expect(f?.unread).toContain('100')
-    expect(f?.unread).toMatch(/too few to compare/i)
+    expect(f?.line).toBe('54 videos named both you and a tracked rival.')
+    expect(f?.unread).toBeNull()
   })
 
   it('bands the toward share once the pool clears the floor, and flags the measurement', () => {
@@ -84,18 +85,16 @@ describe('switchingFigure', () => {
     const f = switching(pool({ toward: 4, away: 40, neither: 80 }))
     expect(f?.pool).toBe(124)
     expect(f?.verdict).toBeNull()
-    // "124 videos where a banded reading needs 100" about a pool of 124 is a
-    // sentence a reader can refute by subtraction. The k floor is what bit.
-    expect(f?.unread).toContain('4 of 124 leaned toward you')
-    expect(f?.unread).toContain('10')
-    expect(f?.unread).not.toContain('needs 100')
+    // Under the k floor too: the count only (T0a, DB-15).
+    expect(f?.line).toBe('124 videos named both you and a tracked rival.')
+    expect(f?.unread).toBeNull()
   })
 
-  it('prints the pool in the line and names what nothing judged', () => {
-    const f = switching(pool({ toward: 7, away: 3, neither: 2 }))
-    expect(f?.line).toContain('12 videos named both')
-    expect(f?.line).toContain('7 of 12 leaned toward you')
-    expect(f?.unread).toContain('2 of 12 carry nothing')
+  it('prints the pool in the line and names what nothing judged, once it clears the floors', () => {
+    const f = switching(pool({ toward: 60, away: 30, neither: 30 }))
+    expect(f?.line).toContain('120 videos named both')
+    expect(f?.line).toContain('60 of 120 leaned toward you')
+    expect(f?.unread).toContain('30 of 120 carry nothing')
   })
 
   it('carries its basis, because it is not comment-dated', () => {
@@ -105,11 +104,13 @@ describe('switchingFigure', () => {
 
 describe('crosscheckLine', () => {
   it('names both populations and draws no arithmetic between them', () => {
-    const f = switching(pool({ toward: 7, away: 3, neither: 2 }))
+    const f = switching(pool({ toward: 60, away: 30, neither: 30 }))
     const line = crosscheckLine(f!, { label: 'Objections', value: { k: 28, n: 205 } })
-    expect(line).toContain('7 of 12')
+    expect(line).toContain('60 of 120')
     expect(line).toContain('28 of 205')
     expect(line).toContain('Two populations, two denominators')
+    // No lean split under the floors, so nothing to set beside one (DB-15).
+    expect(crosscheckLine(switching(pool({ toward: 7, away: 3, neither: 2 }))!, { label: 'Objections', value: { k: 28, n: 205 } })).toBeNull()
   })
 
   it('is null where the objection has no denominator', () => {
@@ -341,7 +342,9 @@ describe('the sales brief’s slide fixtures', () => {
     const f = thinFiguresFixture()
     expect(f.switching?.pool).toBe(35)
     expect(f.switching?.verdict).toBeNull()
-    expect(f.switching?.unread).toContain('35')
+    // The count only (T0a, DB-15).
+    expect(f.switching?.line).toBe('35 videos named both you and a tracked rival.')
+    expect(f.switching?.unread).toBeNull()
     // Two readings is not a line, so the months are named instead of drawn.
     expect(f.line?.series).toHaveLength(0)
     expect(f.line?.label).toBe('Aug → Sep only')

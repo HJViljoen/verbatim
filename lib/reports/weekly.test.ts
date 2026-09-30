@@ -13,6 +13,7 @@ import {
   WEEKLY_EMAIL_WIDTH,
   WEEKLY_RULE,
   weeklyRuleFor,
+  weeklyRuleIn,
   checkNotRecorded,
   firstScreenCount,
   flagFigures,
@@ -102,6 +103,19 @@ describe('the arrangement', () => {
     expect(WEEKLY_RULE).toContain('since the last update')
     // No direction word anywhere on the masthead.
     expect(WEEKLY_RULE).not.toMatch(/growing|fading|rising|declining/i)
+  })
+
+  // T0a (mechanism 6; WR-7): the rule in market terms, the months named and
+  // the week as the comments written in its days, never "arrived since the
+  // last update". Reworded, never dropped: with no window the noun rule stands.
+  it('prints the rule in market terms where the window is known', () => {
+    expect(weeklyRuleIn({ month: '2026-09-01', window: { from: '2026-09-14', to: '2026-09-21' } }))
+      .toBe('Figures are September so far, set against June to August. The week is the comments written 14 to 20 Sep.')
+    expect(weeklyRuleIn({ month: '2026-09-01', window: { from: '2026-08-11', to: '2026-09-10' } }))
+      .toBe('Figures are September so far, set against June to August. This update is the comments written 11 Aug to 9 Sep.')
+    expect(weeklyRuleIn({ month: '2026-01-01', window: { from: '2026-01-05', to: '2026-01-12' } })).toContain('set against October to December')
+    expect(weeklyRuleIn({ month: '2026-09-01', window: null })).toBe(WEEKLY_RULE)
+    expect(weeklyRuleIn({ month: '2026-09-01', window: { from: '2026-09-14', to: '2026-09-21' } })).not.toMatch(/update\b.*arrived|since the last/)
   })
 })
 

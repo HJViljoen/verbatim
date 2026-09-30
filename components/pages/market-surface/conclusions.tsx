@@ -9,6 +9,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surface'
+import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
 
 // MK1 · What we concluded (design §3 MK1; ported to the artboard, Block D
 // wave 2).
@@ -81,8 +82,12 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
 const FIGURE_FACE = 'font-mono text-[11.5px] tabular-nums'
 const FIGURE = `${FIGURE_FACE} text-secondary-foreground`
 
-function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMode; appUrl: string; corpus: number | null }) {
+function Row({ row, mode, appUrl }: { row: ConclusionRow; mode: RenderMode; appUrl: string }) {
   const email = mode === 'email'
+  // ALL TIME, SAID ON THE COUNT (T0a, mechanism 6; YM-26): "157 of 1,699
+  // videos behind it" read as a share of this month once the corpus line
+  // was cut (B45). The count is every video read to date, so it says so in
+  // market terms, and prints no "of" over a corpus a reader cannot place.
   // THE DENOMINATOR IS PRINTED AND THE POPULATION IS NAMED (D8). The artboard
   // writes "305 of 1,388 category videos" — this month's category corpus —
   // over a numerator that is nothing of the sort: `distinctVideos` counts over
@@ -113,9 +118,7 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
     )
     : (
       <span data-copy="figure" className={email ? undefined : FIGURE} style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-        {corpus != null
-          ? <>{fmtInt(row.videos)} of {fmtInt(corpus)} videos behind it</>
-          : <>{fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it</>}
+        {fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it, {GROUNDED_BASIS}
       </span>
     )
   const chips = row.themes.map((t) => {
@@ -188,7 +191,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
     const meta = c.total > 0 ? `${fmtInt(aboveBar)} of ${fmtInt(c.total)} above the evidence bar` : null
     const above = c.rows.filter((r) => r.tier !== 'archive')
     const below = c.rows.filter((r) => r.tier === 'archive')
-    const row = (r: ConclusionRow) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} corpus={c.corpusVideos} />
+    const row = (r: ConclusionRow) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} />
     // THE RUN'S OWN DATE, WEARING THE WORD "UPDATE" (D9). It is the one thing
     // on this block dated by delivery rather than by a comment, and a reader
     // has to be able to tell it from the month in the page bar. A row tag at

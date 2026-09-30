@@ -343,10 +343,6 @@ export function changeNote(observed: boolean, prevMonthLabel: string | null): st
   return `no row in ${prevMonthLabel}`
 }
 
-/** Said above a table that is an earlier month than the one in hand. */
-export const standingsBehindLine = (month: string, table: string): string =>
-  `${monthName(month)} has not been read yet, so this table is ${monthName(table)}.`
-
 /**
  * A rival's state, from what has actually been read.
  *
@@ -1252,8 +1248,13 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
   const stored = input.axis.filter((m) => byMonth.has(m))
   const month = stored[stored.length - 1] ?? null
   if (month == null) return nothing(input.month, standingsUnreadMonth(input.month))
+  // NO EARLIER MONTH'S TABLE UNDER THIS MONTH (T0a, mechanism 6; BR-32): where
+  // the month read has no rows, the block draws no table, never last month's
+  // with a line saying so, which a wording sweep would strip and leave an
+  // August table under a September brief.
+  if (month !== monthStartOf(input.month)) return nothing(input.month, standingsUnreadMonth(input.month))
   const prevMonth = previousMonthOf(month)
-  const behind = month === monthStartOf(input.month) ? null : standingsBehindLine(input.month, month)
+  const behind: string | null = null
 
   // THE CORPUS ROWS WEAR THE PANEL'S SHAPE, and the label says which they are.
   // `buildStandings` divides an audience's videos by the month's videos and its

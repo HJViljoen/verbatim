@@ -2,7 +2,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
-import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
+import { weeklyRuleIn } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Slide } from './slide'
@@ -47,7 +47,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         {first && !stale ? (
           <>
-            <span className="text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</span>
+            <span className="text-secondary-foreground">{weeklyRuleIn({ month: data.month, window: data.reading.window })}</span>
             <span aria-hidden> · </span>
           </>
         ) : null}

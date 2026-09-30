@@ -946,9 +946,11 @@ function CompetitorPage({ page, figures, data }: { page: DocPage; figures: Figur
       <div className="flex items-start justify-between gap-8">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-[35.5px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
-          {page.meta?.thin === 'true' ? <p className="text-[15.5px] text-muted-foreground">On few videos, read with care.</p> : null}
         </div>
-        <ShareStrip data={data} name={name} />
+        {/* A THIN COMPETITOR PRINTS ITS WORDS AND NO FIGURES (T0a, mechanism
+            6; DB-9): figures beside "read with care" presented thin figures
+            as sound once the caveat went, so the figures go instead. */}
+        {page.meta?.thin === 'true' ? null : <ShareStrip data={data} name={name} />}
       </div>
       <div className={`grid min-h-0 flex-1 ${cols.length >= 4 ? 'grid-cols-4 gap-x-4' : 'grid-cols-3 gap-x-6'}`}>
         {cols.map(([label, block]) => (
@@ -1414,6 +1416,11 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
           <span className="ml-auto shrink-0"><ClaimBadge verdict={f.verdict} unit="pts" /></span>
         </div>
 
+        {/* TOO FEW TO COMPARE: THE COUNT ONLY, NO LEAN SPLIT (T0a, mechanism
+            6; DB-15). Where the pool clears no floor (`verdict` null) the
+            split was printed with a "too few" line beside it; now it is not
+            printed at all. */}
+        {f.verdict ? (
         <div className="flex flex-col gap-2">
           <div className="flex h-[10px] w-full shrink-0 gap-0.5 overflow-hidden rounded-full bg-neutral-seg">
             <span className="block h-full rounded-l-full bg-primary" style={{ width: `${pct(f.toward.k)}%` }} />
@@ -1436,6 +1443,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
           </div>
           {f.unread && <p className="text-[14px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
         </div>
+        ) : null}
 
         {/* THE BASIS, BESIDE THE NUMBER, AT THE FOOT. A third clock on a
             month-stamped sheet (D9), and a reader who is not told will read it
@@ -1446,10 +1454,12 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
 
       <div className={`${CARD} flex min-h-0 flex-col gap-3.5 px-6 py-5`}>
         <Eyebrow>How to read these</Eyebrow>
-        <p className="font-mono text-[13.5px] leading-[1.5] text-muted-foreground">
-          <span className="text-foreground">{fmtCount(f.toward.k)}</span> toward · <span className="text-foreground">{fmtCount(f.away.k)}</span> away · <span className="text-foreground">{fmtCount(f.neither.k)}</span> neither · <span className="text-foreground">{fmtCount(f.pool)}</span> in all
-        </p>
-        {data.slideFigures?.crosscheck && (
+        {f.verdict ? (
+          <p className="font-mono text-[13.5px] leading-[1.5] text-muted-foreground">
+            <span className="text-foreground">{fmtCount(f.toward.k)}</span> toward · <span className="text-foreground">{fmtCount(f.away.k)}</span> away · <span className="text-foreground">{fmtCount(f.neither.k)}</span> neither · <span className="text-foreground">{fmtCount(f.pool)}</span> in all
+          </p>
+        ) : null}
+        {f.verdict && data.slideFigures?.crosscheck && (
           <p className={BODY_SM}>{data.slideFigures.crosscheck}</p>
         )}
         <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">

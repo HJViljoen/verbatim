@@ -747,12 +747,10 @@ describe('WR5 · for content', () => {
     // `t2`, not `t1`: §1's hero leads with "Will it survive a wet commute" and
     // §5 no longer repeats it (`risingMovers`).
     expect(text).toContain('5.1% · 71 of 1,388')
-    // Run-indexed, unlike everything above it in this block, and the line has
-    // to say so under a masthead that reads "this month so far".
-    // THE LABEL IS THE READER'S WORD AND THE MULTIPLE PRINTS ITS n. The block
-    // printed the stored slug (`promotional`, and one day `trend-riding`) and a
-    // multiple over an unstated population.
-    expect(text).toContain('Talking head outperformed Commute POV')
+    // T0a (mechanism 6; WR-34): the format multiple is run-indexed and not
+    // re-based on a dated window, so the row is omitted.
+    expect(text).not.toContain('Talking head outperformed Commute POV')
+    expect(text).not.toContain('median video')
   })
 
   // THREE ROWS OF ONE SHAPE, AND ONE ALL-CAPS EYEBROW IN THE SECTION. §5 drew
@@ -793,14 +791,17 @@ describe('WR5 · for content', () => {
   // of a ranked, capped list — bounded at fifteen for every tenant forever by
   // `rankEngageCandidates` — so the row prints the queue's own verb and states
   // the cap, rather than printing a cap as a count of the week.
-  it('counts what the queue surfaced, and never the shown three', () => {
+  // T0a (mechanism 6; WR-32): the surfaced count is a capped list's length,
+  // so it goes, with the per-intent counts; the comments print under "Worth a
+  // reply".
+  it('prints the comments worth a reply, and no capped count', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
-      expect(text, mode).toContain('Surfaced for a reply this week')
-      expect(text, mode).not.toContain('Worth a reply this week')
-      expect(text, mode).toContain('question 7 · objection 3 · buying signal 2')
-      expect(text, mode).toContain('1 below in full')
-      // The cap disclaimer is gone (D63); the counts and "N below in full" say it.
+      expect(text, mode).toContain('Worth a reply')
+      expect(text, mode).toContain('Does the strap come off?')
+      expect(text, mode).not.toContain('Surfaced for a reply')
+      expect(text, mode).not.toContain('question 7 · objection 3 · buying signal 2')
+      expect(text, mode).not.toContain('below in full')
       expect(text, mode).not.toContain('the queue ranks and caps what it shows')
       // D14: nothing records whether a comment was answered. ("answering" in
       // the cap clause is about the reader's own work, not a record of one.)
@@ -814,17 +815,13 @@ describe('WR5 · for content', () => {
   // runner-up's, then the basis both are against. The winner's n used to
   // arrive last, after the runner-up's, with the median clause between two n's
   // it belongs to neither of alone.
-  it('prints the format head-to-head with an n on each side, winner first', () => {
-    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('31 of 402 videos carry it · Commute POV 1.8× over 24 of 402 videos · both against this update’s median video')
-  })
-
-  it('says "against" rather than "both against" where there is no runner-up', () => {
+  it('prints no format head-to-head, with or without a runner-up (WR-34)', () => {
     const data = weeklyFixture()
-    const alone = { ...data, content: { ...data.content, runnerUp: null } }
-    const text = renderText(block.render(alone, 'app', ctx))
-    expect(text).toContain('31 of 402 videos carry it · against this update’s median video')
-    expect(text).not.toContain('both against')
+    for (const d of [data, { ...data, content: { ...data.content, runnerUp: null } }]) {
+      const text = renderText(block.render(d, 'app', ctx))
+      expect(text).not.toContain('videos carry it')
+      expect(text).not.toContain('against this update’s median video')
+    }
   })
 
   // The heading over these rows is deliberately direction-free, and a theme's
@@ -834,9 +831,11 @@ describe('WR5 · for content', () => {
     expect(markup).not.toContain(EMAIL.greenTint)
   })
 
-  it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {
+  // T0a (WR-32; U13): an empty reply queue prints nothing, not a note.
+  it('prints nothing for an empty reply queue', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
-    expect(text).toContain('Nothing is waiting for a reply from this update.')
+    expect(text).not.toContain('Nothing is waiting for a reply from this update.')
+    expect(text).not.toContain('Worth a reply')
   })
 })
 

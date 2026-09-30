@@ -342,14 +342,18 @@ describe('MK1 · what we concluded', () => {
     expect(text).not.toContain('Ordered by')
   })
 
-  it('counts the videos behind a conclusion out of the corpus it counted them over', () => {
+  // T0a (mechanism 6; YM-26): the count is every video read to date, and it
+  // says so on the count in market terms ("all time"), never as "157 of
+  // 1,699", which read as a share of this month.
+  it('says the videos behind a conclusion are all time, on the count itself', () => {
     // `distinctVideos` counts over the WHOLE corpus — Össur has 1,699 analysed
     // videos — and "301 videos behind it" under a heading reading "this month",
     // beside a Competitive surface saying September held 449, is a share of the
     // month that does not exist. The copy contract cannot catch it: the node is
     // a figure, and only a level must carry its "of N".
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('157 of 1,699 videos behind it')
+    expect(text).toContain('157 videos behind it, all time')
+    expect(text).not.toContain('157 of 1,699')
     // The basis sentence is said once on the page, on the advice table's
     // "Grounded in" header (copy de-clutter ruling C).
     expect(text).not.toContain('not over this month alone')
@@ -433,7 +437,7 @@ describe('MK2 · the ledger', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(text).toContain('Recommendation')
     expect(text).toContain('First raised')
-    expect(text).toContain('Grounded in')
+    expect(text).toContain('Behind it, all time')
     expect(text).toContain('Afterwards')
     expect(text).toContain('Jun')
     expect(text).toContain('3 months')   // the age, stacked under the month
@@ -582,18 +586,19 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/quarter/i)
   })
 
-  it('says the all-time basis once on the page: a tooltip on "Grounded in", printed once on paper', () => {
-    // Copy de-clutter ruling C: the basis is said once per surface. On screen
-    // it is the column header's tooltip; paper and email have no tooltip, so
-    // it prints once under the table. MK1 no longer restates it.
+  // T0a (mechanism 6; YM-14): the all-time basis is the count's own label,
+  // "Behind it, all time", in every mode, in market terms: no tooltip, and
+  // no note about "everything we have read for you".
+  it('says the all-time basis on the count’s own label in every mode, never as a tooltip or a note', () => {
     const app = render(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(app).toContain(`title="${GROUNDED_BASIS}"`)
+    expect(markupOf(app)).toContain(`Behind it, ${GROUNDED_BASIS}`)
+    expect(app).not.toContain('title="all time"')
     expect(app).not.toContain('How the Repeated column counts')
-    expect(markupOf(app)).not.toContain('Counted over everything we have read for you')
-    for (const mode of ['print', 'email'] as RenderMode[]) {
+    for (const mode of ['app', 'print', 'email'] as RenderMode[]) {
       const markup = render(marketAdvice.render(marketFixture(), mode, ctx))
       expect(markup).not.toContain('<details')
-      expect(markupOf(markup)).toContain('counted over everything we have read for you')
+      expect(markupOf(markup)).not.toContain('everything we have read for you')
+      expect(markupOf(markup), mode).toMatch(/[Bb]ehind it, all time/)
     }
     const mk1 = render(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(markupOf(mk1)).not.toContain('counted over everything we have read for you')
@@ -958,6 +963,9 @@ describe('MK6 · plans re-checked', () => {
   it('says what a claim count is a count of, and what the floor is', () => {
     const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
     expect(text).toContain('not out of one month')
+    // T0a (mechanism 6; YM-34): a floor, never "k of n" over the all-time corpus.
+    expect(text).toMatch(/at least \d+ videos? we can show you a comment from/)
+    expect(text).not.toMatch(/\d+ of [\d,]+ videos we can show you/)
     // The hold is real since the walkthrough (item 5), and the card says how.
     expect(text).toContain('changes only when the evidence behind it does')
   })

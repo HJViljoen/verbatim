@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { FIRST_QUARTER_COMPARISON, PAGES_CAN_SAY } from '../settings/record-additions'
-import { buildQuarterlyCard, countReadings, eraTo, firstComparisonLine, firstComparisonWhen, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
+import { buildQuarterlyCard, countReadings, eraTo, firstComparisonLine, firstComparisonWhen, monthsBetween, quarterCaveat, quarterMonths, quarterPairJoins, type QuarterlyCardInput } from './reports-card'
+import { pairOn, type PairOn } from '../reading/pairs'
+import { sealandJudge } from '../test/sealand-pairs'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import type { DenominatorPoint } from '../reading/series'
 import type { WindowReading } from '../reading/read'
@@ -298,5 +300,24 @@ describe('buildQuarterlyCard under the three calibration states', () => {
 
   it('a subject with no calibration given is read as before', () => {
     expect(buildQuarterlyCard(input())?.rows.map((r) => r.label)).toEqual(['Durability'])
+  })
+})
+
+// T0a (mechanism 1; RP-25/27): a quarter pair is read the same way only where
+// every month step across the two quarters joins under the product's month
+// judge. Sealand's September search change is inside Q3.
+describe('quarterPairJoins', () => {
+  it('refuses Q3 against Q2 on Sealand, whose searches changed in September', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const q3 = quarterFor(2026, 3)
+    expect(quarterPairJoins(judge, previousQuarter(q3), q3)).toBe(false)
+  })
+
+  it('joins where every step joins, and fails closed on any refused step', () => {
+    const q3 = quarterFor(2026, 3)
+    const all: PairOn = (prevMonth, month) => ({ prevMonth, month, mode: 'comparable', reasons: [], row: null, checkWith: null })
+    expect(quarterPairJoins(all, previousQuarter(q3), q3)).toBe(true)
+    const one: PairOn = (prevMonth, month) => ({ prevMonth, month, mode: month === '2026-05-01' ? 'refuse' : 'comparable', reasons: [], row: null, checkWith: null })
+    expect(quarterPairJoins(one, previousQuarter(q3), q3)).toBe(false)
   })
 })

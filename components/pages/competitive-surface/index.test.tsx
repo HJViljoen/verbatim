@@ -776,7 +776,10 @@ describe('the page, as the artboard composes it', () => {
     const text = renderText(markup)
     expect(text).not.toContain('The rest of the category is not drawn')
     // Not in the legend under the charts …
-    const chips = markup.slice(markup.lastIndexOf('</svg>'), markup.indexOf('Each chart is scaled'))
+    // The legend: its chips' row, after the last chart (the scale note that
+    // once closed it is gone, T0a BR-38).
+    const legendAt = markup.indexOf('flex flex-wrap gap-x-3 gap-y-1', markup.lastIndexOf('</svg>'))
+    const chips = markup.slice(legendAt, markup.indexOf('</div>', legendAt))
     expect(chips).toContain('Ottobock')
     expect(chips).not.toContain('category')
     // and nowhere in the drawing itself
@@ -788,11 +791,11 @@ describe('the page, as the artboard composes it', () => {
     expect(text).toContain(`of ${category.content!.n.toLocaleString('en-US')}`)
   })
 
-  it('draws ONE legend under both charts, and says the scale is not shared', () => {
+  // T0a (mechanism 6; BR-38): the two charts share one scale, the larger of
+  // their two maxima, so no note warns a reader off comparing them.
+  it('draws ONE legend under both charts, on one shared scale, with no scale note', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
-    // ONE legend: the note under it is printed once, and each chart's own
-    // title appears once — two legends would have duplicated both.
-    expect(text.match(/Each chart is scaled to its own highest month/g)?.length).toBe(1)
+    expect(text).not.toContain('Each chart is scaled to its own highest month')
     expect(text.match(/Attention share/g)?.length).toBe(1)
     expect(text.match(/Content share/g)?.length).toBe(1)
   })

@@ -305,7 +305,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
             // `quarterly.read` renumbers the deck and moves the pointer
             // silently. The page's own title resolves everywhere and does
             // not move.
-            note={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it`}
+            note={c.quarterVolume.before != null ? `against ${fmtInt(c.quarterVolume.before)} in the quarter before it` : undefined}
           />
         ) : null}
         {c.quarterNote ? <Note mode={mode}>{c.quarterNote}</Note> : null}

@@ -112,7 +112,9 @@ describe('coverBody', () => {
 
   it('says the month the lead is of is not a month of the quarter, when it is not', () => {
     const body = coverBody({ lead: verdict(), monthLabel: 'October', quarterLabel: 'Q3 2026', unlocked: true, readings: 9, monthOutside: true })
-    expect(body).toContain('the month in hand rather than a month of Q3 2026')
+    // In market terms (T0a, mechanism 6; QR-7).
+    expect(body).toContain('videos, a month outside Q3 2026.')
+    expect(body).not.toContain('the month in hand')
   })
 
   it('says nothing cleared rather than inventing a lead', () => {

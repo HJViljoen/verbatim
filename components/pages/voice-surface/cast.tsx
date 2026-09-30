@@ -2,7 +2,7 @@ import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, shortDate } from '@/lib/format'
+import { fmtInt } from '@/lib/format'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { CastBlock, CastPersona, VoiceSurfaceData } from '@/lib/pages/voice-surface'
@@ -21,6 +21,11 @@ import type { CastBlock, CastPersona, VoiceSurfaceData } from '@/lib/pages/voice
 // update. The groups overlap, so the counts are counts and no share of the
 // month is taken from them; How to read says so once, not a note under the
 // block (25 Sep rulings).
+//
+// IN MARKET TIME (T0a, mechanism 6; CV-25): the head says the span, "all
+// comments to date", and always, not the update it was grouped at, which
+// is our bookkeeping. Every other block on the page is the reading month;
+// unlabelled, the cast would read as who is talking in that month.
 
 /** "YouTube 37% · TikTok 31% · …": a share where the group's platform counts
  *  can carry one, the counts where they cannot, SAID TO BE COUNTS (finish-list
@@ -37,9 +42,10 @@ export function platformLine(p: Pick<CastPersona, 'platformMix'>): string | null
   return shares ? line : `${line} (videos, too few for shares)`
 }
 
-/** The Group column's head: when the groups were drawn, and over what. */
-export function castHead(c: Pick<CastBlock, 'profileDate'>): string | null {
-  return c.profileDate ? `grouped at the ${shortDate(c.profileDate)} update, over everything read to date` : null
+/** The Group column's head: the span the groups are over, in market time. */
+export const CAST_BASIS = 'all comments to date'
+export function castHead(): string {
+  return CAST_BASIS
 }
 
 const byVideos = (c: CastBlock): CastPersona[] => [...c.personas].sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
@@ -102,7 +108,7 @@ export const voiceCast: Block<VoiceSurfaceData> = {
     }
     const personas = byVideos(c)
     const max = Math.max(1, ...personas.map((p) => p.videos))
-    const head = castHead(c)
+    const head = castHead()
     if (mode === 'email') {
       return (
         <BlockFrame title={voiceCast.title} mode={mode}>

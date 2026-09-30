@@ -106,12 +106,11 @@ describe('groundingFor', () => {
     // of an audience — the mock's "41 videos in the category, September" is
     // two populations in one sentence.
     expect(g?.pruned).toBe(false)
-    // The per-row line is the count alone; the all-time basis is said once
-    // per surface off GROUNDED_BASIS (copy de-clutter ruling C).
+    // The per-row line is the count alone; the all-time basis rides on the
+    // count's label in market terms (T0a, mechanism 6; YM-14): "all time".
     expect(g?.line).toBe('1 video behind it')
     expect(g?.line).not.toContain('in the category')
-    expect(GROUNDED_BASIS).toContain('everything we have read for you')
-    expect(GROUNDED_BASIS).toContain('not over one month')
+    expect(GROUNDED_BASIS).toBe('all time')
   })
 })
 
