@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { wholeWeeksWidth } from './week-bars-hover'
 
 import type { RenderMode } from '@/lib/blocks/types'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
@@ -201,5 +202,24 @@ describe('read at the same age, pending', () => {
     const t = renderText(<WeekPendingRow weeks={OCT11.weeks} pending={asAt('2026-11-01T08:30:00.000Z')} mode="app" surface="inner" />)
     expect(t).not.toContain('not kept')
     expect(t).not.toContain('first comparison')
+  })
+})
+
+describe('wholeWeeksWidth (sw-2 item 3)', () => {
+  // At 390 the strip's box held four and a half of the 52 px slots, and the
+  // week at its start edge was cut through its labels (",872", "108").
+  it('widens the slots until a whole number of weeks fills the box', () => {
+    const w = wholeWeeksWidth(238, 520, 10)!
+    expect(w).toBeCloseTo(595, 5)
+    // The box's start edge, scrolled to the end, falls between two weeks.
+    const slot = w / 10
+    expect(((w - 238) / slot) % 1).toBeCloseTo(0, 9)
+    expect(238 / slot).toBe(4)
+  })
+
+  it('leaves a plot that fits alone, and never shows fewer than one week', () => {
+    expect(wholeWeeksWidth(700, 520, 10)).toBeNull()
+    expect(wholeWeeksWidth(0, 520, 10)).toBeNull()
+    expect(wholeWeeksWidth(30, 520, 10)).toBeCloseTo(300, 5)
   })
 })

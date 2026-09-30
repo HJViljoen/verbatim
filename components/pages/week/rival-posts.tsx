@@ -111,7 +111,11 @@ export const weekRivalPosts: Block<WeekData> = {
       )
     }
 
-    const cols = 'grid-cols-[minmax(0,1fr)_56px_64px] gap-x-4 @min-[900px]:grid-cols-[minmax(160px,0.9fr)_72px_80px_minmax(0,2.2fr)_minmax(120px,0.6fr)]'
+    // THE "VIDEOS NAMING THEM" TRACK HOLDS ITS MONTH LINE (sw-2 item 3): at
+    // 390 the track was 64 px and "of 57 in Sep" (12 px mono, about 87 px,
+    // unbroken) ran leftwards over the own-posts figure. It is wide enough for
+    // "of 1,234 in Sep" now, at both widths.
+    const cols = 'grid-cols-[minmax(0,1fr)_52px_104px] gap-x-4 @min-[900px]:grid-cols-[minmax(160px,0.9fr)_72px_104px_minmax(0,2.2fr)_minmax(120px,0.6fr)]'
     return (
       <BlockFrame title={BRANDS_POSTED_TITLE} mode={mode} footer={footer} roomy card>
         <div className="@container">
@@ -129,7 +133,8 @@ export const weekRivalPosts: Block<WeekData> = {
                 <div key={r.audience} role="row" className={`grid ${cols} items-center gap-y-2 py-3 ${RULE.row}`}>
                   <span role="rowheader" className="flex min-w-0 flex-col">
                     <span className="text-[15px] font-semibold text-foreground">{r.label}</span>
-                    {trackedLine(r) ? <span className="font-mono text-[12px] text-muted-foreground">{trackedLine(r)}</span> : null}
+                    {/* The date held together where the narrow column wraps ("tracked since / 17 Sep", never "17 / Sep"). */}
+                    {trackedLine(r) ? <span className="font-mono text-[12px] text-muted-foreground">{trackedLine(r)!.replace(/(\d+) ([A-Z][a-z]{2})$/, '$1\u00a0$2')}</span> : null}
                   </span>
                   <span className={`${SCALE.num} font-semibold`}>{r.ownPostsUnread ? <span className="font-normal text-muted-foreground">·</span> : <span data-copy="figure">{fmtInt(r.byThem)}</span>}</span>
                   <span className={`flex flex-col items-end ${SCALE.prev}`}>

@@ -191,6 +191,7 @@ export function WeekBars({ block, mode, variant, surface }: { block: WeekVolumes
       plot={<Plot L={L} surface={surface} ticks={ticks} label={weekBarsAriaLabel(block.weeks, rules)} />}
       height={L.height}
       minWidth={weekPlotMin(L.n)}
+      slots={L.n}
       labelWidth="wide"
       surface={surface}
       detail={variant === 'front' ? 'card' : 'panel'}
@@ -339,6 +340,7 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
         plot={plot}
         height={H}
         minWidth={weekPlotMin(n)}
+        slots={n}
         labelWidth="wide"
         surface={surface}
         detail="card"

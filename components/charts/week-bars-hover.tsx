@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import type { WeekDetail } from '@/lib/charts/week-bars'
 import { cn } from '@/lib/utils'
@@ -49,6 +49,21 @@ export function WeekDetailRows({ detail, variant }: { detail: WeekDetail; varian
   )
 }
 
+/**
+ * THE PLOT'S WIDTH WHERE THE STRIP SCROLLS: A WHOLE NUMBER OF WEEKS IN VIEW
+ * (sw-2 item 3). The strip opens at its latest week, and at 390 px its box
+ * held four and a half of `minWidth`'s slots, so the week at the box's start
+ * edge was cut through its labels ("7,872" read ",872", "408" read "108").
+ * Under `minWidth` the slots widen until a whole number of them fills the
+ * box, so the start edge falls between two weeks. Null: the plot fits, and
+ * takes the box's width as before.
+ */
+export function wholeWeeksWidth(box: number, minWidth: number, slots: number): number | null {
+  if (!(box > 0) || box >= minWidth || slots < 1) return null
+  const k = Math.max(1, Math.min(slots, Math.floor(box / (minWidth / slots))))
+  return (slots * box) / k
+}
+
 export function WeekBarsHover({
   details,
   labels,
@@ -60,6 +75,7 @@ export function WeekBarsHover({
   detail,
   initial,
   interactive = true,
+  slots,
 }: {
   details: WeekDetail[]
   /** The row names, drawn in the fixed column (it does not scroll). */
@@ -75,9 +91,25 @@ export function WeekBarsHover({
   /** The week the panel shows before any is hovered (This week). */
   initial: number | null
   interactive?: boolean
+  /** The weeks the plot draws, where `details` does not hold one per week
+   *  (the same-age strip passes none). */
+  slots?: number
 }) {
   const [hover, setHover] = useState<number | null>(null)
   const n = Math.max(1, details.length)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [fit, setFit] = useState<number | null>(null)
+  const weeks = slots ?? details.length
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    const measure = () => setFit(wholeWeeksWidth(box.clientWidth, minWidth, weeks))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [minWidth, weeks])
   const shown = hover ?? (detail === 'panel' ? initial : null)
   const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
   const chart = (
@@ -90,10 +122,10 @@ export function WeekBarsHover({
           them. (A reversed row INSIDE the scroll box overflowed to the left of
           the box's origin, where no browser scrolls: the deploy-3 review
           measured 338 px of the plot unreachable at 390.) */}
-      <div className="flex min-w-0 flex-row-reverse overflow-x-auto overflow-y-hidden">
+      <div ref={boxRef} className="flex min-w-0 flex-row-reverse overflow-x-auto overflow-y-hidden">
         {/* A CONTAINER, so the chart's smallest words step down a size where
             its slots are narrow (`@max-[640px]:` on the SVG text). */}
-        <div className="relative flex-1 shrink-0 @container" style={{ minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
+        <div className="relative flex-1 shrink-0 @container" style={{ minWidth: fit ?? minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
           {shown != null ? (
             <span
               aria-hidden

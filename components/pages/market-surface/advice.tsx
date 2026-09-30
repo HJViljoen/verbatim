@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import type { Block, BlockContext, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, NoValue } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
@@ -109,6 +110,16 @@ export const EARLIER_ADVICE = 'Earlier advice, and other wordings of these →'
 const TRACKS = ['w-[22px]', '', 'w-[88px]', 'w-[96px]', 'w-[176px]', 'w-[100px]', 'w-[240px]'] as const
 /** The "Repeated" track, left out where the column is not drawn (`repeatColumn`). */
 const REPEAT_TRACK = 3
+
+/** Under `md` a ledger row is a block, not seven tracks (sw-2 item 3): the
+ *  number beside the advice, then each cell on its own line, under it. */
+const STACK_ROW = 'max-md:grid max-md:grid-cols-[22px_minmax(0,1fr)] max-md:gap-x-2 max-md:gap-y-1 max-md:py-2.5'
+const STACK_CELL = 'max-md:col-start-2 max-md:flex max-md:flex-wrap max-md:items-baseline max-md:gap-x-2 max-md:py-0 max-md:pr-0'
+
+/** A cell's column name, printed beside it only where the table stacks. */
+function StackLabel({ children }: { children: ReactNode }) {
+  return <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground md:hidden">{children}</span>
+}
 
 /** The artboard's mono figure: a number a reader can see is counted rather
  *  than asserted.
@@ -549,10 +560,18 @@ export const marketAdvice: Block<MarketSurfaceData> = {
           </div>
         ) : (
           <>
-            <div className="-mx-1 overflow-x-auto px-1">
-              <table className="w-full border-collapse text-left">
-                <colgroup>{tracks.map((w, i) => <col key={i} className={w || undefined} />)}</colgroup>
-                <thead>
+            {/* UNDER `md` THE TABLE STACKS (sw-2 item 3). Its seven fixed
+                tracks are 720 px, so at 390 it scrolled sideways inside its
+                card: "YOUR DECISIC" at the edge, and the "Why we keep raising
+                it" row, spanning the whole table, clipped mid-sentence. Below
+                `md` each row is a block: the number and the advice, then each
+                cell on its own line under its column's name, and the
+                expansion as wide as the card. One DOM, so the anchors and the
+                decision control are the table's own. */}
+            <div className="-mx-1 overflow-x-auto px-1 max-md:overflow-visible">
+              <table className="w-full border-collapse text-left max-md:block">
+                <colgroup className="max-md:hidden">{tracks.map((w, i) => <col key={i} className={w || undefined} />)}</colgroup>
+                <thead className="max-md:hidden">
                   <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
                     <th className="py-1 pr-3 font-semibold">#</th>
                     <th className="py-1 pr-3 font-semibold">Recommendation</th>
@@ -573,13 +592,13 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     to and a reader following "First raised" down the page met
                     a stepped column. The artboard top-aligns its seven-track
                     rows for the same reason. */}
-                <tbody className="align-top">
+                <tbody className="align-top max-md:block">
                   {tableRows.flatMap((row) => {
                     const age = ageInMonths(row.firstMade, data.readingAt)
                     const cells = (
-                      <tr key={row.lineageId} id={adviceAnchor(row.lineageId)} className={`border-t border-border/70 ${row.lineageId === a.highlight ? 'bg-inner' : ''}`}>
-                        <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(row.number)}</td>
-                        <td className="py-1.5 pr-3 text-[12.5px] font-medium">
+                      <tr key={row.lineageId} id={adviceAnchor(row.lineageId)} className={`border-t border-border/70 ${row.lineageId === a.highlight ? 'bg-inner' : ''} ${STACK_ROW}`}>
+                        <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground max-md:py-0">{fmtInt(row.number)}</td>
+                        <td className="py-1.5 pr-3 text-[12.5px] font-medium max-md:py-0 max-md:pr-0">
                           <span data-copy="stored" data-slot="pass_d_b_recommendation">
                             {mode === 'app'
                               ? <Link href={hrefFor(row.lineageId)} className="hover:underline">{row.title}</Link>
@@ -592,16 +611,17 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                             ? <span className="block text-[11px] font-normal text-muted-foreground">{alsoRaisedLine(row)}</span>
                             : null}
                         </td>
-                        <td className="py-1.5 pr-3">
-                          <span className="flex min-w-0 flex-col gap-px">
+                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}>
+                          <StackLabel>First raised</StackLabel>
+                          <span className="flex min-w-0 flex-col gap-px max-md:flex-row max-md:flex-wrap max-md:items-baseline max-md:gap-x-2">
                             <span className="font-mono text-[11.5px] text-secondary-foreground">{madeInMonth(row.firstMade).split(' ')[0]}</span>
                             {age ? <span className="text-[11px] text-muted-foreground">{age}</span> : null}
                           </span>
                         </td>
-                        {repeat.shown ? <td className="py-1.5 pr-3"><RepeatCell row={row} first={repeat.first(row)} mode={mode} /></td> : null}
-                        <td className="py-1.5 pr-3"><StatusCell row={row} mode={mode} /></td>
-                        <td className="py-1.5 pr-3"><GroundedCell row={row} mode={mode} /></td>
-                        <td className="py-1.5"><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></td>
+                        {repeat.shown ? <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Repeated</StackLabel><RepeatCell row={row} first={repeat.first(row)} mode={mode} /></td> : null}
+                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Your decision</StackLabel><StatusCell row={row} mode={mode} /></td>
+                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Grounded in</StackLabel><GroundedCell row={row} mode={mode} /></td>
+                        <td className={`py-1.5 ${STACK_CELL}`}><StackLabel>Afterwards</StackLabel><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></td>
                       </tr>
                     )
                     // The artboard's expansion, in its own track directly under
@@ -609,8 +629,8 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     // be a ledger entry.
                     return row.lineageId === expanded
                       ? [cells, (
-                        <tr key={`${row.lineageId}-why`}>
-                          <td colSpan={tracks.length} className="pb-2 pt-1"><Expansion row={row} mode={mode} /></td>
+                        <tr key={`${row.lineageId}-why`} className="max-md:block">
+                          <td colSpan={tracks.length} className="pb-2 pt-1 max-md:block"><Expansion row={row} mode={mode} /></td>
                         </tr>
                       )]
                       : [cells]
