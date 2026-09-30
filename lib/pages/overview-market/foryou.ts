@@ -31,7 +31,9 @@ export interface ForYouLine {
   kind: 'followers' | 'unanswered' | 'lead_touch'
   figures: FigureTable
   sentenceKey: string
-  matchedPosts: { id: string; words: string[] }[]
+  /** `postedOn` (additive, sw-3 item 1): the day the post went up, so the
+   *  page lists the posts as Your moves does. Absent on a stored line. */
+  matchedPosts: { id: string; words: string[]; postedOn?: string | null }[]
   label?: string
   labelKind?: 'subject' | 'theme'
   calibration?: SubjectCalibrationWord
@@ -118,7 +120,7 @@ export interface ForYouPost {
 /** What a post had to share, and which did (`postsSharing`). */
 export interface Sharing {
   checked: string[]
-  matched: { id: string; words: string[] }[]
+  matched: { id: string; words: string[]; postedOn?: string | null }[]
 }
 
 /**

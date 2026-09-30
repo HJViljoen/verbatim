@@ -83,10 +83,52 @@ describe('What it means for you (overview.foryou)', () => {
 
   it('names the posts a line matched on, where one did', () => {
     const data = marketFrontFixture()
-    const line = { ...data.foryou!.lines[0], sentenceKey: 'foryou.unanswered.some', matchedPosts: [{ id: 'p1', words: ['zippers', 'rain'] }], figures: { ...data.foryou!.lines[0].figures, foryou_touched: { value: 1, unit: 'videos' as const, label: 'x' } } }
+    const line = { ...data.foryou!.lines[0], sentenceKey: 'foryou.unanswered.some', matchedPosts: [{ id: 'p1', words: ['zippers', 'rain'], postedOn: '2026-09-03' }], figures: { ...data.foryou!.lines[0].figures, foryou_touched: { value: 1, unit: 'videos' as const, label: 'x' } } }
     const t = text(overviewForYou.render({ ...data, foryou: { ...data.foryou!, lines: [line] } }, 'app', ctx))
     expect(t).toContain('1 of your 56 posts')
-    expect(t).toContain('1 post on zippers · rain')
+    expect(t).toContain('your post of 3 Sep: zippers · rain')
+    // A line stored before the posts carried their day still names its words.
+    const stored = { ...line, matchedPosts: [{ id: 'p1', words: ['zippers', 'rain'] }] }
+    expect(text(overviewForYou.render({ ...data, foryou: { ...data.foryou!, lines: [stored] } }, 'app', ctx))).toContain('a post of yours: zippers · rain')
+  })
+
+  it('lists at most three posts and counts the rest, as Your moves does (sw-3 item 1: 19 of 61 on Buying & delivery)', () => {
+    // Production on 30 Sep: the post judge's phrases for 19 of Sealand's 61
+    // posts printed as one run-on line under "19 of your 61 posts".
+    const phrases = [
+      ['Available online and in store'], ['Available online and in store now', 'Pop in and say hi', 'available both online and in physical stores'],
+      ['Tickets are live (and selling fast!)'], ['TICKETS VIA QUICKET - LINK IN BIO'], ['Grab yours on Entry Ninja'], ['available online and in store'],
+      ['Tickets available via the link'], ['Grab the last few tickets', 'via the link in our bio'], ['Shop the collection online', 'in store now'],
+      ['3 stops at our Sealand stores'], ['Pop in and take a look or shop online'], ['store visit invitation'], ['now online and in store'],
+      ['Donate your old bags at any of our stores'], ['shop Second Wave gear at our V&A and Sandton stores'], ['Shop Second Wave gear at our V&A and Sandton stores'],
+      ['Donate any old Sealand gear to your nearest store'], ['Available to purchase with your entry'], ['Shop the collection online or in store now'],
+    ]
+    const days = ['2026-07-21', '2026-07-22', '2026-07-30', ...Array.from({ length: 16 }, (_, i) => `2026-08-${String(i + 1).padStart(2, '0')}`)]
+    const f = buildForYou({
+      month: '2026-09-01',
+      questions: {
+        subject: { id: 's-buying', name: 'Buying & delivery', calibration: 'provisional' },
+        asked: 79,
+        posts: 61,
+        sharing: { checked: ['shipping', 'availability'], matched: phrases.map((words, i) => ({ id: `p${i}`, words, postedOn: days[i] })) },
+      },
+      lead: null,
+      followers: null,
+    })
+    const data = { ...marketFrontFixture(), foryou: f }
+    for (const mode of MODES) {
+      const t = text(overviewForYou.render(data, mode, ctx))
+      if (mode === 'app') expect(t, mode).toContain('19 of your 61 posts touched on it, in that time')
+      else expect(t, mode).toContain('19 of your 61 posts in that time shared two or more of its words.')
+      expect(t, mode).toContain('your post of 21 Jul: Available online and in store')
+      expect(t, mode).toContain('your post of 22 Jul: Available online and in store now · Pop in and say hi · available both online and in physical stores')
+      expect(t, mode).toContain('your post of 30 Jul: Tickets are live (and selling fast!)')
+      expect(t, mode).toContain('and 16 more')
+      expect(t, mode).not.toContain('19 posts on')
+      expect(t, mode).not.toContain('TICKETS VIA QUICKET')
+      assertCopyContract(render(overviewForYou.render(data, mode, ctx)))
+    }
+    expect(blockAnswers(overviewForYou, data).figures['unanswered_0_foryou_touched'].value).toBe(19)
   })
 
   it('Össur (no maker rule): its place among the biggest conversations, with nothing claimed about makers', () => {

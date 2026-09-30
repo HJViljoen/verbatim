@@ -3043,7 +3043,7 @@ async function loadForYouQuestions(input: {
         subject: { id: subject.id, name: subject.name, calibration: calibrationOf.get(subject.id) ?? 'provisional' },
         asked: top.questionVideos,
         posts: posts.length,
-        sharing: { checked: touch.checked, matched: touch.matched.map((m) => ({ id: m.id, words: m.words })) },
+        sharing: { checked: touch.checked, matched: touch.matched.map((m) => ({ id: m.id, words: m.words, postedOn: m.postedOn })) },
       }
     }
   }
@@ -3085,9 +3085,18 @@ async function buildForYouAndPublished(input: {
 
   const questions = await input.questions
 
-  // The lead theme against your posts of the month.
-  const lead = input.lead && input.posts
-    ? { label: input.lead.label, posts: monthPosts.length, sharing: postsSharing(input.lead.label, monthPosts), fewMakers: input.lead.fewMakers, rank: input.lead.rank }
+  // The lead theme against your posts of the month; each matching post with
+  // its day, so the page lists them as Your moves does (sw-3 item 1).
+  const dayOf = new Map(monthPosts.map((p) => [p.id, p.upload_date?.slice(0, 10) ?? null]))
+  const leadSharing = input.lead && input.posts ? postsSharing(input.lead.label, monthPosts) : null
+  const lead = input.lead && leadSharing
+    ? {
+      label: input.lead.label,
+      posts: monthPosts.length,
+      sharing: { checked: leadSharing.checked, matched: leadSharing.matched.map((m) => ({ ...m, postedOn: dayOf.get(m.id) ?? null })) },
+      fewMakers: input.lead.fewMakers,
+      rank: input.lead.rank,
+    }
     : null
 
   // The subject your posts' comments matched most (a ready subject prints).

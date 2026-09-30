@@ -35,8 +35,9 @@ import { LevelBar, MakerMark, RULE, SCALE } from '@/components/pages/overview/ma
 // the bases live in the column heads ("of 626", "of your 20"), the calibration
 // word is a row tag, and nothing explains itself under the tables.
 
-/** The posts a touched row lists before it counts the rest. */
-const POSTS_LISTED = 3
+/** The posts a touched row lists before it counts the rest (Your market's
+ *  "What it means for you" lists them the same way, sw-3 item 1). */
+export const POSTS_LISTED = 3
 
 /** Wide from 720px of block; below it the bar goes and the posts cell takes a
  *  line of its own under its row (a container query, the board's rule). */
@@ -59,7 +60,7 @@ function Words({ words, more }: { words: readonly string[]; more?: boolean }) {
 }
 
 /** One touching post: its day and the words it shared, linked in the app. */
-function PostLine({ post, mode }: { post: QuestionTouch['matched'][number]; mode: RenderMode }) {
+export function PostLine({ post, mode }: { post: Pick<QuestionTouch['matched'][number], 'words'> & { postedOn?: string | null; href?: string | null }; mode: RenderMode }) {
   const day = post.postedOn ? `your post of ${shortDate(post.postedOn)}` : 'a post of yours'
   const who = mode === 'app' && post.href
     ? <a href={post.href} target="_blank" rel="noreferrer" className="hover:underline">{day}</a>

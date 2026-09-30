@@ -9,6 +9,7 @@ import { FOR_YOU_SENTENCES, forYouSentence, forYouWords, type ForYouLine } from 
 import type { OverviewData } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
+import { POSTS_LISTED, PostLine } from '@/components/pages/market-surface/questions'
 
 // 7 · What it means for you (market-first WP2.5; plan §2.2 block 7; the
 // approved preview's tile beside "The market by subject").
@@ -23,17 +24,32 @@ import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
 
 export const FOR_YOU_TITLE = 'What it means for you'
 
-/** The line's words under its figures: "checked: waterproof · rain · zip ·
- *  …", or the words the matching posts shared. IN THE APP a "none" carries its
- *  words as a tooltip (`lookedFor`) rather than a line: "checked: shipping ·
+/** The line's words under its figures: the posts that matched, or "checked:
+ *  waterproof · rain · zip · …". IN THE APP a "none" carries its words as a
+ *  tooltip (`lookedFor`) rather than a line: "checked: shipping ·
  *  availability · ready · size" read as a word-matching test (walkthrough
  *  B8), and Your moves says it the same way. Paper and email have no tooltip
- *  and print the line. */
+ *  and print the line.
+ *
+ *  A MATCH LISTS ITS POSTS AS YOUR MOVES DOES (sw-3 item 1): at most three,
+ *  each with its day and the words it shared, then "and 16 more". Once the
+ *  post judge's phrases joined the words, "19 posts on" and every phrase of
+ *  all 19 posts ran to twenty lines at 390. */
 function Words({ line, mode }: { line: ForYouLine; mode: RenderMode }) {
   const w = forYouWords(line)
-  if (w.words.length === 0) return null
-  if (mode === 'app' && !w.matched) return null
-  const text = `${w.matched ? `${fmtInt(line.matchedPosts.length)} ${line.matchedPosts.length === 1 ? 'post' : 'posts'} on` : 'checked:'} ${w.words.join(' · ')}${w.more ? ' · …' : ''}`
+  if (w.matched) {
+    const byDay = [...line.matchedPosts].sort((a, b) => (a.postedOn ?? '').localeCompare(b.postedOn ?? ''))
+    const listed = byDay.slice(0, POSTS_LISTED)
+    const rest = byDay.length - listed.length
+    const rows = [
+      ...listed.map((p) => <PostLine key={p.id} post={p} mode={mode} />),
+      ...(rest > 0 ? [<span key="rest" className="block">and <span data-copy="figure">{fmtInt(rest)}</span> more</span>] : []),
+    ]
+    if (mode === 'email') return <div style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 4 }}>{rows.map((r, i) => <div key={i}>{r}</div>)}</div>
+    return <span className="font-mono text-[12px] leading-[1.5] text-muted-foreground">{rows}</span>
+  }
+  if (w.words.length === 0 || mode === 'app') return null
+  const text = `checked: ${w.words.join(' · ')}${w.more ? ' · …' : ''}`
   if (mode === 'email') return <div style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 4 }}>{text}</div>
   return <span className="font-mono text-[12px] leading-[1.5] text-muted-foreground">{text}</span>
 }
