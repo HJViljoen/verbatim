@@ -6,7 +6,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { ARRIVAL_THEMES_SHOWN, type ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
+import { ARRIVAL_THEMES_SHOWN, firstHeardThemes, firstHeardWithheld, type ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
 import type { OverviewData } from '@/lib/pages/overview'
 import { regroupedLine } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -86,6 +86,9 @@ function themeLine(t: ArrivalsBlock['newThemes'][number], month: string, mode: R
 export function ArrivalsHeard({ a, month, mode }: { a: ArrivalsBlock; month: string; mode: RenderMode }) {
   const name = longMonth(month)
   if (a.regrouped != null) return <>{regroupedLine({ update: a.run.date, themes: a.regrouped })}</>
+  if (!arrivalsHeardShown(a)) return null
+  // Not a theme our new searches found (T0a, mechanism 4; OV-24).
+  const themes = firstHeardThemes(a.newThemes)
   const makers = a.grouped?.makers ?? 0
   const setAside = a.grouped?.setAside ?? 0
   const grouped = (
@@ -94,7 +97,7 @@ export function ArrivalsHeard({ a, month, mode }: { a: ArrivalsBlock; month: str
       {setAside > 0 ? <> {fig(setAside, mode)} more {setAside === 1 ? 'is' : 'are'} set aside as off-topic.</> : null}
     </>
   )
-  if (a.newThemes.length === 0) {
+  if (themes.length === 0) {
     if (makers + setAside === 0) return <>No theme heard for the first time reached 10 videos in {name}.</>
     return (
       <>
@@ -104,8 +107,8 @@ export function ArrivalsHeard({ a, month, mode }: { a: ArrivalsBlock; month: str
       </>
     )
   }
-  const shown = a.newThemes.slice(0, ARRIVAL_THEMES_SHOWN)
-  const more = a.newThemes.length - shown.length
+  const shown = themes.slice(0, ARRIVAL_THEMES_SHOWN)
+  const more = themes.length - shown.length
   if (mode === 'email') {
     return (
       <>
@@ -132,6 +135,16 @@ export function ArrivalsHeard({ a, month, mode }: { a: ArrivalsBlock; month: str
   )
 }
 
+/** Does "Heard for the first time" say anything true? Not where every theme
+ *  it would list was found by our new searches and nothing else is counted:
+ *  "no theme heard for the first time reached 10 videos" would be false, so
+ *  the column is omitted (T0a, mechanism 4). */
+export function arrivalsHeardShown(a: ArrivalsBlock): boolean {
+  if (a.regrouped != null) return true
+  const grouped = (a.grouped?.makers ?? 0) + (a.grouped?.setAside ?? 0)
+  return firstHeardThemes(a.newThemes).length > 0 || grouped > 0 || !firstHeardWithheld(a.newThemes)
+}
+
 /** Came in, and heard for the first time: two columns on a wide block, one
  *  under the other on a narrow one; a two-cell table in an email. */
 export function ArrivalsColumns({ a, month, mode, clock = false }: { a: ArrivalsBlock; month: string; mode: RenderMode; clock?: boolean }) {
@@ -144,7 +157,7 @@ export function ArrivalsColumns({ a, month, mode, clock = false }: { a: Arrivals
     )
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
-        <tbody><tr>{col('Came in', <ArrivalsCameIn a={a} month={month} mode={mode} clock={clock} />)}{col('Heard for the first time', <ArrivalsHeard a={a} month={month} mode={mode} />)}</tr></tbody>
+        <tbody><tr>{col('Came in', <ArrivalsCameIn a={a} month={month} mode={mode} clock={clock} />)}{arrivalsHeardShown(a) ? col('Heard for the first time', <ArrivalsHeard a={a} month={month} mode={mode} />) : null}</tr></tbody>
       </table>
     )
   }
@@ -154,10 +167,12 @@ export function ArrivalsColumns({ a, month, mode, clock = false }: { a: Arrivals
         <p className="m-0 text-[15px] font-semibold">Came in</p>
         <p className="m-0 max-w-[62ch] text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]"><ArrivalsCameIn a={a} month={month} mode={mode} clock={clock} /></p>
       </div>
-      <div className="flex min-w-0 flex-col gap-2">
-        <p className="m-0 text-[15px] font-semibold">Heard for the first time</p>
-        <div className="m-0 max-w-[62ch] text-[15px] leading-[1.6] text-secondary-foreground"><ArrivalsHeard a={a} month={month} mode={mode} /></div>
-      </div>
+      {arrivalsHeardShown(a) ? (
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className="m-0 text-[15px] font-semibold">Heard for the first time</p>
+          <div className="m-0 max-w-[62ch] text-[15px] leading-[1.6] text-secondary-foreground"><ArrivalsHeard a={a} month={month} mode={mode} /></div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -177,7 +192,7 @@ export function arrivalsFigures(a: ArrivalsBlock, month: string): FigureTable {
     out.arrivals_current_videos = { value: a.current.videos, unit: 'videos', label: `videos in your market in ${longMonth(a.current.month)} so far` }
   }
   if (a.regrouped == null) {
-    for (const t of a.newThemes.slice(0, ARRIVAL_THEMES_SHOWN)) {
+    for (const t of firstHeardThemes(a.newThemes).slice(0, ARRIVAL_THEMES_SHOWN)) {
       const id = t.registryId.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
       out[`arrival_theme_${id}_videos`] = { value: t.k, unit: 'videos', label: `${name} videos of a theme first heard ${when}` }
       if (t.fromNewSearches != null) out[`arrival_theme_${id}_new_searches`] = { value: t.fromNewSearches, unit: 'videos', label: `of them, found by searches added in ${name}` }

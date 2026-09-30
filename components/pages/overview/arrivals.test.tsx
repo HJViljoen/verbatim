@@ -30,6 +30,13 @@ const BEFORE_THE_RULE: typeof SEALAND_20_SEP_ARRIVALS = {
   ],
   grouped: { makers: 3, setAside: 0 },
 }
+/** HYPOTHETICAL: the same themes, each under a third from searches added in
+ *  September. Every one above is a third or more (Laundry planning 8 of 10),
+ *  so none of them is listed as new (T0a, mechanism 4; `firstHeardThemes`). */
+const UNDER_A_THIRD: typeof SEALAND_20_SEP_ARRIVALS = {
+  ...BEFORE_THE_RULE,
+  newThemes: BEFORE_THE_RULE.newThemes.map((t, i) => ({ ...t, fromNewSearches: [2, 3, 0, 1, 3, null][i] })),
+}
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 const text = (data: ReturnType<typeof marketArrivalsFixture>, mode: RenderMode = 'app') => renderText(overviewArrivals.render(data, mode, ctx))
 
@@ -61,24 +68,27 @@ describe('With this update (WP2.7)', () => {
     expect(t).not.toContain('October so far')
   })
 
-  it('names the themes heard first at 10+ in the month (staging: the two Conversation flags New)', () => {
+  // T0a (mechanism 4; OV-24): staging's two themes heard first at 10+ each
+  // had 8 of their 10 videos from searches we added in September. That is our
+  // search, not new talk: neither is listed as new, and with nothing else
+  // counted the column is omitted, never "no theme heard for the first time".
+  it('lists no theme our new searches found as heard for the first time (staging: 8 of 10 each)', () => {
     for (const mode of MODES) {
       const t = text(marketArrivalsFixture(), mode)
-      expect(t).toContain('Heard for the first time')
-      expect(t).toContain('With 10+ videos in September:')
-      expect(t).toMatch(/“\s*Laundry planning for travel\s*”: 8 of its 10 videos came from searches we added in September/)
-      expect(t).toMatch(/“\s*Preference for secondhand fashion\s*”: 8 of its 10 videos/)
-      // Minted by the update but held by August: not heard for the first time.
-      expect(t).not.toContain('Interest in shipping and locations')
-      expect(t).not.toContain('more.')
+      expect(t).not.toContain('Heard for the first time')
+      expect(t).not.toContain('Laundry planning for travel')
+      expect(t).not.toContain('Preference for secondhand fashion')
+      expect(t).not.toContain('searches we added')
+      expect(t).not.toContain('No theme heard for the first time')
+      expect(t).toContain('Came in')
     }
   })
 
   it('names five at most, and counts the rest', () => {
     for (const mode of MODES) {
-      const t = text({ ...marketArrivalsFixture(), arrivals: BEFORE_THE_RULE }, mode)
-      expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
-      expect(t).toMatch(/“\s*Laundry planning for travel\s*”: 8 of its 10 videos/)
+      const t = text({ ...marketArrivalsFixture(), arrivals: UNDER_A_THIRD }, mode)
+      expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 2 of its 13 videos came from searches we added in September/)
+      expect(t).toMatch(/“\s*Laundry planning for travel\s*”: 3 of its 10 videos/)
       expect(t).not.toContain('Preference for secondhand fashion')
       expect(t).toContain('And 1 more.')
       // Led by makers: counted, never named (decision F).
@@ -87,21 +97,24 @@ describe('With this update (WP2.7)', () => {
     }
   })
 
-  it('says how many of a theme’s videos came from searches added in the month, one denominator a line', () => {
+  it('says how many of a theme’s videos came from searches added in the month, one denominator a line, and lists none at a third or more', () => {
     const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: [
-      BEFORE_THE_RULE.newThemes[0],
+      UNDER_A_THIRD.newThemes[0],
       { ...BEFORE_THE_RULE.newThemes[2], fromNewSearches: 0 },
       BEFORE_THE_RULE.newThemes[5],
+      // 9 of 12: a third or more, so not new (T0a).
+      BEFORE_THE_RULE.newThemes[1],
     ] }
     const t = text({ ...marketArrivalsFixture(), arrivals: a })
-    expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 8 of its 13 videos came from searches we added in September/)
+    expect(t).toMatch(/“\s*Interest in shipping and locations\s*”: 2 of its 13 videos came from searches we added in September/)
+    expect(t).not.toContain('Appreciation for smart packing tips')
     expect(t).toMatch(/“\s*Confusion about airline size rules\s*”: none of its 12 videos came from searches we added in September/)
     // Not measured: the count alone, never a zero.
     expect(t).toMatch(/“\s*Preference for secondhand fashion\s*”: 10 videos/)
   })
 
   it('counts the themes led by makers or set aside, never names them (decision F)', () => {
-    const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: BEFORE_THE_RULE.newThemes.slice(0, 2), grouped: { makers: 2, setAside: 1 } }
+    const a = { ...SEALAND_20_SEP_ARRIVALS, newThemes: UNDER_A_THIRD.newThemes.slice(0, 2), grouped: { makers: 2, setAside: 1 } }
     const t = text({ ...marketArrivalsFixture(), arrivals: a })
     expect(t).toContain('2 more are led by makers.')
     expect(t).toContain('1 more is set aside as off-topic.')
@@ -146,11 +159,10 @@ describe('With this update (WP2.7)', () => {
     const f = overviewArrivals.figures!(marketArrivalsFixture())
     expect(f.arrivals_videos_first_read.value).toBe(395)
     expect(f.arrivals_comments_captured.value).toBe(11999)
-    // The named themes: their videos, and those from searches added in the month.
-    expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_') && k.endsWith('_videos'))).toHaveLength(2)
-    expect(Object.keys(f).filter((k) => k.endsWith('_new_searches'))).toHaveLength(2)
+    // Staging's two themes are our new searches' (T0a): no figure for either.
+    expect(Object.keys(f).filter((k) => k.startsWith('arrival_theme_'))).toEqual([])
     // Five at most.
-    const five = overviewArrivals.figures!({ ...marketArrivalsFixture(), arrivals: BEFORE_THE_RULE })
+    const five = overviewArrivals.figures!({ ...marketArrivalsFixture(), arrivals: UNDER_A_THIRD })
     expect(Object.keys(five).filter((k) => k.startsWith('arrival_theme_') && k.endsWith('_videos'))).toHaveLength(5)
     expect(Object.keys(five).filter((k) => k.endsWith('_new_searches'))).toHaveLength(5)
   })

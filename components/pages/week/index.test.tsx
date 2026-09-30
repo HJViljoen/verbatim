@@ -92,12 +92,19 @@ describe('every block on This week', () => {
 })
 
 /** HYPOTHETICAL: Sealand's weeks with no change on the axis and every video
- *  checked. On its own rows the bars would span our search changes and the
- *  relevance check, and the weeks gathered hold videos let in before the
- *  check, so no week is left and Week by week is omitted (T0a, mechanism 3). */
+ *  checked, and its two themes heard first with 3 of their 10 videos from
+ *  searches added in September. On its own rows the bars would span our
+ *  search changes and the relevance check, and the weeks gathered hold videos
+ *  let in before the check, so Week by week is omitted (T0a, mechanism 3);
+ *  and each theme heard first had 8 of its 10 videos from searches we added,
+ *  so Heard for the first time is omitted (mechanism 4). */
 function cleanWeekFixture(): WeekData {
   const d = marketWeekFixture()
-  return { ...d, weeks: { ...d.weeks!, rules: [], weeks: d.weeks!.weeks.map((w) => ({ ...w, unchecked: 0 })) } }
+  return {
+    ...d,
+    weeks: { ...d.weeks!, rules: [], weeks: d.weeks!.weeks.map((w) => ({ ...w, unchecked: 0 })) },
+    heard: { ...d.heard!, rows: d.heard!.rows.map((t) => ({ ...t, provenance: t.provenance ? { ...t.provenance, fromNewSearches: 3 } : null })) },
+  }
 }
 
 describe('week by week (market-first WP2.9, week.weeks)', () => {
@@ -408,11 +415,23 @@ describe('WK §3 · moving now', () => {
 describe('With this update (market-first WP3.7, week.came-in)', () => {
   it('says what the update brought into the market’s month, and hands it back to the month', () => {
     for (const mode of MODES) {
-      const text = renderText(weekCameIn.render(marketWeekFixture(), mode, ctx))
+      const text = renderText(weekCameIn.render(cleanWeekFixture(), mode, ctx))
       expect(text, mode).toContain('The 20 Sep update brought 436 videos and 9,471 comments into your market’s September.')
       expect(text, mode).toContain('That is 436 of the 654 videos September holds so far, after 3 updates.')
       expect(text, mode).toContain('2 themes were heard for the first time with 10 or more videos this month, and 12 comments are worth a reply.')
     }
+  })
+
+  // T0a (mechanism 4; WK-8): both themes Sealand's update heard first had 8
+  // of their 10 videos from searches we added in September. Neither is
+  // counted, and nothing is said in their place, never "no theme was heard".
+  it('counts no theme our new searches found, and says nothing where none is left', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(marketWeekFixture(), mode, ctx))
+      expect(text, mode).not.toMatch(/heard for the first time/)
+      expect(text, mode).toContain('after 3 updates. 12 comments are worth a reply.')
+    }
+    expect(render(weekCameIn.render(marketWeekFixture(), 'app', ctx))).not.toContain('href="#heard-for-the-first-time"')
   })
 
   it('draws the came-in table by part of the market, your own posts left out (decision E)', () => {
@@ -456,7 +475,7 @@ describe('With this update (market-first WP3.7, week.came-in)', () => {
   })
 
   it('says "holds" once the month has ended, never "so far"', () => {
-    const d = marketWeekFixture()
+    const d = cleanWeekFixture()
     const ended: WeekData = { ...d, readingAt: '2026-10-02T06:00:00.000Z', cameIn: { ...d.cameIn, market: { ...d.cameIn.market!, ended: true } } }
     const text = renderText(weekCameIn.render(ended, 'app', ctx))
     expect(text).toContain('September holds, after 3 updates.')
@@ -485,23 +504,32 @@ describe('Your market’s subjects carry their maker share (market-first WP3.7)'
 })
 
 describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
+  // T0a (mechanism 4; WK-20/21): a theme a third or more of whose videos
+  // came from searches added in the month is not heard for the first time.
+  // Sealand's two (8 of 10 each) are both, so the block is omitted.
+  it('is omitted where every theme first heard was our new searches’ (Sealand: 8 of 10 each)', () => {
+    for (const mode of MODES) expect(weekHeard.render(marketWeekFixture(), mode, ctx), mode).toBeNull()
+    expect(blockAnswers(weekHeard, marketWeekFixture()).figures).toEqual({})
+  })
+
   it('leads with how many of the themes first heard reached the floor, one denominator', () => {
     for (const mode of MODES) {
-      expect(renderText(weekHeard.render(marketWeekFixture(), mode, ctx)), mode).toContain('2 themes first heard with this update reached 10 videos this month.')
+      expect(renderText(weekHeard.render(cleanWeekFixture(), mode, ctx)), mode).toContain('2 themes first heard with this update reached 10 videos this month.')
     }
   })
 
-  it('lists each with its videos, New, "·" for the month before, where its videos came from and its maker share', () => {
-    const text = renderText(weekHeard.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Laundry planning for travel 10 · New 8')
-    expect(text).toContain('Preference for secondhand fashion 10 · New 8 a fifth makers')
-    expect(text).toContain('From searches added in Sep')
+  it('lists each with its videos, New, "·" for the month before and its maker share, and no column of where its videos came from', () => {
+    const text = renderText(weekHeard.render(cleanWeekFixture(), 'app', ctx))
+    expect(text).toContain('Laundry planning for travel 10 · New')
+    expect(text).toContain('Preference for secondhand fashion 10 · New a fifth makers')
+    expect(text).not.toContain('From searches added')
+    expect(Object.keys(blockAnswers(weekHeard, cleanWeekFixture()).figures).some((k) => k.endsWith('_new_searches'))).toBe(false)
     expect(text).not.toContain('0%')
     expect(text).toContain('All themes on Conversation →')
   })
 
   it('groups the ones led by makers (decision F) and names the lead ones', () => {
-    const d = marketWeekFixture()
+    const d = cleanWeekFixture()
     const h = d.heard!
     const maker = { ...h.rows[1], registryId: 'r-maker', label: 'Admiration for handmade craftsmanship', k: 65, makerShare: 0.6 }
     const data: WeekData = { ...d, heard: { ...h, makers: { count: 1, lead: [maker] } } }
@@ -511,7 +539,7 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
 
   it('prints no makers column for a tenant with no maker rule (Össur)', () => {
     const text = renderText(weekHeard.render(ossurWeeksFixture(), 'app', ctx))
-    expect(text).toContain('Brand boycott over politics 16 · New ·')
+    expect(text).toContain('Brand boycott over politics 16 · New')
     expect(text).not.toContain('Makers')
   })
 
@@ -749,10 +777,12 @@ describe('the page', () => {
     const markup = render(<WeekPage data={cleanWeekFixture()} />)
     const spans = [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])
     expect(spans).toEqual(['12', '12', '12', '6', '6', '12', '12', '12', '12'])
-    // T0a: on Sealand's own weeks Week by week is omitted, tile and all.
+    // T0a: on Sealand's own rows Week by week (mechanism 3) and Heard for the
+    // first time (mechanism 4) are omitted, tiles and all.
     const real = render(<WeekPage data={marketWeekFixture()} />)
-    expect([...real.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])).toEqual(['12', '12', '6', '6', '12', '12', '12', '12'])
+    expect([...real.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])).toEqual(['12', '6', '6', '12', '12', '12', '12'])
     expect(renderText(<WeekPage data={marketWeekFixture()} />)).not.toContain('WEEK BY WEEK')
+    expect(renderText(<WeekPage data={marketWeekFixture()} />)).not.toContain('HEARD FOR THE FIRST TIME')
   })
 
   it('prints no footnote under a block or under the page (25 Sep rulings)', () => {
@@ -929,9 +959,10 @@ const PAGE_CASES = [marketWeekFixture, ossurWeeksFixture].flatMap((fixture) =>
 describe.each(PAGE_CASES)('$name', ({ block, mode, fixture }) => {
   it('keeps the copy contract, with its title alone in the header and links alone in the footer', () => {
     const el = block.render(fixture(), mode, ctx)
-    // T0a (mechanism 3): Week by week is omitted where no week is left one
-    // way since our latest change (Sealand's own weeks).
-    if (el == null && block.key === 'week.weeks') return
+    // T0a: Week by week is omitted where no week is left one way since our
+    // latest change (mechanism 3), and Heard for the first time where every
+    // theme was our new searches' (mechanism 4), on Sealand's own rows.
+    if (el == null && (block.key === 'week.weeks' || block.key === 'week.heard')) return
     assertCopyContract(render(el))
     expect(isValidElement(el) && el.type === BlockFrame).toBe(true)
     const props = (el as { props: { meta?: unknown; footerNote?: unknown } }).props
@@ -1020,7 +1051,7 @@ describe('This week’s pure helpers (WP3.7)', () => {
   })
 
   it('heardLead: the level and its base, then the floor', () => {
-    const h = marketWeekFixture().heard!
+    const h = cleanWeekFixture().heard!
     expect(heardLead(h, 'this month')).toEqual({ level: '2', rest: ' themes first heard with this update reached 10 videos this month.' })
   })
 

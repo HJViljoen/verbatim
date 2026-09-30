@@ -7,7 +7,7 @@ import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { surface } from '@/lib/nav'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
-import { THEME_PREV_N, boardPrev, figureText, heroView, themeToken, voicesHeading, type HeroPart } from '@/lib/pages/overview-market'
+import { THEME_PREV_N, boardPrev, figureText, heroView, printedLead, themeToken, voicesHeading, type HeroPart } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { MonthlyData } from '@/lib/pages/monthly'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -72,7 +72,8 @@ function monthEmail(data: MonthlyData): ReactNode {
   const prev = shownPrev && shownPrev.n != null ? shownPrev : null
   const cut = hero && hero.top.length > 0 ? splitClause(view.parts) : null
   const voices = (o.heroVoices ?? []).filter(hasQuote)
-  const lead = hero?.lead ?? null
+  // A stored lead our new searches found prints no voices (T0a, MR-3).
+  const lead = printedLead(o.hero)
   // A theme the month before did not read declares no August figure
   // (`prevReadK`), so its cell prints the preview's "·", as the board's does
   // (./themes.tsx), never an empty cell under "Aug of N".
@@ -115,11 +116,6 @@ function monthEmail(data: MonthlyData): ReactNode {
           {voices.map((v) => (
             <div key={v.quote.ref} style={{ marginTop: 16 }}><BlockQuote quote={v.quote} cite={v.cite} mode="email" /></div>
           ))}
-          {view.newSearch ? (
-            <div style={{ borderTop: `1px solid ${EMAIL.border}`, marginTop: 16, paddingTop: 12, fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.muted }}>
-              <Parts parts={view.newSearch} figures={view.figures} mode="email" />
-            </div>
-          ) : null}
         </Inner>
       ) : null}
     </>

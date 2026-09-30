@@ -15,9 +15,9 @@ import { onScreenText } from '@/lib/pages/overview'
 import type { AnomalyLine, LedgerRow, OverviewData, Voice } from '@/lib/pages/overview'
 import { TokenProse } from '@/components/blocks/prose'
 import { surface } from '@/lib/nav'
-import { heroView, voicesHeading } from '@/lib/pages/overview-market'
+import { heroView, printedLead, voicesHeading } from '@/lib/pages/overview-market'
 import { framedHeadline } from '@/lib/pages/market-frame'
-import { InnerLine, isMarketPage, Parts } from './market'
+import { isMarketPage, Parts } from './market'
 
 // OV1 · In one sentence, anything unusual, and the one thing to do
 // (design §3 OV1; ported to `Main.dc.html` §1 in Block D wave 2).
@@ -166,7 +166,8 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const email = mode === 'email'
   const view = heroView(data.hero, data.themes, data.month)
   const voices = data.heroVoices ?? []
-  const lead = data.hero?.kind === 'themes' ? data.hero.lead : null
+  // A stored lead our new searches found prints no voices (T0a, mechanism 4).
+  const lead = printedLead(data.hero)
   const voice = surface('voice')
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   // THE HEADLINE BREAKS AT ITS COLON (design pass): "Your market in
@@ -215,7 +216,6 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
           {voicesHeading(voices.length)} on “<span data-copy="subject" data-slot="pass_b_theme">{lead.label}</span>”
         </div>
         {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} />)}
-        {view.newSearch ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 }}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></div> : null}
       </div>
     ) : (
       <aside className="flex min-w-0 flex-col gap-4 self-start rounded-md bg-inner p-6">
@@ -226,11 +226,8 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
           <span className="font-mono text-[12px] text-muted-foreground">from that theme’s own comments</span>
         </div>
         {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} ground="inner" />)}
-        {view.newSearch ? <p className="m-0 text-[13px] leading-[1.5] text-secondary-foreground"><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></p> : null}
       </aside>
     )
-  ) : lead && view.newSearch ? (
-    <InnerLine mode={mode}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></InnerLine>
   ) : null
 
   if (email) {

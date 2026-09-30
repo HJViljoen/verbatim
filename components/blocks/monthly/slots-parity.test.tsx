@@ -127,9 +127,10 @@ describe('the page and the monthly print one sentence each', () => {
   it('with this update: the page’s came-in and heard-first words, in every mode', () => {
     const data = builtFull()
     const page = pageText('overview.arrivals', data.overview, 'app')
+    // Staging's two themes heard first were our new searches' (T0a,
+    // mechanism 4): neither the page nor the monthly lists them.
     const words = [
       'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in.',
-      'With 10+ videos in September:',
     ]
     for (const mode of MODES) {
       const monthly = read(MONTHLY_BLOCKS['monthly.arrivals'].render(data, mode, ctx))
@@ -141,6 +142,8 @@ describe('the page and the monthly print one sentence each', () => {
       // page's word on how This week counts the update (finish-list item 9).
       expect(monthly, mode).not.toMatch(/week by week/i)
       expect(monthly, mode).not.toContain('This week counts')
+      expect(monthly, mode).not.toContain('Heard for the first time')
+      expect(page).not.toContain('Heard for the first time')
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.arrivals'].render(data, mode, ctx)))
     }
   })

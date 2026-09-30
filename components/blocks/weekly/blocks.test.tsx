@@ -402,6 +402,20 @@ describe('the artefact on a phone', () => {
 describe('WR3 · what came in this week', () => {
   const block = WEEKLY_BLOCKS['weekly.incoming']
 
+  // T0a (mechanism 4; WR-24): a theme first heard that our new searches found
+  // (a third or more of its month's videos) is not counted as new; where none
+  // is left, the count is not printed at all, never "0" or "no theme was heard".
+  it('prints no new-theme count where every theme first heard was our new searches’', () => {
+    const data = weeklyFixture()
+    const withheld = { ...data, incoming: { ...data.incoming, newThemes: [], newThemesTotal: 0, newThemesNote: null, newThemesWithheld: true } }
+    for (const mode of MODES) {
+      const text = renderText(block.render(withheld, mode, ctx))
+      expect(text, mode).not.toContain('heard for the first time')
+      expect(text, mode).toContain('271 videos found')
+      assertCopyContract(render(block.render(withheld, mode, ctx)))
+    }
+  })
+
   it('states the update’s counts as a contribution to the month', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('271 videos found')

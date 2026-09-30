@@ -6,15 +6,14 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { MAKERS_NOT_MEASURED, makerCell } from '@/lib/pages/overview-market'
-import { heardAtFloor, monthPhrase, NEW_THEME_FLOOR, regroupedLine, type HeardBlock, type HeardTheme, type WeekData } from '@/lib/pages/week'
+import { heardAtFloor, heardRows, heardWithheld, monthPhrase, NEW_THEME_FLOOR, regroupedLine, type HeardBlock, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { InnerLine, LevelBar, MakerMark, RULE, SCALE, shortMonthName } from '@/components/pages/overview/market'
 
 // "Heard for the first time" (market-first WP3.7, `week.heard`, a new stored
 // key; the approved preview's This week, its third tile): the themes this
 // update first heard that reached the floor in the month, on the category,
-// where themes are grouped (decision E), each with where its videos came from
-// (the searches first run in the month) and its maker share; the ones led by
+// where themes are grouped (decision E), each with its maker share; the ones led by
 // makers or set aside as off-topic grouped on one line (decision F), as the
 // front page's board groups them.
 //
@@ -24,16 +23,22 @@ import { InnerLine, LevelBar, MakerMark, RULE, SCALE, shortMonthName } from '@/c
 //
 // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep rulings);
 // the column heads carry the month.
+//
+// NOT A THEME OUR NEW SEARCHES FOUND (T0a, mechanism 4; WK-20/21): a theme a
+// third or more of whose month's videos came from searches first run that
+// month is not listed, counted, flagged New or anchored (`heardRows`), and
+// the "From searches added in" column that once annotated it is gone. Where
+// that leaves nothing, the block is omitted, never "nothing was heard".
 
 export const HEARD_TITLE = 'Heard for the first time'
 
 /** The narrow layout's own width, as the front page's board keys its own
  *  (a container query): the rank and the bar leave, the flag and the makers
  *  tag take a line under their row. Written out for Tailwind's scanner. */
-const COLS = 'grid-cols-[minmax(0,1fr)_40px_40px_92px] gap-x-2 @min-[820px]:gap-x-4'
+const COLS = 'grid-cols-[minmax(0,1fr)_40px_40px] gap-x-2 @min-[820px]:gap-x-4'
 const WIDE = (makers: boolean) => makers
-  ? `${COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.4fr)_minmax(96px,1fr)_56px_56px_72px_96px_minmax(150px,0.7fr)]`
-  : `${COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.4fr)_minmax(96px,1fr)_56px_56px_72px_96px]`
+  ? `${COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.4fr)_minmax(96px,1fr)_56px_56px_72px_minmax(150px,0.7fr)]`
+  : `${COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.4fr)_minmax(96px,1fr)_56px_56px_72px]`
 const HIDDEN = '@max-[820px]:hidden'
 const OWN_LINE = '@max-[820px]:order-last @max-[820px]:col-span-full'
 
@@ -46,8 +51,6 @@ function Head({ top, under, align = 'right' }: { top: string; under: string; ali
     </span>
   )
 }
-
-const cellOf = (p: HeardTheme['provenance']): string => (p ? fmtInt(p.fromNewSearches) : '·')
 
 /** "1 theme first heard with this update reached 10 videos this month." The
  *  count alone (finish-list item 9): "1 of the 347 themes first heard" read
@@ -90,7 +93,8 @@ export function HeardTable({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
   const month = shortMonthName(h.month)
   const prev = shortMonthName(h.prevMonth)
   const makers = h.segments === 'measured'
-  const max = Math.max(1, ...h.rows.map((t) => t.k))
+  const rows = heardRows(h)
+  const max = Math.max(1, ...rows.map((t) => t.k))
   if (mode === 'email') {
     const cell = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '6px 10px 6px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
     const num = { ...cell, fontFamily: FONT.mono, textAlign: 'right' as const }
@@ -101,11 +105,10 @@ export function HeardTable({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
           <tr>
             <th style={{ ...head, textAlign: 'left' }}>Theme</th>
             <th style={{ ...head, textAlign: 'right' }}>Videos</th>
-            <th style={{ ...head, textAlign: 'right' }}>From searches added in {month}</th>
           </tr>
         </thead>
         <tbody>
-          {h.rows.map((t) => {
+          {rows.map((t) => {
             const words = makers ? makerCell(t.makerShare) : null
             return (
               <tr key={t.registryId}>
@@ -114,7 +117,6 @@ export function HeardTable({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
                   {words && words !== MAKERS_NOT_MEASURED ? <div style={{ fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{words}</div> : null}
                 </td>
                 <td style={num}><span data-copy="figure">{fmtInt(t.k)}</span></td>
-                <td style={{ ...num, color: EMAIL.ink2 }}><span data-copy="figure">{cellOf(t.provenance)}</span></td>
               </tr>
             )
           })}
@@ -138,10 +140,9 @@ export function HeardTable({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
           <span role="columnheader"><Head top={month} under="videos" /></span>
           <span role="columnheader"><Head top={prev} under="videos" /></span>
           <span role="columnheader" className={HIDDEN} />
-          <span role="columnheader"><Head top="From searches" under={`added in ${month}`} /></span>
           {makers ? <span role="columnheader" className={`${HIDDEN} ${SCALE.head}`}>Makers</span> : null}
         </div>
-        {h.rows.map((t, i) => {
+        {rows.map((t, i) => {
           const words = makers ? makerCell(t.makerShare) : null
           const unmeasured = words === MAKERS_NOT_MEASURED
           return (
@@ -154,7 +155,6 @@ export function HeardTable({ h, mode }: { h: HeardBlock; mode: RenderMode }) {
               <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(t.k)}</span></span>
               <span className={SCALE.prev}>·</span>
               <span className={`text-[13px] font-medium text-foreground ${OWN_LINE}`}>New</span>
-              <span className={SCALE.prev}><span data-copy="figure">{cellOf(t.provenance)}</span></span>
               {makers ? (
                 <span className={`inline-flex min-w-0 items-center gap-2 text-[13px] text-secondary-foreground ${OWN_LINE}`}>
                   {unmeasured ? <span className={SCALE.tag}><span className="@min-[820px]:hidden">makers </span>{words}</span> : words ? <><MakerMark /><span className="truncate">{words}</span></> : null}
@@ -177,8 +177,11 @@ export const weekHeard: Block<WeekData> = {
     const h = data.heard ?? null
     const voice = surface('voice')
     const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, `All themes on ${voice.label} →`)
+    // Every theme it would list was our new searches' and nothing else is
+    // counted: omitted (T0a, mechanism 4).
+    if (heardOmitted(h)) return null
     const empty = weekHeard.emptyState(data)
-    if (!h || (empty && h.rows.length === 0 && !h.makers && !h.setAside)) {
+    if (!h || (empty && heardRows(h).length === 0 && !h.makers && !h.setAside)) {
       return (
         <BlockFrame title={HEARD_TITLE} mode={mode} footer={footer} roomy card>
           <BlockEmpty mode={mode}>{empty ?? HEARD_UNREAD}</BlockEmpty>
@@ -195,7 +198,7 @@ export const weekHeard: Block<WeekData> = {
             {/* "2 themes": a count, marked as code's figure. */}
             {lead.level ? <span data-copy="figure">{lead.level}</span> : null}{lead.rest}
           </p>
-          {h.rows.length > 0 ? <HeardTable h={h} mode={mode} /> : null}
+          {heardRows(h).length > 0 ? <HeardTable h={h} mode={mode} /> : null}
           {h.makers || h.setAside ? (
             <div className={email ? undefined : 'flex flex-col gap-2'}>
               {h.makers ? <GroupLine words="Makers and DIY, grouped" group={h.makers} mode={mode} link={mode === 'app' ? show(h.makers.count) : null} /> : null}
@@ -212,10 +215,9 @@ export const weekHeard: Block<WeekData> = {
     if (!h || h.regrouped) return {}
     const month = longMonth(h.month)
     const out: FigureTable = {}
-    for (const t of h.rows) {
+    for (const t of heardRows(h)) {
       const id = t.registryId.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
       out[`heard_t_${id}_videos`] = { value: t.k, unit: 'videos', label: `${t.label}: videos in ${month}` }
-      if (t.provenance) out[`heard_t_${id}_new_searches`] = { value: t.provenance.fromNewSearches, unit: 'videos', label: `${t.label}: videos from searches added in ${month}` }
     }
     return out
   },
@@ -224,10 +226,16 @@ export const weekHeard: Block<WeekData> = {
     const h = data.heard
     if (!h) return HEARD_UNREAD
     if (h.regrouped) return regroupedLine(h.regrouped)
+    if (heardOmitted(h)) return null
     if (heardAtFloor(h) === 0) return heardLead(h, monthPhrase(h.month, data.readingAt)).rest
     return null
   },
 }
+
+/** Nothing true left to say: every theme at the floor was our new searches'
+ *  (`heardRows`) and nothing is grouped. The block is omitted (T0a). */
+export const heardOmitted = (h: HeardBlock | null | undefined): boolean =>
+  h != null && !h.regrouped && heardAtFloor(h) === 0 && heardWithheld(h)
 
 /** A copy stored before WP3.7, or a read that failed: said, never a zero. */
 export const HEARD_UNREAD = 'The themes this update heard for the first time are not counted here yet.'

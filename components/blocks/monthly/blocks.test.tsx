@@ -201,9 +201,12 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     const t = text('monthly.arrivals', filledSlotsFixture())
     // Staging's 20 Sep update (update_arrivals, 26 Sep): the front page's words.
     expect(t).toContain('With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in.')
-    expect(t).toContain('With 10+ videos in September:')
-    expect(t).toMatch(/Laundry planning for travel\s*”: 8 of its 10 videos came from searches we added in September/)
-    expect(t).toMatch(/Preference for secondhand fashion\s*”: 8 of its 10 videos/)
+    // T0a (mechanism 4): both themes heard first had 8 of their 10 videos
+    // from searches we added in September, so neither is listed as new and,
+    // with nothing else counted, "Heard for the first time" is omitted.
+    expect(t).not.toContain('Heard for the first time')
+    expect(t).not.toContain('Laundry planning for travel')
+    expect(t).not.toContain('Preference for secondhand fashion')
     // Minted by the 20 Sep update but held by August: not heard for the first time.
     expect(t).not.toContain('Interest in shipping and locations')
     expect(t).not.toMatch(/week by week/i)

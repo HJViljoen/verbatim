@@ -42,6 +42,8 @@ import {
 import {
   comparableBaselineFrom,
   heardAtFloor,
+  heardRows,
+  heardWithheld,
   heardBlockOf,
   marketCameIn,
   monthsAfter,
@@ -866,7 +868,14 @@ describe('heardBlockOf (WP3.7): the themes first heard, grouped as the board gro
     expect(h.rows[0].provenance).toEqual({ fromNewSearches: 8, of: 10 })
     expect(h.rows[1].provenance).toBeNull()
     expect(h.prevMonth).toBe('2026-08-01')
-    expect(heardAtFloor(h)).toBe(2)
+    // T0a (mechanism 4; WK-21): Laundry planning's 8 of 10 from searches
+    // added in September is our search, not new talk: not counted or listed.
+    expect(heardAtFloor(h)).toBe(1)
+    expect(heardRows(h).map((r) => r.label)).toEqual(['Preference for secondhand fashion'])
+    expect(heardWithheld(h)).toBe(true)
+    const under = heardBlockOf({ month: '2026-09-01', fresh, segments, segmentsState: 'measured', provenance: new Map([['4f4bc420-8906-44ac-878d-2855c1011485', { fromNewSearches: 3, of: 10 }]]) })
+    expect(heardAtFloor(under)).toBe(2)
+    expect(heardWithheld(under)).toBe(false)
   })
 
   it('groups a theme half or more makers’ into the makers line (decision F), counted with the floor', () => {

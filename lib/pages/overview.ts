@@ -86,7 +86,7 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { loadNewThemes, loadWeekVolumes, monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
 import type { WeekVolumesBlock } from '../reading/weeks'
-import { ARRIVAL_THEMES_SHOWN, arrivalThemes, buildArrivals, latestUpdate, type ArrivalsBlock, type UpdateArrivalsRow } from './overview-market/arrivals'
+import { arrivalThemes, buildArrivals, latestUpdate, type ArrivalsBlock, type UpdateArrivalsRow } from './overview-market/arrivals'
 import type { ConfigChange } from '../config-log'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
@@ -112,6 +112,7 @@ import {
   namesABrand,
   pastOffers,
   pickQuotes,
+  searchInflated,
   searchesAddedIn,
   stripUnevidencedBrand,
   type ThemeEvidence,
@@ -5035,11 +5036,27 @@ async function loadMarketReads(input: {
       return pickQuotes(read.candidates, leadVoiceOptions(clientId, month, theme, segments)).length
     },
   )
-  const leadExcluded = voiceless.size > 0 ? new Set([...excluded, ...voiceless]) : excluded
-  const leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
-  const provenance = leadId == null
-    ? null
-    : leadProvenance.has(leadId) ? leadProvenance.get(leadId) ?? null : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
+  // A THEME OUR NEW SEARCHES FOUND NEVER LEADS (T0a, mechanism 4; OV-8,
+  // MR-3): a candidate a third or more of whose month's videos came from
+  // searches first run that month (`searchInflated`) is passed over, as a
+  // voiceless one is. Past the candidates read, each next row's provenance is
+  // read in turn, at most a board's worth.
+  const inflated = [...leadIds].filter((id) => searchInflated(leadProvenance.get(id)))
+  let leadExcluded: Set<string> = voiceless.size > 0 || inflated.length > 0 ? new Set([...excluded, ...voiceless, ...inflated]) : excluded
+  const provenanceOf = async (id: string): Promise<ThemeProvenance> =>
+    leadProvenance.has(id) ? leadProvenance.get(id) ?? null : loadLeadProvenance(client, clientId, month, id, addedSearches)
+  let leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
+  let provenance = leadId == null ? null : await provenanceOf(leadId)
+  for (let i = 0; leadId != null && searchInflated(provenance) && i < final.rows.length; i++) {
+    leadExcluded = new Set([...leadExcluded, leadId])
+    leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
+    provenance = leadId == null ? null : await provenanceOf(leadId)
+  }
+  if (searchInflated(provenance)) {
+    leadExcluded = leadId ? new Set([...leadExcluded, leadId]) : leadExcluded
+    leadId = null
+    provenance = null
+  }
   const [changeRows, pairRows, recheck, brandsRead] = await Promise.all([changeRowsAhead, pairRowsAhead, recheckAhead, brandsAhead])
   return {
     themes,
@@ -5124,7 +5141,10 @@ async function loadArrivals(input: {
   }
   const fresh = await freshAhead
   const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
-  const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes.slice(0, ARRIVAL_THEMES_SHOWN)
+  // EVERY THEME THAT MAY BE LISTED OR COUNTED, NOT ONLY THE FIVE NAMED (T0a,
+  // mechanism 4): one our new searches found is neither (`firstHeardThemes`),
+  // so each one's provenance is read, in the page's one provenance read.
+  const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes
   const provenance = input.provenance
     ? await input.provenance.ask(named.map((t) => t.registryId))
     : await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), input.addedSearches ?? addedSearchesRead(client, clientId, month))

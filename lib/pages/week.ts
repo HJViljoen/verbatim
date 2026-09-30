@@ -53,7 +53,7 @@ import { citationsUntranslated } from './evidence-untranslated'
 import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
 import type { FormatMatrix } from '../reading/formats'
 import { addedSearchesRead, loadThemeSegmentRows, loadThemesProvenance, makerRuleEnabled, themeSegmentsOf, type SideReading } from './overview'
-import { segmentOf } from './overview-market/board'
+import { searchInflated, segmentOf } from './overview-market/board'
 import { segmentRulesEnabled } from '../segments/rules'
 import { brandCountState, noiseWords, OTHER_MEANING } from '../brands/precision'
 import { trackedSince } from '../settings/search-set'
@@ -1230,8 +1230,21 @@ export function heardBlockOf(input: {
   return { ...base, rows, makers: group(makers), setAside: group(setAside) }
 }
 
+/**
+ * THE ROWS THE BLOCK MAY CALL HEARD FOR THE FIRST TIME (T0a, mechanism 4;
+ * WK-8/20/21): not a theme a third or more of whose month's videos came from
+ * searches first run that month (`searchInflated`). That is our new search,
+ * not new talk, so it is not listed, counted, flagged or anchored at all.
+ * Read at render too, so a stored copy obeys it.
+ */
+export const heardRows = (h: Pick<HeardBlock, 'rows'>): HeardTheme[] => h.rows.filter((t) => !searchInflated(t.provenance))
+
+/** Were any rows left out as our new searches' (`heardRows`)? Then "nothing
+ *  was heard for the first time" is never said in their place. */
+export const heardWithheld = (h: Pick<HeardBlock, 'rows'>): boolean => heardRows(h).length < h.rows.length
+
 /** Every theme the block names or groups: the floor's whole count. */
-export const heardAtFloor = (h: HeardBlock): number => h.rows.length + (h.makers?.count ?? 0) + (h.setAside?.count ?? 0)
+export const heardAtFloor = (h: HeardBlock): number => heardRows(h).length + (h.makers?.count ?? 0) + (h.setAside?.count ?? 0)
 
 /**
  * A reply row's context in the market's words (WP3.7; the approved preview):
@@ -2913,7 +2926,7 @@ async function buildCameIn(input: {
     crossesInto: window && window.from < month ? previousMonthOf(month) : null,
     // The market's own first-heard themes; the ones led by makers or set
     // aside are counted by the heard block (`heardAtFloor`).
-    newThemes: heard.rows.map((t) => ({ id: t.registryId, label: t.label, videos: t.k })),
+    newThemes: heardRows(heard).map((t) => ({ id: t.registryId, label: t.label, videos: t.k })),
     newThemesSeen: heard.seen,
     regrouped: heard.regrouped,
     rivals: rivalRows,
