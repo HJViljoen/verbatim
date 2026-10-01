@@ -142,10 +142,11 @@ describe('(d) What people do in the comments', () => {
 })
 
 describe('the skeleton', () => {
-  it('renders the page\'s shape with no words', () => {
+  it('renders the page\'s shape, with no words but the page title', () => {
     const markup = render(<MarketPictureSkeleton />)
     expect(markup).toContain('role="status"')
-    expect(renderText(<MarketPictureSkeleton />)).toBe('')
+    // The shared PageBar draws the title while the page loads (integration).
+    expect(renderText(<MarketPictureSkeleton />)).toBe('Your market')
     expect(bans(markup)).toEqual([])
   })
 })

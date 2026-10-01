@@ -217,9 +217,12 @@ describe('the pipeline carries write-week-read', () => {
   })
 
   it('outside the consumer-profile flag, fail-soft: its .catch logs and returns null, and sends nothing', () => {
-    const body = src.slice(src.indexOf(".run('write-week-read'"), src.indexOf('// 7. Close the run.'))
+    // Ends where the long-run step begins (integration, 1 Oct): that step's own
+    // comment names noteError, which is not this handler's.
+    const body = src.slice(src.indexOf(".run('write-week-read'"), src.indexOf(".run('write-longrun-read'"))
     expect(body).toContain('runWeekReadStep(admin, { clientId, runId')
-    const handler = body.slice(body.indexOf('.catch('))
+    const at = body.indexOf('.catch(')
+    const handler = body.slice(at, body.indexOf('})', at) + 2)
     expect(handler).toMatch(/console\.error\(`\[write-week-read\] out of retries/)
     expect(handler).toMatch(/return null/)
     expect(handler).not.toMatch(/sendAlertEmail|noteError/)

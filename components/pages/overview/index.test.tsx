@@ -7,8 +7,6 @@ import { render, renderText } from '@/lib/test/render'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OverviewPage, TILE_BLOCKS, frontTile, horizonRange } from './index'
 import { overviewPage } from './page'
-import { FRONT_TILE_KEYS } from './tiles'
-import DashboardLoading from '@/app/dashboard/overview/loading'
 import { SidebarTenant } from '@/components/sidebar-tenant-loader'
 import { PAGES } from '@/components/pages/registry'
 import { marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture, refusedFixture } from './fixture'
@@ -230,21 +228,10 @@ describe('the Overview page', () => {
     expect(frontTile('overview.change', false)).toMatchObject({ col: 12, className: 'xl:row-span-1' })
   })
 
-  // THE SKELETON IS THE PAGE'S OWN TILES (the deploy-3 design review): it
-  // drew deploy 2's page (the subjects full width, the brands one line, no
-  // pairs), and the page takes about 5s on staging, so it visibly jumped into
-  // another layout. Both read ./tiles.ts now.
-  it('has a loading skeleton with the page’s tiles, in its order, widths, floors and pairs', () => {
-    expect(TILE_BLOCKS.map((b) => b.key)).toEqual([...FRONT_TILE_KEYS])
-    const tiles = (markup: string) => [...markup.matchAll(/<section data-tile="" data-col="(\d+)" data-row="(\d+)"[^>]*class="([^"]*)"/g)]
-      .map((m) => [m[1], m[2], /self-(start|center|end)/.test(m[3]), m[3].includes('xl:row-span-1')])
-    // The page as drawn when every block has something to print (a block
-    // omitted on the data, T0a, is known only once the page has loaded).
-    const page = tiles(render(<OverviewPage data={marketFrontFixture({ subjectsCalibration: 'staging' })} />))
-    const skeleton = tiles(render(<DashboardLoading />))
-    expect(skeleton).toEqual(page)
-    expect(skeleton.map((t) => t[0])).toEqual(['12', '12', '12', '12', '12', '8', '4', '6', '6', '12'])
-  })
+  // The page-parity skeleton test lived here. Since the pages build (1 Oct)
+  // the Overview module is no longer a route: /dashboard/overview renders the
+  // "bigger picture" page, whose skeleton is pinned in ./picture/index.test.tsx.
+  // This module renders only stored snapshots and the monthly report now.
 
   // ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8). Parsed from
   // `Main.dc.html`: all six blocks go straight from `</header>` into their
