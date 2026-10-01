@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { CalendarPlus, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,7 +30,11 @@ const selectCls =
 /** The preview's green button: 44px under Your moves, 40px in the page bar. */
 const GREEN = 'cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
 
-export function DateMove({ dating, place = 'block' }: { dating: MoveDating; place?: 'block' | 'bar' }) {
+/** Your moves' page head (pages build, the artboard): the secondary button,
+ *  white with a hairline, the calendar-plus icon. */
+const SECONDARY = 'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-[#E4E2DC] bg-white px-4 text-[14px] font-semibold text-[#26292C] transition-colors hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/30'
+
+export function DateMove({ dating, place = 'block' }: { dating: MoveDating; place?: 'block' | 'bar' | 'head' }) {
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState(dateMoveAction, EMPTY_STATE)
   const [lastDated, setLastDated] = useState<string | undefined>(undefined)
@@ -49,9 +53,9 @@ export function DateMove({ dating, place = 'block' }: { dating: MoveDating; plac
         onClick={() => setOpen(true)}
         // ONE DISPLAY CLASS PER WIDTH: the bar's button is `hidden` below sm
         // (the block's own is there), and never `inline-flex` beside it.
-        className={`${GREEN} ${place === 'bar' ? 'hidden h-10 sm:inline-flex' : 'inline-flex h-11 w-fit px-[18px]'}`}
+        className={place === 'head' ? SECONDARY : `${GREEN} ${place === 'bar' ? 'hidden h-10 sm:inline-flex' : 'inline-flex h-11 w-fit px-[18px]'}`}
       >
-        <Plus className="size-4" aria-hidden />
+        {place === 'head' ? <CalendarPlus className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
         {DATE_MOVE}
       </button>
       <Sheet open={open} onOpenChange={setOpen}>

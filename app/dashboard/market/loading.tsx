@@ -1,40 +1,52 @@
-import { PageGrid } from '@/components/shell/page-grid'
-import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
+import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { PAGE_TITLE } from '@/components/pages/moves/words'
 
-// Mirrors components/pages/market-surface/index.tsx (MarketSurfacePage): the
-// surface bar (Market has no horizon, `lib/nav.ts`) with How to read and its
-// one line, then its two grids. The readings: conclusions and advice, full width.
-// The moves: a 5-column stack (the card · say and hear) beside a 7-column
-// stack (the moves · plans), then the ways full width, as `MOVES_STACKS` and
-// `COLS` lay them out, with the page's own `xl:items-start`.
-export default function MarketLoading() {
+// Mirrors components/pages/moves (MovesPage): the head with its two buttons,
+// then the artboard's two white cards, Your statements (the add field and
+// three four-column rows) and Moves worth considering (three advice rows).
+// The title is the real one, so the page does not change its name on arrival.
+export default function MovesLoading() {
   return (
-    <SkeletonSurface nav="market" pills={1}>
-      <PageGrid>
-        {/* market.conclusions */}
-        <SkeletonTile col={12} row={2} meta lines={5} />
-        {/* market.advice */}
-        <SkeletonTile col={12} row={2} meta lines={4} />
-      </PageGrid>
-      <PageGrid className="xl:items-start">
-        <div className="contents xl:col-span-5 xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
-          {/* market.card */}
-          <SkeletonTile col={12} row={2} meta>
-            <Bone className="h-5 w-3/5" />
-            <BoneLines lines={4} />
-          </SkeletonTile>
-          {/* market.sayhear */}
-          <SkeletonTile col={12} row={1} meta lines={3} />
+    <div className="flex flex-col gap-[22px]" aria-busy>
+      <span role="status" className="sr-only">Loading {PAGE_TITLE}…</span>
+      <div className="flex min-h-10 flex-wrap items-center justify-between gap-4">
+        <h1 className="m-0 text-[26px] font-bold leading-[1.25] text-[#26292C]">{PAGE_TITLE}</h1>
+        <div className="flex items-center gap-[10px]">
+          <Bone className="h-10 w-[140px] rounded-[10px]" />
+          <Bone className="h-10 w-[140px] rounded-[10px]" />
         </div>
-        <div className="contents xl:col-span-7 xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
-          {/* market.moves */}
-          <SkeletonTile col={12} row={2} meta><BoneBars rows={5} /></SkeletonTile>
-          {/* market.plans */}
-          <SkeletonTile col={12} row={1} meta lines={3} />
+      </div>
+      <section className="flex flex-col gap-3 rounded-[16px] bg-white px-7 pt-6 pb-2.5">
+        <div className="flex items-baseline justify-between gap-4">
+          <Bone className="h-5 w-40" />
+          <Bone className="h-3 w-64" />
         </div>
-        {/* market.ways */}
-        <SkeletonTile col={12} row={2} meta lines={4} />
-      </PageGrid>
-    </SkeletonSurface>
+        <BoneLines lines={1} widths={['w-3/5']} />
+        <Bone className="h-11 w-full rounded-[10px]" />
+        <div className="flex flex-col pt-1.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="grid grid-cols-1 items-start gap-4 border-t border-[#E4E2DC] py-[18px] lg:grid-cols-[minmax(0,1.05fr)_220px_minmax(0,1.45fr)_32px] lg:gap-7">
+              <BoneLines lines={2} widths={['w-full', 'w-1/2']} />
+              <div className="flex flex-col gap-2"><Bone className="h-7 w-20" /><Bone className="h-2 w-full" /></div>
+              <BoneLines lines={3} />
+              <div />
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-[10px] rounded-[16px] bg-white px-7 pt-6 pb-2">
+        <div className="flex items-baseline justify-between gap-4">
+          <Bone className="h-5 w-56" />
+          <Bone className="h-3 w-48" />
+        </div>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex flex-col gap-2 border-t border-[#E4E2DC] py-5">
+            <Bone className="h-[26px] w-32 rounded-full" />
+            <Bone className="h-4 w-3/4" />
+            <BoneLines lines={2} />
+          </div>
+        ))}
+      </section>
+    </div>
   )
 }

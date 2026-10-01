@@ -1,7 +1,10 @@
 import { getSessionContext } from '@/lib/auth'
+import { canManageTenant } from '@/lib/roles'
 import { readingHandle } from '@/lib/reading/read'
 import { loadMarketSurface } from '@/lib/pages/market-surface'
-import { MarketSurfacePage } from '@/components/pages/market-surface'
+import { loadStatements } from '@/lib/pages/moves-statements'
+import { MovesPage } from '@/components/pages/moves'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 
@@ -9,15 +12,18 @@ import { surface } from '@/lib/nav'
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('market').label }
 
-// Market — "what should we do, and is it working?" (Phase 1 WP14). The address
-// Market Intelligence used to hold; that page is parked at
-// /dashboard/market-intel until OLD_PAGES_RETIRE_ON and still answers.
+// Adding a statement measures it after the response (`after()` in
+// lib/actions/statements.ts): embedding, band, judge and one stance call, which
+// run on this route's clock.
+export const maxDuration = 300
+
+// Your moves (pages build, 1 Oct; Page-Your-moves.dc.html). The advice, the
+// moves and the plans come off the Market surface's loader, the statements off
+// their own two reads, in ONE wave with the workspace's name.
 //
-// THE LEGACY `?rec=<id>` ALIAS LANDS HERE. Four sent emails and every digest
-// until WP17 carry that parameter, and the loader resolves it to the LINEAGE
-// the recommendation belongs to — the row's own id is deleted and reinserted
-// every update, so the id in a three-week-old email names nothing while its
-// lineage still names the same advice.
+// THE LEGACY `?rec=<id>` ALIAS STILL LANDS HERE. Four sent emails and every
+// digest until WP17 carry it; the loader resolves it to the lineage, and the
+// named row keeps its anchor in "Moves worth considering" while it is current.
 
 export default async function Page({
   searchParams,
@@ -25,7 +31,13 @@ export default async function Page({
   searchParams?: Promise<Record<string, string | undefined>>
 }) {
   const sp = (await searchParams) ?? {}
-  const { supabase, clientId } = await getSessionContext()
-  const data = await loadMarketSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { shortlist: true })
-  return <MarketSurfacePage data={data} params={sp} />
+  const { supabase, clientId, role } = await getSessionContext()
+  const db = supabase as SupabaseClient
+  const [market, client, statements] = await Promise.all([
+    loadMarketSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { shortlist: true }),
+    db.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    loadStatements(db, clientId, { canEdit: canManageTenant(role), brand: '' }),
+  ])
+  const brand = market?.brand || ((client.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'your brand'
+  return <MovesPage market={market} statements={statements ? { ...statements, brand } : null} params={sp} />
 }

@@ -260,6 +260,10 @@ export interface AdviceRow {
   why: string | null
   /** The advice's one real comment, as its own node with its own ref. */
   quote: Quote | null
+  /** Pass D-b's own ranking of the newest copy ('high' · 'medium' · 'low'),
+   *  the chip on Your moves' "Moves worth considering". OPTIONAL, so a copy
+   *  stored before it renders with no chip. */
+  priority?: string | null
 }
 
 export interface AdviceBlock {
@@ -683,6 +687,7 @@ export function buildAdviceRows(
       afterwards: afterwardsFor({ decidedAt, targetIds: [], series: [], audience: 'client', pair: null }),
       why: why || null,
       quote: null,
+      priority: newest.priority ?? null,
     })
   }
   const key = (r: AdviceRow) => orderOf.get(r.lineageId) as { raisedAt: string; newest: RecCopy }
