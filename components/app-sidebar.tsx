@@ -40,17 +40,19 @@ type NavItem = { href: string; label: string; icon: LucideIcon }
 const HAIR = "bg-[#E4E2DC]"
 
 // ONE ROW, AS THE DESIGN DRAWS IT: 40px tall, 4px apart, 12px in, the icon 12px
-// from the label, a 6px radius, 14px ink. The active page is a pill of the ink
-// at 7% (`rgba(38,41,44,0.07)`) and semibold, its icon in ink; every other icon
-// is `#6E7378`. NO LEFT BAR: the 3px green bar at the pill's edge is gone under
-// the stripe ban (pages build brief rule 7; page review §4).
+// from the label, a 6px radius, 14px ink. The active page is a pill of the pale
+// yellow (`bg-accent`: a selected state, the colour roles of 1 Oct; it was the
+// ink at 7%) and semibold, its icon in the orange text; every other icon is
+// `#6E7378`, and a hover is the ink at 7%. NO LEFT BAR: the 3px green bar at
+// the pill's edge is gone under the stripe ban (pages build brief rule 7;
+// page review §4).
 const ROW_CLASS =
   "h-10 gap-3 rounded-[6px] px-3 text-[14px] font-normal text-foreground " +
   "hover:bg-sidebar-accent hover:text-foreground " +
   // `data-active` is on EVERY row ("true" or "false"), so the primitive's own
   // `data-active:` grey and medium weight would reach the inactive rows too.
   "data-[active=false]:bg-transparent data-[active=false]:font-normal data-[active=false]:hover:bg-sidebar-accent " +
-  "data-[active=true]:bg-foreground/[0.07] data-[active=true]:font-semibold data-[active=true]:text-foreground"
+  "data-[active=true]:bg-accent data-[active=true]:hover:bg-accent data-[active=true]:font-semibold data-[active=true]:text-foreground"
 
 // THE AGENT'S ROW (Heinrich, 30 Sep: "stands out"): filled yellow `#FFD43B`,
 // semibold ink, the Lucide `Sparkles` in ink. The design draws it the same on
@@ -82,7 +84,7 @@ export function NavRow({ item, active, agent = false }: { item: NavItem; active:
       <SidebarMenuButton asChild isActive={active} className={agent ? AGENT_CLASS : ROW_CLASS}>
         <Link href={item.href} aria-current={active ? "page" : undefined} onClick={() => setOpenMobile(false)}>
           <item.icon
-            className={cn("size-4", agent || active ? "text-foreground" : "text-[#6E7378]")}
+            className={cn("size-4", agent ? "text-foreground" : active ? "text-orange-text" : "text-[#6E7378]")}
             strokeWidth={2}
             aria-hidden
           />
@@ -111,9 +113,11 @@ export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: Re
 
   return (
     // The design's frame: 256px of white with a 1px hairline on its right edge
-    // and no shadow; 18px above the wordmark, 12px either side, 16px below the
-    // foot. The width is the layout's `--sidebar-width`.
-    <Sidebar variant="sidebar" collapsible="offcanvas" className="border-r-[#E4E2DC]">
+    // and, since the colour pass (Heinrich, 1 Oct: "we don't really have drop
+    // shadows anymore, like for the sidebar"), the sidebar's own soft shadow
+    // beyond it (`--shadow-sidebar`); 18px above the wordmark, 12px either
+    // side, 16px below the foot. The width is the layout's `--sidebar-width`.
+    <Sidebar variant="sidebar" collapsible="offcanvas" className="border-r-[#E4E2DC] shadow-sidebar">
       {/* `header` arrives as a slot because this component is "use client" and
           the workspace switcher's loader is a server component. Without it,
           every user who is not a platform admin, it is the wordmark. */}

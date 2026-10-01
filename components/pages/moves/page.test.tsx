@@ -55,7 +55,7 @@ describe('Moves worth considering', () => {
     expect(t).toContain('Comfort is part of perceived quality, not an extra. The evidence points to specific friction points')
     expect(t.match(/Accept/g)!.length).toBe(1 + 5)
     expect(t.match(/Not for us/g)).toHaveLength(5)
-    expect(m).toMatch(/bg-\[#26292C\] text-white[^"]*"[^>]*>High priority/)
+    expect(m).toMatch(/bg-orange font-semibold text-brand-foreground[^"]*"[^>]*>High priority/)
   })
 
   it('draws only undecided advice, at most five, and nothing at all without any', () => {

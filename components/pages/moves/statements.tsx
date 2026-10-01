@@ -1,3 +1,5 @@
+import { MessageSquareQuote } from 'lucide-react'
+import { BrandChip, ChipSep, type BarWho } from '@/components/colour-roles'
 import type { MarketLabels } from '@/lib/brands/labels'
 import type { StatementReading, StatementsBlockData, StatementView } from '@/lib/statements/types'
 import { AddStatement } from './add-statement'
@@ -22,6 +24,10 @@ import {
 // the sentence is model prose stored by the measurement under its own slot
 // (`stored` · `statement_says`), and the statement is the client's own words
 // (`quote`: rule (c) does not police what a person typed).
+//
+// COLOUR (the roles, colour pass 1 Oct): a brand on the who-line is its chip;
+// the treatment's bars count the market's videos (yellow) or, where the claim
+// is only heard under your own posts, yours (gold).
 
 /** The four tracks: the words, the share, the treatment, the menu. */
 const TRACKS = 'grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_220px_minmax(0,1.45fr)_32px] lg:gap-7'
@@ -30,17 +36,22 @@ const GRID = `grid ${TRACKS}`
 function WhoLine({ reading, brand, market }: { reading: StatementReading; brand: string; market: MarketLabels }) {
   const parts = whoParts(reading.who, brand, market)
   if (parts.length === 0) return null
-  const name = (p: (typeof parts)[number]) => (
-    <span className={p.tone === 'client' ? 'font-semibold text-[#9A6B00]' : p.tone === 'rival' ? 'font-semibold text-[#26292C]' : 'text-[#5F656B]'}>{p.name}</span>
-  )
+  /** A brand as its chip (its videos inside it when counted), the market as
+   *  muted words. */
+  const name = (p: (typeof parts)[number], count: boolean) => {
+    const n = count ? <>{' '}<span data-copy="figure" className="font-mono font-normal">{fmt(p.videos)}</span></> : null
+    if (p.tone === 'client') return <BrandChip who="you">{p.name}{n}</BrandChip>
+    if (p.tone === 'rival') return <BrandChip who="rival">{p.name}{n}</BrandChip>
+    return <><span className="text-[#5F656B]">{p.name}</span>{count ? <> <span data-copy="figure" className="font-mono text-[#5F656B]">{fmt(p.videos)}</span></> : null}</>
+  }
   return (
     <div className="text-[12px] leading-[1.45]">
       {parts.length === 1
-        ? name(parts[0])
+        ? name(parts[0], false)
         : parts.map((p, i) => (
             <span key={p.key}>
-              {i > 0 ? <span className="text-[#5F656B]"> · </span> : null}
-              {name(p)} <span data-copy="figure" className="font-mono text-[#5F656B]">{fmt(p.videos)}</span>
+              {i > 0 ? <ChipSep /> : null}
+              {name(p, true)}
             </span>
           ))}
     </div>
@@ -73,11 +84,11 @@ function TalkColumn({ reading }: { reading: StatementReading }) {
   )
 }
 
-function TreatRow({ label, k, base }: { label: string; k: number; base: number }) {
+function TreatRow({ label, k, base, who }: { label: string; k: number; base: number; who: BarWho }) {
   return (
     <div className="flex items-center gap-3 border-t border-[#E4E2DC] py-1.5">
       <div className="w-[104px] shrink-0 text-[13.5px] text-[#26292C]">{label}</div>
-      <Bar width={barWidth(k, base)} />
+      <Bar width={barWidth(k, base)} who={who} />
       {/* 16px on the cell, as the artboard's cell inherits: its line sets the
           row's 33px pitch; the figure keeps its 14px. */}
       <div className="w-11 shrink-0 text-right text-[16px]">
@@ -90,15 +101,16 @@ function TreatRow({ label, k, base }: { label: string; k: number; base: number }
 function TreatColumn({ reading }: { reading: StatementReading }) {
   const s = reading.stance
   if (!s) return <p className="m-0 text-[13.5px] leading-[1.55] text-[#26292C]">{NOBODY_ANYWHERE}</p>
+  const who: BarWho = s.of === 'own' ? 'you' : 'market'
   return (
     <div className="flex flex-col gap-2">
       <div className="text-[12px] text-[#5F656B]">
         Of the <span data-copy="figure" className="font-mono text-[#26292C]">{fmt(s.base)}</span> videos{s.of === 'own' ? ' under your posts' : ''}
       </div>
       <div className="flex flex-col">
-        <TreatRow label={STANCE_LABELS.backs} k={s.backs} base={s.base} />
-        <TreatRow label={STANCE_LABELS.doubts} k={s.doubts} base={s.base} />
-        <TreatRow label={STANCE_LABELS.asks} k={s.asks} base={s.base} />
+        <TreatRow label={STANCE_LABELS.backs} k={s.backs} base={s.base} who={who} />
+        <TreatRow label={STANCE_LABELS.doubts} k={s.doubts} base={s.base} who={who} />
+        <TreatRow label={STANCE_LABELS.asks} k={s.asks} base={s.base} who={who} />
       </div>
       {reading.says ? (
         <p data-copy="stored" data-slot="statement_says" className="m-0 mt-0.5 text-[13.5px] leading-[1.55] text-[#26292C]">{reading.says}</p>
@@ -126,7 +138,7 @@ export function YourStatements({ data }: { data: StatementsBlockData }) {
   const sub = data.base != null && data.month ? statementsBase(data.base, data.month, data.complete) : undefined
   return (
     <Card pad="px-7 pt-6 pb-2.5" gap="gap-3">
-      <SectionHead title={STATEMENTS_TITLE} sub={sub} />
+      <SectionHead icon={MessageSquareQuote} title={STATEMENTS_TITLE} sub={sub} />
       <p className="m-0 -mt-1 mb-0.5 max-w-[820px] text-[14.5px] leading-[1.55] text-[#5F656B]">{statementsLead(data.brand)}</p>
       {data.canEdit ? <AddStatement /> : null}
       {data.statements.length > 0 ? (

@@ -27,7 +27,32 @@ MASTER.md §Color Palette:
 In the app the mark draws in the brand yellow and the wordmark in ink (see
 "Brand mark" below). **App anti-list:** no left-stripe
 accent blocks (no coloured left border or bar on a card or a quote), no
-highlighted phrases, no gradient washes, no emoji.
+highlighted phrases, no gradient washes, no emoji, no orange words (the
+orange text is `#C2410C`), no pale-yellow card.
+
+### The app's colour roles and shadows (2026-10-01, evening)
+
+Heinrich, 1 Oct: "I kinda want more of the colours that we have in the colour
+palette to actually show up … none of the orange or brown … And I notice we
+don't really have drop shadows anymore." Each colour has ONE job on the ten
+client pages, drawn through `components/colour-roles.tsx` (full table:
+MASTER.md §Colour roles):
+
+- **Yellow**: the market and the brand (market bars, the Agent, a market
+  read's numbers, the videos series).
+- **Orange fill** (never text): what is new and the second series (This
+  week's finding numerals, the comments line, the attention dot, High
+  priority).
+- **Orange text** `#C2410C`: eyebrows, labels, links, icon-tile glyphs.
+- **Gold**: you, the client (its chip, its bars and figures, its handles).
+- **Grey**: rivals (a chip's dot, a rival's own bars).
+- **Pale yellow**: small surfaces (icon tiles, tags, selected states, the
+  Dashboard Agent's header).
+
+Every large card sits on **`--shadow-card`** (`shadow-card`) and the sidebar's
+edge on **`--shadow-sidebar`**; inner panels stay flat. Guards:
+`scripts/check-design-drift.sh` (g) and (h), `lib/palette-guard.test.ts`
+(5) and (6), `components/colour-roles.test.tsx`.
 
 ## Direction — "The murmur"
 

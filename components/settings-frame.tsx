@@ -69,7 +69,8 @@ export function SettingsFrame({
             className={cn(
               'inline-flex h-[38px] shrink-0 items-center whitespace-nowrap rounded-[8px] px-4 text-[14px] transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40',
-              active === s.key ? 'bg-[rgba(38,41,44,0.07)] font-semibold text-[#26292C]' : 'font-medium text-[#5F656B] hover:text-[#26292C]',
+              // The lit tab is a selected state: the pale yellow (the colour roles).
+              active === s.key ? 'bg-accent font-semibold text-[#26292C]' : 'font-medium text-[#5F656B] hover:text-[#26292C]',
             )}
           >
             {s.label}

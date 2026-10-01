@@ -1,3 +1,4 @@
+import { Megaphone } from 'lucide-react'
 import { longMonth } from '@/lib/format'
 import { POSTS_HEAD, type PostsBlock } from '@/lib/pages/brands'
 import { Card, CountWords, TitleRow } from './ui'
@@ -12,7 +13,7 @@ const COLS = 'md:grid-cols-[210px_120px_minmax(0,1fr)]'
 export function PostsCard({ posts }: { posts: PostsBlock }) {
   return (
     <Card className="gap-2.5 px-7 pt-6 pb-2.5">
-      <TitleRow title={POSTS_HEAD} sub={`Posts on their own accounts in ${longMonth(posts.month)}`} />
+      <TitleRow icon={Megaphone} title={POSTS_HEAD} sub={`Posts on their own accounts in ${longMonth(posts.month)}`} />
       <div aria-hidden className={`hidden gap-6 pt-1 text-[12px] font-semibold text-muted-foreground md:grid ${COLS}`}>
         <div>Brand</div>
         <div>Posted</div>

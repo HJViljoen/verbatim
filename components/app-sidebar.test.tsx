@@ -57,15 +57,16 @@ describe('the sidebar', () => {
     expect(html.lastIndexOf('h-px')).toBeLessThan(at('>Agent<'))
   })
 
-  it('marks the active page with the ink pill and weight, and no left bar (the stripe ban)', () => {
+  it('marks the active page with the pale-yellow pill (a selected state), weight and an orange-text icon, and no left bar (the stripe ban)', () => {
     const html = sidebar('/dashboard/voice')
     expect(html).toContain('aria-current="page"')
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
     const active = html.slice(html.lastIndexOf('<a ', html.indexOf('aria-current="page"')), html.indexOf('</a>', html.indexOf('aria-current="page"')))
     expect(active).toContain('data-active="true"')
     expect(active).toContain('>Conversation<')
-    expect(active).toContain('data-[active=true]:bg-foreground/[0.07]')
+    expect(active).toContain('data-[active=true]:bg-accent')
     expect(active).toContain('data-[active=true]:font-semibold')
+    expect(active).toContain('text-orange-text')
     // No bar at the pill's edge, on any row.
     expect(html).not.toMatch(/before:w-\[3px\]|before:w-0\.5|before:bg-primary|border-l-/)
   })
@@ -95,10 +96,13 @@ describe('the sidebar', () => {
     expect(renderText(<SidebarProvider><OpsNavGroup /></SidebarProvider>)).not.toContain('Operator')
   })
 
-  it('is 281px wide as the artboards render it (256px rows, 12px in, the hairline) with no shadow', () => {
+  it('is 281px wide as the artboards render it (256px rows, 12px in, the hairline), with the sidebar\'s own shadow on its edge', () => {
     expect(readFileSync('app/dashboard/layout.tsx', 'utf8')).toContain("'--sidebar-width': '281px'")
-    expect(sidebar('/dashboard')).toContain('border-r-[#E4E2DC]')
-    expect(readFileSync('app/globals.css', 'utf8')).not.toMatch(/\[data-slot="sidebar-inner"\]\s*\{\s*box-shadow/)
+    expect(sidebar('/dashboard')).toContain('border-r-[#E4E2DC] shadow-sidebar')
+    // Heinrich, 1 Oct: the shadows back. One token, set in both themes.
+    const css = readFileSync('app/globals.css', 'utf8')
+    expect(css).toContain('--shadow-sidebar: var(--shadow-sidebar);')
+    expect(css.match(/^\s*--shadow-sidebar: \d/gm)).toHaveLength(2)
   })
 })
 

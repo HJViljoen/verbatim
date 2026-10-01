@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { AtSign, Pencil } from 'lucide-react'
 import { buttonClass, Card, CardTitle } from '@/components/pages/studio/ui'
 import { saveWords } from '@/lib/pages/settings-words'
 import { TENANT_LOCK_REFUSAL } from '@/lib/tenant-locks'
@@ -46,7 +46,7 @@ export function YourAccounts({
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
       <div className="flex items-center justify-between gap-3">
-        <CardTitle>Your accounts</CardTitle>
+        <CardTitle icon={AtSign}>Your accounts</CardTitle>
         {canEdit && !editing ? (
           <button type="button" onClick={() => setEditing(true)} className={buttonClass('secondary', 'small')}>
             <Pencil aria-hidden className="size-[15px]" strokeWidth={2} />
@@ -79,7 +79,8 @@ export function YourAccounts({
           {rows.map((r) => (
             <div key={r.platform} className="flex items-center justify-between gap-3 border-t border-[#E4E2DC] py-3">
               <div className="text-[15px] font-semibold">{r.platform}</div>
-              <div className={r.mono ? 'font-mono text-[13px]' : 'text-[13px]'}>{r.value}</div>
+              {/* Your own accounts are you: the gold (4.7:1 on the white card). */}
+              <div className={r.mono ? 'font-mono text-[13px] text-you' : 'text-[13px] text-you'}>{r.value}</div>
             </div>
           ))}
         </div>

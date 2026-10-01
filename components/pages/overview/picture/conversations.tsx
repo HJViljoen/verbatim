@@ -16,6 +16,9 @@ export function ConversationsBlockView({ block, brand, noun }: { block: Conversa
   const counts = block.rows.some((r) => r.kind === 'count')
   return (
     <Card label="The biggest conversations" className="gap-[14px] px-5 py-6 sm:px-7">
+      {/* No icon tile on this pair: at 1440 the title and its base fill the
+          half-width card to 2px, and a tile would wrap the base (no layout
+          change, the colour pass). */}
       <TitleRow
         title="The biggest conversations"
         sub={counts

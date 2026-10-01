@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { History } from 'lucide-react'
 import type { PastIssue } from '@/lib/pages/studio'
 import { buttonClass, Card, CardTitle } from './ui'
 import { ShareLinkButton } from './share-link-button'
@@ -18,7 +19,7 @@ export function PastIssues({ issues, openHref }: { issues: readonly PastIssue[];
   if (issues.length === 0) return null
   return (
     <Card className="gap-4 px-[30px] pt-[26px] pb-[22px]">
-      <CardTitle>Past issues</CardTitle>
+      <CardTitle icon={History}>Past issues</CardTitle>
       <div className="-mx-1 overflow-x-auto px-1">
         <div role="table" aria-label="Past issues" className="flex min-w-[760px] flex-col">
           <div role="row" className={`${COLS} pb-2.5`}>

@@ -18,6 +18,11 @@
 #       mark and crowd art) is palette A, and the site's own (app/site's icon,
 #       apple-icon and share card, its static marks) is the site's green; each
 #       side's colours are on its own allow-list and no other
+#   (g) the shadows are back (colour pass, 1 Oct): --shadow-card and
+#       --shadow-sidebar are set in the light and the dark block and mapped to
+#       their utilities, and no client page writes a card shadow by hand
+#   (h) the colour roles' one hard rule: the orange (#F2651D, `--orange`) is a
+#       fill and never a text colour anywhere in the app
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -87,7 +92,7 @@ PALETTE_A = {
     'foreground': '#26292C', 'muted-foreground': '#5F656B', 'border': '#E4E2DC',
     'primary': '#26292C', 'primary-foreground': '#FFFFFF', 'accent': '#FFF4C7',
     'brand': '#FFD43B', 'brand-foreground': '#26292C', 'orange-text': '#C2410C', 'orange': '#F2651D',
-    'track': '#ECEAE4', 'you': '#9A6B00', 'comp': '#8A9097', 'ink-market': '#26292C',
+    'track': '#ECEAE4', 'you': '#9A6B00', 'you-foreground': '#FFFFFF', 'comp': '#8A9097', 'ink-market': '#26292C',
     'sidebar': '#FFFFFF', 'sidebar-primary': '#FFD43B', 'sidebar-accent': 'RGBA(38,41,44,0.07)',
 }
 bad = [f'--{k} is {vars_.get(k)}; palette A says {v}' for k, v in PALETTE_A.items() if vars_.get(k) != v]
@@ -131,6 +136,44 @@ for side, (files, allowed) in SIDES.items():
 if bad:
     print('design drift:'); [print('  -', x) for x in sorted(set(bad))]; sys.exit(1)
 print('drift guard (f): ok (app brand art yellow, site brand art green)')
+PY
+
+python3 - <<'PY'
+import re, sys, os
+css = open('app/globals.css').read().split('/* ── Marketing theme')[0]
+bad = []
+def block(selector):
+    m = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', css)
+    return dict(re.findall(r'--([a-z0-9-]+):\s*([^;]+);', m.group(1))) if m else {}
+# (g) the two shadow tokens, in both themes, mapped to utilities
+for name in (':root', '.dark'):
+    vars_ = block(name)
+    for t in ('shadow-card', 'shadow-sidebar'):
+        if t not in vars_: bad.append(f'--{t} is not set in {name}')
+for t in ('shadow-card', 'shadow-sidebar'):
+    if f'--{t}: var(--{t});' not in css: bad.append(f'--{t} has no utility mapping')
+# (g) no card shadow written by hand on a client page (the Agent's body is its own branch's)
+for root, _, files in os.walk('components/pages'):
+    if root.startswith('components/pages/agent'): continue
+    for f in files:
+        if not f.endswith('.tsx') or f.endswith('.test.tsx'): continue
+        p = os.path.join(root, f)
+        for i, line in enumerate(open(p), 1):
+            if re.search(r'shadow-\[0_1px_2px_rgba\(0,0,0,0\.05\),0_4px_14px', line):
+                bad.append(f'{p}:{i}: a card shadow written by hand; use shadow-card')
+# (h) the orange is never a text colour
+ORANGE_TEXT = re.compile(r"\btext-orange(?!-text)\b|\btext-\[#F2651D\]|\bcolor:\s*['\"`]#F2651D", re.I)
+for top in ('app', 'components', 'lib'):
+    for root, _, files in os.walk(top):
+        if root.startswith('app/site'): continue
+        for f in files:
+            if not re.search(r'\.(tsx?|css)$', f) or re.search(r'\.test\.tsx?$', f): continue
+            p = os.path.join(root, f)
+            for i, line in enumerate(open(p, errors='ignore'), 1):
+                if ORANGE_TEXT.search(line): bad.append(f'{p}:{i}: the orange as text; use text-orange-text (#C2410C)')
+if bad:
+    print('design drift:'); [print('  -', x) for x in bad]; sys.exit(1)
+print('drift guard (g)(h): ok (one card shadow, one sidebar shadow; the orange never text)')
 PY
 
 if grep -rn "backdrop-blur" app components --include='*.tsx' --include='*.ts' --include='*.css' 2>/dev/null | grep -v '^app/site' ; then

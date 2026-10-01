@@ -8,7 +8,7 @@ import { surface } from '@/lib/nav'
 // once one clean week exists, and a bone for a block the page may not draw
 // is a jump when it lands. `/dashboard`'s loading.tsx renders this.
 
-const SHADOW = 'shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_rgba(0,0,0,0.04)]'
+const SHADOW = 'shadow-card'
 
 export function HomeSkeleton() {
   return (

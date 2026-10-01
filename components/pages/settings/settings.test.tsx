@@ -58,11 +58,11 @@ describe('Search terms', () => {
 })
 
 describe('Your accounts', () => {
-  it('prints @handles in mono and the channel by name, with Edit for an editor', () => {
+  it('prints @handles in mono and the channel by name, in the gold (your own accounts are you), with Edit for an editor', () => {
     const el = <YourAccounts rows={model.ownAccounts} handles={model.ownHandles} canEdit action={noop} />
     const markup = render(el)
     expect(renderText(el)).toBe('Your accounts Edit Your own posts, kept apart from what your market says. Instagram @sealandgear TikTok @sealandgear YouTube Sealand’s channel')
-    expect(markup).toContain('<div class="font-mono text-[13px]">@sealandgear</div>')
+    expect(markup).toContain('<div class="font-mono text-[13px] text-you">@sealandgear</div>')
     assertCopyContract(markup)
     bans(markup, renderText(el))
     expect(renderText(<YourAccounts rows={model.ownAccounts} handles={model.ownHandles} canEdit={false} action={noop} />)).not.toContain('Edit')

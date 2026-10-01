@@ -1,5 +1,6 @@
 import { updateSearchTerms } from '@/app/dashboard/settings/actions'
-import { Card, CardTitle, Chip } from '@/components/pages/studio/ui'
+import { Search } from 'lucide-react'
+import { Card, CardTitle, Chip, type ChipTone } from '@/components/pages/studio/ui'
 import { TERM_GROUPS, type TermKey, type TermLists } from '@/lib/pages/settings-words'
 import { InlineAdd } from './inline-add'
 
@@ -8,6 +9,16 @@ import { InlineAdd } from './inline-add'
 // terms action, which takes all four lists at once, so every add posts the
 // other three as they stand. A group with no terms is drawn only for someone
 // who can add one: for anyone else it would be an empty section.
+//
+// Each group's chips take its role's colour (the colour roles, 1 Oct): your
+// name is you (gold), the category the market (pale yellow), the brands you
+// track rivals (the track, the grey dot), the words left out the ground.
+const TONE: Record<TermKey, ChipTone> = {
+  brand_keywords: 'you',
+  industry_keywords: 'market',
+  competitor_keywords: 'rival',
+  exclude_terms: 'out',
+}
 
 /** All four lists as hidden fields: the action rewrites the set it is sent. */
 function AllLists({ terms }: { terms: TermLists }) {
@@ -22,7 +33,7 @@ function AllLists({ terms }: { terms: TermLists }) {
 export function SearchTerms({ terms, canEdit }: { terms: TermLists; canEdit: boolean }) {
   return (
     <Card className="gap-3 px-[30px] pt-[26px] pb-2">
-      <CardTitle>Search terms</CardTitle>
+      <CardTitle icon={Search}>Search terms</CardTitle>
       <p className="m-0 -mt-1.5 text-[14px] leading-normal text-[#5F656B]">The words that decide which videos belong to your market.</p>
       <div className="flex flex-col">
         {TERM_GROUPS.filter((g) => canEdit || terms[g.key].length > 0).map((g) => (
@@ -45,7 +56,7 @@ export function SearchTerms({ terms, canEdit }: { terms: TermLists; canEdit: boo
             </div>
             {terms[g.key].length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {terms[g.key].map((t) => <Chip key={t}>{t}</Chip>)}
+                {terms[g.key].map((t) => <Chip key={t} tone={TONE[g.key]}>{t}</Chip>)}
               </div>
             ) : null}
           </div>

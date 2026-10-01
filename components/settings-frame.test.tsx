@@ -22,12 +22,12 @@ describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct)', ()
     expect(text).toMatch(/What you track Team Billing Readiness The record How to read/)
   })
 
-  it('lights exactly one tab, as a pill on ink at 7% in weight 600, and none when the page is parked', () => {
+  it('lights exactly one tab, as a pale-yellow pill (a selected state) in weight 600, and none when the page is parked', () => {
     const lit = render(<SettingsFrame active="billing" title="Settings">x</SettingsFrame>)
     expect(lit.match(/aria-current="page"/g)).toHaveLength(1)
     const tag = /<a[^>]*aria-current="page"[^>]*>/.exec(lit)?.[0] ?? ''
     expect(tag).toContain('href="/dashboard/billing"')
-    expect(tag).toContain('bg-[rgba(38,41,44,0.07)] font-semibold')
+    expect(tag).toContain('bg-accent font-semibold')
     const parked = render(<SettingsFrame active={null} title="Settings">x</SettingsFrame>)
     expect(parked.match(/aria-current="page"/g)).toBeNull()
   })
