@@ -101,9 +101,9 @@ export function FaceOffLegendRows({ rows = faceOff, staticReveal = false }: { ro
       <div className="head">
         <span />
         <span className="legend">
-          <span><i style={{ background: 'var(--green)' }} />You</span>
-          <span><i style={{ background: 'var(--orange)' }} />A rival</span>
-          <span><i style={{ background: '#C5CBD1' }} />The category</span>
+          <span><i style={{ background: 'var(--gold)' }} />You</span>
+          <span><i style={{ background: 'var(--rival)' }} />A rival</span>
+          <span><i style={{ background: 'var(--ink)' }} />The category</span>
         </span>
       </div>
       {rows.map((row, ri) => (

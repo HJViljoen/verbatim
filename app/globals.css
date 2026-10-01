@@ -10,8 +10,9 @@
    bars, the Agent row, badges and mastheads, a pale yellow (#FFF4C7) for soft
    panels, and a text-safe orange (#C2410C) for small labels and links. In a
    chart you are dark gold (#9A6B00), rivals grey (#8A9097), the market ink.
-   The 2026-08-28 green is retired from the app; the marketing site's
-   `.site-theme` keeps its own palette until Heinrich decides. Fonts unchanged:
+   The 2026-08-28 green is retired from the app, and from the marketing site's
+   `.site-theme` (the same palette, plus the dark Room) since the brand moved
+   to yellow the same day. Fonts unchanged:
    IBM Plex Sans (UI) · Plex Serif (verbatim quotes only) · Plex Mono (counts).
    Drift guards: scripts/check-design-drift.sh; lib/palette-guard.test.ts. */
 
@@ -686,32 +687,53 @@
 .vb-print-tile > [data-tile] { width: calc(var(--vb-col) * var(--vb-span, 12) + 16px * (var(--vb-span, 12) - 1)); }
 
 /* ── Marketing theme (see DESIGN.md, "The murmur") ─────────────────────────────
-   Tokens for app/site/*. Everything below this comment is outside the drift
-   guard on purpose: the marketing site is allowed a darker room and a lighter
-   green than the app. Layout and component rules live in app/site/site.css. */
+   Tokens for app/site/*. Palette A since 2026-10-01 ("the whole brand should
+   move to yellow", Heinrich), with the values the app's :root holds: white
+   paper on the warm ground, charcoal ink, the brand yellow (a fill and the
+   signal on the Room, never text on a light ground), the pale yellow, the
+   orange (text-safe for small labels and links; the accent never text), the
+   gold that is "you" in a chart and the grey that is a rival. The Room is a
+   neutral ink now, not a green-tinted one. Everything below this comment is
+   outside the app's drift guards (a)-(e) on purpose, because the site has
+   jobs the app does not (the Room and what sits on it);
+   scripts/check-design-drift.sh (f) holds it to palette A's own list instead.
+   Layout and component rules live in app/site/site.css. */
 .site-theme {
-  --room: #0F1F19;
+  --room: #1F2124;
   --paper: #FFFFFF;
-  --paper-2: #F4F6F5;
+  --paper-2: #F7F6F2;
   --ink: #26292C;
   --ink-2: #45494D;
   --muted: #5F656B;
   --faint: #9AA0A6;
-  --hair: #DCDFE3;
-  --green: #0E8A5F;
-  --green-dark: #3DBF8C;
-  --green-tint: #DDF3E9;
-  --orange: #F0742B;
-  --amber: #E6B03C;
+  --hair: #E4E2DC;
+  /* A bar's track, and the softer rule inside a panel or a mail. */
+  --track: #ECEAE4;
+  --yellow: #FFD43B;
+  --yellow-pale: #FFF4C7;
+  --orange: #F2651D;
+  --orange-text: #C2410C;
+  /* The orange's soft panel: the flagged chip, #C2410C on it at 4.6:1. */
+  --orange-pale: #FEEEE5;
+  /* In a chart: you are the gold, a rival the grey, the market the ink. */
+  --gold: #9A6B00;
+  --rival: #8A9097;
   --red: #DB3B2E;
+  /* What sits on the Room: the text, the quieter text, the quietest (6.2:1),
+     the drifting voices, and the hairline. */
+  --on-room: #ECEEF0;
+  --on-room-2: #C9CCD0;
+  --on-room-muted: #9AA0A6;
+  --voices: #BABEC2;
+  --on-room-hair: rgba(255,255,255,.12);
   --shadow: 0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09);
   --shadow-lg: 0 0 0 1px rgba(38,41,44,.04), 0 2px 6px rgba(38,41,44,.06), 0 0 48px rgba(38,41,44,.14);
   /* shadcn-token aliases so any leftover utility on a marketing page lands on the same palette */
   --background: #FFFFFF;
   --foreground: #26292C;
   --muted-foreground: #5F656B;
-  --border: #DCDFE3;
-  --primary: #0E8A5F;
+  --border: #E4E2DC;
+  --primary: #26292C;
   --primary-foreground: #FFFFFF;
 }
 

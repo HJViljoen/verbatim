@@ -78,9 +78,9 @@ export default function HowItWorks() {
               </div>
               <div className="arrow" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
               <div className="buckets">
-                <div className="bucket"><i style={{ background: 'var(--green)' }} /><div><b>You</b><span>Videos about your brand, and your own posts.</span></div></div>
-                <div className="bucket"><i style={{ background: 'var(--orange)' }} /><div><b>Each competitor</b><span>Videos about them, named and confirmed.</span></div></div>
-                <div className="bucket"><i style={{ background: '#C5CBD1' }} /><div><b>The rest of the category</b><span>Everything else. Usually most of it, and where the market talks without naming anyone.</span></div></div>
+                <div className="bucket"><i style={{ background: 'var(--gold)' }} /><div><b>You</b><span>Videos about your brand, and your own posts.</span></div></div>
+                <div className="bucket"><i style={{ background: 'var(--rival)' }} /><div><b>Each competitor</b><span>Videos about them, named and confirmed.</span></div></div>
+                <div className="bucket"><i style={{ background: 'var(--ink)' }} /><div><b>The rest of the category</b><span>Everything else. Usually most of it, and where the market talks without naming anyone.</span></div></div>
               </div>
             </div>
           </div>
@@ -93,7 +93,7 @@ export default function HowItWorks() {
             <div className="gate communities">
               <div className="gate-row"><div><span style={{ fontWeight: 500 }}>r/ultralight</span><div className="why">12 recent posts probed, 9 about the category.</div><div className="ratio"><i style={{ width: '75%' }} /></div></div><span className="verdict keep">Active</span></div>
               <div className="gate-row"><div><span style={{ fontWeight: 500 }}>r/CampingGear</span><div className="why">12 recent posts probed, 5 about the category.</div><div className="ratio"><i style={{ width: '42%' }} /></div></div><span className="verdict keep">Active</span></div>
-              <div className="gate-row"><div><span style={{ fontWeight: 500 }}>r/hiking</span><div className="why">12 recent posts probed, 2 about the category.</div><div className="ratio"><i style={{ width: '17%', background: 'var(--hair)' }} /></div></div><span className="verdict drop">Not used</span></div>
+              <div className="gate-row"><div><span style={{ fontWeight: 500 }}>r/hiking</span><div className="why">12 recent posts probed, 2 about the category.</div><div className="ratio"><i style={{ width: '17%', background: 'var(--faint)' }} /></div></div><span className="verdict drop">Not used</span></div>
             </div>
           </div>
 

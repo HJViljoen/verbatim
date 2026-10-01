@@ -38,7 +38,7 @@ export default function MarketingHome() {
             <b className="num">99.98%</b>.
           </p>
           <div className="cta">
-            <a className="btn btn-green" href="#early-access">Get early access</a>
+            <a className="btn btn-brand" href="#early-access">Get early access</a>
             <a className="btn btn-ghost" href="#model">See how it works</a>
           </div>
           <p className="from">Verbatim reads the bigger market you sell into: what people buying and talking about products like yours say on TikTok, Instagram, YouTube and Reddit, and where your rivals stand.</p>

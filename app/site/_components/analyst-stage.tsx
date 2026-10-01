@@ -116,7 +116,7 @@ export function AnalystStage() {
             <span>{item.q}</span>
           )}
         </div>
-        <button className="btn btn-green" type="button" onClick={() => pick((current + 1) % analyst.length)}>
+        <button className="btn btn-ink" type="button" onClick={() => pick((current + 1) % analyst.length)}>
           Ask
         </button>
       </div>

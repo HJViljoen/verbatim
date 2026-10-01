@@ -41,7 +41,7 @@ export function LeadForm() {
         {state.message}
       </p>
       <div>
-        <button type="submit" className="btn btn-green" disabled={pending}>
+        <button type="submit" className="btn btn-brand" disabled={pending}>
           {pending ? 'Sending…' : 'Get early access'}
         </button>
       </div>

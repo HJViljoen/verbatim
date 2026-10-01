@@ -15,7 +15,7 @@ export default function SiteNotFound() {
           <h1>Nothing here. <span>The market’s still talking.</span></h1>
           <p>There’s no page at this address. The link may be mistyped, or the page may have moved.</p>
           <div className="nf-links">
-            <Link className="btn btn-green" href="/">Go to the home page</Link>
+            <Link className="btn btn-brand" href="/">Go to the home page</Link>
             <Link className="btn btn-ghost" href="/how-it-works">How it works</Link>
           </div>
         </div>

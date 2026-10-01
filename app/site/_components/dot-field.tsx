@@ -3,9 +3,10 @@
 import { useEffect, useRef } from 'react'
 
 const TOTAL = 18440
-const GREENS = [1138, 5790, 11130, 17176]
+const NAMED = [1138, 5790, 11130, 17176]
 
-// 18,440 marks, four of them green. Drawn incrementally (only the dots added
+// 18,440 marks, four of them the brand's: a yellow disc in an ink ring, ink
+// with yellow as palette A draws a signal on paper. Drawn incrementally (only the dots added
 // since the last frame) over 2.6s as it comes into view; the whole field at
 // once under reduced motion. Redrawn from scratch on resize.
 //
@@ -65,15 +66,18 @@ export function DotField() {
       }
       ctx.fill()
       state.drawn = shown
-      for (const gi of GREENS) {
+      for (const gi of NAMED) {
         if (gi >= shown) continue
         const x = (gi % g.perRow) * g.gap + g.gap / 2
         const y = Math.floor(gi / g.perRow) * g.gap + g.gap / 2
         const pop = Math.min(1, (shown - gi) / 900)
         ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(x, y, r + 2.6 + 8, 0, 6.2832); ctx.fill()
-        ctx.fillStyle = '#0E8A5F'; ctx.beginPath(); ctx.arc(x, y, r + 2.6 * pop, 0, 6.2832); ctx.fill()
-        ctx.strokeStyle = 'rgba(14,138,95,.35)'; ctx.lineWidth = 1.5
-        ctx.beginPath(); ctx.arc(x, y, r + 2.6 * pop + 6 * pop, 0, 6.2832); ctx.stroke()
+        const d = r + 3 * pop
+        ctx.fillStyle = '#FFD43B'; ctx.beginPath(); ctx.arc(x, y, d, 0, 6.2832); ctx.fill()
+        ctx.strokeStyle = '#26292C'; ctx.lineWidth = 1.5
+        ctx.beginPath(); ctx.arc(x, y, d, 0, 6.2832); ctx.stroke()
+        ctx.strokeStyle = 'rgba(38,41,44,.3)'; ctx.lineWidth = 1.5
+        ctx.beginPath(); ctx.arc(x, y, d + 6 * pop, 0, 6.2832); ctx.stroke()
       }
     }
 
@@ -105,5 +109,5 @@ export function DotField() {
     return () => { cancelAnimationFrame(raf); io?.disconnect(); ro?.disconnect(); window.clearTimeout(rt) }
   }, [])
 
-  return <canvas ref={ref} className="dots" role="img" aria-label="18,440 marks, four of them green" />
+  return <canvas ref={ref} className="dots" role="img" aria-label="18,440 marks, four of them yellow" />
 }

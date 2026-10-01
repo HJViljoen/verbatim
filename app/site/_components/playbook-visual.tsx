@@ -279,7 +279,8 @@ export function PlaybookStepVisual({ show }: { show: StepVisual }): ReactNode {
     }
     case 'claimRow': {
       const c = (analyst[2] as DocumentCheck).claims[show.claim]
-      const chipClass = c.k === 'ok' ? ' g' : c.k === 'no' ? ' r' : ''
+      // Contradicted takes the orange, as the home page's claim check draws it.
+      const chipClass = c.k === 'ok' ? ' g' : c.k === 'no' ? ' a' : ''
       return (
         <div className="demo">
           <div className="row">
