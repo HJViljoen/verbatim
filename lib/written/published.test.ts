@@ -128,7 +128,7 @@ describe('loadPublishedWeekRead', () => {
     const failing = (table: string) => {
       const db = fakeDb({ report_schedules: [schedule()], report_sends: [send('r2', 'sent')], week_reads: READS.map((r) => ({ ...r })) })
       const broken = {
-        select: () => broken, eq: () => broken, in: () => broken, not: () => broken, order: () => broken, limit: () => broken,
+        select: () => broken, eq: () => broken, in: () => broken, not: () => broken, or: () => broken, order: () => broken, limit: () => broken,
         then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok),
       }
       return { from: (t: string) => (t === table ? broken : (db.client as SupabaseClient).from(t)) } as unknown as SupabaseClient
@@ -142,6 +142,48 @@ describe('loadPublishedWeekRead', () => {
   it('is null where the week_reads table is not there', async () => {
     const db = fakeDb({ report_schedules: [] })
     expect(await loadPublishedWeekRead(db.client as SupabaseClient, CLIENT)).toBeNull()
+  })
+
+  // ON THE PLATFORM, NOT EMAILED (the backfill, 1 Oct; lib/schedules/publish.ts):
+  // a held build the operator published without its email is on the pages
+  // like a sent one. Its status stays `ready`; `published_at` says so.
+  it('review on: a build PUBLISHED without its email publishes its read; an unpublished held one still does not', async () => {
+    const db = fakeDb({
+      report_schedules: [schedule()],
+      report_sends: [send('r1', 'sent'), send('r2', 'ready', { published_at: '2026-10-01T18:00:00Z' }), send('r3', 'ready', { published_at: null })],
+      week_reads: READS.map((r) => ({ ...r })),
+    })
+    const got = await loadPublishedWeekRead(db.client as SupabaseClient, CLIENT)
+    expect(got).toMatchObject({ runId: 'r2' })
+    // Nothing sent at all, one published: that one.
+    const only = fakeDb({ report_schedules: [schedule()], report_sends: [send('r2', 'ready', { published_at: '2026-10-01T18:00:00Z' })], week_reads: READS.map((r) => ({ ...r })) })
+    expect(headline(await loadPublishedWeekRead(only.client as SupabaseClient, CLIENT))).toBe('The read of r2.')
+    // A published row of another tenant, or of another schedule, publishes nothing here.
+    const other = fakeDb({
+      report_schedules: [schedule()],
+      report_sends: [send('r3', 'ready', { published_at: '2026-10-01T18:00:00Z', client_id: OSSUR_CLIENT_ID }), send('r3', 'ready', { published_at: '2026-10-01T18:00:00Z', schedule_id: 'sched-digest' })],
+      week_reads: READS.map((r) => ({ ...r })),
+    })
+    expect(await loadPublishedWeekRead(other.client as SupabaseClient, CLIENT)).toBeNull()
+  })
+
+  it('a database the publish migration has not reached reads SENT only, as before', async () => {
+    const db = fakeDb({ report_schedules: [schedule()], week_reads: READS.map((r) => ({ ...r })) })
+    // report_sends without the column: a filter naming it fails as PostgREST
+    // does (42703); the sent-only read answers r1.
+    const sendsBefore = () => {
+      let named = false
+      const b: Record<string, unknown> = {
+        select: () => b, eq: () => b, in: () => b, not: () => b, order: () => b, limit: () => b,
+        or: () => { named = true; return b },
+        then: (ok: (v: unknown) => unknown) => Promise.resolve(named
+          ? { data: null, error: { code: '42703', message: 'column report_sends.published_at does not exist' } }
+          : { data: [{ run_id: 'r1' }], error: null }).then(ok),
+      }
+      return b
+    }
+    const before = { from: (t: string) => (t === 'report_sends' ? sendsBefore() : (db.client as SupabaseClient).from(t)) } as unknown as SupabaseClient
+    expect(headline(await loadPublishedWeekRead(before, CLIENT))).toBe('The read of r1.')
   })
 })
 
@@ -182,6 +224,9 @@ describe('loadPublishedLongRun: Your market\'s long-run read passes the same gat
     // Nothing of r1 or r3 sent: nothing.
     expect(await loadPublishedLongRun(world([send('r2', 'sent'), send('r3', 'failed')]).client as SupabaseClient, CLIENT)).toBeNull()
     expect(await loadPublishedLongRun(world([]).client as SupabaseClient, CLIENT)).toBeNull()
+    // Heinrich PUBLISHES r3 without its email (the backfill): September's goes up with it.
+    const published = world([send('r1', 'sent'), send('r3', 'ready', { published_at: '2026-10-01T18:00:00Z' })])
+    expect(await loadPublishedLongRun(published.client as SupabaseClient, CLIENT)).toMatchObject({ month: '2026-09-01' })
   })
 
   it('never a week read, a row that is not a long-run read, another tenant\'s, or one not ready', async () => {
@@ -210,7 +255,7 @@ describe('loadPublishedLongRun: Your market\'s long-run read passes the same gat
     const failing = (table: string) => {
       const db = fakeDb({ report_schedules: [schedule()], report_sends: [send('r3', 'sent')], week_reads: LONG.map((r) => ({ ...r })) })
       const broken = {
-        select: () => broken, eq: () => broken, in: () => broken, not: () => broken, order: () => broken, limit: () => broken,
+        select: () => broken, eq: () => broken, in: () => broken, not: () => broken, or: () => broken, order: () => broken, limit: () => broken,
         then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok),
       }
       return { from: (t: string) => (t === table ? broken : (db.client as SupabaseClient).from(t)) } as unknown as SupabaseClient

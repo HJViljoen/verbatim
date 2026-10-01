@@ -1,4 +1,5 @@
-import { canManageTenant, getSessionContext } from '@/lib/auth'
+import { canManageTenant, getSessionContext, type SessionContext } from '@/lib/auth'
+import { isMissingPublishColumns, onPlatform } from '@/lib/schedules/platform-state'
 import { PageTitle } from '@/components/pages/studio/ui'
 import { YourReports } from '@/components/pages/studio/your-reports'
 import { PastIssues } from '@/components/pages/studio/past-issues'
@@ -35,14 +36,32 @@ export const metadata: Metadata = { title: surface('studio').label }
 // in the workbench.
 //
 // A BUILD THAT HAS NOT GONE OUT IS NEVER A CLIENT'S (writing back, B1): the
-// past issues are `sent` sends only, and the viewer refuses a held snapshot to
-// anyone who may not read held builds (`mayReadHeld`, the operator).
+// past issues are sends on the platform only (`sent`, or put on the platform
+// without the email, which the row says: lib/schedules/platform-state.ts), and
+// the viewer refuses a held snapshot to anyone who may not read held builds
+// (`mayReadHeld`, the operator).
 
 export const dynamic = 'force-dynamic'
 
 const BASE = '/dashboard/studio'
 
 interface SendRow extends StudioSend { status: string }
+
+/** The workspace's issues on the platform: every SENT send, and every build
+ *  the operator put on the platform without its email (`published_at`,
+ *  lib/schedules/publish.ts). A database the publish migration has not
+ *  reached is read the old way, sent only. */
+async function loadIssueSends(supabase: SessionContext['supabase'], clientId: string) {
+  const read = (published: boolean) => {
+    const q = supabase.from('report_sends')
+      .select(published ? 'id, schedule_id, schedule_name, snapshot_id, artifact_id, subject, sent_at, status, published_at' : 'id, schedule_id, schedule_name, snapshot_id, artifact_id, subject, sent_at, status')
+      .eq('client_id', clientId)
+    return (published ? q.or('status.eq.sent,published_at.not.is.null') : q.eq('status', 'sent').not('sent_at', 'is', null))
+      .order('claimed_at', { ascending: false }).limit(100)
+  }
+  const res = await read(true)
+  return res.error && isMissingPublishColumns(res.error) ? read(false) : res
+}
 
 export default async function StudioPage({ searchParams }: { searchParams?: Promise<{ item?: string; view?: string; group?: string }> }) {
   const sp = (await searchParams) ?? {}
@@ -55,10 +74,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
     // `*`, not a column list: `artefact` is M8's column, and a select naming
     // it fails outright on a database a migration behind.
     supabase.from('report_schedules').select('*').eq('client_id', clientId).order('created_at'),
-    supabase.from('report_sends')
-      .select('id, schedule_id, schedule_name, snapshot_id, artifact_id, subject, sent_at, status')
-      .eq('client_id', clientId).eq('status', 'sent').not('sent_at', 'is', null)
-      .order('sent_at', { ascending: false }).limit(100),
+    loadIssueSends(supabase, clientId),
     // Names for the recipients: the workspace's own people (Team reads the
     // same rows on the session client).
     supabase.from('users').select('email, full_name').eq('client_id', clientId),
@@ -74,8 +90,9 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
       recipients: s.recipients ?? [],
       active: Boolean(s.active),
     }))
-  // Sent issues only: a held build stays its reviewer's.
-  const sends = readRows<SendRow>(sendRes, 'studio.sends').filter((s) => s.status === 'sent' && s.sent_at)
+  // Issues on the platform only (sent, or published without the email): a
+  // held build stays its reviewer's.
+  const sends = readRows<SendRow>(sendRes, 'studio.sends').filter((s) => onPlatform(s) && (s.sent_at || s.published_at))
   const members = readRows<StudioMember>(memberRes, 'studio.members').filter((m) => m.email)
 
   // The weekly alone until the briefs are built (Heinrich, 1 Oct).

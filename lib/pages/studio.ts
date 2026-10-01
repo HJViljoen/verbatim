@@ -13,6 +13,7 @@
  */
 
 import { artefactTitle, scheduleArtefact } from '@/lib/schedules/artefact'
+import { PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 
 export type StudioArtefact = 'weekly_read' | 'brief:sales' | 'brief:marketing' | 'brief:content' | 'brief:leadership'
 
@@ -80,7 +81,8 @@ export interface StudioSchedule {
   active: boolean
 }
 
-/** A sent issue (`report_sends`, status `sent`). */
+/** An issue on the platform (`report_sends`): sent (emailed), or put on the
+ *  platform without its email (`published_at`, lib/schedules/publish.ts). */
 export interface StudioSend {
   id: string
   schedule_id: string | null
@@ -88,8 +90,15 @@ export interface StudioSend {
   snapshot_id: string | null
   artifact_id: string | null
   subject: string | null
-  sent_at: string
+  /** When it was emailed; null for a build published without its email. */
+  sent_at: string | null
+  /** When it was put on the platform without its email; absent or null where
+   *  it was not (a database before the publish migration has no column). */
+  published_at?: string | null
 }
+
+/** When an issue reached the platform: its email, else its publishing. */
+const issueAt = (s: Pick<StudioSend, 'sent_at' | 'published_at'>): string => s.sent_at ?? s.published_at ?? ''
 
 /** A member of the workspace, for naming a recipient. */
 export interface StudioMember {
@@ -209,8 +218,10 @@ export function studioRows(input: {
   return STUDIO_REPORTS.map((def) => {
     const schedule = input.schedules.find((s) => studioArtefactOf(s) === def.artefact) ?? null
     const ids = new Set(input.schedules.filter((s) => studioArtefactOf(s) === def.artefact).map((s) => s.id))
+    // The latest ISSUE is the latest email: a build put on the platform
+    // without its email is not one (it is listed in the past issues, saying so).
     const newest = input.sends
-      .filter((x) => x.schedule_id != null && ids.has(x.schedule_id))
+      .filter((x): x is StudioSend & { sent_at: string } => x.schedule_id != null && ids.has(x.schedule_id) && Boolean(x.sent_at))
       .sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0] ?? null
     const recipients = schedule?.recipients ?? []
     const sending = Boolean(schedule?.active) && recipients.length > 0
@@ -238,16 +249,22 @@ export interface PastIssue {
   id: string
   title: string
   report: string
+  /** "Mon 5 Oct", or `PUBLISHED_NOT_EMAILED` for a build on the platform that
+   *  was not emailed. */
   sentOn: string
+  /** When it reached the platform (its email, else its publishing). */
   sentAt: string
   snapshotId: string | null
   artifactId: string | null
 }
 
-/** Every sent issue, newest first, named by the report it belongs to. */
+/** Every issue on the platform, newest first, named by the report it belongs
+ *  to: each one sent, and each one put on the platform without its email,
+ *  which says so (`PUBLISHED_NOT_EMAILED`) where the others print their day. */
 export function pastIssues(sends: readonly StudioSend[], schedules: readonly StudioSchedule[]): PastIssue[] {
   return [...sends]
-    .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
+    .filter((s) => issueAt(s) !== '')
+    .sort((a, b) => issueAt(b).localeCompare(issueAt(a)))
     .map((s) => {
       const schedule = s.schedule_id ? schedules.find((x) => x.id === s.schedule_id) ?? null : null
       const artefact = schedule ? studioArtefactOf(schedule) : null
@@ -258,8 +275,8 @@ export function pastIssues(sends: readonly StudioSend[], schedules: readonly Stu
         id: s.id,
         title: s.subject?.trim() || report,
         report,
-        sentOn: issueDay(s.sent_at),
-        sentAt: s.sent_at,
+        sentOn: s.sent_at ? issueDay(s.sent_at) : PUBLISHED_NOT_EMAILED,
+        sentAt: issueAt(s),
         snapshotId: s.snapshot_id,
         artifactId: s.artifact_id,
       }

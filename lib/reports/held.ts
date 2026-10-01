@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { reviewAudience } from '../schedules/members'
+import { isMissingPublishColumns, onPlatform, type PlatformSendState } from '../schedules/platform-state'
 import { selectAll } from '../supabase-admin'
 
 /**
@@ -20,7 +21,10 @@ import { selectAll } from '../supabase-admin'
  * is every tenant today; the members once neither holds). Everyone else meets
  * none of it: not in Built, not in the viewer, no PDF, no share link, no
  * preview, no test send. Once it is sent it is the workspace's, as every sent
- * report is.
+ * report is. And once the operator puts it ON THE PLATFORM without its email
+ * (`published_at`, lib/schedules/publish.ts; the backfill of 1 Oct), it is the
+ * workspace's too: its reads are on the client's pages, so the build that
+ * carries them is not held back (`onPlatform`, the same rule the pages ask).
  *
  * FAILS CLOSED. Where the sends cannot be read, nothing a send carries is
  * shown to someone who may not read held builds.
@@ -31,27 +35,44 @@ export function mayReadHeld(session: { operator?: unknown | null }, clientId: st
   return session.operator != null || reviewAudience(clientId, opts) === 'members'
 }
 
+/** A send row as the rule reads it. */
+type HeldRow = { snapshot_id: string | null } & PlatformSendState
+
 /** Which of these send rows hold their snapshot back: each snapshot a send
- *  carries, unless some send carrying it went out. Pure. */
-export function heldOf(rows: readonly { snapshot_id: string | null; status: string }[]): Set<string> {
+ *  carries, unless some send carrying it is on the platform (went out, or was
+ *  published without its email). Pure. */
+export function heldOf(rows: readonly HeldRow[]): Set<string> {
   const held = new Set<string>()
-  const sent = new Set<string>()
+  const out = new Set<string>()
   for (const r of rows) {
     if (!r.snapshot_id) continue
-    ;(r.status === 'sent' ? sent : held).add(r.snapshot_id)
+    ;(onPlatform(r) ? out : held).add(r.snapshot_id)
   }
-  for (const id of sent) held.delete(id)
+  for (const id of out) held.delete(id)
   return held
 }
+
+/** The columns the rule reads, with or without the publish columns (a
+ *  database the migration has not reached reads every row unpublished). */
+const COLS = 'snapshot_id, status, published_at'
+const COLS_BEFORE_PUBLISH = 'snapshot_id, status'
 
 /** Every held snapshot of the workspace, or null where the sends could not be
  *  read (the caller then shows nothing a send carries). */
 export async function heldSnapshotIds(admin: SupabaseClient, clientId: string): Promise<Set<string> | null> {
+  type Page = { range: (from: number, to: number) => PromiseLike<{ data: HeldRow[] | null; error: unknown }> }
+  const read = (cols: string) => selectAll<HeldRow>(() =>
+    admin.from('report_sends').select(cols).eq('client_id', clientId).not('snapshot_id', 'is', null).order('claimed_at') as unknown as Page,
+  )
   try {
-    const rows = await selectAll<{ snapshot_id: string | null; status: string }>(() =>
-      admin.from('report_sends').select('snapshot_id, status').eq('client_id', clientId).not('snapshot_id', 'is', null).order('claimed_at'),
-    )
-    return heldOf(rows)
+    try {
+      return heldOf(await read(COLS))
+    } catch (e) {
+      // selectAll rethrows with the message only: the column is named in it.
+      const message = e instanceof Error ? e.message : String(e)
+      if (!isMissingPublishColumns(e) && !(/published_at/.test(message) && /does not exist|schema cache/.test(message))) throw e
+      return heldOf(await read(COLS_BEFORE_PUBLISH))
+    }
   } catch (e) {
     console.error(`[held] the sends could not be read for ${clientId}; held builds are hidden: ${e instanceof Error ? e.message : String(e)}`)
     return null
@@ -60,10 +81,12 @@ export async function heldSnapshotIds(admin: SupabaseClient, clientId: string): 
 
 /** Is this one snapshot held? True where the sends could not be read. */
 export async function snapshotHeld(admin: SupabaseClient, clientId: string, snapshotId: string): Promise<boolean> {
-  const { data, error } = await admin.from('report_sends').select('snapshot_id, status').eq('client_id', clientId).eq('snapshot_id', snapshotId)
+  const read = (cols: string) => admin.from('report_sends').select(cols).eq('client_id', clientId).eq('snapshot_id', snapshotId)
+  let { data, error } = await read(COLS)
+  if (error && isMissingPublishColumns(error)) ({ data, error } = await read(COLS_BEFORE_PUBLISH))
   if (error) {
     console.error(`[held] the sends of snapshot ${snapshotId} could not be read; treated as held: ${error.message}`)
     return true
   }
-  return heldOf((data ?? []) as { snapshot_id: string | null; status: string }[]).has(snapshotId)
+  return heldOf((data ?? []) as unknown as HeldRow[]).has(snapshotId)
 }
