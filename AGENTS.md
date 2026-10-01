@@ -459,6 +459,67 @@ This version has breaking changes — APIs, conventions, and file structure may 
   a week inside one month, against that month so far (`readingMonthOf`,
   `lib/written/month.ts`). Offline preview of a stored read:
   `scripts/weekly-read-email.ts`.
+- **The pages and navigation (pages build, 1 Oct).** Every client page is
+  drawn to its approved artboard (`Page-*.dc.html`); a deviation is Heinrich's
+  call, never a builder's. What the build fixed in place:
+  - **Navigation** (`lib/nav.ts`): ten surfaces in four unlabelled groups. The
+    Dashboard is `/dashboard` (nav key `home`, NO page key: page key
+    `dashboard` names the legacy module that stored snapshots and Össur's
+    digest still render); Your market is `/dashboard/overview` (page key
+    `overview`), and `/dashboard?month=` lands there (`frontRedirect`). A
+    `revalidatePath('/dashboard')` revalidates `/dashboard/overview` too.
+    Brands is labelled Competitive and Ask is labelled Agent; keys and
+    routes are unchanged. Parked pages leave clients through
+    `TENANT_RETIRED` / `tenantAway` (the operator keeps them); Reports
+    redirects into the Studio with its query (`?group=sent&item=`, `?view=`).
+  - **Studio** is shown to clients (`STUDIO_TENANT_VISIBLE`), but who reviews
+    a build is ONE separate switch, `STUDIO_TENANT_REVIEWS` (false):
+    `reviewAudience` and `mayReadHeld` read it, so a held build stays the
+    operator's (B1). Building, composing, sending and the dry preview are the
+    operator's on the server too (`mayBuildReports` in
+    `/api/reports/[id]/build`, `/sections`, `/api/schedules/[id]/send` in
+    every mode, and the preview without `?send=`); a client reads sent issues.
+    Settings' tabs are What you track, Team and Billing (Readiness, The record
+    and How to read are the operator's); Log out sits in its bar.
+  - **The published read** (`lib/written/published.ts`): the ONLY way a page
+    reads `week_reads`. Under an active `weekly_read` schedule with review on,
+    a page prints the newest read whose send went out; otherwise the newest
+    ready one. It fails closed. This week, the Dashboard, the Subjects pane
+    and Your market's subject sentences all use it (pinned).
+  - **Who talk is about** (`lib/brands/attribution.ts`): one rule (a tracked
+    brand named in the item's own counted comments, else the audience; one
+    brand per video; never a guess), one order (the client, rivals by
+    videos, the market last; a kind's split prints most first), one wording
+    (`marketLabels`). The kind words are `talkKindLabel`
+    (`lib/pages/overview-market/kinds.ts`). Every page title is the shared
+    `PageBar` (26px on 40px).
+  - **Legacy modules stay registered, never routed**: `OverviewPage`,
+    `WeekPage` / `WEEK_BLOCKS`, the subjects module, `COMPETITIVE_BLOCKS`,
+    `MARKET_BLOCKS` / `MarketSurfacePage` and the six `voice.*` blocks render
+    stored snapshots, exports and the monthly. A block leaves a page's list,
+    not the registry.
+  - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
+    week stays hidden until two settled clean weeks exist. Your market: the
+    newest `kind = 'month'` long-run read (`data.kind = 'longrun'`,
+    `scripts/longrun-read.ts`), then standing, the top five conversations and
+    the kinds. This week: the published read in full, with additive
+    `monthVideoIds` / `alsoHeard` (a read stored before them prints no brand
+    line and no Also heard). Subjects: the editor moved in
+    (`/dashboard/settings/subjects` redirects), and the pane's lines come from
+    the read's additive `standing[].contents`. Your moves: Your statements
+    (`client_statements` / `client_statement_readings`, migration
+    `20261105090000`; gloss, band at the subjects' 0.40/0.60, judge, stance),
+    re-measured inside `ask-reevaluate` (so only where `CONSUMER_PROFILE` is
+    on) on a clock from that step's start; `match_insights` is approximate
+    (HNSW), so a complete band is `statement_band()`, never it. Deploy order:
+    migration, `scripts/statements-seed.ts --write`,
+    `scripts/statements.ts --client … --write`, re-register Inngest.
+  - **Dead after the build, not deleted** (one cleanup commit wants them):
+    `components/sidebar-tenant-loader.tsx`; the old Settings forms
+    (`app/dashboard/settings/{tracking-form,term-performance,config-shapes,rival-rename}`,
+    most of `components/settings/tracking/*`, the What-we-read loaders in
+    `lib/settings/*`); `StarterCards`, `AskIndexColumns`, `loadAskFront`,
+    `lib/agent/starters.ts`.
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
   the email body are produced in route handlers (`/api/export`,
   `/api/reports/[id]/build`, `/api/admin/schedules/run`, `/api/schedules/*`,
