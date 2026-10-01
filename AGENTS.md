@@ -500,7 +500,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (the one that closed the month and wrote it) went out, and that run's
     operator review email carries its title, lead, headlines and sentences
     under "Also published when you send" (`readyForReview`); the client's
-    email is unchanged. A read's facts worded against a month say "this
+    email is unchanged. **"Went out" means ON THE PLATFORM** (the backfill,
+    1 Oct evening; migration `20261106090000_platform_publish.sql`): sent, or
+    put there by the operator WITHOUT its email (`report_sends.published_at`
+    and `published_by`, the Studio's "Publish to the platform (not emailed)"
+    or `scripts/backfill-platform.ts --publish`; `lib/schedules/publish.ts`).
+    One rule, `onPlatform` (`lib/schedules/platform-state.ts`), read by the page
+    gate, `heldOf` and `report_snapshots`' RLS policy alike. It is a recorded
+    state, never a `sent` row with no recipients: the status stays `ready`, so
+    Send still emails it, and the Studio says "On the platform · not emailed".
+    Publishing is the operator's alone (`mayBuildReports` on
+    `/api/schedules/[id]/publish`). A long-run read written before its month
+    closed carries `partialThrough` and does not stand as the month's
+    (`standsAsMonthRead`), so the month-closing run still writes the full one. A read's facts worded against a month say "this
     month" only while the read's month is the calendar month, and its name
     otherwise (`monthPhrase`: This week's context line, the Dashboard's
     Subjects tile; fresh review B2).

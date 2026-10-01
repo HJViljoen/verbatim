@@ -138,12 +138,19 @@ export function isLongRunData(data: unknown): data is LongRunReadData {
 // (lib/written/published.ts), which holds it back under review like the week
 // read (fresh review B1): never straight off this table.
 
-/** Has this month's long-run read been written (ready, or thin: a month that
- *  had nothing durable to say is not written again)? */
+/** Does this stored row stand as its month's long-run read? Ready or thin (a
+ *  month that had nothing durable to say is not written again), and not a
+ *  read written before the month closed (`partialThrough`, the backfill): the
+ *  run that closes the month writes the full one over it. Pure. */
+export function standsAsMonthRead(row: { status: string; partial_through?: string | null }): boolean {
+  return (row.status === 'ready' || row.status === 'thin') && !row.partial_through
+}
+
+/** Has this month's long-run read been written (`standsAsMonthRead`)? */
 export async function longRunWritten(admin: SupabaseClient, clientId: string, month: string): Promise<boolean> {
   const res = await admin.from(WEEK_READS_TABLE)
-    .select('id', { count: 'exact', head: true })
+    .select('status, partial_through:data->>partialThrough')
     .eq('client_id', clientId).eq('kind', 'month').eq('month', month).in('status', ['ready', 'thin'])
   if (res.error) throw new Error(`week_reads long run written: ${res.error.message}`)
-  return (res.count ?? 0) > 0
+  return ((res.data ?? []) as { status: string; partial_through: string | null }[]).some(standsAsMonthRead)
 }
