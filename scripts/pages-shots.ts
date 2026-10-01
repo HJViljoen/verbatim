@@ -3,6 +3,7 @@
 // artboard (`Page-*.dc.html`).
 //
 //   node --import tsx scripts/pages-shots.ts --out <dir> --artboards <dir>
+//     [--only agent,agent-history] [--width 390] [--scale 2]
 //
 // WHAT IS REAL. Each page is its route's own composition (the components the
 // route renders, in its order), fed the package's render fixture: the same
@@ -35,7 +36,7 @@ import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared
 import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime'
 import { withBrowser } from '../lib/render/chromium'
 
-import { SidebarProvider } from '../components/ui/sidebar'
+import { SidebarProvider, SidebarTrigger } from '../components/ui/sidebar'
 import { AppSidebar } from '../components/app-sidebar'
 import { VerbatimMark } from '../components/brand/mark'
 import { PageBar, PageFrame } from '../components/shell/page-grid'
@@ -60,8 +61,16 @@ import { subjectsView, type SubjectReadLine } from '../lib/pages/subjects-view'
 import { MovesPage } from '../components/pages/moves'
 import { consideringFixture, statementsFixture } from '../components/pages/moves/fixture'
 import { sealandMovesFixture } from '../components/pages/market-surface/fixture'
-import { AskCard } from '../components/pages/agent/ask-card'
-import { EarlierQuestions } from '../components/pages/agent/earlier'
+import { AskPill } from '../components/pages/agent/ask-pill'
+import { HistoryDrawer } from '../components/pages/agent/history-drawer'
+import { AgentComposer } from '../components/agent-composer'
+import { AnswerTile } from '../components/pages/agent/answer'
+import { AskBoxTile } from '../components/pages/agent/ask-box'
+import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '../components/pages/agent/rail'
+import { ASK_TILE_ROW, AskColumns, AskShell } from '../components/pages/agent/surface'
+import { agentFixture } from '../components/pages/agent/fixture'
+import { askHistory } from '../lib/pages/agent-thread'
+import { ExportScope } from '../components/export-menu'
 import { PageTitle } from '../components/pages/studio/ui'
 import { YourReports } from '../components/pages/studio/your-reports'
 import { shownStudioRows, studioRows } from '../lib/pages/studio'
@@ -77,6 +86,11 @@ const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); retur
 const out = resolve(flag('out', 'scratch/pages-shots'))
 const artboards = resolve(flag('artboards', '.'))
 const only = flag('only', '')
+// The viewport's width (`--width 390` for a phone). Anything but 1440 is shot
+// on its own, with no artboard beside it.
+const width = Number(flag('width', '1440'))
+/** Device pixels per CSS pixel (`--scale 2` for a sharp shot). */
+const scale = Number(flag('scale', '1'))
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
@@ -187,9 +201,67 @@ function settingsModel() {
 
 const noop = async <T,>(prev: T): Promise<T> => prev
 
+/** The Agent's earlier questions: the fixture's threads and two more, newest
+ *  first, as `loadAskHistory` hands the page twenty. */
+const AGENT_HISTORY = askHistory([
+  { threadId: 'th-1', title: 'Should our summer campaign lead with recycled materials or durability?', askedAt: '2026-09-28T08:00:00.000Z' },
+  { threadId: 'th-2', title: 'Did the recycled-sails claim land after the August posts?', askedAt: '2026-09-13T09:00:00.000Z', claimCrossed: true },
+  { threadId: 'th-3', title: 'Is price fading, or just quieter?', askedAt: '2026-09-06T09:00:00.000Z' },
+  { threadId: 'th-4', title: 'What do people complain about with Freitag?', askedAt: '2026-08-20T09:00:00.000Z' },
+  { threadId: 'th-5', title: 'Will the roll-top survive a wet commute?', askedAt: '2026-08-14T09:00:00.000Z' },
+  { threadId: 'th-6', title: 'How do people talk about carry-on size rules?', askedAt: '2026-08-09T09:00:00.000Z' },
+], 20)
+
+/** app/dashboard/agent/page.tsx, as an owner with six questions asked sees it
+ *  (or, `first`, a workspace that has asked none: no sheet). */
+const agentIndex = (open: boolean, first = false) => h(PageFrame, {
+  className: 'min-h-full',
+  children: h(Fragment, null,
+    h(PageBar, { title: surface('ask').label }),
+    h('div', { className: 'flex flex-1 items-center justify-center pt-4 pb-24 max-sm:pb-20' },
+      h(AskPill, {
+        canSend: true,
+        window: { current: 'days90', href: { days90: '/dashboard/agent', all: '/dashboard/agent?window=all' } },
+        asked: { asked: first ? 0 : 6, cap: 40 },
+        planLimit: 'PDF, up to 4 MB',
+      }),
+    ),
+    h(HistoryDrawer, { history: first ? askHistory([], 20) : AGENT_HISTORY, defaultOpen: open }),
+  ),
+})
+
+/** app/dashboard/agent/[id]/page.tsx, the question branch, on the fixture's
+ *  measured thread. */
+const agentThread = () => {
+  const data = agentFixture()
+  const planLimit = 'PDF, up to 4 MB'
+  const rail = h(Fragment, null,
+    h(EarlierQuestionsTile, { history: data.history, row: ASK_TILE_ROW, openThread: true }),
+    h(ReadsTile, { reads: data.reads, row: ASK_TILE_ROW }),
+    h(NotAnsweredTile, { notAnswered: data.notAnswered, row: ASK_TILE_ROW }))
+  const column = h(Fragment, null,
+    h(AskBoxTile, { basis: data.basis, plan: data.planChip, row: ASK_TILE_ROW, composer: h(AgentComposer, { canSend: true, planLimit }) }),
+    ...data.turns.map((turn, i) => h(AnswerTile, {
+      key: i, turn, turnIndex: i, measure: data.measure, citations: data.citations, basis: data.basis, row: ASK_TILE_ROW,
+      prevUpdateAt: i > 0 ? data.turns[i - 1].updateAt : undefined, about: i === 0 ? data.about : undefined,
+    })),
+    h('div', { className: 'w-full pt-1' },
+      h(AgentComposer, { canSend: true, threadId: data.threadId, placeholder: 'Ask a follow-up in this thread', window: data.window ?? undefined, planLimit })),
+  )
+  return h(ExportScope, {
+    page: 'agent', params: { thread: data.threadId }, tiles: [],
+    children: h(AskShell, { bar: { brand: data.brand, reading: data.bar.reading }, params: {}, children: h(AskColumns, { rail, children: column }) }),
+  })
+}
+
 // ---- the pages, as their routes compose them -------------------------------------
 
-interface Page { key: string; path: string; artboard: string; page: () => ReactNode }
+interface Page {
+  key: string; path: string; artboard: string; page: () => ReactNode
+  /** Shot in the shipped pane (`h-dvh`, <main> scrolling inside it) at the
+   *  viewport's height, for a page that fills the pane rather than growing. */
+  fixed?: boolean
+}
 const PAGES: Page[] = [
   { key: 'dashboard', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_DATA }) },
   { key: 'your-market', path: '/dashboard/overview', artboard: 'Page-Your-market.dc.html', page: () => h(MarketPicturePage, { data: PICTURE_FIXTURE }) },
@@ -198,22 +270,10 @@ const PAGES: Page[] = [
   { key: 'competitive', path: '/dashboard/competitive', artboard: 'Page-Competitive.dc.html', page: () => h(CompetitivePage, { data: designFixture() }) },
   { key: 'subjects', path: '/dashboard/subjects', artboard: 'Page-Subjects.dc.html', page: () => h(SubjectsPage, { view: subjectsData() }) },
   { key: 'your-moves', path: '/dashboard/market', artboard: 'Page-Your-moves.dc.html', page: () => h(MovesPage, { market: movesData(), statements: statementsFixture() }) },
-  {
-    key: 'agent', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html',
-    page: () => h(PageFrame, {
-      className: 'gap-[22px]',
-      children: h(Fragment, null,
-        h(PageBar, { title: surface('ask').label }),
-        h(AskCard, {
-          canSend: true,
-          window: { current: 'days90', href: { days90: '/dashboard/agent', all: '/dashboard/agent?window=all' } },
-          asked: { asked: 0, cap: 40 },
-          planLimit: 'PDF, up to 4 MB',
-        }),
-        h(EarlierQuestions, { history: null }),
-      ),
-    }),
-  },
+  { key: 'agent', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(false) },
+  { key: 'agent-first', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(false, true) },
+  { key: 'agent-history', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(true) },
+  { key: 'agent-thread', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: agentThread },
   {
     key: 'studio', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html',
     page: () => h('div', { className: 'flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]' },
@@ -256,15 +316,17 @@ const wordmark = () =>
     ),
   )
 
-/** app/dashboard/layout.tsx, as a client sees it, with the pane grown to the
- *  page (the harness's one change: `h-dvh` and the inner scroll go). */
-const shell = (path: string, page: ReactNode) =>
+/** app/dashboard/layout.tsx, as a client sees it. The harness's one change:
+ *  the pane grows to the page (`h-dvh` and the inner scroll go), except for a
+ *  `fixed` page, which is shot in the shipped pane. */
+const shell = (path: string, page: ReactNode, fixed = false) =>
   h(AppRouterContext.Provider, { value: router as never },
     h(PathnameContext.Provider, { value: path },
       h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never },
         h(AppSidebar, { header: wordmark() }),
-        h('div', { className: 'relative flex flex-col flex-1 min-w-0 min-h-dvh bg-[#F7F6F2]' },
-          h('main', { className: 'relative z-10 flex-1 min-h-0 p-6 pt-14 md:px-10 md:pt-7 md:pb-10' }, page),
+        h('div', { className: `relative flex flex-col flex-1 min-w-0 bg-[#F7F6F2] ${fixed ? 'h-dvh overflow-hidden' : 'min-h-dvh'}` },
+          h(SidebarTrigger, { 'aria-label': 'Open navigation', className: 'absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden' }),
+          h('main', { className: `relative z-10 flex-1 min-h-0 p-6 pt-14 md:px-10 md:pt-7 md:pb-10 ${fixed ? 'overflow-y-auto' : ''}` }, page),
         ),
       ),
     ),
@@ -300,19 +362,24 @@ async function main() {
   mkdirSync(out, { recursive: true })
   const style = await css()
   const pages = PAGES.filter((p) => !only || only.split(',').includes(p.key))
-  for (const p of pages) writeFileSync(join(out, `built-${p.key}.html`), doc(style, renderToStaticMarkup(shell(p.path, p.page()))))
+  const tag = width === 1440 ? '' : `-${width}`
+  for (const p of pages) writeFileSync(join(out, `built-${p.key}${tag}.html`), doc(style, renderToStaticMarkup(shell(p.path, p.page(), p.fixed))))
 
   await withBrowser(async (page) => {
-    const shoot = async (url: string, file: string) => {
-      await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
+    const tall = width < 768 ? 844 : 900
+    const shoot = async (url: string, file: string, fixed = false) => {
+      await page.setViewport({ width, height: tall, deviceScaleFactor: scale })
       await page.goto(url, { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts.ready)
-      const height = await page.evaluate(() => Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)))
-      await page.setViewport({ width: 1440, height, deviceScaleFactor: 1 })
+      if (!fixed) {
+        const height = await page.evaluate(() => Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)))
+        await page.setViewport({ width, height, deviceScaleFactor: scale })
+      }
       writeFileSync(file, await page.screenshot({ type: 'png' }))
     }
     for (const p of pages) {
-      await shoot(`file://${join(out, `built-${p.key}.html`)}`, join(out, `built-${p.key}.png`))
+      await shoot(`file://${join(out, `built-${p.key}${tag}.html`)}`, join(out, `built-${p.key}${tag}.png`), p.fixed)
+      if (tag) { console.log(`built-${p.key}${tag}.png`); continue }
       const art = join(artboards, p.artboard)
       if (!existsSync(art)) { console.log(`no artboard for ${p.key}`); continue }
       await shoot(`file://${art}`, join(out, `artboard-${p.key}.png`))

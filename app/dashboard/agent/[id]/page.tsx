@@ -14,6 +14,7 @@ import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '@/components/pages/agent/rail'
 import { ASK_TILE_ROW, AskColumns, AskShell } from '@/components/pages/agent/surface'
+import { ASK_PDF_MAX_BYTES } from '@/lib/config'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 
@@ -51,6 +52,7 @@ export default async function AgentThreadPage({
   // already loads (the landing page's own predicate, same sentence).
   const blocked = nothingSearchable(data.basis)
   const disabledNote = blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined
+  const planLimit = `PDF, up to ${Math.round(ASK_PDF_MAX_BYTES / (1024 * 1024))} MB`
 
   // The index is the TURN's index, not the answered-turns' — `agent.answer:<i>`
   // renders turn i, so filtering before mapping would point at the wrong one.
@@ -163,19 +165,14 @@ export default async function AgentThreadPage({
         <AskColumns rail={rail}>
           {/* THE ASK BOX STAYS ABOVE THE ANSWER, as the artboard draws it: a
               reader with an answer in front of them is one keystroke from the
-              next question, and the plan chip lives on this tile. */}
+              next question, and the plan chip lives on this tile. Its control
+              is the pill, as on the Agent page. */}
           <AskBoxTile
             basis={data.basis}
             plan={data.planChip}
             row={ASK_TILE_ROW}
-            composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} placeholder="Ask about anything your market talks about" />}
+            composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} planLimit={planLimit} />}
           />
-          {/* ONE FOLLOW-UP CONTROL, ON THE LAST ANSWER. Every tile used to get
-              its own, all with the same threadId, the same placeholder and the
-              same aria-label — a five-turn thread rendered six ask boxes and a
-              screen reader six controls with one name and no way to tell them
-              apart. The artboard draws one follow-up, under the answer, which
-              is also where a reader who has just finished reading is. */}
           {data.turns.map((turn, i) => (
             <AnswerTile
               key={turn.askedAt + i}
@@ -192,20 +189,24 @@ export default async function AgentThreadPage({
               // What the question NAMES, read on the market (WP3.9): a
               // subject's own figure and trail, under the first answer.
               about={i === 0 ? data.about : undefined}
-              composer={
-                i === data.turns.length - 1 ? (
-                  <AgentComposer
-                    canSend={canSend && !blocked}
-                    disabledNote={disabledNote}
-                    threadId={id}
-                    placeholder="Ask a follow-up in this thread"
-                    // A follow-up is read over the window the thread was.
-                    window={data.window ?? undefined}
-                  />
-                ) : undefined
-              }
             />
           ))}
+          {/* ONE FOLLOW-UP CONTROL, AT THE BOTTOM OF THE THREAD: the same pill
+              as the Agent page, on the page's ground under the last answer,
+              where a reader who has just finished reading is (Heinrich, 1 Oct;
+              the 22 Aug thread drew it here too). One of it, never one per
+              turn: a five-turn thread once drew six boxes with one name. */}
+          <div className="w-full pt-1">
+            <AgentComposer
+              canSend={canSend && !blocked}
+              disabledNote={disabledNote}
+              threadId={id}
+              placeholder="Ask a follow-up in this thread"
+              // A follow-up is read over the window the thread was.
+              window={data.window ?? undefined}
+              planLimit={planLimit}
+            />
+          </div>
         </AskColumns>
       </AskShell>
     </ExportScope>
