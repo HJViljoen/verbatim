@@ -479,13 +479,31 @@ This version has breaking changes — APIs, conventions, and file structure may 
     operator's on the server too (`mayBuildReports` in
     `/api/reports/[id]/build`, `/sections`, `/api/schedules/[id]/send` in
     every mode, and the preview without `?send=`); a client reads sent issues.
+    A held build is closed to a tenant's session in the database as well:
+    `report_snapshots`' one SELECT policy hides a snapshot a send carries
+    until some send carrying it is `sent` (the `heldOf` rule), except to a
+    platform admin (migration `20261105091000_held_snapshots_rls.sql`,
+    checked by `scripts/pg-shim/held-snapshots-checks.sql`). The Recipients
+    editor never arms a schedule for a tenant: a tenant's save keeps a
+    schedule as it is and never switches one on or creates one switched on,
+    and every row it creates is born with `review` on; arming is the
+    operator's (`updateArtefactRecipients`, fresh review H1).
     Settings' tabs are What you track, Team and Billing (Readiness, The record
     and How to read are the operator's); Log out sits in its bar.
   - **The published read** (`lib/written/published.ts`): the ONLY way a page
     reads `week_reads`. Under an active `weekly_read` schedule with review on,
     a page prints the newest read whose send went out; otherwise the newest
     ready one. It fails closed. This week, the Dashboard, the Subjects pane
-    and Your market's subject sentences all use it (pinned).
+    and Your market's subject sentences all use it (pinned). The long-run
+    read passes the same gate (`loadPublishedLongRun`, fresh review B1):
+    under review it shows only once the weekly_read send of the SAME run
+    (the one that closed the month and wrote it) went out, and that run's
+    operator review email carries its title, lead, headlines and sentences
+    under "Also published when you send" (`readyForReview`); the client's
+    email is unchanged. A read's facts worded against a month say "this
+    month" only while the read's month is the calendar month, and its name
+    otherwise (`monthPhrase`: This week's context line, the Dashboard's
+    Subjects tile; fresh review B2).
   - **Who talk is about** (`lib/brands/attribution.ts`): one rule (a tracked
     brand named in the item's own counted comments, else the audience; one
     brand per video; never a guess), one order (the client, rivals by
@@ -500,9 +518,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     not the registry.
   - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
     week stays hidden until two settled clean weeks exist. Your market: the
-    newest `kind = 'month'` long-run read (`data.kind = 'longrun'`,
-    `scripts/longrun-read.ts`), then standing, the top five conversations and
-    the kinds. This week: the published read in full, with additive
+    PUBLISHED `kind = 'month'` long-run read (`data.kind = 'longrun'`,
+    `scripts/longrun-read.ts`, through `loadPublishedLongRun`), then
+    standing, the top five conversations and the kinds. This week: the published read in full, with additive
     `monthVideoIds` / `alsoHeard` (a read stored before them prints no brand
     line and no Also heard). Subjects: the editor moved in
     (`/dashboard/settings/subjects` redirects), and the pane's lines come from
@@ -513,7 +531,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     on) on a clock from that step's start; `match_insights` is approximate
     (HNSW), so a complete band is `statement_band()`, never it. Deploy order:
     migration, `scripts/statements-seed.ts --write`,
-    `scripts/statements.ts --client … --write`, re-register Inngest.
+    `scripts/statements.ts --client … --write`, re-register Inngest. **Your statements is HELD FROM TENANTS** until Heinrich decides
+    (open ruling #7): `STATEMENTS_TENANT_VISIBLE` is false
+    (`lib/statements/visibility.ts`, `maySeeStatements`), so a tenant's Your
+    moves reads no statement and draws neither the section nor the add form,
+    and the add, edit and remove actions refuse a tenant's session before
+    anything is written, so nothing is measured on a tenant's behalf. The
+    operator sees and uses it as built, on any workspace they view. Opening
+    it to clients is that one constant.
+  - **A page that throws keeps the shell**: `app/dashboard/error.tsx` draws
+    one calm line and Try again (`unstable_retry`) inside the sidebar, and
+    This week loses only its read to a failed `week_reads` read (logged),
+    as the Dashboard, Subjects and Your market lose only their block.
   - **Dead after the build, not deleted** (one cleanup commit wants them):
     `components/sidebar-tenant-loader.tsx`; the old Settings forms
     (`app/dashboard/settings/{tracking-form,term-performance,config-shapes,rival-rename}`,
