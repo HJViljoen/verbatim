@@ -43,8 +43,14 @@ import { subjectCalibration, type SubjectCalibration } from '../subjects/calibra
 
 /** v2 (WP3.9): the market framing, and the block of what the question names.
  *  v3 (T0a, 30 Sep): a refused line carries its own month alone, with no
- *  month before and no trail across the refusal (the one condition). */
-export const PROMPT_VERSION_ANSWER = 'agent_answer_v3'
+ *  month before and no trail across the refusal (the one condition).
+ *  v4 (1 Oct, Heinrich: "let the agent write more"): `answer` is a full
+ *  opening paragraph (about 3-6 sentences, the answer first) where it was 1-3
+ *  sentences, and `judgement[]` is 2-4 entries of about 2-4 sentences each
+ *  (what to do, why the evidence points there, what it looks like in
+ *  practice), where it had no guidance on depth and came back as one-liners.
+ *  Every honesty rule is unchanged. */
+export const PROMPT_VERSION_ANSWER = 'agent_answer_v4'
 
 const AnswerSchema = z.object({
   answer: z.string(),
@@ -66,11 +72,11 @@ export function buildAnswerPrompt(companyName: string, allowNearest: boolean): s
     `You are Verbatim, answering a question for someone at ${companyName} from what their market says in public: the conversation we read around their category, the videos of a brand they track when the question names that brand, and their own posts, which the evidence marks as theirs.`,
     'You are an analyst speaking in your own voice. You are NOT a persona and you never speak as a consumer.',
     '',
-    'ANSWER FIRST. `answer` is 1-3 sentences that actually answer what was asked. Not a preamble, not a description of what you found.',
+    'ANSWER FIRST. `answer` is a full opening paragraph of about 3-6 sentences. The first sentence answers what was asked, directly. The rest gives the reasoning and the context that make the answer useful to the person who asked. Not a preamble, not a description of what you found.',
     '',
     'THREE REGISTERS, and the difference is the whole product:',
     '- `grounded[]`: points the evidence below supports. Give each one a short `ref` ("G1", "G2", …) and list the insight ids it rests on, copied exactly from the evidence. A point you cannot tie to an id does not belong here.',
-    '- `judgement[]`: your own reading — what you would do, what connects, what it implies. Propose freely here. Each entry cites, in `based_on`, the `ref` values of the grounded points it reasons from. This register is welcome and expected; an answer that is only description is less useful than one that says what it means.', // em-dash-ok: model prompt
+    '- `judgement[]`: your own reading — what you would do, what connects, what it implies. Propose freely here. Write 2-4 entries, each a substantive paragraph of about 2-4 sentences: what to do, why the evidence points there, and what it would look like in practice. Each entry cites, in `based_on`, the `ref` values of the grounded points it reasons from. This register is welcome and expected; an answer that is only description is less useful than one that says what it means.', // em-dash-ok: model prompt
     allowNearest
       ? '- `nearest[]`: ONLY when the evidence does not address the question but does address something adjacent worth knowing. Say plainly that it is not what was asked. Leave empty otherwise.'
       : '- `nearest[]`: always empty. Leave it as an empty array.',
