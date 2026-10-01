@@ -392,9 +392,12 @@ export type WeekReadData = WeekReadDataV1 | WeekReadDataV2
 // ---- The long-run read (pages build, 1 Oct: "What holds across {months}") -----------
 //
 // A `week_reads` row of kind 'month' (no migration: the kind exists). Written
-// once a month, at the first run after a month ends, inside the existing
-// `write-week-read` step (lib/written/longrun.ts `maybeWriteLongRun`), or by
-// `scripts/longrun-read.ts`. Durable patterns over the whole record window,
+// once a month, on the run that closes it, by its own step
+// `write-longrun-read` (lib/written/longrun.ts `runLongRunStep`), or by
+// `scripts/longrun-read.ts`. Versioned on its own (`version`, `promptVersion`);
+// the week read's three additions of the same day (`monthVideoIds`,
+// `alsoHeard`, a subject's `contents`) are optional fields of version 2, and a
+// read stored before them prints without them. Durable patterns over the whole record window,
 // never a change: nothing in it compares one month with another.
 
 /** Who a piece of talk is about (the pages build's brand rule): the client's

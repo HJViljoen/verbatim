@@ -34,7 +34,7 @@ import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
-import { measureStatements, measureSummary, statementMonth, STATEMENTS_STEP_BUDGET_MS } from '@/lib/statements/measure'
+import { measureStatements, measureSummary, statementMonth, statementsBudget } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
 import { runLongRunStep } from '@/lib/written/longrun'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -2035,6 +2035,9 @@ export const runPipeline = inngest.createFunction(
     if (flags.consumerProfile) {
       await step
         .run('ask-reevaluate', async () => {
+          // The step's clock: the statements pass below gets what the plan
+          // re-checks leave of it (`statementsBudget`).
+          const stepStartedAt = Date.now()
           const admin = createAdminClient()
           const [{ data: client }, { data: run }] = await Promise.all([
             admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -2051,23 +2054,32 @@ export const runPipeline = inngest.createFunction(
           // plans, because they are the same act (a client input read again
           // against the new conversation). NO NEW STEP ID. It never throws: a
           // failure is logged and the previous readings stand, so a retry of
-          // this step never re-buys the plan re-checks for it. Bounded by its
-          // own clock inside the route's 300 s; with no table it no-ops.
+          // this step never re-buys the plan re-checks for it. BOUNDED from
+          // the step's start (integration, lead's ruling 10): it gets what the
+          // re-checks leave of 270 s, at most 150 s, and every model call in
+          // it ends by that clock (`callOptionsWithin`), so the step stays
+          // inside the route's 300 s; under 30 s left it is not started. With
+          // no table it no-ops.
           let statements: { measured: number; skipped: string | null; costUsd: number } | null = null
-          try {
-            const { data: win } = await admin.from('pipeline_runs').select('window_start, window_end').eq('id', runId).maybeSingle()
-            const w = win as { window_start: string | null; window_end: string | null } | null
-            const r = await measureStatements(admin, {
-              clientId,
-              runId,
-              month: statementMonth(w?.window_start && w.window_end ? { from: w.window_start, to: w.window_end } : null),
-              write: true,
-              deadlineMs: STATEMENTS_STEP_BUDGET_MS,
-            })
-            for (const x of r.results) console.log(`[statements] ${measureSummary(x)}`)
-            statements = { measured: r.results.filter((x) => x.reading).length, skipped: r.skipped, costUsd: r.costUsd }
-          } catch (e) {
-            console.error(`[statements] not measured: ${e instanceof Error ? e.message : String(e)}`)
+          const statementsMs = statementsBudget(stepStartedAt, Date.now())
+          if (statementsMs <= 0) {
+            console.warn('[statements] not measured: the plan re-checks left too little of the step; the readings stand')
+          } else {
+            try {
+              const { data: win } = await admin.from('pipeline_runs').select('window_start, window_end').eq('id', runId).maybeSingle()
+              const w = win as { window_start: string | null; window_end: string | null } | null
+              const r = await measureStatements(admin, {
+                clientId,
+                runId,
+                month: statementMonth(w?.window_start && w.window_end ? { from: w.window_start, to: w.window_end } : null),
+                write: true,
+                deadlineMs: statementsMs,
+              })
+              for (const x of r.results) console.log(`[statements] ${measureSummary(x)}`)
+              statements = { measured: r.results.filter((x) => x.reading).length, skipped: r.skipped, costUsd: r.costUsd }
+            } catch (e) {
+              console.error(`[statements] not measured: ${e instanceof Error ? e.message : String(e)}`)
+            }
           }
           return { checks: results.length, moved: results.reduce((n, r) => n + r.moved.length, 0), statements }
         })

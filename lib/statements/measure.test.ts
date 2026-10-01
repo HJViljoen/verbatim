@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -5,10 +8,14 @@ import {
   buildGlossPrompt,
   buildStancePrompt,
   buildStatementJudgePrompt,
+  callOptionsWithin,
   glossText,
   readingFrom,
   scrubSays,
   statementMonth,
+  statementsBudget,
+  ASK_REEVALUATE_LIMIT_MS,
+  STATEMENTS_STEP_BUDGET_MS,
   validateStanceResponse,
   type DatedMember,
 } from './measure'
@@ -32,7 +39,8 @@ describe('readingFrom', () => {
     expect(r.own).toEqual({ videos: 0 })
     // v2 carries a backer and a doubter: it counts in both, each against the base.
     expect(r.stance).toEqual({ of: 'market', base: 3, backs: 2, doubts: 2, asks: 0 })
-    expect(r.who).toEqual([{ about: 'market', videos: 2 }, { about: 'rival:Freitag', videos: 1 }])
+    // The one order (lib/brands/attribution.ts sortParts): rivals, then the market.
+    expect(r.who).toEqual([{ about: 'rival:Freitag', videos: 1 }, { about: 'market', videos: 2 }])
     expect(r.who.reduce((n, w) => n + w.videos, 0)).toBe(r.stance!.base)
     expect(r.members).toBe(2)
     expect(r.says).toBe('People like it.')
@@ -120,5 +128,56 @@ describe('the prompts', () => {
       { slug: 'recycled_nylon_bags', description: 'Viewers like bags made from recycled nylon.' },
       { slug: 'recycled_doubt', description: 'Commenters doubt the claim.' },
     ] })).toBe('recycled nylon bags. Viewers like bags made from recycled nylon. recycled doubt. Commenters doubt the claim.')
+  })
+})
+
+// ---- Bounded in the weekly run (integration, lead's ruling 10) ------------------
+
+describe('statementsBudget: what the plan re-checks leave of ask-reevaluate', () => {
+  it('its own budget when the re-checks were quick', () => {
+    expect(statementsBudget(0, 10_000)).toBe(STATEMENTS_STEP_BUDGET_MS)
+  })
+
+  it('what is left of the step when they were slow, so the step ends inside the route\'s 300 s', () => {
+    expect(statementsBudget(0, 200_000)).toBe(ASK_REEVALUATE_LIMIT_MS - 200_000)
+    expect(200_000 + statementsBudget(0, 200_000)).toBeLessThanOrEqual(270_000)
+  })
+
+  it('nothing (not started) under thirty seconds', () => {
+    expect(statementsBudget(0, 250_000)).toBe(0)
+    expect(statementsBudget(0, 400_000)).toBe(0)
+  })
+})
+
+describe('callOptionsWithin: no call runs past the pass\'s clock', () => {
+  it('the cap and one retry where both attempts fit', () => {
+    expect(callOptionsWithin(1_000_000, 0)).toEqual({ timeout: 60_000, maxRetries: 1 })
+  })
+
+  it('what is left, and no retry, near the end', () => {
+    expect(callOptionsWithin(90_000, 0)).toEqual({ timeout: 60_000, maxRetries: 0 })
+    expect(callOptionsWithin(30_000, 0)).toEqual({ timeout: 30_000, maxRetries: 0 })
+    expect(callOptionsWithin(30_000, 0, 20_000)).toEqual({ timeout: 20_000, maxRetries: 0 })
+  })
+
+  it('no call at all with under five seconds left', () => {
+    expect(callOptionsWithin(4_000, 0)).toBeNull()
+    expect(callOptionsWithin(0, 10_000)).toBeNull()
+  })
+
+  it('outside any clock, the cap and one retry', () => {
+    expect(callOptionsWithin(null, 0)).toEqual({ timeout: 60_000, maxRetries: 1 })
+  })
+
+  it('the step asks it from its own start, and the calls take it', () => {
+    const src = (p: string) => readFileSync(resolve(__dirname, '../..', p), 'utf8')
+    const pipeline = src('inngest/functions/pipeline.ts')
+    const step = pipeline.slice(pipeline.indexOf(".run('ask-reevaluate'"), pipeline.indexOf(".run('write-week-read'"))
+    expect(step.indexOf('const stepStartedAt = Date.now()')).toBeGreaterThan(0)
+    expect(step).toContain('statementsBudget(stepStartedAt, Date.now())')
+    expect(step).toContain('deadlineMs: statementsMs')
+    const measure = src('lib/statements/measure.ts')
+    expect(measure).not.toMatch(/\{ timeout: 60_000, maxRetries: 1 \}/)
+    expect(measure).toContain('callOptionsWithin(args.deadline, startedAt)')
   })
 })

@@ -78,6 +78,47 @@ export const JUDGE_CONCURRENCY = 4
  *  not reached keeps its previous reading. */
 export const STATEMENTS_STEP_BUDGET_MS = 150_000
 
+/** What `ask-reevaluate` may spend in all, from its start: the route's 300 s
+ *  less the time to write a reading and return. */
+export const ASK_REEVALUATE_LIMIT_MS = 270_000
+
+/** The least worth starting the statements pass with: one gloss, one band,
+ *  one judge call. Less than this, it is not started. */
+export const STATEMENTS_MIN_MS = 30_000
+
+/**
+ * THE STATEMENTS PASS'S BUDGET IN THE WEEKLY RUN, from the STEP's start
+ * (integration, lead's ruling 10: bounded). The plan re-checks go first and
+ * their time is spent; the pass gets what is left of `ASK_REEVALUATE_LIMIT_MS`,
+ * at most its own `STATEMENTS_STEP_BUDGET_MS`, and 0 where that is under
+ * `STATEMENTS_MIN_MS` (it is then not started and the readings stand). Pure.
+ */
+export function statementsBudget(stepStartedAt: number, now: number): number {
+  const left = Math.min(STATEMENTS_STEP_BUDGET_MS, ASK_REEVALUATE_LIMIT_MS - (now - stepStartedAt))
+  return left >= STATEMENTS_MIN_MS ? left : 0
+}
+
+/** A model call's cap, and the least time worth starting one with. */
+export const STATEMENT_CALL_CAP_MS = 60_000
+export const STATEMENT_CALL_FLOOR_MS = 5_000
+
+/**
+ * The SDK's options for one call that must end by `deadline`: its timeout is
+ * what is left (at most the cap), and the SDK retries once only where a second
+ * attempt still fits; null where too little is left to start one. So no call
+ * runs past the pass's clock (the week read's rule, review M4). Pure.
+ */
+export function callOptionsWithin(
+  deadline: number | null | undefined,
+  now: number,
+  capMs = STATEMENT_CALL_CAP_MS,
+): { timeout: number; maxRetries: 0 | 1 } | null {
+  if (deadline == null) return { timeout: capMs, maxRetries: 1 }
+  const left = deadline - now
+  if (left < STATEMENT_CALL_FLOOR_MS) return null
+  return { timeout: Math.min(capMs, left), maxRetries: left >= 2 * capMs ? 1 : 0 }
+}
+
 // ---- Pure: prompts ---------------------------------------------------------
 
 export const STATEMENT_GLOSS_PASS = 'statement_gloss'
@@ -410,9 +451,12 @@ export async function loadDatedMembers(
 
 async function parseCall<T>(
   admin: Admin,
-  args: { clientId: string; runId: string | null; pass: string; index: number; promptVersion: string; system: string; user: string; schema: z.ZodType<T>; name: string; log: boolean },
+  args: { clientId: string; runId: string | null; pass: string; index: number; promptVersion: string; system: string; user: string; schema: z.ZodType<T>; name: string; log: boolean; deadline?: number },
 ): Promise<{ parsed: T | null; costUsd: number; error: string | null }> {
   const startedAt = Date.now()
+  // Never past the pass's clock: no call is started without time for it.
+  const request = callOptionsWithin(args.deadline, startedAt)
+  if (!request) return { parsed: null, costUsd: 0, error: 'no time left for the call' }
   let parsed: T | null = null
   let error: string | null = null
   let usage = { prompt_tokens: 0, completion_tokens: 0 }
@@ -422,7 +466,7 @@ async function parseCall<T>(
       temperature: ANALYSIS_TEMPERATURE,
       messages: [{ role: 'system', content: args.system }, { role: 'user', content: args.user }],
       response_format: zodResponseFormat(args.schema, args.name),
-    }, { timeout: 60_000, maxRetries: 1 })
+    }, request)
     const msg = completion.choices[0]?.message
     parsed = (msg?.parsed ?? null) as T | null
     error = msg?.refusal ?? (parsed ? null : 'no parsed output')
@@ -445,12 +489,12 @@ export async function glossFor(
   admin: Admin,
   statement: Pick<StatementRow, 'id' | 'text'>,
   brand: string,
-  o: { clientId: string; runId: string | null; log: boolean; index: number },
+  o: { clientId: string; runId: string | null; log: boolean; index: number; deadline?: number },
 ): Promise<{ gloss: string | null; costUsd: number }> {
   const r = await parseCall<GlossOutput>(admin, {
     clientId: o.clientId, runId: o.runId, pass: STATEMENT_GLOSS_PASS, index: o.index,
     promptVersion: `${STATEMENT_GLOSS_PROMPT_VERSION}:${statement.id}`, system: buildGlossPrompt(brand),
-    user: `THE CLAIM: "${statement.text.trim()}"`, schema: GlossSchema, name: 'statement_gloss', log: o.log,
+    user: `THE CLAIM: "${statement.text.trim()}"`, schema: GlossSchema, name: 'statement_gloss', log: o.log, deadline: o.deadline,
   })
   const gloss = r.parsed ? glossText(r.parsed) : ''
   return { gloss: gloss || null, costUsd: r.costUsd }
@@ -498,7 +542,7 @@ export async function measureStatement(
     const r = await parseCall<SubjectJudgeOutput>(admin, {
       clientId: opts.clientId, runId, pass: STATEMENT_JUDGE_PASS, index: i + 1,
       promptVersion: `${STATEMENT_JUDGE_PROMPT_VERSION}:${statement.id}`, system, user: buildJudgeUserPrompt(batch),
-      schema: SubjectJudgeSchema, name: 'statement_membership', log: opts.log !== false,
+      schema: SubjectJudgeSchema, name: 'statement_membership', log: opts.log !== false, deadline,
     })
     out.calls++
     out.costUsd += r.costUsd
@@ -535,7 +579,7 @@ export async function measureStatement(
       const r = await parseCall<StanceOutput>(admin, {
         clientId: opts.clientId, runId, pass: STATEMENT_STANCE_PASS, index: i + 1,
         promptVersion: `${STATEMENT_STANCE_PROMPT_VERSION}:${statement.id}`, system: stanceSystem, user: buildJudgeUserPrompt(part),
-        schema: StanceSchema, name: 'statement_stance', log: opts.log !== false,
+        schema: StanceSchema, name: 'statement_stance', log: opts.log !== false, deadline,
       })
       out.calls++
       out.costUsd += r.costUsd
@@ -631,6 +675,10 @@ export async function measureStatements(admin: Admin, opts: MeasureAllOptions): 
       console.error(`[statements] rivals not read; who the talk is about falls back to the audience: ${e instanceof Error ? e.message : String(e)}`)
       return undefined
     })
+  // ONE CLOCK for the whole pass, the glosses and the embeddings included:
+  // every call below ends by it (`callOptionsWithin`).
+  const budget = opts.deadlineMs ?? STATEMENT_DEADLINE_MS * statements.length
+  const passDeadline = started + budget
   // THE GLOSS, then its vector: one small call a statement (none for a band
   // computed elsewhere, which brings its own gloss), then one embeddings call.
   const glosses: (string | null)[] = []
@@ -639,18 +687,18 @@ export async function measureStatements(admin: Admin, opts: MeasureAllOptions): 
     const given = opts.glossOverride?.get(statements[i].text) ?? null
     if (given || opts.bandOverride) { glosses.push(given); continue }
     if (opts.dryRun) { glosses.push(null); continue }
-    const g = await glossFor(admin, statements[i], brand, { clientId: opts.clientId, runId: opts.runId ?? null, log: opts.log !== false, index: i + 1 })
+    const g = await glossFor(admin, statements[i], brand, { clientId: opts.clientId, runId: opts.runId ?? null, log: opts.log !== false, index: i + 1, deadline: passDeadline })
     glossCost += g.costUsd
     glosses.push(g.gloss)
   }
   const toEmbed = glosses.map((g, i) => g ?? (opts.dryRun && !opts.bandOverride ? statements[i].text.trim() : null))
   const embedIdx = toEmbed.map((t, i) => (t && !opts.bandOverride ? i : -1)).filter((i) => i >= 0)
-  const embedded = embedIdx.length > 0 ? await embedTexts(embedIdx.map((i) => toEmbed[i] as string)) : []
+  const embedRequest = callOptionsWithin(passDeadline, Date.now(), 20_000)
+  const embedded = embedIdx.length > 0 && embedRequest ? await embedTexts(embedIdx.map((i) => toEmbed[i] as string), embedRequest) : []
   const vectors: (number[] | null)[] = statements.map(() => null)
-  embedIdx.forEach((i, k) => { vectors[i] = embedded[k] })
+  embedIdx.forEach((i, k) => { vectors[i] = embedded[k] ?? null })
 
   const results: MeasureResult[] = []
-  const budget = opts.deadlineMs ?? STATEMENT_DEADLINE_MS * statements.length
   for (let i = 0; i < statements.length; i++) {
     const left = budget - (Date.now() - started)
     if (left <= 0) {
@@ -659,6 +707,12 @@ export async function measureStatements(admin: Admin, opts: MeasureAllOptions): 
     }
     if (!opts.dryRun && !opts.bandOverride && !glosses[i]) {
       results.push({ statementId: statements[i].id, text: statements[i].text, reading: null, band: 0, vectorMembers: 0, judged: 0, judgedMembers: 0, calls: 1, costUsd: 0, skipped: 'gloss_failed' })
+      continue
+    }
+    // No vector (no time was left to embed it): never measured against an
+    // empty band, which would store "nobody raised it". The reading stands.
+    if (!opts.bandOverride && glosses[i] && !vectors[i]) {
+      results.push({ statementId: statements[i].id, text: statements[i].text, reading: null, band: 0, vectorMembers: 0, judged: 0, judgedMembers: 0, calls: 0, costUsd: 0, skipped: 'deadline' })
       continue
     }
     let r: MeasureResult
