@@ -147,7 +147,7 @@ const hero: R = (d, mode) => {
             </div>
           )}
           {h.quotes.length > 0 && (
-            <div className="flex flex-col gap-1.5 border-l-2 border-border pl-3">
+            <div className="flex flex-col gap-1.5">
               {h.quotes.slice(0, 2).map((q, i) => (
                 <blockquote key={i} className="max-w-[44rem] font-serif text-[14px] leading-[1.45] text-foreground">
                   <span className="line-clamp-1">“{q.text}”</span>
@@ -429,7 +429,7 @@ function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
 function FunnelBody({ d }: { d: D }) {
   return (
     <>
-      <ol className="space-y-2.5 border-l-2 border-border pl-4">
+      <ol className="space-y-2.5">
         {d.funnel.map((s) => (
           <li key={s.label} className="flex items-baseline gap-3">
             <span className="w-16 shrink-0 text-right font-mono text-[18px] font-semibold tabular-nums">{fmtInt(s.n)}</span>

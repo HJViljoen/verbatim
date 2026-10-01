@@ -77,7 +77,7 @@ function Masthead({ data }: { data: MonthlySnapshotData }) {
         <tbody>
           <tr>
             <td style={{ fontFamily: FONT.sans, fontSize: 16, lineHeight: '20px', fontWeight: 700, letterSpacing: '-.02em', color: EMAIL.ink, whiteSpace: 'nowrap' }}>
-              <span aria-hidden style={{ color: EMAIL.green, fontWeight: 700, letterSpacing: '-.12em' }}>{'//'}</span>&nbsp;&nbsp;Verbatim
+              <span aria-hidden style={{ color: EMAIL.ink, fontWeight: 700, letterSpacing: '-.12em' }}>{'//'}</span>&nbsp;&nbsp;Verbatim
             </td>
             <td align="right" style={{ fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.ink2 }}>{data.company}</td>
           </tr>
@@ -147,7 +147,7 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                                 {/* The two buttons stack on a phone (`vb-m-col`), where
                                     side by side they would outrun the column. */}
                                 <td className="vb-m-col" style={{ paddingRight: 12, whiteSpace: 'nowrap' }}>
-                                  <a href={openHref} style={{ display: 'inline-block', padding: '12px 20px', borderRadius: 6, background: EMAIL.green, fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.card, textDecoration: 'none' }}>
+                                  <a href={openHref} style={{ display: 'inline-block', padding: '12px 20px', borderRadius: 6, background: EMAIL.button, fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.card, textDecoration: 'none' }}>
                                     Open {month} in Verbatim
                                   </a>
                                 </td>

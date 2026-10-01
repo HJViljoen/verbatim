@@ -9,6 +9,7 @@
 //   EMAIL_FROM="Verbatim <invites@verbatimintel.com>"   # must be a verified domain
 
 import { Resend } from 'resend'
+import { EMAIL } from '@/lib/email/theme'
 
 const apiKey = process.env.RESEND_API_KEY
 const from = process.env.EMAIL_FROM
@@ -184,7 +185,7 @@ export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: bool
   ].join('\n')
   const html = `<!doctype html>
 <html>
-  <body style="margin:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a">
+  <body style="margin:0;background:${EMAIL.canvas};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${EMAIL.ink}">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px">
       <tr><td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px">
@@ -192,11 +193,11 @@ export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: bool
             <p style="margin:0 0 16px;font-size:16px;line-height:1.5">
               <strong>${escapeHtml(review.reportTitle)}</strong> is ready for review.
             </p>
-            <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#475569">
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:${EMAIL.muted}">
               Built on ${escapeHtml(review.builtOn)} from the latest update. ${escapeHtml(lines.steps)} ${escapeHtml(lines.after)}
             </p>
             <a href="${review.studioUrl}"
-               style="display:inline-block;background:#1E40AF;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">
+               style="display:inline-block;background:${EMAIL.button};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">
               Open in the Studio
             </a>
           </td></tr>
@@ -333,7 +334,7 @@ function inviteHtml(invite: InviteEmail, workspace: string | undefined, inviter:
     : 'a workspace'
   return `<!doctype html>
 <html>
-  <body style="margin:0;background:#f1f5f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a">
+  <body style="margin:0;background:${EMAIL.canvas};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${EMAIL.ink}">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px">
       <tr><td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px">
@@ -341,17 +342,17 @@ function inviteHtml(invite: InviteEmail, workspace: string | undefined, inviter:
             <p style="margin:0 0 16px;font-size:16px;line-height:1.5">
               ${escapeHtml(inviter)}invited you to join ${where} on <strong>Verbatim</strong>.
             </p>
-            <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#475569">
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:${EMAIL.muted}">
               Verbatim is a consumer-intelligence platform. Sign in to see your team's dashboards.
             </p>
             <a href="${invite.inviteUrl}"
-               style="display:inline-block;background:#1E40AF;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">
+               style="display:inline-block;background:${EMAIL.button};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">
               Accept invite
             </a>
-            <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#94a3b8;word-break:break-all">
+            <p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:${EMAIL.faint};word-break:break-all">
               Or paste this link into your browser:<br>${invite.inviteUrl}
             </p>
-            <p style="margin:16px 0 0;font-size:12px;color:#94a3b8">
+            <p style="margin:16px 0 0;font-size:12px;color:${EMAIL.faint}">
               This link expires in 7 days. If you weren't expecting this, you can ignore it.
             </p>
           </td></tr>

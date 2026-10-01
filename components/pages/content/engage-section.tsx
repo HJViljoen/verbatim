@@ -166,7 +166,7 @@ export function repliesBody(d: ContentData, mode: RenderMode): ReactNode {
                   <PlatformIcon platform={row.platform} className="text-secondary-foreground" />{platformLabel(row.platform)} · {row.age ?? '—'}
                 </span>
               </div>
-              <p className="mt-1.5 border-l-2 border-border/80 pl-2 text-[12.5px] italic leading-[1.45]">“{row.text}”</p>
+              <p className="mt-1.5 text-[12.5px] italic leading-[1.45]">“{row.text}”</p>
               <div className="mt-1.5 flex items-center gap-3 text-[11.5px]">
                 {app ? (
                   <Link href={`${basePath}?detail=engage-${row.insightId}${filter ? `&intent=${filter}` : ''}`} scroll={false} className="text-muted-foreground underline-offset-2 hover:underline">
@@ -189,7 +189,7 @@ export function repliesBody(d: ContentData, mode: RenderMode): ReactNode {
           </p>
           <div className="mt-2 space-y-2">
             {flagged.map((row) => (
-              <p key={row.id} className="border-l-2 border-border/80 pl-2 text-[12.5px] italic leading-[1.45]">
+              <p key={row.id} className="text-[12.5px] italic leading-[1.45]">
                 “{row.text}”
                 <span className="ml-2 not-italic text-[11px] text-muted-foreground">{platformLabel(row.platform)} · {row.age ?? '—'}</span>
               </p>

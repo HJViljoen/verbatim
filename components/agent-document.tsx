@@ -92,7 +92,7 @@ export function AgentDocumentView({
 
               {/* Untested stops here. Deliberately. */}
               {c.verdict !== 'silent' && (
-                <div className="space-y-3 border-l-2 border-border pl-3">
+                <div className="space-y-3">
                   {/* The voices lead. The sentence under them is a reading OF
                       them, and saying so is the difference between evidence and
                       a sentence that merely sounds like evidence. */}

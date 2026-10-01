@@ -200,7 +200,7 @@ describe('WR1 · the week in one sentence', () => {
   it('never paints the flag’s movement as good news', () => {
     const markup = render(block.render(weeklyFixture(), 'email', ctx))
     expect(markup).toContain(EMAIL.mixedTint)
-    expect(markup).not.toContain(EMAIL.greenTint)
+    expect(markup).not.toContain(EMAIL.brandTint)
     // And on the screen arm the same axis prints muted, never positive.
     expect(render(block.render(weeklyFixture(), 'app', ctx))).not.toContain('text-positive')
   })
@@ -357,7 +357,7 @@ describe('WR2 · where things stand', () => {
   // Outlook — beside 11px mono figures.
   it('declares a font for every word of the row in the email arm', () => {
     const markup = render(block.render(weeklyFixture(), 'email', ctx))
-    expect(markup).toMatch(/font-size:11px;color:#6E7378">you /)
+    expect(markup).toMatch(/font-size:11px;color:#5F656B">you /)
     // And the rival's name is still INSIDE that wrapper: more spans have been
     // opened than closed between the two words, so nothing has fallen back to
     // the client's own default between them.
@@ -828,7 +828,7 @@ describe('WR5 · for content', () => {
   // share going up is not good news for having gone up.
   it('paints what moved most as movement, not as good news', () => {
     const markup = render(block.render(weeklyFixture(), 'email', ctx))
-    expect(markup).not.toContain(EMAIL.greenTint)
+    expect(markup).not.toContain(EMAIL.brandTint)
   })
 
   // T0a (WR-32; U13): an empty reply queue prints nothing, not a note.

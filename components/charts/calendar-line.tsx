@@ -770,7 +770,7 @@ function LastMonthTick({
 /** The legend swatch for a gutter token — the same shape AND the same colour
  *  the chart draws, so a reader matches them by eye rather than by caption. The
  *  mock rings the below-floor token in the entity's own green
- *  (`box-shadow: inset 0 0 0 1.5px #0E8A5F`), and the chart does; a legend
+ *  (an inset 1.5px ring in the then-green), and the chart does; a legend
  *  ringed in grey beside it is a different mark.
  *
  *  The filling swatch is the one place the legend cannot be literal: the chart's

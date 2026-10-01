@@ -20,7 +20,7 @@ import type { Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
  * SH8) — the remedy `components/pages/agent/marks.tsx` already uses, in the
  * one form an email can carry (a border, since there are no rings in Word).
  *
- * `up` was `#0E8A5F` on `#DDF3E9` and `down` `#DB3B2E` on `#FBE3E1`, at
+ * `up` was the retired green on its tint and `down` `#DB3B2E` on `#FBE3E1`, at
  * 11px/700: 3.75:1 and 3.81:1, about ten instances on one monthly render and
  * every email surface inherits them. `MonthlyReport.dc.html` contains none of
  * those three hexes — its verdict pill is grey both ways and the DIRECTION is
@@ -59,7 +59,7 @@ const chip = (tone: 'up' | 'down' | 'neutral' | 'noted') => ({
     : tone === 'noted'
       ? { background: EMAIL.mixedTint, border: `1px solid ${EMAIL.mixed}` }
       : tone === 'up'
-        ? { background: EMAIL.greenTint, border: `1px solid ${EMAIL.up}` }
+        ? { background: EMAIL.brandTint, border: `1px solid ${EMAIL.up}` }
         : { background: EMAIL.downTint, border: `1px solid ${EMAIL.down}` }),
 })
 

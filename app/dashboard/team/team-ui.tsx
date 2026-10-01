@@ -41,7 +41,7 @@ export function CopyLinkButton({ url }: { url: string }) {
       className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 h-8 text-xs hover:bg-accent"
       title="Copy invite link"
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="h-3.5 w-3.5 text-positive" /> : <Copy className="h-3.5 w-3.5" />}
       {copied ? 'Copied' : 'Copy link'}
     </button>
   )
@@ -71,7 +71,7 @@ export function InviteForm({ inviterRole }: { inviterRole: Role }) {
       </div>
 
       {state.message && (
-        <p className={`text-sm ${state.ok ? 'text-green-600' : 'text-destructive'}`}>{state.message}</p>
+        <p className={`text-sm ${state.ok ? 'text-positive' : 'text-destructive'}`}>{state.message}</p>
       )}
 
       {state.ok && state.inviteUrl && (
@@ -108,7 +108,7 @@ export function ResendButton({ id }: { id: string }) {
       <Button type="submit" variant="outline" size="sm" disabled={pending}>
         {pending ? 'Sending…' : 'Resend'}
       </Button>
-      {state.message && <span className={`ml-2 text-xs ${state.ok ? 'text-green-600' : 'text-destructive'}`}>{state.message}</span>}
+      {state.message && <span className={`ml-2 text-xs ${state.ok ? 'text-positive' : 'text-destructive'}`}>{state.message}</span>}
     </form>
   )
 }

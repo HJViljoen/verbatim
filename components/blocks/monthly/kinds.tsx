@@ -27,7 +27,7 @@ const cell = (k: number | null, n: number | null): string => {
 }
 
 const MOOD_HEX: Record<string, string> = {
-  positive: EMAIL.green,
+  positive: EMAIL.up,
   mixed: EMAIL.mixed,
   neutral: EMAIL.neutralSeg,
   negative: EMAIL.down,

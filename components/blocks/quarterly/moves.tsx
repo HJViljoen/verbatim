@@ -223,7 +223,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                     the order holds. */}
                 <span
                   className={email ? undefined : 'w-5 shrink-0 font-mono text-[12px] tabular-nums text-primary'}
-                  style={email ? { fontFamily: FONT.mono, color: EMAIL.green } : undefined}
+                  style={email ? { fontFamily: FONT.mono, color: EMAIL.ink } : undefined}
                 >
                   {a.number}
                 </span>

@@ -121,7 +121,7 @@ function AnswerBody({ a, from, to, measure, turnIndex }: {
                   <Level f={levelFor(measure, turnIndex, p.id)} />
                 </div>
                 {p.quotes.map((q) => (
-                  <blockquote key={q.n} className="border-l-2 border-border pl-2.5 font-serif text-[12.5px] leading-[1.45] text-foreground">“{q.text}”<Sup n={q.n} /><PdfEnglish q={q} /></blockquote>
+                  <blockquote key={q.n} className="font-serif text-[12.5px] leading-[1.45] text-foreground">“{q.text}”<Sup n={q.n} /><PdfEnglish q={q} /></blockquote>
                 ))}
                 {p.themeRefs.length > 0 && <p className="text-[10.5px] text-muted-foreground">{p.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}</p>}
               </div>
@@ -280,7 +280,7 @@ function ClaimsPage({ d, page }: { d: D; page: number }) {
             </div>
             {!doc.anchored.includes(c.ref) && <p className="text-[10.5px] text-muted-foreground">Not stated directly in the document.</p>}
             {c.verdict !== 'silent' && (
-              <div className="space-y-2 border-l-2 border-border pl-2.5">
+              <div className="space-y-2">
                 {quotes.map((q, k) => <blockquote key={k} className="font-serif text-[12px] leading-[1.45]">“{q.text}”<PdfEnglish q={q} /></blockquote>)}
                 {c.theySay && <p className="text-[12px] leading-snug text-foreground/85">{c.theySay}</p>}
                 {/* The theme names alone. The count that stood here was the

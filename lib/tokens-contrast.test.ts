@@ -69,6 +69,23 @@ describe('palette contrast', () => {
     }
   })
 
+  it('reaches 4.5:1 for palette A\'s text on its own fills, and for the orange text on the page and a card', () => {
+    // Palette A (2026-10-01): ink on the yellow, white on the ink button, ink on
+    // the pale yellow, and the orange that labels and links are set in.
+    for (const mode of [':root', '.dark'] as const) {
+      const pairs: [string, string][] = [
+        ['--brand-foreground', '--brand'],
+        ['--primary-foreground', '--primary'],
+        ['--accent-foreground', '--accent'],
+        ['--orange-text', '--background'],
+        ['--orange-text', '--tile'],
+      ]
+      for (const [ink, ground] of pairs) {
+        expect(contrast(token(mode, ink), token(mode, ground)), `${mode} ${ink} on ${ground}`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
+
   it('knows the reading it was written to catch', () => {
     // The retired value, on the tint the ports put it inside.
     expect(contrast('#6E7378', '#F6F7F8')).toBeLessThan(4.5)
