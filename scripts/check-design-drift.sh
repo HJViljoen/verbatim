@@ -13,6 +13,11 @@
 #       gold --you, rivals the grey --comp, the earlier month the grey --cat),
 #       mapped to a Tailwind colour, and listed in MASTER.md at the light value
 #   (e) palette A is what the light block says: each of its jobs holds its value
+#   (f) two brands until the marketing site is recoloured (Heinrich, 1 Oct):
+#       the app's brand art (its favicons, home-screen icon, share card, yellow
+#       mark and crowd art) is palette A, and the site's own (app/site's icon,
+#       apple-icon and share card, its static marks) is the site's green; each
+#       side's colours are on its own allow-list and no other
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -89,6 +94,43 @@ bad = [f'--{k} is {vars_.get(k)}; palette A says {v}' for k, v in PALETTE_A.item
 if bad:
     print('design drift:'); [print('  -', x) for x in bad]; sys.exit(1)
 print('drift guard (e): ok')
+PY
+
+python3 - <<'PY'
+import re, sys
+# (f) Each side's brand art on its own allow-list. Anything else is the other
+# brand leaking across (a green favicon in the app, a yellow mark on the site)
+# or a colour nobody chose.
+SIDES = {
+    'app (palette A)': (
+        ['app/icon.svg', 'app/icon.tsx', 'app/apple-icon.tsx', 'app/opengraph-image.tsx',
+         'public/brand/verbatim-mark-yellow.svg', 'public/crowd.svg', 'public/crowd-live.svg'],
+        {'26292C', 'FFD43B', 'FFFFFF',  # ink, the brand yellow, the wordmark on the card
+         '1F2124'},                     # the card's Room: a neutral ink band
+    ),
+    'site (green, until it is recoloured)': (
+        ['app/site/icon.svg', 'app/site/icon.tsx', 'app/site/apple-icon.tsx', 'app/site/opengraph-image.tsx',
+         'public/brand/verbatim-mark.svg', 'public/brand/verbatim-mark-mint.svg', 'public/brand/verbatim-mark-white.svg'],
+        {'0E8A5F', '3DBF8C', 'FFFFFF',  # the green, the mint on the Room, white on a green tile
+         '0F1F19'},                     # the site's Room
+    ),
+}
+def norm(h):
+    h = h.upper()
+    return ''.join(c * 2 for c in h) if len(h) == 3 else h
+bad = []
+for side, (files, allowed) in SIDES.items():
+    for f in files:
+        try: text = open(f).read()
+        except FileNotFoundError: bad.append(f'{f}: missing ({side} brand art)'); continue
+        for h in re.findall(r'#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b', text):
+            if norm(h) not in allowed: bad.append(f'{f}: #{norm(h)} is not on the {side} list')
+        for r, g, b in re.findall(r'rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)', text):
+            h = '%02X%02X%02X' % (int(r), int(g), int(b))
+            if h not in allowed: bad.append(f'{f}: rgb({r},{g},{b}) is not on the {side} list')
+if bad:
+    print('design drift:'); [print('  -', x) for x in sorted(set(bad))]; sys.exit(1)
+print('drift guard (f): ok (app brand art yellow, site brand art green)')
 PY
 
 if grep -rn "backdrop-blur" app components --include='*.tsx' --include='*.ts' --include='*.css' 2>/dev/null | grep -v '^app/site' ; then
