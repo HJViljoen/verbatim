@@ -94,6 +94,17 @@ describe('weekReadPage', () => {
     ])
   })
 
+  it('a label naming a brand its talk does not bear out says "a brand"', () => {
+    const named = weekReadPage({
+      read: sealandRead({ alsoHeard: [
+        { themeId: 'ta', label: 'Patagonia praised for warmth', videos: 3, videoIds: ['x1', 'x2', 'x3'] },
+        { themeId: 'tb', label: 'Cotopaxi praised for practical travel', videos: 1, videoIds: ['w1'] },
+      ] }),
+      brand: 'Sealand', names, attribution: attribution(), themeComments, origins, trackedNames: ['Sealand', 'Cotopaxi', 'Patagonia'],
+    })
+    expect(named.alsoHeard.map((x) => x.label)).toEqual(['A brand praised for warmth', 'Cotopaxi praised for practical travel'])
+  })
+
   it('with no attribution read, no item carries a brand line', () => {
     const bare = weekReadPage({ read: read(), brand: 'Sealand', names, attribution: null, themeComments: null, origins: new Map() })
     expect(bare.findings.every((f) => f.who === null && (f.quote?.who ?? null) === null)).toBe(true)

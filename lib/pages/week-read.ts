@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import {
+  aboutName,
   aboutVideo,
   attributeVideos,
   loadAttribution,
@@ -20,6 +21,7 @@ import { resolvedQuote, type ResolvedQuote } from '../reports/weekly-read'
 import type { FigureTable } from '../reports/types'
 import { INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors } from '../rivals'
 import { hydrateData } from '../snapshots'
+import { stripUnevidencedBrand } from './overview-market/board'
 import { isMissingWeekReads, WEEK_READS_TABLE } from '../written/store'
 import type { QuoteRef, WeekReadData } from '../written/types'
 
@@ -122,6 +124,8 @@ export function weekReadPage(a: {
   attribution: AttributionInputs | null
   themeComments: ReadonlyMap<string, ReadonlySet<string>> | null
   origins: ReadonlyMap<string, QuoteOrigin>
+  /** The client's and every rival's name, for the label check. */
+  trackedNames?: readonly string[]
 }): WeekReadPageData {
   const { read, attribution } = a
   // A finding's videos are the read's month's; an also-heard row's, the week's.
@@ -161,9 +165,16 @@ export function weekReadPage(a: {
       who: split(f.monthVideoIds, f.basedOn ?? [], monthOnly),
     }))
 
+  // A label naming a tracked brand its own talk does not bear out says "a
+  // brand" instead (the board's rule, `stripUnevidencedBrand`): the evidence
+  // is the split itself, so with no split read every such name goes.
   const alsoHeard: WeekReadAlsoHeardRow[] = findings.length === 0 ? [] : (read.alsoHeard ?? [])
     .filter((x) => x.label?.trim() && x.videos > 0)
-    .map((x) => ({ label: x.label.trim(), videos: x.videos, who: split(x.videoIds, [x.themeId], weekMonths) }))
+    .map((x) => {
+      const who = split(x.videoIds, [x.themeId], weekMonths)
+      const borne = (who ?? []).map((p) => aboutName(p.about, a.names) ?? '').filter(Boolean)
+      return { label: stripUnevidencedBrand(x.label.trim(), a.trackedNames ?? [], borne).label, videos: x.videos, who }
+    })
 
   return {
     brand: a.brand,
@@ -289,5 +300,6 @@ export async function loadWeekReadPage(scope: Scope): Promise<WeekReadPageData |
     attribution,
     themeComments,
     origins,
+    trackedNames: [brand, ...rivals.map((r) => r.name)],
   })
 }
