@@ -97,9 +97,9 @@ export function SubjectLead({ pane, monthWords, canEdit, status }: { pane: Subje
             <div className="flex min-w-0 flex-col gap-3 pt-4">
               {pane.standing ? (
                 <>
-                  <div className="flex flex-wrap items-baseline gap-2.5">
-                    <span data-copy="figure" className="font-mono text-[34px] font-medium text-[#26292C]">{pane.standing.value}</span>
-                    <span className="text-[14px] text-[#5F656B]">
+                  <div className="flex items-baseline gap-2.5">
+                    <span data-copy="figure" className="shrink-0 font-mono text-[34px] font-medium text-[#26292C]">{pane.standing.value}</span>
+                    <span className="min-w-0 text-[14px] text-[#5F656B]">
                       of the <span data-copy="figure">{fmtInt(pane.standing.n)}</span> videos in your market in {monthWords}
                       {pane.standing.rank ? `, ${pane.standing.rank} subject` : ''}
                     </span>
