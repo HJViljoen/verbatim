@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { canSeeStudio, studioRedirect, STUDIO_AWAY_HREF, STUDIO_HREF, STUDIO_TENANT_REVIEWS, STUDIO_TENANT_VISIBLE } from './studio-visibility'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { BUILDS_ARE_OURS, canSeeStudio, mayBuildReports, studioRedirect, STUDIO_AWAY_HREF, STUDIO_HREF, STUDIO_TENANT_REVIEWS, STUDIO_TENANT_VISIBLE } from './studio-visibility'
 import { reviewAudience } from './schedules/members'
 import type { OperatorView } from './auth'
 
@@ -73,5 +75,45 @@ describe('studioRedirect', () => {
 
   it('lets everyone in once the flag is flipped back on', () => {
     expect(studioRedirect(tenant, true)).toBeNull()
+  })
+})
+
+describe('mayBuildReports: building and sending are the operator\'s (lead\'s ruling 6)', () => {
+  it('the operator, on their own workspace or viewing a tenant; never a client user, whatever their role', () => {
+    expect(mayBuildReports(operatorHome)).toBe(true)
+    expect(mayBuildReports(operatorViewingTenant)).toBe(true)
+    expect(mayBuildReports(tenant)).toBe(false)
+  })
+
+  // Every door that builds, composes or sends asks it before it reads
+  // anything; the preview lets a client read a SENT send only.
+  const src = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8')
+  const refuses = /if \(!mayBuildReports\(session\)\) return NextResponse\.json\(\{ error: BUILDS_ARE_OURS \}, \{ status: 403 \}\)/
+  for (const file of ['app/api/reports/[id]/build/route.ts', 'app/api/reports/[id]/sections/route.ts', 'app/api/schedules/[id]/send/route.ts']) {
+    it(`${file} refuses a client before it reads`, () => {
+      const text = src(file)
+      expect(text).toMatch(refuses)
+      // Ahead of the handler's first query and its first admin client.
+      const body = text.indexOf('export async function')
+      const gate = text.search(refuses)
+      for (const first of ['.from(', 'createAdminClient()']) {
+        const at = text.indexOf(first, body)
+        expect(at, `${file}: ${first}`).toBeGreaterThan(gate)
+      }
+    })
+  }
+
+  it('the dry preview is the operator\'s; a client reads a sent send\'s email only', () => {
+    const text = src('app/api/schedules/[id]/preview/route.ts')
+    const sentOnly = text.indexOf("if (!readsHeld && (send as { status?: string } | null)?.status !== 'sent') return note(HELD, 404)")
+    const dry = text.indexOf('if (!mayBuildReports(session)) return note(HELD, 403)')
+    const build = text.indexOf("runSchedule({ admin, schedule: s, runId, baseUrl: appBaseUrl(), mode: 'preview' })")
+    expect(sentOnly).toBeGreaterThan(0)
+    expect(dry).toBeGreaterThan(sentOnly)
+    expect(build).toBeGreaterThan(dry)
+  })
+
+  it('says so in the client\'s terms', () => {
+    expect(BUILDS_ARE_OURS).toBe('Reports are built and sent by Verbatim.')
   })
 })

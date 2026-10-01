@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { canManageTenant, getRouteSession } from '@/lib/auth'
+import { BUILDS_ARE_OURS, mayBuildReports } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { assertTenantMay } from '@/lib/tenant-locks'
 import { appBaseUrl } from '@/lib/site'
@@ -17,9 +18,13 @@ import type { ScheduleRow, SendRow } from '@/lib/schedules/types'
 //   { mode: 'now' }     → the real thing for the latest completed update:
 //                         claim, build, send to the list (or hold as ready on
 //                         a review schedule), record. Owner or admin.
-//   { mode: 'deliver',  → send a build that is waiting as `ready`. ANY member
-//     sendId }            may press this — the recipients were set by an owner
-//                         or admin; who approved is recorded (T9, 2026-08-31).
+//   { mode: 'deliver',  → send a build that is waiting as `ready`; who
+//     sendId }            approved is recorded (T9, 2026-08-31).
+//
+// EVERY MODE IS THE OPERATOR'S (integration, 1 Oct; lead's ruling 6): the
+// Studio's Send and its review are operator controls, so a client's owner or
+// admin is refused here too (`mayBuildReports`). The role check and the lock
+// below stay for an operator viewing a tenant.
 //
 // Tenant from the session, never the body; the schedule must be the tenant's.
 
@@ -29,6 +34,7 @@ export const maxDuration = 300
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getRouteSession()
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  if (!mayBuildReports(session)) return NextResponse.json({ error: BUILDS_ARE_OURS }, { status: 403 })
   const { id } = await params
   const body = (await request.json().catch(() => null)) as { mode?: unknown; sendId?: unknown } | null
   const mode = body?.mode === 'test' ? 'test' : body?.mode === 'now' ? 'send' : body?.mode === 'deliver' ? 'deliver' : null

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getRouteSession } from '@/lib/auth'
+import { BUILDS_ARE_OURS, mayBuildReports } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { REPORT_MAX_SECTIONS } from '@/lib/config'
 import { newSectionId } from '@/lib/reports/templates'
@@ -13,6 +14,9 @@ import type { ReportSection } from '@/lib/reports/types'
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getRouteSession()
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  // Composing a report is the operator's (lib/studio-visibility.ts
+  // mayBuildReports), as the Studio's create and update actions are.
+  if (!mayBuildReports(session)) return NextResponse.json({ error: BUILDS_ARE_OURS }, { status: 403 })
   const { id } = await ctx.params
   const parsed = z.object({ section: sectionSchema.omit({ id: true }) }).safeParse(await req.json().catch(() => null))
   if (!parsed.success || !z.uuid().safeParse(id).success) return NextResponse.json({ error: 'Bad request.' }, { status: 400 })

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getRouteSession } from '@/lib/auth'
+import { BUILDS_ARE_OURS, mayBuildReports } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
 import { renderBaseUrl } from '@/lib/render/render'
@@ -27,6 +28,9 @@ export const maxDuration = 300
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await getRouteSession()
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
+  // The operator's alone (lib/studio-visibility.ts mayBuildReports): a client
+  // reads sent issues and builds nothing.
+  if (!mayBuildReports(session)) return NextResponse.json({ error: BUILDS_ARE_OURS }, { status: 403 })
   const { supabase, clientId, userId } = session
   const { id } = await ctx.params
   if (!z.uuid().safeParse(id).success) return NextResponse.json({ error: 'No such report.' }, { status: 404 })

@@ -3,6 +3,7 @@ import { join, relative } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { assertTenantMay, CADENCE_HELD, TENANT_LOCK_REFUSAL, TENANT_LOCKS, tenantLocked } from './tenant-locks'
+import { BUILDS_ARE_OURS } from './studio-visibility'
 import { CADENCE_REFUSAL } from './update-rhythm'
 import { queuedMessage } from './settings/queue'
 
@@ -480,7 +481,10 @@ describe('R12: the three tracking writes use the admin client, after the checks'
 //
 // The string match above proves the call is in the file; these prove it runs
 // first: a Sealand admin's "now" and "deliver" are refused before any sender is
-// reached, a test to the caller's own address and the operator go through.
+// reached, and the operator goes through. SINCE 1 OCT (integration, lead's
+// ruling 6) every mode is the operator's (`mayBuildReports`), so a client's
+// admin is refused by that gate before the lock is asked, its own test
+// included; the lock still stands for an operator viewing a locked tenant.
 
 describe('POST /api/schedules/[id]/send under the lock', () => {
   const SCHEDULE = '451aa647-0000-4000-8000-000000000000'
@@ -492,19 +496,20 @@ describe('POST /api/schedules/[id]/send under the lock', () => {
   }
   const routeSession = (s: Record<string, unknown>) => ({ ...s, email: 'admin@tenant.example' })
 
-  it('refuses a Sealand admin’s send now and deliver, before any sender', async () => {
+  it('refuses a Sealand admin’s send now, deliver and test, before any sender (every mode is the operator’s)', async () => {
+    h.admin = fakeClient({ report_schedules: { id: SCHEDULE, client_id: SEALAND, recipients: ['daniela@sealand.example'] }, pipeline_runs: { id: 'run-1' } }).client
     h.session = routeSession(tenantAdmin(SEALAND, session.client))
-    for (const body of [{ mode: 'now' }, { mode: 'deliver', sendId: SEND }]) {
+    for (const body of [{ mode: 'now' }, { mode: 'deliver', sendId: SEND }, { mode: 'test' }]) {
       const r = await post(body)
       expect(r.status).toBe(403)
-      expect(r.json.error).toBe(TENANT_LOCK_REFUSAL.sends)
+      expect(r.json.error).toBe(BUILDS_ARE_OURS)
     }
     expect(h.sent).toEqual([])
   })
 
-  it('lets a Sealand admin send a test to their own address', async () => {
+  it('lets the operator send a test to their own address', async () => {
     h.admin = fakeClient({ report_schedules: { id: SCHEDULE, client_id: SEALAND, recipients: ['daniela@sealand.example'] }, pipeline_runs: { id: 'run-1' } }).client
-    h.session = routeSession(tenantAdmin(SEALAND, session.client))
+    h.session = routeSession(operatorIn(SEALAND, session.client))
     const r = await post({ mode: 'test' })
     expect(r.status).toBe(200)
     expect(h.sent).toEqual(['run:test'])

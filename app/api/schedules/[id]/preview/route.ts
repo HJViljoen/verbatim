@@ -1,4 +1,5 @@
 import { getRouteSession } from '@/lib/auth'
+import { mayBuildReports } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { appBaseUrl } from '@/lib/site'
 import { hydrateSnapshot, loadSnapshot } from '@/lib/snapshots'
@@ -28,7 +29,9 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 //   without      → a dry preview at the workspace's current data: loaders +
 //                  cover, no PDF, no link, no send, no rows left behind
 //
-// Any member may look; sending is owner/admin (the send route).
+// A client reads an issue once it is SENT (`?send=` of a sent send); the dry
+// preview at today's data is the operator's (integration, 1 Oct; lead's
+// ruling 6: `mayBuildReports`), as building and sending are.
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -93,6 +96,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 
   if (!readsHeld && s.review) return note(HELD, 403)
+  // The dry preview builds today's issue: the operator's alone.
+  if (!mayBuildReports(session)) return note(HELD, 403)
 
   // A written report is not built here: writing one costs money and minutes.
   // The dry preview shows the email over the last brief this report built.

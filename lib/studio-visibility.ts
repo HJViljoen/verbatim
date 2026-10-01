@@ -37,6 +37,23 @@ export const STUDIO_TENANT_VISIBLE = true
  */
 export const STUDIO_TENANT_REVIEWS = false
 
+/**
+ * WHO MAY BUILD AND SEND A REPORT (integration, 1 Oct; lead's ruling 6). The
+ * operator alone: the Studio's Build, its review and its Send are operator
+ * controls, and the routes behind them (`/api/reports/[id]/build`,
+ * `/api/reports/[id]/sections`, `/api/schedules/[id]/send` in every mode,
+ * and the dry `/api/schedules/[id]/preview`) refuse anyone else, so a client's
+ * owner or admin cannot reach by POST what the page does not show them. A
+ * client reads issues once they are SENT (the Studio's past issues, a sent
+ * send's preview, the viewer, the PDF, a share link: lib/reports/held.ts).
+ */
+export function mayBuildReports(session: Pick<SessionContext, 'operator'>): boolean {
+  return session.operator != null
+}
+
+/** What those routes answer a client. */
+export const BUILDS_ARE_OURS = 'Reports are built and sent by Verbatim.'
+
 /** The Studio's route. One spelling, so hiding it stays one search. */
 export const STUDIO_HREF = '/dashboard/studio'
 
