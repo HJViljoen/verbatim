@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { settingsBar } from '@/lib/settings/bar'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -39,7 +38,7 @@ export default async function BillingPage({
 }: {
   searchParams?: Promise<{ status?: string }>
 }) {
-  const { supabase, clientId, role } = await getSessionContext()
+  const { supabase, clientId, role, operator } = await getSessionContext()
   const status = (await searchParams)?.status
 
   // RLS lets a member read their own client row; billing columns ride along on it.
@@ -75,7 +74,7 @@ export default async function BillingPage({
   // Settings sub-page.
   const bar = await settingsBar(supabase, clientId, client.company_name ?? 'Your workspace')
   return (
-    <SettingsFrame active="team" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} bar={bar} contentTitle="Plan & billing" contentMeta={byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? 'Plan')} controls={<Link href="/dashboard/team" className="text-[12px] font-medium text-secondary-foreground hover:underline">Team →</Link>}>
+    <SettingsFrame active="billing" operator={operator != null} title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} bar={bar} contentTitle="Plan & billing" contentMeta={byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? 'Plan')}>
       <div className="flex flex-col gap-3">
         {status === 'success' && (
           <p className="rounded-md bg-accent px-4 py-3 text-[12.5px] text-accent-foreground">Thanks. Your subscription is being activated. It may take a moment to reflect here.</p>

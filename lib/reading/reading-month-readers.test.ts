@@ -33,9 +33,9 @@ describe('the readers off the reading pages read the reading month', () => {
     })
   }
 
-  it('Settings › Tracking is handed the reading handle by its page', () => {
+  it('Settings › What you track reads no month at all (pages build, 1 Oct: settings, not readings)', () => {
     const page = readFileSync(join(ROOT, 'app/dashboard/settings/page.tsx'), 'utf8')
-    expect(page).toMatch(/loadTrackingPage\(.*readingHandle\(clientId\)\)/)
+    expect(page).not.toMatch(/readingHandle\(|loadReadingMonth\(|loadTrackingPage\(/)
   })
 
   it('Settings › The record reads it through the same loader (91af44f5)', () => {

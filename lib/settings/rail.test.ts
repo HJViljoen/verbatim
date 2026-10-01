@@ -1,16 +1,29 @@
 import { describe, expect, it } from 'vitest'
 
-import { SETTINGS_ADDRESSES, SETTINGS_SUBPAGES, settingsSubPage } from './rail'
+import { SETTINGS_ADDRESSES, SETTINGS_SUBPAGES, settingsSubPage, settingsTabs } from './rail'
 
 // The settings area's table of tabs. Pure: no render, no DOM.
 
-describe('the settings tabs, in the approved preview\'s order', () => {
-  it('draws the preview\'s six tabs first, in its order, and Readiness after them', () => {
-    expect(SETTINGS_SUBPAGES.map((s) => s.label)).toEqual([
-      'What we read', 'Subjects', 'The record', 'Reports and recipients', 'Team', 'How to read',
-      // Pages still send a reader to "Settings › Readiness"
-      // (lib/reading/own-posts.ts), so the tab stays, after the six.
-      'Readiness',
+describe('the settings tabs, as the Page-Settings artboard draws them', () => {
+  it('shows a client What you track, Team and Billing, in that order', () => {
+    expect(settingsTabs(false).map((s) => s.label)).toEqual(['What you track', 'Team', 'Billing'])
+  })
+
+  it('gives the operator Readiness, The record and How to read after them', () => {
+    expect(settingsTabs(true).map((s) => s.label)).toEqual(['What you track', 'Team', 'Billing', 'Readiness', 'The record', 'How to read'])
+  })
+
+  it('draws no tab for the pages that moved, and keeps their addresses served', () => {
+    for (const key of ['subjects', 'reports'] as const) {
+      expect(settingsTabs(true).some((s) => s.key === key)).toBe(false)
+      expect(SETTINGS_ADDRESSES).toContain(settingsSubPage(key).href)
+    }
+  })
+
+  it('serves the same addresses as before the split', () => {
+    expect([...SETTINGS_ADDRESSES].sort()).toEqual([
+      '/dashboard/billing', '/dashboard/settings', '/dashboard/settings/how-to-read', '/dashboard/settings/readiness',
+      '/dashboard/settings/record', '/dashboard/settings/reports', '/dashboard/settings/subjects', '/dashboard/team',
     ])
   })
 })

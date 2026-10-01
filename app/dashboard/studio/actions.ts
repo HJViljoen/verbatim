@@ -30,12 +30,22 @@ export interface ActionState {
   message: string
 }
 
+// OPERATOR-ONLY, SERVER-SIDE TOO (pages build, 1 Oct). The Studio opened to
+// clients with "Your reports" and the past issues; templates, the catalogue,
+// custom reports, building and editing a build stayed the operator's. Hiding
+// the controls is not the rule: these actions are POST-reachable, so each asks
+// `session.operator` (a `platform_admins` row) before it writes. The schedule
+// actions keep their owner-or-admin gate and the tenant lock, which the
+// lock's sweep test pins.
+const OPERATOR_ONLY: ActionState = { ok: false, message: 'Only Verbatim changes reports in the Studio.' }
+
 const STUDIO = '/dashboard/studio'
 const REPORTS = '/dashboard/reports'
 
 /** Your own template from a starter, or blank; lands in the editor. */
 export async function createReport(formData: FormData): Promise<void> {
-  const { clientId, userId } = await getSessionContext()
+  const { clientId, userId, operator } = await getSessionContext()
+  if (!operator) throw new Error(OPERATOR_ONLY.message)
   const admin = createAdminClient()
   // A written report (2026-08-31): kind 'document', the template's name and
   // reader, no sections, the settings at their defaults.
@@ -94,7 +104,8 @@ const patchArgs = z.object({ id: z.uuid(), patch: reportPatchSchema })
 export async function updateReport(args: { id: string; patch: z.infer<typeof reportPatchSchema> }): Promise<ActionState> {
   const parsed = patchArgs.safeParse(args)
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That edit could not be saved.' }
-  const { clientId } = await getSessionContext()
+  const { clientId, operator } = await getSessionContext()
+  if (!operator) return OPERATOR_ONLY
   const admin = createAdminClient()
   const { data: current } = await admin.from('reports').select('id, cover, audience').eq('id', parsed.data.id).eq('client_id', clientId).maybeSingle()
   if (!current) return { ok: false, message: 'No such template.' }
@@ -125,7 +136,8 @@ export async function updateReport(args: { id: string; patch: z.infer<typeof rep
 
 export async function deleteReport(formData: FormData): Promise<void> {
   const id = z.uuid().parse(String(formData.get('id') ?? ''))
-  const { clientId } = await getSessionContext()
+  const { clientId, operator } = await getSessionContext()
+  if (!operator) throw new Error(OPERATOR_ONLY.message)
   const admin = createAdminClient()
   // Builds stay: a snapshot outlives its template (report_id → null) so links
   // and downloaded files keep working; a schedule pointing here goes with it.
@@ -299,7 +311,8 @@ const blockEditArgs = z.object({ snapshotId: z.uuid(), blockId: z.string().min(1
 export async function saveBlockEdit(args: { snapshotId: string; blockId: string; text: string }): Promise<ActionState> {
   const parsed = blockEditArgs.safeParse(args)
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That edit could not be saved.' }
-  const { clientId, userId } = await getSessionContext()
+  const { clientId, userId, operator } = await getSessionContext()
+  if (!operator) return OPERATOR_ONLY
   const admin = createAdminClient()
   const { data: snap } = await admin.from('report_snapshots').select('id, report_id').eq('id', parsed.data.snapshotId).eq('client_id', clientId).maybeSingle()
   if (!snap) return { ok: false, message: 'No such build.' }
@@ -318,7 +331,8 @@ export async function saveBlockEdit(args: { snapshotId: string; blockId: string;
 export async function restoreBlock(args: { snapshotId: string; blockId: string }): Promise<ActionState> {
   const parsed = blockEditArgs.pick({ snapshotId: true, blockId: true }).safeParse(args)
   if (!parsed.success) return { ok: false, message: 'That block could not be restored.' }
-  const { clientId } = await getSessionContext()
+  const { clientId, operator } = await getSessionContext()
+  if (!operator) return OPERATOR_ONLY
   const admin = createAdminClient()
   const { data: snap } = await admin.from('report_snapshots').select('id, report_id').eq('id', parsed.data.snapshotId).eq('client_id', clientId).maybeSingle()
   if (!snap) return { ok: false, message: 'No such build.' }
@@ -342,7 +356,8 @@ const settingsArgs = z.object({ id: z.uuid(), patch: documentSettingsPatch })
 export async function updateDocumentSettings(args: { id: string; patch: z.infer<typeof documentSettingsPatch> }): Promise<ActionState> {
   const parsed = settingsArgs.safeParse(args)
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That could not be saved.' }
-  const { clientId } = await getSessionContext()
+  const { clientId, operator } = await getSessionContext()
+  if (!operator) return OPERATOR_ONLY
   const admin = createAdminClient()
   const { data: current } = await admin.from('reports').select('id, kind, template_key, cover, settings').eq('id', parsed.data.id).eq('client_id', clientId).maybeSingle()
   if (!current || current.kind !== 'document') return { ok: false, message: 'No such report.' }

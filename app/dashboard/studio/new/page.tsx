@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSessionContext } from '@/lib/auth'
-import { studioRedirect } from '@/lib/studio-visibility'
+import { operatorOnlyRedirect } from '@/lib/pages/studio'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody } from '@/components/shell/master-list'
 import { CUSTOM_KEY, DOCUMENT_STARTERS } from '@/lib/reports/documents/templates'
@@ -27,8 +27,9 @@ export const dynamic = 'force-dynamic'
 const audienceLabel = (k: string) => AUDIENCES.find((a) => a.key === k)?.label ?? k
 
 export default async function NewReportPage() {
-  // A tenant user who types the address is sent to Reports (finish-list 16).
-  const away = studioRedirect(await getSessionContext())
+  // Templates, the catalogue and custom reports are the operator's (pages
+  // build, 1 Oct): anyone else is sent back to the Studio.
+  const away = operatorOnlyRedirect(await getSessionContext())
   if (away) redirect(away)
   return (
     <PageFrame className="min-h-0 flex-1">

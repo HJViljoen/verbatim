@@ -3,42 +3,45 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { SettingsFrame, SettingsTable, SettingsRow, SettingsCard, FactRow } from '@/components/settings-frame'
 import { ReadinessTable } from '@/components/ops/readiness-table'
-import { SETTINGS_SUBPAGES } from '@/lib/settings/rail'
 import type { ReadinessRow } from '@/lib/readiness/types'
 
-describe('the settings tabs (the approved preview, market-first WP3.10)', () => {
-  it('draws every sub-page as a tab over the page, in the preview\'s order', () => {
-    const markup = render(<SettingsFrame active="record" title="Settings">x</SettingsFrame>)
-    const text = renderText(<SettingsFrame active="record" title="Settings">x</SettingsFrame>)
-    for (const s of SETTINGS_SUBPAGES) expect(text).toContain(s.label)
-    // One row on a hairline, no rail beside the page.
-    expect(markup).toMatch(/<nav aria-label="Settings" class="[^"]*flex items-end gap-8 overflow-x-auto border-b border-border/)
-    expect(markup).not.toContain('min-[1100px]:w-[224px]')
-    expect(markup).not.toContain('min-h-10')
+describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct)', () => {
+  it('draws the client\'s three tabs as pills, in the artboard\'s order, and no operator tab', () => {
+    const markup = render(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
+    const text = renderText(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
+    expect(text).toMatch(/What you track Team Billing/)
+    for (const hidden of ['Readiness', 'The record', 'How to read', 'Subjects', 'Reports and recipients']) expect(text).not.toContain(hidden)
+    expect(markup).toMatch(/<nav aria-label="Settings" class="flex gap-1 overflow-x-auto">/)
+    // No hairline under the row and no green rule: the lit tab is a pill.
+    expect(markup).not.toContain('border-b border-border')
+    expect(markup).not.toContain('bg-primary')
   })
 
-  it('lights exactly one tab, with the green rule under it, and none when the page is parked', () => {
-    const lit = render(<SettingsFrame active="record" title="Settings">x</SettingsFrame>)
+  it('gives the operator Readiness, The record and How to read after them', () => {
+    const text = renderText(<SettingsFrame active="record" operator title="Settings">x</SettingsFrame>)
+    expect(text).toMatch(/What you track Team Billing Readiness The record How to read/)
+  })
+
+  it('lights exactly one tab, as a pill on ink at 7% in weight 600, and none when the page is parked', () => {
+    const lit = render(<SettingsFrame active="billing" title="Settings">x</SettingsFrame>)
     expect(lit.match(/aria-current="page"/g)).toHaveLength(1)
     const tag = /<a[^>]*aria-current="page"[^>]*>/.exec(lit)?.[0] ?? ''
-    expect(tag).toContain('href="/dashboard/settings/record"')
-    expect(tag).toContain('font-semibold text-foreground')
-    expect(lit.match(/bg-primary/g)).toHaveLength(1)
+    expect(tag).toContain('href="/dashboard/billing"')
+    expect(tag).toContain('bg-[rgba(38,41,44,0.07)] font-semibold')
     const parked = render(<SettingsFrame active={null} title="Settings">x</SettingsFrame>)
     expect(parked.match(/aria-current="page"/g)).toBeNull()
-    expect(parked).not.toContain('bg-primary')
   })
 
-  it('gives every tab a focus ring and the 44px height', () => {
-    const markup = render(<SettingsFrame active="record" title="Settings">x</SettingsFrame>)
-    expect(markup.match(/focus-visible:ring-2/g)).toHaveLength(SETTINGS_SUBPAGES.length)
-    expect(markup.match(/inline-flex h-11/g)).toHaveLength(SETTINGS_SUBPAGES.length)
+  it('gives every tab a focus ring and the artboard\'s 38px height', () => {
+    const markup = render(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
+    expect(markup.match(/focus-visible:ring-2/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(markup.match(/inline-flex h-\[38px\]/g)).toHaveLength(3)
   })
 
-  it('keeps Billing under the Team tab rather than giving it its own', () => {
-    const entry = SETTINGS_SUBPAGES.find((s) => s.key === 'team')!
-    expect(entry.href).toBe('/dashboard/team')
-    expect(entry.under).toEqual(['/dashboard/billing'])
+  it('puts Log out in the page\'s own bar, as a form', () => {
+    const markup = render(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
+    expect(renderText(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)).toMatch(/^Settings Log out/)
+    expect(markup).toMatch(/<form[^>]*>[\s\S]*<button type="submit"[^>]*>[\s\S]*Log out<\/button><\/form>/)
   })
 })
 
@@ -57,8 +60,8 @@ describe('the settings vocabulary', () => {
     expect(markup).not.toContain('<h2 class="shrink-0 text-[15px] font-semibold">How to read</h2>')
   })
 
-  it('keeps a title the lit tab does not say (Plan & billing, under Team)', () => {
-    const markup = render(<SettingsFrame active="team" title="Settings" contentTitle="Plan & billing">x</SettingsFrame>)
+  it('keeps a title the lit tab does not say (Plan & billing, under Billing)', () => {
+    const markup = render(<SettingsFrame active="billing" title="Settings" contentTitle="Plan & billing">x</SettingsFrame>)
     expect(markup).toContain('<h2 class="shrink-0 text-[15px] font-semibold">Plan &amp; billing</h2>')
   })
 
@@ -66,6 +69,7 @@ describe('the settings vocabulary', () => {
     const markup = render(
       <SettingsFrame
         active="readiness"
+        operator
         title="Settings"
         context="Sealand · read-only"
         contentTitle="Readiness"
@@ -120,20 +124,14 @@ describe('the readiness table, read by a client', () => {
   })
 })
 
-describe('the one-line bar (the 25 Sep rulings, market-first WP3.10)', () => {
-  it('prints the brand, the reading month and "as at … · next update …" under the title, with no menu', async () => {
+describe('no context line under the title (rule 1, pages build 1 Oct)', () => {
+  it('prints neither the reading month nor "as at the update", whatever the caller passes', async () => {
     const { sealandReading } = await import('@/lib/test/reading-fixture')
     const { oneLineBar } = await import('@/lib/shell/bar')
-    const markup = render(<SettingsFrame active="tracking" title="Settings" bar={oneLineBar('Sealand', sealandReading('2026-10-01T00:00:00.000Z'))}>x</SettingsFrame>)
-    const text = renderText(<SettingsFrame active="tracking" title="Settings" bar={oneLineBar('Sealand', sealandReading('2026-10-01T00:00:00.000Z'))}>x</SettingsFrame>)
-    expect(text).toContain('Sealand · September 2026')
-    expect(text).toContain('as at the 27 Sep update')
-    expect(text).toContain('next update Sun 4 Oct')
-    expect(markup).not.toContain('aria-haspopup')
-  })
-  it('is the title alone without a reading month', () => {
-    const text = renderText(<SettingsFrame active="tracking" title="Settings" context="Sealand · first update on record 6 Apr" bar={null}>x</SettingsFrame>)
+    const text = renderText(<SettingsFrame active="tracking" title="Settings" context="Sealand · read-only" bar={oneLineBar('Sealand', sealandReading('2026-10-01T00:00:00.000Z'))}>x</SettingsFrame>)
+    expect(text).not.toContain('September 2026')
     expect(text).not.toContain('as at the')
-    expect(text).not.toContain('first update on record')
+    expect(text).not.toContain('next update')
+    expect(text).not.toContain('read-only')
   })
 })

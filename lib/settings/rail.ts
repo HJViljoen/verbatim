@@ -1,5 +1,5 @@
 /**
- * The Settings area's seven sub-pages, drawn as tabs (Phase 1 WP16, design item 29,
+ * The Settings area's sub-pages, drawn as tabs (Phase 1 WP16, design item 29,
  * Heinrich's 14 Sep revision 3: "a settings area with sub-pages — Tracking ·
  * Subjects · Readiness · The record · Reports and recipients · Team and
  * billing · How to read, forms not tiles").
@@ -20,7 +20,7 @@
  */
 
 export type SettingsSection =
-  | 'tracking' | 'subjects' | 'readiness' | 'record' | 'reports' | 'team' | 'guide'
+  | 'tracking' | 'team' | 'billing' | 'readiness' | 'record' | 'guide' | 'subjects' | 'reports'
 
 export interface SettingsSubPage {
   key: SettingsSection
@@ -29,27 +29,37 @@ export interface SettingsSubPage {
   label: string
   /** Addresses that light this entry without being it. */
   under?: string[]
+  /** Who sees it as a tab: everyone, the operator alone, or nobody (an
+   *  address that still serves, or redirects, after its page moved). */
+  tab: 'all' | 'operator' | 'none'
 }
 
-// THE PREVIEW'S TABS (market-first WP3.10; the approved Settings and
-// SettingsRecord artboards draw "What we read · Subjects · The record ·
-// Reports and recipients · Team · How to read", in that order, as tabs over
-// the page). The key stays `tracking`, so no address or stored link changes;
-// the page it names is the market and the searches that find it, which "What
-// we read" says and "Tracking" did not. "Team" is the entry's label; Billing
-// still lights it (`under`). Readiness comes last, after the preview's six,
-// although the artboards leave it out: pages still send a reader to
-// "Settings › Readiness" (lib/reading/own-posts.ts), and a tab a page names
-// has to be there to be found. Dropping it is a call for Heinrich.
+// THE ARTBOARD'S TABS (pages build, 1 Oct; Page-Settings): What you track ·
+// Team · Billing, with Log out in the page's own bar. The key stays
+// `tracking`, so no address or stored link changes.
+//   - Readiness and The record are the operator's (rule 3: product health and
+//     process are not the client's), and How to read is removed for tenants;
+//     the operator keeps all three as tabs.
+//   - Subjects moved to the Subjects page and Reports and recipients to the
+//     Studio. Their entries stay, tab-less, because their addresses still
+//     answer (a redirect to the new home) and a redirect may only point at an
+//     address this table serves (`lib/nav.test.ts`).
+//   - Billing is its own tab now; it was lit through Team.
 export const SETTINGS_SUBPAGES: readonly SettingsSubPage[] = [
-  { key: 'tracking', href: '/dashboard/settings', label: 'What we read' },
-  { key: 'subjects', href: '/dashboard/settings/subjects', label: 'Subjects' },
-  { key: 'record', href: '/dashboard/settings/record', label: 'The record' },
-  { key: 'reports', href: '/dashboard/settings/reports', label: 'Reports and recipients' },
-  { key: 'team', href: '/dashboard/team', label: 'Team', under: ['/dashboard/billing'] },
-  { key: 'guide', href: '/dashboard/settings/how-to-read', label: 'How to read' },
-  { key: 'readiness', href: '/dashboard/settings/readiness', label: 'Readiness' },
+  { key: 'tracking', href: '/dashboard/settings', label: 'What you track', tab: 'all' },
+  { key: 'team', href: '/dashboard/team', label: 'Team', tab: 'all' },
+  { key: 'billing', href: '/dashboard/billing', label: 'Billing', tab: 'all' },
+  { key: 'readiness', href: '/dashboard/settings/readiness', label: 'Readiness', tab: 'operator' },
+  { key: 'record', href: '/dashboard/settings/record', label: 'The record', tab: 'operator' },
+  { key: 'guide', href: '/dashboard/settings/how-to-read', label: 'How to read', tab: 'operator' },
+  { key: 'subjects', href: '/dashboard/settings/subjects', label: 'Subjects', tab: 'none' },
+  { key: 'reports', href: '/dashboard/settings/reports', label: 'Reports and recipients', tab: 'none' },
 ]
+
+/** The tabs a reader sees: the client's three, and the operator's after them. */
+export function settingsTabs(operator: boolean): SettingsSubPage[] {
+  return SETTINGS_SUBPAGES.filter((s) => s.tab === 'all' || (operator && s.tab === 'operator'))
+}
 
 export function settingsSubPage(key: SettingsSection): SettingsSubPage {
   const s = SETTINGS_SUBPAGES.find((x) => x.key === key)

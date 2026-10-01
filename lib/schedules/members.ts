@@ -39,6 +39,9 @@ export function reviewAudience(
   clientId: string,
   opts: { studioVisible?: boolean; sendsLocked?: boolean } = {},
 ): 'operator' | 'members' {
+  // ONE switch for "do the members review" (integration, 1 Oct): NAV's
+  // STUDIO_TENANT_REVIEWS. STUDIO's local TENANT_REVIEWS said the same thing
+  // and was folded into it. `studioVisible` keeps its name for the callers.
   const studioVisible = opts.studioVisible ?? STUDIO_TENANT_REVIEWS
   const sendsLocked = opts.sendsLocked ?? tenantLocked(clientId, 'sends')
   return !studioVisible || sendsLocked ? 'operator' : 'members'

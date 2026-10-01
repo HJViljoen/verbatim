@@ -66,7 +66,7 @@ export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snap
             above this panel, and the title has to start clear of it. */}
         <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-border/70 py-3 pr-5 pl-14 md:pl-5">
           <h2 className="min-w-0 truncate text-[15px] font-semibold leading-[1.3] tracking-[-0.005em]">{title}</h2>
-          <p className="font-mono text-[11px] text-muted-foreground">built {date} · {pageCount} {pageCount === 1 ? 'page' : 'pages'}</p>
+          <p className="font-mono text-[11px] text-muted-foreground">{date} · {pageCount} {pageCount === 1 ? 'page' : 'pages'}</p>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {artifactId && <a href={`/api/artifacts/${artifactId}`} className={PILL}>Download PDF</a>}
             {showStudio && reportId && <Link href={`${STUDIO_HREF}?item=${reportId}`} className={PILL}>Open in the Studio</Link>}

@@ -93,6 +93,7 @@ export default async function SettingsReadinessPage() {
   return (
     <SettingsFrame
       active="readiness"
+      operator
       title="Settings"
       context={inputs.tenant}
       bar={bar}

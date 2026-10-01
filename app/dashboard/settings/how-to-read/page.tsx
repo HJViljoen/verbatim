@@ -46,6 +46,7 @@ export default async function HowToReadPage() {
   return (
     <SettingsFrame
       active="guide"
+      operator
       title="Settings"
       context={tenant}
       bar={bar}

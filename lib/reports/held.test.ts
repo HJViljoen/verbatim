@@ -60,7 +60,10 @@ describe('the reads, failing closed', () => {
 describe('every door into a build asks the rule', () => {
   const src = (p: string) => readFileSync(resolve(__dirname, '../..', p), 'utf8')
   const doors: [string, RegExp[]][] = [
-    ['app/dashboard/studio/page.tsx', [/snapshotHeld\(createAdminClient\(\), clientId, sp\.view\)/]],
+    // The viewer, and the past issues: sent sends only (pages build, 1 Oct).
+    // Reports left this list at integration: it only redirects into the
+    // Studio now (app/dashboard/reports/page.tsx), so it opens no build.
+    ['app/dashboard/studio/page.tsx', [/mayReadHeld\(session, clientId\) \|\| !\(await snapshotHeld\(createAdminClient\(\), clientId, viewId\)\)/, /\.eq\('status', 'sent'\)/, /\.filter\(\(s\) => s\.status === 'sent' && s\.sent_at\)/]],
     ['app/api/share/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, snapshotId\)/]],
     ['app/api/artifacts/[id]/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, row\.snapshot_id\)/]],
     ['app/api/schedules/[id]/preview/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /status !== 'sent'\) return note\(HELD/, /!readsHeld && s\.review\) return note\(HELD/]],

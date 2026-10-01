@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getSessionContext } from '@/lib/auth'
-import { studioRedirect } from '@/lib/studio-visibility'
+import { operatorOnlyRedirect } from '@/lib/pages/studio'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody } from '@/components/shell/master-list'
 import { pageModule } from '@/components/pages/registry'
@@ -32,8 +32,9 @@ export const dynamic = 'force-dynamic'
 export default async function StudioPage({ params }: { params: Promise<{ reportId: string }> }) {
   const { reportId } = await params
   const session = await getSessionContext()
-  // A tenant user who types the address is sent to Reports (finish-list 16).
-  const away = studioRedirect(session)
+  // Editing and building a report is the operator's (pages build, 1 Oct):
+  // anyone else is sent back to the Studio.
+  const away = operatorOnlyRedirect(session)
   if (away) redirect(away)
   const { supabase, clientId } = session
   const [{ data: row }, { data: client }] = await Promise.all([

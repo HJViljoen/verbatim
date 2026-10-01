@@ -199,6 +199,7 @@ export default async function SettingsRecordPage() {
   return (
     <SettingsFrame
       active="record"
+      operator
       title="Settings"
       bar={oneLineBar(tenant, rm)}
       // D14: the first half is EARLIEST EVIDENCE, not a start date — the same

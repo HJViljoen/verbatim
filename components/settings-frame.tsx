@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { PageBar } from '@/components/shell/page-grid'
-import { ReadingContext } from '@/components/shell/page-bar'
+import { LogOut } from 'lucide-react'
+import { signOut } from '@/app/login/actions'
+import { buttonClass, PageTitle } from '@/components/pages/studio/ui'
 import type { ContextLineInput } from '@/lib/shell/bar'
-import { SETTINGS_SUBPAGES, settingsSubPage, type SettingsSection } from '@/lib/settings/rail'
+import { settingsSubPage, settingsTabs, type SettingsSection } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
 
 // The settings area (Phase 1 WP16, design item 29): one frame shared by
@@ -11,69 +12,67 @@ import { cn } from '@/lib/utils'
 // pages read as one place. The labels and addresses come from
 // lib/settings/rail.ts; this file draws them and decides nothing.
 //
-// TABS OVER THE PAGE, AS THE APPROVED PREVIEW DRAWS THEM (market-first WP3.10,
-// the Settings and SettingsRecord artboards). The bar (the title and the
-// one-line context), then a row of tabs on a hairline, the lit one in the
-// page's ink with the green rule under it, then the sub-page itself. The
-// 224px rail beside a flat column is gone, and with it the counts beside the
-// labels and the save-state strip under them: the artboards draw neither, and
-// the page that saves (What we read) says what its last save was beside its
-// own save button.
+// AS THE PAGE-SETTINGS ARTBOARD DRAWS IT (pages build, 1 Oct). The title, with
+// Log out at the right of the page's own bar (it left the sidebar's foot);
+// then the tabs as pills, the lit one on ink at 7% in weight 600, the others
+// muted; then the sub-page. No context line under the title: the reading
+// month and "as at the update" are process talk (rule 1), so `bar` and
+// `context` are accepted and not printed.
 //
 // A ROW THAT SCROLLS SIDEWAYS ON ITS OWN. At a phone's width the tabs do not
 // fit; the row scrolls inside itself and the page never does.
 //
-// SUB-PAGES THE ARTBOARDS DO NOT DRAW keep their own header (`contentMeta`,
+// SUB-PAGES THE ARTBOARD DOES NOT DRAW keep their own header (`contentMeta`,
 // `contentRule`) above their content. Its title is dropped where it only
-// repeats the lit tab ("Subjects" under Subjects): both artboards open straight
-// on their first card, the tab naming the page. A title the tab does not say
-// ("Plan & billing" under Team) stays.
+// repeats the lit tab.
 
 export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, contentRule, children, controls, bar,
+  active, title, contentTitle, contentMeta, contentRule, children, controls, operator = false,
 }: {
-  /** Which tab is lit. `null` lights none: the parked Initiatives page is
-   *  inside this frame and is not one of the tabs, and lighting What we read
-   *  from it would tell a reader they were somewhere they are not. */
+  /** Which tab is lit. `null` lights none (a parked page inside the frame). */
   active: SettingsSection | null
   title: string
+  /** Not printed (rule 1); kept so callers need not change. */
   context?: ReactNode
   contentTitle?: ReactNode
   contentMeta?: ReactNode
   /** The one sentence under the sub-page title. */
   contentRule?: ReactNode
   controls?: ReactNode
-  /** THE ONE-LINE BAR (the 25 Sep rulings, market-first WP3.10): the brand,
-   *  the reading month and "as at the {update} update · next update {date}",
-   *  from `oneLineBar`. Absent, the bar is the title alone; the free-text
-   *  `context` is still not printed (PageBar ignores it). */
+  /** Not printed (rule 1); kept so callers need not change. */
   bar?: ContextLineInput | null
+  /** The platform operator: Readiness, The record and How to read are tabs
+   *  for them alone. */
+  operator?: boolean
   children: ReactNode
 }) {
   const heading = contentTitle && !(active && contentTitle === settingsSubPage(active).label) ? contentTitle : null
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-6">
-      <PageBar
-        title={title}
-        context={context}
-        line={bar ? <ReadingContext context={bar} basePath={SETTINGS_SUBPAGES[0].href} params={{}} /> : undefined}
-      >{controls}</PageBar>
-      <nav aria-label="Settings" className="-mt-2 flex items-end gap-8 overflow-x-auto border-b border-border">
-        {SETTINGS_SUBPAGES.map((s) => (
+    <div className="flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]">
+      <PageTitle title={title}>
+        {controls}
+        <form action={signOut}>
+          <button type="submit" className={buttonClass('secondary', 'normal')}>
+            <LogOut aria-hidden className="size-4" strokeWidth={2} />
+            Log out
+          </button>
+        </form>
+      </PageTitle>
+      <nav aria-label="Settings" className="flex gap-1 overflow-x-auto">
+        {settingsTabs(operator).map((s) => (
           <Link
             key={s.key}
             href={s.href}
             aria-current={active === s.key ? 'page' : undefined}
             className={cn(
-              'relative inline-flex h-11 shrink-0 items-center whitespace-nowrap text-[14px] transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-              active === s.key ? 'font-semibold text-foreground' : 'text-secondary-foreground hover:text-foreground',
+              'inline-flex h-[38px] shrink-0 items-center whitespace-nowrap rounded-lg px-4 text-[14px] transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40',
+              active === s.key ? 'bg-[rgba(38,41,44,0.07)] font-semibold text-[#26292C]' : 'font-medium text-[#5F656B] hover:text-[#26292C]',
             )}
           >
             {s.label}
-            {active === s.key ? <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-t-[2px] bg-primary" /> : null}
           </Link>
         ))}
       </nav>
