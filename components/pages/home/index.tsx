@@ -125,7 +125,10 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
         {weeks.columns.map((c, i) => (
           <div key={c.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
             <div
-              className={`relative flex w-full grow items-end justify-center border-b ${HAIR} ${i > 0 ? `border-l border-dashed ${HAIR}` : ''}`}
+              // The baseline is an inset 1px line, not a bottom border: the
+              // gridline's `border-dashed` styles every side, and the artboard's
+              // baseline is solid under all eight weeks.
+              className={`relative flex w-full grow items-end justify-center shadow-[inset_0_-1px_0_#E4E2DC] ${i > 0 ? `border-l border-dashed ${HAIR}` : ''}`}
               title={c.videos != null && c.comments != null ? `${c.label}: ${fmtInt(c.videos)} videos, ${fmtInt(c.comments)} comments` : undefined}
             >
               {c.videos != null ? (

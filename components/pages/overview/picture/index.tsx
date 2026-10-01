@@ -26,7 +26,7 @@ export function MarketPicturePage({ data }: { data: MarketPictureData | null }) 
   const heading = <PageBar title={PAGE_TITLE} />
   if (!data) {
     return (
-      <div className="flex flex-col gap-[22px] text-[#26292C]">
+      <div className="flex flex-col gap-[22px] leading-[normal] text-[#26292C]">
         {heading}
         <p className="m-0 text-[15px] text-[#5F656B]">{FIRST_RUN_LINE}</p>
       </div>
@@ -42,7 +42,7 @@ export function MarketPicturePage({ data }: { data: MarketPictureData | null }) 
       : null,
   ].filter(Boolean)
   return (
-    <div className="flex flex-col gap-[22px] text-[#26292C]">
+    <div className="flex flex-col gap-[22px] leading-[normal] text-[#26292C]">
       {heading}
       {data.longRun ? <HoldsBlock read={data.longRun} brand={data.brand} noun={data.noun} /> : null}
       {data.stands ? <StandsBlockView block={data.stands} monthText={monthText} /> : null}

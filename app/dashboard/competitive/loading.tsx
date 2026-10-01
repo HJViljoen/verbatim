@@ -10,7 +10,7 @@ import { surface } from '@/lib/nav'
 
 function CardBones({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`flex min-w-0 flex-col gap-3 rounded-[16px] bg-card px-[26px] py-6 shadow-tile ${className ?? ''}`}>
+    <div className={`flex min-w-0 flex-col gap-3 rounded-[16px] bg-card px-[26px] py-6 ${className ?? ''}`}>
       <Bone className="h-5 w-56 max-w-full" />
       <Bone className="h-3 w-72 max-w-full" />
       {children}

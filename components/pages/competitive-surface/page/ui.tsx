@@ -21,7 +21,7 @@ export const GOLD = '#9A6B00'
 /** A block's white card. Keeps the tile shadow while the page ground is
  *  white; the artboard draws it on palette A's ground with none. */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-card shadow-tile', className)}>{children}</section>
+  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-card', className)}>{children}</section>
 }
 
 /** A title with its base on the line under it (the narrow cards). */

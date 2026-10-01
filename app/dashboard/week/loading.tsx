@@ -12,7 +12,7 @@ export default function WeekLoading() {
     <div className="flex flex-col gap-[22px]" aria-busy="true">
       <span role="status" className="sr-only">Loading {title}…</span>
       <PageTitle>{title}</PageTitle>
-      <section className="flex flex-col gap-4 rounded-[16px] bg-white px-8 pt-7 pb-6 shadow-tile">
+      <section className="flex flex-col gap-4 rounded-[16px] bg-white px-8 pt-7 pb-6">
         <Bone className="h-3 w-20" />
         <BoneLines lines={2} />
         {[0, 1].map((i) => (
@@ -22,7 +22,7 @@ export default function WeekLoading() {
           </div>
         ))}
       </section>
-      <section className="flex flex-col gap-3 rounded-[16px] bg-white px-7 py-6 shadow-tile">
+      <section className="flex flex-col gap-3 rounded-[16px] bg-white px-7 py-6">
         <Bone className="h-5 w-48" />
         <BoneLines lines={3} />
       </section>

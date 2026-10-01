@@ -59,7 +59,9 @@ export function BrandWho({
 }: { parts: readonly AboutPart[]; names: WhoNames; prefix?: string; className?: string }) {
   if (!parts.some((p) => p.videos > 0)) return null
   return (
-    <div data-who="" className={cn('text-[12px] leading-[1.45]', className)}>
+    // The leading LAST: tailwind-merge drops a leading when a later font size
+    // arrives (a caller's 13px), and the artboard draws every brand line at 1.45.
+    <div data-who="" className={cn('text-[12px]', className, 'leading-[1.45]')}>
       <WhoInline parts={parts} names={names} prefix={prefix} />
     </div>
   )

@@ -201,7 +201,7 @@ export function SubjectsPage({ view }: { view: SubjectsView | null }) {
   const title = surface('subjects').label
   if (!view) {
     return (
-      <PageFrame className="gap-[22px]">
+      <PageFrame className="gap-[22px] leading-[normal]">
         <PageBar title={title} />
         <section className={`${CARD} px-5 pt-5 pb-[22px]`}>
           <p className="m-0 text-[14px] text-[#5F656B]">{SUBJECTS_FIRST_RUN}</p>
@@ -214,7 +214,7 @@ export function SubjectsPage({ view }: { view: SubjectsView | null }) {
   const says = pane?.kinds && pane.kinds.rows.length > 0 ? <SubjectSays pane={pane} monthWords={view.monthWords} /> : null
   const asks = pane?.questions && pane.questions.rows.length > 0 ? <SubjectAsks pane={pane} /> : null
   return (
-    <PageFrame className="gap-[22px]">
+    <PageFrame className="gap-[22px] leading-[normal]">
       <PageBar title={title} />
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start">
         <SubjectsList view={view} />

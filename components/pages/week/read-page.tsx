@@ -32,10 +32,11 @@ export function PageTitle({ children }: { children: ReactNode }) {
   return <PageBar title={children} />
 }
 
-/** A card on the page: paper, 16px corners. The tile shadow keeps it apart
- *  from the shell's current ground (the artboard's ground is #F7F6F2). */
+/** A card on the page: paper, 16px corners, flat, as the artboard draws it
+ *  (the shadow kept it apart from a white ground; the shell's ground has been
+ *  the artboard's #F7F6F2 since 1 Oct). */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-white shadow-tile', className)}>{children}</section>
+  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-white', className)}>{children}</section>
 }
 
 /** The writer's sentences (slot `week_read`, scrubbed when stored), any
@@ -134,7 +135,8 @@ export function WeekReadCard({ data }: { data: WeekReadPageData }) {
           <Stored body={data.lead} figures={data.figures} className={cn('m-0 max-w-[1000px] font-serif text-[24px] leading-[1.4] font-medium', INK)} />
         </>
       ) : null}
-      <div className="flex flex-col">
+      {/* 14px between findings, the card's own gap in the artboard. */}
+      <div className="flex flex-col gap-3.5">
         {data.findings.map((f) => <Finding key={f.n} f={f} data={data} />)}
       </div>
     </Card>
@@ -166,8 +168,10 @@ export function AlsoHeardCard({ data }: { data: WeekReadPageData }) {
 export const WEEK_READ_FIRST = 'Your market’s first week will appear here.'
 
 export function WeekReadPage({ data, title }: { data: WeekReadPageData | null; title: string }) {
+  // `normal` leading under the page: the artboard sets none, and the app's
+  // 1.45 / 1.5 made every unset line taller (integration shots, 1 Oct).
   return (
-    <div className="flex flex-col gap-[22px]">
+    <div className="flex flex-col gap-[22px] leading-[normal]">
       <PageTitle>{title}</PageTitle>
       {data && data.findings.length > 0 ? (
         <>

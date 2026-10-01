@@ -94,7 +94,7 @@ export function AskCard({ canSend, disabledNote = 'Only an owner or admin can as
 
   return (
     <form
-      className="m-0 flex w-full flex-col"
+      className="m-0 flex w-full flex-col leading-[normal]"
       onSubmit={(e) => {
         e.preventDefault()
         void send()

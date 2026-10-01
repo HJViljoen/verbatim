@@ -109,7 +109,7 @@ export function VoiceSurfacePage({
 }) {
   if (!data) {
     return (
-      <div className="flex flex-col gap-[22px]">
+      <div className="flex flex-col gap-[22px] leading-[normal]">
         <ConversationTitle controls={controls} />
         <ConvCard className="px-7 py-6">
           <p className="m-0 text-[14px] text-[#5F656B]">Your market’s first month will appear here.</p>
@@ -121,7 +121,7 @@ export function VoiceSurfacePage({
   // as the Brands page links to it (#board on its whole section).
   const board = data.brandView ? <ConvCard id="board">{voiceBoard.render(data, 'app', voiceContext(params))}</ConvCard> : undefined
   return (
-    <div className="flex flex-col gap-[22px]">
+    <div className="flex flex-col gap-[22px] leading-[normal]">
       <ConversationTitle controls={controls} />
       <ConversationBody data={data} params={params} board={board} />
     </div>

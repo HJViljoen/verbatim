@@ -38,7 +38,7 @@ const MUTED = 'text-[#5F656B]'
 /** The artboard's card: white, 16px corners, its own padding and gap. */
 export function ConvCard({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} data-card="" className={cn('flex min-w-0 scroll-mt-6 flex-col rounded-[16px] bg-white shadow-tile', className)}>
+    <section id={id} data-card="" className={cn('flex min-w-0 scroll-mt-6 flex-col rounded-[16px] bg-white', className)}>
       {children}
     </section>
   )
@@ -85,7 +85,8 @@ function Num({ n, unit, size = 14 }: { n: number; unit?: string; size?: number }
   return (
     <div className="shrink-0 whitespace-nowrap text-right font-mono font-medium" style={{ fontSize: size }}>
       <span data-copy="figure">{fmtInt(n)}</span>
-      {unit ? <span className={cn('font-sans text-[12px] font-normal', MUTED)}> {unit}</span> : null}
+      {/* The unit in the number's own face and weight, as drawn. */}
+      {unit ? <span className={cn('text-[12px]', MUTED)}> {unit}</span> : null}
     </div>
   )
 }

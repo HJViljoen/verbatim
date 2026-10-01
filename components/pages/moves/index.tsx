@@ -41,7 +41,7 @@ export function MovesPage({
   const ctx = marketContext(params)
   const considering = consideringRows(market?.advice.shortlist?.rows)
   return (
-    <div className="flex flex-col gap-[22px]">
+    <div className="flex flex-col gap-[22px] leading-[normal]">
       <MovesHeader dating={market?.moves.dating ?? null} />
       {statements ? <YourStatements data={statements} /> : null}
       <MovesWorthConsidering rows={considering} />

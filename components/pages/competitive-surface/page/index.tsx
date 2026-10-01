@@ -36,7 +36,7 @@ export function CompetitivePage({ data }: { data: CompetitiveSurfaceData }) {
   const title = surface('competitive').label
   if (!b) {
     return (
-      <PageFrame className="gap-[22px]">
+      <PageFrame className="gap-[22px] leading-[normal]">
         <PageBar title={title} />
       </PageFrame>
     )
@@ -48,7 +48,7 @@ export function CompetitivePage({ data }: { data: CompetitiveSurfaceData }) {
   const shown = competitiveBlocks(b, client)
   const pane = shown.includes('pane')
   return (
-    <PageFrame className="gap-[22px]">
+    <PageFrame className="gap-[22px] leading-[normal]">
       <PageBar title={title} />
       {list || pane ? (
         <div className={list && pane ? 'grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,0.62fr)_minmax(0,1.38fr)]' : 'grid grid-cols-1 items-start gap-5'}>
