@@ -1,6 +1,9 @@
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadSubjectsPage } from '@/lib/pages/subjects'
+import { loadSubjectReadLine } from '@/lib/pages/subjects-read'
+import { subjectsView } from '@/lib/pages/subjects-view'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { SubjectsPage } from '@/components/pages/subjects'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
@@ -9,16 +12,15 @@ import { surface } from '@/lib/nav'
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('subjects').label }
 
-// Subjects — "how are we seen on this subject?" A new address in Phase 1
-// (there has never been a /dashboard/subjects). WP12 fills it from
-// lib/pages/subjects.ts and the `month_subject_readings` the pipeline writes
-// once M4 is applied; until then every subject read degrades to a sentence
-// saying what is not recorded yet.
+// Subjects (pages rebuild, 1 Oct; Page-Subjects.dc.html): every subject you
+// follow, with the editor that moved in from Settings, and the open subject in
+// full. `?item=` selects the subject, so a reader can send a colleague the
+// subject rather than the page.
 //
-// `?item=` selects the subject, so a reader can send a colleague the subject
-// rather than the page — which is also how OV2's rows link here — and
-// `?questions=` the questions pane's period. The page has no horizon control
-// since deploy 3 (lib/nav.ts), so `?horizon=` moves nothing.
+// TWO READS, ONE AFTER THE OTHER. The page's own loader, read lean (the reads
+// that fed only the retired blocks are not made), then the week read's line on
+// the subject it opened, which needs to know which subject that is. The week
+// read is service-role only (review L2), scoped to the session's client.
 
 export default async function Page({
   searchParams,
@@ -27,6 +29,15 @@ export default async function Page({
 }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId, role } = await getSessionContext()
-  const data = await loadSubjectsPage({ supabase, clientId, reading: readingHandle(clientId), params: sp, canEdit: canManageTenant(role) })
-  return <SubjectsPage data={data} params={sp} />
+  const data = await loadSubjectsPage(
+    { supabase, clientId, reading: readingHandle(clientId), params: sp, canEdit: canManageTenant(role) },
+    { lean: true },
+  )
+  const read = data?.selected
+    ? await loadSubjectReadLine(createAdminClient(), clientId, data.selected.id).catch((error: unknown) => {
+        console.error(`[subjects] week read: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      })
+    : null
+  return <SubjectsPage view={data ? subjectsView(data, read, clientId) : null} />
 }

@@ -276,6 +276,12 @@ export interface WeekReadStanding {
   rung: StandingRung
   line: string
   quote: QuoteRef | null
+  /** ADDITIVE (pages rebuild, 1 Oct): the conversations inside the subject
+   *  this month (`StandingFact.contents`, theme labels, at most
+   *  `STANDING_CONTENTS`), frozen with the read for the Subjects pane's
+   *  "Conversations inside it". Absent on a read stored before it, and on a
+   *  subject with none (or a failed one). */
+  contents?: string[]
 }
 
 // ---- The report (v3) ---------------------------------------------------------------

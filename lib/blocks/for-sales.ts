@@ -148,5 +148,5 @@ export function groupingLine(grouping: SalesGrouping): string | null {
   // Null where the reader named the subjects: they know (copy de-clutter D70).
   return grouping === 'subject'
     ? null
-    : 'Grouped by theme: the grouping is ours and it can change. Name your subjects in Settings and these become yours.'
+    : 'Grouped by theme: the grouping is ours and it can change. Name your subjects on the Subjects page and these become yours.'
 }

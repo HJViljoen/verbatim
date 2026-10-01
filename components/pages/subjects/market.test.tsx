@@ -7,6 +7,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { surface } from '@/lib/nav'
 import { layoutFor, SubjectsPage, SUBJECT_BLOCKS, subjectsPage } from './index'
+import { subjectsView } from '@/lib/pages/subjects-view'
 import { NO_SUBJECTS_LINE, subjectsList } from './list'
 import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import { subjectsOwnPosts } from './own-posts'
@@ -25,6 +26,13 @@ import { marketLineFixture, marketSubjectsFixture, ossurMarketFixture, subjectsF
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 const text = (node: React.ReactNode) => renderText(node).replace(/\s+/g, ' ')
+/** Looks & style with Waterproofing's named questions, so every card draws. */
+const withQuestions = (): SubjectsData => {
+  const data = marketSubjectsFixture()
+  return { ...data, selected: { ...data.selected!, unanswered: waterproofingFixture().selected!.unanswered } }
+}
+/** The page as the route draws it (pages rebuild, 1 Oct), with no week read. */
+const page = (data: SubjectsData) => <SubjectsPage view={subjectsView(data, null, 'client')} />
 
 describe('Subjects on the market: every block, every mode', () => {
   it('renders in all three modes on Looks & style, Waterproofing and Össur, and keeps the copy contract', () => {
@@ -156,10 +164,15 @@ describe('S1 · the rail reads the market', () => {
     // Inside a drawn block, as the front page draws a waiting line (decision B 2).
     expect(render(subjectsList.render(data, 'app', ctx))).toMatch(/<p class="[^"]*bg-inner[^"]*"><span[^>]*>No subjects named yet\.<\/span><\/p>/)
     expect(layoutFor(data).map((l) => l.block.key)).toEqual(['subjects.list', 'subjects.ownposts', 'subjects.sayhear'])
-    const page = text(<SubjectsPage data={data} />)
-    expect(page).toContain(NO_SUBJECTS_LINE)
-    expect(page.toUpperCase()).not.toContain(MARKET_PANE_TITLE.toUpperCase())
-    expect(page).not.toContain('Name a subject')
+    // The page (pages rebuild): a reader who may not change the set reads the
+    // one line; one who may is offered "Add a subject" in its place.
+    const read = text(page({ ...data, list: { ...data.list, canEdit: false } }))
+    expect(read).toContain(NO_SUBJECTS_LINE)
+    expect(read.toUpperCase()).not.toContain(MARKET_PANE_TITLE.toUpperCase())
+    expect(read).not.toContain('Name a subject')
+    const owner = text(page({ ...data, list: { ...data.list, canEdit: true } }))
+    expect(owner).toContain('Add a subject')
+    expect(owner).not.toContain(NO_SUBJECTS_LINE)
   })
 })
 
@@ -309,9 +322,11 @@ describe('S4 · questions people ask on it', () => {
     expect(t).toContain('None of your 56 posts shared two or more of its words.')
   })
 
-  it('the page draws the questions tile whatever its count (the gate from 5bb877d6 is gone)', () => {
-    const page = text(<SubjectsPage data={marketSubjectsFixture()} />)
-    expect(page.toUpperCase()).toContain(QUESTIONS_TITLE.toUpperCase())
+  it('the page draws the questions card where questions are named, and leaves it out where none is (rule 2)', () => {
+    expect(text(page(withQuestions())).toUpperCase()).toContain(QUESTIONS_TITLE.toUpperCase())
+    expect(text(page(withQuestions())).toUpperCase()).toContain('16 OF ITS VIDEOS CARRY A QUESTION. ASKED MOST:')
+    // Two question videos and nothing named: no card with a count and no rows.
+    expect(text(page(marketSubjectsFixture())).toUpperCase()).not.toContain(QUESTIONS_TITLE.toUpperCase())
   })
 })
 
@@ -392,19 +407,20 @@ describe('S6 · month by month on the market', () => {
 })
 
 describe('the market page, as a page', () => {
-  it('puts only Export in the bar: no How to read pill and no "Market or us?" (§2.3 S8, D5)', () => {
-    const page = text(<SubjectsPage data={marketSubjectsFixture()} />)
-    expect(page).toContain('Export')
-    expect(page).not.toContain('How to read this page')
-    expect(page).not.toContain('Market or us?')
+  it('puts nothing in the bar: no Export, no How to read pill and no "Market or us?" (Page-Subjects.dc.html)', () => {
+    const t = text(page(marketSubjectsFixture()))
+    expect(t).not.toContain('Export')
+    expect(t).not.toContain('How to read this page')
+    expect(t).not.toContain('Market or us?')
   })
 
-  it('draws every block once, in the preview\'s order', () => {
-    const page = text(<SubjectsPage data={marketSubjectsFixture()} />)
-    const titles = ['YOUR SUBJECTS', 'THIS SUBJECT IN YOUR MARKET', 'WHAT PEOPLE SAY ABOUT LOOKS & STYLE', 'QUESTIONS PEOPLE ASK ON IT', 'VOICES ON LOOKS & STYLE', 'MONTH BY MONTH', 'YOUR OWN POSTS', 'SAY VS HEAR']
-    const at = titles.map((t) => page.toUpperCase().indexOf(t))
+  it('draws the artboard\'s blocks once, in its order, and none of the retired ones', () => {
+    const t = text(page(withQuestions())).toUpperCase()
+    const titles = ['YOUR SUBJECTS', 'LOOKS & STYLE', 'WHAT PEOPLE SAY ABOUT IT', 'QUESTIONS PEOPLE ASK ON IT']
+    const at = titles.map((x) => t.indexOf(x))
     expect(at.every((x) => x >= 0)).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
+    for (const gone of ['VOICES ON', 'MONTH BY MONTH', 'YOUR OWN POSTS', 'SAY VS HEAR', 'WHERE WE FOUND THEM']) expect(t).not.toContain(gone)
   })
 
   it('a page stored before WP2.2 (no market base) still renders its Phase 1 blocks, as sent', () => {

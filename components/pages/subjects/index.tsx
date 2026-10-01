@@ -1,49 +1,30 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import type { PageModule, Renderable, Slide } from '@/lib/renderables/types'
 import { blockContext } from '@/lib/blocks/types'
-import type { GlossaryKey } from '@/lib/calibration'
 import { fullDate } from '@/lib/format'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { ExportMenu, ExportScope } from '@/components/export-menu'
-import { HowToRead } from '@/components/how-to-read'
-import { PageFrame, PageGrid } from '@/components/shell/page-grid'
-import { SurfacePageBar } from '@/components/shell/page-bar'
-import { barContext } from '@/lib/shell/bar'
-import { Tile, TileEmpty } from '@/components/shell/tile'
 import { loadSubjectsPage, selectedNotReady, type SubjectsData } from '@/lib/pages/subjects'
 import { printsMarket } from '@/lib/subjects/calibration-state'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
 import { subjectsSayHear } from './say-hear'
 import { subjectsSubject } from './subject'
-import { subjectLineDrawsChart, subjectsLine } from './line'
+import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
 import { subjectsVoices } from './voices'
 import { subjectsUnanswered } from './unanswered'
 
-// Subjects — the page (Phase 1 WP12, design §3 SU1–SU3, the mock's
-// Subjects.dc.html).
+// Subjects: the page module and its blocks (Phase 1 WP12).
 //
-// A RAIL AND A COLUMN, as the mock draws it: three narrow tiles on the left —
-// the subject set, what you published, what you claimed — and the selected
-// subject in full on the right. The selection is in the URL (`?item=`), which
-// is how OV2's rows link here and how a reader can send a colleague the subject
-// rather than the page.
-//
-// THE RAIL IS 240px, NOT THREE OF TWELVE COLUMNS (wave 2). The twelve-column
-// PageGrid is the right frame for a page of equal tiles and the wrong one for
-// this page: the mock's rail is a fixed 240 and its main column takes whatever
-// is left, and the nearest span (3 of 12 = 280px at 1440) makes the chart 40px
-// narrower than it was drawn. So the app arm composes the mock's own grid and
-// `PageGrid` stays for the state where there is nothing to lay out. Every tile
-// is still a `Tile`, so `data-col` / `data-row` still address it in print mode
-// and `layoutFor` still decides what an export puts on a slide.
+// THE PAGE ITSELF MOVED (pages rebuild, 1 Oct): `/dashboard/subjects` renders
+// `SubjectsPage` from ./page, built to Page-Subjects.dc.html. The blocks below
+// left the page and stay in the registry, because stored snapshots and the
+// briefs' borrowed sections still render them by key (`subjects.list`,
+// `subjects.voices`, …), and a key that resolves to nothing is an empty tile in
+// a sent artefact. Nothing here is drawn on the app any more.
 
-/** The words this page is measured against — the subject, the level under every
- *  figure, the band behind every change, and the two nouns the denominators are
- *  counted in. From `THIRTEEN_WORDS`, never invented here. */
-const GLOSSARY_ITEMS: GlossaryKey[] = ['subject', 'level', 'change', 'audience', 'video', 'month']
+export { SubjectsPage } from './page'
 
 /** The blocks a subject that is not ready does not draw (T0a, ruling U6). */
 const WITHHELD_WHEN_NOT_READY: readonly Block<SubjectsData>[] = [subjectsKinds, subjectsUnanswered, subjectsLine]
@@ -72,23 +53,6 @@ const LAYOUT: Record<string, { col: number; row: number }> = {
   'subjects.kinds': { col: 6, row: 3 },
   'subjects.unanswered': { col: 6, row: 3 },
   'subjects.voices': { col: 12, row: 3 },
-}
-
-/** The mock's own minimum heights, so a tile spreads to the shape it was drawn
- *  at instead of collapsing onto its shortest reading.
- *
- *  `lg:`, NOT `xl:` — they apply wherever the rail-and-column composition
- *  does, and that is 1024 up (see the grid below). */
-const MIN_H: Record<string, string> = {
-  'subjects.list': 'lg:min-h-[380px]',
-  'subjects.ownposts': 'lg:min-h-[265px]',
-  'subjects.sayhear': 'lg:min-h-[183px]',
-  'subjects.subject': 'lg:min-h-[216px]',
-  'subjects.line': 'lg:min-h-[340px]',
-  'subjects.kinds': 'lg:min-h-[280px]',
-  // No floor: it sits in the rail now, at the height of what it says.
-  'subjects.unanswered': '',
-  'subjects.voices': 'lg:min-h-[300px]',
 }
 
 /**
@@ -161,243 +125,9 @@ function subjectsExportContext(): BlockContext {
   return blockContext(appBaseUrl(), EMAIL)
 }
 
-/**
- * One tile, at the mock's height, spreading its content (MASTER rule 8).
- *
- * THE SPAN COMES FROM `layoutFor`, NOT FROM `LAYOUT` (fix pass). This read
- * `LAYOUT[block.key]` directly, so the four spans `layoutFor` returns for the
- * no-selection arm — the arm production is in today — were dead: the page kept
- * the selected arm's 3 / 9 / 3 / 2 geometry and drew one 216px tile beside a
- * 1,150px rail with about 930px of white next to it. Two sources of truth for
- * one geometry, disagreeing on the only arm a real tenant sees.
- *
- * `minH` is the mock's own tile height and it belongs to the arm that has
- * something to fill it with: a 380px minimum under three lines of a refusal is
- * 250px of blank.
- */
-function BlockTile({ block, data, ctx, col, row, minH = true, className }: {
-  block: Block<SubjectsData>
-  data: SubjectsData
-  ctx: BlockContext
-  col: number
-  row: number
-  minH?: boolean
-  className?: string
-}) {
-  return (
-    <Tile
-      col={col}
-      row={row}
-      distribute="between"
-      exportKey={block.key}
-      className={[minH ? MIN_H[block.key] ?? '' : '', className ?? ''].filter(Boolean).join(' ')}
-    >
-      {block.render(data, 'app', ctx)}
-    </Tile>
-  )
-}
-
 /** Was this page built on the market (WP2.2)? The loader sets the rail's
  *  base on every page since; a stored page has none. */
 export const isMarketSubjects = (data: SubjectsData): boolean => data.list.base !== undefined
-
-/**
- * THE MARKET PAGE'S COMPOSITION (WP2.2; the approved preview's Subjects
- * artboard): the rail beside the subject in your market, then what people say
- * about it beside the questions asked on it, the voices across the page, the
- * months across the page, and your own posts beside say vs hear. From 1280 the
- * pairs sit side by side in the preview's thirds; under it every tile takes the
- * column. Each block draws its own insets (`roomy`), as Your market's do.
- */
-function MarketSubjectsPage({ data, params }: { data: SubjectsData; params: Record<string, string | undefined> }) {
-  const ctx = subjectsContext(params)
-  const tile = (block: Block<SubjectsData>) => (
-    <Tile
-      col={12}
-      // THE CONTENT SETS THE HEIGHT: one row's floor (116px), so a tile that
-      // says one line ("No subjects named yet.") is not a 248px box on a phone.
-      row={1}
-      flush
-      exportKey={block.key}
-      distribute="between"
-      bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
-      className="min-w-0"
-    >
-      {block.render(data, 'app', ctx)}
-    </Tile>
-  )
-  const row = (cols: string, ...blocks: Block<SubjectsData>[]) => (
-    <div className={`grid grid-cols-1 items-stretch gap-6 ${cols}`}>{blocks.map((b) => <div key={b.key} className="flex min-w-0 [&>*]:flex-1">{tile(b)}</div>)}</div>
-  )
-  return (
-    <div className="flex flex-col gap-6">
-      {data.selected && !printsMarket(data.selected.calibration) ? (
-        // Not ready: its name, its pane and its voices (T0a, ruling U6).
-        <>
-          {row('xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]', subjectsList, subjectsSubject)}
-          {row('', subjectsVoices)}
-          {row('lg:grid-cols-2', subjectsOwnPosts, subjectsSayHear)}
-        </>
-      ) : data.selected ? (
-        <>
-          {row('xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]', subjectsList, subjectsSubject)}
-          {row('xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]', subjectsKinds, subjectsUnanswered)}
-          {row('', subjectsVoices)}
-          {row('', subjectsLine)}
-          {row('lg:grid-cols-2', subjectsOwnPosts, subjectsSayHear)}
-        </>
-      ) : (
-        <>
-          {row('', subjectsList)}
-          {row('lg:grid-cols-2', subjectsOwnPosts, subjectsSayHear)}
-        </>
-      )}
-    </div>
-  )
-}
-
-export function SubjectsPage({
-  data,
-  params = {},
-}: {
-  data: SubjectsData | null
-  params?: Record<string, string | undefined>
-}) {
-  if (!data) {
-    return (
-      <PageFrame>
-        <SurfacePageBar nav="subjects" params={params}>
-          <HowToRead items={GLOSSARY_ITEMS} basePath="/dashboard/subjects" anchor="subjects" />
-        </SurfacePageBar>
-        <PageGrid>
-          <Tile col={12} row={2}>
-            <TileEmpty>
-              Nothing has been read for this workspace yet. Your subjects start being counted with the first update
-              after you confirm them.
-            </TileEmpty>
-          </Tile>
-        </PageGrid>
-      </PageFrame>
-    )
-  }
-
-  if (isMarketSubjects(data)) {
-    return (
-      <ExportScope
-        page="subjects"
-        params={params}
-        tiles={layoutFor(data).map((l) => ({ key: l.block.key, title: l.block.title }))}
-      >
-        <PageFrame className="gap-6">
-          {/* EXPORT ALONE AT THE RIGHT-HAND END, as Your market's bar (the
-              approved preview; §2.3 S8: no "Market or us?" before deploy 5).
-              How to read stays one click away in Settings. */}
-          <SurfacePageBar nav="subjects" params={params} context={barContext(data)}>
-            <ExportMenu variant="button" />
-          </SurfacePageBar>
-          <MarketSubjectsPage data={data} params={params} />
-          {/* No footnote under the page (25 Sep rulings). */}
-        </PageFrame>
-      </ExportScope>
-    )
-  }
-
-  const ctx = subjectsContext(params)
-  const layout = layoutFor(data)
-  const drawn = new Map(layout.map((l) => [l.block.key, l]))
-  // The rail-and-column composition is the SELECTED reading's; with nothing
-  // selected there is no detail to sit beside, and `layoutFor` has already
-  // said which four tiles survive and how wide each one is.
-  const tile = (block: Block<SubjectsData>, className?: string, minH = true) => {
-    const at = drawn.get(block.key)
-    return at
-      ? <BlockTile block={block} data={data} ctx={ctx} col={LAYOUT[block.key]?.col ?? at.col} row={LAYOUT[block.key]?.row ?? at.row} className={className} minH={minH} />
-      : null
-  }
-  // THE CHART'S HEIGHT ONLY UNDER A CHART (deploy 2 review): under three
-  // months the tile prints a few figures, and the mock's floors (340px from
-  // `lg`, the row's 512px stacked) left an empty band about 250px tall.
-  const lineChart = subjectLineDrawsChart(data)
-
-  return (
-    <ExportScope
-      page="subjects"
-      params={params}
-      tiles={layoutFor(data).map((l) => ({ key: l.block.key, title: l.block.title }))}
-    >
-      <PageFrame>
-        <SurfacePageBar
-          nav="subjects"
-          params={params}
-          context={barContext(data)}
-        >
-          <HowToRead items={GLOSSARY_ITEMS} basePath="/dashboard/subjects" anchor="subjects" />
-          <ExportMenu />
-        </SurfacePageBar>
-
-        {data.selected ? (
-        <div className="flex flex-col gap-4">
-          {/* THE RAIL STARTS AT 1024, NOT AT 1280. The composition was `xl:`
-              throughout, so at 1152 — an ordinary laptop width — and at 1024,
-              which is the standard gate's second width, the whole page was one
-              stacked column of full-width tiles and the rail-plus-detail idea
-              was simply gone. A 240px rail leaves ~740px of main column at
-              1024, which is more than the chart's own 880-unit viewBox needs.
-              The kind mix / questions PAIR stays `xl:`: at 1024 the two halves
-              would be ~370px each, and three rows of bars do not read at 370. */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start">
-            <div className="flex flex-col gap-4">
-              {tile(subjectsList)}
-              {tile(subjectsOwnPosts)}
-              {tile(subjectsSayHear)}
-              {/* Shown only when it has questions to list (Heinrich, 2026-09-24): a card
-                  that only says the gate was not met is not drawn. */}
-              {drawn.has(subjectsUnanswered.key) && !subjectsUnanswered.emptyState(data) ? tile(subjectsUnanswered, 'min-w-0') : null}
-            </div>
-            <div className="flex min-w-0 flex-col gap-4">
-              {tile(subjectsSubject)}
-              {tile(subjectsLine, lineChart ? undefined : 'min-h-0', lineChart)}
-              {/* THE KIND MIX TAKES THE MAIN COLUMN; ITS AUDIENCES FLOW INTO
-                  TWO COLUMNS where the tile is wide enough (a container query
-                  in the block). The mock's 1.35 : 1 pair with the questions
-                  list assumed a list as tall as the bars; on real data the
-                  list is often one line, and the pair left ~700px of white
-                  beside five audiences of bars (layout sweep, 2026-09-24). The
-                  questions now stack in the rail with the other short cards. */}
-              {drawn.has(subjectsKinds.key) ? tile(subjectsKinds, 'min-w-0') : null}
-            </div>
-          </div>
-          {tile(subjectsVoices)}
-        </div>
-        ) : (
-          // NOTHING SELECTED: the twelve-column grid, at the spans `layoutFor`
-          // returns — two full rows rather than one narrow tile beside a rail
-          // and 930px of white. No minimum height either: the mock's tile
-          // heights are for tiles with a reading in them, and a 380px floor
-          // under three lines of a refusal is blank space that reads as a
-          // rendering fault.
-          <PageGrid>
-            {layout.map(({ block, col, row }) => (
-              <BlockTile key={block.key} block={block} data={data} ctx={ctx} col={col} row={row} minH={false} />
-            ))}
-          </PageGrid>
-        )}
-
-        {data.notes.length > 0 ? (
-          <p className="m-0 text-[11px] text-muted-foreground">
-            {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading
-                layer merges the series' notes by the union of their months
-                (lib/reading/series.ts mergeSeriesNotes). */}
-            {data.notes.map((n) => n.text).join(' ')}
-          </p>
-        ) : null}
-
-        {/* The method footnote came off this page (copy de-clutter ruling B):
-            the page bar's How-sound pill and its record are the one home. */}
-      </PageFrame>
-    </ExportScope>
-  )
-}
 
 // ---- the renderable module (`subjects.shell`, the Export control) ------------
 

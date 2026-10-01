@@ -216,7 +216,7 @@ describe('the quarterly card’s absence', () => {
     assertCopyContract(<QuarterlyAbsentTile />)
     const text = renderText(<QuarterlyAbsentTile />)
     expect(text).toContain('none is confirmed for this workspace yet')
-    expect(text).toContain('Name a subject in Settings')
+    expect(text).toContain('Name a subject on Subjects')
   })
 
   // No date, no count, and nothing about a quarter nobody has read — the same

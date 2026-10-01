@@ -7,6 +7,7 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
+import { subjectsView } from '@/lib/pages/subjects-view'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
 import { SAY_HEAR_NONE, subjectsSayHear } from './say-hear'
@@ -1464,7 +1465,7 @@ describe('SU2 · a note-less change of ours on the axis', () => {
       for (const mode of MODES) {
         for (const block of SUBJECT_BLOCKS) expect(render(block.render(data, mode, ctx))).not.toMatch(/moved this month/i)
       }
-      expect(render(<SubjectsPage data={data} />)).not.toMatch(/moved this month/i)
+      expect(render(<SubjectsPage view={subjectsView(data, null, 'client')} />)).not.toMatch(/moved this month/i)
     }
   })
 })
@@ -1477,7 +1478,7 @@ describe('the Subjects page', () => {
   // method footnote prints on the page.
   it('prints no method footnote and no language sentence', () => {
     const data = subjectsFixture()
-    const text = markupText(render(<SubjectsPage data={data} />))
+    const text = markupText(render(<SubjectsPage view={subjectsView(data, null, 'client')} />))
     expect(text).not.toContain(data.method!.language!)
     expect(text).not.toContain(data.method!.preparedBy)
     expect(text).not.toContain(data.method!.redditCap)

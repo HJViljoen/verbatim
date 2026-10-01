@@ -336,7 +336,7 @@ export function QuarterlyAbsentTile({ col = 7, row = 2 }: { col?: number; row?: 
       meta="not yet"
       distribute="between"
       className="xl:min-h-[248px]"
-      footer={<Link href="/dashboard/settings" className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject in Settings</Link>}
+      footer={<Link href="/dashboard/subjects" className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject on Subjects</Link>}
     >
       <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
         The quarterly review reads the subjects you track, and none is confirmed for this workspace yet, so there is no

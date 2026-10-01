@@ -184,7 +184,7 @@ async function main() {
   if (emit && existsSync(emit)) throw new Error(`${emit} exists; --emit never overwrites a sheet — name a new file`)
   const admin = createAdminClient()
   const active = await loadActiveSubjects(admin, clientId)
-  if (active.length === 0) throw new Error('no active subjects for this tenant — confirm a set in Settings first')
+  if (active.length === 0) throw new Error('no active subjects for this tenant — confirm a set on the Subjects page first')
   const subjects = only ? pickSubjects(active, only) : active
   if (only) console.log(`[subject-calibration] --subjects: ${subjects.map((s) => s.name).join(', ')}`)
 

@@ -62,7 +62,7 @@ async function main() {
 
   const result = await proposeSubjects(admin, clientId, { sources })
   console.log(`\n${proposalSummary(result)}\n`)
-  console.log(`[propose-subjects] $${result.costUsd.toFixed(4)} · pick ${SUBJECTS_MIN}-${SUBJECTS_MAX} of these in Settings › Subjects.`)
+  console.log(`[propose-subjects] $${result.costUsd.toFixed(4)} · pick ${SUBJECTS_MIN}-${SUBJECTS_MAX} of these on the Subjects page.`)
 }
 
 main().catch((e) => {

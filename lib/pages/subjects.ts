@@ -1927,7 +1927,24 @@ async function loadSayHear(supabase: SupabaseClient, clientId: string, runId: st
  * Null is the first-run empty state: a tenant with no delivered update has no
  * reading of anything.
  */
-export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | null> {
+/**
+ * What a caller of `loadSubjectsPage` needs read.
+ *
+ * `lean` is the Subjects page since the pages rebuild (1 Oct): it prints the
+ * rail, the selected subject's market level, what people say about it (its
+ * kinds) and the questions asked on it, and nothing else. So the reads that
+ * feed only the retired blocks (your own posts, say vs hear and its echoes,
+ * the voices, the chart's long axis, the week strip, "where we found them",
+ * the next comparable pair and "asked most") are not made. The export path
+ * (`subjectsPage.load`) keeps the full read for the blocks a stored snapshot
+ * still renders.
+ */
+export interface SubjectsLoadOptions {
+  lean?: boolean
+}
+
+export async function loadSubjectsPage(scope: Scope, opts: SubjectsLoadOptions = {}): Promise<SubjectsData | null> {
+  const lean = opts.lean === true
   const supabase = scope.supabase as SupabaseClient
   const { clientId, params } = scope
   const reading: ReadingHandle = scope.reading
@@ -2071,12 +2088,16 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // `subjectRows == null` is "the set could not be read", which the census
   // must not report as "none is named" — the rail's own sentence answers that
   // state and this tile stays quiet about the set.
-  const ownPostsAhead = loadOwnPosts(supabase, clientId, month, subjectRows == null ? null : active)
-  const sayHearAhead = loadSayHear(supabase, clientId, latestRunId)
+  const ownPostsAhead: Promise<OwnPostCensus | null> = lean
+    ? Promise.resolve(null)
+    : loadOwnPosts(supabase, clientId, month, subjectRows == null ? null : active)
+  const sayHearAhead: Promise<{ counts: ClaimCounts | null; entries: SayVsHearEntry[] }> = lean
+    ? Promise.resolve({ counts: null, entries: [] })
+    : loadSayHear(supabase, clientId, latestRunId)
   // EACH CLAIM COUNTED THE WAY YOUR MOVES COUNTS IT (walkthrough item 8): in
   // the month's market, with your own followers apart. A failure here prints
   // the ledger's stances as before rather than losing the tile.
-  const echoesAhead: Promise<ClaimEcho[] | null> = sayHearAhead
+  const echoesAhead: Promise<ClaimEcho[] | null> = lean ? Promise.resolve(null) : sayHearAhead
     .then((sh) => loadClaimEchoes({ supabase, reading, clientId, month, entries: sh.entries }))
     .catch((e: unknown) => {
       console.error(`[pages] subjects.claimEchoes: ${(e as { message?: string })?.message ?? String(e)}`)
@@ -2095,14 +2116,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     : Promise.resolve({ occupies: null, makers: null, lens: null })
   // When each search first ran (`keyword_performance`), for the pane's "Where
   // we found them", beside the month reads.
-  const keywordRunsAhead = opensOne ? loadKeywordRuns(reading.client, clientId) : Promise.resolve(null)
+  const keywordRunsAhead = opensOne && !lean ? loadKeywordRuns(reading.client, clientId) : Promise.resolve(null)
   // The next pair read the same way, for the Month by month cards: the judge's
   // own pair rows (memoised, so no second read).
-  const pairRowsAhead = opensOne ? loadPairRows(reading.client, clientId, null).catch(() => null) : Promise.resolve(null)
+  const pairRowsAhead = opensOne && !lean ? loadPairRows(reading.client, clientId, null).catch(() => null) : Promise.resolve(null)
   // Every subject's question videos over the last 3 months (the questions
   // tile's "Asked most"), one read beside the month reads.
   const last3 = horizonWindow('last_3', readingAnchor(rm), started.from)
-  const askedMostAhead = opensOne
+  const askedMostAhead = opensOne && !lean
     ? loadQuestionsBySubject(supabase, clientId, selectable.map((s) => s.id), { from: last3.from, to: last3.to }).catch((error: unknown) => {
         console.error(`[subjects] asked most: ${(error as { message?: string })?.message ?? String(error)}`)
         return null
@@ -2126,7 +2147,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     // (`kindsIn`, off the members the pane reads), and each audience's whole
     // kind mix is not drawn on the market page. A pane's sides carry none.
     Promise.resolve(null as StoredKindRow[] | null),
-    opensOne && chartAxis[0] < readAxis[0]
+    opensOne && !lean && chartAxis[0] < readAxis[0]
       ? loadMonthSeries(reading.client, clientId, {
           from: chartAxis[0],
           to: month,
@@ -2155,7 +2176,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const changes = await loadChanges(reading.client, clientId)
   // WEEK BY WEEK, READ AT THE SAME AGE (WP3.13, §2.3 S6): the kept line, read
   // only once WEEK_LINE says print, and only when a subject opens.
-  const weekStripAhead = opensOne
+  const weekStripAhead = opensOne && !lean
     ? loadWeekStrip(reading.client, {
         clientId,
         cfg: weekLineConfigFor(clientId),
@@ -2369,7 +2390,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     // WHERE WE FOUND THEM, read beside the voices and the questions: the
     // subject's market videos this month, the set its kinds are read on
     // (printed below only where that set is the headline's k).
-    const foundAhead = members && readIn(subject.id, month) === 'read'
+    const foundAhead = members && !lean && readIn(subject.id, month) === 'read'
       ? makersAhead
           .then((m) => loadSubjectFound(reading.client, clientId, month, [...subjectMonthVideos(members, month, m.occupies).videos], keywordRunsAhead))
           .catch(() => null)
@@ -2382,10 +2403,12 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       // Patagonia Provisions sardines under Durability), comes from a buyer
       // or commenter and not a maker's audience or a seller's post, and one
       // video gives the subject one voice.
-      loadVoices(supabase, clientId, voiceIds ?? [], {
-        month, marketFirst: true, makers: makersAhead.then((m) => m.makers),
-        gate: gateFor(clientId, { claim: [subject.name, subject.description].filter(Boolean).join('. '), requireRelevance: true }),
-      }),
+      lean
+        ? Promise.resolve(NO_VOICES)
+        : loadVoices(supabase, clientId, voiceIds ?? [], {
+            month, marketFirst: true, makers: makersAhead.then((m) => m.makers),
+            gate: gateFor(clientId, { claim: [subject.name, subject.description].filter(Boolean).join('. '), requireRelevance: true }),
+          }),
       loadUnanswered(supabase, clientId, memberIds ?? [], {
         window: { from: questionsWindow.from, to: questionsWindow.to },
         period: periodPhrase(questionsHorizon, month),
@@ -2556,7 +2579,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // matching the census's `video_claims` sentences to the ledger by exact text
   // never matched, and every row read "not tracked" under a tally that said
   // two of three were echoed.
-  const ownPosts: OwnPostCensus = census
+  const ownPosts: OwnPostCensus | null = census
 
   const asked = await askedMostAhead
   const askedMost = asked
