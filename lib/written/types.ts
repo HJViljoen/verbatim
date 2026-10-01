@@ -359,3 +359,59 @@ export interface WeekReadDataV2 extends WeekReadCommon {
 /** The stored read (`week_reads.data`), by version: a renderer reads
  *  `version` and prints what that version has. */
 export type WeekReadData = WeekReadDataV1 | WeekReadDataV2
+
+// ---- The long-run read (pages build, 1 Oct: "What holds across {months}") -----------
+//
+// A `week_reads` row of kind 'month' (no migration: the kind exists). Written
+// once a month, at the first run after a month ends, inside the existing
+// `write-week-read` step (lib/written/longrun.ts `maybeWriteLongRun`), or by
+// `scripts/longrun-read.ts`. Durable patterns over the whole record window,
+// never a change: nothing in it compares one month with another.
+
+/** Who a piece of talk is about (the pages build's brand rule): the client's
+ *  own posts or a comment naming the client; a tracked rival's filed videos or
+ *  a comment naming the rival; else the category ("Other bags in your
+ *  market"). One brand per video, so a split adds up. */
+export type WhoAbout = 'client' | 'market' | `rival:${string}`
+
+export interface WhoPart {
+  about: WhoAbout
+  videos: number
+}
+
+/** One durable idea, as it prints. */
+export interface LongRunIdea {
+  headline: string
+  /** One or two short paragraphs, the writer's after scrub. */
+  body: string[]
+  /** The cited themes (`theme_registry.id`). */
+  basedOn: string[]
+  /** The DISTINCT lenient-gated videos across every cited theme over the
+   *  window (a video two themes share counts once): the evidence line's count. */
+  videos: number
+  /** The same videos by the month their counted comments are dated in, one
+   *  entry per window month (a video heard in two months counts in both). */
+  months: { month: string; videos: number }[]
+  /** Who those videos are about, one brand per video: the client first, then
+   *  the rivals by videos, the category last. Sums to `videos`. */
+  who: WhoPart[]
+  sure: SureWord
+}
+
+export interface LongRunReadData {
+  version: 1
+  kind: 'longrun'
+  promptVersion: 'longrun_read_v1'
+  /** The read's month, `YYYY-MM-01`: the last month of the window. */
+  month: string
+  /** The window's months, oldest first ("August and September"). */
+  months: string[]
+  /** `[first month start, the month after `month`)`. */
+  window: { from: string; to: string }
+  /** The serif lead, '' where none survived. */
+  inShort: string
+  ideas: LongRunIdea[]
+  held: WeekReadHeld[]
+  model: string
+  costUsd: number
+}

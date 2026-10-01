@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import type { WeekReadData } from './types'
+import type { LongRunReadData, WeekReadData } from './types'
 
 // The stored read (plan T4): one `week_reads` row per run and kind
 // (supabase/migrations/20261104090000_week_reads.sql). The service role
@@ -20,8 +20,9 @@ export interface WeekReadRow {
   month: string | null
   window_start: string | null
   window_end: string | null
-  /** The read (quotes as refs, `text: ''`); null on a failure. */
-  data: WeekReadData | null
+  /** The read (quotes as refs, `text: ''`); null on a failure. A 'month'
+   *  row holds the long-run read (`LongRunReadData`). */
+  data: WeekReadData | LongRunReadData | null
   status: WeekReadStatus
   cost_usd: number
 }
@@ -115,4 +116,50 @@ export async function loadPreviousHeadlines(
   const data = ((res.data ?? [])[0] as { data: WeekReadData | null } | undefined)?.data
   const headlines = (data?.findings ?? []).map((f) => f.headline).filter(Boolean)
   return headlines.length > 0 ? { headlines } : null
+}
+
+// ---- The long-run read (kind 'month') ----------------------------------------------
+
+/** A month's long-run read as the pages read it. */
+export interface StoredLongRun {
+  month: string
+  data: LongRunReadData
+  created_at: string
+}
+
+/** Is this stored `data` a long-run read? (A 'month' row written by anything
+ *  else, or a failed one, is not.) */
+export function isLongRunData(data: unknown): data is LongRunReadData {
+  const d = data as Partial<LongRunReadData> | null
+  return !!d && d.kind === 'longrun' && Array.isArray(d.ideas) && Array.isArray(d.months)
+}
+
+/**
+ * The client's newest READY long-run read (the latest month first), or null:
+ * none written yet, the table not there, or a row that is not one. Service
+ * role only (the table has no tenant policy): the caller scopes it to the
+ * session's client.
+ */
+export async function loadLatestLongRun(admin: SupabaseClient, clientId: string): Promise<StoredLongRun | null> {
+  const res = await admin.from(WEEK_READS_TABLE)
+    .select('month, data, created_at')
+    .eq('client_id', clientId).eq('kind', 'month').eq('status', 'ready')
+    .order('month', { ascending: false }).order('created_at', { ascending: false }).limit(1)
+  if (res.error) {
+    if (isMissingWeekReads(res.error)) return null
+    throw new Error(`week_reads long run: ${res.error.message}`)
+  }
+  const row = ((res.data ?? [])[0] ?? null) as { month: string; data: unknown; created_at: string } | null
+  if (!row || !isLongRunData(row.data)) return null
+  return { month: String(row.month).slice(0, 10), data: row.data, created_at: row.created_at }
+}
+
+/** Has this month's long-run read been written (ready, or thin: a month that
+ *  had nothing durable to say is not written again)? */
+export async function longRunWritten(admin: SupabaseClient, clientId: string, month: string): Promise<boolean> {
+  const res = await admin.from(WEEK_READS_TABLE)
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId).eq('kind', 'month').eq('month', month).in('status', ['ready', 'thin'])
+  if (res.error) throw new Error(`week_reads long run written: ${res.error.message}`)
+  return (res.count ?? 0) > 0
 }

@@ -4272,7 +4272,7 @@ const TABLE_GATE_VERDICTS = 'gate_verdicts'
 /** The reading month's category themes at the floor, and the previous month's
  *  k for each (0 where that month has rows and the theme is not in them). Two
  *  small reads, the second over the first's ids. */
-async function loadBoardThemes(
+export async function loadBoardThemes(
   client: SupabaseClient,
   clientId: string,
   month: string,

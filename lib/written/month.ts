@@ -79,3 +79,11 @@ export function inMonth(month: string, complete: boolean | null | undefined): st
 export function monthHeading(month: string, complete: boolean | null | undefined): string {
   return complete ? `${longMonth(month)} in total` : `${longMonth(month)} so far`
 }
+
+/** Months in words, oldest first: "August and September", "July, August and
+ *  September" (the long-run read's heading and evidence lines). Pure. */
+export function monthsPhrase(months: readonly string[]): string {
+  const names = months.map((x) => longMonth(x))
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}

@@ -641,8 +641,9 @@ async function loadMonthVideoIds(
   return { ids, first }
 }
 
-/** The run's observation of each theme and its Pass B description. */
-async function loadPoolThemes(
+/** The run's observation of each theme and its Pass B description. Exported
+ *  for the long-run pool (lib/written/longrun.ts), which reads the same. */
+export async function loadPoolThemes(
   admin: SupabaseClient,
   clientId: string,
   runId: string,
