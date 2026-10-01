@@ -116,7 +116,7 @@ export default async function TeamPage() {
   // Settings sub-page.
   const bar = await settingsBar(supabase, clientId, client?.company_name ?? 'Your workspace')
   return (
-    <SettingsFrame active="team" title="Settings" context={`${client?.company_name ?? 'Workspace'}${!canManage ? ' · read-only' : ''}`} bar={bar} contentTitle="Team" contentMeta={`${memberRows.length} member${memberRows.length === 1 ? '' : 's'}`} controls={<Link href="/dashboard/billing" className="text-[12px] font-medium text-secondary-foreground hover:underline">Plan &amp; billing →</Link>}>
+    <SettingsFrame active="team" title="Settings" context={`${client?.company_name ?? 'Workspace'}${!canManage ? ' · read-only' : ''}`} bar={bar} contentTitle="Team" contentMeta={`${memberRows.length} member${memberRows.length === 1 ? '' : 's'}`} operator={session.operator != null}>
     <div className="max-w-3xl space-y-4">
 
       {canManage && (

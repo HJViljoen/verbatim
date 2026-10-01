@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 import { ReadinessTable } from '@/components/ops/readiness-table'
 import { SettingsFrame } from '@/components/settings-frame'
@@ -44,6 +44,9 @@ export const metadata: Metadata = { title: `${settingsSubPage('readiness').label
 // discard half instead of measuring a silence.
 export default async function SettingsReadinessPage() {
   const { supabase, clientId, role, operator } = await getSessionContext()
+  // THE OPERATOR'S ALONE (pages build, 1 Oct): readiness is product health,
+  // which a client does not read (rule 3). Anyone else lands on What you track.
+  if (!operator) redirect('/dashboard/settings')
   if (!canManageTenant(role)) notFound()
 
   const now = new Date()
@@ -89,6 +92,7 @@ export default async function SettingsReadinessPage() {
   return (
     <SettingsFrame
       active="readiness"
+      operator
       title="Settings"
       context={inputs.tenant}
       bar={bar}

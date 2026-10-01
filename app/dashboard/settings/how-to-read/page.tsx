@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { SettingsFrame } from '@/components/settings-frame'
 import { HowToReadBody } from '@/components/settings/how-to-read'
 import { ListSearch } from '@/components/shell/list-search'
@@ -33,7 +34,10 @@ export default async function HowToReadPage() {
   // The page is static text, but the frame is a tenant surface and the rail is
   // the workspace's: resolving the session is what keeps a signed-out reader
   // out of it, the same as every other sub-page.
-  const { supabase, clientId } = await getSessionContext()
+  const { supabase, clientId, operator } = await getSessionContext()
+  // Removed for clients (pages build, 1 Oct): method notes are not theirs, and
+  // a page that follows the rules needs no manual. The operator keeps it.
+  if (!operator) redirect('/dashboard/settings')
   const { data: client } = await supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle()
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
   const bar = await settingsBar(supabase, clientId, tenant)
@@ -41,6 +45,7 @@ export default async function HowToReadPage() {
   return (
     <SettingsFrame
       active="guide"
+      operator
       title="Settings"
       context={tenant}
       bar={bar}

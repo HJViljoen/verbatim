@@ -548,6 +548,63 @@ export async function updateCommunity(
   }
 }
 
+// ---- Your accounts (pages build, 1 Oct) ------------------------------------
+//
+// The artboard's "Your accounts › Edit": the workspace's own Instagram, TikTok
+// and YouTube, which are kept apart from what the market says. A handle is a
+// tracking fact like a term (decision I holds handles still for a locked
+// tenant), so it takes the same road: role check, lock, then the queue for a
+// locked tenant and the admin client, stamped, for everyone else.
+
+const HANDLE = /^@?[A-Za-z0-9._-]{1,60}$/
+
+export async function updateOwnHandles(
+  _prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to change settings.' }
+  }
+  const may = assertTenantMay(session, clientId, 'tracking')
+  if (!may.ok && !may.queue) return { ok: false, message: may.message }
+
+  const { data: current, error: readErr } = await supabase
+    .from('tracking_configs')
+    .select('own_handles')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  if (readErr) return { ok: false, message: 'Could not read your accounts just now. Try again.' }
+  if (!current) return { ok: false, message: 'Nothing was saved. This workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+
+  // Only the three platforms the form posts; anything else stored is kept.
+  const next: Record<string, string> = { ...((current.own_handles ?? {}) as Record<string, string>) }
+  for (const platform of ['instagram', 'tiktok', 'youtube'] as const) {
+    if (!formData.has(platform)) continue
+    const raw = String(formData.get(platform) ?? '').trim()
+    if (!raw) { delete next[platform]; continue }
+    if (!HANDLE.test(raw)) return { ok: false, message: `Could not save: that ${platform === 'tiktok' ? 'TikTok' : platform === 'youtube' ? 'YouTube' : 'Instagram'} account is not a handle.` }
+    // Instagram and TikTok are stored without the @; a YouTube value is kept
+    // as typed (an @handle, or a channel id).
+    next[platform] = platform === 'youtube' ? raw : raw.replace(/^@+/, '')
+  }
+
+  if (!may.ok) return queueEdit(session, may.message, { own_handles: next })
+
+  const { error } = await updateWithActor(
+    (payload) => createAdminClient().from('tracking_configs').update(payload).eq('client_id', clientId),
+    { own_handles: next, updated_at: new Date().toISOString() },
+    actorStamp(session, 'your accounts'),
+  )
+  if (error) {
+    console.error(`[settings] own handles not saved for ${clientId}: ${error.message}`)
+    return { ok: false, message: 'Could not save your accounts. Try again, and tell us if it keeps happening.' }
+  }
+  revalidatePath('/dashboard/settings')
+  return { ok: true, message: 'Saved.' }
+}
+
 /**
  * The page's ONE save (Block D wave 2, `settings.save`).
  *

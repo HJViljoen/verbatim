@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
@@ -69,6 +70,9 @@ export const metadata: Metadata = { title: `${settingsSubPage('record').label} Â
 
 export default async function SettingsRecordPage() {
   const { supabase, clientId, role, userId, operator } = await getSessionContext()
+  // THE OPERATOR'S ALONE (pages build, 1 Oct): the record is process, which a
+  // client does not read (rule 1). Anyone else lands on What you track.
+  if (!operator) redirect('/dashboard/settings')
   // THE CLIENT'S RECORD (finish-list item 17): a tenant user reads the record
   // in plain words, without our notes to ourselves or the stranger's captions
   // the gate threw away (lib/settings/client-record.ts). The operator, here
@@ -194,6 +198,7 @@ export default async function SettingsRecordPage() {
   return (
     <SettingsFrame
       active="record"
+      operator
       title="Settings"
       bar={oneLineBar(tenant, rm)}
       // D14: the first half is EARLIEST EVIDENCE, not a start date â€” the same
