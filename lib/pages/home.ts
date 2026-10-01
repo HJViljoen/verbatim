@@ -147,12 +147,13 @@ export const WEEKS_MIN = 1
  * research/empty-blocks.md). That week was searched with today's search set
  * (the 20 and 27 Sep gathers' lists are identical) and gathered by one weekly
  * gather (the 27 Sep run). But 19 of its videos were let in unjudged before
- * the 24 Sep fix, and even after the regate two of them stay: today's check
- * drops them, and stored work (a recommendation, a plan check, a saved Agent
- * answer or an export) cites their insights, so the regate keeps them for a
- * person to decide. Two unchecked videos keep the week off by the chart's own
- * rule. If Heinrich has them removed, the week meets the rule and this is the
- * one line to change (tests pin both).
+ * the 24 Sep fix, and even after the regate some stay (three in the dry run
+ * of 1 Oct, 20:21): today's check drops them, and stored work (a
+ * recommendation, a plan check, a saved Agent answer or an export) cites
+ * their insights, so the regate keeps them for a person to decide. Unchecked
+ * videos keep the week off by the chart's own rule. If Heinrich has them
+ * removed, the week meets the rule and this is the one line to change (tests
+ * pin both).
  */
 export const HOME_FIRST_WEEK = '2026-09-28'
 

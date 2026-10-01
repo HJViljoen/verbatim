@@ -398,6 +398,20 @@ export const CHANGE: readonly { name: string; re: RegExp }[] = [
   { name: 'became', re: /\b(?:shift(?:s|ed|ing)?\s+(?:to|toward|towards|from|away)|settl(?:es|ed|ing)\s+(?:on|into|around)|turn(?:s|ed)?\s+into|is\s+becoming|are\s+becoming|became|has\s+become|have\s+become|emerg(?:es|ed|ing)|start(?:s|ed)?\s+to|beg(?:an|ins)\s+to|starting\s+to|beginning\s+to)\b/i },
 ]
 
+/**
+ * The sentences that state a count (the backfill's backstop, 1 Oct: "no
+ * September counts a partial month would understate"). The writer has no
+ * numbers and the scrub drops a digit's sentence, so this only backs them up:
+ * a digit; a number word from two up, or a magnitude (dozens, hundreds,
+ * thousands); or a share in words ("half of", "a third of", "one in five",
+ * "one out of"). "One" alone is a determiner ("until one bag fits"), never a
+ * count, and is not flagged. Pure.
+ */
+export function countSentences(texts: readonly string[]): string[] {
+  const COUNT = /\b(?:\d[\d,.]*|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundreds?|thousands?|dozens?|(?:half|a third|a quarter|most|majority) of|one (?:in|out of) \w+)\b/i
+  return texts.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((s) => s.trim() && COUNT.test(s))
+}
+
 export interface ScrubbedLongRun {
   output: LongRunOutput
   counts: WeekScrubCounts

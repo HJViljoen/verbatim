@@ -548,7 +548,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
     week draws from ONE clean week, from the week of 28 September
     (`HOME_FIRST_WEEK`, the Dashboard's own constant, so it can move without
-    the week line's `WEEK_LINE_FIRST_WEEK`; 21 September stays off while two
+    the week line's `WEEK_LINE_FIRST_WEEK`; 21 September stays off while the
     cited videos today's check drops stay in it), a filling week faint; the two
     fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix and the
     backfill's regate) cut no week, because `unchecked` counts exactly their

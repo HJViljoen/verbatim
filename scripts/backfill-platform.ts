@@ -81,7 +81,7 @@ import { sendsWeeklyRead } from '../lib/schedules/artefact'
 import { isMissingPublishColumns, onPlatform } from '../lib/schedules/platform-state'
 import { holdWeeklyRead, publishSend } from '../lib/schedules/publish'
 import type { ScheduleRow } from '../lib/schedules/types'
-import { buildLongRunRead, longRunRowOf, monthsPhrase, type BuiltLongRun } from '../lib/written/longrun'
+import { buildLongRunRead, countSentences, longRunRowOf, monthsPhrase, type BuiltLongRun } from '../lib/written/longrun'
 import { readingMonthOf } from '../lib/written/month'
 import type { CallBudget, WeekReadCall } from '../lib/written/deadline'
 import { buildWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead } from '../lib/written/step'
@@ -111,15 +111,6 @@ function sast(now = new Date()): { weekday: string; hm: number; label: string } 
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? ''
   const hm = Number(get('hour')) * 100 + Number(get('minute'))
   return { weekday: get('weekday'), hm, label: `${get('weekday')} ${get('hour')}:${get('minute')} SAST` }
-}
-
-/** A sentence in the reads that states a count: a digit, or a number word.
- *  The writers have no numbers and the scrub drops a digit's sentence, so
- *  this is the backstop the lead asked for ("no September counts a partial
- *  month would understate"). Pure. */
-export function countSentences(texts: readonly string[]): string[] {
-  const NUMBER = /\b(?:\d[\d,.]*|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|twenty|thirty|forty|fifty|hundreds?|thousands?|dozens?|half|a third|a quarter)\b/i
-  return texts.flatMap((t) => t.split(/(?<=[.!?])\s+/)).filter((s) => NUMBER.test(s))
 }
 
 /** The script's caps: twice the step's, because a script is not inside

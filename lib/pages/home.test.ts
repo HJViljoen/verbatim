@@ -67,7 +67,7 @@ describe('Week by week', () => {
     expect(three!.columns.map((c) => c.settled)).toEqual([true, false, false, false, false, false, false, false])
   })
 
-  it('is omitted only where no clean week exists; the week of 21 September is not drawn (two cited videos stay unchecked after the regate)', () => {
+  it('is omitted only where no clean week exists; the week of 21 September is not drawn (cited videos the check drops stay unchecked after the regate)', () => {
     expect(HOME_FIRST_WEEK).toBe('2026-09-28')
     expect(homeWeeks({ ...base, rows: [], updates: sundays, now: '2026-10-26T08:00:00Z' })).toBeNull()
     expect(homeWeeks({ ...base, rows: [row('2026-09-21', 264, 4597)], updates: [], now: '2026-09-27T08:00:00Z' })).toBeNull()
