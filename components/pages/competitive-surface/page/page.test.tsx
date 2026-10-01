@@ -86,7 +86,8 @@ describe('Competitive · the artboard', () => {
     const markup = render(<CompetitivePage data={designFixture()} />)
     // Cotopaxi's 12 of 17, and the category's promotional 737 of 2,623.
     expect(markup).toContain(`width:${(100 * 12) / 17}%`)
-    expect(markup).toContain(`width:${(100 * 737) / 2623}%`)
+    // What works draws its bar at the printed whole percent, as the artboard does (d86a2cb1).
+    expect(markup).toContain(`width:${Math.round((100 * 737) / 2623)}%`)
     expect(markup).not.toContain('width:100%')
   })
 
