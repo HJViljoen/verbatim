@@ -25,7 +25,7 @@ import { homeAxis, homeWeeks, isFailOpenFix, type HomeWeeks } from '../lib/pages
 import { ourChangesWithoutGatherFlags } from '../lib/reading/gather-flags'
 import { loadChanges } from '../lib/reading/read'
 import { marketAudiences } from '../lib/reading/market'
-import { loadDeliveredRuns, marketRivalAudiences, updateInstant } from '../lib/reading/reading-view'
+import { loadCadenceRuns, loadDeliveredRuns, marketRivalAudiences, updateInstant } from '../lib/reading/reading-view'
 import { addDays, isoWeekOf, type MarketWeekRowRaw } from '../lib/reading/weeks'
 import { loadTrackedRivals } from '../lib/rivals'
 import { chunk } from '../lib/chunk'
@@ -281,11 +281,13 @@ export interface ChartChange { removed: readonly UnjudgedVideo[]; cleared: reado
 export async function chartWith(db: SupabaseClient, clientId: string, now: string, changes: Record<string, ChartChange>): Promise<Record<string, HomeWeeks | null> & { weeks: Record<string, Record<string, { videos: number; comments: number; unchecked: number }>> }> {
   const axis = homeAxis(now)
   const to = addDays(axis[axis.length - 1], 7)
-  const [vol, changeRows, runs, rivals] = await Promise.all([
+  const [vol, changeRows, runs, rivals, cadenceRuns] = await Promise.all([
     db.rpc('market_week_volumes', { p_client: clientId, p_from: axis[0], p_to: to }),
     loadChanges(db, clientId),
     loadDeliveredRuns(db, clientId),
     loadTrackedRivals(db, clientId),
+    // The Dashboard's cadence test reads every run (`chartCadenceBroken`).
+    loadCadenceRuns(db, clientId),
   ])
   if (vol.error) throw new Error(`market_week_volumes: ${vol.error.message}`)
   const market = new Set(marketAudiences(marketRivalAudiences(rivals)))
@@ -335,7 +337,7 @@ export async function chartWith(db: SupabaseClient, clientId: string, now: strin
       const t = week.get(w)
       if (t) t.unchecked = Math.max(0, t.unchecked - 1)
     }
-    out[name] = homeWeeks({ rows: rowsOf(week), rivalAudiences: [], changes: ours, updates, now })
+    out[name] = homeWeeks({ rows: rowsOf(week), rivalAudiences: [], changes: ours, updates, runs: cadenceRuns, now })
     weeks[name] = Object.fromEntries(week)
   }
   return Object.assign(out, { weeks })

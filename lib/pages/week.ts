@@ -36,7 +36,7 @@ import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import { loadUpdateSeries, type UpdateSeries } from '../reading/updates'
-import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, updateClock, updateInstant } from '../reading/reading-view'
+import { loadCadenceRuns, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, updateClock, updateInstant } from '../reading/reading-view'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { FigureTable, Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
@@ -4209,12 +4209,22 @@ export async function loadWeekVolumes(input: {
   const cfg = weekLineConfigFor(clientId)
   const keptAhead = input.keptLine && cfg?.print ? loadKeptWeekLine(client, { clientId, cfg, rivalAudiences: input.rivalAudiences, kindsOnly: true }) : null
   keptAhead?.catch(() => {})
-  const res = await client.rpc(RPC_MARKET_WEEK_VOLUMES, { p_client: clientId, p_from: axis[0], p_to: addDays(axis[axis.length - 1], 7) })
+  const [res, runs] = await Promise.all([
+    client.rpc(RPC_MARKET_WEEK_VOLUMES, { p_client: clientId, p_from: axis[0], p_to: addDays(axis[axis.length - 1], 7) }),
+    // The bars' cadence test (`chartCadenceBroken`): every run, any status.
+    // Unreadable, the bars are not drawn rather than drawn unchecked.
+    loadCadenceRuns(client, clientId).catch((e: unknown) => {
+      console.error(`[pages] cadence runs: ${e instanceof Error ? e.message : String(e)}; week by week is not drawn`)
+      return null
+    }),
+  ])
   if (res.error) {
     console.error(`[pages] ${RPC_MARKET_WEEK_VOLUMES}: ${res.error.message}; week by week is not drawn`)
     return null
   }
+  if (!runs) return null
   const block = weekVolumesBlock({
+    runs,
     reading: input.reading,
     now: input.now,
     updates: input.updates,

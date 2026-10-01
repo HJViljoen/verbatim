@@ -60,8 +60,12 @@ import { addDays, dayOf, isoWeekOf, msOfInstant, weekEndInstant, type MarketWeek
 
 /** The first week read on one search set, one relevance check and one update a week. */
 export const WEEK_LINE_FIRST_WEEK = '2026-09-28'
-/** The old and the fixed relevance check both ran in it, and production's
- *  24 Sep rehearsals gathered in it. No point, ever. */
+/** The old and the fixed relevance check both ran in it, and so did two
+ *  rehearsal runs on Thu 24 Sep (`e80e9347`, `03180a33`, both partial). Those
+ *  two SEARCHED nothing (no search rows, no gate verdicts; research
+ *  empty-blocks.md) but did capture 22 of the week's 4,777 comments, and they
+ *  make it three updates in one week, which no pair may read
+ *  (`cadenceBroken`). No point, ever. */
 export const WEEK_LINE_EXCLUDED: readonly string[] = ['2026-09-21']
 /** Read through the second Sunday update after the week ends. */
 export const WEEK_AGE_DAYS_DEFAULT = 14
@@ -320,6 +324,102 @@ export function weekCadence(week: string, runs: readonly WeekRun[]):
   return { runsInWeek: counts[0], runsAfter: [counts[1], counts[2]], lateRun, offCadence }
 }
 
+/** The weeks with their cadence (`WeekVolume.cadence`), for
+ *  `weeksSinceOurChanges` to cut at. Pure. */
+export function withChartCadence<W extends { week: string }>(weeks: readonly W[], runs: readonly ChartRun[], now: string): (W & { cadence: string | null })[] {
+  return weeks.map((w) => ({ ...w, cadence: chartCadenceBroken(w.week, runs, now) }))
+}
+
+/**
+ * THE STEPS AFTER THE GATHER (the release fix, 1 Oct night). The labels a
+ * run's `errors` entry starts with (`noteError`'s `where`, up to the first
+ * ':') for the steps that run on what was already gathered and move no week
+ * count of the market: transcripts, OCR, translation, Pass A, themes, the
+ * keyword attribution, and the client's own posts (their audience is never
+ * pooled into the market, `pooledWeekVolumes`). A label NOT here (a search, a
+ * platform, its comments, the relevance gate, discovery, classification, or
+ * anything new) is taken as a gap in the gather: it fails closed.
+ *
+ * Measured on Sealand, 1 Oct: the 27 Sep update (`f3646446`) closed partial
+ * on `transcript-backfill` x2 (Apify 408 timeouts transcribing one video each)
+ * and `owned-posts:instagram:rareform` (the client's own census read 0 posts),
+ * with two findings riding along (`transcribe:youtube`, caption batches
+ * recovered under the ratio; `pass-a`, one video re-asked on half its
+ * comments). Every gather step completed. The 20 Sep update was partial on the
+ * same own-posts census alone.
+ */
+export const AFTER_GATHER_STEPS: readonly string[] = [
+  'transcribe', 'plan-transcribe', 'transcript-backfill', 'plan-transcript-backfill',
+  'ocr', 'plan-ocr', 'ocr-backfill', 'plan-ocr-backfill',
+  'translate', 'plan-translate',
+  'pass-a', 'replan-pass-a', 'replan-pass-a-ocr', 'replan-pass-a-translated',
+  'persist-themes', 'keyword-attribution',
+  'owned-posts', 'owned-comments', 'owned-events',
+]
+
+/** A run as the chart's cadence reads it: `errors` is `pipeline_runs.errors`. */
+export interface ChartRun extends WeekRun {
+  errors?: readonly unknown[] | null
+}
+
+/** The `errors` list close-run writes is capped (`RUN_ERROR_CAP`,
+ *  lib/pipeline/run-errors.ts, restated so this file stays out of the
+ *  pipeline's imports): a list that long may not name every failed step. */
+const RUN_ERRORS_LISTED_MAX = 50
+
+/**
+ * Did this run complete its GATHER? A completed run did. A partial one did
+ * only when it lists its errors, the list is not cut at the cap, and every
+ * one is a step after the gather (`AFTER_GATHER_STEPS`). Anything else
+ * (failed, running, partial for a gather step, partial with no reason
+ * recorded) did not. Pure.
+ */
+export function gatherCompleted(r: ChartRun): boolean {
+  if (r.status === 'completed') return true
+  if (r.status !== 'partial' || !Array.isArray(r.errors) || r.errors.length === 0 || r.errors.length >= RUN_ERRORS_LISTED_MAX) return false
+  return r.errors.every((e) => typeof e === 'string' && AFTER_GATHER_STEPS.includes(e.split(':')[0].trim()))
+}
+
+/**
+ * THE CHART'S CADENCE TEST (the release fix, 1 Oct night; the reviewer's
+ * blocking finding against the lead's requirement). A week's bar is drawn
+ * only when the week was read the way every other drawn week was: exactly one
+ * Sunday update inside it and one in each of the two weeks after, each one
+ * finished on time and each one a completed GATHER (`gatherCompleted`: a run
+ * partial only for a step after the gather counts as completed here). It is
+ * the same-age line's own rule (`weekCadence`, `cadenceBroken`), read on the
+ * clock: a week whose update has not come round yet (the week still under
+ * way, or one of the two after it) is not broken for lacking it, and a run
+ * still in flight in such a week is not counted until it finishes; an extra,
+ * failed, late or off-day run is a break at once.
+ *
+ * Returns the reason a week breaks, or null. Pure.
+ */
+export function chartCadenceBroken(week: string, runs: readonly ChartRun[], now: string): string | null {
+  const start = msOfInstant(isoWeekOf(week))
+  const nowMs = msOfInstant(now)
+  if (Number.isNaN(start) || Number.isNaN(nowMs)) return `week of ${week}: no clock`
+  const slotEnd = (i: number): number => start + (i + 1) * 7 * DAY_MS
+  const slotOf = (r: ChartRun): number => {
+    const anchor = msOfInstant(r.startedAt ?? r.finishedAt ?? '')
+    return Number.isNaN(anchor) ? -1 : Math.floor((anchor - start) / (7 * DAY_MS))
+  }
+  const counted = runs
+    // In flight in a week not yet over: not counted until it finishes.
+    .filter((r) => !(r.finishedAt == null && r.status === 'running' && nowMs < slotEnd(slotOf(r))))
+    .map((r): WeekRun => ({ id: r.id, status: gatherCompleted(r) ? 'completed' : r.status, finishedAt: r.finishedAt, startedAt: r.startedAt }))
+  const c = weekCadence(week, counted)
+  // A week whose Sunday has not come round reads as having its one update.
+  const due = (i: number, n: number): number => (n === 0 && nowMs < slotEnd(i) ? 1 : n)
+  return cadenceBroken({
+    week,
+    runsInWeek: due(0, c.runsInWeek),
+    runsAfter: [due(1, c.runsAfter[0]), due(2, c.runsAfter[1])],
+    lateRun: c.lateRun,
+    offCadence: c.offCadence,
+  })
+}
+
 /** The date of the update a week is due to be read with: `ageDays / 7`
  *  scheduled updates after the week ends (`nextUpdateAfter`, the tenant's
  *  schedule). Without a schedule, the Sunday before the cutoff. */
@@ -382,7 +482,7 @@ const shortDay = (day: string): string => {
   return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]}`
 }
 
-function cadenceBroken(r: WeekRead): string | null {
+function cadenceBroken(r: Pick<WeekRead, 'week' | 'runsInWeek' | 'runsAfter' | 'lateRun' | 'offCadence'>): string | null {
   const parts: string[] = []
   if (r.runsInWeek !== 1) parts.push(`${r.runsInWeek} updates in the week`)
   if (r.runsAfter[0] !== 1) parts.push(`${r.runsAfter[0]} in the week after`)
@@ -404,8 +504,9 @@ function cadenceBroken(r: WeekRead): string | null {
  *   searches  a terms, communities (the active-set rule), rivals, handles,
  *             platforms or knobs change after the 20 Sep search set and before
  *             the later week's age run;
- *   gate      a gate_rule or regate change after the earlier week began, or
- *             unchecked admissions at 10% or more of either week's videos;
+ *   gate      a gate_rule or regate change after the earlier week began (a
+ *             fix of failed judgements aside, `failOpenFix`), or unchecked
+ *             admissions at 10% or more of either week's videos;
  *   reader    a prompt_version change after the earlier week began, a different
  *             prompt version or lane rule at the two age runs, either not
  *             recorded, or two different ages or methods;
@@ -436,7 +537,10 @@ export function weekPairOf(prev: WeekRead | null, curr: WeekRead | null, changes
   const search = changes.filter((c) => WEEK_SEARCH_SURFACES.includes(c.surface) && inSpan(c, setMs))
   if (search.length) reasons.push({ kind: 'searches', detail: search.map((c) => `${c.surface} ${shortDay(dayOf(msOfInstant(c.changedAt)))}`).join(', ') })
 
-  const gate = changes.filter((c) => WEEK_GATE_SURFACES.includes(c.surface) && inSpan(c, prevStart - 1))
+  // A fix of failed judgements (`failOpenFix`: the 24 Sep fix, the regate,
+  // the operator's keeps) changed no judgement rule: the unchecked share below
+  // carries the videos it concerns, as on the Dashboard (`isFailOpenFix`).
+  const gate = changes.filter((c) => WEEK_GATE_SURFACES.includes(c.surface) && !c.failOpenFix && inSpan(c, prevStart - 1))
   const unchecked = [prev, curr].filter((r) => !(r.unchecked / r.videos < WEEK_UNCHECKED_MAX))
   if (gate.length || unchecked.length) {
     const parts = [

@@ -195,9 +195,11 @@ describe('weekRules', () => {
     expect(rules.some((r) => r.surface === 'other')).toBe(false)
     // The gate fix and attribution v3 are dated 26 Sep: the week of 21 Sep, not on this axis.
     expect(rules.some((r) => r.surface === 'gate_rule')).toBe(false)
+    // The gate fix is a fix of failed judgements (`failOpenFix`, the release
+    // fix of 1 Oct night): no rule, as on the Dashboard; `unchecked` carries it.
     const later = weekRules(changes, [...STAGING_AXIS, '2026-09-21'])
     expect(later.filter((r) => r.week === '2026-09-21').map((r) => [r.surface, r.words])).toEqual([
-      ['attribution', 'how we file videos'], ['gate_rule', 'how we check relevance'],
+      ['attribution', 'how we file videos'],
     ])
   })
 })
@@ -225,8 +227,11 @@ describe('weeksSinceOurChanges', () => {
     expect(weeksSinceOurChanges(weeks, rules.slice(0, 3)).map((w) => w.week)).toEqual(['2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12'])
   })
 
-  it('is not cut by a filing change, which moves no bar of the pooled market (decision E)', () => {
-    expect(weeksSinceOurChanges(weeks, [rule('2026-09-30', 'rivals')])).toHaveLength(weeks.length)
+  it('is cut by a rival or handle change, as the same-age line reads them (the release fix, 1 Oct night), and not by the other filing changes (decision E)', () => {
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-30', 'rivals')]).map((w) => w.week)).toEqual(['2026-10-05', '2026-10-12'])
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-30', 'handles')]).map((w) => w.week)).toEqual(['2026-10-05', '2026-10-12'])
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-30', 'rival_rename')])).toHaveLength(weeks.length)
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-30', 'entity_retag')])).toHaveLength(weeks.length)
   })
 
   it('takes weeks with nothing gathered off the axis: the run of weeks with data that ends at the latest', () => {

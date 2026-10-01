@@ -126,6 +126,28 @@ export interface OurChange {
    *  measure keyed on any of them (`config_change_reach.change_id`) is this
    *  change's. Optional so a hand-built change needs only `id`. */
   rowIds?: readonly string[]
+  /** True when every row of this change is a fix of failed judgements
+   *  (`isFailOpenFix`): the 24 Sep fix, the regate that finished it and the
+   *  operator's keeps. No judgement rule changed, so neither the week chart
+   *  (`weeksSinceOurChanges`) nor the same-age line (`weekPairOf`) cuts at it;
+   *  `unchecked` keeps any week that still holds such a video off both. Absent
+   *  on a hand-built change: it then cuts, which fails closed. */
+  failOpenFix?: boolean
+}
+
+/**
+ * The relevance changes whose whole effect is the videos the gate let in
+ * unjudged: the 24 Sep fix (commit 6efc8588, logged `gate_rule` /
+ * `relevance_gate` by `log-tracking-eras --gate-fix-at`), the regate that
+ * finished it (the same shape, `regate_videos`, migration 20261106092000) and
+ * the operator's keeps of the ones stored work cites (`--keep`, the same
+ * shape). None changed a judgement rule, so none cuts a week by itself:
+ * `unchecked` counts exactly the videos they concern, week by week, and keeps
+ * any week that still holds one off the chart and out of the line. Any OTHER
+ * relevance change still cuts, as every search change does. Pure.
+ */
+export function isFailOpenFix(row: { surface: string; field?: string | null }): boolean {
+  return row.surface === 'gate_rule' && row.field === 'relevance_gate'
 }
 
 /** One row of `month_pair_comparability`; the newest `computedAt` wins. */
@@ -319,6 +341,7 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
       note: g.rows.map((r) => r.note?.trim()).find((n): n is string => !!n) ?? null,
       affects: isPanelFreeze(first) ? [] : VIEWS_BY_SURFACE[surface],
       rowIds: g.rows.map((r) => r.id),
+      ...(g.rows.every(isFailOpenFix) ? { failOpenFix: true } : {}),
     })
   }
   return out

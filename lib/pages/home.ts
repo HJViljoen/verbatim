@@ -8,13 +8,14 @@ import { selectAll } from '../supabase-admin'
 import { loadChanges, loadWindowReading, readingHandle } from '../reading/read'
 import { marketAudiences } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
-import { loadDeliveredRuns, loadReadingMonth, marketRivalAudiences, updateInstant } from '../reading/reading-view'
+import { loadCadenceRuns, loadDeliveredRuns, loadReadingMonth, marketRivalAudiences, updateInstant } from '../reading/reading-view'
+import { withChartCadence, type ChartRun } from '../reading/week-line'
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import {
   addDays, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, weekRules, weeksSinceOurChanges,
   type MarketWeekRowRaw, type WeekVolume,
 } from '../reading/weeks'
-import type { OurChange } from '../reading/comparability'
+import { isFailOpenFix, type OurChange } from '../reading/comparability'
 import { weekReadDates } from '../reports/weekly-read'
 import { monthHeading } from '../written/month'
 import { loadPublishedWeekRead } from '../written/published'
@@ -158,19 +159,10 @@ export function homeAxis(now: string): string[] {
   return axis
 }
 
-/**
- * The relevance changes whose whole effect is the videos the gate let in
- * unjudged: the 24 Sep fix (commit 6efc8588, logged `gate_rule` /
- * `relevance_gate` by `log-tracking-eras --gate-fix-at`) and the regate that
- * finished it (the same shape, `regate_videos`, migration 20261106092000).
- * Neither changed a judgement rule, so neither cuts a week by itself:
- * `unchecked` counts exactly the videos they concern, week by week, and keeps
- * any week that still holds one off the chart. Any OTHER relevance change
- * still cuts, as every search change does. Pure.
- */
-export function isFailOpenFix(row: { surface: string; field?: string | null }): boolean {
-  return row.surface === 'gate_rule' && row.field === 'relevance_gate'
-}
+/** `isFailOpenFix` lives with the change log's grouping now
+ *  (lib/reading/comparability.ts), so the week line reads the same exemption;
+ *  re-exported for the Dashboard's callers and tests. */
+export { isFailOpenFix }
 
 const hrefOf = (key: HomeTileKey): string => surface(key as NavKey).href
 const titleOf = (key: HomeTileKey): string => HOME_TILES.find((t) => t.key === key)?.title ?? key
@@ -227,10 +219,15 @@ export function homeWeeks(input: {
   rivalAudiences: readonly string[]
   changes: readonly OurChange[]
   updates: readonly string[]
+  /** Every run, any status, with its errors (`loadCadenceRuns`): the cadence
+   *  test (`chartCadenceBroken`). The loader always passes them; a caller
+   *  without them (a fixture) is not cut for cadence. */
+  runs?: readonly ChartRun[]
   now: string
 }): HomeWeeks | null {
   const axis = homeAxis(input.now)
-  const weeks = pooledWeekVolumes(input.rows.map(marketWeekRowOf), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  const pooled = pooledWeekVolumes(input.rows.map(marketWeekRowOf), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  const weeks = input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled
   const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis))
     .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')
   if (clean.length < WEEKS_MIN) return null
@@ -637,11 +634,13 @@ export async function loadHome(session: HomeSession, opts: { now?: string } = {}
     loadDeliveredRuns(supabase, clientId),
     loadChanges(reading, clientId),
     rivalsAhead,
-  ]).then(([rows, runs, changeRows, rivals]) => homeWeeks({
+    loadCadenceRuns(supabase, clientId),
+  ]).then(([rows, runs, changeRows, rivals, cadenceRuns]) => homeWeeks({
     rows,
     rivalAudiences: marketRivalAudiences(rivals ?? []),
     changes: ourChangesWithoutGatherFlags(changeRows.filter((r) => !isFailOpenFix(r))),
     updates: runs.map(updateInstant),
+    runs: cadenceRuns,
     now,
   })))
 

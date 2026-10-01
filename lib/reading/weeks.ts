@@ -84,6 +84,11 @@ export interface WeekVolume {
   olderVideos: number
   /** Videos let in before we checked relevance (a kept gate verdict with source 'default'). */
   unchecked: number
+  /** Why the week was not read on the one weekly cadence (`chartCadenceBroken`,
+   *  lib/reading/week-line.ts: not exactly one completed Sunday gather in it and
+   *  in each of the two weeks after), or null where it was. Absent where the
+   *  caller read no runs (a fixture): then nothing is cut for cadence. */
+  cadence?: string | null
 }
 
 /** One of our changes, on the week it was made. `words` names its group for
@@ -369,6 +374,9 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
   for (const c of changes) {
     const group = weekRuleGroupOf(c.surface)
     if (!group) continue
+    // A fix of failed judgements is not a method change (`isFailOpenFix`):
+    // `unchecked` carries its weeks instead.
+    if (c.failOpenFix) continue
     const ms = msOfInstant(c.changedAt)
     if (Number.isNaN(ms)) continue
     const week = isoWeekOf(c.changedAt)
@@ -381,6 +389,17 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
 // ---- The weeks the bars may draw (T0a, mechanism 3) ----------------------------
 
 /**
+ * The changes the bars never span: the same-age line's search surfaces
+ * (rivals and handles included: a rival or handle change moves what the
+ * pooled market gathers) and its relevance surfaces (`WEEK_SEARCH_SURFACES`
+ * and `WEEK_GATE_SURFACES`, lib/reading/week-line.ts, restated here because
+ * that file imports this one; a test pins the two lists equal). The other
+ * filing changes (a rename, a retag, attribution) move no bar of the pooled
+ * market and do not cut.
+ */
+export const WEEK_CUT_SURFACES: readonly OurChangeSurface[] = ['terms', 'subreddits', 'rivals', 'handles', 'platforms', 'knobs', 'gate_rule', 'regate']
+
+/**
  * THE BARS NEVER SPAN OUR CHANGES (T0a, the one condition; inventory mechanism
  * 3, OV-31/33/35 and WK-12–16). A step in the weekly counts after we changed
  * our searches or how we check relevance is our bookkeeping, not the market,
@@ -388,9 +407,14 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
  * not rely on. So the chart draws only weeks read one way:
  *
  *   - from the first week AFTER the week of our latest search or relevance
- *     change on the axis (the change's own week is part before, part after);
- *     a filing change moves no bar of the pooled market (decision E) and does
- *     not cut;
+ *     change on the axis (the change's own week is part before, part after),
+ *     a rival or handle change included (`WEEK_CUT_SURFACES`, as the same-age
+ *     line reads them); the other filing changes move no bar of the pooled
+ *     market (decision E) and do not cut, and a fix of failed judgements
+ *     (`failOpenFix`) is no rule at all (`weekRules`);
+ *   - only weeks read on the one weekly cadence (`cadence`, set by the caller
+ *     from the runs with `chartCadenceBroken`): exactly one completed Sunday
+ *     gather in the week and in each of the two after, as the line requires;
  *   - only the unbroken run of weeks with something gathered that ends at the
  *     latest such week: a week with nothing gathered is off the axis, never an
  *     empty slot that reads as a silent market;
@@ -403,10 +427,7 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
  */
 export function weeksSinceOurChanges(weeks: readonly WeekVolume[], rules: readonly WeekRule[]): WeekVolume[] {
   const cut = rules
-    .filter((r) => {
-      const g = weekRuleGroupOf(r.surface)
-      return g === 'search' || g === 'relevance'
-    })
+    .filter((r) => WEEK_CUT_SURFACES.includes(r.surface))
     .map((r) => isoWeekOf(r.week))
     .sort()
     .pop() ?? null
@@ -416,7 +437,7 @@ export function weeksSinceOurChanges(weeks: readonly WeekVolume[], rules: readon
   let start = end
   while (start > 0) {
     const w = weeks[start - 1]
-    if (!gathered(w) || w.unchecked > 0 || (cut != null && isoWeekOf(w.week) <= cut)) break
+    if (!gathered(w) || w.unchecked > 0 || w.cadence || (cut != null && isoWeekOf(w.week) <= cut)) break
     start--
   }
   return weeks.slice(start, end)

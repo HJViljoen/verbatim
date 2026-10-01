@@ -140,6 +140,30 @@ describe('Week by week', () => {
     expect(src).not.toMatch(/HOME_FIRST_WEEK|WEEK_LINE_FIRST_WEEK/)
   })
 
+  it('draws only weeks on the one weekly cadence: on Sealand the week of 21 Sep stays off once its videos are all judged (the release fix, 1 Oct night)', () => {
+    // Production's runs (read 1 Oct): two rehearsal runs on Thu 24 Sep and the
+    // 27 Sep update make three updates in the week of 21 Sep.
+    const runs = [
+      { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', errors: ['ocr: failed'] },
+      { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', errors: ['ocr: failed'] },
+      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', errors: ['transcript-backfill: Apify 408', 'owned-posts:instagram:rareform: 0 posts'] },
+    ]
+    const judged = [row('2026-09-21', 264, 4597), row('2026-09-28', 281, 4902)]
+    const w = homeWeeks({ ...base, rows: judged, updates: [], runs, now: '2026-10-01T08:00:00Z' })
+    expect(w!.columns[0]).toMatchObject({ label: '28 Sep', videos: 281 })
+    // Without the runs (a fixture) the cadence cuts nothing.
+    expect(homeWeeks({ ...base, rows: judged, updates: [], now: '2026-10-01T08:00:00Z' })!.columns[0]).toMatchObject({ label: '21 Sep' })
+    // One clean Sunday update each, and the 27 Sep one partial only after its gather: 21 Sep is drawn.
+    const clean = homeWeeks({ ...base, rows: judged, updates: [], runs: runs.slice(2), now: '2026-10-01T08:00:00Z' })
+    expect(clean!.columns[0]).toMatchObject({ label: '21 Sep', videos: 264 })
+  })
+
+  it('the loader reads every run for the cadence test', () => {
+    const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
+    expect(src).toMatch(/loadCadenceRuns\(supabase, clientId\)/)
+    expect(src).toMatch(/runs: cadenceRuns,/)
+  })
+
   it('leaves out a week holding videos let in without a check that still stands, and everything before it', () => {
     const dirty = [row('2026-09-21', 262, 4528), row('2026-09-28', 281, 4902, { unchecked: 3 }), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
     const w = homeWeeks({ ...base, rows: dirty, updates: sundays, now: '2026-10-26T08:00:00Z' })

@@ -269,6 +269,26 @@ export function loadDeliveredRuns(supabase: SupabaseClient, clientId: string): P
 }
 
 /**
+ * Every run of the workspace, whatever its status, with its errors: what the
+ * week chart's cadence test reads (`chartCadenceBroken`,
+ * lib/reading/week-line.ts), because a failed, extra or off-day run breaks a
+ * week as surely as a missing one, and a partial run counts as a completed
+ * gather only on its recorded errors. Oldest first. Throws where the runs
+ * cannot be read (the chart is then omitted, never drawn unchecked).
+ */
+export function loadCadenceRuns(supabase: SupabaseClient, clientId: string): Promise<{ id: string; status: string; startedAt: string | null; finishedAt: string | null; errors: unknown[] | null }[]> {
+  return memoRead(supabase, `reading-view:cadence-runs:${clientId}`, async () => {
+    const rows = await selectAll<{ id: string; status: string; started_at: string | null; completed_at: string | null; errors: unknown[] | null }>(() =>
+      supabase.from('pipeline_runs').select('id, status, started_at, completed_at, errors')
+        .eq('client_id', clientId)
+        .order('started_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+    return rows.map((r) => ({ id: r.id, status: r.status, startedAt: r.started_at, finishedAt: r.completed_at, errors: Array.isArray(r.errors) ? r.errors : null }))
+  })
+}
+
+/**
  * `marketRivalAudiences` for a loader that does not already hold the tenant's
  * rivals (Market, the Reports card, the monthly), memoised per request. Null
  * where they cannot be read: the view then infers from the rows, which is what
