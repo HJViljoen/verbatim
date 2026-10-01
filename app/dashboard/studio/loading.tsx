@@ -3,8 +3,8 @@ import { Bone } from '@/components/shell/skeleton'
 import { surface } from '@/lib/nav'
 
 // Mirrors app/dashboard/studio/page.tsx since the pages build (the Page-Studio
-// artboard): the title, then "Your reports", one row per report (the weekly
-// and the four monthly briefs), with the card's own grid. Past issues has no
+// artboard): the title, then "Your reports", one row per report shown (the
+// weekly alone until the briefs are built), with the card's own grid. Past issues has no
 // bone: it is drawn only once an issue has gone out, and a bone for a card the
 // page may not draw is a jump when it lands. The operator's workbench below
 // streams with the page.
@@ -21,7 +21,7 @@ export default function StudioLoading() {
         <div className="-mx-1 overflow-x-hidden px-1">
           <div className="flex min-w-[880px] flex-col">
             <div className={`${COLS} pb-2.5`}>{Array.from({ length: 5 }, (_, i) => <Bone key={i} className="h-3 w-16" />)}</div>
-            {Array.from({ length: 5 }, (_, i) => (
+            {Array.from({ length: 1 }, (_, i) => (
               <div key={i} className={`${COLS} items-center border-t border-[#E4E2DC] py-[18px]`}>
                 <div className="flex flex-col gap-1.5"><Bone className="h-4 w-2/3" /><Bone className="h-3 w-4/5" /></div>
                 <Bone className="h-3.5 w-3/4" />

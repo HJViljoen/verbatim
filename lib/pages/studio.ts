@@ -186,6 +186,19 @@ export function studioArtefactOf(s: Pick<StudioSchedule, 'artefact' | 'starter_k
 }
 
 /** The five rows against a workspace's schedules, sends and members. */
+/**
+ * WHETHER THE FOUR MONTHLY BRIEFS ARE BUILT (Heinrich, 1 Oct: "hide the four
+ * brief rows until the briefs are built"). False: the Studio shows the
+ * weekly's row alone; the briefs' rows (still `studioRows`' answer, and still
+ * tested) come back the day this turns true.
+ */
+export const BRIEFS_BUILT = false
+
+/** The rows the Studio prints: the weekly alone until the briefs are built. */
+export function shownStudioRows<R extends { artefact: string }>(rows: readonly R[], briefsBuilt: boolean = BRIEFS_BUILT): R[] {
+  return rows.filter((r) => briefsBuilt || r.artefact === 'weekly_read')
+}
+
 export function studioRows(input: {
   tenant: string
   schedules: readonly StudioSchedule[]

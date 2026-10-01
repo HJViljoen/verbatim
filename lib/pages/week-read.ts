@@ -161,7 +161,7 @@ export function weekReadPage(a: {
       means: (f.means ?? '').trim(),
       quote: quoteOf(f.quote),
       evidence: (f.evidence ?? '').trim(),
-      context: (f.context ?? '').trim(),
+      context: contextWords(f.context),
       who: split(f.monthVideoIds, f.basedOn ?? [], monthOnly),
     }))
 
@@ -185,6 +185,29 @@ export function weekReadPage(a: {
     figures: read.figures ?? {},
     names: a.names,
   }
+}
+
+/**
+ * A finding's context line in the DESIGN's words (Heinrich, 1 Oct): "Part of
+ * Comfort, the third biggest subject in your market this month." Read off the
+ * stored line, which code wrote ("Part of Comfort: [[…]] of [[…]] videos in
+ * your market in September, the third biggest subject.", `contextLine`): the
+ * subject's name and its rank words are kept, the figures and anything after
+ * the rank are not (no figure in this line). "First heard in {Month}." stays
+ * where the read said it. A line in any other form prints as stored. The
+ * weekly email prints the stored line; this is the page's. Pure.
+ */
+export function contextWords(stored: string | null | undefined): string {
+  const line = (stored ?? '').trim()
+  const parts: string[] = []
+  const part = /^Part of (.+?): /.exec(line)
+  if (part) {
+    const rank = /, (the (?:[a-z]+ )?biggest) subject\b/.exec(line)?.[1]
+    parts.push(rank ? `Part of ${part[1]}, ${rank} subject in your market this month.` : `Part of ${part[1]}.`)
+  }
+  const heard = /First heard in [A-Z][a-z]+\./.exec(line)?.[0]
+  if (heard) parts.push(heard)
+  return parts.length > 0 ? parts.join(' ') : line
 }
 
 /** "In September: " — the brand line's prefix under a finding. */

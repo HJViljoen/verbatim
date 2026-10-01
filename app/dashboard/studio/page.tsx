@@ -6,7 +6,7 @@ import { ReportViewer } from '@/components/reports/report-viewer'
 import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/reports/viewer'
 import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
 import { PRIVACY_LINE } from '@/lib/reading/method'
-import { pastIssues, studioRows, type StudioMember, type StudioSchedule, type StudioSend } from '@/lib/pages/studio'
+import { pastIssues, shownStudioRows, studioRows, type StudioMember, type StudioSchedule, type StudioSend } from '@/lib/pages/studio'
 import { rows as readRows } from '@/lib/pages/read'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { OperatorWorkbench } from './workbench'
@@ -78,7 +78,8 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   const sends = readRows<SendRow>(sendRes, 'studio.sends').filter((s) => s.status === 'sent' && s.sent_at)
   const members = readRows<StudioMember>(memberRes, 'studio.members').filter((m) => m.email)
 
-  const rows = studioRows({ tenant, schedules, sends, members, now: new Date() })
+  // The weekly alone until the briefs are built (Heinrich, 1 Oct).
+  const rows = shownStudioRows(studioRows({ tenant, schedules, sends, members, now: new Date() }))
   const issues = pastIssues(sends, schedules)
 
   // The viewer over the page.

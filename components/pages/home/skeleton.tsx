@@ -5,16 +5,19 @@ import { surface } from '@/lib/nav'
 // The Dashboard while it loads: the page's own frame (components/pages/home),
 // bones where its words and numbers go. The title is real, because it does
 // not change when the page lands. "Week by week" has no bone: it is drawn only
-// once two settled weeks exist, and a bone for a block the page may not draw
+// once one clean week exists, and a bone for a block the page may not draw
 // is a jump when it lands. `/dashboard`'s loading.tsx renders this.
 
 const SHADOW = 'shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_rgba(0,0,0,0.04)]'
 
 export function HomeSkeleton() {
   return (
-    <div className="flex flex-col gap-5 leading-[normal] text-[#26292C]">
+    <div className="flex flex-col gap-5 leading-[normal] text-[#26292C] md:-mx-1 md:-mb-1">
       <span role="status" className="sr-only">Loading Dashboard…</span>
-      <PageBar title={surface('home').label} />
+      {/* The Dashboard's artboard draws its title as a bare 26px line (about
+          34px), not the other pages' 40px bar: the shared bar, 3px pulled in
+          at the top and the foot, lands on the drawn line exactly. */}
+      <div className="-my-[3px]"><PageBar title={surface('home').label} /></div>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <div className={`flex flex-col gap-[18px] rounded-[16px] bg-white px-[26px] py-[22px] self-start xl:col-span-2 ${SHADOW}`}>
           <Bone className="h-5 w-56" />

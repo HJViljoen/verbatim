@@ -74,6 +74,9 @@ export interface HomeWeekColumn {
   label: string
   videos: number | null
   comments: number | null
+  /** False while the week is still filling (under way, or fewer than two
+   *  updates since it ended): drawn at reduced opacity, with no words. */
+  settled: boolean
 }
 
 export interface HomeWeeks {
@@ -127,8 +130,9 @@ export const TILE_ROWS = 3
 /** Columns "Week by week" frames (the artboard: eight weeks from 28 Sep). */
 export const WEEK_COLUMNS = 8
 
-/** Settled weeks the chart needs before it is drawn at all. */
-export const WEEKS_MIN = 2
+/** Clean weeks the chart needs before it is drawn at all (Heinrich, 1 Oct:
+ *  from ONE clean week; a week still filling is drawn faint). */
+export const WEEKS_MIN = 1
 
 const hrefOf = (key: HomeTileKey): string => surface(key as NavKey).href
 const titleOf = (key: HomeTileKey): string => HOME_TILES.find((t) => t.key === key)?.title ?? key
@@ -165,19 +169,22 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
 
 /**
  * The weeks the chart may draw: from the week of 28 September (the first week
- * read on one search set and one update a week, `WEEK_LINE_FIRST_WEEK`), the
- * excluded week out, ONLY weeks that are
- *   - read one way: none before our latest search or relevance change, none
- *     holding videos let in before relevance was checked, none with nothing
- *     gathered (`weeksSinceOurChanges`, T0a's rule for the weekly bars);
- *   - settled: two updates have finished since the week ended, so its count is
- *     no longer filling (`weekStateOf`).
- * Null until `WEEKS_MIN` such weeks exist: the block is omitted rather than
- * drawn as an empty frame.
+ * read on one search set and one update a week, `WEEK_LINE_FIRST_WEEK`; the
+ * weeks before it span our September search and relevance changes and are
+ * never drawn), the excluded week out, ONLY weeks read one way: none before
+ * our latest search or relevance change, none holding videos let in before
+ * relevance was checked, none with nothing gathered (`weeksSinceOurChanges`,
+ * T0a's rule for the weekly bars).
+ *
+ * DRAWN FROM ONE SUCH WEEK (Heinrich, 1 Oct): a week still filling (under
+ * way, or fewer than two updates since it ended, `weekStateOf`) is drawn at
+ * reduced opacity with no words (`settled: false`) and goes solid once
+ * settled. Null only where no such week exists: the block is omitted rather
+ * than drawn as an empty frame.
  *
  * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight from 28 Sep),
- * the latest eight once the series is longer; a framed week that is not
- * settled yet is an empty column.
+ * the latest eight once the series is longer; a framed week with nothing to
+ * draw is an empty column.
  */
 export function homeWeeks(input: {
   rows: readonly MarketWeekRowRaw[]
@@ -193,7 +200,8 @@ export function homeWeeks(input: {
   }
   if (axis.length === 0) return null
   const weeks = pooledWeekVolumes(input.rows.map(marketWeekRowOf), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
-  const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis)).filter((w) => w.state === 'settled')
+  const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis))
+    .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')
   if (clean.length < WEEKS_MIN) return null
   const byWeek = new Map<string, WeekVolume>(clean.map((w) => [w.week, w]))
   const last = clean[clean.length - 1].week
@@ -203,7 +211,7 @@ export function homeWeeks(input: {
   for (let w = first; columns.length < WEEK_COLUMNS; w = addDays(w, 7)) {
     if (WEEK_LINE_EXCLUDED.includes(w)) continue
     const v = byWeek.get(w)
-    columns.push({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: v ? v.videos : null, comments: v ? v.comments : null })
+    columns.push({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: v ? v.videos : null, comments: v ? v.comments : null, settled: v?.state === 'settled' })
   }
   return {
     columns,
@@ -390,11 +398,25 @@ export function movesTile(input: {
   }
 }
 
-/** The tiles that exist, in the artboard's order. */
+/** Heinrich's words (1 Oct) for a tile without enough data to show. */
+export const INSUFFICIENT = 'Insufficient data'
+
+/**
+ * ALL SIX TILES, in the artboard's order (Heinrich, 1 Oct: "a tile without
+ * enough data shows the tile with the line 'Insufficient data' instead of
+ * hiding"). A tile whose fact was not read is its title and its link, with no
+ * number and no rows; the page prints `INSUFFICIENT` where the rows go, and
+ * does the same for a tile that has its number but no rows (Competitive's "9
+ * brands you track", until its brand rows can be built honestly).
+ */
 export function homeTiles(tiles: readonly (HomeTile | null)[]): HomeTile[] {
   const present = tiles.filter((t): t is HomeTile => t != null)
-  return HOME_TILES.flatMap(({ key }) => present.filter((t) => t.key === key))
+  return HOME_TILES.map(({ key }) =>
+    present.find((t) => t.key === key) ?? { key, title: titleOf(key), href: hrefOf(key), big: '', sub: '', rows: [] })
 }
+
+/** Whether a tile prints `INSUFFICIENT` in its rows' place. */
+export const tileInsufficient = (tile: Pick<HomeTile, 'rows'>): boolean => tile.rows.length === 0
 
 /** "Moves worth considering": the number of ideas Your moves' short list
  *  draws (`adviceShortlist`, the decided ones and a handful of the current

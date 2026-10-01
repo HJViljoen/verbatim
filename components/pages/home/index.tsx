@@ -1,11 +1,11 @@
 import Link from 'next/link'
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '@/components/design-icons'
 import type { ReactNode } from 'react'
 
 import { PageBar } from '@/components/shell/page-grid'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import type { HomeData, HomeNumbers, HomeNumbersHalf, HomeTile, HomeTileRow, HomeWeeks } from '@/lib/pages/home'
+import { INSUFFICIENT, tileInsufficient, type HomeData, type HomeNumbers, type HomeNumbersHalf, type HomeTile, type HomeTileRow, type HomeWeeks } from '@/lib/pages/home'
 
 // THE DASHBOARD, drawn to the approved artboard `Page-Dashboard.dc.html`
 // (pages build, HOME package, 1 Oct): the title; "Your market in numbers" and
@@ -19,8 +19,9 @@ import type { HomeData, HomeNumbers, HomeNumbersHalf, HomeTile, HomeTileRow, Hom
 // and the orange text #C2410C.
 //
 // No quotes on this page (rule 5), no left-stripe accents and no highlighted
-// phrases (the design bans). A block or a tile with nothing to show is not
-// drawn (rule 2); the loader decides that, and this file draws what it is given.
+// phrases (the design bans). A block with nothing to show is not drawn (rule
+// 2); a TILE always is, with "Insufficient data" where its rows would be
+// (Heinrich, 1 Oct). The loader decides that; this file draws what it is given.
 
 /** The artboard's card shadow. */
 const SHADOW = 'shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_rgba(0,0,0,0.04)]'
@@ -34,9 +35,15 @@ export function HomePage({ data }: { data: HomeData }) {
     data.numbers ? <NumbersBlock key="numbers" numbers={data.numbers} /> : null,
     data.weeks ? <WeeksBlock key="weeks" weeks={data.weeks} /> : null,
   ].filter(Boolean)
+  // THE DASHBOARD'S OWN PANE: its artboard pads 28/36/36 where every other
+  // page's pads 28/40/40 (the shell's), so 4px of the shell's padding is
+  // taken back at the sides and the foot, from md, where that padding applies.
   return (
-    <div className="flex flex-col gap-5 leading-[normal] text-[#26292C]">
-      <PageBar title={surface('home').label} />
+    <div className="flex flex-col gap-5 leading-[normal] text-[#26292C] md:-mx-1 md:-mb-1">
+      {/* The Dashboard's artboard draws its title as a bare 26px line (about
+          34px), not the other pages' 40px bar: the shared bar, 3px pulled in
+          at the top and the foot, lands on the drawn line exactly. */}
+      <div className="-my-[3px]"><PageBar title={surface('home').label} /></div>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         {left.length > 0 ? <div className="flex min-w-0 flex-col gap-5 xl:col-span-2">{left}</div> : null}
         <div className={left.length > 0 ? 'min-w-0' : 'min-w-0 xl:col-span-3'}>
@@ -101,10 +108,10 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
   const n = weeks.columns.length
   const at = (v: number, max: number) => (max > 0 ? (v / max) * PLOT_TOP * 100 : 0)
   // The comments line: one segment per run of consecutive weeks that have a figure.
-  const runs: { x: number; y: number }[][] = []
+  const runs: { x: number; y: number; settled: boolean }[][] = []
   weeks.columns.forEach((c, i) => {
     if (c.comments == null) return runs.push([])
-    const point = { x: ((i + 0.5) / n) * 100, y: 100 - at(c.comments, weeks.maxComments) }
+    const point = { x: ((i + 0.5) / n) * 100, y: 100 - at(c.comments, weeks.maxComments), settled: c.settled }
     if (runs.length === 0) runs.push([])
     runs[runs.length - 1].push(point)
   })
@@ -132,7 +139,9 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
               title={c.videos != null && c.comments != null ? `${c.label}: ${fmtInt(c.videos)} videos, ${fmtInt(c.comments)} comments` : undefined}
             >
               {c.videos != null ? (
-                <div className="w-[44%] max-w-8 rounded-t-[3px] bg-[#FFD43B]" style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
+                // A week still filling: the same yellow, faint, with no words
+                // (Heinrich, 1 Oct); solid once it has settled.
+                <div className={`w-[44%] max-w-8 rounded-t-[3px] bg-[#FFD43B] ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
               ) : null}
             </div>
             <div className={`whitespace-nowrap text-[12px] max-sm:text-[10px] ${MUTED}`}>{c.label}</div>
@@ -159,7 +168,7 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
           {segments.flat().map((p, i) => (
             <span
               key={i}
-              className="absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#26292C]"
+              className={`absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#26292C] ${p.settled ? '' : 'opacity-45'}`}
               style={{ left: `${p.x}%`, top: `${p.y}%` }}
             />
           ))}
@@ -194,7 +203,7 @@ function AgentBlock() {
         <textarea
           name="ask"
           placeholder="What does my market say about…"
-          className={`min-h-[150px] grow resize-none rounded-[10px] border ${HAIR} bg-white p-3 font-[inherit] text-[14px] text-[#26292C] outline-none placeholder:text-[#5F656B] focus-visible:border-[#26292C] focus-visible:ring-2 focus-visible:ring-[#FFD43B]`}
+          className={`min-h-[176px] grow resize-none rounded-[10px] border ${HAIR} bg-white p-3 font-[inherit] text-[14px] text-[#26292C] outline-none placeholder:text-[#757575] focus-visible:border-[#26292C] focus-visible:ring-2 focus-visible:ring-[#FFD43B]`}
         />
       </label>
       <button
@@ -224,10 +233,16 @@ function PageTile({ tile }: { tile: HomeTile }) {
           Open →
         </Link>
       </div>
-      <div className="flex items-baseline gap-2.5">
-        <div data-copy="figure" className="font-mono text-[30px] font-medium tabular-nums">{tile.big}</div>
-        <div className={`text-[13px] ${MUTED}`}>{tile.sub}</div>
-      </div>
+      {tile.big ? (
+        <div className="flex items-baseline gap-2.5">
+          <div data-copy="figure" className="font-mono text-[30px] font-medium tabular-nums">{tile.big}</div>
+          <div className={`text-[13px] ${MUTED}`}>{tile.sub}</div>
+        </div>
+      ) : null}
+      {/* Heinrich, 1 Oct: the tile stays, and says so where its rows would be. */}
+      {tileInsufficient(tile) ? (
+        <div className={`border-t ${HAIR} py-1.5 text-[13px] ${MUTED}`}>{INSUFFICIENT}</div>
+      ) : null}
       {bars.length > 0 ? (
         <div className="flex flex-col gap-[7px]">
           {bars.map((r) => (

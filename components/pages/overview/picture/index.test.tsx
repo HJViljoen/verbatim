@@ -122,7 +122,9 @@ describe('(c) The biggest conversations', () => {
     expect(text).toContain('Cotopaxi 2 · other bags 31')
     const markup = render(<ConversationsBlockView block={block} brand="Sealand" noun="bags" />)
     const line = markup.slice(markup.indexOf('Makers’'), markup.indexOf('threads.') + 'threads.'.length).replace(/<[^>]+>/g, '')
-    expect(line).toBe('Makers’ own talk (admiration for handmade bag design, love for creative upcycling ideas, requests for patterns and tutorials) is set apart: three of the month’s five largest threads.')
+    // The design's sentence from the count (Heinrich, 1 Oct), no theme labels.
+    expect(line).toBe('Makers’ own talk is set apart: three of the month’s five largest threads.')
+    expect(markup).not.toContain('admiration for handmade bag design')
     expect(text).toContain('Every conversation →')
   })
 

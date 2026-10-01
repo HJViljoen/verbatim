@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { HOME_DATA } from '@/lib/pages/home-fixture'
-import type { HomeData } from '@/lib/pages/home'
+import { homeTiles, type HomeData } from '@/lib/pages/home'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { HomePage } from '.'
@@ -77,6 +77,22 @@ describe('the Dashboard', () => {
   })
 })
 
+describe('a tile without enough data (Heinrich, 1 Oct)', () => {
+  it('stays, with "Insufficient data" where its rows would be: Competitive keeps its number', () => {
+    const text = renderText(<HomePage data={HOME_DATA} />)
+    expect(text).toMatch(/Competitive Open → 9 brands you track Insufficient data/)
+  })
+
+  it('a tile not read is its title and its link, with no number', () => {
+    const data: HomeData = { ...HOME_DATA, tiles: homeTiles([null]) }
+    const markup = render(<HomePage data={data} />)
+    expect(markup.match(/Open →/g)).toHaveLength(6)
+    expect(markup.match(/Insufficient data/g)).toHaveLength(6)
+    expect(markup).not.toContain('data-copy="figure" class="font-mono text-[30px]')
+    assertCopyContract(<HomePage data={data} />)
+  })
+})
+
 describe('the Dashboard with nothing to show yet', () => {
   const empty: HomeData = { numbers: null, weeks: null, tiles: [] }
 
@@ -89,7 +105,7 @@ describe('the Dashboard with nothing to show yet', () => {
     assertCopyContract(<HomePage data={empty} />)
   })
 
-  it('omits Week by week alone until two weeks have settled', () => {
+  it('omits Week by week alone while no clean week exists', () => {
     const text = renderText(<HomePage data={{ ...HOME_DATA, weeks: null }} />)
     expect(text).toContain('Your market in numbers')
     expect(text).not.toContain('Week by week')

@@ -5,7 +5,7 @@ import type { AttributionInputs, TrackedBrands } from '../brands/attribution'
 import { readingHandle } from '../reading/read'
 import { fakeDb } from '../test/fake-db'
 import { frozen, olderRead, sealandRead } from '../test/weekly-read-fixture'
-import { loadWeekReadPage, paragraphs, readLead, weekReadPage, type QuoteOrigin } from './week-read'
+import { contextWords, loadWeekReadPage, paragraphs, readLead, weekReadPage, type QuoteOrigin } from './week-read'
 
 const COTO = '11111111-1111-1111-1111-111111111111'
 const PATA = '22222222-2222-2222-2222-222222222222'
@@ -153,5 +153,21 @@ describe('loadWeekReadPage', () => {
     expect(await loadWeekReadPage({ supabase: none.client, clientId: 'c', reading: readingHandle('c', none.client as never), params: {} })).toBeNull()
     const missing = fakeDb({ clients: [], competitors: [] })
     expect(await loadWeekReadPage({ supabase: missing.client, clientId: 'c', reading: readingHandle('c', missing.client as never), params: {} })).toBeNull()
+  })
+})
+
+describe('contextWords: the context line in the design\'s words (Heinrich, 1 Oct)', () => {
+  it('keeps the subject and its rank from the stored line, and no figure', () => {
+    expect(contextWords('Part of Buying & delivery: [[subj_bd_level]] of [[subj_bd_n]] videos in your market in September, the biggest subject.'))
+      .toBe('Part of Buying & delivery, the biggest subject in your market this month.')
+    expect(contextWords('Part of Comfort: [[a]] of [[b]] videos in your market in September, the third biggest subject; up on August, beyond the normal swing. First heard in September.'))
+      .toBe('Part of Comfort, the third biggest subject in your market this month. First heard in September.')
+  })
+
+  it('names the subject alone past the ranks the read words, and keeps any other line as stored', () => {
+    expect(contextWords('Part of Price: [[a]] of [[b]] videos in your market in September.')).toBe('Part of Price.')
+    expect(contextWords('First heard in September.')).toBe('First heard in September.')
+    expect(contextWords('')).toBe('')
+    expect(contextWords(null)).toBe('')
   })
 })

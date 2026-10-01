@@ -34,13 +34,11 @@ export function ConversationsBlockView({ block, brand, noun }: { block: Conversa
           </div>
         ))}
       </div>
+      {/* The design's sentence, built from the count (Heinrich, 1 Oct): no list
+          of theme labels. */}
       {block.makers && block.makers.labels.length > 0 ? (
-        <div className={`text-[13px] leading-[1.55] ${MUTED}`}>
-          Makers’ own talk (
-          {block.makers.labels.map((l, i) => (
-            <span key={l}>{i > 0 ? ', ' : ''}<span data-copy="subject" data-slot="pass_b_theme">{l}</span></span>
-          ))}
-          ) is set apart{block.makers.inTopFive > 0 ? `: ${numberWord(block.makers.inTopFive)} of the month’s five largest threads` : ''}.
+        <div className={`text-[13px] ${MUTED}`}>
+          Makers’ own talk is set apart{block.makers.inTopFive > 0 ? `: ${numberWord(block.makers.inTopFive)} of the month’s five largest threads` : ''}.
         </div>
       ) : null}
       <Link href={CONVERSATION_HREF} className="text-[14px] font-semibold text-[#C2410C] no-underline hover:text-[#26292C]">

@@ -73,7 +73,9 @@ describe('This week, the page', () => {
     expect(text).toContain('Reddit · 21 Sep · Other bags in your market')
     expect(text).toContain('7 videos this week · 16 in September so far')
     expect(text).toContain('In September: Cotopaxi 2 · Patagonia 2 · other bags 12')
-    expect(text).toContain('Part of Buying & delivery: 23% of 852 videos in your market in September, the biggest subject.')
+    // The design's words (Heinrich, 1 Oct): the rank from code, no figure.
+    expect(text).toContain('Part of Buying & delivery, the biggest subject in your market this month.')
+    expect(text).not.toContain('23% of 852 videos')
     expect(render(page())).toContain('id="finding-1"')
   })
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  STUDIO_REPORTS, firstBriefMonth, initialsOf, issueDay, nextMonday, operatorOnlyRedirect, pastIssues, personOf, studioArtefactOf, studioRows,
+  BRIEFS_BUILT, STUDIO_REPORTS, firstBriefMonth, initialsOf, issueDay, nextMonday, operatorOnlyRedirect, pastIssues, personOf, shownStudioRows, studioArtefactOf, studioRows,
   type StudioSchedule, type StudioSend,
 } from './studio'
 
@@ -112,5 +112,14 @@ describe('the operator-only routes', () => {
   it('let the operator through and send anyone else to the Studio', () => {
     expect(operatorOnlyRedirect({ operator: { viewingClientId: 'x' } })).toBeNull()
     expect(operatorOnlyRedirect({ operator: null })).toBe('/dashboard/studio')
+  })
+})
+
+describe('the rows the Studio shows (Heinrich, 1 Oct)', () => {
+  it('the weekly alone until the briefs are built; all five once they are', () => {
+    const rows = studioRows({ tenant: 'Sealand', schedules: [weeklyRead, digest], sends: [], members, now: NOW })
+    expect(BRIEFS_BUILT).toBe(false)
+    expect(shownStudioRows(rows).map((r) => r.name)).toEqual(['The weekly'])
+    expect(shownStudioRows(rows, true)).toHaveLength(5)
   })
 })

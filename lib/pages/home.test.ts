@@ -5,7 +5,7 @@ import type { MarketWeekRowRaw } from '../reading/weeks'
 import type { WeekReadDataV1, WeekReadDataV2 } from '../written/types'
 import type { RecCopy } from './market-surface'
 import {
-  adviceCount, competitiveTile, homeNumbers, homeTiles, homeWeeks, movesTile, overviewTile, standingLevel,
+  adviceCount, competitiveTile, homeNumbers, homeTiles, homeWeeks, INSUFFICIENT, movesTile, overviewTile, standingLevel, tileInsufficient,
   subjectsTile, voiceTile, weekTile, MOVES_NONE, WEEK_COLUMNS, type HomeTheme,
 } from './home'
 import { HOME_READ } from './home-fixture'
@@ -52,20 +52,34 @@ describe('Week by week', () => {
   const sundays = ['2026-10-04T06:10:00Z', '2026-10-11T06:10:00Z', '2026-10-18T06:10:00Z', '2026-10-25T06:10:00Z']
   const base = { rows, rivalAudiences: [], changes: [] as OurChange[] }
 
-  it('is omitted until two weeks from 28 September have settled', () => {
-    // On 19 October only the week of 28 September has two updates behind it.
-    expect(homeWeeks({ ...base, updates: sundays.slice(0, 3), now: '2026-10-19T08:00:00Z' })).toBeNull()
-    expect(homeWeeks({ ...base, updates: [], now: '2026-10-01T08:00:00Z' })).toBeNull()
+  it('is drawn from ONE clean week from 28 September, a week still filling marked as such (Heinrich, 1 Oct)', () => {
+    // Before any update has closed it, the week of 28 September is under way:
+    // drawn, faint.
+    const one = homeWeeks({ ...base, updates: [], now: '2026-10-01T08:00:00Z' })
+    expect(one!.columns.map((c) => c.videos)).toEqual([281, null, null, null, null, null, null, null])
+    expect(one!.columns[0].settled).toBe(false)
+    // On 19 October only the week of 28 September has two updates behind it;
+    // the weeks of 5 and 12 October are drawn, still filling.
+    const three = homeWeeks({ ...base, updates: sundays.slice(0, 3), now: '2026-10-19T08:00:00Z' })
+    expect(three!.columns.map((c) => c.videos)).toEqual([281, 254, 120, null, null, null, null, null])
+    expect(three!.columns.map((c) => c.settled)).toEqual([true, false, false, false, false, false, false, false])
   })
 
-  it('frames eight weeks from 28 September and draws only the settled ones', () => {
+  it('is omitted only where no clean week exists', () => {
+    expect(homeWeeks({ ...base, rows: [], updates: sundays, now: '2026-10-26T08:00:00Z' })).toBeNull()
+    // The week of 21 September is before the series starts: never drawn.
+    expect(homeWeeks({ ...base, rows: [row('2026-09-21', 262, 4528)], updates: [], now: '2026-09-27T08:00:00Z' })).toBeNull()
+  })
+
+  it('frames eight weeks from 28 September; settled weeks solid, the filling one faint', () => {
     const w = homeWeeks({ ...base, updates: sundays, now: '2026-10-26T08:00:00Z' })
     expect(w).not.toBeNull()
     expect(w!.columns).toHaveLength(WEEK_COLUMNS)
     expect(w!.columns.map((c) => c.label)).toEqual(['28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov', '16 Nov'])
     // The week of 21 September is never drawn; the week of 12 October is still filling.
-    expect(w!.columns.map((c) => c.videos)).toEqual([281, 254, null, null, null, null, null, null])
-    expect(w!.columns.map((c) => c.comments)).toEqual([4902, 4210, null, null, null, null, null, null])
+    expect(w!.columns.map((c) => c.videos)).toEqual([281, 254, 120, null, null, null, null, null])
+    expect(w!.columns.map((c) => c.comments)).toEqual([4902, 4210, 1500, null, null, null, null, null])
+    expect(w!.columns.map((c) => c.settled)).toEqual([true, true, false, false, false, false, false, false])
     expect(w!.maxVideos).toBe(281)
     expect(w!.maxComments).toBe(4902)
   })
@@ -83,13 +97,16 @@ describe('Week by week', () => {
   it('never spans a change to our searches: weeks before it are not drawn', () => {
     const change: OurChange = { id: 'c1', surface: 'terms', changedAt: '2026-10-07T10:00:00Z', note: null, affects: [] }
     const w = homeWeeks({ ...base, changes: [change], updates: sundays, now: '2026-10-26T08:00:00Z' })
-    // Only the week of 12 October is after the change, and it has not settled.
-    expect(w).toBeNull()
+    // Only the week of 12 October is after the change: drawn alone, still filling.
+    expect(w!.columns.map((c) => c.videos)).toEqual([null, null, 120, null, null, null, null, null])
+    expect(w!.columns[2].settled).toBe(false)
   })
 
   it('leaves out a week holding videos let in before relevance was checked', () => {
     const dirty = [row('2026-09-28', 281, 4902, { unchecked: 3 }), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
-    expect(homeWeeks({ ...base, rows: dirty, updates: sundays, now: '2026-10-26T08:00:00Z' })).toBeNull()
+    const w = homeWeeks({ ...base, rows: dirty, updates: sundays, now: '2026-10-26T08:00:00Z' })
+    expect(w!.columns.map((c) => c.videos)).toEqual([null, 254, 120, null, null, null, null, null])
+    expect(w!.columns.map((c) => c.settled).slice(0, 3)).toEqual([false, true, false])
   })
 })
 
@@ -191,7 +208,7 @@ describe('the tiles', () => {
     expect(movesTile({ month: '2026-09-01', posts: null, advice: 5, moves: 1 })).toBeNull()
   })
 
-  it('come in the artboard’s order, and only the ones that exist', () => {
+  it('are always all six, in the artboard’s order; one not read is its title alone, marked insufficient (Heinrich, 1 Oct)', () => {
     const tiles = homeTiles([
       movesTile({ month: '2026-09-01', posts: 25, advice: 5, moves: 0 }),
       competitiveTile(9),
@@ -199,7 +216,15 @@ describe('the tiles', () => {
       overviewTile(HOME_READ),
       weekTile(HOME_READ),
     ])
-    expect(tiles.map((t) => t.title)).toEqual(['Your market', 'This week', 'Competitive', 'Your moves'])
+    expect(tiles.map((t) => t.title)).toEqual(['Your market', 'This week', 'Conversation', 'Competitive', 'Subjects', 'Your moves'])
+    const conversation = tiles.find((t) => t.key === 'voice')!
+    expect(conversation).toMatchObject({ href: '/dashboard/voice', big: '', rows: [] })
+    expect(tileInsufficient(conversation)).toBe(true)
+    // Competitive keeps its number and says the rest is insufficient.
+    expect(tiles.find((t) => t.key === 'competitive')).toMatchObject({ big: '9', sub: 'brands you track', rows: [] })
+    expect(tileInsufficient(tiles.find((t) => t.key === 'competitive')!)).toBe(true)
+    expect(tileInsufficient(tiles.find((t) => t.key === 'overview')!)).toBe(false)
+    expect(INSUFFICIENT).toBe('Insufficient data')
   })
 })
 
