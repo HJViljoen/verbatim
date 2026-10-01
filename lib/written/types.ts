@@ -254,6 +254,9 @@ export interface WeekReadAlsoHeard {
   label: string
   videos: number
   videoIds: string[]
+  /** The same theme's lenient-gated videos over the month (`monthVideoIds`'
+   *  count), so the week's count can be restated against its month. */
+  monthVideos?: number
 }
 
 /**

@@ -305,7 +305,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
   const printedThemes = new Set(findings.flatMap((f) => f.basedOn))
   const alsoHeard: WeekReadAlsoHeard[] = findings.length === 0 ? [] : pool.candidates
     .filter((c) => !printedThemes.has(c.themeId) && c.label.trim())
-    .map((c) => ({ themeId: c.themeId, label: c.label.trim(), videos: c.lenientVideos, videoIds: [...c.lenientVideoIds].sort() }))
+    .map((c) => ({ themeId: c.themeId, label: c.label.trim(), videos: c.lenientVideos, videoIds: [...c.lenientVideoIds].sort(), monthVideos: new Set(c.monthVideoIds).size }))
 
   // ---- The report (v3): only on a week whose findings print ------------------------------
   const report = findings.length > 0 && a.written != null

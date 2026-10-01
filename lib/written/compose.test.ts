@@ -141,8 +141,8 @@ describe('composeWeekRead: what the This week page needs (pages build, additive)
     const c3 = candidate({ id: 'C3', videoIds: ['d', 'e', 'f'], label: 'Cotopaxi praised for practical travel' })
     const read = compose([c1, c2, c3], [finding({ based_on: ['C1'] })])
     expect(read.alsoHeard).toEqual([
-      { themeId: 'th-c2', label: 'Confusion over airline size rules', videos: 3, videoIds: ['a', 'b', 'c'] },
-      { themeId: 'th-c3', label: 'Cotopaxi praised for practical travel', videos: 3, videoIds: ['d', 'e', 'f'] },
+      { themeId: 'th-c2', label: 'Confusion over airline size rules', videos: 3, videoIds: ['a', 'b', 'c'], monthVideos: 9 },
+      { themeId: 'th-c3', label: 'Cotopaxi praised for practical travel', videos: 3, videoIds: ['d', 'e', 'f'], monthVideos: 9 },
     ])
   })
 
