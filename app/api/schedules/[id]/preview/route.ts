@@ -12,6 +12,8 @@ import { renderWeeklyEmail } from '@/lib/email/weekly'
 import { renderMonthlyEmail } from '@/lib/email/monthly'
 import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { renderQuarterlyEmail } from '@/lib/email/quarterly'
+import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
+import { renderWeeklyReadEmail } from '@/lib/email/weekly-read'
 import { runSchedule } from '@/lib/schedules/run'
 import type { ScheduleRow } from '@/lib/schedules/types'
 import type { ReportSnapshotData } from '@/lib/reports/types'
@@ -62,6 +64,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // ever stored.
     if (isWeeklyData(data)) {
       return page(renderWeeklyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
+    }
+    // The weekly read: the email exactly as it goes (or went) out, which is
+    // what the operator reads on a held send before pressing Send.
+    if (isWeeklyReadData(data)) {
+      return page(renderWeeklyReadEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
     }
     if (isMonthlyData(data)) {
       return page(renderMonthlyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)

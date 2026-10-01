@@ -30,9 +30,15 @@ const schedule = (over: Partial<ScheduleLike> = {}): ScheduleLike => ({
   recipients: ['a@x.test'], active: true, lastSentAt: '2026-09-13T06:28:00Z', ...over,
 })
 
+/** One row by its artefact: the order is the page's reading order, and a test
+ *  about one artefact should not break when another joins the list. */
+const rowOf = (rows: ReturnType<typeof recipientRows>, a: string) => rows.find((r) => r.artefact === a)!
+
 describe('artefacts', () => {
-  it('names seven, and only seven', () => {
-    expect(ARTEFACTS).toHaveLength(7)
+  it('names eight: the weekly read, then the seven', () => {
+    expect(ARTEFACTS).toHaveLength(8)
+    expect(ARTEFACTS[0]).toBe('weekly_read')
+    expect(isArtefact('weekly_read')).toBe(true)
     expect(isArtefact('brief:marketing')).toBe(true)
     expect(isArtefact('brief:ops')).toBe(false)
     expect(isArtefact(null)).toBe(false)
@@ -40,30 +46,32 @@ describe('artefacts', () => {
 
   it('lists every artefact, including the ones nothing sends', () => {
     const rows = recipientRows([schedule()], 'weekly')
-    expect(rows).toHaveLength(7)
-    expect(rows[0].artefact).toBe('weekly')
-    expect(rows[0].recipients).toEqual(['a@x.test'])
-    expect(rows[0].sending).toBe(true)
-    expect(rows.filter((r) => r.schedule === null)).toHaveLength(6)
-    expect(rows[1].sending).toBe(false)
+    expect(rows).toHaveLength(8)
+    expect(rows[0].artefact).toBe('weekly_read')
+    expect(rows[0].sending).toBe(false)
+    const weekly = rowOf(rows, 'weekly')
+    expect(weekly.recipients).toEqual(['a@x.test'])
+    expect(weekly.sending).toBe(true)
+    expect(rows.filter((r) => r.schedule === null)).toHaveLength(7)
+    expect(rowOf(rows, 'monthly').sending).toBe(false)
   })
 
   it('sends nothing on a paused workspace, whatever the schedule says', () => {
     const rows = recipientRows([schedule()], 'paused')
-    expect(rows[0].schedule).not.toBeNull()
-    expect(rows[0].sending).toBe(false)
+    expect(rowOf(rows, 'weekly').schedule).not.toBeNull()
+    expect(rowOf(rows, 'weekly').sending).toBe(false)
     expect(sendingSummary(rows, 'paused')).toMatch(/paused/)
   })
 
   it('does not count an active schedule with no addresses as sending', () => {
     const rows = recipientRows([schedule({ recipients: [] })], 'weekly')
-    expect(rows[0].sending).toBe(false)
+    expect(rowOf(rows, 'weekly').sending).toBe(false)
     expect(sendingSummary(rows, 'weekly')).toBe('None of these is being sent.')
   })
 
   it('does not say "no recipient" of a report switched off with addresses on it (Sealand’s weekly under the lock)', () => {
     const rows = recipientRows([schedule({ active: false, recipients: ['a@x.test', 'b@x.test'] })], 'weekly')
-    expect(rows[0].sending).toBe(false)
+    expect(rowOf(rows, 'weekly').sending).toBe(false)
     expect(sendingSummary(rows, 'weekly')).toBe('None of these is being sent.')
   })
 
@@ -93,21 +101,20 @@ describe('artefacts', () => {
       schedule({ id: 'a', artefact: 'weekly' }),
       schedule({ id: 'b', artefact: 'brief:sales' }),
     ], 'weekly')
-    expect(rows[0].buildable).toBe(true)
-    expect(rows[0].sending).toBe(true)
-    expect(rows[3].artefact).toBe('brief:sales')
-    expect(rows[3].buildable).toBe(false)
-    expect(rows[3].sending).toBe(false)
+    expect(rowOf(rows, 'weekly').buildable).toBe(true)
+    expect(rowOf(rows, 'weekly').sending).toBe(true)
+    expect(rowOf(rows, 'brief:sales').buildable).toBe(false)
+    expect(rowOf(rows, 'brief:sales').sending).toBe(false)
     // "reports", not "artefacts": this module's docblock bans the dialect and
     // then reached for the one word in it that is in neither GLOSSARY nor the
     // thirteen.
-    expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 reports is being sent, to 1 address.')
+    expect(sendingSummary(rows, 'weekly')).toBe('1 of 8 reports is being sent, to 1 address.')
     expect(isBuildable('weekly')).toBe(true)
     // `monthly` joined the buildable list in WP18 and `quarterly` in WP20,
     // each with a builder, a deck and a `sends*` branch in the runner behind
     // it. The four briefs are still not here: WP19 builds them, but nothing
-    // sends one on a schedule.
-    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'monthly', 'quarterly'])
+    // sends one on a schedule. The weekly read joined with writing back.
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly_read', 'weekly', 'monthly', 'quarterly'])
     expect(notBuiltYet('brief:sales')).toContain('the sales brief')
     // ABOUT THE SCHEDULE, NOT ABOUT THE DOCUMENT. Össur has a built report
     // titled "Sales brief" and two Block B surfaces link to it in the same
@@ -123,17 +130,19 @@ describe('artefacts', () => {
   // the Active checkbox and switched off whatever an operator ticked. WP20 did
   // the same for the quarterly review, and the merge of the two is why this
   // test names three.
-  it('calls the three artefacts that have a builder buildable, and no others', () => {
-    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'monthly', 'quarterly'])
+  it('calls the four artefacts that have a builder buildable, and no others', () => {
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly_read', 'weekly', 'monthly', 'quarterly'])
     const rows = recipientRows([
+      schedule({ id: 'r', artefact: 'weekly_read', cadence: 'every_update' }),
       schedule({ id: 'b', artefact: 'monthly', cadence: 'monthly' }),
       schedule({ id: 'q', artefact: 'quarterly', cadence: 'quarterly' }),
     ], 'monthly')
-    expect(rows[1].buildable).toBe(true)
-    expect(rows[1].sending).toBe(true)
-    expect(rows[2].artefact).toBe('quarterly')
-    expect(rows[2].buildable).toBe(true)
-    expect(rows[2].sending).toBe(true)
+    expect(rowOf(rows, 'weekly_read').buildable).toBe(true)
+    expect(rowOf(rows, 'weekly_read').sending).toBe(true)
+    expect(rowOf(rows, 'monthly').buildable).toBe(true)
+    expect(rowOf(rows, 'monthly').sending).toBe(true)
+    expect(rowOf(rows, 'quarterly').buildable).toBe(true)
+    expect(rowOf(rows, 'quarterly').sending).toBe(true)
   })
 
   it('counts addresses once across artefacts', () => {
@@ -142,8 +151,9 @@ describe('artefacts', () => {
     ], 'weekly')
     // The dedup itself, over two sending rows, without waiting for a second
     // builder to exist.
-    const second = { ...rows[0], artefact: 'monthly' as const, recipients: ['B@x.test'], sending: true }
-    expect(sendingSummary([rows[0], second], 'weekly')).toBe('2 of 2 reports are being sent, to 2 addresses.')
+    const weekly = rowOf(rows, 'weekly')
+    const second = { ...weekly, artefact: 'monthly' as const, recipients: ['B@x.test'], sending: true }
+    expect(sendingSummary([weekly, second], 'weekly')).toBe('2 of 2 reports are being sent, to 2 addresses.')
   })
 
   it('keeps a schedule that names no artefact rather than dropping it', () => {

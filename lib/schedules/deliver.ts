@@ -20,6 +20,8 @@ import { weeklyBlocksFor } from '../../components/blocks/weekly'
 import { monthlyBlocksFor } from '../../components/blocks/monthly'
 import { isQuarterlyData } from '../reports/quarterly-build'
 import { renderQuarterlyEmail } from '../email/quarterly'
+import { isWeeklyReadData } from '../reports/weekly-read-build'
+import { renderWeeklyReadEmail } from '../email/weekly-read'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -87,7 +89,7 @@ export async function readyForReview(
   const schedule = scheduleRow as ScheduleRow | null
 
   const data = await hydrateSnapshot<ReportSnapshotData>(admin, snapRow)
-  const subject = isWeeklyData(data) || isMonthlyData(data) || isQuarterlyData(data)
+  const subject = isWeeklyData(data) || isMonthlyData(data) || isQuarterlyData(data) || isWeeklyReadData(data)
     ? data.subject
     : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
@@ -214,7 +216,10 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     const weekly = isWeeklyData(data) ? data : null
     const monthly = isMonthlyData(data) ? data : null
     const quarterly = isQuarterlyData(data) ? data : null
-    const arranged = weekly ?? monthly ?? quarterly
+    // THE WEEKLY READ: a written report with no tiles and no reading to
+    // record (`sent_figures`: none, as for a document).
+    const weeklyRead = isWeeklyReadData(data) ? data : null
+    const arranged = weekly ?? monthly ?? quarterly ?? weeklyRead
     // AND THE TWO OF THE THREE THAT ARE A READING OF A MONTH. `arranged`
     // answers "does this email carry tile pictures?", which is no for all
     // three. The record below answers "under which month do these figures
@@ -286,7 +291,9 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       images[k] = `cid:${cid}`
       inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
-    const email = monthly
+    const email = weeklyRead
+      ? renderWeeklyReadEmail({ data: weeklyRead, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : monthly
       ? renderMonthlyEmail({ data: monthly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : weekly
       ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })

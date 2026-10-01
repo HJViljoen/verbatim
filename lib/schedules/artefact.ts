@@ -22,7 +22,7 @@ import type { ScheduleRow } from './types'
  * existed. No live schedule changes shape because this file was added.
  */
 
-export type Artefact = 'weekly' | 'monthly' | 'quarterly' | (string & {})
+export type Artefact = 'weekly_read' | 'weekly' | 'monthly' | 'quarterly' | (string & {})
 
 /** The starter key the weekly report is sent under. */
 export const WEEKLY_STARTER_KEY = 'weekly_report'
@@ -46,6 +46,13 @@ export const QUARTERLY_STARTER_KEY = 'quarterly_review'
 
 export const isQuarterlyArtefact = (a: Artefact | null): boolean => a === 'quarterly'
 
+/** The weekly read's starter key (writing back, 1 Oct): "This week in your
+ *  market", the email of the run's stored written read. Its own key, never
+ *  the weekly report's, for the reason `starterKeyFor` gives. */
+export const WEEKLY_READ_STARTER_KEY = 'weekly_read'
+
+export const isWeeklyReadArtefact = (a: Artefact | null): boolean => a === 'weekly_read'
+
 /**
  * The starter key a schedule for this artefact is stored under.
  *
@@ -62,6 +69,7 @@ export const isQuarterlyArtefact = (a: Artefact | null): boolean => a === 'quart
  * either, so its row is recorded and inert until one lands.
  */
 export function starterKeyFor(artefact: Artefact | null): string {
+  if (artefact === 'weekly_read') return WEEKLY_READ_STARTER_KEY
   if (artefact === 'monthly') return MONTHLY_STARTER_KEY
   if (artefact === 'quarterly') return QUARTERLY_STARTER_KEY
   return WEEKLY_STARTER_KEY
@@ -74,6 +82,7 @@ export function scheduleArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { 
   if (schedule.starter_key === WEEKLY_STARTER_KEY) return 'weekly'
   if (schedule.starter_key === MONTHLY_STARTER_KEY) return 'monthly'
   if (schedule.starter_key === QUARTERLY_STARTER_KEY) return 'quarterly'
+  if (schedule.starter_key === WEEKLY_READ_STARTER_KEY) return 'weekly_read'
   return null
 }
 
@@ -90,6 +99,13 @@ export function sendsMonthly(schedule: Pick<ScheduleRow, 'starter_key'> & { arte
 /** And the quarterly review (Phase 1 WP20). */
 export function sendsQuarterly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
   return isQuarterlyArtefact(scheduleArtefact(schedule))
+}
+
+/** And the weekly read (writing back): a written report of the week, frozen
+ *  from the run's stored read. NOT a block artefact (it has no block keys and
+ *  no reading to answer figures from), and like one it has no `reports` row. */
+export function sendsWeeklyRead(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
+  return isWeeklyReadArtefact(scheduleArtefact(schedule))
 }
 
 /** ANY of the block-arranged artefacts — the weekly report, the monthly reading
@@ -114,6 +130,7 @@ export function sendsBlockArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & 
  */
 export function artefactTitle(artefact: Artefact | null): string {
   if (!artefact) return 'Sending'
+  if (artefact === 'weekly_read') return 'This week in your market'
   if (artefact === 'weekly') return 'Weekly report'
   if (artefact === 'monthly') return 'Monthly report'
   if (artefact === 'quarterly') return 'Quarterly review'

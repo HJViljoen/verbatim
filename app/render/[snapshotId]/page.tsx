@@ -25,6 +25,8 @@ import { appBaseUrl } from '@/lib/site'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { MethodNote, type MethodNoteData } from '@/components/print/method-note'
+import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
+import { WeeklyReadPage } from '@/components/email/weekly-read'
 
 // Print-mode HTML for one snapshot, fetched by the export route's headless
 // Chrome. proxy.ts lets /render through without a session; the signed token
@@ -138,6 +140,16 @@ export default async function RenderPage({
       return (
         <PrintRoot style={style}>
           <QuarterlyDeck data={data} />
+        </PrintRoot>
+      )
+    }
+    // THE WEEKLY READ (writing back): the email's own report as one column on
+    // A4 portrait paper, paginating as a document does. No tiles.
+    if (isWeeklyReadData(data)) {
+      if (token.tileKey) notFound()
+      return (
+        <PrintRoot style={style}>
+          <WeeklyReadPage data={data} appUrl={appBaseUrl()} print />
         </PrintRoot>
       )
     }

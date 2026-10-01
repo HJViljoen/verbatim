@@ -5,6 +5,7 @@ import { isDocumentData, type DocumentSnapshotData } from './documents/types'
 import { isWeeklyData, type WeeklySnapshotData } from './weekly-build'
 import { isMonthlyData, staleMonthlySnapshot, type MonthlySnapshotData } from './monthly-build'
 import { isQuarterlyData, type QuarterlySnapshotData } from './quarterly-build'
+import { isWeeklyReadData, type WeeklyReadSnapshotData } from './weekly-read-build'
 import { WEEKLY_BLOCK_KEYS } from './weekly'
 import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
@@ -22,10 +23,10 @@ export interface ViewerSnapshot {
   id: string
   /** Which deck draws it. Three kinds share `report_snapshots.kind = 'report'`
    *  and are told apart inside `data` — the `isDocumentData` precedent. */
-  kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly'
+  kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly' | 'weekly_read'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData | WeeklyReadSnapshotData
   title: string
   builtAt: string
   pageCount: number
@@ -105,6 +106,13 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
   // and `d.sections.forEach` throws inside a server component.
   if (isQuarterlyData(raw)) {
     return { ...common, kind: 'quarterly', data: raw, pageCount: quarterlyViewerPages(raw.keys) }
+  }
+
+  // THE WEEKLY READ (writing back): one column, one page in the viewer, for
+  // the reason the three above are here (the arranged path below reads
+  // `data.sections`, which it has none of).
+  if (isWeeklyReadData(raw)) {
+    return { ...common, kind: 'weekly_read', data: raw, pageCount: 1 }
   }
 
   // An arranged report: the cover plus every section's slides. The page

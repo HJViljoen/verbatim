@@ -17,6 +17,11 @@
  */
 
 export const ARTEFACTS = [
+  // THE WEEKLY READ (writing back, 1 Oct): "This week in your market", the
+  // week's written report of the market, one for everyone, emailed in full.
+  // First in reading order because it is the report a workspace receives
+  // every week; `weekly` beside it is the numbers-first weekly it follows.
+  'weekly_read',
   'weekly', 'monthly', 'quarterly',
   'brief:sales', 'brief:leadership', 'brief:marketing', 'brief:content',
 ] as const
@@ -29,6 +34,10 @@ export const isArtefact = (v: unknown): v is Artefact =>
 /** What each artefact is called on screen, and what it is. Client wording:
  *  no template keys, no "starter", no cadence jargon. */
 export const ARTEFACT_COPY: Record<Artefact, { label: string; what: string }> = {
+  weekly_read: {
+    label: 'This week in your market',
+    what: 'The week in writing: what happened in your market, what it means for you, and what to watch next week.',
+  },
   weekly: {
     label: 'The weekly report',
     what: 'What came in this week, and anything unusual in it.',
@@ -109,12 +118,19 @@ export const artefactLabel = (a: Artefact): string => ARTEFACT_COPY[a].label
  * the reason the paragraph above gives: with neither, the default starter makes
  * it send the WEEKLY report under the quarterly review's name.
  *
+ * `weekly_read` JOINED IT WITH WRITING BACK (1 Oct): `sendsWeeklyRead` names
+ * the schedule, `snapshotWeeklyRead` (lib/reports/weekly-read-build.ts) freezes
+ * the run's stored `week_reads` row, and `renderWeeklyReadEmail` is the body. A
+ * run with no ready read sends nothing (lib/reports/weekly-read.ts
+ * `weekReadSendState`). Its starter is `weekly_read`, its own, so a row that
+ * lost its artefact column could never send the weekly report in its place.
+ *
  * The four BRIEFS are deliberately NOT here. WP19 builds all four, but it
  * builds them in the Studio and on the Reports page; nothing in
  * `lib/schedules/run.ts` sends a brief, and this constant is about what a
  * SCHEDULE can send. They join the day a `sendsBrief` branch does.
  */
-export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly', 'monthly', 'quarterly']
+export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly_read', 'weekly', 'monthly', 'quarterly']
 
 export const isBuildable = (a: Artefact): boolean => BUILDABLE_ARTEFACTS.includes(a)
 

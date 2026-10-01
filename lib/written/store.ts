@@ -64,6 +64,34 @@ export async function loadWeekReadRow(
   return (res.data as { status: WeekReadStatus; created_at: string } | null) ?? null
 }
 
+/** A stored read as the send path reads it: the whole row of one run and kind. */
+export interface StoredWeekRead {
+  status: WeekReadStatus
+  data: WeekReadData | null
+  created_at: string
+}
+
+/**
+ * The run's stored read of a kind, data included, or null where there is none
+ * (no row, or the table is not in this database yet: both mean "nothing to
+ * send"). Scoped to the client as well as the run, so a schedule can never
+ * pick up another tenant's read by a run id.
+ */
+export async function loadWeekRead(
+  admin: SupabaseClient,
+  a: { clientId: string; runId: string; kind?: WeekReadKind },
+): Promise<StoredWeekRead | null> {
+  const res = await admin.from(WEEK_READS_TABLE)
+    .select('status, data, created_at')
+    .eq('client_id', a.clientId).eq('run_id', a.runId).eq('kind', a.kind ?? 'week')
+    .maybeSingle()
+  if (res.error) {
+    if (isMissingWeekReads(res.error)) return null
+    throw new Error(`week_reads read: ${res.error.message}`)
+  }
+  return (res.data as StoredWeekRead | null) ?? null
+}
+
 /**
  * Last week's headlines, for continuity: the newest READY week read of this
  * client from another run whose window ended by the time this one's began.

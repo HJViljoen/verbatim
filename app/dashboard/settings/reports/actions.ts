@@ -154,7 +154,7 @@ export async function updateArtefactRecipients(
       // keeps the default and stays inert.
       starter_key: starterKeyFor(parsed.data.artefact),
       artefact: parsed.data.artefact,
-      cadence: parsed.data.artefact === 'weekly' ? 'every_update'
+      cadence: parsed.data.artefact === 'weekly' || parsed.data.artefact === 'weekly_read' ? 'every_update'
         : parsed.data.artefact === 'quarterly' ? 'quarterly' : 'monthly',
       recipients: parsed.data.recipients,
       active,

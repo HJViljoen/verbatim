@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { artifactFilename, logExport, storeArtifact } from '../artifacts'
-import { sendReportEmail, type EmailAttachment } from '../email'
+import { sendAlertEmail, sendReportEmail, type EmailAttachment } from '../email'
 import { EMAIL_IMAGE_TILES, renderDigestEmail } from '../email/digest'
 import { renderMany } from '../render/render'
 import { BuildEmptyError, snapshotReport } from '../reports/build'
@@ -26,7 +26,9 @@ import { blockAnswers } from '../blocks/types'
 import { weeklyBlocksFor } from '../../components/blocks/weekly'
 import { monthlyBlocksFor } from '../../components/blocks/monthly'
 import { quarterlyBlocksFor } from '../../components/blocks/quarterly'
-import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly } from './artefact'
+import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly, sendsWeeklyRead } from './artefact'
+import { snapshotWeeklyRead, WeeklyReadNotReadyError, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
+import { renderWeeklyReadEmail } from '../email/weekly-read'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -181,6 +183,30 @@ async function runDocumentSchedule(
   return { status: sent ? 'sent' : 'failed', subject: email.subject, ms: ms(), ...(sent ? {} : { error: 'email not sent, provider not configured or the send failed' }) }
 }
 
+/**
+ * The operator hears that a weekly read was held back (plan T7: "a week with
+ * no read sends nothing and alerts the operator; never an empty report"). Once
+ * per held send: the runner's claim makes a retried step find the row already
+ * skipped and return before this. The fallback is the Monday script, then a
+ * Send now from the Studio, which takes the skipped row over.
+ */
+async function alertWeeklyReadHeld(a: { schedule: ScheduleRow; runId: string; company: string; reason: string; message: string }): Promise<void> {
+  const who = a.company || a.schedule.client_id
+  const n = a.schedule.recipients.length
+  await sendAlertEmail(
+    `Verbatim weekly read not sent: ${who}`,
+    [
+      `${a.message}`,
+      ``,
+      `Schedule: ${a.schedule.name} (${a.schedule.id}), ${n} recipient${n === 1 ? '' : 's'}. Nobody was emailed.`,
+      `Run: ${a.runId} · reason: ${a.reason}`,
+      `Client: ${who} (${a.schedule.client_id})`,
+      ``,
+      `To send this week's read once it exists: node --env-file=.env.local --import tsx scripts/week-read.ts --client ${a.schedule.client_id} --run ${a.runId} (dry), then again with --write; then Send now on this schedule in the Studio.`,
+    ].join('\n'),
+  ).catch(() => ({ sent: false }))
+}
+
 /** The workspace's name, for an artefact that resolves no template. */
 async function companyName(admin: SupabaseClient, clientId: string): Promise<string> {
   const { data } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
@@ -222,7 +248,10 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     const monthly = sendsMonthly(schedule)
     const quarterly = sendsQuarterly(schedule)
     const arranged = sendsBlockArtefact(schedule)
-    const resolved = arranged ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
+    // THE WEEKLY READ (writing back) names no template either: it is the
+    // run's stored written read, frozen whole.
+    const weeklyRead = sendsWeeklyRead(schedule)
+    const resolved = arranged || weeklyRead ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
     if (!resolved) {
       await mark('failed', 'The template this schedule sends no longer exists.')
       return { status: 'failed', sendId, ms: ms(), error: 'The template this schedule sends no longer exists.' }
@@ -246,7 +275,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // what differs is the reading that is frozen and the body that is rendered
     // from it. A schedule says which it is through `lib/schedules/artefact.ts`,
     // and a schedule that says nothing sends exactly what it sent before.
-    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot | MonthlySnapshot | QuarterlySnapshotData; title: string; sections: number }
+    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot | MonthlySnapshot | QuarterlySnapshotData | WeeklyReadSnapshotData; title: string; sections: number }
     // WHAT THE RECORD WILL SAY THIS ARTEFACT PRINTED, held until the send has
     // actually happened. Empty for anything that is not a block artefact: a
     // document brief's figures are display strings with no object behind them
@@ -259,7 +288,25 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // figures under a single `sent_figures.month` would be filing them under
     // the wrong period, which that table's NOT NULL exists to prevent.
     let sentRecord: { rows: SentFigureRow[]; readingAt: string; month: string; monthStatus: 'filling' | 'frozen' } | null = null
-    if (monthly) {
+    if (weeklyRead) {
+      // THE SEND RULE: only a READY read goes out. A thin, failed or missing
+      // one sends NOTHING, never an empty report; the row is skipped (which
+      // settles the update for the ops check, as a list with nobody on it
+      // does) and, on a real send, the operator is told why.
+      let built
+      try {
+        built = await snapshotWeeklyRead({ admin, clientId: schedule.client_id, runId, company: resolved.company, userId: null })
+      } catch (e) {
+        if (e instanceof WeeklyReadNotReadyError) {
+          await mark('skipped', e.message)
+          if (recording) await alertWeeklyReadHeld({ schedule, runId, company: resolved.company, reason: e.reason, message: e.message })
+          return { status: 'skipped', sendId, ms: ms(), error: e.message }
+        }
+        throw e
+      }
+      // `sent_figures`: none (`sentRecord` stays null), as for a document.
+      snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.read.findings.length }
+    } else if (monthly) {
       let built
       try {
         built = await snapshotMonthly({
@@ -368,7 +415,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     const cadenceWord = cadenceWordOf(schedule.cadence)
     const monthlyForEmail = monthly ? (snap.data as MonthlySnapshot) : null
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
-      monthlyForEmail
+      weeklyRead
+        ? renderWeeklyReadEmail({ data: snap.data as WeeklyReadSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : monthlyForEmail
         ? renderMonthlyEmail({ data: monthlyForEmail, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : quarterly
         ? renderQuarterlyEmail({ data: snap.data as QuarterlySnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
@@ -389,7 +438,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // The weekly report says every number in words (lib/email/weekly.tsx), so
     // it asks the runner for no PNGs at all and an image-blocking client loses
     // nothing.
-    const imageTiles = reviewing || arranged ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    const imageTiles = reviewing || arranged || weeklyRead ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return (snap.data as ReportSnapshotData).sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })

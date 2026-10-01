@@ -15,6 +15,8 @@ import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
+import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
+import { WeeklyReadPage } from '@/components/email/weekly-read'
 
 // /r/<token> — a shared report (Stage 2, D5/D6). Public prefix in proxy.ts;
 // everything else is checked here: the token, expiry, revocation, the
@@ -75,6 +77,15 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     return (
       <main>
         <WeeklyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
+  // The weekly read (writing back): the same report as the email, as a page,
+  // so the link and the inbox read the same.
+  if (isWeeklyReadData(data)) {
+    return (
+      <main>
+        <WeeklyReadPage data={data} appUrl={APP_URL} fill />
       </main>
     )
   }

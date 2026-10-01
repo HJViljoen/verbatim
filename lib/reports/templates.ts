@@ -77,6 +77,21 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     sections: [],
   },
   {
+    // THE WEEKLY READ (writing back, 1 Oct): "This week in your market", the
+    // email of the run's stored written read (lib/reports/weekly-read-build.ts).
+    // Here for the reason the three artefacts above are: a schedule names what
+    // it sends through `starter_key` as well as `artefact`, and every guard
+    // that asks "is this a template we know?" must answer yes, or editing its
+    // recipients in the Studio is refused with "Pick a template.". No
+    // sections: nothing about it is arranged.
+    key: 'weekly_read',
+    artefact: true,
+    name: 'This week in your market',
+    audience: 'general',
+    description: 'The week in writing, one report for everyone: the week in one line, what happened, what it means for you, what to watch, and the week\u2019s findings.',
+    sections: [],
+  },
+  {
     // RETIRED (Phase 1 WP17). The weekly REPORT replaces it — an arranged
     // report over block keys, stated month-to-date against the trailing
     // baseline, rather than the dashboard's run-indexed tiles. It stays here,
