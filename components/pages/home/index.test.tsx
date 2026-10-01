@@ -68,7 +68,7 @@ describe('the Dashboard', () => {
   it('prints no quote, no em dash, no left stripe and no highlight', () => {
     expect(markup).not.toContain('data-copy="quote"')
     expect(text).not.toMatch(/[“”]/)
-    expect(text).not.toContain('—')
+    expect(text).not.toContain('\u2014')
     expect(markup).not.toMatch(STRIPE)
   })
 
@@ -107,7 +107,7 @@ describe('the Dashboard skeleton', () => {
   it('names the page and prints no words the page might not', () => {
     const text = renderText(<HomeSkeleton />)
     expect(text).toContain('Dashboard')
-    expect(text).not.toContain('—')
+    expect(text).not.toContain('\u2014')
     expect(render(<HomeSkeleton />)).not.toMatch(STRIPE)
   })
 })
