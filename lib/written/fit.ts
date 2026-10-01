@@ -4,6 +4,7 @@ import { chunk } from '../chunk'
 import { EMBEDDING_MODEL } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
 import { cosine, embedTexts } from '../pipeline/cluster'
+import { asTimeout, isTimeout, UNTIMED_STEP, type CallBudget } from './deadline'
 import { embedCostUsd, embedTokenEstimate } from '../pipeline/embed-insights'
 import type { PoolCandidate, WeekPool } from './types'
 
@@ -145,8 +146,8 @@ export interface FitDeps {
  * How well each cited option fits each written finding, and each story
  * paragraph's options fit that paragraph (v3). Reads the option insights'
  * stored vectors, embeds the findings, the paragraphs (and any insight with
- * none) in one request, and logs that request where `log` is true. Never
- * throws.
+ * none) in one request, and logs that request where `log` is true. Throws
+ * only a `WeekReadTimeoutError` (review M4); any other failure is no fit.
  */
 export async function fitQuotes(
   admin: SupabaseClient,
@@ -158,10 +159,15 @@ export async function fitQuotes(
     /** Story paragraphs that point to a candidate (v3). */
     story?: readonly FitParagraph[]
     log: boolean
+    /** The step's time (lib/written/deadline.ts); outside the step, the cap. */
+    budget?: CallBudget
   },
   deps: Partial<FitDeps> = {},
 ): Promise<QuoteFit> {
-  const embed = deps.embed ?? embedTexts
+  // The one embeddings request, capped and never retried by the SDK; its
+  // timeout is taken when it is made, from what the step has left.
+  const budget = a.budget ?? UNTIMED_STEP
+  const embed = deps.embed ?? ((texts: string[]) => embedTexts(texts, budget.optionsFor('embed')))
   const findings = a.findings.filter((f) => f.headline.trim() && optionsFor(a.pool, f).length > 0)
   const story = (a.story ?? []).filter((p) => p.text.trim() && optionsFor(a.pool, p).length > 0)
   if (findings.length === 0 && story.length === 0) return { ...noFit(), ran: true }
@@ -213,6 +219,10 @@ export async function fitQuotes(
     const storyScores = scoreFit(a.pool, story.map((p, i) => ({ ...p, vector: vectors[findings.length + i] })), insightVectors)
     return { scores, story: storyScores, costUsd, stored: stored.size, embedded: missing.length, findings: findings.length, paragraphs: story.length, ran: true }
   } catch (e) {
+    // A timeout is a failed read, never a silent one (review M4): the step
+    // stores it as failed and tells the operator. Any other failure keeps the
+    // read, with the writer's order deciding the quotes.
+    if (isTimeout(e)) throw asTimeout(e, 'embed')
     const message = e instanceof Error ? e.message : String(e)
     console.warn('[week_read_fit] the quotes could not be fitted; the writer\'s order decides:', message)
     return noFit(message)

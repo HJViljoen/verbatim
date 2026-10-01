@@ -4,6 +4,7 @@ import { sendAlertEmail } from '../email'
 import { checkWeekRead, type WeekCheck } from './check'
 import { loadCompanyContext, type CompanyContext } from './company'
 import { composeWeekRead } from './compose'
+import { callBudget, type CallBudget } from './deadline'
 import { loadTrackedBrands } from './evidence'
 import { fitQuotes, type FitParagraph, type QuoteFit } from './fit'
 import { loadWeekPool } from './pool'
@@ -92,6 +93,9 @@ export async function buildWeekRead(
     clientId: string; runId: string; asOf?: Date; log: boolean; client?: ParseClient; inputs?: WeekReadInputs
     /** The embedder, for a test. */
     embed?: (texts: string[]) => Promise<number[][]>
+    /** The step's time for its model calls (lib/written/deadline.ts). Absent
+     *  (the script), each call keeps its cap and no SDK retry. */
+    budget?: CallBudget
   },
 ): Promise<BuiltWeekRead> {
   const { clientId, runId } = opts
@@ -103,9 +107,9 @@ export async function buildWeekRead(
     return { status: 'thin', data, pool, standing, called: false, raw: null, scrub: null, check: null, fit: null }
   }
 
-  const call = await generateWeekRead(admin, { company, pool, standing, previous, figures, context, clientId, runId, log: opts.log, client: opts.client })
+  const call = await generateWeekRead(admin, { company, pool, standing, previous, figures, context, clientId, runId, log: opts.log, client: opts.client, budget: opts.budget })
   const scrubbed = scrubWeekRead(call.written, figures, weekAllowTokens(pool.candidates, standing), { company })
-  const check = await checkWeekRead(admin, { clientId, runId, companyName: company, headlines: checkableHeadlines(pool, scrubbed.output), persist: opts.log })
+  const check = await checkWeekRead(admin, { clientId, runId, companyName: company, headlines: checkableHeadlines(pool, scrubbed.output), persist: opts.log, budget: opts.budget })
   // Which quote fits each finding, and each story paragraph that points to a
   // voice, as it will print (after the scrub).
   const fit = await fitQuotes(admin, {
@@ -115,6 +119,7 @@ export async function buildWeekRead(
     findings: scrubbed.output.findings.map((f, index) => ({ index, headline: f.headline, saw: f.saw, based_on: f.based_on })),
     story: storyFitTargets(scrubbed.output),
     log: opts.log,
+    budget: opts.budget,
   }, opts.embed ? { embed: opts.embed } : {})
   return finishWeekRead({ company, pool, standing, raw: call.written, check, fit, costUsd: call.costUsd + check.costUsd + fit.costUsd })
 }
@@ -232,6 +237,7 @@ export async function runWeekReadStep(
 ): Promise<WeekReadStepResult> {
   const d = { ...DEFAULT_DEPS, ...deps }
   const who = opts.company ?? opts.clientId
+  const startedAt = Date.now()
   try {
     // No table, nothing spent: the step no-ops until its migration is applied
     // (the rule every additive step follows, AGENTS.md).
@@ -243,7 +249,11 @@ export async function runWeekReadStep(
       )
       return { status: 'missing_migration', findings: 0, held: 0, costUsd: 0 }
     }
-    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true })
+    // THE STEP'S CLOCK STARTS HERE (review M4): every model call below is
+    // capped, never retried by the SDK, and done by WEEK_READ_STEP_BUDGET_MS
+    // (250 s), well inside the route's 300 s; one that runs out is thrown as a
+    // timeout and stored as a failed read below, with the alert naming it.
+    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt }) })
     await d.save(admin, rowOf(opts.clientId, opts.runId, built))
     const result: WeekReadStepResult = { status: built.status, findings: built.data.findings.length, held: built.data.held.length, costUsd: built.data.costUsd }
     console.log(`[write-week-read] ${built.status}: ${result.findings} finding(s), ${result.held} held, $${result.costUsd}`)

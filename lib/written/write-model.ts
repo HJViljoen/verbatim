@@ -4,6 +4,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { SYNTHESIS_MODEL, SYNTHESIS_REASONING_EFFORT, estimateCost } from '../config'
 import { openai } from '../openai'
 import { logAiCall } from '../pipeline/ai-log'
+import { asTimeout, isTimeout, UNTIMED_STEP, type CallBudget } from './deadline'
 import {
   buildWeekReadPrompts, weekReadSchema, WEEK_READ_PASS, WEEK_READ_PROMPT_VERSION,
   type WeekReadOutput, type WeekWriterArgs, type WriterSubject,
@@ -46,6 +47,8 @@ export async function generateWeekRead(
      *  write to any database (scripts/week-read.ts without --write). */
     log?: boolean
     client?: ParseClient
+    /** The step's time (lib/written/deadline.ts); outside the step, the cap. */
+    budget?: CallBudget
   },
 ): Promise<WeekReadCall> {
   const client = args.client ?? openai
@@ -54,7 +57,14 @@ export async function generateWeekRead(
   const log = args.log !== false
   let lastError = ''
   let costUsd = 0
+  const budget = args.budget ?? UNTIMED_STEP
   for (let attempt = 1; attempt <= 2; attempt++) {
+    // HELD TO TIME (review M4): capped, no silent SDK retry, and started only
+    // where the step has time for it and the calls after it. A call that
+    // cannot start, or times out, is thrown as a timeout: the step stores a
+    // failed read and tells the operator; it is never retried here. A second
+    // attempt is for an answer that would not parse, and only with time left.
+    const options = budget.optionsFor('writer')
     const startedAt = Date.now()
     try {
       const completion = await client.chat.completions.parse({
@@ -65,7 +75,7 @@ export async function generateWeekRead(
           { role: 'user', content: user },
         ],
         response_format: zodResponseFormat(weekReadSchema(), 'week_read'),
-      })
+      }, options)
       const usage = completion.usage
         ? { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }
         : { prompt_tokens: 0, completion_tokens: 0 }
@@ -94,6 +104,7 @@ export async function generateWeekRead(
           error: lastError, usage: { prompt_tokens: 0, completion_tokens: 0 }, durationMs: Date.now() - startedAt, validationStatus: 'parse_error',
         }).catch(() => {})
       }
+      if (isTimeout(e)) throw asTimeout(e, 'writer')
     }
   }
   throw new WeekReadWriteError(`The week's read could not be written twice over: ${lastError}`)

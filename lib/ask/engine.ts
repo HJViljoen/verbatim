@@ -181,7 +181,13 @@ export function clipInput(text: string, max = ASK_INPUT_CHARS): { text: string; 
  */
 export async function verdictPass(
   admin: ReturnType<typeof import('../supabase-admin').createAdminClient>,
-  args: { clientId: string; runId: string; companyName: string; claims: ExtractedClaim[]; persist?: boolean },
+  args: {
+    clientId: string; runId: string; companyName: string; claims: ExtractedClaim[]; persist?: boolean
+    /** The SDK's per-call options for this pass's two model calls, where the
+     *  caller holds it to time (the week read's self-check,
+     *  lib/written/deadline.ts). Absent, the SDK's defaults, as Ask has them. */
+    request?: { timeout?: number; maxRetries?: number }
+  },
 ): Promise<{ claims: ClaimResult[]; costUsd: number }> {
   const { clientId, runId, companyName, claims } = args
   const persist = args.persist !== false
@@ -191,7 +197,7 @@ export async function verdictPass(
   // 2. Shortlist themes per claim by embedding. Reproducible relevance, and it
   // fixes the under-recall of showing a reasoning model theme labels alone.
   const themes = await loadAskThemes(admin, clientId, runId)
-  const claimVectors = await embedTexts(claims.map((c) => c.claim))
+  const claimVectors = await embedTexts(claims.map((c) => c.claim), args.request)
   const shortlists = shortlistThemes(claims, claimVectors, themes, { perClaim: ASK_THEMES_PER_CLAIM })
 
   // 3. Real voices for the shortlisted themes, so the verdict is judged against
@@ -288,7 +294,7 @@ export async function verdictPass(
         { role: 'user', content: verdictUser },
       ],
       response_format: zodResponseFormat(VerdictSchema, 'ask_verdict'),
-    })
+    }, args.request)
     verdicts = completion.choices[0]?.message?.parsed ?? null
     if (completion.usage) usage = { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }
   } catch (e) {

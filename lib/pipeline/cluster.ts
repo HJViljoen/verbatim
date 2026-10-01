@@ -51,11 +51,13 @@ export const EMBED_BATCH = 512
  *  Chunked (EMBED_BATCH) and sequential: a bucket is a handful of requests,
  *  and the pipeline shares a 5-slot concurrency with everything else. A failed
  *  chunk throws — the Inngest step retries the whole step. */
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+export async function embedTexts(texts: string[], request?: { timeout?: number; maxRetries?: number }): Promise<number[][]> {
   if (texts.length === 0) return []
   const out: number[][] = []
   for (const part of chunk(texts, EMBED_BATCH)) {
-    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part })
+    // `request`: the SDK's per-call options, where a caller holds the call to
+    // time (the week read's step, lib/written/deadline.ts); absent, its defaults.
+    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part }, request)
     if (res.data.length !== part.length) {
       throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
     }

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { verdictPass } from '../ask/engine'
 import type { CheckVerdict } from '../reports/documents/check'
+import { asTimeout, isTimeout, UNTIMED_STEP, type CallBudget } from './deadline'
 
 // The self-check (plan T3), the document engine's (lib/reports/documents/
 // check.ts) pointed at the week: each finding's HEADLINE, as it would print,
@@ -26,10 +27,18 @@ export interface WeekCheck {
 
 export async function checkWeekRead(
   admin: SupabaseClient,
-  args: { clientId: string; runId: string; companyName: string; headlines: readonly string[]; persist: boolean },
+  args: {
+    clientId: string; runId: string; companyName: string; headlines: readonly string[]; persist: boolean
+    /** The step's time (lib/written/deadline.ts); outside the step, the cap. */
+    budget?: CallBudget
+  },
 ): Promise<WeekCheck> {
   const headlines = [...new Set(args.headlines.map((h) => h.trim()).filter(Boolean))]
   if (headlines.length === 0) return { contradicted: new Map(), verdicts: [], costUsd: 0, ran: true }
+  // Capped, no SDK retry, and only where the step has time left: a call that
+  // cannot start, or times out, fails the read (review M4), it is not a
+  // silent pass. Any other failure keeps the findings unchecked, as before.
+  const request = (args.budget ?? UNTIMED_STEP).optionsFor('check')
   try {
     const out = await verdictPass(admin, {
       clientId: args.clientId,
@@ -37,6 +46,7 @@ export async function checkWeekRead(
       companyName: args.companyName,
       claims: headlines.map((h, i) => ({ ref: `C${i + 1}`, claim: h, source: null })),
       persist: args.persist,
+      request,
     })
     const byRef = new Map(out.claims.map((c) => [c.ref, c]))
     const verdicts = headlines.map((headline, i) => {
@@ -50,6 +60,7 @@ export async function checkWeekRead(
       ran: true,
     }
   } catch (e) {
+    if (isTimeout(e)) throw asTimeout(e, 'check')
     console.error('[written/check] the verdict pass failed; findings kept unchecked:', e)
     return { contradicted: new Map(), verdicts: [], costUsd: 0, ran: false }
   }
