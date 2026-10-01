@@ -11,8 +11,9 @@ import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingVi
 import { MONTH_PARAM } from '../reading/reading-month'
 import { INDUSTRY_AUDIENCE, loadTrackedRivals } from '../rivals'
 import { loadStanding } from '../written/standing'
-import { isMissingWeekReads, loadLatestLongRun, WEEK_READS_TABLE } from '../written/store'
-import type { LongRunReadData, StandingFact, WeekReadData, WhoPart } from '../written/types'
+import { loadPublishedWeekRead } from '../written/published'
+import { loadLatestLongRun } from '../written/store'
+import type { LongRunReadData, StandingFact, WhoPart } from '../written/types'
 import { loadBrandNames, whoSplit, type WhoVideo } from '../written/who'
 import { fetchRunningRunIds } from './latest-video-run'
 import { WHAT_THEY_SELL } from './market-frame'
@@ -287,18 +288,11 @@ export function themeWho(
 
 // ---- The reads ----------------------------------------------------------------------------
 
-/** The newest READY week read's stored sentences on each subject, where that
- *  read is of `month`. Empty where there is none. */
+/** The PUBLISHED week read's stored sentences on each subject (lib/written/
+ *  published.ts: under a review schedule, the newest read that was sent),
+ *  where that read is of `month`. Empty where there is none. */
 async function loadWeekSentences(admin: SupabaseClient, clientId: string, month: string): Promise<Map<string, string>> {
-  const res = await admin.from(WEEK_READS_TABLE)
-    .select('month, data')
-    .eq('client_id', clientId).eq('kind', 'week').eq('status', 'ready').eq('month', month)
-    .order('window_end', { ascending: false }).limit(1)
-  if (res.error) {
-    if (isMissingWeekReads(res.error)) return new Map()
-    throw new Error(`week_reads sentences: ${res.error.message}`)
-  }
-  const data = ((res.data ?? [])[0] as { data: WeekReadData | null } | undefined)?.data
+  const data = (await loadPublishedWeekRead(admin, clientId, { month }))?.data
   return new Map((data?.standing ?? []).filter((s) => s.sentence?.trim()).map((s) => [s.subjectId, s.sentence.trim()]))
 }
 

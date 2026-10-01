@@ -22,7 +22,7 @@ import type { FigureTable } from '../reports/types'
 import { INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors } from '../rivals'
 import { hydrateData } from '../snapshots'
 import { stripUnevidencedBrand } from './overview-market/board'
-import { isMissingWeekReads, WEEK_READS_TABLE } from '../written/store'
+import { loadPublishedWeekRead } from '../written/published'
 import type { QuoteRef, WeekReadData } from '../written/types'
 
 // This week: the latest weekly read, in full (the pages build, 1 Oct; the
@@ -192,20 +192,13 @@ export const monthPrefix = (month: string): string => `In ${longMonth(month)}: `
 
 // ---- the reads -----------------------------------------------------------------
 
-/** The newest ready week read of this client, or null (none, or the table is
- *  not in this database). */
+/** The PUBLISHED week read of this client (`loadPublishedWeekRead`: under a
+ *  review schedule, the newest one that was sent), or null (none, one with no
+ *  findings, or the table is not in this database). */
 export async function loadLatestWeekRead(admin: SupabaseClient, clientId: string): Promise<{ runId: string; data: WeekReadData } | null> {
-  const res = await admin.from(WEEK_READS_TABLE)
-    .select('run_id, data, window_end')
-    .eq('client_id', clientId).eq('kind', 'week').eq('status', 'ready')
-    .order('window_end', { ascending: false }).limit(1)
-  if (res.error) {
-    if (isMissingWeekReads(res.error)) return null
-    throw new Error(`week_reads latest: ${res.error.message}`)
-  }
-  const row = ((res.data ?? [])[0] as { run_id: string; data: WeekReadData | null } | undefined) ?? null
-  if (!row?.data || !Array.isArray(row.data.findings) || row.data.findings.length === 0) return null
-  return { runId: String(row.run_id), data: row.data }
+  const row = await loadPublishedWeekRead(admin, clientId)
+  if (!row || !Array.isArray(row.data.findings) || row.data.findings.length === 0) return null
+  return { runId: row.runId, data: row.data }
 }
 
 /** The comments each theme's month rests on (the category's theme rows). */

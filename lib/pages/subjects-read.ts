@@ -1,13 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { hydrateData } from '../snapshots'
 import { resolvedQuote } from '../reports/weekly-read'
-import { isMissingWeekReads, WEEK_READS_TABLE } from '../written/store'
-import type { WeekReadData } from '../written/types'
+import { loadPublishedWeekRead } from '../written/published'
 import type { SubjectReadLine } from './subjects-view'
 
 // The week read's line on one subject, for the Subjects pane: the writer's
 // sentence, the conversations inside it and its one gated quote, as the
-// pipeline froze them into the newest ready `week_reads` row
+// pipeline froze them into the published `week_reads` row
 // (lib/written/compose.ts). Nothing is re-derived: the page prints what the
 // read says, and only for the read's own month (`subjectsView`).
 //
@@ -22,16 +21,10 @@ export async function loadSubjectReadLine(
   clientId: string,
   subjectId: string,
 ): Promise<SubjectReadLine | null> {
-  const res = await admin.from(WEEK_READS_TABLE)
-    .select('month, data')
-    .eq('client_id', clientId).eq('kind', 'week').eq('status', 'ready')
-    .order('window_end', { ascending: false })
-    .limit(1)
-  if (res.error) {
-    if (isMissingWeekReads(res.error)) return null
-    throw new Error(`week_reads (subjects): ${res.error.message}`)
-  }
-  const row = ((res.data ?? [])[0] as { month: string | null; data: WeekReadData | null } | undefined) ?? null
+  // The PUBLISHED read (lib/written/published.ts): under a review schedule,
+  // the newest one that was sent, so the pane prints nothing Heinrich has not
+  // approved.
+  const row = await loadPublishedWeekRead(admin, clientId)
   const month = row?.data?.month ?? row?.month ?? null
   const standing = row?.data?.standing?.find((s) => s.subjectId === subjectId) ?? null
   if (!month || !standing || standing.calibration === 'failed') return null

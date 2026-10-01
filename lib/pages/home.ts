@@ -18,7 +18,7 @@ import {
 import type { OurChange } from '../reading/comparability'
 import { weekReadDates } from '../reports/weekly-read'
 import { monthHeading } from '../written/month'
-import { isMissingWeekReads, WEEK_READS_TABLE } from '../written/store'
+import { loadPublishedWeekRead } from '../written/published'
 import type { WeekReadData, WeekReadStanding } from '../written/types'
 import type { FigureTable } from '../reports/types'
 import { adviceShortlist } from './advice-shortlist'
@@ -412,22 +412,13 @@ export interface HomeSession {
   clientId: string
 }
 
-/** The latest ready weekly read of this tenant, or null (none yet, or the
- *  table is not in this database). Service role: `week_reads` is never read
- *  by a tenant session (review L2); the tenant id is the session's. */
+/** The tenant's PUBLISHED weekly read (`loadPublishedWeekRead`: under a review
+ *  schedule, the newest one that was sent), or null. Service role:
+ *  `week_reads` is never read by a tenant session (review L2); the tenant id
+ *  is the session's. */
 async function loadLatestRead(admin: SupabaseClient, clientId: string): Promise<{ runId: string; data: WeekReadData } | null> {
-  const res = await admin.from(WEEK_READS_TABLE)
-    .select('run_id, data, window_end')
-    .eq('client_id', clientId).eq('kind', 'week').eq('status', 'ready')
-    .not('data', 'is', null)
-    .order('window_end', { ascending: false, nullsFirst: false })
-    .limit(1)
-  if (res.error) {
-    if (isMissingWeekReads(res.error)) return null
-    throw new Error(`week_reads: ${res.error.message}`)
-  }
-  const row = (res.data ?? [])[0] as { run_id: string; data: WeekReadData | null } | undefined
-  return row?.data ? { runId: String(row.run_id), data: row.data } : null
+  const read = await loadPublishedWeekRead(admin, clientId)
+  return read ? { runId: read.runId, data: read.data } : null
 }
 
 /** A failed read is logged and loses its block, never the page. */
