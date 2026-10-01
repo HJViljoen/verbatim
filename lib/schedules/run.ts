@@ -12,7 +12,7 @@ import { expiryFromDays, mintShareToken } from '../reports/share'
 import type { ReportSnapshotData } from '../reports/types'
 import type { WeeklySnapshotData as WeeklySnapshot } from '../reports/weekly-build'
 import type { MonthlySnapshotData as MonthlySnapshot } from '../reports/monthly-build'
-import { hydrateSnapshot, loadSnapshot } from '../snapshots'
+import { hydrateData, hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { renderWeeklyEmail } from '../email/weekly'
 import { renderMonthlyEmail } from '../email/monthly'
 import { snapshotWeekly, WeeklyEmptyError } from '../reports/weekly-build'
@@ -307,7 +307,13 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
         throw e
       }
       // `sent_figures`: none (`sentRecord` stays null), as for a document.
-      snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.read.findings.length }
+      // THE WORDS, PUT BACK BEFORE ANYTHING IS RENDERED HERE. The stored read
+      // holds every quote as a ref with no words (that is what may be stored),
+      // and a quote with no words prints no panel, so the test send, the
+      // Studio's preview and a send with review off rendered no quotes at all.
+      // The snapshot row keeps the refs; only this render gets the words, the
+      // same walk `hydrateSnapshot` does for every stored artefact.
+      snap = { snapshotId: built.snapshotId, data: await hydrateData(admin, built.data), title: built.data.title, sections: built.data.read.findings.length }
     } else if (monthly) {
       let built
       try {

@@ -101,7 +101,14 @@ export async function loadSnapshotWorkings<T = unknown>(admin: SupabaseClient, i
 
 /** The snapshot's data with the words put back — what the renderers get. */
 export async function hydrateSnapshot<T = unknown>(admin: SupabaseClient, row: SnapshotRow): Promise<T> {
-  const refs = collectQuoteRefs(row.data)
+  return hydrateData<T>(admin, row.data as T)
+}
+
+/** The same walk over data that is not (yet) a stored row: a frozen artefact
+ *  the runner renders straight after freezing it (the weekly read, whose data
+ *  is the stored read with every quote's words empty). */
+export async function hydrateData<T>(admin: SupabaseClient, data: T): Promise<T> {
+  const refs = collectQuoteRefs(data)
   const texts = refs.length ? await fetchQuoteResolutionsByRefs(admin, refs) : new Map<string, QuoteResolution>()
-  return resolveQuotes(row.data, texts) as T
+  return resolveQuotes(data, texts) as T
 }

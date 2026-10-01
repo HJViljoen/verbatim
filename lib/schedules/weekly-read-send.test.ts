@@ -211,6 +211,23 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.report[0].to).toEqual(RECIPIENTS)
     expect(mail.review).toEqual([])
     expect(w.db.calls.some((c) => c.table === 'sent_figures')).toBe(false)
+    // The quotes' words, resolved for this render (the stored read has none).
+    expect(mail.report[0].html).toContain('the words of e:bd2a2f71-2240-4365-9c44-01d685e970b1')
+    expect(mail.report[0].html).toContain('the words of e:e2e1146c-be79-452f-b943-2f3381a662f9')
+  })
+
+  it('a test send and the Studio preview render the quotes too, and keep no snapshot', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    const t = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'test', to: ['heinrich@verbatim.test'] })
+    expect(t.status).toBe('sent')
+    expect(mail.report).toHaveLength(1)
+    expect(mail.report[0].to).toEqual(['heinrich@verbatim.test'])
+    expect(mail.report[0].html).toContain('the words of e:bd2a2f71-2240-4365-9c44-01d685e970b1')
+    const p = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'preview' })
+    expect(p.status).toBe('preview')
+    expect(p.html).toContain('the words of e:e2e1146c-be79-452f-b943-2f3381a662f9')
+    expect(w.tables.report_snapshots).toEqual([])
+    expect(w.tables.report_sends).toEqual([])
   })
 })
 
