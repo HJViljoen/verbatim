@@ -1,3 +1,5 @@
+import { Layers } from 'lucide-react'
+import { TAG } from '@/components/colour-roles'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import type { PictureQuote, StandsBlock } from '@/lib/pages/overview-picture'
@@ -35,7 +37,7 @@ export function StandsBlockView({ block, monthText }: { block: StandsBlock; mont
       : <>Share of the <span data-copy="figure">{fmtInt(block.n)}</span> videos in {monthText}</>
   return (
     <Card label="Where your market stands" className="gap-[14px] px-5 pb-2.5 pt-6 sm:px-7">
-      <TitleRow title="Where your market stands" sub={sub} />
+      <TitleRow icon={Layers} title="Where your market stands" sub={sub} />
       <div className="flex flex-col">
         {block.rows.map((r) => r.level ? (
           <div key={r.subjectId} className={`grid grid-cols-1 gap-8 border-t ${HAIR} py-5 md:grid-cols-2`}>
@@ -49,7 +51,7 @@ export function StandsBlockView({ block, monthText }: { block: StandsBlock; mont
               {r.contents.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {r.contents.map((c) => (
-                    <span key={c} data-copy="subject" data-slot="pass_b_theme" className="rounded-full bg-[#F7F6F2] px-2.5 py-[5px] text-[12px]">{c}</span>
+                    <span key={c} data-copy="subject" data-slot="pass_b_theme" className={`rounded-full px-2.5 py-[5px] text-[12px] ${TAG}`}>{c}</span>
                   ))}
                 </div>
               ) : null}

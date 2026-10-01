@@ -1,4 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
+import { Ear } from 'lucide-react'
+import { EYEBROW, IconTile, NewNumber } from '@/components/colour-roles'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { BrandWho, WhoInline, WHO_MUTED, type WhoNames } from '@/components/brand-who'
 import { PageBar } from '@/components/shell/page-grid'
@@ -19,9 +21,11 @@ import { cn } from '@/lib/utils'
  * stored before its videos were has no brand line, and "Also heard" is left
  * out when nothing else was heard. No word about how the read was made.
  *
- * Palette A literals (the app's tokens are still the old brand's; the colour
- * swap is a later task): yellow #FFD43B, orange text #C2410C, ink #26292C,
- * muted #5F656B, hairline #E4E2DC, ground #F7F6F2.
+ * Palette A literals: ink #26292C, muted #5F656B, hairline #E4E2DC, ground
+ * #F7F6F2. The colour roles (components/colour-roles.tsx, colour pass 1 Oct):
+ * the cards on the card shadow; the findings are the week's new talk, so
+ * their numerals are the orange "new" discs; "In short" and "What it means"
+ * are the orange-text eyebrows; brands on a line are chips.
  */
 
 const HAIR = 'border-[#E4E2DC]'
@@ -32,11 +36,10 @@ export function PageTitle({ children }: { children: ReactNode }) {
   return <PageBar title={children} />
 }
 
-/** A card on the page: paper, 16px corners, flat, as the artboard draws it
- *  (the shadow kept it apart from a white ground; the shell's ground has been
- *  the artboard's #F7F6F2 since 1 Oct). */
+/** A card on the page: paper, 16px corners, on the card shadow (Heinrich,
+ *  1 Oct: the shadows back). */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-white', className)}>{children}</section>
+  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-white shadow-card', className)}>{children}</section>
 }
 
 /** The writer's sentences (slot `week_read`, scrubbed when stored), any
@@ -100,7 +103,7 @@ function Finding({ f, data }: { f: WeekReadPageFinding; data: WeekReadPageData }
     <article id={`finding-${f.n}`} className={cn('grid scroll-mt-6 grid-cols-1 gap-6 border-t py-[26px] lg:grid-cols-5 lg:gap-9', HAIR)}>
       <div className="flex min-w-0 flex-col gap-3.5 lg:col-span-3">
         <div className="flex items-start gap-3">
-          <div aria-hidden className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-[#FFD43B] text-[13px] font-bold">{f.n}</div>
+          <NewNumber n={f.n} />
           <h2 className={cn('m-0 text-[21px] leading-[1.3] font-bold', INK)}>
             <Stored as="span" body={f.headline} figures={figures} />
           </h2>
@@ -108,7 +111,7 @@ function Finding({ f, data }: { f: WeekReadPageFinding; data: WeekReadPageData }
         {f.saw.map((p, i) => <Stored key={i} body={p} figures={figures} className={cn('m-0 text-[16px] leading-[1.6]', INK)} />)}
         {f.means ? (
           <div className="flex flex-col gap-1.5">
-            <div className={cn('text-[12px] font-bold tracking-[0.08em] uppercase', INK)}>What it means</div>
+            <div className={EYEBROW}>What it means</div>
             <Stored body={f.means} figures={figures} className={cn('m-0 text-[16px] leading-[1.6]', INK)} />
           </div>
         ) : null}
@@ -131,7 +134,7 @@ export function WeekReadCard({ data }: { data: WeekReadPageData }) {
     <Card className="gap-3.5 px-8 pt-7 pb-2.5">
       {data.lead ? (
         <>
-          <div className="text-[12px] font-bold tracking-[0.08em] text-[#C2410C] uppercase">In short</div>
+          <div className={EYEBROW}>In short</div>
           <Stored body={data.lead} figures={data.figures} className={cn('m-0 max-w-[1000px] font-serif text-[24px] leading-[1.4] font-medium', INK)} />
         </>
       ) : null}
@@ -148,7 +151,10 @@ export function AlsoHeardCard({ data }: { data: WeekReadPageData }) {
   if (data.alsoHeard.length === 0) return null
   return (
     <Card className="gap-3.5 px-7 py-6">
-      <h2 className={cn('m-0 text-[20px] font-bold', INK)}>Also heard this week</h2>
+      <div className="flex items-baseline gap-2.5">
+        <IconTile icon={Ear} />
+        <h2 className={cn('m-0 text-[20px] font-bold', INK)}>Also heard this week</h2>
+      </div>
       <div className="flex flex-col">
         {data.alsoHeard.map((x, i) => (
           <div key={i} className={cn('flex items-start justify-between gap-3 border-t py-2.5 text-[15px]', HAIR)}>

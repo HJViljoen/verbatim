@@ -66,7 +66,7 @@ describe('Every conversation in {Month}', () => {
 
   it('opens the pane’s row as the selected pill and links each row to its conversation', () => {
     const markup = render(page())
-    expect(markup).toContain('bg-[rgba(38,41,44,0.07)]')
+    expect(markup).toContain('bg-accent text-accent-foreground')
     expect(markup).toMatch(/href="\/dashboard\/voice\?theme=22e2445c#theme"/)
   })
 
@@ -161,10 +161,11 @@ describe('The market’s words, kind by kind', () => {
     expect(bans(markup)).toEqual([])
   })
 
-  it('names the client in its gold and leaves a card with no quote without one', () => {
+  it('names the client in its gold chip, opens on its kind\'s icon tile, and leaves a card with no quote without one', () => {
     const praise = SEALAND_KINDS.find((k) => k.kind === 'praise')!
     const markup = render(<KindCard k={praise} names={NAMES} />)
-    expect(markup).toContain('text-[#9A6B00]')
+    expect(markup).toMatch(/data-who-chip="you"[^>]*bg-you[^>]*text-you-foreground[^>]*>Sealand</)
+    expect(markup).toContain('lucide-thumbs-up')
     expect(renderText(<KindCard k={praise} names={NAMES} />)).not.toContain('“')
   })
 

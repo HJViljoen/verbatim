@@ -1,4 +1,7 @@
 import Link from 'next/link'
+import { ScanSearch } from 'lucide-react'
+
+import { IconTile, SELECTED } from '@/components/colour-roles'
 
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { PANE_TITLE, paneKindLabel, quoteWords, windowWords, type AskedBlock, type InFullBlock, type SaidAbout } from '@/lib/pages/brands'
@@ -9,7 +12,8 @@ import { BrandName, Card, CountRow, SubHead } from './ui'
 // with their videos over the ninety days, stated once; the ones with none in
 // one line; then the brand picked, what people did in its comments as counts,
 // what is said about it (gated quotes, each naming who it is about) and what is
-// asked under its content.
+// asked under its content. The picked pill is the selected pale yellow; the
+// brand's own counts are a rival's, so they draw in the rival grey.
 
 function Pills({ rows }: { rows: InFullBlock['rows'] }) {
   return (
@@ -24,7 +28,7 @@ function Pills({ rows }: { rows: InFullBlock['rows'] }) {
             'inline-flex items-center gap-2 rounded-[8px] px-3.5 text-[14px] text-foreground no-underline',
             // As drawn: a bordered chip is 36px inside its 1px border (38),
             // the selected one 36 with none.
-            r.selected ? 'h-9 bg-foreground/[0.07] font-bold' : 'h-[38px] border border-border font-medium hover:bg-foreground/[0.04]',
+            r.selected ? cn('h-9 font-bold', SELECTED) : 'h-[38px] border border-border font-medium hover:bg-foreground/[0.04]',
           )}
         >
           {r.label}
@@ -90,7 +94,10 @@ export function BrandPaneCard({ inFull, asked, said, noun }: { inFull: InFullBlo
   return (
     <Card className="gap-3.5 px-7 pt-6 pb-7">
       <div className="flex flex-col gap-1">
-        <h2 className="m-0 text-[20px] font-bold text-foreground">{PANE_TITLE}</h2>
+        <div className="flex items-baseline gap-2.5">
+          <IconTile icon={ScanSearch} />
+          <h2 className="m-0 text-[20px] font-bold text-foreground">{PANE_TITLE}</h2>
+        </div>
         <div className="text-[13px] text-muted-foreground">Videos about each brand you track, last 90 days ({windowWords(inFull.window)})</div>
       </div>
       {filed.length > 0 ? <Pills rows={filed} /> : null}
@@ -102,7 +109,7 @@ export function BrandPaneCard({ inFull, asked, said, noun }: { inFull: InFullBlo
           <div className="flex min-w-0 flex-col gap-2.5 pt-3.5">
             <SubHead title={`${sel.label} in full`} sub={<>What people did in the comments, of its <span data-copy="figure">{fmtInt(sel.videos)}</span> videos</>} />
             <div className="flex flex-col">
-              {sel.kinds.map((k) => <CountRow key={k.kind} label={paneKindLabel(k.kind, noun)} k={k.videos} of={sel.videos} />)}
+              {sel.kinds.map((k) => <CountRow key={k.kind} label={paneKindLabel(k.kind, noun)} k={k.videos} of={sel.videos} who="rival" />)}
             </div>
           </div>
           {saidShown || askedShown ? (

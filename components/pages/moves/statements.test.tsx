@@ -62,7 +62,10 @@ describe('Your statements', () => {
     expect(t).toContain('Nobody in your market raised it in September.')
     expect(t).toContain('Talked about under 5 of your own posts.')
     expect(t).toContain('Of the 5 videos under your posts Back it up 3 Doubt it 0 Ask about it 0')
-    expect(row).toMatch(/text-\[#9A6B00\][^>]*>Sealand</)
+    // The client is its gold chip (the colour roles), and the treatment of a
+    // claim heard only under its own posts draws in the gold.
+    expect(row).toMatch(/data-who-chip="you"[^>]*bg-you[^>]*text-you-foreground[^>]*>Sealand</)
+    expect(row).toContain('h-2 bg-you')
   })
 
   it('draws the row nobody repeats', () => {

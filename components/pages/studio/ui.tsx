@@ -1,4 +1,6 @@
+import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { IconTile } from '@/components/colour-roles'
 import { PageBar } from '@/components/shell/page-grid'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +13,11 @@ import { cn } from '@/lib/utils'
 //
 // ink #26292C · muted #5F656B · hair #E4E2DC · paper #FFFFFF · ground #F7F6F2
 // · pale yellow #FFF4C7
+//
+// The colour roles (components/colour-roles.tsx, colour pass 1 Oct): the card
+// shadow, a title's icon tile, and a term chip coloured by whose words it is
+// (your name gold, the category's the pale yellow, a rival's on the track
+// with the grey dot, a left-out word on the ground).
 
 /** The page's own title row: the shared bar (26px on 40px, the artboards'),
  *  and the page's actions at the right. One component for every page's title
@@ -19,17 +26,19 @@ export function PageTitle({ title, children }: { title: string; children?: React
   return <PageBar title={title}>{children}</PageBar>
 }
 
-/** A white card on the ground, radius 16, no border, no stripe. */
+/** A white card on the ground, radius 16, no border, no stripe, on the card
+ *  shadow. */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   // The artboard sets no line-height, so its text runs at the font's own
   // `normal`, not the app's 1.5.
-  return <section className={cn('flex flex-col rounded-[16px] bg-white leading-[normal] text-[#26292C]', className)}>{children}</section>
+  return <section className={cn('flex flex-col rounded-[16px] bg-white leading-[normal] text-[#26292C] shadow-card', className)}>{children}</section>
 }
 
-/** A card's title: 20px, bold. */
-export function CardTitle({ children, as = 'h2' }: { children: ReactNode; as?: 'h2' | 'h3' }) {
+/** A card's title: 20px, bold, behind its icon tile when given one. */
+export function CardTitle({ children, as = 'h2', icon }: { children: ReactNode; as?: 'h2' | 'h3'; icon?: LucideIcon }) {
   const Tag = as
-  return <Tag className="m-0 text-[20px] font-bold leading-[normal]">{children}</Tag>
+  const title = <Tag className="m-0 text-[20px] font-bold leading-[normal]">{children}</Tag>
+  return icon ? <div className="flex min-w-0 items-baseline gap-2.5"><IconTile icon={icon} />{title}</div> : title
 }
 
 const BTN_BASE = 'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40 disabled:opacity-50'
@@ -45,9 +54,25 @@ export function buttonClass(kind: keyof typeof BTN_KIND = 'secondary', size: key
   return cn(BTN_BASE, BTN_SIZE[size], BTN_KIND[kind])
 }
 
-/** A chip: a term, on the ground colour. */
-export function Chip({ children }: { children: ReactNode }) {
-  return <span className="inline-flex items-center rounded-full bg-[#F7F6F2] px-2.5 py-[5px] text-[13px] leading-[1.3] text-[#26292C]">{children}</span>
+/** Whose words a term chip holds. */
+export type ChipTone = 'you' | 'market' | 'rival' | 'out'
+
+const CHIP_TONE: Record<ChipTone, string> = {
+  you: 'bg-you font-medium text-you-foreground',
+  market: 'bg-accent text-accent-foreground',
+  rival: 'bg-track text-[#26292C]',
+  out: 'bg-[#F7F6F2] text-[#26292C]',
+}
+
+/** A chip: a term, coloured by whose words it is (on the ground when not
+ *  said). A rival's carries the rival grey's dot. */
+export function Chip({ children, tone = 'out' }: { children: ReactNode; tone?: ChipTone }) {
+  return (
+    <span data-chip={tone} className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[13px] leading-[1.3]', CHIP_TONE[tone])}>
+      {tone === 'rival' ? <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-comp" /> : null}
+      {children}
+    </span>
+  )
 }
 
 /** A person: their initials on pale yellow, then their name. */

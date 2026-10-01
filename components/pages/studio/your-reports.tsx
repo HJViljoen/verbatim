@@ -1,3 +1,4 @@
+import { NAV_ICON } from '@/components/nav-icons'
 import type { StudioRow } from '@/lib/pages/studio'
 import { Card, CardTitle, PersonChip } from './ui'
 import { RecipientsEditor } from './recipients-editor'
@@ -15,7 +16,7 @@ const COLS = 'grid grid-cols-[minmax(0,2.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax
 export function YourReports({ rows, canEdit, privacy }: { rows: readonly StudioRow[]; canEdit: boolean; privacy: string }) {
   return (
     <Card className="gap-4 px-[30px] pt-[26px] pb-[22px]">
-      <CardTitle>Your reports</CardTitle>
+      <CardTitle icon={NAV_ICON.studio}>Your reports</CardTitle>
       <div className="-mx-1 overflow-x-auto px-1">
         <div role="table" aria-label="Your reports" className="flex min-w-[880px] flex-col">
           <div role="row" className={`${COLS} pb-2.5`}>

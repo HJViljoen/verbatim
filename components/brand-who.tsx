@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { BrandChip, ChipSep } from '@/components/colour-roles'
 import { aboutName, type AboutPart } from '@/lib/brands/labels'
 import { cn } from '@/lib/utils'
 
@@ -8,11 +9,10 @@ import { cn } from '@/lib/utils'
  *
  * ONE PART: the name alone ("Other bags in your market", "Cotopaxi"). TWO OR
  * MORE: each name with its videos, the market last and short ("Cotopaxi 2 ·
- * Patagonia 2 · other bags 16"). The client's name is in the "you" gold, a
- * rival's in ink, the market muted. Nothing is guessed: no part, no line.
- *
- * Palette A literals (gold #9A6B00, muted #5F656B): the app's tokens are still
- * the old brand's (the colour swap is a later task).
+ * Patagonia 2 · other bags 16"). The client is a gold chip and a rival a
+ * chip with the rival grey's dot, each with its videos inside it; the market
+ * stays muted words (the colour roles, components/colour-roles.tsx). Nothing
+ * is guessed: no part, no line.
  */
 
 export const WHO_GOLD = 'text-[#9A6B00]'
@@ -25,10 +25,20 @@ export interface WhoNames {
   market: { long: string; short: string }
 }
 
-function Name({ part, names, short }: { part: AboutPart; names: WhoNames; short: boolean }) {
-  if (part.about === 'market') return <span className={WHO_MUTED}>{short ? names.market.short : names.market.long}</span>
-  if (part.about === 'client') return <span className={cn('font-semibold', WHO_GOLD)}>{names.client}</span>
-  return <span className="font-semibold text-[#26292C]">{aboutName(part.about, names)}</span>
+/** One part: a brand as its chip (its videos inside it when `count`), the
+ *  market as muted words (its videos after them). */
+function Name({ part, names, short, count }: { part: AboutPart; names: WhoNames; short: boolean; count: boolean }) {
+  const n = count ? <>{' '}<span data-copy="figure" className="font-mono font-normal">{part.videos}</span></> : null
+  if (part.about === 'market') {
+    return (
+      <>
+        <span className={WHO_MUTED}>{short ? names.market.short : names.market.long}</span>
+        {count ? <>{' '}<span data-copy="figure" className={cn('font-mono', WHO_MUTED)}>{part.videos}</span></> : null}
+      </>
+    )
+  }
+  if (part.about === 'client') return <BrandChip who="you">{names.client}{n}</BrandChip>
+  return <BrandChip who="rival">{aboutName(part.about, names)}{n}</BrandChip>
 }
 
 /** The label's words inline (no wrapper), for a line that carries more. */
@@ -39,13 +49,12 @@ export function WhoInline({ parts, names, prefix }: { parts: readonly AboutPart[
     <>
       {prefix ? <span className={WHO_MUTED}>{prefix}</span> : null}
       {shown.length === 1 ? (
-        <Name part={shown[0]} names={names} short={false} />
+        <Name part={shown[0]} names={names} short={false} count={false} />
       ) : (
         shown.map((p, i) => (
           <Fragment key={p.about}>
-            {i > 0 ? <span className={WHO_MUTED}> · </span> : null}
-            <Name part={p} names={names} short />{' '}
-            <span data-copy="figure" className={cn('font-mono', WHO_MUTED)}>{p.videos}</span>
+            {i > 0 ? <ChipSep /> : null}
+            <Name part={p} names={names} short count />
           </Fragment>
         ))
       )}

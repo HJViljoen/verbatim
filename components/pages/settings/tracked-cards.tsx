@@ -1,6 +1,8 @@
 import { renameTrackedRival } from '@/app/dashboard/settings/rivals-actions'
 import { updateCommunity, updateTrackingConfig } from '@/app/dashboard/settings/actions'
 import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
+import { Ban, Users } from 'lucide-react'
+import { NAV_ICON } from '@/components/nav-icons'
 import { Card, CardTitle } from '@/components/pages/studio/ui'
 import type { BrandRow } from '@/lib/pages/settings'
 import { InlineAdd } from './inline-add'
@@ -8,14 +10,15 @@ import { BrandMenu } from './brand-menu'
 
 // The right-hand column of What you track (Page-Settings artboard): Brands you
 // track, with their accounts, and the Reddit communities that count as the
-// market. Then, where any exist, the videos marked as not your market.
+// market. Then, where any exist, the videos marked as not your market. A
+// tracked brand carries the rival grey's dot (the colour roles, 1 Oct).
 
 export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly BrandRow[]; names: string[]; canEdit: boolean }) {
   if (!canEdit && brands.length === 0) return null
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
       <div className="flex items-center justify-between gap-3">
-        <CardTitle>Brands you track</CardTitle>
+        <CardTitle icon={NAV_ICON.competitive}>Brands you track</CardTitle>
         {canEdit ? (
           <InlineAdd
             label="Add a brand"
@@ -35,7 +38,7 @@ export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly Br
         {brands.map((b) => (
           <div key={b.name} className="flex items-center justify-between gap-3 border-t border-[#E4E2DC] py-[13px]">
             <div className="flex min-w-0 flex-col gap-[3px]">
-              <div className="text-[15px] font-bold">{b.name}</div>
+              <div className="flex items-center gap-2 text-[15px] font-bold"><span aria-hidden className="size-2 shrink-0 rounded-full bg-comp" />{b.name}</div>
               {b.accounts.length > 0 ? (
                 <div className="text-[13px]">
                   {b.accounts.map((a, i) => (
@@ -60,7 +63,7 @@ export function Communities({ communities, canEdit }: { communities: readonly st
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
       <div className="flex items-center justify-between gap-3">
-        <CardTitle>Communities</CardTitle>
+        <CardTitle icon={Users}>Communities</CardTitle>
         {canEdit ? (
           <InlineAdd
             label="Add a community"
@@ -94,7 +97,7 @@ export function NotYourMarket({ count }: { count: number | null }) {
   if (!count) return null
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-[22px]">
-      <CardTitle>Not your market</CardTitle>
+      <CardTitle icon={Ban}>Not your market</CardTitle>
       <p className="m-0 -mt-1 text-[14px] text-[#5F656B]">
         <span data-copy="figure">{count}</span> {count === 1 ? 'video' : 'videos'} you marked as not your market.
       </p>

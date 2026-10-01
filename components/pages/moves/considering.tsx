@@ -1,3 +1,4 @@
+import { Lightbulb } from 'lucide-react'
 import { adviceAnchor, type AdviceRow } from '@/lib/pages/market-surface'
 import { ConsiderActions } from './consider-actions'
 import { Card, SectionHead } from './parts'
@@ -11,10 +12,14 @@ import { CONSIDERING_MAX, CONSIDERING_SUB, CONSIDERING_TITLE, priorityLabel, typ
 //
 // The title and the argument are Pass D-b's prose, stored and scrubbed under
 // its own slot at write time; the chip and the type are code's.
+//
+// THE PRIORITY CHIP CARRIES THE COLOUR ROLES (colour pass, 1 Oct): high is an
+// attention mark, the orange fill with ink on it (4.6:1); medium the pale
+// yellow of a tag; low stays on the ground, muted.
 
 const CHIP: Record<string, string> = {
-  'High priority': 'bg-[#26292C] text-white',
-  'Medium priority': 'bg-[#F7F6F2] text-[#26292C]',
+  'High priority': 'bg-orange font-semibold text-brand-foreground',
+  'Medium priority': 'bg-accent text-accent-foreground',
   'Low priority': 'bg-[#F7F6F2] text-[#5F656B]',
 }
 
@@ -27,7 +32,7 @@ export function MovesWorthConsidering({ rows }: { rows: readonly AdviceRow[] }) 
   if (rows.length === 0) return null
   return (
     <Card pad="px-7 pt-6 pb-2" gap="gap-[10px]">
-      <SectionHead title={CONSIDERING_TITLE} sub={CONSIDERING_SUB} />
+      <SectionHead icon={Lightbulb} title={CONSIDERING_TITLE} sub={CONSIDERING_SUB} />
       <div className="flex flex-col">
         {rows.map((r) => {
           const chip = priorityLabel(r.priority)

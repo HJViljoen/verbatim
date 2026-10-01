@@ -1,6 +1,10 @@
 import Link from 'next/link'
 import { Sparkles } from '@/components/design-icons'
 import type { ReactNode } from 'react'
+import { ChartColumn, Hash } from 'lucide-react'
+
+import { BAR_FILL, IconTile, NewNumber } from '@/components/colour-roles'
+import { NAV_ICON } from '@/components/nav-icons'
 
 import { PageBar } from '@/components/shell/page-grid'
 import { fmtInt } from '@/lib/format'
@@ -12,19 +16,23 @@ import { INSUFFICIENT, tileInsufficient, type HomeData, type HomeNumbers, type H
 // "Week by week" in two columns beside the Agent; then six page tiles, three
 // to a row. Every size, colour and word below is the artboard's.
 //
-// PALETTE A, LOCALLY. The app's tokens still carry the old identity (muted
-// #6E7378, hairline #DCDFE3, the green), and the app-wide colour swap is a
-// separate task, so this page states the artboard's values itself: ink
-// #26292C, muted #5F656B, hair #E4E2DC, the bar track #ECEAE4, yellow #FFD43B
-// and the orange text #C2410C.
+// PALETTE A, LOCALLY: ink #26292C, muted #5F656B, hair #E4E2DC, the bar track
+// #ECEAE4, as the artboard states them.
+//
+// THE COLOUR ROLES (colour pass, 1 Oct; components/colour-roles.tsx): every
+// card on the one card shadow; each tile and block opens on its icon tile;
+// the videos are the market's yellow and the comments the orange second
+// series, in the numbers' keys and in Week by week alike; This week's
+// findings carry the orange "new" numerals; your own posts are the gold; the
+// Agent's header is the pale yellow under its yellow tile.
 //
 // No quotes on this page (rule 5), no left-stripe accents and no highlighted
 // phrases (the design bans). A block with nothing to show is not drawn (rule
 // 2); a TILE always is, with "Insufficient data" where its rows would be
 // (Heinrich, 1 Oct). The loader decides that; this file draws what it is given.
 
-/** The artboard's card shadow. */
-const SHADOW = 'shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_rgba(0,0,0,0.04)]'
+/** The card shadow (`--shadow-card`: the artboard's, a step stronger). */
+const SHADOW = 'shadow-card'
 /** A main block: radius 16, 22px by 26px. */
 const CARD = `flex flex-col rounded-[16px] bg-white px-[26px] py-[22px] ${SHADOW}`
 const MUTED = 'text-[#5F656B]'
@@ -65,7 +73,10 @@ function NumbersBlock({ numbers }: { numbers: HomeNumbers }) {
   const halves = [numbers.week, numbers.month].filter((h): h is HomeNumbersHalf => h != null)
   return (
     <section className={`${CARD} gap-[18px]`} aria-labelledby="home-numbers">
-      <h2 id="home-numbers" className="m-0 text-[17px] font-bold">Your market in numbers</h2>
+      <div className="flex items-baseline gap-2.5">
+        <IconTile icon={Hash} />
+        <h2 id="home-numbers" className="m-0 text-[17px] font-bold">Your market in numbers</h2>
+      </div>
       <div className={halves.length === 2 ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0' : 'grid grid-cols-1'}>
         {halves.map((h, i) => (
           <div
@@ -80,8 +91,8 @@ function NumbersBlock({ numbers }: { numbers: HomeNumbers }) {
           >
             <div className={`text-[13px] font-semibold ${MUTED}`}>{h.heading}</div>
             <div className="grid grid-cols-2 gap-4">
-              <Stat value={h.videos} unit="videos" />
-              <Stat value={h.comments} unit="comments" />
+              <Stat value={h.videos} unit="videos" series="videos" />
+              <Stat value={h.comments} unit="comments" series="comments" />
             </div>
           </div>
         ))}
@@ -90,11 +101,19 @@ function NumbersBlock({ numbers }: { numbers: HomeNumbers }) {
   )
 }
 
-function Stat({ value, unit }: { value: string; unit: string }) {
+/** The two series' keys, the same marks Week by week draws them with: the
+ *  videos a yellow bar, the comments the orange line. */
+function SeriesKey({ series }: { series: 'videos' | 'comments' }) {
+  return series === 'videos'
+    ? <span aria-hidden className="size-2.5 shrink-0 rounded-[2px] bg-brand" />
+    : <span aria-hidden className="h-0.5 w-3 shrink-0 rounded-full bg-orange" />
+}
+
+function Stat({ value, unit, series }: { value: string; unit: string; series: 'videos' | 'comments' }) {
   return (
     <div className="flex flex-col gap-0.5">
       <div data-copy="figure" className="font-mono text-[34px] font-medium tabular-nums">{value}</div>
-      <div className={`text-[13px] ${MUTED}`}>{unit}</div>
+      <div className={`flex items-center gap-1.5 text-[13px] ${MUTED}`}><SeriesKey series={series} />{unit}</div>
     </div>
   )
 }
@@ -122,10 +141,13 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
   return (
     <section className={`${CARD} gap-[14px]`} aria-labelledby="home-weeks">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-        <h2 id="home-weeks" className="m-0 text-[17px] font-bold">Week by week</h2>
+        <div className="flex items-baseline gap-2.5">
+          <IconTile icon={ChartColumn} />
+          <h2 id="home-weeks" className="m-0 text-[17px] font-bold">Week by week</h2>
+        </div>
         <div className={`flex gap-4 text-[12px] ${MUTED}`} aria-hidden>
-          <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[3px] bg-[#FFD43B]" />Videos</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3.5 bg-[#26292C]" />Comments</span>
+          <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[3px] bg-brand" />Videos</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3.5 rounded-full bg-orange" />Comments</span>
         </div>
       </div>
       <div className="relative flex h-[190px]" role="img" aria-label={`Videos and comments in your market, week by week. ${summary.join('; ')}.`}>
@@ -142,14 +164,15 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
               {c.videos != null ? (
                 // A week still filling: the same yellow, faint, with no words
                 // (Heinrich, 1 Oct); solid once it has settled.
-                <div className={`w-[44%] max-w-8 rounded-t-[3px] bg-[#FFD43B] ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
+                <div className={`w-[44%] max-w-8 rounded-t-[3px] bg-brand ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
               ) : null}
             </div>
             <div className={`whitespace-nowrap text-[12px] max-sm:text-[10px] ${MUTED}`}>{c.label}</div>
           </div>
         ))}
         {/* The comments line, over the plot area: the 190px less the labels'
-            row (12px at normal leading, 15.6), its 8px gap and the 1px baseline. */}
+            row (12px at normal leading, 15.6), its 8px gap and the 1px baseline.
+            The second series, so the orange (its key above and in the numbers). */}
         <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[24.6px]" aria-hidden>
           <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
             {segments.map((seg, i) =>
@@ -158,7 +181,7 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
                   key={i}
                   points={seg.map((p) => `${p.x},${p.y}`).join(' ')}
                   fill="none"
-                  stroke="#26292C"
+                  stroke="var(--orange)"
                   strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
                   strokeLinejoin="round"
@@ -170,7 +193,7 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
           {segments.flat().map((p, i) => (
             <span
               key={i}
-              className={`absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#26292C] ${p.settled ? '' : 'opacity-45'}`}
+              className={`absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange ${p.settled ? '' : 'opacity-45'}`}
               style={{ left: `${p.x}%`, top: `${p.y}%` }}
             />
           ))}
@@ -193,8 +216,10 @@ function AgentBlock() {
       className={`flex h-full flex-col gap-[14px] rounded-[16px] bg-white p-[22px] ${SHADOW}`}
       aria-labelledby="home-agent"
     >
-      <div className="flex items-center gap-2.5">
-        <div className="flex size-8 items-center justify-center rounded-[8px] bg-[#FFD43B]">
+      {/* The header on the pale yellow, bled to the card's edges (a small
+          surface: one line high), the Agent's own yellow tile on it. */}
+      <div data-agent-head="" className="-mx-[22px] -mt-[22px] flex items-center gap-2.5 rounded-t-[16px] bg-accent px-[22px] pt-[22px] pb-4">
+        <div className="flex size-8 items-center justify-center rounded-[8px] bg-brand">
           <Sparkles className="size-4 text-[#26292C]" strokeWidth={2} aria-hidden />
         </div>
         <h2 id="home-agent" className="m-0 text-[17px] font-bold">Agent</h2>
@@ -226,7 +251,10 @@ function PageTile({ tile }: { tile: HomeTile }) {
   return (
     <section className={`flex min-w-0 flex-col gap-2.5 rounded-[14px] bg-white px-[22px] py-5 ${SHADOW}`} aria-label={tile.title}>
       <div className="flex items-center justify-between">
-        <h2 className="m-0 text-[15px] font-bold">{tile.title}</h2>
+        <div className="flex min-w-0 items-baseline gap-2.5">
+          <IconTile icon={NAV_ICON[tile.key]} />
+          <h2 className="m-0 text-[15px] font-bold">{tile.title}</h2>
+        </div>
         <Link
           href={tile.href}
           className="rounded-sm text-[13px] font-semibold text-[#C2410C] no-underline outline-none hover:text-[#26292C] focus-visible:ring-2 focus-visible:ring-[#FFD43B]"
@@ -237,7 +265,8 @@ function PageTile({ tile }: { tile: HomeTile }) {
       </div>
       {tile.big ? (
         <div className="flex items-baseline gap-2.5">
-          <div data-copy="figure" className="font-mono text-[30px] font-medium tabular-nums">{tile.big}</div>
+          {/* Your own posts are you: the gold. Every other tile counts the market. */}
+          <div data-copy="figure" className={`font-mono text-[30px] font-medium tabular-nums ${tile.key === 'market' ? 'text-you' : ''}`}>{tile.big}</div>
           <div className={`text-[13px] ${MUTED}`}>{tile.sub}</div>
         </div>
       ) : null}
@@ -253,7 +282,7 @@ function PageTile({ tile }: { tile: HomeTile }) {
                 <Label copy={r.copy}>{r.label}</Label>
               </div>
               <div className="h-1.5 grow overflow-hidden rounded-[3px] bg-[#ECEAE4]">
-                {r.pct != null ? <div className="h-1.5 bg-[#FFD43B]" style={{ width: `${Math.min(100, Math.max(0, r.pct))}%` }} /> : null}
+                {r.pct != null ? <div className={`h-1.5 ${BAR_FILL.market}`} style={{ width: `${Math.min(100, Math.max(0, r.pct))}%` }} /> : null}
               </div>
               <div data-copy="figure" className={`${r.pct != null ? 'w-[34px]' : ''} shrink-0 text-right font-mono text-[12px] tabular-nums`}>{r.value}</div>
             </div>
@@ -262,9 +291,12 @@ function PageTile({ tile }: { tile: HomeTile }) {
       ) : null}
       {texts.length > 0 ? (
         <div className="flex flex-col">
-          {texts.map((r) => (
+          {texts.map((r, i) => (
             <div key={r.label} className={`flex justify-between gap-2.5 border-t ${HAIR} py-1.5 text-[13px]`}>
-              <span><Label copy={r.copy}>{r.label}</Label></span>
+              {/* This week's findings are the week's new talk: the orange numerals. */}
+              {r.copy === 'finding'
+                ? <span className="flex items-start gap-2"><span className="pt-px"><NewNumber n={i + 1} size={16} /></span><Label copy={r.copy}>{r.label}</Label></span>
+                : <span><Label copy={r.copy}>{r.label}</Label></span>}
               <span className={MUTED}>{r.value}</span>
             </div>
           ))}

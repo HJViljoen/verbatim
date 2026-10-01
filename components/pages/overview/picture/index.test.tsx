@@ -72,10 +72,11 @@ describe('(a) What holds across the months', () => {
     expect(markup).toContain('data-copy="stored" data-slot="week_read"')
   })
 
-  it('says who each idea is about: Sealand first in gold, the rivals, the category last', () => {
+  it('says who each idea is about: Sealand first in its gold chip, the rivals in theirs, the category last', () => {
     const rows = text.slice(text.indexOf('Heard in August and September, 30 videos'))
     expect(rows).toContain('Sealand 6 Cotopaxi 10 The North Face 2 Patagonia 1 Other bags in your market 11')
-    expect(markup).toContain('text-[#9A6B00]">Sealand<')
+    expect(markup).toMatch(/data-who-chip="you"[^>]*bg-you[^>]*text-you-foreground[^>]*>Sealand</)
+    expect(markup).toMatch(/data-who-chip="rival"[^>]*>(?:<span[^>]*><\/span>)?Cotopaxi</)
   })
 
   it('draws nothing for a read with no idea', () => {

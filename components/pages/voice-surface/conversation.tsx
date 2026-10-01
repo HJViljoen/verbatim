@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { Sparkles } from '@/components/design-icons'
-import { BrandWho, WhoInline, WHO_GOLD } from '@/components/brand-who'
+import { MapPin, Users, type LucideIcon } from 'lucide-react'
+import { MessageSquareText, Sparkles } from '@/components/design-icons'
+import { BrandWho, WhoInline } from '@/components/brand-who'
+import { BAR_FILL, BrandChip, EYEBROW, IconTile, KIND_ICON, SELECTED, TAG, type BarWho } from '@/components/colour-roles'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import type { AboutPart } from '@/lib/brands/attribution'
 import { aboutName } from '@/lib/brands/attribution'
@@ -25,9 +27,12 @@ import { cn } from '@/lib/utils'
 // Conversation, drawn to the approved artboard (Page-Conversation.dc.html,
 // the pages build of 1 Oct): the board of every conversation beside one in
 // full and where the market talks; who is talking; the market's words, kind
-// by kind. Palette A literals throughout (yellow #FFD43B, track #ECEAE4, ink
-// #26292C, muted #5F656B, hair #E4E2DC, ground #F7F6F2, orange #C2410C): the
-// app's tokens are still the old brand's until the colour swap.
+// by kind. Palette A literals for the neutrals (track #ECEAE4, ink #26292C,
+// muted #5F656B, hair #E4E2DC, ground #F7F6F2); the colour roles through
+// components/colour-roles.tsx (colour pass, 1 Oct): the card shadow, each
+// card's icon tile (a kind's own glyph on its card), the open conversation
+// selected in the pale yellow, its eyebrow in the orange text, tags pale
+// yellow, brands as chips, bars by whose videos they count.
 //
 // NO LEFT STRIPE, NO HIGHLIGHT, NO EMOJI, NO EM DASH. Bars are drawn against
 // 100%. A block with nothing to show is not drawn.
@@ -35,27 +40,31 @@ import { cn } from '@/lib/utils'
 const HAIR = 'border-[#E4E2DC]'
 const MUTED = 'text-[#5F656B]'
 
-/** The artboard's card: white, 16px corners, its own padding and gap. */
+/** The artboard's card: white, 16px corners, on the card shadow, its own
+ *  padding and gap. */
 export function ConvCard({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} data-card="" className={cn('flex min-w-0 scroll-mt-6 flex-col rounded-[16px] bg-white', className)}>
+    <section id={id} data-card="" className={cn('flex min-w-0 scroll-mt-6 flex-col rounded-[16px] bg-white shadow-card', className)}>
       {children}
     </section>
   )
 }
 
-function H2({ title, sub, stacked = false }: { title: string; sub?: string; stacked?: boolean }) {
+function H2({ title, sub, stacked = false, icon }: { title: string; sub?: string; stacked?: boolean; icon?: LucideIcon }) {
+  const head = icon
+    ? <div className="flex items-baseline gap-2.5"><IconTile icon={icon} /><h2 className="m-0 text-[20px] font-bold">{title}</h2></div>
+    : <h2 className="m-0 text-[20px] font-bold">{title}</h2>
   if (stacked) {
     return (
       <div className="flex flex-col gap-1">
-        <h2 className="m-0 text-[20px] font-bold">{title}</h2>
+        {head}
         {sub ? <div className={cn('text-[13px]', MUTED)}>{sub}</div> : null}
       </div>
     )
   }
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-      <h2 className="m-0 text-[20px] font-bold">{title}</h2>
+      {head}
       {sub ? <div className={cn('text-[13px]', MUTED)}>{sub}</div> : null}
     </div>
   )
@@ -70,12 +79,13 @@ function H3({ title, sub }: { title: string; sub?: string }) {
   )
 }
 
-/** A bar drawn against 100%, never against the top row. */
-export function Bar({ pct, width }: { pct: number; width?: number }) {
+/** A bar drawn against 100%, never against the top row; filled by whose
+ *  videos it counts (here, the category's: the market yellow). */
+export function Bar({ pct, width, who = 'market' }: { pct: number; width?: number; who?: BarWho }) {
   const w = Math.max(0, Math.min(100, pct))
   return (
     <span aria-hidden className={cn('block h-2 overflow-hidden rounded bg-[#ECEAE4]', width ? 'shrink-0' : 'grow')} style={width ? { width } : undefined}>
-      <span className="block h-2 bg-[#FFD43B]" style={{ width: `${w}%` }} />
+      <span className={cn('block h-2', BAR_FILL[who])} style={{ width: `${w}%` }} />
     </span>
   )
 }
@@ -135,7 +145,7 @@ function BoardCard({ data, params }: { data: VoiceSurfaceData; params: Record<st
   const openId = data.theme.state === 'ready' ? data.theme.id : null
   return (
     <ConvCard className="gap-3 px-7 pt-6 pb-6">
-      <H2 stacked title={`Every conversation in ${month}`} sub={`${fmtInt(count)} conversations on 10 or more videos · share of the category’s ${fmtInt(n)} videos ${sizeWords(data, c)}`} />
+      <H2 stacked icon={MessageSquareText} title={`Every conversation in ${month}`} sub={`${fmtInt(count)} conversations on 10 or more videos · share of the category’s ${fmtInt(n)} videos ${sizeWords(data, c)}`} />
       <div className="flex flex-col">
         {b.rows.map((t) => {
           const on = t.registryId === openId
@@ -149,7 +159,7 @@ function BoardCard({ data, params }: { data: VoiceSurfaceData; params: Record<st
               aria-current={on ? 'true' : undefined}
               className={cn(
                 'flex items-center gap-3.5 border-t text-[#26292C] no-underline',
-                on ? '-mx-3 rounded-[10px] border-transparent bg-[rgba(38,41,44,0.07)] px-3 py-[9px]' : cn('py-[9px]', HAIR),
+                on ? cn('-mx-3 rounded-[10px] border-transparent px-3 py-[9px]', SELECTED) : cn('py-[9px]', HAIR),
               )}
             >
               <div className="flex min-w-0 grow flex-col gap-0.5">
@@ -201,7 +211,7 @@ function PaneCard({ data }: { data: VoiceSurfaceData }) {
   const voices: ConvQuote[] = c ? c.voices : t.voices.map((v) => ({ quote: v.quote as Quote, source: v.cite, who: [] }))
   return (
     <ConvCard id="theme" className="gap-[18px] px-7 pt-[26px] pb-7">
-      <div className={cn('text-[12px] font-bold uppercase tracking-[0.08em]', MUTED)}>A conversation in full</div>
+      <div className={EYEBROW}>A conversation in full</div>
       <div className="flex flex-col gap-2">
         <h2 data-copy="subject" data-slot="pass_b_theme" className="m-0 text-[24px] font-bold leading-[1.25]">{t.label}</h2>
         <div className="flex flex-wrap items-baseline gap-2.5">
@@ -211,7 +221,7 @@ function PaneCard({ data }: { data: VoiceSurfaceData }) {
         {row?.who.length ? <BrandWho parts={row.who} names={c!.names} className="text-[13px]" /> : null}
         {row?.subject || makers ? (
           <div className="flex flex-wrap items-center gap-2">
-            {row?.subject ? <span className="inline-flex items-center rounded-full bg-[#F7F6F2] px-2.5 py-[5px] text-[12px] leading-[1.3] text-[#26292C]">Part of {row.subject}</span> : null}
+            {row?.subject ? <span className={cn('inline-flex items-center rounded-full px-2.5 py-[5px] text-[12px] leading-[1.3]', TAG)}>Part of {row.subject}</span> : null}
             {makers ? <span className={cn('text-[13px]', MUTED)}>{makers}</span> : null}
           </div>
         ) : null}
@@ -254,7 +264,7 @@ function WhereCard({ data, params }: { data: VoiceSurfaceData; params: Record<st
   const rows = w.expanded ? w.rows : w.rows.slice(0, WHERE_SHOWN)
   return (
     <ConvCard id="where" className="gap-3 px-7 pt-6 pb-[22px]">
-      <H2 stacked title="Where your market talks" sub={`Accounts with 3 or more of the category’s videos in ${longMonth(data.month)}`} />
+      <H2 stacked icon={MapPin} title="Where your market talks" sub={`Accounts with 3 or more of the category’s videos in ${longMonth(data.month)}`} />
       <div className="flex flex-col">
         {rows.map((a) => (
           <div key={a.key} className={cn('flex h-[41px] items-center gap-3 border-t', HAIR)}>
@@ -283,7 +293,7 @@ function WhoTalksCard({ data }: { data: VoiceSurfaceData }) {
   if (personas.length === 0) return null
   return (
     <ConvCard className="gap-2.5 px-7 pt-6 pb-2">
-      <H2 title="Who is talking" sub="Videos each group comments on, all comments to date" />
+      <H2 icon={Users} title="Who is talking" sub="Videos each group comments on, all comments to date" />
       <div className="flex flex-col">
         {personas.map((p) => {
           const wants = firstSentence(p.wants)
@@ -318,16 +328,20 @@ function WhoTalksCard({ data }: { data: VoiceSurfaceData }) {
 // ---- the market's words, kind by kind ------------------------------------------------
 
 function BrandName({ part, names }: { part: AboutPart; names: ConversationExtras['names'] }) {
-  if (part.about === 'client') return <span className={cn('font-semibold', WHO_GOLD)}>{names.client}</span>
-  return <span className="font-semibold text-[#26292C]">{aboutName(part.about, names)}</span>
+  if (part.about === 'client') return <BrandChip who="you">{names.client}</BrandChip>
+  return <BrandChip who="rival">{aboutName(part.about, names)}</BrandChip>
 }
 
 export function KindCard({ k, names }: { k: ConvKind; names: ConversationExtras['names'] }) {
+  const icon = KIND_ICON[k.kind]
   return (
     <ConvCard className="gap-3 px-6 py-[22px]">
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="m-0 text-[17px] font-bold">{k.label}</h3>
+          <div className="flex items-baseline gap-2.5">
+            {icon ? <IconTile icon={icon} size="sm" /> : null}
+            <h3 className="m-0 text-[17px] font-bold">{k.label}</h3>
+          </div>
           <Num n={k.videos} unit="videos" size={15} />
         </div>
         <BrandWho parts={k.split} names={names} />
