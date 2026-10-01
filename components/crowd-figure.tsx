@@ -7,7 +7,7 @@
 // page.
 //
 // Why not reuse the asset: crowd.svg has no ids or classes to target, is used
-// as a CSS background-image on three surfaces, and hard-codes stroke #14503A so
+// as a CSS background-image on three surfaces, and hard-codes its ink stroke so
 // it cannot follow the dark theme. Inline SVG is the house pattern for every
 // chart here anyway (no chart libraries — DESIGN rule), and it themes, scales
 // and gives the evidence blocks real coordinates to point at.

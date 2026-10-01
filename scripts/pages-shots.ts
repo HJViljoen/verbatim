@@ -251,7 +251,7 @@ const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {},
 const wordmark = () =>
   h('div', { className: 'px-3 pt-1 pb-[18px]' },
     h('div', { className: 'flex items-center gap-[7px]' },
-      h(VerbatimMark, { size: 20, className: 'shrink-0 text-foreground' }),
+      h(VerbatimMark, { size: 20, className: 'shrink-0 text-brand' }),
       h('span', { className: 'text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground', style: { fontFamily: "'Bricolage Grotesque', sans-serif" } }, 'Verbatim'),
     ),
   )

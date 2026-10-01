@@ -68,7 +68,11 @@ const Gap = ({ h = 24 }: { h?: number }) => <div style={{ height: h, fontSize: 0
 
 /** The masthead: the product and the tenant, the heading, and the month with
  *  the update it was read to. The one context line the 25 Sep rulings allow,
- *  with no "still filling" and no freeze date. */
+ *  with no "still filling" and no freeze date. The ditto is the brand yellow
+ *  beside the name in ink, as the app's sidebar draws it (1 Oct); a mark, not
+ *  words, so it is hidden from a screen reader. Its two strokes sit .04em
+ *  apart, not the ink's -.12em: in the pale yellow the hairline between them
+ *  closed and the ditto read as one slash. */
 function Masthead({ data }: { data: MonthlySnapshotData }) {
   const read = readToWords(data.reading?.readTo ?? null)
   return (
@@ -77,7 +81,7 @@ function Masthead({ data }: { data: MonthlySnapshotData }) {
         <tbody>
           <tr>
             <td style={{ fontFamily: FONT.sans, fontSize: 16, lineHeight: '20px', fontWeight: 700, letterSpacing: '-.02em', color: EMAIL.ink, whiteSpace: 'nowrap' }}>
-              <span aria-hidden style={{ color: EMAIL.ink, fontWeight: 700, letterSpacing: '-.12em' }}>{'//'}</span>&nbsp;&nbsp;Verbatim
+              <span aria-hidden style={{ color: EMAIL.brand, fontWeight: 700, letterSpacing: '.04em' }}>{'//'}</span>&nbsp;&nbsp;Verbatim
             </td>
             <td align="right" style={{ fontFamily: FONT.sans, fontSize: 14, lineHeight: '20px', fontWeight: 600, color: EMAIL.ink2 }}>{data.company}</td>
           </tr>

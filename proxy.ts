@@ -2,6 +2,21 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function proxy(request: NextRequest) {
+  const host = (request.headers.get('host') ?? '').toLowerCase()
+  const isMarketingHost = host === 'verbatimintel.com' || host === 'www.verbatimintel.com'
+
+  // TWO FAVICONS UNTIL THE SITE IS RECOLOURED (1 Oct): the app is yellow
+  // (app/favicon.ico) and the marketing site keeps its green. Next allows a
+  // favicon.ico at the root segment only, and every page links it, so the
+  // apex is handed the site's own here (public/brand/favicon-site.ico, built
+  // by scripts/build-brand-assets.ts). The icon, apple-icon and share card
+  // split by route segment instead (app/site/icon.svg and the rest).
+  if (isMarketingHost && request.nextUrl.pathname === '/favicon.ico') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/brand/favicon-site.ico'
+    return NextResponse.rewrite(url)
+  }
+
   // Static assets (crowd.svg, favicon.ico, …) are never auth-gated or
   // rewritten, on any host. Without this, an unauthenticated request for a
   // public/ file 307s to /login — which silently broke the crowd artwork on
@@ -15,7 +30,8 @@ export async function proxy(request: NextRequest) {
   // misses them, and without this a crawler asking the apex for the share card
   // is handed the marketing rewrite and a logged-out browser asking the app
   // host for its favicon is handed /login. They are brand art on both hosts:
-  // never gated, never rewritten.
+  // never gated, never rewritten. (The site's own copies, app/site/*, live
+  // under /site, which the apex passes through below.)
   if (['/icon', '/apple-icon', '/opengraph-image'].includes(request.nextUrl.pathname)) {
     return NextResponse.next()
   }
@@ -24,8 +40,6 @@ export async function proxy(request: NextRequest) {
   // verbatimintel.com serves the public marketing pages (app/site/*) and never
   // touches Supabase; the product lives on app.verbatimintel.com. Host-based
   // rewrite keeps both in one project sharing one design system.
-  const host = (request.headers.get('host') ?? '').toLowerCase()
-  const isMarketingHost = host === 'verbatimintel.com' || host === 'www.verbatimintel.com'
   if (isMarketingHost) {
     const url = request.nextUrl.clone()
     url.port = ''
@@ -123,6 +137,8 @@ export const config = {
   // Exclude /api/inngest, /api/stripe, /api/admin and /api/cron: all are called
   // without a Supabase session and carry their own auth (Inngest/Stripe signing
   // keys, the service-role key for the admin trigger, CRON_SECRET for the ops
-  // check), so they must skip the redirect.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/inngest|api/stripe|api/admin|api/cron).*)'],
+  // check), so they must skip the redirect. favicon.ico is NOT excluded (1 Oct):
+  // the apex is handed the site's own above, and on the app host it leaves at
+  // the static-asset rule before any session work.
+  matcher: ['/((?!_next/static|_next/image|api/inngest|api/stripe|api/admin|api/cron).*)'],
 }

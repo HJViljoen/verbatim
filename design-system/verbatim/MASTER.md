@@ -87,7 +87,10 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 9. **Drift guards (mechanical, run before merge):** every neutral must have blue ≥ red in RGB (cream fails)
    except palette A's three warm neutrals (ground, hairline, track); no green in the app tokens; palette A's
    jobs hold their values; no `backdrop-blur` in the app (`scripts/check-design-drift.sh`). Retired green in
-   app code and left stripes on cards or quotes fail `lib/palette-guard.test.ts`.
+   app code and left stripes on cards or quotes fail `lib/palette-guard.test.ts`. Since 1 Oct the app's brand
+   art is yellow (the mark in the sidebar and the signed-out frame, the favicons, the share card) while the
+   marketing site keeps its green: guard (f) holds each side's brand art to its own colours, and the palette
+   guard reaches `public/` and the app's icons, the site's own files aside (`DESIGN.md` §Brand mark).
 
 ### Preferences — things Heinrich likes and wants more of (2026-08-28). NOT rules: apply with judgment, page by page
 > His words: "the things I say aren't always going to be a fit — just stuff that I liked and that I want more of."

@@ -18,13 +18,15 @@ const wordmarkFace = Bricolage_Grotesque({ subsets: ["latin"], weight: "700", di
  *
  * As the design draws it (`sidebar2.py`): 4px above, 12px either side and 18px
  * below, inside the sidebar's own 12px; the mark at 20px and the word at 18px,
- * 7px apart, both in ink.
+ * 7px apart. The mark is the brand yellow (Heinrich, 1 Oct: "at the top left,
+ * I want the logo to be yellow"); the word stays ink, because yellow text on
+ * the white sidebar does not read (1.3:1).
  */
 export function SidebarWordmark() {
   return (
     <div className="px-3 pt-1 pb-[18px]">
       <div className="flex items-center gap-[7px]">
-        <VerbatimMark size={20} className="shrink-0 text-foreground" />
+        <VerbatimMark size={20} className="shrink-0 text-brand" />
         <span className={`${wordmarkFace.className} text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground`}>Verbatim</span>
       </div>
     </div>

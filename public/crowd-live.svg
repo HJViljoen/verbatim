@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 640" preserveAspectRatio="xMidYMax slice" fill="none" stroke="#14503A" stroke-linecap="round" stroke-linejoin="round"><style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 640" preserveAspectRatio="xMidYMax slice" fill="none" stroke="#26292C" stroke-linecap="round" stroke-linejoin="round"><style>
 /* Living-crowd variant for the marketing site. Each figure is a top-level g;
    speech bubbles are top-level paths. Individual transform properties
    (rotate/translate) compose with each figure's existing transform attribute,

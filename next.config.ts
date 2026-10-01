@@ -46,6 +46,9 @@ const nextConfig: NextConfig = {
     // the URL-based file tracer, so the fonts are named here — without this the
     // route ships and throws at request time with no face to draw with.
     '/opengraph-image': ['./app/fonts/**'],
+    // The marketing site's own card (it keeps the green while the app is
+    // yellow, 1 Oct) reads the same two weights the same way.
+    '/site/opengraph-image': ['./app/fonts/**'],
   },
   // Share links (Stage 2): a public, read-only page nobody should index. The
   // page sets metadata.robots as well; this is the header form for crawlers
