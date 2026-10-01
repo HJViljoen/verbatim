@@ -87,7 +87,7 @@ describe('BlockFrame', () => {
     // And with it on, the mark and the mono title the artboards head with.
     const accented = render(<BlockFrame mode="app" title="Rivals" accent><span>x</span></BlockFrame>)
     expect(accented).toContain('font-mono text-[11px] uppercase tracking-[0.08em]')
-    expect(accented).toContain('bg-positive')
+    expect(accented).toContain('bg-orange')
   })
 
   // A BIG FIGURE IS NOT SET IN MONO (the fix pass, E-monthly review [Medium]).
@@ -372,14 +372,14 @@ describe('BlockMovement', () => {
     expect(markup).not.toContain('▲')
     // The band rides in the email arm too — it used to be dropped entirely here.
     expect(markupText(markup)).toBe('+6.9 pts · band ±2.4 pts')
-    expect(markup).toContain(EMAIL.greenTint)
+    expect(markup).toContain(EMAIL.brandTint)
   })
 
   it('puts the email chip\'s colour in the tint and the edge, never in the text (SH8)', () => {
-    // `up` was #0E8A5F on #DDF3E9 and `down` #DB3B2E on #FBE3E1, at 11px/700:
+    // `up` was the retired green on its tint and `down` #DB3B2E on #FBE3E1, at 11px/700:
     // 3.75:1 and 3.81:1, about ten instances on one monthly render.
     const up = render(<BlockMovement mode="email" verdict={moved} unit="pts" />)
-    expect(up).toContain(EMAIL.greenTint)
+    expect(up).toContain(EMAIL.brandTint)
     expect(up).toContain(`1px solid ${EMAIL.up}`)
     expect(up).toContain(`color:${EMAIL.ink}`)
     const down = render(<BlockMovement mode="email" verdict={{ state: 'moved', change: -6.9, band: 2.4 }} unit="pts" />)
@@ -426,7 +426,7 @@ describe('BlockProportion', () => {
   it('resolves its colours to hex for the email', () => {
     const markup = render(<BlockProportion mode="email" segments={segments} of="videos" />)
     assertEmailSafe(markup)
-    expect(markup).toContain(EMAIL.green)
+    expect(markup).toContain(EMAIL.up)
     expect(markup).toContain(EMAIL.down)
   })
 
@@ -458,7 +458,7 @@ describe('BlockRanked', () => {
   it('renders an email-safe ranked list with hex colours', () => {
     const markup = render(<BlockRanked mode="email" rows={rows} />)
     assertEmailSafe(markup)
-    expect(markup).toContain(EMAIL.green)
+    expect(markup).toContain(EMAIL.you)
   })
 
   it('renders nothing for an empty list', () => {
@@ -601,8 +601,10 @@ describe('BlockQuote, ground="inner" (market-first WP1.6 design pass)', () => {
     expect(html).toContain('bg-tile px-2 py-0.5 font-mono text-[12px]')
   })
 
-  it('keeps the rule for every other caller', () => {
-    expect(render(<BlockQuote quote={quote} mode="app" />)).toContain('border-l-2 border-primary/30 pl-3')
+  it('draws no left rule for any other caller either (palette A bans the stripe)', () => {
+    const html = render(<BlockQuote quote={quote} mode="app" />)
+    expect(html).not.toContain('border-l')
+    expect(render(<BlockQuote quote={quote} mode="email" />)).not.toMatch(/<td width="2"|border-left/i)
   })
 })
 

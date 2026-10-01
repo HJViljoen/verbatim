@@ -267,7 +267,7 @@ const standings: E<CompetitiveData> = (d) => {
   return (
     <div>
       {rows.map((r) => (
-        <RankedRow key={r.name} label={r.you ? <strong>You</strong> : r.name} color={r.you ? EMAIL.green : EMAIL.comp} pct={st.maxPct > 0 ? (r.pct / st.maxPct) * 100 : 0} count={fmtPct(r.pct)} badge={showsDelta && r.delta != null && r.delta !== 0 ? <DeltaText value={r.delta} unit=" pt" decimals={1} good={r.you ? 'up' : 'down'} /> : undefined} />
+        <RankedRow key={r.name} label={r.you ? <strong>You</strong> : r.name} color={r.you ? EMAIL.you : EMAIL.comp} pct={st.maxPct > 0 ? (r.pct / st.maxPct) * 100 : 0} count={fmtPct(r.pct)} badge={showsDelta && r.delta != null && r.delta !== 0 ? <DeltaText value={r.delta} unit=" pt" decimals={1} good={r.you ? 'up' : 'down'} /> : undefined} />
       ))}
       <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>share of the tracked conversation, by videos{showsDelta ? ' · change vs the previous update' : ''}</div>
     </div>

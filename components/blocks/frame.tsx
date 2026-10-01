@@ -225,7 +225,7 @@ export function BlockFrame({
                             it, so a 2px rule painted on the cell rendered as a
                             16px green square. */}
                         <td width={16} style={{ width: 16, verticalAlign: 'middle', lineHeight: 0 }}>
-                          <span style={{ display: 'inline-block', width: 16, height: 2, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }} />
+                          <span style={{ display: 'inline-block', width: 16, height: 2, borderRadius: 2, background: EMAIL.accent, fontSize: 0, lineHeight: 0 }} />
                         </td>
                         <td width={8} style={{ width: 8, fontSize: 1 }}>&nbsp;</td>
                       </>
@@ -365,7 +365,7 @@ export function BlockFrame({
                 ? 'flex min-w-0 items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-secondary-foreground'
                 : cn('font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]'),
             )}>
-              {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-positive" /> : null}
+              {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-orange" /> : null}
               {title}
             </h2>
             {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}

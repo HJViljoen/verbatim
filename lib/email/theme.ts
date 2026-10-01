@@ -1,37 +1,52 @@
 /**
- * The email's palette and type (Reports & Exports Stage 3, 2026-08-30).
+ * The email's palette and type (Reports & Exports Stage 3, 2026-08-30;
+ * palette A since 2026-10-01).
  *
  * Email clients read no stylesheet and no CSS variable, so the app tokens
- * (app/globals.css :root, identity of 2026-08-28) are mirrored here as literal
- * hex — the same constants the interim weekly email carried. Chrome is
- * grey-scale; one green does its four jobs (you, the button, links as
- * actions, "good"); competitor orange and category grey mean what they mean
- * on the dashboard. Web-safe stacks behind Plex: most clients never load a
- * web font, and the fallback has to read as the same page.
+ * (app/globals.css :root) are mirrored here as literal hex. Palette A, as the
+ * weekly read (`components/email/weekly-read.tsx`) draws it: a paper ground
+ * under a white card, ink text and an ink button with white text, the brand
+ * yellow for fills (ink on it), pale yellow for soft panels, the text-safe
+ * orange for small labels and links, dark gold for "you" and "good", grey for
+ * rivals. Web-safe stacks behind Plex: most clients never load a web font, and
+ * the fallback has to read as the same page.
  */
 
 export const EMAIL = {
-  green: '#0E8A5F',
-  greenTint: '#DDF3E9',
-  link: '#0B6E4C',
-  canvas: '#F6F7F8',
+  /** The brand yellow: a fill, never text. Ink on it. */
+  brand: '#FFD43B',
+  /** The pale yellow: a soft panel or chip, ink on it. */
+  brandTint: '#FFF4C7',
+  /** "You" in a chart: the dark gold. */
+  you: '#9A6B00',
+  /** The primary button: ink, white text on it. */
+  button: '#26292C',
+  /** Orange text: small labels and links (5.2:1 on the card). */
+  link: '#C2410C',
+  /** The orange accent: a rule or a dot, never text. */
+  accent: '#F2651D',
+  canvas: '#F7F6F2',
   card: '#FFFFFF',
-  inner: '#F6F7F8',
+  inner: '#F7F6F2',
   ink: '#26292C',
   ink2: '#45494D',
-  muted: '#6E7378',
+  muted: '#5F656B',
   faint: '#9AA0A6',
-  border: '#DCDFE3',
-  hairline: '#EBEDF0',
-  up: '#0E8A5F',
+  border: '#E4E2DC',
+  hairline: '#E4E2DC',
+  /** A bar's background. */
+  track: '#ECEAE4',
+  /** "Good": shares the gold with "you", as the app's --positive does. */
+  up: '#9A6B00',
   down: '#DB3B2E',
   downTint: '#FBE3E1',
-  comp: '#F0742B',
+  /** A rival: the chart grey. */
+  comp: '#8A9097',
   cat: '#9AA1A9',
   mixed: '#E6B03C',
   /** `mixed` at 20% over the card, FLATTENED — the artboards' attention tint
    *  (`rgba(230,176,60,.20)`), which a mail client laying out with Word will
-   *  not composite. It completes the tint set beside `greenTint` and
+   *  not composite. It completes the tint set beside `brandTint` and
    *  `downTint`, and it is the one a movement carries when the caller has said
    *  the direction is not a judgement (`BlockMovement`, good="neutral"). */
   mixedTint: '#FAEFD8',
@@ -50,9 +65,11 @@ export const FONT = {
  *  a color-mix); the email needs the hex. Unknown → the muted grey, so a new
  *  token can never paint an email black. */
 const TOKEN_HEX: Record<string, string> = {
-  'var(--you)': EMAIL.green,
-  'var(--primary)': EMAIL.green,
-  'var(--positive)': EMAIL.green,
+  'var(--you)': EMAIL.you,
+  'var(--primary)': EMAIL.button,
+  'var(--positive)': EMAIL.up,
+  'var(--brand)': EMAIL.brand,
+  'var(--track)': EMAIL.track,
   'var(--comp)': EMAIL.comp,
   'var(--cat)': EMAIL.cat,
   'var(--mixed)': EMAIL.mixed,
@@ -61,10 +78,12 @@ const TOKEN_HEX: Record<string, string> = {
   'var(--neutral-seg)': EMAIL.neutralSeg,
   'var(--muted-foreground)': EMAIL.muted,
   'var(--foreground)': EMAIL.ink,
-  'color-mix(in srgb, var(--comp) 70%, var(--tile))': '#F59E6B',
-  'color-mix(in srgb, var(--comp) 48%, var(--tile))': '#F8BC99',
-  'bg-positive': EMAIL.green,
-  'bg-you': EMAIL.green,
+  'color-mix(in srgb, var(--comp) 70%, var(--tile))': '#ADB1B6',
+  'color-mix(in srgb, var(--comp) 48%, var(--tile))': '#C7CACD',
+  'bg-positive': EMAIL.up,
+  'bg-you': EMAIL.you,
+  'bg-brand': EMAIL.brand,
+  'bg-track': EMAIL.track,
   'bg-comp': EMAIL.comp,
   'bg-cat': EMAIL.cat,
   'bg-negative': EMAIL.down,
@@ -77,12 +96,12 @@ const TOKEN_HEX: Record<string, string> = {
   // in the email arm, which paints every segment of a proportion bar the same
   // colour — a legend of four dots that are one dot.
   'var(--chart-1)': EMAIL.ink,
-  'var(--chart-2)': EMAIL.green,
+  'var(--chart-2)': EMAIL.you,
   'var(--chart-3)': EMAIL.muted,
   'var(--chart-4)': EMAIL.cat,
   'var(--chart-5)': EMAIL.neutralSeg,
   'bg-chart-1': EMAIL.ink,
-  'bg-chart-2': EMAIL.green,
+  'bg-chart-2': EMAIL.you,
   'bg-chart-3': EMAIL.muted,
   'bg-chart-4': EMAIL.cat,
   'bg-chart-5': EMAIL.neutralSeg,

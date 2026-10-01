@@ -76,7 +76,7 @@ describe('tile email renderers', () => {
     hygiene(html)
     expect(html).toContain('87%')
     expect(html).toContain('to date · 698 conversations rated')
-    expect(html).toContain(`background:${EMAIL.green}`)
+    expect(html).toContain(`background:${EMAIL.up}`)
     expect(html).toContain(`background:${EMAIL.down}`)
     expect(html).toContain('Positive 609 · Negative 11')
   })
@@ -90,7 +90,7 @@ describe('tile email renderers', () => {
     expect(html).not.toContain('>New<')
     expect(html).toContain('Socket pain')
     expect(html).toContain(`background:${EMAIL.cat}`)
-    expect(html).toContain(`background:${EMAIL.green}`)
+    expect(html).toContain(`background:${EMAIL.you}`)
     expect(html).toContain('width="100%"')
   })
   it('movement without a picture still says the numbers, and never a themes row frozen before the gate', () => {
@@ -175,7 +175,7 @@ describe('text helpers', () => {
     expect(htmlToText('<p>Össur&#x27;s share &#8212; and &#x2019;s</p>')).toBe('Össur\'s share — and ’s')
   })
   it('tokenHex maps tokens and classes to hex and never to nothing', () => {
-    expect(tokenHex('var(--you)')).toBe(EMAIL.green)
+    expect(tokenHex('var(--you)')).toBe(EMAIL.you)
     expect(tokenHex('bg-warning')).toBe(EMAIL.mixed)
     expect(tokenHex('#123456')).toBe('#123456')
     expect(tokenHex('var(--something-new)')).toBe(EMAIL.muted)

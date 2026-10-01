@@ -119,7 +119,7 @@ function emailBody(b: MonthlyBrands): ReactNode {
         <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse' }}>
           <tbody>
             <tr>
-              <td style={{ width: 20, verticalAlign: 'top', paddingTop: 8 }}><div aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }}>&nbsp;</div></td>
+              <td style={{ width: 20, verticalAlign: 'top', paddingTop: 8 }}><div aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: EMAIL.accent, fontSize: 0, lineHeight: 0 }}>&nbsp;</div></td>
               <td style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2 }}>{nameWords(b)}</td>
             </tr>
           </tbody>

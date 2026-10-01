@@ -84,7 +84,7 @@ export function DigestEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                     <tr>
                       <td style={{ padding: '24px 28px 4px' }}>
                         <div style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, letterSpacing: '-.02em', color: EMAIL.ink, marginBottom: 10 }}>
-                          <img src={`${appUrl}/brand/verbatim-mark.png`} width="16" height="16" alt="" style={{ verticalAlign: '-2px', marginRight: 7 }} />
+                          <img src={`${appUrl}/brand/verbatim-mark-ink.png`} width="16" height="16" alt="" style={{ verticalAlign: '-2px', marginRight: 7 }} />
                           Verbatim
                         </div>
                         <div style={text.eyebrow}>{data.company} · consumer intelligence</div>

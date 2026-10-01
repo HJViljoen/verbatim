@@ -73,7 +73,7 @@ export function Row({ label, chip, href, linkText, children }: { label?: string;
 export function Chip({ tone, children }: { tone: 'up' | 'down' | 'neutral'; children: ReactNode }) {
   const style: CSSProperties = tone === 'neutral'
     ? { background: EMAIL.inner, color: EMAIL.muted, fontWeight: 600 }
-    : tone === 'up' ? { background: EMAIL.greenTint, color: EMAIL.up, fontWeight: 700 } : { background: EMAIL.downTint, color: EMAIL.down, fontWeight: 700 }
+    : tone === 'up' ? { background: EMAIL.brandTint, color: EMAIL.up, fontWeight: 700 } : { background: EMAIL.downTint, color: EMAIL.down, fontWeight: 700 }
   return <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 11, padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap', ...style }}>{children}</span>
 }
 
@@ -130,7 +130,7 @@ export function RankedRow({ label, pct, color, count, badge, dot }: { label: Rea
 }
 
 export function Badge({ children }: { children: ReactNode }) {
-  return <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 10, background: EMAIL.greenTint, color: EMAIL.link }}>{children}</span>
+  return <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 10, background: EMAIL.brand, color: EMAIL.ink }}>{children}</span>
 }
 
 /** A big figure with its unit and a line under it. */
@@ -164,8 +164,8 @@ export function Quote({ text: t, cite, lang, english }: { text: string; cite?: R
     <table width="100%" {...presentation} style={{ ...T, marginTop: 6 }}>
       <tbody>
         <tr>
-          <td width={2} style={{ background: EMAIL.border, fontSize: 1 }}>&nbsp;</td>
-          <td style={{ padding: '2px 0 2px 10px' }}>
+          {/* A plain panel on the ground, never a stripe (palette A). */}
+          <td style={{ background: EMAIL.inner, borderRadius: 12, padding: '16px 18px' }}>
             <div style={{ fontFamily: FONT.serif, fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: EMAIL.ink }}>“{t}”</div>
             {/* LABEL, THEN THE RENDERING IT NAMES — `QuoteBlock`'s order, and
                 the artboards'. This renderer keeps its own markup and never
@@ -191,7 +191,7 @@ export function Quote({ text: t, cite, lang, english }: { text: string; cite?: R
  */
 export function Button({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
   return (
-    <a href={href} style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', fontWeight: 600, textDecoration: 'none', padding: '13px 18px', borderRadius: 6, background: primary ? EMAIL.green : EMAIL.card, color: primary ? EMAIL.card : EMAIL.ink, border: primary ? `1px solid ${EMAIL.green}` : `1px solid ${EMAIL.border}` }}>{children}</a>
+    <a href={href} style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', fontWeight: 600, textDecoration: 'none', padding: '13px 18px', borderRadius: 6, background: primary ? EMAIL.button : EMAIL.card, color: primary ? EMAIL.card : EMAIL.ink, border: primary ? `1px solid ${EMAIL.button}` : `1px solid ${EMAIL.border}` }}>{children}</a>
   )
 }
 

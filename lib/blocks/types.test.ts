@@ -100,7 +100,7 @@ describe('blockContext', () => {
   it('answers the email fields honestly rather than leaving them undefined', () => {
     const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
     expect(ctx.image('overview.subjects')).toBeNull()
-    expect(ctx.theme.green).toBe('#0E8A5F')
+    expect(ctx.theme.you).toBe('#9A6B00')
     expect(ctx.params).toBeUndefined()
   })
 

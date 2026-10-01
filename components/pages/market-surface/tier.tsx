@@ -21,7 +21,7 @@ const LABEL: Record<GateTier, string> = {
 }
 
 const TONE: Record<GateTier, { app: string; bg: string; fg: string }> = {
-  confirmed: { app: 'bg-accent text-accent-foreground', bg: EMAIL.greenTint, fg: EMAIL.up },
+  confirmed: { app: 'bg-accent text-accent-foreground', bg: EMAIL.brandTint, fg: EMAIL.ink },
   early_signal: { app: 'bg-warning/15 text-warning', bg: EMAIL.inner, fg: EMAIL.ink2 },
   archive: { app: 'bg-inner text-muted-foreground', bg: EMAIL.inner, fg: EMAIL.muted },
 }

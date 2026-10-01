@@ -351,18 +351,18 @@ export function NotDrawn({ children = 'not compared', mode = 'app' }: { children
   return <span className="text-[12px] text-muted-foreground">{children}</span>
 }
 
-export type ChipTone = 'plain' | 'green' | 'amber' | 'muted'
+export type ChipTone = 'plain' | 'positive' | 'amber' | 'muted'
 
 /** The artboard's single-line pill. `rounded-full` is for one line only
  *  (design-system §3.6), so it never wraps. */
 export function Chip({ tone = 'plain', children, mode = 'app' }: { tone?: ChipTone; children: ReactNode; mode?: RenderMode }) {
   if (mode === 'email') {
-    const bg = tone === 'green' ? EMAIL.greenTint : tone === 'amber' ? 'rgba(230,176,60,.20)' : EMAIL.inner
-    const fg = tone === 'green' ? EMAIL.link : tone === 'muted' ? EMAIL.muted : EMAIL.ink2
+    const bg = tone === 'positive' ? EMAIL.brandTint : tone === 'amber' ? 'rgba(230,176,60,.20)' : EMAIL.inner
+    const fg = tone === 'positive' ? EMAIL.up : tone === 'muted' ? EMAIL.muted : EMAIL.ink2
     return <span style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: 1.3, background: bg, color: fg, padding: '2px 8px', borderRadius: 9999 }}>{children}</span>
   }
   const cls =
-    tone === 'green' ? 'bg-positive/15 text-positive'
+    tone === 'positive' ? 'bg-positive/15 text-positive'
       : tone === 'amber' ? 'bg-warning/20 text-foreground'
         : tone === 'muted' ? 'bg-inner text-muted-foreground'
           : 'bg-inner text-secondary-foreground'
