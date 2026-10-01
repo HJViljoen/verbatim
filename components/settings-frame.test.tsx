@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { SettingsFrame, SettingsTable, SettingsRow, SettingsCard, FactRow } from '@/components/settings-frame'
 import { ReadinessTable } from '@/components/ops/readiness-table'
-import { SETTINGS_SUBPAGES } from '@/lib/settings/rail'
 import type { ReadinessRow } from '@/lib/readiness/types'
 
 describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct)', () => {
