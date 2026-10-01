@@ -237,6 +237,23 @@ export interface WeekReadFinding {
    *  and/or "First heard in September.", or '' where neither is true. Printed
    *  in a verdict node: a direction word here is code's, earned. */
   context: string
+  /** ADDITIVE (pages build, 1 Oct). The videos `videos.month` counts (the
+   *  union of the cited candidates' `monthVideoIds`, sorted), so the This week
+   *  page's brand line ("In September: Cotopaxi 2 · other bags 12") splits
+   *  exactly the count the evidence line prints. Absent on a read stored
+   *  before it: the page prints no brand line for it. */
+  monthVideoIds?: string[]
+}
+
+/** ADDITIVE (pages build, 1 Oct). One conversation also heard this week: an
+ *  eligible pool candidate no printed finding rests on, with its week's
+ *  lenient-gated videos (the count printed, and the videos its brand line
+ *  splits). */
+export interface WeekReadAlsoHeard {
+  themeId: string
+  label: string
+  videos: number
+  videoIds: string[]
 }
 
 /**
@@ -317,6 +334,9 @@ interface WeekReadCommon {
   figures: FigureTable
   held: WeekReadHeld[]
   model: string; costUsd: number
+  /** ADDITIVE (pages build, 1 Oct): "Also heard this week" on the This week
+   *  page. Absent on a read stored before it, empty on a thin week. */
+  alsoHeard?: WeekReadAlsoHeard[]
 }
 
 /** A read stored by week_read_v1 or v2: In short, then the findings with a

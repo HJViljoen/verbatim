@@ -126,6 +126,33 @@ describe('composeWeekRead: a thin week', () => {
   })
 })
 
+describe('composeWeekRead: what the This week page needs (pages build, additive)', () => {
+  it('stores each finding\'s month videos, the set its evidence line counts', () => {
+    const c1 = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6'], monthVideoIds: ['v6', 'v1', 'm1'] })
+    const c2 = candidate({ id: 'C2', videoIds: ['v5', 'v6', 'v7'], monthVideoIds: ['v6', 'm2'] })
+    const read = compose([c1, c2], [finding({ based_on: ['C1', 'C2'] })])
+    expect(read.findings[0].monthVideoIds).toEqual(['m1', 'm2', 'v1', 'v6'])
+    expect(read.findings[0].monthVideoIds).toHaveLength(read.findings[0].videos.month)
+  })
+
+  it('also heard: the eligible candidates no printed finding rests on, in the pool\'s order, with their week\'s videos', () => {
+    const c1 = candidate({ id: 'C1', gated: 8 })
+    const c2 = candidate({ id: 'C2', videoIds: ['a', 'b', 'c'], label: 'Confusion over airline size rules' })
+    const c3 = candidate({ id: 'C3', videoIds: ['d', 'e', 'f'], label: 'Cotopaxi praised for practical travel' })
+    const read = compose([c1, c2, c3], [finding({ based_on: ['C1'] })])
+    expect(read.alsoHeard).toEqual([
+      { themeId: 'th-c2', label: 'Confusion over airline size rules', videos: 3, videoIds: ['a', 'b', 'c'] },
+      { themeId: 'th-c3', label: 'Cotopaxi praised for practical travel', videos: 3, videoIds: ['d', 'e', 'f'] },
+    ])
+  })
+
+  it('a thin week hears nothing else either', () => {
+    const p = pool([candidate({ id: 'C1' })])
+    const read = composeWeekRead({ pool: p, standing: [], written: null, subjects: [], writerFigures: writerFigures(p), model: '', costUsd: 0 })
+    expect(read.alsoHeard).toEqual([])
+  })
+})
+
 describe('composeWeekRead: the lines code writes', () => {
   it('the evidence line counts what the finding rests on: the union of every cited candidate, this week and in the month so far', () => {
     const c1 = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6'], monthVideoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'm1', 'm2', 'm3'], weekVideos: 14, monthK: 40, label: 'Price feels hard to justify' })
