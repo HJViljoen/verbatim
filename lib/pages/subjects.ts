@@ -2552,7 +2552,9 @@ export async function loadSubjectsPage(scope: Scope, opts: SubjectsLoadOptions =
         ? { id: move.id, title: move.title, declaredAt: move.declared_at, status: move.status }
         : null,
       behind: own && own.k != null && own.k > 0
-        ? { videos: own.k, href: `/dashboard/videos?subject=${encodeURIComponent(subject.id)}` }
+        // The subject on Subjects (`?item=`): the parked Content page retired for
+        // clients on 1 Oct, so its address only redirects (lib/nav.ts).
+        ? { videos: own.k, href: `/dashboard/subjects?item=${encodeURIComponent(subject.id)}` }
         : null,
       gap,
       trail: trailLine(

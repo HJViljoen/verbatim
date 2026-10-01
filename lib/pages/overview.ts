@@ -1922,7 +1922,7 @@ export function subjectsNote(rows: readonly SubjectRow[], when = 'this month'): 
 /** The "not a blank form" line (design §3 OV2, empty state). */
 export function candidateLine(candidates: readonly SubjectCandidate[]): string {
   return candidates.length === 0
-    ? 'No subjects are named yet, and nothing has been proposed. Name the five to eight things you want to be known for in Settings.'
+    ? 'No subjects are named yet, and nothing has been proposed. Name the five to eight things you want to be known for on Subjects.'
     : `We have proposed ${fmtInt(candidates.length)} ${candidates.length === 1 ? 'subject' : 'subjects'} from your own claims and your category's top themes. Confirm, rename or replace them.`
 }
 

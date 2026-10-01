@@ -94,7 +94,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]">
-      <PageTitle title="Studio" />
+      <PageTitle title={surface('studio').label} />
       <YourReports rows={rows} canEdit={canManageTenant(role)} privacy={PRIVACY_LINE} />
       <PastIssues issues={issues} openHref={openHref} />
       {isOperator ? <OperatorWorkbench session={session} sp={{ item: sp.group === 'sent' ? undefined : sp.item }} /> : null}

@@ -646,7 +646,7 @@ export function thinFixture(): WeekData {
     },
     subjects: {
       month: '2026-09-01',
-      unread: 'No subjects are recorded for this workspace yet. Name what you care about in Settings and this update’s videos are counted against them from the next reading.',
+      unread: 'No subjects are recorded for this workspace yet. Name what you care about on Subjects and this update’s videos are counted against them from the next reading.',
       rows: [],
       // NO ROWS MEANS NO LEAD, never "0 of 0 ran above typical": a sentence
       // counting comparisons nobody drew is the exact failure `unread` exists
@@ -1028,7 +1028,7 @@ export function ossurWeeksFixture(): WeekData {
     // Össur names no subject on staging (§2.13): the market block's one line.
     subjects: {
       rows: [],
-      unread: 'No subjects are recorded for this workspace yet. Name what you care about in Settings and this update’s videos are counted against them from the next reading.',
+      unread: 'No subjects are recorded for this workspace yet. Name what you care about on Subjects and this update’s videos are counted against them from the next reading.',
       month: '2026-09-01',
       lead: null,
       namedLine: null,

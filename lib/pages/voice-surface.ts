@@ -1013,14 +1013,16 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         voices: paneVoices.map((c) => voiceOf(c)),
         chip,
         isLead,
-        videosHref: `/dashboard/videos?theme=${encodeURIComponent(open.registryId)}`,
+        // The theme in full on Conversation (`?theme=`): the parked Content
+        // page retired for clients on 1 Oct and only redirects.
+        videosHref: `/dashboard/voice?theme=${encodeURIComponent(open.registryId)}`,
         askHref: askAboutTheme(open),
         notes: [],
       }
     : {
         state: 'none', id: null, label: 'No theme is open', kind: null, kindLabel: null, makerSentence: null,
         flags: [], k: null, n: null, prev: null, provenance: null, kinds: null, voices: [], chip,
-        isLead: false, videosHref: '/dashboard/videos', askHref: '/dashboard/agent', notes: [noThemeOpen(month)],
+        isLead: false, videosHref: '/dashboard/voice', askHref: '/dashboard/agent', notes: [noThemeOpen(month)],
       }
 
   // ── the market in the month ─────────────────────────────────────────────

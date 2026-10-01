@@ -177,7 +177,9 @@ export function repliesSection<D>(key: string, pick: (data: D) => RepliesBlock, 
     render(data, mode = 'app', ctx) {
       const r = pick(data)
       const empty = block.emptyState(data)
-      const all = surface === 'page' ? `${ctx.appUrl}/dashboard/videos?detail=replies` : `${ctx.appUrl}/dashboard/week#${WEEK_ANCHORS.reply}`
+      // This week either way: the parked Content page that listed every reply
+      // retired for clients on 1 Oct and only redirects there (lib/nav.ts).
+      const all = surface === 'page' ? `${ctx.appUrl}/dashboard/week` : `${ctx.appUrl}/dashboard/week#${WEEK_ANCHORS.reply}`
       const words = surface === 'page' ? `Open all ${fmtInt(r.total)} →` : `Open all ${fmtInt(r.total)} on This week →`
       const footer: ReactNode = r.rows.length === 0 ? undefined : mode === 'email' ? <WeeklyLink href={all} label={words} /> : openLink(mode, all, words)
       if (empty) return <BlockFrame title={REPLY_TITLE} mode={mode} footer={footer} roomy card><BlockEmpty mode={mode}>{empty}</BlockEmpty></BlockFrame>

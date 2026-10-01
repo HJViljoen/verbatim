@@ -2421,7 +2421,7 @@ export function refsOf(value: unknown): string[] {
 // ---- §2 ----------------------------------------------------------------------
 
 const SUBJECTS_UNREAD =
-  'No subjects are recorded for this workspace yet. Name what you care about in Settings and this update’s videos are counted against them from the next reading.'
+  'No subjects are recorded for this workspace yet. Name what you care about on Subjects and this update’s videos are counted against them from the next reading.'
 
 async function buildSubjects(input: {
   reading: ReadingHandle
