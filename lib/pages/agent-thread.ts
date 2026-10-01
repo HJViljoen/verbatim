@@ -574,6 +574,9 @@ export async function loadAskHistory(
    */
   cardsIn: readonly PlanCheckCard[] | Promise<readonly PlanCheckCard[]>,
   limit = 50,
+  /** How many rows are drawn: the thread page's rail draws three; the Agent
+   *  page's "Earlier questions" draws more (pages rebuild, 1 Oct). */
+  shown = 3,
 ): Promise<AskHistory> {
   // The thread the reader is ON, off the same param the loader reads. Not
   // drawn in the rail; still counted in the month (`askHistory`).
@@ -612,7 +615,7 @@ export async function loadAskHistory(
       // reads as "its claims held" (`AskHistoryRow.claimCrossed`).
       claimCrossed: !t.plan_check_id ? false : crossedByPlan.get(t.plan_check_id) ?? null,
     })),
-    3,
+    shown,
     openThread,
   )
   const oldest = row<{ created_at: string }>(oldestRes, 'askHistory.oldest')

@@ -148,7 +148,7 @@ export default async function AgentThreadPage({
               <TileEmpty>
                 Nothing was saved against this document. Either nothing in it read as a claim about customers or the
                 market, or the check failed on our side before it finished. It still counted as one of this
-                month&rsquo;s questions, and you can bring the document again from the box on Ask.
+                month&rsquo;s questions, and you can bring the document again from the Agent&rsquo;s box.
               </TileEmpty>
             </Tile>
           </AskColumns>
