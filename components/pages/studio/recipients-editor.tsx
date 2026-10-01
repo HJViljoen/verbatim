@@ -11,10 +11,12 @@ import { buttonClass } from './ui'
 //
 // THE EDITOR NEVER SWITCHES SENDING. It posts the schedule's own `active`
 // back, so saving a list leaves a schedule that sends sending and one that is
-// off, off; a report with no schedule yet starts as the old form's default
-// did. Switching sending on is still refused for a locked tenant, in the
-// lock's own words (lib/tenant-locks.ts), and the briefs, which nothing sends
-// on a schedule yet, are stored switched off by the action.
+// off, off; a report with no schedule yet posts the old form's default, which
+// only the operator's save honours: the action stores a tenant's new row
+// switched off, and every new row reviewed (fresh review H1). Switching
+// sending on is still refused for a locked tenant, in the lock's own words
+// (lib/tenant-locks.ts), and the briefs, which nothing sends on a schedule
+// yet, are stored switched off by the action.
 
 const initial: RecipientsState = { ok: false, message: '' }
 

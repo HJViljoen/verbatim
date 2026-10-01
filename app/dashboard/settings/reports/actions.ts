@@ -44,6 +44,15 @@ import { assertTenantMay } from '@/lib/tenant-locks'
 // list for an artefact nothing builds is stored SWITCHED OFF, whatever the
 // checkbox said, and the form says so (lib/settings/artefacts.ts
 // BUILDABLE_ARTEFACTS).
+//
+// ARMING A SCHEDULE IS THE OPERATOR'S (fresh review H1, lead's ruling, 1 Oct
+// evening). The Studio's Recipients editor is open to every owner and admin,
+// and a tenant with no weekly_read row saving a list used to create an ACTIVE
+// one with review OFF (the column's default): every Sunday a model-written
+// read emailed with nobody reviewing it, and the pages printing it ungated.
+// So a tenant's save keeps a schedule that sends sending, and never switches
+// one on or creates one switched on; and every row this inserts is born with
+// review ON, so whoever later arms it arms a reviewed send.
 
 export interface RecipientsState {
   ok: boolean
@@ -130,13 +139,16 @@ export async function updateArtefactRecipients(
   const label = ARTEFACT_COPY[parsed.data.artefact].label
   // The one value the form does not get to decide.
   const buildable = isBuildable(parsed.data.artefact)
-  const active = buildable && parsed.data.active
+  const requested = buildable && parsed.data.active
   // THE TENANT LOCK (market-first decision J, lib/tenant-locks.ts): during the
   // trial a tenant's own user may keep a list, never switch its sending on.
-  if (active) {
+  if (requested) {
     const may = assertTenantMay(session, clientId, 'sends')
     if (!may.ok) return { ok: false, message: may.message }
   }
+  // H1: only the operator switches a schedule on. Anyone else's save leaves
+  // one that sends sending and anything else (or nothing yet) off.
+  const active = requested && (session.operator != null || existing?.active === true)
   const before = existing
     ? { recipients: existing.recipients as string[], active: existing.active as boolean }
     : null
@@ -160,6 +172,9 @@ export async function updateArtefactRecipients(
         : parsed.data.artefact === 'quarterly' ? 'quarterly' : 'monthly',
       recipients: parsed.data.recipients,
       active,
+      // Born reviewed (H1): a schedule armed later holds its build for the
+      // operator rather than sending what nobody read.
+      review: true,
       created_by: userId,
     })
 
