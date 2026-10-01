@@ -387,7 +387,7 @@ export const overviewSentence: Block<OverviewData> = {
         // and had no call site — and MASTER's own rule is "depth is elevation,
         // never tone". So: the primary rail the sidebar uses to mark the active
         // row, and a heavier lead. No new colour, no second palette.
-        <TileBlock className="flex items-center gap-4 border-l-2 border-primary pl-3">
+        <TileBlock className="flex items-center gap-4">
           <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
             <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Top recommendation</span>
             <Link data-copy="stored" data-slot="pass_d_b_recommendation" href={s.ledger.href} className="text-[13.5px] font-semibold underline-offset-2 hover:underline">{s.ledger.title}</Link>

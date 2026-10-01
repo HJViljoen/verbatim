@@ -162,8 +162,8 @@ describe('OV1, ported to the artboard', () => {
     // citation tail in a ragged gutter.
     expect(markup).toContain('xl:grid-cols-[minmax(0,1fr)_400px]')
     expect(markup).not.toContain('xl:grid-cols-2')
-    // The quote's rule is P0's green tint, which is the artboard's.
-    expect(markup).toContain('border-l-2 border-primary/30')
+    // No rule down the quote's left edge: palette A bans the stripe.
+    expect(markup).not.toContain('border-l-2')
   })
 
   it('dates the block by the last update and NOT by a promised next one', () => {

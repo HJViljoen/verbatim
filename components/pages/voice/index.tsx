@@ -247,7 +247,7 @@ const ribbon: R = (d, mode) => {
             const body = (
               <>
                 <span className={`${chip} max-w-full self-start truncate ${categoryChip(c.themeCategory)}`}>{c.themeLabel}</span>
-                <blockquote className="min-h-0 border-l-2 border-border pl-2.5 text-[12.5px] italic leading-[1.4] text-foreground/90">
+                <blockquote className="min-h-0 text-[12.5px] italic leading-[1.4] text-foreground/90">
                   <span className="line-clamp-4">“{c.quote.text}”</span>
                   {c.quote.english ? <span className="mt-1 block text-[11.5px] not-italic text-muted-foreground line-clamp-3">{c.quote.english}</span> : null}
                   {c.who && <span className="mt-1 block text-[10.5px] not-italic text-muted-foreground">{c.who}</span>}

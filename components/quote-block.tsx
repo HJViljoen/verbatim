@@ -143,8 +143,10 @@ export function QuoteBlock({ quote, mode = 'app', cite, ground = 'tile' }: Quote
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', marginTop: 6 }}>
         <tbody>
           <tr>
-            <td width={2} style={{ background: EMAIL.border, fontSize: 1 }}>&nbsp;</td>
-            <td style={{ padding: '2px 0 2px 10px' }}>
+            {/* A PLAIN PANEL, NOT A STRIPE (palette A, 2026-10-01): the
+                design's quote is serif italic on the ground with the cite under
+                it; a coloured or grey rule down its left edge is banned. */}
+            <td style={{ background: EMAIL.inner, borderRadius: 12, padding: '16px 18px' }}>
               <div data-copy="quote" style={{ fontFamily: FONT.serif, fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: EMAIL.ink }}>“{quote.text}”</div>
               {/* TWO SIDES OF THIS MERGE MEET HERE. `subjects` (SB8/SH12's email
                   arm) puts the translation LABEL BEFORE the English, so a reader
@@ -170,11 +172,10 @@ export function QuoteBlock({ quote, mode = 'app', cite, ground = 'tile' }: Quote
     )
   }
 
-  // THE IN-APP RULE IS GREEN-TINTED, AND THE WORDS LEAN (P0 item 5). On screen
-  // this was a grey rule and an upright serif; the artboards draw every in-app
-  // quote behind `rgba(14,138,95,.3)` — DESIGN.md's own green tint, "Highlight
-  // in quotes, the 'you' tile, supported claims", so it is not a fifth job for
-  // the green — with the words italic at 14px/1.375 in ink at 85%.
+  // NO RULE DOWN THE LEFT, AND THE WORDS LEAN (P0 item 5; palette A,
+  // 2026-10-01). The quote was set behind a 2px green-tinted rule; palette A
+  // bans a left stripe on a quote, so a quote on a card is the design's serif
+  // italic with nothing beside it, in ink at 85%.
   //
   // NOW 15PX, NOT THE ARTBOARDS' 14 (Heinrich's ruling, 2026-09-24): serif
   // italic stays and the size steps up one, which is also paper's size, so a
@@ -201,7 +202,7 @@ export function QuoteBlock({ quote, mode = 'app', cite, ground = 'tile' }: Quote
   // On an inner block the box is the frame, on paper as on screen.
   const boxed = ground === 'inner'
   return (
-    <blockquote className={boxed ? 'm-0' : big ? 'max-w-[66ch] rounded-lg bg-inner px-4 py-2.5' : 'border-l-2 border-primary/30 pl-3'}>
+    <blockquote className={boxed ? 'm-0' : big ? 'max-w-[66ch] rounded-lg bg-inner px-4 py-2.5' : 'm-0'}>
       {/* THE SPEAKER'S WORDS, MARKED AS THEIRS. See the `quote` kind in
           lib/test/copy-contract.ts: rule (c) is about what the PRODUCT claims,
           and a customer who writes "I'm a double below knee" is not claiming a

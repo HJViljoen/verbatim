@@ -1236,7 +1236,7 @@ function SayHearPage({ page, figures, company }: { page: DocPage; figures: Figur
                 {verdict && <span className="shrink-0"><Pill tone={verdict.tone}>{verdict.word}</Pill></span>}
               </div>
               {theySay && (
-                <p className="border-l-2 border-border pl-3.5 text-[15px] leading-[1.45] text-secondary-foreground">{theySay}</p>
+                <p className="text-[15px] leading-[1.45] text-secondary-foreground">{theySay}</p>
               )}
               {b.text && <BlockSlot block={b} textClass={BODY}><Paragraphs text={b.text} figures={figures} className={BODY} /></BlockSlot>}
             </li>

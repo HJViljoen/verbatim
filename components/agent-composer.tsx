@@ -148,7 +148,7 @@ export function AgentComposer({
   // LIVE IS THE ONLY GATE ON THE BUTTON. It used to be `ready` — `live` AND at
   // least `MIN_QUESTION` characters typed — with `disabled:opacity-30` on the
   // pill, so the page's primary control was drawn unavailable on every first
-  // paint of both routes: `#0E8A5F` at 30% over white is `#B7DCCF` and the
+  // paint of both routes: the then-green at 30% over white is `#B7DCCF` and the
   // white label on it measures 1.48:1. On `/dashboard/agent` that pill is the
   // only saturated element on the page and the only thing a new tenant can do,
   // and it was greyed out before anyone had done anything wrong. "You have not

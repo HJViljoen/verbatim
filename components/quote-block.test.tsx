@@ -123,7 +123,9 @@ describe('the email arm is painted from lib/email/theme', () => {
 
   it('carries no colour that is not a theme constant', () => {
     for (const dead of ['#e5e2dc', '#1c1b19', '#55524c', '#8a867e']) expect(html.toLowerCase()).not.toContain(dead)
-    expect(html).toContain(EMAIL.border)
+    // A plain panel on the ground (palette A), not a stripe cell beside it.
+    expect(html).toContain(`background:${EMAIL.inner}`)
+    expect(html).not.toContain('width="2"')
     expect(html).toContain(EMAIL.ink)
     expect(html).toContain(EMAIL.muted)
     // `EMAIL.faint` (#9AA0A6, 2.64:1) came off the cite and the translation
@@ -150,9 +152,9 @@ describe('the email arm is painted from lib/email/theme', () => {
 describe('the in-app arm', () => {
   const html = render(<QuoteBlock quote={es} mode="app" />)
 
-  it('rules the quote in the green tint, not in chrome grey', () => {
-    expect(html).toContain('border-primary/30')
-    expect(html).not.toContain('border-border')
+  it('draws no rule down the quote\'s left edge (palette A bans the stripe)', () => {
+    expect(html).not.toContain('border-l')
+    expect(html).not.toContain('border-primary')
   })
 
   it('leans the words, in the voice face, at 15px (the ruling, over the artboards\' 14)', () => {
