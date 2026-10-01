@@ -1,4 +1,5 @@
--- Checks for 20261106091000_week_unchecked_newest.sql, run on a throwaway
+-- Checks for 20261106091000_week_unchecked_newest.sql (and the operator's
+-- verdict, 20261106093000), run on a throwaway
 -- cluster after the migration (scripts/pg-shim/throwaway.sh check <dir> this-file).
 -- Every check raises on a wrong answer; one transaction, rolled back.
 --
@@ -44,6 +45,15 @@ do $$ declare n int; v int; begin
   if n is distinct from 2 then raise exception 'after: % unchecked, expected 2 (y2 dropped, y3 never judged)', n; end if;
   -- Counts are untouched: the function counts what is stored.
   if v is distinct from 4 then raise exception 'after: % videos, expected 4', v; end if;
+end $$;
+
+-- An operator keeps the dropped one (20261106093000): the newest verdict is a
+-- clean keep, and only y3 (never judged) stays unchecked.
+insert into public.gate_verdicts (client_id, run_id, platform, video_id, kept, reason, source, created_at) values
+  ('00000000-0000-4000-8000-00000000c0c1', null, 'youtube', 'y2', true, 'kept by the operator: on-topic', 'operator', '2026-10-01 20:00Z');
+do $$ declare n int; begin
+  select sum(unchecked) into n from public.market_week_volumes('00000000-0000-4000-8000-00000000c0c1', '2026-09-21', '2026-09-28');
+  if n is distinct from 1 then raise exception 'after the keep: % unchecked, expected 1 (y3)', n; end if;
 end $$;
 
 select 'week-unchecked checks: all passed' as result;

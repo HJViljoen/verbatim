@@ -144,3 +144,15 @@ export async function citedAmong(db: SupabaseClient, clientId: string, videoIds:
   }
   return out
 }
+
+/** The operator's keeps (`--keep <ids> --yes`): one appended verdict per
+ *  video, kept, source `operator`, the reason saying who and why. The newest
+ *  verdict then is a clean keep, so the video is checked (migration
+ *  20261106093000). Pure. */
+export function operatorKeepRows(clientId: string, videos: readonly UnjudgedVideo[], reason: string): GateVerdictRow[] {
+  return videos.map((v) => {
+    const [row] = buildGateVerdictRows(clientId, null, v.platform, [{ video_id: v.video_id, account_name: v.account_name ?? '', caption: v.caption ?? '', hashtags: v.hashtags ?? [] }],
+      new Map([[v.video_id, { relevant: true, reason: `kept by the operator: ${reason}`, source: 'gpt' as const }]]))
+    return { ...row, kept: true, source: 'operator' as const }
+  })
+}

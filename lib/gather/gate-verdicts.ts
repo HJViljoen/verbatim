@@ -67,7 +67,9 @@ export interface GateVerdictRow {
   keyword: string | null
   kept: boolean
   reason: string | null
-  source: 'heuristic' | 'gpt' | 'default'
+  /** 'operator': a person's verdict (scripts/backfill-platform.ts --keep,
+   *  migration 20261106093000); never written by a gather. */
+  source: 'heuristic' | 'gpt' | 'default' | 'operator'
 }
 
 /**
