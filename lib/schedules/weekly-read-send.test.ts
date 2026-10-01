@@ -17,7 +17,7 @@ import type { ScheduleRow } from './types'
 const mail = vi.hoisted(() => ({
   report: [] as { to: string[]; subject: string; html: string }[],
   alert: [] as { subject: string; text: string }[],
-  review: [] as { to: string[]; studioUrl: string; forOperator?: boolean; reportTitle: string; recipients?: number; editable?: boolean }[],
+  review: [] as { to: string[]; studioUrl: string; forOperator?: boolean; reportTitle: string; recipients?: number; editable?: boolean; alsoPublished?: unknown }[],
 }))
 
 vi.mock('../email', () => ({
@@ -236,6 +236,53 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(p.html).toContain('the words of e:e2e1146c-be79-452f-b943-2f3381a662f9')
     expect(w.tables.report_snapshots).toEqual([])
     expect(w.tables.report_sends).toEqual([])
+  })
+})
+
+describe('the run that closes a month: the operator reads the long-run read before Send publishes it (fresh review B1)', () => {
+  const longRun = (over: Record<string, unknown> = {}) => ({
+    client_id: CLIENT, run_id: RUN, kind: 'month', status: 'ready', month: '2026-09-01', created_at: '2026-10-04T08:41:00Z',
+    data: {
+      version: 1, kind: 'longrun', promptVersion: 'longrun_read_v1', month: '2026-09-01', months: ['2026-08-01', '2026-09-01'],
+      window: { from: '2026-08-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' },
+      inShort: 'Buyers like the idea of a sustainable bag but ask harder questions before they commit.',
+      ideas: [
+        { headline: 'Interest stalls when the way to buy isn’t clear', body: ['People who already want the bag stop on basic buying questions.', 'Price and size are asked in the same breath.'], basedOn: ['th-a'], videos: 42, months: [], who: [], sure: 'strong' },
+        { headline: '  ', body: ['A headline that did not survive prints nothing.'], basedOn: [], videos: 1, months: [], who: [], sure: 'strong' },
+      ],
+      held: [], model: 'm', costUsd: 0.13,
+    },
+    ...over,
+  })
+
+  it('the operator\'s review email carries its title, lead, headlines and sentences', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    w.tables.week_reads.push(longRun())
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('ready')
+    expect(mail.review).toHaveLength(1)
+    expect(mail.review[0].forOperator).toBe(true)
+    expect(mail.review[0].alsoPublished).toEqual({
+      title: 'What holds across August and September',
+      inShort: 'Buyers like the idea of a sustainable bag but ask harder questions before they commit.',
+      ideas: [{ headline: 'Interest stalls when the way to buy isn’t clear', body: ['People who already want the bag stop on basic buying questions.', 'Price and size are asked in the same breath.'] }],
+    })
+    // The client's email, at the Send, is unchanged: no long-run read in it.
+    await deliverSend({ admin: w.admin, sendId: r.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'operator-user' })
+    expect(mail.report).toHaveLength(1)
+    expect(mail.report[0].html).not.toContain('What holds across')
+    expect(mail.report[0].html).not.toContain('Interest stalls')
+  })
+
+  it('every other week (no long-run read, a thin one, another run\'s) adds nothing', async () => {
+    for (const extra of [[], [longRun({ status: 'thin' })], [longRun({ run_id: 'run-20' })]]) {
+      mail.review.length = 0
+      const w = world({ status: 'ready', data: frozen(sealandRead()) })
+      w.tables.week_reads.push(...extra)
+      await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+      expect(mail.review).toHaveLength(1)
+      expect(mail.review[0].alsoPublished ?? null).toBeNull()
+    }
   })
 })
 

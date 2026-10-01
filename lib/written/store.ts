@@ -134,25 +134,9 @@ export function isLongRunData(data: unknown): data is LongRunReadData {
   return !!d && d.kind === 'longrun' && Array.isArray(d.ideas) && Array.isArray(d.months)
 }
 
-/**
- * The client's newest READY long-run read (the latest month first), or null:
- * none written yet, the table not there, or a row that is not one. Service
- * role only (the table has no tenant policy): the caller scopes it to the
- * session's client.
- */
-export async function loadLatestLongRun(admin: SupabaseClient, clientId: string): Promise<StoredLongRun | null> {
-  const res = await admin.from(WEEK_READS_TABLE)
-    .select('month, data, created_at')
-    .eq('client_id', clientId).eq('kind', 'month').eq('status', 'ready')
-    .order('month', { ascending: false }).order('created_at', { ascending: false }).limit(1)
-  if (res.error) {
-    if (isMissingWeekReads(res.error)) return null
-    throw new Error(`week_reads long run: ${res.error.message}`)
-  }
-  const row = ((res.data ?? [])[0] ?? null) as { month: string; data: unknown; created_at: string } | null
-  if (!row || !isLongRunData(row.data)) return null
-  return { month: String(row.month).slice(0, 10), data: row.data, created_at: row.created_at }
-}
+// A page reads the long-run read through `loadPublishedLongRun`
+// (lib/written/published.ts), which holds it back under review like the week
+// read (fresh review B1): never straight off this table.
 
 /** Has this month's long-run read been written (ready, or thin: a month that
  *  had nothing durable to say is not written again)? */

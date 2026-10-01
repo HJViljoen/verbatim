@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { artifactFilename, logExport, replaceArtifactFile, storeArtifact, type ArtifactRow } from '../artifacts'
-import { sendReportEmail, sendReviewEmail, type EmailAttachment } from '../email'
+import { sendReportEmail, sendReviewEmail, type AlsoPublished, type EmailAttachment } from '../email'
 import { EMAIL_IMAGE_TILES, renderDigestEmail } from '../email/digest'
 import { documentSubject, renderDocumentEmail } from '../email/document-brief'
 import { applyEdits, loadEdits } from '../reports/documents/edits'
@@ -23,6 +23,9 @@ import { monthlyBlocksFor } from '../../components/blocks/monthly'
 import { isQuarterlyData } from '../reports/quarterly-build'
 import { renderQuarterlyEmail } from '../email/quarterly'
 import { isWeeklyReadData } from '../reports/weekly-read-build'
+import { monthsPhrase } from '../written/month'
+import { isLongRunData, loadWeekRead } from '../written/store'
+import type { LongRunReadData } from '../written/types'
 import { renderWeeklyReadEmail } from '../email/weekly-read'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
@@ -65,6 +68,37 @@ export interface DeliverResult {
 }
 
 const EMAIL_FAILED = 'email not sent, provider not configured or the send failed'
+
+/** The month's long-run read as the operator's review email shows it (fresh
+ *  review B1): its title, lead and every idea's headline and sentences, as
+ *  Your market prints them. Null where it prints nothing. Pure. */
+export function alsoPublishedOf(read: LongRunReadData): AlsoPublished | null {
+  const ideas = read.ideas
+    .filter((idea) => (idea.headline ?? '').trim())
+    .map((idea) => ({ headline: idea.headline.trim(), body: (idea.body ?? []).map((p) => p.trim()).filter(Boolean) }))
+  if (ideas.length === 0) return null
+  return { title: `What holds across ${monthsPhrase(read.months)}`, inShort: (read.inShort ?? '').trim(), ideas }
+}
+
+/**
+ * WHAT THE SEND ALSO PUBLISHES (fresh review B1, lead's ruling, 1 Oct
+ * evening). The run that closes a month writes the month's long-run read
+ * beside its week read, and Your market prints it once THIS run's weekly read
+ * is sent (`loadPublishedLongRun`). So the operator's review email for that
+ * run carries it, for Heinrich to read before he presses Send. Null where the
+ * run wrote none that prints (every other week); `unread` where it could not
+ * be read, so the email says so rather than leave it out.
+ */
+async function loadAlsoPublished(admin: SupabaseClient, clientId: string, runId: string): Promise<AlsoPublished | null> {
+  try {
+    const row = await loadWeekRead(admin, { clientId, runId, kind: 'month' })
+    if (!row || row.status !== 'ready' || !isLongRunData(row.data)) return null
+    return alsoPublishedOf(row.data)
+  } catch (e) {
+    console.error(`[deliver] the long-run read of run ${runId} could not be read into the review email: ${e instanceof Error ? e.message : String(e)}`)
+    return { unread: true }
+  }
+}
 
 /**
  * The build stands, and a person is asked to look at it: the send row becomes
@@ -119,6 +153,11 @@ export async function readyForReview(
   // WHERE THE STUDIO LISTS IT. A report by its id; an artefact schedule (no
   // `reports` row) under `schedule:<id>`, which is where its Send button is.
   const item = reportId ?? (schedule && sendsArtefact(schedule) ? `schedule:${schedule.id}` : null)
+  // The OPERATOR's email for a weekly read: the long-run read its Send also
+  // publishes, where this run wrote one. The client's email is unchanged.
+  const alsoPublished = reviewers.audience === 'operator' && isWeeklyReadData(data)
+    ? await loadAlsoPublished(admin, row.client_id, data.runId)
+    : null
   const { sent } = await sendReviewEmail({
     to: reviewers.to,
     companyName: (client?.company_name as string | undefined) ?? '',
@@ -128,6 +167,7 @@ export async function readyForReview(
     forOperator: reviewers.audience === 'operator',
     editable: reportId != null,
     recipients: schedule?.recipients.length,
+    alsoPublished,
   })
   // The build stands either way; the copy must not claim an email that the
   // provider refused or that no provider was configured to send.

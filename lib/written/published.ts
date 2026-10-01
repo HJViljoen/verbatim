@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { UUID_IN_CHUNK } from '../chunk'
 import { sendsWeeklyRead } from '../schedules/artefact'
-import { isMissingWeekReads, WEEK_READS_TABLE } from './store'
+import { isLongRunData, isMissingWeekReads, WEEK_READS_TABLE, type StoredLongRun } from './store'
 import type { WeekReadData } from './types'
 
 /**
@@ -29,6 +29,14 @@ import type { WeekReadData } from './types'
  *
  * Service role, scoped by the caller to the SESSION's client (`week_reads` has
  * no tenant policy, review L2).
+ *
+ * THE LONG-RUN READ PASSES THE SAME GATE (fresh review B1, lead's ruling, 1 Oct
+ * evening). Your market's "What holds across {months}" is a `kind = 'month'`
+ * row written by the run that closes a month, beside that run's week read.
+ * Under the gate it shows only once the weekly_read send of the SAME run went
+ * out: Heinrich read it in that run's review email (`readyForReview`,
+ * lib/schedules/deliver.ts) before he pressed Send. Ungated, the newest ready
+ * one. `loadPublishedLongRun`, through the one `loadPublishGate` below.
  */
 
 export interface PublishedWeekRead {
@@ -123,6 +131,19 @@ async function loadSentRuns(admin: SupabaseClient, clientId: string, scheduleIds
   return new Set(((res.data ?? []) as { run_id: string | null }[]).map((r) => String(r.run_id)).filter(Boolean))
 }
 
+/** The gate a page's stored read passes: the tenant's rule and, under a gated
+ *  rule, the runs whose send went out. Null where nothing may be published:
+ *  the schedules or the sends could not be read (fails closed), or, gated,
+ *  nothing has gone out yet. The week read and the long-run read both ask it. */
+async function loadPublishGate(admin: SupabaseClient, clientId: string): Promise<{ rule: PublishRule; sent: ReadonlySet<string> } | null> {
+  const rule = await loadPublishRule(admin, clientId)
+  if (!rule) return null
+  if (!rule.gated) return { rule, sent: new Set() }
+  const runs = await loadSentRuns(admin, clientId, rule.scheduleIds)
+  if (!runs || runs.size === 0) return null
+  return { rule, sent: runs }
+}
+
 /**
  * The published week read of this tenant, or null (none yet, none sent under
  * review, the table not in this database, or a read that failed closed).
@@ -133,14 +154,9 @@ export async function loadPublishedWeekRead(
   clientId: string,
   opts: { month?: string } = {},
 ): Promise<PublishedWeekRead | null> {
-  const rule = await loadPublishRule(admin, clientId)
-  if (!rule) return null
-  let sent: ReadonlySet<string> = new Set()
-  if (rule.gated) {
-    const runs = await loadSentRuns(admin, clientId, rule.scheduleIds)
-    if (!runs || runs.size === 0) return null
-    sent = runs
-  }
+  const gate = await loadPublishGate(admin, clientId)
+  if (!gate) return null
+  const { rule, sent } = gate
 
   let q = admin.from(WEEK_READS_TABLE)
     .select('run_id, month, window_end, status, data')
@@ -162,4 +178,34 @@ export async function loadPublishedWeekRead(
     windowEnd: row.window_end,
     data: row.data as WeekReadData,
   }
+}
+
+/**
+ * The published long-run read of this tenant (Your market's "What holds
+ * across {months}"), or null: none written yet, none whose run's send went
+ * out under review, the table not in this database, or a read that failed
+ * closed. The newest month first (its window ends latest); a row that is not
+ * a long-run read is passed over.
+ */
+export async function loadPublishedLongRun(admin: SupabaseClient, clientId: string): Promise<StoredLongRun | null> {
+  const gate = await loadPublishGate(admin, clientId)
+  if (!gate) return null
+  const { rule, sent } = gate
+
+  let q = admin.from(WEEK_READS_TABLE)
+    .select('run_id, month, window_end, status, data, created_at')
+    .eq('client_id', clientId).eq('kind', 'month').eq('status', 'ready')
+    .not('data', 'is', null)
+  if (rule.gated) q = q.in('run_id', [...sent])
+  // One row a month: a chunk is every month there is, so a row that is not a
+  // long-run read is passed over for the one before it, gated or not.
+  const res = await q.order('month', { ascending: false }).order('created_at', { ascending: false }).limit(UUID_IN_CHUNK)
+  if (res.error) {
+    if (isMissingWeekReads(res.error)) return null
+    throw new Error(`week_reads published long run: ${res.error.message}`)
+  }
+  const rows = ((res.data ?? []) as (PublishCandidate & { month: string; created_at: string })[]).filter((r) => isLongRunData(r.data))
+  const row = pickPublished(rows, rule, sent)
+  if (!row || !isLongRunData(row.data)) return null
+  return { month: String(row.month).slice(0, 10), data: row.data, created_at: row.created_at }
 }

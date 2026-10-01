@@ -10,8 +10,7 @@ import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingVi
 import { MONTH_PARAM } from '../reading/reading-month'
 import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../rivals'
 import { loadStanding } from '../written/standing'
-import { loadPublishedWeekRead } from '../written/published'
-import { loadLatestLongRun } from '../written/store'
+import { loadPublishedLongRun, loadPublishedWeekRead } from '../written/published'
 import type { LongRunReadData, StandingFact, WhoPart } from '../written/types'
 import { loadCommentNamings, trackedBrands, whoSplit, type WhoVideo } from '../brands/attribution'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -23,9 +22,10 @@ import { fetchThemedRunId } from './themed-run'
 
 // Your market as "the bigger picture" (pages build, 1 Oct; the design
 // `Page-Your-market.dc.html`). Four blocks, in order:
-//  (a) "What holds across {months}": the newest READY long-run read
-//      (`week_reads` kind 'month', lib/written/longrun.ts), as stored. None
-//      written: the block is omitted;
+//  (a) "What holds across {months}": the PUBLISHED long-run read
+//      (`week_reads` kind 'month', lib/written/longrun.ts, through
+//      `loadPublishedLongRun`: under review, only once its run's weekly read
+//      was sent), as stored. None published: the block is omitted;
 //  (b) "Where your market stands": EVERY tracked subject in one list
 //      (`loadStanding`, the written read's own standing facts: its levels are
 //      the Subjects page's). A ready subject prints its share, the latest
@@ -397,7 +397,7 @@ export async function loadMarketPicture(input: {
     loadTrackedRivals(supabase, clientId),
     loadReadingSchedule(admin, clientId),
     loadMonthSeries(admin, clientId, { from: '2019-01-01', to: nowIso, updatesByMonth: {}, firstRunMonth: null }),
-    soft('longRun', loadLatestLongRun(admin, clientId), null),
+    soft('longRun', loadPublishedLongRun(admin, clientId), null),
   ])
   if (runs.length === 0) return null
   const brand = ((clientRes.data as { company_name: string | null } | null)?.company_name ?? '').trim() || 'Your brand'

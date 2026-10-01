@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { fakeDb } from '../test/fake-db'
 import { sealandRead } from '../test/weekly-read-fixture'
-import { loadPublishedWeekRead, pickPublished, publishRule, type PublishSchedule } from './published'
+import { loadPublishedLongRun, loadPublishedWeekRead, pickPublished, publishRule, type PublishSchedule } from './published'
 
 // The one "published read" selector (integration, lead's ruling 3): under an
 // active weekly-read schedule with review ON, a page prints the newest read
@@ -145,6 +145,84 @@ describe('loadPublishedWeekRead', () => {
   })
 })
 
+describe('loadPublishedLongRun: Your market\'s long-run read passes the same gate (fresh review B1)', () => {
+  // The run that closes a month writes its week read AND the month's long-run
+  // read; under review the long-run read shows only once THAT run's weekly
+  // read was sent, which is when Heinrich has read both.
+  const longRun = (run: string, month: string, over: Record<string, unknown> = {}) => ({
+    client_id: CLIENT, run_id: run, kind: 'month', status: 'ready', month,
+    window_end: month === '2026-08-01' ? '2026-09-01T00:00:00Z' : '2026-10-01T00:00:00Z',
+    created_at: `${month.slice(0, 7)}-28T05:00:00Z`,
+    data: {
+      version: 1, kind: 'longrun', promptVersion: 'longrun_read_v1', month, months: ['2026-08-01', month],
+      window: { from: '2026-08-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' },
+      inShort: `What holds to ${month}.`, ideas: [], held: [], model: 'm', costUsd: 0,
+    },
+    ...over,
+  })
+  const LONG = [longRun('r1', '2026-08-01'), longRun('r3', '2026-09-01')]
+  const inShort = (r: Awaited<ReturnType<typeof loadPublishedLongRun>>) => r?.data.inShort ?? null
+
+  it('ungated (no schedule, or review off): the newest ready long-run read', async () => {
+    const none = fakeDb({ week_reads: [...READS, ...LONG].map((r) => ({ ...r })) })
+    expect(await loadPublishedLongRun(none.client as SupabaseClient, CLIENT)).toMatchObject({ month: '2026-09-01' })
+    const off = fakeDb({ report_schedules: [schedule({ review: false })], report_sends: [], week_reads: LONG.map((r) => ({ ...r })) })
+    expect(inShort(await loadPublishedLongRun(off.client as SupabaseClient, CLIENT))).toBe('What holds to 2026-09-01.')
+  })
+
+  it('review on: only a long-run read whose OWN run was sent; a later run sent does not publish it', async () => {
+    const world = (sends: ReturnType<typeof send>[]) =>
+      fakeDb({ report_schedules: [schedule()], report_sends: sends, week_reads: [...READS, ...LONG].map((r) => ({ ...r })) })
+    // r3 wrote September's; its send is held. r2's going out says nothing about r3's.
+    const held = world([send('r1', 'sent'), send('r2', 'sent'), send('r3', 'ready')])
+    expect(inShort(await loadPublishedLongRun(held.client as SupabaseClient, CLIENT))).toBe('What holds to 2026-08-01.')
+    // Heinrich presses Send on r3: September's goes up with it.
+    const sent = world([send('r1', 'sent'), send('r2', 'sent'), send('r3', 'sent')])
+    expect(await loadPublishedLongRun(sent.client as SupabaseClient, CLIENT)).toMatchObject({ month: '2026-09-01', created_at: '2026-09-28T05:00:00Z' })
+    // Nothing of r1 or r3 sent: nothing.
+    expect(await loadPublishedLongRun(world([send('r2', 'sent'), send('r3', 'failed')]).client as SupabaseClient, CLIENT)).toBeNull()
+    expect(await loadPublishedLongRun(world([]).client as SupabaseClient, CLIENT)).toBeNull()
+  })
+
+  it('never a week read, a row that is not a long-run read, another tenant\'s, or one not ready', async () => {
+    const db = fakeDb({
+      week_reads: [
+        ...READS.map((r) => ({ ...r })),
+        longRun('r1', '2026-08-01'),
+        longRun('r3', '2026-09-01', { data: { kind: 'something-else' } }),
+        longRun('r4', '2026-09-01', { status: 'thin' }),
+        longRun('x', '2026-09-01', { client_id: OSSUR_CLIENT_ID }),
+      ],
+    })
+    // The newest ready 'month' row is not a long-run read: passed over for
+    // the month before it.
+    expect(inShort(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT))).toBe('What holds to 2026-08-01.')
+    const gated = fakeDb({
+      report_schedules: [schedule()],
+      report_sends: [send('r1', 'sent'), send('r3', 'sent'), send('r4', 'sent')],
+      week_reads: [longRun('r1', '2026-08-01'), longRun('r3', '2026-09-01', { data: { kind: 'something-else' } }), longRun('r4', '2026-09-01', { status: 'thin' })],
+    })
+    expect(inShort(await loadPublishedLongRun(gated.client as SupabaseClient, CLIENT))).toBe('What holds to 2026-08-01.')
+  })
+
+  it('fails closed: schedules or sends it cannot read publish nothing; no table, nothing', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failing = (table: string) => {
+      const db = fakeDb({ report_schedules: [schedule()], report_sends: [send('r3', 'sent')], week_reads: LONG.map((r) => ({ ...r })) })
+      const broken = {
+        select: () => broken, eq: () => broken, in: () => broken, not: () => broken, order: () => broken, limit: () => broken,
+        then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok),
+      }
+      return { from: (t: string) => (t === table ? broken : (db.client as SupabaseClient).from(t)) } as unknown as SupabaseClient
+    }
+    expect(await loadPublishedLongRun(failing('report_schedules'), CLIENT)).toBeNull()
+    expect(await loadPublishedLongRun(failing('report_sends'), CLIENT)).toBeNull()
+    expect(err).toHaveBeenCalledTimes(2)
+    err.mockRestore()
+    expect(await loadPublishedLongRun(fakeDb({ report_schedules: [] }).client as SupabaseClient, CLIENT)).toBeNull()
+  })
+})
+
 describe('every page that prints a week read asks the selector', () => {
   // This week, the Dashboard's numbers and tiles, the Subjects pane, and Your
   // market's subject sentences. A page reading `week_reads` itself would
@@ -158,4 +236,10 @@ describe('every page that prints a week read asks the selector', () => {
       expect(text).not.toMatch(/from\('week_reads'\)/)
     })
   }
+
+  it('Your market reads its long-run read through the gate too', () => {
+    const text = src('lib/pages/overview-picture.ts')
+    expect(text).toMatch(/loadPublishedLongRun\(/)
+    expect(text).not.toMatch(/loadLatestLongRun/)
+  })
 })

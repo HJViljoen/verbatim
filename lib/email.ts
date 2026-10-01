@@ -147,6 +147,37 @@ export interface ReviewEmail {
   /** Whether there is anything to edit before sending: a report the Studio
    *  edits, yes; an artefact Verbatim writes whole (the weekly read), no. */
   editable?: boolean
+  /** What else the Send publishes, for the operator to read first: the
+   *  month's long-run read, which Your market prints once this run's weekly
+   *  read is sent (fresh review B1). Absent on every other review. */
+  alsoPublished?: AlsoPublished | null
+}
+
+/**
+ * The month's long-run read as the operator's review email carries it: its
+ * title ("What holds across August and September"), its lead and each idea's
+ * headline and sentences, the writer's words as stored (scrubbed when they
+ * were written; no comment's words, no figure). `unread` where the run's
+ * long-run read could not be read into the email: the email then says so
+ * rather than leave it out, because the Send publishes it either way.
+ */
+export type AlsoPublished =
+  | { title: string; inShort: string; ideas: { headline: string; body: string[] }[] }
+  | { unread: true }
+
+/** The section's heading where the long-run read could not be read. */
+export const ALSO_PUBLISHED_UNREAD =
+  'Also published when you send: the long-run read on Your market, if this update wrote one. It could not be read into this email, so check it before you send.'
+
+/** The review email's "Also published when you send" section, as plain
+ *  paragraphs in order (pure, for the test and the text body). */
+export function alsoPublishedLines(also: AlsoPublished): { heading: string; lead: string | null; ideas: { headline: string; body: string[] }[] } {
+  if ('unread' in also) return { heading: ALSO_PUBLISHED_UNREAD, lead: null, ideas: [] }
+  return {
+    heading: `Also published when you send: ${also.title}`,
+    lead: also.inShort.trim() || null,
+    ideas: also.ideas.map((idea, i) => ({ headline: `${i + 1}. ${idea.headline}`, body: idea.body })),
+  }
 }
 
 /** The lines of the review email's body, in order (pure, for the test). */
@@ -167,14 +198,16 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
 // A report built on a review schedule is waiting for a person. Thin by design:
 // nothing from the report's content is in the email — the review IS the read,
 // and the body stays free of anything an erasure would have to chase. Same
-// optional posture as the rest of this module.
-export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: boolean }> {
-  if (!resend || !from || review.to.length === 0) {
-    console.log(`[email:stub] review "${review.reportTitle}" ready -> ${review.to.join(', ') || '(no members)'}: ${review.studioUrl}`)
-    return { sent: false }
-  }
+// optional posture as the rest of this module. ONE exception (fresh review
+// B1): the operator's email for a run that also wrote the month's long-run
+// read carries that read's own words, because the Send publishes it on Your
+// market and the Studio does not show it. They are the writer's sentences,
+// never a comment's, so there is still nothing for an erasure to chase.
+/** The review email's subject, text and HTML (pure, for the test). */
+export function reviewEmailBody(review: ReviewEmail): { subject: string; text: string; html: string } {
   const subject = review.companyName ? `${review.companyName}: ${review.reportTitle} is ready for review` : `${review.reportTitle} is ready for review`
   const lines = reviewEmailLines(review)
+  const also = review.alsoPublished ? alsoPublishedLines(review.alsoPublished) : null
   const text = [
     lines.lead,
     ``,
@@ -182,7 +215,28 @@ export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: bool
     review.studioUrl,
     ``,
     lines.after,
+    ...(also
+      ? [
+        ``,
+        also.heading,
+        ...(also.lead ? [``, also.lead] : []),
+        ...also.ideas.flatMap((idea) => [``, idea.headline, ...idea.body]),
+      ]
+      : []),
   ].join('\n')
+  // Below the button, after a hairline: the long-run read the Send publishes
+  // too, for the operator to read before pressing it.
+  const alsoHtml = also
+    ? `
+          <tr><td style="padding-top:24px">
+            <div style="border-top:1px solid ${EMAIL.hairline};padding-top:24px">
+              <p style="margin:0 0 12px;font-size:15px;font-weight:600;line-height:1.45">${escapeHtml(also.heading)}</p>${also.lead ? `
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.55">${escapeHtml(also.lead)}</p>` : ''}${also.ideas.map((idea) => `
+              <p style="margin:16px 0 6px;font-size:14px;font-weight:600;line-height:1.45">${escapeHtml(idea.headline)}</p>${idea.body.map((p) => `
+              <p style="margin:0 0 8px;font-size:14px;line-height:1.55;color:${EMAIL.ink2}">${escapeHtml(p)}</p>`).join('')}`).join('')}
+            </div>
+          </td></tr>`
+    : ''
   const html = `<!doctype html>
 <html>
   <body style="margin:0;background:${EMAIL.canvas};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${EMAIL.ink}">
@@ -200,12 +254,21 @@ export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: bool
                style="display:inline-block;background:${EMAIL.button};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">
               Open in the Studio
             </a>
-          </td></tr>
+          </td></tr>${alsoHtml}
         </table>
       </td></tr>
     </table>
   </body>
 </html>`
+  return { subject, text, html }
+}
+
+export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: boolean }> {
+  if (!resend || !from || review.to.length === 0) {
+    console.log(`[email:stub] review "${review.reportTitle}" ready -> ${review.to.join(', ') || '(no members)'}: ${review.studioUrl}`)
+    return { sent: false }
+  }
+  const { subject, text, html } = reviewEmailBody(review)
   try {
     const { error } = await resend.emails.send({ from, to: review.to, subject, text, html })
     if (error) {

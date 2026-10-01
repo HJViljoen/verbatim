@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderInviteEmail, reviewEmailLines } from './email'
+import { ALSO_PUBLISHED_UNREAD, renderInviteEmail, reviewEmailBody, reviewEmailLines } from './email'
 
 // The invite email's copy and addressing. Pure: `renderInviteEmail` reads only
 // its argument plus the module-level EMAIL_FROM, and no Resend client is
@@ -140,5 +140,44 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
     expect(l.steps).toBe('Read it, edit it if anything needs a change, then send it.')
     expect(l.after).toBe('Nothing goes to the recipients until someone presses Send.')
     expect(reviewEmailLines({ ...base, recipients: 1 }).after).toBe('Nothing goes to the 1 recipient until someone presses Send.')
+  })
+
+  // Fresh review B1: the operator's email for the run that closes a month
+  // carries the long-run read the Send also publishes on Your market.
+  const also = {
+    title: 'What holds across August and September',
+    inShort: 'Buyers ask harder questions before they commit.',
+    ideas: [
+      { headline: 'Interest stalls when the way to buy isn’t clear', body: ['People stop on basic buying questions.', 'Price & size come <with> it.'] },
+      { headline: 'Rivals are known for concrete jobs', body: ['Cotopaxi is talked about as a travel tool.'] },
+    ],
+  }
+
+  it('adds "Also published when you send" with the read\'s title, lead, headlines and sentences, after the button', () => {
+    const body = reviewEmailBody({ ...base, forOperator: true, editable: false, alsoPublished: also })
+    expect(body.text).toContain([
+      'Also published when you send: What holds across August and September',
+      '',
+      'Buyers ask harder questions before they commit.',
+      '',
+      '1. Interest stalls when the way to buy isn’t clear',
+      'People stop on basic buying questions.',
+      'Price & size come <with> it.',
+      '',
+      '2. Rivals are known for concrete jobs',
+      'Cotopaxi is talked about as a travel tool.',
+    ].join('\n'))
+    expect(body.html.indexOf('Also published when you send: What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
+    expect(body.html).toContain('2. Rivals are known for concrete jobs')
+    expect(body.html).toContain('Price &amp; size come &lt;with&gt; it.')
+    expect(body.text + body.html).not.toMatch(/[—–]/)
+  })
+
+  it('says so where the read could not be read, and adds nothing on any other review', () => {
+    expect(reviewEmailBody({ ...base, forOperator: true, alsoPublished: { unread: true } }).text).toContain(ALSO_PUBLISHED_UNREAD)
+    const plain = reviewEmailBody({ ...base, forOperator: true })
+    expect(plain.text).not.toContain('Also published')
+    expect(plain.html).not.toContain('Also published')
+    expect(plain.subject).toBe('Sealand: This week in your market is ready for review')
   })
 })
