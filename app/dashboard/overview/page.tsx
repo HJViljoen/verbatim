@@ -2,31 +2,26 @@
 // front page, in the `(front)` route group so its loader wrapped it alone
 // (sw-2 item 8); the Dashboard took `/dashboard`, and this folder is its own
 // segment now, so the loader beside it still wraps this page and no other.
+//
+// "THE BIGGER PICTURE" (pages build, MARKET, to Page-Your-market.dc.html):
+// what holds across the record (the newest long-run read), where your market
+// stands, the biggest conversations, and what people do in the comments
+// (lib/pages/overview-picture.ts, components/pages/overview/picture).
+//
+// THE LEGACY OVERVIEW IS STILL REGISTERED, AND IS NO LONGER ON A ROUTE.
+// `OverviewPage` / `loadOverview` stay for the monthly, the export module and
+// stored snapshots (`components/pages/overview`), as the legacy dashboard did
+// before it: they keep rendering inside the artefacts that already name them.
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
-import { loadOverview } from '@/lib/pages/overview'
-import { OverviewPage } from '@/components/pages/overview'
-import { marketFrame } from '@/lib/pages/market-frame'
+import { loadMarketPicture } from '@/lib/pages/overview-picture'
+import { MarketPicturePage } from '@/components/pages/overview/picture'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('overview').label }
-
-// Overview — "what is this month's reading?" (Phase 1 WP11). The front page is
-// now the comment-dated monthly reading: lib/pages/overview.ts loads it and
-// components/pages/overview draws it as seven blocks, in the monthly report's
-// own order.
-//
-// THE LEGACY DASHBOARD IS STILL REGISTERED, AND IS NO LONGER ON A ROUTE.
-// `components/pages/dashboard` stays in the renderable registry (WP9) because
-// one sent snapshot, one live share link and two active weekly schedules are
-// keyed on `dashboard.*` tiles and would render a section short without it. It
-// is simply not what `/dashboard` draws any more — which is also how
-// `dashboard.share`'s Ring and the movement tile leave the live product: they
-// keep rendering inside the artefacts that already name them, and no reader
-// meets them on a page again.
 
 export default async function Page({
   searchParams,
@@ -35,10 +30,6 @@ export default async function Page({
 }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  // YOUR MARKET (market-first WP1.6): the one caller, with its export, that
-  // builds the page's market blocks and pays for their reads.
-  const data = await loadOverview({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { marketFront: true })
-  // WHAT "YOUR MARKET" IS (finish-list item 24): the page's own framing, set
-  // here and not in the loader, so the monthly prints as it did.
-  return <OverviewPage data={data ? { ...data, frame: marketFrame(clientId, data.brand) } : data} params={sp} />
+  const data = await loadMarketPicture({ supabase, clientId, reading: readingHandle(clientId), params: sp })
+  return <MarketPicturePage data={data} />
 }

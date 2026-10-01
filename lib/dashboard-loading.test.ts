@@ -115,9 +115,13 @@ describe('dashboard loading skeletons', () => {
     if (!LEGACY.has(folder)) expect(html).toMatch(/role="status"/)
   })
 
-  it('Your market\'s skeleton is the current Overview, not the pre-redesign dashboard', () => {
+  it('Your market\'s skeleton is the bigger picture\'s, not the pre-redesign dashboard', () => {
     const src = readFileSync(join(ROOT, 'overview', 'loading.tsx'), 'utf8')
-    expect(src).toMatch(/nav="overview"/)
+    expect(src).toMatch(/<MarketPictureSkeleton \/>/)
     expect(src).not.toMatch(/SkeletonStrip|title="Dashboard"/)
+  })
+
+  it('the Dashboard\'s skeleton is HOME\'s', () => {
+    expect(readFileSync(join(ROOT, '(home)', 'loading.tsx'), 'utf8')).toMatch(/<HomeSkeleton \/>/)
   })
 })

@@ -7,13 +7,15 @@
 // loader at app/dashboard/loading.tsx would wrap every dashboard address, the
 // catch-all's 404 included, and stream it as a 200.
 //
-// HOME (`components/pages/home`, `lib/pages/home.ts`) builds the page. Until it
-// merges this renders the title alone and imports nothing of HOME's; the lead
-// swaps the body for `<HomePage … />`.
+// HOME builds the page (`components/pages/home`, `lib/pages/home.ts`): one
+// wave of light reads, and the published weekly read (lib/written/published.ts)
+// behind its numbers and tiles.
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { HomePage } from '@/components/pages/home'
+import { getSessionContext } from '@/lib/auth'
 import { frontRedirect, surface, type SearchProps } from '@/lib/nav'
+import { loadHome } from '@/lib/pages/home'
 
 // The tab's title is the page's own name (the root layout's template adds
 // ' · Verbatim').
@@ -24,9 +26,6 @@ export default async function Page({ searchParams }: SearchProps) {
   // email linked it until 1 Oct): it lands there, query and all.
   const away = frontRedirect((await searchParams) ?? {})
   if (away) redirect(away)
-  return (
-    <PageFrame>
-      <PageBar title={surface('home').label} />
-    </PageFrame>
-  )
+  const { supabase, clientId } = await getSessionContext()
+  return <HomePage data={await loadHome({ supabase, clientId })} />
 }
