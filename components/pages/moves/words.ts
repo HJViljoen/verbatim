@@ -1,5 +1,5 @@
 import { longMonth } from '@/lib/format'
-import { sortParts, type MarketLabels } from '@/lib/brands/attribution'
+import { sortParts, type MarketLabels } from '@/lib/brands/labels'
 import type { About, StatementReading } from '@/lib/statements/types'
 
 // Your moves (pages build, package MOVES): the page's words and the pure

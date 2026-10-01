@@ -6,6 +6,7 @@ import { WHAT_THEY_SELL } from '../pages/market-frame'
 import { audienceOf, CLIENT_AUDIENCE, rivalNameOf } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { BRAND_RULE_VERSION } from './aliases'
+import { aboutName, marketLabelsOf, sortParts, type About, type AboutPart, type MarketLabels } from './labels'
 import { brandCountState } from './precision'
 
 // Who an item of talk is about (the pages build, 1 Oct; brief client rule 6):
@@ -47,14 +48,6 @@ import { brandCountState } from './precision'
 // split by audience prints most first, so the market leads it (the caller
 // re-sorts, as the artboard draws "other bags 599 · Patagonia 11").
 
-/** Who an item is about: the client, one tracked rival by name, or the market. */
-export type About = 'client' | `rival:${string}` | 'market'
-
-/** One part of a split: who, and how many distinct videos. */
-export interface AboutPart {
-  about: About
-  videos: number
-}
 
 /** A brand_mentions comment row, as the split reads it. */
 export interface Naming {
@@ -93,6 +86,10 @@ export interface TalkScope {
   months?: ReadonlySet<string> | null
 }
 
+// The printed side (the type, the one order, the one wording) lives in
+// ./labels, which a client component may import; re-exported here.
+export { aboutName, marketLabelsOf, sortParts, type About, type AboutPart, type MarketLabels }
+
 const rival = (name: string): About => `rival:${name}`
 
 /** The market's own label, long ("Other bags in your market", a lone
@@ -104,26 +101,7 @@ export function marketLabels(clientId: string): MarketLabels {
   return marketLabelsOf(WHAT_THEY_SELL[clientId])
 }
 
-export interface MarketLabels {
-  long: string
-  short: string
-  inline: string
-}
 
-/** The same, from the noun itself (a caller that already holds it). */
-export function marketLabelsOf(noun: string | null | undefined): MarketLabels {
-  const n = (noun ?? '').trim()
-  return n
-    ? { long: `Other ${n} in your market`, short: `other ${n}`, inline: `other ${n} in your market` }
-    : { long: 'Others in your market', short: 'others', inline: 'others in your market' }
-}
-
-/** The printed name an `About` stands for (the market is the caller's). */
-export function aboutName(about: About, brands: Pick<TrackedBrands, 'client'>): string | null {
-  if (about === 'client') return brands.client
-  if (about === 'market') return null
-  return about.slice('rival:'.length)
-}
 
 /** The brand a naming names, as an `About`; null where it is not a tracked
  *  brand whose naming counts. */
@@ -215,14 +193,6 @@ export function attributeVideos(videoIds: Iterable<string>, inputs: AttributionI
   return sortParts([...counts.entries()].map(([about, videos]) => ({ about, videos })), inputs.brands)
 }
 
-/** The one order (the design's): the client first, then the rivals by
- *  videos (most first, then by name), the market last. */
-export function sortParts(parts: readonly AboutPart[], brands: Pick<TrackedBrands, 'client'>): AboutPart[] {
-  const rank = (p: AboutPart): number => (p.about === 'client' ? 0 : p.about === 'market' ? 2 : 1)
-  return [...parts]
-    .filter((p) => p.videos > 0)
-    .sort((a, b) => rank(a) - rank(b) || b.videos - a.videos || (aboutName(a.about, brands) ?? '').localeCompare(aboutName(b.about, brands) ?? ''))
-}
 
 /** The split of an audience reading (a kind's videos by audience): the
  *  audiences' own answer, no naming read. The client's own posts are never

@@ -1,4 +1,4 @@
-import type { MarketLabels } from '@/lib/brands/attribution'
+import type { MarketLabels } from '@/lib/brands/labels'
 import type { StatementReading, StatementsBlockData, StatementView } from '@/lib/statements/types'
 import { AddStatement } from './add-statement'
 import { Bar, Card, SectionHead } from './parts'

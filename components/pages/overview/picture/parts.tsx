@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { marketLabelsOf } from '@/lib/brands/attribution'
+import { marketLabelsOf } from '@/lib/brands/labels'
 import type { WhoAbout, WhoPart } from '@/lib/written/types'
 
 // The pieces Your market's blocks share, drawn to the approved artboard

@@ -67,8 +67,8 @@ export type Stance = (typeof STANCES)[number]
 
 /** Who a stretch of talk is about (the brief's rule 6): the client, a tracked
  *  rival, or the rest of the category. The one type (lib/brands/attribution.ts). */
-export type { About } from '../brands/attribution'
-import type { About, MarketLabels } from '../brands/attribution'
+export type { About } from '../brands/labels'
+import type { About, MarketLabels } from '../brands/labels'
 
 export interface StatementRow {
   id: string

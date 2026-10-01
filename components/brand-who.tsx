@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { aboutName, type AboutPart } from '@/lib/brands/attribution'
+import { aboutName, type AboutPart } from '@/lib/brands/labels'
 import { cn } from '@/lib/utils'
 
 /**
