@@ -1,7 +1,6 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
@@ -225,40 +224,42 @@ export function CompetitiveSurfacePage({
 
   const ctx = competitiveContext(params)
   if (data.brands) return <BrandsPage data={data} params={params} ctx={ctx} />
+  // NO EXPORT ON BRANDS (T0 ruling U12; BR-2): the page key `competitive`
+  // resolves to the parked Competitive Intelligence module
+  // (components/pages/registry.ts), so "Export" printed that page's
+  // update-to-update deltas, which no pair judge ever saw, under the Brands
+  // name. The control returns the day Brands has an export module of its own.
   return (
-    <ExportScope page="competitive" params={params} tiles={tilesFor(data).map(({ block: b }) => ({ key: b.key, title: b.title }))}>
-      <PageFrame>
-        <SurfacePageBar
-          nav="competitive"
-          params={params}
-          context={barContext(data)}
-        >
-          <ExportMenu />
-          <HowToRead items={LEGEND} basePath="/dashboard/competitive" anchor="competitive" />
-        </SurfacePageBar>
-        {/* CO1, inline: the artboard's RIVAL pill row, under the band and
-            outside any card. */}
-        {competitiveRivals.render(data, 'app', ctx)}
-        <PageGrid className={GRID_ROWS}>
-          {tilesFor(data).map(({ block, col, row }) => (
-            // NO `distribute`: every tile has exactly ONE child, the block's
-            // own `<section>`; what puts a footer on the floor is the block
-            // filling the tile (`h-full` on its own `BlockFrame`).
-            <Tile key={block.key} col={col} row={row} exportKey={block.key} className={STACKED}>
-              {block.render(data, 'app', ctx)}
-            </Tile>
-          ))}
-        </PageGrid>
-        {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings
-            put no explanatory footnote under a block). The record is
-            Settings'; the "How sound is this" pill that once opened it left
-            every page with the 25 Sep rulings. The privacy line is legal, not
-            method, and stays. */}
-        {data.method ? (
-          <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{data.method.privacy}</p>
-        ) : null}
-      </PageFrame>
-    </ExportScope>
+    <PageFrame>
+      <SurfacePageBar
+        nav="competitive"
+        params={params}
+        context={barContext(data)}
+      >
+        <HowToRead items={LEGEND} basePath="/dashboard/competitive" anchor="competitive" />
+      </SurfacePageBar>
+      {/* CO1, inline: the artboard's RIVAL pill row, under the band and
+          outside any card. */}
+      {competitiveRivals.render(data, 'app', ctx)}
+      <PageGrid className={GRID_ROWS}>
+        {tilesFor(data).map(({ block, col, row }) => (
+          // NO `distribute`: every tile has exactly ONE child, the block's
+          // own `<section>`; what puts a footer on the floor is the block
+          // filling the tile (`h-full` on its own `BlockFrame`).
+          <Tile key={block.key} col={col} row={row} className={STACKED}>
+            {block.render(data, 'app', ctx)}
+          </Tile>
+        ))}
+      </PageGrid>
+      {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings
+          put no explanatory footnote under a block). The record is
+          Settings'; the "How sound is this" pill that once opened it left
+          every page with the 25 Sep rulings. The privacy line is legal, not
+          method, and stays. */}
+      {data.method ? (
+        <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{data.method.privacy}</p>
+      ) : null}
+    </PageFrame>
   )
 }
 
@@ -273,31 +274,27 @@ export function CompetitiveSurfacePage({
 function BrandsPage({ data, params, ctx }: { data: CompetitiveSurfaceData; params: Record<string, string | undefined>; ctx: BlockContext }) {
   const lines = BRANDS_LINES.map((line) => line.filter(({ block }) => brandsDrawn(block, data))).filter((line) => line.length > 0)
   return (
-    <ExportScope page="competitive" params={params} tiles={lines.flat().map(({ block: b }) => ({ key: b.key, title: b.title }))}>
-      <PageFrame className="gap-6">
-        <SurfacePageBar nav="competitive" params={params} context={barContext(data)}>
-          <ExportMenu variant="button" />
-        </SurfacePageBar>
-        <PageGrid className="gap-6 xl:auto-rows-auto">
-          {lines.flat().map(({ block, col }) => (
-            <Tile
-              key={block.key}
-              col={col}
-              row={1}
-              flush
-              exportKey={block.key}
-              className="min-h-0"
-              bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
-              distribute="between"
-            >
-              {block.render(data, 'app', ctx)}
-            </Tile>
-          ))}
-        </PageGrid>
-        {data.method ? (
-          <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{data.method.privacy}</p>
-        ) : null}
-      </PageFrame>
-    </ExportScope>
+    <PageFrame className="gap-6">
+      {/* No Export here either (T0 ruling U12; BR-2): see `CompetitiveSurfacePage`. */}
+      <SurfacePageBar nav="competitive" params={params} context={barContext(data)} />
+      <PageGrid className="gap-6 xl:auto-rows-auto">
+        {lines.flat().map(({ block, col }) => (
+          <Tile
+            key={block.key}
+            col={col}
+            row={1}
+            flush
+            className="min-h-0"
+            bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
+            distribute="between"
+          >
+            {block.render(data, 'app', ctx)}
+          </Tile>
+        ))}
+      </PageGrid>
+      {data.method ? (
+        <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{data.method.privacy}</p>
+      ) : null}
+    </PageFrame>
   )
 }

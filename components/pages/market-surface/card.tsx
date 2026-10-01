@@ -2,14 +2,13 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BrandClaim } from '@/components/blocks/brand-claim'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { MovementBadge } from '@/components/delta-badge'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { CardCount, MoveCandidate } from '@/lib/reading/moves'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 // The claim row's cut and its no-wording sentence are Overview's, imported
 // rather than re-declared: the card is ONE `MoveCandidate` composed in
@@ -105,7 +104,10 @@ function Movement({ verdict, mode, shared = null }: { verdict: Verdict; mode: Re
   // arm, and the email arm (no flex, Outlook lays out with Word) keeps them on
   // one line where they cannot break apart anyway.
   const now = fmtInt(v.value.k)
-  const then = v.baseline ? fmtInt(v.baseline.k) : null
+  // THE MONTH BEFORE ONLY BESIDE A COMPARISON THAT WAS DRAWN (T0a, YM-19; the
+  // one condition): a refused movement, even stored with its baseline, prints
+  // its own month alone, with no "against", no badge and no chip.
+  const then = v.baseline && priorPrintable(v) ? fmtInt(v.baseline.k) : null
   if (mode === 'email') {
     return (
       <div data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, padding: '2px 0' }}>
@@ -124,7 +126,7 @@ function Movement({ verdict, mode, shared = null }: { verdict: Verdict; mode: Re
     <span data-copy="verdict" className="flex min-w-0 flex-col gap-1">
       <span className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-[12px] text-secondary-foreground">{v.objectLabel} in {where}</span>
-        <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null} />
+        <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={then != null} />
       </span>
       <span className="flex flex-wrap items-end gap-x-3 gap-y-1">
         <FigureCell value={now} of={<>of {fmtInt(v.value.n)} videos</>} />
@@ -342,7 +344,6 @@ export const marketCard: Block<MarketSurfaceData> = {
           {movements.length > 0 ? (
             <div className={email ? undefined : 'flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2'}>
               {movements.map((v) => <Movement key={`${v.objectKind}:${v.objectId}:${v.audience}`} verdict={v} mode={mode} shared={shared} />)}
-              <PairChip note={shared} mode={mode} />
             </div>
           ) : null}
           {!card.proposal && card.unread ? <BlockEmpty mode={mode}>{card.unread}</BlockEmpty> : null}

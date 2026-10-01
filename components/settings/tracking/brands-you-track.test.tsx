@@ -20,10 +20,10 @@ import { BrandsYouTrackCard, type BrandRow } from './brands-you-track'
 
 const NOT_YET = { note: 'not counted yet' }
 const ROWS: BrandRow[] = [
-  { name: 'Patagonia', searchedAs: ['patagonia black hole'], since: '17 Sep', filed: 5, came: { kOrganic: 13, kAny: 45 }, ownPosts: 19 },
-  { name: 'Cotopaxi', searchedAs: ['cotopaxi backpack'], since: 'by 28 Jun', filed: 12, came: { kOrganic: 3, kAny: 28 }, ownPosts: 21 },
+  { name: 'Patagonia', searchedAs: ['patagonia black hole'], since: '17 Sep', filed: 5, came: { kOrganic: 13 }, ownPosts: 19 },
+  { name: 'Cotopaxi', searchedAs: ['cotopaxi backpack'], since: 'by 28 Jun', filed: 12, came: { kOrganic: 3 }, ownPosts: 21 },
   { name: 'Freitag', searchedAs: ['freitag bag', 'frtg'], since: 'by 28 Jun', filed: 6, came: { note: 'mostly the German word for Friday · not counted' }, ownPosts: 14 },
-  { name: 'The North Face', searchedAs: ['north face backpack'], since: '17 Sep', filed: 6, came: { kOrganic: 6, kAny: 36 }, ownPosts: 23 },
+  { name: 'The North Face', searchedAs: ['north face backpack'], since: '17 Sep', filed: 6, came: { kOrganic: 6 }, ownPosts: 23 },
   { name: 'Freedom of Movement', searchedAs: ['fombrand'], since: '17 Sep', filed: 0, came: NOT_YET, ownPosts: 30 },
   { name: 'Old School', searchedAs: [], since: '17 Sep', filed: 0, came: NOT_YET, ownPosts: 8 },
   { name: 'Rareform', searchedAs: ['rareform bag'], since: '9 Sep', filed: 0, came: NOT_YET, ownPosts: 1 },
@@ -40,10 +40,13 @@ describe('Brands you track', () => {
     expect(read(renderText(card(ROWS.slice(0, 4))))).toContain('All four had videos filed under them in September: 29, all part of your market.')
   })
 
-  it('prints the preview\'s columns: searched as, tracked since, filed, came up in (two ways) and its own posts', () => {
-    expect(t).toContain('Brand Searched as Tracked since Filed under it Sep Came up in, Sep outside our brand searches in all Its own posts Sep')
-    expect(t).toContain('Patagonia patagonia black hole 17 Sep 5 13 45 19')
-    expect(t).toContain('Cotopaxi cotopaxi backpack by 28 Jun 12 3 28 21')
+  // T0 ruling U10: one count a brand, named unprompted; "in all" took in
+  // the videos our own brand searches fetched and is never printed.
+  it('prints the preview\'s columns: searched as, tracked since, filed, came up in (one count) and its own posts', () => {
+    expect(t).toContain('Brand Searched as Tracked since Filed under it Sep Came up in, Sep named unprompted Its own posts Sep')
+    expect(t).not.toContain('in all')
+    expect(t).toContain('Patagonia patagonia black hole 17 Sep 5 13 19')
+    expect(t).toContain('Cotopaxi cotopaxi backpack by 28 Jun 12 3 21')
     expect(t).toContain('Freitag freitag bag · frtg by 28 Jun 6 mostly the German word for Friday · not counted 14')
     expect(t).toContain('Old School no search term 17 Sep 0 not counted yet 8')
     expect(t).toContain('Rareform rareform bag 9 Sep 0 not counted yet 1')
@@ -51,12 +54,12 @@ describe('Brands you track', () => {
     expect(read(renderText(card([{ ...ROWS[6], ownPosts: null }])))).toContain('Rareform rareform bag 9 Sep 0 not counted yet ·')
   })
 
-  it('draws the counted brand\'s two counts as one bar: in all, and without our rival searches inside it', () => {
+  it('draws the counted brand\'s one count as a bar, against the largest count', () => {
     const html = render(card())
-    // Patagonia's 45 is the longest "in all"; its 13 sit inside it.
+    // Patagonia's 13 is the largest; The North Face's 6 is drawn against it.
     expect(html).toContain('width:100%')
-    expect(html).toContain(`width:${(13 / 45) * 100}%`)
-    expect(html).toContain(`width:${(36 / 45) * 100}%`)
+    expect(html).toContain(`width:${(6 / 13) * 100}%`)
+    expect(html).not.toContain(`width:${(13 / 45) * 100}%`)
   })
 
   it('links to the Brands page by its current label, and nothing else', () => {

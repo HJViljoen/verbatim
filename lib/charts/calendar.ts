@@ -245,11 +245,14 @@ export interface ValueScale {
  */
 export function valueScale(
   series: readonly CalendarSeries[],
-  opts: { zeroBase?: boolean; top?: number; baseline?: number } = {},
+  opts: { zeroBase?: boolean; top?: number; baseline?: number; atLeast?: number } = {},
 ): ValueScale {
   const top = opts.top ?? 12
   const baseline = opts.baseline ?? 180
   const values: number[] = []
+  // A SHARED SCALE (T0a, BR-38): two charts meant to be read side by side
+  // take the larger of their two maxima, so neither is scaled to its own.
+  if (opts.atLeast != null && Number.isFinite(opts.atLeast)) values.push(opts.atLeast)
   for (const s of series) for (const p of s.points) if (p.value != null) values.push(p.value)
   for (const s of series) for (const p of s.points) if (p.atLastMonth != null) values.push(p.atLastMonth)
   const zeroBase = opts.zeroBase ?? true
@@ -307,6 +310,45 @@ export function lineSegments(points: readonly CalendarPoint[]): number[][] {
   })
   if (held.length) runs.push(held)
   return runs
+}
+
+/**
+ * THE MONTHS SINCE THE LATEST REFUSED STEP, AND NOTHING BEFORE IT (T0a; plan
+ * §0a, the one condition; inventory PR-11).
+ *
+ * A refused step used to be drawn as a gap: both points stayed and only the
+ * segment went, with a chip under the plot saying why. Without the chip, two
+ * unjoined dots either side of a step up read as growth, so the months on the
+ * far side of a series' latest refused step (`brokenBefore`) are not drawn at
+ * all: not as dots, not in the figures, not in the hover. The step's own point
+ * stays, stripped of its refusal and of any "at this point last month" tick
+ * (that tick is the same comparison). The axis then starts at the earliest
+ * month any series still draws. A series with no refused step is untouched.
+ * Pure.
+ */
+export function sinceLatestBreak(axis: readonly string[], series: readonly CalendarSeries[]): { axis: string[]; series: CalendarSeries[] } {
+  const trimmed = series.map((s) => {
+    const cut = s.points.reduce((at, p, i) => (p.brokenBefore ? i : at), -1)
+    if (cut < 0) return s
+    const kept = s.points.slice(cut).map((p, i) => {
+      if (i > 0) return p
+      const { brokenBefore: _refused, atLastMonth: _lastMonth, ...point } = p
+      return point
+    })
+    return { ...s, points: kept }
+  })
+  if (trimmed.every((s, i) => s === series[i])) return { axis: [...axis], series: trimmed }
+  const firsts = trimmed.map((s) => s.points[0]?.month).filter((m): m is string => m != null).sort()
+  const from = firsts[0] ?? null
+  return { axis: from == null ? [] : axis.filter((m) => m >= from), series: trimmed }
+}
+
+/** The same rule for a sparkline's slots (`breaks[i]`: the step into slot i
+ *  is refused): every value before the latest refused step becomes a gap, so
+ *  its dot is not drawn; the slots stay, so no point is misdated. */
+export function valuesSinceBreak<T>(values: readonly (T | null)[], breaks?: readonly boolean[] | null): (T | null)[] {
+  const cut = (breaks ?? []).reduce((at, b, i) => (b ? i : at), -1)
+  return cut < 0 ? [...values] : values.map((v, i) => (i < cut ? null : v))
 }
 
 /** The last month of a series that carries a plotted value — the point the end

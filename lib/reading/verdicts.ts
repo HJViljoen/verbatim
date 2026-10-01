@@ -253,6 +253,33 @@ export function isAnswer(state: VerdictState): boolean {
   return state === 'moved' || state === 'no_clear_change'
 }
 
+/**
+ * May the earlier side of this comparison print beside the later one?
+ *
+ * THE ONE CONDITION (plan §0a, 30 Sep): a comparison the product will not
+ * stand behind is not shown at all, and the month before printed beside this
+ * month IS that comparison, whatever words sit between them. A refused
+ * verdict, for any reason, prints its own level only: no baseline, no change,
+ * no "against", no tick. `bandVerdict` no longer hands a refused verdict a
+ * baseline; this is the same rule for a verdict stored before it did not, so
+ * a frozen export or a saved answer renders under today's rule.
+ *
+ * AND A PAIR THE JUDGE REFUSED, WHATEVER STATE THE VERDICT CARRIES (T0a
+ * review, finding 1). A refused month pair used to come back
+ * `too_little_data` wherever a side was under the band's floors, with its
+ * baseline kept, and so printed the month before on every surface that asked
+ * this question. `monthChange` and `pairedVerdict` now answer `refused` for
+ * any pair the judge refuses; a verdict whose month-pair note says `refuse`
+ * is the same refusal wherever it was stored, and obeys too.
+ *
+ * A flagged pair (a change of ours touched under a tenth) is not refused and
+ * prints bare (T0 ruling U4). A pair under the floor that the judge accepted
+ * prints its levels with no change claim, as it always has.
+ */
+export function priorPrintable(verdict: (Pick<Verdict, 'state'> & { pair?: VerdictPairNote | null }) | null | undefined): boolean {
+  return verdict != null && verdict.state !== 'refused' && verdict.pair?.mode !== 'refuse'
+}
+
 export interface BandVerdictInput {
   objectKind: ObjectKind
   objectId: string
@@ -304,7 +331,16 @@ export function bandVerdict(input: BandVerdictInput): Verdict {
     state: 'too_little_data',
     flags,
   }
-  if (input.refused) return { ...base, state: 'refused', refusedReason: input.refused }
+  // A REFUSED VERDICT CARRIES NO BASELINE (T0a, 30 Sep: honesty by omission).
+  // The number exists, but a reader shown the month before beside this one
+  // reads a comparison the product refused to draw, and a model handed it can
+  // describe one in words no scrubber catches. The value stays, so the level
+  // still prints; the other side does not travel. `priorPrintable` is the
+  // same rule for a verdict stored before this line.
+  if (input.refused) {
+    const { baseline: _prior, ...level } = base
+    return { ...level, state: 'refused', refusedReason: input.refused }
+  }
   if (!input.baseline) return base
 
   const verdict: DeltaVerdict = proportionDelta(

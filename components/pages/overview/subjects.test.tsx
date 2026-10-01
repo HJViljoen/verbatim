@@ -289,11 +289,13 @@ describe('the monthly-line column shares one scale', () => {
   })
 })
 
-// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct seven subject rows each
-// printed "Not read as a change: we changed our searches in September." in
-// both change columns. The fixture's rows are refused as the loader refuses
-// them (WP1.3), counts kept.
-describe('OV2 · a refusal every row shares prints once, as a chip', () => {
+// A REFUSAL IS NOT SHOWN AND NOT EXPLAINED (T0a; plan §0a, the one
+// condition). On 2 Oct seven subject rows each printed the refusal in both
+// change columns; the deploy-1 review folded it into one chip and "not
+// compared" cells. Now the cells are empty and nothing says why, and "at this
+// point last month" does not print beside a refused pair. The fixture's rows
+// are refused as the loader refuses them (WP1.3), counts kept.
+describe('OV2 · a refusal every row shares prints nothing (T0a)', () => {
   const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
   const refuse = (v: import('@/lib/reading/verdicts').Verdict | null) =>
     v ? { ...v, state: 'refused' as const, refusedReason: 'tracking_change' as const, changePts: null, bandPts: null, pair } : v
@@ -312,13 +314,15 @@ describe('OV2 · a refusal every row shares prints once, as a chip', () => {
     }
   }
 
-  it('says "not compared" in the cells and the reason once, in every mode', () => {
+  it('prints no chip, no sentence and no "not compared", in every mode', () => {
     for (const mode of MODES) {
+      const markup = render(overviewSubjects.render(refused(), mode, ctx))
       const text = renderText(overviewSubjects.render(refused(), mode, ctx))
-      expect(text.split('not read as a change: we changed our searches in September').length - 1).toBe(1)
+      expect(text).not.toContain('not read as a change')
       expect(text).not.toContain('Not read as a change')
-      expect(text).toContain('not compared')
-      assertCopyContract(render(overviewSubjects.render(refused(), mode, ctx)))
+      expect(text).not.toContain('not compared')
+      expect(markup).not.toContain('data-pair-chip')
+      assertCopyContract(markup)
     }
   })
 
@@ -346,11 +350,12 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     for (const mode of MODES) assertCopyContract(render(overviewSubjects.render(data, mode, ctx)))
   })
 
-  it('a failed subject prints its name and "being re-described", and none of its figures', () => {
+  // T0a (ruling U6): a subject that is not ready prints its name alone.
+  it('a failed subject prints its name, and none of its figures and no word', () => {
     for (const mode of MODES) {
       const text = renderText(overviewSubjects.render(data, mode, ctx))
       expect(text).toContain('Repair & warranty')
-      expect(text.match(/being re-described/g)?.length).toBe(1)
+      expect(text).not.toContain('being re-described')
       // Its 33 of 625 category videos never print.
       expect(text).not.toContain('33 of 625')
     }
@@ -361,11 +366,12 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
   // check), on the same staging rows: a provisional subject with figures.
   const unchecked = calibrationOverviewFixture({ unchecked: ['water'] })
 
-  it('a provisional subject prints its market levels, marked, and no "you" side or change', () => {
+  it('a provisional subject prints its name alone: no market level, no "you" side, no change (T0a, OV-42; ruling U6)', () => {
     for (const mode of MODES) {
       const text = renderText(overviewSubjects.render(unchecked, mode, ctx))
-      expect(text.match(/provisional/g)?.length).toBe(1)
-      expect(text).toContain('28 of 625')
+      expect(text).toContain('Waterproofing')
+      expect(text).not.toContain('provisional')
+      expect(text).not.toContain('28 of 625')
     }
     const row = unchecked.subjects.rows.find((r) => r.id === 'water')!
     expect(row.calibration).toBe('provisional')
@@ -377,10 +383,12 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
 
   // WP1.1 review, finding 1: Community & purpose was named 24 Sep, after the
   // 24 Sep update wrote September, and has no row in any month. The 0 a month
-  // series fills there is no reading: "0 of 625" was invented.
+  // series fills there is no reading: "0 of 625" was invented. HYPOTHETICAL
+  // `ready` on the render (it is provisional, which prints its name alone).
+  const communityReady = { ...data, subjects: { ...data.subjects, rows: data.subjects.rows.map((r) => (r.id === 'community' ? { ...r, calibration: 'ready' as const } : r)) } }
   it('a subject named after the month was written says "no reading yet" (default M-a), and no figure, never 0', () => {
     for (const mode of MODES) {
-      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      const text = renderText(overviewSubjects.render(communityReady, mode, ctx))
       expect(text).toContain('no reading yet')
       expect(text).not.toContain('0 of 625')
       // Said once: the row's words are the whole row.
@@ -398,15 +406,19 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     expect(byId('water').rival?.k).toBe(0)
   })
 
-  it('marks a provisional subject\'s figure "(provisional)" in the table a document cites (WP1.1 review, finding 10)', () => {
+  it('declares no figure for a provisional subject in the table a document cites (WP1.1 review, finding 10; T0a)', () => {
     const figures = blockAnswers(overviewSubjects, unchecked).figures
-    expect(figures.subject_water_share.label).toBe('Waterproofing, share of the category this month (provisional)')
+    expect(Object.keys(figures).filter((k) => k.startsWith('subject_water'))).toEqual([])
     expect(figures.subject_looks_share.label).toBe('Looks & style, share of the category this month')
   })
 
-  it('an unread row is its linked name and its words, one cell across', () => {
-    const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
+  it('an unread row is its linked name and its words, one cell across; a provisional one its linked name alone', () => {
+    const row = rowOf(render(overviewSubjects.render(communityReady, 'app', ctx)), 'Community &amp; purpose')
     expect(row).toContain('no reading yet')
+    const provisional = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
+    expect(provisional).toContain('item=community')
+    expect(provisional).not.toContain('no reading yet')
+    expect(provisional).toMatch(/colspan="6"/i)
     expect(row).toContain('item=community')
     expect(row).toMatch(/colspan="6"/i)
     expect(row).not.toContain('provisional')
@@ -445,22 +457,24 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     return markup.slice(markup.lastIndexOf('<tr', at), markup.indexOf('</tr>', at))
   }
 
-  it('a failed row is its name and its word: no link to a pane that does not exist, no dash in each column', () => {
+  it('a failed row is its name: no link to a pane that does not exist, no dash in each column, no word (T0a)', () => {
     for (const mode of ['app', 'print'] as const) {
       const row = rowOf(render(overviewSubjects.render(data, mode, ctx)), 'Repair &amp; warranty')
-      expect(row).toContain('being re-described')
       expect(row).not.toContain('<a ')
       expect(row).not.toContain('—')
-      // One cell across the six; the row's header says why, once, and never
-      // "not shown until … checked": it was checked, and failed.
       expect(row).toMatch(/colspan="6"/i)
-      expect(row.match(/being re-described/g)?.length).toBe(1)
+      expect(row).not.toContain('being re-described')
       expect(row).not.toContain('not shown until')
     }
   })
 
-  it('a provisional row carries the withheld mark in its change cell as in its "you" cells', () => {
+  // T0a (ruling U6): a provisional row is its linked name and one empty cell
+  // across; it no longer carries withheld marks beside figures of its own.
+  it('a provisional row is its linked name, one cell across, with no withheld marks', () => {
     const row = rowOf(render(overviewSubjects.render(unchecked, 'app', ctx)), 'Waterproofing')
-    expect(row.match(/not shown until its check clears/g)?.length).toBe(3)
+    expect(row).toContain('item=water')
+    expect(row).toMatch(/colspan="6"/i)
+    expect(row).not.toContain('not shown until its check clears')
+    expect(row).not.toContain('28 of 625')
   })
 })

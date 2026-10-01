@@ -106,7 +106,13 @@ export function brandsLine(b: BrandsArriving, competitiveLabel: string): string 
 //
 // FINISH-LIST ITEM 20 (29 Sep): the headline head read "Without any video our
 // rival searches found", which did not parse; the same base, said plainly.
-export const BRANDS_HEAD_ORGANIC = 'Outside our brand searches'
+//
+// T0 RULING U10 (30 Sep): in market terms, and the only count a brand prints.
+// "In all" counted the videos our own brand searches fetched, so it is never
+// printed; the constant stays for a stored copy's figure labels only. Not the
+// ruling's example "Brought up unprompted": "up" is a direction word, and the
+// copy contract admits one only inside a verdict node.
+export const BRANDS_HEAD_ORGANIC = 'Named unprompted'
 export const BRANDS_HEAD_ALL = 'In all'
 
 /** The headline column's base, where the block read one. */

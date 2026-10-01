@@ -257,6 +257,11 @@ describe('Ask\'s movement reader under the month-pair rule', () => {
     expect(line).toContain('comparison refused')
     expect(line).toContain('Not read as a change: we changed our searches in September.')
     expect(line).not.toMatch(/\bmoved\b/)
+    // T0a, AK-14 (the one condition): the month before is not offered to the
+    // model beside a refused comparison, so an answer cannot name it.
+    expect(line).toContain('- Socket comfort · The category: Sep 2026 14 of 118 videos (11.9%); comparison refused')
+    expect(line).not.toContain('Aug 2026')
+    expect(line).not.toContain('8 of 182')
   })
 
   it('never earns a word over a step that is not comparable, or on a month not yet ended', () => {

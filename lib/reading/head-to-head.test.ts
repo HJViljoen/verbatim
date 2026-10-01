@@ -5,6 +5,7 @@ import { directionRe } from '../test/copy-contract'
 import { OSSUR_UPDATES, sealandJudge } from '../test/sealand-pairs'
 import { FACE_OFF_FLOOR, headToHead, recurrenceOf, type HeadToHeadSide } from './head-to-head'
 import { pairJudge, pairOn } from './pairs'
+import { priorPrintable } from './verdicts'
 
 // CO3 · the head-to-head, re-based on the months.
 //
@@ -335,7 +336,22 @@ describe('headToHead · the month-pair rule', () => {
       asked.push(`${prev}|${month}|${audience}`)
       return judge(prev, month, audience)
     })
-    expect(asked).toEqual(['2026-08-01|2026-09-01|competitor:Cotopaxi'])
+    // Each side on its own audience, and nothing else: the verdict's pair,
+    // and each side's once more for whether its month before may print
+    // (T0a: a refused side keeps its own month alone).
+    expect([...new Set(asked)].sort()).toEqual(['2026-08-01|2026-09-01|client', '2026-08-01|2026-09-01|competitor:Cotopaxi'])
+  })
+
+  it('prints no month before for a side whose pair is refused, on any measure (T0a, the one condition)', () => {
+    const input = { month: '2026-09-01', previousMonth: '2026-08-01', you: SEALAND_OWN, them: COTOPAXI, readThisMonth: 654, readPreviousMonth: 377 }
+    const h = headToHead({ ...input, pair: pairOn(sealandJudge('2026-10-02T06:00:00.000Z')) })
+    for (const m of h.measures) {
+      expect(m.them?.prev, m.key).toBeUndefined()
+      expect(m.you?.prev, m.key).toBeUndefined()
+    }
+    // With no judge, both months print as they did.
+    const open = headToHead({ ...input, pair: null })
+    expect(open.measures.some((m) => m.them?.prev != null)).toBe(true)
   })
 
   // Össur's Ottobock, the same path on the positive share: staging's real
@@ -364,11 +380,15 @@ describe('headToHead · the month-pair rule', () => {
       pair: judge,
     })
     // The positive share is 17 of 19 judged against 42 of 48: under the
-    // band's floor of 100 either side, so it reads "too few to compare", the
-    // true reason, and carries no pair words (deploy 1 review).
+    // band's floor of 100 either side, and the pair is refused. The judge's
+    // refusal wins (T0a review, finding 1; it read "too few to compare" with
+    // August's 42 of 48 kept beside it, deploy 1 review): refused, this
+    // month's share alone.
     const mood = r.measures.find((m) => m.key === 'sentiment')!.rivalVerdict!
-    expect(mood.state).toBe('too_little_data')
-    expect(mood.pair).toBeUndefined()
+    expect(mood.state).toBe('refused')
+    expect(mood.pair?.mode).toBe('refuse')
+    expect(mood.baseline).toBeUndefined()
+    expect(priorPrintable(mood)).toBe(false)
     // The video share, 24 of 369 against 48 of 597, clears the floors: refused
     // for the pair, with no update promised (paused).
     const share = r.measures.find((m) => m.key === 'videos')!.rivalVerdict!

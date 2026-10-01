@@ -144,15 +144,24 @@ describe('what each state prints', () => {
     expect([printsMarket('ready'), printsClient('ready'), earnsVerdict('ready'), isFailed('ready')]).toEqual([true, true, true, false])
   })
 
-  it('provisional prints its market level, marked, and no client level, verdict or headline', () => {
-    expect(calibrationWord('provisional')).toBe('provisional')
-    expect(calibrationWord('calibrating')).toBe('provisional')
-    expect([printsMarket('provisional'), printsClient('provisional'), earnsVerdict('provisional'), isFailed('provisional')]).toEqual([true, false, false, false])
+  // T0a (plan §0a; ruling U6): a figure the product cannot stand behind does
+  // not print, so a provisional subject no longer prints its market level
+  // marked "provisional": it prints its name, and no word.
+  it('provisional prints its name alone: no market level, client level, verdict, headline or word', () => {
+    expect(calibrationWord('provisional')).toBeNull()
+    expect(calibrationWord('calibrating')).toBeNull()
+    expect([printsMarket('provisional'), printsClient('provisional'), earnsVerdict('provisional'), isFailed('provisional')]).toEqual([false, false, false, false])
+    expect(printsMarket('calibrating')).toBe(false)
   })
 
-  it('failed prints nothing but its name and "being re-described"', () => {
-    expect(calibrationWord('failed')).toBe('being re-described')
+  it('failed prints nothing but its name, and no word (T0a)', () => {
+    expect(calibrationWord('failed')).toBeNull()
     expect([printsMarket('failed'), printsClient('failed'), earnsVerdict('failed'), isFailed('failed')]).toEqual([false, false, false, true])
+  })
+
+  it('a row stored with no state renders as it was sent', () => {
+    expect(printsMarket(null)).toBe(true)
+    expect(printsMarket(undefined)).toBe(true)
   })
 
   it('the words carry no digit and no dash', () => {

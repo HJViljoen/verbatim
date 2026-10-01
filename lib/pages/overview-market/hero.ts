@@ -2,12 +2,13 @@ import { fmtInt, longMonth } from '../../format'
 import { carriesShare } from '../../reading/level'
 import type { FigureTable } from '../../reading/verdicts'
 import {
+  boardPrev,
   LEAD_MAX_MAKER_SHARE,
-  LEAD_NEW_SEARCH_NOTE,
   THEME_FLOOR,
   isMeasuredShare,
   makerFraction,
   prevReadK,
+  searchInflated,
   type MarketTheme,
   type ThemeBoard,
 } from './board'
@@ -113,6 +114,12 @@ export const UNQUOTED_KINDS: ReadonlySet<string> = new Set(['demographic_signal'
 /** May this board row supply the page's voices? */
 export function mayLead(t: MarketTheme, segments: ThemeBoard['segments'], excluded: ReadonlySet<string>): boolean {
   if (t.labelStripped || t.identityNewThisRun || excluded.has(t.registryId)) return false
+  // A THEME OUR NEW SEARCHES FOUND NEVER LEADS (T0a, mechanism 4; OV-8,
+  // MR-3): a third or more of its month's videos from searches first run that
+  // month is our search, not the market's biggest conversation. The loader
+  // reads the candidates' provenance and excludes them; a row carrying it is
+  // held here too.
+  if (searchInflated(t.provenance)) return false
   if (t.kind != null && UNQUOTED_KINDS.has(t.kind)) return false
   if (segments === 'no_rule') return true
   if (segments !== 'measured') return false
@@ -226,7 +233,7 @@ export function heroThemeParts(hero: Extract<HeroLead, { kind: 'themes' }>, boar
  *  it read none of the themes named, there is no line ("August: none, none
  *  and none of 537" says nothing; the deploy-3 design review). */
 export function heroPrevParts(hero: Extract<HeroLead, { kind: 'themes' }>, board: ThemeBoard): HeroPart[] | null {
-  const prev = board.prev
+  const prev = boardPrev(board)
   if (!prev || prev.n == null || prev.n <= 0 || hero.top.length === 0) return null
   if (hero.top.every((t) => prevReadK(t) == null)) return null
   const parts: HeroPart[] = [{ t: 'text', s: `${longMonth(prev.month)}: ` }]
@@ -238,26 +245,12 @@ export function heroPrevParts(hero: Extract<HeroLead, { kind: 'themes' }>, board
   return parts
 }
 
-/** Does the lead carry its new-search count? At a third or more of its
- *  reading-month videos (`LEAD_NEW_SEARCH_NOTE`). */
-export function leadNewSearch(lead: MarketTheme | null): { fromNewSearches: number; of: number } | null {
-  const p = lead?.provenance
-  if (!p || !(p.of > 0) || !(p.fromNewSearches >= 0) || p.fromNewSearches > p.of) return null
-  return p.fromNewSearches / p.of >= LEAD_NEW_SEARCH_NOTE ? p : null
-}
-
-export const LEAD_NEW = 'lead_new_searches'
-export const LEAD_OF = 'lead_videos'
-
-/** "[x] of its [21] videos came from searches we added in September". */
-export function leadNewSearchParts(lead: MarketTheme | null, month: string): HeroPart[] | null {
-  if (!leadNewSearch(lead)) return null
-  return [
-    { t: 'figure', key: LEAD_NEW },
-    { t: 'text', s: ' of its ' },
-    { t: 'figure', key: LEAD_OF },
-    { t: 'text', s: ` videos came from searches we added in ${longMonth(month)}` },
-  ]
+/** The lead a page prints, or none: a stored lead our new searches found
+ *  (`searchInflated`, T0a mechanism 4) prints no voices, rather than the note
+ *  that once said so. */
+export function printedLead(hero: HeroLead | null | undefined): MarketTheme | null {
+  const lead = hero?.kind === 'themes' ? hero.lead : null
+  return lead && !searchInflated(lead.provenance) ? lead : null
 }
 
 /** One theme's level in a column or a clause: its share at 100 videos or more,
@@ -279,7 +272,7 @@ export function themeFigures(board: ThemeBoard, rows: readonly MarketTheme[] = b
   const out: FigureTable = {
     [THEME_N]: { value: board.n, unit: 'videos', label: `category videos in ${month}` },
   }
-  const prev = board.prev
+  const prev = boardPrev(board)
   if (prev && prev.n != null && prev.n > 0) {
     out[THEME_PREV_N] = { value: prev.n, unit: 'videos', label: `category videos in ${longMonth(prev.month)}` }
   }
@@ -318,8 +311,7 @@ export function groupFigures(board: ThemeBoard): FigureTable {
   return out
 }
 
-/** The hero's own table: the board's figures for its three rows, and the
- *  lead's new-search count where it prints. */
+/** The hero's own table: the board's figures for its three rows. */
 export function heroFigures(hero: HeroLead, board: ThemeBoard | null, month: string): FigureTable {
   if (hero.kind === 'subject') {
     return {
@@ -328,13 +320,7 @@ export function heroFigures(hero: HeroLead, board: ThemeBoard | null, month: str
     }
   }
   if (hero.kind !== 'themes' || !board) return {}
-  const out = themeFigures(board, hero.top)
-  const note = leadNewSearch(hero.lead)
-  if (note) {
-    out[LEAD_NEW] = { value: note.fromNewSearches, unit: 'videos', label: `of the lead theme's videos, found by searches added in ${longMonth(month)}` }
-    out[LEAD_OF] = { value: note.of, unit: 'videos', label: `the lead theme's videos in ${longMonth(month)}` }
-  }
-  return out
+  return themeFigures(board, hero.top)
 }
 
 /** A figure as it prints: a whole share, or a count. */
@@ -367,18 +353,16 @@ export function voicesHeading(count: number): string {
 export interface HeroView {
   parts: HeroPart[]
   prev: HeroPart[] | null
-  newSearch: HeroPart[] | null
   figures: FigureTable
 }
 
 export function heroView(hero: HeroLead | null | undefined, board: ThemeBoard | null | undefined, month: string): HeroView {
-  if (!hero || hero.kind === 'size') return { parts: [], prev: null, newSearch: null, figures: {} }
-  if (hero.kind === 'subject') return { parts: heroSubjectParts(hero), prev: null, newSearch: null, figures: heroFigures(hero, null, month) }
-  if (!board) return { parts: [], prev: null, newSearch: null, figures: {} }
+  if (!hero || hero.kind === 'size') return { parts: [], prev: null, figures: {} }
+  if (hero.kind === 'subject') return { parts: heroSubjectParts(hero), prev: null, figures: heroFigures(hero, null, month) }
+  if (!board) return { parts: [], prev: null, figures: {} }
   return {
     parts: heroThemeParts(hero, board),
     prev: heroPrevParts(hero, board),
-    newSearch: leadNewSearchParts(hero.lead, month),
     figures: heroFigures(hero, board, month),
   }
 }

@@ -5,9 +5,10 @@ import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { heardAtFloor, monthPhrase, NEW_THEME_FLOOR, regroupedLine, type MarketCameIn, type WeekData } from '@/lib/pages/week'
+import { heardAtFloor, heardWithheld, monthPhrase, NEW_THEME_FLOOR, regroupedLine, type MarketCameIn, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { RULE, SCALE } from '@/components/pages/overview/market'
+import { weekBarsOmitted } from '@/lib/pages/overview-market/weeks'
 
 // "With this update" (market-first WP3.7, `week.came-in`; the approved
 // preview's This week, its first tile): what this update's days brought into
@@ -73,9 +74,12 @@ function Body({ data, m, email }: { data: WeekData; m: MarketCameIn; email: bool
       </span>,
     )
   }
+  // The count leaves out a theme our new searches found (`heardAtFloor`,
+  // T0a mechanism 4); where that leaves none, nothing is said of it, never
+  // "no theme was heard for the first time".
   const heardPart = heard?.regrouped
     ? null
-    : at != null
+    : at != null && !(at === 0 && heardWithheld(heard!))
       ? at === 0
         ? <>No theme was heard for the first time with {fmtInt(NEW_THEME_FLOOR)} or more videos {when}</>
         : <>{b(at)} {at === 1 ? 'theme was' : 'themes were'} heard for the first time with {fmtInt(NEW_THEME_FLOOR)} or more videos {when}</>
@@ -95,7 +99,7 @@ function Anchors({ data }: { data: WeekData }) {
   const heard = data.heard ?? null
   const at = heard && !heard.regrouped ? heardAtFloor(heard) : 0
   const links: { href: string; label: string }[] = [
-    ...(data.weeks ? [{ href: `#${WEEK_ANCHORS.weeks}`, label: 'Week by week' }] : []),
+    ...(data.weeks && !weekBarsOmitted(data.weeks) ? [{ href: `#${WEEK_ANCHORS.weeks}`, label: 'Week by week' }] : []),
     ...(at > 0 ? [{ href: `#${WEEK_ANCHORS.heard}`, label: `${fmtInt(at)} heard for the first time` }] : []),
     ...(!data.replies.unread && data.replies.total > 0 ? [{ href: `#${WEEK_ANCHORS.reply}`, label: `${fmtInt(data.replies.total)} worth a reply` }] : []),
   ]

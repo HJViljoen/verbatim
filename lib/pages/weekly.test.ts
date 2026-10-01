@@ -120,6 +120,12 @@ describe('headlineObject', () => {
     expect(head?.k).toBe(65)
     expect(head?.atLastMonth).toEqual({ k: 44, n: 244 })
     expect(head?.audience).toBe('the category')
+    expect(head?.comparable).toBe(true)
+    // T0a, WR-10: the same lead where the page's judge refused the category's
+    // month pair carries no last-month figure and says it is not comparable.
+    const refused = headlineObject({ ...data, sentence: { ...data.sentence, monthPair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null } } })
+    expect(refused?.comparable).toBe(false)
+    expect(refused?.atLastMonth).toBeNull()
   })
 
   // `categoryAtLastMonth` is the CATEGORY side alone, and OV1's lead may be the

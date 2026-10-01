@@ -75,14 +75,12 @@ function Claim({ claim, mode }: { claim: PlanClaimRow; mode: RenderMode }) {
         </span>
       </div>
       {claim.quote ? <BlockQuote quote={claim.quote} mode={mode} /> : null}
-      {/* THE COUNT WITH ITS POPULATION, or the count alone where the corpus
-          could not be read — `basis` under the card says which of the two this
-          is, and `n === 0` means there is no denominator rather than a share of
-          nothing. */}
-      <span data-copy={claim.value.n > 0 ? 'level' : 'figure'} className="font-mono text-[11px] tabular-nums text-muted-foreground">
-        {claim.value.n > 0
-          ? `${fmtInt(claim.value.k)} of ${fmtInt(claim.value.n)} videos we can show you a comment from`
-          : `${fmtInt(claim.value.k)} videos we can show you a comment from`}
+      {/* A FLOOR, NEVER A SHARE (T0a, mechanism 6; YM-34): k is bounded by
+          what retrieval returned and n is every video read to date, so "k of
+          n" read as a measured share of the market. The count says what it
+          is: at least this many. */}
+      <span data-copy="figure" className="font-mono text-[11px] tabular-nums text-muted-foreground">
+        {`at least ${fmtInt(claim.value.k)} ${claim.value.k === 1 ? 'video' : 'videos'} we can show you a comment from`}
       </span>
     </TileBlock>
   )

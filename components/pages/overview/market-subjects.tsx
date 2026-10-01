@@ -8,6 +8,7 @@ import { byMarketSize, CALIBRATION_TAG, makerWords, marketLevel } from '@/lib/pa
 import type { OverviewData, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { NO_READING_YET } from '@/lib/subjects/read-in'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
 
 // "The market by subject" (market-first WP1.6, plan §2.2 block 6): each
@@ -53,14 +54,32 @@ export function prevCountTag(k: number | null | undefined, prev: { month: string
  * other reason keeps "no reading yet".
  */
 export function rowTag(r: SubjectRow): string | null {
-  if (r.calibration === 'failed') return CALIBRATION_TAG.failed
+  // A subject that is not ready is its name alone (T0a, ruling U6): no tag,
+  // no figure.
+  if (!printsMarket(r.calibration)) return null
   if (r.unread) return r.unread
   if (r.market?.k == null) return NO_READING_YET
-  return CALIBRATION_TAG[r.calibration ?? 'provisional']
+  return CALIBRATION_TAG[r.calibration ?? 'ready']
 }
 
-/** Whether a row prints figures at all. */
-export const printsFigures = (r: SubjectRow): boolean => r.calibration !== 'failed' && r.market?.k != null
+/**
+ * The month before, as the block prints it beside this month, or null.
+ *
+ * THE ONE CONDITION (T0a, OV-45). The loader leaves the month before out
+ * wherever the market pair is refused (`withMarketSides`), so no column,
+ * tick, legend entry or count tag names it. A copy stored before that rule
+ * still carries it, and the kinds block on the same page is judged on the
+ * same market pair: where that block (or the size headline) carries the
+ * pair's refusal, the month before is not printed here either.
+ */
+export function subjectsPrev(data: Pick<OverviewData, 'subjects' | 'category' | 'sentence'>): { month: string; n: number | null } | null {
+  const refused = data.category?.market?.chip != null || data.sentence?.chip != null
+  return refused ? null : data.subjects.market?.prev ?? null
+}
+
+/** Whether a row prints figures at all: only a ready subject's (T0a, OV-42;
+ *  `printsMarket`), and never a figure nobody read. */
+export const printsFigures = (r: SubjectRow): boolean => printsMarket(r.calibration) && r.market?.k != null
 
 /** A row's maker tag, as the Subjects rail prints it (plan §2.2 block 6: at a
  *  fifth or more, "over a third makers" in the approved preview), or null
@@ -73,7 +92,7 @@ export function marketSubjectsFigures(data: OverviewData): FigureTable {
   const out: FigureTable = {}
   const month = longMonth(data.month)
   const n = data.subjects.market?.n ?? null
-  const prevN = data.subjects.market?.prev?.n ?? null
+  const prevN = subjectsPrev(data)?.n ?? null
   for (const r of data.subjects.rows) {
     if (!printsFigures(r)) continue
     const k = r.market?.k as number
@@ -112,7 +131,10 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
   }
   const rows = [...b.rows].sort(byMarketSize)
   const n = b.market?.n ?? null
-  const prev = b.market?.prev ?? null
+  const prev = subjectsPrev(data)
+  // No row prints a figure (every subject still being checked, T0a ruling U6):
+  // the figure columns' heads go with the figures, so no "of N" heads nothing.
+  const heads = rows.some(printsFigures)
   const axis = barAxis(rows.flatMap((r) => [
     printsFigures(r) && n ? (r.market?.k as number) / n : null,
     printsFigures(r) && prev?.n && r.marketPrev?.k != null ? r.marketPrev.k / prev.n : null,
@@ -127,9 +149,9 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
           <thead>
             <tr>
               <th style={{ ...c, borderTop: 0, textAlign: 'left', color: EMAIL.muted, fontSize: 11 }}>Subject</th>
-              <th style={{ ...num, borderTop: 0, color: EMAIL.muted, fontSize: 11 }}>Videos</th>
-              <th style={{ ...num, borderTop: 0 }}><BaseHead month={data.month} n={n} mode={mode} /></th>
-              {prev ? <th style={{ ...num, borderTop: 0 }}><BaseHead month={prev.month} n={prev.n} mode={mode} /></th> : null}
+              <th style={{ ...num, borderTop: 0, color: EMAIL.muted, fontSize: 11 }}>{heads ? 'Videos' : null}</th>
+              <th style={{ ...num, borderTop: 0 }}>{heads ? <BaseHead month={data.month} n={n} mode={mode} /> : null}</th>
+              {prev ? <th style={{ ...num, borderTop: 0 }}>{heads ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -164,10 +186,10 @@ export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUr
         <div className="@min-[600px]:min-w-[560px]" role="table">
           <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
             <span role="columnheader" className={SCALE.head}>Subject</span>
-            <span role="columnheader" className={hidden}><BarLegend month={data.month} prevMonth={prev?.month ?? null} short /></span>
-            <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
-            <span role="columnheader"><BaseHead month={data.month} n={n} mode={mode} /></span>
-            <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
+            <span role="columnheader" className={hidden}>{heads ? <BarLegend month={data.month} prevMonth={prev?.month ?? null} short /> : null}</span>
+            <span role="columnheader" className={`text-right ${SCALE.head}`}>{heads ? 'Videos' : null}</span>
+            <span role="columnheader">{heads ? <BaseHead month={data.month} n={n} mode={mode} /> : null}</span>
+            <span role="columnheader">{heads && prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
           </div>
           {rows.map((r) => {
             const figures = printsFigures(r)

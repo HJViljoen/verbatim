@@ -3,6 +3,7 @@ import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { longMonth } from '../format'
 import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
+import { windowDays } from '../shell/bar'
 import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
@@ -145,6 +146,24 @@ export const weeklyRuleFor = (noun: PeriodNoun): string =>
       'This update is how much of it arrived since the last one.'
 
 /**
+ * THE RULE IN MARKET TERMS (T0a, mechanism 6; WR-7): the months named, and the
+ * week or update as the comments written in its days, never as "how much of it
+ * arrived since the last update", which is our gathering. It is the basis that
+ * stops the week's figures reading as a period of their own, so it is reworded
+ * and never dropped: with no window to name, the rule by noun stands.
+ *   "Figures are September so far, set against June to August. The week is
+ *    the comments written 14 to 20 Sep."
+ */
+export function weeklyRuleIn(input: { month: string; window: { from: string; to: string } | null }): string {
+  const days = input.window ? windowDays(input.window.from, input.window.to) : null
+  if (!days) return weeklyRuleFor(periodNounFor(input.window))
+  const before1 = prevMonth(input.month)
+  const before3 = prevMonth(prevMonth(before1))
+  const noun = periodNounFor(input.window) === 'week' ? 'The week' : 'This update'
+  return `Figures are ${longMonth(input.month)} so far, set against ${longMonth(before3)} to ${longMonth(before1)}. ${noun} is the comments written ${days}.`
+}
+
+/**
  * The first screen's budget (design §3 WR section 1: "Budget: 12 printed
  * numbers on this screen").
  *
@@ -284,6 +303,15 @@ export interface WeekSentenceInput {
   n: number
   /** The same point last month, or null where M3 cannot answer the window. */
   atLastMonth: { k: number; n: number } | null
+  /**
+   * Whether this month may be set against the month before at all: the pair
+   * judge's answer for the audience the share is a share of (T0a, WR-10).
+   * False, and the sentence names this month's level alone, with no clause
+   * about last month: a comparison the judge refused is not shown and not
+   * explained (the one condition). Omitted (a sentence stored before the
+   * rule), the clause stands as it did.
+   */
+  comparable?: boolean
 }
 
 const pctOf = (k: number, n: number): number => (n > 0 ? Math.round((k / n) * 1000) / 10 : 0)
@@ -318,6 +346,7 @@ export function weekSentence(input: WeekSentenceInput): WeekSentence {
   // for; a fourth number here would cost a flag on the first screen.
   const head = `${stamp}: ${input.label} is running at [[${share}]] of [[${of}]] videos read for ${input.audience}`
 
+  if (input.comparable === false) return { body: `${head}.`, figures }
   if (!input.atLastMonth) {
     return { body: `${head}. At this point last month: not recorded yet.`, figures }
   }

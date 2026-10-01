@@ -142,16 +142,32 @@ export function subjectCalibration(
   return wilsonUpper(precision, n) < SUBJECT_PRECISION_FLOOR ? 'failed' : 'provisional'
 }
 
-/** The word a row carries, or null: ready rows and rows stored without the
- *  field carry none. Accepts a stored string ('calibrating'). */
+/**
+ * The word a row carries on a client surface: none, in every state (T0a,
+ * inventory §B.2; ruling U6). "Provisional" and "being re-described" were the
+ * only thing qualifying an unverified figure beside them; the figure now goes
+ * instead (`printsMarket`), and the subject keeps its name and what people
+ * say. The words stay in `CALIBRATION_WORDS` for the operator's own pages.
+ */
 export function calibrationWord(v: string | null | undefined): string | null {
-  const state = readCalibration(v)
-  return state === 'provisional' || state === 'failed' ? CALIBRATION_WORDS[state] : null
+  void v
+  return null
 }
 
-/** Does the subject's MARKET level print? Everything but failed. */
+/**
+ * Does the subject's MARKET level print, and every count that rests on its
+ * membership (its share, rank, trail, kinds, question counts, maker split,
+ * month cards and chart)?
+ *
+ * ONLY WHEN READY (T0a, inventory §B.2; ruling U6). A provisional subject's
+ * matching is not verified, so a figure resting on it is a figure the product
+ * cannot stand behind: it no longer prints with a "provisional" tag beside it,
+ * it does not print. A failed one never did. A stored row with no field
+ * renders as it was sent.
+ */
 export function printsMarket(v: string | null | undefined): boolean {
-  return readCalibration(v) !== 'failed'
+  const state = readCalibration(v)
+  return state == null || state === 'ready'
 }
 
 /** Does the subject's CLIENT level (the "you" side, your own posts) print?

@@ -4,11 +4,11 @@ import { MARKET_KINDS_TITLE } from '@/components/pages/overview/market-kinds'
 import { barAxis, shortMonthName } from '@/components/pages/overview/market'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
-import { marketLevel, type MarketKinds } from '@/lib/pages/overview-market'
+import { kindsPrev, marketLevel, type MarketKinds } from '@/lib/pages/overview-market'
 import type { MonthlyData } from '@/lib/pages/monthly'
 import { T, presentation } from './email-table'
 import { fromFrontPage } from './adapt'
-import { Bar, ChipLine, Num, RowLabel, SubHead, Table } from './email'
+import { Bar, Num, RowLabel, SubHead, Table } from './email'
 
 /**
  * 4 · What people did in the comments (market-first WP2.1; the front page's
@@ -36,7 +36,8 @@ const MOOD_HEX: Record<string, string> = {
 function Mood({ m }: { m: MarketKinds }) {
   if (m.mood.length === 0) return null
   const total = m.mood.reduce((n, r) => n + (r.k ?? 0), 0)
-  const prev = m.prev
+  // No month before beside a refused market pair (T0a, MR-7).
+  const prev = kindsPrev(m)
   return (
     <>
       <SubHead marginTop={24}>
@@ -83,7 +84,8 @@ function Mood({ m }: { m: MarketKinds }) {
 function kindsEmail(data: MonthlyData): ReactNode {
   const m = data.overview.category.market
   if (!m) return null
-  const prev = m.prev
+  // No month before beside a refused market pair, and no chip (T0a, MR-7).
+  const prev = kindsPrev(m)
   const axis = barAxis(m.kinds.map((r) => (r.k != null && m.n ? r.k / m.n : null)))
   return (
     <>
@@ -107,7 +109,6 @@ function kindsEmail(data: MonthlyData): ReactNode {
         })}
       />
       <Mood m={m} />
-      <ChipLine words={m.chip} />
     </>
   )
 }

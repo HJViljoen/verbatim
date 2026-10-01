@@ -12,7 +12,7 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import { CONTRIBUTIONS_NOT_RECORDED, subjectsLead } from '@/lib/reports/weekly'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { calibrationWord, isFailed, printsClient } from '@/lib/subjects/calibration-state'
+import { calibrationWord, isFailed, printsClient, printsMarket } from '@/lib/subjects/calibration-state'
 
 // WR2 · Where things stand (design §3 WR section 2).
 //
@@ -162,8 +162,10 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
         </>
       )
   // A FAILED ROW, AND ONE THE MONTH WAS NOT READ FOR (WP1.1 review, finding
-  // 1), is its name and its words: no bar, no figure, no sides.
-  if (failed || row.unread) {
+  // 1), is its name and its words: no bar, no figure, no sides. SO IS A
+  // PROVISIONAL ONE (T0a, WR-17; ruling U6): every figure on the row rests on
+  // its unverified matching.
+  if (failed || row.unread || !printsMarket(row.calibration)) {
     return mode === 'email'
       ? (
         <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 14 }}>
@@ -267,7 +269,13 @@ export const weeklySubjects: Block<WeeklyData> = {
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
     const note = [s.note, data.contributions ? null : CONTRIBUTIONS_NOT_RECORDED].filter(Boolean).join(' ')
-    const top = Math.max(0.1, ...s.rows.map((r) => r.category.pct ?? 0))
+    // A subject that is not ready has no rank and sets no scale (T0a, ruling
+    // U6): the ready rows in their order, then the rest by name.
+    const ordered = [
+      ...s.rows.filter((r) => printsMarket(r.calibration)),
+      ...s.rows.filter((r) => !printsMarket(r.calibration)).sort((a, b) => a.label.localeCompare(b.label)),
+    ]
+    const top = Math.max(0.1, ...ordered.filter((r) => printsMarket(r.calibration)).map((r) => r.category.pct ?? 0))
     return frame(
       <div>
         {/* WHAT THE SIX ROWS ADD UP TO, BEFORE ANY OF THEM (weekly.s2.lead).
@@ -285,7 +293,7 @@ export const weeklySubjects: Block<WeeklyData> = {
             {lead.level ? <span data-copy="level">{lead.level}</span> : null}{lead.body}
           </div>
         ) : null}
-        {s.rows.map((r) => (
+        {ordered.map((r) => (
           <Row
             key={r.id}
             row={r}
@@ -308,7 +316,8 @@ export const weeklySubjects: Block<WeeklyData> = {
   figures(data): FigureTable {
     const out: FigureTable = {}
     for (const r of data.subjects.rows) {
-      if (r.category.pct == null) continue
+      // No figure for a subject that is not ready (T0a, ruling U6).
+      if (r.category.pct == null || !printsMarket(r.calibration)) continue
       out[`subject_${r.id.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_share`] = {
         value: r.category.pct,
         unit: 'pct',

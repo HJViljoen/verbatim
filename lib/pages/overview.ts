@@ -64,7 +64,8 @@ import {
   type Substrate,
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
-import { pairOnVerdict, type PairComparability } from '../reading/comparability'
+import { joins, pairOnVerdict, type PairComparability } from '../reading/comparability'
+import { valuesSinceBreak } from '../charts/calendar'
 import { marketAudiences, pooledDenominators } from '../reading/market'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
@@ -85,7 +86,7 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { loadNewThemes, loadWeekVolumes, monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
 import type { WeekVolumesBlock } from '../reading/weeks'
-import { ARRIVAL_THEMES_SHOWN, arrivalThemes, buildArrivals, latestUpdate, type ArrivalsBlock, type UpdateArrivalsRow } from './overview-market/arrivals'
+import { arrivalThemes, buildArrivals, latestUpdate, type ArrivalsBlock, type UpdateArrivalsRow } from './overview-market/arrivals'
 import type { ConfigChange } from '../config-log'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
@@ -111,6 +112,7 @@ import {
   namesABrand,
   pastOffers,
   pickQuotes,
+  searchInflated,
   searchesAddedIn,
   stripUnevidencedBrand,
   type ThemeEvidence,
@@ -2548,7 +2550,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // and E), on the front page only: the weekly's rows stay as they were.
   const pooledCounts = pooledDenominators(history.denominators, marketRivals)
   if (marketFirst) {
-    withMarketSides(subjects, { months: subjectMonths ?? [], subjects: subjectRows ?? [], counts: pooledCounts, month, prevMonth, marketRivals, read: subjectsRead })
+    withMarketSides(subjects, { months: subjectMonths ?? [], subjects: subjectRows ?? [], counts: pooledCounts, month, prevMonth, marketRivals, read: subjectsRead, prevComparable: joins(pair(prevMonth, month, 'market')) })
     const makers = subjectMakersAhead ? await subjectMakersAhead : null
     if (makers) withMakerShares(subjects, makers.lens, marketRivals)
   }
@@ -3010,9 +3012,14 @@ async function loadForYouQuestions(input: {
       console.error(`[pages] overview.foryou questions: ${(error as { message?: string })?.message ?? String(error)}`)
       return null
     })
+    // A READY subject first (T0a, OV-49; ruling U6): only its count prints, so
+    // a provisional subject asked about more never hides it. A provisional one
+    // is picked only where no ready one was asked about, and its line is then
+    // withheld (`buildForYou`).
+    const unready = (id: string): number => (calibrationOf.get(id) === 'ready' ? 0 : 1)
     const top = (asked ?? [])
       .filter((a) => a.questionVideos > 0)
-      .sort((a, b) => b.questionVideos - a.questionVideos || (askable.find((x) => x.id === a.subjectId)?.name ?? '').localeCompare(askable.find((x) => x.id === b.subjectId)?.name ?? ''))[0]
+      .sort((a, b) => unready(a.subjectId) - unready(b.subjectId) || b.questionVideos - a.questionVideos || (askable.find((x) => x.id === a.subjectId)?.name ?? '').localeCompare(askable.find((x) => x.id === b.subjectId)?.name ?? ''))[0]
     if (top) {
       const named = await nameQuestions(input.supabase, input.clientId, input.themedRunId, top.insights.map((i) => i.id)).catch(() => new Map<string, { registryId: string; label: string }>())
       const groups = new Map<string, { label: string; videos: Set<string> }>()
@@ -5029,11 +5036,27 @@ async function loadMarketReads(input: {
       return pickQuotes(read.candidates, leadVoiceOptions(clientId, month, theme, segments)).length
     },
   )
-  const leadExcluded = voiceless.size > 0 ? new Set([...excluded, ...voiceless]) : excluded
-  const leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
-  const provenance = leadId == null
-    ? null
-    : leadProvenance.has(leadId) ? leadProvenance.get(leadId) ?? null : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
+  // A THEME OUR NEW SEARCHES FOUND NEVER LEADS (T0a, mechanism 4; OV-8,
+  // MR-3): a candidate a third or more of whose month's videos came from
+  // searches first run that month (`searchInflated`) is passed over, as a
+  // voiceless one is. Past the candidates read, each next row's provenance is
+  // read in turn, at most a board's worth.
+  const inflated = [...leadIds].filter((id) => searchInflated(leadProvenance.get(id)))
+  let leadExcluded: Set<string> = voiceless.size > 0 || inflated.length > 0 ? new Set([...excluded, ...voiceless, ...inflated]) : excluded
+  const provenanceOf = async (id: string): Promise<ThemeProvenance> =>
+    leadProvenance.has(id) ? leadProvenance.get(id) ?? null : loadLeadProvenance(client, clientId, month, id, addedSearches)
+  let leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
+  let provenance = leadId == null ? null : await provenanceOf(leadId)
+  for (let i = 0; leadId != null && searchInflated(provenance) && i < final.rows.length; i++) {
+    leadExcluded = new Set([...leadExcluded, leadId])
+    leadId = final.rows.find((t) => mayLeadTheme(t, segments, leadExcluded))?.registryId ?? null
+    provenance = leadId == null ? null : await provenanceOf(leadId)
+  }
+  if (searchInflated(provenance)) {
+    leadExcluded = leadId ? new Set([...leadExcluded, leadId]) : leadExcluded
+    leadId = null
+    provenance = null
+  }
   const [changeRows, pairRows, recheck, brandsRead] = await Promise.all([changeRowsAhead, pairRowsAhead, recheckAhead, brandsAhead])
   return {
     themes,
@@ -5118,7 +5141,10 @@ async function loadArrivals(input: {
   }
   const fresh = await freshAhead
   const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
-  const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes.slice(0, ARRIVAL_THEMES_SHOWN)
+  // EVERY THEME THAT MAY BE LISTED OR COUNTED, NOT ONLY THE FIVE NAMED (T0a,
+  // mechanism 4): one our new searches found is neither (`firstHeardThemes`),
+  // so each one's provenance is read, in the page's one provenance read.
+  const named = fresh.regrouped ? [] : arrivalThemes(fresh.shown, shares, new Map()).newThemes
   const provenance = input.provenance
     ? await input.provenance.ask(named.map((t) => t.registryId))
     : await loadThemesProvenance(client, clientId, month, named.map((t) => t.registryId), input.addedSearches ?? addedSearchesRead(client, clientId, month))
@@ -5153,11 +5179,15 @@ function marketFrontPage(reads: MarketReads, input: {
   const { month, prevMonth } = input
   const counts = pooledDenominators(input.denominators, input.marketRivals)
   const themes = reads.themes.map((t) => (reads.lead && t.registryId === reads.lead.registryId ? { ...t, provenance: reads.lead.provenance } : t))
+  // THEMES ARE THE CATEGORY'S, SO THEIR PAIR IS THE THEMES VIEW (decision E,
+  // `viewForAudience`): a re-filing moves them, as it does not the market.
+  // Refused, the board carries no month before at all (T0a, OV-12 and the
+  // hero's August line, OV-7: the one condition). The refusal rides on the
+  // board as data (`chip`) and is never printed.
+  const themesPair = input.pair(prevMonth, month, INDUSTRY_AUDIENCE)
   const board: ThemeBoard = {
-    ...buildThemeBoard(themes, reads.n, month, reads.segments, reads.prev),
-    // THEMES ARE THE CATEGORY'S, SO THEIR PAIR IS THE THEMES VIEW (decision E,
-    // `viewForAudience`): a re-filing moves them, as it does not the market.
-    chip: pairChip(input.pair(prevMonth, month, INDUSTRY_AUDIENCE)),
+    ...buildThemeBoard(themes, reads.n, month, reads.segments, joins(themesPair) ? reads.prev : null),
+    chip: pairChip(themesPair),
   }
   const subjects = input.subjects.rows.map((r) => ({
     id: r.id,
@@ -5246,8 +5276,15 @@ export function withMarketSides(block: SubjectsBlock, input: {
    *  same input `buildSubjects` took. Optional: without it every month with
    *  rows reads as read. */
   read?: SubjectsReadIn
+  /** Whether the month before may print beside this month: the market pair
+   *  joins (`joins(pair(prevMonth, month, 'market'))`, the pair judge). False
+   *  and the block carries no month before at all, on any row (T0a, OV-45:
+   *  August printed beside a search-inflated September with no chip).
+   *  Omitted (a fixture with no pair), the month before stands. */
+  prevComparable?: boolean
 }): void {
   const byId = new Map(input.subjects.map((x) => [x.id, x]))
+  const prevShown = input.prevComparable ?? true
   const readIn = subjectReadInOf(input.read, input.months)
   for (const r of block.rows) {
     const subject = byId.get(r.id)
@@ -5273,12 +5310,12 @@ export function withMarketSides(block: SubjectsBlock, input: {
       ? null
       : marketSubjectSide(input.months, input.counts, r.id, input.prevMonth, input.marketRivals, known(input.prevMonth))
     r.market = { k: side.k, n: side.n, pct: side.pct, verdict: null, observed: side.k != null }
-    r.marketPrev = prev && prev.n != null ? prev : null
+    r.marketPrev = prevShown && prev && prev.n != null ? prev : null
   }
   block.market = {
     month: input.month,
     n: input.counts.get(input.month)?.videos ?? null,
-    prev: input.counts.has(input.prevMonth) ? { month: input.prevMonth, n: input.counts.get(input.prevMonth)?.videos ?? null } : null,
+    prev: prevShown && input.counts.has(input.prevMonth) ? { month: input.prevMonth, n: input.counts.get(input.prevMonth)?.videos ?? null } : null,
   }
 }
 
@@ -5442,6 +5479,10 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   // THE MONTH-PAIR RULE (decision D, WP1.3). No judge (a fixture) is "no pair
   // applies here": nothing refused, every step joined.
   const { pairFor, comparableFor, stepBreaks, stepReasons } = pairTools(input.pair)
+  // The category's month pair, judged once: with no judge (a fixture) nothing
+  // is refused.
+  const monthPairNow = pairFor(input.prevMonth, input.month, INDUSTRY_AUDIENCE)
+  const lastMonthShown = monthPairNow == null || joins(monthPairNow)
   const readIn = subjectReadInOf(input.read, input.months)
   const kOf = subjectKOf(input.months, readIn)
   // The word's k, by the same rule over the read axis's rows (WP3.4).
@@ -5549,11 +5590,17 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       rival,
       category,
       direction: input.thin ? null : directionWord(wordPoints, { asOf: input.asOf, comparable: comparableFor(INDUSTRY_AUDIENCE) }),
-      spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
+      // THE LINE STARTS AT ITS LATEST REFUSED STEP (T0a; the one condition):
+      // a month across a refused step is a gap here, so no chart, trail or
+      // "Aug → Sep" label built from this row can set it beside the months
+      // after it (`valuesSinceBreak`).
+      spark: valuesSinceBreak(axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)), stepBreaks(sparkMonths, INDUSTRY_AUDIENCE)),
       sparkMonths,
       sparkBreaks: stepBreaks(sparkMonths, INDUSTRY_AUDIENCE),
       sparkBreakWhy: stepReasons(sparkMonths, INDUSTRY_AUDIENCE),
-      categoryAtLastMonth: atLastMonthFor(input, s.id),
+      // "At this point last month" is the month pair's comparison too: none
+      // where the judge refuses it (T0a).
+      categoryAtLastMonth: lastMonthShown ? atLastMonthFor(input, s.id) : null,
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
     }), unread)
   })
@@ -5867,7 +5914,8 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       // the same slice `SubjectRow.spark` takes, so the two lines on one
       // artefact cannot be drawn over two different windows. Read by the
       // quarterly review's mover rows; nothing else reads it yet.
-      spark: onAxis.slice(-SPARK_MONTHS).map((p) => (p ? pctOf(p.k, p.videos) : null)),
+      // Nothing before the latest refused step (T0a; `valuesSinceBreak`).
+      spark: valuesSinceBreak(onAxis.slice(-SPARK_MONTHS).map((p) => (p ? pctOf(p.k, p.videos) : null)), stepBreaks(input.axis.slice(-SPARK_MONTHS), s.audience)),
       sparkMonths: input.axis.slice(-SPARK_MONTHS),
       sparkBreaks: stepBreaks(input.axis.slice(-SPARK_MONTHS), s.audience),
       // EARLIEST EVIDENCE ON THIS AXIS, NEVER A START DATE. The axis may not
@@ -6031,7 +6079,8 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
             prevMonth: input.prevMonth,
             makerShares: input.makerShares,
           }),
-          levelsPrev: input.prevMonth
+          // No month before beside a refused pair (T0a; the one condition).
+          levelsPrev: input.prevMonth && (!input.pair || joins(input.pair(input.prevMonth, input.month, input.audience)))
             ? { month: input.prevMonth, n: input.perAudience.get(`${input.prevMonth}|${input.audience}`) ?? null }
             : null,
         }

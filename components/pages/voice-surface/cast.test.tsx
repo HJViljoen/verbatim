@@ -23,10 +23,14 @@ describe('voiceCast (C4)', () => {
     expect(text).toContain('one of this group’s own comments')
   })
 
-  it('names when the groups were drawn in the column head, never as header meta (§2.4 C4)', () => {
-    expect(castHead(voiceFixture().cast)).toBe('grouped at the 20 Sep update, over everything read to date')
+  // T0a (mechanism 6; CV-25): the span, in market time, always.
+  it('names the span the groups are over in the column head, in market time, never as header meta (§2.4 C4)', () => {
+    expect(castHead()).toBe('all comments to date')
     const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('grouped at the 20 Sep update, over everything read to date')
+    expect(markup).toContain('all comments to date')
+    expect(markup).not.toContain('grouped at the')
+    const undated = { ...voiceFixture(), cast: { ...voiceFixture().cast!, profileDate: null } }
+    expect(renderText(voiceCast.render(undated, 'email', ctx))).toContain('all comments to date')
     expect(markup).toMatch(/<h2[^>]*>Who is talking<\/h2>/)
     // No block footer: the frame's footer rail (a quote's own cite is a <footer> too).
     expect(markup).not.toContain('<footer class="flex min-h-12')

@@ -70,7 +70,6 @@ const hero = (over: Partial<Parameters<typeof YourMarketCard>[0]> = {}) => (
     videos={654}
     split={SEP}
     prev={{ month: '2026-08-01', split: AUG }}
-    chip={CHIP}
     ownPosts={20}
     movesLabel="Your moves"
     movesHref="/dashboard/market"
@@ -93,7 +92,10 @@ describe('Your market, the card the preview opens on (WP3.10)', () => {
     expect(read(renderText(hero({ soFar: true })))).toContain('654 videos in September so far.')
   })
 
-  it('draws the bar of its two parts, and prints the split, the month before, the chip and what is not in it', () => {
+  // The month before prints only where the page's market pair joins (T0a,
+  // ST-10: the loader passes none where it is refused, and the card carries
+  // no refusal chip at all).
+  it('draws the bar of its two parts, and prints the split, the month before and what is not in it, with no chip', () => {
     const html = render(hero())
     expect(html).toContain('role="img" aria-label="654 videos: 625 in the category, 29 filed under brands you track"')
     expect(html).toContain('flex:625 1 0')
@@ -104,7 +106,8 @@ describe('Your market, the card the preview opens on (WP3.10)', () => {
     expect(t).toContain('29 filed under brands you track')
     expect(t).toContain('Cotopaxi 12, Freitag 6, The North Face 6, Patagonia 5')
     expect(t).toContain('August: 377 · 351 in the category and 26 under brands you track')
-    expect(t).toContain(CHIP)
+    expect(t).not.toContain(CHIP)
+    expect(html).not.toContain('data-pair-chip')
     expect(t).toContain('Not in it: your own posts (20 in September, read on Your moves) and the comments under brands’ own posts.')
   })
 
@@ -125,7 +128,7 @@ describe('Your market, the card the preview opens on (WP3.10)', () => {
   })
 
   it('leaves out what it could not read, and reads "not measured" before MF1', () => {
-    const t = read(renderText(hero({ prev: null, chip: null, ownPosts: null })))
+    const t = read(renderText(hero({ prev: null, ownPosts: null })))
     expect(t).not.toContain('August:')
     expect(t).not.toContain('not read as a change')
     expect(t).toContain('Not in it: your own posts, read on Your moves, and the comments under brands’ own posts.')

@@ -1,13 +1,12 @@
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { MAKERS_NOT_MEASURED, groupFigures, makerCell, prevReadK, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { MAKERS_NOT_MEASURED, boardPrev, groupFigures, makerCell, prevReadK, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, RULE, SCALE, barAxis, isMarketPage } from './market'
 
@@ -73,8 +72,10 @@ function GroupLine({ words, group, mode, show }: { words: string; group: { count
   )
 }
 
-function Board({ board, mode, chip, voiceHref }: { board: ThemeBoard; mode: 'app' | 'print' | 'email'; chip: string | null; voiceHref?: string }) {
-  const prev = board.prev && board.prev.n != null ? board.prev : null
+function Board({ board, mode, voiceHref }: { board: ThemeBoard; mode: 'app' | 'print' | 'email'; voiceHref?: string }) {
+  // No month before beside a refused themes pair, and no refusal chip (T0a).
+  const shown = boardPrev(board)
+  const prev = shown && shown.n != null ? shown : null
   const makersColumn = board.segments === 'measured'
   // No August mark where August did not read the theme (`prevReadK`): the
   // cell beside it prints "·", so the bar draws no tick at zero either.
@@ -115,7 +116,6 @@ function Board({ board, mode, chip, voiceHref }: { board: ThemeBoard; mode: 'app
         {board.makers ? <GroupLine words="Makers and DIY, grouped" group={board.makers} mode={mode} /> : null}
         {board.setAside ? <GroupLine words="Set aside as off-topic" group={board.setAside} mode={mode} /> : null}
         {board.segments === 'unknown' ? <InnerLine mode={mode}>Makers’ videos are not marked yet; this list groups them once they are.</InnerLine> : null}
-        <PairChip words={chip} mode={mode} />
       </div>
     )
   }
@@ -194,7 +194,6 @@ function Board({ board, mode, chip, voiceHref }: { board: ThemeBoard; mode: 'app
           {board.segments === 'unknown' ? <InnerLine mode={mode}>Makers’ videos are not marked yet; this list groups them once they are.</InnerLine> : null}
         </div>
       ) : null}
-      <PairChip words={chip} mode={mode} />
     </div>
   )
 }
@@ -216,7 +215,7 @@ export const overviewThemes: Block<OverviewData> = {
     const empty = overviewThemes.emptyState(data)
     return (
       <BlockFrame title={overviewThemes.title} mode={mode} footer={footer} roomy>
-        {empty || !board ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Board board={board} mode={mode} chip={board.chip ?? null} voiceHref={`${ctx.appUrl}${voice.href}`} />}
+        {empty || !board ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : <Board board={board} mode={mode} voiceHref={`${ctx.appUrl}${voice.href}`} />}
       </BlockFrame>
     )
   },

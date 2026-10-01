@@ -22,7 +22,7 @@ import type { PlatformMix } from '../reading/types'
 import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan } from '../settings/deck-record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isMissingMonthTable } from '../reading/monthly'
-import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
+import { isAnswer, priorPrintable, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { gapBasisLine, gapBetween, gapLine, inheritRefusal, GAP_WORDS, type Gap, type GapSide } from '../reading/gap'
 import type { Grounding } from '../reading/afterwards'
 import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
@@ -65,6 +65,8 @@ import type { HeadToHead } from '../reading/head-to-head'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
 import type { MoveReading } from '../reading/moves'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
+import { quarterPairJoins } from './reports-card'
+import { loadAppPairOn } from '../reading/gather-flags'
 
 /**
  * The quarterly review's loader (Phase 1 WP20, design item 14).
@@ -399,7 +401,7 @@ export interface CategoryPage {
    *  counts. NOT a verdict: a volume is not a share of itself, and banding one
    *  against the other prints "4,147 of 4,147 · no clear change". Null where
    *  the window read could not be taken. */
-  quarterVolume: { videos: number; before: number } | null
+  quarterVolume: { videos: number; before: number | null } | null
 }
 
 export interface RivalsPage {
@@ -765,7 +767,9 @@ export function coverBody(input: {
   if (input.lead && isAnswer(input.lead.state)) {
     parts.push(
       `The biggest banded change in ${input.monthLabel} is ${input.lead.objectLabel}, at [[lead_share]] of [[lead_of]] videos${
-        input.monthOutside ? `, the month in hand rather than a month of ${input.quarterLabel}` : ''
+        // The basis in market terms (T0a, mechanism 6; QR-7): the month is
+        // named as outside the quarter, never "the month in hand".
+        input.monthOutside ? `, a month outside ${input.quarterLabel}` : ''
       }.`,
     )
   } else {
@@ -803,7 +807,8 @@ export function coverBody(input: {
  */
 export function monthBasisClause(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
-  return `the month-level pages read ${longMonth(month)}, outside this quarter`
+  // In market terms (T0a, mechanism 6; QR-5): the pages' month, named.
+  return `the month pages show ${longMonth(month)}, outside this quarter`
 }
 
 /** The same fact as a sentence a page can print under its own rows. Null while
@@ -811,7 +816,9 @@ export function monthBasisClause(month: string, quarter: Quarter): string | null
  *  headed Q3 can let a month figure speak for itself. */
 export function monthOutsideNote(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
-  return `${longMonth(month)} is outside this quarter: it is the month the product is in now.`
+  // In market terms (T0a, mechanism 6; QR-5): whose figures these are, never
+  // "the month the product is in now".
+  return `These figures are ${longMonth(month)}’s, a month outside this quarter.`
 }
 
 /**
@@ -890,7 +897,8 @@ export function unsettledItems(
           ? `band ±${Math.round(v.bandPts * 10) / 10}`
           : MOVEMENT_WORDS[v.state as keyof typeof MOVEMENT_WORDS] ?? MOVEMENT_WORDS.too_little_data,
       body: `${v.objectLabel} read ${v.value.n > 0 ? `${fmtInt(v.value.k)} of ${fmtInt(v.value.n)} videos` : 'nothing we could count'} in this window${
-        v.baseline ? `, against ${fmtInt(v.baseline.k)} of ${fmtInt(v.baseline.n)} before it` : ''
+        // Never beside a refused comparison (T0a; the one condition).
+        v.baseline && priorPrintable(v) ? `, against ${fmtInt(v.baseline.k)} of ${fmtInt(v.baseline.n)} before it` : ''
       }.`,
     }))
 }
@@ -1010,6 +1018,8 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     changeLog,
     quiet,
     draft: options.draft ?? null,
+    // The product's month judge, which fails closed (`refuseEveryPair`).
+    joined: scope.reading ? quarterPairJoins(await loadAppPairOn(scope.reading, readingAt), prior, quarter) : false,
   })
 }
 
@@ -1207,6 +1217,10 @@ export interface ComposeQuarterlyInput {
    *  could not look" are two different sentences. */
   quiet?: QuarterQuiet[] | null
   draft?: string | null
+  /** Is the quarter pair read the same way: every month step across the two
+   *  quarters joins under the month judge (`quarterPairJoins`, T0a)? Absent
+   *  reads as joined (a fixture, or a caller with no judge). */
+  joined?: boolean
 }
 
 /**
@@ -1233,6 +1247,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     subjectsBefore: a.subjectsBefore,
     readings,
     overview,
+    joined: a.joined !== false,
   })
   const windowApplied = a.thisQuarter.denominators != null
   // The theme half is its own read and its own silence: a window pair can
@@ -1275,6 +1290,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     monthNote,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
+    joined: a.joined !== false,
   })
   // THE COVER IS BUILT AFTER THE PAGES IT QUOTES, NOT BEFORE THEM. Its three
   // cards are page 3's quarter gap, page 4's attention panel and the largest of
@@ -1359,11 +1375,23 @@ function buildQuarterVerdicts(a: {
   subjectsBefore: SubjectWindowReading[] | null
   readings: number
   overview: OverviewData
+  /** Does every month step across the two quarters join under the month judge
+   *  (`quarterPairJoins`)? Where it does not, every quarter comparison on these
+   *  pages is refused: this quarter's count alone, no quarter before, nothing
+   *  printed about it (T0a review, finding 5; the Reports card's own rule). */
+  joined: boolean
 }): Verdict[] {
   const now = a.thisQuarter.denominators
   const before = a.lastQuarter.denominators
   if (!now || !before) return []
   const out: Verdict[] = []
+  // THE PAIR JUDGE, ONCE FOR THE WHOLE ARTEFACT (T0a review, finding 5). The
+  // cover, "Our read" and the subjects' quarter columns read these verdicts,
+  // and they ignored the judge the Reports card already obeyed, so the card and
+  // the review it opens could disagree once the quarter view unlocks. Under the
+  // gate every verdict is `baseline_forming` and carries no quarter before
+  // anyway; past it, a quarter pair the judge refuses is refused here.
+  const refused = a.joined ? undefined : ('tracking_change' as const)
   // NO VERDICT ON AN AUDIENCE'S OWN VOLUME. The first cut built one per
   // audience as `value: {k: videos, n: videos}` against the same pair before
   // it — 100% against 100%, so `proportionDelta` answered 0 points and the
@@ -1390,10 +1418,10 @@ function buildQuarterVerdicts(a: {
     // none: dropped, rather than printed to a client as a raw id.
     const label = themeLabel(t.theme_id, a.overview)
     if (!was || !n || !priorN || !label) continue
-    // NOT UNDER THE MONTH-PAIR RULE YET (market-first decision D): a quarter
-    // against a quarter is WP3.11's (deploy 5). The plan's first quarter
-    // comparison is Q1 2027 against Q4 2026, in April (§2.11); Q4 against Q3
-    // is refused by comparability.
+    // UNDER THE MONTH-PAIR RULE, STEP BY STEP (`quarterPairJoins`, T0a): a
+    // quarter against a quarter is refused where any month step across the
+    // two is. The plan's first quarter comparison read the same way is Q1
+    // 2027 against Q4 2026, in April (§2.11).
     out.push(
       quarterChange({
         object: { kind: 'theme', id: t.theme_id, label },
@@ -1403,6 +1431,7 @@ function buildQuarterVerdicts(a: {
         value: { k: t.videos, n },
         baseline: { k: was.videos, n: priorN },
         readings: a.readings,
+        ...(refused ? { refused } : {}),
       }),
     )
   }
@@ -1445,6 +1474,7 @@ function buildQuarterVerdicts(a: {
           value: { k: subjectsNow.get(`${audience}:${row.id}`)?.videos ?? 0, n },
           baseline: { k: subjectsBefore.get(`${audience}:${row.id}`)?.videos ?? 0, n: priorN },
           readings: a.readings,
+          ...(refused ? { refused } : {}),
         }),
       )
     }
@@ -1734,9 +1764,14 @@ function buildRead(a: {
   // same figure the cover was calling a quarter change. A month's reading is
   // still on the pages that own it, and is still in `verdicts` below for
   // anything that audits what this artefact drew.
+  // AND NEVER A REFUSED ONE (T0a review, finding 5; the one condition): a
+  // quarter comparison the pair judge refused is not shown, so the read does
+  // not argue from it or say that it was refused ("could have been compared
+  // and were not, because …" is the reason the rule forbids). It says what it
+  // says of a quarter with no comparison drawn.
   const interpretation = composeInterpretation(
     'interpretation_quarterly',
-    a.quarterVerdicts,
+    a.quarterVerdicts.filter((v) => v.state !== 'refused'),
     proseFigures(a.cover.figures),
     quotes.map((q) => ({ ref: q.quote.ref, context: q.cite })),
     { draft: a.draft },
@@ -1844,11 +1879,13 @@ function buildSubjects(a: {
     // A refusal on EITHER column refuses the difference: if the product will
     // not say whether one side moved, it will not say how far apart they are
     // either, because both refusals are about the same break in the record.
-    // A refused column that recorded no reason draws NO gap rather than a
-    // difference beside it (`inheritRefusal`, lib/reading/gap.ts).
+    // AND A REFUSED GAP IS NOT DRAWN AT ALL (T0a; the one condition): no
+    // "comparison refused" headline, no reason and no quarter before. It was
+    // drawn refused where a reason was recorded (`inheritRefusal`,
+    // lib/reading/gap.ts), which no quarter verdict carried until the pair
+    // judge reached them.
     const inherited = inheritRefusal([you, category])
-    if (inherited.refused && !inherited.reason) return null
-    const refused = inherited.reason ?? undefined
+    if (inherited.refused) return null
     return gapBetween({
       objectKind: 'subject',
       objectId: row.id,
@@ -1859,7 +1896,6 @@ function buildSubjects(a: {
       ...(a0 && b0 && you.basis && category.basis
         ? { basis: { a: a0, b: b0, window: { kind: 'quarter' as const, from: you.basis.from, to: you.basis.to } } }
         : {}),
-      ...(refused ? { refused } : {}),
       // A subject's membership is not a clustering artefact.
       regime: 'n/a',
     })
@@ -1993,6 +2029,7 @@ export function withFlags(mover: Mover): QuarterMover {
 }
 
 function buildCategory(a: {
+  joined: boolean
   overview: OverviewData
   quiet: QuarterQuiet[] | null
   quotes: { quote: Quote; cite: string }[]
@@ -2083,7 +2120,10 @@ function buildCategory(a: {
           : quarter.length === 0
             ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
             : null,
-    quarterVolume: videos != null && before != null ? { videos, before } : null,
+    // THE QUARTER BEFORE'S COUNT ONLY WHERE THE PAIR IS READ THE SAME WAY (T0a;
+    // QR-10): a video count across two quarters answers a question about our
+    // gathering where a month step between them is refused.
+    quarterVolume: videos != null ? { videos, before: a.joined ? before : null } : null,
   }
 }
 
@@ -2486,18 +2526,10 @@ function buildUnsettled(a: {
   }
   for (const row of a.subjects.rows) {
     if (row.categoryQuarter || row.youQuarter) continue
-    // A PROVISIONAL OR FAILED SUBJECT IS WAITING ON ITS CHECK, not on its
-    // sides (decision C, WP1.1): "neither side read" would be false of it.
-    if (!earnsVerdict(row.calibration)) {
-      waiting.push({
-        title: `${row.label}, quarter on quarter`,
-        why: row.calibration === 'failed' ? 'being re-described' : 'provisional',
-        line: row.calibration === 'failed'
-          ? 'This subject is being re-described, so no verdict is printed for it.'
-          : 'This subject is provisional until its check clears, so no verdict is printed for it.',
-      })
-      continue
-    }
+    // A PROVISIONAL OR FAILED SUBJECT IS NOT A LINE HERE (T0a; ruling U6):
+    // "neither side read" would be false of it, and why it has no figure is
+    // ours to know, not the market's. It keeps its name on its page.
+    if (!earnsVerdict(row.calibration)) continue
     waiting.push({
       title: `${row.label}, quarter on quarter`,
       why: 'neither side read on both sides',

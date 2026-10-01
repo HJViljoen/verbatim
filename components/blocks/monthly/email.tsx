@@ -148,32 +148,6 @@ export function Body({ children, marginTop = 0, size = 15 }: { children: ReactNo
   return <div style={{ fontFamily: FONT.sans, fontSize: size, lineHeight: size >= 15 ? '24px' : '22px', color: EMAIL.ink2, marginTop }}>{children}</div>
 }
 
-/**
- * The "not read as a change" chip, as the email artboard sets it: the mark,
- * the clause before the colon in ink at 600, the reason after it. The words
- * are the pair's own (`pairChipWords`), untouched; only the first letter is
- * raised, because the line starts a sentence here.
- */
-export function ChipLine({ words, marginTop = 16 }: { words: string | null | undefined; marginTop?: number }) {
-  if (!words) return null
-  const cut = words.indexOf(': ')
-  const lead = cut > 0 ? words.slice(0, cut + 1) : null
-  const rest = cut > 0 ? words.slice(cut + 2) : words
-  const upper = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`
-  return (
-    <table width="100%" {...presentation} style={{ ...T, marginTop }}>
-      <tbody>
-        <tr>
-          <td style={{ width: 22, verticalAlign: 'top', fontFamily: FONT.sans, fontSize: 14, lineHeight: '22px', color: EMAIL.muted }} aria-hidden>⊘</td>
-          <td data-copy="verdict" data-pair-chip="" style={{ fontFamily: FONT.sans, fontSize: 14, lineHeight: '22px', color: EMAIL.ink2 }}>
-            {lead ? <><span style={{ fontWeight: 600, color: EMAIL.ink }}>{upper(lead)}</span> {rest}.</> : `${upper(rest)}.`}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  )
-}
-
 /** A sub-heading inside a section ("Asked", "Came in"). */
 export function SubHead({ children, marginTop = 0 }: { children: ReactNode; marginTop?: number }) {
   return <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '22px', fontWeight: 600, color: EMAIL.ink, marginTop }}>{children}</div>

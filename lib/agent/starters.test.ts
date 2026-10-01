@@ -46,10 +46,17 @@ describe('starter questions, written by code from the front page’s biggest obj
       .toEqual([['Interest in specific colors', 11]])
   })
 
-  it('offers the biggest subject in the words Subjects’ "Ask about this" sends, never a failed one', () => {
-    const subject = cards.find((c) => c.question.startsWith('What does my market say about'))
-    expect(subject).toEqual({ question: 'What does my market say about Looks & style?', rows: [{ kind: 'subject', label: 'Looks & style, a subject', k: 104, tags: ['provisional', 'over a third makers'] }] })
+  // T0a (AK-4; ruling U6): only a READY subject is offered, since its count,
+  // rank and maker share rest on its matching; every subject on the fixture
+  // is provisional or failed, so none is offered.
+  it('offers the biggest READY subject in the words Subjects’ "Ask about this" sends, never a provisional or failed one', () => {
+    expect(cards.find((c) => c.question.startsWith('What does my market say about'))).toBeUndefined()
     expect(cards.some((c) => c.question.includes('Repair'))).toBe(false)
+    const ready = starterQuestions({ subjects: [
+      { label: 'Looks & style', calibration: 'ready', market: { k: 104 }, makerShare: 0.34 },
+      { label: 'Comfort', calibration: 'provisional', market: { k: 200 }, makerShare: null },
+    ] })
+    expect(ready.find((c) => c.question.startsWith('What does my market say about'))).toEqual({ question: 'What does my market say about Looks & style?', rows: [{ kind: 'subject', label: 'Looks & style, a subject', k: 104, tags: ['about a third makers'] }] })
   })
 
   it('is six cards at most, none empty, none twice', () => {

@@ -23,7 +23,7 @@ import {
   type MoveReadingInput,
   type MoveSeries,
 } from './moves'
-import type { Verdict } from './verdicts'
+import { priorPrintable, type Verdict } from './verdicts'
 import { monthlyLineLabel } from '../pages/overview'
 
 const MONTH = '2026-09-01'
@@ -587,12 +587,16 @@ describe('readMove under the month-pair rule (decision D, WP1.3)', () => {
     expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed our searches in September.')
   })
 
-  it('a pair that could not have been compared anyway reads "too few to compare", its step still broken (deploy 1 review)', () => {
-    // The fixture's own side: 8 of 110 in July, under the band's 10.
+  it('a refused pair on thin data is refused too, with no month before, its step still broken (T0a review, finding 1)', () => {
+    // The fixture's own side: 8 of 110 in July, under the band's 10. It read
+    // "too few to compare" with July kept beside September (deploy 1 review);
+    // the judge's refusal wins now.
     const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
     const r = reading({ pair: judge })
-    expect(r.verdict?.state).toBe('too_little_data')
-    expect(r.verdict?.pair).toBeUndefined()
+    expect(r.verdict?.state).toBe('refused')
+    expect(r.verdict?.pair?.mode).toBe('refuse')
+    expect(r.verdict?.baseline).toBeUndefined()
+    expect(priorPrintable(r.verdict)).toBe(false)
     expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed our searches in September.')
   })
 

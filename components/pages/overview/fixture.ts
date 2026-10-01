@@ -8,7 +8,7 @@ import type { LevelRow, OverviewData, RivalRow, SideReading, SubjectRow } from '
 import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, buildSubjects, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
 import { JUDGE_VERSION, type Subject } from '@/lib/subjects/types'
 import { subjectCountedFrom, unreadWords } from '@/lib/subjects/read-in'
-import { pairOn } from '@/lib/reading/pairs'
+import { pairOn, type PairOn } from '@/lib/reading/pairs'
 import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { kindShares } from '@/lib/reading/kinds'
 import { moodShares } from '@/lib/reading/mood'
@@ -213,8 +213,10 @@ export function cardFixture(): MoveCandidate {
 }
 
 /** One move, read: declared in August, so July is the last clean month before
- *  it and September the latest after it. August is drawn and not compared. */
-export function moveReadingFixture(calibration?: 'ready' | 'provisional' | 'failed'): MoveReading {
+ *  it and September the latest after it. August is drawn and not compared.
+ *  `pair`: the month judge to read it under (a fixture pins rendering with
+ *  none; T0a's structural checks read it under Sealand's). */
+export function moveReadingFixture(calibration?: 'ready' | 'provisional' | 'failed', pair: PairOn | null = null): MoveReading {
   const line = (audience: string, label: string, touched: boolean, ks: [number, number][]) => ({
     audience,
     label,
@@ -228,7 +230,7 @@ export function moveReadingFixture(calibration?: 'ready' | 'provisional' | 'fail
     })),
   })
   return readMove({
-    pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
+    pair, // none by default: a fixture pins rendering (lib/test/pair-fixture.ts)
     move: {
       id: 'mv-1',
       title: 'Push repairability',

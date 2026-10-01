@@ -49,7 +49,9 @@ import {
   mayLead,
   namesABrand,
   pickQuotes,
+  searchInflated,
   stripUnevidencedBrand,
+  shownFlags,
   themeFlags,
   themeProvenance,
   type ConversationBoard,
@@ -58,6 +60,7 @@ import {
   type ThemeFlag,
 } from './overview-market'
 import { row, rows as readRows } from './read'
+import { joins } from '../reading/comparability'
 import { readConversationView, viewParams } from '../views/conversation'
 import type { ViewState } from '../views/state'
 import { VIEW_PARAM } from '../views/view'
@@ -898,16 +901,18 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     })
     if (voiceless.size > 0) leadExcluded = new Set([...excluded, ...voiceless])
   }
-  const hero = heroLead(leadBoard, [], leadExcluded)
-  const leadId = hero.kind === 'themes' ? hero.lead?.registryId ?? null : null
-
-  // THE FLAGS AND THE PROVENANCE, IN.
+  // THE FLAGS AND THE PROVENANCE, IN, before the lead: a theme our new
+  // searches found never leads (T0a, mechanism 4; `searchInflated`).
   const [{ heardBefore, regrouped }, { added, evidence }] = await Promise.all([flagsAhead, provenanceAhead])
   themes = themes.map((t) => ({
     ...t,
     flags: themeFlags({ k: t.k, prevK: t.prev?.k ?? null, heardBefore: (t.prev?.k ?? 0) > 0 || heardBefore.has(t.registryId), regrouped: regrouped.has(t.registryId) }),
     provenance: cv.provenance(themeProvenance(refs.get(t.registryId) ?? [], evidence, added), t.k),
   }))
+  const inflated = themes.filter((t) => searchInflated(t.provenance)).map((t) => t.registryId)
+  if (inflated.length > 0) leadExcluded = new Set([...leadExcluded, ...inflated])
+  const hero = heroLead(leadBoard, [], leadExcluded)
+  const leadId = hero.kind === 'themes' ? hero.lead?.registryId ?? null : null
 
   // THE CATEGORY'S VIDEOS IN A THEME AT 10+ (C1's second line): the union of
   // their videos, where every one of them was read.
@@ -916,8 +921,15 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? new Set(tenIds.flatMap((id) => refs.get(id) ?? [])).size
     : null)
   const pair = await judgeAhead
-  const chip = pairChip(pair(prevMonth, month, INDUSTRY_AUDIENCE))
-  const board = buildConversationBoard(themes, n, month, segments, prevN != null ? { month: prevMonth, n: prevN } : null, {
+  const themesPair = pair(prevMonth, month, INDUSTRY_AUDIENCE)
+  const chip = pairChip(themesPair)
+  // A REFUSED THEMES PAIR CARRIES NO MONTH BEFORE AND NO FLAG (T0a, CV-10 and
+  // CV-11; the one condition), and a theme our own new searches found is
+  // never "New" (§B.4, `shownFlags`). The refusal is data here (`chip`) and
+  // is never printed.
+  const joined = joins(themesPair)
+  themes = themes.map((t) => ({ ...t, flags: shownFlags(t, { chip }) }))
+  const board = buildConversationBoard(themes, n, month, segments, joined && prevN != null ? { month: prevMonth, n: prevN } : null, {
     expanded,
     belowCount: pool.length - atTenIds.length,
     inThemes,

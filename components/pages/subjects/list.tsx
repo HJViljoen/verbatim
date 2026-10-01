@@ -17,7 +17,7 @@ import { fmtInt, fmtPct, fullDate, longMonth, shortDate } from '@/lib/format'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectRail, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { calibrationWord, FAILED_EXPLAINED, isFailed } from '@/lib/subjects/calibration-state'
+import { calibrationWord, isFailed, printsMarket } from '@/lib/subjects/calibration-state'
 import { levelText } from '@/lib/reading/level'
 
 // SU1 · The subjects, and editing them (design §3 SU1; the mock's first rail
@@ -68,9 +68,11 @@ function marketLevel(m: { k: number; n: number }): string {
  * re-described", "not counted yet"). Null for a ready row with nothing to say.
  */
 export function railTags(r: SubjectRail, n: number | null): { word: string | null; maker: string | null; count: boolean } {
-  const failed = isFailed(r.calibration)
-  const figure = !failed && r.status === 'active' && r.market != null
-  const word = failed ? calibrationWord(r.calibration) : figure ? calibrationWord(r.calibration) : r.note ?? NO_READING_YET
+  // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, SB-9; ruling U6): no
+  // word, no maker share and no count tag, since each rests on its matching.
+  if (!printsMarket(r.calibration)) return { word: null, maker: null, count: false }
+  const figure = r.status === 'active' && r.market != null
+  const word = figure ? calibrationWord(r.calibration) : r.note ?? NO_READING_YET
   return {
     word,
     maker: figure ? makerWords(r.makerShare ?? null) : null,
@@ -100,11 +102,14 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
   const base = l.base!
   const email = mode === 'email'
   const n = base.n
-  const prev = base.prev
-  // ONE PLAIN LINE UNDER THE RAIL where a subject is being re-described
-  // (finish-list item 21), never on a rail without one. On the page only: the
-  // briefs that borrow this block are on hold and print as they did.
-  const explained = mode === 'app' && l.rows.some((r) => isFailed(r.calibration)) ? FAILED_EXPLAINED : null
+  // THE ONE CONDITION (T0a, SB-14): the loader leaves the month before out
+  // where the market pair is refused. A copy stored before that rule still
+  // carries it; the pane beside the rail judged the same market pair, and
+  // where it carries the refusal the month before is not printed here.
+  const prev = data.selected?.chip ? null : base.prev
+  // NO LINE EXPLAINING A SUBJECT BEING RE-DESCRIBED (T0a, ruling U6): it is
+  // its name alone, and why it has no figure is ours, not the market's.
+  const explained: string | null = null
   if (email) {
     const c = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 10px 4px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
     const num = { ...c, fontFamily: FONT.mono, textAlign: 'right' as const }
@@ -121,7 +126,7 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
         <tbody>
           {l.rows.map((r) => {
             const t = railTags(r, n)
-            const figure = !isFailed(r.calibration) && r.status === 'active' && r.market != null
+            const figure = printsMarket(r.calibration) && r.status === 'active' && r.market != null
             const tag = [t.word, t.maker, t.count ? 'under 10, a count' : null, figure ? prevCountTag(r.marketPrev?.k, prev) : null].filter(Boolean).join(' · ')
             return (
               <tr key={r.id}>
@@ -151,7 +156,7 @@ function MarketRail({ data, mode }: { data: SubjectsData; mode: RenderMode }) {
       {l.rows.map((r) => {
         const t = railTags(r, n)
         const failed = isFailed(r.calibration)
-        const figure = !failed && r.status === 'active' && r.market != null
+        const figure = printsMarket(r.calibration) && r.status === 'active' && r.market != null
         const prevCount = figure ? prevCountTag(r.marketPrev?.k, prev) : null
         const tags = (
           <span className={`col-span-full flex flex-wrap items-center gap-x-1.5 pt-0.5 ${SCALE.tag}`}>
@@ -243,6 +248,9 @@ export const subjectsList: Block<SubjectsData> = {
         >
           <SubjectEditor
             chrome={false}
+            // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a; ruling
+            // U6): nothing resting on its matching reaches the editor, on a
+            // stored row too.
             rows={l.rows.map((r) => ({
               id: r.id,
               name: r.name,
@@ -250,13 +258,14 @@ export const subjectsList: Block<SubjectsData> = {
               namedAt: r.namedAt,
               status: r.status,
               because: originLine(r.origin),
-              level: r.level,
-              market: r.market ?? null,
-              note: r.note,
-              verdict: r.verdict,
+              level: printsMarket(r.calibration) ? r.level : null,
+              market: printsMarket(r.calibration) ? r.market ?? null : null,
+              note: printsMarket(r.calibration) ? r.note : null,
+              verdict: printsMarket(r.calibration) ? r.verdict : null,
               selected: r.selected,
               href: r.href || undefined,
-              withheld: isFailed(r.calibration),
+              // Not ready: its name alone (T0a; ruling U6).
+              withheld: !printsMarket(r.calibration),
             }))}
             setLine={l.setLine}
             notRecorded={l.notRecorded}
@@ -289,14 +298,17 @@ export const subjectsList: Block<SubjectsData> = {
               // second time in the level's place.
               const word = calibrationWord(r.calibration)
               const failed = isFailed(r.calibration)
-              const note = r.note && r.note !== word ? r.note : null
+              // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a; ruling
+              // U6): no level, no note and no word, on a stored row too.
+              const shown = printsMarket(r.calibration)
+              const note = shown && r.note && r.note !== word ? r.note : null
               // A ROW WITH NO FIGURE AND ITS OWN SENTENCE (a subject the
               // month was not read for, "no reading yet", or one not
               // confirmed yet) says that sentence and no
               // word under its name, as the app's rail does: one line saying
               // why there is no figure, not two.
               const tagged = failed || r.market != null || r.level != null || note == null
-              const level = r.level && r.level.pct != null ? (
+              const level = !shown ? null : r.level && r.level.pct != null ? (
                 <>
                   <span data-copy="level" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'} style={email ? { fontFamily: FONT.mono, color: EMAIL.muted } : undefined}>
                     {fmtPct(r.level.pct)} of your videos · {fmtInt(r.level.k)} of {fmtInt(r.level.n)} videos
@@ -312,7 +324,7 @@ export const subjectsList: Block<SubjectsData> = {
                 </>
               ) : r.status === 'active' && r.market ? (
                 // The market's level, named (decision C with E). Never your
-                // own level.
+                // own level. Only a ready subject's (T0a, ruling U6).
                 // Through `levelText` (WP1.1 review, finding 5): a whole
                 // percent over its count at 100 videos or more, the count
                 // alone under it.

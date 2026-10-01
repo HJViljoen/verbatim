@@ -325,27 +325,26 @@ describe('BlockMovement: the month-pair rule (market-first decision D, WP1.3)', 
   }
   const SENTENCE = 'Not read as a change: we changed our searches in September.'
 
-  it('prints the refusal\'s own sentence in every mode, never "moved" and never a change', () => {
+  // T0a (plan §0a, the one condition): a refused comparison is not shown and
+  // not explained, in any mode: no sentence, no "not compared", no chip.
+  it('prints nothing for a refused pair, in every mode, and never "moved" or a change', () => {
+    expect(SENTENCE).toContain('Not read as a change')
     for (const mode of MODES) {
-      const markup = render(<BlockMovement mode={mode} verdict={looks} unit="pts" />)
-      assertCopyContract(markup)
-      expect(markupText(markup)).toBe(SENTENCE)
-      expect(markup).not.toContain('▲')
-      if (mode === 'email') assertEmailSafe(markup)
+      expect(render(<BlockMovement mode={mode} verdict={looks} unit="pts" />), mode).toBe('')
     }
   })
 
-  it('a pair not compared yet names the update it is read with next', () => {
+  it('a pair not compared yet prints nothing either, and names no update', () => {
     const notYet: Verdict = { ...looks, refusedReason: 'depth', pair: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: '2026-12-13T04:00:00.000Z' } }
-    expect(markupText(render(<BlockMovement mode="app" verdict={notYet} />))).toBe('Not compared yet: checked with the 13 Dec update.')
+    for (const mode of MODES) expect(render(<BlockMovement mode={mode} verdict={notYet} />), mode).toBe('')
   })
 
-  it('a pair a change of ours touched a little of keeps its band and carries the note', () => {
+  it('a pair a change of ours touched a little of keeps its band and prints bare, with no note (T0 ruling U4)', () => {
     const flagged: Verdict = { ...moved, flags: ['tracking_change'], pair: { mode: 'flag', cause: 'ours', changeMonth: '2026-10-01', checkWith: null } }
     for (const mode of MODES) {
       const markup = render(<BlockMovement mode={mode} verdict={flagged} unit="pts" />)
       assertCopyContract(markup)
-      expect(markupText(markup)).toContain('Read with a note: a change of ours in October touched under a tenth of the videos.')
+      expect(markupText(markup)).not.toContain('Read with a note')
       expect(markupText(markup)).toContain('6.9')
     }
   })
@@ -360,9 +359,11 @@ describe('BlockMovement', () => {
     }
   })
 
-  it('says the same thing in an email as on the screen', () => {
-    expect(markupText(render(<BlockMovement mode="app" verdict={refused} />))).toBe('comparison refused')
-    expect(markupText(render(<BlockMovement mode="email" verdict={refused} />))).toBe('comparison refused')
+  it('says the same thing in an email as on the screen: for a refusal, nothing (T0a)', () => {
+    expect(render(<BlockMovement mode="app" verdict={refused} />)).toBe('')
+    expect(render(<BlockMovement mode="email" verdict={refused} />)).toBe('')
+    expect(markupText(render(<BlockMovement mode="app" verdict={{ state: 'too_little_data', change: 0, band: 2 }} />))).toBe('too few to compare')
+    expect(markupText(render(<BlockMovement mode="email" verdict={{ state: 'too_little_data', change: 0, band: 2 }} />))).toBe('too few to compare')
   })
 
   it('carries the sign as a tone and a glyph-free sign in an email', () => {
@@ -387,7 +388,7 @@ describe('BlockMovement', () => {
     expect(down).toContain(`color:${EMAIL.ink}`)
     // The non-answer's grey takes ink2: muted on inner is the 4.46:1 pair SH7
     // is about, and this arm cannot read the app's token.
-    expect(render(<BlockMovement mode="email" verdict={refused} />)).toContain(`color:${EMAIL.ink2}`)
+    expect(render(<BlockMovement mode="email" verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toContain(`color:${EMAIL.ink2}`)
     // No arm paints its words in a hue any more.
     for (const m of [up, down]) {
       expect(m).not.toContain(`color:${EMAIL.up};`)

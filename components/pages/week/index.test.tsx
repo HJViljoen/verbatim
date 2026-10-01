@@ -91,29 +91,52 @@ describe('every block on This week', () => {
   })
 })
 
+/** HYPOTHETICAL: Sealand's weeks with no change on the axis and every video
+ *  checked, and its two themes heard first with 3 of their 10 videos from
+ *  searches added in September. On its own rows the bars would span our
+ *  search changes and the relevance check, and the weeks gathered hold videos
+ *  let in before the check, so Week by week is omitted (T0a, mechanism 3);
+ *  and each theme heard first had 8 of its 10 videos from searches we added,
+ *  so Heard for the first time is omitted (mechanism 4). */
+function cleanWeekFixture(): WeekData {
+  const d = marketWeekFixture()
+  return {
+    ...d,
+    weeks: { ...d.weeks!, rules: [], weeks: d.weeks!.weeks.map((w) => ({ ...w, unchecked: 0 })) },
+    heard: { ...d.heard!, rows: d.heard!.rows.map((t) => ({ ...t, provenance: t.provenance ? { ...t.provenance, fromNewSearches: 3 } : null })) },
+  }
+}
+
 describe('week by week (market-first WP2.9, week.weeks)', () => {
+  it('is omitted where no week is left one way since our latest change (T0a, mechanism 3)', () => {
+    for (const mode of MODES) expect(weekWeeks.render(marketWeekFixture(), mode, ctx), mode).toBeNull()
+    expect(weekWeeks.figures!(marketWeekFixture())).toEqual({})
+  })
+
   it('draws the market’s videos and comments for each week, as counts, with its facts panel', () => {
     for (const mode of MODES) {
-      const t = renderText(weekWeeks.render(marketWeekFixture(), mode, ctx))
+      const t = renderText(weekWeeks.render(cleanWeekFixture(), mode, ctx))
       for (const n of ['244', '226', '187', '229', '404', '318', '5,809', '7,851', '5,462']) expect(t).toContain(n)
       expect(t).not.toMatch(/%|▲|▼/)
     }
-    const app = renderText(weekWeeks.render(marketWeekFixture(), 'app', ctx))
+    const app = renderText(weekWeeks.render(cleanWeekFixture(), 'app', ctx))
     // The preview's panel: the latest week no longer so far.
     expect(app).toContain('Week of 7 Sep')
     expect(app).toContain('of them 389 in the category and 15 filed under a brand you track')
     expect(app).toContain('all dated in September')
     expect(app).toContain('filling')
     expect(app).toContain('so far')
-    expect(app).toContain('Our changes')
+    // T0a: no "Our changes" row, and no week with nothing gathered.
+    expect(app).not.toContain('Our changes')
+    expect(app).not.toContain('none gathered')
   })
 
   it('is headed by its title alone and footed by links alone, one of them to the same-age reading', () => {
-    const el = weekWeeks.render(marketWeekFixture(), 'app', ctx) as { props: { title: string; meta?: unknown; footerNote?: unknown } }
+    const el = weekWeeks.render(cleanWeekFixture(), 'app', ctx) as { props: { title: string; meta?: unknown; footerNote?: unknown } }
     expect(el.props.title).toBe('Week by week')
     expect(el.props.meta).toBeUndefined()
     expect(el.props.footerNote).toBeUndefined()
-    const t = renderText(weekWeeks.render(marketWeekFixture(), 'app', ctx))
+    const t = renderText(weekWeeks.render(cleanWeekFixture(), 'app', ctx))
     expect(t).toContain('How to read: Week by week →')
     expect(t).toContain('Read at the same age, on Your market →')
     // No same-age reading to link to where the tenant keeps none (Össur).
@@ -129,7 +152,7 @@ describe('week by week (market-first WP2.9, week.weeks)', () => {
   })
 
   it('declares the counts it draws, one token a week and a row', () => {
-    const f = weekWeeks.figures!(marketWeekFixture())
+    const f = weekWeeks.figures!(cleanWeekFixture())
     expect(f.week_2026_09_07_videos.value).toBe(404)
     expect(f.week_2026_09_07_comments.value).toBe(7851)
     expect(f.week_2026_07_27_videos).toBeUndefined()
@@ -154,11 +177,13 @@ describe('WK §2 · your market’s subjects (market-first WP2.7)', () => {
     }
   })
 
-  it('names a subject being re-described and one the month was not read for, with no figure', () => {
+  // T0a (WK-26; ruling U6): a subject that is not ready is its name alone.
+  it('names a failed subject and a provisional one the month was not read for, with no figure and no word', () => {
     for (const mode of MODES) {
       const text = renderText(weekSubjects.render(marketWeekFixture(), mode, ctx))
-      expect(text).toMatch(/Repair & warranty\s*being re-described/)
-      expect(text).toMatch(/Community & purpose\s*no reading yet/)
+      expect(text).toMatch(/Repair & warranty\s*Community & purpose/)
+      expect(text).not.toContain('being re-described')
+      expect(text).not.toContain('no reading yet')
       // Repair & warranty's 36 market videos and Community & purpose's window
       // rows print nowhere.
       expect(text).not.toContain('36')
@@ -390,11 +415,23 @@ describe('WK §3 · moving now', () => {
 describe('With this update (market-first WP3.7, week.came-in)', () => {
   it('says what the update brought into the market’s month, and hands it back to the month', () => {
     for (const mode of MODES) {
-      const text = renderText(weekCameIn.render(marketWeekFixture(), mode, ctx))
+      const text = renderText(weekCameIn.render(cleanWeekFixture(), mode, ctx))
       expect(text, mode).toContain('The 20 Sep update brought 436 videos and 9,471 comments into your market’s September.')
       expect(text, mode).toContain('That is 436 of the 654 videos September holds so far, after 3 updates.')
       expect(text, mode).toContain('2 themes were heard for the first time with 10 or more videos this month, and 12 comments are worth a reply.')
     }
+  })
+
+  // T0a (mechanism 4; WK-8): both themes Sealand's update heard first had 8
+  // of their 10 videos from searches we added in September. Neither is
+  // counted, and nothing is said in their place, never "no theme was heard".
+  it('counts no theme our new searches found, and says nothing where none is left', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(marketWeekFixture(), mode, ctx))
+      expect(text, mode).not.toMatch(/heard for the first time/)
+      expect(text, mode).toContain('after 3 updates. 12 comments are worth a reply.')
+    }
+    expect(render(weekCameIn.render(marketWeekFixture(), 'app', ctx))).not.toContain('href="#heard-for-the-first-time"')
   })
 
   it('draws the came-in table by part of the market, your own posts left out (decision E)', () => {
@@ -412,8 +449,10 @@ describe('With this update (market-first WP3.7, week.came-in)', () => {
   })
 
   it('points at the tiles that hold what it counts, on screen only', () => {
-    const markup = render(weekCameIn.render(marketWeekFixture(), 'app', ctx))
+    const markup = render(weekCameIn.render(cleanWeekFixture(), 'app', ctx))
     expect(markup).toContain('href="#week-by-week"')
+    // No link to a tile that is omitted (T0a, mechanism 3).
+    expect(render(weekCameIn.render(marketWeekFixture(), 'app', ctx))).not.toContain('href="#week-by-week"')
     expect(markup).toContain('href="#heard-for-the-first-time"')
     expect(markup).toContain('href="#worth-a-reply"')
     expect(render(weekCameIn.render(marketWeekFixture(), 'print', ctx))).not.toContain('href="#')
@@ -436,7 +475,7 @@ describe('With this update (market-first WP3.7, week.came-in)', () => {
   })
 
   it('says "holds" once the month has ended, never "so far"', () => {
-    const d = marketWeekFixture()
+    const d = cleanWeekFixture()
     const ended: WeekData = { ...d, readingAt: '2026-10-02T06:00:00.000Z', cameIn: { ...d.cameIn, market: { ...d.cameIn.market!, ended: true } } }
     const text = renderText(weekCameIn.render(ended, 'app', ctx))
     expect(text).toContain('September holds, after 3 updates.')
@@ -465,23 +504,32 @@ describe('Your market’s subjects carry their maker share (market-first WP3.7)'
 })
 
 describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
+  // T0a (mechanism 4; WK-20/21): a theme a third or more of whose videos
+  // came from searches added in the month is not heard for the first time.
+  // Sealand's two (8 of 10 each) are both, so the block is omitted.
+  it('is omitted where every theme first heard was our new searches’ (Sealand: 8 of 10 each)', () => {
+    for (const mode of MODES) expect(weekHeard.render(marketWeekFixture(), mode, ctx), mode).toBeNull()
+    expect(blockAnswers(weekHeard, marketWeekFixture()).figures).toEqual({})
+  })
+
   it('leads with how many of the themes first heard reached the floor, one denominator', () => {
     for (const mode of MODES) {
-      expect(renderText(weekHeard.render(marketWeekFixture(), mode, ctx)), mode).toContain('2 themes first heard with this update reached 10 videos this month.')
+      expect(renderText(weekHeard.render(cleanWeekFixture(), mode, ctx)), mode).toContain('2 themes first heard with this update reached 10 videos this month.')
     }
   })
 
-  it('lists each with its videos, New, "·" for the month before, where its videos came from and its maker share', () => {
-    const text = renderText(weekHeard.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Laundry planning for travel 10 · New 8')
-    expect(text).toContain('Preference for secondhand fashion 10 · New 8 a fifth makers')
-    expect(text).toContain('From searches added in Sep')
+  it('lists each with its videos, New, "·" for the month before and its maker share, and no column of where its videos came from', () => {
+    const text = renderText(weekHeard.render(cleanWeekFixture(), 'app', ctx))
+    expect(text).toContain('Laundry planning for travel 10 · New')
+    expect(text).toContain('Preference for secondhand fashion 10 · New a fifth makers')
+    expect(text).not.toContain('From searches added')
+    expect(Object.keys(blockAnswers(weekHeard, cleanWeekFixture()).figures).some((k) => k.endsWith('_new_searches'))).toBe(false)
     expect(text).not.toContain('0%')
     expect(text).toContain('All themes on Conversation →')
   })
 
   it('groups the ones led by makers (decision F) and names the lead ones', () => {
-    const d = marketWeekFixture()
+    const d = cleanWeekFixture()
     const h = d.heard!
     const maker = { ...h.rows[1], registryId: 'r-maker', label: 'Admiration for handmade craftsmanship', k: 65, makerShare: 0.6 }
     const data: WeekData = { ...d, heard: { ...h, makers: { count: 1, lead: [maker] } } }
@@ -491,7 +539,7 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
 
   it('prints no makers column for a tenant with no maker rule (Össur)', () => {
     const text = renderText(weekHeard.render(ossurWeeksFixture(), 'app', ctx))
-    expect(text).toContain('Brand boycott over politics 16 · New ·')
+    expect(text).toContain('Brand boycott over politics 16 · New')
     expect(text).not.toContain('Makers')
   })
 
@@ -593,12 +641,18 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     const order = ['The North Face', 'Patagonia', 'Freedom of Movement', 'Old School', 'Cotopaxi', 'Freitag', 'Rareform'].map((n) => text.indexOf(`${n}tracked since`) >= 0 ? text.indexOf(`${n}tracked since`) : text.indexOf(`${n} tracked since`))
     expect(order.every((x) => x >= 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order)
-    expect(text).toContain('The North Face tracked since 20 Sep 23 33 “Aimé Leon Dore / The North Face 2026. @aimeleondore @thenorthface” Instagram · 14 Sep 98')
+    // T0a (mechanism 6; WK-41/42): no "Own posts" count (gather-dated) and
+    // no update naming count; the month's figure only, where it was read.
+    expect(text).toContain('The North Face tracked since 20 Sep · “Aimé Leon Dore / The North Face 2026. @aimeleondore @thenorthface” Instagram · 14 Sep 98')
+    expect(text).not.toContain('Own posts')
+    expect(text).not.toContain('No post of their own in these days')
   })
 
-  it('prints an unmeasured name’s count plainly, with no note (the lead’s R2)', () => {
-    const text = renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Freitag tracked since 28 Jun 6 149')
+  it('prints an unmeasured name’s month count plainly, with no note (the lead’s R2)', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, namedMonth: { k: 7, n: 516 } } : r))
+    const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
+    expect(text).toContain('Freitag tracked since 28 Jun 7 “')
     expect(text).not.toContain('German')
   })
 
@@ -606,28 +660,54 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
     const d = marketWeekFixture()
     const rivals = d.cameIn.rivals.map((r) => (r.label === 'Freitag' ? { ...r, nameNote: 'mostly the German word for Friday · not counted' } : r))
     const text = renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx))
-    expect(text).toContain('Freitag tracked since 28 Jun 6 ·')
-    expect(text).toContain('149 videos matched the name, mostly the German word for Friday · not counted')
+    expect(text).toContain('Freitag tracked since 28 Jun ·')
+    expect(text).toContain('Named unprompted: mostly the German word for Friday · not counted')
+    expect(text).not.toContain('149')
     expect(text.indexOf('Freitag')).toBeGreaterThan(text.indexOf('Rareform'))
   })
 
-  it('prints the videos naming each brand on the Brands page’s basis, against the month, and Settings’ tracked-since date (finish-list 7, 9)', () => {
+  // ONE BRAND COUNT, THE BRANDS PAGE'S (T0 ruling U10; T0a review, finding
+  // 2): "Named unprompted", over its one base, as Brands, Your market, the
+  // monthly and Settings print it. It printed "Videos naming them … 54 in
+  // Sep", the count "in all", which counts the videos our own brand searches
+  // fetched.
+  it('prints each brand’s "Named unprompted" count on the Brands page’s basis, over its one base, and Settings’ tracked-since date (finish-list 7, 9; U10)', () => {
     const d = marketWeekFixture()
     const rivals = d.cameIn.rivals.map((r) =>
-      r.label === 'Freitag' ? { ...r, aboutThem: 2, aboutMonth: 7, foundByName: 149, aboutNote: null, since: 'by 28 Jun' }
-        : r.label === 'The North Face' ? { ...r, aboutThem: 11, aboutMonth: 54, aboutNote: null, since: '17 Sep' }
-          : r.label === 'Rareform' ? { ...r, aboutThem: 0, aboutMonth: null, aboutNote: 'not counted yet', since: '9 Sep' }
+      r.label === 'Freitag' ? { ...r, aboutThem: 2, namedMonth: { k: 7, n: 516 }, foundByName: 149, aboutNote: null, since: 'by 28 Jun' }
+        : r.label === 'The North Face' ? { ...r, aboutThem: 11, namedMonth: { k: 12, n: 516 }, aboutNote: null, since: '17 Sep' }
+          : r.label === 'Rareform' ? { ...r, aboutThem: 0, namedMonth: null, aboutNote: 'not counted yet', since: '9 Sep' }
             : r)
+    for (const mode of ['app', 'email'] as const) {
+      const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, mode, ctx)))
+      expect(text).toContain('Named unprompted')
+      expect(text).toContain('of 516 in Sep')
+      expect(text).not.toContain('Videos naming them')
+      expect(text).not.toContain('about them')
+      expect(text).not.toContain('149')
+      expect(text).not.toContain('11 of')
+    }
     const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, 'app', ctx)))
-    expect(text).toContain('Videos naming them')
-    expect(text).not.toContain('about them')
-    expect(text).toContain('Freitag tracked by 28 Jun 6 2 of 7 in Sep')
-    expect(text).not.toContain('149')
-    expect(text).toContain('The North Face tracked since 17 Sep 23 11 of 54 in Sep')
-    expect(text).toContain('Videos naming them: not counted yet')
+    expect(text).toContain('Freitag tracked by 28 Jun 7 “')
+    expect(text).toContain('The North Face tracked since 17 Sep 12 “')
+    expect(text).toContain('Named unprompted: not counted yet')
+    // The figure table carries the same count, on the same label.
+    const figures = weekRivalPosts.figures!({ ...d, cameIn: { ...d.cameIn, rivals } })
+    expect(figures['brand_competitor:The North Face_naming_month']).toMatchObject({ value: 12, label: 'The North Face: named unprompted in Sep, of 516 videos' })
     // A month of none prints the 0 alone, never "of 0".
-    const none = rivals.map((r) => (r.label === 'Old School' ? { ...r, aboutThem: 0, aboutMonth: 0, aboutNote: null } : r))
+    const none = rivals.map((r) => (r.label === 'Old School' ? { ...r, aboutThem: 0, namedMonth: { k: 0, n: 516 }, aboutNote: null } : r))
     expect(flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals: none } }, 'app', ctx)))).not.toContain('of 0 in Sep')
+  })
+
+  it('never prints the count "in all" a stored copy carries (U10)', () => {
+    const d = marketWeekFixture()
+    const rivals = d.cameIn.rivals.map((r) => (r.label === 'The North Face' ? { ...r, aboutMonth: 54, aboutNote: null } : r))
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = flat(renderText(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals } }, mode, ctx)))
+      expect(text).not.toContain('54')
+      expect(text).not.toContain('of 516')
+    }
+    expect(Object.keys(weekRivalPosts.figures!({ ...d, cameIn: { ...d.cameIn, rivals } })).some((k) => k.endsWith('_naming_month'))).toBe(false)
   })
 
   it('opens the brands’ page under its current sidebar label', () => {
@@ -636,9 +716,13 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
 })
 
 describe('Checks on this update (market-first WP3.7, week.checks)', () => {
-  it('prints the three checks side by side: the refusal chip, the forming baseline, nothing flagged', () => {
+  // T0a (the one condition): with the months refused, "Moving now" is not
+  // drawn at all, and no chip says why.
+  it('prints the checks side by side: no "Moving now" on a refused pair, the forming baseline, nothing flagged', () => {
     const text = renderText(weekChecks.render(marketWeekFixture(), 'app', ctx))
-    expect(text).toContain('Moving now not read as a change: we changed our searches in September')
+    expect(text).not.toContain('Moving now')
+    expect(text).not.toContain('not read as a change')
+    expect(render(weekChecks.render(marketWeekFixture(), 'app', ctx))).not.toContain('data-pair-chip')
     expect(text).toContain('Unusual this week Not checked with this update: the baseline is forming. 0 of 3 months flags from January')
     expect(text).toContain('Flagged for awareness Nothing in these days was flagged as a claim about this space that does not hold up.')
     expect(text).toContain('What we changed, and when →')
@@ -711,7 +795,7 @@ describe('the coverage line and the two sections Phase 1 does not build', () => 
 
 describe('the page', () => {
   it('draws the preview’s nine tiles in its order, and the bar’s one line', () => {
-    const text = renderText(<WeekPage data={marketWeekFixture()} />)
+    const text = renderText(<WeekPage data={cleanWeekFixture()} />)
     expect(text).toContain('Sealand · The 20 Sep update comments written 10 to 20 Sep')
     const at = WEEK_BLOCKS.map((b) => text.indexOf(b.title.toUpperCase()) >= 0 ? text.indexOf(b.title.toUpperCase()) : text.indexOf(b.title))
     expect(at.every((x) => x >= 0)).toBe(true)
@@ -722,9 +806,15 @@ describe('the page', () => {
   })
 
   it('pairs your market’s subjects with For sales, half and half; every other tile is full width', () => {
-    const markup = render(<WeekPage data={marketWeekFixture()} />)
+    const markup = render(<WeekPage data={cleanWeekFixture()} />)
     const spans = [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])
     expect(spans).toEqual(['12', '12', '12', '6', '6', '12', '12', '12', '12'])
+    // T0a: on Sealand's own rows Week by week (mechanism 3) and Heard for the
+    // first time (mechanism 4) are omitted, tiles and all.
+    const real = render(<WeekPage data={marketWeekFixture()} />)
+    expect([...real.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => m[1])).toEqual(['12', '6', '6', '12', '12', '12', '12'])
+    expect(renderText(<WeekPage data={marketWeekFixture()} />)).not.toContain('WEEK BY WEEK')
+    expect(renderText(<WeekPage data={marketWeekFixture()} />)).not.toContain('HEARD FOR THE FIRST TIME')
   })
 
   it('prints no footnote under a block or under the page (25 Sep rulings)', () => {
@@ -830,12 +920,15 @@ describe('WK §2 under the three calibration states', () => {
     },
   }
 
-  it('names the withheld subjects with their word and no figure, in every mode', () => {
+  // T0a (ruling U6): each by its name alone, no calibration word.
+  it('names the withheld subjects with no word and no figure, in every mode', () => {
     for (const mode of MODES) {
       assertCopyContract(render(weekSubjects.render(data, mode, ctx)))
       const text = renderText(weekSubjects.render(data, mode, ctx))
-      expect(text).toContain('Repair & warranty being re-described')
-      expect(text).toContain('Community & purpose provisional')
+      expect(text).toContain('Repair & warranty')
+      expect(text).toContain('Community & purpose')
+      expect(text).not.toContain('being re-described')
+      expect(text).not.toContain('provisional')
     }
   })
 
@@ -856,7 +949,7 @@ describe('WK §2 under the three calibration states', () => {
   it('a block with only withheld subjects is not "no subjects recorded"', () => {
     const only: WeekData = { ...data, subjects: { ...data.subjects, rows: [], unread: null, lead: null } }
     const text = renderText(weekSubjects.render(only, 'app', ctx))
-    expect(text).toContain('being re-described')
+    expect(text).toContain('Repair & warranty')
     expect(text).not.toContain('No subjects are recorded')
   })
 
@@ -864,23 +957,27 @@ describe('WK §2 under the three calibration states', () => {
   // September (staging), so the month was not read for it. It says "no
   // reading yet", as Your market and the Subjects rail do, and never
   // "provisional", which is the calibration word alone.
+  // HYPOTHETICAL `ready` for Community & purpose: a provisional one is its
+  // name alone (T0a), on a copy stored with its unread words too.
   it('a subject the month was not read for says "no reading yet", not its calibration word, in every mode', () => {
-    const unread: WeekData = {
+    const words = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' })
+    const withheld = (calibration: 'ready' | 'provisional'): WeekData => ({
       ...data,
       subjects: {
         ...data.subjects,
         withheld: [
           { id: 's-repair', label: 'Repair & warranty', calibration: 'failed' },
-          { id: 's-community', label: 'Community & purpose', calibration: 'provisional', unread: unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' }) },
+          { id: 's-community', label: 'Community & purpose', calibration, unread: words },
         ],
       },
-    }
+    })
     for (const mode of MODES) {
-      assertCopyContract(render(weekSubjects.render(unread, mode, ctx)))
-      const text = renderText(weekSubjects.render(unread, mode, ctx))
+      assertCopyContract(render(weekSubjects.render(withheld('ready'), mode, ctx)))
+      const text = renderText(weekSubjects.render(withheld('ready'), mode, ctx))
       expect(text).toContain('Community & purpose no reading yet')
       expect(text).not.toContain('provisional')
-      expect(text).toContain('Repair & warranty being re-described')
+      expect(text).not.toContain('being re-described')
+      expect(renderText(weekSubjects.render(withheld('provisional'), mode, ctx))).not.toContain('no reading yet')
     }
   })
 })
@@ -894,6 +991,10 @@ const PAGE_CASES = [marketWeekFixture, ossurWeeksFixture].flatMap((fixture) =>
 describe.each(PAGE_CASES)('$name', ({ block, mode, fixture }) => {
   it('keeps the copy contract, with its title alone in the header and links alone in the footer', () => {
     const el = block.render(fixture(), mode, ctx)
+    // T0a: Week by week is omitted where no week is left one way since our
+    // latest change (mechanism 3), and Heard for the first time where every
+    // theme was our new searches' (mechanism 4), on Sealand's own rows.
+    if (el == null && (block.key === 'week.weeks' || block.key === 'week.heard')) return
     assertCopyContract(render(el))
     expect(isValidElement(el) && el.type === BlockFrame).toBe(true)
     const props = (el as { props: { meta?: unknown; footerNote?: unknown } }).props
@@ -982,7 +1083,7 @@ describe('This week’s pure helpers (WP3.7)', () => {
   })
 
   it('heardLead: the level and its base, then the floor', () => {
-    const h = marketWeekFixture().heard!
+    const h = cleanWeekFixture().heard!
     expect(heardLead(h, 'this month')).toEqual({ level: '2', rest: ' themes first heard with this update reached 10 videos this month.' })
   })
 

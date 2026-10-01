@@ -8,6 +8,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render } from '@/lib/test/render'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
+import { afterwardsWithheld } from '@/lib/reading/afterwards'
 import { BRIEF_UNIT, DELIVERY_SCOPE, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { ARGUMENT_CHARS, bound, GROUNDING_BASIS, shownRows, TITLE_CHARS, toMake } from './make'
@@ -537,9 +538,36 @@ describe('content.make — the mock’s page 2', () => {
       // A commenter's own words and the refusal sentence are printed whole
       // whatever their length: both appear on this page or nowhere.
       if (r.quote?.text) expect(text).toContain(r.quote.text)
-      // An undecided card prints no "after" (copy de-clutter E87).
-      if (r.decidedAt) expect(text).toContain(r.afterwards.line)
+      // An undecided card prints no "after" (copy de-clutter E87), and nor
+      // does one whose comparison is withheld (T0a; the one condition).
+      if (r.decidedAt && !afterwardsWithheld(r.afterwards)) expect(text).toContain(r.afterwards.line)
       else expect(text).not.toContain(r.afterwards.line)
+    }
+  })
+
+  // A COMPARISON THE PRODUCT WILL NOT DRAW IS NOT SHOWN (T0a; the one
+  // condition; review findings 1 and 4): a card whose afterwards reading is
+  // across two groupings or a refused pair prints no box, no reason, no badge
+  // and no month before, in every mode, and declares no verdict for it.
+  it('prints no afterwards box for a withheld comparison, live or stored', () => {
+    const seam = data.advice.rows.find((r) => r.lineageId === 'L-repair-clip')!
+    expect(seam.afterwards.state).toBe('reading')
+    const refusedPair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    const withheld = [
+      { ...seam.afterwards, verdict: { ...seam.afterwards.verdict!, flags: ['clustering_unknown' as const] } },
+      { ...seam.afterwards, verdict: { ...seam.afterwards.verdict!, pair: refusedPair } },
+      { state: 'refused' as const, verdict: null, months: seam.afterwards.months, line: 'Not read as a change: we changed our searches in September.', pair: refusedPair },
+    ]
+    for (const afterwards of withheld) {
+      const rows = data.advice.rows.map((r) => (r.lineageId === 'L-repair-clip' ? { ...r, afterwards } : r))
+      const shown = { ...data, advice: { ...data.advice, rows } }
+      for (const mode of ['app', 'print', 'email'] as const) {
+        const out = markupText(render(contentMake.render(shown, mode, ctx)))
+        expect(out, mode).not.toContain('12 of 118')
+        expect(out, mode).not.toContain('Not read as a change')
+        expect(out, mode).not.toContain('21 of 130')
+      }
+      expect(blockAnswers(contentMake, shown).verdicts.some((v) => v.objectLabel === 'Repair & warranty')).toBe(false)
     }
   })
 

@@ -133,10 +133,11 @@ describe('the quarterly card', () => {
     expect(html).not.toContain('data-copy="level"')
   })
 
-  // The caveat is measured, not written: a month read back at setup and a
-  // month under the band's minimum are two different facts and the card says
-  // both.
-  it('names the months the quarter cannot stand on', () => {
+  // T0a (mechanism 1; RP-25): a quarter holding a month read back at setup is
+  // not compared at all. The quarter before goes, tick, line, legend and
+  // badge, and with it the caveat that once explained the comparison; each
+  // row keeps this quarter's level.
+  it('draws no quarter before, and no caveat, where the quarter holds a month read back at setup', () => {
     const card = quarterlyCardFixture({
       monthsInQuarter: [
         { month: '2026-07-01', videos: 1290, backRead: true },
@@ -145,8 +146,15 @@ describe('the quarterly card', () => {
       ],
     })
     const text = renderText(<QuarterlyCardTile card={card} />)
-    expect(text).toContain('read back at setup')
-    expect(text).toContain('July 2026')
+    const html = render(<QuarterlyCardTile card={card} />)
+    expect(text).not.toContain('read back at setup')
+    expect(text).not.toContain('the quarter before ·')
+    expect(html).not.toContain('h-2.5 w-0.5 rounded-[1px] bg-muted-foreground')
+    expect(text).toContain('912 of 4,147')
+    // And where the month judge refuses a step across the two quarters.
+    const refused = renderText(<QuarterlyCardTile card={quarterlyCardFixture({ joined: false })} />)
+    expect(refused).not.toContain('the quarter before ·')
+    expect(refused).toContain('912 of 4,147')
   })
 
   // THE PILL'S AMBER IS IN THE TINT AND THE RING. `bg-warning/15 text-warning`
@@ -297,17 +305,16 @@ describe('the quarterly card under the three calibration states', () => {
     readings: 6,
   })!
 
-  it('prints a provisional subject\'s bar marked "provisional", a ready one unmarked, and no failed one', () => {
-    const markup = render(<QuarterlyCardTile card={card} />)
+  // T0a (RP-26; ruling U6): a provisional subject's bar rests on its
+  // unverified matching and goes, as a failed one's always did.
+  it('prints a ready subject\'s bar unmarked, and no provisional or failed one', () => {
     const text = renderText(<QuarterlyCardTile card={card} />)
-    expect(text).toContain('12 of 875')
-    expect(text.match(/provisional/g)?.length).toBe(1)
-    const at = text.indexOf('Community & purpose')
-    expect(text.slice(at, text.indexOf('provisional', at))).not.toContain('Looks & style')
+    expect(text).toContain('136 of 875')
+    expect(text).not.toContain('Community & purpose')
+    expect(text).not.toContain('12 of 875')
+    expect(text).not.toContain('provisional')
     expect(text).not.toContain('Repair & warranty')
     expect(text).not.toContain('46 of 875')
-    // The word is a line of its own, never inside the truncating label.
-    expect(markup).toContain('<span class="min-w-0 truncate text-[12.5px]">Community &amp; purpose · the category</span>')
     assertCopyContract(<QuarterlyCardTile card={card} />)
   })
 })

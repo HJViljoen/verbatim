@@ -2,17 +2,15 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { refusalInBlock, sharedPairNote } from '@/lib/calibration'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
-import { allRedescribed, kindsInLead, paneSides, sideEyebrow, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { allRedescribed, kindsInLead, paneSides, sideEyebrow, selectedNotReady, SUBJECTS_ALL_REDESCRIBED, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 import { RULE, SCALE } from '@/components/pages/overview/market'
 import { surface } from '@/lib/nav'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
-import type { FigureTable } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable } from '@/lib/reading/verdicts'
 
 // SU2 · the kinds of thing said, per audience (design §3 SU2, the mock's (b)).
 //
@@ -173,26 +171,22 @@ function KindMovement({ side, brand, mode }: { side: SubjectSide; brand: string;
   const froms = new Set(rows.map((k) => side.kindVerdicts[k.kind]?.basis?.from).filter(Boolean) as string[])
   if (froms.size !== 1) return null
   const prevMonth = [...froms][0]
-  // ONE REFUSAL, SAID ONCE (deploy 1 review). A strip whose every kind is
-  // refused for one month pair has no movement to show: the chip says why,
-  // once, where four sentences stood. Mixed, the refused kinds say "not
-  // compared" and the chip follows.
-  const shared = sharedPairNote(rows.map((k) => side.kindVerdicts[k.kind]))
-  if (shared && rows.every((k) => refusalInBlock(side.kindVerdicts[k.kind], shared))) {
-    return email ? <div style={{ paddingTop: 8 }}><PairChip note={shared} mode={mode} /></div> : <PairChip note={shared} mode={mode} className="mt-1" />
-  }
+  // A REFUSED KIND IS NOT SHOWN AND NOT EXPLAINED (T0a; the one condition):
+  // the strip lists only the kinds whose change was drawn, and a strip with
+  // none is not drawn at all.
+  const compared = rows.filter((k) => priorPrintable(side.kindVerdicts[k.kind]))
+  if (compared.length === 0) return null
 
   const body = (
     <>
       <span className={email ? undefined : 'text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
         {sideEyebrow(side, brand)}, since {monthName(prevMonth).split(' ')[0]}:
       </span>
-      {rows.map((k) => (
+      {compared.map((k) => (
         <span key={k.kind} className={email ? undefined : 'flex items-center gap-1.5 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginRight: 10 } : undefined}>
-          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} good="neutral" sharedRefusal={shared} />
+          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} good="neutral" />
         </span>
       ))}
-      <PairChip note={shared} mode={mode} />
     </>
   )
   if (email) return <div style={{ paddingTop: 8 }}>{body}</div>
@@ -207,6 +201,10 @@ export const subjectsKinds: Block<SubjectsData> = {
   question: 'What kind of thing is being said in each audience?',
 
   render(data, mode = 'app', ctx) {
+    // A SUBJECT THAT IS NOT READY DRAWS NOTHING HERE, WHOEVER RENDERS THE
+    // BLOCK (T0a, ruling U6; review finding 3): the page leaves it out, and so
+    // does an export or a stored section (`selectedNotReady`).
+    if (selectedNotReady(data)) return null
     const pane = data.selected
     // WHAT PEOPLE SAY ABOUT IT (WP2.2): a pane the loader builds carries its
     // own kinds; one stored before WP2.2 prints its audiences' kind mix, as
@@ -276,7 +274,8 @@ export const subjectsKinds: Block<SubjectsData> = {
 
   figures(data): FigureTable {
     const k = data.selected?.kindsIn
-    if (!k) return {}
+    // Nothing declared for a subject that is not ready: nothing prints.
+    if (!k || selectedNotReady(data)) return {}
     const out: FigureTable = {}
     for (const r of k.rows) out[`subject_kind_${r.kind}_videos`] = { value: r.k, unit: 'videos', label: `${data.selected!.name}, ${r.label.toLowerCase()}, videos` }
     return out
@@ -288,7 +287,7 @@ export const subjectsKinds: Block<SubjectsData> = {
   // strip the block never draws. The strip is the category's (or the first side
   // that has kinds), and so is this.
   verdicts(data) {
-    if (data.selected?.monthStates !== undefined) return []
+    if (data.selected?.monthStates !== undefined || selectedNotReady(data)) return []
     const withKinds = (data.selected ? paneSides(data.selected) : []).filter((s) => s.kinds.length > 0)
     const drawn = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
     return drawn ? Object.values(drawn.kindVerdicts).filter((v) => v != null) : []

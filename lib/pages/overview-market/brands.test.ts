@@ -32,8 +32,9 @@ describe('buildBrandsBlock', () => {
     expect(b.ninetyDayNote).toBe(NINETY_DAY_NOTE)
   })
 
-  it('heads the headline column with exactly what it leaves out', () => {
-    expect(BRANDS_HEAD_ORGANIC).toBe('Outside our brand searches')
+  // T0 ruling U10: in market terms, with no direction word ("up" is one).
+  it('heads the one column in market terms', () => {
+    expect(BRANDS_HEAD_ORGANIC).toBe('Named unprompted')
     expect(BRANDS_HEAD_ALL).toBe('In all')
   })
 

@@ -1,6 +1,7 @@
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, fmtPct, longMonth, monthName } from '../format'
 import { pairedVerdict } from './bands'
+import { joins } from './comparability'
 import { EXCLUDED_NOTE } from './formats'
 import { monthStartOf, nextMonth } from './month-key'
 import type { PairOn } from './pairs'
@@ -269,13 +270,33 @@ export function headToHead(input: HeadToHeadInput): HeadToHead {
   const commentBasis = `videos and comments dated in ${longMonth(month)}`
   const publishedBasis = `videos published in ${longMonth(month)}`
 
+  // THE MONTH BEFORE ONLY WHERE THE SIDE'S PAIR JOINS (T0a; the one
+  // condition). Every row printed both months side by side, the non-share
+  // rows with no pair check at all ("both months are printed instead"); a side
+  // whose month pair the judge refuses keeps its own month alone, on every
+  // measure. With no judge (a fixture) nothing is refused.
+  const joined = (audience: string): boolean => {
+    const pair = pairFor(input, month, audience)
+    return pair == null || joins(pair)
+  }
+  const youJoined = joined(you.audience)
+  const themJoined = joined(them.audience)
+  const withoutPrev = (level: FaceOffSide | null): FaceOffSide | null => {
+    if (!level || !level.prev) return level
+    const { prev: _before, ...rest } = level
+    return rest
+  }
   const measures: FaceOffMeasure[] = [
     videosMeasure(input, month, floor, commentBasis),
     commentsMeasure(input, commentBasis),
     engagementMeasure(input, publishedBasis),
     sentimentMeasure(input, month, floor, publishedBasis),
     postsMeasure(input, publishedBasis),
-  ]
+  ].map((m) => ({
+    ...m,
+    you: youJoined ? m.you : withoutPrev(m.you),
+    them: themJoined ? m.them : withoutPrev(m.them),
+  }))
 
   const theirVideos = them.month?.videos ?? null
   return {

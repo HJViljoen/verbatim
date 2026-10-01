@@ -263,7 +263,9 @@ export const weeklyIncoming: Block<WeeklyData> = {
             counting it printed a display cap at mono 21/600: a workspace that
             heard fourteen new themes printed 3. Same rule as `switchingTotal`
             one section over (lib/blocks/for-sales.ts). */}
-        <StatRow
+        {/* Every theme first heard was our new searches' (T0a, mechanism 4):
+            the count is not printed, never "0 heard for the first time". */}
+        {i.newThemesWithheld && i.newThemesTotal === 0 ? null : <StatRow
           mode={mode}
           value={fmtInt(i.newThemesTotal)}
           label={i.newThemesTotal === 1 ? 'theme heard for the first time' : 'themes heard for the first time'}
@@ -272,7 +274,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
             : i.newThemesTotal > i.newThemes.length
               ? `the ${fmtInt(i.newThemes.length)} largest ${i.newThemes.length === 1 ? 'is' : 'are'} below`
               : null}
-        />
+        />}
         {/* NULL IS NOT ZERO. `quotesTotal` is null where subjects are not
             recorded — there is nothing for a comment to be new ON — and the
             row then carries the reason rather than a count of nothing. */}

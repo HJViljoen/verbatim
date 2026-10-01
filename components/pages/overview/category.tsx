@@ -7,8 +7,7 @@ import { BlockCalendar } from '@/components/blocks/calendar'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { PAIR_NOT_COMPARED, pairSentence, sharedPairNote } from '@/lib/calibration'
+import { sharedPairNote } from '@/lib/calibration'
 import { BlockProportion } from '@/components/blocks/bars'
 import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
 import { TileBlock } from '@/components/shell/tile'
@@ -289,11 +288,14 @@ export function levelCell(k: number | null, n: number | null): string {
  * makers mark. No comparison is drawn across the two columns (WP1.3 refuses
  * August against September), so nothing here carries a change or a band.
  */
-function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: RenderMode }) {
+function LevelList({ c, month, mode, refused = false }: { c: CategoryBlock; month: string; mode: RenderMode; refused?: boolean }) {
   const levels = c.levels ?? []
   if (levels.length === 0) return <BlockEmpty mode={mode}>No theme has been read into {longMonth(month)} yet.</BlockEmpty>
   const n = levels[0].n
-  const prev = c.levelsPrev ?? null
+  // The loader leaves the month before off where the pair is refused; a copy
+  // stored before that rule prints none where its block carries a refusal
+  // (T0a; the one condition).
+  const prev = refused ? null : c.levelsPrev ?? null
   const anyMeasured = levels.some((l) => l.makerShare != null)
   // NO MAKERS COLUMN WHERE NO RULE MARKS MAKERS (deploy 1 review): Össur has
   // none by design (§2.13), and "makers not yet marked" over an empty column
@@ -426,7 +428,6 @@ export const overviewCategory: Block<OverviewData> = {
       ...c.growing.map((m) => m.verdict),
       ...c.fading.map((m) => m.verdict),
     ])
-    const chip = <PairChip note={shared} mode={mode} />
 
     // ONE ROW PER KIND, EACH WITH ITS OWN DENOMINATOR (D4/D10). The artboard
     // draws three rows — label, share, change — and the build wrapped them into
@@ -538,9 +539,10 @@ export const overviewCategory: Block<OverviewData> = {
         {c.fading.length > 0 ? arm('Smaller share than last month', c.fading) : null}
       </div>
     ) : (
-      // The movers' own refusal is the block's: it says "not compared" and the
-      // chip says why, once.
-      <BlockEmpty mode={mode}>{shared && c.moversNote === pairSentence(shared) ? PAIR_NOT_COMPARED : c.moversNote ?? `Nothing moved clearly in ${longMonth(data.month)}.`}</BlockEmpty>
+      // A REFUSED PAIR SAYS NOTHING (T0a): where the block's verdicts were
+      // refused for a month pair, no mover was compared and nothing is said
+      // about it; the line goes with the comparison.
+      shared ? null : <BlockEmpty mode={mode}>{c.moversNote ?? `Nothing moved clearly in ${longMonth(data.month)}.`}</BlockEmpty>
     )
 
     const mood = c.mood ? (
@@ -722,13 +724,12 @@ export const overviewCategory: Block<OverviewData> = {
       >
         {email ? (
           <div>
-            {c.levels ? <Line label={LEVELS_LABEL} mode={mode}><LevelList c={c} month={data.month} mode={mode} /></Line> : null}
+            {c.levels ? <Line label={LEVELS_LABEL} mode={mode}><LevelList c={c} month={data.month} mode={mode} refused={shared != null} /></Line> : null}
             <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
-            <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+            {movers ? <Line label={moversLabel(c)} mode={mode}>{movers}</Line> : null}
             <Line label="Mood" mode={mode}>{mood}</Line>
             <Line label="Attention" mode={mode}>{attention}</Line>
             <Line label="No longer being said" mode={mode}>{quiet}</Line>
-            {chip}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-3">
@@ -737,7 +738,7 @@ export const overviewCategory: Block<OverviewData> = {
                 pair is compared, and a five-column table needs the tile's
                 width; the three columns below keep their own arrangement. A
                 stored export that predates the field draws no list. */}
-            {c.levels ? <Line label={LEVELS_LABEL} mode={mode}><LevelList c={c} month={data.month} mode={mode} /></Line> : null}
+            {c.levels ? <Line label={LEVELS_LABEL} mode={mode}><LevelList c={c} month={data.month} mode={mode} refused={shared != null} /></Line> : null}
             {/* THE ARTBOARD'S THREE COLUMNS (mock-gap §Visual fidelity: "the
                 mood-beside-attention arrangement and the kind-rows-beside-more
                 control all collapse into one column"). The kinds and the mood
@@ -767,7 +768,7 @@ export const overviewCategory: Block<OverviewData> = {
                       only one page saying why. Taken off a printed row's own
                       verdict, so the heading can never describe a comparison the
                       block did not draw. */}
-                  <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+                  {movers ? <Line label={moversLabel(c)} mode={mode}>{movers}</Line> : null}
                 </div>
                 <div className="min-w-0 xl:pl-4">
                   <Line label="Attention" mode={mode}>{attention}</Line>
@@ -784,7 +785,7 @@ export const overviewCategory: Block<OverviewData> = {
                   <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
                 </div>
                 <div className="flex min-w-0 flex-col gap-3 xl:pl-4">
-                  <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+                  {movers ? <Line label={moversLabel(c)} mode={mode}>{movers}</Line> : null}
                   <div className="border-t border-border/70 pt-2.5">
                     <Line label="Mood" mode={mode}>{mood}</Line>
                   </div>
@@ -816,7 +817,6 @@ export const overviewCategory: Block<OverviewData> = {
               <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">No longer being said</span>
               {quiet}
             </TileBlock>
-            {chip}
           </div>
         )}
       </BlockFrame>

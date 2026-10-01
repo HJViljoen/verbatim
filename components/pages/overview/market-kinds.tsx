@@ -1,18 +1,18 @@
 import type { RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { marketLevel, type MarketKinds } from '@/lib/pages/overview-market'
+import { kindsPrev, marketLevel, type MarketKinds } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { BarLegend, BaseHead, LevelBar, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
 
 // "What people did in the comments" (market-first WP1.6, plan §2.2 block 4):
 // every kind and the four moods as levels on the market's base, the month
-// before beside each, one chip at the foot (R3). No depth line and no
+// before beside each where the market pair joins, and nothing about it where
+// the pair is refused (T0a). No depth line and no
 // off-topic note under the block (25 Sep rulings); each kind's maker share
 // arrives as a row tag with deploy 3 (WP2.3), never as a note.
 
@@ -53,21 +53,23 @@ export function marketKindsFigures(m: MarketKinds): FigureTable {
     if (r.k != null) out[kindToken(r.kind, 'k')] = { value: r.k, unit: 'videos', label: `videos where people were ${r.label.toLowerCase()} in ${month}` }
     const share = level(r.k, m.n, `${r.label}'s share of ${month}`)
     if (share && share.unit === 'pct') out[kindToken(r.kind, 'share')] = share
-    const prev = m.prev ? level(r.prevK, m.prev.n, `${r.label} in ${longMonth(m.prev.month)}`) : null
+    const before = kindsPrev(m)
+    const prev = before ? level(r.prevK, before.n, `${r.label} in ${longMonth(before.month)}`) : null
     if (prev) out[kindToken(r.kind, 'prev')] = prev
   }
   for (const r of m.mood) {
     if (r.k != null) out[moodToken(r.mood, 'k')] = { value: r.k, unit: 'videos', label: `${r.label} videos in ${month}` }
     const share = level(r.k, m.judged, `${r.label}'s share of ${month}`)
     if (share && share.unit === 'pct') out[moodToken(r.mood, 'share')] = share
-    const prev = m.prev ? level(r.prevK, m.prev.judged, `${r.label} in ${longMonth(m.prev.month)}`) : null
+    const before = kindsPrev(m)
+    const prev = before ? level(r.prevK, before.judged, `${r.label} in ${longMonth(before.month)}`) : null
     if (prev) out[moodToken(r.mood, 'prev')] = prev
   }
   return out
 }
 
 function KindsTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
-  const prev = m.prev
+  const prev = kindsPrev(m)
   const axis = barAxis(m.kinds.flatMap((r) => [
     r.k != null && m.n ? r.k / m.n : null,
     prev && r.prevK != null && prev.n ? r.prevK / prev.n : null,
@@ -135,7 +137,7 @@ function KindsTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
 
 function MoodTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
   if (m.mood.length === 0) return null
-  const prev = m.prev
+  const prev = kindsPrev(m)
   if (mode === 'email') {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginTop: 10 }}>
@@ -207,7 +209,6 @@ export function renderMarketKinds(data: OverviewData, mode: RenderMode, appUrl: 
           </div>
         </div>
       )}
-      <PairChip words={m.chip} mode={mode} />
     </BlockFrame>
   )
 }

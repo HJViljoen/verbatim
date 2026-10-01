@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { PairChip } from '@/components/blocks/pair-chip'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
@@ -57,7 +56,7 @@ export interface IndexEntry { href: string; title: string; sub: string }
 /**
  * YOUR MARKET (the artboard's first card): what the market is and its size in
  * the reading month, the bar of its two parts (the category and the brands you
- * track), the month before as counts, the pair's chip and what is not in it;
+ * track), the month before as counts where the pair joins, and what is not in it;
  * beside it, the page's index. The one link is the footer's.
  *
  * "The comments under brands' own posts" are not in it because a rival's own
@@ -65,7 +64,7 @@ export interface IndexEntry { href: string; title: string; sub: string }
  * claims or nothing), and `market_month_videos` reads full-lane videos only.
  */
 export function YourMarketCard({
-  month, soFar = false, videos, split = null, prev = null, chip = null, ownPosts = null, movesLabel, movesHref, marketLabel, marketHref, index = [],
+  month, soFar = false, videos, split = null, prev = null, ownPosts = null, movesLabel, movesHref, marketLabel, marketHref, index = [],
 }: {
   month: string
   /** The reading month is still running ("in September so far"). */
@@ -74,8 +73,6 @@ export function YourMarketCard({
   split?: MarketSplit | null
   /** The month before, as counts, where it was read. */
   prev?: { month: string; split: MarketSplit } | null
-  /** The market pair's chip ("not read as a change: …"), where refused. */
-  chip?: string | null
   /** Your own posts dated in the month; null where they were not read. */
   ownPosts?: number | null
   movesLabel?: string
@@ -128,14 +125,11 @@ export function YourMarketCard({
               </div>
             </div>
           ) : null}
-          {prev || chip ? (
+          {prev ? (
             <div className="flex flex-col gap-3">
-              {prev ? (
-                <span className="font-mono text-[13px] text-muted-foreground">
-                  {longMonth(prev.month)}: <PrevFig n={prev.split.videos} /> · <PrevFig n={prev.split.category} /> in the category and <PrevFig n={prev.split.brands} /> under brands you track
-                </span>
-              ) : null}
-              {chip ? <PairChip words={chip} mode="app" /> : null}
+              <span className="font-mono text-[13px] text-muted-foreground">
+                {longMonth(prev.month)}: <PrevFig n={prev.split.videos} /> · <PrevFig n={prev.split.category} /> in the category and <PrevFig n={prev.split.brands} /> under brands you track
+              </span>
             </div>
           ) : null}
           <div className="border-t border-border/60 pt-4">

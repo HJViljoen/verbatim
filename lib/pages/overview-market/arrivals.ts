@@ -1,5 +1,5 @@
 import { monthStartOf } from '../../reading/month-key'
-import { segmentOf } from './board'
+import { searchInflated, segmentOf } from './board'
 
 // "With this update" (market-first WP2.7, plan §2.2 block 3 and §4.2
 // `ArrivalsBlock`): what came into the market with the latest update, as
@@ -40,6 +40,23 @@ export interface ArrivalsBlock {
   regrouped: number | null
   grouped?: { makers: number; setAside: number }
 }
+
+/**
+ * THE THEMES A PAGE MAY CALL NEW (T0a, mechanism 4; OV-24): a theme a third or
+ * more of whose month's videos came from searches first run that month
+ * (`searchInflated`) was found by our new search, not heard in the market for
+ * the first time, so it is not listed as new at all (never listed with a note
+ * saying so). A theme whose provenance was not measured stays. Read at the
+ * loader and at render, so a stored copy obeys it too.
+ */
+export function firstHeardThemes<T extends { k: number; fromNewSearches: number | null }>(themes: readonly T[]): T[] {
+  return themes.filter((t) => t.fromNewSearches == null || !searchInflated({ fromNewSearches: t.fromNewSearches, of: t.k }))
+}
+
+/** Were any new themes left out as our new searches' (`firstHeardThemes`)?
+ *  Then "no theme was heard for the first time" is never said in their place. */
+export const firstHeardWithheld = (themes: readonly { k: number; fromNewSearches: number | null }[]): boolean =>
+  firstHeardThemes(themes).length < themes.length
 
 /** One row of `update_arrivals`, as PostgREST returns it. */
 export interface UpdateArrivalsRow {

@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
@@ -216,12 +215,14 @@ function Questions({ q, mode }: { q: QuestionsBlock; mode: RenderMode }) {
     videos: t.videos,
     touch: t.touch,
   }))
-  const subjectRows: Row[] = q.subjects.map((s) => ({
+  // A SUBJECT THAT IS NOT READY IS NOT A ROW HERE (T0a, YM-9; ruling U6):
+  // being in this table says its market asked about it, which rests on its
+  // unverified matching, as its count and groups do. On a copy stored before
+  // the rule too.
+  const subjectRows: Row[] = q.subjects.filter((s) => s.calibration === 'ready').map((s) => ({
     key: s.subjectId,
     label: <span>{s.name}</span>,
-    tags: s.calibration === 'provisional'
-      ? email ? <>{' '}<CalibrationTag calibration="provisional" mode={mode} /></> : tag(<CalibrationTag calibration="provisional" mode={mode} />)
-      : null,
+    tags: null,
     sub: s.groups.length > 0 ? (
       <>
         {s.groups.map((g, i) => (
@@ -289,7 +290,8 @@ export const marketQuestions: Block<MarketSurfaceData> = {
     if (!q) return {}
     const out: FigureTable = {}
     q.themes.forEach((t, i) => { out[`questions_theme_${i + 1}`] = { value: t.videos, unit: 'videos', label: `${longMonth(q.month)} videos asking: ${t.label}` } })
-    q.subjects.forEach((s, i) => { out[`questions_subject_${i + 1}`] = { value: s.videos, unit: 'videos', label: `videos asking about ${s.name}, last ${QUESTION_WINDOW_MONTHS} months` } })
+    // Not a subject that is not ready's count (T0a, ruling U6).
+    q.subjects.forEach((s, i) => { if (s.calibration === 'ready') out[`questions_subject_${i + 1}`] = { value: s.videos, unit: 'videos', label: `videos asking about ${s.name}, last ${QUESTION_WINDOW_MONTHS} months` } })
     return out
   },
 

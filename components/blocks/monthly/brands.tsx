@@ -4,7 +4,7 @@ import { MARKET_BRANDS_TITLE, MarketBrandsBody, brandAxis } from '@/components/p
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC, nameLineParts, organicBase, topicNote } from '@/lib/pages/overview-market'
+import { BRANDS_HEAD_ORGANIC, nameLineParts, organicBase, topicNote } from '@/lib/pages/overview-market'
 import type { MonthlyBrands } from '@/lib/reports/monthly-slots'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { Inner, Num } from './email'
@@ -31,26 +31,23 @@ import { slotSection } from './slot'
  * `topicNote`), so the two print one sentence each.
  */
 
-/** The artboard's inks, as hex: the rivals' orange and its 48% step. */
+/** The artboard's ink, as hex: the rivals' orange. */
 const ORGANIC_HEX = EMAIL.comp
-const ALL_HEX = '#F8BC99'
 const BAR_WIDTH = 160
 
 function nameWords(b: MonthlyBrands): ReactNode {
   return nameLineParts(b).map((p, i) => (p.t === 'text' ? <span key={i}>{p.s}</span> : <Num key={i} size={15}>{fmtInt(p.value)}</Num>))
 }
 
-/** The two counts as one bar, table-safe: the headline count in orange, the
- *  rest of the count in all in its paler step, set
- *  on the row's middle as the artboard draws it. */
-function EmailBar({ organic, all, axis }: { organic: number; all: number; axis: number }) {
+/** The count as a bar, table-safe, set on the row's middle as the artboard
+ *  draws it. ONE COUNT A BRAND (T0 ruling U10): no "in all" step. */
+function EmailBar({ organic, axis }: { organic: number; axis: number }) {
   const px = (k: number) => Math.round((Math.max(0, k) / axis) * BAR_WIDTH)
   const a = px(organic)
-  const b = Math.max(0, px(all) - a)
   const seg = (w: number, bg: string) => (w > 0 ? <td style={{ width: w, height: 8, background: bg, fontSize: 0, lineHeight: 0 }}>&nbsp;</td> : null)
   return (
     <table role="presentation" cellPadding={0} cellSpacing={0} aria-hidden style={{ borderCollapse: 'collapse', marginTop: 7 }}>
-      <tbody><tr>{seg(a, ORGANIC_HEX)}{seg(b, ALL_HEX)}</tr></tbody>
+      <tbody><tr>{seg(a, ORGANIC_HEX)}</tr></tbody>
     </table>
   )
 }
@@ -72,7 +69,6 @@ const rowCell = (last: boolean, align: 'left' | 'right' = 'left', width?: number
  * that cell must survive a phone, where the bar column leaves (`vb-m-bar`).
  */
 function EmailTable({ b }: { b: MonthlyBrands }) {
-  const n = b.topics[0]?.n ?? null
   const nOrganic = organicBase(b)
   const axis = brandAxis(b)
   const counted = b.topics.some((t) => topicNote(t) == null)
@@ -89,7 +85,6 @@ function EmailTable({ b }: { b: MonthlyBrands }) {
           <th style={headCell('right', counted ? 144 : undefined)}>{counted ? (nOrganic == null
             ? <>{swatch(ORGANIC_HEX)}{BRANDS_HEAD_ORGANIC}</>
             : <span data-copy="level">{swatch(ORGANIC_HEX)}{BRANDS_HEAD_ORGANIC}<br />of {fmtInt(nOrganic)}</span>) : null}</th>
-          <th style={headCell('right', counted ? 64 : undefined)}>{counted ? <span data-copy="level">{swatch(ALL_HEX)}{BRANDS_HEAD_ALL}<br />of {n == null ? '·' : fmtInt(n)}</span> : null}</th>
         </tr>
       </thead>
       <tbody>
@@ -100,12 +95,11 @@ function EmailTable({ b }: { b: MonthlyBrands }) {
             <tr key={t.brandKey}>
               <td style={{ ...rowCell(last), paddingLeft: 0 }}>{t.label}</td>
               {note ? (
-                <td colSpan={3} style={{ ...rowCell(last), fontSize: 13, color: EMAIL.muted }}>{note}</td>
+                <td colSpan={2} style={{ ...rowCell(last), fontSize: 13, color: EMAIL.muted }}>{note}</td>
               ) : (
                 <>
-                  <td className="vb-m-bar" style={rowCell(last, 'left', BAR_WIDTH)}><EmailBar organic={t.kOrganic ?? 0} all={t.kAny ?? 0} axis={axis} /></td>
+                  <td className="vb-m-bar" style={rowCell(last, 'left', BAR_WIDTH)}><EmailBar organic={t.kOrganic ?? 0} axis={axis} /></td>
                   <td style={rowCell(last, 'right', 144)}><Num>{fmtInt(t.kOrganic ?? 0)}</Num></td>
-                  <td style={rowCell(last, 'right', 64)}><Num prev>{fmtInt(t.kAny ?? 0)}</Num></td>
                 </>
               )}
             </tr>
@@ -150,14 +144,14 @@ function figures(b: MonthlyBrands): FigureTable {
   }
   const nOrganic = organicBase(b)
   if (nOrganic != null && b.topics.some((t) => !topicNote(t))) {
-    out.brands_organic_n = { value: nOrganic, unit: 'videos', label: `videos in your market in ${month}, without any video our rival searches found` }
+    out.brands_organic_n = { value: nOrganic, unit: 'videos', label: `videos in your market in ${month}, named unprompted` }
   }
   for (const t of b.topics) {
-    // A brand not counted has no figure: never a 0.
-    if (topicNote(t) || t.kOrganic == null || t.kAny == null) continue
+    // A brand not counted has no figure: never a 0. One count a brand, never
+    // "in all" (T0 ruling U10).
+    if (topicNote(t) || t.kOrganic == null) continue
     const id = t.brandKey.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
-    out[`brand_${id}_organic`] = { value: t.kOrganic, unit: 'videos', label: `videos naming ${t.label} in ${month}, without any video our rival searches found` }
-    out[`brand_${id}_any`] = { value: t.kAny, unit: 'videos', label: `videos naming ${t.label} in ${month}` }
+    out[`brand_${id}_organic`] = { value: t.kOrganic, unit: 'videos', label: `videos naming ${t.label} in ${month}, named unprompted` }
   }
   return out
 }

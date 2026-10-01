@@ -225,10 +225,10 @@ describe('how to read, market-first', () => {
     expect(def('brands').body).toContain(NINETY_DAY_NOTE)
   })
 
-  it('names the brand table’s first count by its column head, never “our own rival searches”', () => {
+  it('names the brand table’s one count by its column head, never “our own rival searches” and never “in all” (T0 ruling U10)', () => {
     for (const t of [def('brands').body, card('competitive').cannot.join(' ')]) {
       expect(t).toContain(`“${BRANDS_HEAD_ORGANIC}”`)
-      expect(t).toContain(`“${BRANDS_HEAD_ALL}”`)
+      expect(t).not.toContain(`“${BRANDS_HEAD_ALL}”`)
       expect(t).not.toContain('rival searches')
     }
   })

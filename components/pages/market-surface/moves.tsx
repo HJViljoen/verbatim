@@ -2,14 +2,13 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { CalendarLine, type CalendarSeries } from '@/components/charts/calendar-line'
 import { MovementBadge } from '@/components/delta-badge'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { MoveReading, MoveSeries } from '@/lib/reading/moves'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
 import { MOVES_MARKET_HOW, moveMonthLevel, type MarketSurfaceData, type MoveMarketMonth, type MoveMarketRead } from '@/lib/pages/market-surface'
 import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
@@ -135,7 +134,8 @@ function Side({ verdict, mode, control = false, shared = null }: { verdict: Verd
       <span data-copy="level" className={mono} style={monoStyle}>
         {fmtInt(v.value.k)} of {fmtInt(v.value.n)} videos ({pct(v.value.k, v.value.n)})
       </span>
-      {v.baseline ? (
+      {/* Not beside a refused comparison (T0a; the one condition). */}
+      {v.baseline && priorPrintable(v) ? (
         <>
           {' '}against{' '}
           <span data-copy="level" className={mono} style={monoStyle}>
@@ -151,7 +151,7 @@ function Side({ verdict, mode, control = false, shared = null }: { verdict: Verd
   return (
     <span data-copy="verdict" className="flex items-baseline justify-between gap-3">
       <span className="min-w-0 text-[12px] text-secondary-foreground">{body}</span>
-      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null} />
+      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null && priorPrintable(v)} />
     </span>
   )
 }
@@ -220,13 +220,11 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
           <div style={{ marginTop: 4 }}>
             <Side verdict={r.verdict} mode={mode} shared={shared} />
             {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control shared={shared} />)}
-            <PairChip note={shared} mode={mode} />
           </div>
         ) : (
           <TileBlock className="flex min-w-0 flex-col gap-1">
             <Side verdict={r.verdict} mode={mode} shared={shared} />
             {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control shared={shared} />)}
-            <PairChip note={shared} mode={mode} />
           </TileBlock>
         )
       ) : (
@@ -270,17 +268,19 @@ const ROLE_WORDS: Record<MoveMarketMonth['role'], string> = { move: 'Move month'
  *  and the market's level in each of the three months, as levels only. */
 function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) {
   const email = mode === 'email'
-  const on = read.label
-    ? `${read.label} in your market${read.calibration === 'provisional' ? ' (provisional)' : ''}`
-    : null
+  // A MOVE ON A SUBJECT THAT IS NOT READY IS ITS TITLE, WHAT IT IS ON AND ITS
+  // DATE (T0a, YM-47; ruling U6): no level cells, no "provisional", and no
+  // sentence about why.
+  const withheld = read.calibration === 'provisional' || read.calibration === 'failed'
+  const on = read.label && !withheld ? `${read.label} in your market` : null
   const cellWords = (m: MoveMarketMonth) => `${longMonth(m.month)}: ${moveMonthLevel(m)}`
   if (email) {
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{read.title}</div>
         <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{read.on} · dated {shortDate(read.datedOn ?? read.declaredAt)}</div>
-        {read.calibration === 'failed'
-          ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{MOVE_FAILED}</div>
+        {withheld
+          ? null
           : on
             ? read.months.map((m) => <div key={m.role} data-copy={m.state === 'read' ? 'level' : undefined} style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2 }}>{ROLE_WORDS[m.role]} · {cellWords(m)}</div>)
             : <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{MOVE_NO_OBJECT}</div>}
@@ -293,9 +293,7 @@ function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) 
         <span className="text-[14px] font-semibold text-foreground">{read.title}</span>
         <span className="text-[12px] text-muted-foreground">{read.on} · dated {shortDate(read.datedOn ?? read.declaredAt)}</span>
       </span>
-      {read.calibration === 'failed' ? (
-        <span className="text-[13px] text-secondary-foreground">{MOVE_FAILED}</span>
-      ) : on ? (
+      {withheld ? null : on ? (
         <>
           <span className="text-[13px] font-medium text-foreground">{on}, as a level</span>
           <span className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -314,8 +312,6 @@ function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) 
   )
 }
 
-/** A move on a subject being re-described is not read (decision C). */
-const MOVE_FAILED = 'Its subject is being re-described, so the market is not read on it.'
 /** A move naming nothing the market is read on month by month. */
 const MOVE_NO_OBJECT = 'This move names nothing your market is read on month by month, so there is no level to show.'
 

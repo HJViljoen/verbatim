@@ -234,7 +234,9 @@ describe('OV5, ported to the artboard', () => {
     expect(seriesLine(refused)).not.toContain('→')
     expect(seriesLine(refused)).toContain('%')
 
-    // Two months grouped differently are not one run, whatever the count.
+    // Two months grouped differently are not one run, whatever the count, and
+    // under the one condition (T0a) the month before the break is not printed
+    // beside the ones after it at all, marked or not.
     const broken = {
       ...reading,
       series: reading.series.map((s, i) =>
@@ -243,7 +245,16 @@ describe('OV5, ported to the artboard', () => {
           : s,
       ),
     }
-    expect(seriesLine(broken)).toContain(REGIME_BREAK.trim())
+    const first = reading.series[0]
+    const firstRead = first.points.find((p) => p.pct != null)!
+    const firstLabel = `${firstRead.month.slice(5, 7)}/${firstRead.month.slice(2, 4)}`
+    expect(seriesLine(reading)).toContain(`${first.label} ${firstLabel}`)
+    expect(seriesLine(broken)).not.toContain(REGIME_BREAK.trim())
+    expect(seriesLine(broken)).not.toContain(`${first.label} ${firstLabel}`)
+    // A refused step (the month-pair rule) cuts the run the same way.
+    const refusedStep = { ...reading, series: reading.series.map((s) => ({ ...s, refusedSteps: { '2026-09-01': 'x' } })) }
+    expect(seriesLine(refusedStep)).not.toContain('07/26')
+    expect(seriesLine(refusedStep)).not.toContain('08/26')
   })
 
   it('declares the moves’ verdicts, so the record can count what refused', () => {

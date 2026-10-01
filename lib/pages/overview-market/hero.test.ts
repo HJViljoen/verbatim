@@ -5,8 +5,9 @@ import {
   figureText,
   heroLead,
   heroView,
-  leadNewSearch,
   leadRank,
+  mayLead,
+  printedLead,
   THEME_N,
   THEME_PREV_N,
   themeToken,
@@ -206,15 +207,26 @@ describe('the hero’s words', () => {
     expect(said.toLowerCase()).not.toContain('buyer')
   })
 
-  it('print the lead’s new-search count only at a third or more of its videos', () => {
-    const lead = { ...septemberThemes()[5], provenance: { fromNewSearches: 7, of: 21 } }
-    expect(leadNewSearch(lead)).toEqual({ fromNewSearches: 7, of: 21 })
-    expect(leadNewSearch({ ...lead, provenance: { fromNewSearches: 6, of: 21 } })).toBeNull()
-    expect(leadNewSearch({ ...lead, provenance: null })).toBeNull()
-    const themes = septemberThemes().map((t) => (t.registryId === 'th-airline' ? lead : t))
+  // T0a (mechanism 4; OV-8, MR-3): a theme a third or more of whose month's
+  // videos came from searches first run that month never leads, and no note
+  // about it prints: the lead passes to the next theme that may lead.
+  it('never lead with a theme our new searches found (a third or more of its videos), and print no note about it', () => {
+    const inflated = { ...septemberThemes()[5], provenance: { fromNewSearches: 7, of: 21 } }
+    const themes = septemberThemes().map((t) => (t.registryId === 'th-airline' ? inflated : t))
     const b = board(themes)
-    const view = heroView(heroLead(b, [], new Set()), b, SEPTEMBER)
-    expect(text(view.newSearch, view.figures)).toBe('7 of its 21 videos came from searches we added in September')
+    const before = heroLead(board(), [], new Set())
+    expect(before.kind === 'themes' && before.lead?.registryId).toBe('th-airline')
+    const hero = heroLead(b, [], new Set())
+    expect(hero.kind === 'themes' && hero.lead?.registryId).not.toBe('th-airline')
+    expect(mayLead(inflated, 'measured', new Set())).toBe(false)
+    // Under a third, it may lead.
+    expect(mayLead({ ...inflated, provenance: { fromNewSearches: 6, of: 21 } }, 'measured', new Set())).toBe(true)
+    const view = heroView(hero, b, SEPTEMBER)
+    expect(Object.keys(view.figures).some((k) => k.startsWith('lead_'))).toBe(false)
+    expect(text(view.parts, view.figures)).not.toMatch(/searches we added/)
+    // A lead stored before the rule prints no voices.
+    expect(printedLead({ kind: 'themes', top: [], lead: inflated })).toBeNull()
+    expect(printedLead({ kind: 'themes', top: [], lead: septemberThemes()[5] })?.registryId).toBe('th-airline')
   })
 
   it('under 100 videos in the previous month prints counts, never a share', () => {
@@ -231,7 +243,7 @@ describe('the hero’s words', () => {
   })
 
   it('the size alone adds nothing', () => {
-    expect(heroView({ kind: 'size' }, board(), SEPTEMBER)).toEqual({ parts: [], prev: null, newSearch: null, figures: {} })
+    expect(heroView({ kind: 'size' }, board(), SEPTEMBER)).toEqual({ parts: [], prev: null, figures: {} })
   })
 })
 

@@ -18,7 +18,8 @@ import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
-import type { PairOn } from '../reading/pairs'
+import { joins } from '../reading/comparability'
+import { joinedRun, type PairOn } from '../reading/pairs'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -1002,6 +1003,12 @@ export const QUESTION_WINDOW_MONTHS = 3
 export const questionsEmpty = (month: string): string =>
   `No question theme in your market reached ${fmtInt(THEME_FLOOR)} videos in ${longMonth(month)}, and no subject was asked about over the last three months.`
 
+/** The empty state where a subject was asked about but none is ready: the
+ *  "no subject was asked about" half would be false, so it is not said (T0a,
+ *  ruling U6). */
+export const questionsEmptyThemes = (month: string): string =>
+  `No question theme in your market reached ${fmtInt(THEME_FLOOR)} videos in ${longMonth(month)}.`
+
 /** The first month of the three the subject rows read. */
 export const questionWindowFrom = (month: string): string => monthsBack(month, QUESTION_WINDOW_MONTHS - 1)
 
@@ -1053,8 +1060,10 @@ export function buildQuestions(input: {
       touch: questionTouch({ labels: [label], posts: monthPosts }),
     }
   })
+  // ONLY A READY SUBJECT IS A ROW (T0a, YM-9; ruling U6): its count, its
+  // rank and its being here at all rest on its matching.
   const subjects: QuestionSubjectRow[] = input.subjects
-    .filter((x) => x.calibration !== 'failed' && x.videos > 0)
+    .filter((x) => x.calibration === 'ready' && x.videos > 0)
     .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
     .slice(0, QUESTION_SUBJECTS_SHOWN)
     .map((x) => {
@@ -1078,7 +1087,9 @@ export function buildQuestions(input: {
     window: { from, to: month },
     windowPosts: input.posts ? input.posts.length : null,
     subjects,
-    empty: themes.length === 0 && subjects.length === 0 ? questionsEmpty(month) : null,
+    empty: themes.length === 0 && subjects.length === 0
+      ? input.subjects.some((x) => x.videos > 0) ? questionsEmptyThemes(month) : questionsEmpty(month)
+      : null,
     segments: input.segments,
   }
 }
@@ -1172,8 +1183,21 @@ export function moveMarketReads(input: {
   adviceTargets: ReadonlyMap<string, string>
   levels: (kind: 'subject' | 'theme', id: string, month: string) => number | null
   n: (month: string) => number | null
+  /**
+   * Whether one calendar step on the market was read the same way: the pair
+   * judge on the market view (`joins(pair(prev, month, 'market'))`).
+   *
+   * THE ONE CONDITION (T0a, YM-45). Three levels side by side are a
+   * comparison however they are worded, and "a search change in the month
+   * after" printed as the market's answer to the move. A later month prints
+   * only where every step from the move's month to it joins (`joinedRun`);
+   * past a refused step the move's month prints alone. Omitted (a fixture
+   * with no pair), every step joins.
+   */
+  joined?: (prevMonth: string, month: string) => boolean
 }): MoveMarketRead[] {
   const reading = monthStartOf(input.month)
+  const joined = input.joined ?? (() => true)
   return input.moves.map((m) => {
     // THE MOVE'S MONTH IS THE DAY IT WAS MADE (MF5), else the day it was
     // declared: every move before MF5, and one dated today.
@@ -1185,16 +1209,31 @@ export function moveMarketReads(input: {
       subject && m.subject_id ? { kind: 'subject', id: m.subject_id }
         : themeId && (m.kind === 'advice' || (m.registry_ids ?? []).length === 1) ? { kind: 'theme', id: themeId } : null
     const label = subject?.name ?? (object?.kind === 'theme' ? input.themes.get(object.id) ?? null : null)
-    const failed = subject?.calibration === 'failed'
+    // Only a ready subject's levels (T0a, YM-47; ruling U6): a provisional
+    // one's rest on its unverified matching, as a failed one's do.
+    const failed = subject != null && subject.calibration !== 'ready'
     const roles: MoveMarketMonth['role'][] = ['move', 'after', 'after_that']
     let at = moveMonth
-    const months: MoveMarketMonth[] = roles.map((role) => {
+    const all: MoveMarketMonth[] = roles.map((role) => {
       const month = at
       at = nextMonth(at)
       if (month > reading) return { month, role, state: 'not_yet', k: null, n: null }
       const n = input.n(month)
       const k = object && !failed ? input.levels(object.kind, object.id, month) : null
       return n != null && n > 0 && k != null ? { month, role, state: 'read', k, n } : { month, role, state: 'not_read', k: null, n: null }
+    })
+    // The move's month always prints. A later month across a refused step
+    // from it is left out, and so is every month after that one: nothing past
+    // the break is shown beside the move's month. A month not here yet is no
+    // comparison and keeps its slot while nothing before it was left out.
+    const run = new Set(joinedRun(all.filter((x) => x.state !== 'not_yet'), moveMonth, joined).map((x) => x.month))
+    let broken = false
+    const months = all.filter((x) => {
+      if (x.role === 'move') return true
+      if (broken) return false
+      if (x.state === 'not_yet' || run.has(x.month)) return true
+      broken = true
+      return false
     })
     return {
       moveId: m.id,
@@ -1633,6 +1672,7 @@ export async function loadMarketSurface(
     subjects: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, { name: x.name, calibration: calibrationOf.get(x.id) ?? 'provisional' }])),
     themes: themeLabels,
     adviceTargets: new Map(groundedRows.filter((r) => r.targetIds.length > 0).map((r) => [r.lineageId, r.targetIds[0]])),
+    joined: (prevMonth, m) => joins(pair(prevMonth, m, 'market')),
   })
   const movesBlock: MovesBlock = {
     rows: moveRows,
@@ -1977,6 +2017,8 @@ async function loadMoveMarketReads(input: {
   subjects: ReadonlyMap<string, { name: string; calibration: SubjectCalibrationWord }>
   themes: ReadonlyMap<string, string>
   adviceTargets: ReadonlyMap<string, string>
+  /** One calendar step on the market read the same way (`moveMarketReads`). */
+  joined: (prevMonth: string, month: string) => boolean
 }): Promise<MoveMarketRead[]> {
   if (input.moves.length === 0) return []
   const audiences = marketAudiences(input.rivalAudiences)
@@ -2015,6 +2057,7 @@ async function loadMoveMarketReads(input: {
     // object with no row in any month was never read, which is not zero.
     levels: (kind, id, m) => levels.get(`${kind}:${id}:${m}`) ?? (read.has(`${kind}:${id}`) && input.counts.get(m)?.videos != null ? 0 : null),
     n: (m) => input.counts.get(m)?.videos ?? null,
+    joined: input.joined,
   })
 }
 

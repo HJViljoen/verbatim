@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import type { SubjectsData } from '@/lib/pages/subjects'
 
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { surface } from '@/lib/nav'
-import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
+import { layoutFor, SubjectsPage, SUBJECT_BLOCKS, subjectsPage } from './index'
 import { NO_SUBJECTS_LINE, subjectsList } from './list'
 import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import { subjectsOwnPosts } from './own-posts'
@@ -80,19 +81,35 @@ describe('S1 · the rail reads the market', () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at)
   })
 
+  // HYPOTHETICAL: the market pair read the same way (no refusal on the pane),
+  // so the rail prints the month before.
+  const joined = (): SubjectsData => {
+    const data = marketSubjectsFixture()
+    return { ...data, selected: data.selected ? { ...data.selected, chip: null } : null }
+  }
+
   it('heads its columns with the base: this month and the month before, on the market', () => {
-    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
+    const t = text(subjectsList.render(joined(), 'app', ctx))
     expect(t).toContain('ranked by September')
     expect(t).toContain('Sep of 654')
     expect(t).toContain('Aug of 377')
   })
 
   it('prints each row\'s videos, share and the month before; a month under 10 as its count', () => {
-    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
+    const t = text(subjectsList.render(joined(), 'app', ctx))
     expect(t).toMatch(/Looks & style 103 16% 10%/)
     expect(t).toMatch(/Comfort 43 7% 7%/)
     // Price's August 5 is under 10: a count, never a share (§2.12).
     expect(t).toMatch(/Price 25 4% 5/)
+  })
+
+  it('prints no month before where the market pair is refused (T0a, SB-14: the one condition)', () => {
+    for (const mode of ['app', 'email'] as const) {
+      const t = text(subjectsList.render(marketSubjectsFixture(), mode, ctx))
+      expect(t, mode).toContain('Sep of 654')
+      expect(t, mode).not.toContain('Aug of 377')
+      expect(t, mode).not.toMatch(/Looks & style 103 16% 10%/)
+    }
   })
 
   it('tags a row with its maker share at a fifth or more, and nothing under it (decision F)', () => {
@@ -102,24 +119,23 @@ describe('S1 · the rail reads the market', () => {
     expect((t.match(/makers/g) ?? []).length).toBe(2)
   })
 
-  it('prints "being re-described" and no figure for a failed subject, and "no reading yet" for one not read', () => {
+  // T0a (SB-9; ruling U6): a subject that is not ready is its name alone,
+  // failed (Repair & warranty) or provisional and not read (Community &
+  // purpose): no figure, no word, no "no reading yet".
+  it('prints a failed subject and a provisional one by name alone, with no figure and no word', () => {
     const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toMatch(/Repair & warranty being re-described/)
+    expect(t).toMatch(/Community & purpose Repair & warranty The rest is on Conversation/)
+    expect(t).not.toContain('being re-described')
     expect(t).not.toMatch(/Repair & warranty 36/)
-    expect(t).toMatch(/Community & purpose no reading yet/)
+    expect(t).not.toContain('no reading yet')
   })
 
-  // Finish-list item 21: "being re-described" was printed with nothing
-  // saying what it meant.
-  it('explains "being re-described" in one plain line on the page, and not on paper', () => {
-    const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toContain(FAILED_EXPLAINED)
-    expect(t.split(FAILED_EXPLAINED).length - 1).toBe(1)
+  // Finish-list item 21's line explained "being re-described". With the word
+  // gone (T0a) there is nothing for it to explain, on the page or on paper.
+  it('prints no line explaining "being re-described", in any mode', () => {
+    for (const mode of MODES) expect(text(subjectsList.render(marketSubjectsFixture(), mode, ctx)), mode).not.toContain(FAILED_EXPLAINED)
     assertCopyContract(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx)))
-    for (const mode of ['print', 'email'] as const) expect(text(subjectsList.render(marketSubjectsFixture(), mode, ctx))).not.toContain(FAILED_EXPLAINED)
-    // Paper keeps the markup it had: the line's wrapper is drawn only with it.
-    expect(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx))).toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
-    expect(render(subjectsList.render(marketSubjectsFixture(), 'print', ctx))).not.toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
+    expect(render(subjectsList.render(marketSubjectsFixture(), 'app', ctx))).not.toContain('<div class="flex min-w-0 flex-col gap-3"><div role="table"')
   })
 
   it('draws no editing control (a rename or a stop is Settings\')', () => {
@@ -152,12 +168,16 @@ describe('S2 · the subject in your market', () => {
     const t = text(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
     expect(t).toContain(MARKET_PANE_TITLE)
     expect(t).toMatch(/Looks & style came up in 103 of 654 September videos in your market \( ?16% ?\)\./)
-    expect(t).toContain('Aug 10% of 377 · Sep 16% of 654')
+    // T0a (SB-17): the Aug→Sep pair is refused, so the trail is September's
+    // level alone; August beside it was the comparison the judge refused.
+    expect(t).toContain('Sep 16% of 654')
+    expect(t).not.toContain('Aug 10% of 377')
   })
 
-  it('prints the pair\'s one chip, "who posted them" and the months read, and no gap and no side', () => {
+  it('prints "who posted them" and the months read, no refusal chip (T0a), and no gap and no side', () => {
     const t = text(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toContain('not read as a change: we changed our searches in September')
+    expect(t).not.toContain('not read as a change: we changed our searches in September')
+    expect(render(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))).not.toContain('data-pair-chip')
     expect(t).toContain('Its 103 September videos')
     expect(t).toContain('34% makers’ videos')
     expect(t).toContain('66% everyone else')
@@ -216,10 +236,15 @@ describe('S2 · the subject in your market', () => {
     expect(t).not.toMatch(/\d+% makers/)
   })
 
-  it('carries the calibration word in its trail: provisional, never a verdict', () => {
+  // T0a (SB-16; ruling U6): a provisional subject's trail rests on its
+  // matching; the pane prints its name and no trail, no word, no verdict.
+  it('prints no trail and no word for a provisional subject, and never a verdict', () => {
     const data = marketSubjectsFixture()
     const t = text(subjectsSubject.render({ ...data, selected: { ...data.selected!, calibration: 'provisional' } }, 'app', ctx))
-    expect(t).toContain('provisional · Aug 10% of 377 · Sep 16% of 654')
+    expect(t).toContain('Looks & style')
+    expect(t).not.toContain('provisional')
+    expect(t).not.toContain('Sep 16% of 654')
+    expect(t).not.toContain('Aug 10% of 377')
     expect(blockAnswers(subjectsSubject, data).verdicts).toEqual([])
   })
 
@@ -321,13 +346,18 @@ describe('S6 · month by month on the market', () => {
     expect(monthsLead(data.selected!.marketLine)).toBe('Two months read for this subject, not yet a line.')
     expect(t).toContain('Two months read for this subject, not yet a line.')
     expect(t).toContain('ended · still filling until the 1 Nov update')
-    expect(t).toContain('38 of 377')
+    // T0a (SB-33, the one condition): August against September is refused, so
+    // August's card is not set beside September's, and no chip says why.
+    expect(t).not.toContain('38 of 377')
     expect(t).toContain('103 of 654')
     expect(t).toContain('so far from 16 Oct · ended from 1 Nov')
     expect(t).toContain('settles with the 3 Jan update')
     expect(t).toContain('the first step joined as a line')
     expect(t).toContain('once November has filled, about the 3 Jan update')
-    expect(t).toContain('not read as a change: we changed our searches in September')
+    expect(t).not.toContain('not read as a change: we changed our searches in September')
+    // HYPOTHETICAL: with the pair read the same way, August's card prints.
+    const joined = { ...data, selected: { ...data.selected!, marketLine: { ...data.selected!.marketLine!, refusedSteps: {} } } }
+    expect(text(subjectsLine.render(joined, 'app', ctx))).toContain('38 of 377')
   })
 
   it('never says "complete", "so far, N days" or "still filling" in a lead', () => {
@@ -335,15 +365,24 @@ describe('S6 · month by month on the market', () => {
     for (const w of ['complete', 'so far', 'still filling']) expect(lead).not.toContain(w)
   })
 
-  it(`from the ${LINE_FROM}rd month read draws one line, a refused step broken`, () => {
+  it(`from the ${LINE_FROM}rd month read draws one line, and nothing across a refused step`, () => {
     const data = marketSubjectsFixture()
-    const line = marketLineFixture('s-looks', 'Looks & style', [
+    const points = [
       { ...data.selected!.marketLine!.points[0], month: '2026-07-01', k: 30, videos: 300, pct: 10 },
       ...data.selected!.marketLine!.points,
-    ], data.selected!.marketLine!.refusedSteps)
-    const html = render(subjectsLine.render({ ...data, chartAxis: ['2026-07-01', '2026-08-01', '2026-09-01'], selected: { ...data.selected!, marketLine: line } }, 'app', ctx))
-    expect(html).toContain('<svg')
-    expect(html).not.toContain('not yet a line')
+    ]
+    const at = (steps: Record<string, string>) => render(subjectsLine.render({
+      ...data,
+      chartAxis: ['2026-07-01', '2026-08-01', '2026-09-01'],
+      selected: { ...data.selected!, marketLine: marketLineFixture('s-looks', 'Looks & style', points, steps) },
+    }, 'app', ctx))
+    const joined = at({})
+    expect(joined).toContain('<svg')
+    expect(joined).not.toContain('not yet a line')
+    // T0a: September's step refused, so September stands alone (a card).
+    const refused = at(data.selected!.marketLine!.refusedSteps ?? {})
+    expect(refused).not.toContain('<polyline')
+    expect(renderText(refused)).not.toContain('38 of 377')
   })
 
   it('draws no weekly strip at deploy 3 (§2.3 S6)', () => {
@@ -372,5 +411,47 @@ describe('the market page, as a page', () => {
     const t = text(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     expect(t).not.toContain(MARKET_PANE_TITLE)
     expect(t).toContain('Durability')
+  })
+})
+
+// EXPORT THIS PAGE OBEYS THE PAGE (T0a, ruling U6; review finding 3). The
+// layout left a not-ready subject's months, kinds and questions out, but the
+// export's slides always asked for them, and "Questions people ask on it: 2
+// videos asked about Looks & style in September" printed on a provisional
+// subject's PDF. The slides leave them out, and the three blocks answer the
+// rule themselves, so a stored section or any other caller obeys it too.
+describe('the export of a subject that is not ready', () => {
+  const notReady = (calibration: 'provisional' | 'failed'): SubjectsData => {
+    const data = marketSubjectsFixture()
+    return { ...data, selected: { ...data.selected!, calibration } }
+  }
+  const WITHHELD = ['subjects.line', 'subjects.kinds', 'subjects.unanswered']
+
+  it('asks for no slide the page does not draw, and keeps the name, the pane and the voices', () => {
+    for (const calibration of ['provisional', 'failed'] as const) {
+      const keys = subjectsPage.slides(notReady(calibration), 'default').flatMap((sl) => sl.keys)
+      for (const k of WITHHELD) expect(keys, calibration).not.toContain(k)
+      for (const k of ['subjects.list', 'subjects.subject', 'subjects.voices']) expect(keys, calibration).toContain(k)
+      expect(new Set(keys)).toEqual(new Set(layoutFor(notReady(calibration)).map((l) => l.block.key)))
+    }
+    // A ready subject still exports all of them.
+    const ready = subjectsPage.slides(marketSubjectsFixture(), 'default').flatMap((sl) => sl.keys)
+    for (const k of WITHHELD) expect(ready).toContain(k)
+  })
+
+  it('draws nothing from the three blocks, in any mode, and declares nothing for them', () => {
+    const data = notReady('provisional')
+    for (const block of [subjectsLine, subjectsKinds, subjectsUnanswered]) {
+      for (const mode of MODES) expect(render(block.render(data, mode, ctx)), `${block.key} ${mode}`).toBe('')
+      const answers = blockAnswers(block, data)
+      expect(Object.keys(answers.figures), block.key).toEqual([])
+      expect(answers.verdicts, block.key).toEqual([])
+    }
+    // Nothing the review saw on the PDF: the question count, the kinds' counts
+    // and the month's share.
+    const all = SUBJECT_BLOCKS.map((b) => text(b.render(data, 'print', ctx))).join(' ')
+    expect(all).not.toContain('videos asked about Looks & style')
+    expect(all).not.toContain('Praising it')
+    expect(all).not.toContain('103 of 654')
   })
 })

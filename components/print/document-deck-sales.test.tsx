@@ -165,9 +165,11 @@ describe('sales.p1 — the cover', () => {
 
   // A refusal says which floor bit and how many it had — the mock's bare "too
   // few to compare" over 12 videos does not.
-  it('says how many the refused figure had', () => {
-    expect(words(sheets(deck(salesBriefThinFixture()))[0]))
-      .toContain('Too few to compare: 35 videos where a banded reading needs 100.')
+  // T0a (mechanism 6; DB-15): under the floors, the count only.
+  it('prints the count only where the figure is under its floors', () => {
+    const w = words(sheets(deck(salesBriefThinFixture()))[0])
+    expect(w).not.toContain('Too few to compare: 35 videos where a banded reading needs 100.')
+    expect(w).not.toMatch(/leaned toward you/)
   })
 
   // `sales.p1.footer`: the cover was the one sheet of a paid PDF with no page
@@ -303,9 +305,13 @@ describe('sales.p5 — the switching sheet', () => {
 
   // …and under the floor the figure names the floor, which is a different
   // answer and keeps its own words.
-  it('names the floor where the pool is under it', () => {
+  // T0a (DB-15): no lean split under the floor, and no refusal line beside
+  // one; the pool's count stands.
+  it('prints the pool and no lean split where the pool is under the floor', () => {
     const thin = words(sheetNamed(deck(salesBriefThinFixture()), 'Who is moving, and which way'))
-    expect(thin).toContain('Too few to compare: 35 videos where a banded reading needs 100.')
+    expect(thin).not.toContain('Too few to compare')
+    expect(thin).not.toMatch(/Toward Sealand \d+ of/)
+    expect(thin).toContain('35')
   })
 
   // Copy de-clutter E36: the sentence explained an absence nobody asks about.
@@ -711,5 +717,30 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     assertCopyContract(deck())
     assertCopyContract(deck(salesBriefThinFixture()))
     assertCopyContract(deck(salesBriefLegacyFixture()))
+  })
+})
+
+// T0a (mechanism 6; DB-9): a thin competitor prints its words and no
+// figures, never figures beside "read with care".
+describe('a competitor page on few videos', () => {
+  const withCompetitor = (thin: boolean) => {
+    const data = salesBriefFixture()
+    const page = {
+      id: 'c1', kind: 'competitor' as const, title: 'Freitag',
+      blocks: [{ id: 'c1.pitch', field: 'pitch' as const, text: 'Recycled truck tarps, sold as a design object.' }],
+      meta: { name: 'Freitag', thin: String(thin) },
+    }
+    return { ...data, pages: [...data.pages, page], layout: [...(data.layout ?? []), { kind: 'page' as const, id: 'c1' }] }
+  }
+
+  it('prints no share strip and no "read with care" where thin, and the strip where not', () => {
+    const sheetOf = (html: string) => words(sheets(html).find((x) => x.includes('Recycled truck tarps')) ?? '')
+    const thin = sheetOf(deck(withCompetitor(true) as never))
+    expect(thin).toContain('Recycled truck tarps')
+    expect(thin).not.toContain('read with care')
+    expect(thin).not.toContain('Share of tracked conversation')
+    const full = sheetOf(deck(withCompetitor(false) as never))
+    expect(full).toContain('Recycled truck tarps')
+    expect(full).not.toContain('read with care')
   })
 })

@@ -8,6 +8,7 @@ import { splitSentences } from '@/lib/prose/scrub'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { QuarterlyData, ReadPage } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel, withoutReadingCounter } from '@/lib/reports/quarterly'
+import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
 import { Bullet, Card, Chip, Column, Columns, Dots, Eyebrow, Level, Note, Row, Stored } from './parts'
 
 // QR2 · Our read — the interpretation slot, labelled (design §7 item 9).
@@ -188,7 +189,8 @@ export const quarterlyRead: Block<QuarterlyData> = {
                       it is a count of; a zero with no explanation would be a
                       claim about the evidence rather than about our own
                       re-analysis. */}
-                  {a.grounded ? <><span data-copy="figure">{a.grounded.line.replace(/,? counted over everything we have read for you.*$/, '')}</span>{' '}</> : null}
+                  {/* All time, on the count (T0a, mechanism 6; QR-12). */}
+                  {a.grounded ? <><span data-copy="figure">{a.grounded.line.replace(/,? counted over everything we have read for you.*$/, '')}{a.grounded.pruned ? '' : `, ${GROUNDED_BASIS}`}</span>{' '}</> : null}
                   {a.status}{a.decidedAt ? ` · you decided ${fullDate(a.decidedAt)}` : ' · no decision yet'}
                 </Bullet>
               ))

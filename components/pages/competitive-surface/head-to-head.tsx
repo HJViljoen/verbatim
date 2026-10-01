@@ -1,13 +1,12 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, monthName } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
 import { NOT_A_SHARE_WHY, type FaceOffMeasure, type FaceOffSide, type HeadToHead } from '@/lib/reading/head-to-head'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
 import { headToHeadFigures } from '@/lib/pages/playbook'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 
@@ -73,8 +72,10 @@ const HEAD = 'font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreg
  *  product does not show and rule (b), which reads LEVEL nodes, could not see
  *  it. Same rule as `Now`: `n === 0` is the measure that is not a share of
  *  anything, and only there is the denominator dropped. */
-function Then({ level, mode }: { level: FaceOffSide | null; mode: RenderMode }) {
-  const prev = level?.prev ?? null
+function Then({ level, verdict, mode }: { level: FaceOffSide | null; verdict: Verdict | null; mode: RenderMode }) {
+  // Not beside a refused comparison (T0a): the loader leaves it off where the
+  // side's pair is refused, and a stored row keyed on its own refused verdict.
+  const prev = verdict && !priorPrintable(verdict) ? null : level?.prev ?? null
   if (!prev) return mode === 'email' ? <span /> : <span aria-hidden />
   const of = prev.value.n > 0 ? `of ${fmtInt(prev.value.n)}` : null
   if (mode === 'email') {
@@ -141,9 +142,9 @@ function Row({ measure: m, mode, shared = null }: { measure: FaceOffMeasure; mod
       <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}`, fontFamily: FONT.sans }}>
         {label}
         <div style={{ marginTop: 3 }}>
-          <Now level={m.you} mode={mode} /> <Then level={m.you} mode={mode} /> <Change verdict={m.verdict} mode={mode} shared={shared} />
+          <Now level={m.you} mode={mode} /> <Then level={m.you} verdict={m.verdict} mode={mode} /> <Change verdict={m.verdict} mode={mode} shared={shared} />
           {' · '}
-          <Now level={m.them} mode={mode} /> <Then level={m.them} mode={mode} /> <Change verdict={m.rivalVerdict} mode={mode} shared={shared} />
+          <Now level={m.them} mode={mode} /> <Then level={m.them} verdict={m.rivalVerdict} mode={mode} /> <Change verdict={m.rivalVerdict} mode={mode} shared={shared} />
         </div>
         {m.why ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{m.why}</div> : null}
       </div>
@@ -154,10 +155,10 @@ function Row({ measure: m, mode, shared = null }: { measure: FaceOffMeasure; mod
     <div className={`${GRID} min-h-[34px] border-t border-border/70 py-1`}>
       <span className="min-w-0 pr-3">{label}</span>
       <Now level={m.you} mode={mode} />
-      <Then level={m.you} mode={mode} />
+      <Then level={m.you} verdict={m.verdict} mode={mode} />
       <Change verdict={m.verdict} mode={mode} shared={shared} />
       <Now level={m.them} mode={mode} />
-      <Then level={m.them} mode={mode} />
+      <Then level={m.them} verdict={m.rivalVerdict} mode={mode} />
       <Change verdict={m.rivalVerdict} mode={mode} shared={shared} />
     </div>
   )
@@ -302,7 +303,6 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
             {/* ONE REFUSAL, SAID ONCE (deploy 1 review): the change cell
                 wrapped the whole sentence to four lines in its narrow
                 column. It says "not compared" and the chip says why. */}
-            <PairChip note={shared} mode={mode} className="mt-2" />
             {/* AN EMPTY COLUMN IS NOT A MEASURED ZERO, AND IT SAYS SO FIRST. */}
             {sideReasons(h).map((why) => (
               <p key={why} className={note} style={noteStyle}>{why}</p>

@@ -149,25 +149,21 @@ export function switchingFigure(input: SwitchingInput): SwitchingFigure | null {
       })
     : null
 
-  const line = `${fmtInt(pool)} ${pool === 1 ? 'video' : 'videos'} named both you and a tracked rival · ${fmtInt(toward.k)} of ${fmtInt(pool)} leaned toward you${
-    away.k > 0 ? `, ${fmtInt(away.k)} of ${fmtInt(pool)} away` : ''
-  }.`
+  // TOO FEW TO COMPARE: THE COUNT ONLY (T0a, mechanism 6; DB-15). A split
+  // printed beside "too few to compare" is a reading the line itself
+  // refuses; under the floors the lean split is not printed at all.
+  const line = clears
+    ? `${fmtInt(pool)} ${pool === 1 ? 'video' : 'videos'} named both you and a tracked rival · ${fmtInt(toward.k)} of ${fmtInt(pool)} leaned toward you${
+      away.k > 0 ? `, ${fmtInt(away.k)} of ${fmtInt(pool)} away` : ''
+    }.`
+    : `${fmtInt(pool)} ${pool === 1 ? 'video' : 'videos'} named both you and a tracked rival.`
 
   // TWO DIFFERENT SILENCES. A pool under the floor is a reading we decline to
   // band; a pool whose videos carry no stored judgement is a reading we do not
   // have. Both are said, because a reader shown "3 of 54" and nothing else
   // cannot tell which of them they are looking at.
   const unreadParts: string[] = []
-  if (!clearsN) {
-    unreadParts.push(
-      `Too few to compare: ${fmtInt(pool)} ${pool === 1 ? 'video' : 'videos'} where a banded reading needs ${fmtInt(floor.minN)}.`,
-    )
-  } else if (!clearsK) {
-    unreadParts.push(
-      `Too few to compare: ${fmtInt(toward.k)} of ${fmtInt(pool)} leaned toward you where a banded reading needs ${fmtInt(floor.minK ?? 0)}.`,
-    )
-  }
-  if (neither.k > 0) {
+  if (clears && neither.k > 0) {
     unreadParts.push(
       `${fmtInt(neither.k)} of ${fmtInt(pool)} carry nothing that says which way they leaned.`,
     )
@@ -203,7 +199,8 @@ export function crosscheckLine(
   figure: SwitchingFigure,
   objection: { label: string; value: Counted } | null,
 ): string | null {
-  if (!objection || objection.value.n === 0) return null
+  // No lean split under the floors (DB-15), so nothing to set beside one.
+  if (!objection || objection.value.n === 0 || figure.verdict == null) return null
   const towardPct = figure.pool > 0 ? (figure.toward.k / figure.pool) * 100 : 0
   const objectionPct = (objection.value.k / objection.value.n) * 100
   return (

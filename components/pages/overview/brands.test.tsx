@@ -22,18 +22,22 @@ const read = (node: Parameters<typeof renderText>[0]): string =>
 const withBrands = (brands: OverviewData['brands']): OverviewData => ({ ...marketFrontFixture(), brands })
 
 describe('Brands in your market (WP2.6)', () => {
-  it('prints the name line first, then each measured brand’s two counts, in every mode', () => {
+  // T0 ruling U10: one count a brand, named unprompted, on its one base; the
+  // "in all" count took in the videos our own brand searches fetched and is
+  // never printed or drawn.
+  it('prints the name line first, then each measured brand’s one count, in every mode', () => {
     for (const mode of MODES) {
       const t = read(overviewRivals.render(withBrands(stagingBrandsRead()), mode, ctx))
       expect(t, mode).toContain('In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.')
       expect(t.indexOf('your name came up'), mode).toBeLessThan(t.indexOf('Patagonia'))
-      expect(t, mode).toMatch(/Patagonia\s*13\s*45/)
-      expect(t, mode).toMatch(/The North Face\s*6\s*36/)
-      expect(t, mode).toMatch(/Cotopaxi\s*3\s*28/)
-      // Each count's head carries its base: the headline count's one base,
-      // and the market's.
-      expect(t, mode).toMatch(/Outside our brand searches\s*(·\s*)?of 516/)
-      expect(t, mode).toMatch(/In all\s*(·\s*)?of 654/)
+      expect(t, mode).toMatch(/Patagonia\s*13\b/)
+      expect(t, mode).not.toMatch(/Patagonia\s*13\s*45/)
+      expect(t, mode).toMatch(/The North Face\s*6\b/)
+      expect(t, mode).toMatch(/Cotopaxi\s*3\b/)
+      expect(t, mode).not.toMatch(/Cotopaxi\s*3\s*28/)
+      // The count's head carries its one base.
+      expect(t, mode).toMatch(/Named unprompted\s*(·\s*)?of 516/)
+      expect(t, mode).not.toContain('In all')
       assertCopyContract(render(overviewRivals.render(withBrands(stagingBrandsRead()), mode, ctx)))
     }
   })
@@ -105,12 +109,14 @@ describe('Brands in your market (WP2.6)', () => {
     }
   })
 
-  it('draws the preview’s bars on one axis, the headline count over the count in all', () => {
+  it('draws the preview’s bars on one axis, the one count each (T0 ruling U10)', () => {
     const b = stagingBrandsRead()
-    expect(brandAxis(b)).toBe(48)
+    // A little over the largest count, Patagonia's 13.
+    expect(brandAxis(b)).toBe(14)
     const markup = render(overviewRivals.render(withBrands(b), 'app', ctx))
-    expect(markup).toContain('width:93.8%')
-    expect(markup).toContain('width:27.1%')
+    expect(markup).toContain(`width:${((13 / 14) * 100).toFixed(1)}%`)
+    expect(markup).not.toContain('width:93.8%')
+    expect(markup).not.toContain('color-mix(in srgb, var(--comp) 48%')
     expect(markup).toContain('var(--comp)')
     expect(markup).toContain('bg-you')
   })

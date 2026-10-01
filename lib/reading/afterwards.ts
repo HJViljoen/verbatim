@@ -4,7 +4,7 @@ import { distinctVideos } from '../market-tiles'
 import { monthChange } from './bands'
 import type { PairComparability } from './comparability'
 import { monthStartOf } from './monthly'
-import type { Counted, ObjectKind, RefusedReason, Verdict, VerdictPairNote } from './verdicts'
+import { priorPrintable, type Counted, type ObjectKind, type RefusedReason, type Verdict, type VerdictFlag, type VerdictPairNote } from './verdicts'
 
 // The two columns the advice ledger has never had: what a piece of advice was
 // GROUNDED IN, and what the conversation did AFTERWARDS (Phase 1 Block D, D4).
@@ -171,14 +171,15 @@ const PRUNED_LINE =
   'The evidence this was written from is no longer on record: a later update replaced it, so we cannot count the videos behind it.'
 
 /**
- * The basis every grounding count is on, said ONCE per surface (copy de-clutter
- * ruling C): on Market as the "Grounded in" column's tooltip, in a document as
- * one footer line. The per-row line below is the count alone, because the same
- * clause stacked under every row of a ledger is what a three-month reader
- * stops reading.
+ * The basis every grounding count is on, IN MARKET TERMS AND ON THE COUNT'S OWN
+ * LABEL (T0a, mechanism 6; YM-14/26, QR-12): the videos behind a piece of
+ * advice are all time, so the label says "all time" ("Behind it, all time",
+ * "157 videos behind it, all time") wherever the count prints. It was a
+ * tooltip and a footer line about "everything we have read for you", which a
+ * reader skips and a wording sweep deletes, leaving an all-time count to read
+ * as this month's.
  */
-export const GROUNDED_BASIS =
-  'Counted over everything we have read for you, not over one month.'
+export const GROUNDED_BASIS = 'all time'
 
 const prunedGrounding = (audience: string): Grounding =>
   ({ videos: 0, themes: 0, audience, pruned: true, line: PRUNED_LINE })
@@ -216,7 +217,10 @@ export function groundingFor(input: GroundingInput): Grounding | null {
  *              to read at all. Different from `too_soon`: this one never
  *              resolves on the calendar.
  * `refused`    the comparison could be drawn and must not be — a rename, a
- *              tracking change, a re-grouping, an unlogged era.
+ *              tracking change, a re-grouping, an unlogged era, a month pair
+ *              the judge refused, or two months whose themes were not grouped
+ *              the same way on record (T0a, YM-16). A client surface prints
+ *              nothing for it (`afterwardsWithheld`).
  */
 export type AfterwardsState = 'reading' | 'too_soon' | 'no_target' | 'refused'
 
@@ -283,6 +287,48 @@ export interface AfterwardsInput {
 
 /** How many readable months after the decision before a comparison is drawn. */
 export const AFTERWARDS_MIN_READINGS = 2
+
+/**
+ * The flags that make an afterwards comparison NOT LIKE FOR LIKE (T0a,
+ * inventory YM-16; review finding 4).
+ *
+ * The two months either side of a decision are a theme's months, and a theme
+ * is a grouping of ours: `clustering_changed` says the two months were grouped
+ * differently, `clustering_unknown` that nobody recorded how one of them was
+ * grouped, and `renamed` that the two sides are two names. Each was printed as
+ * a note beside the comparison ("we did not record how themes were grouped
+ * …"), and the notes are process talk the wording sweep removes; without them
+ * the comparison would read as the conversation's change. So it is not drawn
+ * at all: the one condition, not comparable means not shown.
+ */
+export const AFTERWARDS_NOT_LIKE_FOR_LIKE: readonly VerdictFlag[] = ['clustering_changed', 'clustering_unknown', 'renamed']
+
+/** May this verdict be printed as an afterwards reading: a comparison the
+ *  judge did not refuse (`priorPrintable`), between two months grouped the
+ *  same way on record? */
+export function afterwardsComparable(verdict: Pick<Verdict, 'state' | 'flags'> & { pair?: VerdictPairNote | null }): boolean {
+  return priorPrintable(verdict) && !(verdict.flags ?? []).some((f) => AFTERWARDS_NOT_LIKE_FOR_LIKE.includes(f))
+}
+
+/**
+ * Does this cell hold a comparison a client surface does not show (T0a; plan
+ * §0a, the one condition)? A refused answer, or a stored reading whose verdict
+ * would be refused today (a month pair the judge refused, or two months not
+ * grouped the same way on record). Nothing prints for it: no comparison, no
+ * sentence saying why, no badge and no note. Every renderer of the column asks
+ * this one question (the advice ledger, the quarterly's moves page, the
+ * content brief's cards), so a stored row obeys it as a live one does.
+ */
+export function afterwardsWithheld(a: Pick<Afterwards, 'state' | 'verdict'> | null | undefined): boolean {
+  if (a == null) return false
+  if (a.state === 'refused') return true
+  return a.state === 'reading' && a.verdict != null && !afterwardsComparable(a.verdict)
+}
+
+/** The line a not-like-for-like comparison is kept with. It is never printed
+ *  on a client surface (`afterwardsWithheld`); the field is never blank. */
+const NOT_LIKE_FOR_LIKE_LINE =
+  'We cannot read this one afterwards: the two months were not grouped the same way on record, so a comparison would be about our grouping rather than about the conversation.'
 
 const REFUSED_LINE: Record<RefusedReason, string> = {
   unlogged_era: 'We cannot read this one afterwards: part of the stretch either side of your decision is from before we kept a record of what we were tracking.',
@@ -410,11 +456,26 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
   })
 
   // A REFUSAL IS AN ANSWER, AND IT IS THE CELL'S. `monthChange` refuses a
-  // rename, and a pair the month-pair rule refuses (WP1.3), whose own sentence
-  // names the cause; the comparison it would have drawn is not printed beside it.
-  if (verdict.refusedReason) {
-    const line = verdict.pair ? pairSentence(verdict.pair) : REFUSED_LINE[verdict.refusedReason]
+  // rename, and a pair the month-pair rule refuses (WP1.3) on thin data as on
+  // full (T0a review, finding 1); the comparison it would have drawn is not
+  // kept beside it, and no client surface prints the cell
+  // (`afterwardsWithheld`).
+  if (verdict.refusedReason || verdict.pair?.mode === 'refuse') {
+    const line = verdict.pair?.mode === 'refuse'
+      ? pairSentence(verdict.pair)
+      : REFUSED_LINE[verdict.refusedReason ?? 'unmeasured']
     return { state: 'refused', verdict: null, months, line, pair: verdict.pair?.mode === 'refuse' ? verdict.pair : null }
+  }
+  // AND A COMPARISON ACROSS TWO GROUPINGS IS NOT DRAWN (T0a, YM-16): see
+  // `AFTERWARDS_NOT_LIKE_FOR_LIKE`.
+  if (!afterwardsComparable(verdict)) {
+    return {
+      state: 'refused',
+      verdict: null,
+      months,
+      line: verdict.flags.includes('clustering_changed') ? REFUSED_LINE.clustering_changed : NOT_LIKE_FOR_LIKE_LINE,
+      pair: null,
+    }
   }
 
   // THE NUMBERS AND THE BAND, AND NOT A WORD FOR THEM. See the file header's

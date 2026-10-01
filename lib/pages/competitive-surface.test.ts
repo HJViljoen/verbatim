@@ -189,7 +189,9 @@ describe('CO2 · the standings', () => {
     expect(block.source).toBe('corpus')
   })
 
-  it('names the month the table IS, never the month in hand', () => {
+  // T0a (mechanism 6; BR-32): where the month read has no rows, the block
+  // draws no table at all, never last month's with a line saying so.
+  it('draws no earlier month’s table where the month read has none', () => {
     // The gap every calendar month has: `freeze-months` writes a month's rows
     // when an update lands in it, so from the 1st until that month's first
     // delivered run the newest stored month is last month's. The block used to
@@ -204,16 +206,12 @@ describe('CO2 · the standings', () => {
       month: '2026-10-01',
       changes: [],
     })
-    expect(block.month).toBe('2026-09-01')
-    expect(block.monthLabel).toBe('Sep 2026')
-    expect(block.behind).toBe('Oct 2026 has not been read yet, so this table is Sep 2026.')
-    // And the table is September's, so the figures and the rows agree with the
-    // sentence: 19 of 449, not "not observed" under a 449.
-    expect(block.denominators[block.denominators.length - 1].label).toBe('Sep 2026')
-    expect(block.rows.find((r) => r.audience === 'client')!.content).toEqual({ k: 19, n: 449, pct: 4.2 })
-    // August is still what September is compared with — the previous CALENDAR
-    // month of the table's own month, not the previous stored one.
-    expect(block.rows.find((r) => r.audience === 'client')!.contentVerdict).not.toBeNull()
+    expect(block.month).toBe('2026-10-01')
+    expect(block.behind).toBeNull()
+    expect(block.rows).toEqual([])
+    expect(block.series).toEqual([])
+    expect(block.denominators).toEqual([])
+    expect(block.empty).toContain('Oct 2026 has not been read yet')
   })
 
   it('refuses rather than borrowing another month when the horizon holds no read month', () => {

@@ -3,7 +3,7 @@ import { fmtInt, longMonth, monthName } from '../format'
 import { monthChange } from './bands'
 import { refusedSteps, type PairOn } from './pairs'
 import { monthStartOf, nextMonth } from './month-key'
-import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
+import { priorPrintable, type Counted, type FigureTable, type Verdict, type VerdictWindow } from './verdicts'
 import type { DeclareMoveInput } from '../subjects/moves'
 import { printsClient, readCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -661,7 +661,8 @@ export function readMove(input: MoveReadingInput): MoveReading {
     figures.share_now = { value: pct(verdict.value), unit: 'pct', label: `your share in ${after}` }
     figures.videos_now = { value: verdict.value.k, unit: 'videos', label: `your videos on it in ${after}` }
     figures.videos_read = { value: verdict.value.n, unit: 'videos', label: `your videos read in ${after}` }
-    if (verdict.baseline) {
+    // No "before" figure beside a refused comparison (T0a; the one condition).
+    if (verdict.baseline && priorPrintable(verdict)) {
       figures.share_before = {
         value: pct(verdict.baseline),
         unit: 'pct',

@@ -7,12 +7,12 @@ import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { surface } from '@/lib/nav'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
-import { THEME_PREV_N, figureText, heroView, themeToken, voicesHeading, type HeroPart } from '@/lib/pages/overview-market'
+import { THEME_PREV_N, boardPrev, figureText, heroView, printedLead, themeToken, voicesHeading, type HeroPart } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { MonthlyData } from '@/lib/pages/monthly'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { fromFrontPage } from './adapt'
-import { Body, ChipLine, Inner, Num, RowLabel, Table } from './email'
+import { Body, Inner, Num, RowLabel, Table } from './email'
 
 /**
  * 1 · The month (market-first WP2.1; the front page's block 1, plan §2.2).
@@ -67,10 +67,13 @@ function monthEmail(data: MonthlyData): ReactNode {
   const s = o.sentence
   const view = heroView(o.hero, o.themes, o.month)
   const hero = o.hero?.kind === 'themes' ? o.hero : null
-  const prev = o.themes?.prev && o.themes.prev.n != null ? o.themes.prev : null
+  // No month before beside a refused themes pair, and no chip (T0a, MR-2).
+  const shownPrev = o.themes ? boardPrev(o.themes) : null
+  const prev = shownPrev && shownPrev.n != null ? shownPrev : null
   const cut = hero && hero.top.length > 0 ? splitClause(view.parts) : null
   const voices = (o.heroVoices ?? []).filter(hasQuote)
-  const lead = hero?.lead ?? null
+  // A stored lead our new searches found prints no voices (T0a, MR-3).
+  const lead = printedLead(o.hero)
   // A theme the month before did not read declares no August figure
   // (`prevReadK`), so its cell prints the preview's "·", as the board's does
   // (./themes.tsx), never an empty cell under "Aug of N".
@@ -104,7 +107,6 @@ function monthEmail(data: MonthlyData): ReactNode {
       ) : view.parts.length > 0 ? (
         <Body marginTop={16}><Parts parts={view.parts} figures={view.figures} mode="email" /></Body>
       ) : null}
-      <ChipLine words={s.chip} />
       {lead && voices.length > 0 ? (
         <Inner>
           <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '22px', fontWeight: 600, color: EMAIL.ink }}>
@@ -114,11 +116,6 @@ function monthEmail(data: MonthlyData): ReactNode {
           {voices.map((v) => (
             <div key={v.quote.ref} style={{ marginTop: 16 }}><BlockQuote quote={v.quote} cite={v.cite} mode="email" /></div>
           ))}
-          {view.newSearch ? (
-            <div style={{ borderTop: `1px solid ${EMAIL.border}`, marginTop: 16, paddingTop: 12, fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.muted }}>
-              <Parts parts={view.newSearch} figures={view.figures} mode="email" />
-            </div>
-          ) : null}
         </Inner>
       ) : null}
     </>

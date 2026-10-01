@@ -6,7 +6,7 @@ import {
 import { changesFromLog } from './comparability'
 import {
   isoWeekOf, marketWeekRowOf, pooledWeekVolumes, updatesSinceWeek, WEEK_AXIS_MAX, weekAxis, weekEndInstant, weekRuleGroupOf,
-  weekRules, weekStateOf,
+  weekRules, weeksSinceOurChanges, weekStateOf, type WeekRule, type WeekVolume,
 } from './weeks'
 
 // Week by week (decision M, part 1; WP2.9). The volumes are staging's real rows
@@ -199,5 +199,55 @@ describe('weekRules', () => {
     expect(later.filter((r) => r.week === '2026-09-21').map((r) => [r.surface, r.words])).toEqual([
       ['attribution', 'how we file videos'], ['gate_rule', 'how we check relevance'],
     ])
+  })
+})
+
+// T0a (the one condition; mechanism 3): the bars never span our changes. A
+// step in the weekly counts after we changed our searches or how we check
+// relevance is our bookkeeping, so the chart draws only the weeks after the
+// week of our latest such change; no week with nothing gathered (never an
+// empty slot); and no week counting videos let in before the relevance check.
+describe('weeksSinceOurChanges', () => {
+  const at = (week: string, videos: number, unchecked = 0, state: WeekVolume['state'] = 'settled'): WeekVolume => ({
+    week, state: videos === 0 ? 'none_gathered' : state, updatesSince: 2, videos, comments: videos * 10, category: videos, rivalFiled: 0,
+    commentsNextMonth: 0, medianDated: null, under5: 0, olderVideos: 0, unchecked,
+  })
+  const rule = (date: string, surface: WeekRule['surface']): WeekRule => ({ date, week: isoWeekOf(date), surface, words: '' })
+  const weeks = [
+    at('2026-08-24', 187), at('2026-08-31', 229), at('2026-09-07', 404), at('2026-09-14', 318), at('2026-09-21', 300),
+    at('2026-09-28', 280), at('2026-10-05', 290), at('2026-10-12', 120, 0, 'so_far'),
+  ]
+
+  it('starts after the week of the latest search or relevance change (9, 13, 17 Sep; 26 Sep)', () => {
+    const rules = [rule('2026-09-09', 'terms'), rule('2026-09-13', 'terms'), rule('2026-09-17', 'platforms'), rule('2026-09-26', 'gate_rule')]
+    expect(weeksSinceOurChanges(weeks, rules).map((w) => w.week)).toEqual(['2026-09-28', '2026-10-05', '2026-10-12'])
+    // The search changes alone: from the week after 17 Sep's.
+    expect(weeksSinceOurChanges(weeks, rules.slice(0, 3)).map((w) => w.week)).toEqual(['2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12'])
+  })
+
+  it('is not cut by a filing change, which moves no bar of the pooled market (decision E)', () => {
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-30', 'rivals')])).toHaveLength(weeks.length)
+  })
+
+  it('takes weeks with nothing gathered off the axis: the run of weeks with data that ends at the latest', () => {
+    const gappy = [at('2026-08-24', 187), at('2026-08-31', 0), at('2026-09-07', 404), at('2026-09-14', 318), at('2026-09-21', 0), at('2026-09-28', 0)]
+    expect(weeksSinceOurChanges(gappy, []).map((w) => w.week)).toEqual(['2026-09-07', '2026-09-14'])
+  })
+
+  it('draws no week counting videos let in before we checked relevance, nor any week before it', () => {
+    const mixed = [at('2026-09-07', 404, 27), at('2026-09-14', 318), at('2026-09-21', 300, 3), at('2026-09-28', 280), at('2026-10-05', 290)]
+    expect(weeksSinceOurChanges(mixed, []).map((w) => w.week)).toEqual(['2026-09-28', '2026-10-05'])
+  })
+
+  it('leaves nothing on staging’s own weeks: changes to 26 Sep, nothing gathered after 20 Sep, pre-check videos to 14 Sep', () => {
+    const axis = ['2026-07-27', '2026-08-03', '2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05']
+    const vols = pooledWeekVolumes(STAGING_WEEK_VOLUMES, STAGING_RIVALS, axis, { now: '2026-10-11T06:00:00.000Z', updates: STAGING_UPDATES })
+    expect(weeksSinceOurChanges(vols, weekRules(changesFromLog(STAGING_CHANGES), axis))).toEqual([])
+  })
+
+  it('is idempotent, and keeps the weeks in axis order', () => {
+    const once = weeksSinceOurChanges(weeks, [rule('2026-09-13', 'terms')])
+    expect(weeksSinceOurChanges(once, [])).toEqual(once)
+    expect(once.map((w) => w.week)).toEqual([...once.map((w) => w.week)].sort())
   })
 })

@@ -1,5 +1,6 @@
 import { pooledSide, type MarketCount } from '../../reading/market'
 import { monthStartOf } from '../../reading/month-key'
+import { printsMarket } from '../../subjects/calibration-state'
 
 // "The market by subject" (market-first WP1.6, plan §2.2 block 6): each
 // subject's market rows, ranked by size, with its calibration word as a row
@@ -29,11 +30,13 @@ export function marketCalibration(v: string | null | undefined): SubjectCalibrat
   return 'provisional'
 }
 
-/** The row tag a state prints: "provisional", "being re-described", or none. */
+/** The row tag a state prints: none, in every state (T0a, §B.2; ruling U6).
+ *  A subject that is not ready prints its name and no figure instead of a
+ *  figure with "provisional" beside it. */
 export const CALIBRATION_TAG: Record<SubjectCalibrationWord, string | null> = {
   ready: null,
-  provisional: 'provisional',
-  failed: 'being re-described',
+  provisional: null,
+  failed: null,
 }
 
 export interface MarketSide {
@@ -80,12 +83,13 @@ export function marketSubjectSide(
   return { k: side.k, n: side.n, pct }
 }
 
-/** The block's order: by the market's k, largest first; a subject being
- *  re-described, or not read yet, after every subject with a figure; then by
- *  name, so the order never depends on how the rows came back. */
+/** The block's order: by the market's k, largest first; a subject that is
+ *  not ready (its figure is withheld, and so is its rank: T0a, ruling U6), or
+ *  not read yet, after every subject with a figure; then by name, so the order
+ *  never depends on how the rows came back. */
 export function byMarketSize<T extends { label: string; market?: { k: number | null } | null; calibration?: SubjectCalibrationWord }>(a: T, b: T): number {
-  const ka = a.calibration === 'failed' ? null : a.market?.k ?? null
-  const kb = b.calibration === 'failed' ? null : b.market?.k ?? null
+  const ka = printsMarket(a.calibration) ? a.market?.k ?? null : null
+  const kb = printsMarket(b.calibration) ? b.market?.k ?? null : null
   if (ka == null && kb != null) return 1
   if (kb == null && ka != null) return -1
   return (kb ?? 0) - (ka ?? 0) || a.label.localeCompare(b.label)

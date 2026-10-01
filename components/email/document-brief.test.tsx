@@ -20,13 +20,14 @@ const body = (data: DocumentSnapshotData) =>
 const words = (data: DocumentSnapshotData) => markupText(body(data))
 
 describe('the document brief email', () => {
-  it('prints the refusal the FIGURE wrote, which is the half the inbox was losing', () => {
+  // T0a (mechanism 6; DB-15): under the floors the figure prints its count
+  // only, and no "too few to compare" note travels with it.
+  it('prints no refusal note under a figure below its floors, and the count stands', () => {
     const data = salesBriefThinFixture()
     const note = overviewTiles(data).map((t) => t.note).find(Boolean)
-    // The fixture is production today: 35 own videos named a rival where a
-    // banded reading needs 100.
-    expect(note).toContain('Too few to compare')
-    expect(words(data)).toContain(note as string)
+    // The fixture is production today: 35 own videos named a rival.
+    expect(note ?? '').not.toContain('Too few to compare')
+    expect(words(data)).not.toContain('Too few to compare: 35 videos')
   })
 
   it('prints the tile’s banded claim as a chip, in the deck’s own vocabulary', () => {

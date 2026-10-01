@@ -1,13 +1,12 @@
 import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { BRANDS_HEAD_ALL, BRANDS_HEAD_ORGANIC } from '@/lib/pages/overview-market'
+import { BRANDS_HEAD_ORGANIC } from '@/lib/pages/overview-market'
 import {
-  prevPrinted, TOPICS_NOT_READ, TOPICS_TITLE, topicsCounted, topicWords,
+  TOPICS_NOT_READ, TOPICS_TITLE, topicsCounted, topicWords,
   type TopicRow, type TopicsBlock,
 } from '@/lib/pages/brands'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
@@ -20,10 +19,9 @@ import { emailCell, emailHead, SubHead, Swatch } from './parts'
 // preview's second block on Brands).
 //
 // EVERY BRAND YOU TRACK, COUNTED IN EVERY VIDEO IT COMES UP IN (decision E):
-// the headline count leaves out every video any of our rival searches found
-// (the 27 Sep ruling: one base for every brand, under its column head), "in
-// all" beside it, and the month before beside that, in grey. Two levels on
-// one axis, never a change: the pair's chip says why they are not read as one.
+// one count a brand, leaving out every video any of our brand searches found
+// (the 27 Sep ruling: one base for every brand, under its column head). No
+// "in all" and no month before (T0 ruling U10; T0a, the one condition).
 // A brand prints its counts only once production's hand check holds it
 // (WP2.6), else "not counted yet", or "mostly {another word} · not counted"
 // where the check measured it under the floor.
@@ -34,21 +32,18 @@ import { emailCell, emailHead, SubHead, Swatch } from './parts'
 // THE HEADER IS THE TITLE ALONE, THE FOOTER A LINK ALONE (25 Sep rulings);
 // each column head carries its base (§1 B ruling 3).
 
-/** The inks: the headline count in the rivals' orange, in all at 48% of it,
- *  the month before as the grey tick (the preview's and Your market's). */
+/** The ink: the count in the rivals' orange (the preview's). */
 const ORGANIC_INK = 'var(--comp)'
-const ALL_INK = 'color-mix(in srgb, var(--comp) 48%, var(--tile))'
-const PREV_INK = 'var(--cat)'
 
 /** The bars' axis: a little over the largest count drawn. */
 export function topicsAxis(rows: readonly TopicRow[]): number {
-  const max = Math.max(0, ...rows.flatMap((r) => [r.kAny ?? 0, r.prevK ?? 0]))
+  const max = Math.max(0, ...rows.map((r) => r.kOrganic ?? 0))
   return Math.max(1, Math.ceil(max * 1.06))
 }
 
 const pct = (k: number | null, axis: number) => `${Math.max(0, Math.min(100, ((k ?? 0) / axis) * 100)).toFixed(1)}%`
 
-/** A column head over its base: "In all" over "of 654". */
+/** A column head over its base: "Named unprompted" over "of 516". */
 function Head({ words, n, ink, bar = false, wrap = false }: { words: string; n: number | null; ink?: string; bar?: boolean; wrap?: boolean }) {
   return (
     <span role="columnheader" data-copy={n == null ? undefined : 'level'} className="flex flex-col items-end text-right">
@@ -58,20 +53,23 @@ function Head({ words, n, ink, bar = false, wrap = false }: { words: string; n: 
   )
 }
 
-/** The tracked brands' table, in the app and on paper. */
+/** The tracked brands' table, in the app and on paper.
+ *
+ *  ONE COUNT A BRAND, ON ONE BASE (T0 ruling U10; inventory §B.5). "In all"
+ *  counted the videos our own per-brand searches fetched, so a brand we search
+ *  harder read bigger; it is never printed. The count that stands leaves out
+ *  every video any of our brand searches found, over the one base every brand
+ *  shares. No month before: it was the "in all" count, and August beside
+ *  September is a comparison the judge refuses on Sealand's data. */
 function TrackedTable({ t }: { t: TopicsBlock }) {
   const counted = topicsCounted(t.tracked)
-  const prev = counted && prevPrinted(t.tracked) && t.prevMonth != null
   const axis = topicsAxis(t.tracked)
-  // WIDE FROM 560px OF BLOCK: label, bar, the two counts, the month before.
-  // Narrower, the bar leaves (Your market's rule for its tables).
-  // Narrow, the figure columns keep to their numbers' width and the brand
-  // takes the rest, breaking between words, never inside one.
-  const cols = prev
-    ? 'grid-cols-[minmax(0,1fr)_5rem_3rem_3rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem_4.5rem]'
-    : 'grid-cols-[minmax(0,1fr)_5rem_3rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem_3.5rem]'
+  // WIDE FROM 560px OF BLOCK: label, bar, the count. Narrower, the bar leaves
+  // (Your market's rule for its tables). Narrow, the figure column keeps to
+  // its numbers' width and the brand takes the rest, breaking between words.
+  const cols = 'grid-cols-[minmax(0,1fr)_8.5rem] @min-[560px]:grid-cols-[minmax(9rem,11.5rem)_minmax(64px,1fr)_8.5rem]'
   const bar = '@max-[560px]:hidden'
-  const spanAll = prev ? 'col-span-3 @min-[560px]:col-span-4' : 'col-span-2 @min-[560px]:col-span-3'
+  const spanAll = 'col-span-1 @min-[560px]:col-span-2'
   return (
     <div className="@container min-w-0">
       <div role="table" aria-label="Brands we track" className="flex flex-col">
@@ -80,15 +78,12 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
             <div aria-hidden className={cn('grid items-end gap-x-3 @min-[560px]:gap-x-4 text-[13px] font-semibold leading-[1.35] text-secondary-foreground', cols)}>
               <span />
               <span className={bar} />
-              <span className="col-span-2 border-b border-border pb-1.5 text-right">{longMonth(t.month)}</span>
-              {prev ? <span className="border-b border-border pb-1.5 text-right">{longMonth(t.prevMonth as string)}</span> : null}
+              <span className="border-b border-border pb-1.5 text-right">{longMonth(t.month)}</span>
             </div>
             <div role="row" className={cn('grid items-end gap-x-3 @min-[560px]:gap-x-4 text-[13px] font-medium leading-[1.35] text-muted-foreground', cols)}>
               <span role="columnheader" className="whitespace-nowrap">Brand</span>
               <span aria-hidden className={bar} />
               <Head words={BRANDS_HEAD_ORGANIC} n={t.nOrganic} ink={ORGANIC_INK} wrap />
-              <Head words={BRANDS_HEAD_ALL} n={t.n} ink={ALL_INK} />
-              {prev ? <Head words={BRANDS_HEAD_ALL} n={t.prevN} ink={PREV_INK} bar /> : null}
             </div>
           </div>
         ) : (
@@ -107,13 +102,9 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
               ) : (
                 <>
                   <span aria-hidden className={cn('relative block h-2', bar)}>
-                    <span className="absolute inset-y-0 left-0 rounded-[2px]" style={{ width: pct(r.kAny, axis), background: ALL_INK }} />
-                    <span className="absolute inset-y-0 left-0 rounded-l-[2px]" style={{ width: pct(r.kOrganic, axis), background: ORGANIC_INK }} />
-                    {prev && r.prevK != null ? <span className="absolute -top-1 h-4 w-[2px] rounded-[1px]" style={{ left: `calc(${pct(r.prevK, axis)} - 1px)`, background: PREV_INK }} /> : null}
+                    <span className="absolute inset-y-0 left-0 rounded-[2px]" style={{ width: pct(r.kOrganic, axis), background: ORGANIC_INK }} />
                   </span>
                   <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(r.kOrganic ?? 0)}</span>
-                  <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] tabular-nums text-secondary-foreground">{fmtInt(r.kAny ?? 0)}</span>
-                  {prev ? <span role="cell" data-copy={r.prevK == null ? undefined : 'figure'} className="text-right font-mono text-[15px] tabular-nums text-muted-foreground">{r.prevK == null ? '·' : fmtInt(r.prevK)}</span> : null}
                 </>
               )}
             </div>
@@ -124,26 +115,20 @@ function TrackedTable({ t }: { t: TopicsBlock }) {
   )
 }
 
-/** The brands the market names that we do not search: in all, each month. */
+/** The brands the market names that we do not search, counted on the same
+ *  one base as the tracked ones (T0 ruling U10). */
 function WatchedTable({ t, rows }: { t: TopicsBlock; rows: readonly TopicRow[] }) {
   const counted = topicsCounted(rows)
-  const prev = counted && prevPrinted(rows) && t.prevMonth != null
-  const cols = prev ? 'grid-cols-[minmax(0,1fr)_4.5rem_4rem]' : 'grid-cols-[minmax(0,1fr)_4.5rem]'
+  const cols = 'grid-cols-[minmax(0,1fr)_4.5rem]'
   return (
     <div role="table" aria-label="Named, but not searched" className="flex flex-col">
       {counted ? (
         <div role="row" className={cn('grid items-end gap-x-4 border-b border-border pb-2.5 text-[13px] leading-[1.35]', cols)}>
           <span role="columnheader" className="font-medium text-muted-foreground">Brand</span>
-          <span role="columnheader" data-copy={t.n == null ? undefined : 'level'} className="flex flex-col items-end text-right">
+          <span role="columnheader" data-copy={t.nOrganic == null ? undefined : 'level'} className="flex flex-col items-end text-right">
             <span className="font-semibold text-secondary-foreground">{longMonth(t.month)}</span>
-            {t.n == null ? null : <span className="font-mono text-[12px] text-muted-foreground">of {fmtInt(t.n)}</span>}
+            {t.nOrganic == null ? null : <span className="font-mono text-[12px] text-muted-foreground">of {fmtInt(t.nOrganic)}</span>}
           </span>
-          {prev ? (
-            <span role="columnheader" data-copy={t.prevN == null ? undefined : 'level'} className="flex flex-col items-end text-right">
-              <span className="font-semibold text-secondary-foreground">{longMonth(t.prevMonth as string)}</span>
-              {t.prevN == null ? null : <span className="font-mono text-[12px] text-muted-foreground">of {fmtInt(t.prevN)}</span>}
-            </span>
-          ) : null}
         </div>
       ) : (
         <div role="row" className="border-b border-border pb-2.5 text-[13px] font-medium text-muted-foreground"><span role="columnheader">Brand</span></div>
@@ -153,11 +138,8 @@ function WatchedTable({ t, rows }: { t: TopicsBlock; rows: readonly TopicRow[] }
         return (
           <div key={r.brandKey} role="row" className={cn('grid min-h-11 items-center gap-x-4', counted ? cols : 'grid-cols-[minmax(0,1fr)_auto]', i === rows.length - 1 ? null : 'border-b border-border/60')}>
             <span role="rowheader" className="min-w-0 break-words text-[15px] text-foreground">{r.label}</span>
-            {words ? <span role="cell" className={cn('text-right text-[14px] text-muted-foreground', counted && prev ? 'col-span-2' : null)}>{words}</span> : (
-              <>
-                <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(r.kAny ?? 0)}</span>
-                {prev ? <span role="cell" data-copy={r.prevK == null ? undefined : 'figure'} className="text-right font-mono text-[15px] tabular-nums text-muted-foreground">{r.prevK == null ? '·' : fmtInt(r.prevK)}</span> : null}
-              </>
+            {words ? <span role="cell" className="text-right text-[14px] text-muted-foreground">{words}</span> : (
+              <span role="cell" data-copy="figure" className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(r.kOrganic ?? 0)}</span>
             )}
           </div>
         )
@@ -168,15 +150,12 @@ function WatchedTable({ t, rows }: { t: TopicsBlock; rows: readonly TopicRow[] }
 
 function EmailTopics({ t }: { t: TopicsBlock }) {
   const counted = topicsCounted(t.tracked)
-  const prev = counted && prevPrinted(t.tracked) && t.prevMonth != null
   const table = (rows: readonly TopicRow[], organic: boolean) => (
     <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%', marginTop: 8 }}>
       <thead>
         <tr>
           <th style={emailHead}>Brand</th>
-          {counted && organic ? <th style={{ ...emailHead, textAlign: 'right' }}><span data-copy="level">{BRANDS_HEAD_ORGANIC} · of {fmtInt(t.nOrganic ?? 0)}</span></th> : null}
-          {counted ? <th style={{ ...emailHead, textAlign: 'right' }}>{t.n == null ? longMonth(t.month) : <span data-copy="level">{longMonth(t.month)} · of {fmtInt(t.n)}</span>}</th> : null}
-          {prev ? <th style={{ ...emailHead, textAlign: 'right' }}>{t.prevN == null ? longMonth(t.prevMonth as string) : <span data-copy="level">{longMonth(t.prevMonth as string)} · of {fmtInt(t.prevN)}</span>}</th> : null}
+          {counted ? <th style={{ ...emailHead, textAlign: 'right' }}><span data-copy="level">{organic ? `${BRANDS_HEAD_ORGANIC} · ` : `${longMonth(t.month)} · `}of {fmtInt(t.nOrganic ?? 0)}</span></th> : null}
         </tr>
       </thead>
       <tbody>
@@ -185,9 +164,7 @@ function EmailTopics({ t }: { t: TopicsBlock }) {
           return (
             <tr key={r.brandKey}>
               <td style={emailCell}>{r.label}{words ? <div style={{ fontSize: 12, color: EMAIL.muted }}>{words}</div> : null}</td>
-              {counted && organic ? <td style={{ ...emailCell, textAlign: 'right' }}>{words ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600 }}>{fmtInt(r.kOrganic ?? 0)}</span>}</td> : null}
-              {counted ? <td style={{ ...emailCell, textAlign: 'right' }}>{words ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono }}>{fmtInt(r.kAny ?? 0)}</span>}</td> : null}
-              {prev ? <td style={{ ...emailCell, textAlign: 'right', color: EMAIL.muted }}>{words || r.prevK == null ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono }}>{fmtInt(r.prevK)}</span>}</td> : null}
+              {counted ? <td style={{ ...emailCell, textAlign: 'right' }}>{words ? null : <span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600 }}>{fmtInt(r.kOrganic ?? 0)}</span>}</td> : null}
             </tr>
           )
         })}
@@ -227,7 +204,6 @@ export const competitiveTopics: Block<CompetitiveSurfaceData> = {
       return (
         <BlockFrame title={TOPICS_TITLE} mode={mode} footer={footer}>
           <EmailTopics t={t} />
-          <PairChip words={t.chip} mode={mode} />
         </BlockFrame>
       )
     }
@@ -238,7 +214,6 @@ export const competitiveTopics: Block<CompetitiveSurfaceData> = {
           <div className="flex min-w-0 flex-col gap-4">
             <SubHead title="Brands we track" note="videos each came up in" mode={mode} />
             <TrackedTable t={t} />
-            <PairChip words={t.chip} mode={mode} className="mt-2" />
           </div>
           {watched ? (
             <div className="flex min-w-0 flex-col gap-4">
@@ -256,12 +231,10 @@ export const competitiveTopics: Block<CompetitiveSurfaceData> = {
     if (!t) return {}
     const out: FigureTable = {}
     for (const r of [...t.tracked, ...(t.watched ?? [])]) {
-      if (r.count !== 'counted' || r.kAny == null) continue
+      // The one count a brand prints (T0 ruling U10): never "in all".
+      if (r.count !== 'counted' || r.kOrganic == null) continue
       const id = r.brandKey.replace(/[^a-z0-9]+/gi, '_').toLowerCase()
-      out[`brand_${id}_any`] = { value: r.kAny, unit: 'videos', label: `videos naming ${r.label} in ${longMonth(t.month)}` }
-      if (r.kOrganic != null && t.watched?.every((w) => w.brandKey !== r.brandKey)) {
-        out[`brand_${id}_organic`] = { value: r.kOrganic, unit: 'videos', label: `videos naming ${r.label} in ${longMonth(t.month)}, outside our brand searches` }
-      }
+      out[`brand_${id}_organic`] = { value: r.kOrganic, unit: 'videos', label: `videos naming ${r.label} in ${longMonth(t.month)}, named unprompted` }
     }
     return out
   },

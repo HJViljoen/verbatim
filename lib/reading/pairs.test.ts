@@ -9,6 +9,7 @@ import {
 } from '../calibration'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import { directionWord, monthChange, pairedVerdict, type SeriesPoint } from './bands'
+import { priorPrintable } from './verdicts'
 import {
   changesFromLog,
   comparabilityOf,
@@ -23,6 +24,7 @@ import {
   BRANDS_PANEL,
   CATEGORY_AUDIENCE,
   comparableOn,
+  joinedRun,
   laterMonthOf,
   pairJudge,
   pairOn,
@@ -106,9 +108,11 @@ describe('monthChange: August against September never reads "moved"', () => {
       expect(v.refusedReason).toBe('tracking_change')
       expect(v.pair).toEqual({ mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null })
       expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed our searches in September.')
-      // The counts stay, so the levels print; no change is drawn.
+      // This month's counts stay, so its level prints; no change is drawn,
+      // and the month before does not travel with a refusal (T0a, the one
+      // condition: a refused verdict carries no baseline).
       expect(v.value).toEqual({ k: 104, n: 626 })
-      expect(v.baseline).toEqual({ k: 38, n: 351 })
+      expect(v.baseline).toBeUndefined()
       expect(v.changePts).toBeNull()
     }
   })
@@ -232,22 +236,78 @@ describe('an October search change inside August against September\'s span', () 
   })
 })
 
-// ONLY A PAIR THAT COULD HAVE BEEN COMPARED IS REFUSED FOR IT (deploy 1
-// review). Staging's Subjects hero at 2 Oct: Patagonia's Looks & style cell is
-// 0 of its 5 September videos with no August reading at all, and Cotopaxi's 0
-// of 12; the refusal named our September searches on cells no band could ever
-// have compared.
-describe('monthChange: a side under the floor reads "too few to compare", not the pair', () => {
+// A REFUSED PAIR IS REFUSED WHATEVER THE FLOORS SAY (T0a review, finding 1;
+// plan §0a, the one condition). Deploy 1 let the band answer first on a side
+// under its floors, so that the refusal's words were printed only where a
+// change could have been drawn (staging's Patagonia, 0 of 5 September videos
+// with no August reading). No refusal is worded on a client surface now, and
+// that order kept a thin refused pair's month before: Sealand's own side,
+// about 84 videos against a floor of 100, printed "26 of 84 against 23 of 85"
+// across a pair the judge refused.
+describe('monthChange: a refused pair is refused on thin data too, with no month before', () => {
   const PATAGONIA = 'competitor:Patagonia'
-  it('no earlier side: too little data, no pair words', () => {
+  it('no earlier side: refused for the pair, this month alone', () => {
     const v = monthChange({
       object: LOOKS, audience: PATAGONIA,
       curr: { month: '2026-09-01', videos: 5, k: 0, audience: PATAGONIA, regime: 'n/a' },
       prev: { month: '2026-08-01', videos: 0, k: 0, audience: PATAGONIA, regime: 'n/a' },
       comparability: judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'brands'),
     })
+    expect(v.state).toBe('refused')
+    expect(v.pair?.mode).toBe('refuse')
+    expect(v.baseline).toBeUndefined()
+    expect(v.value).toEqual({ k: 0, n: 5 })
+    expect(priorPrintable(v)).toBe(false)
+  })
+
+  it('a thin side (Sealand\'s own, 26 of 84 against 23 of 85): refused, no baseline, no change', () => {
+    const CLIENT = 'client'
+    const v = monthChange({
+      object: LOOKS, audience: CLIENT,
+      curr: { month: '2026-09-01', videos: 84, k: 26, audience: CLIENT, regime: 'n/a' },
+      prev: { month: '2026-08-01', videos: 85, k: 23, audience: CLIENT, regime: 'n/a' },
+      comparability: judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'brands'),
+    })
+    expect(v.state).toBe('refused')
+    expect(v.baseline).toBeUndefined()
+    expect(v.changePts).toBeNull()
+    expect(v.bandPts).toBeNull()
+    expect(priorPrintable(v)).toBe(false)
+  })
+
+  it('a thin side the judge ACCEPTS keeps its levels, with no change claim', () => {
+    const CLIENT = 'client'
+    const v = monthChange({
+      object: LOOKS, audience: CLIENT,
+      curr: { month: '2026-11-01', videos: 84, k: 26, audience: CLIENT, regime: 'n/a' },
+      prev: { month: '2026-10-01', videos: 85, k: 23, audience: CLIENT, regime: 'n/a' },
+      comparability: judgeAt('2026-12-07T12:00:00.000Z', [HYPOTHETICAL_SAME_WAY], [])('2026-10-01', '2026-11-01', 'brands'),
+    })
     expect(v.state).toBe('too_little_data')
-    expect(v.pair).toBeUndefined()
+    expect(v.baseline).toEqual({ k: 23, n: 85 })
+    expect(priorPrintable(v)).toBe(true)
+  })
+
+  it('pairedVerdict answers the same way on a thin side', () => {
+    const v = pairedVerdict({
+      objectKind: 'rival', objectId: 'competitor:Cotopaxi', objectLabel: 'Cotopaxi', audience: 'competitor:Cotopaxi',
+      window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+      value: { k: 0, n: 12 }, baseline: { k: 1, n: 30 },
+    }, judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'brands'))
+    expect(v.state).toBe('refused')
+    expect(v.baseline).toBeUndefined()
+    expect(v.pair?.mode).toBe('refuse')
+    expect(priorPrintable(v)).toBe(false)
+  })
+
+  it('a stored verdict of the old shape (thin, its baseline kept, the pair note on it) still keeps its month before off the page', () => {
+    const stored = {
+      ...monthChange({ object: LOOKS, audience: 'client', curr: { ...sep, videos: 84, k: 26 }, prev: { ...aug, videos: 85, k: 23 }, comparability: null }),
+      pair: { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null },
+    }
+    expect(stored.state).toBe('too_little_data')
+    expect(stored.baseline).toBeDefined()
+    expect(priorPrintable(stored)).toBe(false)
   })
 
   it('both sides over the floor: refused for the pair, as before', () => {
@@ -557,5 +617,38 @@ describe('the pair words (lib/calibration.ts)', () => {
       expect(s).not.toMatch(/\u2014/)
       expect(s).not.toMatch(/filling|how sound|complete/i)
     }
+  })
+})
+
+// T0a (the one condition): months printed side by side are a comparison, so a
+// trail or a move's read stops at a refused step.
+describe('joinedRun: the months a reader may print side by side', () => {
+  const pts = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'].map((month) => ({ month }))
+  const refusedInto = (bad: string[]) => (_prev: string, month: string) => !bad.includes(month)
+
+  it('keeps every month where every step joins', () => {
+    expect(joinedRun(pts, '2026-09-01', () => true).map((p) => p.month)).toEqual(pts.map((p) => p.month))
+  })
+
+  it('from the newest month back, stops at the latest refused step', () => {
+    expect(joinedRun(pts, '2026-09-01', refusedInto(['2026-09-01'])).map((p) => p.month)).toEqual(['2026-09-01'])
+    expect(joinedRun(pts, '2026-09-01', refusedInto(['2026-08-01'])).map((p) => p.month)).toEqual(['2026-08-01', '2026-09-01'])
+  })
+
+  it('from a move\'s month forward, stops at the first refused step', () => {
+    expect(joinedRun(pts, '2026-07-01', refusedInto(['2026-08-01'])).map((p) => p.month)).toEqual(['2026-06-01', '2026-07-01'])
+    expect(joinedRun(pts, '2026-07-01', refusedInto(['2026-09-01'])).map((p) => p.month)).toEqual(['2026-06-01', '2026-07-01', '2026-08-01'])
+  })
+
+  it('Sealand on 2 Oct: August against September is refused on the market, so September stands alone', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const run = joinedRun(pts.slice(2), '2026-09-01', (a, b) => joins(judge(a, b, 'market')))
+    expect(run.map((p) => p.month)).toEqual(['2026-09-01'])
+  })
+
+  it('does not judge a step between months that are not consecutive, and returns nothing without the anchor', () => {
+    const gap = [{ month: '2026-06-01' }, { month: '2026-08-01' }]
+    expect(joinedRun(gap, '2026-08-01', () => false).map((p) => p.month)).toEqual(['2026-06-01', '2026-08-01'])
+    expect(joinedRun(pts, '2026-10-01', () => true)).toEqual([])
   })
 })

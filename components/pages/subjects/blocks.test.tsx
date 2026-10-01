@@ -307,21 +307,24 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
   })
 
-  it('the rail: Repair & warranty "being re-described", five ready rows with figures and no word, Community & purpose with no figure until its first reading', () => {
+  // T0a (SB-9; ruling U6): a subject that is not ready is its name alone:
+  // Repair & warranty (failed) and Community & purpose (provisional, and not
+  // read) print no figure, no word and no "no reading yet".
+  it('the rail: Repair & warranty and Community & purpose by name alone, five ready rows with figures and no word', () => {
     const data = calibrationFixture()
     for (const mode of MODES) {
       const text = renderText(subjectsList.render(data, mode, ctx))
       expect(text).toContain('Repair & warranty')
-      expect(text).toContain('being re-described')
+      expect(text).toContain('Community & purpose')
+      expect(text).not.toContain('being re-described')
       // A failed subject prints no figure: its 36 of 654 never reaches the rail.
       expect(text).not.toContain('36 of 654')
       for (const k of [103, 43, 39, 29, 25]) expect(text).toContain(`${k} of 654`)
-      // WP1.1 review, finding 1: named after the 24 Sep update wrote
-      // September, it has no row anywhere, and "0 of 654" was invented.
-      expect(text).toContain('no reading yet')
+      // Never "0 of 654" (WP1.1 review, finding 1), and never "no reading
+      // yet" of a subject that is held back.
+      expect(text).not.toContain('no reading yet')
       expect(text).not.toContain('0 of 654')
       expect(text).not.toContain('provisional')
-      expect(text.match(/being re-described/g)?.length).toBe(1)
       // The market's base is said on the row, never read as your own videos.
       expect(text).toContain('in your market')
       expect(text).not.toContain('of your videos')
@@ -359,14 +362,18 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
   }
 
-  it('the rail sets a provisional word on its own line, never after a dangling separator', () => {
-    const markup = render(subjectsList.render(uncheckedRail(), 'app', ctx))
-    const at = markup.indexOf('29 of 654 in your market')
-    const word = markup.indexOf('provisional', at)
-    expect(word).toBeGreaterThan(at)
-    // The level's span closes and the word opens a span of its own: no separator between them.
-    expect(markup.slice(at, word)).not.toContain('·')
-    expect(markup.slice(at, word)).toContain('</span><span')
+  // T0a (ruling U6): a provisional subject prints neither its level nor its
+  // word; stored with its note, the note goes too.
+  it('the rail prints a provisional subject by its name alone, on a row stored with its word too', () => {
+    for (const mode of MODES) {
+      const text = renderText(subjectsList.render(uncheckedRail(), mode, ctx))
+      expect(text).toContain('Waterproofing')
+      expect(text).not.toContain('29 of 654')
+      expect(text).not.toContain('provisional')
+    }
+    const stored = uncheckedRail()
+    const withWord = { ...stored, list: { ...stored.list, rows: stored.list.rows.map((r) => (r.id === 's-water' ? { ...r, note: 'provisional' } : r)) } }
+    for (const mode of MODES) expect(renderText(subjectsList.render(withWord, mode, ctx)), mode).not.toContain('provisional')
   })
 
   it('the rail sets a failed subject\'s name in the muted ink', () => {
@@ -374,11 +381,9 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     expect(markup).toContain('<span class="text-[12.5px] font-medium text-muted-foreground">Repair &amp; warranty</span>')
   })
 
-  it('on paper every rail row is one grid, with the word under the name', () => {
+  it('on paper every rail row is one grid', () => {
     const markup = render(subjectsList.render(uncheckedRail(), 'print', ctx))
     expect(markup.match(/grid grid-cols-\[minmax\(0,1fr\)_auto_auto\]/g)?.length).toBe(7)
-    const at = markup.indexOf('Waterproofing')
-    expect(markup.slice(at, markup.indexOf('</span>', markup.indexOf('provisional', at)))).not.toContain('in your market')
   })
 
   // The fixture's pane is Community & purpose, which the month was not read
@@ -388,10 +393,13 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     return { ...data, selected: data.selected ? { ...data.selected, unread: null } : null }
   }
 
-  it('the pane carries its word in the heading line, beside the name', () => {
+  // T0a (ruling U6): the pane's heading names the subject and carries no
+  // calibration word.
+  it('the pane heading names a provisional subject with no word', () => {
     const markup = render(subjectsSubject.render(readPane(), 'app', ctx))
     const heading = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'))
-    expect(heading).toContain('provisional')
+    expect(heading).toContain('Community &amp; purpose')
+    expect(heading).not.toContain('provisional')
   })
 
   // Default M-a: the pane says what its rail row says, "no reading yet", in
@@ -441,7 +449,7 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     expect(text).not.toContain('provisional')
   })
 
-  it('a rail row stored with "calibrating" reads as provisional', () => {
+  it('a rail row stored with "calibrating" reads as provisional: its name alone', () => {
     const base = subjectsFixture()
     const stored = {
       ...base,
@@ -452,16 +460,18 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
     for (const mode of MODES) {
       const text = renderText(subjectsList.render(stored, mode, ctx))
-      expect(text).toContain('provisional')
+      expect(text).toContain(base.list.rows[1].name)
+      expect(text).not.toContain('provisional')
       assertCopyContract(render(subjectsList.render(stored, mode, ctx)))
     }
   })
 
-  it('the pane of a provisional subject: marked, no "you" side, no gap line, no verdict', () => {
+  it('the pane of a provisional subject: named, no word, no "you" side, no gap line, no verdict', () => {
     const data = readPane()
     for (const mode of MODES) {
       const text = renderText(subjectsSubject.render(data, mode, ctx))
-      expect(text).toContain('provisional')
+      expect(text).toContain('Community & purpose')
+      expect(text).not.toContain('provisional')
       expect(text).not.toContain('of your videos')
       expect(text).not.toContain('videos behind your figure')
     }
@@ -474,7 +484,7 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     const stored = { ...base, selected: { ...base.selected!, calibration: 'calibrating' as const } }
     expect(base.selected!.sides.some((s) => s.kind === 'you')).toBe(true)
     const text = renderText(subjectsSubject.render(stored, 'app', ctx))
-    expect(text).toContain('provisional')
+    expect(text).not.toContain('provisional')
     expect(text).not.toContain('of your videos')
     expect(subjectsSubject.verdicts!(stored)).toEqual([])
     // The chart draws no line for your own side either.
@@ -1478,7 +1488,10 @@ describe('the Subjects page', () => {
 // kinds strip each printed "Not read as a change: we changed our searches in
 // September." The fixture's verdicts are refused as the loader refuses them
 // (WP1.3), counts kept.
-describe('Subjects · a refusal the cells share prints once, as a chip', () => {
+// T0a (plan §0a, the one condition): the chip and the "not compared" cells
+// are gone; a refused cell prints its own level alone, with no earlier month
+// beside it and nothing about why.
+describe('Subjects · a refusal the cells share prints nothing (T0a)', () => {
   const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
   const refuse = <V extends { state: string } | null | undefined>(v: V): V =>
     v ? ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair } as V) : v
@@ -1499,30 +1512,33 @@ describe('Subjects · a refusal the cells share prints once, as a chip', () => {
   }
   const CHIP = 'not read as a change: we changed our searches in September'
 
-  it('the hero says "not compared" in each cell and the reason once, in every mode', () => {
+  it('the hero prints no chip, no sentence and no "not compared", in every mode', () => {
     for (const mode of MODES) {
+      const markup = render(subjectsSubject.render(refused(), mode, ctx))
       const text = renderText(subjectsSubject.render(refused(), mode, ctx))
-      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain('Not read as a change')
-      assertCopyContract(render(subjectsSubject.render(refused(), mode, ctx)))
+      expect(text).not.toContain('not compared')
+      expect(markup).not.toContain('data-pair-chip')
+      assertCopyContract(markup)
     }
   })
 
-  // THE LEAD'S R3: a cell that already shows the earlier month in grey says
-  // nothing more; a cell without one says "not compared".
-  it('prints nothing beside a cell that already shows the earlier month, "not compared" beside one that does not', () => {
+  it('prints no earlier month beside a refused cell (it printed one in grey)', () => {
     const data = refused()
-    const sides = data.selected.sides.filter((s) => s.observed && s.pct != null && s.verdict?.state === 'refused')
-    const withPrior = sides.filter((s) => s.previous?.pct != null).length
-    expect(withPrior).toBeGreaterThan(0)
-    const text = renderText(subjectsSubject.render(data, 'app', ctx))
-    expect(text.split('not compared').length - 1).toBe(sides.length - withPrior)
+    const sides = data.selected.sides.filter((s) => s.observed && s.pct != null && s.verdict?.state === 'refused' && s.previous?.pct != null)
+    expect(sides.length).toBeGreaterThan(0)
+    const html = render(subjectsSubject.render(data, 'app', ctx))
+    // The earlier month's grey cell (`priorMonth`) is not drawn.
+    expect(html).not.toContain('text-muted-foreground/80')
+    // Where the pair joins, it is.
+    expect(render(subjectsSubject.render(subjectsFixture(), 'app', ctx))).toContain('text-muted-foreground/80')
   })
 
-  it('the kinds strip, every kind refused, is the chip alone', () => {
+  it('the kinds strip, every kind refused, is not drawn at all', () => {
     for (const mode of MODES) {
       const text = renderText(subjectsKinds.render(refused(), mode, ctx))
-      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain('Not read as a change')
       expect(text).not.toMatch(/since [A-Z][a-z]{2}:/)
       assertCopyContract(render(subjectsKinds.render(refused(), mode, ctx)))

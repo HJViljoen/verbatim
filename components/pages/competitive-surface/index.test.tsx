@@ -776,7 +776,10 @@ describe('the page, as the artboard composes it', () => {
     const text = renderText(markup)
     expect(text).not.toContain('The rest of the category is not drawn')
     // Not in the legend under the charts …
-    const chips = markup.slice(markup.lastIndexOf('</svg>'), markup.indexOf('Each chart is scaled'))
+    // The legend: its chips' row, after the last chart (the scale note that
+    // once closed it is gone, T0a BR-38).
+    const legendAt = markup.indexOf('flex flex-wrap gap-x-3 gap-y-1', markup.lastIndexOf('</svg>'))
+    const chips = markup.slice(legendAt, markup.indexOf('</div>', legendAt))
     expect(chips).toContain('Ottobock')
     expect(chips).not.toContain('category')
     // and nowhere in the drawing itself
@@ -788,11 +791,11 @@ describe('the page, as the artboard composes it', () => {
     expect(text).toContain(`of ${category.content!.n.toLocaleString('en-US')}`)
   })
 
-  it('draws ONE legend under both charts, and says the scale is not shared', () => {
+  // T0a (mechanism 6; BR-38): the two charts share one scale, the larger of
+  // their two maxima, so no note warns a reader off comparing them.
+  it('draws ONE legend under both charts, on one shared scale, with no scale note', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
-    // ONE legend: the note under it is printed once, and each chart's own
-    // title appears once — two legends would have duplicated both.
-    expect(text.match(/Each chart is scaled to its own highest month/g)?.length).toBe(1)
+    expect(text).not.toContain('Each chart is scaled to its own highest month')
     expect(text.match(/Attention share/g)?.length).toBe(1)
     expect(text.match(/Content share/g)?.length).toBe(1)
   })
@@ -987,17 +990,19 @@ describe('Freitag’s counts print plainly, with no note (the lead’s R2)', () 
   })
 })
 
-// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct CO2's two change columns
-// wrapped the refusal to two lines in each of six cells, and the face-off's
-// change cell to four. The fixtures' verdicts are refused as the loader refuses
-// them (WP1.3), counts kept.
-describe('a refusal the cells share prints once, as a chip (deploy 1 review)', () => {
+// A REFUSAL IS NOT SHOWN AND NOT EXPLAINED (T0a; plan §0a, the one
+// condition). It used to print once, as a chip, with "not compared" in each
+// cell (deploy 1 review); now a refused change prints nothing, the change
+// columns go where no row's change was drawn, and no earlier level stands
+// beside a refused one. The fixtures' verdicts are refused as the loader
+// refuses them (WP1.3), counts kept, as a stored copy would carry them.
+describe('a refusal the cells share prints nothing (T0a)', () => {
   const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
   const refuse = <V extends { state: string } | null>(v: V): V =>
     v ? ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair } as V) : v
   const CHIP = 'not read as a change: we changed our searches in September'
 
-  it('CO2: "not compared" in the change cells, the reason once under the table', () => {
+  it('CO2: no change columns, no "not compared" and no chip where every change is refused', () => {
     const data = sealandRivalFixture()
     const refused = {
       ...data,
@@ -1009,22 +1014,29 @@ describe('a refusal the cells share prints once, as a chip (deploy 1 review)', (
     expect(refused.standings.rows.some((r) => r.contentVerdict != null)).toBe(true)
     for (const mode of MODES) {
       const text = renderText(competitiveStandings.render(refused, mode, ctx))
-      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain('Not read as a change')
-      expect(text).toContain('not compared')
+      expect(text).not.toContain('not compared')
+      expect(text).not.toContain('on last month')
+      expect(render(competitiveStandings.render(refused, mode, ctx))).not.toContain('data-pair-chip')
       assertCopyContract(render(competitiveStandings.render(refused, mode, ctx)))
     }
   })
 
-  it('CO3: the face-off’s refused change says "not compared", and the chip says why', () => {
+  it('CO3: the face-off’s refused change prints nothing, and no month before stands beside it', () => {
     const data = competitiveFixture()
     const h = data.headToHead!
     const refused = { ...data, headToHead: { ...h, measures: h.measures.map((m) => ({ ...m, verdict: refuse(m.verdict), rivalVerdict: refuse(m.rivalVerdict) })) } }
     expect(refused.headToHead.measures.some((m) => m.verdict != null || m.rivalVerdict != null)).toBe(true)
     for (const mode of MODES) {
       const text = renderText(competitiveHeadToHead.render(refused, mode, ctx))
-      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain(CHIP)
       expect(text).not.toContain('Not read as a change')
+      expect(text).not.toContain('not compared')
+      // The earlier level of a side whose change was refused is not printed.
+      for (const m of refused.headToHead.measures) {
+        if (m.verdict && m.you?.prev) expect(text, m.key).not.toContain(`${m.you.prev.text} of`)
+      }
       assertCopyContract(render(competitiveHeadToHead.render(refused, mode, ctx)))
     }
   })

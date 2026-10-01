@@ -14,6 +14,10 @@ import { PLAN_EMPTY, planCard } from '@/lib/ask/plan-cards'
 import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
 import { recurrenceOf } from '@/lib/reading/head-to-head'
 import type { MoveDating } from '@/lib/pages/date-move'
+import { monthChange } from '@/lib/reading/bands'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 
 // Market's block fixtures (Phase 1 WP14).
 //
@@ -60,15 +64,20 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       }),
       // Decided in June, so July and September are both strictly after it and
       // the comparison is drawn. Two month readings, never a pool of them.
+      // HYPOTHETICAL: the three months grouped by one clustering on record
+      // (`clusteringKey`), so the comparison is like for like and is drawn;
+      // on today's corpus no month carries a grouping and none is (T0a,
+      // YM-16), and a judged pair across our September searches is refused
+      // (T0a review, finding 1). This row pins the drawing.
       afterwards: afterwardsFor({
         pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
         decidedAt: '2026-06-02T10:00:00.000Z',
         targetIds: ['reg-repair'],
         objectLabel: 'Repair & warranty',
         series: [
-          { month: '2026-05-01', k: 9, n: 104 },
-          { month: '2026-07-01', k: 11, n: 118 },
-          { month: '2026-09-01', k: 21, n: 130 },
+          { month: '2026-05-01', k: 9, n: 104, clusteringKey: 'hypothetical-one-grouping' },
+          { month: '2026-07-01', k: 11, n: 118, clusteringKey: 'hypothetical-one-grouping' },
+          { month: '2026-09-01', k: 21, n: 130, clusteringKey: 'hypothetical-one-grouping' },
         ],
         audience: LEDGER_AUDIENCE,
       }),
@@ -355,7 +364,10 @@ export const SUBJECTS_ASKED: SubjectAsked[] = [
 ]
 
 /** Y1 on Sealand's September, before MF3: no post is filed by the judge. */
-export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null): QuestionsBlock {
+/** `ready`: HYPOTHETICAL, every subject asked about checked and ready. On
+ *  production none is, and a subject that is not ready is no row of the
+ *  block (T0a, YM-9; ruling U6). */
+export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null, ready = false): QuestionsBlock {
   return buildQuestions({
     month: '2026-09-01',
     themes: SEP_THEMES,
@@ -363,7 +375,7 @@ export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null): Qu
     n: 626,
     brandNames: ['Sealand', 'Cotopaxi', 'Patagonia', 'The North Face', 'Freitag'],
     posts: sealandPosts(),
-    subjects: SUBJECTS_ASKED,
+    subjects: ready ? SUBJECTS_ASKED.map((x) => ({ ...x, calibration: 'ready' as const })) : SUBJECTS_ASKED,
     filings: filings ? ownPostFilings(filings) : null,
   })
 }
@@ -371,7 +383,7 @@ export function sealandQuestions(filings: OwnPostSubjectRow[] | null = null): Qu
 /** The same, after MF3 with the judge's rows: every post filed for every
  *  subject asked about, one post filed as about Price. (The judge has not run:
  *  the rows are the shape it writes, over the 56 staging posts.) */
-export function sealandQuestionsFiled(): QuestionsBlock {
+export function sealandQuestionsFiled(ready = false): QuestionsBlock {
   const posts = sealandPosts()
   const rows: OwnPostSubjectRow[] = posts.flatMap((p) => SUBJECTS_ASKED.map((x) => ({
     video_id: p.id,
@@ -383,7 +395,7 @@ export function sealandQuestionsFiled(): QuestionsBlock {
     judge_version: 'own_post_subjects_v1',
     decided_at: '2026-11-22T09:00:00.000Z',
   })))
-  return sealandQuestions(rows)
+  return sealandQuestions(rows, ready)
 }
 
 /**
@@ -637,5 +649,56 @@ export function ossurMovesFixture(): MarketSurfaceData {
     },
     ways: { ...base.ways, claims: [], claimSubjects: null, claimsLine: 'Nothing you have said in your own posts has been read against the conversation this update.' },
     questions,
+  }
+}
+
+/**
+ * Your moves across a month pair the judge REFUSES, ON THIN DATA (T0a review,
+ * finding 1), read on 2 Oct with the product's own judge
+ * (lib/test/sealand-pairs.ts): August against September is refused on every
+ * view for our September searches, and Sealand's own side carries about 84
+ * videos a month against a floor of 100. The review's three live prints:
+ *
+ *  · the month's card: "Durability in your audience … 26 of 84 videos against
+ *    23 of 85";
+ *  · the move reading: "10 of 84 videos (12%) against 6 of 82 (7%) before it
+ *    was declared";
+ *  · the advice's Afterwards: "21 of 130 videos in your audience in Sep 2026,
+ *    against 9 of 104 in May 2026 · band 8.5 points" (the months grouped the
+ *    same way, HYPOTHETICAL, so only the judge can refuse it).
+ *
+ * Each is refused now, and prints its own month alone.
+ */
+export function thinRefusedMovesFixture(): MarketSurfaceData {
+  const base = marketFixture()
+  const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+  const durability = { kind: 'subject' as const, id: 's1', label: 'Durability' }
+  const side = (audience: string, before: [number, number], now: [number, number]): Verdict => monthChange({
+    object: durability,
+    audience,
+    curr: { month: '2026-09-01', videos: now[1], k: now[0], audience, regime: 'n/a' },
+    prev: { month: '2026-08-01', videos: before[1], k: before[0], audience, regime: 'n/a' },
+    comparability: judge('2026-08-01', '2026-09-01', audience),
+  })
+  const card = { ...cardFixture(), movement: { yours: side(CLIENT_AUDIENCE, [23, 85], [26, 84]), category: side(INDUSTRY_AUDIENCE, [264, 1388], [305, 1388]) } }
+  const rows = base.advice.rows.map((r) => (r.lineageId !== 'L-old' ? r : {
+    ...r,
+    afterwards: afterwardsFor({
+      pair: (prevMonth, month) => judge(prevMonth, month, LEDGER_AUDIENCE),
+      decidedAt: r.decidedAt,
+      targetIds: ['reg-repair'],
+      objectLabel: 'Repair & warranty',
+      series: [
+        { month: '2026-05-01', k: 9, n: 104, clusteringKey: 'hypothetical-one-grouping' },
+        { month: '2026-07-01', k: 11, n: 118, clusteringKey: 'hypothetical-one-grouping' },
+        { month: '2026-09-01', k: 21, n: 130, clusteringKey: 'hypothetical-one-grouping' },
+      ],
+      audience: LEDGER_AUDIENCE,
+    }),
+  }))
+  return {
+    ...base,
+    advice: { ...base.advice, rows },
+    moves: { ...base.moves, card, readings: [moveReadingFixture(undefined, judge)] },
   }
 }

@@ -187,13 +187,20 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).not.toContain('still filling')
   })
 
-  it('"The month": the size, then the three biggest conversations with one denominator, then August as levels and the chip', () => {
+  // T0a (OV-6/OV-7, the one condition): the fixture's September pair is
+  // refused, so "The month" prints no August line and no chip.
+  it('"The month": the size, then the three biggest conversations with one denominator, and nothing of the refused August', () => {
     expect(text).toContain('Your market in September so far: 655 videos and 16,233 comments.')
     expect(text).toContain(
       'Its three biggest conversations not led by makers, of the 626 category videos: “Ready to buy handmade bags” 69, “Love for stylish bag design” 60 and “Confusion over airline bag sizes” 21. About a third of each of the first two sits under makers’ own posts.',
     )
-    expect(text).toContain('August: 7%, 7% and 3% of 351')
-    expect(text).toContain('not read as a change: we changed our searches in September')
+    expect(text).not.toContain('August: 7%, 7% and 3% of 351')
+    expect(text).not.toContain('not read as a change: we changed our searches in September')
+    // HYPOTHETICAL: the themes pair read the same way; August prints as levels.
+    const base = marketFrontFixture()
+    const joined = { ...base, themes: base.themes ? { ...base.themes, chip: null } : base.themes }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.sentence')!
+    expect(read(block.render(joined, 'app', ctx))).toContain('August: 7%, 7% and 3% of 351')
   })
 
   it('the voice is the lead theme’s own, and the lead is a quarter makers or fewer', () => {
@@ -203,10 +210,11 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(data.hero?.kind === 'themes' && data.hero.lead?.makerShare).toBeLessThanOrEqual(LEAD_MAX_MAKER_SHARE)
   })
 
-  it('the board: ten rows not led by makers, the makers line, August as a share in its column', () => {
+  it('the board: ten rows not led by makers, the makers line, and no August beside the refused September', () => {
     expect(text).toContain('What your market talked about')
     expect(text).toContain('Sep of 626')
-    expect(text).toContain('Aug of 351')
+    // T0a (OV-12): the themes pair is refused, so no August column at all.
+    expect(text).not.toContain('Aug of 351')
     expect(text).toContain('Makers and DIY, grouped: 7 themes at 10+, led by Admiration for upcycled bag creativity (71) and Respect for handmade craftsmanship (64)')
     expect(text).toContain('about a third makers')
     expect(text).toContain('a fifth makers')
@@ -254,28 +262,34 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('If you made it in pink and a bigger size I would buy it immediately')
   })
 
-  it('the subjects on the market, each with its calibration word, and a subject never read says so and promises no date', () => {
+  // T0a (OV-42; ruling U6): every subject on production is provisional, so
+  // each prints its name and no figure, word or tag.
+  it('the subjects on the market, each by its name alone while none is ready', () => {
     expect(text).toContain('The market by subject')
-    expect(text).toContain('Looks & style provisional')
-    expect(text).toContain('Buying & delivery no reading yet')
+    expect(text).toMatch(/Buying & delivery Comfort Community & purpose Durability Looks & style Price Repair & warranty Waterproofing Open Subjects/)
+    expect(text).not.toContain('Looks & style provisional')
   })
 
   // THE MAKER TAG (§2.2 block 6, the approved Main artboard's "provisional ·
   // ▨ over a third makers"), at a fifth or more, as the Subjects rail prints
   // it: staging at the 11 Oct clock read Looks & style at 35 of 103 market
   // videos makers' (0.34), Durability 9 of 39 (0.23) and Price 3 of 25 (0.12).
-  it('a subject a fifth or more makers carries the rail\'s maker tag; under a fifth, or not measured, none', () => {
+  // HYPOTHETICAL `ready` on every row: a provisional subject's maker share
+  // rests on its matching and goes with its figure (T0a, ruling U6).
+  it('a READY subject a fifth or more makers carries the rail\'s maker tag; under a fifth, not measured, or not ready, none', () => {
     const base = marketFrontFixture()
     const share: Record<string, number> = { 's-looks': 35 / 103, 's-durability': 9 / 39, 's-price': 3 / 25 }
-    const rows = base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id] } : r))
+    const rows = base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id], calibration: 'ready' as const } : { ...r, calibration: 'ready' as const }))
     const data = { ...base, subjects: { ...base.subjects, rows } }
     const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
     for (const mode of MODES) {
       const t = read(block.render(data, mode, ctx))
-      expect(t, mode).toMatch(/Looks & style (· )?provisional (· )?about a third makers/)
-      expect(t, mode).toMatch(/Durability (· )?provisional (· )?about a quarter makers/)
+      expect(t, mode).toMatch(/Looks & style (· )?about a third makers/)
+      expect(t, mode).toMatch(/Durability (· )?about a quarter makers/)
       expect(t, mode).not.toMatch(/Price[^\n]*makers/)
     }
+    const provisional = { ...base, subjects: { ...base.subjects, rows: base.subjects.rows.map((r) => (share[r.id] != null ? { ...r, makerShare: share[r.id] } : r)) } }
+    for (const mode of MODES) expect(read(block.render(provisional, mode, ctx)), mode).not.toContain('makers')
     // A stored copy with no maker share draws no tag.
     expect(read(block.render(base, 'app', ctx))).not.toContain('makers')
   })
@@ -285,8 +299,9 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   // while an update will still read the month, and "not read in August" once
   // none will (a month picked in the selector after it froze).
   it('a subject the month was not read for prints the row\'s own unread words, the ones every surface prints', () => {
+    // HYPOTHETICAL `ready`: a provisional subject is its name alone (T0a).
     const base = marketFrontFixture()
-    const rows = base.subjects.rows.map((r) => (r.id === 's-buying' ? { ...r, unread: 'not read in August' } : r))
+    const rows = base.subjects.rows.map((r) => (r.id === 's-buying' ? { ...r, unread: 'not read in August', calibration: 'ready' as const } : r))
     const frozen = { ...base, subjects: { ...base.subjects, rows } }
     const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
     for (const mode of MODES) {
@@ -299,8 +314,20 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   })
 
   it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
-    expect(text).toContain('Price provisional · August under 10, a count 23 4% 5')
-    expect(text).not.toContain('Price provisional 23 4% ·')
+    // HYPOTHETICAL: the market pair read the same way (no refusal on the
+    // page), so the month before prints, and Price checked and ready (T0a).
+    const base = marketFrontFixture()
+    const ready = { ...base, subjects: { ...base.subjects, rows: base.subjects.rows.map((r) => (r.id === 's-price' ? { ...r, calibration: 'ready' as const } : r)) } }
+    const joined = { ...ready, sentence: { ...base.sentence, chip: null }, category: { ...base.category, market: base.category.market ? { ...base.category.market, chip: null } : undefined } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
+    const printed = read(block.render(joined, 'app', ctx))
+    expect(printed).toContain('Price August under 10, a count 23 4% 5')
+    expect(printed).not.toContain('Price 23 4% ·')
+    // T0a (OV-45, the one condition): on the fixture's own refused September
+    // pair the block prints no month before at all: no column, no count tag.
+    const refused = read(block.render(ready, 'app', ctx))
+    expect(refused).not.toContain('Aug of')
+    expect(refused).not.toContain('August under 10')
     // Said on the row, so the count cannot read as a share (finish-list item 9).
     expect(prevCountTag(7, { month: '2026-08-01', n: 378 })).toBe('August under 10, a count')
     expect(prevCountTag(70, { month: '2026-08-01', n: 378 })).toBeNull()
@@ -456,7 +483,11 @@ describe('nothing skipped (§5.9)', () => {
 
 describe('the first screen holds at most 30 numbers (decision B)', () => {
   it('the bar, "The month" and the board’s first five rows', () => {
-    const data = marketFrontFixture()
+    // HYPOTHETICAL: the themes pair read the same way, so the month before is
+    // on the first screen too (the most it can hold); the fixture's refused
+    // September holds fewer.
+    const base = marketFrontFixture()
+    const data = { ...base, themes: base.themes ? { ...base.themes, chip: null } : base.themes }
     const board = data.themes!
     const firstScreen = [
       blockAnswers(overviewSentence, data).figures,
@@ -485,7 +516,11 @@ describe('the 25 Sep rulings on Your market (§5.12)', () => {
       const data = make()
       for (const block of FRONT_PAGE_BLOCKS) {
         for (const mode of MODES) {
-          const root = rootOf(block.render(data, mode, ctx))
+          const node = block.render(data, mode, ctx)
+          // T0a: What it means for you is omitted where its only line rests
+          // on a provisional subject (production's Waterproofing).
+          if (node == null && block.key === 'overview.foryou') continue
+          const root = rootOf(node)
           expect(root?.type, `${name} ${block.key} ${mode}`).toBe(BlockFrame)
           expect(root?.props.meta, `${name} ${block.key} ${mode} meta`).toBeUndefined()
           expect(root?.props.footerNote, `${name} ${block.key} ${mode} footerNote`).toBeUndefined()
@@ -542,10 +577,15 @@ describe('Össur, paused, with no maker rule and no subjects (§2.13, §5.2)', (
   // "AUG 0%" (the lead's ruling of 27 Sep): August did not read the theme, so
   // its August cell is the preview's "·", in every mode, never "0%".
   it('prints "·" in August for "Brand boycott over politics", which August did not read, never "0%"', () => {
+    // HYPOTHETICAL: the themes pair read the same way (Össur's own is refused,
+    // paused since its 13 Sep update, and then no August prints at all: T0a).
+    const base = ossurFrontFixture()
+    const joined = { ...base, themes: base.themes ? { ...base.themes, chip: null } : base.themes }
     for (const mode of MODES) {
-      const board = read(overviewThemes.render(ossurFrontFixture(), mode, ctx))
+      const board = read(overviewThemes.render(joined, mode, ctx))
       expect(board, mode).toMatch(/Brand boycott over politics 16 5% ·/)
       expect(board, mode).not.toMatch(/(^|\s)0%/)
+      expect(read(overviewThemes.render(base, mode, ctx)), mode).not.toMatch(/Brand boycott over politics 16 5% ·/)
     }
     expect(Object.values(overviewThemes.figures?.(ossurFrontFixture()) ?? {}).filter((f) => f.value === 0)).toEqual([])
   })

@@ -174,10 +174,13 @@ export function ledgerWithDismissal(): MarketSurfaceData {
         decidedAt: '2026-07-20T09:00:00.000Z',
         targetIds: ['reg-repair'],
         objectLabel: 'Repair & warranty',
+        // HYPOTHETICAL: one grouping on record across the three months, so
+        // the comparison is like for like and is drawn (T0a, YM-16: today's
+        // months carry none, and no comparison between them is drawn).
         series: [
-          { month: '2026-06-01', k: 12, n: 118 },
-          { month: '2026-08-01', k: 16, n: 124 },
-          { month: '2026-09-01', k: 21, n: 130 },
+          { month: '2026-06-01', k: 12, n: 118, clusteringKey: 'hypothetical-one-grouping' },
+          { month: '2026-08-01', k: 16, n: 124, clusteringKey: 'hypothetical-one-grouping' },
+          { month: '2026-09-01', k: 21, n: 130, clusteringKey: 'hypothetical-one-grouping' },
         ],
         audience: LEDGER_AUDIENCE,
       }),
@@ -247,10 +250,11 @@ export function ledgerWithDismissal(): MarketSurfaceData {
       decidedAt: '2026-07-28T10:00:00.000Z',
       targetIds: ['reg-price'],
       objectLabel: 'Price and value',
+      // HYPOTHETICAL: one grouping on record (T0a, YM-16), as above.
       series: [
-        { month: '2026-06-01', k: 34, n: 118 },
-        { month: '2026-08-01', k: 30, n: 124 },
-        { month: '2026-09-01', k: 27, n: 130 },
+        { month: '2026-06-01', k: 34, n: 118, clusteringKey: 'hypothetical-one-grouping' },
+        { month: '2026-08-01', k: 30, n: 124, clusteringKey: 'hypothetical-one-grouping' },
+        { month: '2026-09-01', k: 27, n: 130, clusteringKey: 'hypothetical-one-grouping' },
       ],
       audience: LEDGER_AUDIENCE,
     }),

@@ -36,7 +36,7 @@ import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadChanges, loadMonthSeries, loadPairRows, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
-import { nextComparablePair, pairOnVerdict } from '../reading/comparability'
+import { joins, nextComparablePair, pairOnVerdict } from '../reading/comparability'
 import { pairChipWords } from '../calibration'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import type { MethodLines } from '../reading/method'
@@ -52,7 +52,7 @@ import {
   type Subject,
 } from '../subjects/types'
 import {
-  CALIBRATION_WORDS,
+  printsMarket,
   readCalibration,
   subjectCalibration,
   type StoredCalibration,
@@ -749,15 +749,14 @@ export function railNote(
 ): string | null {
   if (status === 'proposed') return 'not counted yet: confirm it and counting starts with the next update'
   const state = readCalibration(calibration)
-  // Failed first: a subject being re-described prints nothing else, read or not.
-  if (state === 'failed') return CALIBRATION_WORDS.failed
+  // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, ruling U6): no word,
+  // "provisional" or "being re-described", and no figure beside it.
+  if (state === 'failed' || state === 'provisional') return null
   // A SUBJECT THE MONTH WAS NOT READ FOR (named after its last update) says
   // so in place of a figure and of its word: "no reading yet" (`unreadWords`,
   // the one wording on every surface, default M-a), never "provisional",
   // which is the calibration word alone.
   if (unread) return unread
-  // A67: the pane says it in full; the rail says the one word.
-  if (state === 'provisional') return CALIBRATION_WORDS.provisional
   if (!read) return NO_READING_YET
   return null
 }
@@ -781,7 +780,9 @@ export function fillMakerShares(rows: SubjectRail[], makers: Pick<MarketMakers, 
  *  the rows named but not confirmed; ties by name, so the order never depends
  *  on how the rows came back. */
 export function byRailRank(a: Pick<SubjectRail, 'status' | 'market' | 'calibration' | 'name'>, b: Pick<SubjectRail, 'status' | 'market' | 'calibration' | 'name'>): number {
-  const tier = (r: typeof a) => (r.status !== 'active' ? 2 : r.market && readCalibration(r.calibration) !== 'failed' ? 0 : 1)
+  // A subject that is not ready has no rank (T0a, ruling U6): it follows the
+  // ready ones, by name.
+  const tier = (r: typeof a) => (r.status !== 'active' ? 2 : r.market && printsMarket(r.calibration) ? 0 : 1)
   const t = tier(a) - tier(b)
   if (t !== 0) return t
   return (tier(a) === 0 ? (b.market?.k ?? 0) - (a.market?.k ?? 0) : 0) || a.name.localeCompare(b.name)
@@ -837,6 +838,19 @@ export function allRedescribed(data: Pick<SubjectsData, 'list'>): boolean {
 /** The selected subject's sides as its blocks print them (`calibratedSides`). */
 export function paneSides(pane: Pick<SubjectPane, 'sides' | 'calibration'>): SubjectSide[] {
   return calibratedSides(pane.sides, pane.calibration)
+}
+
+/**
+ * Is the selected subject one whose membership-derived blocks draw nothing
+ * (T0a, ruling U6; review finding 3)? What people do in its comments, the
+ * questions counted on it and its months all rest on matching that is not
+ * verified. The page's layout leaves those blocks out (`layoutFor`), and they
+ * answer this themselves too, so an export, a stored report section or any
+ * other caller obeys the rule. A stored pane with no calibration field renders
+ * as it was sent (`printsMarket`).
+ */
+export function selectedNotReady(data: Pick<SubjectsData, 'selected'>): boolean {
+  return data.selected != null && !printsMarket(data.selected.calibration)
 }
 
 /**
@@ -2227,12 +2241,21 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // every one with a figure; a subject named but not confirmed last. Each row
   // carries the month before on the same base, and its maker share (decision
   // F: printed at a fifth or more).
+  //
+  // THE MONTH BEFORE ONLY WHERE THE MARKET PAIR JOINS (T0a, SB-14). The rail
+  // printed August beside September on every row with no pair check at all;
+  // where the judge refuses the pair (Sealand's September: our searches
+  // changed), the rail carries no month before, on any row, and no column.
+  const railPrevShown = joins(pair(prevMonth, month, MARKET_LINE))
   const railRows: SubjectRail[] = [...active, ...proposed].map((s) => {
     // A proposed subject was never checked and measures nothing; its row says
     // "not counted yet" whatever the state (`railNote`).
     const calibration = calibrationOf.get(s.id) ?? subjectCalibration(s)
-    const counted = s.status === 'active' && calibration !== 'failed' ? marketOf(s.id) : null
-    const before = counted ? marketOf(s.id, prevMonth) : null
+    // ONLY A READY SUBJECT'S FIGURE (T0a, SB-9; ruling U6): a provisional
+    // subject's matching is unverified, so its row carries no market level,
+    // no month before, no maker share and no rank; it is its name.
+    const counted = s.status === 'active' && printsMarket(calibration) ? marketOf(s.id) : null
+    const before = counted && railPrevShown ? marketOf(s.id, prevMonth) : null
     const unread = s.status === 'active' && readIn(s.id, month) === 'unread'
     return {
       id: s.id,
@@ -2266,7 +2289,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     base: {
       month,
       n: marketCounts.get(monthStartOf(month))?.videos ?? null,
-      prev: marketCounts.has(monthStartOf(prevMonth))
+      prev: railPrevShown && marketCounts.has(monthStartOf(prevMonth))
         ? { month: prevMonth, n: marketCounts.get(monthStartOf(prevMonth))?.videos ?? null }
         : null,
     },
@@ -2422,7 +2445,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       rivalAudiences: marketRivals,
       read: (m) => readIn(subject.id, m) === 'read',
     })
-    const marketLine = line
+    // No line for a subject that is not ready (T0a, SB-15; ruling U6): its
+    // trail, month cards and chart all rest on its unverified matching.
+    const marketLine = line && printsMarket(calibration)
       ? { ...line, refusedSteps: refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, MARKET_LINE)) }
       : null
     const readMonths = new Set(monthsReadOf(marketLine).map((p) => monthStartOf(p.month)))
@@ -2536,7 +2561,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const asked = await askedMostAhead
   const askedMost = asked
     ? asked
-        .filter((a) => a.questionVideos > 0)
+        // Only a ready subject's count (T0a, ruling U6): a provisional
+        // subject's question count rests on its unverified matching.
+        .filter((a) => a.questionVideos > 0 && printsMarket(calibrationOf.get(a.subjectId) ?? 'provisional'))
         .map((a) => ({ id: a.subjectId, name: selectable.find((x) => x.id === a.subjectId)?.name ?? '', videos: a.questionVideos }))
         .filter((a) => a.name)
         .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
@@ -3672,13 +3699,29 @@ export const monthsReadOf = (line: MonthSeries | null | undefined): MonthSeries[
   (line?.points ?? []).filter((p) => p.k != null && p.videos != null && p.videos > 0)
 
 /**
+ * The months read that may print side by side: those since the line's latest
+ * refused step (T0a, SB-17 and SB-33; the one condition). A month across a
+ * refused step is not set beside the reading month as a card, in a trail or
+ * in a figure list, chip or no chip.
+ */
+export function monthsShownOf(line: MonthSeries | null | undefined): MonthSeries['points'] {
+  const breaks = Object.keys(line?.refusedSteps ?? {}).map(monthStartOf).sort()
+  const since = breaks.length > 0 ? breaks[breaks.length - 1] : null
+  return monthsReadOf(line).filter((p) => since == null || monthStartOf(p.month) >= since)
+}
+
+/**
  * The pane's trail, "Aug 10% of 377 · Sep 16% of 654": the last three months
  * read, each a level on the market's base (`marketLevel`: a whole percent at
  * 100 videos and 10 of its own, the count under) with its "of N" (§4.0: every
  * level prints its base). Levels side by side, never a direction.
  */
 export function marketTrail(line: MonthSeries | null | undefined): { month: string; text: string; of: string }[] {
-  return monthsReadOf(line).slice(-3).flatMap((p) => {
+  // ONLY THE MONTHS SINCE THE LATEST REFUSED STEP (T0a, SB-17; the one
+  // condition): "Aug 10% of 377 · Sep 16% of 654" across a refused pair is
+  // the comparison the judge refused, chip or no chip. The line carries its
+  // refused steps (`refusedSteps`, judged on the market view).
+  return monthsShownOf(line).slice(-3).flatMap((p) => {
     const level = marketLevel(p.k, p.videos)
     return level ? [{ month: p.month, text: level.text, of: `of ${fmtInt(p.videos as number)}` }] : []
   })
@@ -3818,7 +3861,7 @@ export function paneMarketLead(
   month: string,
 ): string | null {
   const m = pane.market
-  if (!m || pane.unread || readCalibration(pane.calibration) === 'failed') return null
+  if (!m || pane.unread || !printsMarket(pane.calibration)) return null
   const level = levelText(m.k, m.n)
   if (!level) return null
   const when = longMonth(month)
@@ -3832,7 +3875,7 @@ export function sideFigures(pane: SubjectPane | null): FigureTable {
   if (!pane) return out
   // The headline's market figure (default M-b), under the keys it prints.
   const m = pane.market
-  if (m && !pane.unread && readCalibration(pane.calibration) !== 'failed' && levelText(m.k, m.n)) {
+  if (m && !pane.unread && printsMarket(pane.calibration) && levelText(m.k, m.n)) {
     out.subject_market_videos = { value: m.k, unit: 'videos', label: `${pane.name}, videos in your market this month` }
     if (levelText(m.k, m.n)?.kind === 'share') {
       out.subject_market_share = { value: Math.round((m.k / m.n) * 100), unit: 'pct', label: `${pane.name}, share of your market this month` }

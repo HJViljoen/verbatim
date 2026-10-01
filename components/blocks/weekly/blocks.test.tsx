@@ -402,6 +402,20 @@ describe('the artefact on a phone', () => {
 describe('WR3 · what came in this week', () => {
   const block = WEEKLY_BLOCKS['weekly.incoming']
 
+  // T0a (mechanism 4; WR-24): a theme first heard that our new searches found
+  // (a third or more of its month's videos) is not counted as new; where none
+  // is left, the count is not printed at all, never "0" or "no theme was heard".
+  it('prints no new-theme count where every theme first heard was our new searches’', () => {
+    const data = weeklyFixture()
+    const withheld = { ...data, incoming: { ...data.incoming, newThemes: [], newThemesTotal: 0, newThemesNote: null, newThemesWithheld: true } }
+    for (const mode of MODES) {
+      const text = renderText(block.render(withheld, mode, ctx))
+      expect(text, mode).not.toContain('heard for the first time')
+      expect(text, mode).toContain('271 videos found')
+      assertCopyContract(render(block.render(withheld, mode, ctx)))
+    }
+  })
+
   it('states the update’s counts as a contribution to the month', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('271 videos found')
@@ -733,12 +747,10 @@ describe('WR5 · for content', () => {
     // `t2`, not `t1`: §1's hero leads with "Will it survive a wet commute" and
     // §5 no longer repeats it (`risingMovers`).
     expect(text).toContain('5.1% · 71 of 1,388')
-    // Run-indexed, unlike everything above it in this block, and the line has
-    // to say so under a masthead that reads "this month so far".
-    // THE LABEL IS THE READER'S WORD AND THE MULTIPLE PRINTS ITS n. The block
-    // printed the stored slug (`promotional`, and one day `trend-riding`) and a
-    // multiple over an unstated population.
-    expect(text).toContain('Talking head outperformed Commute POV')
+    // T0a (mechanism 6; WR-34): the format multiple is run-indexed and not
+    // re-based on a dated window, so the row is omitted.
+    expect(text).not.toContain('Talking head outperformed Commute POV')
+    expect(text).not.toContain('median video')
   })
 
   // THREE ROWS OF ONE SHAPE, AND ONE ALL-CAPS EYEBROW IN THE SECTION. §5 drew
@@ -779,14 +791,17 @@ describe('WR5 · for content', () => {
   // of a ranked, capped list — bounded at fifteen for every tenant forever by
   // `rankEngageCandidates` — so the row prints the queue's own verb and states
   // the cap, rather than printing a cap as a count of the week.
-  it('counts what the queue surfaced, and never the shown three', () => {
+  // T0a (mechanism 6; WR-32): the surfaced count is a capped list's length,
+  // so it goes, with the per-intent counts; the comments print under "Worth a
+  // reply".
+  it('prints the comments worth a reply, and no capped count', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
-      expect(text, mode).toContain('Surfaced for a reply this week')
-      expect(text, mode).not.toContain('Worth a reply this week')
-      expect(text, mode).toContain('question 7 · objection 3 · buying signal 2')
-      expect(text, mode).toContain('1 below in full')
-      // The cap disclaimer is gone (D63); the counts and "N below in full" say it.
+      expect(text, mode).toContain('Worth a reply')
+      expect(text, mode).toContain('Does the strap come off?')
+      expect(text, mode).not.toContain('Surfaced for a reply')
+      expect(text, mode).not.toContain('question 7 · objection 3 · buying signal 2')
+      expect(text, mode).not.toContain('below in full')
       expect(text, mode).not.toContain('the queue ranks and caps what it shows')
       // D14: nothing records whether a comment was answered. ("answering" in
       // the cap clause is about the reader's own work, not a record of one.)
@@ -800,17 +815,13 @@ describe('WR5 · for content', () => {
   // runner-up's, then the basis both are against. The winner's n used to
   // arrive last, after the runner-up's, with the median clause between two n's
   // it belongs to neither of alone.
-  it('prints the format head-to-head with an n on each side, winner first', () => {
-    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('31 of 402 videos carry it · Commute POV 1.8× over 24 of 402 videos · both against this update’s median video')
-  })
-
-  it('says "against" rather than "both against" where there is no runner-up', () => {
+  it('prints no format head-to-head, with or without a runner-up (WR-34)', () => {
     const data = weeklyFixture()
-    const alone = { ...data, content: { ...data.content, runnerUp: null } }
-    const text = renderText(block.render(alone, 'app', ctx))
-    expect(text).toContain('31 of 402 videos carry it · against this update’s median video')
-    expect(text).not.toContain('both against')
+    for (const d of [data, { ...data, content: { ...data.content, runnerUp: null } }]) {
+      const text = renderText(block.render(d, 'app', ctx))
+      expect(text).not.toContain('videos carry it')
+      expect(text).not.toContain('against this update’s median video')
+    }
   })
 
   // The heading over these rows is deliberately direction-free, and a theme's
@@ -820,9 +831,11 @@ describe('WR5 · for content', () => {
     expect(markup).not.toContain(EMAIL.greenTint)
   })
 
-  it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {
+  // T0a (WR-32; U13): an empty reply queue prints nothing, not a note.
+  it('prints nothing for an empty reply queue', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
-    expect(text).toContain('Nothing is waiting for a reply from this update.')
+    expect(text).not.toContain('Nothing is waiting for a reply from this update.')
+    expect(text).not.toContain('Worth a reply')
   })
 })
 
@@ -906,23 +919,28 @@ describe('the weekly subjects block under the three calibration states (decision
     for (const mode of MODES) assertCopyContract(render(weeklySubjectsBlock.render(data, mode, ctx)))
   })
 
-  it('a failed subject prints its name and word and nothing else; a provisional one has no "you" clause', () => {
+  // T0a (WR-15; ruling U6): a subject that is not ready, failed or
+  // provisional, prints its name and nothing resting on its matching: no
+  // figure, no word, no "you" clause.
+  it('a failed or provisional subject prints its name and nothing else', () => {
     // Waterproofing read as never checked, on the same staging row.
     const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
     for (const mode of MODES) {
       const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
-      expect(text.match(/being re-described/g)?.length).toBe(1)
+      expect(text).toContain('Repair & warranty')
+      expect(text).not.toContain('being re-described')
       expect(text).not.toContain('33 of 625')
       const provisional = renderText(weeklySubjectsBlock.render(unchecked, mode, ctx))
-      expect(provisional.match(/provisional/g)?.length).toBe(1)
-      expect(provisional.slice(provisional.indexOf('Waterproofing'))).not.toMatch(/\byou\b/)
+      expect(provisional).toContain('Waterproofing')
+      expect(provisional).not.toContain('provisional')
+      expect(provisional).not.toContain('28 of 625')
     }
   })
 
-  it('marks a provisional subject\'s figure in its figure table (WP1.1 review, finding 10)', () => {
+  it('declares no figure for a provisional subject, and a ready one\'s unmarked (WP1.1 review, finding 10; T0a)', () => {
     const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
     const figures = weeklySubjectsBlock.figures!(unchecked)
-    expect(figures.subject_water_share.label).toContain('(provisional)')
+    expect(Object.keys(figures).filter((k) => k.startsWith('subject_water'))).toEqual([])
     expect(figures.subject_looks_share.label).not.toContain('provisional')
   })
 
@@ -934,8 +952,11 @@ describe('the weekly subjects block under the three calibration states (decision
   })
 
   it('a subject the month was not read for prints its name and "no reading yet", and no figure (WP1.1 review, finding 1; default M-a)', () => {
+    // HYPOTHETICAL: Community & purpose checked and ready (it has no check on
+    // staging, and a provisional subject prints its name alone, T0a).
+    const ready = { ...data, subjects: { ...data.subjects, rows: data.subjects.rows.map((r) => (r.id === 'community' ? { ...r, calibration: 'ready' as const } : r)) } }
     for (const mode of MODES) {
-      const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
+      const text = renderText(weeklySubjectsBlock.render(ready, mode, ctx))
       const row = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
       expect(row).toContain('no reading yet')
       expect(row).not.toMatch(/\d+ of \d+/)

@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, brokenStepChip, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
+  axisLabels, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
   figureLines, lastReading, legendEveryMonth, legendMonths, legendStates, lineSegments, MIN_CHART_MONTHS,
   monthColumns, spanOf, spreadLabels, STATE_LABEL, undrawnLine, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
+  sinceLatestBreak,
 } from '@/lib/charts/calendar'
 
 // The calendar-spaced line (Phase 1 WP10, design item 6, decisions L, M, U).
@@ -145,11 +145,14 @@ export function niceTop(max: number, hi: number): number | null {
 }
 
 export function CalendarLine({
-  axis, series: given, rules = [], bands = [], format = (v) => `${v}`,
+  axis, series: givenSeries, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
   zeroBase = true, legend = true, maxLabels = 12, endLabels = true,
-  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS,
+  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS, scaleTo,
 }: {
+  /** The value the scale reaches at least: a caller drawing two charts on one
+   *  scale passes both charts' largest value (T0a, BR-38). */
+  scaleTo?: number
   /** Every month to draw, ascending — `monthAxis(from, to)`. */
   axis: readonly string[]
   series: readonly CalendarSeries[]
@@ -206,7 +209,13 @@ export function CalendarLine({
    *  under it the chart prints the figures instead (`MIN_CHART_MONTHS`). */
   minMonths?: number
 }) {
-  const months = axis.map((m) => m)
+  // NOTHING ACROSS A REFUSED STEP (T0a; the one condition): each series is
+  // drawn from its latest refused step on, and the axis from the earliest
+  // month still drawn (`sinceLatestBreak`). A stored series from before the
+  // rule carries its refusals too, and draws under it.
+  const trimmed = sinceLatestBreak(axis, givenSeries)
+  const months = trimmed.axis
+  const given = trimmed.series
   if (!months.length || !given.length) return null
 
   // TOO FEW MONTHS FOR A LINE (2026-09-24). One or two dots under a line
@@ -222,9 +231,6 @@ export function CalendarLine({
   // printed over each other. They are named once, in `undrawnLine`.
   const series = given.filter(drawsLine)
   const missing = undrawnLine(given)
-  // WHY A STEP IS NOT JOINED (WP1.3; the lead's R11): one chip under the plot,
-  // true of every refused step. Each step's own reason is on its hover.
-  const joinsChip = brokenStepChip(series)
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
   // THE GUTTER TRACK, AND WHY IT IS NOT FIVE UNITS LOWER (SH14, amended at the
@@ -251,7 +257,7 @@ export function CalendarLine({
   // spans 183.5-188.5 and at k=2.6 about 185-187: below the baseline, which is
   // SH14's point, and clear of the labels, which is this.
   const gutterY = g.gutterY
-  const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
+  const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline, atLeast: scaleTo })
   // The same values `valueScale` measures its top from.
   const plotted: number[] = []
   for (const sr of series) for (const pt of sr.points) {
@@ -517,7 +523,6 @@ export function CalendarLine({
         ))}
       </svg>
 
-      <PairChip words={joinsChip} mode="app" />
       {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
     </div>
   )

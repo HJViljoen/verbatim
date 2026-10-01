@@ -56,8 +56,15 @@ export interface MarketKinds {
   /** The market's judged videos this month (the mood's n). */
   judged: number | null
   mood: MarketMoodRow[]
-  /** The month pair's one chip for the block (R3), or null. */
+  /** The market pair's refusal, or null. Data only: never printed (T0a). A
+   *  block that carries one carries no month before (`kindsPrev`). */
   chip: string | null
+}
+
+/** The month before as the block prints it: none where the market pair is
+ *  refused, on a block built today or stored before the rule (T0a). */
+export function kindsPrev(m: Pick<MarketKinds, 'prev' | 'chip'>): MarketKinds['prev'] {
+  return m.chip ? null : m.prev
 }
 
 type KindRowIn = { month: string; audience: string; kind: string; videos: number }
@@ -105,7 +112,11 @@ export function buildMarketKinds(input: {
   chip: string | null
 }): MarketKinds {
   const month = monthStartOf(input.month)
-  const prevMonth = input.prevMonth ? monthStartOf(input.prevMonth) : null
+  // A REFUSED PAIR CARRIES NO MONTH BEFORE (T0a, OV-38; the one condition):
+  // where the market pair is refused (`chip`), no kind or mood row holds an
+  // earlier count, no column names it, and a kind with no video this month
+  // is not listed on last month's strength.
+  const prevMonth = input.prevMonth && !input.chip ? monthStartOf(input.prevMonth) : null
   const audiences = new Set(marketAudiences(input.rivalAudiences))
   const kindRows = input.kindRows ?? []
   const readIn = (m: string): boolean => kindRows.some((r) => monthStartOf(r.month) === m && audiences.has(r.audience))

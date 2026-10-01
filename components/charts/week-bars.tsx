@@ -3,11 +3,11 @@ import type { ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import {
-  dueLabel, GAP_SECOND_LINE, weekBarsAriaLabel, weekPlotMin, weekBarsLayout, weekBarsTable, weekChangeSentence, weekDetail, weekName,
+  dueLabel, GAP_SECOND_LINE, weekBarsAriaLabel, weekPlotMin, weekBarsLayout, weekBarsTable, weekDetail, weekName,
   type WeekBarsLayout, type WeekBarsSize,
 } from '@/lib/charts/week-bars'
 import { dueHasPassed, firstComparisonDue, weekKindLabel, WEEK_LINE_EXCLUDED, WEEK_LINE_KINDS, type PendingWeekLine } from '@/lib/reading/week-line'
-import { isoWeekOf, weekRuleGroupOf, type WeekRule, type WeekVolume, type WeekVolumesBlock } from '@/lib/reading/weeks'
+import { isoWeekOf, weeksSinceOurChanges, type WeekVolume, type WeekVolumesBlock } from '@/lib/reading/weeks'
 import { WeekBarsHover } from './week-bars-hover'
 
 // The weekly volume bars (market-first decision M, part 1; WP2.9 "Design"),
@@ -37,10 +37,6 @@ import { WeekBarsHover } from './week-bars-hover'
 
 const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
 
-/** The changes the chart draws: our searches and our relevance check. A
- *  filing change moves no bar of the pooled market (decision E), so neither
- *  the marks, the key nor the text alternative names one. */
-const drawnRules = (rules: readonly WeekRule[]): WeekRule[] => rules.filter((r) => weekRuleGroupOf(r.surface) !== 'filing')
 const MONO = { fontFamily: 'var(--font-mono)' } as const
 /** A state word where the plot's slots are narrow (under 640px of plot):
  *  "filling" beside "filling" must not touch. */
@@ -55,17 +51,6 @@ export function ChangeMark({ mark, surface = 'tile' }: { mark: 'search' | 'other
   return mark === 'search'
     ? <path d="M0 0 l4.5 7.5 h-9 z" style={{ fill: 'var(--foreground)' }} />
     : <path d="M0 0.6 l4 6.4 h-8 z" style={{ fill: `var(--${surface})`, stroke: 'var(--foreground)', strokeWidth: 1.2, strokeLinejoin: 'round' }} />
-}
-
-/** The key's marks, as the preview draws them before its sentence. */
-function KeyMarks({ search, other }: { search: boolean; other: boolean }) {
-  const w = (search ? 11 : 0) + (other ? 11 : 0)
-  return (
-    <svg width={w} height={20} viewBox={`0 0 ${w} 20`} aria-hidden className="mt-0.5 flex-none">
-      {search ? <g transform="translate(4.5 5.5)"><ChangeMark mark="search" /></g> : null}
-      {other ? <g transform={`translate(${search ? 15.5 : 4.5} 5.5)`}><ChangeMark mark="other" /></g> : null}
-    </svg>
-  )
 }
 
 function Plot({ L, surface, ticks, label }: { L: WeekBarsLayout; surface: 'inner' | 'tile'; ticks: 'top' | 'row'; label: string }) {
@@ -175,21 +160,27 @@ function WeekBarsEmailTable({ weeks }: { weeks: readonly WeekVolume[] }) {
  * under the axis, the selected week's facts in a panel beside the chart).
  */
 export function WeekBars({ block, mode, variant, surface }: { block: WeekVolumesBlock; mode: RenderMode; variant: 'front' | 'week'; surface: 'inner' | 'tile' }) {
-  if (mode === 'email') return <WeekBarsEmailTable weeks={block.weeks} />
+  // THE BARS NEVER SPAN OUR CHANGES (T0a, mechanism 3): only the weeks read
+  // one way since our latest search or relevance change, with no week of
+  // nothing gathered and none counting videos let in before we checked
+  // relevance; and no marks, no key and no "Our changes" row. On a stored
+  // copy too. Nothing left: no chart.
+  const weeks = weeksSinceOurChanges(block.weeks, block.rules)
+  if (weeks.length === 0) return null
+  if (mode === 'email') return <WeekBarsEmailTable weeks={weeks} />
   const size: WeekBarsSize = variant === 'front' ? 'large' : 'medium'
   const ticks = variant === 'front' ? 'top' : 'row'
-  const rules = drawnRules(block.rules)
-  const L = weekBarsLayout(block.weeks, rules, { size, ticks })
-  const details = block.weeks.map(weekDetail)
+  const L = weekBarsLayout(weeks, [], { size, ticks })
+  const details = weeks.map(weekDetail)
   // THE PANEL'S DEFAULT WEEK: the latest one with anything gathered that is no
   // longer "so far" (the preview's week of 7 Sep), else the latest with any.
-  const withData = block.weeks.map((w, i) => ({ w, i })).filter((e) => e.w.state !== 'none_gathered' && e.w.videos > 0)
+  const withData = weeks.map((w, i) => ({ w, i })).filter((e) => e.w.state !== 'none_gathered' && e.w.videos > 0)
   const initial = (withData.filter((e) => e.w.state !== 'so_far').pop() ?? withData.pop())?.i ?? null
   return (
     <WeekBarsHover
       details={details}
       labels={<RowLabels L={L} sub={variant === 'front'} marks={ticks === 'row'} />}
-      plot={<Plot L={L} surface={surface} ticks={ticks} label={weekBarsAriaLabel(block.weeks, rules)} />}
+      plot={<Plot L={L} surface={surface} ticks={ticks} label={weekBarsAriaLabel(weeks, [])} />}
       height={L.height}
       minWidth={weekPlotMin(L.n)}
       slots={L.n}
@@ -199,23 +190,6 @@ export function WeekBars({ block, mode, variant, surface }: { block: WeekVolumes
       initial={initial}
       interactive={mode === 'app'}
     />
-  )
-}
-
-/** The key under the chart: our changes' marks and one sentence naming their
- *  days. Nothing where no change is on the chart. */
-export function WeekBarsKey({ block, mode }: { block: WeekVolumesBlock; mode: RenderMode }) {
-  const sentence = weekChangeSentence(drawnRules(block.rules))
-  if (!sentence) return null
-  if (mode === 'email') return <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.ink2, marginTop: 8 }}>{sentence}</div>
-  const L = weekBarsLayout(block.weeks, drawnRules(block.rules), { size: 'large', ticks: 'top' })
-  const search = L.ticks.some((t) => t.mark === 'search')
-  const other = L.ticks.some((t) => t.mark === 'other')
-  return (
-    <div className="flex gap-3 pt-2">
-      <KeyMarks search={search} other={other} />
-      <p className="m-0 text-[15px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]">{sentence}</p>
-    </div>
   )
 }
 

@@ -22,6 +22,11 @@ const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 const text = (node: React.ReactNode) => renderText(node).replace(/\s+/g, ' ')
 
+/** HYPOTHETICAL: production's page with Waterproofing checked and ready, as on
+ *  staging. On production it is provisional, and its line is withheld (T0a,
+ *  OV-49; ruling U6). */
+const readyFront = (): OverviewData => marketFrontFixture({ subjectsCalibration: 'staging' })
+
 /** Staging's page on 11 Oct (read with the 20 Sep update): Waterproofing's
  *  16 question videos against Sealand's 56 posts from July to September, and
  *  the lead "Price and sale questions" against its 20 September posts; none
@@ -51,21 +56,34 @@ describe('What it means for you (overview.foryou)', () => {
     }
   })
 
-  it('prints Waterproofing, provisional, 16 videos over the last 3 months, and 0 of your 56 posts (GR F24)', () => {
-    const t = text(overviewForYou.render(marketFrontFixture(), 'app', ctx))
+  // T0a (OV-49; ruling U6): a provisional subject's asked-count rests on its
+  // unverified matching. Its line goes, and with nothing left the block is
+  // omitted, never "no subject was asked about".
+  it('omits the block where its only line rests on a provisional subject', () => {
+    for (const mode of MODES) expect(text(overviewForYou.render(marketFrontFixture(), mode, ctx)), mode).toBe('')
+    expect(overviewForYou.emptyState(marketFrontFixture())).toBeNull()
+    expect(blockAnswers(overviewForYou, marketFrontFixture()).figures).toEqual({})
+    // A copy stored before the rule, with the provisional line in it, too.
+    const stored = { ...marketFrontFixture(), foryou: { ...readyFront().foryou!, lines: readyFront().foryou!.lines.map((l) => ({ ...l, calibration: 'provisional' as const })) } }
+    expect(text(overviewForYou.render(stored, 'app', ctx))).toBe('')
+  })
+
+  it('prints Waterproofing, 16 videos over the last 3 months, and 0 of your 56 posts (GR F24), where it is ready', () => {
+    const t = text(overviewForYou.render(readyFront(), 'app', ctx))
     expect(t).toContain(FOR_YOU_TITLE)
-    expect(t).toContain('Waterproofing provisional')
+    expect(t).toContain('Waterproofing')
+    expect(t).not.toContain('provisional')
     expect(t).toContain('16 videos your market asked about it, over the last 3 months')
     // Walkthrough B8: what a post did, not the test it passed; the words
     // looked for ride as a tooltip in the app.
     expect(t).toContain('0 of your 56 posts touched on it, in that time')
     expect(t).not.toContain('shared two or more of its words')
     expect(t).not.toContain('checked:')
-    expect(render(overviewForYou.render(marketFrontFixture(), 'app', ctx))).toContain('We looked in your posts for: waterproofing, zippers, rain, coated, …')
+    expect(render(overviewForYou.render(readyFront(), 'app', ctx))).toContain('We looked in your posts for: waterproofing, zippers, rain, coated, …')
   })
 
   it('writes the same line as a sentence on paper and in an email', () => {
-    const t = text(overviewForYou.render(marketFrontFixture(), 'email', ctx))
+    const t = text(overviewForYou.render(readyFront(), 'email', ctx))
     expect(t).toContain('Your market asked about it on 16 videos over the last 3 months. None of your 56 posts in that time shared two or more of its words.')
   })
 
@@ -82,7 +100,7 @@ describe('What it means for you (overview.foryou)', () => {
   })
 
   it('names the posts a line matched on, where one did', () => {
-    const data = marketFrontFixture()
+    const data = readyFront()
     const line = { ...data.foryou!.lines[0], sentenceKey: 'foryou.unanswered.some', matchedPosts: [{ id: 'p1', words: ['zippers', 'rain'], postedOn: '2026-09-03' }], figures: { ...data.foryou!.lines[0].figures, foryou_touched: { value: 1, unit: 'videos' as const, label: 'x' } } }
     const t = text(overviewForYou.render({ ...data, foryou: { ...data.foryou!, lines: [line] } }, 'app', ctx))
     expect(t).toContain('1 of your 56 posts')
@@ -107,7 +125,9 @@ describe('What it means for you (overview.foryou)', () => {
     const f = buildForYou({
       month: '2026-09-01',
       questions: {
-        subject: { id: 's-buying', name: 'Buying & delivery', calibration: 'provisional' },
+        // HYPOTHETICAL `ready` (it is provisional on production, and T0a
+        // withholds a provisional subject's line).
+        subject: { id: 's-buying', name: 'Buying & delivery', calibration: 'ready' },
         asked: 79,
         posts: 61,
         sharing: { checked: ['shipping', 'availability'], matched: phrases.map((words, i) => ({ id: `p${i}`, words, postedOn: days[i] })) },
@@ -146,7 +166,7 @@ describe('What it means for you (overview.foryou)', () => {
   })
 
   it('prints no "you" column, no direction word and no advice; its footer names Your moves by its label', () => {
-    const t = text(overviewForYou.render(marketFrontFixture(), 'app', ctx))
+    const t = text(overviewForYou.render(readyFront(), 'app', ctx))
     expect(t).toContain(`Open ${surface('market').label} →`)
     for (const w of ['growing', 'fading', 'rising', 'you should', 'Add a']) expect(t.toLowerCase()).not.toContain(w.toLowerCase())
   })
@@ -200,12 +220,13 @@ describe('the monthly\'s "What it means for you" section (monthly.you, WP2.5 fil
     expect(monthlySlotsFrom(overviewFixture()).you.state).toBe('stub')
   })
 
-  it('prints the line\'s head, its sentence and the words checked, and the census', () => {
+  it('prints the line\'s head, its sentence and the words checked, and the census, where the subject is ready', () => {
     const data = monthlyFixture()
-    const filled = { ...data, slots: { ...data.slots, you: monthlySlotsFrom(marketFrontFixture()).you } }
+    const filled = { ...data, slots: { ...data.slots, you: monthlySlotsFrom(readyFront()).you } }
     for (const mode of MODES) {
       const t = text(monthlyYou.render(filled, mode, ctx))
-      expect(t, mode).toContain('Waterproofing · provisional')
+      expect(t, mode).toContain('Waterproofing')
+      expect(t, mode).not.toContain('provisional')
       expect(t, mode).toContain('None of your 56 posts in that time shared two or more of its words.')
       expect(t, mode).toContain('waterproofing · zippers · rain · coated · …')
       expect(t, mode).toContain('234 comments')

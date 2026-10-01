@@ -276,8 +276,9 @@ describe('the leadership one-pager', () => {
     // Looks & style and Waterproofing ready and refused, Repair & warranty
     // failed, Community & purpose unread.
     expect(calibrationOverviewFixture().subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 54])
-    // Waterproofing provisional (never checked): its cells hold no sentence.
-    expect(calibrationOverviewFixture({ unchecked: ['water'] }).subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 41])
+    // Waterproofing provisional (never checked): its name alone, one line, as
+    // a failed row (T0a, DB-7; ruling U6).
+    expect(calibrationOverviewFixture({ unchecked: ['water'] }).subjects.rows.map(sheetRowPx)).toEqual([54, 21, 21, 21])
     // Staging at 2 Oct: seven rows, a caveat. Charged what they measure, three
     // rows, the truncation line and the caveat (54 + 21 + 54 + 18 + 18 = 165).
     expect(sheetSubjectRows(7, 1, [54, 21, 54, 54, 54, 54, 21])).toBe(3)
@@ -572,16 +573,19 @@ describe('the leadership sheet under the three calibration states (decision C, W
     expect(leadSubject(rows.filter((r) => r.calibration !== 'ready'))).toBeNull()
   })
 
-  it('keeps the calibration word out of the truncating name, so it is never the part cut off', () => {
+  // T0a (ruling U6): a subject that is not ready prints its name and no
+  // calibration word; the name still truncates on its own line.
+  it('prints a failed or provisional subject by its truncating name, with no calibration word', () => {
     const markup = render(sheet(calibrationOverviewFixture()))
-    // The name truncates on its own line; the word is a sibling, not inside it.
     expect(markup).toContain('<span class="block truncate">Repair &amp; warranty</span>')
     expect(markup).toContain('<span class="block truncate">Community &amp; purpose</span>')
-    expect(markupText(markup)).toContain('being re-described')
+    expect(markupText(markup)).not.toContain('being re-described')
     // Community & purpose was never read (WP1.1 review, finding 1): its words
     // say so, in the word's place ("no reading yet", default M-a).
     expect(markupText(markup)).toContain('no reading yet')
-    expect(markupText(render(sheet(calibrationOverviewFixture({ unchecked: ['water'] }))))).toContain('provisional')
+    const unchecked = markupText(render(sheet(calibrationOverviewFixture({ unchecked: ['water'] }))))
+    expect(unchecked).not.toContain('provisional')
+    expect(unchecked).not.toContain('28 of 625')
   })
 
   it('a failed row is its name and its word, with no dash in each column', () => {

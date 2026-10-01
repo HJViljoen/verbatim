@@ -1,5 +1,5 @@
 import { SparkHover } from './spark-hover'
-import { lineSegments } from '@/lib/charts/calendar'
+import { lineSegments, valuesSinceBreak } from '@/lib/charts/calendar'
 
 // Server-rendered SVG sparkline — the smallest chart that works. The line
 // traces in once on mount (CSS, reduced-motion aware). With `hover`, a thin
@@ -33,7 +33,7 @@ import { lineSegments } from '@/lib/charts/calendar'
 // not own — Overview's subjects column and the sales deck's `DeckSpark` are
 // the two callers the finding names, and they are `main`'s and `sales`'.
 export function Sparkline({
-  values, color = 'var(--primary)', width = 90, height = 26, fill = false, endDot = true, strokeWidth = 1.5, animate = true, hover, domain, zeroBase = false, rule = false, breaks, className,
+  values: givenValues, color = 'var(--primary)', width = 90, height = 26, fill = false, endDot = true, strokeWidth = 1.5, animate = true, hover, domain, zeroBase = false, rule = false, breaks: givenBreaks, className,
 }: {
   values: (number | null)[]
   /** A REFUSED STEP IS DRAWN BROKEN (market-first decision D, WP1.3). One entry
@@ -64,6 +64,10 @@ export function Sparkline({
   rule?: boolean
   className?: string
 }) {
+  // NOTHING BEFORE THE LATEST REFUSED STEP (T0a; the one condition): those
+  // slots are gaps, so no dot sits beside a month the judge refused to compare
+  // it with (`valuesSinceBreak`).
+  const values = valuesSinceBreak(givenValues, givenBreaks)
   if (values.length === 0) return null
   const drawn = values.filter((v): v is number => v != null)
   if (drawn.length === 0) return null
@@ -73,7 +77,7 @@ export function Sparkline({
   const n = values.length
   const xs = values.map((_, i) => (n === 1 ? width / 2 : 2 + (i * (width - 4)) / (n - 1)))
   const ys = values.map((v) => (v == null ? null : Math.min(height - 3, Math.max(3, height - 3 - ((v - lo) / rng) * (height - 6)))))
-  const runs = lineSegments(values.map((v, i) => ({ month: `${i}`, value: v, state: 'read' as const, ...(breaks?.[i] ? { brokenBefore: 'refused' } : {}) })))
+  const runs = lineSegments(values.map((v, i) => ({ month: `${i}`, value: v, state: 'read' as const })))
   const last = runs[runs.length - 1][runs[runs.length - 1].length - 1]
   const whole = runs.length === 1 && runs[0].length === n
   const pointsOf = (run: number[]) => run.map((i) => `${xs[i].toFixed(1)},${(ys[i] as number).toFixed(1)}`).join(' ')

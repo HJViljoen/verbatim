@@ -3,7 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
-import { earnsVerdict, isFailed, printsClient, withheldLabel } from '@/lib/subjects/calibration-state'
+import { earnsVerdict, isFailed, printsClient, printsMarket, withheldLabel } from '@/lib/subjects/calibration-state'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -62,6 +62,20 @@ import { Card, ChartEndings, Column, Columns, Eyebrow, Note, NotDrawn, TableHead
 /** The mock's `116px 136px 136px 126px 125px`, as ratios, so the table is
  *  fluid inside the 8fr column instead of overflowing a narrower one. */
 const TEMPLATE = 'minmax(0,116fr) minmax(0,136fr) minmax(0,136fr) minmax(0,126fr) minmax(0,125fr)'
+/** The table without its two quarter columns (`quarterColumnsShown`). */
+const MONTH_TEMPLATE = 'minmax(0,116fr) minmax(0,136fr) minmax(0,136fr)'
+
+/**
+ * Do the two quarter columns print? Not where every quarter comparison on the
+ * page is refused (T0a review, finding 5; the one condition): the pair judge
+ * refused the quarter pair, each cell would be empty, and a column headed
+ * "Q2 → Q3" over nothing is the comparison's frame with the reason taken out.
+ * The columns and the sentence naming them go; the month's two stay.
+ */
+export function quarterColumnsShown(rows: readonly Pick<SubjectsPage['rows'][number], 'youQuarter' | 'categoryQuarter'>[]): boolean {
+  const drawn = rows.flatMap((r) => [r.youQuarter, r.categoryQuarter]).filter((v) => v != null)
+  return drawn.length === 0 || drawn.some((v) => v!.state !== 'refused')
+}
 
 function Side({ side, mode }: { side: SubjectQuarterRow['you']; mode: RenderMode }): ReactNode {
   if (!side) {
@@ -128,28 +142,32 @@ export const quarterlySubjects: Block<QuarterlyData> = {
     const voices = s.quotes.filter(hasQuote)
     const series = s.line ? lineSeries(s.line, data.monthStatus === 'filling' ? data.month : null) : []
 
+    const quarterly = quarterColumnsShown(s.rows)
+    const template = quarterly ? TEMPLATE : MONTH_TEMPLATE
+    const columns = (cells: ReactNode[]): ReactNode[] => (quarterly ? cells : cells.slice(0, 3))
     const table = (
       <Column mode={mode} gap={0}>
         <TableHead
           mode={mode}
-          template={TEMPLATE}
-          cells={[
+          template={template}
+          cells={columns([
             'Subject',
             `You, ${s.monthLabel}`,
             `${data.category.label}, ${s.monthLabel}`,
             `${data.category.label} ${quarterLabel(data.prior, false)} → ${quarterLabel(data.quarter, false)}`,
             `You ${quarterLabel(data.prior, false)} → ${quarterLabel(data.quarter, false)}`,
-          ]}
+          ])}
         />
         {s.rows.map((row) => (
           <TableRow
             key={row.id}
             mode={mode}
-            template={TEMPLATE}
-            cells={isFailed(row.calibration)
+            template={template}
+            cells={columns(isFailed(row.calibration) || !printsMarket(row.calibration)
               // A FAILED ROW IS ITS NAME AND ITS WORD (decision C, design
               // pass): no dash in each column and no "not compared", which is
-              // the refusal's word for a pair and not what happened here.
+              // the refusal's word for a pair and not what happened here. SO
+              // IS A PROVISIONAL ONE (T0a, QR-9; ruling U6): its name alone.
               ? [
                 <div key="name" style={email ? { color: EMAIL.muted } : undefined} className={email ? undefined : 'text-muted-foreground'}>{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></div>,
                 <span key="you" />, <span key="cat" />, <span key="catq" />, <span key="youq" />,
@@ -173,7 +191,7 @@ export const quarterlySubjects: Block<QuarterlyData> = {
                 : row.youQuarter
                   ? <BlockMovement key="youq" verdict={row.youQuarter} unit="pts" mode={mode} />
                   : <NotDrawn key="youq" mode={mode} />,
-            ]}
+            ])}
           />
         ))}
         {/* `qr.p3.rules` · the build's four rule sentences, kept. The mock's
@@ -183,7 +201,9 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             — and is recorded as a deviation rather than invented here. */}
         <div className={email ? undefined : 'mt-2'}>
           <Note mode={mode}>
-            The first two columns are {s.monthLabel} on its own. The last two are this quarter against the one before it.
+            {quarterly
+              ? <>The first two columns are {s.monthLabel} on its own. The last two are this quarter against the one before it.</>
+              : <>Both columns are {s.monthLabel} on its own.</>}
             {s.monthNote ? ` ${s.monthNote}` : ''}
           </Note>
           {s.note ? <Note mode={mode}>{s.note}</Note> : null}

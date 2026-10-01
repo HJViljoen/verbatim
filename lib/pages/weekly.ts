@@ -14,11 +14,12 @@ import type { ForSalesData } from '../blocks/for-sales'
 import type { MethodLines } from '../reading/method'
 import { countRefused } from '../reading/record'
 import type { Verdict } from '../reading/verdicts'
-import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock, type WeeklyHeadline } from './overview'
+import { loadOverview, addedSearchesRead, audienceInLabel, daysInto, isMissingAnomalyFlags, loadThemesProvenance, type Mover, type OverviewData, type SubjectsBlock, type WeeklyHeadline } from './overview'
+import { searchInflated } from './overview-market/board'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import { buildSales, loadSubjectQuotes, loadSubjects, marketSubjectArrivals, workedLabel } from './week'
 import { loadMarketRivalAudiences } from '../reading/reading-view'
-import { earnsVerdict } from '../subjects/calibration-state'
+import { earnsVerdict, printsMarket } from '../subjects/calibration-state'
 import {
   CONTRIBUTIONS_NOT_RECORDED,
   periodNounFor,
@@ -67,6 +68,10 @@ export interface IncomingBlock {
    *  slice above. Never null: the read either answers or the block is empty. */
   newThemesTotal: number
   newThemesNote: string | null
+  /** Themes first heard that our new searches found were left out (T0a,
+   *  mechanism 4). Where none is left, the count is not printed at all, never
+   *  "no theme was heard for the first time". Absent on a stored copy. */
+  newThemesWithheld?: boolean
   rivalPosts: RivalPost[]
   rivalPostsNote: string | null
   /**
@@ -387,8 +392,16 @@ export function headlineObject(data: OverviewData): {
   k: number
   n: number
   atLastMonth: { k: number; n: number } | null
+  comparable: boolean
 } | null {
   const lead = weeklyHeadline(data).lead
+  // THE CLAUSE ABOUT LAST MONTH ONLY WHERE THE PAIR JUDGE ALLOWS IT (T0a,
+  // WR-10). The headline is always on the category, and the page's own judge
+  // answered the category's month pair (`sentence.monthPair`, the themes
+  // view). Refused, and no "against … at this point in August" prints: once
+  // the window tables fill, that clause would otherwise be the one comparison
+  // on the page nothing judged.
+  const comparable = data.sentence.monthPair?.mode !== 'refuse'
   if (lead) {
     const row = data.subjects.rows.find((r) => r.id === lead.objectId)
     // ONE DENOMINATOR, OR NO COMPARISON. `SubjectRow.categoryAtLastMonth` is
@@ -408,7 +421,8 @@ export function headlineObject(data: OverviewData): {
       audience: audienceInLabel(lead.audience),
       k: lead.value.k,
       n: lead.value.n,
-      atLastMonth: last ? { k: last.k, n: last.n } : null,
+      atLastMonth: comparable && last ? { k: last.k, n: last.n } : null,
+      comparable,
     }
   }
   // NEVER A PROVISIONAL OR FAILED SUBJECT (decision C, WP1.1): neither may be
@@ -424,12 +438,13 @@ export function headlineObject(data: OverviewData): {
       audience: 'the category',
       k: best.category.k ?? 0,
       n: best.category.n ?? 0,
-      atLastMonth: best.categoryAtLastMonth ? { k: best.categoryAtLastMonth.k, n: best.categoryAtLastMonth.n } : null,
+      atLastMonth: comparable && best.categoryAtLastMonth ? { k: best.categoryAtLastMonth.k, n: best.categoryAtLastMonth.n } : null,
+      comparable,
     }
   }
   const top = [...data.category.growing, ...data.category.fading].sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))[0]
   if (top) {
-    return { label: top.label, objectId: top.id, audience: 'the category', k: top.k, n: top.n, atLastMonth: null }
+    return { label: top.label, objectId: top.id, audience: 'the category', k: top.k, n: top.n, atLastMonth: null, comparable }
   }
   return null
 }
@@ -802,7 +817,8 @@ async function subjectArrivals(
   window: { from: string; to: string } | null,
   month: string,
 ): Promise<Record<string, number> | null> {
-  const rowsOut = subjects.rows.filter((r) => r.calibration !== 'failed' && !r.unread)
+  // Only a ready subject's arrivals (T0a, ruling U6).
+  const rowsOut = subjects.rows.filter((r) => printsMarket(r.calibration) && !r.unread)
   if (rowsOut.length === 0 || !window) return null
   try {
     const rivals = await loadMarketRivalAudiences(scope.supabase as SupabaseClient, scope.clientId)
@@ -921,7 +937,7 @@ async function loadIncoming(
           .eq('run_id', run.id),
       ),
     ),
-    newThemesOf(supabase, clientId, run.id),
+    newThemesOf(supabase, clientId, run.id, overview.month),
     // THE WINDOW IS THE COMMENT'S CLOCK, NOT THE RUN'S. "New quotes on your
     // subjects" means comments WRITTEN in the days this update covered — an
     // insight this update wrote out of a March comment is March's. With no
@@ -986,7 +1002,8 @@ async function loadIncoming(
     monthVideos: overview.bar.videos,
     newThemes: themes.shown,
     newThemesTotal: themes.total,
-    newThemesNote: themes.total > 0 ? null : 'No theme was heard for the first time in this update.',
+    newThemesNote: themes.total > 0 || themes.withheld ? null : 'No theme was heard for the first time in this update.',
+    ...(themes.withheld ? { newThemesWithheld: true } : {}),
     rivalPosts,
     rivalPostsNote: rivalPosts.length > 0 ? null : 'No tracked rival posted in this update’s window.',
     quotes: subjectQuotes.shown.slice(0, INCOMING_QUOTES),
@@ -1073,7 +1090,8 @@ async function newThemesOf(
   supabase: SupabaseClient,
   clientId: string,
   runId: string,
-): Promise<{ shown: { label: string; videos: number }[]; total: number }> {
+  month: string,
+): Promise<{ shown: { label: string; videos: number }[]; total: number; withheld?: boolean }> {
   const obsRes = await supabase
     .from('theme_observations')
     .select('theme_id, label')
@@ -1091,7 +1109,14 @@ async function newThemesOf(
   for (const t of rows<{ registry_id: string | null; supporting_video_ids: string[] | null }>(videosRes, 'weekly.newThemeVideos')) {
     if (t.registry_id) byRegistry.set(t.registry_id, (t.supporting_video_ids ?? []).length)
   }
-  const counted = observed
+  // NOT A THEME OUR NEW SEARCHES FOUND (T0a, mechanism 4; WR-24): a third or
+  // more of its month's videos from searches first run that month is our
+  // search, not new talk, so it is neither listed nor counted. A read that
+  // fails measures nothing and keeps the theme, as the front page does.
+  const provenance = await loadThemesProvenance(supabase, clientId, month, observed.map((o) => o.theme_id), addedSearchesRead(supabase, clientId, month))
+    .catch(() => new Map<string, { fromNewSearches: number; of: number } | null>())
+  const kept = observed.filter((o) => !searchInflated(provenance.get(o.theme_id)))
+  const counted = kept
     .map((o) => ({ label: o.label, videos: byRegistry.get(o.theme_id) ?? 0 }))
     // A theme whose membership this run did not retain cannot be stated in
     // videos, and "heard for the first time, in 0 videos" is not a sentence.
@@ -1099,7 +1124,7 @@ async function newThemesOf(
     // a count of the same things the cards are.
     .filter((t) => t.videos > 0)
     .sort((a, b) => b.videos - a.videos)
-  return { shown: counted.slice(0, NEW_THEMES_SHOWN), total: counted.length }
+  return { shown: counted.slice(0, NEW_THEMES_SHOWN), total: counted.length, withheld: kept.length < observed.length }
 }
 
 // ---- section 5 ----------------------------------------------------------------

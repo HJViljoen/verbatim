@@ -1,7 +1,7 @@
 import { makerWords } from '../pages/overview-market/board'
 import type { AsksBlock, MarketTheme, ThemeBoard } from '../pages/overview-market/board'
 import type { HeroLead } from '../pages/overview-market/hero'
-import { CALIBRATION_WORDS, type SubjectCalibration } from '../subjects/calibration-state'
+import type { SubjectCalibration } from '../subjects/calibration-state'
 
 /**
  * Ask's starter questions, written by code from the front page's biggest
@@ -133,17 +133,16 @@ export function starterQuestions(input: StarterInput): StarterQuestion[] {
   const wishes = listOf('feature_request').slice(0, 2)
   if (wishes.length) push('What does my market wish for?', wishes.map((r) => themeRow({ ...r, makerShare: shareOf(r.registryId) })))
 
-  // The biggest subject on the market, in Subjects' own wording. A failed one
-  // is being re-described and is never offered (decision C).
+  // The biggest subject on the market, in Subjects' own wording. ONLY A READY
+  // ONE (T0a, AK-4; ruling U6): a provisional subject's count, its rank and
+  // its maker share all rest on its unverified matching, and a failed one is
+  // being re-described.
   const subject = [...(input.subjects ?? [])]
-    .filter((s) => s.calibration !== 'failed' && s.market?.k != null && s.market.k > 0)
+    .filter((s) => s.calibration === 'ready' && s.market?.k != null && s.market.k > 0)
     .sort((a, b) => (b.market?.k ?? 0) - (a.market?.k ?? 0))[0]
   if (subject) {
     const maker = makerWords(subject.makerShare)
-    const tags = [
-      ...(subject.calibration === 'provisional' ? [CALIBRATION_WORDS.provisional] : []),
-      ...(maker ? [maker] : []),
-    ]
+    const tags = [...(maker ? [maker] : [])]
     push(`What does my market say about ${subject.label}?`, [{ kind: 'subject', label: `${subject.label}, a subject`, k: subject.market?.k ?? 0, tags }])
   }
   return out.slice(0, STARTERS_SHOWN)

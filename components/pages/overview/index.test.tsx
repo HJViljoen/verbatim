@@ -65,7 +65,15 @@ describe('the Overview’s blocks', () => {
     for (const data of [overviewFixture(), refusedFixture(), marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture()]) {
       for (const block of OVERVIEW_BLOCKS) {
         for (const mode of MODES) {
-          const markup = render(block.render(data, mode, ctx))
+          const node = block.render(data, mode, ctx)
+          // T0a: a block with nothing true left to print is omitted. The one
+          // that can be: What it means for you, where its only line rests on
+          // a provisional subject (production's Waterproofing).
+          if (node == null) {
+            expect(block.key, `${block.key}/${mode}`).toBe('overview.foryou')
+            continue
+          }
+          const markup = render(node)
           expect(markup.length).toBeGreaterThan(0)
           // No unsubstituted figure token ever reaches a reader — the defect
           // production found on an object id that begins with a digit.
@@ -161,10 +169,16 @@ describe('the Overview page', () => {
   // changed. OV0 is not a tile (Block D wave 3, M7); it keeps its place in
   // `OVERVIEW_BLOCKS` for the print slide and the email, which carry no bar.
   // OV5 comes back reworked as "What you published".
-  it('draws the page bar, Your market’s ten tiles and nothing else', () => {
+  // T0a: production's What it means for you has one line, on a provisional
+  // subject, so it is omitted, tile and all, and the subjects span the row.
+  it('draws the page bar, Your market’s ten tiles and nothing else, less a block with nothing true to print', () => {
     const markup = render(<OverviewPage data={marketFrontFixture()} />)
     expect(markup).toContain('Your market')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(10)
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(9)
+    expect(frontTile('overview.subjects', false, new Set(['overview.foryou'])).col).toBe(12)
+    expect(frontTile('overview.subjects', false).col).toBe(8)
+    const ready = render(<OverviewPage data={marketFrontFixture({ subjectsCalibration: 'staging' })} />)
+    expect((ready.match(/data-tile=""/g) ?? []).length).toBe(10)
     expect(TILE_BLOCKS.map((b) => b.key)).toEqual([
       'overview.sentence', 'overview.themes', 'overview.arrivals', 'overview.category', 'overview.asks',
       'overview.subjects', 'overview.foryou', 'overview.moves', 'overview.rivals', 'overview.change',
@@ -172,7 +186,8 @@ describe('the Overview page', () => {
     expect(markup).not.toContain('This month so far')
     const text = renderText(<OverviewPage data={marketFrontFixture()} />)
     expect(text).toContain('What you published')
-    expect(text).toContain('What it means for you')
+    expect(text).not.toContain('What it means for you')
+    expect(renderText(<OverviewPage data={marketFrontFixture({ subjectsCalibration: 'staging' })} />)).toContain('What it means for you')
     assertCopyContract(markup)
   })
 
@@ -182,9 +197,14 @@ describe('the Overview page', () => {
   // beside the brands; above xl every tile spans one row and the grid
   // stretches both tiles of a pair to it, each block's section filling its
   // tile with its footer last.
+  // Sealand with Waterproofing ready, as on staging, so all ten tiles draw;
+  // on production What it means for you is omitted and the subjects span the
+  // row (T0a).
   it('pairs the tiles as the preview does, one row a pair, both tiles of a pair stretched to one height', () => {
+    const production = [...render(<OverviewPage data={marketFrontFixture()} />).matchAll(/<section data-tile="" data-col="(\d+)"/g)].map((m) => Number(m[1]))
+    expect(production).toEqual([12, 12, 12, 12, 12, 12, 6, 6, 12])
     for (const [data, cols] of [
-      [marketFrontFixture(), { 'overview.subjects': 8, 'overview.foryou': 4, 'overview.moves': 6, 'overview.rivals': 6 }],
+      [marketFrontFixture({ subjectsCalibration: 'staging' }), { 'overview.subjects': 8, 'overview.foryou': 4, 'overview.moves': 6, 'overview.rivals': 6 }],
       [ossurFrontFixture(), { 'overview.subjects': 6, 'overview.foryou': 6, 'overview.moves': 6, 'overview.rivals': 6 }],
     ] as const) {
       const markup = render(<OverviewPage data={data} />)
@@ -218,7 +238,9 @@ describe('the Overview page', () => {
     expect(TILE_BLOCKS.map((b) => b.key)).toEqual([...FRONT_TILE_KEYS])
     const tiles = (markup: string) => [...markup.matchAll(/<section data-tile="" data-col="(\d+)" data-row="(\d+)"[^>]*class="([^"]*)"/g)]
       .map((m) => [m[1], m[2], /self-(start|center|end)/.test(m[3]), m[3].includes('xl:row-span-1')])
-    const page = tiles(render(<OverviewPage data={marketFrontFixture()} />))
+    // The page as drawn when every block has something to print (a block
+    // omitted on the data, T0a, is known only once the page has loaded).
+    const page = tiles(render(<OverviewPage data={marketFrontFixture({ subjectsCalibration: 'staging' })} />))
     const skeleton = tiles(render(<DashboardLoading />))
     expect(skeleton).toEqual(page)
     expect(skeleton.map((t) => t[0])).toEqual(['12', '12', '12', '12', '12', '8', '4', '6', '6', '12'])

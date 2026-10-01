@@ -5,7 +5,9 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
-import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { afterwardsFor, GROUNDED_BASIS } from '@/lib/reading/afterwards'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { marketClaimEcho } from '@/lib/reading/own-posts'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
@@ -95,7 +97,9 @@ describe('Market · every block, every mode, every state', () => {
     const reading = new Set(['market.questions', 'market.sayhear'])
     expect(figureCount(MARKET_BLOCKS.filter((b) => !reading.has(b.key)).map((b) => blockAnswers(b, sealandMovesFixture()).figures))).toBe(0)
     const q = blockAnswers(marketQuestions, sealandMovesFixture()).figures
-    expect(Object.values(q).map((f) => f.value)).toEqual([21, 20, 11, 16, 12, 11])
+    // The three question themes; no subject, since none is ready on
+    // production (T0a, YM-9; ruling U6).
+    expect(Object.values(q).map((f) => f.value)).toEqual([21, 20, 11])
     const sh = blockAnswers(marketSayHear, sealandMovesFixture()).figures
     expect(Object.values(sh).map((f) => f.value)).toEqual([25, 89, 0])
   })
@@ -340,14 +344,18 @@ describe('MK1 · what we concluded', () => {
     expect(text).not.toContain('Ordered by')
   })
 
-  it('counts the videos behind a conclusion out of the corpus it counted them over', () => {
+  // T0a (mechanism 6; YM-26): the count is every video read to date, and it
+  // says so on the count in market terms ("all time"), never as "157 of
+  // 1,699", which read as a share of this month.
+  it('says the videos behind a conclusion are all time, on the count itself', () => {
     // `distinctVideos` counts over the WHOLE corpus — Össur has 1,699 analysed
     // videos — and "301 videos behind it" under a heading reading "this month",
     // beside a Competitive surface saying September held 449, is a share of the
     // month that does not exist. The copy contract cannot catch it: the node is
     // a figure, and only a level must carry its "of N".
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('157 of 1,699 videos behind it')
+    expect(text).toContain('157 videos behind it, all time')
+    expect(text).not.toContain('157 of 1,699')
     // The basis sentence is said once on the page, on the advice table's
     // "Grounded in" header (copy de-clutter ruling C).
     expect(text).not.toContain('not over this month alone')
@@ -397,7 +405,9 @@ describe('MK2 · the ledger', () => {
   // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): a reading
   // refused for its month pair says "not compared" in its cell, and the chip
   // under the table says why, once, in every mode.
-  it('prints a month-pair refusal once, as the chip, and "not compared" in each refused cell', () => {
+  // T0a (YM-16; plan §0a, the one condition): a refused Afterwards is not
+  // shown and not explained: no chip, no "not compared", no sentence.
+  it('prints nothing for a month-pair refusal: no chip, no "not compared" and no sentence', () => {
     const data = marketFixture()
     const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
     const sentence = 'Not read as a change: we changed our searches in September.'
@@ -410,9 +420,12 @@ describe('MK2 · the ledger', () => {
     expect(rows.length).toBeGreaterThan(2)
     for (const mode of MODES) {
       const text = renderText(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, mode, ctx))
-      expect(text.split('not read as a change: we changed our searches in September').length - 1, mode).toBe(1)
+      expect(text, mode).not.toContain('not read as a change')
       expect(text, mode).not.toContain(sentence)
-      expect(text.split('not compared').length - 1, mode).toBe(rows.length - 1)
+      expect(text, mode).not.toContain('not compared')
+      expect(render(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, mode, ctx)), mode).not.toContain('data-pair-chip')
+      // The row that was not refused still says its own thing.
+      expect(text, mode).toContain('Not decided yet.')
     }
   })
 
@@ -426,7 +439,7 @@ describe('MK2 · the ledger', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(text).toContain('Recommendation')
     expect(text).toContain('First raised')
-    expect(text).toContain('Grounded in')
+    expect(text).toContain('Behind it, all time')
     expect(text).toContain('Afterwards')
     expect(text).toContain('Jun')
     expect(text).toContain('3 months')   // the age, stacked under the month
@@ -492,16 +505,64 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('in 2 months')
   })
 
-  it('never leaves the afterwards cell blank, and prints the clustering caveat beside the verdict', () => {
+  it('never leaves an undecided cell blank, and draws a like-for-like comparison with both sides and the band', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    // The drawn comparison: both sides, both denominators, the band, and the
-    // badge — which refuses, so no magnitude travels with it (D2).
+    // The drawn comparison (HYPOTHETICAL: one grouping on record): both sides,
+    // both denominators, the band, and the badge — which refuses, so no
+    // magnitude travels with it (D2). No grouping caveat: there is none.
     expect(text).toContain('21 of 130 videos in your audience')
     expect(text).toContain('too few to compare')
-    expect(text).toContain('like for like')
+    expect(text).not.toContain('like for like')
     // The two silences, each its own sentence rather than a dash.
     expect(text).toContain('Not decided yet.')
     expect(text).not.toMatch(/Afterwards\s+—/)
+  })
+
+  // NOT LIKE FOR LIKE, OR REFUSED, IS NOT SHOWN (T0a, YM-16; review findings 1
+  // and 4). The same row with its months as today's corpus holds them (no
+  // grouping on record), or stored as a reading whose verdict carries the
+  // flag, or across a pair the judge refused on thin data: the cell prints
+  // nothing, with no caveat, no reason, no badge and no month before.
+  it('draws nothing for a comparison across two groupings or a refused pair, in every mode, live or stored', () => {
+    const data = marketFixture()
+    const row = data.advice.rows.find((r) => r.lineageId === 'L-old')!
+    const drawn = row.afterwards
+    const refusedPair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    const variants = [
+      // Live: today's corpus, no grouping on record.
+      afterwardsFor({
+        pair: null, decidedAt: '2026-06-02T10:00:00.000Z', targetIds: ['reg-repair'], objectLabel: 'Repair & warranty',
+        series: [{ month: '2026-05-01', k: 9, n: 104 }, { month: '2026-07-01', k: 11, n: 118 }, { month: '2026-09-01', k: 21, n: 130 }],
+        audience: 'client',
+      }),
+      // Live: the review's own case, a May to September pair the judge refuses.
+      afterwardsFor({
+        pair: (prev, month) => pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))(prev, month, 'client'),
+        decidedAt: '2026-06-02T10:00:00.000Z', targetIds: ['reg-repair'], objectLabel: 'Repair & warranty',
+        series: [{ month: '2026-05-01', k: 9, n: 104, clusteringKey: 'k1' }, { month: '2026-07-01', k: 11, n: 118, clusteringKey: 'k1' }, { month: '2026-09-01', k: 21, n: 130, clusteringKey: 'k1' }],
+        audience: 'client',
+      }),
+      // Stored before T0a: a reading whose verdict carries the flag, or the
+      // refused pair's note on a thin verdict.
+      { ...drawn, verdict: { ...drawn.verdict!, flags: ['clustering_unknown' as const] } },
+      { ...drawn, verdict: { ...drawn.verdict!, pair: refusedPair } },
+    ]
+    for (const afterwards of variants) {
+      const rows = data.advice.rows.map((r) => (r.lineageId === 'L-old' ? { ...r, afterwards } : r))
+      const shown = { ...data, advice: { ...data.advice, rows } }
+      for (const mode of ['app', 'print', 'email'] as const) {
+        const text = renderText(marketAdvice.render(shown, mode, ctx))
+        expect(text, mode).not.toContain('21 of 130')
+        expect(text, mode).not.toContain('9 of 104')
+        expect(text, mode).not.toContain('May 2026')
+        expect(text, mode).not.toContain('like for like')
+        expect(text, mode).not.toContain('grouped')
+        expect(text, mode).not.toContain('We cannot read this one')
+        expect(text, mode).not.toContain('Not read as a change')
+        expect(text, mode).not.toContain('Afterwards, on every row')
+      }
+      expect(blockAnswers(marketAdvice, shown).verdicts).toHaveLength(0)
+    }
   })
 
   it('says the evidence is an earlier read rather than printing zero videos behind a row', () => {
@@ -575,18 +636,19 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/quarter/i)
   })
 
-  it('says the all-time basis once on the page: a tooltip on "Grounded in", printed once on paper', () => {
-    // Copy de-clutter ruling C: the basis is said once per surface. On screen
-    // it is the column header's tooltip; paper and email have no tooltip, so
-    // it prints once under the table. MK1 no longer restates it.
+  // T0a (mechanism 6; YM-14): the all-time basis is the count's own label,
+  // "Behind it, all time", in every mode, in market terms: no tooltip, and
+  // no note about "everything we have read for you".
+  it('says the all-time basis on the count’s own label in every mode, never as a tooltip or a note', () => {
     const app = render(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(app).toContain(`title="${GROUNDED_BASIS}"`)
+    expect(markupOf(app)).toContain(`Behind it, ${GROUNDED_BASIS}`)
+    expect(app).not.toContain('title="all time"')
     expect(app).not.toContain('How the Repeated column counts')
-    expect(markupOf(app)).not.toContain('Counted over everything we have read for you')
-    for (const mode of ['print', 'email'] as RenderMode[]) {
+    for (const mode of ['app', 'print', 'email'] as RenderMode[]) {
       const markup = render(marketAdvice.render(marketFixture(), mode, ctx))
       expect(markup).not.toContain('<details')
-      expect(markupOf(markup)).toContain('counted over everything we have read for you')
+      expect(markupOf(markup)).not.toContain('everything we have read for you')
+      expect(markupOf(markup), mode).toMatch(/[Bb]ehind it, all time/)
     }
     const mk1 = render(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(markupOf(mk1)).not.toContain('counted over everything we have read for you')
@@ -951,6 +1013,9 @@ describe('MK6 · plans re-checked', () => {
   it('says what a claim count is a count of, and what the floor is', () => {
     const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
     expect(text).toContain('not out of one month')
+    // T0a (mechanism 6; YM-34): a floor, never "k of n" over the all-time corpus.
+    expect(text).toMatch(/at least \d+ videos? we can show you a comment from/)
+    expect(text).not.toMatch(/\d+ of [\d,]+ videos we can show you/)
     // The hold is real since the walkthrough (item 5), and the card says how.
     expect(text).toContain('changes only when the evidence behind it does')
   })

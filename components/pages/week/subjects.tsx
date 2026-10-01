@@ -7,6 +7,7 @@ import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { monthPhrase, type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
@@ -57,11 +58,12 @@ export const weekSubjects: Block<WeekData> = {
   question: 'What did this update add to your market’s subjects?',
 
   render(data, mode = 'app', ctx) {
-    const s = data.subjects
     // BUILT ON THE MARKET (market-first WP2.7): the preview's table. A copy
     // stored before WP2.7 carries the client's own side and draws the strip
-    // it was sent with, below.
-    if (s.market) return renderMarket(data, mode, ctx.appUrl)
+    // it was sent with, below, less any subject that is not ready (T0a).
+    if (data.subjects.market) return renderMarket(data, mode, ctx.appUrl)
+    const split = splitRows(data.subjects)
+    const s = { ...data.subjects, rows: split.rows, withheld: split.withheld }
     const email = mode === 'email'
     const empty = weekSubjects.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/subjects`
@@ -263,7 +265,7 @@ function Withheld({ rows, email, strip }: { rows: NonNullable<WeekData['subjects
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>
         {rows.map((r, i) => (
-          <span key={r.id}>{i > 0 ? ' · ' : ''}{r.label} <CalibrationTag calibration={r.calibration} unread={r.unread} mode="email" /></span>
+          <span key={r.id}>{i > 0 ? ' · ' : ''}{r.label} <CalibrationTag calibration={r.calibration} unread={printsMarket(r.calibration) ? r.unread : null} mode="email" /></span>
         ))}
       </div>
     )
@@ -276,7 +278,7 @@ function Withheld({ rows, email, strip }: { rows: NonNullable<WeekData['subjects
         // hairline's pixel stay, so the text lands on the strip's x.
         <div key={r.id} className="flex min-w-0 flex-col gap-0.5 border-transparent xl:border-l xl:pl-4 xl:first:border-l-0 xl:first:pl-0">
           <span className="truncate text-[12.5px] font-medium text-muted-foreground" title={r.label}>{r.label}</span>
-          <CalibrationTag calibration={r.calibration} unread={r.unread} block />
+          <CalibrationTag calibration={r.calibration} unread={printsMarket(r.calibration) ? r.unread : null} block />
         </div>
       ))}
     </div>
@@ -365,10 +367,19 @@ const shareCell = (k: number | null, n: number | null): string => {
 
 const plus = (j: number | null): string => (j == null ? '·' : `+${fmtInt(j)}`)
 
+/** The rows that print figures, and the names that do not (T0a, WK-26;
+ *  ruling U6): a subject that is not ready is named with the withheld, on a
+ *  page built today and on a copy stored before the rule. */
+function splitRows(s: WeekData['subjects']): { rows: WeekData['subjects']['rows']; withheld: NonNullable<WeekData['subjects']['withheld']> } {
+  const rows = s.rows.filter((r) => printsMarket(r.calibration))
+  const named = s.rows.filter((r) => !printsMarket(r.calibration)).map((r) => ({ id: r.id, label: r.label, calibration: r.calibration ?? 'provisional' }))
+  return { rows, withheld: [...named, ...(s.withheld ?? [])] }
+}
+
 function marketFigures(data: WeekData): FigureTable {
   const out: FigureTable = {}
   const month = longMonth(data.subjects.month)
-  for (const r of data.subjects.rows) {
+  for (const r of splitRows(data.subjects).rows) {
     const side = r.market?.monthSoFar
     if (side?.k == null) continue
     const word = r.calibration === 'provisional' ? ' (provisional)' : ''
@@ -381,7 +392,8 @@ function marketFigures(data: WeekData): FigureTable {
 }
 
 function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
-  const s = data.subjects
+  const split = splitRows(data.subjects)
+  const s = { ...data.subjects, rows: split.rows, withheld: split.withheld }
   const n = s.market?.n ?? null
   const month = shortMonthName(s.market?.month ?? s.month)
   const nav = surface('subjects')
@@ -416,7 +428,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
           <tbody>
             {s.rows.map((r) => (
               <tr key={r.id}>
-                <td style={c}>{r.label}{r.calibration === 'provisional' ? <> <CalibrationTag calibration={r.calibration} mode={mode} /></> : null}{makerWords(r.makerShare ?? null) ? <div style={{ fontSize: 11.5, color: EMAIL.muted }}>{makerWords(r.makerShare ?? null)}</div> : null}</td>
+                <td style={c}>{r.label}{makerWords(r.makerShare ?? null) ? <div style={{ fontSize: 11.5, color: EMAIL.muted }}>{makerWords(r.makerShare ?? null)}</div> : null}</td>
                 <td style={num}><span data-copy="figure">{r.market?.monthSoFar.k != null ? fmtInt(r.market.monthSoFar.k) : '·'}</span></td>
                 <td style={num}><span data-copy="figure">{shareCell(r.market?.monthSoFar.k ?? null, n)}</span></td>
                 <td style={{ ...num, color: EMAIL.ink2 }}><span data-copy="figure">{plus(r.market?.thisUpdate ?? null)}</span></td>
@@ -424,7 +436,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
             ))}
             {withheld.map((r) => (
               <tr key={r.id}>
-                <td style={c} colSpan={4}>{r.label} <CalibrationTag calibration={r.calibration} unread={r.unread} mode={mode} /></td>
+                <td style={c} colSpan={4}>{r.label} <CalibrationTag calibration={r.calibration} unread={printsMarket(r.calibration) ? r.unread : null} mode={mode} /></td>
               </tr>
             ))}
           </tbody>
@@ -458,7 +470,6 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
               <span role="rowheader" className="flex min-w-0 flex-col gap-1.5">
                 <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                   <span className={`[text-wrap:pretty] ${SCALE.row}`}>{r.label}</span>
-                  {r.calibration === 'provisional' ? <CalibrationTag calibration={r.calibration} className="text-[12px]" /> : null}
                   {makerWords(r.makerShare ?? null) ? <span className="inline-flex items-center gap-2 text-[13px] text-secondary-foreground"><MakerMark />{makerWords(r.makerShare ?? null)}</span> : null}
                 </span>
                 {k != null ? (
@@ -476,7 +487,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
         {withheld.map((r) => (
           <div key={r.id} role="row" className={`flex min-h-12 flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2.5 ${RULE.row} last:border-b-0`}>
             <span role="rowheader" className={SCALE.row}>{r.label}</span>
-            <CalibrationTag calibration={r.calibration} unread={r.unread} className="text-[12px]" />
+            <CalibrationTag calibration={r.calibration} unread={printsMarket(r.calibration) ? r.unread : null} className="text-[12px]" />
           </div>
         ))}
       </div>

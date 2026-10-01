@@ -15,25 +15,38 @@ const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('', EMAIL, {})
 
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceTheme.render(data, mode, ctx))
+/** HYPOTHETICAL: the themes pair read the same way (no refusal on the
+ *  theme), so the month before and the flag print. The fixture's own pair is
+ *  refused (our September searches), and then neither prints (T0a). */
+const joined = (data = voiceFixture()) => ({ ...data, theme: { ...data.theme, chip: null } })
 
 describe('voiceTheme (C3)', () => {
-  it('opens the lead with its kind and its maker share (a quarter or less), and its flag', () => {
-    const text = draw()
+  it('opens the lead with its kind and its maker share (a quarter or less), and its flag where the pair joins', () => {
+    const text = draw(joined())
     expect(text).toContain('Price and sale questions')
     expect(text).toContain('Ready to buy')
     expect(text).toContain('a fifth of its videos are makers’ own')
     expect(text).toContain('Now 10+')
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    const markup = render(voiceTheme.render(joined(), 'app', ctx))
     expect(markup).toContain('too few last month to call it a change')
+    // T0a (CV-20): the fixture's own refused pair prints no flag.
+    expect(draw()).not.toContain('Now 10+')
   })
 
-  it('prints three levels, never a change: the month, the month before, and where its videos came from', () => {
-    const text = draw()
-    // 18 of 625 in September; 7 of 351 in August; 11 of its 18 from September's added searches.
+  it('prints levels, never a change: the month, and the month before only where the pair joins; never "from searches"', () => {
+    const text = draw(joined())
+    // 18 of 625 in September; 7 of 351 in August.
     expect(text).toMatch(/18\s*videos\s*in September,\s*3%\s*of 625 category videos/)
     expect(text).toMatch(/2%\s*in August\s*7\s*of 351 category videos/)
-    expect(text).toMatch(/11\s*of the 18\s*came from searches we added in September/)
     expect(text).not.toMatch(/[▲▼]/)
+    // T0a (CV-18, CV-19): no August beside the refused September, and no
+    // count of what our added searches found, in any mode.
+    for (const mode of MODES) {
+      const refused = draw(voiceFixture(), mode)
+      expect(refused, mode).toMatch(/18\s*(videos\s*in September|of 625 category videos in September)/)
+      expect(refused, mode).not.toContain('of 351')
+      expect(refused, mode).not.toContain('came from searches we added')
+    }
   })
 
   it('says "so far" only while the month is so far', () => {
@@ -74,7 +87,7 @@ describe('voiceTheme (C3)', () => {
     expect(text).toContain('Praising it')
     expect(text).not.toContain('makers’ own')
     expect(text).toMatch(/34\s*videos\s*in September,\s*10%\s*of 338 category videos/)
-    expect(text).toMatch(/0\s*of the 34\s*came from searches we added in September/)
+    expect(text).not.toContain('came from searches we added')
   })
 
   // "AUG 0%" (the lead's ruling of 27 Sep): a theme August did not read has

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { pooledDenominators } from '../../reading/market'
 import { brandsBlockFor, brandsLine } from './brands'
-import { buildMarketKinds, marketKindLabel, marketLevel } from './kinds'
+import { buildMarketKinds, kindsPrev, marketKindLabel, marketLevel } from './kinds'
 import { byMarketSize, CALIBRATION_TAG, marketCalibration, marketSubjectSide } from './subjects'
 
 // Staging's stored month rows for Sealand, August and September 2026 (read
@@ -42,7 +42,20 @@ const STATS = [
 ]
 
 describe('what people did in the comments, pooled over the market (decision E)', () => {
-  const m = buildMarketKinds({ kindRows: KINDS, statsRows: STATS, counts: COUNTS, month: '2026-09-01', prevMonth: '2026-08-01', rivalAudiences: RIVALS, chip: 'not read as a change: we changed our searches in September' })
+  // HYPOTHETICAL: the market pair read the same way (no refusal), so the
+  // month before is carried; the refused case is pinned below (T0a).
+  const m = buildMarketKinds({ kindRows: KINDS, statsRows: STATS, counts: COUNTS, month: '2026-09-01', prevMonth: '2026-08-01', rivalAudiences: RIVALS, chip: null })
+
+  it('carries no month before at all where the market pair is refused (T0a, OV-38; the one condition)', () => {
+    const refused = buildMarketKinds({ kindRows: KINDS, statsRows: STATS, counts: COUNTS, month: '2026-09-01', prevMonth: '2026-08-01', rivalAudiences: RIVALS, chip: 'not read as a change: we changed our searches in September' })
+    expect(refused.prev).toBeNull()
+    expect(refused.kinds.every((r) => r.prevK == null)).toBe(true)
+    expect(refused.mood.every((r) => r.prevK == null)).toBe(true)
+    expect(refused.kinds.map((r) => [r.label, r.k])).toEqual([['Praising it', 468], ['Ready to buy', 381], ['What made them look', 5]])
+    expect(kindsPrev(refused)).toBeNull()
+    // A block stored before the rule, with its month before and its refusal.
+    expect(kindsPrev({ ...m, chip: 'not read as a change: we changed our searches in September' })).toBeNull()
+  })
 
   it('sums each kind over the category and the tracked brands, never the client', () => {
     expect(m.n).toBe(654)
@@ -104,18 +117,22 @@ describe('the market by subject (decision C and E)', () => {
     expect(marketCalibration('ready')).toBe('ready')
     expect(marketCalibration('failed')).toBe('failed')
     expect(marketCalibration(null)).toBe('provisional')
-    expect(CALIBRATION_TAG.failed).toBe('being re-described')
+    // T0a (ruling U6): no state prints a word; the figure goes instead.
+    expect(CALIBRATION_TAG.failed).toBeNull()
+    expect(CALIBRATION_TAG.provisional).toBeNull()
     expect(CALIBRATION_TAG.ready).toBeNull()
   })
 
-  it('ranks by the market’s size, with a failed or unread subject last', () => {
+  // T0a (ruling U6): a subject that is not ready has no rank; it follows the
+  // ready ones, by name.
+  it('ranks the ready subjects by the market’s size, every other one after them by name', () => {
     const rows = [
       { label: 'Comfort', market: { k: 43 }, calibration: 'ready' as const },
       { label: 'Repair & warranty', market: { k: 36 }, calibration: 'failed' as const },
       { label: 'Looks & style', market: { k: 103 }, calibration: 'provisional' as const },
       { label: 'Community & purpose', market: { k: null }, calibration: 'provisional' as const },
     ]
-    expect([...rows].sort(byMarketSize).map((r) => r.label)).toEqual(['Looks & style', 'Comfort', 'Community & purpose', 'Repair & warranty'])
+    expect([...rows].sort(byMarketSize).map((r) => r.label)).toEqual(['Comfort', 'Community & purpose', 'Looks & style', 'Repair & warranty'])
   })
 })
 

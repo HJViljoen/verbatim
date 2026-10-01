@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { fakeDb } from '../test/fake-db'
 import { HYPOTHETICAL_SAME_WAY } from '../test/pair-fixture'
 import { sealandJudge } from '../test/sealand-pairs'
-import { pairOn } from '../reading/pairs'
+import { pairOn, type PairOn } from '../reading/pairs'
 import {
   loadObjectReadings,
   objectLine,
@@ -124,11 +124,15 @@ describe('a subject named in a question: its own figure and trail', () => {
     const r = objectReading({ object: looks('ready'), points: LOOKS_POINTS }, SEP, judgeOn2Oct, ON_2_OCT)
     expect(r.state).toBe('read')
     expect(r.curr).toEqual({ month: SEP, k: 104, n: 626 })
-    expect(r.trail.map((p) => p.month)).toEqual([AUG, SEP])
+    // T0a (the one condition): the trail stops at the refused step, and no
+    // month before is offered beside September.
+    expect(r.trail.map((p) => p.month)).toEqual([SEP])
+    expect(r.prev).toBeNull()
     expect(r.verdict?.state).toBe('refused')
     expect(r.verdict?.state).not.toBe('moved')
     expect(r.direction).toBeNull()
     const line = objectLine(r)
+    expect(line).not.toContain('Aug 2026')
     expect(line).toContain('Looks & style (a subject) · your market')
     expect(line).toContain('Sep 2026 104 of 626 videos (16.6%)')
     expect(line).toContain('comparison refused')
@@ -150,19 +154,22 @@ describe('a subject named in a question: its own figure and trail', () => {
     expect(r.direction).toBeNull()
   })
 
-  it('a PROVISIONAL subject prints its market level with no verdict and no word (decision C)', () => {
+  // T0a (AK-5; ruling U6): a PROVISIONAL subject's level rests on matching
+  // that is not yet verified, so it goes the way a failed one's always did:
+  // the name, no figure, no verdict and no word.
+  it('a PROVISIONAL subject is named with no figure, no verdict and no word', () => {
     const r = objectReading({ object: looks('provisional'), points: LOOKS_POINTS }, SEP, judgeOn2Oct, ON_2_OCT)
     expect(r.verdict).toBeNull()
     expect(r.direction).toBeNull()
-    expect(r.curr?.k).toBe(104)
-    expect(objectLine(r)).toContain('a level only')
-    expect(objectLine(r)).toContain('(a subject, provisional)')
+    expect(r.curr).toBeNull()
+    expect(r.trail).toEqual([])
+    expect(objectLine(r)).toBe('- Looks & style (a subject) · your market: no figure is given')
   })
 
-  it('a FAILED subject prints no figure, only that it is being re-described', () => {
+  it('a FAILED subject prints no figure, only its name', () => {
     const r = objectReading({ object: { kind: 'subject', id: 'subj-repair', label: 'Repair & warranty', calibration: 'failed' }, points: LOOKS_POINTS }, SEP, judgeOn2Oct, ON_2_OCT)
     expect(r.curr).toBeNull()
-    expect(objectLine(r)).toContain('being re-described')
+    expect(objectLine(r)).toBe('- Repair & warranty (a subject) · your market: no figure is given')
     expect(objectLine(r)).not.toMatch(/\d+ of \d+/)
   })
 
@@ -222,7 +229,9 @@ describe('loadObjectReadings: on the market, one read per kind of object', () =>
     const [r] = await loadObjectReadings(client as never, { ...base, objects: [{ kind: 'brand', id: 'comp-cotopaxi', label: 'Cotopaxi' }] })
     expect(r.state).toBe('read')
     expect(r.curr).toEqual({ month: SEP, k: 31, n: 654 })
-    expect(r.prev).toEqual({ month: AUG, k: 39, n: 377 })
+    // Refused: August does not travel beside September (T0a).
+    expect(r.prev).toBeNull()
+    expect(r.trail.map((p) => p.month)).toEqual([SEP])
     expect(r.verdict?.state).toBe('refused')
     expect(objectLine(r)).not.toMatch(/\bmoved\b/)
   })
@@ -238,12 +247,13 @@ describe('loadObjectReadings: on the market, one read per kind of object', () =>
         { client_id: CLIENT, month: SEP, audience: 'client', subject_id: 'subj-looks', videos: 9, comments: 0 },
       ],
     }))
-    const [r] = await loadObjectReadings(client as never, { ...base, objects: [looks('provisional')] })
+    const [r] = await loadObjectReadings(client as never, { ...base, objects: [looks('ready')] })
     // n is the pooled market: 626 + 29 = 655 in September, 351 + 26 = 377 in
     // August. The client's 9 never reach k.
     expect(r.curr).toEqual({ month: SEP, k: 104, n: 655 })
-    expect(r.prev).toEqual({ month: AUG, k: 38, n: 377 })
-    expect(r.verdict).toBeNull()
+    // The pair is refused on 2 Oct, so August does not travel (T0a).
+    expect(r.prev).toBeNull()
+    expect(r.verdict?.state).toBe('refused')
   })
 
   it('reads a kind and the mood on the market; each refuses Aug→Sep and none says "moved"', async () => {
@@ -331,10 +341,16 @@ describe('a subject pooled as Subjects pools it', () => {
 
   it('leaves out a brand with no videos that month, as Subjects does: 103 of 654, not "0 of 654"', async () => {
     const { client } = fakeDb(stagingTables())
-    const [r] = await loadObjectReadings(client as never, { ...base, objects: [looks('ready')] })
+    // HYPOTHETICAL: the pair read the same way, so August is shown and its
+    // pooling can be checked (on 2 Oct the judge refuses it, and T0a prints
+    // no month before beside a refusal).
+    const joined: PairOn = (prevMonth, month) => ({ prevMonth, month, mode: 'comparable', reasons: [], row: null, checkWith: null })
+    const [r] = await loadObjectReadings(client as never, { ...base, pair: joined, objects: [looks('ready')] })
     expect(r.state).toBe('read')
     expect(r.curr).toEqual({ month: SEP, k: 103, n: 654 })
     expect(r.prev).toEqual({ month: AUG, k: 38, n: 377 })
+    const [refused] = await loadObjectReadings(fakeDb(stagingTables()).client as never, { ...base, objects: [looks('ready')] })
+    expect(refused.prev).toBeNull()
     expect(objectLine(r)).toContain('Sep 2026 103 of 654 videos')
     expect(objectLine(r)).not.toMatch(/\b0 of \d/)
   })
@@ -343,19 +359,19 @@ describe('a subject pooled as Subjects pools it', () => {
     const { client } = fakeDb(stagingTables())
     const withNext = await loadObjectReadings(client as never, {
       ...base,
-      objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'provisional' }],
+      objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'ready' }],
       nextUpdate: '2026-10-04T06:00:00.000Z',
     })
     expect(withNext[0].state).toBe('unread')
     expect(withNext[0].curr).toEqual({ month: SEP, k: null, n: 654 })
     expect(withNext[0].unread).toBe('no reading yet')
-    expect(objectLine(withNext[0])).toContain('Community & purpose (a subject, provisional) · your market: no reading yet')
+    expect(objectLine(withNext[0])).toContain('Community & purpose (a subject) · your market: no reading yet')
     expect(objectLine(withNext[0])).not.toMatch(/\d+ of \d+/)
     // No update to come (a paused tenant, or an older month): the month
     // will not be read for it.
     const paused = await loadObjectReadings(client as never, {
       ...base,
-      objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'provisional' }],
+      objects: [{ kind: 'subject', id: 'subj-community', label: 'Community & purpose', calibration: 'ready' }],
     })
     expect(paused[0].unread).toBe('not read in September')
   })

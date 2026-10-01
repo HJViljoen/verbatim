@@ -4,21 +4,19 @@ import type { Block, BlockContext, QuoteRef, RenderMode } from '@/lib/blocks/typ
 import { BlockEmpty, BlockFrame, NoValue } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { PAIR_NOT_COMPARED, refusalInBlock, sharedPairNote } from '@/lib/calibration'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { FLAG_NOTE } from '@/lib/agent/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { openLink } from '@/components/blocks/open-link'
 import {
   ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, LEDGER_ALL_PARAM, LEDGER_ALL_VALUE, LEDGER_FIRST_TIME_LINE,
   adviceAnchor, ageInMonths, madeInMonth, marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
-import { GROUNDED_BASIS, type Afterwards } from '@/lib/reading/afterwards'
+import { afterwardsWithheld, GROUNDED_BASIS, type Afterwards } from '@/lib/reading/afterwards'
 import { REC_STATUS_LABEL } from '@/lib/calibration'
 import { LeadDecision } from './lead-decision'
 import { LEAD_SQUARE, LEAD_UNDECIDED, leadStamp } from './lead-words'
@@ -242,21 +240,20 @@ function GroundedCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
  */
 export function foldedAfterwards(rows: readonly AdviceRow[]): string | null {
   if (rows.length < 2) return null
+  // A WITHHELD CELL IS NEVER FOLDED INTO A SENTENCE (T0a; the one condition):
+  // it prints nothing, so no line under the table may speak for it, and a
+  // column holding one says different things about different rows.
   const lines = new Set(rows.map((r) =>
-    r.afterwards?.state === 'reading' && r.afterwards.verdict ? '\u0000reading' : (r.afterwards?.line ?? ADVICE_AFTERWARDS_UNRECORDED),
+    afterwardsWithheld(r.afterwards) ? '\u0000withheld'
+      : r.afterwards?.state === 'reading' && r.afterwards.verdict ? '\u0000reading'
+        : (r.afterwards?.line ?? ADVICE_AFTERWARDS_UNRECORDED),
   ))
   if (lines.size !== 1) return null
   const only = [...lines][0]
-  return only === '\u0000reading' ? null : only
+  return only.startsWith('\u0000') ? null : only
 }
 
-/** The month-pair refusals the Afterwards column carries, as verdict-shaped
- *  pairs for `sharedPairNote`. */
-function afterwardsRefusals(rows: readonly AdviceRow[]): { state: string; pair: VerdictPairNote }[] {
-  return rows.flatMap((r) => (r.afterwards?.state === 'refused' && r.afterwards.pair ? [{ state: 'refused', pair: r.afterwards.pair }] : []))
-}
-
-function AfterwardsCell({ row, mode, folded = false, shared = null }: { row: AdviceRow; mode: RenderMode; folded?: boolean; shared?: VerdictPairNote | null }) {
+function AfterwardsCell({ row, mode, folded = false }: { row: AdviceRow; mode: RenderMode; folded?: boolean }) {
   // A FROZEN ROW MAY NOT HAVE THE FIELD AT ALL, and this cell used to reach
   // straight through it. `afterwards` is required and wave 1 added it, so a
   // `report_snapshots` row whose `surfaces.market` froze before Block D
@@ -266,14 +263,16 @@ function AfterwardsCell({ row, mode, folded = false, shared = null }: { row: Adv
   // the fifth thing this column can say, and it is about our record.
   const a: Afterwards | null = row.afterwards ?? null
   const email = mode === 'email'
+  // A COMPARISON THAT IS NOT SHOWN IS NOT EXPLAINED (T0a, YM-16; the one
+  // condition): a refused cell, or a stored reading across a pair the judge
+  // refused or two months not grouped the same way, is empty, with no "not
+  // compared", no refusal sentence, no badge and no note.
+  if (afterwardsWithheld(a)) return null
   if (a == null || a.state !== 'reading' || !a.verdict) {
     // The column says one thing about every row: it says it once, under the
     // table, and the cell carries the artboard's mark for an empty one.
     if (folded) return <NoValue mode={mode} label="nothing to report yet" />
-    // A REFUSAL FOR THE MONTH PAIR IS THE BLOCK'S CHIP, NOT THE CELL'S (deploy
-    // 1 review, the lead's R3): the cell says "not compared".
-    const refusedForPair = a?.state === 'refused' && a.pair != null && refusalInBlock({ state: 'refused', pair: a.pair }, shared)
-    const line = refusedForPair ? PAIR_NOT_COMPARED : a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
+    const line = a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
     return email
       ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{line}</span>
       : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{line}</span>
@@ -358,7 +357,7 @@ export function splitLead(a: Pick<MarketSurfaceData['advice'], 'rows' | 'current
  * reading (the afterwards sentence) rides under it, so nothing the table
  * printed for this row is lost by leading with it.
  */
-function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode: RenderMode; hrefFor: (lineageId: string) => string; shared: VerdictPairNote | null; folded: boolean }) {
+function LeadCard({ row, mode, hrefFor, folded }: { row: AdviceRow; mode: RenderMode; hrefFor: (lineageId: string) => string; folded: boolean }) {
   const email = mode === 'email'
   const repeated = row.timesMade > 1 ? `repeated across ${fmtInt(row.timesMade)} updates` : 'raised by one update'
   const grounded = row.grounded && !row.grounded.pruned ? row.grounded.videos : null
@@ -373,7 +372,7 @@ function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode
             ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.ink2 }}>{LEAD_UNDECIDED}</span>
             : <StatusCell row={row} mode={mode} />}
         </div>
-        {folded ? null : <div style={{ marginTop: 4 }}><AfterwardsCell row={row} mode={mode} shared={shared} /></div>}
+        {folded ? null : <div style={{ marginTop: 4 }}><AfterwardsCell row={row} mode={mode} /></div>}
       </div>
     )
   }
@@ -390,10 +389,10 @@ function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode
             : repeated}
           {alsoRaisedLine(row) ? <>{' · '}{alsoRaisedLine(row)}</> : null}
           {grounded != null
-            ? <>{' · '}<span data-copy="figure" className="font-semibold text-foreground">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it</>
+            ? <>{' · '}<span data-copy="figure" className="font-semibold text-foreground">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it, {GROUNDED_BASIS}</>
             : <>{' · '}<GroundedCell row={row} mode={mode} /></>}
         </span>
-        {folded ? null : <span className="text-[12px] text-muted-foreground"><AfterwardsCell row={row} mode={mode} shared={shared} /></span>}
+        {folded ? null : <span className="text-[12px] text-muted-foreground"><AfterwardsCell row={row} mode={mode} /></span>}
       </div>
       <div className="flex min-w-0 flex-col items-start gap-1.5 md:border-l md:border-border md:pl-8">
         {/* WHAT YOU DECIDED, AND "MARK DONE" (the preview's column, WP3.6
@@ -451,19 +450,16 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // named the absence of an Afterwards column; the column exists now, so the
     // sentence is printed only while no row on the page has a reading in it —
     // which is production today, and is the honest naming of that absence.
-    const anyReading = a.rows.some((r) => r.afterwards?.state === 'reading')
+    const anyReading = a.rows.some((r) => r.afterwards?.state === 'reading' && !afterwardsWithheld(r.afterwards))
 
     // THE READER'S OWN ANSWER STAYS ON THE PAGE; THE DERIVATION IS ONE PRESS
     // AWAY. `requestedLine` answers a link the reader followed and the two
     // state sentences — nothing is being written down, nothing has been read
     // in the Afterwards column yet — are facts about this workspace, not
     // method. What goes behind the disclosure is how the columns count.
-    // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): the chip under
-    // the table, and "not compared" in each refused cell. A column that is
-    // one refusal on every row is the chip alone, not a folded footnote too.
-    const sharedRefusal = sharedPairNote(afterwardsRefusals(a.rows))
-    const folding = foldedAfterwards(a.rows)
-    const afterwardsOnce = sharedRefusal && folding != null && afterwardsRefusals(a.rows).length === a.rows.length ? null : folding
+    // A REFUSAL IS NOT SAID AT ALL (T0a; the one condition): a withheld cell
+    // is empty and never folds into the line under the table.
+    const afterwardsOnce = foldedAfterwards(a.rows)
     const state = [
       !a.recorded ? ADVICE_UNRECORDED : null,
       afterwardsOnce ? `Afterwards, on every row: ${afterwardsOnce}` : null,
@@ -497,19 +493,10 @@ export const marketAdvice: Block<MarketSurfaceData> = {
             {state}
           </p>
         ) : null}
-        {mode !== 'app' ? (
-          // Paper and email have no tooltip, so the basis prints once here.
-          <p
-            className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-          >
-            Grounded in: {GROUNDED_BASIS.charAt(0).toLowerCase() + GROUNDED_BASIS.slice(1)}
-          </p>
-        ) : null}
-        {/* The all-time basis rides on the "Grounded in" column header as a
-            tooltip, the one place this page says it (copy de-clutter ruling
-            C); the "First time" chip carries its clock as a tooltip (B57); the
-            "How the Repeated column counts" disclosure is cut (B58). */}
+        {/* The all-time basis is the count's own label, "Behind it, all
+            time", in every mode (T0a, mechanism 6; YM-14): no tooltip and no
+            note. The "First time" chip carries its clock as a tooltip (B57);
+            the "How the Repeated column counts" disclosure is cut (B58). */}
       </div>
     )
 
@@ -530,7 +517,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         footer={more > 0 ? showAll : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        {lead ? <LeadCard row={lead} mode={mode} hrefFor={hrefFor} shared={sharedRefusal} folded={afterwardsOnce != null} /> : null}
+        {lead ? <LeadCard row={lead} mode={mode} hrefFor={hrefFor} folded={afterwardsOnce != null} /> : null}
         {email ? (
           <div>
             {tableRows.map((row) => (
@@ -549,13 +536,12 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     </>
                   ) : null}
                   <StatusCell row={row} mode={mode} />
-                  <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · grounded in </span>
+                  <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · behind it, {GROUNDED_BASIS}: </span>
                   <GroundedCell row={row} mode={mode} />
                 </div>
-                <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></div>
+                <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} /></div>
               </div>
             ))}
-            <PairChip note={sharedRefusal} mode={mode} />
             {notes}
           </div>
         ) : (
@@ -578,9 +564,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     <th className="py-1 pr-3 font-semibold">First raised</th>
                     {repeat.shown ? <th className="py-1 pr-3 font-semibold">Repeated</th> : null}
                     <th className="py-1 pr-3 font-semibold">Your decision</th>
-                    <th className="py-1 pr-3 font-semibold">
-                      <span title={GROUNDED_BASIS} className="cursor-help">Grounded in</span>
-                    </th>
+                    <th className="py-1 pr-3 font-semibold">Behind it, {GROUNDED_BASIS}</th>
                     <th className="py-1 font-semibold">Afterwards</th>
                   </tr>
                 </thead>
@@ -620,8 +604,8 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                         </td>
                         {repeat.shown ? <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Repeated</StackLabel><RepeatCell row={row} first={repeat.first(row)} mode={mode} /></td> : null}
                         <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Your decision</StackLabel><StatusCell row={row} mode={mode} /></td>
-                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Grounded in</StackLabel><GroundedCell row={row} mode={mode} /></td>
-                        <td className={`py-1.5 ${STACK_CELL}`}><StackLabel>Afterwards</StackLabel><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></td>
+                        <td className={`py-1.5 pr-3 ${STACK_CELL}`}><StackLabel>Behind it, {GROUNDED_BASIS}</StackLabel><GroundedCell row={row} mode={mode} /></td>
+                        <td className={`py-1.5 ${STACK_CELL}`}><StackLabel>Afterwards</StackLabel><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} /></td>
                       </tr>
                     )
                     // The artboard's expansion, in its own track directly under
@@ -638,7 +622,6 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 </tbody>
               </table>
             </div>
-            <PairChip note={sharedRefusal} mode={mode} />
             {notes}
           </>
         )}
@@ -665,7 +648,10 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // the worse of the two sites: `verdicts()` is part of the renderable
     // contract a brief's reading merge walks, so a missing field here threw
     // before anything was drawn — the freeze/resolve spine, not only the page.
-    return data.advice.rows.map((r) => r.afterwards?.verdict).filter((v): v is Verdict => v != null)
+    // A WITHHELD COMPARISON IS NOT DECLARED EITHER: it is not printed.
+    return data.advice.rows
+      .map((r) => (afterwardsWithheld(r.afterwards) ? null : r.afterwards?.verdict))
+      .filter((v): v is Verdict => v != null)
   },
 
   // THE ONE COMMENT THIS BLOCK SHOWS, by the same choice the render makes —

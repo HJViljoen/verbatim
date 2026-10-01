@@ -10,7 +10,7 @@ import { noneFoundBrandsRead, uncheckedBrandsRead, stagingBrandsRead } from '@/l
 import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
 import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview/index'
 import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
-import { marketArrivalsFixture, ossurArrivalsFixture } from '@/components/pages/overview/fixture'
+import { marketArrivalsFixture, marketFrontFixture, ossurArrivalsFixture } from '@/components/pages/overview/fixture'
 import { MONTHLY_BLOCKS, monthlySections } from './index'
 import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
 import { monthlyFixture } from './fixture'
@@ -80,13 +80,16 @@ describe('the page and the monthly print one sentence each', () => {
       for (const words of [
         'In September your name came up in none of your market’s 654 videos. The 8 videos that name you are your own posts.',
         'not counted yet',
-        'Outside our brand searches',
+        'Named unprompted',
       ]) {
         expect(page).toContain(words)
         expect(monthly, mode).toContain(words)
       }
       expect(monthly, mode).toMatch(/of 516/)
-      expect(monthly, mode).toMatch(/Patagonia\s*13\s*45/)
+      // One count a brand (T0 ruling U10): never "in all".
+      expect(monthly, mode).toMatch(/Patagonia\s*13\b/)
+      expect(monthly, mode).not.toMatch(/Patagonia\s*13\s*45/)
+      expect(page).not.toContain('In all')
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.brands'].render(data, mode, ctx)))
     }
   })
@@ -124,9 +127,10 @@ describe('the page and the monthly print one sentence each', () => {
   it('with this update: the page’s came-in and heard-first words, in every mode', () => {
     const data = builtFull()
     const page = pageText('overview.arrivals', data.overview, 'app')
+    // Staging's two themes heard first were our new searches' (T0a,
+    // mechanism 4): neither the page nor the monthly lists them.
     const words = [
       'With the 20 Sep update: 395 videos read in your market for the first time, and 11,999 more comments written in September came in.',
-      'With 10+ videos in September:',
     ]
     for (const mode of MODES) {
       const monthly = read(MONTHLY_BLOCKS['monthly.arrivals'].render(data, mode, ctx))
@@ -138,12 +142,17 @@ describe('the page and the monthly print one sentence each', () => {
       // page's word on how This week counts the update (finish-list item 9).
       expect(monthly, mode).not.toMatch(/week by week/i)
       expect(monthly, mode).not.toContain('This week counts')
+      expect(monthly, mode).not.toContain('Heard for the first time')
+      expect(page).not.toContain('Heard for the first time')
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.arrivals'].render(data, mode, ctx)))
     }
   })
 
   it('what it means for you and what you published: the page’s sentences and census, in every mode', () => {
-    const data = builtFull()
+    // HYPOTHETICAL: Waterproofing checked and ready, as on staging. On
+    // production it is provisional, so both the page and the monthly withhold
+    // its line (T0a, ruling U6; the next test).
+    const data = builtFull({ ...marketArrivalsFixture(), foryou: marketFrontFixture({ subjectsCalibration: 'staging' }).foryou })
     const forYou = pageText('overview.foryou', data.overview)
     const census = pageText('overview.moves', data.overview)
     const sentence = 'Your market asked about it on 16 videos over the last 3 months. None of your 56 posts in that time shared two or more of its words.'
@@ -157,6 +166,20 @@ describe('the page and the monthly print one sentence each', () => {
         expect(monthly, `${mode}: ${w}`).toContain(w)
       }
       assertCopyContract(render(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx)))
+    }
+  })
+
+  // T0a (OV-49 / MR-9; ruling U6): a provisional subject's line is withheld
+  // on both, and where that leaves the for-you half with nothing, it is
+  // omitted, never "no subject was asked about"; the census stands.
+  it('a provisional subject’s line is withheld on the page and in the monthly, and nothing claims no subject was asked about', () => {
+    const data = builtFull()
+    expect(pageText('overview.foryou', data.overview)).toBe('')
+    for (const mode of MODES) {
+      const monthly = read(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx))
+      expect(monthly, mode).not.toContain('Waterproofing')
+      expect(monthly, mode).not.toContain(FOR_YOU_NONE)
+      expect(monthly, mode).toContain('234 comments')
     }
   })
 

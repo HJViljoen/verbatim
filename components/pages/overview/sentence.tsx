@@ -14,11 +14,10 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { onScreenText } from '@/lib/pages/overview'
 import type { AnomalyLine, LedgerRow, OverviewData, Voice } from '@/lib/pages/overview'
 import { TokenProse } from '@/components/blocks/prose'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { surface } from '@/lib/nav'
-import { heroView, voicesHeading } from '@/lib/pages/overview-market'
+import { heroView, printedLead, voicesHeading } from '@/lib/pages/overview-market'
 import { framedHeadline } from '@/lib/pages/market-frame'
-import { InnerLine, isMarketPage, Parts } from './market'
+import { isMarketPage, Parts } from './market'
 
 // OV1 · In one sentence, anything unusual, and the one thing to do
 // (design §3 OV1; ported to `Main.dc.html` §1 in Block D wave 2).
@@ -107,19 +106,6 @@ export function lastUpdateMeta(data: OverviewData): string {
   return dates.length > 0 ? `update of ${dates[dates.length - 1]}` : `no update yet in ${longMonth(data.bar.month)}`
 }
 
-/**
- * The month pair's refusal, under a size sentence (market-first WP1.5): "not
- * read as a change: we changed our searches in September". The preview's grey
- * pill with the ⊘ mark, on its own line under the sentence (deploy 1 review:
- * it was 12px muted text trailing the sentence on the hero, read as an
- * aside), marked `verdict` because it is the answer the comparison gave.
- */
-function RefusalChip({ chip, mode }: { chip: string; mode: RenderMode }) {
-  if (mode === 'email') return <PairChip words={chip} mode={mode} />
-  // The wrapper takes the row, so the pill keeps its own width under it.
-  return <span className="basis-full"><PairChip words={chip} mode={mode} /></span>
-}
-
 /** One voice: the quote behind its green-tinted rule, the video's own on-screen
  *  text where the OCR pass read any, and the cite tail. */
 function VoiceRow({ voice, mode, ground }: { voice: Voice; mode: RenderMode; ground?: 'tile' | 'inner' }) {
@@ -180,7 +166,8 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const email = mode === 'email'
   const view = heroView(data.hero, data.themes, data.month)
   const voices = data.heroVoices ?? []
-  const lead = data.hero?.kind === 'themes' ? data.hero.lead : null
+  // A stored lead our new searches found prints no voices (T0a, mechanism 4).
+  const lead = printedLead(data.hero)
   const voice = surface('voice')
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   // THE HEADLINE BREAKS AT ITS COLON (design pass): "Your market in
@@ -222,7 +209,6 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
       ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><Parts parts={view.prev} figures={view.figures} mode={mode} /></div>
       : <span data-copy="level" className="font-mono text-[13px] tabular-nums text-muted-foreground"><Parts parts={view.prev} figures={view.figures} mode={mode} figureClassName="font-mono font-medium tabular-nums text-secondary-foreground" /></span>
   ) : null
-  const chip = s.chip ? <PairChip words={s.chip} mode={mode} /> : null
   const aside = lead && voices.length > 0 ? (
     email ? (
       <div style={{ marginTop: 12 }}>
@@ -230,7 +216,6 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
           {voicesHeading(voices.length)} on “<span data-copy="subject" data-slot="pass_b_theme">{lead.label}</span>”
         </div>
         {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} />)}
-        {view.newSearch ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 }}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></div> : null}
       </div>
     ) : (
       <aside className="flex min-w-0 flex-col gap-4 self-start rounded-md bg-inner p-6">
@@ -241,11 +226,8 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
           <span className="font-mono text-[12px] text-muted-foreground">from that theme’s own comments</span>
         </div>
         {voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} ground="inner" />)}
-        {view.newSearch ? <p className="m-0 text-[13px] leading-[1.5] text-secondary-foreground"><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></p> : null}
       </aside>
     )
-  ) : lead && view.newSearch ? (
-    <InnerLine mode={mode}><Parts parts={view.newSearch} figures={view.figures} mode={mode} /></InnerLine>
   ) : null
 
   if (email) {
@@ -255,7 +237,6 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
         {lede}
         {clause}
         {prev}
-        {chip}
         {aside}
       </BlockFrame>
     )
@@ -263,7 +244,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const main = (
     <div className="flex min-w-0 flex-col gap-6 pt-1">
       <div className="flex flex-col gap-4">{lede ? <div className="flex flex-col gap-2">{size}{lede}</div> : size}{clause}</div>
-      {prev || chip ? <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{prev}{chip}</div> : null}
+      {prev ? <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{prev}</div> : null}
     </div>
   )
   return (
@@ -327,7 +308,9 @@ export const overviewSentence: Block<OverviewData> = {
           // the column already holds the line to about that.
           className="m-0 max-w-[68ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
         />
-        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : s.chip ? <RefusalChip chip={s.chip} mode={mode} /> : null}
+        {/* No refusal chip under the size sentence (T0a: a refused
+            comparison is not shown and not explained). */}
+        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : null}
       </div>
     )
 

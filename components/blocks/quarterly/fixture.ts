@@ -255,7 +255,7 @@ const record = (delivered: number, readingAt = NOW): RecordInputs => ({
 })
 
 /** A quarter that reads on both sides. */
-export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyData {
+export function quarterlyFixture(over: Partial<QuarterlyData> = {}, compose: { joined?: boolean } = {}): QuarterlyData {
   const overview = withSixSubjects(overviewFixture())
   return {
     ...composeQuarterly({
@@ -274,6 +274,7 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
       quiet: QUIET,
       searchPlan: SEARCH_PLAN,
       changeLog: CHANGE_LOG,
+      ...compose,
     }),
     ...over,
   }

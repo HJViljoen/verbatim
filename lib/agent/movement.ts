@@ -4,21 +4,22 @@ import { AGENT_MOVEMENT_MONTHS, AGENT_MOVEMENT_TOPICS } from '../config'
 import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, type Direction, type SeriesPoint } from '../reading/bands'
-import { BRANDS_PANEL, comparableOn, type PairOn } from '../reading/pairs'
+import { BRANDS_PANEL, comparableOn, joinedRun, type PairOn } from '../reading/pairs'
+import { joins } from '../reading/comparability'
 import { kindChange, kindLabel } from '../reading/kinds'
 import { moodChange } from '../reading/mood'
 import { pooledDenominators, pooledSide, marketAudiences, type MarketCount } from '../reading/market'
 import { SENTIMENT_BAND } from '../report-bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { selectAll } from '../supabase-admin'
-import { earnsVerdict, isFailed, type SubjectCalibration } from '../subjects/calibration-state'
+import { printsMarket, type SubjectCalibration } from '../subjects/calibration-state'
 import { loadChanges, loadMonthSeries, readingHandle } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint, type MonthSeries } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { sinceStart } from '../reading/horizon'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../reading/reading-view'
-import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
+import { isAnswer, priorPrintable, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { TABLE_SUBJECTS } from '../subjects/types'
 
@@ -216,8 +217,12 @@ export function movementLine(r: MovementReading): string {
     r.readableMonths === 0
       ? 'no month here carries enough videos to compare on'
       : `${r.readableMonths} ${r.readableMonths === 1 ? 'month' : 'months'} of readings behind it`
+  // A REFUSED LINE CARRIES ITS OWN MONTH ALONE (T0a, AK-14): the month
+  // before is not offered to the model beside a comparison the product
+  // refused, so no answer can describe one in words a scrubber cannot see.
+  const sides = priorPrintable(v) ? `${side(r.prev)} → ${side(r.curr)}` : side(r.curr)
   return [
-    `- ${r.label} · ${r.audience}: ${side(r.prev)} → ${side(r.curr)}; ${change}`,
+    `- ${r.label} · ${r.audience}: ${sides}; ${change}`,
     `    ${direction}; ${history}`,
     ...notes.map((n) => `    · ${n}`),
   ].join('\n')
@@ -532,16 +537,16 @@ export function objectReading(
   const o = input.object
   const empty: ObjectReading = { object: o, state: 'not_read', trail, curr, prev, verdict: null, direction: null, filling }
   if (input.notRead || !curr || curr.n == null) return empty
-  // DECISION C. A failed subject is being re-described and prints nothing; a
-  // provisional one prints its level and earns no verdict and no word.
-  if (o.kind === 'subject' && isFailed(o.calibration)) return { ...empty, state: 'read', curr: null, prev: null, trail: [] }
+  // DECISION C, UNDER T0a (ruling U6). A subject that is not ready prints
+  // nothing that rests on its matching: a failed one never did, and a
+  // provisional one no longer prints its level. Its name stands alone.
+  if (o.kind === 'subject' && !printsMarket(o.calibration)) return { ...empty, state: 'read', curr: null, prev: null, trail: [] }
   // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1): its k is
   // no reading, never 0, and it says so in Subjects' own words.
   if (o.kind === 'subject' && curr.k == null) {
     return { ...empty, state: 'unread', unread: unreadWords({ month: m, filling, nextUpdate: input.nextUpdate ?? null }) }
   }
   const base: ObjectReading = { object: o, state: 'read', trail, curr, prev, verdict: null, direction: null, filling }
-  if (o.kind === 'subject' && !earnsVerdict(o.calibration)) return base
 
   const key = o.kind === 'brand' ? BRAND_PAIR_KEY : MARKET_PAIR_KEY
   const comparability = pair(prevKey, m, key)
@@ -570,12 +575,17 @@ export function objectReading(
   const series: SeriesPoint[] = trail.map((p) => ({ month: monthStartOf(p.month), videos: p.n, k: p.k, audience: MARKET_PAIR_KEY, regime: 'n/a' }))
   const direction = thin ? null : directionWord(series, { asOf, comparable: comparableOn(pair, key), ...(o.kind === 'mood' ? { floor: SENTIMENT_BAND } : {}) })
   verdict.direction = direction
-  return { ...base, verdict, direction }
+  // THE TRAIL STOPS AT THE LATEST REFUSED STEP (T0a, AK-14/24): the prompt
+  // and the page list only the months read the same way as the month read,
+  // and a refused pair carries no month before. The direction word above was
+  // already earned only inside one joined run.
+  const joinedTrail = joinedRun(trail, m, (a, b) => joins(pair(a, b, key)))
+  return { ...base, trail: joinedTrail, prev: priorPrintable(verdict) ? prev : null, verdict, direction }
 }
 
 /** What each object is, in the reader's words, in a line of the prompt. */
 function objectNoun(o: MarketObjectRef): string {
-  if (o.kind === 'subject') return `${o.label} (a subject${o.calibration === 'provisional' ? ', provisional' : ''})`
+  if (o.kind === 'subject') return `${o.label} (a subject)`
   if (o.kind === 'kind') return `${kindLabel(o.id)} (what people were doing)`
   if (o.kind === 'mood') return 'The mood, positive of the videos judged'
   return `${o.label} (a brand, named in the video or its comments)`
@@ -588,7 +598,7 @@ const MARKET_WORDS = 'your market'
 export function objectLine(r: ObjectReading): string {
   const head = `- ${objectNoun(r.object)} · ${MARKET_WORDS}`
   if (r.state === 'not_read') return `${head}: not read yet`
-  if (r.object.kind === 'subject' && isFailed(r.object.calibration)) return `${head}: being re-described, so no figure is given`
+  if (r.object.kind === 'subject' && !printsMarket(r.object.calibration)) return `${head}: no figure is given`
   if (r.state === 'unread') return `${head}: ${r.unread ?? 'no reading yet'}, because it was named after the month's videos were read, so no figure is given`
   // Only the months read: a month with no reading is left out, never "0 of N".
   const trail = r.trail

@@ -6,15 +6,14 @@ import { openLink } from '@/components/blocks/open-link'
 import { surface } from '@/lib/nav'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
-import { prevMonth } from '@/lib/reading/month-key'
+import { monthStartOf, prevMonth } from '@/lib/reading/month-key'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { priorPrintable, type FigureTable, type Verdict } from '@/lib/reading/verdicts'
 import { moveWaitingLine } from '@/lib/pages/overview'
 import type { MoveRow, OverviewData } from '@/lib/pages/overview'
 
@@ -215,17 +214,18 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
           refusal. A `Verdict` carries the change and the band together or
           neither, so each side prints its own badge and the two sit beside each
           other for the reader to weigh. */}
-      {card.movement.yours || card.movement.category ? (
+      {/* A REFUSED SIDE PRINTS NOTHING, NOT EVEN ITS NAME (T0a): its badge
+          is empty, and a label over nothing says a comparison was refused. */}
+      {priorPrintable(card.movement.yours) || priorPrintable(card.movement.category) ? (
         <span className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground'}>
-          {card.movement.yours ? (
+          {priorPrintable(card.movement.yours) ? (
             <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={card.movement.yours} unit="pts" mode={mode} sharedRefusal={cardShared} /></span>
           ) : null}
-          {card.movement.category ? (
+          {priorPrintable(card.movement.category) ? (
             <span className={email ? undefined : 'flex items-center gap-1.5'}>the category <BlockMovement verdict={card.movement.category} unit="pts" mode={mode} sharedRefusal={cardShared} /></span>
           ) : null}
         </span>
       ) : null}
-      <PairChip note={cardShared} mode={mode} />
 
       {/* THE PRIMARY BUTTON'S SLOT, WITH THE HONEST SENTENCE IN IT
           (`main.moves.card.confirm`). The card is built; the write path is not.
@@ -297,7 +297,17 @@ export function seriesLine(reading: MoveReading): string {
       // the break is that refusal contradicted in the reader's own eye. The
       // break is MARKED, not hidden: the reader sees both months and sees why
       // they are not one run.
-      const read = s.points.filter((p) => p.pct != null)
+      // ONLY THE MONTHS SINCE THE LATEST BREAK (T0a; the one condition). A
+      // refused step (`refusedSteps`) or a change of grouping between two
+      // months is a comparison the product will not stand behind, so the
+      // months before it are not printed beside the ones after, marked or not.
+      const readAll = s.points.filter((p) => p.pct != null)
+      const steps = s.refusedSteps ?? {}
+      const regimeBroke = (i: number): boolean =>
+        !s.noClustering && s.regimeByMonth != null && (s.regimeByMonth[readAll[i - 1].month] ?? null) !== (s.regimeByMonth[readAll[i].month] ?? null)
+      let from = 0
+      for (let i = 1; i < readAll.length; i++) if (steps[readAll[i].month] || steps[monthStartOf(readAll[i].month)] || regimeBroke(i)) from = i
+      const read = readAll.slice(from)
       const parts = read.map((p, i) => {
         // UNDER THE FLOOR, THE COUNT ALONE ("6 of 82"); at or over it, the
         // share of its own n ("9.1% of 1,290"). "7.3% 6 of 82" was a decimal
@@ -307,11 +317,7 @@ export function seriesLine(reading: MoveReading): string {
           : `${p.pct}%`
         const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${level}`
         if (i === 0) return label
-        const broke =
-          !s.noClustering &&
-          s.regimeByMonth != null &&
-          (s.regimeByMonth[read[i - 1].month] ?? null) !== (s.regimeByMonth[p.month] ?? null)
-        return `${broke ? REGIME_BREAK : arrows ? ' → ' : ' · '}${label}`
+        return `${arrows ? ' → ' : ' · '}${label}`
       })
       return parts.length > 0 ? `${s.label} ${parts.join('')}` : null
     })
@@ -352,15 +358,17 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
           control, and this product does not compute one. */}
       {reading ? (
         <>
-          <span className={email ? undefined : 'flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-secondary-foreground'}>
-            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={reading.verdict} unit="pts" mode={mode} sharedRefusal={readingShared} /></span>
-            {reading.control.map((v) => (
-              <span key={`${v.objectId}-${v.audience}`} className={email ? undefined : 'flex items-center gap-1.5'}>
-                {seriesLabel(reading, v.audience)} <BlockMovement verdict={v} unit="pts" mode={mode} sharedRefusal={readingShared} />
-              </span>
-            ))}
-          </span>
-          <PairChip note={readingShared} mode={mode} />
+          {/* A refused side prints nothing, not even its name (T0a). */}
+          {priorPrintable(reading.verdict) || reading.control.some(priorPrintable) ? (
+            <span className={email ? undefined : 'flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-secondary-foreground'}>
+              {priorPrintable(reading.verdict) ? <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={reading.verdict} unit="pts" mode={mode} sharedRefusal={readingShared} /></span> : null}
+              {reading.control.filter(priorPrintable).map((v) => (
+                <span key={`${v.objectId}-${v.audience}`} className={email ? undefined : 'flex items-center gap-1.5'}>
+                  {seriesLabel(reading, v.audience)} <BlockMovement verdict={v} unit="pts" mode={mode} sharedRefusal={readingShared} />
+                </span>
+              ))}
+            </span>
+          ) : null}
           {/* MARKED `level`, so rule (b) reaches it (Block D wave 3, M5). The
               line is a run of banded LEVELS and it printed six bare shares;
               unmarked, the copy contract's denominator rule never looked at

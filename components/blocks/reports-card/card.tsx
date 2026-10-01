@@ -1,12 +1,13 @@
 import Link from 'next/link'
 
-import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { Tile } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { QuarterlyCard } from '@/lib/pages/reports-card'
 import { quarterUnlocked } from '@/lib/reports/quarterly'
+import { priorPrintable } from '@/lib/reading/verdicts'
+import { printsMarket } from '@/lib/subjects/calibration-state'
 
 /**
  * The quarterly card on /dashboard/reports (Block D wave 2, package E-reports;
@@ -48,12 +49,16 @@ import { quarterUnlocked } from '@/lib/reports/quarterly'
  * two readings, side by side, with the band between them printed as a word.
  */
 export function QuarterlyCardTile({
-  card, col = 7, row = 2,
+  card: givenCard, col = 7, row = 2,
 }: {
   card: QuarterlyCard
   col?: number
   row?: number
 }) {
+  // ONLY A READY SUBJECT'S BAR (T0a, RP-26; ruling U6): a provisional one's
+  // level rests on its unverified matching. The loader leaves it out; a card
+  // stored before the rule is read the same way.
+  const card = { ...givenCard, series: givenCard.series.filter((s) => printsMarket(s.calibration)) }
   const unlocked = quarterUnlocked(card.readings)
   // WHETHER A COMPARISON WAS DRAWN AT ALL, which is a different question from
   // whether the gate is open. `buildQuarterlyCard` answers with no rows and no
@@ -62,7 +67,12 @@ export function QuarterlyCardTile({
   // card. The note in the body names the real cause; the pill and the footnote
   // below take their lead from this rather than from `readings`.
   const drawn = card.series.length > 0
-  const baselineOf = (label: string) => card.rows.find((r) => r.label === label)?.verdict.baseline ?? null
+  // Only beside a comparison that was drawn (T0a; the one condition): a
+  // refused quarter prints no tick and no "the quarter before" line.
+  const baselineOf = (label: string) => {
+    const v = card.rows.find((r) => r.label === label)?.verdict
+    return v && priorPrintable(v) ? v.baseline ?? null : null
+  }
   // ONE SCALE FOR EVERY BAR AND EVERY TICK ON THE CARD, and never the largest
   // bar itself. Scaled against the largest level, a card with one row drew its
   // 2.0% ("1 of 49", Sealand's Price) as a FULL bar — the one level on the card
@@ -192,12 +202,6 @@ export function QuarterlyCardTile({
                     </span>
                   </span>
                 </div>
-                {/* A PROVISIONAL SUBJECT'S BAR IS MARKED (decision C; WP1.1
-                    review, finding 2): its market level prints, with its
-                    word on a line of its own under the label, as on every
-                    other subjects table, so the truncating label never cuts
-                    it. A ready subject carries none. */}
-                <CalibrationTag calibration={s.calibration} block className="pl-3.5" />
                 {base && (
                   <p className="m-0 pl-3.5 font-mono text-[10.5px] text-muted-foreground">
                     the quarter before · {fmtPct(share(base.k, base.n), 1)} · {fmtInt(base.k)} of {fmtInt(base.n)}

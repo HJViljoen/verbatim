@@ -14,7 +14,7 @@ import { marketAdvice } from './advice'
 import { marketMoves } from './moves'
 import { claimsHead, claimsTally, marketSayHear } from './sayhear'
 import {
-  deepLinkFixture, firstUpdateFixture, marketFixture, ossurMovesFixture, sealandMovesFixture, sealandQuestionsFiled, unrecordedFixture,
+  deepLinkFixture, firstUpdateFixture, marketFixture, ossurMovesFixture, sealandMovesFixture, sealandQuestions, sealandQuestionsFiled, unrecordedFixture,
 } from './fixture'
 
 // WP3.6 · Your moves, rebuilt (market-first plan §2.6 Y1–Y6).
@@ -55,13 +55,29 @@ describe('market.questions (Y1) · three modes, an empty state, a fixture state'
     expect(render(marketQuestions.render(sealandMovesFixture(), 'app', ctx))).toContain('We looked in your posts for: airline, sizes')
   })
 
-  it('reads the three months by subject, and before MF3 says "so far", never a false none', () => {
+  // T0a (YM-9; ruling U6): every subject on production is provisional, and
+  // a subject's row, count and groups rest on its matching, so the table by
+  // subject is omitted there. It prints where the subjects are ready.
+  it('prints no subject that is not ready: production’s table by subject is omitted', () => {
     const text = renderText(marketQuestions.render(sealandMovesFixture(), 'app', ctx))
+    expect(text).not.toContain('by subject')
+    for (const name of ['Waterproofing', 'Price', 'Repair & warranty', 'Comfort', 'Durability']) expect(text).not.toContain(name)
+    expect(text).not.toContain('provisional')
+    expect(sealandMovesFixture().questions?.subjects).toEqual([])
+    // A copy stored before the rule, with its provisional rows in it.
+    const stored = { ...sealandMovesFixture(), questions: { ...sealandQuestions(null, true), subjects: sealandQuestions(null, true).subjects.map((s) => ({ ...s, calibration: 'provisional' as const })) } }
+    expect(renderText(marketQuestions.render(stored, 'app', ctx))).not.toContain('by subject')
+    expect(Object.keys(marketQuestions.figures!(stored)).filter((k) => k.startsWith('questions_subject'))).toEqual([])
+  })
+
+  it('reads the three months by subject, and before MF3 says "so far", never a false none (every subject ready)', () => {
+    const data = { ...sealandMovesFixture(), questions: sealandQuestions(null, true) }
+    const text = renderText(marketQuestions.render(data, 'app', ctx))
     expect(text).toContain('Over the last 3 months, by subject')
     expect(text).toContain('of your 56')
-    expect(text).toMatch(/Waterproofing provisional Demand for real waterproofing 3 · Worries about zippers in rain 2 16/)
-    expect(text).toMatch(/Price provisional Price and sale questions 6 12/)
-    expect(text).toMatch(/Repair & warranty provisional 11/)
+    expect(text).toMatch(/Waterproofing Demand for real waterproofing 3 · Worries about zippers in rain 2 16/)
+    expect(text).toMatch(/Price Price and sale questions 6 12/)
+    expect(text).toMatch(/Repair & warranty 11/)
     // No subject row says a bare "none": the judge has filed none of the 56
     // posts. One statement per cell (walkthrough B8), never "not checked yet"
     // beside "none of 56 shared two of its words".
@@ -73,7 +89,7 @@ describe('market.questions (Y1) · three modes, an empty state, a fixture state'
   })
 
   it('after MF3, reads the judge: a filed post about the subject touches it, every post filed reads none', () => {
-    const data = { ...sealandMovesFixture(), questions: sealandQuestionsFiled() }
+    const data = { ...sealandMovesFixture(), questions: sealandQuestionsFiled(true) }
     const text = renderText(marketQuestions.render(data, 'app', ctx))
     expect(text).not.toContain(JUDGE_NOT_CHECKED)
     expect(text).toMatch(/Price[^]*?1 of 56 your post of 22 Jul ?: sale · discounts/)
@@ -224,16 +240,31 @@ describe('Y4 · moves read in the market, as levels', () => {
   ]
   // Staging's pooled market, August and September (measured 27 Sep: the
   // market's videos 377 and 654; Waterproofing's market videos 15 and 29),
-  // and nothing read for October yet.
-  const reads = moveMarketReads({
+  // and nothing read for October yet. Waterproofing is ready, as on staging;
+  // a provisional subject's levels rest on its unverified matching and are
+  // not read (T0a, YM-47; ruling U6).
+  const readsFor = (calibration: 'ready' | 'provisional') => moveMarketReads({
     moves,
     month: '2026-09-01',
     on: (m) => (m.id === 'm-w' ? 'on the subject Waterproofing' : 'on a piece of advice'),
-    subjects: new Map([['s-water', { name: 'Waterproofing', calibration: 'provisional' as const }]]),
+    subjects: new Map([['s-water', { name: 'Waterproofing', calibration }]]),
     themes: new Map(),
     adviceTargets: new Map(),
     levels: (_kind, _id, month) => (month === '2026-08-01' ? 15 : month === '2026-09-01' ? 29 : null),
     n: (month) => (month === '2026-08-01' ? 377 : month === '2026-09-01' ? 654 : null),
+  })
+  const reads = readsFor('ready')
+
+  it('reads no level on a provisional subject: the move is its name and its day', () => {
+    const [w] = readsFor('provisional')
+    expect(w.months.every((m) => m.k == null && m.n == null)).toBe(true)
+    const data = { ...sealandMovesFixture(), moves: { ...sealandMovesFixture().moves, rows: [], empty: null, market: readsFor('provisional') } }
+    for (const mode of MODES) {
+      const text = renderText(marketMoves.render(data, mode, ctx))
+      expect(text, mode).toContain('Show the zip test on camera')
+      expect(text, mode).not.toMatch(/\d+ of \d+/)
+      expect(text, mode).not.toContain('provisional')
+    }
   })
 
   it('reads the move’s month and the two after it, as levels, and names the ones not read yet', () => {

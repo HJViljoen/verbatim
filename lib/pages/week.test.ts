@@ -42,6 +42,8 @@ import {
 import {
   comparableBaselineFrom,
   heardAtFloor,
+  heardRows,
+  heardWithheld,
   heardBlockOf,
   marketCameIn,
   monthsAfter,
@@ -726,21 +728,21 @@ describe('marketSubjectsOf (market-first WP2.7)', () => {
     expect(b.market).toEqual({ month: '2026-09-01', n: 654 })
   })
 
-  it('prints a provisional subject’s market figure, marked, and never a verdict', () => {
-    const price = marketSubjectsOf(base).rows.find((r) => r.id === 'price')!
-    expect(price.calibration).toBe('provisional')
-    expect(price.market?.monthSoFar.k).toBe(25)
-    expect(price.market?.thisUpdate).toBe(13)
-    expect(price.verdict).toBeNull()
-    expect(price.market?.monthSoFar.verdict).toBeNull()
+  // T0a (WK-26; ruling U6): a provisional subject prints no figure; it is
+  // named among the withheld, as a failed one is.
+  it('names a provisional subject with no figure, never its market level', () => {
+    const b = marketSubjectsOf(base)
+    expect(b.rows.find((r) => r.id === 'price')).toBeUndefined()
+    expect(b.withheld?.find((r) => r.id === 'price')).toEqual({ id: 'price', label: 'Price', calibration: 'provisional' })
   })
 
-  it('withholds a failed subject and one the month was not read for, with their words', () => {
+  it('withholds a failed subject, a provisional one and one the month was not read for', () => {
     const b = marketSubjectsOf(base)
-    expect(b.rows.map((r) => r.id)).toEqual(['looks', 'price'])
+    expect(b.rows.map((r) => r.id)).toEqual(['looks'])
     expect(b.withheld).toEqual([
       { id: 'repair', label: 'Repair & warranty', calibration: 'failed' },
-      { id: 'community', label: 'Community & purpose', calibration: 'provisional', unread: 'no reading yet' },
+      { id: 'community', label: 'Community & purpose', calibration: 'provisional' },
+      { id: 'price', label: 'Price', calibration: 'provisional' },
     ])
   })
 
@@ -752,7 +754,7 @@ describe('marketSubjectsOf (market-first WP2.7)', () => {
 
   it('reads 0 for a read subject no market video cited this update', () => {
     const b = marketSubjectsOf({ ...base, added: [] })
-    expect(b.rows.map((r) => r.market?.thisUpdate)).toEqual([0, 0])
+    expect(b.rows.map((r) => r.market?.thisUpdate)).toEqual([0])
   })
 
   it('leaves a rival that is no longer tracked out of both counts', () => {
@@ -866,7 +868,14 @@ describe('heardBlockOf (WP3.7): the themes first heard, grouped as the board gro
     expect(h.rows[0].provenance).toEqual({ fromNewSearches: 8, of: 10 })
     expect(h.rows[1].provenance).toBeNull()
     expect(h.prevMonth).toBe('2026-08-01')
-    expect(heardAtFloor(h)).toBe(2)
+    // T0a (mechanism 4; WK-21): Laundry planning's 8 of 10 from searches
+    // added in September is our search, not new talk: not counted or listed.
+    expect(heardAtFloor(h)).toBe(1)
+    expect(heardRows(h).map((r) => r.label)).toEqual(['Preference for secondhand fashion'])
+    expect(heardWithheld(h)).toBe(true)
+    const under = heardBlockOf({ month: '2026-09-01', fresh, segments, segmentsState: 'measured', provenance: new Map([['4f4bc420-8906-44ac-878d-2855c1011485', { fromNewSearches: 3, of: 10 }]]) })
+    expect(heardAtFloor(under)).toBe(2)
+    expect(heardWithheld(under)).toBe(false)
   })
 
   it('groups a theme half or more makers’ into the makers line (decision F), counted with the floor', () => {

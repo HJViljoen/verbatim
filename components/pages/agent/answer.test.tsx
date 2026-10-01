@@ -378,22 +378,27 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
   const provisional = objectReading({ object: { kind: 'subject', id: 's2', label: 'Waterproofing', calibration: 'provisional' }, points: [{ month: '2026-09-01', k: 33, n: 626 }] }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
   const brand = objectReading({ object: { kind: 'brand', id: 'b1', label: 'Cotopaxi' }, points: [], notRead: true }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
 
-  it('prints the level with its "of N", the trail and the refusal, never "moved"', () => {
+  it('prints the level with its "of N" and nothing of the refused month before, never "moved"', () => {
     const text = renderText(<AboutReadings readings={[ready]} />)
     expect(text).toContain('Looks & style')
     expect(text).toContain('104 of 626 videos')
     expect(text).toContain('in your market · September')
-    // The Subjects pane's own trail (`marketTrail`): each month a level on
-    // its own base, with its "of N".
-    expect(text).toContain('Aug 11% of 351 · Sep 17% of 626')
-    expect(text).toContain('Not read as a change: we changed our searches in September.')
+    // T0a (the one condition): the pair is refused, so no trail across it
+    // ("Aug 11% of 351 · Sep 17% of 626" was the comparison itself) and no
+    // sentence saying why.
+    expect(text).not.toContain('Aug')
+    expect(text).not.toContain('of 351')
+    expect(text).not.toContain('Not read as a change')
     expect(text).not.toMatch(/\bmoved\b/)
   })
 
-  it('marks a provisional subject and says "not read yet" where nothing was counted', () => {
+  // T0a (AK-5; ruling U6): a provisional subject's level rests on its
+  // unverified matching; it is named with no figure and no word.
+  it('names a provisional subject with no figure, and says "not read yet" where nothing was counted', () => {
     const text = renderText(<AboutReadings readings={[provisional, brand]} />)
-    expect(text).toContain('provisional')
-    expect(text).toContain('33 of 626 videos')
+    expect(text).toContain('Waterproofing')
+    expect(text).not.toContain('provisional')
+    expect(text).not.toContain('33 of 626')
     expect(text).toContain('Cotopaxi')
     expect(text).toContain('not read yet')
   })
@@ -401,8 +406,9 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
   // Community & purpose on staging: named 24 Sep at 12:41, after the update
   // that wrote September (lib/subjects/read-in.ts). Subjects prints "no
   // reading yet" in its word's place; Ask printed "0 of 654 videos".
+  // HYPOTHETICAL `ready` (a provisional subject is its name alone, T0a).
   const unread = objectReading(
-    { object: { kind: 'subject', id: 's3', label: 'Community & purpose', calibration: 'provisional' }, points: [{ month: '2026-09-01', k: null, n: 654 }], filling: new Set(['2026-09-01']), nextUpdate: '2026-10-04T06:00:00.000Z' },
+    { object: { kind: 'subject', id: 's3', label: 'Community & purpose', calibration: 'ready' }, points: [{ month: '2026-09-01', k: null, n: 654 }], filling: new Set(['2026-09-01']), nextUpdate: '2026-10-04T06:00:00.000Z' },
     '2026-09-01', judge, '2026-10-02T06:00:00.000Z',
   )
 
@@ -415,12 +421,15 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
   })
 
   it('shows at most the last three months read, and never a month with no reading', () => {
+    // HYPOTHETICAL: `ready`, and every pair read the same way, so the trail
+    // is not cut at a refused step (T0a) and its three-month cap shows.
+    const joined = (prevMonth: string, month: string) => ({ prevMonth, month, mode: 'comparable' as const, reasons: [], row: null, checkWith: null })
     const long = objectReading({
-      object: { kind: 'subject', id: 's1', label: 'Looks & style', calibration: 'provisional' },
+      object: { kind: 'subject', id: 's1', label: 'Looks & style', calibration: 'ready' },
       // Staging's pooled market, June to September (June and July under
       // 100 videos print counts).
       points: [{ month: '2026-06-01', k: 5, n: 50 }, { month: '2026-07-01', k: 4, n: 36 }, { month: '2026-08-01', k: 38, n: 377 }, { month: '2026-09-01', k: 103, n: 654 }],
-    }, '2026-09-01', judge, '2026-10-02T06:00:00.000Z')
+    }, '2026-09-01', joined, '2026-10-02T06:00:00.000Z')
     const text = renderText(<AboutReadings readings={[long]} />)
     expect(text).toContain('Jul 4 of 36 · Aug 10% of 377 · Sep 16% of 654')
     expect(text).not.toContain('Jun')

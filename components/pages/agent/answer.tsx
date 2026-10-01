@@ -12,7 +12,9 @@ import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
 import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
-import { pairSentence } from '@/lib/calibration'
+import { priorPrintable } from '@/lib/reading/verdicts'
+import { printsMarket } from '@/lib/subjects/calibration-state'
+import { monthStartOf } from '@/lib/reading/month-key'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { NO_READING_YET } from '@/lib/subjects/read-in'
@@ -89,7 +91,9 @@ function Marks({ f }: { f: FindingMeasure }) {
 function Baseline({ f }: { f: FindingMeasure }) {
   const prev = f.verdict?.baseline
   const from = f.verdict?.basis?.from
-  if (!prev || !from) return null
+  // Only beside a comparison that was drawn (T0a, AK-14): a refused one, even
+  // stored with its baseline, prints the month read alone.
+  if (!prev || !from || !priorPrintable(f.verdict)) return null
   return (
     <p className="m-0 font-mono text-[11px] text-muted-foreground">
       the month before:{' '}
@@ -231,7 +235,13 @@ function FindingChart({ f }: { f: FindingMeasure }) {
  * neither node's text is something the contract has to reason about.
  */
 function MonthTrail({ f }: { f: FindingMeasure }) {
-  const months = f.series.filter((p) => f.chart.axis.includes(p.month))
+  // THE MONTHS SINCE THE LATEST REFUSED STEP ONLY (T0a, AK-14). A finding
+  // measured today carries only those; one stored before the rule carries the
+  // refused step on its line (`brokenBefore`), and nothing before it is
+  // listed, because " → " across a refused step is the comparison itself.
+  const breaks = f.chart.line.points.filter((p) => p.brokenBefore).map((p) => monthStartOf(p.month)).sort()
+  const since = breaks.length > 0 ? breaks[breaks.length - 1] : null
+  const months = f.series.filter((p) => f.chart.axis.includes(p.month) && (since == null || monthStartOf(p.month) >= since))
   if (months.length === 0) return null
   return (
     <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
@@ -531,9 +541,14 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
       <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">In your market</h3>
       {readings.map((r) => {
         const label = aboutLabel(r)
-        const failed = r.object.kind === 'subject' && r.object.calibration === 'failed'
+        // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, AK-24; ruling
+        // U6): no level, trail, verdict or word.
+        const failed = r.object.kind === 'subject' && !printsMarket(r.object.calibration)
         const unread = r.state === 'unread'
-        const trail = aboutTrail(r)
+        // A REFUSED PAIR PRINTS THE MONTH READ ALONE (T0a, AK-24): no trail
+        // across the refusal and no sentence about it.
+        const refused = r.verdict != null && !priorPrintable(r.verdict)
+        const trail = refused ? aboutTrail(r).slice(-1) : aboutTrail(r)
         const current = trail.length > 0 ? trail[trail.length - 1].month : null
         // THE SUBJECT PANE'S OWN TRAIL (S7): the last three months read, each
         // a level on its own base with its "of N", the month read in bold.
@@ -553,9 +568,7 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
               <span className="text-[13px] font-semibold text-foreground">{label}</span>
               {r.object.kind === 'subject' && !failed ? <CalibrationTag calibration={r.object.calibration ?? null} unread={unread ? r.unread ?? NO_READING_YET : null} /> : null}
             </div>
-            {failed ? (
-              <p className="m-0 text-[12.5px] text-muted-foreground">being re-described</p>
-            ) : unread ? (
+            {failed ? null : unread ? (
               trailLine
             ) : r.state === 'not_read' || !r.curr || r.curr.n == null || r.curr.k == null ? (
               <p className="m-0 text-[12.5px] text-muted-foreground">not read yet</p>
@@ -563,16 +576,13 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <FindingLevel value={{ k: r.curr.k, n: r.curr.n }} />
-                  {r.verdict && r.verdict.state !== 'refused' ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
+                  {r.verdict && !refused ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
                   <DirectionWord direction={r.direction} />
                   <span className="font-mono text-[11px] text-muted-foreground">
                     in your market · <span data-copy="figure">{longMonth(r.curr.month)}</span>
                   </span>
                 </div>
                 {trailLine}
-                {r.verdict?.pair?.mode === 'refuse' ? (
-                  <p className="m-0 text-[12px] text-muted-foreground">{pairSentence(r.verdict.pair)}</p>
-                ) : null}
               </>
             )}
           </TileBlock>

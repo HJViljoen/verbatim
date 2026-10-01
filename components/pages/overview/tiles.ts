@@ -40,6 +40,13 @@ const ONE_LINE_COLS: Record<string, 4 | 6 | 8 | 12> = {
   'overview.moves': 6,
   'overview.rivals': 6,
 }
+/** The preview's two pairs, each way round. */
+const PAIRED: Record<string, string> = {
+  'overview.subjects': 'overview.foryou',
+  'overview.foryou': 'overview.subjects',
+  'overview.moves': 'overview.rivals',
+  'overview.rivals': 'overview.moves',
+}
 const ONE_LINE_ROWS: Record<string, number> = {
   'overview.subjects': 1,
   'overview.rivals': 1,
@@ -65,8 +72,11 @@ const ONE_LINE_ROWS: Record<string, number> = {
  * Below `xl` the page is one column and each tile keeps its floor (`ROWS`,
  * below), set so a short block holds no white under its footer.
  */
-export function frontTile(key: string, oneLine: boolean): { col: 4 | 6 | 8 | 12; row: number; className: string } {
-  const col = (oneLine ? ONE_LINE_COLS : FRONT_COLS)[key] ?? 12
+export function frontTile(key: string, oneLine: boolean, omitted: ReadonlySet<string> = new Set()): { col: 4 | 6 | 8 | 12; row: number; className: string } {
+  // A TILE WHOSE PARTNER IS OMITTED SPANS THE ROW ALONE (T0a): an empty block
+  // is left out, never drawn as an empty tile beside its pair.
+  const partner = PAIRED[key]
+  const col = partner && omitted.has(partner) ? 12 : (oneLine ? ONE_LINE_COLS : FRONT_COLS)[key] ?? 12
   return {
     col,
     row: (oneLine ? ONE_LINE_ROWS[key] : undefined) ?? ROWS[key] ?? 2,

@@ -273,8 +273,17 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
         flags: pair.flag && !flags.includes('tracking_change') ? [...flags, 'tracking_change'] : flags,
         ...(pair.note && !panelRefused ? { pair: pair.note } : {}),
       }
+      // A REFUSED VERDICT CARRIES NO BASELINE (`bandVerdict`'s refused shape;
+      // T0a, the one condition): the month before does not travel beside a
+      // comparison the product will not draw.
+      const { baseline: _prior, ...level } = base
       if (panelRefused) {
-        attentionVerdict = { ...base, state: 'refused', refusedReason: 'tracking_change' }
+        attentionVerdict = { ...level, state: 'refused', refusedReason: 'tracking_change' }
+      } else if (pair.refused) {
+        // THE JUDGE'S REFUSAL WINS OVER THE FLOORS (T0a review, finding 1;
+        // `pairedVerdict`): a side under them is refused with the pair's note,
+        // never "too few to compare" beside last month's panel.
+        attentionVerdict = { ...level, state: 'refused', refusedReason: pair.refused }
       } else {
         const delta = proportionDelta(
           {
@@ -287,17 +296,12 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
           },
           floor,
         )
-        // THE FLOOR FIRST (deploy 1 review, the lead's R5): a side under the
-        // band's floors is "too few to compare", as `pairedVerdict` answers;
-        // the pair's refusal applies only where both sides clear it.
-        if (pair.refused && delta.state !== 'too_little_data') {
-          attentionVerdict = { ...base, state: 'refused', refusedReason: pair.refused }
-        } else {
-          const { pair: _pair, ...unpaired } = base
-          attentionVerdict = delta.state === 'too_little_data'
-            ? { ...unpaired, changePts: delta.change, bandPts: delta.band, state: delta.state }
-            : { ...base, changePts: delta.change, bandPts: delta.band, state: delta.state }
-        }
+        // A PAIR THE JUDGE ACCEPTED: the band answers, and a side under its
+        // floors is "too few to compare" with no change drawn.
+        const { pair: _pair, ...unpaired } = base
+        attentionVerdict = delta.state === 'too_little_data'
+          ? { ...unpaired, changePts: delta.change, bandPts: delta.band, state: delta.state }
+          : { ...base, changePts: delta.change, bandPts: delta.band, state: delta.state }
       }
     }
 

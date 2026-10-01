@@ -576,8 +576,15 @@ describe('measureAnswer under the month-pair rule', () => {
       expect(f.verdict?.state).toBe('refused')
       expect(f.verdict?.refusedReason).toBe('tracking_change')
       expect(f.direction).toBeNull()
-      // The chart beside the answer breaks the refused step.
-      expect(f.chart.line.points.find((p) => p.month === MONTH)?.brokenBefore).toBe('Not read as a change: we changed our searches in September.')
+      // T0a (the one condition): the chart and the trail beside the answer
+      // start at the refused step. August is not drawn or listed beside
+      // September, joined or not, and no "_prev_" key is offered to the model.
+      expect(f.chart.axis).toEqual([MONTH])
+      expect(f.chart.line.points.map((p) => p.month)).toEqual([MONTH])
+      expect(f.chart.line.points.some((p) => p.brokenBefore)).toBe(false)
+      expect(f.series.map((p) => p.month)).toEqual([MONTH])
+      expect(f.verdict?.baseline).toBeUndefined()
+      expect(Object.keys(f.figures).some((k) => /_prev_|_change$|_band$/.test(k))).toBe(false)
     }
   })
 })
