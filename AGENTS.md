@@ -430,6 +430,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (`report_sends`) stores subject, recipients and ids — never the email body;
   "the email as sent" re-renders from the snapshot. `weekly_reports` is
   legacy (read-only, stored HTML) and gets no new rows.
+- **The weekly read (`weekly_read`, "This week in your market") sends only a
+  READY read.** The artefact is the email of the run's stored `week_reads` row
+  (`lib/reports/weekly-read-build.ts`): one body for the email, the share page,
+  the viewer and the A4 PDF (`components/email/weekly-read.tsx`), quotes as
+  refs, `sent_figures` none. A run whose read is thin, failed, missing or empty
+  sends NOTHING: the send is `skipped` and the operator is alerted
+  (`weekReadSendState`, `runSchedule`). A review schedule's email goes to the
+  OPERATOR (`ALERT_EMAIL`), not the members, wherever the Studio is hidden from
+  the tenant or its sending is locked (`reviewAudience`,
+  `lib/schedules/members.ts`). Offline preview of a stored read:
+  `scripts/weekly-read-email.ts`.
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
   the email body are produced in route handlers (`/api/export`,
   `/api/reports/[id]/build`, `/api/admin/schedules/run`, `/api/schedules/*`,
