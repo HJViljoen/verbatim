@@ -1,18 +1,32 @@
+import { Bricolage_Grotesque } from "next/font/google"
 import { getSessionContext } from "@/lib/auth"
 import { listWorkspaces } from "@/lib/workspaces"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 import { VerbatimMark } from "@/components/brand/mark"
 
+// THE WORDMARK'S FACE (the navigation of 1 Oct: every `Page-*.dc.html` sidebar
+// sets "Verbatim" in Bricolage Grotesque 700). The bold cut alone, latin only,
+// for one word; everything else in the app stays Plex. A class on the word
+// itself rather than a variable on the layout, so the phone drawer, which is
+// portalled outside the layout's tree, draws it too.
+const wordmarkFace = Bricolage_Grotesque({ subsets: ["latin"], weight: "700", display: "swap" })
+
 /**
- * The wordmark as it has always been — and, for everyone who is not a platform
- * admin, as it stays. Also the Suspense fallback, so the header never shifts:
- * the operator's company name simply replaces it in place when it arrives.
+ * The wordmark, for everyone who is not a platform admin. Also the Suspense
+ * fallback, so the header never shifts: the operator's company name simply
+ * replaces it in place when it arrives.
+ *
+ * As the design draws it (`sidebar2.py`): 4px above, 12px either side and 18px
+ * below, inside the sidebar's own 12px; the mark at 20px and the word at 18px,
+ * 7px apart, both in ink.
  */
 export function SidebarWordmark() {
   return (
-    <div className="flex h-14 items-center gap-2 px-4">
-      <VerbatimMark size={20} className="shrink-0 text-primary" />
-      <span className="text-[18px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
+    <div className="px-3 pt-1 pb-[18px]">
+      <div className="flex items-center gap-[7px]">
+        <VerbatimMark size={20} className="shrink-0 text-foreground" />
+        <span className={`${wordmarkFace.className} text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground`}>Verbatim</span>
+      </div>
     </div>
   )
 }

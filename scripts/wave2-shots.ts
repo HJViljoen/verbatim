@@ -32,7 +32,6 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
-import { LogOut } from 'lucide-react'
 import { withBrowser } from '../lib/render/chromium'
 
 import { OverviewPage } from '../components/pages/overview'
@@ -49,9 +48,8 @@ import { voiceFixture } from '../components/pages/voice-surface/fixture'
 import { marketFixture } from '../components/pages/market-surface/fixture'
 import { competitiveFixture } from '../components/pages/competitive-surface/fixture'
 import { weekFixture } from '../components/pages/week/fixture'
-import { SidebarTenant } from '../components/sidebar-tenant-loader'
 import { NAV_ICON } from '../components/nav-icons'
-import { surfacesIn, type NavKey } from '../lib/nav'
+import { surfacesIn, type NavGroup, type NavKey } from '../lib/nav'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -63,61 +61,45 @@ const artboards = flag(
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
-// THE ROWS COME OFF `lib/nav.ts`, not a list retyped here — the labels and the
-// order are the one table's, which is what the app reads too. `NAV` used to be
-// that list by hand and is now derived, so a surface renamed in the table is
-// renamed in the shot.
-const NAV = surfacesIn('Intelligence').map((s) => ({ key: s.key, label: s.label }))
-const ACCOUNT = surfacesIn('Account').map((s) => ({ key: s.key, label: s.label }))
-const TENANT = renderToStaticMarkup(SidebarTenant({ brand: 'Sealand', role: 'admin' }))
+// THE ROWS COME OFF `lib/nav.ts`, not a list retyped here — the labels, the
+// order and the four groups are the one table's, which is what the app reads
+// too, so a surface renamed in the table is renamed in the shot.
+const GROUPS: NavGroup[] = ['read', 'steer', 'agent']
+const rowsOf = (g: NavGroup) => surfacesIn(g).map((s) => ({ key: s.key, label: s.label }))
 
-// The shipped row's icon, at the shipped size. `size-4` is 16px and the app
-// paints it `text-muted-foreground`, `text-foreground` on the active row —
-// which is what `Main.dc.html` draws (16 × 16, stroke-width 2, `#6E7378` and
-// `#26292C`). `currentColor` lets the row's own colour reach it, as the class
-// does in the app.
-const icon = (key: NavKey, active: boolean) =>
+// The shipped row's icon, at the shipped size: 16px, stroke 2, ink on the
+// active row and on the Agent's, `#6E7378` otherwise (components/app-sidebar.tsx,
+// as `sidebar2.py` draws it).
+const icon = (key: NavKey, ink: boolean) =>
   renderToStaticMarkup(
     createElement(NAV_ICON[key], {
       width: 16,
       height: 16,
-      color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
+      color: ink ? 'var(--foreground)' : '#6E7378',
       strokeWidth: 2,
       'aria-hidden': true,
     }),
   )
 
-// Logout is the one row with no `NavKey`; it is the app's `LogOut`, drawn the
-// same way. Imported lazily here rather than added to the nav map, because it
-// is not a surface and `components/nav-icons.ts` holds surfaces.
-const LOGOUT_ICON = renderToStaticMarkup(
-  createElement(LogOut, { width: 16, height: 16, color: 'var(--muted-foreground)', strokeWidth: 2, 'aria-hidden': true }),
-)
-
+// The navigation of 1 Oct, drawn as the app draws it: 256px of white, a
+// hairline on its right edge, the wordmark, four groups split by hairlines
+// and no group labels, the Agent a filled yellow row, Studio and Settings at
+// the foot. The active page is a pill of the ink at 7% and semibold, no bar.
+const row = (s: { key: NavKey; label: string }, active: string) => {
+  const agent = s.key === 'ask'
+  const on = s.label === active
+  const fill = agent ? 'background:#FFD43B;font-weight:600;' : on ? 'background:rgba(38,41,44,0.07);font-weight:600;' : ''
+  return `<div style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:6px;font-size:14px;color:var(--foreground);${fill}">${icon(s.key, agent || on)}<span>${s.label}</span></div>`
+}
+const HAIRLINE = '<div style="height:1px;background:#E4E2DC;margin:8px 12px"></div>'
 const sidebar = (active: string) => `
-<aside style="width:224px;flex:none;display:flex;flex-direction:column;background:var(--sidebar);box-shadow:var(--shadow-tile)">
-  <div style="display:flex;align-items:baseline;gap:8px;padding:20px 16px 4px">
-    <span style="font-size:17px;font-weight:700;letter-spacing:-.02em;color:var(--foreground)">Verbatim</span>
+<aside style="width:256px;flex:none;display:flex;flex-direction:column;gap:4px;padding:18px 12px 16px;box-sizing:border-box;background:#FFFFFF;border-right:1px solid #E4E2DC">
+  <div style="padding:4px 12px 18px;display:flex;align-items:center;gap:7px">
+    <span style="font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--foreground)">Verbatim</span>
   </div>
-  <nav style="display:flex;flex-direction:column;gap:4px;padding-top:8px">
-    <div style="padding:0 14px">
-      <div style="height:28px;display:flex;align-items:center;padding:0 10px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground)">Intelligence</div>
-      ${NAV.map((s) => `
-      <div style="position:relative;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:4.8px;font-size:14px;font-weight:${s.label === active ? 600 : 400};color:${s.label === active ? 'var(--foreground)' : 'var(--sidebar-foreground)'}">
-        ${s.label === active ? '<span style="position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:9999px;background:var(--primary)"></span>' : ''}
-        ${icon(s.key, s.label === active)}<span>${s.label}</span>
-      </div>`).join('')}
-    </div>
-    <div style="padding:0 14px">
-      <div style="height:28px;display:flex;align-items:center;padding:0 10px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground)">Account</div>
-      ${ACCOUNT.map((s) => `
-      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)">${icon(s.key, false)}<span>${s.label}</span></div>`).join('')}
-    </div>
-  </nav>
-  <div style="margin-top:auto;padding:0 14px 16px">
-    ${TENANT}
-    <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)">${LOGOUT_ICON}<span>Logout</span></div>
-  </div>
+  ${GROUPS.map((g) => rowsOf(g).map((s) => row(s, active)).join('')).join(HAIRLINE)}
+  <div style="flex-grow:1"></div>
+  ${rowsOf('foot').map((s) => row(s, active)).join('')}
 </aside>`
 
 async function css(): Promise<string> {
@@ -135,8 +117,8 @@ const doc = (style: string, body: string, active: string) =>
 html,body{margin:0;padding:0}
 :root{--font-plex-sans:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;--font-plex-serif:'IBM Plex Serif',Georgia,serif;--font-plex-mono:'IBM Plex Mono',ui-monospace,monospace;--font-emoji:'Apple Color Emoji','Segoe UI Emoji',sans-serif;--font-sans:var(--font-plex-sans);--font-serif:var(--font-plex-serif);--font-mono:var(--font-plex-mono)}
 body{font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
-</style></head><body><div style="display:flex;width:1440px;background:var(--background)">${sidebar(active)}
-<main style="flex:1;min-width:0;padding:24px">${body}</main></div></body></html>`
+</style></head><body><div style="display:flex;width:1440px;background:#F7F6F2">${sidebar(active)}
+<main style="flex:1;min-width:0;padding:28px 40px 40px">${body}</main></div></body></html>`
 
 const pair = (built: string, artboard: string, title: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -153,7 +135,7 @@ h1{color:#e8e6df;font-size:26px;padding:24px 24px 0;margin:0}
 
 interface Page { key: string; nav: string; artboard: string; markup: () => string }
 const PAGES: Page[] = [
-  { key: 'overview', nav: 'Overview', artboard: 'Main.dc.html', markup: () => renderToStaticMarkup(OverviewPage({ data: overviewFixture() })) },
+  { key: 'overview', nav: 'Your market', artboard: 'Main.dc.html', markup: () => renderToStaticMarkup(OverviewPage({ data: overviewFixture() })) },
   { key: 'subjects', nav: 'Subjects', artboard: 'Subjects.dc.html', markup: () => renderToStaticMarkup(SubjectsPage({ data: subjectsFixture() })) },
   // VOICE TAKES ITS PAGE BAR'S RIGHT-HAND END FROM ITS CALLER, so the shot has
   // to pass it or photograph a bar the app does not have. Every other page
@@ -165,7 +147,7 @@ const PAGES: Page[] = [
   // the case the component is written for.
   {
     key: 'voice',
-    nav: 'Voice',
+    nav: 'Conversation',
     artboard: 'Voice.dc.html',
     markup: () => renderToStaticMarkup(VoiceSurfacePage({
       data: voiceFixture(),
@@ -177,7 +159,7 @@ const PAGES: Page[] = [
       controls: createElement(HowToRead, { items: VOICE_LEGEND, basePath: '/dashboard/voice', anchor: 'voice' }),
     })),
   },
-  { key: 'market', nav: 'Market', artboard: 'Market.dc.html', markup: () => renderToStaticMarkup(MarketSurfacePage({ data: marketFixture() })) },
+  { key: 'market', nav: 'Your moves', artboard: 'Market.dc.html', markup: () => renderToStaticMarkup(MarketSurfacePage({ data: marketFixture() })) },
   { key: 'competitive', nav: 'Competitive', artboard: 'Competitive.dc.html', markup: () => renderToStaticMarkup(CompetitiveSurfacePage({ data: competitiveFixture() })) },
   { key: 'week', nav: 'This week', artboard: 'ThisWeek.dc.html', markup: () => renderToStaticMarkup(WeekPage({ data: weekFixture() })) },
 ]

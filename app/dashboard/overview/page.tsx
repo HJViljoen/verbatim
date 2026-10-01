@@ -1,8 +1,7 @@
-// IN A ROUTE GROUP, WITH ITS LOADER (sw-2 item 8). Your market's skeleton was
-// app/dashboard/loading.tsx, which wrapped every dashboard address in a
-// Suspense boundary, the unknown ones too: the catch-all's notFound() came
-// after the shell had streamed, so a mistyped address answered 200. In
-// (front) the loader wraps this page alone; the URL is still /dashboard.
+// YOUR MARKET AT /dashboard/overview (1 Oct; page review §5.1). It was the
+// front page, in the `(front)` route group so its loader wrapped it alone
+// (sw-2 item 8); the Dashboard took `/dashboard`, and this folder is its own
+// segment now, so the loader beside it still wraps this page and no other.
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadOverview } from '@/lib/pages/overview'

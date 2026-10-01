@@ -35,9 +35,11 @@ export function WorkspaceSwitcher({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         disabled={pending}
-        className="flex w-full items-center gap-1.5 rounded-md px-4 pt-5 pb-1 text-left outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
+        className="flex w-full items-center gap-[7px] rounded-md px-3 pt-1 pb-[18px] text-left outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
       >
-        <VerbatimMark size={20} className="shrink-0 text-primary" />
+        {/* The wordmark's own geometry and ink (components/workspace-switcher-loader.tsx
+            SidebarWordmark), so the header does not shift when this replaces it. */}
+        <VerbatimMark size={20} className="shrink-0 text-foreground" />
         <span className="truncate text-[17px] font-bold tracking-[-0.02em] text-foreground">
           {operator.viewingName}
         </span>

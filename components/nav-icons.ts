@@ -1,4 +1,4 @@
-import { Globe, Target, MessageSquareText, Tag, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Globe, Target, MessageSquareText, Tag, List, CalendarDays, Sparkles, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
 
 import type { NavKey } from "@/lib/nav"
 
@@ -61,18 +61,22 @@ import type { NavKey } from "@/lib/nav"
  * renamed it, is the preview's tag (`M12.6 2.6A2 2 0 0 0 11.2 2H4 … z` and a
  * dot at 7.5, 7.5; deploy 5), no longer three columns.
  */
+/*
+ * THE NAVIGATION OF 1 OCT (`sidebar2.py`, every `Page-*.dc.html` sidebar) adds
+ * three and changes one: the Dashboard is `LayoutDashboard`, the Agent goes back
+ * to the original Lucide `Sparkles` (Heinrich, 30 Sep: the 22 Aug "Verbatim
+ * Agent" row), and the Studio is one of the ten with the `LayoutTemplate` it
+ * always had. Reports left the table, and its `FileText` with it.
+ */
 export const NAV_ICON: Record<NavKey, LucideIcon> = {
+  home: LayoutDashboard,
   overview: Globe,
-  subjects: List,
-  voice: MessageSquareText,
-  market: Target,
-  competitive: Tag,
   week: CalendarDays,
-  ask: CircleHelp,
-  reports: FileText,
+  voice: MessageSquareText,
+  competitive: Tag,
+  subjects: List,
+  market: Target,
+  ask: Sparkles,
+  studio: LayoutTemplate,
   settings: SlidersVertical,
 }
-
-/** The Studio is not one of the nine and is in no group list — it arrives
- *  through its own slot, for a session that may see it. */
-export const STUDIO_ICON: LucideIcon = LayoutTemplate

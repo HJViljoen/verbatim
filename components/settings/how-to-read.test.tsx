@@ -25,13 +25,18 @@ function cardMarkup(key: string): string {
 }
 
 describe('How to read, the page cards', () => {
-  it('draws one card per sidebar page, in the sidebar’s order, each under its anchor', () => {
+  // Every sidebar page but the Dashboard, which owns nothing (lib/settings/
+  // how-to-read.test.ts).
+  const CARDED = SURFACES.filter((s) => s.key !== 'home')
+
+  it('draws one card per sidebar page, in the cards’ order, each under its anchor', () => {
     const order = [...markup.matchAll(/<section id="([a-z]+)" data-search=/g)].map((m) => m[1])
-    expect(order).toEqual(SURFACES.map((s) => s.key))
+    expect(order).toEqual(READING_CARDS.map((c) => c.key))
+    expect([...order].sort()).toEqual(CARDED.map((s) => s.key).sort())
   })
 
   it('heads each card with its title alone; the link to the page is in the card’s foot, by its current label (25 Sep rulings, §4.0)', () => {
-    for (const s of SURFACES) {
+    for (const s of CARDED) {
       const html = cardMarkup(s.key)
       const header = html.slice(0, html.indexOf('</h3>'))
       expect(header, s.key).not.toContain('<a ')
@@ -42,7 +47,7 @@ describe('How to read, the page cards', () => {
   })
 
   it('prints §2.1’s question under the title, where the page has one', () => {
-    for (const s of SURFACES) if (s.question) expect(text).toContain(s.question)
+    for (const s of CARDED) if (s.question) expect(text).toContain(s.question)
   })
 
   it('prints every card’s words, and what each cannot tell you', () => {

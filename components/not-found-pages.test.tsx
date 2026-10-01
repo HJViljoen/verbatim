@@ -29,7 +29,7 @@ describe('the not-found pages', () => {
 
   it('the dashboard one names the front page by its sidebar label and links to it', () => {
     const html = render(DashboardNotFound())
-    expect(renderText(DashboardNotFound())).toContain('Go to Your market')
+    expect(renderText(DashboardNotFound())).toContain('Go to Dashboard')
     expect(html).toContain('href="/dashboard"')
   })
 

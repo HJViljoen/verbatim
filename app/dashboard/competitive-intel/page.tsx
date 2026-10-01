@@ -1,9 +1,10 @@
+import { redirect } from 'next/navigation'
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadCompetitive, type CompetitiveParams } from '@/lib/pages/competitive'
 import { CompetitivePage } from '@/components/pages/competitive'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
-import { oldPage } from '@/lib/nav'
+import { oldPage, tenantAway } from '@/lib/nav'
 import type { Metadata } from 'next'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -18,7 +19,11 @@ export const metadata: Metadata = { title: oldPage('/dashboard/competitive-intel
 // (Reports & Exports, 2026-08-29).
 
 export default async function Page({ searchParams }: { searchParams?: Promise<CompetitiveParams> }) {
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant no longer reaches this page (lib/nav.ts TENANT_RETIRED, 1 Oct); the operator keeps it.
+  const away = tenantAway(session, '/dashboard/competitive-intel')
+  if (away) redirect(away)
+  const { supabase, clientId } = session
   const sp = (await searchParams) ?? {}
   const data = await loadCompetitive({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return (

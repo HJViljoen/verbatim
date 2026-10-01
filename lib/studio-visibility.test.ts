@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { canSeeStudio, studioRedirect, STUDIO_AWAY_HREF, STUDIO_HREF, STUDIO_TENANT_VISIBLE } from './studio-visibility'
+import { canSeeStudio, studioRedirect, STUDIO_AWAY_HREF, STUDIO_HREF, STUDIO_TENANT_REVIEWS, STUDIO_TENANT_VISIBLE } from './studio-visibility'
+import { reviewAudience } from './schedules/members'
 import type { OperatorView } from './auth'
 
 // The gate that hides the Studio from tenant users (owner's call 2026-09-17).
@@ -37,10 +38,16 @@ describe('canSeeStudio', () => {
     expect(canSeeStudio(operatorHome)).toBe(true)
   })
 
-  it('is off for tenants as shipped', () => {
-    // The guard on the whole point of the change: if this ever goes true by
-    // accident, every client sees the Studio again.
-    expect(STUDIO_TENANT_VISIBLE).toBe(false)
+  it('is on for tenants as shipped (1 Oct: clients see the Studio)', () => {
+    expect(STUDIO_TENANT_VISIBLE).toBe(true)
+  })
+
+  it('does not make the members a build\'s reviewers: review stays the operator\'s', () => {
+    // Opening the page to clients is not opening its review controls. If this
+    // ever goes true by accident, a held build and its review email reach
+    // the members of every tenant whose sending is not locked.
+    expect(STUDIO_TENANT_REVIEWS).toBe(false)
+    expect(reviewAudience('a-tenant-not-locked', { sendsLocked: false })).toBe('operator')
   })
 
   it('names one route, the one every surface links to', () => {
@@ -50,9 +57,13 @@ describe('canSeeStudio', () => {
 
 // Finish-list item 16: `/dashboard/studio` opened for a tenant who typed it.
 describe('studioRedirect', () => {
-  it('sends a tenant user to Reports while the flag is off', () => {
+  it('sends a tenant user to the Dashboard while the flag is off, never to Reports (which redirects into the Studio)', () => {
     expect(studioRedirect(tenant, false)).toBe(STUDIO_AWAY_HREF)
-    expect(studioRedirect(tenant)).toBe('/dashboard/reports')
+    expect(STUDIO_AWAY_HREF).toBe('/dashboard')
+  })
+
+  it('lets a tenant user in as shipped', () => {
+    expect(studioRedirect(tenant)).toBeNull()
   })
 
   it('lets an operator in, on their own workspace and viewing a tenant', () => {

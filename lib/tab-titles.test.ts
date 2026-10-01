@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { SURFACES } from './nav'
 
 // Every app tab read "Verbatim · Consumer Intelligence", whichever page it held
-// (finish-list item 25 polish). Each of the nine now titles itself from the
+// (finish-list item 25 polish). Each of the ten now titles itself from the
 // same table the sidebar reads (lib/nav.ts), and the root layout's template
 // adds the product. A page that drops its metadata fails here.
 
@@ -13,9 +13,9 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')
 
 describe('tab titles', () => {
   it.each(SURFACES.map((s) => [s.label, s]))('%s titles its tab from its own surface', (_label, s) => {
-    // Your market's page sits in the (front) route group (sw-2 item 8: its
+    // The Dashboard's page sits in the (home) route group (sw-2 item 8: its
     // loader must not wrap the dashboard's catch-all); its URL is /dashboard.
-    const file = s.href === '/dashboard' ? 'app/dashboard/(front)/page.tsx' : `app${s.href}/page.tsx`
+    const file = s.href === '/dashboard' ? 'app/dashboard/(home)/page.tsx' : `app${s.href}/page.tsx`
     const src = read(file)
     expect(src, file).toMatch(/export const metadata: Metadata = \{ title: /)
     expect(src, file).toContain(`surface('${s.key}').label`)

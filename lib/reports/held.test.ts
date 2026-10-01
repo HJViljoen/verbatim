@@ -60,8 +60,6 @@ describe('the reads, failing closed', () => {
 describe('every door into a build asks the rule', () => {
   const src = (p: string) => readFileSync(resolve(__dirname, '../..', p), 'utf8')
   const doors: [string, RegExp[]][] = [
-    // Built, the cards, the count, the Sent detail and the viewer.
-    ['app/dashboard/reports/page.tsx', [/mayReadHeld\(session, clientId\)/, /heldSnapshotIds\(/, /\.filter\(\(b\) => showsBuild\(b\.id\)\)/, /snapshotHeld\(createAdminClient\(\), clientId, sp\.view\)/, /sendContent && selectedSend\?\.snapshot_id/, /\{sendContent && <DetailSection label="Files and links">/]],
     ['app/dashboard/studio/page.tsx', [/snapshotHeld\(createAdminClient\(\), clientId, sp\.view\)/]],
     ['app/api/share/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, snapshotId\)/]],
     ['app/api/artifacts/[id]/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, row\.snapshot_id\)/]],

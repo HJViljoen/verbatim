@@ -68,6 +68,7 @@ function revalidateInitiatives() {
   revalidatePath('/dashboard/settings/initiatives')
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/overview')
   revalidatePath('/dashboard/voice')
 }
 

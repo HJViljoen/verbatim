@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { SettingsFrame, SettingsCard } from '@/components/settings-frame'
 import { InitiativeRowForm } from './initiative-row'
 import { getSessionContext } from '@/lib/auth'
@@ -6,7 +7,7 @@ import { weekdayDate } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
-import { PARKED_INITIATIVES, surface } from '@/lib/nav'
+import { PARKED_INITIATIVES, surface, tenantAway } from '@/lib/nav'
 import type { Metadata } from 'next'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -30,7 +31,11 @@ export const metadata: Metadata = { title: `${PARKED_INITIATIVES.label} · ${sur
 // nowhere else to go is parked, never redirected.
 
 export default async function InitiativesSettingsPage() {
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant no longer reaches this page (lib/nav.ts TENANT_RETIRED, 1 Oct); the operator keeps it.
+  const away = tenantAway(session, '/dashboard/settings/initiatives')
+  if (away) redirect(away)
+  const { supabase, clientId } = session
 
   const [clientRes, initiativesRes] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),

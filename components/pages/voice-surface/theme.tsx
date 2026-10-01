@@ -161,7 +161,8 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
       </div>
     )
 
-    const askLabel = 'Ask about this'
+    // The design's words (Page-Conversation.dc.html), naming the Agent (1 Oct).
+    const askLabel = 'Ask the Agent about this'
     const videosLabel = `The ${fmtInt(t.k)} videos behind this →`
     const actions = email ? (
       <p style={{ fontFamily: FONT.sans, fontSize: 13, margin: '10px 0 0' }}>

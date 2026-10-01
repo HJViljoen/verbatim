@@ -23,8 +23,10 @@ import { QUEUE_FLOOR } from './queue'
 import { TERM_YIELD_BASIS } from './terms'
 
 describe('how to read', () => {
-  it('describes every surface the shell has, and no other', () => {
-    expect(READING_CARDS.map((c) => c.key)).toEqual(SURFACES.map((s) => s.key))
+  it('describes every surface the shell has but the Dashboard, and no other', () => {
+    // The Dashboard (1 Oct) owns nothing: it is one headline from each page,
+    // each linking through, so the page it points at is the one described.
+    expect(READING_CARDS.map((c) => c.key).sort()).toEqual(SURFACES.filter((s) => s.key !== 'home').map((s) => s.key).sort())
   })
 
   it('repeats neither the title nor the question — lib/nav.ts owns both', () => {
@@ -265,7 +267,7 @@ describe('how to read, market-first', () => {
     expect(ASK_MONTHLY_CAP).toBe(40)
     expect(cardText('ask')).toContain('40 questions a month')
     expect(MONTHLY_UPDATES_PAST_END).toBe(1)
-    expect(cardText('reports')).toContain('one update past its end')
+    expect(cardText('studio')).toContain('one update past its end')
   })
 
   it('says a held-still edit is queued, and claims nothing lands before the queue’s floor (decision I)', () => {

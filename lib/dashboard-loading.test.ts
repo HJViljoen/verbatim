@@ -31,17 +31,14 @@ const SHARED: Readonly<Record<string, string>> = {
   'settings/record': 'settings',
   'settings/reports': 'settings',
   'settings/subjects': 'settings',
-  // Both only redirect: [id] into the Reports archive, new to the Studio or back.
-  'reports/[id]': 'reports',
-  'reports/new': 'reports',
   // Redirects to studio/edit/[reportId]; reports/studio/loading.tsx re-exports its skeleton.
   'reports/studio/[reportId]': 'reports/studio',
 }
 
 /** Pages that must have NO loader above them (sw-2 item 8): a Suspense
  *  boundary streams the page's shell with status 200 before its notFound()
- *  throws, so an unknown /dashboard address answered 200. The front page's
- *  loader lives in the (front) route group, and nothing wraps the catch-all. */
+ *  throws, so an unknown /dashboard address answered 200. The Dashboard's
+ *  loader lives in the (home) route group, and nothing wraps the catch-all. */
 const NO_LOADER: Readonly<Record<string, string>> = {
   '[...rest]': 'throws notFound(); a loader above it turns the 404 into a streamed 200',
 }
@@ -52,6 +49,10 @@ const INHERITS: Readonly<Record<string, string>> = {
   // its crowd art on a separate branch; these follow it there.
   ask: 'redirects to /dashboard/agent',
   'ask/[id]': 'redirects to /dashboard/agent',
+  // Reports folded into the Studio (1 Oct): all three only redirect there.
+  reports: 'redirects to /dashboard/studio',
+  'reports/[id]': 'redirects to /dashboard/studio',
+  'reports/new': 'redirects to /dashboard/studio',
 }
 
 function pages(dir: string): string[] {
@@ -71,7 +72,8 @@ const ALL = pages(ROOT).sort()
 
 describe('dashboard loading skeletons', () => {
   it('finds the dashboard pages', () => {
-    expect(ALL).toContain('(front)')
+    expect(ALL).toContain('(home)')
+    expect(ALL).toContain('overview')
     expect(ALL.length).toBeGreaterThan(20)
   })
 
@@ -113,8 +115,8 @@ describe('dashboard loading skeletons', () => {
     if (!LEGACY.has(folder)) expect(html).toMatch(/role="status"/)
   })
 
-  it('the root skeleton is the current Overview, not the pre-redesign dashboard', () => {
-    const src = readFileSync(join(ROOT, '(front)', 'loading.tsx'), 'utf8')
+  it('Your market\'s skeleton is the current Overview, not the pre-redesign dashboard', () => {
+    const src = readFileSync(join(ROOT, 'overview', 'loading.tsx'), 'utf8')
     expect(src).toMatch(/nav="overview"/)
     expect(src).not.toMatch(/SkeletonStrip|title="Dashboard"/)
   })

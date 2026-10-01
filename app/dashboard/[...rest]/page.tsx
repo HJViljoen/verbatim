@@ -11,8 +11,8 @@ export const metadata: Metadata = { title: 'Page not found' }
 //
 // NO LOADER ABOVE IT, AND NONE OF ITS OWN (sw-2 item 8). A loading.tsx is a
 // Suspense boundary: the shell streams with status 200 before notFound()
-// throws, so an unknown address answered 200. Your market's loader lives in
-// app/dashboard/(front) for that reason, and lib/dashboard-loading.test.ts
+// throws, so an unknown address answered 200. The Dashboard's loader lives in
+// app/dashboard/(home) for that reason, and lib/dashboard-loading.test.ts
 // holds the line.
 export default function UnknownDashboardPage(): never {
   notFound()

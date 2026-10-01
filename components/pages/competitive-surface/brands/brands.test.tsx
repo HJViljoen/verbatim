@@ -305,9 +305,9 @@ describe('B7 · share of what our searches found', () => {
 })
 
 describe('the Brands page', () => {
-  it('is titled Brands, with the month selector and its one line, no horizon pills and no Export', () => {
+  it('is titled Competitive (its label again since 1 Oct), with the month selector and its one line, no horizon pills and no Export', () => {
     const t = text(<CompetitiveSurfacePage data={brandsFixture()} />)
-    expect(t.startsWith('Brands ')).toBe(true)
+    expect(t.startsWith('Competitive ')).toBe(true)
     expect(t).toContain('as at the 20 Sep update')
     // T0 ruling U12 (BR-2): the page key `competitive` exports the parked
     // Competitive Intelligence page, with deltas no pair judge saw, so Brands

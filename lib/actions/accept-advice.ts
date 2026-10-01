@@ -85,6 +85,7 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
   const status = await setRecommendationStatus(rec.id as string, 'acted_on')
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/overview')
   if (!status.ok) return { ok: false, message: `${plan.message} ${status.message}`.trim() }
   return { ok: true, message: plan.message }
 }

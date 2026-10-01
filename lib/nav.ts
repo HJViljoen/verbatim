@@ -1,6 +1,7 @@
 import { OLD_PAGES_RETIRE_ON } from './config'
 import { fullDate } from './format'
 import type { PageKey } from './renderables/types'
+import type { SessionContext } from './auth'
 
 /**
  * The shell's one table (Phase 1 WP9, items 42 and 38a, decision C).
@@ -14,17 +15,24 @@ import type { PageKey } from './renderables/types'
  * and it means the question a page answers is written down once.
  *
  * NAV KEYS ARE NOT PAGE KEYS. A page key is a stored contract (what a snapshot
- * and a built report name). A nav key is an address in the shell. Reports and
- * Settings have no renderable module and never will; Ask's module is keyed
- * `agent` and its address is `/dashboard/agent`. Where a surface has both,
+ * and a built report name). A nav key is an address in the shell. The
+ * Dashboard, the Studio and Settings have no renderable module of their own;
+ * the Agent's module is keyed `agent`, its nav key is `ask` and its address is
+ * `/dashboard/agent`. Where a surface has both,
  * `page` names its page key, and that is the only place the two are joined.
  */
 
 export type NavKey =
-  | 'overview' | 'subjects' | 'voice' | 'market' | 'competitive' | 'week'
-  | 'ask' | 'reports' | 'settings'
+  | 'home' | 'overview' | 'week' | 'voice' | 'competitive' | 'subjects' | 'market'
+  | 'ask' | 'studio' | 'settings'
 
-export type NavGroup = 'Intelligence' | 'Account'
+/**
+ * The sidebar's four groups (the navigation design of 1 Oct, `sidebar2.py`):
+ * the pages that read the market, the two the client steers, the Agent, and
+ * the foot. They are separated by space and a hairline and carry NO label, so
+ * these names are addresses in code and never print.
+ */
+export type NavGroup = 'read' | 'steer' | 'agent' | 'foot'
 
 /** What the page bar at the top of the surface carries. */
 export type BarKind =
@@ -34,7 +42,8 @@ export type BarKind =
   /** Title, the update and its comment window, Export. This week is dated by
    *  the update, not by the month, so it takes no horizon. */
   | 'week'
-  /** Title only. Nothing on Ask, Reports or Settings is a reading of a month. */
+  /** Title only. Nothing on the Dashboard, the Agent, the Studio or Settings
+   *  is a reading of a month. */
   | 'title'
 
 export interface Surface {
@@ -42,8 +51,8 @@ export interface Surface {
   href: string
   /** The sidebar label AND the page title — one string, deliberately. */
   label: string
-  /** The one question the surface answers, from the mock's page bars
-   *  (`mock-spec.md` §5, verbatim). Null where the surface is not a reading. */
+  /** The one question the surface answers. Null where the surface is not a
+   *  reading. */
   question: string | null
   group: NavGroup
   bar: BarKind
@@ -55,67 +64,53 @@ export interface Surface {
 }
 
 /**
- * The nine, in market-first's order (decision K, plan §2.1): "Your market ·
- * Subjects · Conversation · Brands · Your moves · This week · Ask · Reports ·
- * Settings", split into the two groups the artboards draw. The mock's order
- * (`spec/artboards.md`) put Market before Competitive; decision K puts the
- * brands before your own moves, and the preview draws it that way.
+ * The ten, in the sidebar's order (the navigation design of 1 Oct; page review
+ * §4): Dashboard · Your market · This week · Conversation · Competitive, then
+ * Subjects · Your moves, then the Agent, and at the foot Studio · Settings.
  *
- * EACH LABEL CHANGES WITH THE DEPLOY THAT REBUILDS ITS PAGE (§2.1). Deploy 2
- * (WP1.6) renames two: "Overview" becomes "Your market", the new front page,
- * and "Market" becomes "Your moves", because its content is already the
- * decision page and the sidebar must never show "Your market" beside
- * "Market". Voice became Conversation with deploy 3 (WP2.4); Competitive
- * became Brands with deploy 5 (WP3.5). Keys and page keys do not change, so no stored report
- * breaks. Your moves keeps its question until deploy 5 rebuilds the page.
+ * KEYS, ADDRESSES AND PAGE KEYS DO NOT CHANGE WITH A LABEL, so no stored report
+ * or link breaks. Two labels changed on 1 Oct: Brands is "Competitive" again and
+ * Ask is "Agent". One address moved: Your market left `/dashboard` for
+ * `/dashboard/overview`, and the new Dashboard took `/dashboard`.
+ *
+ * THE DASHBOARD IS NAV KEY `home` WITH NO PAGE KEY. Page key `dashboard` is a
+ * stored contract (a sent snapshot, a share link, Össur's digest schedule) and
+ * names the legacy module, which stays in the registry and is never a route.
+ *
+ * Reports is not one of the ten any more: it folded into the Studio, and
+ * `/dashboard/reports` redirects there (RETIRED_ADDRESSES). The Studio is one
+ * of the ten because it is shown to clients now (STUDIO_TENANT_VISIBLE).
  */
 export const SURFACES: readonly Surface[] = [
-  // NO HORIZON ON YOUR MARKET (WP1.6): every block reads the reading month
-  // and its month before, so the four pills would return a byte-identical
-  // page, and the approved preview's bar is the month selector and one line.
-  { key: 'overview', href: '/dashboard', label: 'Your market', question: 'What is your market saying this month, and what changed?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'overview' },
-  // SUBJECTS ON THE MARKET (WP2.2, deploy 3; §2.1): the question is the
-  // market's. NO HORIZON PILLS (the lead's ruling of 27 Sep, following the
-  // approved preview and §5.12: the bar is the month selector and one line).
-  // So the page reads the month whatever `?horizon=` says, and the month
-  // selector drops it; the questions pane's "Asked most, last 3 months" links
-  // (§2.3 S4) ask for their period in the pane's own `?questions=`
-  // (lib/pages/subjects.ts `subjectsHorizons`).
-  { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How big is each subject in your market, month by month?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'subjects' },
-  // CONVERSATION WITH DEPLOY 3 (WP2.4, plan §2.1): the page is rebuilt as
-  // every theme at 10 videos or more, so the label changes with it. The key,
-  // the address and the page key stay `voice`, so no stored link or report
-  // breaks.
-  // No horizon either: every block reads the reading month, as on Your market.
-  { key: 'voice', href: '/dashboard/voice', label: 'Conversation', question: 'Everything your market talked about, in full', group: 'Intelligence', bar: 'reading', horizon: false, page: 'voice' },
-  // BRANDS WITH DEPLOY 5 (WP3.5, plan §2.1): the page is rebuilt as the brands
-  // that come up in your market, so the label and the question change with
-  // it. The key, the address and the page key stay `competitive`, so no stored
-  // link or report breaks. NO HORIZON (the approved preview's bar is the month
-  // selector and one line): its brand counts read the reading month and its
-  // "in full" blocks the ninety days ending at the reading month's last update.
-  { key: 'competitive', href: '/dashboard/competitive', label: 'Brands', question: 'Which brands come up in your market, and what is said around them?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'competitive' },
-  { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
-  { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
-  { key: 'ask', href: '/dashboard/agent', label: 'Ask', question: 'What does the conversation say about this?', group: 'Intelligence', bar: 'title', page: 'agent' },
-  { key: 'reports', href: '/dashboard/reports', label: 'Reports', question: 'Which document do I need?', group: 'Intelligence', bar: 'title' },
-  { key: 'settings', href: '/dashboard/settings', label: 'Settings', question: null, group: 'Account', bar: 'title', page: 'settings' },
+  { key: 'home', href: '/dashboard', label: 'Dashboard', question: 'What is happening in your market right now?', group: 'read', bar: 'title' },
+  // YOUR MARKET MOVED (1 Oct, page review §5.1): `/dashboard/overview`, page
+  // key `overview` unchanged. `/dashboard?month=` still lands here (the
+  // monthly email's link before it was retargeted), by the Dashboard's own
+  // redirect. NO HORIZON: every block reads the reading month.
+  { key: 'overview', href: '/dashboard/overview', label: 'Your market', question: 'What is your market saying this month, and what changed?', group: 'read', bar: 'reading', horizon: false, page: 'overview' },
+  { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'read', bar: 'week', page: 'week' },
+  // CONVERSATION: the key, the address and the page key stay `voice`, so no
+  // stored link or report breaks. No horizon: every block reads the month.
+  { key: 'voice', href: '/dashboard/voice', label: 'Conversation', question: 'Everything your market talked about, in full', group: 'read', bar: 'reading', horizon: false, page: 'voice' },
+  // COMPETITIVE AGAIN (1 Oct): it was "Brands" from deploy 5. The key, the
+  // address and the page key stayed `competitive` throughout. No horizon.
+  { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Which brands come up in your market, and what is said around them?', group: 'read', bar: 'reading', horizon: false, page: 'competitive' },
+  // SUBJECTS: no horizon pills (27 Sep ruling); the page still reads
+  // `?horizon=` for its questions pane (lib/pages/subjects.ts).
+  { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How big is each subject in your market, month by month?', group: 'steer', bar: 'reading', horizon: false, page: 'subjects' },
+  { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'steer', bar: 'reading', horizon: false, page: 'market' },
+  // THE AGENT (1 Oct): the label was "Ask". Its key stays `ask`, its address
+  // `/dashboard/agent` and its page key `agent`.
+  { key: 'ask', href: '/dashboard/agent', label: 'Agent', question: 'What does the conversation say about this?', group: 'agent', bar: 'title', page: 'agent' },
+  { key: 'studio', href: '/dashboard/studio', label: 'Studio', question: 'Which reports go to whom, and where are the past issues?', group: 'foot', bar: 'title' },
+  { key: 'settings', href: '/dashboard/settings', label: 'Settings', question: null, group: 'foot', bar: 'title', page: 'settings' },
 ]
 
 /**
  * The horizon control appears only where a horizon means something: a reading
- * of calendar months. Not on This week (dated by the update), not on Ask,
- * Reports or Settings.
- *
- * AND NOT ON MARKET, which is the one reading surface that is not a reading of
- * a WINDOW (Phase 1 WP14). Its conclusions are the latest update's, its ledger
- * is deliberately all-time ("every piece of advice this product has ever given
- * you"), its moves are all moves and its claims are the latest update's. The
- * bar drew the four-link control anyway, and a client pressing "Last 12 months"
- * got a byte-identical page. A control that changes nothing is worse than an
- * absent one: it teaches a reader that the other four do nothing either. Its
- * month selector and line stay, because Market IS a reading — the two
- * questions are separate and the flag says so rather than `bar` answering both.
+ * of calendar months. Not on This week (dated by the update), not on the
+ * Dashboard, the Agent, the Studio or Settings, and not on any reading page
+ * today: each one reads its month in every block (`horizon: false`).
  */
 export const hasHorizon = (s: Surface): boolean => s.bar === 'reading' && s.horizon !== false
 
@@ -129,28 +124,27 @@ export function surface(key: NavKey): Surface {
 export const surfacesIn = (group: NavGroup): Surface[] => SURFACES.filter((s) => s.group === group)
 
 /**
- * Live addresses that are not one of the nine but belong under one.
+ * Live addresses that are not one of the ten but belong under one.
  *
  * Team and Plan & billing are reached from the Settings rail and are Settings
- * as far as a reader is concerned; the Studio is where a report is edited, and
- * a reader gets to it from Reports. Without this they were three live pages
- * outside the active-nav rule: a reader inside them saw no mark anywhere and
- * the shell stopped saying where they were. A parked page is deliberately NOT
- * here — a page that is going must not light the page that replaced it.
+ * as far as a reader is concerned. Reports only redirects into the Studio now,
+ * so for the moment it takes to resolve it lights the Studio. A parked page is
+ * deliberately NOT here: a page that is going must not light the page that
+ * replaced it.
  */
 const UNDER: Readonly<Record<string, NavKey>> = {
   '/dashboard/team': 'settings',
   '/dashboard/billing': 'settings',
-  '/dashboard/studio': 'reports',
+  '/dashboard/reports': 'studio',
 }
 
 /**
  * Which surface a path belongs to, for the active-nav mark.
  *
- * `/dashboard` is exact-matched because every dashboard path starts with it —
- * the rule the Phase 0 sidebar carried, kept. Longest match otherwise, so
- * `/dashboard/settings/tracking` lights Settings and `/dashboard/market-intel`
- * lights nothing (a parked page is not one of the nine).
+ * `/dashboard` is exact-matched because every dashboard path starts with it.
+ * Longest match otherwise, so `/dashboard/settings/tracking` lights Settings
+ * and `/dashboard/market-intel` lights nothing (a parked page is not one of
+ * the ten).
  */
 export function surfaceForPath(pathname: string): Surface | null {
   let best: Surface | null = null
@@ -165,6 +159,33 @@ export function surfaceForPath(pathname: string): Surface | null {
     if (pathname === href || pathname.startsWith(`${href}/`)) return surface(key)
   }
   return null
+}
+
+/** A Next page's search params, as a page receives them. */
+export type SearchParams = Record<string, string | string[] | undefined>
+/** A page's props when it reads nothing but its search params. */
+export type SearchProps = { searchParams?: Promise<SearchParams> }
+
+/** `href` with these params as its query string, every value kept (a repeated
+ *  key stays repeated). For a redirect that must not drop a deep link. */
+export function withQuery(href: string, params: SearchParams = {}): string {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    for (const x of Array.isArray(v) ? v : [v]) if (x !== undefined) q.append(k, x)
+  }
+  const qs = q.toString()
+  return qs ? `${href}?${qs}` : href
+}
+
+/**
+ * `/dashboard?month=…` WAS YOUR MARKET (page review §5.1). Until 1 Oct the
+ * front page was Your market, and the monthly email linked a month there; one
+ * already in an inbox still does. The Dashboard reads no month, so a request
+ * carrying one lands on Your market with its whole query; any other request is
+ * the Dashboard's. Null means stay.
+ */
+export function frontRedirect(params: SearchParams = {}): string | null {
+  return params.month === undefined ? null : withQuery(surface('overview').href, params)
 }
 
 // ---- The pages that are retiring --------------------------------------------
@@ -182,6 +203,8 @@ export interface OldPage {
   caveat?: string
 }
 
+/** The three parked reading pages. A tenant no longer reaches them
+ *  (TENANT_RETIRED, 1 Oct); the operator still does, under this banner. */
 export const OLD_PAGES: readonly OldPage[] = [
   { href: '/dashboard/market-intel', label: 'Market Intelligence', replacedBy: 'market' },
   { href: '/dashboard/competitive-intel', label: 'Competitive Intelligence', replacedBy: 'competitive' },
@@ -238,6 +261,46 @@ export function oldPageBanner(page: OldPage): { title: string; body: string; cta
   }
 }
 
+// ---- Addresses a tenant no longer reaches -----------------------------------
+
+/**
+ * The parked pages and the Settings sub-pages that RETIRE FOR TENANTS (U12 and
+ * U7; page review §4; the pages build of 1 Oct), and where a tenant lands
+ * instead. The operator keeps every one of them: each still serves, with its
+ * banner where it has one, for a session `getSessionContext().operator` names.
+ *
+ *   Market Intelligence      → Your moves   (its advice and moves live there)
+ *   Competitive Intelligence → Competitive
+ *   Content                  → This week    (worth a reply lives there)
+ *   Settings › Initiatives   → Your moves   (Date a move and Mark done, U12)
+ *   Settings › Readiness, The record, How to read → Settings (operator only
+ *     or cut for clients, page review §1 Settings)
+ *
+ * A target is an address something serves today, which `lib/nav.test.ts` pins.
+ */
+export const TENANT_RETIRED: Readonly<Record<string, string>> = {
+  '/dashboard/market-intel': '/dashboard/market',
+  '/dashboard/competitive-intel': '/dashboard/competitive',
+  '/dashboard/videos': '/dashboard/week',
+  '/dashboard/settings/initiatives': '/dashboard/market',
+  '/dashboard/settings/readiness': '/dashboard/settings',
+  '/dashboard/settings/record': '/dashboard/settings',
+  '/dashboard/settings/how-to-read': '/dashboard/settings',
+}
+
+/**
+ * Where a session is sent from an address that retired for tenants: the
+ * replacement for a tenant user, null for the operator (who keeps the page).
+ * Pure, so both answers are tested; each page asks it before it reads
+ * anything and redirects on a non-null. Throws on an address that is not in
+ * the table: a page asking for its own way out has to have one.
+ */
+export function tenantAway(session: Pick<SessionContext, 'operator'>, href: string): string | null {
+  const to = TENANT_RETIRED[href]
+  if (to === undefined) throw new Error(`not retired for tenants: ${href}`)
+  return session.operator === null ? to : null
+}
+
 // ---- Addresses that lose their page -----------------------------------------
 
 /**
@@ -265,6 +328,11 @@ export function oldPageBanner(page: OldPage): { title: string; body: string; cta
  */
 export const RETIRED_ADDRESSES: Readonly<Record<string, string>> = {
   '/dashboard/profile': '/dashboard/voice#cast',
-  '/dashboard/guide': '/dashboard/settings/how-to-read',
+  // How to read is cut for clients (page review §1 Settings), so the Guide
+  // lands on Settings itself (page review §4).
+  '/dashboard/guide': '/dashboard/settings',
   '/dashboard/settings/connections': '/dashboard/settings',
+  // Reports folded into the Studio (1 Oct). The page keeps the query string, so
+  // `?group=`, `?item=` and `?view=` reach the Studio's past issues.
+  '/dashboard/reports': '/dashboard/studio',
 }

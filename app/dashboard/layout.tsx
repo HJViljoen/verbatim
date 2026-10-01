@@ -3,9 +3,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AccessBannerLoader } from "@/components/access-banner-loader"
 import { OpsNavLoader } from "@/components/ops/ops-nav-loader"
-import { StudioNavLoader } from "@/components/studio-nav-loader"
 import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
-import { SidebarTenantLoader } from "@/components/sidebar-tenant-loader"
 
 // Deliberately synchronous: no session, no DB. This layout wraps every
 // dashboard route, and an async layout sits ABOVE each route's loading.tsx
@@ -14,10 +12,10 @@ import { SidebarTenantLoader } from "@/components/sidebar-tenant-loader"
 // duration. The proxy already gates anonymous users; the page resolves the
 // session (request-cached) and the billing banner streams in behind Suspense.
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // Sidebar 14rem, not shadcn's 16rem: labels sit closer to the edge and the
-  // page gets the width back (Heinrich, 2026-08-28 walk-through).
+  // Sidebar 256px (16rem), the width every `Page-*.dc.html` artboard draws
+  // (the navigation of 1 Oct). It was 14rem from the 2026-08-28 walk-through.
   return (
-    <SidebarProvider style={{ '--sidebar-width': '14rem' } as React.CSSProperties}>
+    <SidebarProvider style={{ '--sidebar-width': '16rem' } as React.CSSProperties}>
       {/* The sidebar header streams: the shell paints the wordmark immediately
           and, for a platform admin only, the tenant switcher replaces it when
           the session resolves. Same reason as the banner below — this layout
@@ -33,16 +31,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <OpsNavLoader />
           </Suspense>
         }
-        studio={
-          <Suspense fallback={null}>
-            <StudioNavLoader />
-          </Suspense>
-        }
-        tenant={
-          <Suspense fallback={null}>
-            <SidebarTenantLoader />
-          </Suspense>
-        }
       />
       {/* min-w-0: without it this flex item refuses to shrink below the
           intrinsic width of wide children (the Content page's 9-column table),
@@ -55,19 +43,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           2026-08-28 (MASTER.md rule 8): the 48px header — which only ever held
           the mobile sidebar trigger — is gone; on phones the trigger floats in
           the top-left corner.
-          2026-09-24 (MASTER.md rule 6, Heinrich's call): the crowd backdrop is
-          BACK on every dashboard page, reversing its 2026-08-28 removal. It is
-          absolute inside this pane, not inside <main>: the pane does not
-          scroll, so the crowd stays put while <main> scrolls over it, adds no
-          scroll height, and follows the sidebar because the pane is the space
-          right of it. <main> is `relative z-10`, so every tile paints on top. */}
-      <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden">
-        <div className="crowd-bg crowd-bg--shell" aria-hidden />
+          1 Oct (the navigation build, every `Page-*.dc.html` artboard): the
+          pane is the design's ground, Palette A `#F7F6F2`, with no crowd
+          backdrop behind it (it came back on 2026-09-24 and the approved
+          designs draw none), and <main> sits 28px from the top and 40px from
+          the other three edges. Palette A is used locally: the app's own
+          --background is still the old white, and the app-wide colour swap is
+          a separate task. */}
+      <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden bg-[#F7F6F2]">
         <SidebarTrigger
           aria-label="Open navigation"
           className="absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden"
         />
-        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto p-6 pt-14 md:p-8">
+        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto p-6 pt-14 md:px-10 md:pt-7 md:pb-10">
           <Suspense fallback={null}>
             <AccessBannerLoader />
           </Suspense>

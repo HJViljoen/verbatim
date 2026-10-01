@@ -3,6 +3,7 @@ import { Fragment, type ReactNode } from 'react'
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth } from '@/lib/format'
+import { surface } from '@/lib/nav'
 import { MONTHLY_CANVAS_GUTTER, MONTHLY_CARD_WIDTH, readToWords } from '@/lib/reports/monthly'
 import { staleMonthlySnapshot, type MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlySections } from '@/components/blocks/monthly'
@@ -102,7 +103,8 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
   const sections = stale ? [] : monthlySections(data.keys, data.reading)
   const [first, ...rest] = sections
   const month = longMonth(data.month)
-  const openHref = `${appUrl}/dashboard?month=${data.month.slice(0, 7)}`
+  // Your market, at its own address since 1 Oct (`/dashboard` is the Dashboard).
+  const openHref = `${appUrl}${surface('overview').href}?month=${data.month.slice(0, 7)}`
   return (
     <html lang="en">
       <head>

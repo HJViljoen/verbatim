@@ -55,6 +55,7 @@ export async function dateMoveAction(_prev: SubjectFormState, form: FormData): P
   // page's moves line.
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/overview')
   const day = moveDay(datedOn, databaseToday())
   return { ok: true, message: dateMoveSaid(typeof day === 'string' ? null : day.day), ...(result.value?.id ? { id: result.value.id } : {}) }
 }

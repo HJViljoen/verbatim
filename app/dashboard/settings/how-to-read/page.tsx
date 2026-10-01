@@ -1,10 +1,11 @@
+import { redirect } from 'next/navigation'
 import { SettingsFrame } from '@/components/settings-frame'
 import { HowToReadBody } from '@/components/settings/how-to-read'
 import { ListSearch } from '@/components/shell/list-search'
 import { getSessionContext } from '@/lib/auth'
 import { settingsBar } from '@/lib/settings/bar'
 import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { surface, tenantAway } from '@/lib/nav'
 import { settingsSubPage } from '@/lib/settings/rail'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -33,7 +34,11 @@ export default async function HowToReadPage() {
   // The page is static text, but the frame is a tenant surface and the rail is
   // the workspace's: resolving the session is what keeps a signed-out reader
   // out of it, the same as every other sub-page.
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant no longer reaches this page (lib/nav.ts TENANT_RETIRED, 1 Oct); the operator keeps it.
+  const away = tenantAway(session, '/dashboard/settings/how-to-read')
+  if (away) redirect(away)
+  const { supabase, clientId } = session
   const { data: client } = await supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle()
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
   const bar = await settingsBar(supabase, clientId, tenant)

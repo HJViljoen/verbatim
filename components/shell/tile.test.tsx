@@ -204,9 +204,9 @@ describe('PageBar', () => {
     expect(markup).toMatch(/<p class="[^"]*flex-wrap[^"]*">update of 13 Sep/)
   })
 
-  it('draws the approved preview\'s bar: the title at MASTER\'s text-2xl bold, the controls at the end of the pair', () => {
+  it('draws the approved design\'s bar: the title at 26px bold on a 40px line, the controls at the end of the pair', () => {
     const markup = render(<PageBar title="Your market" line="Sealand">x</PageBar>)
-    expect(markup).toContain('text-2xl leading-8 font-bold')
+    expect(markup).toContain('text-[26px] leading-10 font-bold')
     expect(markup).not.toContain('text-[17px]')
     // Level with the line's foot from `sm`; beside the title on a phone, with
     // the line taking the whole width under them.

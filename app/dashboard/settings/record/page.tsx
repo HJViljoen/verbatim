@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
@@ -29,7 +30,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { oneLineBar } from '@/lib/shell/bar'
 import { AppealButton } from './appeal-button'
 import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { surface, tenantAway } from '@/lib/nav'
 import { settingsSubPage } from '@/lib/settings/rail'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -68,7 +69,11 @@ export const metadata: Metadata = { title: `${settingsSubPage('record').label} Â
 // five sections are in that state, so it is the common arm and not the edge.
 
 export default async function SettingsRecordPage() {
-  const { supabase, clientId, role, userId, operator } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant no longer reaches this page (lib/nav.ts TENANT_RETIRED, 1 Oct); the operator keeps it.
+  const away = tenantAway(session, '/dashboard/settings/record')
+  if (away) redirect(away)
+  const { supabase, clientId, role, userId, operator } = session
   // THE CLIENT'S RECORD (finish-list item 17): a tenant user reads the record
   // in plain words, without our notes to ourselves or the stranger's captions
   // the gate threw away (lib/settings/client-record.ts). The operator, here

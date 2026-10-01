@@ -29,8 +29,9 @@ const SHOTS: Shot[] = [
   // and This week are shells or legacy pages until WP11-WP15 fill them; they
   // are shot anyway, because a route that stops routing is what this script is
   // for.
-  { name: 'overview', path: '/dashboard' },
-  { name: 'overview-brief', path: '/dashboard?detail=brief' },
+  { name: 'dashboard', path: '/dashboard' },
+  { name: 'overview', path: '/dashboard/overview' },
+  { name: 'overview-brief', path: '/dashboard/overview?detail=brief' },
   { name: 'subjects', path: '/dashboard/subjects' },
   { name: 'voice', path: '/dashboard/voice?seed=1', follow: 'a[href*="theme="]' },
   { name: 'voice-filtered', path: '/dashboard/voice?seed=1&entity=client&type=pain_point&stage=consideration' },
