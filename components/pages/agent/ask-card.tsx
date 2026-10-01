@@ -3,8 +3,8 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowUp, FileUp, Loader2 } from 'lucide-react'
-import { Sparkles } from '@/components/design-icons'
+import { ArrowUp, Loader2 } from 'lucide-react'
+import { FileUp, Sparkles } from '@/components/design-icons'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '@/lib/agent/scope'
 
 // The Agent's question box (pages rebuild, 1 Oct; Page-Agent.dc.html). One

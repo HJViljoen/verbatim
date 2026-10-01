@@ -13,7 +13,7 @@ export function Card({ pad, gap, children, className }: { pad: string; gap: stri
 export function SectionHead({ title, sub }: { title: string; sub?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-      <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-[#26292C]">{title}</h2>
+      <h2 className="m-0 text-[20px] font-bold text-[#26292C]">{title}</h2>
       {sub ? <div className="text-[13px] text-[#5F656B]">{sub}</div> : null}
     </div>
   )

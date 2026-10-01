@@ -78,7 +78,9 @@ function TreatRow({ label, k, base }: { label: string; k: number; base: number }
     <div className="flex items-center gap-3 border-t border-[#E4E2DC] py-1.5">
       <div className="w-[104px] shrink-0 text-[13.5px] text-[#26292C]">{label}</div>
       <Bar width={barWidth(k, base)} />
-      <div className="w-11 shrink-0 text-right">
+      {/* 16px on the cell, as the artboard's cell inherits: its line sets the
+          row's 33px pitch; the figure keeps its 14px. */}
+      <div className="w-11 shrink-0 text-right text-[16px]">
         <span data-copy="figure" className="font-mono text-[14px] font-medium text-[#26292C]">{fmt(k)}</span>
       </div>
     </div>

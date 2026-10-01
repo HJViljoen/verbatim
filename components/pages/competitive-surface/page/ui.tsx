@@ -28,7 +28,7 @@ export function Card({ children, className }: { children: ReactNode; className?:
 export function TitleStack({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{title}</h2>
+      <h2 className="m-0 text-[20px] font-bold text-foreground">{title}</h2>
       {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </div>
   )
@@ -38,7 +38,7 @@ export function TitleStack({ title, sub }: { title: ReactNode; sub?: ReactNode }
 export function TitleRow({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-      <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{title}</h2>
+      <h2 className="m-0 text-[20px] font-bold text-foreground">{title}</h2>
       {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </div>
   )
@@ -48,7 +48,7 @@ export function TitleRow({ title, sub }: { title: ReactNode; sub?: ReactNode }) 
 export function SubHead({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex flex-col gap-[3px]">
-      <h3 className="m-0 text-[16px] font-bold leading-[1.35] text-foreground">{title}</h3>
+      <h3 className="m-0 text-[16px] font-bold text-foreground">{title}</h3>
       {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </div>
   )

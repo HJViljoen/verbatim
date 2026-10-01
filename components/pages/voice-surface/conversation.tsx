@@ -85,8 +85,9 @@ function Num({ n, unit, size = 14 }: { n: number; unit?: string; size?: number }
   return (
     <div className="shrink-0 whitespace-nowrap text-right font-mono font-medium" style={{ fontSize: size }}>
       <span data-copy="figure">{fmtInt(n)}</span>
-      {/* The unit in the number's own face and weight, as drawn. */}
-      {unit ? <span className={cn('text-[12px]', MUTED)}> {unit}</span> : null}
+      {/* The unit in the number's own face and weight, the space at the
+          figure's size (a 10px gap), as drawn. */}
+      {unit ? <>{' '}<span className={cn('text-[12px]', MUTED)}>{unit}</span></> : null}
     </div>
   )
 }

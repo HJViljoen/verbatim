@@ -1,8 +1,8 @@
-import { LayoutDashboard, Globe, Target, Tag, CalendarDays, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Globe, Target, Tag, LayoutTemplate, type LucideIcon } from "lucide-react"
 
 // Four are the artboards' own paths (the installed Lucide redrew them since
 // `sidebar2.py`): components/design-icons.ts.
-import { List, MessageSquareText, SlidersVertical, Sparkles } from "@/components/design-icons"
+import { CalendarDays, List, MessageSquareText, SlidersVertical, Sparkles } from "@/components/design-icons"
 
 import type { NavKey } from "@/lib/nav"
 

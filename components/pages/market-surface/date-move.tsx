@@ -1,7 +1,8 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { CalendarPlus, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import { CalendarPlus } from '@/components/design-icons'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

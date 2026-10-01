@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { FileUp } from 'lucide-react'
+import { FileUp } from '@/components/design-icons'
 
 import { DateMove } from '@/components/pages/market-surface/date-move'
 import { PageBar } from '@/components/shell/page-grid'

@@ -132,12 +132,13 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
         {weeks.columns.map((c, i) => (
           <div key={c.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
             <div
-              // The baseline is an inset 1px line, not a bottom border: the
-              // gridline's `border-dashed` styles every side, and the artboard's
-              // baseline is solid under all eight weeks.
-              className={`relative flex w-full grow items-end justify-center shadow-[inset_0_-1px_0_#E4E2DC] ${i > 0 ? `border-l border-dashed ${HAIR}` : ''}`}
+              // The baseline is a solid bottom border under all eight weeks, as
+              // drawn, with the bars standing on it; the dashed gridline is its
+              // own element, because `border-dashed` would style every side.
+              className={`relative flex w-full grow items-end justify-center border-b ${HAIR}`}
               title={c.videos != null && c.comments != null ? `${c.label}: ${fmtInt(c.videos)} videos, ${fmtInt(c.comments)} comments` : undefined}
             >
+              {i > 0 ? <span aria-hidden className={`absolute inset-y-0 left-0 border-l border-dashed ${HAIR}`} /> : null}
               {c.videos != null ? (
                 // A week still filling: the same yellow, faint, with no words
                 // (Heinrich, 1 Oct); solid once it has settled.
@@ -147,8 +148,9 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
             <div className={`whitespace-nowrap text-[12px] max-sm:text-[10px] ${MUTED}`}>{c.label}</div>
           </div>
         ))}
-        {/* The comments line, over the plot area (the 190px less the labels' row). */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[26px]" aria-hidden>
+        {/* The comments line, over the plot area: the 190px less the labels'
+            row (12px at normal leading, 15.6), its 8px gap and the 1px baseline. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[24.6px]" aria-hidden>
           <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
             {segments.map((seg, i) =>
               seg.length > 1 ? (

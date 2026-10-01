@@ -24,7 +24,8 @@ function Row({ r, of }: { r: WorksRow; of: number }) {
   return (
     <div className="flex items-center gap-3.5 border-t border-border py-2">
       <div className="w-[150px] min-w-0 shrink-0 text-[14px] text-foreground max-sm:w-[120px]">{r.label}</div>
-      <Bar pct={of > 0 ? (100 * r.k) / of : 0} className="grow" />
+      {/* Drawn at the printed percent, as the artboard draws it. */}
+      <Bar pct={of > 0 ? pct : 0} className="grow" />
       <div className="w-10 shrink-0 text-right font-mono text-[14px] font-medium text-foreground">
         {of < SMALL_BASE ? <Num value={r.k} /> : <span data-copy="figure">{pct}%</span>}
       </div>
@@ -41,7 +42,7 @@ export function WorksCard({ works, noun }: { works: WorksBlock; noun: string | n
   return (
     <Card className="gap-3 px-7 pt-6 pb-[22px]">
       <div className="flex flex-col gap-1">
-        <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{WORKS_TITLE}</h2>
+        <h2 className="m-0 text-[20px] font-bold text-foreground">{WORKS_TITLE}</h2>
         <div className="text-[12px] leading-[1.45]"><BrandName kind="market">{marketLabel(noun)}</BrandName></div>
       </div>
       {lead ? (

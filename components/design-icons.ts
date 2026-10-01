@@ -15,6 +15,10 @@ import { createLucideIcon } from 'lucide-react'
  *   SlidersVertical     the installed one's handles moved; the artboards' are
  *                       M2 14h4 / M10 8h4 / M18 16h4
  *
+ * And two more the side-by-side shots found (integration, 1 Oct): FileUp
+ * ("Check a plan"; the artboards' older folded corner) and CalendarDays (This
+ * week; the artboards draw the box before the two ticks).
+ *
  * So these are built with Lucide's own factory from the artboards' exact
  * paths: the same component, props and output as a Lucide icon (16px, stroke
  * 2, currentColor), so every caller is unchanged but the glyph is the design's.
@@ -54,4 +58,34 @@ export const SlidersVertical = createLucideIcon('sliders-vertical', [
   ['path', { d: 'M2 14h4', key: 'path6' }],
   ['path', { d: 'M10 8h4', key: 'path7' }],
   ['path', { d: 'M18 16h4', key: 'path8' }],
+])
+
+export const FileUp = createLucideIcon('file-up', [
+  ['path', { d: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z', key: 'path0' }],
+  ['path', { d: 'M14 2v4a2 2 0 0 0 2 2h4', key: 'path1' }],
+  ['path', { d: 'M12 12v6', key: 'path2' }],
+  ['path', { d: 'm15 15-3-3-3 3', key: 'path3' }],
+])
+
+export const CalendarDays = createLucideIcon('calendar-days', [
+  ['rect', { width: '18', height: '18', x: '3', y: '4', rx: '2', key: 'rect0' }],
+  ['path', { d: 'M16 2v4', key: 'path1' }],
+  ['path', { d: 'M8 2v4', key: 'path2' }],
+  ['path', { d: 'M3 10h18', key: 'path3' }],
+  ['path', { d: 'M8 14h.01', key: 'path4' }],
+  ['path', { d: 'M12 14h.01', key: 'path5' }],
+  ['path', { d: 'M16 14h.01', key: 'path6' }],
+  ['path', { d: 'M8 18h.01', key: 'path7' }],
+  ['path', { d: 'M12 18h.01', key: 'path8' }],
+  ['path', { d: 'M16 18h.01', key: 'path9' }],
+])
+
+/** "Date a move" (Your moves' head): the artboard's CalendarPlus. */
+export const CalendarPlus = createLucideIcon('calendar-plus', [
+  ['path', { d: 'M8 2v4', key: 'path0' }],
+  ['path', { d: 'M16 2v4', key: 'path1' }],
+  ['path', { d: 'M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8', key: 'path2' }],
+  ['path', { d: 'M3 10h18', key: 'path3' }],
+  ['path', { d: 'M16 19h6', key: 'path4' }],
+  ['path', { d: 'M19 16v6', key: 'path5' }],
 ])

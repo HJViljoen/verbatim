@@ -28,7 +28,7 @@ function Pills({ rows }: { rows: InFullBlock['rows'] }) {
           )}
         >
           {r.label}
-          <span data-copy="figure" className="font-mono text-[12px] text-muted-foreground">{fmtInt(r.videos)}</span>
+          <span data-copy="figure" className={cn('font-mono text-[12px] text-muted-foreground', r.selected ? 'font-medium' : null)}>{fmtInt(r.videos)}</span>
         </Link>
       ))}
     </nav>
@@ -90,7 +90,7 @@ export function BrandPaneCard({ inFull, asked, said, noun }: { inFull: InFullBlo
   return (
     <Card className="gap-3.5 px-7 pt-6 pb-7">
       <div className="flex flex-col gap-1">
-        <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{PANE_TITLE}</h2>
+        <h2 className="m-0 text-[20px] font-bold text-foreground">{PANE_TITLE}</h2>
         <div className="text-[13px] text-muted-foreground">Videos about each brand you track, last 90 days ({windowWords(inFull.window)})</div>
       </div>
       {filed.length > 0 ? <Pills rows={filed} /> : null}
