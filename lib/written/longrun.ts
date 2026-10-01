@@ -94,12 +94,7 @@ export function longRunMonths(month: string, firstFloorMonth: string | null): st
   return months
 }
 
-/** "August and September", "July, August and September". Pure. */
-export function monthsPhrase(months: readonly string[]): string {
-  const names = months.map((m) => longMonth(m))
-  if (names.length <= 1) return names[0] ?? ''
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-}
+export { monthsPhrase } from './month'
 
 /** The window of a set of months: `[first month start, the month after the
  *  last)`. Pure. */

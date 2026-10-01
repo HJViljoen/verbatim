@@ -432,7 +432,7 @@ describe('marketRivalAudiences: the one market every loader pools', () => {
       }
     }
     expect([...new Set(calls)].sort()).toEqual([
-      'competitive-surface.ts', 'market-surface.ts', 'monthly.ts', 'overview.ts', 'reports-card.ts', 'subjects.ts', 'voice-surface.ts',
+      'competitive-surface.ts', 'market-surface.ts', 'monthly.ts', 'overview-picture.ts', 'overview.ts', 'reports-card.ts', 'subjects.ts', 'voice-surface.ts',
     ])
   })
 })
