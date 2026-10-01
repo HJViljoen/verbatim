@@ -167,7 +167,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   that fails deletes nothing, on that run and every later one, until it is
   fixed. This is a different thing from the retention
   cron (`inngest/functions/retention.ts`), which drops raw payloads and AI-call
-  bodies past 30 days and refreshes-or-deletes YouTube only; nothing analytical
+  bodies past 30 days, the regate's backup copies (`regate_backup`, whole
+  batches, step `purge-regate-backup`, migration `20261106094000`) past 30
+  days, and refreshes-or-deletes YouTube only; nothing analytical
   is deleted on any other platform, which is what the notice says.
 - **Theme identity lives in `theme_registry`.** `themes.id` is a per-run row id
   (the table is fully replaced each run) and must NEVER be used as a cross-run
@@ -396,9 +398,36 @@ This version has breaking changes — APIs, conventions, and file structure may 
   unmeasured `regate` as a tenth); undo is `regate_restore(batch)`. A video
   something stored cites is kept and named; a person decides it with
   `--keep <ids> --yes`, which appends an `operator` verdict (kept; migration
-  `20261106093000`), so the newest verdict is a clean keep. Deletion, not exclusion: a video
+  `20261106093000`), so the newest verdict is a clean keep, and logs ONE
+  `gate_rule` / `relevance_gate` change of its own (`operatorKeepChange`). It
+  takes only videos flagged unchecked (`newestUnchecked`, the same rule as the
+  SQL) and refuses any other. Deletion, not exclusion: a video
   counts through sixteen SQL functions, two views, TypeScript readers and the
   pipeline's own re-reads, with no single place to exclude it.
+  **The undo is a data undo, on purpose:** today's verdicts stay, so a
+  restored video's newest verdict is a drop and it counts `unchecked`, which
+  is the state it was in before (the fail-open default is unchecked too);
+  keeping one is `--keep`. After a restore, refresh the reading month again
+  (`freezeMonths`), and restore within 30 days: retention drops a batch then
+  (`purge-regate-backup`), after which `regate_restore` says "no batch".
+  **These rows are not method changes** (`isFailOpenFix`, now in
+  `lib/reading/comparability.ts`; `changesFromLog` sets `failOpenFix` on a
+  change whose every row is `gate_rule` / `relevance_gate`): neither the
+  Dashboard's chart, the weekly bars (`weekRules`) nor the same-age line
+  (`weekPairOf`'s gate reason) cuts at them; `unchecked` carries their weeks.
+- **The week chart's cut and cadence** (the release fix, 1 Oct night;
+  `weeksSinceOurChanges`, `lib/reading/weeks.ts`). The bars never span a
+  change on `WEEK_CUT_SURFACES` (the same-age line's search and gate surfaces,
+  rivals and handles included; a test pins them equal), and draw only weeks
+  on the one weekly cadence: exactly one completed Sunday gather in the week
+  and in each of the two after (`chartCadenceBroken`, the line's own
+  `cadenceBroken` on the clock; `loadCadenceRuns` reads every run, any
+  status). A partial run counts as a completed gather only when every
+  recorded error is a step after the gather (`AFTER_GATHER_STEPS`, fail
+  closed). On Sealand the week of 21 Sep holds THREE runs (the two 24 Sep
+  rehearsals, which searched nothing, and the 27 Sep update `f3646446`,
+  partial only for transcripts and the own-posts census), so it is never
+  drawn, `--keep` or not; the first bar is 28 Sep.
 - **Production reads from agents are serialised and rationed.** Five agents
   reading production at once is what caused the outage above, so this is the
   fix and not caution. Before the first read of a session, `select 1` through
@@ -525,9 +554,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     and `published_by`, the Studio's "Publish to the platform (not emailed)"
     or `scripts/backfill-platform.ts --publish`; `lib/schedules/publish.ts`).
     One rule, `onPlatform` (`lib/schedules/platform-state.ts`), read by the page
-    gate, `heldOf` and `report_snapshots`' RLS policy alike. It is a recorded
-    state, never a `sent` row with no recipients: the status stays `ready`, so
-    Send still emails it, and the Studio says "On the platform · not emailed".
+    gate, `heldOf`, `report_snapshots`' RLS policy, the email preview
+    (`/api/schedules/[id]/preview`) and the purge's "delivered" line
+    (`lib/reports/purge.ts`: `drafts` keeps a published build, `all` refuses
+    one) alike; wherever "sent" means visible or kept, it means this. It is a
+    recorded state, never a `sent` row with no recipients: the status stays
+    `ready`, so Send still emails it, and the operator's workbench says "On the
+    platform · not emailed". A client's Past issues print the day it was
+    published, like any issue, and never how it got there (§0a.1).
     Publishing is the operator's alone (`mayBuildReports` on
     `/api/schedules/[id]/publish`). A long-run read written before its month
     closed carries `partialThrough` and does not stand as the month's

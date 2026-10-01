@@ -77,6 +77,59 @@ export function newestDefaultKept(rows: readonly { platform: string; video_id: s
   return [...newest.entries()].filter(([, v]) => v.kept && v.source === 'default').map(([k]) => k).sort()
 }
 
+/** `platform\0video_id` of every video whose NEWEST verdict is not a clean
+ *  keep: the fail-open default, or a drop (the regate's cited videos, which
+ *  today's check dropped and stored work keeps). Exactly `market_week_volumes`'
+ *  `unchecked` rule (migration 20261106091000, newest by `created_at` then
+ *  `id`; the rows come in that order). These, and only these, are the videos
+ *  the operator may keep (`--keep`). Pure. */
+export function newestUnchecked(rows: readonly { platform: string; video_id: string; source: string; kept: boolean; created_at: string }[]): string[] {
+  const newest = new Map<string, { source: string; kept: boolean; at: string }>()
+  for (const r of rows) {
+    const k = `${r.platform}\u0000${r.video_id}`
+    const h = newest.get(k)
+    if (!h || r.created_at >= h.at) newest.set(k, { source: r.source, kept: r.kept, at: r.created_at })
+  }
+  return [...newest.entries()].filter(([, v]) => !v.kept || v.source === 'default').map(([k]) => k).sort()
+}
+
+/** The requested keeps that are NOT flagged unchecked (`newestUnchecked`),
+ *  each named: a keep is the operator's verdict on a video the check could
+ *  not stand behind, never a way to put back any video at all. Pure. */
+export function keepRefusals(videos: readonly Pick<UnjudgedVideo, 'platform' | 'video_id'>[], unchecked: ReadonlySet<string>): string[] {
+  return videos
+    .filter((v) => !unchecked.has(`${v.platform}\u0000${v.video_id}`))
+    .map((v) => `${v.platform}:${v.video_id}: not flagged unchecked (its newest verdict is a clean keep, or it has none); only the flagged videos can be kept`)
+}
+
+/** The `config_changes` row the operator's keeps log: ONE change, the 24 Sep
+ *  fix's own shape (`gate_rule` / `relevance_gate`, as `regate_videos` logs),
+ *  because a keep judges videos the fail-open gate let in or the regate named,
+ *  and changes no rule: the comparison judge measures it as the fix, and
+ *  neither the week chart nor the same-age line cuts at it (`isFailOpenFix`).
+ *  No note (Heinrich, 27 Sep: these rows carry no sentence); the reason rides
+ *  on each verdict. Pure. */
+export function operatorKeepChange(clientId: string, videos: readonly Pick<UnjudgedVideo, 'platform' | 'video_id'>[], actorLabel: string, at: string): Record<string, unknown> {
+  const ids = videos.map((v) => `${v.platform}:${v.video_id}`)
+  // Field for field what `regate_videos` inserts (the SQL writes `gate_rule`,
+  // which `ConfigSurface` does not list, so `changeRow` cannot build it).
+  return {
+    client_id: clientId,
+    changed_at: at,
+    surface: 'gate_rule',
+    field: 'relevance_gate',
+    before: { unchecked: ids },
+    after: { kept_by_operator: ids },
+    actor_kind: 'script',
+    actor_user_id: null,
+    actor_label: actorLabel,
+    run_id: null,
+    source: 'logged',
+    rows_affected: videos.length,
+    note: null,
+  }
+}
+
 /** What today's check says of each, and what follows. Pure. */
 export interface RegatePlan {
   /** Kept by today's check: they stay, now checked. */

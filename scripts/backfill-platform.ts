@@ -39,6 +39,18 @@
 // runs before `--yes`, which refuses while any is left (unless
 // `--without-regate`), so the stored reads count without them.
 //
+// THE UNDO IS A DATA UNDO, AND THAT IS RIGHT (the release fix, 1 Oct night).
+// `select regate_restore('<batch>')` puts every row back; today's verdicts
+// stay (the log is append-only), so a restored video's newest verdict is
+// today's drop and it counts `unchecked`, which keeps its weeks off the chart
+// and out of the line. That is the state it was in before the regate (its
+// newest verdict was the fail-open default, also unchecked), so nothing is
+// re-inserted: a person who means to keep one says so with `--keep`, which
+// takes exactly these flagged videos. After a restore, run the reading
+// month's refresh again (freeze-months: a filling month took the removal),
+// and restore within 30 days: retention drops a batch then
+// (`purge-regate-backup`; YouTube's 30-day rule).
+//
 // FIVE MODES.
 //   (default) DRY: reads production, makes the model calls (logged nowhere),
 //             prints the regate's plan, what it would write, the full text of
@@ -55,7 +67,10 @@
 //             cites, for a person to decide): DRY, it shows what the
 //             Dashboard's own chart code draws as it stands, after the regate
 //             and after both, and whether the week then meets the rule.
-//   --keep … --yes  appends one verdict per video: kept, source operator.
+//   --keep … --yes  appends one verdict per video: kept, source operator,
+//             and logs ONE gate_rule / relevance_gate change (the fix's shape,
+//             `operatorKeepChange`). Only videos flagged unchecked (newest
+//             verdict the default or a drop) are taken; any other is refused.
 //   --yes     writes 1 to 3 (each only where missing). Emails nobody.
 //   --publish puts the held build ON THE PLATFORM without its email
 //             (`publishSend`, lib/schedules/publish.ts: `published_at`, and a
@@ -80,10 +95,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { scriptActor } from '../lib/config-log'
 import { longMonth } from '../lib/format'
-import { loadUnjudgedMarketVideos, operatorKeepRows, type UnjudgedVideo } from '../lib/gather/rejudge'
+import { keepRefusals, loadUnjudgedMarketVideos, newestUnchecked, operatorKeepChange, operatorKeepRows, type UnjudgedVideo } from '../lib/gather/rejudge'
 import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes'
 import { monthStartOf } from '../lib/reading/month-key'
 import { sendsWeeklyRead } from '../lib/schedules/artefact'
+import { selectAll } from '../lib/supabase-admin'
 import { isMissingPublishColumns, onPlatform } from '../lib/schedules/platform-state'
 import { holdWeeklyRead, publishSend } from '../lib/schedules/publish'
 import type { ScheduleRow } from '../lib/schedules/types'
@@ -252,6 +268,13 @@ async function main() {
       keepVideos.push(hits[0])
     }
     if (fail.length) return finish(block, fail, cost)
+    // Only the flagged ones: a video whose newest verdict is not a clean keep
+    // (the market_week_volumes `unchecked` rule). Any other is refused.
+    type Gv = { platform: string; video_id: string; source: string; kept: boolean; created_at: string }
+    const verdicts = await selectAll<Gv>(() => db.from('gate_verdicts').select('platform, video_id, source, kept, created_at')
+      .eq('client_id', clientId).order('created_at').order('id') as unknown as { range: (a: number, b: number) => PromiseLike<{ data: Gv[] | null; error: unknown }> })
+    fail.push(...keepRefusals(keepVideos, new Set(newestUnchecked(verdicts))))
+    if (fail.length) return finish(block, fail, cost)
     say()
     say(`## The operator's keeps (${keepVideos.length}): "${reason}"`)
     say()
@@ -263,9 +286,15 @@ async function main() {
         fail.push(`gate_verdicts: ${error.message}${/check constraint/.test(error.message) ? ' (apply 20261106093000_gate_verdict_operator.sql with the deploy first)' : ''}`)
         return finish(block, fail, cost)
       }
+      // The record: one change, the fix's shape (`operatorKeepChange`).
+      const change = await db.from('config_changes').insert(operatorKeepChange(clientId, keepVideos, `${COMMAND} --keep`, new Date().toISOString()))
+      if (change.error) {
+        fail.push(`config_changes: ${change.error.message} (the ${rows.length} verdict(s) ARE written; log the change by hand: surface gate_rule, field relevance_gate, source logged)`)
+        return finish(block, fail, cost)
+      }
       say()
-      say(`WRITTEN: ${rows.length} operator verdict(s) appended (kept). The newest verdict of each is a clean keep.`)
-      block.push(`keep written: ${rows.length} operator verdict(s) · ${keepVideos.map((v) => v.video_id).join(', ')}`)
+      say(`WRITTEN: ${rows.length} operator verdict(s) appended (kept), and one gate_rule / relevance_gate change logged. The newest verdict of each is a clean keep.`)
+      block.push(`keep written: ${rows.length} operator verdict(s) · ${keepVideos.map((v) => v.video_id).join(', ')} · change logged`)
       return finish(block, fail, cost)
     }
     // Dry: what the chart's own code draws as it stands, after the regate,
@@ -291,7 +320,7 @@ async function main() {
     say(`- After the regate and these keeps: ${chartLine(chart.both)} · week of ${week}: ${at('both').videos} videos, ${at('both').unchecked} unchecked`)
     const first = chart.both?.columns.find((c) => c.videos != null) ?? null
     const met = at('both').unchecked === 0 && first?.week === week
-    say(`- The week of ${week}: ${met ? 'the rule is MET (same searches, one weekly gather, every video judged by a check that stands)' : `the rule is NOT met (${at('both').unchecked} unchecked)`}; ${first ? `the first week drawn becomes ${first.label}, ${first.settled ? 'settled' : 'still filling (drawn faint; settled after two updates past its end, by the chart\'s own rule)'}` : 'no week is drawn'}. It follows from the data: no code changes.`)
+    say(`- The week of ${week}: ${met ? 'the rule is MET (same searches, one weekly gather, every video judged by a check that stands)' : `the rule is NOT met (${at('both').unchecked ? `${at('both').unchecked} unchecked` : 'no video unchecked, but the chart\'s own rule leaves the week off: its cadence (not exactly one completed Sunday gather in it and in each of the two weeks after, chartCadenceBroken) or a change after it'})`}; ${first ? `the first week drawn becomes ${first.label}, ${first.settled ? 'settled' : 'still filling (drawn faint; settled after two updates past its end, by the chart\'s own rule)'}` : 'no week is drawn'}. It follows from the data: no code changes.`)
     block.push(`keep (dry): ${keepVideos.length} video(s) · week of ${week} after regate ${at('regate').unchecked} unchecked, after regate + keep ${at('both').unchecked} · first week drawn: ${first ? `${first.label} (${first.settled ? 'settled' : 'filling'})` : 'none'} · rule ${met ? 'met' : 'NOT met'}`)
     return finish(block, fail, cost)
   }
@@ -365,7 +394,7 @@ async function main() {
         const out = await applyRegate(db, { clientId, runId: run.id, month, read: regated, actorLabel: `${COMMAND} --regate --yes --client ${clientId}` })
         say()
         say(`WRITTEN: ${out.verdicts} verdict row(s) appended; removal ${out.removal ? JSON.stringify(out.removal) : 'none (nothing dropped)'}; ${longMonth(month)} refreshed: ${out.refreshed}.`)
-        block.push(`regate written: ${out.verdicts} verdicts · ${out.removal ? `removed ${String(out.removal.videos_removed)} (backup batch ${String(out.removal.batch_id)}; undo: select regate_restore('${String(out.removal.batch_id)}'))` : 'nothing removed'} · ${longMonth(month)} refreshed`)
+        block.push(`regate written: ${out.verdicts} verdicts · ${out.removal ? `removed ${String(out.removal.videos_removed)} (backup batch ${String(out.removal.batch_id)}; undo within 30 days: select regate_restore('${String(out.removal.batch_id)}'), then freeze-months for ${longMonth(month)}; a restored video counts unchecked until --keep, as before the regate)` : 'nothing removed'} · ${longMonth(month)} refreshed`)
       }
       return finish(block, fail, cost)
     }

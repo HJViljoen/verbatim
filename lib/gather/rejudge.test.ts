@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { newestDefaultKept, operatorKeepRows, planRegate, rejudgeRows, type UnjudgedVideo } from './rejudge'
+import { isFailOpenFix } from '../reading/comparability'
+import { keepRefusals, newestDefaultKept, newestUnchecked, operatorKeepChange, operatorKeepRows, planRegate, rejudgeRows, type UnjudgedVideo } from './rejudge'
 
 // The videos the gate let in unjudged before the 24 Sep fix, judged after all
 // (the backfill's regate, 1 Oct). Pure parts.
@@ -56,5 +59,48 @@ describe('operatorKeepRows: a person keeps a video the check drops', () => {
   })
   it('an operator keep is the newest verdict: the video is no longer unjudged', () => {
     expect(newestDefaultKept([gv('a', 'default', true, '2026-09-20T04:18:00Z'), gv('a', 'gpt', false, '2026-10-01T18:00:00Z'), gv('a', 'operator', true, '2026-10-01T20:00:00Z')])).toEqual([])
+  })
+})
+
+describe('--keep takes the flagged unchecked videos only, and logs one change (the release fix, 1 Oct night)', () => {
+  const rows = [
+    gv('a', 'default', true, '2026-09-20T04:18:00Z'),
+    gv('b', 'default', true, '2026-09-20T04:18:00Z'), gv('b', 'gpt', false, '2026-10-01T18:00:00Z'),
+    gv('c', 'default', true, '2026-09-20T04:18:00Z'), gv('c', 'gpt', true, '2026-10-01T18:00:00Z'),
+    gv('d', 'gpt', true, '2026-09-27T04:18:00Z'),
+    gv('e', 'gpt', false, '2026-09-27T04:18:00Z'), gv('e', 'operator', true, '2026-10-01T20:00:00Z'),
+  ]
+
+  it('unchecked is market_week_volumes\' rule: the newest verdict is the default or a drop', () => {
+    expect(newestUnchecked(rows)).toEqual(['youtube\u0000a', 'youtube\u0000b'])
+  })
+
+  it('refuses every requested video that is not flagged, by name', () => {
+    const flagged = new Set(newestUnchecked(rows))
+    expect(keepRefusals([v('a'), v('b')], flagged)).toEqual([])
+    const refused = keepRefusals([v('a'), v('c'), v('d'), v('e'), v('z')], flagged)
+    expect(refused).toHaveLength(4)
+    expect(refused[0]).toMatch(/^youtube:c: not flagged unchecked/)
+  })
+
+  it('logs one gate_rule / relevance_gate change, the fix\'s shape, with no note', () => {
+    const row = operatorKeepChange('client-1', [v('a'), v('b')], 'scripts/backfill-platform.ts --keep', '2026-10-01T20:00:00Z')
+    expect(row).toMatchObject({
+      client_id: 'client-1', surface: 'gate_rule', field: 'relevance_gate', source: 'logged', actor_kind: 'script',
+      actor_label: 'scripts/backfill-platform.ts --keep', run_id: null, rows_affected: 2, note: null,
+      after: { kept_by_operator: ['youtube:a', 'youtube:b'] },
+    })
+    // So neither the chart nor the same-age line cuts at it.
+    expect(isFailOpenFix(row as { surface: string; field: string })).toBe(true)
+  })
+
+  it('the script checks the flag before it writes, and writes the change after the verdicts', () => {
+    const src = readFileSync(resolve(__dirname, '../../scripts/backfill-platform.ts'), 'utf8')
+    const refuse = src.indexOf('fail.push(...keepRefusals(keepVideos, new Set(newestUnchecked(verdicts))))')
+    const verdicts = src.indexOf("db.from('gate_verdicts').insert(rows)")
+    const change = src.indexOf("db.from('config_changes').insert(operatorKeepChange(")
+    expect(refuse).toBeGreaterThan(0)
+    expect(verdicts).toBeGreaterThan(refuse)
+    expect(change).toBeGreaterThan(verdicts)
   })
 })
