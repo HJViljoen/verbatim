@@ -8,7 +8,7 @@ import { evidenceOf, monthEvidenceOf, sureOf } from './sure'
 import {
   firstHeardThisWeek,
   type HeldSection, type PoolCandidate, type QuoteOption, type QuoteRef, type StandingFact, type TokenSentence,
-  type WeekMarketFigures, type WeekPool, type WeekReadDataV2, type WeekReadFinding, type WeekReadHeld,
+  type WeekMarketFigures, type WeekPool, type WeekReadAlsoHeard, type WeekReadDataV2, type WeekReadFinding, type WeekReadHeld,
   type WeekReadImplication, type WeekReadNewItem, type WeekReadParagraph, type WeekReadStanding, type WeekReadWatchItem,
 } from './types'
 import { WEEK_FINDINGS_MAX, WEEK_READ_MAX, WEEK_READ_PROMPT_VERSION, type WriterSubject } from './write'
@@ -296,8 +296,16 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
       sure,
       evidence: evidence.body,
       context: context.body,
+      monthVideoIds: [...new Set(j.cited.flatMap((c) => c.monthVideoIds))].sort(),
     })
   }
+
+  // Also heard this week (the This week page): the eligible candidates no
+  // printed finding rests on, in the pool's order, only where findings print.
+  const printedThemes = new Set(findings.flatMap((f) => f.basedOn))
+  const alsoHeard: WeekReadAlsoHeard[] = findings.length === 0 ? [] : pool.candidates
+    .filter((c) => !printedThemes.has(c.themeId) && c.label.trim())
+    .map((c) => ({ themeId: c.themeId, label: c.label.trim(), videos: c.lenientVideos, videoIds: [...c.lenientVideoIds].sort(), monthVideos: new Set(c.monthVideoIds).size }))
 
   // ---- The report (v3): only on a week whose findings print ------------------------------
   const report = findings.length > 0 && a.written != null
@@ -440,6 +448,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     ...(complete ? { monthComplete: true } : {}),
     figures,
     held,
+    alsoHeard,
     model: a.model,
     promptVersion: WEEK_READ_PROMPT_VERSION,
     costUsd: a.costUsd,

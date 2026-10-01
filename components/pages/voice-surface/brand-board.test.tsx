@@ -122,7 +122,7 @@ describe('the page under ?brand=', () => {
   it('leaves the market’s page as it was without the parameter', () => {
     const markup = render(<VoiceSurfacePage data={voiceFixture()} />)
     expect(markup).not.toContain('<section id="board"')
-    expect(markup).toContain('Every theme at 10 videos or more')
+    expect(markup).toContain('Every conversation in September')
     expect(markup).not.toContain('last 90 days')
   })
 })

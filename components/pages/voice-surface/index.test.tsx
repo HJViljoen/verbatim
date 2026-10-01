@@ -6,7 +6,6 @@ import { render, renderText } from '@/lib/test/render'
 import { VOICE_BLOCKS, VoiceSurfacePage, voiceContext } from './index'
 import { allAccountsVoiceFixture, ossurVoiceFixture, refusedVoiceFixture, voiceFixture } from './fixture'
 import { BlockFrame } from '@/components/blocks/frame'
-import VoiceLoading from '@/app/dashboard/voice/loading'
 
 // Conversation — the page (market-first WP2.4, plan §2.4).
 
@@ -68,75 +67,51 @@ describe('VOICE_BLOCKS', () => {
 })
 
 describe('nothing skipped (§5.9, WP2.4’s done-when)', () => {
-  it('every theme at 10+ in the fixture’s month is on Conversation: 21 on staging’s September, against 7 before', () => {
+  it('every conversation at 10+ in the fixture’s month is on Conversation, the makers’ in their one line', () => {
     const data = voiceFixture()
     const text = renderText(<VoiceSurfacePage data={data} params={{}} />)
-    const every = [...data.board.rows, ...(data.board.makers ?? []), ...(data.board.setAside ?? [])]
-    expect(every).toHaveLength(data.board.atTen)
-    expect(data.board.atTen).toBe(21)
+    const every = [...data.board.rows, ...(data.board.makers ?? [])]
+    expect(every).toHaveLength(21)
     for (const t of every) expect(text, t.label).toContain(t.label)
   })
 })
 
-describe('the skeleton at app/dashboard/voice/loading.tsx', () => {
-  it('draws the same six growing sections the page does, and asks for no row', () => {
-    const markup = render(<VoiceLoading />)
-    expect(markup.match(/data-tile=""/g)).toHaveLength(VOICE_BLOCKS.length)
-    expect(markup).not.toMatch(/row-span-\d/)
-    expect(markup).toContain('Loading Conversation')
-  })
-})
-
-describe('VoiceSurfacePage', () => {
-  it('draws six tiles under the bar, the theme pane at #theme and the accounts at #where', () => {
+describe('VoiceSurfacePage (the approved artboard; ./conversation.test.tsx has each block)', () => {
+  it('draws the board, the pane at #theme and the accounts at #where, and no legacy tile', () => {
     const markup = render(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(markup.match(/data-tile=""/g)).toHaveLength(6)
     expect(markup).toContain('id="theme"')
-    expect(markup).toContain('id="board"')
     expect(markup).toContain('id="where"')
+    expect(markup).not.toMatch(/data-tile=""/)
   })
 
-  it('never names the military-dog channel on the whole page: it is counted as set aside (WP3.8; default of 29 Sep)', () => {
+  it('never names the military-dog channel on the whole page', () => {
     for (const data of [voiceFixture(), allAccountsVoiceFixture()]) {
       const text = renderText(<VoiceSurfacePage data={data} params={{}} />)
       expect(text).not.toContain('Mike Ritland')
-      expect(text).toContain('Set aside as off-topic:')
     }
   })
 
-  it('gives no block a fixed height, so nothing on this page can be cut in silence', () => {
-    const markup = render(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(markup).not.toMatch(/data-row=/)
-    expect(markup).not.toMatch(/row-span-/)
-  })
-
-  it('prints the bar’s one line and no horizon (25 Sep rulings; lib/nav.ts)', () => {
+  it('prints the title alone: no "as at" line, no horizon, no footnote', () => {
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
     expect(text).toContain('Conversation')
-    expect(text).toContain('as at the 20 Sep update · updates paused')
+    expect(text).not.toContain('as at the')
     expect(text).not.toContain('This month')
-    expect(text).not.toContain('Last 3 months')
-  })
-
-  it('prints no footnote under a block, no "how sound" string, and keeps the legal privacy line', () => {
-    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
     expect(text.toLowerCase()).not.toContain('how sound')
     expect(text).not.toContain('We did not record how themes were grouped')
-    expect(text).toContain('Commenters are never identified; quotes carry platform and date only.')
   })
 
-  it('takes the page bar’s right-hand control from its caller, never from a hook', () => {
-    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} controls={<span>How to read this page</span>} />)
-    expect(text).toContain('How to read this page')
+  it('takes the title row’s right-hand control from its caller, never from a hook', () => {
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} controls={<span>A control</span>} />)
+    expect(text).toContain('A control')
   })
 
-  it('says the workspace has been read at all before it says anything else', () => {
+  it('says one neutral line where nothing has been read', () => {
     const text = renderText(<VoiceSurfacePage data={null} params={{}} />)
-    expect(text).toContain('Nothing has been read for this workspace yet')
+    expect(text).toContain('Your market’s first month will appear here.')
   })
 
   it('renders the whole page for Össur (paused, no maker rule) and before MF1', () => {
     expect(renderText(<VoiceSurfacePage data={ossurVoiceFixture()} params={{}} />)).toContain('Brand boycott over politics')
-    expect(renderText(<VoiceSurfacePage data={refusedVoiceFixture()} params={{}} />)).toContain('Reading who is talking is not switched on for this workspace yet.')
+    expect(renderText(<VoiceSurfacePage data={refusedVoiceFixture()} params={{}} />)).toContain('Every conversation in September')
   })
 })

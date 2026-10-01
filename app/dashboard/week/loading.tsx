@@ -1,51 +1,31 @@
-import { PageGrid, TileColumns } from '@/components/shell/page-grid'
-import { SkeletonSurface, SkeletonTile, BoneLines, BoneBars } from '@/components/shell/skeleton'
+import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { PageTitle } from '@/components/pages/week/read-page'
+import { surface } from '@/lib/nav'
 
-// Mirrors components/pages/week/index.tsx (WeekPage; market-first WP3.7, the
-// approved preview's This week): the week bar (no horizon: it is dated by the
-// update) with its one line, How to read and Export, then the blocks in
-// `WEEK_BLOCKS` order at their `COLS` widths: with this update · week by week
-// · heard for the first time · your market's subjects (6) beside for sales (6)
-// · worth a reply · what worked · what brands you track posted · checks on
-// this update. Nothing under the grid (25 Sep rulings).
+// Mirrors components/pages/week/read-page.tsx (the artboard
+// Page-This-week.dc.html): the title, then the read's card (In short, then
+// findings with the quote beside them), then "Also heard this week". The
+// title is the page's own words, so nothing changes when the page lands.
 export default function WeekLoading() {
+  const title = surface('week').label
   return (
-    <SkeletonSurface nav="week" pills={3}>
-      <PageGrid className="gap-6 xl:auto-rows-auto">
-        {/* week.came-in · the sentence and the came-in table */}
-        <SkeletonTile col={12} row={2}>
-          <TileColumns of={2}>
-            <BoneLines lines={4} />
-            <div className="xl:pl-4"><BoneBars rows={3} /></div>
-          </TileColumns>
-        </SkeletonTile>
-        {/* week.weeks */}
-        <SkeletonTile col={12} row={2}><BoneBars rows={4} /></SkeletonTile>
-        {/* week.heard */}
-        <SkeletonTile col={12} row={2}><BoneBars rows={3} /></SkeletonTile>
-        {/* week.subjects (6) · week.sales (6) */}
-        <SkeletonTile col={6} row={2}><BoneBars rows={5} /></SkeletonTile>
-        <SkeletonTile col={6} row={2} lines={5} />
-        {/* week.reply */}
-        <SkeletonTile col={12} row={2} lines={5} />
-        {/* week.worked · formats beside hooks */}
-        <SkeletonTile col={12} row={2}>
-          <TileColumns of={2}>
-            <BoneBars rows={4} />
-            <div className="xl:pl-4"><BoneBars rows={4} /></div>
-          </TileColumns>
-        </SkeletonTile>
-        {/* week.rival-posts */}
-        <SkeletonTile col={12} row={2} lines={5} />
-        {/* week.checks · three abreast */}
-        <SkeletonTile col={12} row={1}>
-          <TileColumns of={3}>
-            <BoneLines lines={2} />
-            <div className="xl:pl-4"><BoneLines lines={2} /></div>
-            <div className="xl:pl-4"><BoneLines lines={2} /></div>
-          </TileColumns>
-        </SkeletonTile>
-      </PageGrid>
-    </SkeletonSurface>
+    <div className="flex flex-col gap-[22px]" aria-busy="true">
+      <span role="status" className="sr-only">Loading {title}…</span>
+      <PageTitle>{title}</PageTitle>
+      <section className="flex flex-col gap-4 rounded-2xl bg-white px-8 pt-7 pb-6 shadow-tile">
+        <Bone className="h-3 w-20" />
+        <BoneLines lines={2} />
+        {[0, 1].map((i) => (
+          <div key={i} className="grid grid-cols-1 gap-6 border-t border-[#E4E2DC] pt-6 lg:grid-cols-5 lg:gap-9">
+            <div className="flex flex-col gap-3 lg:col-span-3"><Bone className="h-5 w-2/3" /><BoneLines lines={4} /></div>
+            <div className="flex flex-col gap-3 lg:col-span-2 lg:pt-9"><Bone className="h-24 w-full" /><BoneLines lines={2} /></div>
+          </div>
+        ))}
+      </section>
+      <section className="flex flex-col gap-3 rounded-2xl bg-white px-7 py-6 shadow-tile">
+        <Bone className="h-5 w-48" />
+        <BoneLines lines={3} />
+      </section>
+    </div>
   )
 }
