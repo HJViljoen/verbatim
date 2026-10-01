@@ -5,7 +5,10 @@ import sharp from 'sharp'
 // Raster copies of the Verbatim mark, for the two places that cannot take an
 // SVG: app/favicon.ico (the browsers and bookmark bars that still ask for it)
 // and the email header (every client strips inline SVG). Run it again whenever
-// the mark changes; the output is committed, so nothing rasterises at build.
+// the mark or its colours change; the output is committed, so nothing
+// rasterises at build. Palette A (2026-10-01): the mark is ink on a light
+// ground and the brand yellow on a dark one, and the app icon is the ink mark
+// on a yellow rounded tile.
 //
 //   node --import tsx scripts/build-brand-assets.ts
 //
@@ -21,10 +24,14 @@ const glyph = (colour: string) =>
   <line x1="47" y1="16" x2="37" y2="48" stroke="${colour}" stroke-width="12" stroke-linecap="round"/>
 </svg>`
 
-/** The favicon tile: green on white, radius 12 of 64 — the same 6-at-32px as app/icon.tsx. */
-const tile = glyph('#0E8A5F').replace(
+const INK = '#26292C'
+const YELLOW = '#FFD43B'
+
+/** The favicon tile: ink on the yellow, radius 12 of 64 — the same 6-at-32px as
+ *  app/icon.tsx, and the same art as app/icon.svg. */
+const tile = glyph(INK).replace(
   'fill="none">',
-  'fill="none">\n  <rect width="64" height="64" rx="12" fill="#FFFFFF"/>',
+  `fill="none">\n  <rect width="64" height="64" rx="12" fill="${YELLOW}"/>`,
 )
 
 const png = (svg: string, size: number) =>
@@ -56,13 +63,17 @@ function ico(images: { size: number; data: Buffer }[]): Buffer {
 }
 
 async function main() {
-  // The email mark, at 4× the 16px it is shown at, so it stays crisp on retina.
+  // The email mark, at 8× the 16px it is shown at, so it stays crisp on retina
+  // and when a client zooms (128px, the size the ink mark was first committed
+  // at). `-ink` is the one the emails name; the plain name is kept, in ink,
+  // because emails sent before palette A point at it.
   for (const [file, colour] of [
-    ['verbatim-mark.png', '#0E8A5F'],
-    ['verbatim-mark-mint.png', '#3DBF8C'],
+    ['verbatim-mark-ink.png', INK],
+    ['verbatim-mark.png', INK],
+    ['verbatim-mark-yellow.png', YELLOW],
   ] as const) {
     const out = path.join(ROOT, 'public/brand', file)
-    await writeFile(out, await png(glyph(colour), 64))
+    await writeFile(out, await png(glyph(colour), 128))
     console.log('wrote', path.relative(ROOT, out))
   }
 

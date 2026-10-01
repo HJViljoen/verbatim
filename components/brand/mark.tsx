@@ -1,9 +1,9 @@
 // The Verbatim mark: the ditto mark, "repeated exactly as said". Two short
 // parallel strokes leaning forward, drawn in currentColor so the surface picks
-// the colour: ink in the app (palette A, 2026-10-01); on the marketing site the
-// Verbatim green on white, mint on the dark Room, white on a green tile, until
-// Heinrich decides the site's palette. Static copies for
-// email and other non-React surfaces live in `public/brand/`.
+// the colour. Palette A (2026-10-01), everywhere the brand appears: ink on a
+// light ground, the brand yellow on the dark Room, and the ink mark on a yellow
+// tile for the app icon. Static copies for email and other non-React surfaces
+// live in `public/brand/`.
 //
 // Decorative by default: the wordmark beside it already says "Verbatim", so a
 // second reading of the name is noise. Pass `title` only where the mark stands

@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og"
 import { OgMark } from "@/components/brand/og-mark"
 
-// The home-screen icon. White mark on a full green tile, square: iOS applies
-// its own mask, so rounding it here would round it twice.
+// The home-screen icon. The ink mark on a full yellow tile, square: iOS
+// applies its own mask, so rounding it here would round it twice.
 export const runtime = "nodejs"
 export const size = { width: 180, height: 180 }
 export const contentType = "image/png"
@@ -17,10 +17,10 @@ export default function AppleIcon() {
           height: "100%",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0E8A5F",
+          background: "#FFD43B",
         }}
       >
-        <OgMark size={140} color="#FFFFFF" />
+        <OgMark size={140} color="#26292C" />
       </div>
     ),
     size,

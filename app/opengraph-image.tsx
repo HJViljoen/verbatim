@@ -3,8 +3,8 @@ import path from "node:path"
 import { ImageResponse } from "next/og"
 import { OgMark } from "@/components/brand/og-mark"
 
-// The card every link to Verbatim unfurls into: the Room, the lockup, the line
-// the site opens with. Bricolage Grotesque is the marketing face (DESIGN.md,
+// The card every link to Verbatim unfurls into: the Room (palette A's neutral
+// ink band), the lockup with the yellow mark, the line the site opens with. Bricolage Grotesque is the marketing face (DESIGN.md,
 // "Typography"); next/font cannot hand its bytes to Satori, so the two static
 // weights are bundled under app/fonts and read here.
 export const runtime = "nodejs"
@@ -12,8 +12,8 @@ export const alt = "Verbatim · consumer intelligence"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
-const ROOM = "#0F1F19"
-const MINT = "#3DBF8C"
+const ROOM = "#1F2124"
+const YELLOW = "#FFD43B"
 
 export default async function OpengraphImage() {
   // READ BY PATH, NOT BY `import.meta.url` (Block D wave 1, P0 item 8).
@@ -60,7 +60,7 @@ export default async function OpengraphImage() {
             the strokes on the wordmark's baseline; the descriptor is lifted the
             10px its smaller descent leaves under it. */}
         <div style={{ display: "flex", alignItems: "flex-end", gap: 30, marginLeft: -16 }}>
-          <OgMark size={112} color={MINT} />
+          <OgMark size={112} color={YELLOW} />
           <div style={{ fontSize: 108, lineHeight: 1, fontWeight: 700, letterSpacing: "-0.02em", color: "#FFFFFF", whiteSpace: "nowrap" }}>
             Verbatim
           </div>
