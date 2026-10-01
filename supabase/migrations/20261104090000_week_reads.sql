@@ -23,13 +23,18 @@
 -- UPDATE (an upsert needs both) and not DELETE or TRUNCATE; a row goes only
 -- with its run or its client (the cascades run as the owner).
 --
--- RLS: the tenant's members read their own client's rows (the
--- get_my_client_id() policy every tenant table carries); only the service role
--- writes. Additive: a new table, nothing existing changes, so it can go live
--- before the code that writes it.
+-- SERVICE ROLE ONLY (the review's L2, 1 Oct): RLS is on with NO policy and no
+-- grant to `authenticated` or `anon`, so a tenant's session reads nothing here,
+-- even through PostgREST. A stored read carries what no client may see before
+-- it is sent (a held week, the findings the self-check dropped and why, the
+-- cost and the model), and nothing reads this table with a session client:
+-- the pipeline step, the script and the send path all use the service role.
+-- The front page (T5) adds a narrow policy or view when it needs one. The
+-- service role writes and reads. Additive: a new table, nothing existing
+-- changes, so it can go live before the code that writes it.
 --
--- IDEMPOTENT: `if not exists`, drop-then-create for the policy, grants that
--- are no-ops the second time. Applied twice on a throwaway PostgreSQL 17
+-- IDEMPOTENT: `if not exists`, drop-if-exists for the policy an earlier draft
+-- of this file created, grants that are no-ops the second time. Applied twice on a throwaway PostgreSQL 17
 -- cluster (scripts/pg-shim/throwaway.sh) with an empty catalogue diff, and
 -- exercised by scripts/pg-shim/week-reads-checks.sql. No BEGIN/COMMIT.
 
@@ -65,11 +70,9 @@ create index if not exists week_reads_client_latest_idx
 
 alter table public.week_reads enable row level security;
 
+-- No tenant policy: a session client reads nothing (see SERVICE ROLE ONLY).
 drop policy if exists "Members read their week reads" on public.week_reads;
-create policy "Members read their week reads" on public.week_reads
-  for select to authenticated using (client_id = public.get_my_client_id());
 
 revoke all on public.week_reads from anon, authenticated;
-grant select on public.week_reads to authenticated;
 grant select, insert, update on public.week_reads to service_role;
 revoke delete, truncate on public.week_reads from service_role;

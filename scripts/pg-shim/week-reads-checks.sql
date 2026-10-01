@@ -13,8 +13,9 @@ begin;
 -- 1. Grants -------------------------------------------------------------------------
 do $$
 begin
-  if not has_table_privilege('authenticated', 'public.week_reads', 'SELECT') then
-    raise exception 'grants FAILED: a member cannot read week_reads';
+  -- Service role only (L2): a tenant's session may not even read it.
+  if has_table_privilege('authenticated', 'public.week_reads', 'SELECT') then
+    raise exception 'grants FAILED: a member can read week_reads';
   end if;
   if has_table_privilege('authenticated', 'public.week_reads', 'INSERT')
      or has_table_privilege('authenticated', 'public.week_reads', 'UPDATE')
@@ -33,10 +34,13 @@ begin
      or has_table_privilege('service_role', 'public.week_reads', 'TRUNCATE') then
     raise exception 'grants FAILED: the service role can delete a read';
   end if;
-  if (select count(*) from pg_policies where schemaname = 'public' and tablename = 'week_reads') <> 1 then
-    raise exception 'policy FAILED: week_reads should carry exactly one policy';
+  if (select count(*) from pg_policies where schemaname = 'public' and tablename = 'week_reads') <> 0 then
+    raise exception 'policy FAILED: week_reads should carry no policy';
   end if;
-  raise notice 'ok  grants: members read, the service role inserts and updates, nobody deletes; one policy';
+  if not (select relrowsecurity from pg_class where oid = 'public.week_reads'::regclass) then
+    raise exception 'rls FAILED: week_reads should have row level security on';
+  end if;
+  raise notice 'ok  grants: no member or anon access, the service role reads, inserts and updates, nobody deletes; RLS on, no policy';
 end $$;
 
 -- 2. Two tenants, a member of the first, a run each ------------------------------------
@@ -115,23 +119,22 @@ begin
 end $$;
 reset role;
 
--- 5. A member reads their own client's rows and no other's, and writes none -----------------
+-- 5. A member reads nothing, their own client's rows included, and writes none --------------
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "00000000-0000-4000-8000-00000000a0e1", "role": "authenticated"}';
 do $$
 begin
-  if (select count(*) from public.week_reads) <> 2 then
-    raise exception 'rls FAILED: the member sees % rows, not their own two', (select count(*) from public.week_reads);
-  end if;
-  if exists (select 1 from public.week_reads where client_id <> '00000000-0000-4000-8000-00000000a0c1') then
-    raise exception 'rls FAILED: the member sees another tenant''s read';
-  end if;
+  begin
+    perform count(*) from public.week_reads;
+    raise exception 'grants FAILED: a member read week_reads';
+  exception when insufficient_privilege then null;
+  end;
   begin
     update public.week_reads set status = 'thin';
     raise exception 'grants FAILED: a member updated a read';
   exception when insufficient_privilege then null;
   end;
-  raise notice 'ok  rls: the member reads their own two rows, none of the other tenant''s, and cannot write';
+  raise notice 'ok  access: a member reads no read, their own client''s included, and cannot write';
 end $$;
 reset role;
 

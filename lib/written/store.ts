@@ -4,7 +4,7 @@ import type { WeekReadData } from './types'
 
 // The stored read (plan T4): one `week_reads` row per run and kind
 // (supabase/migrations/20261104090000_week_reads.sql). The service role
-// writes it; a tenant member reads their own client's rows.
+// writes and reads it; a tenant's session reads nothing (review L2).
 
 export const WEEK_READS_TABLE = 'week_reads'
 
