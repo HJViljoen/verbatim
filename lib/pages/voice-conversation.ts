@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { attributeAudiences, attributeVideos, sortParts, type About, type AboutPart, type AttributionInputs } from '../brands/attribution'
 import { chunk, UUID_IN_CHUNK } from '../chunk'
-import { kindLabel } from '../reading/kinds'
+import { talkKindLabel } from './overview-market/kinds'
 import { monthStartOf } from '../reading/month-key'
 import { TABLE_THEME_READINGS } from '../reading/types'
 import { CLIENT_AUDIENCE, rivalNameOf } from '../rivals'
@@ -48,27 +48,10 @@ export const MAKER_LINE_SHARE_FLOOR = 3
 /** The kinds in the artboard's words. Praise names what the tenant sells
  *  ("Praised a bag"); a tenant with no noun reads "Praised it". */
 export function convKindLabel(kind: string, clientId: string): string {
-  switch (kind) {
-    case 'praise': {
-      const noun = WHAT_THEY_SELL[clientId]
-      return noun ? `Praised a ${singular(noun)}` : 'Praised it'
-    }
-    case 'purchase_intent': return 'Said they want to buy'
-    case 'question': return 'Asked a question'
-    case 'pain_point': return 'Complained about something'
-    case 'feature_request': return 'Wished for something'
-    case 'objection': return 'Pushed back'
-    case 'buying_trigger': return 'Said what made them look'
-    case 'switching_signal': return 'Said they’re switching'
-    case 'demographic_signal': return 'Said who they are'
-    default: return kindLabel(kind)
-  }
+  return talkKindLabel(kind, WHAT_THEY_SELL[clientId])
 }
 
 /** "bags" → "bag". */
-function singular(noun: string): string {
-  return noun.endsWith('ies') ? `${noun.slice(0, -3)}y` : noun.endsWith('s') ? noun.slice(0, -1) : noun
-}
 
 /** A share as the page prints it: whole percent, half up. */
 export const shareOf = (k: number, n: number): number => (n > 0 ? Math.floor((100 * k) / n + 0.5) : 0)

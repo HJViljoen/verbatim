@@ -9,7 +9,8 @@ import { marketAudiences } from '../reading/market'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading } from '../reading/read'
 import { loadMarketRivalAudiences } from '../reading/reading-view'
-import { CLIENT_AUDIENCE } from '../rivals'
+import { CLIENT_AUDIENCE, loadCompetitors } from '../rivals'
+import { loadCommentNamings, namesByComment, trackedBrands, whoSplit, type WhoVideo } from '../brands/attribution'
 import { checkWeekRead, type WeekCheck } from './check'
 import { loadCompanyContext, type CompanyContext } from './company'
 import { callBudget, WEEK_READ_STEP_BUDGET_MS, type CallBudget } from './deadline'
@@ -21,7 +22,6 @@ import { ADVICE, scrubWeekText, toldWhatToDo, type WeekScrubCounts } from './scr
 import { WEEK_READS_TABLE, longRunWritten, saveWeekRead, type WeekReadRow } from './store'
 import { sureOf } from './sure'
 import type { LongRunIdea, LongRunReadData, WeekReadHeld, WhoPart } from './types'
-import { loadBrandNames, loadCommentBrands, whoSplit, type WhoVideo } from './who'
 import type { ParseClient } from './write-model'
 
 // The long-run read (pages build, 1 Oct): "What holds across {months}", the
@@ -47,8 +47,9 @@ import type { ParseClient } from './write-model'
 // counts is a citation the LENIENT gate passes (`lenientGateFor`). No quote is
 // picked: the section prints none.
 //
-// WHO IT IS ABOUT, per video (lib/written/who.ts): the brand a counted comment
-// names, else the video's audience. Frozen with the read.
+// WHO IT IS ABOUT, per video (lib/brands/attribution.ts, the one rule every
+// page uses): the brand a counted comment names, else the video's audience.
+// Frozen with the read.
 //
 // COMPOSE (code owns every fact): an idea rests on the candidates it cites
 // that exist, each candidate on one idea only; on at least the evidence the
@@ -362,9 +363,9 @@ export async function loadLongRunPool(
   // Who each eligible theme's talk is about: the brands its counted comments
   // name (one read), else each video's audience. Read before the selection,
   // which keeps room for the brands' own themes.
-  const names = await loadBrandNames(admin, clientId, company)
-  const brandsOf = await loadCommentBrands(admin, clientId, ranked.flatMap((j) => j.videos.flatMap((v) => v.comments)), names)
-  return buildLongRunPool(head, ranked, brandsOf, company)
+  const tracked = trackedBrands(clientId, company, await loadCompetitors(admin, clientId))
+  const namings = await loadCommentNamings(admin, { clientId, commentIds: ranked.flatMap((j) => j.videos.flatMap((v) => v.comments)), brands: tracked })
+  return buildLongRunPool(head, ranked, namesByComment(namings), company)
 }
 
 // ---- Scrub ---------------------------------------------------------------------------------------

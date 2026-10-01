@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { fmtInt, longMonth } from '../format'
 import { fetchQuoteResolutionsByRefs } from '../quotes'
 import { LEVEL_FLOOR_N } from '../reading/level'
@@ -9,16 +8,17 @@ import { monthStartOf, prevMonth } from '../reading/month-key'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom } from '../reading/reading-view'
 import { MONTH_PARAM } from '../reading/reading-month'
-import { INDUSTRY_AUDIENCE, loadTrackedRivals } from '../rivals'
+import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../rivals'
 import { loadStanding } from '../written/standing'
 import { loadPublishedWeekRead } from '../written/published'
 import { loadLatestLongRun } from '../written/store'
 import type { LongRunReadData, StandingFact, WhoPart } from '../written/types'
-import { loadBrandNames, whoSplit, type WhoVideo } from '../written/who'
+import { loadCommentNamings, trackedBrands, whoSplit, type WhoVideo } from '../brands/attribution'
 import { fetchRunningRunIds } from './latest-video-run'
 import { WHAT_THEY_SELL } from './market-frame'
 import { loadBoardObservations, loadBoardThemes, loadThemeSegmentRows, makerRuleEnabled, themeSegmentsOf } from './overview'
 import { buildThemeBoard, byBoardOrder, segmentOf, type MarketTheme, type ThemeBoard } from './overview-market/board'
+import { talkKindLabel } from './overview-market/kinds'
 import { fetchThemedRunId } from './themed-run'
 
 // Your market as "the bigger picture" (pages build, 1 Oct; the design
@@ -66,16 +66,7 @@ export function soldNoun(clientId: string): string | null {
 
 /** A kind's label, as the design words it ("Praised a bag"). */
 export function pictureKindLabel(kind: string, noun: string | null): string {
-  const one = noun ? noun.replace(/s$/, '') : null
-  switch (kind) {
-    case 'praise': return one ? `Praised a ${one}` : 'Praised it'
-    case 'purchase_intent': return 'Said they want to buy'
-    case 'question': return 'Asked a question'
-    case 'pain_point': return 'Complained about something'
-    case 'feature_request': return 'Wished for something'
-    case 'objection': return 'Pushed back'
-    default: return kind.replace(/_/g, ' ')
-  }
+  return talkKindLabel(kind, noun)
 }
 
 /** "September so far" while the month is under way, else "September". */
@@ -342,18 +333,11 @@ async function loadConversationWho(admin: SupabaseClient, clientId: string, mont
     if (refs.error) throw new Error(refs.error.message)
     const rows = ((refs.data ?? []) as { object_id: string; audience: string; video_ids: string[] | null; comment_ids: string[] | null }[])
       .map((r) => ({ object_id: String(r.object_id), audience: String(r.audience), video_ids: (r.video_ids ?? []).map(String), comment_ids: (r.comment_ids ?? []).map(String) }))
-    const names = await loadBrandNames(admin, clientId, company)
-    const comments = [...new Set(rows.flatMap((r) => r.comment_ids))]
-    const pages = await mapWithLimit(chunk(comments, UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
-      const res = await admin.from('brand_mentions').select('comment_id, video_id, brand_key')
-        .eq('client_id', clientId).eq('source', 'comment').neq('method', 'rejected').in('comment_id', part)
-      if (res.error) throw new Error(res.error.message)
-      return (res.data ?? []) as { comment_id: string; video_id: string; brand_key: string }[]
-    })
-    const mentions = pages.flat().flatMap((m) => {
-      const name = names.get(String(m.brand_key))
-      return name ? [{ comment_id: String(m.comment_id), video_id: String(m.video_id), name }] : []
-    })
+    // The one rule and its gates (lib/brands/attribution.ts): the rules'
+    // version, never a hit a confirm rejected, the hand check.
+    const tracked = trackedBrands(clientId, company, await loadCompetitors(admin, clientId))
+    const namings = await loadCommentNamings(admin, { clientId, commentIds: rows.flatMap((r) => r.comment_ids), brands: tracked })
+    const mentions = namings.map((n) => ({ comment_id: n.commentId, video_id: n.videoId, name: n.name }))
     return themeWho(rows, mentions, company)
   } catch (error) {
     console.error(`[pages] overview-picture.who: ${(error as { message?: string })?.message ?? String(error)}`)

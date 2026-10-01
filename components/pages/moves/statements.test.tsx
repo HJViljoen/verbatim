@@ -80,9 +80,9 @@ describe('Your statements', () => {
     expect(row).toContain('aria-label="Edit or remove this statement"')
   })
 
-  it('splits a brand line with the counts, short names, most first', () => {
+  it('splits a brand line with the counts and short names, in the one order (rivals, then the market) whatever order the reading stored', () => {
     const m = render(<YourStatements data={statementsFixture({ statements: [{ id: '55555555-5555-4555-8555-555555555555', text: 'We take back used gear and give it a new life', reading: MIXED }] })} />)
-    expect(markupText(m)).toContain('other bags 105 · Patagonia 10')
+    expect(markupText(m)).toContain('Patagonia 10 · other bags 105')
     expect(markupText(m)).toContain('Talked about under 5 of your own posts.')
     assertCopyContract(m)
   })

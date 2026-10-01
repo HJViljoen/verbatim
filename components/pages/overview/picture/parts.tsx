@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { marketLabelsOf } from '@/lib/brands/attribution'
 import type { WhoAbout, WhoPart } from '@/lib/written/types'
 
 // The pieces Your market's blocks share, drawn to the approved artboard
@@ -54,12 +55,12 @@ export function Bar({ pct, height = 8, className = 'flex-grow' }: { pct: number;
 
 /** A brand's name as a split prints it: the client gold, a rival in ink,
  *  the rest of the market quiet ("Other bags in your market", or "other
- *  bags" in a running line). */
+ *  bags" in a running line: `marketLabelsOf`, the one wording). */
 export function WhoName({ about, brand, noun, short = false }: { about: WhoAbout; brand: string; noun: string | null; short?: boolean }) {
   if (about === 'client') return <span className="font-semibold text-[#9A6B00]">{brand}</span>
   if (about === 'market') {
-    const words = short ? (noun ? `other ${noun}` : 'the rest') : (noun ? `Other ${noun} in your market` : 'The rest of your market')
-    return <span className={MUTED}>{words}</span>
+    const words = marketLabelsOf(noun)
+    return <span className={MUTED}>{short ? words.short : words.long}</span>
   }
   return <span className={`font-semibold ${INK}`}>{about.slice('rival:'.length)}</span>
 }

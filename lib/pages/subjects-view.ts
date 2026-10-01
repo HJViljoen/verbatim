@@ -3,7 +3,7 @@ import { carriesShare } from '../reading/level'
 import { monthStartOf } from '../reading/month-key'
 import type { ResolvedQuote } from '../reports/weekly-read'
 import { printsMarket, readCalibration } from '../subjects/calibration-state'
-import { marketKindLabel } from './overview-market/kinds'
+import { talkKindLabel } from './overview-market/kinds'
 import { WHAT_THEY_SELL } from './market-frame'
 import { byRailRank, type SubjectRail, type SubjectsData } from './subjects'
 
@@ -41,28 +41,9 @@ const RANK_WORDS = [
  *  market board). Praise names what the market buys where the product knows
  *  it (`WHAT_THEY_SELL`), so another tenant never reads "Praised a bag". */
 export function subjectKindLabel(kind: string, clientId: string): string {
-  switch (kind) {
-    case 'purchase_intent': return 'Said they want to buy'
-    case 'question': return 'Asked a question'
-    case 'feature_request': return 'Wished for something'
-    case 'pain_point': return 'Complained about something'
-    case 'praise': {
-      const noun = singular(WHAT_THEY_SELL[clientId])
-      return noun ? `Praised a ${noun}` : 'Praised it'
-    }
-    case 'buying_trigger': return 'Said what made them look'
-    case 'objection': return 'Pushed back'
-    case 'switching_signal': return 'Said they’re switching'
-    case 'demographic_signal': return 'Said who they are'
-    default: return marketKindLabel(kind)
-  }
+  return talkKindLabel(kind, WHAT_THEY_SELL[clientId])
 }
 
-function singular(noun: string | undefined): string | null {
-  if (!noun) return null
-  const n = noun.trim()
-  return n.endsWith('s') && n.length > 1 ? n.slice(0, -1) : n
-}
 
 /** The client's definition, cut at a word near `COVERS_MAX` with an ellipsis. */
 export function coversLine(description: string | null | undefined, max = COVERS_MAX): string | null {

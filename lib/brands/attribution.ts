@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { monthStartOf } from '../reading/month-key'
 import { WHAT_THEY_SELL } from '../pages/market-frame'
 import { audienceOf, CLIENT_AUDIENCE, rivalNameOf } from '../rivals'
@@ -30,8 +30,22 @@ import { brandCountState } from './precision'
 // keys are not tracked brands and are ignored, and so is a key no tracked
 // brand has. Nothing is ever read from a label or a caption here.
 //
-// PURE HALF FIRST; THEN THE ONE READ (`loadAttribution`): the videos' entity
-// tags and the brand_mentions comment rows of those videos, side by side.
+// PURE HALF FIRST; THEN THE READS: `loadAttribution` (the videos' entity tags
+// and the brand_mentions comment rows of those videos, side by side) and
+// `loadCommentNamings` (the same rows by comment, for a caller that holds the
+// comments rather than the videos: the long-run read, Your market's
+// conversations). Both apply the same gates.
+//
+// THE ONE MODULE (integration, lead's ruling 4). MARKET's `lib/written/who.ts`
+// stated this rule a second time with fewer gates (no hand check, no rule
+// version) and is folded in here; MOVES's statements file their videos
+// through it at measure time; and every page names the market with
+// `marketLabels` ("Other bags in your market" / "other bags").
+//
+// ONE ORDER (the design's, `who_of_theme` in the generator): the client
+// first, then the rivals by videos (ties by name), the market last. A kind's
+// split by audience prints most first, so the market leads it (the caller
+// re-sorts, as the artboard draws "other bags 599 · Patagonia 11").
 
 /** Who an item is about: the client, one tracked rival by name, or the market. */
 export type About = 'client' | `rival:${string}` | 'market'
@@ -82,11 +96,26 @@ export interface TalkScope {
 const rival = (name: string): About => `rival:${name}`
 
 /** The market's own label, long ("Other bags in your market", a lone
- *  label) and short ("other bags", inside a split), from the product's noun
- *  for what the tenant sells (lib/pages/market-frame.ts). */
-export function marketLabels(clientId: string): { long: string; short: string } {
-  const noun = WHAT_THEY_SELL[clientId]
-  return noun ? { long: `Other ${noun} in your market`, short: `other ${noun}` } : { long: 'Others in your market', short: 'others' }
+ *  label), short ("other bags", inside a split) and inline ("other bags in
+ *  your market", inside a sentence), from the product's noun for what the
+ *  tenant sells (lib/pages/market-frame.ts). THE one wording: every page that
+ *  names the market takes it from here. */
+export function marketLabels(clientId: string): MarketLabels {
+  return marketLabelsOf(WHAT_THEY_SELL[clientId])
+}
+
+export interface MarketLabels {
+  long: string
+  short: string
+  inline: string
+}
+
+/** The same, from the noun itself (a caller that already holds it). */
+export function marketLabelsOf(noun: string | null | undefined): MarketLabels {
+  const n = (noun ?? '').trim()
+  return n
+    ? { long: `Other ${n} in your market`, short: `other ${n}`, inline: `other ${n} in your market` }
+    : { long: 'Others in your market', short: 'others', inline: 'others in your market' }
 }
 
 /** The printed name an `About` stands for (the market is the caller's). */
@@ -114,6 +143,13 @@ export function aboutAudience(audience: string | null | undefined): About {
   return name ? rival(name) : 'market'
 }
 
+/** Of the tracked brands a video's talk names, the one it is filed under:
+ *  the alphabetically first, so a video is never counted twice. */
+function firstNamed(named: readonly { about: About; name: string }[]): About | null {
+  const sorted = [...named].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
+  return sorted[0]?.about ?? null
+}
+
 /** Who one video is about, by the rule in the header. */
 export function aboutVideo(videoId: string, inputs: AttributionInputs, scope: TalkScope = {}): About {
   const named = (inputs.namings.get(videoId) ?? [])
@@ -121,9 +157,49 @@ export function aboutVideo(videoId: string, inputs: AttributionInputs, scope: Ta
     .filter((n) => !scope.months || (n.month != null && scope.months.has(n.month)))
     .map((n) => namedAbout(n.brandKey, inputs.brands))
     .filter((x): x is { about: About; name: string } => x != null)
-    .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
-  if (named.length > 0) return named[0].about
-  return aboutAudience(inputs.audiences.get(videoId))
+  return firstNamed(named) ?? aboutAudience(inputs.audiences.get(videoId))
+}
+
+/**
+ * One video as a caller that read the namings by comment holds it
+ * (`loadCommentNamings`): its audience, and the tracked brands its counted
+ * comments name, by display name (already gated).
+ */
+export interface WhoVideo {
+  id: string
+  audience: string
+  named: readonly string[]
+}
+
+/** Who such a video is about: the same rule as `aboutVideo`. */
+export function aboutNamed(v: Pick<WhoVideo, 'audience' | 'named'>, client: string): About {
+  const own = client.trim().toLowerCase()
+  const named = [...new Set(v.named.map((n) => n.trim()).filter(Boolean))]
+    .map((name): { about: About; name: string } => ({ about: name.toLowerCase() === own ? 'client' : rival(name), name }))
+  return firstNamed(named) ?? aboutAudience(v.audience)
+}
+
+/** The same video seen through several pieces of talk, once: the named
+ *  brands of every sighting count. */
+export function mergeWhoVideos(videos: readonly WhoVideo[]): WhoVideo[] {
+  const byId = new Map<string, { audience: string; named: Set<string> }>()
+  for (const v of videos) {
+    const held = byId.get(v.id)
+    if (held) for (const n of v.named) held.named.add(n)
+    else byId.set(v.id, { audience: v.audience, named: new Set(v.named) })
+  }
+  return [...byId.entries()].map(([id, v]) => ({ id, audience: v.audience, named: [...v.named] }))
+}
+
+/** The split of such videos, one brand per video, in the one order. Sums to
+ *  the number of distinct videos. */
+export function whoSplit(videos: readonly WhoVideo[], client: string): AboutPart[] {
+  const counts = new Map<About, number>()
+  for (const v of mergeWhoVideos(videos)) {
+    const about = aboutNamed(v, client)
+    counts.set(about, (counts.get(about) ?? 0) + 1)
+  }
+  return sortParts([...counts.entries()].map(([about, videos]) => ({ about, videos })), { client })
 }
 
 /**
@@ -139,14 +215,13 @@ export function attributeVideos(videoIds: Iterable<string>, inputs: AttributionI
   return sortParts([...counts.entries()].map(([about, videos]) => ({ about, videos })), inputs.brands)
 }
 
-/** Brands by videos (most first, then by name), the market last. */
+/** The one order (the design's): the client first, then the rivals by
+ *  videos (most first, then by name), the market last. */
 export function sortParts(parts: readonly AboutPart[], brands: Pick<TrackedBrands, 'client'>): AboutPart[] {
+  const rank = (p: AboutPart): number => (p.about === 'client' ? 0 : p.about === 'market' ? 2 : 1)
   return [...parts]
     .filter((p) => p.videos > 0)
-    .sort((a, b) => {
-      if ((a.about === 'market') !== (b.about === 'market')) return a.about === 'market' ? 1 : -1
-      return b.videos - a.videos || (aboutName(a.about, brands) ?? '').localeCompare(aboutName(b.about, brands) ?? '')
-    })
+    .sort((a, b) => rank(a) - rank(b) || b.videos - a.videos || (aboutName(a.about, brands) ?? '').localeCompare(aboutName(b.about, brands) ?? ''))
 }
 
 /** The split of an audience reading (a kind's videos by audience): the
@@ -247,4 +322,49 @@ export async function loadAttribution(
     console.error(`[brands] attribution not read: ${(error as Error)?.message ?? String(error)}`)
     return null
   }
+}
+
+/** A tracked brand named in one counted comment, on its video. */
+export interface CommentNaming {
+  commentId: string
+  videoId: string
+  /** The brand's display name ("Sealand", "Cotopaxi"). */
+  name: string
+}
+
+/**
+ * The tracked brands these comments name, by the same gates as
+ * `loadAttribution` (the rules' version, never a hit a confirm rejected, the
+ * hand check; `watched:` and unknown keys name nothing). For a caller that
+ * holds the comments an item rests on. Throws on a failed read: the caller
+ * prints no split rather than a guessed one.
+ */
+export async function loadCommentNamings(
+  db: SupabaseClient,
+  a: { clientId: string; commentIds: Iterable<string>; brands: TrackedBrands },
+): Promise<CommentNaming[]> {
+  const ids = [...new Set(a.commentIds)].filter(Boolean)
+  if (ids.length === 0) return []
+  const pages = await mapWithLimit(chunk(ids, UUID_IN_CHUNK), READ_CONCURRENCY, (part) => selectAll<MentionRow>(() =>
+    db.from('brand_mentions').select('video_id, brand_key, comment_id, comment_month, method, rule_version')
+      .eq('client_id', a.clientId).eq('source', 'comment').in('comment_id', part).order('id')))
+  const out: CommentNaming[] = []
+  for (const [videoId, namings] of countedNamings(pages.flat())) {
+    for (const n of namings) {
+      const named = n.commentId ? namedAbout(n.brandKey, a.brands) : null
+      if (named) out.push({ commentId: n.commentId as string, videoId, name: named.name })
+    }
+  }
+  return out
+}
+
+/** Comment id → the brands it names, each once. */
+export function namesByComment(namings: readonly CommentNaming[]): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const n of namings) {
+    const held = out.get(n.commentId) ?? []
+    if (!held.includes(n.name)) held.push(n.name)
+    out.set(n.commentId, held)
+  }
+  return out
 }

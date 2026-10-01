@@ -1,3 +1,5 @@
+import { marketLabels } from '@/lib/brands/attribution'
+import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { READING_VERSION, type StatementReading, type StatementsBlockData } from '@/lib/statements/types'
 import type { AdviceRow } from '@/lib/pages/market-surface'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
@@ -59,6 +61,7 @@ export function statementsFixture(over: Partial<StatementsBlockData> = {}): Stat
     complete: true,
     base: 852,
     brand: 'Sealand',
+    market: marketLabels(SEALAND_CLIENT_ID),
     canEdit: true,
     statements: [
       { id: '11111111-1111-4111-8111-111111111111', text: 'Every Sealand product is a small act of defiance against waste', reading: ANTI_WASTE },

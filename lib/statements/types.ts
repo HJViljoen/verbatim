@@ -66,8 +66,9 @@ export const STANCES = ['backs', 'doubts', 'asks', 'neutral'] as const
 export type Stance = (typeof STANCES)[number]
 
 /** Who a stretch of talk is about (the brief's rule 6): the client, a tracked
- *  rival, or the rest of the category. */
-export type About = 'client' | `rival:${string}` | 'market'
+ *  rival, or the rest of the category. The one type (lib/brands/attribution.ts). */
+export type { About } from '../brands/attribution'
+import type { About, MarketLabels } from '../brands/attribution'
 
 export interface StatementRow {
   id: string
@@ -137,6 +138,9 @@ export interface StatementsBlockData {
   canEdit: boolean
   /** The client's own name, for the block's lead and the brand line. */
   brand: string
+  /** The market's words for this tenant ("Other bags in your market" /
+   *  "other bags"): `marketLabels`, the one wording. */
+  market: MarketLabels
 }
 
 export function isMissingStatements(error: { code?: string | null; message?: string | null } | null | undefined): boolean {

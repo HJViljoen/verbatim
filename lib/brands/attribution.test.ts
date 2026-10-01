@@ -2,15 +2,23 @@ import { describe, expect, it } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../config'
 import { fakeDb } from '../test/fake-db'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import {
   aboutAudience,
+  aboutNamed,
   aboutVideo,
   attributeAudiences,
   attributeVideos,
   countedNamings,
   loadAttribution,
+  loadCommentNamings,
   marketLabels,
+  marketLabelsOf,
+  mergeWhoVideos,
+  namesByComment,
+  sortParts,
   trackedBrands,
+  whoSplit,
   windowMonths,
   type AttributionInputs,
   type Naming,
@@ -130,8 +138,10 @@ describe('trackedBrands', () => {
 
 describe('marketLabels', () => {
   it('names the market by what the tenant sells', () => {
-    expect(marketLabels(SEALAND_CLIENT_ID)).toEqual({ long: 'Other bags in your market', short: 'other bags' })
-    expect(marketLabels('someone-else')).toEqual({ long: 'Others in your market', short: 'others' })
+    expect(marketLabels(SEALAND_CLIENT_ID)).toEqual({ long: 'Other bags in your market', short: 'other bags', inline: 'other bags in your market' })
+    expect(marketLabels('someone-else')).toEqual({ long: 'Others in your market', short: 'others', inline: 'others in your market' })
+    expect(marketLabelsOf('bags')).toEqual(marketLabels(SEALAND_CLIENT_ID))
+    expect(marketLabelsOf(null)).toEqual(marketLabels('someone-else'))
   })
 })
 
@@ -157,9 +167,10 @@ describe('loadAttribution', () => {
     })
     const x = await loadAttribution(db.client as never, { clientId: 'cl', videoIds: ['v1', 'v2', 'v3'], brands })
     expect(x).not.toBeNull()
+    // The one order: the client first, then the rivals, the market last.
     expect(attributeVideos(['v1', 'v2', 'v3'], x!)).toEqual([
-      { about: 'rival:Cotopaxi', videos: 1 },
       { about: 'client', videos: 1 },
+      { about: 'rival:Cotopaxi', videos: 1 },
       { about: 'rival:The North Face', videos: 1 },
     ])
     expect(db.calls.map((c) => c.table).sort()).toEqual(['brand_mentions', 'videos'])
@@ -168,5 +179,103 @@ describe('loadAttribution', () => {
   it('answers null, never a guessed split, when a table cannot be read', async () => {
     const db = fakeDb({ videos: [] })
     expect(await loadAttribution(db.client as never, { clientId: 'cl', videoIds: ['v1'], brands })).toBeNull()
+  })
+})
+
+// ---- Folded in from MARKET's lib/written/who.ts (integration, ruling 4) --------
+
+describe('sortParts: the one order', () => {
+  it('the client first even with fewer videos, then the rivals by videos and name, the market last', () => {
+    expect(sortParts([
+      { about: 'market', videos: 11 },
+      { about: 'rival:Patagonia', videos: 1 },
+      { about: 'client', videos: 6 },
+      { about: 'rival:The North Face', videos: 2 },
+      { about: 'rival:Cotopaxi', videos: 10 },
+      { about: 'rival:Gone', videos: 0 },
+    ], brands)).toEqual([
+      { about: 'client', videos: 6 },
+      { about: 'rival:Cotopaxi', videos: 10 },
+      { about: 'rival:The North Face', videos: 2 },
+      { about: 'rival:Patagonia', videos: 1 },
+      { about: 'market', videos: 11 },
+    ])
+  })
+})
+
+describe('aboutNamed: the same rule over names already read', () => {
+  it('a named brand wins over the audience, the alphabetically first of two; the client by its name', () => {
+    expect(aboutNamed({ audience: INDUSTRY_AUDIENCE, named: ['The North Face', 'Cotopaxi'] }, 'Sealand')).toBe('rival:Cotopaxi')
+    expect(aboutNamed({ audience: 'competitor:Cotopaxi', named: ['Sealand'] }, 'Sealand')).toBe('client')
+    expect(aboutNamed({ audience: INDUSTRY_AUDIENCE, named: ['sealand'] }, 'Sealand')).toBe('client')
+  })
+
+  it('else the audience: own posts, a rival\'s filed videos, the category', () => {
+    expect(aboutNamed({ audience: CLIENT_AUDIENCE, named: [] }, 'Sealand')).toBe('client')
+    expect(aboutNamed({ audience: 'competitor:Patagonia', named: [] }, 'Sealand')).toBe('rival:Patagonia')
+    expect(aboutNamed({ audience: INDUSTRY_AUDIENCE, named: [] }, 'Sealand')).toBe('market')
+  })
+
+  it('agrees with aboutVideo on the same talk', () => {
+    const x = inputs({ v1: 'industry-other' }, { v1: [named(TNF, 'c1'), named(COTO, 'c2')] })
+    expect(aboutNamed({ audience: 'industry-other', named: ['The North Face', 'Cotopaxi'] }, 'Sealand')).toBe(aboutVideo('v1', x))
+  })
+})
+
+describe('whoSplit', () => {
+  it('one brand per video, merged across sightings, in the one order', () => {
+    const split = whoSplit([
+      { id: 'v1', audience: INDUSTRY_AUDIENCE, named: [] },
+      { id: 'v1', audience: INDUSTRY_AUDIENCE, named: ['Patagonia'] },
+      { id: 'v2', audience: 'competitor:Cotopaxi', named: [] },
+      { id: 'v3', audience: 'competitor:Cotopaxi', named: [] },
+      { id: 'v4', audience: CLIENT_AUDIENCE, named: [] },
+      { id: 'v5', audience: INDUSTRY_AUDIENCE, named: [] },
+    ], 'Sealand')
+    expect(split).toEqual([
+      { about: 'client', videos: 1 },
+      { about: 'rival:Cotopaxi', videos: 2 },
+      { about: 'rival:Patagonia', videos: 1 },
+      { about: 'market', videos: 1 },
+    ])
+    expect(split.reduce((n, p) => n + p.videos, 0)).toBe(5)
+    expect(mergeWhoVideos([{ id: 'v1', audience: 'x', named: ['A'] }, { id: 'v1', audience: 'x', named: ['B'] }])).toEqual([{ id: 'v1', audience: 'x', named: ['A', 'B'] }])
+  })
+})
+
+describe('loadCommentNamings', () => {
+  it('names a comment\'s tracked brands by the same gates as loadAttribution', async () => {
+    const row = (id: string, comment: string, video: string, key: string, over: Record<string, unknown> = {}) => ({
+      id, client_id: 'cl', video_id: video, brand_key: key, source: 'comment', comment_id: comment, comment_month: '2026-09-14', method: 'rule', rule_version: 'brands_v1', ...over,
+    })
+    const db = fakeDb({
+      brand_mentions: [
+        row('m1', 'c1', 'v1', COTO),
+        row('m2', 'c1', 'v1', 'client'),
+        // A hit a confirm rejected names nothing.
+        row('m3', 'c2', 'v2', PATA),
+        row('m4', 'c2', 'v2', PATA, { method: 'rejected', rule_version: 'brands_v1+brand_confirm_v1' }),
+        // An older rules' row, a watched key, an unknown key, a name the hand check refuses.
+        row('m5', 'c3', 'v3', TNF, { rule_version: 'brands_v0' }),
+        row('m6', 'c3', 'v3', 'watched:osprey'),
+        row('m7', 'c3', 'v3', '99999999-9999-9999-9999-999999999999'),
+        row('m8', 'c3', 'v3', FREI),
+        // Another tenant's row is never read.
+        { ...row('m9', 'c1', 'v1', TNF), client_id: 'other' },
+      ],
+    })
+    const out = await loadCommentNamings(db.client as never, { clientId: 'cl', commentIds: ['c1', 'c2', 'c3', 'c1'], brands })
+    expect(out.sort((a, b) => a.name.localeCompare(b.name))).toEqual([
+      { commentId: 'c1', videoId: 'v1', name: 'Cotopaxi' },
+      { commentId: 'c1', videoId: 'v1', name: 'Sealand' },
+    ])
+    expect(namesByComment(out)).toEqual(new Map([['c1', ['Cotopaxi', 'Sealand']]]))
+  })
+
+  it('reads nothing for no comments, and throws (no guessed split) when the table cannot be read', async () => {
+    const db = fakeDb({})
+    expect(await loadCommentNamings(db.client as never, { clientId: 'cl', commentIds: [], brands })).toEqual([])
+    expect(db.calls).toHaveLength(0)
+    await expect(loadCommentNamings(db.client as never, { clientId: 'cl', commentIds: ['c1'], brands })).rejects.toThrow()
   })
 })

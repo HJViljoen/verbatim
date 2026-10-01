@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { marketLabels, type MarketLabels } from '../brands/attribution'
 import {
   TABLE_STATEMENTS,
   TABLE_STATEMENT_READINGS,
@@ -28,6 +29,7 @@ export function statementsBlock(args: {
   readings: readonly { statement_id: string; month: string; data: StatementReading; measured_at: string }[]
   canEdit: boolean
   brand: string
+  market: MarketLabels
 }): StatementsBlockData {
   const live = new Set(args.statements.map((s) => s.id))
   const readings = args.readings.filter((r) => live.has(r.statement_id) && r.data && typeof r.data === 'object')
@@ -47,6 +49,7 @@ export function statementsBlock(args: {
     statements,
     canEdit: args.canEdit,
     brand: args.brand,
+    market: args.market,
   }
 }
 
@@ -83,6 +86,7 @@ export async function loadStatements(
       readings: ((rd.error ? [] : rd.data) ?? []) as { statement_id: string; month: string; data: StatementReading; measured_at: string }[],
       canEdit: opts.canEdit,
       brand: opts.brand,
+      market: marketLabels(clientId),
     })
   } catch (e) {
     console.error(`[pages] moves.statements: ${e instanceof Error ? e.message : String(e)}`)

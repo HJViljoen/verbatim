@@ -29,6 +29,40 @@ import { SHARE_BAND } from '../../report-bands'
  *  every other kind as it reads everywhere. */
 export const marketKindLabel = (kind: string): string => MARKET_KIND_LABELS[kind] ?? kindLabel(kind)
 
+/**
+ * What people did in the comments, in the rebuilt pages' words (the approved
+ * artboards of 1 Oct: "Praised a bag", "Said they want to buy"). ONE list for
+ * every page (integration, lead's ruling 4): Your market, Conversation,
+ * Competitive and Subjects each wrote it out, word for word. Praise names
+ * what the tenant sells (`WHAT_THEY_SELL`, singular); a tenant with no noun
+ * reads "Praised it".
+ */
+export function talkKindLabel(kind: string, noun: string | null | undefined): string {
+  switch (kind) {
+    case 'praise': {
+      const one = singularNoun(noun)
+      return one ? `Praised a ${one}` : 'Praised it'
+    }
+    case 'purchase_intent': return 'Said they want to buy'
+    case 'question': return 'Asked a question'
+    case 'pain_point': return 'Complained about something'
+    case 'feature_request': return 'Wished for something'
+    case 'objection': return 'Pushed back'
+    case 'buying_trigger': return 'Said what made them look'
+    case 'switching_signal': return 'Said they’re switching'
+    case 'demographic_signal': return 'Said who they are'
+    default: return marketKindLabel(kind)
+  }
+}
+
+/** The singular of the plural noun the product stores ("bags" → "bag"). */
+function singularNoun(noun: string | null | undefined): string | null {
+  const n = (noun ?? '').trim()
+  if (!n) return null
+  if (n.endsWith('ies')) return `${n.slice(0, -3)}y`
+  return n.endsWith('s') && n.length > 1 ? n.slice(0, -1) : n
+}
+
 export interface MarketKindRow {
   kind: string
   label: string

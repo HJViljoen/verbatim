@@ -1,3 +1,4 @@
+import type { MarketLabels } from '@/lib/brands/attribution'
 import type { StatementReading, StatementsBlockData, StatementView } from '@/lib/statements/types'
 import { AddStatement } from './add-statement'
 import { Bar, Card, SectionHead } from './parts'
@@ -26,8 +27,8 @@ import {
 const TRACKS = 'grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.05fr)_220px_minmax(0,1.45fr)_32px] lg:gap-7'
 const GRID = `grid ${TRACKS}`
 
-function WhoLine({ reading, brand }: { reading: StatementReading; brand: string }) {
-  const parts = whoParts(reading.who, brand)
+function WhoLine({ reading, brand, market }: { reading: StatementReading; brand: string; market: MarketLabels }) {
+  const parts = whoParts(reading.who, brand, market)
   if (parts.length === 0) return null
   const name = (p: (typeof parts)[number]) => (
     <span className={p.tone === 'client' ? 'font-semibold text-[#9A6B00]' : p.tone === 'rival' ? 'font-semibold text-[#26292C]' : 'text-[#5F656B]'}>{p.name}</span>
@@ -104,13 +105,13 @@ function TreatColumn({ reading }: { reading: StatementReading }) {
   )
 }
 
-function StatementLine({ s, brand, canEdit }: { s: StatementView; brand: string; canEdit: boolean }) {
+function StatementLine({ s, brand, market, canEdit }: { s: StatementView; brand: string; market: MarketLabels; canEdit: boolean }) {
   const r = s.reading
   return (
     <div className={`${GRID} items-start border-t border-[#E4E2DC] py-[18px]`} data-statement={s.id}>
       <div className="flex flex-col gap-2">
         <p data-copy="quote" className="m-0 text-[16px] font-semibold leading-[1.4] text-[#26292C]">{s.text}</p>
-        {r ? <WhoLine reading={r} brand={brand} /> : null}
+        {r ? <WhoLine reading={r} brand={brand} market={market} /> : null}
       </div>
       {r ? <TalkColumn reading={r} /> : <div className="hidden lg:block" />}
       {r ? <TreatColumn reading={r} /> : <div className="hidden lg:block" />}
@@ -132,7 +133,7 @@ export function YourStatements({ data }: { data: StatementsBlockData }) {
             {COLUMN_HEADS.map((h) => <div key={h} className="text-[12px] font-semibold text-[#5F656B]">{h}</div>)}
             <div />
           </div>
-          {data.statements.map((s) => <StatementLine key={s.id} s={s} brand={data.brand} canEdit={data.canEdit} />)}
+          {data.statements.map((s) => <StatementLine key={s.id} s={s} brand={data.brand} market={data.market} canEdit={data.canEdit} />)}
         </div>
       ) : null}
     </Card>

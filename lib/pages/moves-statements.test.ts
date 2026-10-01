@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { marketLabelsOf } from '../brands/attribution'
 import { statementsBlock } from './moves-statements'
 import type { StatementReading } from '../statements/types'
 
@@ -27,6 +28,7 @@ describe('statementsBlock', () => {
       ],
       canEdit: true,
       brand: 'Sealand',
+      market: marketLabelsOf('bags'),
     })
     expect(b.month).toBe('2026-09-01')
     expect(b.base).toBe(852)
@@ -34,6 +36,8 @@ describe('statementsBlock', () => {
     expect(b.statements.map((s) => s.id)).toEqual(['s1', 's2', 's3'])
     expect(b.statements[0].reading?.market.base).toBe(852)
     expect(b.statements[2].reading).toBeNull()
+    // The tenant's own market words ride with the block (marketLabels).
+    expect(b.market.long).toBe('Other bags in your market')
   })
 
   it('ignores readings of retired statements and has no month when nothing is measured', () => {
@@ -42,6 +46,7 @@ describe('statementsBlock', () => {
       readings: [{ statement_id: 'gone', month: '2026-09-01', data: reading('2026-09-01', 852), measured_at: '2026-10-01T00:00:00Z' }],
       canEdit: false,
       brand: 'Sealand',
+      market: marketLabelsOf('bags'),
     })
     expect(b.month).toBeNull()
     expect(b.base).toBeNull()

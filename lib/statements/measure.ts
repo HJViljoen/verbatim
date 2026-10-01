@@ -8,6 +8,8 @@ import { embeddingCoverage } from '../agent/retrieve'
 import { logAiCall } from '../pipeline/ai-log'
 import { embedTexts } from '../pipeline/cluster'
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { aboutAudience, aboutVideo, loadAttribution, sortParts, trackedBrands, type TrackedBrands } from '../brands/attribution'
+import { loadCompetitors } from '../rivals'
 import { nextMonth } from '../reading/month-key'
 import { readingMonthOf } from '../written/month'
 import { scrubWeekText } from '../written/scrub'
@@ -183,11 +185,12 @@ export interface DatedMember {
   videos: { id: string; lane: 'market' | 'own'; about: About }[]
 }
 
-/** `competitor:<name>` / `industry-other` / the client's own, as `About`. */
+/** `competitor:<name>` / `industry-other` / the client's own, as `About`:
+ *  the audience half of the one rule (`aboutAudience`, lib/brands/
+ *  attribution.ts). A tracked brand named in the statement's own comments
+ *  overrides it at measure time (`loadDatedMembers` with `brands`). */
 export function aboutOf(audience: string | null | undefined, own: boolean): About {
-  if (own) return 'client'
-  if (audience && audience.startsWith('competitor:')) return `rival:${audience.slice('competitor:'.length)}`
-  return 'market'
+  return own ? 'client' : aboutAudience(audience)
 }
 
 /**
@@ -226,7 +229,10 @@ export function readingFrom(args: {
     stance = { of, base: base.size, backs: by.backs.size, doubts: by.doubts.size, asks: by.asks.size }
     const counts = new Map<About, number>()
     for (const about of base.values()) counts.set(about, (counts.get(about) ?? 0) + 1)
-    who.push(...[...counts.entries()].map(([about, videos]) => ({ about, videos })).sort((a, b) => b.videos - a.videos || a.about.localeCompare(b.about)))
+    // The one order (lib/brands/attribution.ts `sortParts`): the client, the
+    // rivals by videos, the market last. The client's name is not needed for
+    // it (the client sorts by rank, never by name).
+    who.push(...sortParts([...counts.entries()].map(([about, videos]) => ({ about, videos })), { client: '' }))
   }
   return {
     version: READING_VERSION,
@@ -264,6 +270,8 @@ export interface MeasureOptions {
   bandOverride?: ReadonlyMap<string, readonly { audience_insight_id: string; score: number }[]>
   /** The gloss the band was read from, recorded on the reading. */
   gloss?: string | null
+  /** The tracked brands, for who the talk is about (the one rule). */
+  brands?: TrackedBrands
   deadlineMs?: number
   /** Log each model call to `ai_call_log` (default true). The dry run turns it
    *  off: it writes nothing to the database, the call log included. */
@@ -343,6 +351,10 @@ export async function loadDatedMembers(
   memberIds: readonly string[],
   month: string,
   market: ReadonlyMap<string, string>,
+  /** The tracked brands: given, a brand named in the statement's own comments
+   *  files its video (the one rule, lib/brands/attribution.ts). Without them,
+   *  or where the namings cannot be read, the audience alone answers. */
+  brands?: TrackedBrands,
 ): Promise<DatedMember[]> {
   if (memberIds.length === 0) return []
   const evidence: { audience_insight_id: string; comment_id: string }[] = []
@@ -382,6 +394,16 @@ export async function loadDatedMembers(
     const seen = byMember.get(e.audience_insight_id) ?? new Map()
     seen.set(v.id, { id: v.id, lane, about: aboutOf(market.get(v.id), v.own) })
     byMember.set(e.audience_insight_id, seen)
+  }
+  // WHO THE TALK IS ABOUT, by the one rule: the namings in the statement's own
+  // comments of the month (every member's, so a video is filed once).
+  if (brands) {
+    const videoIds = [...new Set([...byMember.values()].flatMap((m) => [...m.keys()]))]
+    const inputs = await loadAttribution(admin, { clientId, videoIds, brands })
+    if (inputs) {
+      const scope = { comments: new Set(comments.keys()), months: new Set([month]) }
+      for (const seen of byMember.values()) for (const v of seen.values()) v.about = aboutVideo(v.id, inputs, scope)
+    }
   }
   return memberIds.map((id) => ({ id, videos: [...(byMember.get(id)?.values() ?? [])] }))
 }
@@ -492,7 +514,7 @@ export async function measureStatement(
     return out
   }
 
-  const dated = await loadDatedMembers(admin, opts.clientId, [...members].sort(), opts.month, market)
+  const dated = await loadDatedMembers(admin, opts.clientId, [...members].sort(), opts.month, market, opts.brands)
   const lane: 'market' | 'own' | null = dated.some((m) => m.videos.some((v) => v.lane === 'market'))
     ? 'market'
     : dated.some((m) => m.videos.some((v) => v.lane === 'own')) ? 'own' : null
@@ -601,6 +623,14 @@ export async function measureStatements(admin: Admin, opts: MeasureAllOptions): 
     loadMarketMonth(admin, opts.clientId, month.month),
   ])
   const brand = ((client as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'the brand'
+  // The tracked brands, once a pass, for who each statement's talk is about.
+  // A failed read leaves the audience to answer (lib/brands/attribution.ts).
+  const brands = await loadCompetitors(admin, opts.clientId)
+    .then((rivals) => trackedBrands(opts.clientId, brand, rivals))
+    .catch((e: unknown) => {
+      console.error(`[statements] rivals not read; who the talk is about falls back to the audience: ${e instanceof Error ? e.message : String(e)}`)
+      return undefined
+    })
   // THE GLOSS, then its vector: one small call a statement (none for a band
   // computed elsewhere, which brings its own gloss), then one embeddings call.
   const glosses: (string | null)[] = []
@@ -635,7 +665,7 @@ export async function measureStatements(admin: Admin, opts: MeasureAllOptions): 
     try {
       r = await measureStatement(admin, statements[i], vectors[i], market, {
         clientId: opts.clientId, runId: opts.runId, brand, month: month.month, complete: month.complete,
-        dryRun: opts.dryRun, bandOverride: opts.bandOverride, gloss: glosses[i], deadlineMs: Math.min(left, STATEMENT_DEADLINE_MS), log: opts.log,
+        dryRun: opts.dryRun, bandOverride: opts.bandOverride, gloss: glosses[i], brands, deadlineMs: Math.min(left, STATEMENT_DEADLINE_MS), log: opts.log,
       })
     } catch (e) {
       if (isMissingStatements(e as { code?: string; message?: string })) return { month: month.month, skipped: 'migration', results, costUsd: results.reduce((n, x) => n + x.costUsd, 0) }

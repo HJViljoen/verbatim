@@ -3,7 +3,8 @@ import { fmtInt, longMonth, shortDate } from '../format'
 import { levelText } from '../reading/level'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { FLAGGED_KIND, KIND_ORDER } from '../reading/kinds'
-import { marketKindLabel } from './overview-market/kinds'
+import { marketKindLabel, talkKindLabel } from './overview-market/kinds'
+import { marketLabelsOf } from '../brands/attribution'
 import { perfVsMedian } from '../content-tiles'
 import { audienceOf } from '../rivals'
 import type { OwnClaimRow, OwnPostCensus } from '../reading/own-posts'
@@ -819,30 +820,18 @@ export function windowWords(w: { from: string; to: string }): string {
   return `${shortDate(`${w.from.slice(0, 10)}T00:00:00.000Z`)} to ${shortDate(last)}`
 }
 
-/** The singular of a plural noun the product stores ("bags" → "bag"). */
-const singular = (noun: string): string => (noun.endsWith('s') ? noun.slice(0, -1) : noun)
 
 /** What people did in a brand's comments, in the artboard's words. */
 export function paneKindLabel(kind: string, noun: string | null | undefined): string {
-  switch (kind) {
-    case 'praise': return noun ? `Praised a ${singular(noun)}` : 'Praised it'
-    case 'purchase_intent': return 'Said they want to buy'
-    case 'question': return 'Asked a question'
-    case 'pain_point': return 'Complained about something'
-    case 'feature_request': return 'Wished for something'
-    case 'objection': return 'Pushed back'
-    case 'buying_trigger': return 'Said what made them look'
-    case 'switching_signal': return 'Said they’re switching'
-    case 'demographic_signal': return 'Said who they are'
-    default: return marketKindLabel(kind)
-  }
+  return talkKindLabel(kind, noun)
 }
 
 /** The category, as a brand line names it: "Other bags in your market", or
- *  "other bags in your market" inside a line. */
+ *  "other bags in your market" inside a line. The one wording
+ *  (`marketLabelsOf`, lib/brands/attribution.ts). */
 export const marketLabel = (noun: string | null | undefined, inline = false): string => {
-  const words = noun ? `Other ${noun} in your market` : 'Others in your market'
-  return inline ? `o${words.slice(1)}` : words
+  const words = marketLabelsOf(noun)
+  return inline ? words.inline : words.long
 }
 
 /** The findings the page prints, as one list: the weightiest first (Pass C's

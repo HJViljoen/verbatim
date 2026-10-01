@@ -1,4 +1,5 @@
 import { longMonth } from '@/lib/format'
+import { sortParts, type MarketLabels } from '@/lib/brands/attribution'
 import type { About, StatementReading } from '@/lib/statements/types'
 
 // Your moves (pages build, package MOVES): the page's words and the pure
@@ -30,8 +31,6 @@ export const STATEMENT_MENU_LABEL = 'Edit or remove this statement'
 export const COLUMN_HEADS = ['You say', 'Talked about in', 'How people treat it'] as const
 export const OF_MARKET_VIDEOS = 'of your market’s videos'
 export const NOBODY_ANYWHERE = 'Nobody repeats it, in your market or under your own posts.'
-export const OTHER_LONG = 'Other bags in your market'
-export const OTHER_SHORT = 'other bags'
 export const STANCE_LABELS = { backs: 'Back it up', doubts: 'Doubt it', asks: 'Ask about it' } as const
 
 export const CONSIDERING_TITLE = 'Moves worth considering'
@@ -79,21 +78,25 @@ export interface WhoPart {
   videos: number
 }
 
-/** The brand line's parts, in the reading's order (most videos first). One
- *  part prints its name alone; several print short names with their counts. */
-export function whoParts(who: StatementReading['who'], brand: string): WhoPart[] {
-  const several = who.length > 1
-  return who.map((w) => ({
+/** The brand line's parts, in the one order every page uses (the client,
+ *  the rivals by videos, the market last: `sortParts`), whatever order a
+ *  stored reading kept. One part prints its name alone; several print short
+ *  names with their counts. The market's words are the tenant's
+ *  (`marketLabels`), never a hard-coded noun. */
+export function whoParts(who: StatementReading['who'], brand: string, market: MarketLabels): WhoPart[] {
+  const sorted = sortParts(who, { client: brand })
+  const several = sorted.length > 1
+  return sorted.map((w) => ({
     key: w.about,
-    name: aboutName(w.about, brand, several),
+    name: aboutName(w.about, brand, market, several),
     tone: w.about === 'client' ? 'client' : w.about === 'market' ? 'market' : 'rival',
     videos: w.videos,
   }))
 }
 
-export function aboutName(about: About, brand: string, short = false): string {
+export function aboutName(about: About, brand: string, market: MarketLabels, short = false): string {
   if (about === 'client') return brand
-  if (about === 'market') return short ? OTHER_SHORT : OTHER_LONG
+  if (about === 'market') return short ? market.short : market.long
   return about.slice('rival:'.length)
 }
 
