@@ -204,10 +204,10 @@ describe('SU2 · the subject in full', () => {
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
 
-  it('offers Track this and Ask about this in the app, and neither on paper', () => {
+  it('offers Track this and Ask the Agent in the app, and neither on paper', () => {
     expect(renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))).toContain('Track this')
-    expect(renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))).toContain('Ask about this')
-    expect(renderText(subjectsSubject.render(subjectsFixture(), 'print', ctx))).not.toContain('Ask about this')
+    expect(renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))).toContain('Ask the Agent')
+    expect(renderText(subjectsSubject.render(subjectsFixture(), 'print', ctx))).not.toContain('Ask the Agent')
   })
 
   it('lets a client declare a new move after dropping one, and not while one is running', () => {

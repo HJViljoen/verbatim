@@ -95,7 +95,7 @@ export const PLAN_CLAIM_BASIS_UNCOUNTED =
   'We could not count how many videos we have read for you, so this count stands without its share.'
 
 export const PLAN_EMPTY =
-  'No plan has been checked for this workspace yet. Upload a campaign brief on Ask and it is re-read against every update.'
+  'No plan has been checked for this workspace yet. Upload a campaign brief to the Agent and it is re-read against every update.'
 
 /** The mock's three words, which are also Ask's own
  *  (`lib/pages/agent-thread.ts` prints "n supported · n contradicted · n

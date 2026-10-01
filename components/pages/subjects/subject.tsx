@@ -283,7 +283,7 @@ export const subjectsSubject: Block<SubjectsData> = {
             <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} />
             <Link href={href} className={PILL}>
               <CircleQuestionMark className="size-3.5" aria-hidden />
-              Ask about this
+              Ask the Agent
             </Link>
           </>
         ) : undefined}
@@ -517,7 +517,7 @@ function MarketPane({ data, mode, appUrl, empty }: { data: SubjectsData; mode: R
     )
   }
   const ask = `${appUrl}/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${pane.name}?`)}`
-  const footer = openLink(mode, ask, 'Ask about this →')
+  const footer = openLink(mode, ask, 'Ask the Agent →')
   const lead = paneMarketLead(pane, data.month)
   // A SUBJECT THAT IS NOT READY PRINTS NO FIGURE RESTING ON ITS MATCHING
   // (T0a, SB-15; ruling U6): no headline level, trail, "Its N videos", where

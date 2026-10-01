@@ -251,7 +251,7 @@ describe('S2 · the subject in your market', () => {
   it('sends the subject to Ask as a question about the market', () => {
     const html = render(subjectsSubject.render(marketSubjectsFixture(), 'app', ctx))
     expect(html).toContain(`ask=${encodeURIComponent('What does my market say about Looks & style?')}`)
-    expect(render(subjectsSubject.render(marketSubjectsFixture(), 'print', ctx))).not.toContain('Ask about this')
+    expect(render(subjectsSubject.render(marketSubjectsFixture(), 'print', ctx))).not.toContain('Ask the Agent')
   })
 })
 

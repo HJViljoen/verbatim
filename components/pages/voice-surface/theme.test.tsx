@@ -77,7 +77,7 @@ describe('voiceTheme (C3)', () => {
 
   it('draws no in-app control on paper', () => {
     const markup = render(voiceTheme.render(voiceFixture(), 'print', ctx))
-    expect(markup).not.toContain('Ask about this')
+    expect(markup).not.toContain('Ask the Agent')
     expect(markup).not.toContain('videos behind this')
   })
 
