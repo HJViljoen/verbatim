@@ -163,8 +163,8 @@ export type StandingCalibration = 'ready' | 'provisional' | 'failed' | 'unread'
 export interface StandingFact {
   subjectId: string; name: string
   calibration: StandingCalibration
-  level: { k: number; n: number } | null        // pooled market, reading month to date; null where unread or failed (kept for a provisional subject, never printed)
-  rank: number                                  // by level among the subjects that have one (ready and provisional, the Subjects rail's set); 0 where there is none
+  level: { k: number; n: number } | null        // pooled market, reading month to date; null unless ready (T0a, ruling U6)
+  rank: number                                  // by level among the ready subjects (the Subjects rail's set since T0a); 0 where there is none
   trail: { month: string; k: number | null; n: number | null }[]   // up to 12 months; [] where failed
   verdict: Verdict | null                       // monthChange on the market pair view (null = no comparable pair, or not ready)
   direction: Direction | null                   // directionWord only, ready only

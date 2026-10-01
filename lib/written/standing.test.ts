@@ -94,7 +94,9 @@ describe('factsFromReadings: each rung, on the product readings', () => {
       ['Comfort', 'level', null, null, 3],
     ])
     expect(facts[0].level).toEqual({ k: 196, n: 852 })
-    expect(facts[0].trail).toEqual([{ month: '2026-08-01', k: 66, n: 378 }, { month: SEP, k: 196, n: 852 }])
+    // The trail stops at the refused step (T0a, AK-14/24): August is not
+    // carried beside a September it cannot be compared with.
+    expect(facts[0].trail).toEqual([{ month: SEP, k: 196, n: 852 }])
   })
 
   it('a comparable pair that moved earns the change rung', () => {
@@ -124,7 +126,7 @@ describe('factsFromReadings: each rung, on the product readings', () => {
     expect(fact.rung).toBe('direction')
   })
 
-  it('every tracked subject appears: provisional keeps its level unprinted, unread has none, failed is the name alone', () => {
+  it('every tracked subject appears: provisional and unread have no level, failed is the name alone', () => {
     const facts = factsFromReadings([
       subjectReading({ name: 'Price', calibration: 'provisional', points: AUG_SEP([6, 378], [31, 852]), pair: joinEveryPair }),
       subjectReading({ name: 'Repair & warranty', calibration: 'failed', points: AUG_SEP([15, 378], [41, 852]), pair: joinEveryPair }),
@@ -133,11 +135,13 @@ describe('factsFromReadings: each rung, on the product readings', () => {
     ], true)
     expect(facts.map((f) => [f.name, f.calibration, f.rung, f.rank])).toEqual([
       ['Comfort', 'ready', 'level', 1],
-      ['Price', 'provisional', 'none', 2],
+      ['Price', 'provisional', 'none', 0],
       ['Community & purpose', 'unread', 'none', 0],
       ['Repair & warranty', 'failed', 'none', 0],
     ])
-    expect(facts[1]).toMatchObject({ verdict: null, direction: null, level: { k: 31, n: 852 } })
+    // T0a (ruling U6): a provisional subject's figure is not printed with a
+    // tag, it is not there.
+    expect(facts[1]).toMatchObject({ verdict: null, direction: null, level: null, trail: [] })
     expect(facts[2]).toMatchObject({ level: null, verdict: null, direction: null })
     expect(facts[2].trail).toEqual([{ month: '2026-08-01', k: 4, n: 378 }, { month: SEP, k: null, n: 852 }])
     // Name only: no figure, no trail, no material. Nothing says why.
@@ -152,14 +156,15 @@ describe('factsFromReadings: each rung, on the product readings', () => {
     expect(facts).toMatchObject([{ subjectId: 'sf', name: 'Repair & warranty', calibration: 'failed', level: null, rung: 'none' }])
   })
 
-  it('ranks by the level among the subjects that have one, largest first, ties by name', () => {
+  it('ranks by the level among the ready subjects, largest first, ties by name', () => {
     const facts = factsFromReadings([
       subjectReading({ name: 'b', points: AUG_SEP([1, 378], [40, 852]) }),
       subjectReading({ name: 'd', points: [{ month: SEP, k: null, n: 852 }] }),
       subjectReading({ name: 'a', points: AUG_SEP([1, 378], [40, 852]) }),
       subjectReading({ name: 'c', calibration: 'provisional', points: AUG_SEP([1, 378], [90, 852]) }),
     ], false)
-    expect(facts.map((f) => [f.name, f.rank])).toEqual([['c', 1], ['a', 2], ['b', 3], ['d', 0]])
+    // c is provisional: no rank since T0a, however big its unverified level.
+    expect(facts.map((f) => [f.name, f.rank])).toEqual([['a', 1], ['b', 2], ['c', 0], ['d', 0]])
   })
 })
 

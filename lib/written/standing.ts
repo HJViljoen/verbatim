@@ -37,9 +37,12 @@ import type { QuoteRef, StandingCalibration, StandingFact, StandingRung, TokenSe
 // months from where the market first cleared the floor, judges the month pair
 // on the market view (decision D), draws the band (`monthChange`) and the
 // direction word (`directionWord`, never on a thin month), and applies
-// decision C: a failed subject reads nothing and a provisional one its level
-// only. It is the Subjects page's figure for the same month (`subjectPoints`
-// and the rail's `railMarketSide` pool the same stored rows the same way).
+// decision C under T0a (ruling U6): a subject that is not ready reads
+// nothing that rests on its matching, so a failed one and a provisional one
+// both come back with no level, and a ready one's trail stops at the latest
+// refused month pair. It is the Subjects page's figure for the same month
+// (`subjectPoints` and the rail's `railMarketSide` pool the same stored rows
+// the same way).
 //
 // WHAT THIS FILE ADDS. The rung, the rank, and the code sentence per rung; and
 // the subject's month in material the writer may read: the themes inside it,
@@ -63,10 +66,11 @@ import type { QuoteRef, StandingCalibration, StandingFact, StandingRung, TokenSe
 // EVERY TRACKED SUBJECT APPEARS (§0a.2, the T1/T2 fixups of 30 Sep): each
 // active subject has a fact, whatever it can print. A figure prints only for
 // a READY subject (§0a's one condition, "a figure we can't stand behind …
-// doesn't print"): a provisional subject's fact keeps its level for the
-// Studio's workings, an unread one has none, and for both `standingLine`
-// writes nothing (`rung: 'none'`); each still appears with what people say
-// about it where it has a gated quote, contents or notes. A FAILED subject's
+// doesn't print"): a provisional subject's fact has no level and no rank
+// (T0a, ruling U6: its matching is not verified, so nothing resting on it
+// prints, as on the Subjects rail), an unread one has none, and for both
+// `standingLine` writes nothing (`rung: 'none'`); each still appears with what
+// people say about it where it has a gated quote, contents or notes. A FAILED subject's
 // membership cannot be trusted, so its fact is the name alone: no level, no
 // trail, no material. Renderers list name-only subjects in one quiet "Also
 // following" line and never say why.
@@ -153,9 +157,10 @@ export interface SubjectReading {
   reading: ObjectReading | null
 }
 
-/** The order facts come in: the subjects with a level, largest first (the
- *  Subjects rail's order), then the unread, then the failed, each by name. */
-const STATE_ORDER: Record<StandingCalibration, number> = { ready: 0, provisional: 0, unread: 1, failed: 2 }
+/** The order facts come in: the ready subjects, largest first (the Subjects
+ *  rail's order), then the provisional, the unread and the failed, each by
+ *  name. */
+const STATE_ORDER: Record<StandingCalibration, number> = { ready: 0, provisional: 1, unread: 2, failed: 3 }
 
 /**
  * The facts the readings earn, one for EVERY subject handed in, ranked,
@@ -163,12 +168,13 @@ const STATE_ORDER: Record<StandingCalibration, number> = { ready: 0, provisional
  *  · failed (decision C): the name only;
  *  · no level in the month (not read, or read before it was named): `unread`,
  *    with its trail and no level;
- *  · provisional: its level, no verdict, no direction, `rung: 'none'`;
+ *  · provisional: no level, no rank, no verdict, no direction, `rung:
+ *    'none'` (T0a, ruling U6: the reading itself returns none);
  *  · ready: its level, and the verdict and direction the readings earned.
  * `comparable` is the market pair judge on the month and the one before:
  * where it refuses, the verdict is null ("no comparable pair"). The rank is by
- * level among the subjects that have one (ready and provisional, as the
- * Subjects rail ranks them), ties by name; 0 for the rest. Pure.
+ * level among the ready subjects (as the Subjects rail ranks them since T0a),
+ * ties by name; 0 for the rest. Pure.
  */
 export function factsFromReadings(readings: readonly SubjectReading[], comparable: boolean): StandingFact[] {
   const facts: StandingFact[] = []
@@ -189,6 +195,11 @@ export function factsFromReadings(readings: readonly SubjectReading[], comparabl
     }
     if (calibration === 'failed' || !reading) {
       facts.push({ ...bare, calibration: 'failed' })
+      continue
+    }
+    // Not ready, not failed: listed under its own state, with no figure.
+    if (calibration === 'provisional') {
+      facts.push({ ...bare, calibration: 'provisional' })
       continue
     }
     const trail = reading.trail.map((p) => ({ month: monthStartOf(p.month), k: p.k, n: p.n }))
