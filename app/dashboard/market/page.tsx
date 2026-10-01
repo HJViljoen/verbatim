@@ -3,6 +3,7 @@ import { canManageTenant } from '@/lib/roles'
 import { readingHandle } from '@/lib/reading/read'
 import { loadMarketSurface } from '@/lib/pages/market-surface'
 import { loadStatements } from '@/lib/pages/moves-statements'
+import { maySeeStatements } from '@/lib/statements/visibility'
 import { MovesPage } from '@/components/pages/moves'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Metadata } from 'next'
@@ -31,12 +32,15 @@ export default async function Page({
   searchParams?: Promise<Record<string, string | undefined>>
 }) {
   const sp = (await searchParams) ?? {}
-  const { supabase, clientId, role } = await getSessionContext()
+  const { supabase, clientId, role, operator } = await getSessionContext()
   const db = supabase as SupabaseClient
+  // Your statements is held from tenants until Heinrich decides (open ruling
+  // #7, lib/statements/visibility.ts): a tenant's page reads no statement and
+  // draws neither the section nor the add form; the operator's is as built.
   const [market, client, statements] = await Promise.all([
     loadMarketSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { shortlist: true }),
     db.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    loadStatements(db, clientId, { canEdit: canManageTenant(role), brand: '' }),
+    maySeeStatements({ operator }) ? loadStatements(db, clientId, { canEdit: canManageTenant(role), brand: '' }) : Promise.resolve(null),
   ])
   const brand = market?.brand || ((client.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'your brand'
   return <MovesPage market={market} statements={statements ? { ...statements, brand } : null} params={sp} />

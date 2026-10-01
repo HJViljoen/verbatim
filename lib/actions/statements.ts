@@ -8,6 +8,7 @@ import { getSessionContext } from '@/lib/auth'
 import { canManageTenant } from '@/lib/roles'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { measureStatements, measureSummary } from '@/lib/statements/measure'
+import { maySeeStatements, STATEMENTS_HELD } from '@/lib/statements/visibility'
 import {
   STATEMENTS_MAX,
   STATEMENT_MAX_CHARS,
@@ -26,6 +27,12 @@ import {
 // AN EDIT IS A RETIREMENT PLUS A NEW ROW. The reading is about the words; a
 // statement edited in place would carry a reading about a sentence nobody can
 // see any more.
+//
+// HELD FROM TENANTS (lead's ruling 5, 1 Oct evening; open ruling #7): while
+// `STATEMENTS_TENANT_VISIBLE` is false (lib/statements/visibility.ts) every
+// action refuses a session that is not the operator's, BEFORE anything is
+// written, so nothing is measured on a tenant's behalf. The operator uses it
+// as built.
 //
 // MEASURED ON ADD, AFTER THE RESPONSE. The new statement is measured with
 // `after()` on the service role (embedding, band, judge, one stance call): the
@@ -48,8 +55,8 @@ export async function cleanStatement(raw: unknown): Promise<string> {
 const textSchema = z.string().min(STATEMENT_MIN_CHARS).max(STATEMENT_MAX_CHARS)
 
 async function writer() {
-  const { supabase, clientId, userId, role } = await getSessionContext()
-  return { supabase, clientId, userId, allowed: canManageTenant(role) }
+  const { supabase, clientId, userId, role, operator } = await getSessionContext()
+  return { supabase, clientId, userId, allowed: canManageTenant(role), held: !maySeeStatements({ operator }) }
 }
 
 function measureLater(clientId: string, statementId: string) {
@@ -94,6 +101,7 @@ export async function addStatement(_prev: StatementActionState, form: FormData):
     return { ok: false, message: text.length < STATEMENT_MIN_CHARS ? 'Type the statement first.' : `Keep it under ${STATEMENT_MAX_CHARS} characters.` }
   }
   const ctx = await writer()
+  if (ctx.held) return { ok: false, message: STATEMENTS_HELD }
   if (!ctx.allowed) return { ok: false, message: 'Only owners and admins can change statements.' }
   const added = await insertStatement(ctx, text)
   if (!('id' in added)) return added
@@ -118,6 +126,7 @@ async function retire(ctx: Awaited<ReturnType<typeof writer>>, id: string): Prom
 export async function removeStatement(id: string): Promise<StatementActionState> {
   if (!z.string().uuid().safeParse(id).success) return { ok: false, message: 'That statement is no longer here.' }
   const ctx = await writer()
+  if (ctx.held) return { ok: false, message: STATEMENTS_HELD }
   if (!ctx.allowed) return { ok: false, message: 'Only owners and admins can change statements.' }
   const failed = await retire(ctx, id)
   if (failed) return failed
@@ -132,6 +141,7 @@ export async function editStatement(id: string, raw: string): Promise<StatementA
     return { ok: false, message: text.length < STATEMENT_MIN_CHARS ? 'Type the statement first.' : `Keep it under ${STATEMENT_MAX_CHARS} characters.` }
   }
   const ctx = await writer()
+  if (ctx.held) return { ok: false, message: STATEMENTS_HELD }
   if (!ctx.allowed) return { ok: false, message: 'Only owners and admins can change statements.' }
   const { data: current } = await ctx.supabase.from(TABLE_STATEMENTS)
     .select('text').eq('id', id).eq('client_id', ctx.clientId).is('retired_at', null).maybeSingle()
