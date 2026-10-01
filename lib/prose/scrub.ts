@@ -434,6 +434,7 @@ export const PROSE_SLOTS = [
   'report_cover',
   'document_write',
   'week_read',
+  'statement_says',
   'interpretation_monthly',
   'interpretation_quarterly',
   'interpretation_anomaly',
@@ -541,6 +542,10 @@ export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   // with NO verdicts, so any direction word drops its sentence. The ladder's
   // change and direction words are code's, in the standing line beside it.
   week_read: 'both',
+  // Your statements (pages build, MOVES): one sentence on what people say about
+  // a client's statement, written with no verdicts and run through the
+  // written read's scrubber (lib/statements/measure.ts scrubSays).
+  statement_says: 'both',
   interpretation_monthly: 'both',
   interpretation_quarterly: 'both',
   interpretation_anomaly: 'both',
