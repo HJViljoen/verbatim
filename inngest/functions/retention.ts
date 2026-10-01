@@ -11,6 +11,7 @@ import {
   YOUTUBE_BACKSTOP_NIGHTLY_CAP,
 } from '@/lib/config'
 import { deleteCommentsProperly, refreshYoutubeComments, refreshYoutubeVideos } from '@/lib/retention/youtube-refresh-io'
+import { isRegateBackupUnavailable, regateBatchCount, REGATE_BACKUP_TABLE } from '@/lib/retention/youtube-refresh'
 
 // Data retention (Tier 0 T0-9, 2026-08-18; YouTube refresh Tier 1.5,
 // 2026-08-22). Until Tier 0 nothing in the product ever deleted source data:
@@ -42,10 +43,21 @@ import { deleteCommentsProperly, refreshYoutubeComments, refreshYoutubeVideos } 
 //                                   exports quoting them staled), cited lose
 //                                   `author`. It should delete nothing on a
 //                                   healthy night; if it does, refresh is failing.
+//   6. purge-regate-backup         — the regate's backup (`regate_backup`,
+//                                   migration 20261106092000): every row backed
+//                                   up 30+ days ago is deleted, whole batches
+//                                   (one transaction, one `backed_up_at`). Its
+//                                   jsonb copies hold YouTube comment text that
+//                                   can never be refreshed; the undo
+//                                   (`regate_restore`) goes with them. No-op
+//                                   until the table and its delete grant
+//                                   (20261106094000) are in this database.
 //
 // Deliberately conservative: nothing analytical is deleted on any platform
 // except YouTube rows YouTube itself no longer serves. Comment text and
 // insights live for the life of the workspace, which is what the notice says.
+// (Step 6 deletes the regate's BACKUP copies, every platform's, at 30 days:
+// rows already removed from the corpus, kept only as an undo.)
 // Preview: `node --env-file=.env.local --import tsx scripts/retention-dry.ts`.
 export const retentionDaily = inngest.createFunction(
   {
@@ -59,7 +71,7 @@ export const retentionDaily = inngest.createFunction(
     // and forgotten. scripts/retention-dry.ts reports what a sweep would do.
     if (!retentionEnabled()) {
       console.log('[retention] RETENTION_ENABLED is not set; skipping sweep')
-      return { skipped: 'disabled', rawDeleted: 0, bodiesStripped: 0, deleted: 0, pseudonymised: 0, artifactsStaled: 0, remaining: 0 }
+      return { skipped: 'disabled', rawDeleted: 0, bodiesStripped: 0, deleted: 0, pseudonymised: 0, artifactsStaled: 0, remaining: 0, regateBackup: { rows: 0, batches: 0, skipped: true } }
     }
     const cutoff = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
 
@@ -193,12 +205,35 @@ export const retentionDaily = inngest.createFunction(
       return { deleted, pseudonymised, artifactsStaled: del.artifactsStaled, remaining }
     })
 
-    const summary = { rawDeleted, bodiesStripped, ytComments, ytVideos, ...ytPurged }
+    // 6. The regate's backup (release/oct2 review, item 2). `regate_videos()`
+    //    copies every row it removes into `regate_backup`, comments included,
+    //    and a copy can never be refreshed, so it goes at the same 30 days as
+    //    the rows it copies. By `backed_up_at`, so a batch goes whole (a
+    //    half-pruned batch would restore an insight without its comment).
+    const regateBackup = await step.run('purge-regate-backup', async () => {
+      const admin = createAdminClient()
+      const { data, error } = await admin
+        .from(REGATE_BACKUP_TABLE)
+        .delete()
+        .lt('backed_up_at', cutoff(YOUTUBE_RETENTION_DAYS))
+        .select('batch_id')
+      if (error) {
+        if (isRegateBackupUnavailable(error)) {
+          console.warn(`[retention] purge-regate-backup skipped: ${error.message} (apply 20261106092000 and 20261106094000)`)
+          return { rows: 0, batches: 0, skipped: true }
+        }
+        throw new Error(`purge regate_backup: ${error.message}`)
+      }
+      const rows = (data ?? []) as { batch_id: string | null }[]
+      return { rows: rows.length, batches: regateBatchCount(rows), skipped: false }
+    })
+
+    const summary = { rawDeleted, bodiesStripped, ytComments, ytVideos, ...ytPurged, regateBackup }
     console.log(`[retention] ${JSON.stringify(summary)}`)
 
     // One line a day is noise; a day that touches nothing at all after the
     // first sweep means the job has silently stopped working.
-    if (rawDeleted === 0 && bodiesStripped === 0 && ytComments.due === 0 && ytVideos.due === 0 && ytPurged.deleted + ytPurged.pseudonymised === 0) {
+    if (rawDeleted === 0 && bodiesStripped === 0 && ytComments.due === 0 && ytVideos.due === 0 && ytPurged.deleted + ytPurged.pseudonymised === 0 && regateBackup.rows === 0) {
       console.log('[retention] nothing due today')
     }
     // Every step ran; now surface a refresh failure as a failed run (retries

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   diffRefreshedComments, evidenceToDrop, phrasesToDrop, diffRefreshedVideos, videoTombstone,
-  refreshCutoffs, distinctIds, assertPlausibleGoneRate, type StoredComment, type RefreshedComment,
+  refreshCutoffs, distinctIds, assertPlausibleGoneRate, isRegateBackupUnavailable, regateBatchCount,
+  type StoredComment, type RefreshedComment,
 } from './youtube-refresh'
 
 const NOW = '2026-08-22T02:00:00.000Z'
@@ -128,5 +129,23 @@ describe('assertPlausibleGoneRate — the circuit breaker', () => {
     expect(() => assertPlausibleGoneRate('comments', 50, 0)).toThrow(/0 of 50/)
     expect(() => assertPlausibleGoneRate('comments', 200, 60)).toThrow(/70% gone/)
     expect(() => assertPlausibleGoneRate('videos', 10, 0)).toThrow()
+  })
+})
+
+describe('the regate backup prune (purge-regate-backup)', () => {
+  it('no-ops only where the migrations have not reached the database', () => {
+    expect(isRegateBackupUnavailable({ code: 'PGRST205', message: "Could not find the table 'public.regate_backup' in the schema cache" })).toBe(true)
+    expect(isRegateBackupUnavailable({ code: '42P01', message: 'relation "public.regate_backup" does not exist' })).toBe(true)
+    expect(isRegateBackupUnavailable({ code: '42501', message: 'permission denied for table regate_backup' })).toBe(true)
+  })
+  it('throws on anything else, and on another table\'s absence', () => {
+    expect(isRegateBackupUnavailable({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe(false)
+    expect(isRegateBackupUnavailable({ code: 'PGRST205', message: "Could not find the table 'public.comments' in the schema cache" })).toBe(false)
+    expect(isRegateBackupUnavailable(null)).toBe(false)
+    expect(isRegateBackupUnavailable('regate_backup does not exist')).toBe(false)
+  })
+  it('counts the batches a deletion took', () => {
+    expect(regateBatchCount([{ batch_id: 'a' }, { batch_id: 'a' }, { batch_id: 'b' }])).toBe(2)
+    expect(regateBatchCount([])).toBe(0)
   })
 })

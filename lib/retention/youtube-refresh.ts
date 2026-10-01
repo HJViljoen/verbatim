@@ -244,3 +244,33 @@ export function assertPlausibleGoneRate(kind: 'comments' | 'videos', requested: 
   if (requested >= 10 && found === 0) throw new Error(`refresh ${kind}: 0 of ${requested} ids found; refusing to treat that as deletions`)
   if (requested >= 50 && found / requested < 0.5) throw new Error(`refresh ${kind}: only ${found} of ${requested} ids found (${Math.round((1 - found / requested) * 100)}% gone); refusing to delete at that rate`)
 }
+
+// ── the regate's backup (release/oct2 review, item 2) ─────────────────────
+// `regate_videos()` (migration 20261106092000) copies every row it removes into
+// `regate_backup` as jsonb, YouTube comment text included, and a copy can never
+// be refreshed. So the retention cron deletes it at the same 30 days
+// (`purge-regate-backup`, after the backstop), by `backed_up_at`. A batch is
+// one transaction and its rows share one `backed_up_at`, so a batch goes whole.
+
+/** The table the step prunes. */
+export const REGATE_BACKUP_TABLE = 'regate_backup'
+
+/** Is this "the regate's migrations have not reached this database" and
+ *  nothing else? The table is missing (20261106092000 not applied: PostgREST's
+ *  PGRST205 or Postgres' 42P01), or the service role may not delete from it
+ *  (20261106094000 not applied, where default privileges did not grant it:
+ *  42501). The step then no-ops, as every step does before its migration. Any
+ *  other error is a real failure and is thrown. */
+export function isRegateBackupUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, message } = error as { code?: string; message?: string }
+  const text = message ?? ''
+  if (!text.includes(REGATE_BACKUP_TABLE)) return false
+  if (code && ['PGRST205', '42P01', '42501'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text) || /permission denied/i.test(text)
+}
+
+/** How many batches a deleted set of backup rows held. Pure. */
+export function regateBatchCount(rows: readonly { batch_id: string | null }[]): number {
+  return new Set(rows.map((r) => r.batch_id).filter(Boolean)).size
+}

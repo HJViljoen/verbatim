@@ -1,7 +1,7 @@
 import { createAdminClient } from '../lib/supabase-admin'
 import { RAW_PAYLOAD_RETENTION_DAYS, AI_LOG_BODY_RETENTION_DAYS, YOUTUBE_RETENTION_DAYS, YOUTUBE_REFRESH_NIGHTLY_CAP, YOUTUBE_VIDEO_REFRESH_NIGHTLY_CAP } from '../lib/config'
 import { refreshYoutubeComments, refreshYoutubeVideos } from '../lib/retention/youtube-refresh-io'
-import { refreshCutoffs } from '../lib/retention/youtube-refresh'
+import { isRegateBackupUnavailable, refreshCutoffs, REGATE_BACKUP_TABLE } from '../lib/retention/youtube-refresh'
 
 // What tonight's retention sweep (inngest/functions/retention.ts) would do —
 // READ-ONLY. The job's own comments have promised `npm run retention:dry` since
@@ -43,6 +43,12 @@ async function main() {
   const bodiesDue = await count(admin.from('ai_call_log').select('id', { count: 'exact', head: true }).lt('created_at', cutoff(AI_LOG_BODY_RETENTION_DAYS)).or('request.not.is.null,response.not.is.null'))
   const ytDue = await count(admin.from('comments').select('id', { count: 'exact', head: true }).eq('platform', 'youtube').or(`and(refreshed_at.is.null,created_at.lt.${due}),refreshed_at.lt.${due}`))
   const ytVideosDue = await count(admin.from('videos').select('id', { count: 'exact', head: true }).eq('platform', 'youtube').is('unavailable_at', null).or(`and(refreshed_at.is.null,scraped_at.lt.${due}),refreshed_at.lt.${due}`))
+  // The regate's backup: rows backed up 30+ days ago (step 6). A database the
+  // regate migration has not reached has none. A GET, not a HEAD: a HEAD's
+  // error has no body to name the missing table by.
+  const regateRes = await admin.from(REGATE_BACKUP_TABLE).select('batch_id', { count: 'exact' }).lt('backed_up_at', cutoff(YOUTUBE_RETENTION_DAYS)).limit(1)
+  if (regateRes.error && !isRegateBackupUnavailable(regateRes.error)) throw new Error(regateRes.error.message)
+  const regateDue = regateRes.error ? 0 : regateRes.count ?? 0
   const ytBackstop = await count(admin.from('comments').select('id', { count: 'exact', head: true }).eq('platform', 'youtube').or(`and(refreshed_at.is.null,created_at.lt.${backstop}),refreshed_at.lt.${backstop}`))
 
   console.log(`1. purge-video-raw            ${rawDue} payload(s) past ${RAW_PAYLOAD_RETENTION_DAYS}d → deleted`)
@@ -51,6 +57,7 @@ async function main() {
   console.log(`4. refresh-youtube-videos     ${ytVideosDue} video(s) 25d+ since last read → stats re-fetched (cap ${YOUTUBE_VIDEO_REFRESH_NIGHTLY_CAP}/night)`)
   console.log(`5. purge-stale-youtube-comments (BACKSTOP) ${ytBackstop} row(s) unrefreshed at ${YOUTUBE_RETENTION_DAYS}d → uncited deleted through the shared path (stored exports quoting them staled), cited lose author`)
   if (ytBackstop > 0 && ytDue > 0) console.log('   (expected before the first refresh has run; should be 0 every night after)')
+  console.log(`6. purge-regate-backup         ${regateDue} regate_backup row(s) backed up ${YOUTUBE_RETENTION_DAYS}d+ ago → deleted, whole batches (their undo goes with them)`)
 
   if (sample > 0) {
     console.log(`\n--refresh-sample ${sample}: calling YouTube for ${sample} due comment ids (read-only) …`)
