@@ -1,3 +1,4 @@
+import { PageBar } from '@/components/shell/page-grid'
 import { Bone, BoneLines } from '@/components/shell/skeleton'
 import { settingsTabs } from '@/lib/settings/rail'
 
@@ -10,10 +11,9 @@ export function SettingsSkeleton({ title, cards = 3 }: { title: string; cards?: 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[22px]">
       <span role="status" className="sr-only">Loading {title}…</span>
-      <div className="flex min-h-10 items-center justify-between gap-4">
-        <h1 className="m-0 text-[26px] font-bold leading-tight text-[#26292C]">{title}</h1>
+      <PageBar title={title}>
         <Bone className="h-10 w-[104px] rounded-[10px]" />
-      </div>
+      </PageBar>
       <nav aria-hidden className="flex gap-1 overflow-x-hidden">
         {settingsTabs(false).map((s, i) => (
           <div key={s.key} className="flex h-[38px] shrink-0 items-center px-4">

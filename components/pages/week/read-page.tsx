@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { BrandWho, WhoInline, WHO_MUTED, type WhoNames } from '@/components/brand-who'
+import { PageBar } from '@/components/shell/page-grid'
 import { platformLabel, shortDate } from '@/lib/format'
 import { substituteFigures } from '@/lib/reports/cover'
 import type { FigureTable } from '@/lib/reports/types'
@@ -26,9 +27,9 @@ import { cn } from '@/lib/utils'
 const HAIR = 'border-[#E4E2DC]'
 const INK = 'text-[#26292C]'
 
-/** The page's own title, at the artboard's 26px. */
+/** The page's own title: the shared bar, at the artboard's 26px on 40px. */
 export function PageTitle({ children }: { children: ReactNode }) {
-  return <h1 className={cn('m-0 text-[26px] leading-[1.25] font-bold', INK)}>{children}</h1>
+  return <PageBar title={children} />
 }
 
 /** A card on the page: paper, 16px corners. The tile shadow keeps it apart

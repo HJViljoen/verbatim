@@ -1,4 +1,6 @@
+import { PageBar } from '@/components/shell/page-grid'
 import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { surface } from '@/lib/nav'
 
 // The Dashboard while it loads: the page's own frame (components/pages/home),
 // bones where its words and numbers go. The title is real, because it does
@@ -12,7 +14,7 @@ export function HomeSkeleton() {
   return (
     <div className="flex flex-col gap-5 leading-[normal] text-[#26292C]">
       <span role="status" className="sr-only">Loading Dashboard…</span>
-      <h1 className="m-0 text-[26px] font-bold">Dashboard</h1>
+      <PageBar title={surface('home').label} />
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <div className={`flex flex-col gap-[18px] rounded-[16px] bg-white px-[26px] py-[22px] self-start xl:col-span-2 ${SHADOW}`}>
           <Bone className="h-5 w-56" />

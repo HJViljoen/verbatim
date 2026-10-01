@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { PageBar } from '@/components/shell/page-grid'
 import { cn } from '@/lib/utils'
 
 // The atoms the Studio and Settings artboards are drawn with (design
@@ -11,14 +12,11 @@ import { cn } from '@/lib/utils'
 // ink #26292C · muted #5F656B · hair #E4E2DC · paper #FFFFFF · ground #F7F6F2
 // · pale yellow #FFF4C7
 
-/** The page's own title row: the title, and the page's actions at the right. */
+/** The page's own title row: the shared bar (26px on 40px, the artboards'),
+ *  and the page's actions at the right. One component for every page's title
+ *  (integration, 1 Oct), so this only names it for the Studio and Settings. */
 export function PageTitle({ title, children }: { title: string; children?: ReactNode }) {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-4">
-      <h1 className="m-0 text-[26px] font-bold leading-[normal] text-[#26292C]">{title}</h1>
-      {children ? <div className="flex items-center gap-2.5">{children}</div> : null}
-    </div>
-  )
+  return <PageBar title={title}>{children}</PageBar>
 }
 
 /** A white card on the ground, radius 16, no border, no stripe. */

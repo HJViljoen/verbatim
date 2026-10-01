@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { PageBar } from '@/components/shell/page-grid'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import type { HomeData, HomeNumbers, HomeNumbersHalf, HomeTile, HomeTileRow, HomeWeeks } from '@/lib/pages/home'
@@ -35,7 +36,7 @@ export function HomePage({ data }: { data: HomeData }) {
   ].filter(Boolean)
   return (
     <div className="flex flex-col gap-5 leading-[normal] text-[#26292C]">
-      <h1 className="m-0 text-[26px] font-bold">Dashboard</h1>
+      <PageBar title={surface('home').label} />
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         {left.length > 0 ? <div className="flex min-w-0 flex-col gap-5 xl:col-span-2">{left}</div> : null}
         <div className={left.length > 0 ? 'min-w-0' : 'min-w-0 xl:col-span-3'}>

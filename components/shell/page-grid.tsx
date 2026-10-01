@@ -222,7 +222,9 @@ export function PageBar({
           in a 40px-high bar). It was MASTER's `text-2xl`. */}
       <h1 className="col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold">{title}</h1>
       {children ? (
-        <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-3', line ? 'sm:row-end-3' : null)}>{children}</div>
+        // 10px between the controls: the artboards' own gap (Your moves,
+        // Settings), since the bar became every page's title (integration).
+        <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2.5', line ? 'sm:row-end-3' : null)}>{children}</div>
       ) : null}
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
           wrap fallback, and it is the line that says what the page's numbers

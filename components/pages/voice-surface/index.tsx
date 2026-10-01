@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { PageBar } from '@/components/shell/page-grid'
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
@@ -81,12 +82,7 @@ export const VOICE_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 /** The page's title row: the artboard's 26px title, and whatever control the
  *  route puts at its right-hand end (none today). */
 export function ConversationTitle({ controls }: { controls?: ReactNode }) {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-4">
-      <h1 className="m-0 text-[26px] font-bold leading-tight">{surface('voice').label}</h1>
-      {controls ? <div className="flex items-center gap-2.5">{controls}</div> : null}
-    </div>
-  )
+  return <PageBar title={surface('voice').label}>{controls}</PageBar>
 }
 
 /**

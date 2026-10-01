@@ -1,3 +1,4 @@
+import { PageBar } from '@/components/shell/page-grid'
 import { Bone, BoneLines } from '@/components/shell/skeleton'
 import { PAGE_TITLE } from '@/components/pages/moves/words'
 
@@ -9,13 +10,10 @@ export default function MovesLoading() {
   return (
     <div className="flex flex-col gap-[22px]" aria-busy>
       <span role="status" className="sr-only">Loading {PAGE_TITLE}…</span>
-      <div className="flex min-h-10 flex-wrap items-center justify-between gap-4">
-        <h1 className="m-0 text-[26px] font-bold leading-[1.25] text-[#26292C]">{PAGE_TITLE}</h1>
-        <div className="flex items-center gap-[10px]">
-          <Bone className="h-10 w-[140px] rounded-[10px]" />
-          <Bone className="h-10 w-[140px] rounded-[10px]" />
-        </div>
-      </div>
+      <PageBar title={PAGE_TITLE}>
+        <Bone className="h-10 w-[140px] rounded-[10px]" />
+        <Bone className="h-10 w-[140px] rounded-[10px]" />
+      </PageBar>
       <section className="flex flex-col gap-3 rounded-[16px] bg-white px-7 pt-6 pb-2.5">
         <div className="flex items-baseline justify-between gap-4">
           <Bone className="h-5 w-40" />

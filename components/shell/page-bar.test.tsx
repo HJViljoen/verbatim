@@ -1,7 +1,10 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { SurfacePageBar, HorizonControl } from './page-bar'
 import { SkeletonSurfaceBar } from './skeleton'
+import { PageBar } from './page-grid'
 import { SURFACES, hasHorizon } from '@/lib/nav'
 import { sealandReading } from '@/lib/test/reading-fixture'
 
@@ -149,5 +152,29 @@ describe('HorizonControl', () => {
     const markup = render(<HorizonControl basePath="/dashboard/subjects" params={{}} current="this_month" />)
     expect(markup).toMatch(/<nav aria-label="How far back" class="[^"]*\bflex-wrap\b[^"]*"/)
     expect(markup).not.toMatch(/<nav aria-label="How far back" class="[^"]*\bshrink-0\b/)
+  })
+})
+
+describe('one title for every page (integration, 1 Oct)', () => {
+  // Every artboard draws its title the same way: 26px bold in a 40px bar,
+  // its controls 10px apart. The shared PageBar draws it, and the rebuilt
+  // pages and their skeletons go through it instead of each writing a local
+  // 26px h1 (lead's ruling 12).
+  const ROOT = join(__dirname, '..', '..')
+  const files = (dir: string): string[] =>
+    readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) =>
+      e.isDirectory() ? files(join(dir, e.name)) : /\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name) ? [join(dir, e.name)] : [])
+  const PAGES = [
+    'components/pages/home', 'components/pages/overview/picture', 'components/pages/week', 'components/pages/voice-surface',
+    'components/pages/competitive-surface/page', 'components/pages/subjects', 'components/pages/moves', 'components/pages/agent',
+    'components/pages/studio', 'components/pages/settings', 'components/settings-frame.tsx', 'components/settings-skeleton.tsx', 'app/dashboard',
+  ]
+  it.each(PAGES)('%s draws no title of its own', (p) => {
+    const list = p.endsWith('.tsx') ? [p] : files(p)
+    for (const f of list) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/<h1[^>]*text-\[26px\]/)
+  })
+
+  it('the bar keeps the artboards\' 10px between its controls', () => {
+    expect(render(<PageBar title="Your moves"><a>Check a plan</a><a>Date a move</a></PageBar>)).toContain('justify-end gap-2.5')
   })
 })

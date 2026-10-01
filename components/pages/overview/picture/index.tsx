@@ -1,3 +1,4 @@
+import { PageBar } from '@/components/shell/page-grid'
 import type { MarketPictureData } from '@/lib/pages/overview-picture'
 import { ConversationsBlockView, KindsBlockView } from './conversations'
 import { HoldsBlock } from './holds'
@@ -22,11 +23,7 @@ export const PAGE_TITLE = 'Your market'
 export const FIRST_RUN_LINE = 'Your market’s first month will appear here.'
 
 export function MarketPicturePage({ data }: { data: MarketPictureData | null }) {
-  const heading = (
-    <div className="flex min-h-10 items-center justify-between gap-4">
-      <h1 className="m-0 text-[26px] font-bold text-[#26292C]">{PAGE_TITLE}</h1>
-    </div>
-  )
+  const heading = <PageBar title={PAGE_TITLE} />
   if (!data) {
     return (
       <div className="flex flex-col gap-[22px] text-[#26292C]">

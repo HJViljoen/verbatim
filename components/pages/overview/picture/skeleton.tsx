@@ -1,4 +1,6 @@
+import { PageBar } from '@/components/shell/page-grid'
 import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { PAGE_TITLE } from './index'
 
 // Your market's loading skeleton (pages build): the page's own shape, so the
 // blocks fill in place. The page's name, the long-run read (its lead and
@@ -26,9 +28,7 @@ function Rows({ n, label = 'basis-[45%] sm:basis-[300px]' }: { n: number; label?
 export function MarketPictureSkeleton() {
   return (
     <div className="flex flex-col gap-[22px]" role="status" aria-busy="true" aria-label="Loading Your market">
-      <div className="flex min-h-10 items-center">
-        <Bone className="h-7 w-40" />
-      </div>
+      <PageBar title={PAGE_TITLE} />
       <div className="flex flex-col gap-[14px] rounded-[16px] bg-white px-5 pb-2.5 pt-7 sm:px-8">
         <Bone className="h-3 w-64" />
         <BoneLines lines={3} className="max-w-[1000px]" widths={['w-full', 'w-11/12', 'w-2/3']} />
