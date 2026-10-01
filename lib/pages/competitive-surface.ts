@@ -705,17 +705,21 @@ export async function loadCompetitiveSurface(scope: Scope, opts: { brands?: bool
         params: scope.params as Record<string, string | undefined>,
         ownPosts: ownInputsAhead,
         playbook: playbookAhead.then((videos) => (videos ? buildPlaybook({ month, brand, rival: null, videos, conclusionMinRated: LEAD_MIN_RATED }) : null)),
+        playbookVideos: playbookAhead,
         hrefFor: (name) => competitiveSurfaceHref(name, scope.params as Record<string, string | undefined>),
       })
     : null
   brandsAhead?.catch(() => {})
 
   // ── CO5 · what the category asks under their content ───────────────────
+  // The Competitive page (`brands`) draws its own "Asked under their content"
+  // off the window readings and never CO5, so it is not read there: no rival,
+  // no reads.
   const questions = await buildQuestions({
     supabase,
     reading,
     clientId,
-    rival: selected?.name ?? null,
+    rival: opts.brands ? null : selected?.name ?? null,
     window,
     subreddits,
     subjectsNamed,
@@ -856,6 +860,8 @@ async function loadRivals(
 interface RivalPostRow {
   id: string
   competitor_name: string | null
+  /** The post's platform: the Competitive page lists each brand's. */
+  platform: string | null
   upload_date: string | null
   comments_count: number
   hook_style: string | null
@@ -908,7 +914,7 @@ export async function readRivalOwnPostInputs(
     selectAll<RivalPostRow>(() =>
       supabase
         .from('videos')
-        .select('id, competitor_name, upload_date, comments_count, hook_style, classified_type')
+        .select('id, competitor_name, platform, upload_date, comments_count, hook_style, classified_type')
         .eq('client_id', clientId)
         .eq('source', 'competitor_owned')
         .gte('upload_date', start)

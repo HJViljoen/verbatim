@@ -4,6 +4,8 @@ import { levelText } from '../reading/level'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { FLAGGED_KIND, KIND_ORDER } from '../reading/kinds'
 import { marketKindLabel } from './overview-market/kinds'
+import { perfVsMedian } from '../content-tiles'
+import { audienceOf } from '../rivals'
 import type { OwnClaimRow, OwnPostCensus } from '../reading/own-posts'
 import type { FormatMatrix, FormatRow } from '../reading/formats'
 import type { Quote } from '../renderables/types'
@@ -472,6 +474,26 @@ export interface FindingCard {
   /** "seen in {months} of the last {of} months", where the lead theme was
    *  read. Null where nothing anchors it. */
   seen: { months: number; of: number } | null
+  /** Pass C's impact ('high' · 'medium' · 'low'), for the order the
+   *  Competitive page lays its cards in. Optional: older readers omit it. */
+  impact?: string | null
+  /** The finding in full (`competitive_insights.finding`, stored
+   *  `pass_c_finding`). Optional: older readers omit it. */
+  body?: string | null
+  /** Who the talk it rests on is about, from the buckets of the themes it
+   *  cites (never from its words): other tracked brands, the category, and
+   *  whether the client's own talk is the other side. Optional. */
+  about?: FindingAbout | null
+}
+
+/** The parties a finding compares, read off its cited themes' buckets. */
+export interface FindingAbout {
+  /** Tracked brands other than the finding's own, in the order cited. */
+  brands: string[]
+  /** The category's talk ("other bags in your market") is cited. */
+  market: boolean
+  /** The client's talk is cited, or the finding names the client. */
+  client: boolean
 }
 
 export interface FindingGroup {
@@ -529,7 +551,7 @@ const KIND_RANK = Object.keys(FINDING_KIND_WORDS)
 export function buildFindings(input: {
   /** Tracked brands in B2's order. */
   rivals: readonly string[]
-  findings: readonly { id: string; rival: string; category: string; title: string; quote: Quote | null; seen: { months: number; of: number } | null; impact?: string | null }[]
+  findings: readonly { id: string; rival: string; category: string; title: string; quote: Quote | null; seen: { months: number; of: number } | null; impact?: string | null; body?: string | null; about?: FindingAbout | null }[]
   /** Each tracked brand's videos in the ninety days (B2's count). */
   videos: ReadonlyMap<string, number>
   floor: number
@@ -546,7 +568,12 @@ export function buildFindings(input: {
     if (mine.length === 0) continue
     groups.push({
       rival,
-      findings: mine.map((f) => ({ id: f.id, category: f.category, kindWords: findingKindWords(f.category), title: f.title, quote: f.quote, seen: f.seen })),
+      findings: mine.map((f) => ({
+        id: f.id, category: f.category, kindWords: findingKindWords(f.category), title: f.title, quote: f.quote, seen: f.seen,
+        ...(f.impact !== undefined ? { impact: f.impact } : {}),
+        ...(f.body !== undefined ? { body: f.body } : {}),
+        ...(f.about !== undefined ? { about: f.about } : {}),
+      })),
     })
   }
   const grouped = new Set(groups.map((g) => norm(g.rival)))
@@ -569,18 +596,44 @@ export function noFindingLine(b: FindingsBlock, brand: string): string {
 
 export interface PostsBlock {
   month: string
-  /** Each tracked brand's own posts published in the month, most first. */
-  rows: { audience: string; label: string; posts: number }[]
+  /** Each tracked brand's own posts published in the month, most first.
+   *  `platforms` (their labels, A to Z) and `said` (up to `POSTS_SAID` of the
+   *  brand's own claims, the most carried first, each said once) are the
+   *  Competitive page's; optional, as older readers omit them. */
+  rows: { audience: string; label: string; posts: number; platforms?: string[]; said?: { id: string; claim: string }[] }[]
   /** Each brand's claim carried by the most of its month's posts, in the
    *  words the claims read wrote (stored `pass_a_brand_claim`), as plain
    *  text, never set as a quote. */
   claims: { audience: string; label: string; id: string; claim: string; posts: { k: number; n: number } }[]
 }
 
-export function buildPosts(input: { month: string; censuses: readonly OwnPostCensus[] }): PostsBlock {
+/** Claims a brand's row prints on the Competitive page. */
+export const POSTS_SAID = 2
+
+const claimKey = (s: string): string => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+export function buildPosts(input: {
+  month: string
+  censuses: readonly OwnPostCensus[]
+  /** Each brand's platforms this month, by audience (the posts' own). */
+  platforms?: ReadonlyMap<string, readonly string[]>
+}): PostsBlock {
   const rows = input.censuses
     .filter((c) => c.unread == null && c.published.k > 0)
-    .map((c) => ({ audience: c.audience, label: c.audienceLabel, posts: c.published.k }))
+    .map((c) => {
+      const row: PostsBlock['rows'][number] = { audience: c.audience, label: c.audienceLabel, posts: c.published.k }
+      if (!input.platforms) return row
+      // ONE CLAIM SAID ONCE: the census dedupes on its own key; a second pass
+      // on the words folded catches the same sentence stored twice.
+      const seen = new Set<string>()
+      const said = [...c.claims].sort(topClaim).filter((x) => {
+        const k = claimKey(x.claim)
+        if (!k || seen.has(k)) return false
+        seen.add(k)
+        return true
+      }).slice(0, POSTS_SAID).map((x) => ({ id: x.id, claim: x.claim }))
+      return { ...row, platforms: [...(input.platforms.get(c.audience) ?? [])], said }
+    })
     .sort((a, b) => b.posts - a.posts || a.label.localeCompare(b.label))
   const order = new Map(rows.map((r, i) => [r.audience, i]))
   const claims = input.censuses
@@ -688,6 +741,264 @@ export interface BrandsPageData {
   posts: PostsBlock
   content: ContentBlock | null
   share: ShareBlock
+  /** The Competitive page's (pages build, 1 Oct), each optional so a reader
+   *  built before it still type-checks:
+   *  what the tenant sells, as a plural noun ("bags"), or null; */
+  noun?: string | null
+  /** what is said about the brand read in full, its quotes gated; */
+  saidAbout?: SaidAbout | null
+  /** what works in the market's videos, the month's category column. */
+  works?: WorksBlock | null
+}
+
+// ---- the Competitive page (pages build, 1 Oct; Page-Competitive.dc.html) ----------
+//
+// The approved artboard, five blocks: the brands in your market with you among
+// them, a brand in full, where a rival's talk differs, what they post and say
+// about themselves, and what works in your market's videos. The name block,
+// the "in all" counts and the share of what our searches found are cut.
+
+export const LIST_TITLE = 'Brands in your market'
+export const PANE_TITLE = 'A brand in full'
+export const POSTS_HEAD = 'What they post, and what they say about themselves'
+export const WORKS_TITLE = 'What works in your market’s videos'
+export const FINDINGS_SUB = 'Set against what your market says about you'
+
+/** "September so far" while the month is still being read, else "September". */
+export const monthSoFar = (month: string, soFar: boolean): string => `${longMonth(month)}${soFar ? ' so far' : ''}`
+
+/** One row of the brand list: a tracked brand, or you. */
+export interface BrandListRow {
+  label: string
+  /** Videos that named the brand unprompted this month. */
+  k: number
+  you: boolean
+}
+
+export interface BrandList {
+  month: string
+  rows: BrandListRow[]
+  /** Tracked brands (and you) the month's videos never named unprompted: an
+   *  absence that is itself a finding. */
+  notNamed: string[]
+}
+
+/**
+ * The brand list: the unprompted count only, with you as one row on the list
+ * (your name's own count, every match read by hand). A brand whose count is
+ * not measured yet prints nothing at all, neither a row nor a name: a figure
+ * we cannot stand behind is omitted, not explained.
+ */
+export function brandList(b: Pick<BrandsPageData, 'topics' | 'name'>, client: string): BrandList | null {
+  const t = b.topics
+  if (!t) return null
+  const rows: BrandListRow[] = []
+  const notNamed: string[] = []
+  for (const r of t.tracked) {
+    if (r.count === 'counted' && r.kOrganic != null) {
+      if (r.kOrganic > 0) rows.push({ label: r.label, k: r.kOrganic, you: false })
+      else notNamed.push(r.label)
+    } else if (r.count === 'none') {
+      notNamed.push(r.label)
+    }
+  }
+  const mine = b.name?.counted ?? null
+  if (mine) {
+    if (mine.k > 0) rows.push({ label: client, k: mine.k, you: true })
+    else notNamed.push(client)
+  }
+  if (rows.length === 0 && notNamed.length === 0) return null
+  rows.sort((x, y) => y.k - x.k || x.label.localeCompare(y.label))
+  return { month: t.month, rows, notNamed }
+}
+
+/** "30 Jun to 27 Sep": a [from, to) window in the day words, its last day
+ *  the one before `to`. */
+export function windowWords(w: { from: string; to: string }): string {
+  const last = new Date(Date.parse(`${w.to.slice(0, 10)}T00:00:00.000Z`) - 24 * 60 * 60 * 1000).toISOString()
+  return `${shortDate(`${w.from.slice(0, 10)}T00:00:00.000Z`)} to ${shortDate(last)}`
+}
+
+/** The singular of a plural noun the product stores ("bags" → "bag"). */
+const singular = (noun: string): string => (noun.endsWith('s') ? noun.slice(0, -1) : noun)
+
+/** What people did in a brand's comments, in the artboard's words. */
+export function paneKindLabel(kind: string, noun: string | null | undefined): string {
+  switch (kind) {
+    case 'praise': return noun ? `Praised a ${singular(noun)}` : 'Praised it'
+    case 'purchase_intent': return 'Said they want to buy'
+    case 'question': return 'Asked a question'
+    case 'pain_point': return 'Complained about something'
+    case 'feature_request': return 'Wished for something'
+    case 'objection': return 'Pushed back'
+    case 'buying_trigger': return 'Said what made them look'
+    case 'switching_signal': return 'Said they’re switching'
+    case 'demographic_signal': return 'Said who they are'
+    default: return marketKindLabel(kind)
+  }
+}
+
+/** The category, as a brand line names it: "Other bags in your market", or
+ *  "other bags in your market" inside a line. */
+export const marketLabel = (noun: string | null | undefined, inline = false): string => {
+  const words = noun ? `Other ${noun} in your market` : 'Others in your market'
+  return inline ? `o${words.slice(1)}` : words
+}
+
+/** The findings the page prints, as one list: the weightiest first (Pass C's
+ *  impact), then in the brands' order. */
+export function findingsShown(b: FindingsBlock): (FindingCard & { rival: string })[] {
+  const all = b.groups.flatMap((g, gi) => g.findings.map((f, fi) => ({ ...f, rival: g.rival, gi, fi })))
+  all.sort((x, y) => (IMPACT[x.impact ?? ''] ?? 3) - (IMPACT[y.impact ?? ''] ?? 3) || x.gi - y.gi || x.fi - y.fi)
+  return all.map(({ gi: _gi, fi: _fi, ...f }) => f)
+}
+
+// ---- what is said about the brand read in full ----------------------------------
+
+/** Quotes the pane prints about the brand read in full. */
+export const SAID_SHOWN = 2
+
+export interface SaidQuote {
+  ref: string
+  text: string
+  lang: string | null
+  english: string | null
+  platform: string | null
+  /** The comment's own date. */
+  date: string | null
+}
+
+/** A quote's words as the page sets them: its English where the comment was
+ *  not, emoji taken out (the page prints none), spaces folded. */
+export const quoteWords = (q: { text: string; english: string | null }): string =>
+  (q.english ?? q.text).replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim()
+
+export interface SaidAbout {
+  audience: string
+  label: string
+  quotes: SaidQuote[]
+}
+
+// ---- what works in your market's videos ----------------------------------------
+
+/** Rows per table (the artboard's six). */
+export const WORKS_ROWS = 6
+/** Rated videos a format needs before its engagement multiple prints (This
+ *  week's "What worked" floor, read over a month). */
+export const WORKS_MIN_RATED = 10
+/** Platforms with no engagement rate this product can read. */
+const WORKS_EXCLUDED = ['reddit']
+
+export interface WorksRow {
+  key: string
+  label: string
+  /** Videos of this format (or opening), of the table's base. */
+  k: number
+  /** Its average engagement against the median video's; null under the floor. */
+  multiple: number | null
+}
+
+export interface WorksBlock {
+  month: string
+  /** The category's videos posted in the month with a recognisable format,
+   *  and with a recognisable opening: each table's base. */
+  formatsOf: number
+  hooksOf: number
+  formats: WorksRow[]
+  hooks: WorksRow[]
+}
+
+export interface WorksVideo {
+  upload_date: string | null
+  platform: string
+  classified_type: string | null
+  hook_style: string | null
+  engagement_rate: number | string | null
+  is_client: boolean | null
+  is_competitor: boolean | null
+  competitor_name: string | null
+}
+
+/**
+ * The category's videos posted in the month: how they are made and how they
+ * open, as shares of the videos carrying each, with each one's average
+ * engagement against the month's median rated video (This week's "What
+ * worked" method, monthly: Reddit out, a rate above zero, a floor of
+ * `WORKS_MIN_RATED` rated videos a row).
+ */
+export function buildWorks(input: { month: string; videos: readonly WorksVideo[]; audience: string; label: (key: string) => string }): WorksBlock | null {
+  const month = monthStartOf(input.month)
+  const end = nextMonth(month)
+  const mine = input.videos.filter((v) => {
+    const day = (v.upload_date ?? '').slice(0, 10)
+    return day >= month && day < end && audienceOf(v) === input.audience
+  })
+  const rated = mine
+    .filter((v) => !WORKS_EXCLUDED.includes(v.platform) && Number(v.engagement_rate) > 0)
+    .map((v) => ({ engagement_rate: Number(v.engagement_rate), classified_type: v.classified_type, hook_style: v.hook_style }))
+  const table = (key: 'classified_type' | 'hook_style'): { of: number; rows: WorksRow[] } => {
+    const counts = new Map<string, number>()
+    for (const v of mine) {
+      const k = v[key]
+      if (k) counts.set(k, (counts.get(k) ?? 0) + 1)
+    }
+    const of = [...counts.values()].reduce((s, n) => s + n, 0)
+    const multiples = new Map(perfVsMedian(rated, key, { minCount: WORKS_MIN_RATED, top: Number.POSITIVE_INFINITY }).map((p) => [p.k, p.multiple]))
+    const rows = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, WORKS_ROWS)
+      .map(([k, n]) => ({ key: k, label: input.label(k), k: n, multiple: multiples.get(k) ?? null }))
+    return { of, rows }
+  }
+  const formats = table('classified_type')
+  const hooks = table('hook_style')
+  if (formats.rows.length === 0 && hooks.rows.length === 0) return null
+  return { month, formatsOf: formats.of, hooksOf: hooks.of, formats: formats.rows, hooks: hooks.rows }
+}
+
+/** A share of a base, whole, as the page prints it. */
+export const sharePct = (k: number, n: number): number => (n > 0 ? Math.floor((100 * k) / n + 0.5) : 0)
+
+/** "3.0": a multiple at one decimal. */
+export const multipleWords = (m: number): string => (Math.round(m * 10) / 10).toFixed(1)
+
+/** A format's name in a sentence, plural: "Tutorials", "Story videos". */
+const FORMAT_PLURAL: Readonly<Record<string, string>> = {
+  tutorial: 'Tutorials', review: 'Reviews', comparison: 'Comparisons', testimonial: 'Testimonials',
+  unboxing: 'Unboxings', 'how-to': 'How-tos', challenge: 'Challenges',
+}
+const ORDINAL = ['', 'second ', 'third ', 'fourth ', 'fifth ', 'sixth ']
+
+/** A sentence as text and figures, each figure its own node. */
+export type Bit = { t: 'text'; s: string } | { t: 'figure'; s: string }
+
+/**
+ * The lead under "What works": the common format met most strongly, and the
+ * one met least, with where it stands among the common ones. "Story videos
+ * draw the strongest response of the common formats, 3.0 times the
+ * engagement of the median video. Tutorials, the second most common format,
+ * draw 1.4 times." Null under two rated rows. Composed in code, never by a
+ * model.
+ */
+export function worksSentence(w: WorksBlock): Bit[] | null {
+  const rated = w.formats.map((r, rank) => ({ r, rank })).filter((x) => x.r.multiple != null)
+  if (rated.length < 2) return null
+  const best = [...rated].sort((a, b) => (b.r.multiple ?? 0) - (a.r.multiple ?? 0) || a.rank - b.rank)[0]
+  const least = [...rated].sort((a, b) => (a.r.multiple ?? 0) - (b.r.multiple ?? 0) || a.rank - b.rank)[0]
+  const out: Bit[] = [
+    { t: 'text', s: `${best.r.label} videos draw the strongest response of the common formats, ` },
+    { t: 'figure', s: multipleWords(best.r.multiple ?? 0) },
+    { t: 'text', s: ' times the engagement of the median video.' },
+  ]
+  if (least.r.key !== best.r.key && (least.r.multiple ?? 0) < (best.r.multiple ?? 0)) {
+    const name = FORMAT_PLURAL[least.r.key] ?? `${least.r.label} videos`
+    out.push(
+      { t: 'text', s: ` ${name}, the ${ORDINAL[least.rank] ?? ''}most common format, draw ` },
+      { t: 'figure', s: multipleWords(least.r.multiple ?? 0) },
+      { t: 'text', s: ' times.' },
+    )
+  }
+  return out
 }
 
 /** A level's words: "8 of 21" under 100, a share at or over it. */
