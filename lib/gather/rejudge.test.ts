@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { newestDefaultKept, planRegate, rejudgeRows, type UnjudgedVideo } from './rejudge'
+import { newestDefaultKept, operatorKeepRows, planRegate, rejudgeRows, type UnjudgedVideo } from './rejudge'
 
 // The videos the gate let in unjudged before the 24 Sep fix, judged after all
 // (the backfill's regate, 1 Oct). Pure parts.
@@ -45,5 +45,16 @@ describe('planRegate', () => {
     expect(rows.map((r) => [r.video_id, r.kept, r.source, r.run_id])).toEqual([['k', true, 'gpt', null], ['d', false, 'gpt', null]])
     expect(rows[1].reason).toBe('judged again after the 24 Sep fix: a tank')
     expect(rows[0]).toMatchObject({ client_id: 'client-1', platform: 'youtube', caption_excerpt: 'caption k' })
+  })
+})
+
+describe('operatorKeepRows: a person keeps a video the check drops', () => {
+  it('one kept row per video, source operator, run_id null, the reason saying who and why', () => {
+    const rows = operatorKeepRows('client-1', [v('a'), v('b')], 'on-topic on review (an upcycled purse)')
+    expect(rows.map((r) => [r.video_id, r.kept, r.source, r.run_id])).toEqual([['a', true, 'operator', null], ['b', true, 'operator', null]])
+    expect(rows[0].reason).toBe('kept by the operator: on-topic on review (an upcycled purse)')
+  })
+  it('an operator keep is the newest verdict: the video is no longer unjudged', () => {
+    expect(newestDefaultKept([gv('a', 'default', true, '2026-09-20T04:18:00Z'), gv('a', 'gpt', false, '2026-10-01T18:00:00Z'), gv('a', 'operator', true, '2026-10-01T20:00:00Z')])).toEqual([])
   })
 })

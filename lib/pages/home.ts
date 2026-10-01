@@ -35,10 +35,11 @@ import { TABLE_MOVES } from '../subjects/types'
 //      this month, the four figures the latest READY weekly read froze at its
 //      run (`week_reads.data.market`, the market base: the category plus the
 //      tracked brands' audiences, the client's own posts out);
-//   2. "Week by week": the market's weekly videos and comments from the week
-//      of 28 September (`HOME_FIRST_WEEK`), only weeks read one way; a week
-//      still filling is drawn faint, and the block is omitted until one such
-//      week exists (rule 2: no empty frame);
+//   2. "Week by week": the market's weekly videos and comments, only weeks
+//      read one way, from the first such week the data shows (`homeAxis`,
+//      `weeksSinceOurChanges`; never a constant); a week still filling is
+//      drawn faint, and the block is omitted until one such week exists (rule
+//      2: no empty frame);
 //   3. the Agent box (the page draws it; nothing is read);
 //   4. six tiles, one number and a few short rows each, each appearing only
 //      when its fact exists.
@@ -138,24 +139,24 @@ export const WEEK_COLUMNS = 8
 export const WEEKS_MIN = 1
 
 /**
- * THE CHART'S FIRST WEEK: 28 September, the first week read on one search
- * set, one relevance check and one update a week (the week line's
- * `WEEK_LINE_FIRST_WEEK`, held here as the Dashboard's own constant so the
- * chart can move without moving the pipeline's kept weeks).
- *
- * WHY NOT 21 SEPTEMBER (measured read-only on production, 1 Oct evening,
- * research/empty-blocks.md). That week was searched with today's search set
- * (the 20 and 27 Sep gathers' lists are identical) and gathered by one weekly
- * gather (the 27 Sep run). But 19 of its videos were let in unjudged before
- * the 24 Sep fix, and even after the regate some stay (three in the dry run
- * of 1 Oct, 20:21): today's check drops them, and stored work (a
- * recommendation, a plan check, a saved Agent answer or an export) cites
- * their insights, so the regate keeps them for a person to decide. Unchecked
- * videos keep the week off by the chart's own rule. If Heinrich has them
- * removed, the week meets the rule and this is the one line to change (tests
- * pin both).
+ * THE CHART'S FIRST WEEK IS THE DATA'S, NEVER A CONSTANT (the lead's ruling,
+ * 1 Oct night). The axis is the last `WEEK_COLUMNS` weeks to now, and the
+ * weeks drawn are those `weeksSinceOurChanges` finds read one way: after the
+ * latest search or relevance change on the axis (the fail-open fixes aside,
+ * `isFailOpenFix`), with something gathered, and with no video let in without
+ * a check that stands (`unchecked`, the newest verdict). A change before the
+ * axis leaves every axis week after it, so nothing older is needed. On
+ * Sealand that is: the 17 Sep search change cuts everything to the week of 14
+ * Sep, and the week of 21 Sep is drawn once its unchecked videos are judged
+ * (the regate, and the operator's keeps of the ones stored work cites); until
+ * then the run starts later, by the same rule, with no code change.
  */
-export const HOME_FIRST_WEEK = '2026-09-28'
+export function homeAxis(now: string): string[] {
+  const current = isoWeekOf(now)
+  const axis: string[] = []
+  for (let i = WEEK_COLUMNS - 1; i >= 0; i--) axis.push(addDays(current, -7 * i))
+  return axis
+}
 
 /**
  * The relevance changes whose whole effect is the videos the gate let in
@@ -205,9 +206,8 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
 // ---- 2. Week by week -------------------------------------------------------------
 
 /**
- * The weeks the chart may draw: from the week of 28 September
- * (`HOME_FIRST_WEEK`; the weeks before it span our September search and
- * relevance changes and are never drawn), ONLY weeks read one way: none before our latest
+ * The weeks the chart may draw, from the last `WEEK_COLUMNS` weeks
+ * (`homeAxis`), ONLY weeks read one way: none before our latest
  * search or relevance change (the fail-open fixes aside, `isFailOpenFix`),
  * none holding videos let in without a check that still stands, none with
  * nothing gathered (`weeksSinceOurChanges`, T0a's rule for the weekly bars).
@@ -218,9 +218,9 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
  * settled. Null only where no such week exists: the block is omitted rather
  * than drawn as an empty frame.
  *
- * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight), from
- * `HOME_FIRST_WEEK`, the latest eight once the series is longer; a framed
- * week with nothing to draw is an empty column.
+ * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight), opening at
+ * the first week drawn, the latest eight once the series is longer; a week
+ * still to come is an empty column.
  */
 export function homeWeeks(input: {
   rows: readonly MarketWeekRowRaw[]
@@ -229,18 +229,17 @@ export function homeWeeks(input: {
   updates: readonly string[]
   now: string
 }): HomeWeeks | null {
-  const current = isoWeekOf(input.now)
-  const axis: string[] = []
-  for (let w = HOME_FIRST_WEEK; w <= current; w = addDays(w, 7)) axis.push(w)
-  if (axis.length === 0) return null
+  const axis = homeAxis(input.now)
   const weeks = pooledWeekVolumes(input.rows.map(marketWeekRowOf), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
   const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis))
     .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')
   if (clean.length < WEEKS_MIN) return null
   const byWeek = new Map<string, WeekVolume>(clean.map((w) => [w.week, w]))
   const last = clean[clean.length - 1].week
+  // The frame opens at the first week drawn: an earlier week is not a silent
+  // market, it is a week not read one way, and it is left off the frame.
   let first = addDays(last, -7 * (WEEK_COLUMNS - 1))
-  if (first < HOME_FIRST_WEEK) first = HOME_FIRST_WEEK
+  if (first < clean[0].week) first = clean[0].week
   const columns: HomeWeekColumn[] = []
   for (let w = first; columns.length < WEEK_COLUMNS; w = addDays(w, 7)) {
     const v = byWeek.get(w)
@@ -614,7 +613,7 @@ async function loadMonthThemes(
 /** `market_week_volumes` over the chart's weeks. */
 async function loadWeekRows(reading: SupabaseClient, clientId: string, now: string): Promise<MarketWeekRowRaw[]> {
   const to = addDays(isoWeekOf(now), 7)
-  const res = await reading.rpc('market_week_volumes', { p_client: clientId, p_from: HOME_FIRST_WEEK, p_to: to })
+  const res = await reading.rpc('market_week_volumes', { p_client: clientId, p_from: homeAxis(now)[0], p_to: to })
   if (res.error) throw new Error(`market_week_volumes: ${res.error.message}`)
   return (res.data ?? []) as MarketWeekRowRaw[]
 }

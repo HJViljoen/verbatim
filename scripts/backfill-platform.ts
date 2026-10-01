@@ -4,7 +4,7 @@
 // put it on the platform without emailing anyone.
 //
 //   node --env-file=.env.local --import tsx scripts/backfill-platform.ts \
-//     --client <uuid> [--run <uuid>] [--out <file.md>] [--regate [--yes] | --yes | --publish]
+//     --client <uuid> [--run <uuid>] [--out <file.md>] [--regate [--yes] | --keep <ids> [--yes] | --yes | --publish]
 //
 // Run it through ~/.claude/plans/verbatim-writing-back/run/backfill-platform.sh,
 // which checks production first and keeps the log.
@@ -50,6 +50,12 @@
 //   --regate --yes --plan <file>  writes the regate a dry run planned (the dry
 //             run saves its verdicts with --plan <file>; the write applies
 //             exactly those, never a fresh judgement). Emails nobody.
+//   --keep <id>[,<id>…] [--reason "<why>"] [--plan <file>]  the operator keeps
+//             videos the check drops (the regate keeps the ones stored work
+//             cites, for a person to decide): DRY, it shows what the
+//             Dashboard's own chart code draws as it stands, after the regate
+//             and after both, and whether the week then meets the rule.
+//   --keep … --yes  appends one verdict per video: kept, source operator.
 //   --yes     writes 1 to 3 (each only where missing). Emails nobody.
 //   --publish puts the held build ON THE PLATFORM without its email
 //             (`publishSend`, lib/schedules/publish.ts: `published_at`, and a
@@ -74,7 +80,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { scriptActor } from '../lib/config-log'
 import { longMonth } from '../lib/format'
-import { loadUnjudgedMarketVideos } from '../lib/gather/rejudge'
+import { loadUnjudgedMarketVideos, operatorKeepRows, type UnjudgedVideo } from '../lib/gather/rejudge'
 import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes'
 import { monthStartOf } from '../lib/reading/month-key'
 import { sendsWeeklyRead } from '../lib/schedules/artefact'
@@ -87,7 +93,7 @@ import type { CallBudget, WeekReadCall } from '../lib/written/deadline'
 import { buildWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead } from '../lib/written/step'
 import { saveWeekRead, weekReadsApplied } from '../lib/written/store'
 import type { LongRunReadData } from '../lib/written/types'
-import { applyRegate, dropContributions, readRegate, savedPlanOf, simulateLongRun, simulateWeekRead, type RegateRead, type SavedRegatePlan } from './backfill-regate'
+import { applyRegate, chartLine, chartWith, dropContributions, readRegate, savedPlanOf, simulateLongRun, simulateWeekRead, type RegateRead, type SavedRegatePlan } from './backfill-regate'
 import { renderLongRun, renderWeekRead } from './written-render'
 
 const args = process.argv.slice(2)
@@ -138,13 +144,16 @@ async function main() {
     console.error(`Usage: ${COMMAND} --client <uuid> [--run <uuid>] [--out <file.md>] [--regate [--yes] | --yes [--without-regate] | --publish]`)
     process.exit(2)
   }
+  const keep = has('keep')
   const regate = has('regate')
-  const write = has('yes') && !regate
+  if (keep && (regate || has('publish'))) throw new Error('--keep is a step of its own')
+  const write = has('yes') && !regate && !keep
+  const keepWrite = has('yes') && keep
   const regateWrite = has('yes') && regate
   const publish = has('publish')
   if (has('yes') && publish) throw new Error('--yes and --publish are separate steps: write, read the text, then publish')
   if (regate && publish) throw new Error('--regate and --publish are separate steps')
-  const mode = publish ? 'PUBLISH' : regateWrite ? 'REGATE WRITE' : regate ? 'REGATE DRY RUN' : write ? 'WRITE' : 'DRY RUN'
+  const mode = publish ? 'PUBLISH' : keepWrite ? 'KEEP WRITE' : keep ? 'KEEP DRY RUN' : regateWrite ? 'REGATE WRITE' : regate ? 'REGATE DRY RUN' : write ? 'WRITE' : 'DRY RUN'
   const block: string[] = []
   const fail: string[] = []
   const clock = sast()
@@ -221,6 +230,71 @@ async function main() {
 
   let cost = 0
   let regatedContrib: { gone: Set<string>; contrib: Awaited<ReturnType<typeof dropContributions>> } | null = null
+
+  // ---- THE OPERATOR'S KEEPS (--keep <ids>) ----------------------------------------------------
+  // A person keeps videos the check drops (the regate keeps the ones stored
+  // work cites, for exactly this): one appended verdict each, source
+  // operator, so the newest verdict is a clean keep. Dry by default: it shows
+  // what the chart's own code then draws, after the regate and after both.
+  if (keep) {
+    const ids = flag('keep').split(',').map((x) => x.trim()).filter(Boolean)
+    if (ids.length === 0) throw new Error('--keep takes video ids: --keep <id>[,<id>…] (platform:id where two platforms share an id)')
+    const reason = flag('reason', 'on-topic on review')
+    const wanted = ids.map((x) => (x.includes(':') ? { platform: x.split(':')[0], video_id: x.slice(x.indexOf(':') + 1) } : { platform: null as string | null, video_id: x }))
+    const found = await db.from('videos').select('id, platform, video_id, account_name, caption, hashtags, is_client')
+      .eq('client_id', clientId).in('video_id', wanted.map((w) => w.video_id))
+    if (found.error) throw new Error(`videos: ${found.error.message}`)
+    type Kv = UnjudgedVideo & { is_client: boolean | null }
+    const keepVideos: UnjudgedVideo[] = []
+    for (const w of wanted) {
+      const hits = ((found.data ?? []) as Kv[]).filter((v) => v.video_id === w.video_id && (!w.platform || v.platform === w.platform))
+      if (hits.length !== 1) { fail.push(`${w.platform ? `${w.platform}:` : ''}${w.video_id}: ${hits.length === 0 ? 'no such video of this client' : 'on two platforms: write platform:id'}`); continue }
+      keepVideos.push(hits[0])
+    }
+    if (fail.length) return finish(block, fail, cost)
+    say()
+    say(`## The operator's keeps (${keepVideos.length}): "${reason}"`)
+    say()
+    for (const v of keepVideos) say(`- ${v.platform} ${v.video_id}: "${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 100)}"`)
+    if (keepWrite) {
+      const rows = operatorKeepRows(clientId, keepVideos, `${reason} (${COMMAND} --keep)`)
+      const { error } = await db.from('gate_verdicts').insert(rows)
+      if (error) {
+        fail.push(`gate_verdicts: ${error.message}${/check constraint/.test(error.message) ? ' (apply 20261106093000_gate_verdict_operator.sql with the deploy first)' : ''}`)
+        return finish(block, fail, cost)
+      }
+      say()
+      say(`WRITTEN: ${rows.length} operator verdict(s) appended (kept). The newest verdict of each is a clean keep.`)
+      block.push(`keep written: ${rows.length} operator verdict(s) · ${keepVideos.map((v) => v.video_id).join(', ')}`)
+      return finish(block, fail, cost)
+    }
+    // Dry: what the chart's own code draws as it stands, after the regate,
+    // and after the regate and these keeps. The regate is the saved plan
+    // (--plan) where there is one, else judged now (a fraction of a cent).
+    const planPath = flag('plan')
+    const saved = planPath ? (JSON.parse(readFileSync(resolve(process.cwd(), planPath), 'utf8')) as SavedRegatePlan) : null
+    const rg = await readRegate(db, clientId, saved)
+    cost += rg.costUsd
+    const kept = new Set(keepVideos.map((v) => v.id))
+    const chart = await chartWith(db, clientId, new Date().toISOString(), {
+      now: { removed: [], cleared: [] },
+      regate: { removed: rg.plan.drop, cleared: rg.plan.kept },
+      both: { removed: rg.plan.drop.filter((v) => !kept.has(v.id)), cleared: [...rg.plan.kept, ...keepVideos] },
+    })
+    const week = isoMonday(new Date(Date.parse(run.window_end) - 1).toISOString())
+    const at = (name: string) => chart.weeks[name][week] ?? { videos: 0, comments: 0, unchecked: 0 }
+    say()
+    say(`### Week by week, as the Dashboard's own code draws it (homeWeeks; regate plan ${saved ? `saved ${saved.judgedAt}` : 'judged now'})`)
+    say()
+    say(`- As it stands: ${chartLine(chart.now)}`)
+    say(`- After the regate: ${chartLine(chart.regate)} · week of ${week}: ${at('regate').videos} videos, ${at('regate').unchecked} unchecked`)
+    say(`- After the regate and these keeps: ${chartLine(chart.both)} · week of ${week}: ${at('both').videos} videos, ${at('both').unchecked} unchecked`)
+    const first = chart.both?.columns.find((c) => c.videos != null) ?? null
+    const met = at('both').unchecked === 0 && first?.week === week
+    say(`- The week of ${week}: ${met ? 'the rule is MET (same searches, one weekly gather, every video judged by a check that stands)' : `the rule is NOT met (${at('both').unchecked} unchecked)`}; ${first ? `the first week drawn becomes ${first.label}, ${first.settled ? 'settled' : 'still filling (drawn faint; settled after two updates past its end, by the chart\'s own rule)'}` : 'no week is drawn'}. It follows from the data: no code changes.`)
+    block.push(`keep (dry): ${keepVideos.length} video(s) · week of ${week} after regate ${at('regate').unchecked} unchecked, after regate + keep ${at('both').unchecked} · first week drawn: ${first ? `${first.label} (${first.settled ? 'settled' : 'filling'})` : 'none'} · rule ${met ? 'met' : 'NOT met'}`)
+    return finish(block, fail, cost)
+  }
 
   // ---- THE REGATE (--regate; and simulated in the dry run) -----------------------------------
   // The videos the gate let in unjudged, judged by today's check. It runs

@@ -21,6 +21,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { whoSplit } from '../lib/brands/attribution'
+import { homeAxis, homeWeeks, isFailOpenFix, type HomeWeeks } from '../lib/pages/home'
+import { ourChangesWithoutGatherFlags } from '../lib/reading/gather-flags'
+import { loadChanges } from '../lib/reading/read'
+import { marketAudiences } from '../lib/reading/market'
+import { loadDeliveredRuns, marketRivalAudiences, updateInstant } from '../lib/reading/reading-view'
+import { addDays, isoWeekOf, type MarketWeekRowRaw } from '../lib/reading/weeks'
+import { loadTrackedRivals } from '../lib/rivals'
 import { chunk } from '../lib/chunk'
 import { selectAll } from '../lib/supabase-admin'
 import { scriptActor } from '../lib/config-log'
@@ -255,4 +262,87 @@ export async function simulateLongRun(db: SupabaseClient, built: BuiltLongRun, a
     }),
   }
   return finishLongRun(db, { clientId: a.clientId, runId: built.pool.runId, pool, company: a.company, raw: built.raw, costUsd: built.data.costUsd - built.check.costUsd, log: false, check: built.check })
+}
+
+// ---- The chart, as its own code would draw it (the operator's keeps) -----------------------
+
+/** A set of the unjudged videos and what happens to it: removed by the
+ *  regate, or made checked (kept by today's check, or by the operator). */
+export interface ChartChange { removed: readonly UnjudgedVideo[]; cleared: readonly UnjudgedVideo[] }
+
+/**
+ * The Dashboard's "Week by week" exactly as `homeWeeks` draws it, on the
+ * market's weekly rows as they stand and with each change applied: a removed
+ * video leaves its weeks' videos, comments and unchecked count; a cleared one
+ * leaves the unchecked count only (every one of them is unchecked today).
+ * Read-only: one `market_week_volumes` call, the change log, the updates, and
+ * the changed videos' comments over the axis.
+ */
+export async function chartWith(db: SupabaseClient, clientId: string, now: string, changes: Record<string, ChartChange>): Promise<Record<string, HomeWeeks | null> & { weeks: Record<string, Record<string, { videos: number; comments: number; unchecked: number }>> }> {
+  const axis = homeAxis(now)
+  const to = addDays(axis[axis.length - 1], 7)
+  const [vol, changeRows, runs, rivals] = await Promise.all([
+    db.rpc('market_week_volumes', { p_client: clientId, p_from: axis[0], p_to: to }),
+    loadChanges(db, clientId),
+    loadDeliveredRuns(db, clientId),
+    loadTrackedRivals(db, clientId),
+  ])
+  if (vol.error) throw new Error(`market_week_volumes: ${vol.error.message}`)
+  const market = new Set(marketAudiences(marketRivalAudiences(rivals)))
+  const base = new Map<string, { videos: number; comments: number; unchecked: number }>()
+  for (const r of (vol.data ?? []) as MarketWeekRowRaw[]) {
+    if (!market.has(String(r.audience))) continue
+    const w = String(r.week).slice(0, 10)
+    const t = base.get(w) ?? { videos: 0, comments: 0, unchecked: 0 }
+    base.set(w, { videos: t.videos + Number(r.videos), comments: t.comments + Number(r.comments), unchecked: t.unchecked + Number(r.unchecked) })
+  }
+  // Each changed video's comments, by ISO week, over the axis.
+  const all = new Map<string, UnjudgedVideo>()
+  for (const c of Object.values(changes)) for (const v of [...c.removed, ...c.cleared]) all.set(v.id, v)
+  const perVideo = new Map<string, Map<string, number>>()
+  const byPlatform = new Map<string, UnjudgedVideo[]>()
+  for (const v of all.values()) byPlatform.set(v.platform, [...(byPlatform.get(v.platform) ?? []), v])
+  type C = { video_id: string; comment_date: string }
+  for (const [platform, vs] of byPlatform) {
+    for (const part of chunk(vs, 100)) {
+      const byVid = new Map(part.map((v) => [v.video_id, v.id]))
+      const rows = await selectAll<C>(() => db.from('comments').select('video_id, comment_date').eq('client_id', clientId).eq('platform', platform)
+        .in('video_id', part.map((v) => v.video_id)).gte('comment_date', `${axis[0]}T00:00:00.000Z`).lt('comment_date', `${to}T00:00:00.000Z`)
+        .order('id') as unknown as { range: (a: number, b: number) => PromiseLike<{ data: C[] | null; error: unknown }> })
+      for (const c of rows) {
+        const id = byVid.get(c.video_id)
+        if (!id) continue
+        const w = isoWeekOf(c.comment_date)
+        const m = perVideo.get(id) ?? new Map<string, number>()
+        m.set(w, (m.get(w) ?? 0) + 1)
+        perVideo.set(id, m)
+      }
+    }
+  }
+  const rowsOf = (week: Map<string, { videos: number; comments: number; unchecked: number }>): MarketWeekRowRaw[] =>
+    [...week.entries()].map(([w, t]) => ({ week: w, audience: 'industry-other', videos: t.videos, comments: t.comments, comments_next_month: 0, under_5: 0, median_dated: null, mean_dated: null, older_videos: 0, unchecked: t.unchecked }) as unknown as MarketWeekRowRaw)
+  const ours = ourChangesWithoutGatherFlags(changeRows.filter((r) => !isFailOpenFix(r)))
+  const updates = runs.map(updateInstant)
+  const out: Record<string, HomeWeeks | null> = {}
+  const weeks: Record<string, Record<string, { videos: number; comments: number; unchecked: number }>> = {}
+  for (const [name, c] of Object.entries(changes)) {
+    const week = new Map([...base.entries()].map(([w, t]) => [w, { ...t }]))
+    for (const v of c.removed) for (const [w, n] of perVideo.get(v.id) ?? []) {
+      const t = week.get(w)
+      if (t) { t.videos = Math.max(0, t.videos - 1); t.comments = Math.max(0, t.comments - n); t.unchecked = Math.max(0, t.unchecked - 1) }
+    }
+    for (const v of c.cleared) for (const [w] of perVideo.get(v.id) ?? []) {
+      const t = week.get(w)
+      if (t) t.unchecked = Math.max(0, t.unchecked - 1)
+    }
+    out[name] = homeWeeks({ rows: rowsOf(week), rivalAudiences: [], changes: ours, updates, now })
+    weeks[name] = Object.fromEntries(week)
+  }
+  return Object.assign(out, { weeks })
+}
+
+/** The columns drawn, in a line: "21 Sep 264 (filling) · 28 Sep 281 (filling)". */
+export function chartLine(w: HomeWeeks | null): string {
+  if (!w) return 'not drawn (no week read one way)'
+  return w.columns.filter((c) => c.videos != null).map((c) => `${c.label} ${c.videos} (${c.settled ? 'settled' : 'filling'})`).join(' · ')
 }

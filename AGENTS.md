@@ -394,7 +394,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ONE `gate_rule` / `relevance_gate` change (the fix's own shape, so the pair
   judge measures it, `lib/provenance/measure.ts`, instead of counting an
   unmeasured `regate` as a tenth); undo is `regate_restore(batch)`. A video
-  something stored cites is kept and named. Deletion, not exclusion: a video
+  something stored cites is kept and named; a person decides it with
+  `--keep <ids> --yes`, which appends an `operator` verdict (kept; migration
+  `20261106093000`), so the newest verdict is a clean keep. Deletion, not exclusion: a video
   counts through sixteen SQL functions, two views, TypeScript readers and the
   pipeline's own re-reads, with no single place to exclude it.
 - **Production reads from agents are serialised and rationed.** Five agents
@@ -546,10 +548,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     stored snapshots, exports and the monthly. A block leaves a page's list,
     not the registry.
   - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
-    week draws from ONE clean week, from the week of 28 September
-    (`HOME_FIRST_WEEK`, the Dashboard's own constant, so it can move without
-    the week line's `WEEK_LINE_FIRST_WEEK`; 21 September stays off while the
-    cited videos today's check drops stay in it), a filling week faint; the two
+    week draws from ONE clean week, the first the DATA shows, never a
+    constant (`homeAxis`: the last eight weeks; `weeksSinceOurChanges` cuts at
+    the latest search or relevance change on them, at unchecked weeks and at
+    weeks with nothing gathered), a filling week faint; the two
     fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix and the
     backfill's regate) cut no week, because `unchecked` counts exactly their
     videos (`isFailOpenFix`). The Competitive tile's row is "Named most in
