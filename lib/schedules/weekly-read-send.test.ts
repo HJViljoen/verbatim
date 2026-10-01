@@ -198,6 +198,9 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.report[0].to).toEqual(RECIPIENTS)
     expect(mail.report[0].subject).toBe(held.subject)
     expect(mail.report[0].html).toContain('the words of e:bd2a2f71-2240-4365-9c44-01d685e970b1')
+    // "Read this week in full" is the share link minted at the Send.
+    const token = (w.tables.share_links[0] as { token: string }).token
+    expect(mail.report[0].html).toContain(`${APP}/r/${token}`)
     expect(w.tables.report_sends[0]).toMatchObject({ status: 'sent', approved_by: 'operator-user' })
     // `sent_figures`: none, as for a document.
     expect(w.db.calls.some((c) => c.table === 'sent_figures')).toBe(false)

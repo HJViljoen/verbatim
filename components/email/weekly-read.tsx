@@ -106,8 +106,10 @@ function Divider() {
 }
 
 /** A quote, on a plain panel: the serif italic, the cite under it, and the
- *  English where the comment was in another language (original first, always). */
-function QuotePanel({ q }: { q: ResolvedQuote }) {
+ *  English where the comment was in another language (original first, always).
+ *  The panel is the ground on paper, and paper on the ground (the findings
+ *  band), so it always reads as a panel. */
+function QuotePanel({ q, onGround = false }: { q: ResolvedQuote; onGround?: boolean }) {
   const note = translationNote({ lang: q.lang, english: q.english })
   const label = translationLabel(note)
   const cite = [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(`${q.date}T12:00:00.000Z`) : null].filter(Boolean).join(' · ')
@@ -115,7 +117,7 @@ function QuotePanel({ q }: { q: ResolvedQuote }) {
     <table width="100%" {...presentation} style={{ ...T, marginTop: 16 }}>
       <tbody>
         <tr>
-          <td style={{ background: P.ground, borderRadius: 14, padding: '16px 18px' }}>
+          <td style={{ background: onGround ? P.paper : P.ground, borderRadius: 14, padding: '16px 18px' }}>
             <p data-copy="quote" style={{ margin: 0, fontFamily: FONT.serif, fontStyle: 'italic', fontSize: 16, lineHeight: '1.5', color: P.ink }}>“{q.text}”</p>
             {label ? <div style={{ ...s.meta, fontSize: 12, marginTop: 8 }}>{label}</div> : null}
             {note.english ? <p style={{ margin: '4px 0 0', fontFamily: FONT.serif, fontSize: 14, lineHeight: '1.5', color: P.muted }}>{note.english}</p> : null}
@@ -161,10 +163,19 @@ export interface WeeklyReadReportProps {
   /** The mark's address. An email needs an absolute one; a page on the app's
    *  own origin may pass the relative path. */
   markSrc?: string
+  /** Where "Read this week in full" leads: the report's own share page (the
+   *  web version, findings in full). The email passes its share link; where
+   *  there is none (a test send, a preview) and on the page itself, the row
+   *  is not printed. Until the new This week page ships, this is the full
+   *  read; the old page carries none of it. */
+  fullUrl?: string | null
+  /** The findings in full (what was seen, what it means, the quote): the web
+   *  page, the viewer and the paper. The email prints them compact. */
+  full?: boolean
 }
 
 /** The card itself, masthead to footer: the same in every frame. */
-export function WeeklyReadReport({ data, appUrl, markSrc }: WeeklyReadReportProps) {
+export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full = false }: WeeklyReadReportProps) {
   const stale = staleWeeklyReadSnapshot(data)
   const company = data.company || 'Your company'
   if (stale) {
@@ -315,16 +326,22 @@ export function WeeklyReadReport({ data, appUrl, markSrc }: WeeklyReadReportProp
                     </td>
                     <td style={{ borderTop: `1px solid ${P.hairline}`, padding: '16px 0', verticalAlign: 'top' }}>
                       <Prose as="div" body={f.headline} figures={v.figures} style={{ fontFamily: FONT.sans, fontSize: 17, fontWeight: 700, lineHeight: '1.3', color: P.ink }} />
-                      {f.line ? <Prose body={f.line} figures={v.figures} style={{ ...s.body, fontSize: 15, lineHeight: '1.55', marginTop: 6 }} /> : null}
-                      {f.evidence ? <div data-copy="figure" style={{ ...s.meta, marginTop: 6 }}>{codeLine(f.evidence, v.figures)}</div> : null}
+                      {/* IN FULL ON THE PAGE: what was seen, then what it
+                          means, then the voice; compact in the email. */}
+                      {full && f.saw ? <Prose body={f.saw} figures={v.figures} style={{ ...s.body, fontSize: 15, lineHeight: '1.6', marginTop: 8 }} /> : null}
+                      {f.line ? <Prose body={f.line} figures={v.figures} style={{ ...s.body, fontSize: 15, lineHeight: full ? '1.6' : '1.55', marginTop: full ? 10 : 6 }} /> : null}
+                      {full && f.quote ? <QuotePanel q={f.quote} onGround /> : null}
+                      {f.evidence ? <div data-copy="figure" style={{ ...s.meta, marginTop: full ? 10 : 6 }}>{codeLine(f.evidence, v.figures)}</div> : null}
                     </td>
                   </tr>
                 ))}
-                <tr>
-                  <td colSpan={2} style={{ borderTop: `1px solid ${P.hairline}`, paddingTop: 14 }}>
-                    <a href={`${appUrl}/dashboard/week`} style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: P.orange, textDecoration: 'none' }}>Read this week in full →</a>
-                  </td>
-                </tr>
+                {fullUrl ? (
+                  <tr>
+                    <td colSpan={2} style={{ borderTop: `1px solid ${P.hairline}`, paddingTop: 14 }}>
+                      <a href={fullUrl} style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: P.orange, textDecoration: 'none' }}>Read this week in full →</a>
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </Band>
@@ -357,7 +374,7 @@ export function WeeklyReadReport({ data, appUrl, markSrc }: WeeklyReadReportProp
   )
 }
 
-export interface WeeklyReadEmailProps extends WeeklyReadReportProps {
+export interface WeeklyReadEmailProps extends Omit<WeeklyReadReportProps, 'full'> {
   /** The inbox preview line. */
   preheader?: string
 }
@@ -365,7 +382,7 @@ export interface WeeklyReadEmailProps extends WeeklyReadReportProps {
 const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap'
 
 /** The email document: the card on the ground, centred, phone first. */
-export function WeeklyReadEmail({ data, appUrl, markSrc, preheader }: WeeklyReadEmailProps) {
+export function WeeklyReadEmail({ data, appUrl, markSrc, fullUrl, preheader }: WeeklyReadEmailProps) {
   return (
     <html lang="en">
       <head>
@@ -381,7 +398,7 @@ export function WeeklyReadEmail({ data, appUrl, markSrc, preheader }: WeeklyRead
           <tbody>
             <tr>
               <td align="center" style={{ padding: '16px 0 24px' }}>
-                <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} />
+                <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} fullUrl={fullUrl} />
               </td>
             </tr>
           </tbody>
@@ -393,11 +410,12 @@ export function WeeklyReadEmail({ data, appUrl, markSrc, preheader }: WeeklyRead
 
 /**
  * The same card as a page: the share link (`/r/<token>`), the in-app viewer and
- * the printed PDF. `print` adds the page size the render route prints at: A4,
- * portrait, the column paginating as a document does, because this report is
- * one column to read down, not a deck of slides.
+ * the printed PDF, with the findings IN FULL (it is where the email's "Read
+ * this week in full" leads). `print` adds the page size the render route
+ * prints at: A4, portrait, the column paginating as a document does, because
+ * this report is one column to read down, not a deck of slides.
  */
-export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-ink.png', print = false, fill = false }: WeeklyReadReportProps & {
+export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-ink.png', print = false, fill = false }: Omit<WeeklyReadReportProps, 'full' | 'fullUrl'> & {
   print?: boolean
   /** The share page: the ground fills the window. */
   fill?: boolean
@@ -409,7 +427,7 @@ export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-i
         <tbody>
           <tr>
             <td align="center">
-              <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} />
+              <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} full />
             </td>
           </tr>
         </tbody>

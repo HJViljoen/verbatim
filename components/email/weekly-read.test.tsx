@@ -12,11 +12,12 @@ import { WeeklyReadEmail, WeeklyReadPage, WeeklyReadReport, WEEKLY_READ_PALETTE 
 // contract, Heinrich's §0a rules and the two design bans.
 
 const APP = 'https://app.verbatimintel.com'
-const email = (data = sealandSnapshot()) => render(<WeeklyReadEmail data={data} appUrl={APP} preheader={data.subject} />)
+const SHARE = `${APP}/r/tok`
+const email = (data = sealandSnapshot(), fullUrl: string | null = SHARE) => render(<WeeklyReadEmail data={data} appUrl={APP} fullUrl={fullUrl} preheader={data.subject} />)
 const page = (data = sealandSnapshot()) => render(<WeeklyReadPage data={data} appUrl={APP} fill />)
 /** The reader's text of the card alone (the document's <title> and the hidden
  *  preheader are not something a reader reads in order). */
-const cardText = (data = sealandSnapshot()) => markupText(render(<WeeklyReadReport data={data} appUrl={APP} />))
+const cardText = (data = sealandSnapshot()) => markupText(render(<WeeklyReadReport data={data} appUrl={APP} fullUrl={SHARE} />))
 
 /** Where each of the design's sections starts in the reader's text. */
 function order(text: string, marks: string[]): number[] {
@@ -102,8 +103,17 @@ describe('the weekly read email: the approved design, top to bottom', () => {
     expect(html).not.toMatch(/display:\s*(flex|grid)/i)
     expect(html).toContain(`${APP}/brand/verbatim-mark-ink.png`)
     expect(html).toContain(`href="${APP}/dashboard"`)
-    expect(html).toContain(`href="${APP}/dashboard/week"`)
     expect(html).toContain(`href="${APP}/dashboard/settings/reports"`)
+  })
+
+  it('"Read this week in full" leads to the report\'s own web page, and is not printed where there is none', () => {
+    expect(email()).toContain(`href="${SHARE}"`)
+    expect(email()).not.toContain('/dashboard/week')
+    const bare = email(sealandSnapshot(), null)
+    expect(markupText(bare)).not.toContain('Read this week in full')
+    // The email keeps its findings compact: no "saw" paragraph, no finding quote.
+    expect(markupText(email())).not.toContain('People ask for specific backpack brands and models')
+    expect(markupText(email())).not.toContain('Osprey Farpoint')
   })
 
   it('a withdrawn quote leaves no empty panel and no orphaned cite', () => {
@@ -145,12 +155,23 @@ describe('older and unreadable reads', () => {
 })
 
 describe('the share page and the paper are the same report', () => {
-  it('the share page prints the email body, in the same order, under the same contract', () => {
+  it('the share page prints the whole report, its findings in full with their quotes, under the same contract', () => {
     const t = markupText(page())
     for (const m of ['This week in your market', 'The week in one line', 'What happened', 'What it means for Sealand', 'Worth watching next week', 'This week’s findings', 'Open Verbatim']) {
       expect(t).toContain(m)
     }
+    // The story's quotes, and each finding in full: what was seen, what it
+    // means, its quote, its evidence, in that order.
+    expect(t).toContain('“I recommend looking at Columbia tiger brook series.”')
+    const order = ['Buyers ask for named alternatives', 'People ask for specific backpack brands and models', 'Choice is made inside a comparison set', 'Osprey Farpoint', '7 videos this week · 16 in September so far']
+    const at = order.map((m) => t.indexOf(m))
+    at.forEach((x, i) => expect(x, order[i]).toBeGreaterThan(-1))
+    for (let i = 1; i < at.length; i++) expect(at[i]).toBeGreaterThan(at[i - 1])
+    // It is the full read, so it does not link to itself.
+    expect(t).not.toContain('Read this week in full')
     assertCopyContract(page())
+    for (const n of copyNodes(page()).filter((x) => x.kind === 'prose')) expect(n.ownText, n.text).not.toMatch(/\d/)
+    expect(copyNodes(page()).filter((n) => n.kind === 'quote')).toHaveLength(3)
     expect(page()).toContain('src="/brand/verbatim-mark-ink.png"')
     expect(page()).not.toMatch(/border-left|borderLeft/i)
   })
@@ -168,7 +189,9 @@ describe('renderWeeklyReadEmail', () => {
     expect(out.html.startsWith('<!doctype html>')).toBe(true)
     expect(out.text).toContain('What it means for Sealand')
     expect(out.text).toContain('Open Verbatim')
-    // The design ends on "Open Verbatim": no share button, no attachment line.
-    expect(out.html).not.toContain('/r/tok')
+    // The share link is "Read this week in full"; there is no share button
+    // and no attachment line (the design ends on "Open Verbatim").
+    expect(out.html).toContain(`href="${APP}/r/tok"`)
+    expect(out.html.match(/\/r\/tok/g)).toHaveLength(1)
   })
 })

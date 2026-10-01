@@ -13,10 +13,12 @@ import type { WeeklyReadSnapshotData } from '../reports/weekly-read-build'
  * the report cannot describe two different weeks, and "the email as sent"
  * re-renders to the same line.
  *
- * NO SHARE BUTTON AND NO ATTACHMENT LINE. The approved design ends on "Open
- * Verbatim" and "Who gets this"; the email IS the report. `shareUrl` and
- * `attached` are accepted so every artefact's renderer has one call shape, and
- * deliberately not printed.
+ * THE SHARE LINK IS "READ THIS WEEK IN FULL" (review M3): the report's own
+ * web page, findings in full, until the new This week page ships. Where there
+ * is no link (a test send, a preview) the row is not printed. No share button
+ * and no attachment line: the approved design ends on "Open Verbatim" and
+ * "Who gets this"; `attached` is accepted so every artefact's renderer has one
+ * call shape, and deliberately not printed.
  */
 
 export interface RenderWeeklyReadArgs {
@@ -30,6 +32,6 @@ export interface RenderWeeklyReadArgs {
 
 export function renderWeeklyReadEmail(a: RenderWeeklyReadArgs): { subject: string; html: string; text: string } {
   const preheader = a.data.subject.replace(/^[^:]*:\s*/, '')
-  const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} preheader={preheader} />)}`
+  const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} fullUrl={a.shareUrl ?? null} preheader={preheader} />)}`
   return { subject: a.data.subject, html, text: htmlToText(html) }
 }

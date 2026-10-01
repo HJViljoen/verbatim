@@ -14,6 +14,10 @@
 //              withdrawn one would.
 // --company    the name the masthead and "What it means for" print (Sealand).
 // --app        where the email's links point (https://app.verbatimintel.com).
+// --share      the share link "Read this week in full" leads to, as a send
+//              mints one (default <app>/r/preview).
+// --page-out   also write the share page (the web version, findings in full)
+//              as a standalone HTML file.
 //
 // The mark is inlined, so the file reads the same opened from disk. Nothing
 // is written but --out; the read must be `ready` (a thin, failed or empty one
@@ -22,6 +26,10 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { createElement } from 'react'
+
+import { WeeklyReadPage } from '../components/email/weekly-read'
+import { renderStaticHtml } from '../lib/email/render-html'
 import { renderWeeklyReadEmail } from '../lib/email/weekly-read'
 import { resolveQuotes } from '../lib/renderables/quotes-freeze'
 import { weekReadSendState } from '../lib/reports/weekly-read'
@@ -66,8 +74,16 @@ function main(): void {
   const read = resolveQuotes(stored.data, words)
   const data = weeklyReadSnapshotData({ company: flag('company', 'Sealand'), runId: flag('run', 'preview'), read, writtenAt: new Date().toISOString() })
   const mark = `data:image/png;base64,${readFileSync(resolve(process.cwd(), 'public/brand/verbatim-mark-ink.png')).toString('base64')}`
-  const email = renderWeeklyReadEmail({ data, appUrl: flag('app', 'https://app.verbatimintel.com'), markSrc: mark })
+  const app = flag('app', 'https://app.verbatimintel.com')
+  const email = renderWeeklyReadEmail({ data, appUrl: app, markSrc: mark, shareUrl: flag('share', `${app}/r/preview`) })
   writeFileSync(resolve(process.cwd(), outPath), email.html)
+  const pageOut = flag('page-out')
+  if (pageOut) {
+    const body = renderStaticHtml(createElement(WeeklyReadPage, { data, appUrl: app, markSrc: mark, fill: true }))
+    const doc = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${data.title}</title><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap" rel="stylesheet"></head><body style="margin:0">${body}</body></html>`
+    writeFileSync(resolve(process.cwd(), pageOut), doc)
+    console.log(`Wrote ${pageOut} (the share page)`)
+  }
   console.log(`Subject: ${email.subject}`)
   console.log(`Quotes resolved for reading: ${words.size}`)
   console.log(`Wrote ${outPath} (${email.html.length} bytes)`)

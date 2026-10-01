@@ -124,8 +124,10 @@ export interface WeeklyReadView {
   implications: string[]
   watch: string[]
   newThisWeek: { body: string; evidence: string }[]
-  /** Compact: the headline, the short line (what it means), the evidence line. */
-  findings: { headline: string; line: string; evidence: string }[]
+  /** The email prints them compact (the headline, the short line, which is
+   *  what it means, and the evidence line); the web page in full (what was
+   *  seen and the finding's quote as well). */
+  findings: { headline: string; line: string; evidence: string; saw: string; quote: ResolvedQuote | null }[]
   market: WeekMarketFigures | null
   /** The read's printed figures: every `[[key]]` above resolves here. */
   figures: FigureTable
@@ -172,6 +174,8 @@ export function weeklyReadView(read: WeekReadData): WeeklyReadView {
       line: (f.means ?? '').trim() || firstSentence(f.saw ?? ''),
       evidence: (f.evidence ?? '').trim()
         || (f.videos ? `${f.videos.week} videos this week · ${f.videos.month} in ${longMonth(read.month)} so far` : ''),
+      saw: (f.saw ?? '').trim(),
+      quote: resolvedQuote(f.quote),
     }))
     .filter((f) => f.headline)
   const figures = read.figures ?? {}
