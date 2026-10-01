@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { HOME_DATA } from '@/lib/pages/home-fixture'
-import { competitiveTile, homeTiles, type HomeData } from '@/lib/pages/home'
+import { HOME_DATA, HOME_EMPTY, HOME_NO_WEEKS } from '@/lib/pages/home-fixture'
+import { competitiveTile, homeTiles, INSUFFICIENT, type HomeData } from '@/lib/pages/home'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { HomePage } from '.'
@@ -104,29 +104,68 @@ describe('a tile without enough data (Heinrich, 1 Oct)', () => {
   })
 })
 
-describe('the Dashboard with nothing to show yet', () => {
-  const empty: HomeData = { numbers: null, weeks: null, tiles: [] }
+/** The top as the artboard draws it: two columns, the numbers and then Week
+ *  by week on the left (two of three), the Agent alone on the right, spanning
+ *  both rows. */
+const TOP = /<div class="grid grid-cols-1 gap-5 xl:grid-cols-3"><div class="flex min-w-0 flex-col gap-5 xl:col-span-2"><section[^>]*aria-labelledby="home-numbers">[\s\S]*?<\/section><section[^>]*aria-labelledby="home-weeks">[\s\S]*?<\/section><\/div><div class="min-w-0"><form[^>]*aria-labelledby="home-agent"/
 
-  it('omits the blocks and tiles that have nothing, and keeps the Agent', () => {
-    const text = renderText(<HomePage data={empty} />)
-    expect(text).not.toContain('Your market in numbers')
-    expect(text).not.toContain('Week by week')
-    expect(text).not.toContain('Open →')
-    expect(text).toContain('Agent')
-    assertCopyContract(<HomePage data={empty} />)
+/** The words between a block's title and the next block's. */
+const between = (text: string, from: string, to: string): string => text.slice(text.indexOf(from), text.indexOf(to))
+
+const AXIS = ['28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov', '16 Nov']
+
+describe('the top keeps its two columns, the Agent on the right, whatever the data (Heinrich, 1 Oct)', () => {
+  it('the full state: both blocks drawn as today, with no "Insufficient data" in either', () => {
+    const markup = render(<HomePage data={HOME_DATA} />)
+    const text = renderText(<HomePage data={HOME_DATA} />)
+    expect(markup).toMatch(TOP)
+    expect(markup).not.toContain('xl:col-span-3')
+    expect(between(text, 'Your market in numbers', 'Agent')).not.toContain(INSUFFICIENT)
+    expect(markup).toContain('role="img" aria-label="Videos and comments in your market, week by week. 28 Sep: 281 videos, 4,902 comments; 5 Oct: 254 videos, 4,210 comments."')
+    expect(markup.match(/data-week-state=/g)).toHaveLength(2)
   })
 
-  it('omits Week by week alone while no clean week exists', () => {
-    const text = renderText(<HomePage data={{ ...HOME_DATA, weeks: null }} />)
-    expect(text).toContain('Your market in numbers')
-    expect(text).not.toContain('Week by week')
-    expect(text).not.toContain('28 Sep')
+  it('no read: both blocks drawn, each with "Insufficient data", and the Agent in the right column', () => {
+    const markup = render(<HomePage data={HOME_EMPTY} />)
+    const text = renderText(<HomePage data={HOME_EMPTY} />)
+    expect(markup).toMatch(TOP)
+    expect(markup).not.toContain('xl:col-span-3')
+    // The numbers: the title and the tiles' empty line, no figure.
+    expect(between(text, 'Your market in numbers', 'Week by week')).toBe(`Your market in numbers ${INSUFFICIENT} `)
+    expect(markup).not.toContain('font-mono text-[34px]')
+    // Week by week: the title, the legend, the empty frame's eight weeks as
+    // drawn, then the line where the artboard prints its note.
+    expect(between(text, 'Week by week', 'Agent')).toBe(`Week by week Videos Comments ${AXIS.join(' ')} ${INSUFFICIENT} `)
+    expect(markup).not.toContain('data-week-state=')
+    expect(markup).not.toContain('<polyline')
+    expect(markup).not.toContain('role="img"')
+    // Two blocks and six tiles, each saying so once.
+    expect(markup.match(/Insufficient data/g)).toHaveLength(8)
+    expect(text).toContain('Ask what your market thinks about anything')
+    assertCopyContract(<HomePage data={HOME_EMPTY} />)
+  })
+
+  it('the numbers but no week to draw: the numbers as today, Week by week the empty frame', () => {
+    const markup = render(<HomePage data={HOME_NO_WEEKS} />)
+    const text = renderText(<HomePage data={HOME_NO_WEEKS} />)
+    expect(markup).toMatch(TOP)
+    expect(between(text, 'Your market in numbers', 'Week by week')).toBe('Your market in numbers This week, 21 to 27 September 262 videos 4,528 comments September so far 852 videos 21,468 comments ')
+    expect(between(text, 'Week by week', 'Agent')).toBe(`Week by week Videos Comments ${AXIS.join(' ')} ${INSUFFICIENT} `)
+    expect(markup).not.toContain('data-week-state=')
+    assertCopyContract(<HomePage data={HOME_NO_WEEKS} />)
+  })
+
+  it('no tiles at all still keeps the two columns', () => {
+    const markup = render(<HomePage data={{ ...HOME_EMPTY, tiles: [] }} />)
+    expect(markup).toMatch(TOP)
+    expect(markup).not.toContain('Open →')
   })
 
   it('prints one half of the numbers when only one was read', () => {
     const text = renderText(<HomePage data={{ ...HOME_DATA, numbers: { week: null, month: HOME_DATA.numbers!.month } }} />)
     expect(text).toContain('September so far')
     expect(text).not.toContain('This week, 21 to 27 September')
+    expect(between(text, 'Your market in numbers', 'Agent')).not.toContain(INSUFFICIENT)
   })
 })
 

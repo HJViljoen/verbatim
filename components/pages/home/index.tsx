@@ -9,7 +9,7 @@ import { NAV_ICON } from '@/components/nav-icons'
 import { PageBar } from '@/components/shell/page-grid'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { INSUFFICIENT, tileInsufficient, type HomeData, type HomeNumbers, type HomeNumbersHalf, type HomeTile, type HomeTileRow, type HomeWeeks } from '@/lib/pages/home'
+import { INSUFFICIENT, tileInsufficient, weeksDrawable, type HomeData, type HomeNumbers, type HomeNumbersHalf, type HomeTile, type HomeTileRow, type HomeWeeks } from '@/lib/pages/home'
 
 // THE DASHBOARD, drawn to the approved artboard `Page-Dashboard.dc.html`
 // (pages build, HOME package, 1 Oct): the title; "Your market in numbers" and
@@ -27,9 +27,10 @@ import { INSUFFICIENT, tileInsufficient, type HomeData, type HomeNumbers, type H
 // Agent's header is the pale yellow under its yellow tile.
 //
 // No quotes on this page (rule 5), no left-stripe accents and no highlighted
-// phrases (the design bans). A block with nothing to show is not drawn (rule
-// 2); a TILE always is, with "Insufficient data" where its rows would be
-// (Heinrich, 1 Oct). The loader decides that; this file draws what it is given.
+// phrases (the design bans). Every block and tile is always drawn, with
+// "Insufficient data" where it has nothing to show (Heinrich, 1 Oct), so the
+// top keeps its two columns, the Agent on the right, whatever the data. The
+// loader decides what there is; this file draws what it is given.
 
 /** The card shadow (`--shadow-card`: the artboard's, a step stronger). */
 const SHADOW = 'shadow-card'
@@ -39,10 +40,6 @@ const MUTED = 'text-[#5F656B]'
 const HAIR = 'border-[#E4E2DC]'
 
 export function HomePage({ data }: { data: HomeData }) {
-  const left = [
-    data.numbers ? <NumbersBlock key="numbers" numbers={data.numbers} /> : null,
-    data.weeks ? <WeeksBlock key="weeks" weeks={data.weeks} /> : null,
-  ].filter(Boolean)
   // THE DASHBOARD'S OWN PANE: its artboard pads 28/36/36 where every other
   // page's pads 28/40/40 (the shell's), so 4px of the shell's padding is
   // taken back at the sides and the foot, from md, where that padding applies.
@@ -53,8 +50,11 @@ export function HomePage({ data }: { data: HomeData }) {
           at the top and the foot, lands on the drawn line exactly. */}
       <div className="-my-[3px]"><PageBar title={surface('home').label} /></div>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        {left.length > 0 ? <div className="flex min-w-0 flex-col gap-5 xl:col-span-2">{left}</div> : null}
-        <div className={left.length > 0 ? 'min-w-0' : 'min-w-0 xl:col-span-3'}>
+        <div className="flex min-w-0 flex-col gap-5 xl:col-span-2">
+          <NumbersBlock numbers={data.numbers} />
+          <WeeksBlock weeks={data.weeks} />
+        </div>
+        <div className="min-w-0">
           <AgentBlock />
         </div>
       </div>
@@ -69,34 +69,39 @@ export function HomePage({ data }: { data: HomeData }) {
 
 // ---- 1. Your market in numbers -------------------------------------------------------
 
-function NumbersBlock({ numbers }: { numbers: HomeNumbers }) {
-  const halves = [numbers.week, numbers.month].filter((h): h is HomeNumbersHalf => h != null)
+function NumbersBlock({ numbers }: { numbers: HomeNumbers | null }) {
+  const halves = [numbers?.week, numbers?.month].filter((h): h is HomeNumbersHalf => h != null)
   return (
     <section className={`${CARD} gap-[18px]`} aria-labelledby="home-numbers">
       <div className="flex items-baseline gap-2.5">
         <IconTile icon={Hash} />
         <h2 id="home-numbers" className="m-0 text-[17px] font-bold">Your market in numbers</h2>
       </div>
-      <div className={halves.length === 2 ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0' : 'grid grid-cols-1'}>
-        {halves.map((h, i) => (
-          <div
-            key={h.heading}
-            className={
-              halves.length < 2
-                ? 'flex flex-col gap-[14px]'
-                : i === 0
-                  ? `flex flex-col gap-[14px] sm:border-r sm:pr-6 ${HAIR}`
-                  : `flex flex-col gap-[14px] border-t pt-6 sm:border-t-0 sm:pl-6 sm:pt-0 ${HAIR}`
-            }
-          >
-            <div className={`text-[13px] font-semibold ${MUTED}`}>{h.heading}</div>
-            <div className="grid grid-cols-2 gap-4">
-              <Stat value={h.videos} unit="videos" series="videos" />
-              <Stat value={h.comments} unit="comments" series="comments" />
+      {halves.length === 0 ? (
+        // Nothing read: the tiles' empty line, under the title.
+        <div className={`border-t ${HAIR} py-1.5 text-[13px] ${MUTED}`}>{INSUFFICIENT}</div>
+      ) : (
+        <div className={halves.length === 2 ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0' : 'grid grid-cols-1'}>
+          {halves.map((h, i) => (
+            <div
+              key={h.heading}
+              className={
+                halves.length < 2
+                  ? 'flex flex-col gap-[14px]'
+                  : i === 0
+                    ? `flex flex-col gap-[14px] sm:border-r sm:pr-6 ${HAIR}`
+                    : `flex flex-col gap-[14px] border-t pt-6 sm:border-t-0 sm:pl-6 sm:pt-0 ${HAIR}`
+              }
+            >
+              <div className={`text-[13px] font-semibold ${MUTED}`}>{h.heading}</div>
+              <div className="grid grid-cols-2 gap-4">
+                <Stat value={h.videos} unit="videos" series="videos" />
+                <Stat value={h.comments} unit="comments" series="comments" />
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -124,6 +129,7 @@ function Stat({ value, unit, series }: { value: string; unit: string; series: 'v
 const PLOT_TOP = 0.88
 
 function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
+  const drawable = weeksDrawable(weeks)
   const n = weeks.columns.length
   const at = (v: number, max: number) => (max > 0 ? (v / max) * PLOT_TOP * 100 : 0)
   // The comments line: one segment per run of consecutive weeks that have a figure.
@@ -150,7 +156,12 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
           <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3.5 rounded-full bg-orange" />Comments</span>
         </div>
       </div>
-      <div className="relative flex h-[190px]" role="img" aria-label={`Videos and comments in your market, week by week. ${summary.join('; ')}.`}>
+      <div
+        className="relative flex h-[190px]"
+        {...(drawable
+          ? { role: 'img', 'aria-label': `Videos and comments in your market, week by week. ${summary.join('; ')}.` }
+          : { 'aria-hidden': true })}
+      >
         {weeks.columns.map((c, i) => (
           <div key={c.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
             <div
@@ -199,6 +210,9 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
           ))}
         </div>
       </div>
+      {/* No week to draw: the artboard's empty frame, and this line where it
+          prints its note. */}
+      {drawable ? null : <div className={`text-[12px] ${MUTED}`}>{INSUFFICIENT}</div>}
     </section>
   )
 }

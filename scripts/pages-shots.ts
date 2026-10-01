@@ -44,7 +44,7 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 import { surface } from '../lib/nav'
 
 import { HomePage } from '../components/pages/home'
-import { HOME_DATA } from '../lib/pages/home-fixture'
+import { HOME_DATA, HOME_EMPTY, HOME_NO_WEEKS } from '../lib/pages/home-fixture'
 import { MarketPicturePage } from '../components/pages/overview/picture'
 import { PICTURE_FIXTURE } from '../components/pages/overview/picture/fixture'
 import { WeekReadPage } from '../components/pages/week/read-page'
@@ -264,6 +264,8 @@ interface Page {
 }
 const PAGES: Page[] = [
   { key: 'dashboard', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_DATA }) },
+  { key: 'dashboard-empty', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_EMPTY }) },
+  { key: 'dashboard-no-weeks', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_NO_WEEKS }) },
   { key: 'your-market', path: '/dashboard/overview', artboard: 'Page-Your-market.dc.html', page: () => h(MarketPicturePage, { data: PICTURE_FIXTURE }) },
   { key: 'this-week', path: '/dashboard/week', artboard: 'Page-This-week.dc.html', page: () => h(WeekReadPage, { data: weekData(), title: surface('week').label }) },
   { key: 'conversation', path: '/dashboard/voice', artboard: 'Page-Conversation.dc.html', page: () => h(VoiceSurfacePage, { data: conversationFixture(), params: {} }) },

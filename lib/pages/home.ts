@@ -39,8 +39,8 @@ import { TABLE_MOVES } from '../subjects/types'
 //   2. "Week by week": the market's weekly videos and comments, only weeks
 //      read one way, from the first such week the data shows (`homeAxis`,
 //      `weeksSinceOurChanges`; never a constant); a week still filling is
-//      drawn faint, and the block is omitted until one such week exists (rule
-//      2: no empty frame);
+//      drawn faint; until one such week exists the block is the artboard's
+//      empty frame with "Insufficient data" (Heinrich, 1 Oct);
 //   3. the Agent box (the page draws it; nothing is read);
 //   4. six tiles, one number and a few short rows each, each appearing only
 //      when its fact exists.
@@ -52,7 +52,7 @@ import { TABLE_MOVES } from '../subjects/types'
 // ONE WAVE OF LIGHT READS, NO PAGE LOADER. Every read below is a small,
 // bounded select or one RPC, started together; the only hop is the handful
 // that need the latest read's month, run and window, which start the moment
-// that one row lands. A failed read loses its block or tile, never the page.
+// that one row lands. A failed read empties its block or tile, never the page.
 //
 // PURE BUILDERS, EXPORTED. `homeNumbers`, `homeWeeks` and the tile builders
 // take rows and return what prints, so lib/pages/home.test.ts pins every rule
@@ -110,8 +110,10 @@ export interface HomeTile {
 }
 
 export interface HomeData {
+  /** Null where no half was read: the block prints `INSUFFICIENT`. */
   numbers: HomeNumbers | null
-  weeks: HomeWeeks | null
+  /** Always a frame: `homeWeeksFrame` where no week is drawable. */
+  weeks: HomeWeeks
   tiles: HomeTile[]
 }
 
@@ -207,8 +209,8 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
  * DRAWN FROM ONE SUCH WEEK (Heinrich, 1 Oct): a week still filling (under
  * way, or fewer than two updates since it ended, `weekStateOf`) is drawn at
  * reduced opacity with no words (`settled: false`) and goes solid once
- * settled. Null only where no such week exists: the block is omitted rather
- * than drawn as an empty frame.
+ * settled. Null only where no such week exists: the loader then hands the
+ * page `homeWeeksFrame`, the empty frame with "Insufficient data".
  *
  * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight), opening at
  * the first week drawn, the latest eight once the series is longer; a week
@@ -248,6 +250,23 @@ export function homeWeeks(input: {
     maxComments: Math.max(...clean.map((w) => w.comments)),
   }
 }
+
+/**
+ * THE EMPTY FRAME (Heinrich, 1 Oct: a block without enough data shows
+ * "Insufficient data", not nothing). Where `homeWeeks` finds no week to draw,
+ * the block is the artboard's empty frame: `WEEK_COLUMNS` blank columns from
+ * the current week on, labelled as drawn (28 Sep to 16 Nov on 1 October).
+ */
+export function homeWeeksFrame(now: string): HomeWeeks {
+  const columns: HomeWeekColumn[] = []
+  for (let w = isoWeekOf(now); columns.length < WEEK_COLUMNS; w = addDays(w, 7)) {
+    columns.push({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: null, comments: null, settled: false })
+  }
+  return { columns, maxVideos: 0, maxComments: 0 }
+}
+
+/** Whether "Week by week" has a week to draw; where not, it prints `INSUFFICIENT`. */
+export const weeksDrawable = (weeks: HomeWeeks): boolean => weeks.columns.some((c) => c.videos != null)
 
 // ---- 4. The tiles ------------------------------------------------------------------
 
@@ -681,7 +700,7 @@ export async function loadHome(session: HomeSession, opts: { now?: string } = {}
 
   return {
     numbers: homeNumbers(data),
-    weeks,
+    weeks: weeks ?? homeWeeksFrame(now),
     tiles: homeTiles([
       overviewTile(data),
       weekTile(data),

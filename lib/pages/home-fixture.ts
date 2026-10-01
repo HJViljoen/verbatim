@@ -1,6 +1,6 @@
 import type { FigureTable } from '../reports/types'
 import type { WeekReadDataV2, WeekReadFinding, WeekReadStanding } from '../written/types'
-import type { HomeData } from './home'
+import { homeTiles, homeWeeksFrame, type HomeData } from './home'
 
 // The Dashboard's fixtures (lib/pages/home.test.ts, components/pages/home/
 // index.test.tsx): Sealand's September as the approved artboard prints it
@@ -144,3 +144,17 @@ export const HOME_DATA: HomeData = {
     },
   ],
 }
+
+/** The day the artboard is dated, for the empty frames below. */
+export const HOME_NOW = '2026-10-01T08:00:00Z'
+
+/** The Dashboard with no published read and no week to draw: both blocks and
+ *  all six tiles print "Insufficient data", and the Agent keeps its column. */
+export const HOME_EMPTY: HomeData = {
+  numbers: null,
+  weeks: homeWeeksFrame(HOME_NOW),
+  tiles: homeTiles([]),
+}
+
+/** The numbers read, but no week the chart may draw yet. */
+export const HOME_NO_WEEKS: HomeData = { ...HOME_DATA, weeks: homeWeeksFrame(HOME_NOW) }

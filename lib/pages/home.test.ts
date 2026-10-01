@@ -7,7 +7,7 @@ import type { MarketWeekRowRaw } from '../reading/weeks'
 import type { WeekReadDataV1, WeekReadDataV2 } from '../written/types'
 import type { RecCopy } from './market-surface'
 import {
-  adviceCount, competitiveTile, homeAxis, homeNumbers, homeTiles, homeWeeks, INSUFFICIENT, isFailOpenFix, movesTile, overviewTile, standingLevel, tileInsufficient,
+  adviceCount, competitiveTile, homeAxis, homeNumbers, homeTiles, homeWeeks, homeWeeksFrame, INSUFFICIENT, isFailOpenFix, movesTile, overviewTile, standingLevel, tileInsufficient, weeksDrawable,
   subjectsTile, voiceTile, weekTile, MOVES_NONE, WEEK_COLUMNS, type HomeTheme,
 } from './home'
 import { HOME_READ } from './home-fixture'
@@ -88,6 +88,14 @@ describe('Week by week', () => {
     expect(w!.columns.some((c) => c.label === '14 Sep')).toBe(false)
     expect(homeWeeks({ ...base, rows: [], updates: sundays, now: '2026-10-26T08:00:00Z' })).toBeNull()
     expect(homeWeeks({ ...base, rows: [row('2026-09-14', 345, 5918)], updates: [], now: '2026-09-20T08:00:00Z' })).toBeNull()
+  })
+
+  it('with no week to draw, the page gets the artboard\'s empty frame: eight blank weeks from the current one (Heinrich, 1 Oct)', () => {
+    const frame = homeWeeksFrame('2026-10-01T08:00:00Z')
+    expect(frame.columns.map((c) => c.label)).toEqual(['28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov', '16 Nov'])
+    expect(frame.columns.every((c) => c.videos == null && c.comments == null && !c.settled)).toBe(true)
+    expect(weeksDrawable(frame)).toBe(false)
+    expect(weeksDrawable(homeWeeks({ ...base, updates: [], now: '2026-10-01T08:00:00Z' })!)).toBe(true)
   })
 
   it('frames eight weeks from the first week drawn; settled weeks solid, the filling one faint', () => {
