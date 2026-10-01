@@ -3,7 +3,8 @@
  * that exercise a reader's I/O glue (market-first WP3.9 and WP3.11).
  *
  * WHAT IT ANSWERS. `from(table)` with `select`, `eq`, `neq`, `in`, `is`,
- * `not(col, 'is', null)`, `gte`, `lte`, `lt`, `order`, `limit`, `range`,
+ * `not(col, 'is', null)`, `or` (eq / is.null / not.is.null), `gte`, `lte`,
+ * `lt`, `order`, `limit`, `range`,
  * `maybeSingle` and `single`, over rows handed in per table; and `rpc(fn,
  * args)` through a function handed in per name. A table the test did not name
  * answers with a PostgREST-shaped "does not exist" error, so a reader's
@@ -115,6 +116,21 @@ export function fakeDb(
       not(col: string, op: string, v: unknown) {
         call.filters.push(`${col} not ${op} ${String(v)}`)
         if (op === 'is' && v === null) preds.push((r) => r[col] != null)
+        return builder
+      },
+      // PostgREST's `or`, for the shapes the readers use: comma-separated
+      // `col.eq.value`, `col.is.null` and `col.not.is.null`.
+      or(expr: string) {
+        call.filters.push(`or(${expr})`)
+        const parts = expr.split(',').map((t) => {
+          const [col, ...rest] = t.split('.')
+          const op = rest.join('.')
+          if (op === 'is.null') return (r: Row) => (r[col] ?? null) === null
+          if (op === 'not.is.null') return (r: Row) => r[col] != null
+          if (op.startsWith('eq.')) return (r: Row) => String(r[col]) === op.slice(3)
+          throw new Error(`fakeDb: or() does not read "${t}"`)
+        })
+        preds.push((r) => parts.some((p) => p(r)))
         return builder
       },
       gte(col: string, v: string) { call.filters.push(`${col}>=${v}`); preds.push((r) => String(r[col]) >= v); return builder },

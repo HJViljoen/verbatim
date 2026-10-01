@@ -515,7 +515,7 @@ describe('6 · trim-stale-memberships: its position, its failure, and the one ta
   })
 
   it('every SQL function that reads subject_memberships is called by the run after the trim, by a page, or is the judge', () => {
-    expect(readers).toEqual(['lens_readings', 'market_week_readings', 'monthly_subject_readings', 'subject_band', 'window_subject_readings'])
+    expect(readers).toEqual(['lens_readings', 'market_week_readings', 'monthly_subject_readings', 'regate_restore', 'regate_videos', 'subject_band', 'window_subject_readings'])
     const code = (f: string) => readFileSync(join(ROOT, f), 'utf8')
     // lens_readings: the lens step and the comparability re-check; market_week_readings: the
     // comparability step's weekly keep. All three run after the trim (above).
@@ -527,6 +527,11 @@ describe('6 · trim-stale-memberships: its position, its failure, and the one ta
     expect(defs.get('subject_band')!.body).toMatch(/from public\.audience_insights_current ai/)
     // window_subject_readings: pages only; no step calls it.
     expect(src).not.toMatch(/window_subject_readings|RPC_WINDOW_SUBJECT_READINGS/)
+    // regate_videos / regate_restore (the backfill's regate, 20261106092000):
+    // an operator's removal with a backup and its undo, which back up and
+    // delete (or put back) a removed video's memberships with its insights.
+    // No step calls either.
+    expect(src).not.toMatch(/regate_videos|regate_restore/)
   })
 
   it('no trigger fires from a subject_memberships delete into anything freeze-months reads', () => {

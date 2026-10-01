@@ -108,6 +108,26 @@ describe('past issues', () => {
   })
 })
 
+describe('past issues: a build put on the platform without its email (the backfill, 1 Oct)', () => {
+  const published: StudioSend = { id: 'p', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-p', artifact_id: null, subject: 'Sealand: the week', sent_at: null, published_at: '2026-10-01T18:00:00Z' }
+  const sent: StudioSend = { id: 's', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-s', artifact_id: 'pdf-s', subject: 'Sealand: the next week', sent_at: '2026-10-05T07:00:00Z' }
+
+  it('is listed by when it reached the platform, and says honestly that it was not emailed', () => {
+    const issues = pastIssues([published, sent], [weeklyRead])
+    expect(issues.map((i) => [i.id, i.sentOn])).toEqual([['s', 'Mon 5 Oct'], ['p', 'On the platform · not emailed']])
+    expect(issues[1]).toMatchObject({ snapshotId: 'snap-p', artifactId: null, sentAt: '2026-10-01T18:00:00Z' })
+  })
+
+  it('a published build that was emailed afterwards prints its email\'s day', () => {
+    expect(pastIssues([{ ...published, sent_at: '2026-10-05T07:00:00Z' }], [weeklyRead])[0].sentOn).toBe('Mon 5 Oct')
+  })
+
+  it('is not the weekly\'s latest issue: that is the latest EMAIL', () => {
+    const rows = studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [published], members, now: NOW })
+    expect(rows.find((r) => r.artefact === 'weekly_read')?.latest).toBe('First issue Mon 5 Oct')
+  })
+})
+
 describe('the operator-only routes', () => {
   it('let the operator through and send anyone else to the Studio', () => {
     expect(operatorOnlyRedirect({ operator: { viewingClientId: 'x' } })).toBeNull()

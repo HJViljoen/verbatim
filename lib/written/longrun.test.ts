@@ -6,7 +6,7 @@ import type { QuoteVideo } from '../quote-gate'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import type { DatedEvidence } from './evidence'
 import {
-  buildLongRunPool, CHANGE, closesMonth, composeLongRun, endedMonthOf, isLongRunEligible, judgeLongRunTheme, longRunMonths, longRunRowOf,
+  buildLongRunPool, CHANGE, closesMonth, composeLongRun, countSentences, endedMonthOf, isLongRunEligible, judgeLongRunTheme, longRunMonths, longRunRowOf,
   monthsPhrase, rankLongRun, runLongRunStep, scrubLongRun, selectLongRun, themesToJudge, windowOfMonths,
   type BuiltLongRun, type LongRunCandidate, type LongRunJudgement, type LongRunPool,
 } from './longrun'
@@ -443,5 +443,25 @@ describe('runLongRunStep (write-longrun-read)', () => {
     const row = longRunRowOf('client-1', 'run-oct', builtLongRun())
     expect(row.data).toMatchObject({ kind: 'longrun', months: [AUG, SEP] })
     expect(JSON.stringify(row.data)).not.toMatch(/"text":"[^"]/)
+  })
+})
+
+describe('countSentences: the backfill\'s backstop against a count in the long-run read', () => {
+  it('flags a digit, a number word from two, a magnitude, and a share in words', () => {
+    expect(countSentences([
+      'Buyers ask in 40 videos.',
+      'Two brands come up again and again.',
+      'Hundreds of people ask about straps.',
+      'Half of the talk is about comfort.',
+      'One in five buyers asks about price.',
+    ])).toHaveLength(5)
+  })
+  it('never flags "one" as a determiner, and passes plain prose', () => {
+    expect(countSentences([
+      'Buyers compare across brands until one bag solves their list.',
+      'They move between brands when one answer is missing.',
+      'No one asks about the zips.',
+      'Comfort is part of the core product.',
+    ])).toEqual([])
   })
 })

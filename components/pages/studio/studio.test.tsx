@@ -77,4 +77,14 @@ describe('Past issues', () => {
     assertCopyContract(markup)
     bans(markup, text)
   })
+
+  it('a build put on the platform without its email says so where the day would be (the backfill, 1 Oct)', () => {
+    const published = pastIssues([{ id: 'p1', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-p', artifact_id: null, subject: 'Sealand: the week', sent_at: null, published_at: '2026-10-01T18:00:00Z' }], schedules)
+    const markup = render(<PastIssues issues={published} openHref={open} />)
+    const text = renderText(<PastIssues issues={published} openHref={open} />)
+    expect(text).toContain('Sealand: the week The weekly On the platform · not emailed Open Share link')
+    expect(text).not.toContain('PDF')
+    assertCopyContract(markup)
+    bans(markup, text)
+  })
 })

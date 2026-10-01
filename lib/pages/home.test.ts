@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { OurChange } from '../reading/comparability'
@@ -5,7 +7,7 @@ import type { MarketWeekRowRaw } from '../reading/weeks'
 import type { WeekReadDataV1, WeekReadDataV2 } from '../written/types'
 import type { RecCopy } from './market-surface'
 import {
-  adviceCount, competitiveTile, homeNumbers, homeTiles, homeWeeks, INSUFFICIENT, movesTile, overviewTile, standingLevel, tileInsufficient,
+  adviceCount, competitiveTile, HOME_FIRST_WEEK, homeNumbers, homeTiles, homeWeeks, INSUFFICIENT, isFailOpenFix, movesTile, overviewTile, standingLevel, tileInsufficient,
   subjectsTile, voiceTile, weekTile, MOVES_NONE, WEEK_COLUMNS, type HomeTheme,
 } from './home'
 import { HOME_READ } from './home-fixture'
@@ -65,10 +67,10 @@ describe('Week by week', () => {
     expect(three!.columns.map((c) => c.settled)).toEqual([true, false, false, false, false, false, false, false])
   })
 
-  it('is omitted only where no clean week exists', () => {
+  it('is omitted only where no clean week exists; the week of 21 September is not drawn (cited videos the check drops stay unchecked after the regate)', () => {
+    expect(HOME_FIRST_WEEK).toBe('2026-09-28')
     expect(homeWeeks({ ...base, rows: [], updates: sundays, now: '2026-10-26T08:00:00Z' })).toBeNull()
-    // The week of 21 September is before the series starts: never drawn.
-    expect(homeWeeks({ ...base, rows: [row('2026-09-21', 262, 4528)], updates: [], now: '2026-09-27T08:00:00Z' })).toBeNull()
+    expect(homeWeeks({ ...base, rows: [row('2026-09-21', 264, 4597)], updates: [], now: '2026-09-27T08:00:00Z' })).toBeNull()
   })
 
   it('frames eight weeks from 28 September; settled weeks solid, the filling one faint', () => {
@@ -76,7 +78,6 @@ describe('Week by week', () => {
     expect(w).not.toBeNull()
     expect(w!.columns).toHaveLength(WEEK_COLUMNS)
     expect(w!.columns.map((c) => c.label)).toEqual(['28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov', '16 Nov'])
-    // The week of 21 September is never drawn; the week of 12 October is still filling.
     expect(w!.columns.map((c) => c.videos)).toEqual([281, 254, 120, null, null, null, null, null])
     expect(w!.columns.map((c) => c.comments)).toEqual([4902, 4210, 1500, null, null, null, null, null])
     expect(w!.columns.map((c) => c.settled)).toEqual([true, true, false, false, false, false, false, false])
@@ -102,11 +103,31 @@ describe('Week by week', () => {
     expect(w!.columns[2].settled).toBe(false)
   })
 
-  it('leaves out a week holding videos let in before relevance was checked', () => {
+  it('leaves out a week holding videos let in without a check that still stands', () => {
     const dirty = [row('2026-09-28', 281, 4902, { unchecked: 3 }), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
     const w = homeWeeks({ ...base, rows: dirty, updates: sundays, now: '2026-10-26T08:00:00Z' })
     expect(w!.columns.map((c) => c.videos)).toEqual([null, 254, 120, null, null, null, null, null])
     expect(w!.columns.map((c) => c.settled).slice(0, 3)).toEqual([false, true, false])
+  })
+
+  it('the fail-open fixes cut no week by themselves (their whole effect is `unchecked`); any other relevance change does', () => {
+    expect(isFailOpenFix({ surface: 'gate_rule', field: 'relevance_gate' })).toBe(true)
+    expect(isFailOpenFix({ surface: 'gate_rule', field: 'relevance_prompt' })).toBe(false)
+    expect(isFailOpenFix({ surface: 'regate', field: null })).toBe(false)
+    expect(isFailOpenFix({ surface: 'terms', field: null })).toBe(false)
+    // Had the loader passed it on, the regate's record (a gate_rule change
+    // dated in the week of 28 September) would cut that week and start the
+    // chart a week later: that is why the loader leaves the fixes out
+    // (`changeRows.filter((r) => !isFailOpenFix(r))`) and nothing else.
+    const regate: OurChange = { id: 'g2', surface: 'gate_rule', changedAt: '2026-10-02T18:00:00Z', note: null, affects: [] }
+    const cut = homeWeeks({ ...base, changes: [regate], updates: sundays, now: '2026-10-26T08:00:00Z' })
+    expect(cut!.columns.map((c) => c.videos)).toEqual([null, 254, 120, null, null, null, null, null])
+    expect(homeWeeks({ ...base, changes: [], updates: sundays, now: '2026-10-26T08:00:00Z' })!.columns[0].videos).toBe(281)
+  })
+
+  it('the loader leaves the fail-open fixes out of the cut, and only them', () => {
+    const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
+    expect(src).toMatch(/changes: ourChangesWithoutGatherFlags\(changeRows\.filter\(\(r\) => !isFailOpenFix\(r\)\)\)/)
   })
 })
 
@@ -178,6 +199,22 @@ describe('the tiles', () => {
     expect(competitiveTile(1)?.sub).toBe('brand you track')
     expect(competitiveTile(0)).toBeNull()
     expect(competitiveTile(null)).toBeNull()
+  })
+
+  it('Competitive: the two brands named most in the page\'s month, off the page\'s own brand list (the backfill, 1 Oct)', () => {
+    const list = {
+      month: '2026-09-01',
+      rows: [{ label: 'Cotopaxi', k: 21, you: false }, { label: 'Patagonia', k: 12, you: false }, { label: 'Sealand', k: 12, you: true }],
+    }
+    expect(competitiveTile(9, list)!.rows).toEqual([{ kind: 'text', label: 'Named most in September', copy: null, value: 'Cotopaxi, Patagonia' }])
+    // One named brand prints one; none named, or no list read, prints the
+    // tile with no row (Insufficient data). There is no week reading of who
+    // was named and no source for "compared on": neither row is drawn.
+    expect(competitiveTile(9, { month: '2026-09-01', rows: [{ label: 'Cotopaxi', k: 3, you: false }] })!.rows[0].value).toBe('Cotopaxi')
+    expect(competitiveTile(9, { month: '2026-09-01', rows: [] })!.rows).toEqual([])
+    expect(competitiveTile(9, null)!.rows).toEqual([])
+    expect(tileInsufficient(competitiveTile(9, null)!)).toBe(true)
+    expect(tileInsufficient(competitiveTile(9, list)!)).toBe(false)
   })
 
   it('Subjects: how many you follow, the biggest this month and the one added last', () => {

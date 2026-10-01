@@ -21,9 +21,9 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import {
-  ASKED_PARAM, buildAsked, buildContent, buildFindings, buildInFull, buildNameBlock, buildPosts, buildShare, buildTopics, buildWorks,
+  ASKED_PARAM, brandList, buildAsked, buildContent, buildFindings, buildInFull, buildNameBlock, buildPosts, buildShare, buildTopics, buildWorks,
   leadTheme, ninetyDays, recurrenceMonths, SAID_SHOWN,
-  type BrandMonthIn, type BrandsPageData, type FindingAbout, type SaidAbout, type WorksVideo,
+  type BrandList, type BrandMonthIn, type BrandsPageData, type FindingAbout, type SaidAbout, type WorksVideo,
 } from './brands'
 import { WHAT_THEY_SELL } from './market-frame'
 import { workedLabel } from './week'
@@ -286,7 +286,7 @@ function pooled(rows: readonly StoredBrandRow[], month: string, brandKey: string
 }
 
 async function readBrandCounts(
-  input: BrandsLoadInput,
+  input: Pick<BrandsLoadInput, 'db' | 'clientId' | 'pair'>,
   month: string,
   prev: string,
   live: readonly { name: string; audience: string }[],
@@ -432,6 +432,26 @@ async function readBrandCounts(
       mentionsRead: mentions != null,
     }),
   }
+}
+
+/**
+ * "Brands in your market" alone, for the Dashboard's Competitive tile (the
+ * backfill, 1 Oct evening; lead's ruling): the same `readBrandCounts` the page
+ * reads and the page's own `brandList`, over the same reading month, so the
+ * tile and the page can never disagree. Null where the page would draw no
+ * list.
+ */
+export async function loadBrandList(input: {
+  db: SupabaseClient
+  clientId: string
+  month: string
+  rivals: readonly { name: string; retiredAt: string | null }[]
+  client: string
+}): Promise<BrandList | null> {
+  const month = monthStartOf(input.month)
+  const live = input.rivals.filter((r) => !r.retiredAt).map((r) => ({ name: r.name, audience: rivalKey(r.name) }))
+  const b1 = await readBrandCounts({ db: input.db, clientId: input.clientId, pair: null }, month, prevMonth(month), live)
+  return b1 ? brandList({ topics: b1.topics, name: b1.name }, input.client) : null
 }
 
 // ---- B2 -------------------------------------------------------------------------

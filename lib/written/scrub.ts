@@ -1,6 +1,7 @@
 import { allowTokens, scrubProse, splitSentences, stripThemeRefs } from '../prose/scrub'
 import { capText, noDashes } from '../reports/documents/scrub'
 import type { FigureTable } from '../reports/types'
+import { britishSpelling } from './spelling'
 import type { PoolCandidate, StandingFact } from './types'
 import { WEEK_READ_MAX, type WeekReadOutput } from './write'
 
@@ -21,7 +22,10 @@ import { WEEK_READ_MAX, type WeekReadOutput } from './write'
 //     forecasts drop their sentence too (`ADVICE`, `FORECAST`, and the
 //     company told what it could or should do): the report is intelligence,
 //     never instructions, and a question worth watching is never a forecast;
-//  6. a field cap, cut at a sentence boundary; a one-line field (the week's
+//  6. British spelling on the prose kept (`britishSpelling`, ./spelling.ts):
+//     "color" becomes "colour", never inside quotation marks, which are the
+//     speaker's words. It drops nothing and counts nothing;
+//  7. a field cap, cut at a sentence boundary; a one-line field (the week's
 //     line, a watch line) over its cap is dropped whole rather than cut, so
 //     no claim prints half said.
 //
@@ -186,7 +190,7 @@ function scrubParagraph(raw: string, o: WeekScrubOptions): { text: string; count
   }
   const r = scrubProse('week_read', kept.join(' '), { figures: o.figures ?? {}, allow: o.allow ?? [], verdicts: [] })
   counts = add(counts, { ...ZERO, dropped: r.dropped, droppedDigits: r.droppedDigits, droppedDirection: r.droppedDirection, leaked: r.leaked })
-  return { text: splitSentences(r.text).map(capitalised).join(' '), counts }
+  return { text: britishSpelling(splitSentences(r.text).map(capitalised).join(' ')), counts }
 }
 
 /** A sentence whose first word the magnitude strip took ("Many buyers…")

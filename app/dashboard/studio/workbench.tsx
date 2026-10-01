@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { canManageTenant, type SessionContext } from '@/lib/auth'
+import { isMissingPublishColumns, publishedNotEmailed, PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 import { BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody, PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
 import { BuildButton } from '@/components/reports/build-button'
@@ -42,7 +43,27 @@ const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}
 
 interface Report { id: string; kind: ReportKind; template_key: string | null; title: string; audience: string; cover: CoverSpec; status: 'draft' | 'built'; sections: ReportSection[]; latest_snapshot_id: string | null; updated_at: string }
 interface BuildRow { id: string; title: string; created_at: string; cover: CoverText | null; figures: FigureTable | null; artifacts: { id: string; format: string; bytes: number; stale: boolean; rendered_at: string; version: number }[] }
-interface SendRow { id: string; schedule_id: string | null; status: string; subject: string | null; recipients: string[]; sent_at: string | null; claimed_at: string; error: string | null; ready_at: string | null; approved_by: string | null; snapshot_id: string | null }
+interface SendRow { id: string; schedule_id: string | null; status: string; subject: string | null; recipients: string[]; sent_at: string | null; claimed_at: string; error: string | null; ready_at: string | null; approved_by: string | null; snapshot_id: string | null; published_at?: string | null }
+
+const SEND_COLS = 'id, schedule_id, status, subject, recipients, sent_at, claimed_at, error, ready_at, approved_by, snapshot_id'
+
+/** The schedule's sends, with when each was put on the platform without its
+ *  email (`published_at`); a database the publish migration has not reached
+ *  is read without it, and every row reads unpublished. */
+async function loadSends(supabase: SessionContext['supabase'], clientId: string) {
+  const read = (cols: string) => supabase.from('report_sends').select(cols).eq('client_id', clientId).order('claimed_at', { ascending: false }).limit(100)
+  const res = await read(`${SEND_COLS}, published_at`)
+  return res.error && isMissingPublishColumns(res.error) ? read(SEND_COLS) : res
+}
+
+/** A send's line in the schedule's history. */
+function historyLine(s: SendRow, nameOf: ReadonlyMap<string, string>): string {
+  if (s.status === 'sent' && s.sent_at) return `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}${s.approved_by ? ` · sent by ${nameOf.get(s.approved_by) ?? 'a teammate'}` : ''}`
+  if (publishedNotEmailed(s) && s.published_at) return `${PUBLISHED_NOT_EMAILED.toLowerCase()} · ${fmtWhen(s.published_at)}`
+  if (s.status === 'failed') return `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
+  if (s.status === 'ready') return `ready for review ${fmtWhen(s.ready_at ?? s.claimed_at)}`
+  return `${s.status} ${fmtWhen(s.claimed_at)}`
+}
 
 const readerOf = (r: Pick<Report, 'audience' | 'cover'>) => r.cover?.reader?.trim() || AUDIENCES.find((a) => a.key === r.audience)?.label || 'General'
 const pagesOf = (sections: { page: string }[]) => [...new Set(sections.map((s) => catalogueTitle(s.page)))]
@@ -54,12 +75,12 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
   const [{ data: reportData }, { data: scheduleData }, { data: sendData }, { data: runData }] = await Promise.all([
     supabase.from('reports').select('id, kind, template_key, title, audience, cover, status, sections, latest_snapshot_id, updated_at').eq('client_id', clientId).order('created_at'),
     supabase.from('report_schedules').select('*').eq('client_id', clientId),
-    supabase.from('report_sends').select('id, schedule_id, status, subject, recipients, sent_at, claimed_at, error, ready_at, approved_by, snapshot_id').eq('client_id', clientId).order('claimed_at', { ascending: false }).limit(100),
+    loadSends(supabase, clientId),
     supabase.from('pipeline_runs').select('id').eq('client_id', clientId).in('status', ['completed', 'partial']).limit(1),
   ])
   const reports = (reportData ?? []) as Report[]
   const schedules = (scheduleData ?? []) as ScheduleRow[]
-  const sends = (sendData ?? []) as SendRow[]
+  const sends = (sendData ?? []) as unknown as SendRow[]
   const sendable = (runData ?? []).length > 0
   const scheduleOf = new Map(schedules.filter((s) => s.report_id).map((s) => [s.report_id as string, s]))
   // A SCHEDULE THAT SENDS AN ARTEFACT HAS NO `reports` ROW (Phase 1 WP17), and
@@ -95,8 +116,12 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
   // September's own update had already gone out. Pressing Send would mail last
   // month's brief to the whole list.
   const newest = scheduleSends[0] ?? null
+  // A build put on the platform without its email stays `ready`, and Send
+  // still emails it; it is offered for that only while it is the schedule's
+  // newest build, so a later week's Send can never be followed by an older
+  // published week's email to the whole list.
   const readySend =
-    scheduleSends.find((s) => s.status === 'ready')
+    scheduleSends.find((s) => s.status === 'ready' && (!s.published_at || s === newest))
     ?? (newest && newest.status === 'claimed' && newest.snapshot_id != null && claimDecision(newest) === 'takeover' ? newest : null)
   const stalled = readySend?.status === 'claimed'
   // Who pressed Send, for the archive line.
@@ -211,7 +236,7 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
                   canManage={canManage}
                   userEmail={email ?? null}
                   sendable={sendable}
-                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
+                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled, publishedAt: readySend.published_at ?? null } : null}
                   reviewer={reviewAudience(clientId)}
                 />
                 {history.length > 0 && (
@@ -221,12 +246,7 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
                         {s.status === 'ready'
                           ? <span className="font-medium">{s.subject ?? 'Update'}</span>
                           : <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
-                        <span className="font-mono text-[10.5px] text-muted-foreground">
-                          {s.status === 'sent' && s.sent_at
-                            ? `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}`
-                            : s.status === 'failed' ? `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
-                            : `${s.status} ${fmtWhen(s.claimed_at)}`}
-                        </span>
+                        <span className="font-mono text-[10.5px] text-muted-foreground">{historyLine(s, nameOf)}</span>
                       </li>
                     ))}
                   </ul>
@@ -258,7 +278,7 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
                   userEmail={email ?? null}
                   sendable={sendable}
                   isDocument={isDocument}
-                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
+                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled, publishedAt: readySend.published_at ?? null } : null}
                   reviewer={reviewAudience(clientId)}
                 />
                 {history.length > 0 && (
@@ -269,13 +289,7 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
                         {s.status === 'ready'
                           ? <span className="font-medium">{s.subject ?? 'Update'}</span>
                           : <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
-                        <span className="font-mono text-[10.5px] text-muted-foreground">
-                          {s.status === 'sent' && s.sent_at
-                            ? `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}${s.approved_by ? ` · sent by ${nameOf.get(s.approved_by) ?? 'a teammate'}` : ''}`
-                            : s.status === 'failed' ? `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
-                            : s.status === 'ready' ? `ready for review ${fmtWhen(s.ready_at ?? s.claimed_at)}`
-                            : `${s.status} ${fmtWhen(s.claimed_at)}`}
-                        </span>
+                        <span className="font-mono text-[10.5px] text-muted-foreground">{historyLine(s, nameOf)}</span>
                       </li>
                     ))}
                   </ul>

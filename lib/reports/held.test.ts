@@ -22,6 +22,10 @@ describe('heldOf: a snapshot is held until a send carrying it went out', () => {
   it('a build that failed once and then went out is released', () => {
     expect(heldOf([send('a', 'failed'), send('a', 'sent')]).has('a')).toBe(false)
   })
+  it('a build the operator put ON THE PLATFORM without its email is released; its status stays ready', () => {
+    const held = heldOf([{ ...send('a', 'ready'), published_at: '2026-10-01T18:00:00Z' }, { ...send('b', 'ready'), published_at: null }, send('c', 'ready')])
+    expect([...held].sort()).toEqual(['b', 'c'])
+  })
 })
 
 describe('mayReadHeld: only whoever reviews the workspace', () => {
@@ -48,6 +52,13 @@ describe('the reads, failing closed', () => {
     expect(await heldSnapshotIds(db.client as SupabaseClient, CLIENT)).toBeNull()
     expect(await snapshotHeld(db.client as SupabaseClient, CLIENT, 'a')).toBe(true)
   })
+  it('snapshotHeld: a published build is not held, an unpublished ready one is', async () => {
+    const db = fakeDb({ report_sends: [{ ...send('a', 'ready'), published_at: '2026-10-01T18:00:00Z' }, send('b', 'ready')] })
+    const admin = db.client as SupabaseClient
+    expect(await snapshotHeld(admin, CLIENT, 'a')).toBe(false)
+    expect(await snapshotHeld(admin, CLIENT, 'b')).toBe(true)
+    expect([...((await heldSnapshotIds(admin, CLIENT)) ?? [])]).toEqual(['b'])
+  })
   it('snapshotHeld: a ready build is held, a sent one and a Studio build with no send are not', async () => {
     const db = fakeDb({ report_sends: [send('a', 'ready'), send('b', 'sent')] })
     const admin = db.client as SupabaseClient
@@ -63,7 +74,9 @@ describe('every door into a build asks the rule', () => {
     // The viewer, and the past issues: sent sends only (pages build, 1 Oct).
     // Reports left this list at integration: it only redirects into the
     // Studio now (app/dashboard/reports/page.tsx), so it opens no build.
-    ['app/dashboard/studio/page.tsx', [/mayReadHeld\(session, clientId\) \|\| !\(await snapshotHeld\(createAdminClient\(\), clientId, viewId\)\)/, /\.eq\('status', 'sent'\)/, /\.filter\(\(s\) => s\.status === 'sent' && s\.sent_at\)/]],
+    // On the platform (lib/schedules/platform-state.ts): sent, or published
+    // without its email (the backfill, 1 Oct).
+    ['app/dashboard/studio/page.tsx', [/mayReadHeld\(session, clientId\) \|\| !\(await snapshotHeld\(createAdminClient\(\), clientId, viewId\)\)/, /q\.or\('status\.eq\.sent,published_at\.not\.is\.null'\)/, /\.filter\(\(s\) => onPlatform\(s\) && \(s\.sent_at \|\| s\.published_at\)\)/]],
     ['app/api/share/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, snapshotId\)/]],
     ['app/api/artifacts/[id]/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, row\.snapshot_id\)/]],
     ['app/api/schedules/[id]/preview/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /status !== 'sent'\) return note\(HELD/, /!readsHeld && s\.review\) return note\(HELD/]],

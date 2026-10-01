@@ -37,15 +37,14 @@ import { resolve } from 'node:path'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { longMonth } from '../lib/format'
-import { WHAT_THEY_SELL } from '../lib/pages/market-frame'
 import { monthStartOf } from '../lib/reading/month-key'
 import {
   buildLongRunRead, loadLongRunInputs, longRunRowOf, monthsPhrase,
-  type BuiltLongRun, type LongRunInputs,
+  type LongRunInputs,
 } from '../lib/written/longrun'
 import { buildLongRunPrompts } from '../lib/written/longrun-write'
 import { saveWeekRead, weekReadsApplied } from '../lib/written/store'
-import type { WhoPart } from '../lib/written/types'
+import { renderLongRun } from './written-render'
 
 const args = process.argv.slice(2)
 const flag = (name: string, fallback = ''): string => {
@@ -83,62 +82,6 @@ async function newestRun(db: SupabaseClient, clientId: string): Promise<string> 
   const id = (res.data ?? [])[0]?.id
   if (!id) throw new Error('no delivered run to store the read under')
   return String(id)
-}
-
-/** A split as the page prints it. */
-function whoRows(parts: readonly WhoPart[], company: string, noun: string | null): string[] {
-  return parts.map((p) => {
-    const name = p.about === 'client' ? company : p.about === 'market' ? `Other ${noun ?? 'brands'} in your market` : p.about.slice('rival:'.length)
-    return `| ${name} | ${p.videos} |`
-  })
-}
-
-function render(company: string, clientId: string, built: BuiltLongRun, mode: string): string {
-  const d = built.data
-  const noun = WHAT_THEY_SELL[clientId] ?? null
-  const phrase = monthsPhrase(d.months)
-  const out: string[] = [
-    `# ${company}: the long-run read for ${longMonth(d.month)} (${mode})`,
-    '',
-    `Clustering of run \`${built.pool.runId}\` · window ${d.window.from} to ${d.window.to} · status **${built.status}** · model ${d.model || 'none (no call)'} · ${d.promptVersion} · cost $${d.costUsd.toFixed(4)}${built.check ? ` (self-check $${built.check.costUsd.toFixed(4)}${built.check.ran ? '' : ', DID NOT RUN'})` : ''}`,
-    '',
-    '<sub>The section as it reads on Your market, then the workings. Small print is not client copy.</sub>',
-    '',
-    '---',
-    '',
-    `**WHAT HOLDS ACROSS ${phrase.toUpperCase()}**`,
-    '',
-  ]
-  if (d.inShort) out.push(`> ${d.inShort}`, '')
-  for (const [i, idea] of d.ideas.entries()) {
-    out.push(`### ${i + 1}. ${idea.headline}`, '')
-    for (const p of idea.body) out.push(p, '')
-    out.push(`Heard in ${monthsPhrase(idea.months.filter((m) => m.videos > 0).map((m) => m.month))}, **${idea.videos}** videos`, '', '| About | Videos |', '|---|---|', ...whoRows(idea.who, company, noun), '')
-    out.push(`<sub>${idea.sure} · by month: ${idea.months.map((m) => `${longMonth(m.month)} ${m.videos}`).join(', ')} · rests on ${idea.basedOn.map((t) => built.pool.candidates.find((c) => c.themeId === t)?.id ?? t).join(', ')}</sub>`, '')
-  }
-  if (d.ideas.length === 0) out.push('_(no idea prints: the block is omitted on the page)_', '')
-  out.push('---', '', '## Workings', '')
-  if (d.held.length) {
-    out.push('### Held', '')
-    for (const h of d.held) out.push(`- **${h.headline}**: ${h.reason}`)
-    out.push('')
-  }
-  if (built.scrub) out.push(`Scrub: ${built.scrub.dropped} sentence(s) dropped (digits ${built.scrub.droppedDigits}, direction ${built.scrub.droppedDirection}, process ${built.scrub.droppedBanned}, change or advice ${built.scrub.droppedAdvice}).`, '')
-  if (built.check) {
-    out.push('### Self-check', '')
-    for (const v of built.check.verdicts) out.push(`- ${v.verdict}: ${v.headline}`)
-    out.push('')
-  }
-  if (built.raw) out.push('### The writer, before scrub', '', '```json', JSON.stringify(built.raw, null, 2), '```', '')
-  out.push(`### The pool (${built.pool.candidates.length} candidates${built.pool.thin ? ', THIN' : ''}; months ${phrase})`, '')
-  for (const c of built.pool.candidates) {
-    const by = built.pool.months.map((m) => `${longMonth(m).slice(0, 3)} ${(c.monthVideoIds[m] ?? []).length}`).join(' · ')
-    const who = c.who.map((p) => `${p.about} ${p.videos}`).join(', ')
-    out.push(`**${c.id} "${c.label}"** · ${c.videoIds.length} videos (${by}) · kinds ${c.kinds.join(', ') || 'none'} · who: ${who}`)
-    if (c.description) out.push('', `_${c.description}_`)
-    out.push('', ...c.notes.map((n) => `- ${n}`), '')
-  }
-  return out.join('\n')
 }
 
 async function main() {
@@ -189,7 +132,7 @@ async function main() {
   const built = await buildLongRunRead(db, { clientId, month, company, runId: runArg, logRunId: rowRun ?? undefined, log: write, inputs })
   console.log(`Built in ${Math.round((Date.now() - started) / 1000)} s: ${built.status}, ${built.data.ideas.length} idea(s), ${built.data.held.length} held, $${built.data.costUsd.toFixed(4)}.`)
 
-  const text = render(company, clientId, built, write ? 'WRITTEN' : 'DRY RUN, not stored')
+  const text = renderLongRun(company, clientId, built, write ? 'WRITTEN' : 'DRY RUN, not stored')
   console.log(`\n${text}\n`)
   const json = JSON.stringify({ status: built.status, data: built.data, workings: { pool: built.pool, context: inputs.context, raw: built.raw, scrub: built.scrub, check: built.check && { ...built.check, contradicted: [...built.check.contradicted] } } }, null, 2)
   const outPath = flag('out')

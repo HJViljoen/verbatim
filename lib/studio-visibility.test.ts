@@ -89,7 +89,9 @@ describe('mayBuildReports: building and sending are the operator\'s (lead\'s rul
   // anything; the preview lets a client read a SENT send only.
   const src = (p: string) => readFileSync(resolve(__dirname, '..', p), 'utf8')
   const refuses = /if \(!mayBuildReports\(session\)\) return NextResponse\.json\(\{ error: BUILDS_ARE_OURS \}, \{ status: 403 \}\)/
-  for (const file of ['app/api/reports/[id]/build/route.ts', 'app/api/reports/[id]/sections/route.ts', 'app/api/schedules/[id]/send/route.ts']) {
+  // The publish route too (the backfill, 1 Oct): what goes on the platform
+  // without its email is Heinrich's decision, never a client's.
+  for (const file of ['app/api/reports/[id]/build/route.ts', 'app/api/reports/[id]/sections/route.ts', 'app/api/schedules/[id]/send/route.ts', 'app/api/schedules/[id]/publish/route.ts']) {
     it(`${file} refuses a client before it reads`, () => {
       const text = src(file)
       expect(text).toMatch(refuses)
@@ -98,6 +100,8 @@ describe('mayBuildReports: building and sending are the operator\'s (lead\'s rul
       const gate = text.search(refuses)
       for (const first of ['.from(', 'createAdminClient()']) {
         const at = text.indexOf(first, body)
+        // A route that reads only through a library call has no `.from(` of its own.
+        if (at < 0 && first === '.from(') continue
         expect(at, `${file}: ${first}`).toBeGreaterThan(gate)
       }
     })

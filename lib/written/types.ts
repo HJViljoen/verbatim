@@ -446,4 +446,12 @@ export interface LongRunReadData {
   held: WeekReadHeld[]
   model: string
   costUsd: number
+  /** Written before its month closed, on the comments to this day
+   *  (`YYYY-MM-DD`): the backfill of 1 Oct (scripts/backfill-platform.ts).
+   *  Additive, absent on every read the pipeline writes. Such a read does not
+   *  count as the month's (`longRunWritten`), so the run that closes the month
+   *  still writes the full one, which then takes its place on the page. It
+   *  prints exactly as any other: no sentence states a count, and the counts
+   *  code prints are over the whole window. */
+  partialThrough?: string
 }

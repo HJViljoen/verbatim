@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { UUID_IN_CHUNK } from '../chunk'
 import { sendsWeeklyRead } from '../schedules/artefact'
+import { isMissingPublishColumns } from '../schedules/platform-state'
 import { isLongRunData, isMissingWeekReads, WEEK_READS_TABLE, type StoredLongRun } from './store'
 import type { WeekReadData } from './types'
 
@@ -10,8 +11,10 @@ import type { WeekReadData } from './types'
  *
  * Which weekly read a PAGE may print. Where the tenant has an ACTIVE
  * `weekly_read` schedule with REVIEW ON, a read reaches its pages only once
- * that schedule's send for the read's run has gone out (`report_sends.status
- * = 'sent'`): the newest such read. Everywhere else (no such schedule, or
+ * that schedule's send for the read's run is ON THE PLATFORM: it went out
+ * (`report_sends.status = 'sent'`), or the operator put it there without its
+ * email (`published_at`, the backfill of 1 Oct; lib/schedules/publish.ts):
+ * the newest such read. Everywhere else (no such schedule, or
  * review off), the newest READY read, as before.
  *
  * Why: a review schedule holds a build until Heinrich has read it (B1,
@@ -114,15 +117,23 @@ async function loadPublishRule(admin: SupabaseClient, clientId: string): Promise
   return publishRule((res.data ?? []) as PublishSchedule[])
 }
 
-/** The runs whose send on a gating schedule went out, newest first, or null
- *  where the sends cannot be read. */
+/** The runs whose send on a gating schedule is ON THE PLATFORM, newest
+ *  first, or null where the sends cannot be read: sent (emailed), or put on
+ *  the platform without its email (`published_at`, the operator's Publish,
+ *  lib/schedules/publish.ts). A database without the publish columns is read
+ *  the old way, sent only, which is every row it can hold. */
 async function loadSentRuns(admin: SupabaseClient, clientId: string, scheduleIds: readonly string[]): Promise<Set<string> | null> {
-  const res = await admin.from('report_sends').select('run_id')
-    .eq('client_id', clientId).in('schedule_id', [...scheduleIds]).eq('status', 'sent').not('run_id', 'is', null)
-    .order('claimed_at', { ascending: false })
-    // The newest sends are the only ones the newest read can be among; one
-    // chunk keeps the `in` below inside PostgREST's URL.
-    .limit(UUID_IN_CHUNK)
+  const read = (published: boolean) => {
+    const q = admin.from('report_sends').select('run_id')
+      .eq('client_id', clientId).in('schedule_id', [...scheduleIds]).not('run_id', 'is', null)
+    return (published ? q.or('status.eq.sent,published_at.not.is.null') : q.eq('status', 'sent'))
+      .order('claimed_at', { ascending: false })
+      // The newest sends are the only ones the newest read can be among; one
+      // chunk keeps the `in` below inside PostgREST's URL.
+      .limit(UUID_IN_CHUNK)
+  }
+  let res = await read(true)
+  if (res.error && isMissingPublishColumns(res.error)) res = await read(false)
   if (res.error) {
     if (isMissingTable(res.error, 'report_sends')) return new Set()
     console.error(`[published] the sends of ${clientId} could not be read; no read is published: ${res.error.message}`)

@@ -8,6 +8,7 @@ import { deleteSchedule, saveSchedule } from '@/app/dashboard/studio/actions'
 import { CADENCES, type ScheduleRow } from '@/lib/schedules/types'
 import { splitRecipients } from '@/lib/schedules/validate'
 import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
+import { PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 
 // A report's sending (Stage 3, reshaped 2026-08-30): who gets it, after which
 // updates, with the PDF and a share link. One schedule per report; saved
@@ -34,7 +35,7 @@ interface Props {
   /** A build waiting for a person: any member may read it and send it. */
   /** A build waiting for a person. `stalled` = a delivery that died partway
    *  and whose claim has gone cold; the same Send press picks it up. */
-  ready?: { id: string; subject: string | null; readyAt: string | null; error: string | null; stalled?: boolean } | null
+  ready?: { id: string; subject: string | null; readyAt: string | null; error: string | null; stalled?: boolean; publishedAt?: string | null } | null
   /** A written report is edited block by block before it goes; an arranged one is not. */
   isDocument?: boolean
   /** Who gets the review email (lib/schedules/members.ts `reviewAudience`):
@@ -59,14 +60,14 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
   const [active, setActive] = useState(schedule?.active ?? true)
   const [review, setReview] = useState(schedule?.review ?? false)
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null)
-  const [confirm, setConfirm] = useState<'send' | 'delete' | 'deliver' | null>(null)
+  const [confirm, setConfirm] = useState<'send' | 'delete' | 'deliver' | 'publish' | null>(null)
   const [preview, setPreview] = useState(false)
   // THE HELD BUILD'S OWN EMAIL. "Read the email" on a build waiting for review
   // used to open the dry preview at today's data, which rebuilds from scratch;
   // the reviewer must read the email that Send will deliver, so it opens the
   // send's own snapshot (`?send=`), the "email as sent" path.
   const [heldPreview, setHeldPreview] = useState(false)
-  const [busy, setBusy] = useState<'test' | 'now' | 'deliver' | null>(null)
+  const [busy, setBusy] = useState<'test' | 'now' | 'deliver' | 'publish' | null>(null)
 
   const parsedRecipients = splitRecipients(recipients)
   const tooMany = parsedRecipients.length > SCHEDULE_RECIPIENTS_MAX
@@ -128,19 +129,44 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
     }
   }
 
+  // ON THE PLATFORM, NOT EMAILED (the backfill, 1 Oct; lib/schedules/publish.ts):
+  // the operator puts a held weekly build's reads on the client's pages
+  // without emailing anyone. Send still emails it afterwards, as before.
+  const publish = async () => {
+    if (!schedule || !ready) return
+    setBusy('publish'); setConfirm(null); setStatus(null)
+    try {
+      const r = await fetch(`/api/schedules/${schedule.id}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sendId: ready.id }) })
+      const j = (await r.json().catch(() => ({}))) as { status?: string; error?: string }
+      if (!r.ok) setStatus({ ok: false, message: j.error ?? 'Could not publish it. Try again.' })
+      else if (j.status === 'published') setStatus({ ok: true, message: 'On the platform. Nobody was emailed.' })
+      else if (j.status === 'already') setStatus({ ok: true, message: 'It is on the platform already.' })
+      else setStatus({ ok: false, message: j.error ?? 'Could not publish it.' })
+      router.refresh()
+    } catch {
+      setStatus({ ok: false, message: 'Could not publish it. Try again.' })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const readyOn = ready?.readyAt ? new Date(ready.readyAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : null
+  const published = Boolean(ready?.publishedAt) && !ready?.stalled
+  const canPublish = Boolean(ready) && !ready?.stalled && !published && !isDocument
 
   return (
     <div className="flex flex-col gap-4">
       {ready && schedule && (
         <div className="flex flex-col gap-2 rounded-[6px] bg-inner px-4 py-3">
           <p className="text-[13px] font-medium text-foreground">
-            {ready.stalled ? 'Stopped partway through sending' : `Ready for review${readyOn ? ` · built ${readyOn}` : ''}`}
+            {ready.stalled ? 'Stopped partway through sending' : `${published ? PUBLISHED_NOT_EMAILED : 'Ready for review'}${readyOn ? ` · built ${readyOn}` : ''}`}
           </p>
           <p className="text-[12px] leading-[1.45] text-muted-foreground">
             {ready.stalled
               ? `The report is built, and nothing was recorded as sent. It stopped partway, so it is possible some of the ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} already have it; sending it again goes to all of them. Anyone here can send it.`
-              : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}`}
+              : published
+                ? `Its read is on the client's pages, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
+                : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}${canPublish ? ' Or put it on the platform without emailing anyone.' : ''}`}
           </p>
           {ready.error && <p className="text-[12px] text-negative">The last attempt did not go: {ready.error}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -158,6 +184,17 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
             {isDocument
               ? <Link href={`/dashboard/studio/edit/${reportId}`} className={btnQuiet}>Read and edit it</Link>
               : <button type="button" onClick={() => setHeldPreview((v) => !v)} className={btnQuiet}>{heldPreview ? 'Hide the email' : 'Read the email'}</button>}
+            {canPublish && (confirm === 'publish' ? (
+              <span className="inline-flex items-center gap-2 text-[12px]">
+                Put it on the platform without emailing anyone?
+                <button type="button" onClick={publish} className={btnPrimary}>Yes, publish</button>
+                <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setConfirm('publish')} disabled={busy != null} className={btnQuiet}>
+                {busy === 'publish' ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Publishing…</> : 'Publish to the platform (not emailed)'}
+              </button>
+            ))}
           </div>
           {heldPreview && !isDocument && (
             <div className="mt-2 flex flex-col gap-1">
