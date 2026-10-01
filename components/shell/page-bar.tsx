@@ -78,10 +78,12 @@ function LineClauses({ line }: { line: string }) {
   )
 }
 
-/** "Sealand · September 2026 ▾  as at the 24 Sep update · next update Sun 27 Sep". */
+/** "Sealand · September 2026 ▾  as at the 24 Sep update · next update Sun 27 Sep".
+ *  `line={false}` is the brand and the month alone: the update line is our
+ *  process (§0a.1), and the Agent prints none (round 2, 1 Oct). */
 export function ReadingContext({
-  context, basePath, params,
-}: { context: ContextLineInput; basePath: string; params: Record<string, string | undefined> }) {
+  context, basePath, params, line = true,
+}: { context: ContextLineInput; basePath: string; params: Record<string, string | undefined>; line?: boolean }) {
   const label = monthLabel(context.reading.month)
   const title = monthTitle(context.reading)
   const options = monthOptions(basePath, params, context.reading, context.others ?? [])
@@ -100,7 +102,7 @@ export function ReadingContext({
       ) : (
         <span title={title} className={SELECTOR_CHIP}>{label}</span>
       )}
-      <LineClauses line={contextLine(context)} />
+      {line ? <LineClauses line={contextLine(context)} /> : null}
     </>
   )
 }

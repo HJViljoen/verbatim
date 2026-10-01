@@ -35,9 +35,8 @@ import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 export const ASK_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
 /**
- * THE ONE-LINE BAR, ON ASK TOO (WP3.9; 25 Sep rulings, §5.12). The approved
- * preview draws Ask's bar as every reading page's: "Sealand · September 2026
- * as at the 24 Sep update · next update Sun 27 Sep". Ask's `lib/nav.ts` bar
+ * THE ONE-LINE BAR, ON ASK TOO (WP3.9; 25 Sep rulings, §5.12): "Sealand ·
+ * September 2026", without the update line since round 2 (1 Oct). Ask's `lib/nav.ts` bar
  * kind stays `title` (that file is not this package's), so the shell composes
  * `PageBar` with the bar's own `line`, drawn by the same `ReadingContext` the
  * reading pages use, over the reading month an answer's window ends in. The
@@ -56,8 +55,12 @@ export function AskShell({
   children: ReactNode
 }) {
   const s = surface('ask')
+  // THE BRAND AND THE MONTH, AND NO UPDATE LINE (round 2, 1 Oct): "as at the
+  // 27 Sep update · next update Sun 4 Oct" is our process as an event (§0a.1),
+  // and the nine other pages' bars already print none. "September 2026" is
+  // the date a reader needs.
   const line = bar?.reading
-    ? <ReadingContext context={{ brand: bar.brand, reading: bar.reading, others: [] }} basePath={s.href} params={params} />
+    ? <ReadingContext context={{ brand: bar.brand, reading: bar.reading, others: [] }} basePath={s.href} params={params} line={false} />
     : undefined
   return (
     <PageFrame>

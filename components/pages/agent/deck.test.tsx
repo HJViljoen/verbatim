@@ -69,8 +69,10 @@ describe('the deck prints the screen’s figures', () => {
     expect(text).not.toMatch(/\d+ conversations?\b/)
   })
 
-  it('prints each level’s base as the screen does', () => {
-    expect(slide(measured, 'agent.turn:0:0')).toContain('in your market in September, not counting the videos about brands you track')
+  it('says the base once, as the screen does', () => {
+    const text = slide(measured, 'agent.turn:0:0')
+    expect(text).toContain('Counted out of the 1,388 September videos about your category in general')
+    expect(text.split('Counted out of').length - 1).toBe(1)
   })
 
   it('resolves a follow-up’s level by its OWN turn', () => {

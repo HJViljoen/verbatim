@@ -69,7 +69,7 @@ import { AskBoxTile } from '../components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '../components/pages/agent/rail'
 import { ASK_TILE_ROW, AskColumns, AskShell } from '../components/pages/agent/surface'
 import { agentFixture, sealandLongTermFixture } from '../components/pages/agent/fixture'
-import { askHistory } from '../lib/pages/agent-thread'
+import { askHistory, inHouseStyle } from '../lib/pages/agent-thread'
 import { ExportScope } from '../components/export-menu'
 import { PageTitle } from '../components/pages/studio/ui'
 import { YourReports } from '../components/pages/studio/your-reports'
@@ -232,7 +232,10 @@ const agentIndex = (open: boolean, first = false) => h(PageFrame, {
 
 /** app/dashboard/agent/[id]/page.tsx, the question branch, on the fixture's
  *  measured thread. */
-const agentThread = (data = agentFixture()) => {
+const agentThread = (raw = agentFixture()) => {
+  // The loader's read-time house style (no dashes in the model's prose), which
+  // a fixture's stored prose has not been through.
+  const data = { ...raw, turns: raw.turns.map((t) => (t.answer ? { ...t, answer: inHouseStyle(t.answer) } : t)) }
   const planLimit = 'PDF, up to 4 MB'
   const rail = h(Fragment, null,
     h(EarlierQuestionsTile, { history: data.history, row: ASK_TILE_ROW, openThread: true }),

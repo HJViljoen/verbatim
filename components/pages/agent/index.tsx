@@ -7,7 +7,7 @@ import {
 } from '@/lib/pages/agent-thread'
 import { fmtInt } from '@/lib/format'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
-import { findingBase, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
+import { findingsBaseLine, ownBase, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
 import { DO_HEADING, JUDGEMENT_HEADING, NEAREST_HEADING, basedOnLine, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
 import { surface } from '@/lib/nav'
@@ -27,7 +27,7 @@ import { translationLabel, translationNote } from '@/components/quote-block'
 //
 // EVERY FIGURE ON THIS DECK IS THE SCREEN'S FIGURE (E-ask fix pass). The level
 // comes off `AnswerMeasure`, resolved BY TURN through `findingKey`, with the
-// screen's own base words (`findingBase`).
+// screen's own base line (`findingsBaseLine`).
 
 type D = AgentThreadData
 
@@ -52,9 +52,10 @@ function Question({ t, first, d }: { t: Turn; first: boolean; d: D }) {
 }
 
 /**
- * A finding's level ON PAPER — the same counted pair the screen prints, with
- * the screen's base words under the sentence (`findingBase`): "13 of 796" alone
- * beside a Dashboard that says 834 is the question Heinrich asked (1 Oct).
+ * A finding's level ON PAPER — the same counted pair the screen prints. Its
+ * base is the section's one line (`findingsBaseLine`), as on screen: "13 of
+ * 796" with nothing saying what 796 is, beside a Dashboard that says 834, is
+ * the question Heinrich asked (1 Oct).
  */
 function Level({ f }: { f: FindingMeasure }) {
   return (
@@ -121,6 +122,11 @@ function FindingsBody({ a, from, to, measure, turnIndex }: {
           the whole answer so a spill onto the next sheet cannot disagree with
           the first about whose customers spoke. */}
       <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{saidHeading(a.grounded)}{from > 0 ? ' (continued)' : ''}</h3>
+      {/* The base, once a sheet, as the screen says it once (round 2). */}
+      {(() => {
+        const line = findingsBaseLine(a.grounded.map((g) => levelFor(measure, turnIndex, g.id)).filter((f): f is FindingMeasure => f != null))
+        return line ? <p data-copy="figure" className="text-[11px] text-muted-foreground">{line}</p> : null
+      })()}
       <div className="grid grid-cols-2 gap-3">
         {points.map((p, i) => {
           const f = levelFor(measure, turnIndex, p.id)
@@ -133,7 +139,7 @@ function FindingsBody({ a, from, to, measure, turnIndex }: {
                 <p className="min-w-0 flex-1 text-[13px] leading-snug"><span className="mr-2 font-mono text-[10.5px] font-semibold text-muted-foreground">{from + i + 1}</span><span data-copy={p.replaced ? undefined : 'prose'}>{p.text}</span></p>
                 {measured ? <Level f={measured} /> : null}
               </div>
-              {measured ? <p data-copy="figure" className="font-mono text-[10px] text-muted-foreground">{findingBase(measured)}</p> : null}
+              {measured && ownBase(measured) ? <p data-copy="figure" className="font-mono text-[10px] text-muted-foreground">{ownBase(measured)}</p> : null}
               {labels.length > 0 && <p className="text-[10.5px] text-muted-foreground">Covers: <span data-copy="subject" data-slot="pass_b_theme">{labels.join(' · ')}</span></p>}
             </div>
           )

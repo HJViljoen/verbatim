@@ -77,7 +77,9 @@ describe('the measurement half', () => {
     // On screen the band is the badge's hover (copy de-clutter ruling I);
     // print keeps it inline.
     expect(text).toMatch(/▲ 2\.6 pts/)
-    expect(render(tile(measured))).toContain('title="moved beyond the 2 pt margin of this measurement"')
+    // The band in the tooltip, in plain words, never "this measurement".
+    expect(render(tile(measured))).toMatch(/title="more than the usual month-to-month swing of \d+(\.\d+)? points"/)
+    expect(render(tile(measured))).not.toContain('measurement')
   })
 
   it('prints the direction word only where three months earned one', () => {
@@ -89,17 +91,30 @@ describe('the measurement half', () => {
     expect(text).not.toContain('fading over 3')
   })
 
-  it('states each base against the market, not as "the category" (1 Oct)', () => {
-    // The fixture hands the measurement no market count, so the clause names
-    // no number; `answer-copy.test.tsx` holds the counted one.
+  it('states the base once, against the market, and each level alone (round 2)', () => {
+    // The fixture hands the measurement no market count, so the line names
+    // no number for the brands; `answer-copy.test.tsx` holds the counted one.
+    expect(text).toContain('Counted out of the 1,388 September videos about your category in general, not counting the videos about brands you track.')
+    expect(text.split('Counted out of').length - 1).toBe(1)
     expect(text).toContain('130 of 1,388 videos')
-    expect(text).toContain('in your market in September, not counting the videos about brands you track')
     expect(text).not.toContain('in the category')
   })
 
-  it('states the client’s own thin side rather than comparing it', () => {
-    expect(text).toContain('In your own audience: 26 of 84 videos')
-    expect(text).toContain(MOVEMENT_WORDS.too_little_data)
+  it('highlights no phrase: the level is set in weight, never on a tint', () => {
+    const markup = render(tile(measured))
+    expect(markup).not.toMatch(/data-copy="level"[^>]*class="[^"]*\bbg-/)
+  })
+
+  it('prints the client’s own side only where it says something (§0a.2)', () => {
+    // 26 of 84 is under the floor: "too few to compare" is all it said.
+    expect(text).not.toContain('In your own audience')
+    expect(text).not.toContain(MOVEMENT_WORDS.too_little_data)
+    const clear = agentFixture({
+      measure: { ...measured.measure!, findings: measured.measure!.findings.map((f) => ({ ...f, own: { value: { k: 52, n: 160 }, thin: false } })) },
+    })
+    const shown = renderText(tile(clear))
+    expect(shown).toContain('In your own audience: 52 of 160 videos')
+    expect(shown).not.toContain(MOVEMENT_WORDS.too_little_data)
   })
 
   it('prints every plotted month with its own denominator', () => {

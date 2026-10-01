@@ -1,16 +1,15 @@
 import { Fragment } from 'react'
 import Link from 'next/link'
 import { CalendarLine } from '@/components/charts/calendar-line'
-import { BlockMovement } from '@/components/blocks/movement'
 import { Tile, TileBlock } from '@/components/shell/tile'
-import { TOO_FEW, answerFallback, findingBase, findingSentence, findingSentenceParts, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
+import { answerFallback, findingSentence, findingSentenceParts, findingsBaseLine, ownBase, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
 import { DO_HEADING, NEAREST_HEADING, basedOnLine, saidHeading } from '@/lib/agent/types'
 import { monthlyLineLabel } from '@/lib/pages/overview'
 import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
 import type { ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
-import { priorPrintable } from '@/lib/reading/verdicts'
+import { priorPrintable, type Verdict } from '@/lib/reading/verdicts'
 import { printsMarket } from '@/lib/subjects/calibration-state'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
@@ -65,38 +64,54 @@ import { DirectionWord, FindingLevel, InferencePill } from './marks'
 // words.
 
 /**
+ * The comparison beside a level, where one was drawn AND answered: "▲ 2.6 pts"
+ * (the usual swing it beat in its tooltip) or "no clear change". Nothing for a
+ * refused pair or one with too few videos on a side (§0a.2: only what has
+ * something to say), and never "±0 pts" beside a non-answer. Ask's own, so the
+ * shared badge's wording ("the margin of this measurement") stays off this
+ * page.
+ */
+function Comparison({ v }: { v: Verdict | null | undefined }) {
+  if (!v || !priorPrintable(v)) return null
+  if (v.state === 'moved' && v.changePts != null && v.changePts !== 0) {
+    return (
+      <span
+        data-copy="verdict"
+        title={v.bandPts != null ? `more than the usual month-to-month swing of ${v.bandPts} points` : undefined}
+        className={`whitespace-nowrap text-xs font-semibold ${v.changePts > 0 ? 'text-positive' : 'text-negative'}`}
+      >
+        {v.changePts > 0 ? '▲' : '▼'} {Math.abs(v.changePts).toLocaleString('en-US')} pts
+      </span>
+    )
+  }
+  if (v.state === 'no_clear_change') return <span data-copy="verdict" className="text-xs font-medium text-muted-foreground">no clear change</span>
+  return null
+}
+
+/**
  * One finding's measurement — the row of marks under its sentence.
  *
- * ORDER IS THE ARGUMENT: the level first (what is true), then the banded
- * comparison (whether it moved), then the direction word (only where three
- * readings in one regime earned it), then the month it is a level of. A badge
- * before a level is a change with nothing to change.
+ * ORDER IS THE ARGUMENT: the level first (what is true), then the comparison
+ * (whether it moved), then the direction word (only where three months in one
+ * regime earned it). A badge before a level is a change with nothing to change.
+ * The base is the section's line (`findingsBaseLine`), said once; a finding on
+ * another audience carries its own (`ownBase`).
  */
 function Marks({ f, level = true }: { f: FindingMeasure; level?: boolean }) {
-  // A REPLACED POINT'S SENTENCE IS ITS LEVEL, BASE AND COMPARISON ALREADY
+  // A REPLACED POINT'S SENTENCE IS ITS LEVEL AND COMPARISON ALREADY
   // (`findingSentence`), so the row keeps only the direction word, the one
   // thing that sentence does not say, and is not drawn without one.
   if (!level) return f.direction ? <div className="flex flex-wrap items-center gap-2"><DirectionWord direction={f.direction} /></div> : null
+  const base = ownBase(f)
   return (
     <div className="flex flex-wrap items-center gap-2">
       <FindingLevel value={f.value} />
-      {/* The band travels with the change or neither is printed — D2. The
-          non-answer arm prints the word alone and never a magnitude beside it,
-          which is what `MovementBadge` already enforces. */}
-      <BlockMovement verdict={f.verdict} unit="pts" />
-      {/* THE WORD AND ITS SCOPE WRAP TOGETHER. At 1024 the row wrapped between
-          them and "growing over 3 readings" landed on one line with "in the
-          category · September" on the next — a direction word separated from
-          the audience and the month it is a direction IN, which is the one
-          thing that makes it checkable. */}
+      <Comparison v={f.verdict} />
+      {/* THE WORD AND ITS SCOPE WRAP TOGETHER: a direction word separated from
+          the audience it is a direction IN is not checkable. */}
       <span className="inline-flex items-center gap-2">
         <DirectionWord direction={f.direction} />
-        {/* THE BASE, WORDED AGAINST THE MARKET (`findingBase`): "in your
-            market in September, not counting the 38 about brands you track",
-            so 796 here and the Dashboard's 834 add up. */}
-        <span data-copy="figure" className="font-mono text-[11px] text-muted-foreground">
-          {findingBase(f)}
-        </span>
+        {base ? <span data-copy="figure" className="font-mono text-[11px] text-muted-foreground">{base}</span> : null}
       </span>
     </div>
   )
@@ -121,23 +136,23 @@ function Baseline({ f }: { f: FindingMeasure }) {
 }
 
 /**
- * The client's own side of a finding, where they have one.
+ * The client's own side of a finding, where it says something.
  *
- * NEVER A SECOND LINE ON THE CHART. Sealand's own audience runs tens of videos
- * a month against a floor of a hundred, so the own side is a caveat: the counts
- * with their denominator, and the badge's own word for a side that cannot
- * carry a comparison. The theme's LABEL is deliberately not repeated here —
- * it is model prose (`pass_b_theme`) and the sentence around it is code's.
+ * NEVER A SECOND LINE ON THE CHART, and ONLY WHERE IT CLEARS THE FLOOR (round
+ * 2, 1 Oct; §0a.2): Sealand's own audience runs tens of videos a month against
+ * a floor of a hundred, and "0 of 10 videos · too few to compare" under every
+ * finding said nothing but that. The theme's LABEL is deliberately not
+ * repeated here: it is model prose (`pass_b_theme`) and the sentence around
+ * it is code's.
  */
 function OwnSide({ f }: { f: FindingMeasure }) {
-  if (!f.own) return null
+  if (!f.own || f.own.thin) return null
   return (
     <p className="m-0 text-[12.5px] leading-[1.5] text-secondary-foreground">
       In your own audience:{' '}
       <span data-copy="figure">
         {fmtInt(f.own.value.k)} of {fmtInt(f.own.value.n)} videos
       </span>
-      {f.own.thin ? <> · <span className="text-[12px] font-medium text-muted-foreground">{TOO_FEW}</span></> : null}
     </p>
   )
 }
@@ -271,15 +286,14 @@ function MonthTrail({ f }: { f: FindingMeasure }) {
 
 /**
  * The product's own sentence for a finding (`findingSentence`), set as the
- * page sets a finding: the counted pair in its level chip, inside the
- * sentence, so a replaced point keeps the colour every other finding's level
- * has. The theme's label is marked as the model's words it is
+ * page sets a finding: the counted pair in the level's own weight, inside the
+ * sentence and never highlighted (Heinrich's ban). The theme's label is marked as the model's words it is
  * (`pass_b_theme`): a label can carry a direction word ("Frustration with
  * declining product quality") that is the subject's name, not a claim of ours.
  */
 function Sentence({ f }: { f: FindingMeasure }) {
   const { label, level, base, after } = findingSentenceParts(f)
-  return <><span data-copy="subject" data-slot="pass_b_theme">{label}</span>: <FindingLevel value={level} /> <span data-copy="figure">{base}</span>.{after}</>
+  return <><span data-copy="subject" data-slot="pass_b_theme">{label}</span>: <FindingLevel value={level} />{base ? <> <span data-copy="figure">{base}</span></> : null}.{after}</>
 }
 
 /**
@@ -520,7 +534,7 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
               <>
                 <div className="flex flex-wrap items-center gap-2">
                   <FindingLevel value={{ k: r.curr.k, n: r.curr.n }} />
-                  {r.verdict && !refused ? <BlockMovement verdict={r.verdict} unit="pts" /> : null}
+                  {r.verdict && !refused ? <Comparison v={r.verdict} /> : null}
                   <DirectionWord direction={r.direction} />
                   <span className="font-mono text-[11px] text-muted-foreground">
                     in your market · <span data-copy="figure">{longMonth(r.curr.month)}</span>
@@ -619,6 +633,14 @@ export function AnswerTile({
                     rests on the client's own videos. */}
                 {saidHeading(answer.grounded)}
               </h3>
+              {/* THE BASE, ONCE (round 2): "Counted out of the 796 September
+                  videos about your category in general: your market's 834,
+                  less the 38 about brands you track." Each finding then reads
+                  "13 of 796 videos". */}
+              {(() => {
+                const line = findingsBaseLine(turnFindings(turn, measure, turnIndex))
+                return line ? <p data-copy="figure" className="m-0 text-[12px] leading-[1.45] text-muted-foreground">{line}</p> : null
+              })()}
               {answer.grounded.map((point, i) => (
                 <Finding key={point.id} point={point} index={i} measure={measure} turnIndex={turnIndex} />
               ))}

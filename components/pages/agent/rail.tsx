@@ -3,7 +3,6 @@ import { fmtInt, shortDate } from '@/lib/format'
 import type { NotAnswered } from '@/lib/agent/measure'
 import type { AskHistory, AskReads } from '@/lib/pages/agent-thread'
 import { Tile, TileEmpty } from '@/components/shell/tile'
-import { InferencePill } from './marks'
 
 // The right rail — three tiles (Block D wave 2, E-ask · `ask.history.*`,
 // `ask.draws.*`, `ask.notanswered*`).
@@ -81,7 +80,7 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2, openThread = 
                 </span>
                 {/* `=== true` on purpose: null is "we did not re-read that plan",
                     which is not "nothing crossed" (`AskHistoryRow.claimCrossed`). */}
-                {r.claimCrossed === true && <InferencePill>1 claim crossed</InferencePill>}
+                {r.claimCrossed === true && <span className="font-mono text-[10.5px] font-semibold text-foreground">1 claim crossed</span>}
               </div>
             </li>
           ))}

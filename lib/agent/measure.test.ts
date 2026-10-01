@@ -10,6 +10,7 @@ import {
   answerFallback,
   findingBase,
   findingSentence,
+  findingsBaseLine,
   loadNotAnswered,
   magnitudeWords,
   measureAnswer,
@@ -310,7 +311,7 @@ describe('scrubThreadAnswer', () => {
     // The finding itself, with its own denominator and base, and nothing
     // saying a sentence was replaced (§0a, 1 Oct).
     expect(out.grounded[0].text).toBe(findingSentence(measure.findings[0]))
-    expect(out.grounded[0].text).toContain('320 of 1,388 videos in your market in September')
+    expect(out.grounded[0].text).toContain('Will it survive a wet commute: 320 of 1,388 videos.')
     expect(out.grounded[0].text).not.toMatch(/did not measure|instead|reading/)
     expect(out.grounded[0].replaced).toBe(true)
     // A point that survived is not marked.
@@ -364,7 +365,7 @@ describe('answerFallback', () => {
   it('writes the finding itself, plainly, and nothing about how it was made', () => {
     const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
     const text = answerFallback(m) as string
-    expect(text).toContain('320 of 1,388 videos in your market in September, not counting the videos about brands you track.')
+    expect(text).toContain('320 of 1,388 videos.')
     expect(text).toMatch(/points on August, more than the usual swing of \d/)
     expect(text).not.toMatch(/did not measure|reading|the category|band/)
   })
@@ -380,6 +381,15 @@ describe('answerFallback', () => {
     // No tracked brand at all: the category IS the market.
     const none = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true, market: { category: 1388, rivalFiled: 0 } })
     expect(findingBase(none.findings[0])).toBe('in your market in September')
+  })
+
+  it('says a category finding’s base once, for the section (round 2)', () => {
+    const at = (market: { category: number; rivalFiled: number | null } | null) =>
+      findingsBaseLine(measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true, market }).findings)
+    expect(at({ category: 1388, rivalFiled: 38 })).toBe('Counted out of the 1,388 September videos about your category in general: your market\'s 1,426, less the 38 about brands you track.')
+    expect(at(null)).toBe('Counted out of the 1,388 September videos about your category in general, not counting the videos about brands you track.')
+    expect(at({ category: 1388, rivalFiled: 0 })).toBe('Counted out of the 1,388 September videos in your market.')
+    expect(findingsBaseLine([])).toBeNull()
   })
 
   it('writes only that turn’s findings where it is told which', () => {

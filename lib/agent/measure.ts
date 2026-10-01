@@ -683,8 +683,9 @@ export function askAllowList(texts: readonly (string | null | undefined)[]): str
  * THE CATEGORY IS WORDED AGAINST THE MARKET (see `brandsTracked`): a reader
  * who has just read "834 videos in your market in September" on the Dashboard
  * meets "13 of 796" here, and the clause after it is what makes the two add
- * up. Plain words only: no "category", no "reading", nothing about how the
- * count was made (§0a).
+ * up. Plain words only: nothing about how the count was made (§0a). A page
+ * says a category finding's base once (`findingsBaseLine`) and this only for
+ * a finding on another audience (`ownBase`).
  */
 export function findingBase(f: Pick<FindingMeasure, 'audience' | 'audienceLabel' | 'brandsTracked' | 'verdict'>, month?: string): string {
   const when = longMonth(month ?? f.verdict?.window.from ?? '')
@@ -700,11 +701,38 @@ export function findingBase(f: Pick<FindingMeasure, 'audience' | 'audienceLabel'
 }
 
 /**
- * One finding, as the product states it for itself: what it is about, its
- * level with its own base, and the comparison only where one was drawn and
- * answered. A plain finding and nothing about how it was made: no note that a
- * sentence was replaced, no "too few", no refusal (§0a). The digits are
- * code's.
+ * WHAT A CATEGORY FINDING'S "OF N" IS, SAID ONCE (round 2, 1 Oct). Every
+ * finding on the category shares one n (one month, one audience), so the base
+ * is one plain line under "What people said" and each finding reads "13 of
+ * 796 videos": "Counted out of the 796 September videos about your category in
+ * general: your market's 834, less the 38 about brands you track." Null where
+ * no finding is on the category. A finding on another audience states its own
+ * base beside it (`ownBase`).
+ */
+export function findingsBaseLine(findings: readonly FindingMeasure[], month?: string): string | null {
+  const f = findings.find((x) => x.audience === INDUSTRY_AUDIENCE)
+  if (!f) return null
+  const when = longMonth(month ?? f.verdict?.window.from ?? '')
+  const n = fmtInt(f.value.n)
+  const b = f.brandsTracked
+  if (b === 0) return `Counted out of the ${n} ${when} videos in your market.`
+  return b == null
+    ? `Counted out of the ${n} ${when} videos about your category in general, not counting the videos about brands you track.`
+    : `Counted out of the ${n} ${when} videos about your category in general: your market's ${fmtInt(f.value.n + b)}, less the ${fmtInt(b)} about brands you track.`
+}
+
+/** The base a finding states beside its own level: none on the category,
+ *  whose base the section says once (`findingsBaseLine`). */
+export const ownBase = (f: Pick<FindingMeasure, 'audience' | 'audienceLabel' | 'brandsTracked' | 'verdict'>): string | null =>
+  f.audience === INDUSTRY_AUDIENCE ? null : findingBase(f)
+
+/**
+ * One finding, as the product states it for itself: what it is about and its
+ * level, and the comparison only where one was drawn and answered. A plain
+ * finding and nothing about how it was made: no note that a sentence was
+ * replaced, no "too few", no refusal (§0a). The digits are code's. The base is
+ * the section's line (`findingsBaseLine`), or the finding's own where it is
+ * not on the category.
  *
  * The label leads and a colon follows, because a theme's label is model
  * prose of any shape ("Is the premium worth it", "Buy less, make it better")
@@ -712,15 +740,15 @@ export function findingBase(f: Pick<FindingMeasure, 'audience' | 'audienceLabel'
  */
 export function findingSentence(f: FindingMeasure): string {
   const { label, level, base, after } = findingSentenceParts(f)
-  return `${label}: ${fmtInt(level.k)} of ${fmtInt(level.n)} videos ${base}.${after}`
+  return `${label}: ${fmtInt(level.k)} of ${fmtInt(level.n)} videos${base ? ` ${base}` : ''}.${after}`
 }
 
 /** `findingSentence` in its parts, for a surface that sets them apart: the
  *  theme's label (model prose, which it marks as its slot's), the counted
- *  pair (which it draws as the level it is), the base, and the comparison
+ *  pair, the finding's own base (null on the category), and the comparison
  *  after the full stop, where one was drawn and answered ('' otherwise). */
-export function findingSentenceParts(f: FindingMeasure): { label: string; level: Counted; base: string; after: string } {
-  const parts = { label: f.label, level: f.value, base: findingBase(f) }
+export function findingSentenceParts(f: FindingMeasure): { label: string; level: Counted; base: string | null; after: string } {
+  const parts = { label: f.label, level: f.value, base: ownBase(f) }
   const v = f.verdict
   if (!v || !priorPrintable(v) || !isAnswer(v.state) || v.changePts == null || v.bandPts == null || !v.basis?.from) return { ...parts, after: '' }
   const prev = longMonth(v.basis.from)

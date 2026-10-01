@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AnswerTile, AboutReadings } from './answer'
 import { agentPage } from './index'
 import { NotAnsweredTile, ReadsTile } from './rail'
+import { AskShell } from './surface'
 import { agentFixture, followUpFixture, refusedFixture, sealandLongTermFixture, thinRefusedAskFixture } from './fixture'
 import { markupText, render } from '@/lib/test/render'
 import { copyViolations } from '@/lib/test/copy-contract'
@@ -9,7 +10,6 @@ import { bannedHits } from '@/lib/written/scrub'
 import { inHouseStyle, type AgentThreadData } from '@/lib/pages/agent-thread'
 import { OUT_OF_CORPUS_NOTICE } from '@/lib/agent/types'
 import { SILENCE_SENTENCE, SILENCE_SENTENCE_V1 } from '@/lib/agent/enforce'
-import { TOO_FEW } from '@/lib/agent/measure'
 
 // THE GUARD ON THE AGENT'S ANSWER VIEW (§0a, 1 Oct).
 //
@@ -42,7 +42,7 @@ const PROCESS: readonly { name: string; re: RegExp }[] = [
   { name: 'drawn', re: /\bdrawn\b|\bnot drawn\b|months named/i },
   { name: 'refused', re: /\brefus(?:ed|al|es)\b/i },
   { name: 'gate', re: /\bgate[sd]?\b/i },
-  { name: 'update', re: /\bupdate of\b|\banswered against\b/i },
+  { name: 'update', re: /\bupdate of\b|\banswered against\b|\bnext update\b|\bas at the\b|\bupdates paused\b/i },
   { name: 'base as the category', re: /\bin the category\b|where themes are grouped/i },
   { name: 'what we read', re: /\bwe (?:read|analys\w*|have analysed|do not read|cannot see)\b|conversation (?:we read|analysed)|what we read/i },
   { name: 'on file', re: /\bon file\b/i },
@@ -81,13 +81,10 @@ describe('the answer view says nothing about how it was made (§0a)', () => {
     it(`${name}: the product's words carry no process phrase`, () => {
       const text = markupText(productOnly(viewMarkup(make())))
       expect(processHits(text)).toEqual([])
-      // Two exemptions from the shared list, both named. The brand's own name:
-      // "Prepared by … · with Verbatim" is the signature on paper, not a
-      // sentence about the method. And "too few to compare" beside the
-      // client's own side ("In your own audience: 0 of 10 videos · too few to
-      // compare"), which Heinrich ruled is information (1 Oct): it is about
-      // the size of their own audience, not about how we work.
-      expect(bannedHits(text.replace(/\bVerbatim\b/g, '').replaceAll(TOO_FEW, ''))).toEqual([])
+      // One exemption from the shared list: the brand's own name. "Prepared
+      // by … · with Verbatim" is the signature on paper, not a sentence about
+      // the method. ("too few to compare" is no longer printed at all.)
+      expect(bannedHits(text.replace(/\bVerbatim\b/g, ''))).toEqual([])
       expect(text).not.toContain('—')
     })
   }
@@ -110,18 +107,28 @@ describe('the live thread, as Heinrich read it (1 Oct)', () => {
     // extraction puts a space before the colon and the stop that the page
     // does not draw; it is taken out here.)
     const read = tile.replace(/\s+([:.])/g, '$1').replace(/\s+/g, ' ')
-    expect(read).toContain('Trust in long-lasting bag quality: 13 of 796 videos in your market in September, not counting the 38 about brands you track.')
-    expect(read).toContain('Frustration with declining product quality: 8 of 796 videos in your market in September, not counting the 38 about brands you track.')
-    expect(d.turns[0].answer!.grounded[0].text).toBe('Trust in long-lasting bag quality: 13 of 796 videos in your market in September, not counting the 38 about brands you track.')
+    expect(read).toContain('Trust in long-lasting bag quality: 13 of 796 videos.')
+    expect(read).toContain('Frustration with declining product quality: 8 of 796 videos.')
+    expect(d.turns[0].answer!.grounded[0].text).toBe('Trust in long-lasting bag quality: 13 of 796 videos.')
   })
 
-  it('states every other finding’s base the same way, beside its level', () => {
-    expect(tile).toContain('5 of 796 videos in your market in September, not counting the 38 about brands you track')
-    expect(tile).toContain('22 of 796 videos in your market in September, not counting the 38 about brands you track')
+  it('says the base once, under "What people said", and each finding reads just its level (round 2)', () => {
+    expect(tile).toContain('What people said Counted out of the 796 September videos about your category in general: your market\'s 834, less the 38 about brands you track.')
+    expect(tile.split('Counted out of').length - 1).toBe(1)
+    expect(tile).not.toContain('not counting the 38')
+    expect(tile).toContain('5 of 796 videos Covers')
+    expect(tile).toContain('22 of 796 videos Covers')
   })
 
-  it('keeps the own side as information, in plain words', () => {
-    expect(tile).toContain('In your own audience: 0 of 10 videos · too few to compare')
+  it('leaves out the own side where it says nothing (0 of 10, under the floor)', () => {
+    expect(tile).not.toContain('In your own audience')
+    expect(tile).not.toContain('too few to compare')
+  })
+
+  it('highlights no phrase anywhere on the page', () => {
+    const markup = viewMarkup(d)
+    expect(markup).not.toMatch(/data-copy="level"[^>]*class="[^"]*\bbg-/)
+    expect(markup).not.toContain('bg-accent')
   })
 
   it('says what a point covers in one short line', () => {
@@ -167,5 +174,16 @@ describe('a stored answer is shown in today’s words', () => {
     expect(out.grounded[0].text).toBe('People ask about fit, and about the zip.')
     expect(out.judgement[0].text).toBe('Lead with fit, the zip can wait.')
     expect(processHits(`${out.answer} ${out.notice}`)).toEqual([])
+  })
+})
+
+describe('the page bar over a thread (round 2)', () => {
+  it('is the brand and the month alone: no "as at the update", no "next update"', () => {
+    const d = sealandLongTermFixture()
+    const text = markupText(render(<AskShell bar={{ brand: d.brand, reading: d.bar.reading }}><span /></AskShell>))
+    expect(text).toContain('Sealand')
+    expect(text).toContain('September 2026')
+    // (Export renders inside the page's ExportScope; the shots show it.)
+    expect(processHits(text)).toEqual([])
   })
 })

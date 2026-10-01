@@ -45,29 +45,19 @@ import type { Counted } from '@/lib/reading/verdicts'
  * reads a level node's whole text: a bare figure beside a denominator in a
  * sibling cell is exactly the failure the rule was written for.
  *
- * AND IT KEEPS THE ARTBOARD'S GREEN, WHICH IS THE THIRD DECISION. Refusing the
- * tier chip (D11) and refusing the ladder word (above) were both about the
- * WORD. What replaced them — `bg-inner` with `text-foreground` — was never
- * decided as anything; it was what was left. The result: in ~1,200px of answer
- * at 1440 the only saturated ink was one green "▲ 2.6 pts" and two numerals,
- * and the counted pair — the page's entire argument — was the same grey as the
- * "the month before" line under it. The eye landed instead on the amber
- * inference pill in the judgement block, which is the one thing on the page
- * explicitly NOT counted.
- *
- * So the chip takes the anchor the artboard gives it (`accent` /
- * `accent-foreground`, 5.4:1 light and 7.6:1 dark) and keeps none of the claim:
- * the artboard's green said "Strong evidence", and this says "104 of 626
- * videos" — a counted pair, in the glossary's own example of a level, with no
- * tier and no ladder anywhere near it. Green here is emphasis, not
- * favourability: `MovementBadge` is the node that colours on an axis, and it
- * is the one beside this.
+ * AND IT IS NOT HIGHLIGHTED (round 2, 1 Oct). It took the artboard's green
+ * chip (`accent`) for emphasis, and on the page that read as a highlighted
+ * phrase, which Heinrich bans. The counted pair keeps its emphasis in weight
+ * alone; `MovementBadge`'s colour, beside it, is still the one on an axis.
  */
 export function FindingLevel({ value, noun = 'videos' }: { value: Counted; noun?: string }) {
+  // NO HIGHLIGHT (round 2, 1 Oct; Heinrich's ban on highlighted phrases): the
+  // pale-yellow chip read as a highlighted phrase inside a sentence. The level
+  // keeps its emphasis in weight alone, the same in a row and in a sentence.
   return (
     <span
       data-copy="level"
-      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-accent px-2 py-px text-[12px] font-medium text-accent-foreground tabular-nums"
+      className="whitespace-nowrap font-semibold text-foreground tabular-nums"
     >
       {fmtInt(value.k)} of {fmtInt(value.n)} {noun}
     </span>
@@ -121,17 +111,11 @@ export function DirectionWord({ direction }: { direction: Direction | null | und
  * `app/globals.css`.
  */
 export function ClaimChip({ tone, children }: { tone: 'supported' | 'contradicted' | 'untested'; children: ReactNode }) {
-  const cls =
-    tone === 'supported'
-      ? 'bg-accent text-accent-foreground'
-      : tone === 'contradicted'
-        ? 'bg-negative/12 text-foreground ring-1 ring-negative/50'
-        : 'bg-inner text-muted-foreground'
-  return (
-    <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-medium ${cls}`}>
-      {children}
-    </span>
-  )
+  // NO TINT (round 2, 1 Oct; Heinrich's ban on highlighted phrases): the three
+  // counts sit in a line of text beside the plan's name, so they are words in
+  // that line, set in weight, the untested one quieter.
+  const cls = tone === 'untested' ? 'font-medium text-muted-foreground' : 'font-semibold text-foreground'
+  return <span className={`whitespace-nowrap text-[12px] ${cls}`}>{children}</span>
 }
 
 /**
