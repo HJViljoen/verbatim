@@ -36,7 +36,7 @@ import { TABLE_MOVES } from '../subjects/types'
 //      run (`week_reads.data.market`, the market base: the category plus the
 //      tracked brands' audiences, the client's own posts out);
 //   2. "Week by week": the market's weekly videos and comments from the week
-//      of 21 September (`HOME_FIRST_WEEK`), only weeks read one way; a week
+//      of 28 September (`HOME_FIRST_WEEK`), only weeks read one way; a week
 //      still filling is drawn faint, and the block is omitted until one such
 //      week exists (rule 2: no empty frame);
 //   3. the Agent box (the page draws it; nothing is read);
@@ -138,22 +138,23 @@ export const WEEK_COLUMNS = 8
 export const WEEKS_MIN = 1
 
 /**
- * THE CHART'S FIRST WEEK: 21 September (the backfill's regate, 1 Oct evening;
- * measured read-only on production, research/empty-blocks.md). That week was
- * searched with today's search set (the 20 and 27 Sep gathers' lists are
- * identical), gathered by one weekly gather (the 27 Sep run), and, once the
- * regate has judged the videos the old check let in unjudged and removed the
- * ones today's check drops, holds no video without a check that stands
- * (`market_week_volumes`' `unchecked` reads the newest verdict, migration
- * 20261106091000). Until then it holds such videos and is not drawn, by the
- * same rule as any week. Weeks before it were gathered on other search sets
- * (terms changed on 9, 13 and 17 Sep) and are never drawn.
+ * THE CHART'S FIRST WEEK: 28 September, the first week read on one search
+ * set, one relevance check and one update a week (the week line's
+ * `WEEK_LINE_FIRST_WEEK`, held here as the Dashboard's own constant so the
+ * chart can move without moving the pipeline's kept weeks).
  *
- * The Dashboard's own constant: the week line's `WEEK_LINE_FIRST_WEEK` and
- * `WEEK_LINE_EXCLUDED` (the pipeline's kept same-age weeks, lib/reading/
- * week-line.ts) are not moved.
+ * WHY NOT 21 SEPTEMBER (measured read-only on production, 1 Oct evening,
+ * research/empty-blocks.md). That week was searched with today's search set
+ * (the 20 and 27 Sep gathers' lists are identical) and gathered by one weekly
+ * gather (the 27 Sep run). But 19 of its videos were let in unjudged before
+ * the 24 Sep fix, and even after the regate two of them stay: today's check
+ * drops them, and stored work (a recommendation, a plan check, a saved Agent
+ * answer or an export) cites their insights, so the regate keeps them for a
+ * person to decide. Two unchecked videos keep the week off by the chart's own
+ * rule. If Heinrich has them removed, the week meets the rule and this is the
+ * one line to change (tests pin both).
  */
-export const HOME_FIRST_WEEK = '2026-09-21'
+export const HOME_FIRST_WEEK = '2026-09-28'
 
 /**
  * The relevance changes whose whole effect is the videos the gate let in
@@ -203,9 +204,9 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
 // ---- 2. Week by week -------------------------------------------------------------
 
 /**
- * The weeks the chart may draw: from the week of 21 September
- * (`HOME_FIRST_WEEK`; the weeks before it span our September search changes
- * and are never drawn), ONLY weeks read one way: none before our latest
+ * The weeks the chart may draw: from the week of 28 September
+ * (`HOME_FIRST_WEEK`; the weeks before it span our September search and
+ * relevance changes and are never drawn), ONLY weeks read one way: none before our latest
  * search or relevance change (the fail-open fixes aside, `isFailOpenFix`),
  * none holding videos let in without a check that still stands, none with
  * nothing gathered (`weeksSinceOurChanges`, T0a's rule for the weekly bars).
