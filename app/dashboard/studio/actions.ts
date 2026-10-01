@@ -169,7 +169,20 @@ const scheduleFacts = (row: Record<string, unknown>) => {
   return facts
 }
 
-/** Create (no id) or update (id) a schedule from the form. */
+/** What `saveSchedule` answers a tenant asking for more than its recipients. */
+const RECIPIENTS_ONLY: ActionState = { ok: false, message: 'Only Verbatim adds a sending. You can change who receives one.' }
+
+/** Create (no id) or update (id) a schedule from the form.
+ *
+ *  RECIPIENTS ONLY FOR A TENANT (lead, 1 Oct evening, after fresh review H1).
+ *  The form is the operator's (the Studio workbench), but this action is
+ *  POST-reachable by any owner or admin. For anyone but the operator it
+ *  changes the recipients of an existing schedule of the workspace and
+ *  NOTHING ELSE: `active`, `review`, the cadence, the template, the PDF and
+ *  the link's life are ignored whatever the POST carries, and creating a
+ *  schedule is refused. Arming one stays the operator's. The tenant lock
+ *  still answers a locked tenant's request to switch sending on first, in
+ *  its own words. */
 export async function saveSchedule(args: { id?: string | null; input: ScheduleInput }): Promise<ActionState & { id?: string }> {
   const session = await getSessionContext()
   const { clientId, userId, role } = session
@@ -195,8 +208,30 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
     if (!may.ok) return { ok: false, message: may.message }
   }
   const admin = createAdminClient()
-  if (s.starterKey && !starterTemplate(s.starterKey)) return { ok: false, message: 'Pick a template.' }
   const id = args.id ? z.uuid().safeParse(args.id).data ?? null : null
+  if (session.operator == null) {
+    if (!id) return RECIPIENTS_ONLY
+    const { data: prior, error: priorError } = await admin.from('report_schedules')
+      .select('recipients').eq('id', id).eq('client_id', clientId).maybeSingle()
+    if (priorError) return { ok: false, message: 'Could not save that. Try again.' }
+    if (!prior) return { ok: false, message: 'That sending is not in this workspace.' }
+    const { error } = await admin.from('report_schedules')
+      .update({ recipients: s.recipients, updated_at: new Date().toISOString() })
+      .eq('id', id).eq('client_id', clientId)
+    if (error) return { ok: false, message: 'Could not save that. Try again.' }
+    await recordConfigChange(admin, {
+      clientId,
+      surface: 'schedule',
+      field: 'report_schedules.recipients',
+      before: { recipients: (prior as { recipients: string[] }).recipients },
+      after: { recipients: s.recipients },
+      actor: actorStamp(session, 'changed who receives a sending'),
+      note: `schedule ${id}`,
+    })
+    revalidatePath(STUDIO)
+    return { ok: true, message: 'Saved', id }
+  }
+  if (s.starterKey && !starterTemplate(s.starterKey)) return { ok: false, message: 'Pick a template.' }
   if (s.reportId) {
     const { data: r } = await admin.from('reports').select('id').eq('id', s.reportId).eq('client_id', clientId).maybeSingle()
     if (!r) return { ok: false, message: 'That template is not in this workspace.' }
