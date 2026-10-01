@@ -35,7 +35,7 @@ export function PageTitle({ children }: { children: ReactNode }) {
 /** A card on the page: paper, 16px corners. The tile shadow keeps it apart
  *  from the shell's current ground (the artboard's ground is #F7F6F2). */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('flex min-w-0 flex-col rounded-2xl bg-white shadow-tile', className)}>{children}</section>
+  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-white shadow-tile', className)}>{children}</section>
 }
 
 /** The writer's sentences (slot `week_read`, scrubbed when stored), any
@@ -79,7 +79,7 @@ export function QuotePanel({ quote, names, size = 17 }: { quote: WeekReadQuote; 
   const words = stripEmoji(quote.text)
   if (!words) return null
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-[#F7F6F2] px-[18px] py-4">
+    <div className="flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
       <p data-copy="quote" className={cn('m-0 font-serif italic leading-[1.5]', INK)} style={{ fontSize: size }}>“{words}”</p>
       {label ? <div className={cn('text-[12px]', WHO_MUTED)}>{label}</div> : null}
       {note.english ? <p data-copy="quote" className={cn('m-0 font-serif text-[14px] leading-[1.5]', WHO_MUTED)}>{stripEmoji(note.english)}</p> : null}

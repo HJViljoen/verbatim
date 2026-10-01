@@ -54,16 +54,16 @@ export function BrandMenu({
         aria-label={`More for ${name}`}
         aria-expanded={mode !== 'closed'}
         onClick={() => setMode((m) => (m === 'closed' ? 'menu' : 'closed'))}
-        className="inline-flex size-[34px] items-center justify-center rounded-lg border border-transparent bg-transparent text-[#5F656B] hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40"
+        className="inline-flex size-[34px] items-center justify-center rounded-[8px] border border-transparent bg-transparent text-[#5F656B] hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40"
       >
         <Ellipsis aria-hidden className="size-4" strokeWidth={2} />
       </button>
       {mode !== 'closed' && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-[260px] flex-col gap-2 rounded-2xl border border-[#E4E2DC] bg-white p-3 text-[13px] shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
+        <div className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-[260px] flex-col gap-2 rounded-[16px] border border-[#E4E2DC] bg-white p-3 text-[13px] shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
           {mode === 'menu' && (
             <>
-              {id ? <button type="button" onClick={() => setMode('rename')} className="rounded-lg px-2 py-1.5 text-left font-medium hover:bg-[#F7F6F2]">Rename</button> : null}
-              <button type="button" onClick={() => setMode('stop')} className="rounded-lg px-2 py-1.5 text-left font-medium hover:bg-[#F7F6F2]">Stop tracking</button>
+              {id ? <button type="button" onClick={() => setMode('rename')} className="rounded-[8px] px-2 py-1.5 text-left font-medium hover:bg-[#F7F6F2]">Rename</button> : null}
+              <button type="button" onClick={() => setMode('stop')} className="rounded-[8px] px-2 py-1.5 text-left font-medium hover:bg-[#F7F6F2]">Stop tracking</button>
             </>
           )}
           {mode === 'rename' && id && (

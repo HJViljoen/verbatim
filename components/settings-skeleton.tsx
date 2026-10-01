@@ -23,7 +23,7 @@ export function SettingsSkeleton({ title, cards = 3 }: { title: string; cards?: 
       </nav>
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         {Array.from({ length: cards }, (_, i) => (
-          <div key={i} className="flex flex-col gap-3 rounded-2xl bg-white px-[30px] py-[26px]">
+          <div key={i} className="flex flex-col gap-3 rounded-[16px] bg-white px-[30px] py-[26px]">
             <Bone className="h-5 w-40" /><Bone className="h-3 w-2/3" /><BoneLines lines={3} />
           </div>
         ))}

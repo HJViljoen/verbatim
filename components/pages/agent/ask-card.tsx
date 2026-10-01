@@ -102,7 +102,7 @@ export function AskCard({ canSend, disabledNote = 'Only an owner or admin can as
     >
       <div className="flex flex-col gap-5 rounded-[20px] bg-white px-8 pt-[30px] pb-[26px] shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_24px_rgba(0,0,0,0.05)] max-sm:px-5">
         <div className="flex items-center gap-3.5">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#FFD43B]">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[12px] bg-[#FFD43B]">
             <Sparkles className="size-5 text-[#26292C]" aria-hidden />
           </div>
           <div className="flex flex-col gap-[3px]">
@@ -150,7 +150,7 @@ export function AskCard({ canSend, disabledNote = 'Only an owner or admin can as
                     key={w}
                     href={window.href[w]}
                     aria-current={window.current === w ? 'true' : undefined}
-                    className={`inline-flex h-[30px] items-center rounded-lg px-3 text-[13px] no-underline ${
+                    className={`inline-flex h-[30px] items-center rounded-[8px] px-3 text-[13px] no-underline ${
                       window.current === w
                         ? 'bg-white font-semibold text-[#26292C] shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
                         : 'bg-transparent font-medium text-[#5F656B] hover:text-[#26292C]'

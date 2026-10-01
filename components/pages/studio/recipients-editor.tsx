@@ -37,7 +37,7 @@ export function RecipientsEditor({ artefact, name, recipients, active }: { artef
         Recipients
       </button>
       {open && (
-        <form action={action} className="absolute right-0 top-[calc(100%+8px)] z-20 flex w-[320px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-2xl border border-[#E4E2DC] bg-white p-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
+        <form action={action} className="absolute right-0 top-[calc(100%+8px)] z-20 flex w-[320px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[16px] border border-[#E4E2DC] bg-white p-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
           <input type="hidden" name="artefact" value={artefact} />
           {active ? <input type="hidden" name="active" value="on" /> : null}
           <label htmlFor={`recipients-${artefact}`} className="text-[14px] font-semibold text-[#26292C]">Who gets {name.startsWith('The ') ? name.replace(/^The /, 'the ') : `the ${name.toLowerCase()}`}</label>

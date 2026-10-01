@@ -16,7 +16,7 @@ export default function StudioLoading() {
     <div className="flex min-h-0 flex-1 flex-col gap-[22px]">
       <span role="status" className="sr-only">Loading {title}…</span>
       <PageBar title={title} />
-      <section className="flex flex-col gap-4 rounded-2xl bg-white px-[30px] pt-[26px] pb-[22px]">
+      <section className="flex flex-col gap-4 rounded-[16px] bg-white px-[30px] pt-[26px] pb-[22px]">
         <Bone className="h-5 w-36" />
         <div className="-mx-1 overflow-x-hidden px-1">
           <div className="flex min-w-[880px] flex-col">

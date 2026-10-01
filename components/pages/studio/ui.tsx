@@ -23,7 +23,7 @@ export function PageTitle({ title, children }: { title: string; children?: React
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   // The artboard sets no line-height, so its text runs at the font's own
   // `normal`, not the app's 1.5.
-  return <section className={cn('flex flex-col rounded-2xl bg-white leading-[normal] text-[#26292C]', className)}>{children}</section>
+  return <section className={cn('flex flex-col rounded-[16px] bg-white leading-[normal] text-[#26292C]', className)}>{children}</section>
 }
 
 /** A card's title: 20px, bold. */

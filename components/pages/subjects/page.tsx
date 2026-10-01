@@ -23,7 +23,7 @@ import { AddSubjectButton, EditSubjectButton, SubjectRowMenu, type EditableSubje
 // of 1 Oct). The page module stays in the registry for stored snapshots
 // (`subjectsPage`, ./index).
 
-const CARD = 'flex flex-col rounded-2xl bg-white'
+const CARD = 'flex flex-col rounded-[16px] bg-white'
 const HAIR = 'border-[#E4E2DC]'
 
 /** A bar against 100%, never against the top row. */
@@ -49,7 +49,7 @@ export function SubjectsList({ view }: { view: SubjectsView }) {
           {view.rows.map((r) => (
             <li
               key={r.id}
-              className={`flex h-[42px] items-center justify-between gap-2 rounded-lg pr-1.5 pl-3 ${r.selected ? 'bg-[rgba(38,41,44,0.07)] font-bold' : 'font-medium'}`}
+              className={`flex h-[42px] items-center justify-between gap-2 rounded-[8px] pr-1.5 pl-3 ${r.selected ? 'bg-[rgba(38,41,44,0.07)] font-bold' : 'font-medium'}`}
             >
               {r.href ? (
                 <Link href={r.href} aria-current={r.selected ? 'true' : undefined} className="min-w-0 truncate text-[14px] text-[#26292C] no-underline hover:text-[#26292C]">
@@ -124,7 +124,7 @@ export function SubjectLead({ pane, monthWords, canEdit, status }: { pane: Subje
           ) : null}
           {pane.quote ? (
             <div className="min-w-0 pt-4">
-              <figure className="m-0 flex flex-col gap-2 rounded-xl bg-[#F7F6F2] px-[18px] py-4">
+              <figure className="m-0 flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
                 <blockquote data-copy="quote" className="m-0 font-serif text-[16px] leading-[1.5] text-[#26292C] italic">“{pane.quote.text}”</blockquote>
                 {label ? <div className="text-[12px] text-[#5F656B]">{label}</div> : null}
                 {note?.english ? <p data-copy="quote" className="m-0 font-serif text-[14px] leading-[1.5] text-[#5F656B]">{note.english}</p> : null}

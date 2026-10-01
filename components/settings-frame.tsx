@@ -67,7 +67,7 @@ export function SettingsFrame({
             href={s.href}
             aria-current={active === s.key ? 'page' : undefined}
             className={cn(
-              'inline-flex h-[38px] shrink-0 items-center whitespace-nowrap rounded-lg px-4 text-[14px] transition-colors',
+              'inline-flex h-[38px] shrink-0 items-center whitespace-nowrap rounded-[8px] px-4 text-[14px] transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40',
               active === s.key ? 'bg-[rgba(38,41,44,0.07)] font-semibold text-[#26292C]' : 'font-medium text-[#5F656B] hover:text-[#26292C]',
             )}

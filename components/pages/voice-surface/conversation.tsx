@@ -38,7 +38,7 @@ const MUTED = 'text-[#5F656B]'
 /** The artboard's card: white, 16px corners, its own padding and gap. */
 export function ConvCard({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <section id={id} data-card="" className={cn('flex min-w-0 scroll-mt-6 flex-col rounded-2xl bg-white shadow-tile', className)}>
+    <section id={id} data-card="" className={cn('flex min-w-0 scroll-mt-6 flex-col rounded-[16px] bg-white shadow-tile', className)}>
       {children}
     </section>
   )

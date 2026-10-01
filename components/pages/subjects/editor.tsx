@@ -65,7 +65,7 @@ export function SubjectRowMenu({ subject }: { subject: EditableSubject }) {
         <DropdownMenuTrigger
           aria-label={`Rename or stop ${subject.name}`}
           disabled={pending}
-          className="inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-[#5F656B] hover:bg-[rgba(38,41,44,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-none bg-transparent text-[#5F656B] hover:bg-[rgba(38,41,44,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Ellipsis className="size-4" aria-hidden />
         </DropdownMenuTrigger>

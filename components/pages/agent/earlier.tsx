@@ -9,7 +9,7 @@ import type { AskHistory } from '@/lib/pages/agent-thread'
 export function EarlierQuestions({ history }: { history: AskHistory | null }) {
   if (!history || history.rows.length === 0) return null
   return (
-    <section aria-label="Earlier questions" className="flex flex-col gap-3 rounded-2xl bg-white px-7 pt-6 pb-5">
+    <section aria-label="Earlier questions" className="flex flex-col gap-3 rounded-[16px] bg-white px-7 pt-6 pb-5">
       <h2 className="m-0 text-[20px] font-bold text-[#26292C]">Earlier questions</h2>
       <ul className="m-0 flex list-none flex-col p-0">
         {history.rows.map((r) => (
