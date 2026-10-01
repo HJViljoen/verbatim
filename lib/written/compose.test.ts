@@ -126,6 +126,19 @@ describe('composeWeekRead: a thin week', () => {
   })
 })
 
+describe('composeWeekRead: the conversations inside each subject (pages rebuild)', () => {
+  it('freezes a subject\'s contents with the read for the Subjects pane, and none for a failed one or one with none', () => {
+    const standing = [
+      fact({ subjectId: 's1', name: 'Comfort', rank: 1, contents: ['Straps that dig in', 'Back panel airflow'] }),
+      fact({ subjectId: 's2', name: 'Repair', calibration: 'failed', contents: ['Broken zips'] }),
+      fact({ subjectId: 's3', name: 'Price', rank: 2 }),
+    ]
+    const p = pool([candidate({ id: 'C1' })])
+    const read = composeWeekRead({ pool: p, standing, written: null, subjects: [], writerFigures: writerFigures(p), model: '', costUsd: 0 })
+    expect(read.standing.map((s) => s.contents)).toEqual([['Straps that dig in', 'Back panel airflow'], undefined, undefined])
+  })
+})
+
 describe('composeWeekRead: the lines code writes', () => {
   it('the evidence line counts what the finding rests on: the union of every cited candidate, this week and in the month so far', () => {
     const c1 = candidate({ id: 'C1', videoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6'], monthVideoIds: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'm1', 'm2', 'm3'], weekVideos: 14, monthK: 40, label: 'Price feels hard to justify' })

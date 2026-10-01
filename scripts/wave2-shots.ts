@@ -45,6 +45,7 @@ import { WeekPage } from '../components/pages/week'
 
 import { overviewFixture } from '../components/pages/overview/fixture'
 import { subjectsFixture } from '../components/pages/subjects/fixture'
+import { subjectsView } from '../lib/pages/subjects-view'
 import { voiceFixture } from '../components/pages/voice-surface/fixture'
 import { marketFixture } from '../components/pages/market-surface/fixture'
 import { competitiveFixture } from '../components/pages/competitive-surface/fixture'
@@ -154,7 +155,7 @@ h1{color:#e8e6df;font-size:26px;padding:24px 24px 0;margin:0}
 interface Page { key: string; nav: string; artboard: string; markup: () => string }
 const PAGES: Page[] = [
   { key: 'overview', nav: 'Overview', artboard: 'Main.dc.html', markup: () => renderToStaticMarkup(OverviewPage({ data: overviewFixture() })) },
-  { key: 'subjects', nav: 'Subjects', artboard: 'Subjects.dc.html', markup: () => renderToStaticMarkup(SubjectsPage({ data: subjectsFixture() })) },
+  { key: 'subjects', nav: 'Subjects', artboard: 'Subjects.dc.html', markup: () => renderToStaticMarkup(SubjectsPage({ view: subjectsView(subjectsFixture(), null, 'fixture') })) },
   // VOICE TAKES ITS PAGE BAR'S RIGHT-HAND END FROM ITS CALLER, so the shot has
   // to pass it or photograph a bar the app does not have. Every other page
   // here mounts `HowToRead` inside its own component; Voice's route passes it

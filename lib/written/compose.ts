@@ -418,6 +418,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
       rung: f.rung,
       line: line.body,
       quote: f.calibration === 'failed' ? null : f.quoteRef,
+      ...(f.calibration !== 'failed' && f.contents.length > 0 ? { contents: [...f.contents] } : {}),
     }
   })
 
