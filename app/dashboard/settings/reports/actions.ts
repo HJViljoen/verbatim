@@ -13,7 +13,9 @@ import { isMissingArtefact } from '@/lib/settings/reports-load'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { assertTenantMay } from '@/lib/tenant-locks'
 
-// Settings › Reports and recipients — who receives which artefact (design ST6).
+// Who receives which artefact (design ST6). The form lives in the Studio's
+// "Your reports" since the pages build (1 Oct); the action stays at this
+// address, which the tenant lock's sweep test pins.
 //
 // EVERY WRITE CARRIES AN ACTOR, and not through the trigger. The
 // tracking_configs_audit trigger watches tracking_configs; recipients left that
@@ -184,7 +186,7 @@ export async function updateArtefactRecipients(
       : `${label} now goes to ${parsed.data.recipients.length} address${parsed.data.recipients.length === 1 ? '' : 'es'}${active ? '' : ', and is switched off'}.`,
   })
 
-  revalidatePath('/dashboard/settings/reports')
+  revalidatePath('/dashboard/studio')
   return {
     ok: true,
     message: buildable ? 'Saved.' : `Saved. ${notBuiltYet(parsed.data.artefact)}`,

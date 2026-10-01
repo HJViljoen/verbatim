@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SCHEDULE_RECIPIENTS_MAX } from '../config'
-import { STUDIO_TENANT_VISIBLE } from '../studio-visibility'
 import { tenantLocked } from '../tenant-locks'
 import { normaliseRecipients } from './validate'
 
@@ -17,6 +16,17 @@ export async function memberEmails(admin: SupabaseClient, clientId: string): Pro
   const emails = ((data ?? []) as { email: string | null }[]).map((r) => r.email ?? '').filter(Boolean)
   return normaliseRecipients(emails).slice(0, SCHEDULE_RECIPIENTS_MAX)
 }
+
+/**
+ * WHETHER A TENANT'S MEMBERS REVIEW THEIR OWN BUILDS (pages build, 1 Oct).
+ * False: the Studio opened to clients (`STUDIO_TENANT_VISIBLE`), but its
+ * review controls and Send stayed the operator's, so the review email, and
+ * with it every held build (`lib/reports/held.ts` `mayReadHeld`), stays the
+ * operator's for every tenant. Until the split it rode the Studio's
+ * visibility flag, which would have handed an unlocked tenant's members held
+ * builds the moment the Studio opened. `studioVisible` below is this answer.
+ */
+export const TENANT_REVIEWS = false
 
 /**
  * WHO READS A BUILD BEFORE IT GOES OUT (writing back, T7's review fix).
@@ -38,7 +48,7 @@ export function reviewAudience(
   clientId: string,
   opts: { studioVisible?: boolean; sendsLocked?: boolean } = {},
 ): 'operator' | 'members' {
-  const studioVisible = opts.studioVisible ?? STUDIO_TENANT_VISIBLE
+  const studioVisible = opts.studioVisible ?? TENANT_REVIEWS
   const sendsLocked = opts.sendsLocked ?? tenantLocked(clientId, 'sends')
   return !studioVisible || sendsLocked ? 'operator' : 'members'
 }

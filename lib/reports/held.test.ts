@@ -62,7 +62,8 @@ describe('every door into a build asks the rule', () => {
   const doors: [string, RegExp[]][] = [
     // Built, the cards, the count, the Sent detail and the viewer.
     ['app/dashboard/reports/page.tsx', [/mayReadHeld\(session, clientId\)/, /heldSnapshotIds\(/, /\.filter\(\(b\) => showsBuild\(b\.id\)\)/, /snapshotHeld\(createAdminClient\(\), clientId, sp\.view\)/, /sendContent && selectedSend\?\.snapshot_id/, /\{sendContent && <DetailSection label="Files and links">/]],
-    ['app/dashboard/studio/page.tsx', [/snapshotHeld\(createAdminClient\(\), clientId, sp\.view\)/]],
+    // The viewer, and the past issues: sent sends only (pages build, 1 Oct).
+    ['app/dashboard/studio/page.tsx', [/mayReadHeld\(session, clientId\) \|\| !\(await snapshotHeld\(createAdminClient\(\), clientId, viewId\)\)/, /\.eq\('status', 'sent'\)/, /\.filter\(\(s\) => s\.status === 'sent' && s\.sent_at\)/]],
     ['app/api/share/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, snapshotId\)/]],
     ['app/api/artifacts/[id]/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, row\.snapshot_id\)/]],
     ['app/api/schedules/[id]/preview/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /status !== 'sent'\) return note\(HELD/, /!readsHeld && s\.review\) return note\(HELD/]],

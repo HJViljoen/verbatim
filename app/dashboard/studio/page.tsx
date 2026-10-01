@@ -1,359 +1,103 @@
-import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
-import { studioRedirect } from '@/lib/studio-visibility'
-import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
-import { PaneHeader, PaneBody, PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
-import { BuildButton } from '@/components/reports/build-button'
-import { DocumentBuildControl } from '@/components/documents/build-control'
-import { BUILD_ACTIVE, type ReportBuildRow, type ReportKind } from '@/lib/reports/types'
-import { BUILD_COLS, BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
-import { documentTemplate } from '@/lib/reports/documents/templates'
-import { DeleteReport } from '@/components/reports/delete-report'
-import { ShareLinks, type ShareLinkView } from '@/components/reports/share-links'
+import { PageTitle } from '@/components/pages/studio/ui'
+import { YourReports } from '@/components/pages/studio/your-reports'
+import { PastIssues } from '@/components/pages/studio/past-issues'
 import { ReportViewer } from '@/components/reports/report-viewer'
 import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/reports/viewer'
-import { ScheduleForm } from '@/components/schedules/schedule-form'
-import { createAdminClient } from '@/lib/supabase-admin'
-import { getBaseUrl } from '@/lib/site'
-import { coverPlainText } from '@/lib/reports/cover'
-import { catalogueTitle } from '@/lib/reports/catalogue'
-import { AUDIENCES, type CoverSpec, type CoverText, type FigureTable, type ReportSection } from '@/lib/reports/types'
-import { CADENCES, type ScheduleRow } from '@/lib/schedules/types'
-import { artefactTitle, scheduleArtefact, sendsArtefact } from '@/lib/schedules/artefact'
-import { reviewAudience } from '@/lib/schedules/members'
 import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
-import { sendFailureSentence } from '@/lib/schedules/copy'
-import { claimDecision } from '@/lib/schedules/claim'
-import { cn } from '@/lib/utils'
+import { PRIVACY_LINE } from '@/lib/reading/method'
+import { pastIssues, studioRows, type StudioMember, type StudioSchedule, type StudioSend } from '@/lib/pages/studio'
+import { rows as readRows } from '@/lib/pages/read'
+import { createAdminClient } from '@/lib/supabase-admin'
+import { OperatorWorkbench } from './workbench'
 import type { Metadata } from 'next'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: 'Studio' }
 
-// The Studio (Heinrich, 2026-08-30): your reports down the left, the one you
-// picked on the right. A report is a template of your own (pages, tiles,
-// who it is written for) plus its sending (who gets it after which updates,
-// PDF attached, share link inside). New report = pick a template or go
-// custom. Reports (the other page) is the archive of what went out.
+// THE STUDIO, OPEN TO CLIENTS (pages build, 1 Oct; the Page-Studio artboard).
+// Reports folds in here: "Your reports" (the weekly and the four monthly
+// briefs, who gets each, the latest issue, Recipients for owners and admins)
+// and, once anything has gone out, the past issues to open, download and
+// share. The `studioRedirect` bounce to Reports is gone: Reports now redirects
+// here (NAV), and the two together would loop.
+//
+// OPERATOR-ONLY BELOW. Build, templates, catalogue, custom reports, the review
+// controls and Send are the operator's workbench (`./workbench.tsx`), drawn
+// only where `session.operator` is set, and the routes behind it (`/new`,
+// `/edit`) send anyone else back here.
+//
+// DEEP LINKS KEEP WORKING. `?view=<snapshot>` opens the viewer over the page;
+// `?group=sent&item=<send>` (Reports' old address for an issue, and the
+// workbench's history) opens that issue's snapshot; `?item=` selects a report
+// in the workbench.
+//
+// A BUILD THAT HAS NOT GONE OUT IS NEVER A CLIENT'S (writing back, B1): the
+// past issues are `sent` sends only, and the viewer refuses a held snapshot to
+// anyone who may not read held builds (`mayReadHeld`, the operator).
 
 export const dynamic = 'force-dynamic'
 
 const BASE = '/dashboard/studio'
-const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
 
-interface Report { id: string; kind: ReportKind; template_key: string | null; title: string; audience: string; cover: CoverSpec; status: 'draft' | 'built'; sections: ReportSection[]; latest_snapshot_id: string | null; updated_at: string }
-interface BuildRow { id: string; title: string; created_at: string; cover: CoverText | null; figures: FigureTable | null; artifacts: { id: string; format: string; bytes: number; stale: boolean; rendered_at: string; version: number }[] }
-interface SendRow { id: string; schedule_id: string | null; status: string; subject: string | null; recipients: string[]; sent_at: string | null; claimed_at: string; error: string | null; ready_at: string | null; approved_by: string | null; snapshot_id: string | null }
+interface SendRow extends StudioSend { status: string }
 
-const readerOf = (r: Pick<Report, 'audience' | 'cover'>) => r.cover?.reader?.trim() || AUDIENCES.find((a) => a.key === r.audience)?.label || 'General'
-const pagesOf = (sections: { page: string }[]) => [...new Set(sections.map((s) => catalogueTitle(s.page)))]
-
-export default async function StudioPage({ searchParams }: { searchParams?: Promise<{ item?: string; view?: string }> }) {
+export default async function StudioPage({ searchParams }: { searchParams?: Promise<{ item?: string; view?: string; group?: string }> }) {
   const sp = (await searchParams) ?? {}
   const session = await getSessionContext()
-  // A tenant user who types the address is sent to Reports (finish-list 16).
-  const away = studioRedirect(session)
-  if (away) redirect(away)
-  const { supabase, clientId, role, email } = session
-  const canManage = canManageTenant(role)
+  const { supabase, clientId, role } = session
+  const isOperator = session.operator != null
 
-  const [{ data: reportData }, { data: scheduleData }, { data: sendData }, { data: runData }] = await Promise.all([
-    supabase.from('reports').select('id, kind, template_key, title, audience, cover, status, sections, latest_snapshot_id, updated_at').eq('client_id', clientId).order('created_at'),
-    supabase.from('report_schedules').select('*').eq('client_id', clientId),
-    supabase.from('report_sends').select('id, schedule_id, status, subject, recipients, sent_at, claimed_at, error, ready_at, approved_by, snapshot_id').eq('client_id', clientId).order('claimed_at', { ascending: false }).limit(100),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).in('status', ['completed', 'partial']).limit(1),
+  const [clientRes, scheduleRes, sendRes, memberRes] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    // `*`, not a column list: `artefact` is M8's column, and a select naming
+    // it fails outright on a database a migration behind.
+    supabase.from('report_schedules').select('*').eq('client_id', clientId).order('created_at'),
+    supabase.from('report_sends')
+      .select('id, schedule_id, schedule_name, snapshot_id, artifact_id, subject, sent_at, status')
+      .eq('client_id', clientId).eq('status', 'sent').not('sent_at', 'is', null)
+      .order('sent_at', { ascending: false }).limit(100),
+    // Names for the recipients: the workspace's own people (Team reads the
+    // same rows on the session client).
+    supabase.from('users').select('email, full_name').eq('client_id', clientId),
   ])
-  const reports = (reportData ?? []) as Report[]
-  const schedules = (scheduleData ?? []) as ScheduleRow[]
-  const sends = (sendData ?? []) as SendRow[]
-  const sendable = (runData ?? []).length > 0
-  const scheduleOf = new Map(schedules.filter((s) => s.report_id).map((s) => [s.report_id as string, s]))
-  // A SCHEDULE THAT SENDS AN ARTEFACT HAS NO `reports` ROW (Phase 1 WP17), and
-  // the Studio is the only place any schedule can be read or edited. Listing
-  // only `reports` meant that the moment `migrate-schedule-keys --apply` moved
-  // a workspace onto the weekly report, its recipients field, Preview, Send now
-  // and Active toggle all disappeared and SQL became the only door to the list
-  // of people it emails. So an artefact schedule is listed in its own right,
-  // under `?item=schedule:<id>`, until WP16's delivery screen takes it over.
-  const artefacts = schedules.filter((s) => sendsArtefact(s))
-  const artefactKey = (s: ScheduleRow) => `schedule:${s.id}`
-  const pickedArtefact = sp.item?.startsWith('schedule:')
-    ? artefacts.find((s) => artefactKey(s) === sp.item) ?? null
-    : null
 
-  const selectedId = pickedArtefact ? null : sp.item && reports.some((r) => r.id === sp.item) ? sp.item : reports[0]?.id ?? null
-  const selected = selectedId ? reports.find((r) => r.id === selectedId) ?? null : null
-  const schedule = pickedArtefact ?? (selected ? scheduleOf.get(selected.id) ?? null : null)
-  const scheduleSends = schedule ? sends.filter((s) => s.schedule_id === schedule.id) : []
-  const history = scheduleSends.slice(0, 6)
-  // A build waiting for a person: the newest one, shown to every member.
-  // A delivery that died between the claim and the email (a killed render, a
-  // redeploy) leaves a `claimed` row with a snapshot behind it and no way in:
-  // it is not `ready`, so the block below never appeared, and only the next
-  // update would move it. Past the stale window that claim belongs to nobody,
-  // and deliverSend already takes it over by its timestamp, so the Studio
-  // offers it in the same place, saying plainly that it stopped partway.
-  // (claimDecision reads the clock itself; this page is force-dynamic, so it
-  // is a fresh read on every request.)
-  // The stalled fallback is offered ONLY on the newest send: `claimDecision`
-  // calls a cold claim stale forever, and sends are per (schedule, run), so an
-  // August hand-send that timed out would still be offered in September, after
-  // September's own update had already gone out. Pressing Send would mail last
-  // month's brief to the whole list.
-  const newest = scheduleSends[0] ?? null
-  const readySend =
-    scheduleSends.find((s) => s.status === 'ready')
-    ?? (newest && newest.status === 'claimed' && newest.snapshot_id != null && claimDecision(newest) === 'takeover' ? newest : null)
-  const stalled = readySend?.status === 'claimed'
-  // Who pressed Send, for the archive line.
-  const approverIds = [...new Set(history.map((s) => s.approved_by).filter(Boolean) as string[])]
-  let nameOf = new Map<string, string>()
-  if (approverIds.length) {
-    const { data: people } = await supabase.from('users').select('id, full_name, email').in('id', approverIds)
-    nameOf = new Map(((people ?? []) as { id: string; full_name: string | null; email: string }[]).map((p) => [p.id, p.full_name || p.email]))
-  }
+  const tenant = ((clientRes.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'you'
+  const schedules = readRows<StudioSchedule & { recipients: string[] | null; artefact?: string | null; starter_key?: string | null }>(scheduleRes, 'studio.schedules')
+    .map((s): StudioSchedule => ({
+      id: s.id,
+      name: s.name ?? '',
+      artefact: s.artefact ?? null,
+      starter_key: s.starter_key ?? null,
+      recipients: s.recipients ?? [],
+      active: Boolean(s.active),
+    }))
+  // Sent issues only: a held build stays its reviewer's.
+  const sends = readRows<SendRow>(sendRes, 'studio.sends').filter((s) => s.status === 'sent' && s.sent_at)
+  const members = readRows<StudioMember>(memberRes, 'studio.members').filter((m) => m.email)
 
-  let builds: BuildRow[] = []
-  let shareLinks: ShareLinkView[] = []
-  // A written report's builds are its report_builds rows (phase, cost, the
-  // PDF); an edit on a build's snapshot marks it. The share section takes
-  // the latest finished build's snapshot.
-  let docBuilds: ReportBuildRow[] = []
-  let editedSnapshots = new Set<string>()
-  const isDocument = selected?.kind === 'document'
-  if (selected && isDocument) {
-    const { data: db } = await supabase.from('report_builds').select(BUILD_COLS).eq('client_id', clientId).eq('report_id', selected.id).order('started_at', { ascending: false }).limit(12)
-    docBuilds = (db ?? []) as ReportBuildRow[]
-    const snapIds = docBuilds.map((b) => b.snapshot_id).filter((x): x is string => Boolean(x))
-    if (snapIds.length) {
-      const { data: ed } = await supabase.from('report_edits').select('snapshot_id').in('snapshot_id', snapIds)
-      editedSnapshots = new Set(((ed ?? []) as { snapshot_id: string }[]).map((e) => e.snapshot_id))
-    }
-  }
-  if (selected) {
-    const { data: b } = await supabase.from('report_snapshots')
-      .select('id, title, created_at, cover:data->cover, figures:data->figures, artifacts(id, format, bytes, stale, rendered_at, version)')
-      .eq('client_id', clientId).eq('report_id', selected.id).order('created_at', { ascending: false }).limit(12)
-    builds = (b ?? []) as unknown as BuildRow[]
-    if (builds.length) {
-      // The token is withheld from the workspace's own RLS reads; links are read server-side, scoped to the tenant.
-      const admin = createAdminClient()
-      const base = await getBaseUrl()
-      const byBuild = new Map(builds.map((x) => [x.id, x.created_at]))
-      const { data: l } = await admin.from('share_links')
-        .select('id, snapshot_id, token, title, expires_at, password_hash, revoked_at, view_count, last_viewed_at, created_at')
-        .eq('client_id', clientId).in('snapshot_id', builds.map((x) => x.id)).order('created_at', { ascending: false })
-      shareLinks = ((l ?? []) as { id: string; snapshot_id: string; token: string; title: string; expires_at: string | null; password_hash: string | null; revoked_at: string | null; view_count: number; last_viewed_at: string | null; created_at: string }[])
-        .map((x) => ({ id: x.id, url: `${base}/r/${x.token}`, title: x.title, createdAt: x.created_at, expiresAt: x.expires_at, revokedAt: x.revoked_at, protected: Boolean(x.password_hash), views: x.view_count, lastViewedAt: x.last_viewed_at, buildAt: byBuild.get(x.snapshot_id) ?? x.created_at }))
-    }
-  }
+  const rows = studioRows({ tenant, schedules, sends, members, now: new Date() })
+  const issues = pastIssues(sends, schedules)
 
-  // The viewer over the page (?view=): a build's frozen pages, read here
-  // rather than downloaded. The loader scopes it to this workspace.
-  // A build that has not gone out is its reviewer's (lib/reports/held.ts):
-  // the operator today; this guard is for the day the Studio opens to a
-  // tenant whose sending is still locked.
+  // The viewer over the page.
+  const fromIssue = sp.group === 'sent' && sp.item ? issues.find((i) => i.id === sp.item)?.snapshotId ?? null : null
+  const viewId = sp.view ?? fromIssue
   let viewer: ViewerSnapshot | null = null
-  if (sp.view && (mayReadHeld(session, clientId) || !(await snapshotHeld(createAdminClient(), clientId, sp.view)))) {
-    viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  if (viewId && (mayReadHeld(session, clientId) || !(await snapshotHeld(createAdminClient(), clientId, viewId)))) {
+    viewer = await loadViewerSnapshot(createAdminClient(), clientId, viewId)
   }
-  const itemKey = pickedArtefact ? artefactKey(pickedArtefact) : selectedId ?? undefined
-  const openViewer = (snapshotId: string) => viewerHref(BASE, { item: itemKey }, snapshotId)
-  const closeViewer = viewerHref(BASE, { item: itemKey }, null)
-
-  const sendingLine = (s: ScheduleRow | null) => {
-    if (!s) return 'not sent to anyone yet'
-    const cadence = CADENCES.find((c) => c.key === s.cadence)?.label.toLowerCase() ?? s.cadence
-    return `${s.active ? 'sends' : 'sending off'} · ${cadence} · ${s.recipients.length} ${s.recipients.length === 1 ? 'person' : 'people'}`
-  }
+  const keep = { item: sp.group === 'sent' ? undefined : sp.item }
+  const openHref = (snapshotId: string) => viewerHref(BASE, keep, snapshotId)
+  const closeHref = viewerHref(BASE, keep, null)
 
   return (
-    <PageFrame className="min-h-0 flex-1">
-      <PageBar title="Studio" context="your reports, and who gets them">
-        <Link href={`${BASE}/new`}><BarPill primary>New report</BarPill></Link>
-      </PageBar>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 md:h-[calc(100dvh_-_6.75rem)] md:flex-row">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-tile shadow-tile md:w-[280px] md:shrink-0">
-          <PaneHeader title="Reports" meta={reports.length ? `${reports.length}` : undefined}>
-            <Link href={`${BASE}/new`} aria-label="New report" className="inline-flex size-6 items-center justify-center rounded-full bg-inner text-[15px] leading-none text-secondary-foreground ring-1 ring-border hover:bg-tile">+</Link>
-          </PaneHeader>
-          <PaneBody>
-            {reports.length || artefacts.length ? (
-              <ul className="flex flex-col">
-                {reports.map((r) => (
-                  <li key={r.id}>
-                    <Link href={`${BASE}?item=${r.id}`} className={cn('block rounded-[4px] px-3 py-2 hover:bg-inner', r.id === selectedId && 'bg-inner')}>
-                      <p className={cn('truncate text-[13px] leading-[1.3]', r.id === selectedId ? 'font-semibold' : 'font-medium')}>{r.title}</p>
-                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">for {readerOf(r)} · {scheduleOf.get(r.id)?.active ? `sends to ${scheduleOf.get(r.id)!.recipients.length}` : r.status === 'built' ? 'built' : 'draft'}</p>
-                    </Link>
-                  </li>
-                ))}
-                {artefacts.map((s) => (
-                  <li key={s.id}>
-                    <Link href={`${BASE}?item=${artefactKey(s)}`} className={cn('block rounded-[4px] px-3 py-2 hover:bg-inner', pickedArtefact?.id === s.id && 'bg-inner')}>
-                      <p className={cn('truncate text-[13px] leading-[1.3]', pickedArtefact?.id === s.id ? 'font-semibold' : 'font-medium')}>{artefactTitle(scheduleArtefact(s))}</p>
-                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">written by Verbatim · {s.active ? `sends to ${s.recipients.length}` : 'sending off'}</p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <PaneEmpty>No reports yet. Start one from a template, or go custom.</PaneEmpty>
-            )}
-          </PaneBody>
-        </section>
-
-        <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg bg-tile shadow-tile">
-          {pickedArtefact ? (
-            <>
-              <DetailHeader
-                eyebrow="Written by Verbatim · nothing to arrange"
-                title={artefactTitle(scheduleArtefact(pickedArtefact))}
-                meta={sendingLine(pickedArtefact)}
-              />
-              <DetailSection>
-                <p className="max-w-[60ch] text-[12.5px] leading-relaxed text-muted-foreground">
-                  Verbatim writes this one from your update, so there is no outline to edit. What you choose here is who receives it, when, and what rides along.
-                </p>
-              </DetailSection>
-              <DetailSection label="Sending">
-                <ScheduleForm
-                  key={`${pickedArtefact.id}:${pickedArtefact.updated_at}:${readySend?.id ?? 'none'}`}
-                  reportId={null}
-                  starterKey={pickedArtefact.starter_key}
-                  reportTitle={pickedArtefact.name}
-                  schedule={pickedArtefact}
-                  canManage={canManage}
-                  userEmail={email ?? null}
-                  sendable={sendable}
-                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
-                  reviewer={reviewAudience(clientId)}
-                />
-                {history.length > 0 && (
-                  <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">
-                    {history.map((s) => (
-                      <li key={s.id} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
-                        {s.status === 'ready'
-                          ? <span className="font-medium">{s.subject ?? 'Update'}</span>
-                          : <Link href={`/dashboard/reports?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
-                        <span className="font-mono text-[10.5px] text-muted-foreground">
-                          {s.status === 'sent' && s.sent_at
-                            ? `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}`
-                            : s.status === 'failed' ? `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
-                            : `${s.status} ${fmtWhen(s.claimed_at)}`}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </DetailSection>
-            </>
-          ) : selected ? (
-            <>
-              <DetailHeader eyebrow={`${isDocument ? 'Written report' : 'Report'} · written for ${readerOf(selected)}`} title={selected.title}
-                meta={isDocument
-                  ? `${documentTemplate(selected.template_key)?.name ?? 'written'} · written by Verbatim from the update · ${selected.status === 'built' ? 'built' : 'not built yet'} · edited ${fmtWhen(selected.updated_at)} · ${sendingLine(schedule)}`
-                  : `${selected.sections.length} section${selected.sections.length === 1 ? '' : 's'} · ${pagesOf(selected.sections).join(' · ') || 'empty'} · ${selected.status === 'built' ? 'built' : 'draft'} · edited ${fmtWhen(selected.updated_at)} · ${sendingLine(schedule)}`} />
-              <DetailSection>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`${BASE}/edit/${selected.id}`} className="inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border hover:bg-inner">Edit</Link>
-                  {isDocument
-                    ? <DocumentBuildControl reportId={selected.id} inFlight={docBuilds[0] && BUILD_ACTIVE.includes(docBuilds[0].status) ? { id: docBuilds[0].id, status: docBuilds[0].status, startedAt: docBuilds[0].started_at } : null} />
-                    : <BuildButton reportId={selected.id} />}
-                  <DeleteReport id={selected.id} />
-                </div>
-              </DetailSection>
-              <DetailSection label="Sending">
-                <ScheduleForm
-                  key={`${selected.id}:${schedule?.updated_at ?? 'none'}:${readySend?.id ?? 'none'}`}
-                  reportId={selected.id}
-                  reportTitle={selected.title}
-                  schedule={schedule}
-                  canManage={canManage}
-                  userEmail={email ?? null}
-                  sendable={sendable}
-                  isDocument={isDocument}
-                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
-                  reviewer={reviewAudience(clientId)}
-                />
-                {history.length > 0 && (
-                  <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">
-                    {history.map((s) => (
-                      <li key={s.id} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
-                        {/* A ready send has no archive page yet: Reports lists what went out. */}
-                        {s.status === 'ready'
-                          ? <span className="font-medium">{s.subject ?? 'Update'}</span>
-                          : <Link href={`/dashboard/reports?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
-                        <span className="font-mono text-[10.5px] text-muted-foreground">
-                          {s.status === 'sent' && s.sent_at
-                            ? `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}${s.approved_by ? ` · sent by ${nameOf.get(s.approved_by) ?? 'a teammate'}` : ''}`
-                            : s.status === 'failed' ? `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
-                            : s.status === 'ready' ? `ready for review ${fmtWhen(s.ready_at ?? s.claimed_at)}`
-                            : `${s.status} ${fmtWhen(s.claimed_at)}`}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </DetailSection>
-              <DetailSection label="Builds">
-                {isDocument ? (
-                  docBuilds.length > 0 ? (
-                    <ul className="flex flex-col gap-2">
-                      {docBuilds.map((b) => {
-                        const art = builds.find((x) => x.id === b.snapshot_id)?.artifacts.find((a) => a.format === 'pdf') ?? null
-                        return (
-                          <li key={b.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[4px] bg-inner px-4 py-2.5 text-[12.5px]">
-                            <span className="font-mono text-[10.5px] text-muted-foreground">{fmtWhen(b.started_at)}</span>
-                            <span className={b.status === 'failed' ? 'text-negative' : b.status === 'done' ? '' : 'text-secondary-foreground'}>{b.status === 'done' ? 'Built' : BUILD_PHASE_WORDS[b.status]}{b.status === 'failed' && b.error ? `: ${b.error}` : ''}</span>
-                            {b.needs_review && <span className="text-warning">a check flagged this one, read it before sending</span>}
-                            {b.snapshot_id && editedSnapshots.has(b.snapshot_id) && <span className="font-mono text-[10.5px] text-muted-foreground">edited</span>}
-                            {Number(b.cost_usd) > 0 && <span className="font-mono text-[10.5px] text-muted-foreground">${Number(b.cost_usd).toFixed(2)}</span>}
-                            {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} scroll={false} className="font-medium underline underline-offset-2">Open</Link>}
-                            {art && <a href={`/api/artifacts/${art.id}`} className="font-medium underline underline-offset-2">PDF · {fmtBytes(art.bytes)}{art.stale ? ' · re-renders' : ''}</a>}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground">Not built yet. Building reads the update, asks the data, writes the brief for its reader and prints the PDF. Three to five minutes.</p>
-                  )
-                ) : builds.length > 0 ? (
-                  <ul className="flex flex-col gap-3">
-                    {builds.map((b) => (
-                      <li key={b.id} className="rounded-[4px] bg-inner px-4 py-3">
-                        <p className="font-mono text-[10.5px] text-muted-foreground">built {fmtWhen(b.created_at)}{b === builds[0] && selected.status === 'draft' ? ' · edited since, build again for a current PDF' : ''}</p>
-                        {b.cover && b.figures && <p className="mt-1.5 text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(b.cover.body, b.figures)}</p>}
-                        <div className="mt-2 flex flex-wrap gap-3">
-                          <Link href={openViewer(b.id)} scroll={false} className="text-[12px] font-medium underline underline-offset-2">Open</Link>
-                          {b.artifacts.map((a) => (
-                            <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · re-renders' : ''}</a>
-                          ))}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-[12px] text-muted-foreground">Not built yet. Building freezes the figures as they are now, writes the cover for its reader and prints the PDF.</p>
-                )}
-              </DetailSection>
-              <DetailSection label="Share">
-                <ShareLinks snapshotId={builds[0]?.id ?? null} links={shareLinks} />
-              </DetailSection>
-            </>
-          ) : (
-            <div className="flex flex-1 flex-col items-start justify-center gap-3 px-8">
-              <p className="text-[14px] font-medium">Nothing here yet.</p>
-              <p className="max-w-[44ch] text-[12.5px] text-muted-foreground">A report arranges the pages you already have for a reader you name, and can go out to a list of people after each update.</p>
-              <Link href={`${BASE}/new`}><BarPill primary>New report</BarPill></Link>
-            </div>
-          )}
-        </section>
-      </div>
-      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} showStudio />}
-    </PageFrame>
+    <div className="flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]">
+      <PageTitle title="Studio" />
+      <YourReports rows={rows} canEdit={canManageTenant(role)} privacy={PRIVACY_LINE} />
+      <PastIssues issues={issues} openHref={openHref} />
+      {isOperator ? <OperatorWorkbench session={session} sp={{ item: sp.group === 'sent' ? undefined : sp.item }} /> : null}
+      {viewer && <ReportViewer snapshot={viewer} closeHref={closeHref} showStudio={isOperator} />}
+    </div>
   )
 }
