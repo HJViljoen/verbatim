@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, UUID_IN_CHUNK } from '../chunk'
-import { fmtInt, longMonth, platformLabel } from '../format'
+import { fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { cleanQuote, fetchInsightsByIds, readTranslations, readingOf } from '../quotes'
 import { pickEligible } from '../quote-gate'
 import { selectAll } from '../supabase-admin'
@@ -68,9 +68,16 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { themeQuestion } from '../agent/starters'
 import { buildWords, loadKindRows, loadWordsCandidates, marketKindVideos, shortlistWords, type WordsBlock } from './voice-surface-words'
-import { buildWhere, loadEarlierMonths, loadMemory, loadMonthVideos, memoryMonths, type WhereBlock } from './voice-surface-where'
+import { buildWhere, loadMonthVideos, type WhereBlock } from './voice-surface-where'
 import { brandNamed, loadBrandView, type BrandView } from './voice-surface-brand'
 import { ninetyDays } from './brands'
+import { loadAttribution, marketLabels, trackedBrands } from '../brands/attribution'
+import { clientBrandName } from '../brands/precision'
+import {
+  CONV_KINDS, KIND_ITEM_FLOOR, buildConversation, convKindLabel, kindItems, loadBrandThemeRows, loadReadySubjects,
+  loadThemeFacts, quoteSource,
+  type ConversationExtras, type KindTheme, type TalkRef,
+} from './voice-conversation'
 
 // Conversation — "everything your market talked about, in full" (market-first
 // WP2.4, plan §2.4 C1–C4; the page was Voice, Phase 1 WP13, and keeps its key,
@@ -287,6 +294,11 @@ export interface VoiceSurfaceData {
   /** One brand's videos in place of the market's board (`?brand=`); null or
    *  absent where the page reads the market. */
   brandView?: BrandView | null
+  /** What the approved artboard adds (the pages build, 1 Oct): who each item
+   *  of talk is about, subjects and makers on the board, and the market's
+   *  words by kind (`./voice-conversation.ts`). Null where it could not be
+   *  read; absent on a copy stored before it. */
+  conversation?: ConversationExtras | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -405,14 +417,14 @@ export function noThemeOpen(month: string): string {
 
 // ---- the reads ----------------------------------------------------------------
 
-async function loadRivals(supabase: SupabaseClient, clientId: string): Promise<{ name: string; retiredAt: string | null }[]> {
+async function loadRivals(supabase: SupabaseClient, clientId: string): Promise<{ id?: string; name: string; retiredAt: string | null }[]> {
   let stored: Competitor[] = []
   try {
     stored = await loadCompetitors(supabase, clientId)
   } catch (error) {
     if (!isMissingCompetitors(error)) throw error
   }
-  if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
+  if (stored.length > 0) return stored.map((r) => ({ id: r.id, name: r.name, retiredAt: r.retired_at }))
   const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
   const tc = row<{ competitor_names: string[] | null }>(res, 'voice.rivals')
   return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
@@ -666,23 +678,23 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   monthVideosAhead.catch(() => {})
   const kindRowsAhead = loadKindRows(db, clientId, month, marketRivals)
   kindRowsAhead.catch(() => {})
-  // The memory's months are known now, and so are their reads.
-  const remembered = memoryMonths(month, history.denominators.filter((d) => d.audience === INDUSTRY_AUDIENCE).map((d) => monthStartOf(d.month)))
-  const earlierAhead = loadEarlierMonths(db, clientId, month, remembered)
-  earlierAhead.catch(() => {})
+  // NO MEMORY READ (the pages build, 1 Oct): the artboard prints each
+  // account's videos and comments in the month, never how many months it was
+  // seen in, so the earlier months are not read.
   const whereAhead = (async (): Promise<WhereBlock | null> => {
     const mv = await monthVideosAhead
     if (!mv) return null
-    const base = { month, videos: mv.videos, segments: mv.segments, segmentsState: mv.segmentsState }
-    // Every listed account first (the memory reads their videos), then the
-    // block as the reader asked for it.
-    const listed = buildWhere({ ...base, memory: null, expanded: true }).rows
-    const memory = listed.length > 0
-      ? await loadMemory(db, clientId, month, remembered, mv.videos, listed.map((a) => ({ platform: a.platform, name: a.name })), earlierAhead)
-      : null
-    return buildWhere({ ...base, memory, expanded: params.accounts === 'all' })
+    return buildWhere({ month, videos: mv.videos, segments: mv.segments, segmentsState: mv.segmentsState, memory: null, expanded: params.accounts === 'all' })
   })()
   whereAhead.catch(() => {})
+
+  // THE ARTBOARD'S OWN READS START HERE (`./voice-conversation.ts`): the
+  // conversations under the client's and the rivals' videos, and the ready
+  // subjects with their members. Neither waits on anything below.
+  const brandThemesAhead = loadBrandThemeRows(db, clientId, month, marketRivals)
+  brandThemesAhead.catch(() => {})
+  const subjectsAhead = loadReadySubjects(supabase, clientId)
+  subjectsAhead.catch(() => {})
 
   // ONE BRAND'S VIDEOS (`?brand=`), IN THE BOARD'S PLACE: the ninety days the
   // Brands page reads, started here beside everything else. A page without
@@ -711,6 +723,22 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const atTenIds = pool.filter((r) => r.k >= THEME_FLOOR).map((r) => r.id)
   const shownIds = expanded ? pool.map((r) => r.id) : atTenIds
   const kById = new Map(pool.map((r) => [r.id, r.k]))
+
+  // THE KIND ANALYSIS'S CONVERSATIONS (the artboard's "The market’s words"):
+  // every category conversation at its floor the board does not already
+  // observe, and those under the client's and the rivals' videos, with their
+  // labels and kinds; and the board's members, for the subject tags. One wave,
+  // beside wave 4.
+  const factsAhead = (async () => {
+    const brandThemes = await brandThemesAhead
+    const kindPool = pool.filter((r) => r.k >= KIND_ITEM_FLOOR && !shownIds.includes(r.id)).map((r) => r.id)
+    const [facts, members] = await Promise.all([
+      loadThemeFacts(supabase, clientId, themedRunId, [...kindPool, ...brandThemes.map((r) => r.themeId)]),
+      loadThemeFacts(supabase, clientId, themedRunId, atTenIds, true),
+    ])
+    return { brandThemes, facts, members }
+  })()
+  factsAhead.catch(() => {})
 
   // On a view (WP3.3) the segments and shares are the view's (`cv`, an
   // identity while no view is live).
@@ -775,6 +803,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     supabase,
     clientId,
     params,
+    // The artboard prints no voice under a group, so none is read.
+    quotes: false,
     profile: row<{ personas: Partial<Persona>[]; run_date: string; run_id: string; insight_population: number | null; theme_population: number | null }>(profileRes, 'voice.consumerProfile'),
     newestRunId: row<{ id: string }>(newestRunRes, 'voice.newestRun')?.id ?? null,
   })
@@ -958,6 +988,14 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const marketVoicesOnly = isLead && segments === 'measured'
   const openCandidates = open ? voicesRead.get(open.registryId)?.candidates ?? [] : []
   if ((marketVoicesOnly || cv.readsSegments) && !(open && marked.has(open.registryId))) await markVideoSegments(db, clientId, openCandidates)
+  // Never a sale offer or an ad (default M-c): the next eligible voice.
+  // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): the theme's
+  // voices speak to it, one per video, from the market's buyers and
+  // commenters — never a maker's audience or a seller's post, on the lead or
+  // on a theme the reader opened. Kept whole for the artboard's source lines.
+  const paneVoices = (open
+    ? pickQuotes(cv.voices(openCandidates), { month, kind: open.kind, count: THEME_VOICES, marketVideosOnly: marketVoicesOnly, skipOffers: true, gate: gateFor(clientId, { claim: open.label, requireRelevance: true }) })
+    : []) as Parameters<typeof voiceOf>[0][]
   const theme: ThemeBlock = open
     ? {
         state: 'ready',
@@ -972,13 +1010,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         prev: open.prev,
         provenance: open.provenance,
         kinds: cv.kinds(kinds),
-        // Never a sale offer or an ad (default M-c): the next eligible voice.
-        // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts): the
-        // theme's voices speak to it, one per video, from the market's buyers
-        // and commenters — never a maker's audience or a seller's post, on
-        // the lead or on a theme the reader opened.
-        voices: pickQuotes(cv.voices(openCandidates), { month, kind: open.kind, count: THEME_VOICES, marketVideosOnly: marketVoicesOnly, skipOffers: true, gate: gateFor(clientId, { claim: open.label, requireRelevance: true }) })
-          .map((c) => voiceOf(c as Parameters<typeof voiceOf>[0])),
+        voices: paneVoices.map((c) => voiceOf(c)),
         chip,
         isLead,
         videosHref: `/dashboard/videos?theme=${encodeURIComponent(open.registryId)}`,
@@ -1032,6 +1064,72 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       })
     : null
 
+  // ── the artboard's additions (`./voice-conversation.ts`) ─────────────────
+  // Two hops after the facts wave: the month record of the kind analysis's
+  // conversations the board did not read, then ONE attribution read over
+  // every video the page says who it is about. A failure hides what it
+  // feeds, never the page.
+  const conversation = await quiet((async (): Promise<ConversationExtras> => {
+    const [{ brandThemes, facts, members }, subjects] = await Promise.all([factsAhead, subjectsAhead])
+    const live = new Map(themes.map((t) => [t.registryId, t]))
+    const kindThemes: KindTheme[] = pool.filter((r) => r.k >= KIND_ITEM_FLOOR).flatMap((r) => {
+      const t = live.get(r.id)
+      const f = facts.get(r.id)
+      const label = t?.label ?? f?.label ?? null
+      // A label naming a brand is checked against its evidence on the board
+      // (`stripUnevidencedBrand`); one the board did not read is left out
+      // rather than printed unchecked.
+      if (!label || (!t && namesABrand(label, brandNames))) return []
+      return [{ id: r.id, label, kind: t?.kind ?? f?.kind ?? null, k: r.k, makerShare: shares?.maker.get(r.id) ?? null, noiseShare: shares?.noise.get(r.id) ?? null }]
+    })
+    const itemIds = [...new Set(CONV_KINDS.flatMap((k) => kindItems(kindThemes, k).map((t) => t.id)))]
+    const extraComments = new Map<string, Set<string>>()
+    const missing = itemIds.filter((id) => !refs.has(id))
+    const extraRefs = missing.length > 0 ? await loadThemeRefs(db, clientId, month, missing, extraComments) : new Map<string, string[]>()
+    const talk = new Map<string, TalkRef>()
+    for (const [id, videoIds] of [...refs, ...extraRefs]) talk.set(id, { videoIds, comments: refComments.get(id) ?? extraComments.get(id) ?? null })
+
+    const boardIds = [...board.rows.map((t) => t.registryId), ...(theme.id ? [theme.id] : [])]
+    const seed = (q: { quote: Quote; platform: string | null; date: string | null; commentId: string | null; videoId: string | null }) => q
+    const voices = paneVoices.map((c) => seed({ quote: voiceOf(c).quote, platform: c.platform, date: c.commentDate, commentId: c.commentId, videoId: c.video?.id ?? null }))
+    const kindQuotes = new Map((words?.kinds ?? []).flatMap((k) => {
+      const q = k.quotes[0]
+      return q ? [[k.kind, seed({ quote: q.quote, platform: q.platform, date: q.date, commentId: q.commentId ?? null, videoId: q.videoId ?? null })] as const] : []
+    }))
+    const videoIds = new Set<string>([
+      ...[...boardIds, ...itemIds].flatMap((id) => talk.get(id)?.videoIds ?? []),
+      ...[...voices, ...kindQuotes.values()].flatMap((q) => (q.videoId ? [q.videoId] : [])),
+    ])
+    const client = clientBrandName(clientId) ?? brand
+    const attribution = await loadAttribution(db, {
+      clientId,
+      videoIds,
+      brands: trackedBrands(clientId, client, rivals.flatMap((r) => (r.id ? [{ id: r.id, name: r.name }] : []))),
+    })
+    const monthKindRows = (kindRows ?? []).filter((r) => monthStartOf(r.month) === month).map((r) => ({ audience: r.audience, kind: r.kind, videos: r.videos }))
+    return buildConversation({
+      client,
+      market: marketLabels(clientId),
+      month,
+      monthName: longMonth(month),
+      soFar: rm.state === 'so_far',
+      boardIds,
+      talk,
+      attribution,
+      members: new Map([...members].map(([id, f]) => [id, f.memberIds])),
+      subjects,
+      makerShares: board.segments === 'measured' && shares ? shares.maker : null,
+      kindThemes,
+      brandRows: brandThemes.map((r) => ({ ...r, label: facts.get(r.themeId)?.label ?? null, kind: facts.get(r.themeId)?.kind ?? null })),
+      kindRows: kindRows ? monthKindRows : null,
+      kindVideos: kindRows ? marketKindVideos(kindRows, pooled, month, marketRivals) : null,
+      kindLabel: (kind) => convKindLabel(kind, clientId),
+      voices,
+      kindQuotes,
+      source: (q) => quoteSource(platformLabel, (iso) => shortDate(iso), q),
+    })
+  })(), 'voice.conversation')
+
   return {
     brand,
     month,
@@ -1053,6 +1151,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     where,
     ...(viewed.view ? { view: viewed.view } : {}),
     brandView,
+    conversation,
   }
 }
 
@@ -1090,6 +1189,9 @@ interface CastInput {
     insight_population: number | null; theme_population: number | null
   } | null
   newestRunId: string | null
+  /** Read a voice for each group (the legacy block prints one); false reads
+   *  none. */
+  quotes?: boolean
 }
 
 /**
@@ -1140,7 +1242,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
   // excerpts before, and printed a Goodwill line under "Supporter"; it reads
   // the first ten now, so the gate has a pool, and prints none rather than a
   // bad one.
-  const ids = [...new Set(personas.flatMap((p) => p.insightIds.slice(0, CAST_INSIGHTS)))]
+  const ids = input.quotes === false ? [] : [...new Set(personas.flatMap((p) => p.insightIds.slice(0, CAST_INSIGHTS)))]
   const evidenceByInsight = new Map<string, { id: string; quote: string; commentId: string | null; platform: string | null; videoId: string | null }[]>()
   if (ids.length > 0) {
     // Only the first few excerpts of each insight: `relevance_rank` is the
@@ -1170,7 +1272,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     }
   }
   const all = [...evidenceByInsight.values()].flat()
-  const [readings, ctx] = await Promise.all([
+  const [readings, ctx] = all.length === 0 ? [new Map(), null] as const : await Promise.all([
     readTranslations(input.supabase, all.map((q) => q.quote)),
     readQuoteContext(input.supabase, input.clientId, {
       commentIds: all.map((q) => q.commentId),
@@ -1185,7 +1287,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     return pickEligible(pool, (q) => ({
       text: q.quote,
       ...readingOf(readings, q.quote),
-      video: q.commentId ? ctx.forComment(q.commentId) : ctx.forEvidence(q.id),
+      video: !ctx ? null : q.commentId ? ctx.forComment(q.commentId) : ctx.forEvidence(q.id),
     }), 1, gate)[0] ?? null
   }
 

@@ -107,6 +107,11 @@ export interface WordsQuote {
   maker: boolean
   /** Where it was said; null where the video has no public URL. */
   href: string | null
+  /** ADDITIVE (the pages build): the comment and the video it is under
+   *  (`videos.id`), for who the words are about. Absent on a copy stored
+   *  before them. */
+  commentId?: string | null
+  videoId?: string | null
 }
 
 export interface WordsKind {
@@ -269,6 +274,8 @@ export function buildWords(input: {
         likes: c.likes,
         maker: input.segments === 'measured' && c.segment === 'maker',
         href: citationLink(c.platform, c.videoUrl, c.nativeCommentId).href,
+        commentId: c.commentId,
+        videoId: c.videoId,
       })
     }
     out.push({ kind, label: marketKindLabel(kind), videos, quotes })

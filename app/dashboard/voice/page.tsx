@@ -28,12 +28,9 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Vo
   const { supabase, clientId } = await getSessionContext()
   const sp = ((await searchParams) ?? {}) as Record<string, string | undefined>
   const data = await loadVoiceSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  // NO "HOW TO READ THIS PAGE" PILL IN THE BAR (d3 polish), as on Your
-  // market since 26 Sep (Heinrich's default there): the approved preview's
-  // bar is the brand, the month selector and its one line, and How to read is
-  // one click away in Settings, in its rail. The preview's Export is not here
-  // yet: the export route renders the page key `voice` as the legacy Voice
-  // module (components/pages/registry.ts), so a PDF from this bar would not be
-  // this page.
+  // THE APPROVED ARTBOARD (the pages build, 1 Oct): the title alone at the
+  // top, no month chip, no "as at" line and no Export (the export route
+  // renders the legacy Voice module, so a PDF from here would not be this
+  // page).
   return <VoiceSurfacePage data={data} params={sp} />
 }

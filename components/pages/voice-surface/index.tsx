@@ -3,11 +3,7 @@ import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
-import { PRIVACY_LINE } from '@/lib/reading/method'
-import { PageFrame, PageGrid } from '@/components/shell/page-grid'
-import { SurfacePageBar } from '@/components/shell/page-bar'
-import { barContext } from '@/lib/shell/bar'
-import { Tile, TileEmpty } from '@/components/shell/tile'
+import { surface } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { voiceAudience } from './audience'
@@ -16,15 +12,17 @@ import { voiceTheme } from './theme'
 import { voiceCast } from './cast'
 import { voiceWords } from './words'
 import { voiceWhere } from './where'
+import { ConvCard, ConversationBody } from './conversation'
 
 // Conversation — the page (market-first WP2.4 and WP3.8, plan §2.4 C1–C6; it
 // was Voice, Phase 1 WP13, and keeps the key `voice`).
 //
-// SIX BLOCKS, IN THE ORDER A READER ASKS: how big was the market and where
-// are its themes grouped (C1) · every theme it talked about at 10 or more (C2)
-// · one of them in full (C3) · who is talking (C4) · the market's words, kind
-// by kind (C5) · where it talks, account by account (C6). A row on the board
-// opens its theme in C3.
+// THE PAGE IS THE APPROVED ARTBOARD NOW (the pages build, 1 Oct;
+// `./conversation.tsx`). The six blocks below are RETIRED FROM THE PAGE and
+// kept registered, keys unchanged, for what still renders them (the registry
+// sweep, the brand view under `?brand=`): how big was the market (C1) · every
+// theme at 10 or more (C2) · one in full (C3) · who is talking (C4) · the
+// market's words (C5) · where it talks (C6).
 
 export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
   voiceAudience,
@@ -34,16 +32,6 @@ export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
   voiceWords,
   voiceWhere,
 ]
-
-/** The anchor each block's section carries: the board's rows open the pane
- *  at `#theme`, and the pane's "in full below" link points at it. */
-const ANCHORS: Readonly<Record<string, string>> = { 'voice.theme': 'theme' }
-
-/** A block's anchor. Under `?brand=` the board's whole section is `#board`
- *  (the Brands page links there), so the brand's name in the title is on
- *  screen; the market's board keeps `#board` on its table. */
-const anchorOf = (key: string, data: VoiceSurfaceData): string | undefined =>
-  key === 'voice.board' && data.brandView ? 'board' : ANCHORS[key]
 
 /**
  * NO FIXED-HEIGHT TILES ON THIS PAGE. `Tile` is `overflow-hidden`, and a tile
@@ -90,10 +78,28 @@ export function voiceContext(params: Record<string, string | undefined> = {}): B
  *  same legend. */
 export const VOICE_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
+/** The page's title row: the artboard's 26px title, and whatever control the
+ *  route puts at its right-hand end (none today). */
+export function ConversationTitle({ controls }: { controls?: ReactNode }) {
+  return (
+    <div className="flex min-h-10 items-center justify-between gap-4">
+      <h1 className="m-0 text-[26px] font-bold leading-tight">{surface('voice').label}</h1>
+      {controls ? <div className="flex items-center gap-2.5">{controls}</div> : null}
+    </div>
+  )
+}
+
 /**
- * `controls` IS THE ROUTE'S, NOT THE PAGE'S: the legend pill reads
- * `useSearchParams`, and this page also renders under `renderToStaticMarkup`
- * and on the print path, where no router is mounted.
+ * THE APPROVED ARTBOARD (Page-Conversation.dc.html, the pages build of 1 Oct):
+ * the title, then every conversation beside one in full and where the market
+ * talks, who is talking, and the market's words by kind
+ * (`./conversation.tsx`). No page-bar line, no month chip, no Export and no
+ * footnote: `?month=` still reads another month. The six legacy blocks stay
+ * registered (`VOICE_BLOCKS`) for what still renders them; the page draws
+ * none of them, except the board's brand view under `?brand=`.
+ *
+ * `controls` IS THE ROUTE'S, NOT THE PAGE'S: this page also renders under
+ * `renderToStaticMarkup`, where no router is mounted.
  */
 export function VoiceSurfacePage({
   data,
@@ -102,44 +108,26 @@ export function VoiceSurfacePage({
 }: {
   data: VoiceSurfaceData | null
   params?: Record<string, string | undefined>
-  /** The page bar's right-hand end — the legend pill, from the route. */
+  /** The title row's right-hand end, from the route. */
   controls?: ReactNode
 }) {
   if (!data) {
     return (
-      <PageFrame>
-        <SurfacePageBar nav="voice" params={params}>{controls}</SurfacePageBar>
-        <PageGrid>
-          <Tile col={12} row={2}>
-            <TileEmpty>
-              Nothing has been read for this workspace yet. The first reading of what your market talked about lands with the first update.
-            </TileEmpty>
-          </Tile>
-        </PageGrid>
-      </PageFrame>
+      <div className="flex flex-col gap-[22px]">
+        <ConversationTitle controls={controls} />
+        <ConvCard className="px-7 py-6">
+          <p className="m-0 text-[14px] text-[#5F656B]">Your market’s first month will appear here.</p>
+        </ConvCard>
+      </div>
     )
   }
-
-  const ctx = voiceContext(params)
+  // `?brand=`: the brand's ninety days in the board's place, the legacy block
+  // as the Brands page links to it (#board on its whole section).
+  const board = data.brandView ? <ConvCard id="board">{voiceBoard.render(data, 'app', voiceContext(params))}</ConvCard> : undefined
   return (
-    <PageFrame className="gap-6">
-      <SurfacePageBar
-        nav="voice"
-        params={params}
-        // The brand, the month selector and "as at the {update} update · next
-        // update {date}" (25 Sep rulings). No horizon: the page reads one
-        // month (lib/nav.ts).
-        context={barContext(data)}
-      >
-        {controls}
-      </SurfacePageBar>
-      {VOICE_BLOCKS.map((block) => (
-        <GrowingTile key={block.key} flush id={anchorOf(block.key, data)}>{block.render(data, 'app', ctx)}</GrowingTile>
-      ))}
-      {/* NO FOOTNOTE UNDER A BLOCK (25 Sep rulings): the page prints no
-          method paragraph and no caveat under its blocks. The privacy line is
-          a legal line, not method, and stays. */}
-      <p className="m-0 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{PRIVACY_LINE}</p>
-    </PageFrame>
+    <div className="flex flex-col gap-[22px]">
+      <ConversationTitle controls={controls} />
+      <ConversationBody data={data} params={params} board={board} />
+    </div>
   )
 }
