@@ -5,7 +5,8 @@ import { EMAIL_IMAGE_TILES, renderDigestEmail } from '../email/digest'
 import { documentSubject, renderDocumentEmail } from '../email/document-brief'
 import { applyEdits, loadEdits } from '../reports/documents/edits'
 import { reviewRecipients } from './members'
-import { sendsArtefact } from './artefact'
+import { sendsArtefact, sendsWeeklyRead } from './artefact'
+import { alertWeeklyRead } from './weekly-read-alert'
 import { renderMany } from '../render/render'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
@@ -211,6 +212,15 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       ? { status: 'ready' as const, ready_at: row.ready_at ?? new Date().toISOString(), error: error.slice(0, 500) }
       : { status: 'failed' as const, error: error.slice(0, 500) }
     await admin.from('report_sends').update(patch).eq('id', sendId)
+    // The weekly read's delivery failing reaches the operator at once (review
+    // L1), not the next morning's check.
+    if (sendsWeeklyRead(schedule)) {
+      const { data: client } = await admin.from('clients').select('company_name').eq('id', schedule.client_id).maybeSingle()
+      await alertWeeklyRead('delivery_failed', {
+        schedule, runId: row.run_id, company: (client?.company_name as string | undefined) ?? null,
+        reason: `"${row.subject ?? schedule.name}" did not go to the list: ${error}`,
+      })
+    }
     return { status: 'failed', ms: ms(), error }
   }
 
@@ -249,11 +259,22 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       const page = k.split('.')[0]
       return data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
-    const rendered = await renderMany({
-      baseUrl: a.renderBaseUrl ?? a.baseUrl,
-      snapshotId: snapRow.id,
-      jobs: [{ format: 'pdf' }, ...imageTiles.map((k) => ({ format: 'png' as const, tileKey: k }))],
-    })
+    // THE WEEKLY READ'S PDF, WHERE IT IS NOT ATTACHED (review L1): rendered
+    // for the archive where it can be; a Chromium hiccup must not stop the
+    // email, which is the report.
+    const pdfOptional = Boolean(weeklyRead) && !schedule.attach_pdf
+    let rendered: Awaited<ReturnType<typeof renderMany>> | null = null
+    try {
+      rendered = await renderMany({
+        baseUrl: a.renderBaseUrl ?? a.baseUrl,
+        snapshotId: snapRow.id,
+        jobs: [{ format: 'pdf' }, ...imageTiles.map((k) => ({ format: 'png' as const, tileKey: k }))],
+      })
+    } catch (e) {
+      if (!pdfOptional) throw e
+      console.warn(`[deliver ${sendId}] the PDF did not render, and is not attached: the email goes without it: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    const pdf = rendered?.[0] ?? null
 
     // The stored PDF: replace a stale file with what we just rendered (edits
     // and erasures both stale it); store one if the row never had one.
@@ -262,14 +283,14 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       const { data: art } = await admin.from('artifacts').select('*').eq('id', row.artifact_id).maybeSingle()
       artifact = (art as ArtifactRow | null) ?? null
     }
-    if (artifact?.stale) {
-      artifact = await replaceArtifactFile(admin, artifact, { buffer: rendered[0].buffer, renderMs: rendered[0].ms })
+    if (pdf && artifact?.stale) {
+      artifact = await replaceArtifactFile(admin, artifact, { buffer: pdf.buffer, renderMs: pdf.ms })
       await logExport(admin, { clientId: schedule.client_id, userId: a.approvedBy ?? null, snapshotId: snapRow.id, artifactId: artifact.id, action: 'rerender', kind: 'report', format: 'pdf' })
-    } else if (!artifact) {
-      artifact = await storeArtifact(admin, { clientId: schedule.client_id, snapshotId: snapRow.id, format: 'pdf', tileKey: null, buffer: rendered[0].buffer, renderMs: rendered[0].ms })
+    } else if (pdf && !artifact) {
+      artifact = await storeArtifact(admin, { clientId: schedule.client_id, snapshotId: snapRow.id, format: 'pdf', tileKey: null, buffer: pdf.buffer, renderMs: pdf.ms })
       await logExport(admin, { clientId: schedule.client_id, userId: a.approvedBy ?? null, snapshotId: snapRow.id, artifactId: artifact.id, action: 'export', kind: 'report', format: 'pdf' })
     }
-    const pdfFilename = artifactFilename(snapRow.title, artifact)
+    const pdfFilename = artifact ? artifactFilename(snapRow.title, artifact) : 'report.pdf'
 
     // The link the email carries: the one minted at build time, or a fresh one.
     let shareUrl: string | null = null
@@ -297,14 +318,14 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // Recorded before the email, not after it: a send that the provider
     // refuses is retried, and a retry must reuse this link and this file
     // rather than leave a public link behind on every attempt.
-    await admin.from('report_sends').update({ artifact_id: artifact.id, share_link_id: shareLinkId }).eq('id', sendId)
+    await admin.from('report_sends').update({ artifact_id: artifact?.id ?? null, share_link_id: shareLinkId }).eq('id', sendId)
 
     const images: Record<string, string> = {}
     const inline: EmailAttachment[] = []
     imageTiles.forEach((k, i) => {
       const cid = `${k.replace(/\./g, '-')}@verbatim`
       images[k] = `cid:${cid}`
-      inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
+      inline.push({ filename: `${k}.png`, content: rendered![i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
     const email = weeklyRead
       ? renderWeeklyReadEmail({ data: weeklyRead, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
@@ -318,7 +339,7 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
         ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
     const attachments = pruneInlineImages(email.html, inline)
-    if (schedule.attach_pdf) attachments.push({ filename: pdfFilename, content: rendered[0].buffer, contentType: 'application/pdf' })
+    if (schedule.attach_pdf && pdf) attachments.push({ filename: pdfFilename, content: pdf.buffer, contentType: 'application/pdf' })
     const { sent } = await sendReportEmail({ to, subject: email.subject, html: email.html, text: email.text, attachments })
     if (!sent) return await failAs(EMAIL_FAILED)
 
@@ -331,7 +352,7 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
         sent_at: now,
         subject: email.subject,
         recipients: to,
-        artifact_id: artifact.id,
+        artifact_id: artifact?.id ?? null,
         share_link_id: shareLinkId,
         approved_by: a.approvedBy ?? null,
       })

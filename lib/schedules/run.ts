@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { artifactFilename, logExport, storeArtifact } from '../artifacts'
-import { sendAlertEmail, sendReportEmail, type EmailAttachment } from '../email'
+import { sendReportEmail, type EmailAttachment } from '../email'
 import { EMAIL_IMAGE_TILES, renderDigestEmail } from '../email/digest'
 import { renderMany } from '../render/render'
 import { BuildEmptyError, snapshotReport } from '../reports/build'
@@ -29,6 +29,7 @@ import { quarterlyBlocksFor } from '../../components/blocks/quarterly'
 import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly, sendsWeeklyRead } from './artefact'
 import { snapshotWeeklyRead, WeeklyReadNotReadyError, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
 import { renderWeeklyReadEmail } from '../email/weekly-read'
+import { alertWeeklyRead } from './weekly-read-alert'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -183,32 +184,6 @@ async function runDocumentSchedule(
   return { status: sent ? 'sent' : 'failed', subject: email.subject, ms: ms(), ...(sent ? {} : { error: 'email not sent, provider not configured or the send failed' }) }
 }
 
-/**
- * The operator hears that a weekly read was held back (plan T7: "a week with
- * no read sends nothing and alerts the operator; never an empty report"). Once
- * per update: the route answers 200 for a skipped send, so Inngest does not
- * retry the `send:<id>` step, and a completed step is never run again on
- * replay. A Send now that finds the read still missing alerts again, which is
- * the operator asking. The fallback is the Monday script, then a Send now from
- * the Studio, which takes the skipped row over (`claimDecision`).
- */
-async function alertWeeklyReadHeld(a: { schedule: ScheduleRow; runId: string; company: string; reason: string; message: string }): Promise<void> {
-  const who = a.company || a.schedule.client_id
-  const n = a.schedule.recipients.length
-  await sendAlertEmail(
-    `Verbatim weekly read not sent: ${who}`,
-    [
-      `${a.message}`,
-      ``,
-      `Schedule: ${a.schedule.name} (${a.schedule.id}), ${n} recipient${n === 1 ? '' : 's'}. Nobody was emailed.`,
-      `Run: ${a.runId} · reason: ${a.reason}`,
-      `Client: ${who} (${a.schedule.client_id})`,
-      ``,
-      `To send this week's read once it exists: node --env-file=.env.local --import tsx scripts/week-read.ts --client ${a.schedule.client_id} --run ${a.runId} (dry), then again with --write; then Send now on this schedule in the Studio.`,
-    ].join('\n'),
-  ).catch(() => ({ sent: false }))
-}
-
 /** The workspace's name, for an artefact that resolves no template. */
 async function companyName(admin: SupabaseClient, clientId: string): Promise<string> {
   const { data } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
@@ -221,6 +196,13 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
   const { admin, schedule, runId } = a
   const recording = a.mode === 'send'
   let sendId: string | undefined
+  // THE WEEKLY READ'S FAILURES REACH THE OPERATOR AT ONCE (review L1): on a
+  // real send, any failure below (the build, the hold for review, the review
+  // email, the email to the list) alerts, not only the next morning's check.
+  const weeklyReadSend = recording && sendsWeeklyRead(schedule)
+  let companyForAlert = ''
+  const alertFailed = (reason: string) =>
+    weeklyReadSend ? alertWeeklyRead('failed', { schedule, runId, company: companyForAlert, reason }) : Promise.resolve()
 
   if (recording) {
     const claim = await claimSend(admin, schedule, runId)
@@ -237,6 +219,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
 
   let snapshotId: string | undefined
   let artifactStored = false
+  // A review build with no PDF (the weekly read, not attached) is kept once
+  // its send row names it, as a build with a file is (the orphan rule).
+  let buildRecorded = false
   try {
     // A WEEKLY SCHEDULE NAMES NO TEMPLATE, and must not be failed for it. The
     // weekly report is an arrangement over BLOCK keys rather than over page
@@ -254,6 +239,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // run's stored written read, frozen whole.
     const weeklyRead = sendsWeeklyRead(schedule)
     const resolved = arranged || weeklyRead ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
+    companyForAlert = resolved?.company ?? ''
     if (!resolved) {
       await mark('failed', 'The template this schedule sends no longer exists.')
       return { status: 'failed', sendId, ms: ms(), error: 'The template this schedule sends no longer exists.' }
@@ -301,7 +287,11 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
       } catch (e) {
         if (e instanceof WeeklyReadNotReadyError) {
           await mark('skipped', e.message)
-          if (recording) await alertWeeklyReadHeld({ schedule, runId, company: resolved.company, reason: e.reason, message: e.message })
+          // Once per update: the route answers 200 for a skipped send, so
+          // Inngest does not retry the `send:<id>` step, and a completed step
+          // is never run again on replay. A Send now that finds the read still
+          // missing alerts again, which is the operator asking.
+          if (recording) await alertWeeklyRead('not_sent', { schedule, runId, company: resolved.company, reason: `${e.message} (${e.reason})` })
           return { status: 'skipped', sendId, ms: ms(), error: e.message }
         }
         throw e
@@ -450,11 +440,26 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
       const page = k.split('.')[0]
       return (snap.data as ReportSnapshotData).sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
-    const rendered = await renderMany({
-      baseUrl: a.renderBaseUrl ?? a.baseUrl,
-      snapshotId,
-      jobs: [{ format: 'pdf' }, ...imageTiles.map((k) => ({ format: 'png' as const, tileKey: k }))],
-    })
+    // THE WEEKLY READ'S PDF, WHERE IT IS NOT ATTACHED (review L1): the email
+    // is the report, so a Chromium hiccup must not stop it. On the review path
+    // nothing is rendered at all (the build waits without a file; the Send
+    // renders one for the archive); on a send it is rendered for the archive
+    // where it can be, and the email goes without it where it cannot.
+    const pdfOptional = weeklyRead && !schedule.attach_pdf
+    let rendered: Awaited<ReturnType<typeof renderMany>> | null = null
+    if (!(pdfOptional && reviewing)) {
+      try {
+        rendered = await renderMany({
+          baseUrl: a.renderBaseUrl ?? a.baseUrl,
+          snapshotId,
+          jobs: [{ format: 'pdf' }, ...imageTiles.map((k) => ({ format: 'png' as const, tileKey: k }))],
+        })
+      } catch (e) {
+        if (!pdfOptional) throw e
+        console.warn(`[schedule ${schedule.id}] the PDF did not render, and is not attached: the email goes without it: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    const pdf = rendered?.[0] ?? null
     // A test send leaves no artifact, no export event and no public link: it is
     // a rehearsal for the person who clicked, not a build for the workspace.
     let artifactId: string | undefined
@@ -462,11 +467,13 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     let shareUrl: string | null = null
     let shareLinkId: string | null = null
     if (recording) {
-      const artifact = await storeArtifact(admin, { clientId: schedule.client_id, snapshotId, format: 'pdf', tileKey: null, buffer: rendered[0].buffer, renderMs: rendered[0].ms })
-      artifactStored = true
-      artifactId = artifact.id
-      pdfFilename = artifactFilename(snap.title, artifact)
-      await logExport(admin, { clientId: schedule.client_id, userId: null, snapshotId, artifactId: artifact.id, action: 'export', kind: 'report', format: 'pdf' })
+      if (pdf) {
+        const artifact = await storeArtifact(admin, { clientId: schedule.client_id, snapshotId, format: 'pdf', tileKey: null, buffer: pdf.buffer, renderMs: pdf.ms })
+        artifactStored = true
+        artifactId = artifact.id
+        pdfFilename = artifactFilename(snap.title, artifact)
+        await logExport(admin, { clientId: schedule.client_id, userId: null, snapshotId, artifactId: artifact.id, action: 'export', kind: 'report', format: 'pdf' })
+      }
 
       // 4. The link the email carries. Open with the link; the schedule's life;
       // no password. A review send mints nothing here: a report that is never
@@ -494,11 +501,18 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
         .from('report_sends')
         .update({ snapshot_id: snapshotId, artifact_id: artifactId ?? null, share_link_id: shareLinkId })
         .eq('id', sendId)
+      // The send row names the build now, file or no file: it is kept.
+      buildRecorded = true
       if (schedule.report_id) await admin.from('reports').update({ status: 'built', latest_snapshot_id: snapshotId, updated_at: now }).eq('id', schedule.report_id)
       const ready = await readyForReview(admin, { sendId, baseUrl: a.baseUrl })
       if (ready.status === 'failed') {
         await mark('failed', ready.error ?? 'Could not put this out for review.')
+        await alertFailed(`It could not be held for review: ${ready.error ?? 'no reason given'}`)
         return { status: 'failed', sendId, snapshotId, artifactId, ms: ms(), error: ready.error }
+      }
+      // Held, and nobody told: the reviewer would never know it waits.
+      if (weeklyReadSend && !ready.notified) {
+        await alertWeeklyRead('review_unsent', { schedule, runId, company: companyForAlert, reason: `"${ready.subject ?? snap.title}" is built and held for review, and the review email was not sent (is ALERT_EMAIL set, and is the email service up?).` })
       }
       return { status: 'ready', sendId, snapshotId, artifactId, shareUrl: shareUrl ?? undefined, subject: ready.subject, notified: ready.notified, ms: ms() }
     }
@@ -509,12 +523,13 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     imageTiles.forEach((k, i) => {
       const cid = `${k.replace(/\./g, '-')}@verbatim`
       images[k] = `cid:${cid}`
-      inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
+      inline.push({ filename: `${k}.png`, content: rendered![i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
     const email = renderEmail(shareUrl, images)
     const attachments = pruneInlineImages(email.html, inline)
-    if (schedule.attach_pdf) attachments.push({ filename: pdfFilename, content: rendered[0].buffer, contentType: 'application/pdf' })
+    if (schedule.attach_pdf && pdf) attachments.push({ filename: pdfFilename, content: pdf.buffer, contentType: 'application/pdf' })
     const { sent } = await sendReportEmail({ to, subject: email.subject, html: email.html, text: email.text, attachments })
+    if (!sent && recording) await alertFailed('The email to the list was not accepted by the email service.')
     if (!recording) {
       // A rehearsal leaves nothing behind: no build in the archive without a file.
       await admin.from('report_snapshots').delete().eq('id', snapshotId)
@@ -558,8 +573,10 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
     console.error(`[schedule ${schedule.id}] ${error}`)
-    if (snapshotId && !artifactStored) await admin.from('report_snapshots').delete().eq('id', snapshotId)
+    const kept = artifactStored || buildRecorded
+    if (snapshotId && !kept) await admin.from('report_snapshots').delete().eq('id', snapshotId)
     await mark('failed', error)
-    return { status: 'failed', sendId, snapshotId: artifactStored ? snapshotId : undefined, ms: ms(), error }
+    await alertFailed(`It failed on its way out: ${error}`)
+    return { status: 'failed', sendId, snapshotId: kept ? snapshotId : undefined, ms: ms(), error }
   }
 }

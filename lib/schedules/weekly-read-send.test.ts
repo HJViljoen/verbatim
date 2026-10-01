@@ -43,6 +43,9 @@ vi.mock('../quotes', async (importOriginal) => ({
 
 const { runSchedule } = await import('./run')
 const { deliverSend } = await import('./deliver')
+const emailMod = await import('../email')
+const renderMod = await import('../render/render')
+const artifactsMod = await import('../artifacts')
 
 const CLIENT = SEALAND_CLIENT_ID
 const RUN = 'run-27'
@@ -86,6 +89,8 @@ beforeEach(() => {
   mail.report.length = 0
   mail.alert.length = 0
   mail.review.length = 0
+  vi.mocked(renderMod.renderMany).mockClear()
+  vi.mocked(artifactsMod.storeArtifact).mockClear()
   vi.stubEnv('ALERT_EMAIL', 'heinrich@verbatim.test')
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -126,7 +131,7 @@ describe('a run with no ready read sends NOTHING and tells the operator', () => 
       expect(w.tables.report_sends[0]).toMatchObject({ status: 'skipped', schedule_id: 'sched-wr', run_id: RUN })
       expect(mail.alert).toHaveLength(1)
       expect(mail.alert[0].subject).toBe('Verbatim weekly read not sent: Sealand')
-      expect(mail.alert[0].text).toContain('Nobody was emailed')
+      expect(mail.alert[0].text).toContain('Nobody on the list was emailed')
       expect(mail.alert[0].text).toContain(`--run ${RUN}`)
     })
   }
@@ -250,5 +255,92 @@ describe('reviewAudience: who reads a build before it goes', () => {
     const w = world(null)
     expect(await reviewRecipients(w.admin, 'another-tenant', { studioVisible: true, sendsLocked: false })).toEqual({ audience: 'members', to: [] })
     expect(await reviewRecipients(w.admin, CLIENT, { env: { ALERT_EMAIL: 'heinrich@verbatim.test' } })).toEqual({ audience: 'operator', to: ['heinrich@verbatim.test'] })
+  })
+})
+
+describe('L1: a Chromium hiccup never stops the weekly read, and every failure reaches the operator at once', () => {
+  it('review path, PDF not attached: nothing is rendered, the build is held and kept, the review email goes', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    const r = await runSchedule({ admin: w.admin, schedule: schedule({ attach_pdf: false }), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('ready')
+    expect(renderMod.renderMany).not.toHaveBeenCalled()
+    expect(artifactsMod.storeArtifact).not.toHaveBeenCalled()
+    expect(w.tables.report_snapshots).toHaveLength(1)
+    expect(w.tables.report_sends[0]).toMatchObject({ status: 'ready', artifact_id: null })
+    expect(mail.review).toHaveLength(1)
+    expect(mail.alert).toEqual([])
+  })
+
+  it('review path, PDF attached: it is rendered and stored, as before', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) }, schedule({ attach_pdf: true }))
+    await runSchedule({ admin: w.admin, schedule: schedule({ attach_pdf: true }), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(renderMod.renderMany).toHaveBeenCalledTimes(1)
+    expect(w.tables.report_sends[0]).toMatchObject({ status: 'ready', artifact_id: 'art-1' })
+  })
+
+  it('a send whose PDF will not render still goes, without it, when the PDF is not attached', async () => {
+    vi.mocked(renderMod.renderMany).mockRejectedValueOnce(new Error('chromium crashed'))
+    const w = world({ status: 'ready', data: frozen(sealandRead()) }, schedule({ review: false }))
+    const r = await runSchedule({ admin: w.admin, schedule: schedule({ review: false, attach_pdf: false }), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('sent')
+    expect(mail.report).toHaveLength(1)
+    expect(w.tables.report_sends[0]).toMatchObject({ status: 'sent', artifact_id: null })
+    expect(mail.alert).toEqual([])
+  })
+
+  it('the operator\'s Send delivers without a PDF when it will not render and is not attached', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    const held = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    vi.mocked(renderMod.renderMany).mockRejectedValueOnce(new Error('chromium crashed'))
+    const out = await deliverSend({ admin: w.admin, sendId: held.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'op' })
+    expect(out.status).toBe('sent')
+    expect(mail.report[0].to).toEqual(RECIPIENTS)
+  })
+
+  it('a failure while building alerts at once, and the send is failed', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    delete w.tables.report_snapshots   // the snapshot insert fails
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('failed')
+    expect(mail.report).toEqual([])
+    expect(mail.alert).toHaveLength(1)
+    expect(mail.alert[0].subject).toBe('Verbatim weekly read failed on its way out: Sealand')
+    expect(mail.alert[0].text).toMatch(/It failed on its way out: snapshot: insert failed/)
+  })
+
+  it('held but the review email did not go: the operator is told it waits', async () => {
+    vi.mocked(emailMod.sendReviewEmail).mockResolvedValueOnce({ sent: false })
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r).toMatchObject({ status: 'ready', notified: false })
+    expect(mail.alert).toHaveLength(1)
+    expect(mail.alert[0].subject).toBe('Verbatim weekly read waiting for review (the review email did not go): Sealand')
+  })
+
+  it('the email to the list not accepted (review off): failed, and the operator is told at once', async () => {
+    vi.mocked(emailMod.sendReportEmail).mockResolvedValueOnce({ sent: false })
+    const w = world({ status: 'ready', data: frozen(sealandRead()) }, schedule({ review: false }))
+    const r = await runSchedule({ admin: w.admin, schedule: schedule({ review: false }), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('failed')
+    expect(mail.alert.map((x) => x.subject)).toEqual(['Verbatim weekly read failed on its way out: Sealand'])
+  })
+
+  it("the operator's Send not accepted: it waits again, and the operator is told", async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    const held = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    vi.mocked(emailMod.sendReportEmail).mockResolvedValueOnce({ sent: false })
+    const out = await deliverSend({ admin: w.admin, sendId: held.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'op' })
+    expect(out.status).toBe('failed')
+    expect(w.tables.report_sends[0]).toMatchObject({ status: 'ready' })
+    expect(mail.alert).toHaveLength(1)
+    expect(mail.alert[0].subject).toBe('Verbatim weekly read did not reach its list: Sealand')
+  })
+
+  it('a test send that fails alerts nobody (it is a rehearsal)', async () => {
+    vi.mocked(emailMod.sendReportEmail).mockResolvedValueOnce({ sent: false })
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'test', to: ['heinrich@verbatim.test'] })
+    expect(r.status).toBe('failed')
+    expect(mail.alert).toEqual([])
   })
 })
