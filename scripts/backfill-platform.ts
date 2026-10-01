@@ -4,7 +4,7 @@
 // put it on the platform without emailing anyone.
 //
 //   node --env-file=.env.local --import tsx scripts/backfill-platform.ts \
-//     --client <uuid> [--run <uuid>] [--out <file.md>] [--yes | --publish]
+//     --client <uuid> [--run <uuid>] [--out <file.md>] [--regate [--yes] | --yes | --publish]
 //
 // Run it through ~/.claude/plans/verbatim-writing-back/run/backfill-platform.sh,
 // which checks production first and keeps the log.
@@ -30,10 +30,26 @@
 // one), no subject recalibration (a definition change is Heinrich's), no
 // email to anyone.
 //
-// THREE MODES.
+// THE REGATE FIRST (scripts/backfill-regate.ts; the lead's ruling, 1 Oct
+// evening). Before the 24 Sep fix the relevance gate kept every video of a
+// batch OpenAI refused, unjudged; 66 such videos sit in Sealand's market and
+// count everywhere. `--regate --yes` judges them with today's check, appends
+// today's verdicts, removes the ones it drops with a backup (`regate_videos`;
+// undo `regate_restore`) and refreshes the reading month's stored rows. It
+// runs before `--yes`, which refuses while any is left (unless
+// `--without-regate`), so the stored reads count without them.
+//
+// FIVE MODES.
 //   (default) DRY: reads production, makes the model calls (logged nowhere),
-//             prints what it would write, the full text of both reads for
-//             Heinrich to read, and the cost. Writes nothing.
+//             prints the regate's plan, what it would write, the full text of
+//             both reads for Heinrich to read, as they stand AND after the
+//             regate (simulated: the dropped videos out of their figures,
+//             composed again from the same writer output), and the cost.
+//             Writes nothing.
+//   --regate  the regate's plan alone (dry; a fraction of a cent).
+//   --regate --yes --plan <file>  writes the regate a dry run planned (the dry
+//             run saves its verdicts with --plan <file>; the write applies
+//             exactly those, never a fresh judgement). Emails nobody.
 //   --yes     writes 1 to 3 (each only where missing). Emails nobody.
 //   --publish puts the held build ON THE PLATFORM without its email
 //             (`publishSend`, lib/schedules/publish.ts: `published_at`, and a
@@ -51,16 +67,14 @@
 // .env.local IS PRODUCTION. It probes first (a timed read of the one client
 // row) and will not go on if that takes over 3 s or fails.
 
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk } from '../lib/chunk'
 import { scriptActor } from '../lib/config-log'
 import { longMonth } from '../lib/format'
-import { loadGatherConfig } from '../lib/gather/gather'
-import { classifyRelevance } from '../lib/gather/relevance'
+import { loadUnjudgedMarketVideos } from '../lib/gather/rejudge'
 import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes'
 import { monthStartOf } from '../lib/reading/month-key'
 import { sendsWeeklyRead } from '../lib/schedules/artefact'
@@ -72,8 +86,8 @@ import { readingMonthOf } from '../lib/written/month'
 import type { CallBudget, WeekReadCall } from '../lib/written/deadline'
 import { buildWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead } from '../lib/written/step'
 import { saveWeekRead, weekReadsApplied } from '../lib/written/store'
-import { selectAll } from '../lib/supabase-admin'
 import type { LongRunReadData } from '../lib/written/types'
+import { applyRegate, dropContributions, readRegate, savedPlanOf, simulateLongRun, simulateWeekRead, type RegateRead, type SavedRegatePlan } from './backfill-regate'
 import { renderLongRun, renderWeekRead } from './written-render'
 
 const args = process.argv.slice(2)
@@ -122,60 +136,6 @@ export function isoMonday(iso: string): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day)).toISOString().slice(0, 10)
 }
 
-/**
- * THE VIDEOS LET IN UNJUDGED (the lead's question about the week chart, 1 Oct):
- * every market-lane video whose only relevance verdict is the fail-open
- * `default` (a GPT batch that failed before the 24 Sep fix), judged now by
- * today's check (`classifyRelevance`, gpt-4.1-mini, one call per sixty), and
- * which of them have comments dated in `week`. READ-ONLY: the verdicts are
- * printed, never stored. Bounded at `cap` videos.
- */
-async function measureUnchecked(db: SupabaseClient, clientId: string, week: string, cap = 1000): Promise<{ text: string[]; costUsd: number; inWeek: number; inWeekRejected: number; total: number; rejected: number }> {
-  type Gv = { platform: string; video_id: string; source: string; kept: boolean }
-  const gv = await selectAll<Gv>(() => db.from('gate_verdicts').select('platform, video_id, source, kept').eq('client_id', clientId).order('created_at') as unknown as { range: (a: number, b: number) => PromiseLike<{ data: Gv[] | null; error: unknown }> })
-  const judged = new Set(gv.filter((g) => g.source !== 'default').map((g) => `${g.platform}:${g.video_id}`))
-  const unjudged = [...new Set(gv.filter((g) => g.source === 'default' && g.kept).map((g) => `${g.platform}:${g.video_id}`))].filter((k) => !judged.has(k))
-  type V = { id: string; platform: string; video_id: string; account_name: string | null; caption: string | null; hashtags: string[] | null; analyzed_lane: string | null; is_client: boolean | null }
-  const videos: V[] = []
-  const byPlatform = new Map<string, string[]>()
-  for (const k of unjudged) { const [p, ...id] = k.split(':'); byPlatform.set(p, [...(byPlatform.get(p) ?? []), id.join(':')]) }
-  for (const [platform, ids] of byPlatform) {
-    for (const part of chunk(ids, 100)) {
-      const r = await db.from('videos').select('id, platform, video_id, account_name, caption, hashtags, analyzed_lane, is_client').eq('client_id', clientId).eq('platform', platform).in('video_id', part)
-      if (r.error) throw new Error(`videos: ${r.error.message}`)
-      videos.push(...((r.data ?? []) as V[]))
-    }
-  }
-  const market = videos.filter((v) => v.analyzed_lane === 'full' && v.is_client !== true).slice(0, cap)
-  const to = new Date(Date.parse(`${week}T00:00:00Z`) + 7 * 86_400_000).toISOString()
-  const inWeek = new Set<string>()
-  const mByPlatform = new Map<string, string[]>()
-  for (const v of market) mByPlatform.set(v.platform, [...(mByPlatform.get(v.platform) ?? []), v.video_id])
-  for (const [platform, ids] of mByPlatform) {
-    for (const part of chunk(ids, 100)) {
-      const r = await db.from('comments').select('video_id').eq('client_id', clientId).eq('platform', platform).in('video_id', part)
-        .gte('comment_date', `${week}T00:00:00Z`).lt('comment_date', to).limit(5000)
-      if (r.error) throw new Error(`comments: ${r.error.message}`)
-      for (const c of (r.data ?? []) as { video_id: string }[]) inWeek.add(`${platform}:${c.video_id}`)
-    }
-  }
-  const config = await loadGatherConfig(clientId)
-  const result = await classifyRelevance(market.map((v) => ({ video_id: `${v.platform}:${v.video_id}`, account_name: v.account_name ?? '', caption: v.caption ?? '', hashtags: v.hashtags ?? [] })), { method: 'gpt', config })
-  const verdict = (v: V) => result.verdicts.get(`${v.platform}:${v.video_id}`)
-  const rejected = market.filter((v) => verdict(v)?.relevant === false)
-  const weekVideos = market.filter((v) => inWeek.has(`${v.platform}:${v.video_id}`))
-  const weekRejected = weekVideos.filter((v) => verdict(v)?.relevant === false)
-  const still = market.filter((v) => verdict(v)?.source === 'default').length
-  const text = [
-    `Market-lane videos whose only relevance verdict is the fail-open default: ${market.length} (of ${unjudged.length} unjudged videos in all).`,
-    `Today's check keeps ${market.length - rejected.length - still} and drops ${rejected.length}${still ? `; ${still} could not be judged now either (${result.failedBatches} failed batch(es))` : ''}.`,
-    `Of them, ${weekVideos.length} have comments dated in the week of ${week}: today's check keeps ${weekVideos.length - weekRejected.length} and drops ${weekRejected.length}.`,
-    ...weekRejected.map((v) => `  - drops ${v.platform} ${v.video_id}: "${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 100)}" (${verdict(v)?.reason ?? ''})`),
-    `Cost of judging them now: $${result.costUsd.toFixed(4)}. Nothing was stored.`,
-  ]
-  return { text, costUsd: result.costUsd, inWeek: weekVideos.length, inWeekRejected: weekRejected.length, total: market.length, rejected: rejected.length }
-}
-
 interface RunRow { id: string; status: string; started_at: string; completed_at: string | null; window_start: string | null; window_end: string | null }
 
 const lines: string[] = []
@@ -184,13 +144,16 @@ const say = (s = '') => { lines.push(s); console.log(s) }
 async function main() {
   const clientId = flag('client')
   if (!/^[0-9a-f-]{36}$/.test(clientId)) {
-    console.error(`Usage: ${COMMAND} --client <uuid> [--run <uuid>] [--out <file.md>] [--yes | --publish]`)
+    console.error(`Usage: ${COMMAND} --client <uuid> [--run <uuid>] [--out <file.md>] [--regate [--yes] | --yes [--without-regate] | --publish]`)
     process.exit(2)
   }
-  const write = has('yes')
+  const regate = has('regate')
+  const write = has('yes') && !regate
+  const regateWrite = has('yes') && regate
   const publish = has('publish')
-  if (write && publish) throw new Error('--yes and --publish are separate steps: write, read the text, then publish')
-  const mode = publish ? 'PUBLISH' : write ? 'WRITE' : 'DRY RUN'
+  if (has('yes') && publish) throw new Error('--yes and --publish are separate steps: write, read the text, then publish')
+  if (regate && publish) throw new Error('--regate and --publish are separate steps')
+  const mode = publish ? 'PUBLISH' : regateWrite ? 'REGATE WRITE' : regate ? 'REGATE DRY RUN' : write ? 'WRITE' : 'DRY RUN'
   const block: string[] = []
   const fail: string[] = []
   const clock = sast()
@@ -266,6 +229,99 @@ async function main() {
   say(`- The platform state (migration 20261106090000): ${publishColumns ? 'in this database' : 'NOT in this database'}`)
 
   let cost = 0
+  let regatedContrib: { gone: Set<string>; contrib: Awaited<ReturnType<typeof dropContributions>> } | null = null
+
+  // ---- THE REGATE (--regate; and simulated in the dry run) -----------------------------------
+  // The videos the gate let in unjudged, judged by today's check. It runs
+  // BEFORE --yes writes the reads, so the stored reads count without the ones
+  // today's check drops.
+  let regated: RegateRead | null = null
+  if (regate || (!write && !publish)) {
+    say()
+    say('---')
+    say()
+    // --regate --yes applies a dry run's saved plan (--plan), never a fresh
+    // judgement: what is written is what Heinrich read.
+    const planPath = flag('plan')
+    let saved: SavedRegatePlan | null = null
+    if (regateWrite) {
+      if (!planPath) throw new Error('--regate --yes applies a dry run\'s plan: pass --plan <file> (the dry run writes it)')
+      saved = JSON.parse(readFileSync(resolve(process.cwd(), planPath), 'utf8')) as SavedRegatePlan
+    }
+    regated = await readRegate(db, clientId, saved)
+    cost += regated.costUsd
+    if (!regateWrite && planPath) {
+      writeFileSync(resolve(process.cwd(), planPath), `${JSON.stringify(savedPlanOf(clientId, regated), null, 2)}\n`)
+      say(`(The plan, with every verdict, is saved to ${planPath}: \`--regate --yes --plan\` applies exactly it.)`)
+    }
+    const { plan } = regated
+    const line = (v: { platform: string; video_id: string; caption: string | null }) =>
+      `${v.platform} ${v.video_id}: "${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 90)}" (${regated!.verdictOf(v as never)?.reason ?? 'no verdict'})`
+    say(`## The regate: ${regated.videos.length} market videos the gate let in unjudged, judged by today's check ($${regated.costUsd.toFixed(4)})`)
+    say()
+    say(`Of ${regated.unjudgedAll} videos whose newest relevance verdict is the fail-open default, ${regated.videos.length} are in the market (comments read in full, not your own posts).`)
+    say(`- Kept by today's check (stay, now checked): ${plan.kept.length}`)
+    say(`- Dropped (${regateWrite ? 'removed, each row backed up' : 'would be removed, each row backed up'}): ${plan.drop.length}`)
+    for (const v of plan.drop) say(`  - ${line(v)}`)
+    if (plan.cited.length) {
+      say(`- Dropped but cited by something stored (kept, for a person to decide): ${plan.cited.length}`)
+      for (const v of plan.cited) say(`  - ${line(v)}`)
+    }
+    if (plan.undecided.length) say(`- Not judged now either (${regated.failedBatches} failed batch(es); left as they are): ${plan.undecided.length}`)
+    block.push(`regate: ${regated.videos.length} unjudged market videos · keeps ${plan.kept.length} · ${regateWrite ? 'removes' : 'would remove'} ${plan.drop.length}${plan.cited.length ? ` · ${plan.cited.length} cited, kept` : ''}${plan.undecided.length ? ` · ${plan.undecided.length} undecided` : ''} · $${regated.costUsd.toFixed(4)}`)
+
+    // The week of 21 Sep, measured again as the chart's rule reads it.
+    const contrib = await dropContributions(db, clientId, plan.drop, window)
+    const week = isoMonday(new Date(Date.parse(run.window_end) - 1).toISOString())
+    const weekEnd = new Date(Date.parse(`${week}T00:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10)
+    const vol = await db.rpc('market_week_volumes', { p_client: clientId, p_from: week, p_to: weekEnd })
+    if (vol.error) throw new Error(`market_week_volumes: ${vol.error.message}`)
+    const rows = (vol.data ?? []) as { week: string; videos: number; comments: number; unchecked: number }[]
+    const before = rows.filter((r) => String(r.week).slice(0, 10) === week).reduce((t, r) => ({ videos: t.videos + Number(r.videos), comments: t.comments + Number(r.comments), unchecked: t.unchecked + Number(r.unchecked) }), { videos: 0, comments: 0, unchecked: 0 })
+    const weekWindow = { from: `${week}T00:00:00.000Z`, to: `${weekEnd}T00:00:00.000Z` }
+    const dropInWeek = await dropContributions(db, clientId, plan.drop, weekWindow)
+    // What stays unchecked in the week: the dropped videos something cites
+    // (kept, their newest verdict a drop) and any still undecided.
+    const staying = [...plan.cited, ...plan.undecided]
+    const stayInWeek = staying.length > 0 ? await dropContributions(db, clientId, staying, weekWindow) : null
+    const left = stayInWeek?.week.videos ?? 0
+    const citedHere = plan.cited.filter((v) => stayInWeek?.weekVideoIds.has(v.id))
+    say()
+    say(`### The week of ${week}, as the chart reads it`)
+    say()
+    say(`- Now: ${before.videos} market videos, ${before.comments} comments, ${before.unchecked} let in without a check that stands.`)
+    say(`- After the regate: ${before.videos - dropInWeek.week.videos} videos, ${before.comments - dropInWeek.week.comments} comments, ${left} still without a check that stands${citedHere.length ? `: ${citedHere.map((v) => `${v.platform} ${v.video_id}`).join(', ')}, dropped by today's check but cited by stored work, so kept` : ''}.`)
+    say(`- The chart's rule for the week: ${left === 0 ? 'met (same searches, one weekly gather, every video judged by a check that stands)' : `NOT met: ${left} of its videos would stay unchecked, and the rule keeps such a week off`}.`)
+    block.push(`week of ${week}: ${before.videos} → ${before.videos - dropInWeek.week.videos} videos · unchecked ${before.unchecked} → ${left}${left ? ` (${citedHere.length} cited, kept)` : ''} · rule ${left === 0 ? 'met' : 'NOT met'}`)
+
+    if (regateWrite) {
+      if (!publishColumns) fail.push('the platform migrations are not in production: apply them with the deploy first')
+      if (fail.length === 0) {
+        const out = await applyRegate(db, { clientId, runId: run.id, month, read: regated, actorLabel: `${COMMAND} --regate --yes --client ${clientId}` })
+        say()
+        say(`WRITTEN: ${out.verdicts} verdict row(s) appended; removal ${out.removal ? JSON.stringify(out.removal) : 'none (nothing dropped)'}; ${longMonth(month)} refreshed: ${out.refreshed}.`)
+        block.push(`regate written: ${out.verdicts} verdicts · ${out.removal ? `removed ${String(out.removal.videos_removed)} (backup batch ${String(out.removal.batch_id)}; undo: select regate_restore('${String(out.removal.batch_id)}'))` : 'nothing removed'} · ${longMonth(month)} refreshed`)
+      }
+      return finish(block, fail, cost)
+    }
+    if (regate) {
+      say()
+      say('Nothing was written. `--regate --yes` writes it; then `--yes` writes the reads on the corrected counts.')
+      return finish(block, fail, cost)
+    }
+    // The dry run: the reads below are composed on the counts as they stand,
+    // then again without the dropped videos (the simulation).
+    regatedContrib = { gone: new Set(plan.drop.map((v) => v.id)), contrib }
+  }
+
+  // --yes writes the reads on the corrected counts: the regate goes first.
+  if (write && !has('without-regate')) {
+    const left = await loadUnjudgedMarketVideos(db, clientId)
+    if (left.videos.length > 0) {
+      fail.push(`${left.videos.length} market videos are still let in unjudged: run --regate --yes first (or --without-regate to write the reads on the counts as they stand)`)
+      return finish(block, fail, cost)
+    }
+  }
 
   // ---- PUBLISH ------------------------------------------------------------------------------
   if (publish) {
@@ -310,6 +366,18 @@ async function main() {
     say()
     say(renderWeekRead(company, run.id, weekBuilt, words, write ? 'WRITTEN' : 'DRY RUN, not stored', inputs.context))
     if (write) await saveWeekRead(db, rowOf(clientId, run.id, weekBuilt))
+    if (regatedContrib && regatedContrib.gone.size > 0) {
+      const sim = simulateWeekRead(weekBuilt, company, regatedContrib.gone, regatedContrib.contrib)
+      const overlap = weekBuilt.pool.candidates.reduce((n, c) => n + c.lenientVideoIds.filter((id) => regatedContrib!.gone.has(id)).length, 0)
+      say()
+      say('---')
+      say()
+      say(`## 1b. The week read after the regate (simulated: the ${regatedContrib.gone.size} dropped videos out of its figures, composed again from the same writer output, no model call; ${overlap} of the findings' videos were among them)`)
+      say()
+      say(renderWeekRead(company, run.id, sim, words, 'DRY RUN AFTER THE REGATE, simulated', inputs.context))
+      const m = sim.data.market
+      block.push(`week read after the regate: ${m?.week.videos ?? '?'} videos · ${m?.week.comments ?? '?'} comments this week; ${m?.month.videos ?? '?'} · ${m?.month.comments ?? '?'} in ${longMonth(month)} · ${sim.data.findings.length} finding(s)`)
+    }
     block.push(`week read: ${write ? 'written' : 'would write'} ${weekBuilt.status} · ${weekBuilt.data.findings.length} finding(s) · $${weekBuilt.data.costUsd.toFixed(4)}`)
     if (weekBuilt.status !== 'ready') fail.push(`the week read is ${weekBuilt.status}: nothing would go on the platform`)
   }
@@ -336,6 +404,15 @@ async function main() {
     say(`What code prints beside each idea: "Heard in ${monthsPhrase(data.months)}, N videos" and who the videos are about, counted over the whole window (${data.window.from.slice(0, 10)} to ${data.window.to.slice(0, 10)}), on the comments to ${through}. No September-only count prints. The month-closing run writes the full read over it.`)
     if (counted.length > 0) fail.push(`the long-run read states a count in ${counted.length} sentence(s): not written`)
     if (write && counted.length === 0) await saveWeekRead(db, longRunRowOf(clientId, run.id, { status: built.status, data }))
+    if (regatedContrib && regatedContrib.gone.size > 0) {
+      const sim = await simulateLongRun(db, built, { clientId, company, gone: regatedContrib.gone })
+      const simData: LongRunReadData = { ...sim.data, partialThrough: through }
+      say()
+      say(`### 2b. After the regate (simulated: the dropped videos out of every idea's counts, composed again from the same writer output and self-check)`)
+      say()
+      say(renderLongRun(company, clientId, { ...sim, data: simData }, 'DRY RUN AFTER THE REGATE, simulated'))
+      block.push(`long-run read after the regate: ${simData.ideas.length} idea(s) · ${simData.ideas.map((i) => i.videos).join(', ')} videos`)
+    }
     block.push(`long-run read: ${write && counted.length === 0 ? 'written' : 'would write'} ${built.status} · ${data.ideas.length} idea(s) over ${monthsPhrase(data.months)} · partial through ${through} · $${data.costUsd.toFixed(4)} · count sentences ${counted.length}`)
   }
 
@@ -358,20 +435,6 @@ async function main() {
     else if (out.status === 'exists') say(`## 3. The held build: stands (${out.sendStatus})`)
     else { say(`## 3. The held build: ${out.status}: ${out.error}`); fail.push(`held build ${out.status}: ${out.error}`) }
     block.push(`held build: ${out.status}${out.status === 'held' ? ` (send ${out.sendId})` : ''}`)
-  }
-
-  // ---- The week chart's question (dry run only, read-only) ----------------------------------
-  if (!write && !has('no-rejudge')) {
-    const week = isoMonday(new Date(Date.parse(run.window_end) - 1).toISOString())
-    say()
-    say('---')
-    say()
-    say(`## The week of ${week}: the videos let in unjudged, judged by today's check (measured, not stored)`)
-    say()
-    const m = await measureUnchecked(db, clientId, week)
-    for (const l of m.text) say(l)
-    cost += m.costUsd
-    block.push(`unjudged videos: ${m.total} in the market lane; today's check drops ${m.rejected} · week of ${week}: ${m.inWeek}, drops ${m.inWeekRejected} · $${m.costUsd.toFixed(4)} (not stored)`)
   }
 
   // ---- Publishing ---------------------------------------------------------------------------
