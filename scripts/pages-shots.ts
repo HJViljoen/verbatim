@@ -115,6 +115,8 @@ function weekData() {
     attribution,
     themeComments: new Map([['t1', new Set(['c2', 'c3'])], ['tb', new Set(['cw'])]]),
     origins: new Map([['e:e2aa9829-a7ec-4947-ac47-387a9a14133c', { commentId: 'cq', videoId: 'q1' }]]),
+    // The fixture's month, so the shots read as the artboard ("this month").
+    asOf: '2026-09-29T08:00:00Z',
   })
 }
 

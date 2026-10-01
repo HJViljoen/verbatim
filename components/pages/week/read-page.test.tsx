@@ -49,6 +49,7 @@ function data(over: Parameters<typeof sealandRead>[0] = {}): WeekReadPageData {
     attribution: attribution(),
     themeComments: new Map([['t1', new Set(['c2', 'c3'])], ['tb', new Set(['cw'])]]),
     origins: new Map([['e:e2aa9829-a7ec-4947-ac47-387a9a14133c', { commentId: 'cq', videoId: 'q1' }]]),
+    asOf: '2026-09-29T08:00:00Z',
   })
 }
 

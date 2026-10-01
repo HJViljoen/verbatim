@@ -24,6 +24,7 @@ import type { FigureTable } from '../reports/types'
 import { adviceShortlist } from './advice-shortlist'
 import { buildAdviceRows, type RecCopy } from './market-surface'
 import { POOL_FLOOR, segmentOf, THEME_FLOOR } from './overview-market/board'
+import { monthPhrase } from './week'
 import { TABLE_MOVES } from '../subjects/types'
 
 // THE DASHBOARD (`/dashboard`, nav key `home`; pages build, HOME package, 1 Oct).
@@ -346,16 +347,22 @@ export function competitiveTile(brands: number | null): HomeTile | null {
 }
 
 /** Subjects: how many you follow, the biggest in the read's month, and the
- *  one you added most recently. Null where you follow none. */
+ *  one you added most recently. Null where you follow none.
+ *
+ *  "Biggest this month" only while the read's month is the calendar month;
+ *  "Biggest in September" once it is not (fresh review B2, `monthPhrase`): a
+ *  week crossing into October is September's, and reaches the page in
+ *  October. */
 export function subjectsTile(input: {
   subjects: readonly { name: string; named_at: string | null }[] | null
   read: WeekReadData | null
+  now: string
 }): HomeTile | null {
   const subjects = input.subjects ?? []
   if (subjects.length === 0) return null
   const rows: HomeTileRow[] = []
   const biggest = input.read ? rankedStanding(input.read)[0] : undefined
-  if (biggest) rows.push({ kind: 'text', label: 'Biggest this month', copy: null, value: `${biggest.name}, ${biggest.value}` })
+  if (biggest) rows.push({ kind: 'text', label: `Biggest ${monthPhrase(input.read!.month, input.now)}`, copy: null, value: `${biggest.name}, ${biggest.value}` })
   const latest = subjects
     .filter((s) => s.named_at && Number.isFinite(Date.parse(s.named_at)))
     .sort((a, b) => Date.parse(b.named_at!) - Date.parse(a.named_at!) || a.name.localeCompare(b.name))[0]
@@ -617,7 +624,7 @@ export async function loadHome(session: HomeSession, opts: { now?: string } = {}
       weekTile(data),
       voice,
       competitiveTile(tracked),
-      subjectsTile({ subjects, read: data }),
+      subjectsTile({ subjects, read: data, now }),
       movesTile({ month, posts, advice, moves }),
     ]),
   }

@@ -22,6 +22,7 @@ import type { FigureTable } from '../reports/types'
 import { INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors } from '../rivals'
 import { hydrateData } from '../snapshots'
 import { stripUnevidencedBrand } from './overview-market/board'
+import { monthPhrase } from './week'
 import { loadPublishedWeekRead } from '../written/published'
 import type { QuoteRef, WeekReadData } from '../written/types'
 
@@ -126,8 +127,12 @@ export function weekReadPage(a: {
   origins: ReadonlyMap<string, QuoteOrigin>
   /** The client's and every rival's name, for the label check. */
   trackedNames?: readonly string[]
+  /** Now, for the context line's month words: "this month" only while the
+   *  read's month is the calendar month (`monthPhrase`). */
+  asOf: string
 }): WeekReadPageData {
   const { read, attribution } = a
+  const when = monthPhrase(read.month, a.asOf)
   // A finding's videos are the read's month's; an also-heard row's, the week's.
   const monthOnly = new Set([read.month])
   const weekMonths = read.window ? windowMonths(read.window) : monthOnly
@@ -161,7 +166,7 @@ export function weekReadPage(a: {
       means: (f.means ?? '').trim(),
       quote: quoteOf(f.quote),
       evidence: (f.evidence ?? '').trim(),
-      context: contextWords(f.context),
+      context: contextWords(f.context, when),
       who: split(f.monthVideoIds, f.basedOn ?? [], monthOnly),
     }))
 
@@ -196,14 +201,21 @@ export function weekReadPage(a: {
  * the rank are not (no figure in this line). "First heard in {Month}." stays
  * where the read said it. A line in any other form prints as stored. The
  * weekly email prints the stored line; this is the page's. Pure.
+ *
+ * THE RANK IS THE READ'S MONTH'S (fresh review B2). `when` is
+ * `monthPhrase(read.month, now)`: "this month" only while the read's month is
+ * the calendar month, and the month's own name once it is not ("the third
+ * biggest subject in your market in September"). A week crossing into
+ * October is restated against September, and reaches the page on Monday
+ * 5 Oct, when "this month" would name October.
  */
-export function contextWords(stored: string | null | undefined): string {
+export function contextWords(stored: string | null | undefined, when: string): string {
   const line = (stored ?? '').trim()
   const parts: string[] = []
   const part = /^Part of (.+?): /.exec(line)
   if (part) {
     const rank = /, (the (?:[a-z]+ )?biggest) subject\b/.exec(line)?.[1]
-    parts.push(rank ? `Part of ${part[1]}, ${rank} subject in your market this month.` : `Part of ${part[1]}.`)
+    parts.push(rank ? `Part of ${part[1]}, ${rank} subject in your market ${when}.` : `Part of ${part[1]}.`)
   }
   const heard = /First heard in [A-Z][a-z]+\./.exec(line)?.[0]
   if (heard) parts.push(heard)
@@ -270,12 +282,14 @@ async function loadQuoteOrigins(db: SupabaseClient, refs: readonly string[]): Pr
 
 /**
  * This week, for one tenant. Null where no ready read exists yet (the route
- * prints one neutral line, ruling U2).
+ * prints one neutral line, ruling U2). `now` is injectable for a script and
+ * the test; the page passes nothing.
  */
-export async function loadWeekReadPage(scope: Scope): Promise<WeekReadPageData | null> {
+export async function loadWeekReadPage(scope: Scope, opts: { now?: string } = {}): Promise<WeekReadPageData | null> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const db = scope.reading.client
+  const now = opts.now ?? new Date().toISOString()
 
   const [clientRes, latest, rivals] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -317,5 +331,6 @@ export async function loadWeekReadPage(scope: Scope): Promise<WeekReadPageData |
     themeComments,
     origins,
     trackedNames: [brand, ...rivals.map((r) => r.name)],
+    asOf: now,
   })
 }

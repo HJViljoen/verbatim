@@ -186,14 +186,23 @@ describe('the tiles', () => {
       { name: 'Buying & delivery', named_at: '2026-09-24T09:00:00Z' },
       { name: 'Price', named_at: '2026-09-12T10:00:00Z' },
     ]
-    const t = subjectsTile({ subjects, read: HOME_READ })!
+    const now = '2026-09-29T08:00:00Z'
+    const t = subjectsTile({ subjects, read: HOME_READ, now })!
     expect(t).toMatchObject({ title: 'Subjects', big: '3', sub: 'subjects you follow' })
     expect(t.rows).toEqual([
       { kind: 'text', label: 'Biggest this month', copy: null, value: 'Buying & delivery, 23%' },
       { kind: 'text', label: 'Added most recently', copy: null, value: 'Buying & delivery, 24 Sep' },
     ])
-    expect(subjectsTile({ subjects, read: null })!.rows.map((r) => r.label)).toEqual(['Added most recently'])
-    expect(subjectsTile({ subjects: [], read: HOME_READ })).toBeNull()
+    expect(subjectsTile({ subjects, read: null, now })!.rows.map((r) => r.label)).toEqual(['Added most recently'])
+    expect(subjectsTile({ subjects: [], read: HOME_READ, now })).toBeNull()
+  })
+
+  it('Subjects: a read of an ended month names it, never "this month" (fresh review B2, the crossing week)', () => {
+    // The week of 28 Sep to 4 Oct is restated against September and reaches
+    // the page once Heinrich sends it on Monday 5 Oct.
+    const crossing: WeekReadDataV2 = { ...HOME_READ, window: { from: '2026-09-27T04:03:00Z', to: '2026-10-04T04:02:00Z' }, monthComplete: true }
+    const t = subjectsTile({ subjects: [{ name: 'Comfort', named_at: null }], read: crossing, now: '2026-10-05T07:00:00Z' })!
+    expect(t.rows[0]).toEqual({ kind: 'text', label: 'Biggest in September', copy: null, value: 'Buying & delivery, 23%' })
   })
 
   it('Your moves: posts published in the month, the moves worth considering and the moves you dated', () => {

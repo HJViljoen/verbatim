@@ -58,7 +58,8 @@ describe('the pure half', () => {
 })
 
 describe('weekReadPage', () => {
-  const page = weekReadPage({ read: read(), brand: 'Sealand', names, attribution: attribution(), themeComments, origins })
+  const ASOF = '2026-09-29T08:00:00Z'
+  const page = weekReadPage({ read: read(), brand: 'Sealand', names, attribution: attribution(), themeComments, origins, asOf: ASOF })
 
   it('prints every finding in the read’s order, numbered for the email’s anchors', () => {
     expect(page.findings.map((f) => [f.n, f.headline])).toEqual([
@@ -100,19 +101,19 @@ describe('weekReadPage', () => {
         { themeId: 'ta', label: 'Patagonia praised for warmth', videos: 3, videoIds: ['x1', 'x2', 'x3'] },
         { themeId: 'tb', label: 'Cotopaxi praised for practical travel', videos: 1, videoIds: ['w1'] },
       ] }),
-      brand: 'Sealand', names, attribution: attribution(), themeComments, origins, trackedNames: ['Sealand', 'Cotopaxi', 'Patagonia'],
+      brand: 'Sealand', names, attribution: attribution(), themeComments, origins, trackedNames: ['Sealand', 'Cotopaxi', 'Patagonia'], asOf: ASOF,
     })
     expect(named.alsoHeard.map((x) => x.label)).toEqual(['A brand praised for warmth', 'Cotopaxi praised for practical travel'])
   })
 
   it('with no attribution read, no item carries a brand line', () => {
-    const bare = weekReadPage({ read: read(), brand: 'Sealand', names, attribution: null, themeComments: null, origins: new Map() })
+    const bare = weekReadPage({ read: read(), brand: 'Sealand', names, attribution: null, themeComments: null, origins: new Map(), asOf: ASOF })
     expect(bare.findings.every((f) => f.who === null && (f.quote?.who ?? null) === null)).toBe(true)
     expect(bare.alsoHeard.every((x) => x.who === null)).toBe(true)
   })
 
   it('a read with no finding prints nothing else either', () => {
-    const empty = weekReadPage({ read: sealandRead({ findings: [] }), brand: 'Sealand', names, attribution: null, themeComments: null, origins: new Map() })
+    const empty = weekReadPage({ read: sealandRead({ findings: [] }), brand: 'Sealand', names, attribution: null, themeComments: null, origins: new Map(), asOf: ASOF })
     expect(empty).toMatchObject({ lead: null, findings: [], alsoHeard: [] })
   })
 })
@@ -158,16 +159,39 @@ describe('loadWeekReadPage', () => {
 
 describe('contextWords: the context line in the design\'s words (Heinrich, 1 Oct)', () => {
   it('keeps the subject and its rank from the stored line, and no figure', () => {
-    expect(contextWords('Part of Buying & delivery: [[subj_bd_level]] of [[subj_bd_n]] videos in your market in September, the biggest subject.'))
+    expect(contextWords('Part of Buying & delivery: [[subj_bd_level]] of [[subj_bd_n]] videos in your market in September, the biggest subject.', 'this month'))
       .toBe('Part of Buying & delivery, the biggest subject in your market this month.')
-    expect(contextWords('Part of Comfort: [[a]] of [[b]] videos in your market in September, the third biggest subject; up on August, beyond the normal swing. First heard in September.'))
+    expect(contextWords('Part of Comfort: [[a]] of [[b]] videos in your market in September, the third biggest subject; up on August, beyond the normal swing. First heard in September.', 'this month'))
       .toBe('Part of Comfort, the third biggest subject in your market this month. First heard in September.')
   })
 
   it('names the subject alone past the ranks the read words, and keeps any other line as stored', () => {
-    expect(contextWords('Part of Price: [[a]] of [[b]] videos in your market in September.')).toBe('Part of Price.')
-    expect(contextWords('First heard in September.')).toBe('First heard in September.')
-    expect(contextWords('')).toBe('')
-    expect(contextWords(null)).toBe('')
+    expect(contextWords('Part of Price: [[a]] of [[b]] videos in your market in September.', 'this month')).toBe('Part of Price.')
+    expect(contextWords('First heard in September.', 'this month')).toBe('First heard in September.')
+    expect(contextWords('', 'this month')).toBe('')
+    expect(contextWords(null, 'this month')).toBe('')
+  })
+})
+
+describe('the crossing week names its own month, never "this month" (fresh review B2)', () => {
+  // The first read (28 Sep to 4 Oct) is restated against September and
+  // reaches the page on Monday 5 Oct, when "this month" means October.
+  const crossing = () => {
+    const base = sealandRead()
+    return sealandRead({
+      window: { from: '2026-09-27T04:03:00Z', to: '2026-10-04T04:02:00Z' },
+      findings: base.findings.map((f, i) => (i === 0
+        ? { ...f, context: 'Part of Comfort: [[a]] of [[b]] videos in your market in September, the third biggest subject.' }
+        : f)),
+    })
+  }
+  const at = (asOf: string) => weekReadPage({ read: crossing(), brand: 'Sealand', names, attribution: null, themeComments: null, origins: new Map(), asOf })
+
+  it('in October, the rank is September\'s by name', () => {
+    expect(at('2026-10-05T07:00:00Z').findings[0].context).toBe('Part of Comfort, the third biggest subject in your market in September.')
+  })
+
+  it('still in September, "this month"', () => {
+    expect(at('2026-09-30T12:00:00Z').findings[0].context).toBe('Part of Comfort, the third biggest subject in your market this month.')
   })
 })
