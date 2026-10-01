@@ -33,7 +33,7 @@ export function MonthlyShareShell({ data, appUrl }: { data: MonthlySnapshotData;
       <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6 px-4 py-8 md:px-6">
         <header className="flex flex-col gap-2 rounded-lg bg-tile px-4 py-6 shadow-tile sm:px-8 sm:py-8">
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-            <p className="m-0 text-[16px] font-bold tracking-[-0.02em]"><span aria-hidden className="text-positive">{'//'}</span> Verbatim</p>
+            <p className="m-0 text-[16px] font-bold tracking-[-0.02em]"><span aria-hidden className="text-brand">{'//'}</span> Verbatim</p>
             <p className="m-0 text-[14px] font-semibold text-secondary-foreground">{data.company}</p>
           </div>
           <h1 className="m-0 mt-6 text-[24px] font-bold leading-[1.3] tracking-[-0.015em] [text-wrap:balance]">{data.title}</h1>

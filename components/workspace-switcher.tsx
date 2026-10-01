@@ -37,9 +37,10 @@ export function WorkspaceSwitcher({
         disabled={pending}
         className="flex w-full items-center gap-[7px] rounded-md px-3 pt-1 pb-[18px] text-left outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
       >
-        {/* The wordmark's own geometry and ink (components/workspace-switcher-loader.tsx
-            SidebarWordmark), so the header does not shift when this replaces it. */}
-        <VerbatimMark size={20} className="shrink-0 text-foreground" />
+        {/* The wordmark's own geometry and colours (components/workspace-switcher-loader.tsx
+            SidebarWordmark: the yellow mark, the name in ink), so the header
+            does not shift when this replaces it. */}
+        <VerbatimMark size={20} className="shrink-0 text-brand" />
         <span className="truncate text-[17px] font-bold tracking-[-0.02em] text-foreground">
           {operator.viewingName}
         </span>

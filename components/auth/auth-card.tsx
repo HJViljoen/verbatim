@@ -5,7 +5,8 @@ import { VerbatimMark } from '@/components/brand/mark'
 // request, the new password and an invitation. They were two families: sign in
 // on the crowd with a plain green square where the mark belongs, the rest on a
 // bare grey page with the name alone. One frame, and the ditto mark the
-// sidebar, the site and the favicon already carry (components/brand/mark.tsx).
+// sidebar and the favicon already carry (components/brand/mark.tsx): the brand
+// yellow, as the sidebar draws it, with the name beside it in ink.
 
 /** The fields and the button inside the frame, so a form built from `Input`
  *  and `Button` matches the sign-in form's hand-written ones. */
@@ -30,7 +31,7 @@ export function AuthCard({
 
       <div className="relative z-10 w-full max-w-md rounded-2xl bg-card ring-1 ring-border/70 shadow-tile-hover p-8">
         <div className="flex items-center gap-2.5 mb-1.5">
-          <VerbatimMark size={24} className="shrink-0 text-primary" />
+          <VerbatimMark size={24} className="shrink-0 text-brand" />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Verbatim</h1>
         </div>
         {subtitle ? <p className="text-muted-foreground mb-7 text-sm">{subtitle}</p> : <div className="mb-6" />}
