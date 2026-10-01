@@ -8,7 +8,7 @@
 
 **Project:** Verbatim
 **System:** palette A (live in `app/globals.css` since 2026-10-01; the approved page designs)
-**Updated:** 2026-10-01 — palette A replaced the 2026-08-28 green (§Color Palette); 2026-08-28 — visual-identity target added (see first section); 2026-07-03 replaced the stale April blue/amber system.
+**Updated:** 2026-10-01 (evening) — the colour roles and the card shadow (§Colour roles, §Shape & Elevation); 2026-10-01 — palette A replaced the 2026-08-28 green (§Color Palette); 2026-08-28 — visual-identity target added (see first section); 2026-07-03 replaced the stale April blue/amber system.
 **Source of truth:** `app/globals.css` (tokens) + `lib/ui-colors.ts` (accent/status helpers). This file describes them; if they disagree, the code wins.
 
 ---
@@ -36,7 +36,7 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 |---|---|---|
 | Page ground | `#F7F6F2` | the warm paper the page sits on; also the inner block inside a card |
 | Card / tile | `#FFFFFF` | white cards on the ground |
-| Elevation | `0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)` | **ambient** (no offset, no negative spread) so all edges/corners read alike; sidebar uses the same |
+| Elevation | `--shadow-card`: `0 1px 2px rgba(38,41,44,.06), 0 4px 14px rgba(38,41,44,.06), 0 12px 32px rgba(38,41,44,.04)` | every large card on the client pages (since 1 Oct, evening); the sidebar's edge is `--shadow-sidebar`. The ambient `--shadow-tile` stays on the legacy tiles and paper |
 | Ink | `#26292C` | charcoal — never black; no black blocks / dark heroes |
 | Ink-2 / muted / faint | `#45494D` / `#5F656B` / `#9AA0A6` | greys |
 | Hairline / track | `#E4E2DC` / `#ECEAE4` | rules; the background a bar is drawn on |
@@ -57,12 +57,14 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 | Retired | `#F6F1E7` cream · `#14503A` pine · `#FDFAF3` tile · all `--accent-*` bucket hues · glass/backdrop-blur · the 2026-08-28 green `#0E8A5F` and its tints | |
 
 ### Rules (decided, 2026-08-28)
-1. **Chrome is ink and paper.** The brand yellow and the orange do the jobs palette A gives them (above);
-   nothing else in the frame carries a hue.
-2. **Colour = meaning, in data only.** You gold · rivals grey · the market ink; valence gold / amber / red.
+1. **Chrome is ink and paper.** The brand yellow and the orange do the jobs palette A gives them (above),
+   and since 1 Oct the colour roles (§Colour roles) give the chrome small, fixed jobs too: icon tiles,
+   selected states, tags. Nothing in the frame carries a hue that has no role.
+2. **Colour = meaning.** You gold · rivals grey · the market yellow in bars and ink in lines; valence gold / amber / red.
    Category chips are grey text labels — retire the hashed `ACCENT_TINTS` cycling in `lib/ui-colors.ts`.
    Accepted: "you" and "positive" share the gold, as they shared the green before it.
-3. **Depth by elevation, not tone or borders.** No 1px border on every card, no pill-everything; radius 6;
+3. **Depth by elevation, not tone or borders.** Cards on `--shadow-card`, the sidebar on `--shadow-sidebar`
+   (Heinrich, 1 Oct: the shadows back). No 1px border on every card, no pill-everything; radius 6;
    `rounded-full` only on single-line pills (existing rule).
 4. **Type — DECIDED 2026-08-28: IBM Plex Sans (UI) · IBM Plex Serif (verbatim quotes only — quotes are speech) ·
    IBM Plex Mono (counts, metadata; tabular figures).** One superfamily, so all three share the same bones.
@@ -186,6 +188,42 @@ multi-hue set retired with the identity. `categorySolid` and `levelBadge` no lon
 A full dark theme exists (`.dark` block, ink grounds, the yellow as brand and primary); every new
 surface must read in both.
 
+## Colour roles (2026-10-01, evening; Heinrich: "more of the colours … to actually show up")
+
+> His words: "I kinda want more of the colours that we have in the colour palette to actually show up on
+> this site, because at the moment it's really just yellow, white and the darker colour, none of the orange
+> or brown." More colour, and every colour keeps ONE job, so colour carries meaning and a reader learns it
+> once. The classes live in **`components/colour-roles.tsx`** (`BAR_FILL`, `IconTile`, `BrandChip`,
+> `ChipSep`, `NewNumber`, `EYEBROW`, `SELECTED`, `TAG`, `KIND_ICON`); a page never picks a colour for itself.
+> Tokens, not literals, so each role holds in `.dark`.
+
+| Colour | Role | Where it shows |
+|---|---|---|
+| Yellow `#FFD43B` | **The market and the brand.** Ink on it | Bars counting the market's videos; the Agent (sidebar row, its tile); a market read's numbered ideas (Your market); the videos series |
+| Orange `#F2651D` | **New, attention, the second series. FILLS ONLY** | This week's finding numerals (the week's new talk; Dashboard and This week); the comments line and its keys; the format the Competitive lead sentence names (a dot); the High priority chip. Ink on it, 4.6:1 |
+| Orange text `#C2410C` | **Labels and links** | Eyebrows (In short, What it means, A conversation in full, What holds across …); Open →, Every conversation →; the glyph in an icon tile; a section label over tags ("Conversations inside it") |
+| Gold `#9A6B00` | **You (the client)** | Its brand chip (white on gold, 4.7:1); its bars where the base is its own posts (Your statements); its figures (Dashboard "posts published"); its handles (Settings › Your accounts); its term chips ("Your name"); its dot and "You" chip in Brands in your market |
+| Grey `#8A9097` | **Rivals** | A rival's chip dot; a rival's own bars (Competitive › "{brand} in full"); the dot before a tracked brand (Brands in your market, Brands you track, their term chips) |
+| Pale yellow `#FFF4C7` | **Small surfaces** | Icon tiles; tags (a conversation or subject, "Part of …", the category's terms, Medium priority); selected states (the sidebar row, a Settings tab, a subject, a conversation, a brand pill); the Dashboard Agent's header band |
+| Ink / muted / hairline / ground / paper / track | Neutral chrome | Text, the primary button, lines in a chart (the market line), the quote panel (ground), cards (paper), a bar's track |
+
+**The brand line.** A brand named on a line of talk is a chip: you gold with white words, a rival on the
+track with the grey dot, its videos inside the chip; the market stays muted words (it is the default, and a
+chip on every row would make the exception the rule). Chips bound themselves, so the " · " between them is
+kept for a screen reader and the line's words (`ChipSep`) and not drawn. Gold WORDS sit on white only: on the
+ground they are 4.3:1 and on the pale yellow 4.2:1, both under AA, which is why a quote panel's source line
+names the client by its chip.
+
+**Icon tiles.** Every card's title (and every Dashboard tile) opens on a 28px tile, pale yellow under an
+orange-text glyph; a Conversation kind card on a 24px tile with its kind's glyph (`KIND_ICON`). The tile takes
+no height (a negative block margin, 18px of layout), so no row moves. Where a tile would wrap a title's base
+(Your market's pair of half-width cards at 1440), the card has none: no layout change.
+
+**Bans that still hold.** No left stripe; no marker fill behind words in prose (a chip is a label on a brand
+line, never inside a sentence; `components/colour-roles.test.tsx` checks the pages); no beige or warm-white
+large surface (cards stay white on the `#F7F6F2` ground; the pale yellow never fills a card, an article or a
+paragraph); no gradient; the orange never as text (drift guard (h), `lib/palette-guard.test.ts`); AA for all text.
+
 ## Typography
 
 - **Sans + headings:** IBM Plex Sans (`--font-plex-sans`, via `next/font/google`)
@@ -201,10 +239,19 @@ surface must read in both.
   truth); chips/pills `rounded-full`, single-line only. This doc drifted to `1rem`, was corrected
   to `0.3rem` on 2026-08-18 and to the shipped `0.375rem` on 2026-09-15 — when the two disagree,
   the stylesheet wins.
-- **Elevation is ambient**, no offset and no negative spread, so every edge and corner reads alike:
-  `--shadow-tile: 0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)`.
+- **The card shadow (1 Oct, evening; Heinrich: "we don't really have drop shadows anymore, like for
+  the sidebar or the large blocks, which I also want brought back").** ONE token for every large card on
+  the ten client pages: `--shadow-card` → `shadow-card`, `0 1px 2px rgba(38,41,44,.06), 0 4px 14px
+  rgba(38,41,44,.06), 0 12px 32px rgba(38,41,44,.04)` — the Dashboard tiles' own design shadow (`0 1px 2px
+  rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.04)`) in the ink, a step stronger so it reads on the ground, with a
+  third, wider layer for depth. The sidebar's right edge: `--shadow-sidebar` → `shadow-sidebar`, `1px 0 0
+  rgba(38,41,44,.04), 4px 0 16px rgba(38,41,44,.06), 12px 0 40px rgba(38,41,44,.04)`, beside its hairline.
+  Both are set in `.dark` (a white hairline at 6% and black layers). **Inner panels stay flat**: a quote on
+  the ground, an inner block. No card writes a shadow literal (drift guard (g); `lib/palette-guard.test.ts`).
+- The legacy tiles, the shares and paper keep the **ambient** `--shadow-tile` (no offset, no negative
+  spread): `0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)`.
   `--shadow-tile-hover` is the same, deeper. `--shadow-block` is a hair of lift for a block inside
-  a tile — never a ring. The sidebar uses the tile shadow. **No `backdrop-blur` anywhere in the
+  a tile — never a ring. **No `backdrop-blur` anywhere in the
   app** (drift guard (c) fails the build); `app/site` marketing is excluded.
 
 ## Signature components
@@ -427,7 +474,9 @@ copy contract by construction (`lib/test/copy-contract.ts`).
 
 - ❌ Emojis as icons (use Lucide SVGs)
 - ❌ Left-stripe accent blocks: no coloured left border or bar (wider than a 1px divider) on a card or a quote (Heinrich, palette A; `lib/palette-guard.test.ts`)
-- ❌ Highlighted phrases: no marker fill, tint or coloured background behind words inside a sentence or a quote
+- ❌ Highlighted phrases: no marker fill, tint or coloured background behind words inside a sentence or a quote (a brand chip is a label on a brand line, never in prose)
+- ❌ The orange `#F2651D` as a text colour (labels and links take `#C2410C`); gold words on the ground or the pale yellow (under AA)
+- ❌ A colour with no role (§Colour roles), or a pale-yellow card, article or paragraph
 - ❌ The retired green (`#0E8A5F` and its tints) anywhere in the app
 - ❌ Raw confidence/opportunity scores in client-facing UI
 - ❌ Layout-shifting hovers; instant state changes (use 150–300ms transitions)

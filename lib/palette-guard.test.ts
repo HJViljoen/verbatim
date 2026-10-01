@@ -29,6 +29,21 @@ import { join } from 'path'
 //     beside a quote. A 1px `border-l` between two columns is a divider and
 //     passes.
 //
+// (5) THE SHADOWS ARE BACK, AS ONE TOKEN (Heinrich, 1 Oct: "we don't really
+//     have drop shadows anymore, like for the sidebar or the large blocks").
+//     `--shadow-card` and `--shadow-sidebar` are set in both themes; every
+//     large card of the ten client pages draws `shadow-card` and no card
+//     carries a shadow literal of its own; inner panels (a quote on the
+//     ground) stay flat.
+//
+// (6) THE COLOUR ROLES (components/colour-roles.tsx; MASTER §Colour roles).
+//     Orange is a FILL, never a text colour: no `text-orange` (the fill token)
+//     and no orange hex as a text colour; the text-safe orange is
+//     `text-orange-text` (#C2410C). Gold words sit on white only: on the
+//     ground or the pale yellow they fail AA (4.3 and 4.2 to 1), so a brand on
+//     a line is a chip (white on the gold, 4.7 to 1) and the pages name the
+//     client through it.
+//
 // Pure: it reads the source off disk. Test files are not scanned: they assert
 // these strings are ABSENT, so they have to be able to name them.
 
@@ -95,6 +110,29 @@ function hits(patterns: RegExp[], files: string[]): string[] {
 
 const read = (p: string) => readFileSync(p, 'utf8')
 
+/** Each card primitive of the ten client pages, and the class string it is
+ *  drawn with. The Agent page's body is redesigned on its own branch and uses
+ *  the token there. */
+const CARDS: [string, string][] = [
+  ['components/pages/home/index.tsx', "const SHADOW = 'shadow-card'"],
+  ['components/pages/home/skeleton.tsx', "const SHADOW = 'shadow-card'"],
+  ['components/pages/overview/picture/parts.tsx', 'rounded-[16px] bg-white shadow-card'],
+  ['components/pages/week/read-page.tsx', 'rounded-[16px] bg-white shadow-card'],
+  ['components/pages/voice-surface/conversation.tsx', 'rounded-[16px] bg-white shadow-card'],
+  ['components/pages/competitive-surface/page/ui.tsx', 'rounded-[16px] bg-card shadow-card'],
+  ['components/pages/subjects/page.tsx', "const CARD = 'flex flex-col rounded-[16px] bg-white shadow-card'"],
+  ['components/pages/moves/parts.tsx', 'rounded-[16px] bg-white shadow-card'],
+  ['components/pages/studio/ui.tsx', 'text-[#26292C] shadow-card'],
+]
+
+/** Orange as a text colour: the fill token as `text-`, or the orange hex set
+ *  as a colour. */
+const ORANGE_TEXT = [
+  /\btext-orange(?!-text)\b/,
+  /\btext-\[#F2651D\]/i,
+  /\bcolor:\s*['"`]#F2651D/i,
+]
+
 describe('palette A guard', () => {
   it('finds the source it is meant to scan, the app\'s brand art included and the site left out', () => {
     for (const f of ['app/globals.css', 'components/quote-block.tsx', 'lib/email/theme.ts', 'app/icon.svg',
@@ -145,6 +183,35 @@ describe('palette A guard', () => {
     expect(hits(STRIPE, FILES)).toEqual([])
   })
 
+  it('sets the card and sidebar shadows once, in both themes, and maps them to utilities', () => {
+    const css = appText('app/globals.css')
+    for (const t of ['shadow-card', 'shadow-sidebar']) {
+      expect(css, t).toContain(`--${t}: var(--${t});`)
+      expect(css.match(new RegExp(`^\\s*--${t}: \\d`, 'gm')), t).toHaveLength(2)
+    }
+  })
+
+  it('draws every large card of the client pages on the card shadow, with no shadow literal of its own', () => {
+    for (const [f, cls] of CARDS) expect(read(f), f).toContain(cls)
+    // The artboard's literal, and any card-sized shadow written out by hand.
+    const pages = FILES.filter((f) => f.startsWith('components/pages/') && !f.startsWith('components/pages/agent/'))
+    expect(hits([/shadow-\[0_1px_2px_rgba\(0,0,0,0\.05\),0_4px_14px/], pages)).toEqual([])
+    // The sidebar's edge.
+    expect(read('components/app-sidebar.tsx')).toContain('className="border-r-[#E4E2DC] shadow-sidebar"')
+  })
+
+  it('keeps the inner panels flat: a quote on the ground carries no shadow', () => {
+    for (const f of ['components/pages/overview/picture/stands.tsx', 'components/pages/week/read-page.tsx', 'components/pages/voice-surface/conversation.tsx']) {
+      const panel = read(f).split('\n').find((l) => l.includes('rounded-[12px] bg-[#F7F6F2]'))
+      expect(panel, f).toBeDefined()
+      expect(panel!, f).not.toMatch(/shadow-/)
+    }
+  })
+
+  it('never sets the orange as a text colour (the text-safe orange is #C2410C)', () => {
+    expect(hits(ORANGE_TEXT, FILES)).toEqual([])
+  })
+
   it('knows the forms it was written to catch, and lets a divider through', () => {
     const caught = (line: string, set: RegExp[]) => set.some((re) => re.test(line))
     for (const line of [
@@ -169,6 +236,10 @@ describe('palette A guard', () => {
       expect(caught(line, RETIRED_GREEN), line).toBe(true)
     }
     expect(caught("background: '#FFD43B'", RETIRED_GREEN)).toBe(false)
+    for (const line of ['className="text-orange"', 'className="font-bold text-orange uppercase"', 'className="text-[#F2651D]"', "style={{ color: '#F2651D' }}"]) {
+      expect(caught(line, ORANGE_TEXT), line).toBe(true)
+    }
+    for (const line of ['className="text-orange-text"', 'className="bg-orange"', 'stroke="var(--orange)"']) expect(caught(line, ORANGE_TEXT), line).toBe(false)
     expect(caught('const ROOM = "#1F2124"', RETIRED_GREEN)).toBe(false)
   })
 })
