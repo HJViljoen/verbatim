@@ -2,9 +2,31 @@
 
 > The design contract for `verbatimintel.com` (`app/site/*`). Consult BEFORE
 > styling anything on the marketing site. The app (`app.verbatimintel.com`)
-> runs its own identity (`design-system/verbatim/MASTER.md`); the two share the
-> Verbatim green and the charcoal ink and deliberately nothing else. Rewritten
+> runs its own identity (`design-system/verbatim/MASTER.md`); since 2026-10-01
+> that is palette A (below), and the two share only the charcoal ink. Rewritten
 > 2026-09-06 for the site that replaced the August "Annotated transcript" page.
+
+## The app: palette A (2026-10-01)
+
+The app no longer uses the Verbatim green; the site keeps it until Heinrich
+decides. The app's values live in `app/globals.css` and are described in
+MASTER.md §Color Palette:
+
+| Role | Hex |
+|---|---|
+| Page ground | `#F7F6F2` |
+| Cards / paper | `#FFFFFF` |
+| Ink (text, primary buttons, white text on them) | `#26292C` |
+| Muted text | `#5F656B` |
+| Hairlines / track | `#E4E2DC` / `#ECEAE4` |
+| Brand yellow (bars, the Agent row, badges, mastheads; ink on it) | `#FFD43B` |
+| Pale yellow (soft panels) | `#FFF4C7` |
+| Orange text (small labels, links) / orange accent (never text) | `#C2410C` / `#F2651D` |
+| Chart: you / rivals / market | `#9A6B00` / `#8A9097` / ink |
+
+In the app the mark and wordmark draw in ink. **App anti-list:** no left-stripe
+accent blocks (no coloured left border or bar on a card or a quote), no
+highlighted phrases, no gradient washes, no emoji.
 
 ## Direction — "The murmur"
 
@@ -36,7 +58,7 @@ strokes leaning forward, on a 64 viewBox with 12-wide round caps.
   and `app/opengraph-image.tsx`; `scripts/build-brand-assets.ts` rebuilds the
   rasters when the mark changes.
 - In React it is `VerbatimMark` (`components/brand/mark.tsx`), drawn in
-  `currentColor` so the surface picks the colour.
+  `currentColor` so the surface picks the colour. In the app that is ink.
 
 ## Palette (marketing)
 

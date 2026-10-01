@@ -7,8 +7,8 @@
 ---
 
 **Project:** Verbatim
-**System:** the "green refresh" (live since June 2026)
-**Updated:** 2026-08-28 — new visual-identity target added (see first section); 2026-07-03 replaced the stale April blue/amber system.
+**System:** palette A (live in `app/globals.css` since 2026-10-01; the approved page designs)
+**Updated:** 2026-10-01 — palette A replaced the 2026-08-28 green (§Color Palette); 2026-08-28 — visual-identity target added (see first section); 2026-07-03 replaced the stale April blue/amber system.
 **Source of truth:** `app/globals.css` (tokens) + `lib/ui-colors.ts` (accent/status helpers). This file describes them; if they disagree, the code wins.
 
 ---
@@ -26,33 +26,42 @@ Cream `#F6F1E7` + pine `#14503A` + serif display is the recognised AI-default lo
 Unslop all name it). Banning colours only re-samples the next default — a tell is an *unspecified* default — so
 this is a positive spec: grey-scale chrome, colour reserved for meaning, and a green that is not the sage.
 
+> **Colour superseded 2026-10-01 by palette A** (§Color Palette below, and `app/globals.css`). The rows
+> below are palette A's; the reasoning of this section (grey-scale chrome, colour for meaning, depth by
+> elevation) stands. The green no longer does any job in the app.
+
 ### Tokens (light theme — derive dark from these; every surface must read in both)
 
 | Job | Hex | Notes |
 |---|---|---|
-| Canvas **and** tile | `#FFFFFF` | same white; depth comes from elevation, never tone |
+| Page ground | `#F7F6F2` | the warm paper the page sits on; also the inner block inside a card |
+| Card / tile | `#FFFFFF` | white cards on the ground |
 | Elevation | `0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)` | **ambient** (no offset, no negative spread) so all edges/corners read alike; sidebar uses the same |
 | Ink | `#26292C` | charcoal — never black; no black blocks / dark heroes |
-| Ink-2 / muted / faint | `#45494D` / `#6E7378` / `#9AA0A6` | cool greys |
-| Hairline / hairline-2 | `#DCDFE3` / `#EBEDF0` | inside tiles only |
-| **Verbatim green** | `#0E8A5F` | primary button · active-nav mark · "you" in every chart · "good" (positive sentiment, up-deltas, evidence chip). Mid-light, higher chroma, blue-leaning — the shift from the old pine is lightness + chroma, not just hue |
-| Green tint | `#DDF3E9` | chips, hover fills only |
-| Competitor | `#F0742B` | data only |
+| Ink-2 / muted / faint | `#45494D` / `#5F656B` / `#9AA0A6` | greys |
+| Hairline / track | `#E4E2DC` / `#ECEAE4` | rules; the background a bar is drawn on |
+| Primary button | `#26292C` | ink, white text ("Ask", "Open") |
+| **Brand yellow** | `#FFD43B` | the brand fill: bars, the Agent sidebar row, badges, report mastheads. Ink on it, never a text colour |
+| Pale yellow | `#FFF4C7` | soft panels, chips, hover fills (`--accent`) |
+| Orange text / orange | `#C2410C` / `#F2651D` | small labels and links / the accent, never text |
+| You | `#9A6B00` | dark gold: "you" in every chart, and "good" |
+| Rival | `#8A9097` | data only |
 | Category / rest of field | `#9AA1A9` | data only |
 | Mixed / early | `#E6B03C` | data only |
 | Negative | `#DB3B2E` | data only |
 | Neutral segment | `#CDD2D7` | data only |
 | **Market ink** (market-first, decision K) | `#26292C` | the market, in the main ink · `--ink-market` |
-| You ink | `#0E8A5F` | you, in the green · `--ink-you` |
-| Rival ink | `#F0742B` | rivals, in the orange · `--ink-rival` |
+| You ink | `#9A6B00` | you, in the dark gold · `--ink-you` |
+| Rival ink | `#8A9097` | rivals, in the grey · `--ink-rival` |
 | Earlier-month ink | `#9AA1A9` | the earlier month, in grey · `--ink-earlier` |
-| Retired | `#F6F1E7` cream · `#14503A` pine · `#FDFAF3` tile · all `--accent-*` bucket hues · glass/backdrop-blur | |
+| Retired | `#F6F1E7` cream · `#14503A` pine · `#FDFAF3` tile · all `--accent-*` bucket hues · glass/backdrop-blur · the 2026-08-28 green `#0E8A5F` and its tints | |
 
 ### Rules (decided, 2026-08-28)
-1. **Chrome is grey-scale.** Green does exactly four jobs (above). Nothing else in the frame carries a hue.
-2. **Colour = meaning, in data only.** You green · competitor orange · category grey; valence green / amber / red.
+1. **Chrome is ink and paper.** The brand yellow and the orange do the jobs palette A gives them (above);
+   nothing else in the frame carries a hue.
+2. **Colour = meaning, in data only.** You gold · rivals grey · the market ink; valence gold / amber / red.
    Category chips are grey text labels — retire the hashed `ACCENT_TINTS` cycling in `lib/ui-colors.ts`.
-   Accepted: "you" and "positive" share the green; where a chart needs them apart, positive drops to the tint.
+   Accepted: "you" and "positive" share the gold, as they shared the green before it.
 3. **Depth by elevation, not tone or borders.** No 1px border on every card, no pill-everything; radius 6;
    `rounded-full` only on single-line pills (existing rule).
 4. **Type — DECIDED 2026-08-28: IBM Plex Sans (UI) · IBM Plex Serif (verbatim quotes only — quotes are speech) ·
@@ -75,8 +84,10 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
    sidebar rail (desktop) / a floating control (mobile). Keep the inner-scroll pane: with the crowd back in the
    shell (rule 6) it is what holds the backdrop still while content scrolls, and what stopped the mobile toolbar
    from shifting it.
-9. **Drift guards (mechanical, run before merge):** every neutral must have blue ≥ red in RGB (cream fails);
-   the only green in `globals.css` is `#0E8A5F` and its tint; no `backdrop-blur` in the app.
+9. **Drift guards (mechanical, run before merge):** every neutral must have blue ≥ red in RGB (cream fails)
+   except palette A's three warm neutrals (ground, hairline, track); no green in the app tokens; palette A's
+   jobs hold their values; no `backdrop-blur` in the app (`scripts/check-design-drift.sh`). Retired green in
+   app code and left stripes on cards or quotes fail `lib/palette-guard.test.ts`.
 
 ### Preferences — things Heinrich likes and wants more of (2026-08-28). NOT rules: apply with judgment, page by page
 > His words: "the things I say aren't always going to be a fit — just stuff that I liked and that I want more of."
@@ -109,9 +120,8 @@ normalised onto one **tweakcn** token set; keep our SSR SVG charts and add a cli
 
 ## Character
 
-Grey-scale chrome, colour reserved for meaning, one green. Depth comes from elevation and
-never from tone: the canvas and the tile are the same white and a tile is found by its
-shadow. The product expresses judgment — chips and prose, never raw scores (Redesign Spec §1).
+Ink and paper chrome, colour reserved for meaning, one brand yellow (palette A). Depth comes
+from elevation and the ground: white cards on a warm paper ground. The product expresses judgment — chips and prose, never raw scores (Redesign Spec §1).
 
 **Primary viewport: laptop/desktop.** Clients read this on laptops; design desktop-first.
 Mobile must work but is the secondary pass.
@@ -127,43 +137,51 @@ Mobile must work but is the secondary pass.
 > The tokens below ARE `app/globals.css`. §Visual identity — 2026-08-28 above states the
 > reasoning; this states the values. When the two disagree, the stylesheet wins.
 
-All tokens are CSS variables in `app/globals.css`, mapped to Tailwind utilities via `@theme inline`.
-Light theme:
+**Palette A (2026-10-01, the approved page designs).** All tokens are CSS variables in
+`app/globals.css`, mapped to Tailwind utilities via `@theme inline`. Light theme:
 
 | Role | Hex | Token / utility |
 |------|-----|-----------------|
-| Canvas **and** tile | `#FFFFFF` | `--background`, `--tile`, `--card` |
-| Inner block (inside a tile) | `#F6F7F8` | `--inner`, `--muted` |
-| Ink | `#26292C` charcoal | `--foreground` |
-| Ink-2 / muted / faint | `#45494D` / `#6E7378` / `#9AA0A6` | `--secondary-foreground`, `--muted-foreground` |
-| Verbatim green | `#0E8A5F` | `--primary`, `--you`, `--positive`, `--ring` |
-| Green tint | `#DDF3E9` → `#0B6E4C` | `--accent` / `--accent-foreground` — chips and hover fills only |
-| Hairline | `#DCDFE3` | `--border`, `--input` — inside tiles only |
+| Page ground | `#F7F6F2` | `--background` |
+| Cards / paper | `#FFFFFF` | `--card`, `--tile`, `--popover` |
+| Inner block (inside a card) | `#F7F6F2` | `--inner`, `--muted`, `--secondary` — the ground again |
+| Ink (text, primary buttons) | `#26292C` | `--foreground`, `--primary` (white `--primary-foreground`), `--ring` |
+| Ink-2 / muted | `#45494D` / `#5F656B` | `--secondary-foreground`, `--muted-foreground` |
+| Hairlines / borders | `#E4E2DC` | `--border`, `--input`, `--sidebar-border` |
+| Track (a bar's background) | `#ECEAE4` | `--track` → `bg-track` |
+| Brand yellow | `#FFD43B`, ink on it | `--brand` / `--brand-foreground` → `bg-brand text-brand-foreground`; `--sidebar-primary` (the Agent row) |
+| Pale yellow (soft panels) | `#FFF4C7`, ink on it | `--accent` / `--accent-foreground` |
+| Orange text (small labels, links) | `#C2410C` | `--orange-text` → `text-orange-text` |
+| Orange accent (never text) | `#F2651D` | `--orange` → `bg-orange` |
+| Sidebar active row | ink at 7% | `--sidebar-accent` (a pill, with weight; no bar) |
 
-**Data buckets** (colour = meaning, data only): you `--you` `#0E8A5F` · competitor `--comp` `#F0742B`
-· category / rest of field `--cat` `#9AA1A9` · mixed / early `--mixed` `#E6B03C` · neutral segment
-`--neutral-seg` `#CDD2D7`.
+**Data buckets** (colour = meaning, data only): you `--you` `#9A6B00` (dark gold) · rival
+`--comp` `#8A9097` (grey; the second rival `--comp-2` `#ADB1B6`) · category / rest of field
+`--cat` `#9AA1A9` · mixed / early `--mixed` `#E6B03C` · neutral segment `--neutral-seg` `#CDD2D7`.
+Bars that state a share fill with the brand yellow on the track, drawn against 100%.
 
 **The market-first inks** (decision K, WP3.10): who a mark belongs to, by name. The market takes the
-main ink `--ink-market` `#26292C` (dark `#ECEEF0`), you stay green `--ink-you` `#0E8A5F` (`#2FBF85`),
-rivals orange `--ink-rival` `#F0742B` (`#F58A4A`), and grey means the earlier month `--ink-earlier`
+main ink `--ink-market` `#26292C` (dark `#ECEEF0`), you take the dark gold `--ink-you` `#9A6B00` (`#E0A82E`),
+rivals the grey `--ink-rival` `#8A9097` (`#8A9097`), and the lighter grey means the earlier month `--ink-earlier`
 `#9AA1A9` (`#7C838B`). Additive: each shares its value with `--foreground`, `--you`, `--comp` and
 `--cat`, and `scripts/check-design-drift.sh` (d) fails the lint when one drifts from its twin or from
 this table. Utilities: `bg-ink-market`, `text-ink-you`, `stroke-ink-rival`, `fill-ink-earlier` and the
 like.
 
-**Semantic status**: positive `#0E8A5F` (shares the green) · warning `#E6B03C` · negative/destructive `#DB3B2E`.
+**Semantic status**: positive `#9A6B00` (shares the gold) · warning `#E6B03C` · negative/destructive `#DB3B2E`.
 
 **Category chips carry NO hue.** `lib/ui-colors.ts` `ACCENT_TINTS` is a ONE-entry list
 (`bg-inner text-muted-foreground`) and `categoryTint(key)` returns it for every key — the hashed
 multi-hue set retired with the identity. `categorySolid` and `levelBadge` no longer exist;
 `SENTIMENT_BADGE` and `PREVALENCE_BADGE` do.
 
-**Chart ramp** — ink lightness, NOT a green ramp: `--chart-1…5` = `#26292C` · `#0E8A5F` · `#6E7378`
-· `#9AA1A9` · `#CDD2D7`. `chart-2` is the green, for where "you"/"good" is implied. There is no
-`greenForPct()` anywhere in the codebase and there never was.
+**Chart ramp** — ink lightness: `--chart-1…5` = `#26292C` · `#9A6B00` · `#6E7378`
+· `#9AA1A9` · `#CDD2D7`. `chart-2` is the gold, for where "you"/"good" is implied.
 
-A full dark theme exists (`.dark` block); every new surface must read in both.
+**Emails** mirror these as literal hex in `lib/email/theme.ts` (`EMAIL`): an email reads no CSS variable.
+
+A full dark theme exists (`.dark` block, ink grounds, the yellow as brand and primary); every new
+surface must read in both.
 
 ## Typography
 
@@ -192,7 +210,7 @@ A full dark theme exists (`.dark` block); every new surface must read in both.
   dashboard page via the shell.
 - **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
   (grey, always), sentiment uses `SENTIMENT_BADGE`, prevalence uses `PREVALENCE_BADGE`,
-  evidence tiers show "Strong evidence" (green tint) / "Early signal" (warning tint) — never numeric scores.
+  evidence tiers show "Strong evidence" (pale yellow) / "Early signal" (warning tint) — never numeric scores.
 - **Voice links** — pill outline in primary: `text-primary ring-1 ring-primary/25 hover:bg-primary/5`.
 - **`.stat-hero`** is RETIRED. Rule 1 ("no black blocks / dark heroes") removed it from
   `app/globals.css`; the class name survives only in a comment in `components/stat-band.tsx`.
@@ -224,9 +242,9 @@ built from `components/shell/` and `components/charts/`, not from `Card`:
   `CalendarLine` (the dated axis — see §Chart rules), `Ring` (the ONE circle allowed: share of
   something, ≤4 slices, your number in the centre), `PlatformIcon`. `ProportionBar`/`BarLegend`
   stay for splits. `MovementBadge` is the ONE badge (§Chart rules).
-- **Colour jobs on tiles:** you / positive = green (`--positive`, `--primary`); wider category = slate; a
-  competitor = clay (first), ochre, plum, slate; rest-of-field = `--input` sand; mixed / early = warning gold;
-  the verbatim rule stays the signature (clay/primary left rule).
+- **Colour jobs on tiles:** you / positive = dark gold (`--you`, `--positive`); rivals grey (`--comp`); the
+  market ink; share bars brand yellow on `--track`; mixed / early = warning amber. A quote carries **no left
+  rule** (palette A's stripe ban): serif italic on the page, or a plain panel on the ground.
 - **Numbers:** counts of real voices, videos, themes and shares are shown big and in mono; model confidence is
   never a number. Formatters in `lib/format.ts` are hydration-safe (UTC dates, hand-rolled separators).
 - **Rounding follows the content, not the box:** `rounded-full` ONLY on single-line pills (fixed height or
@@ -399,12 +417,15 @@ copy contract by construction (`lib/test/copy-contract.ts`).
 
 1. Write Tailwind class strings out in full — never interpolated — so v4 detects them (see `lib/ui-colors.ts` header).
 2. Client-facing language ban list applies to all UI copy (Redesign Spec §1): no *run, pass, gather, scraped, pipeline, corpus, run id*.
-3. Charts are server-rendered (divs/SVG) with the chart-green range or category accents — no chart libraries, no client JS for static data.
+3. Charts are server-rendered (divs/SVG) with the palette A data colours (yellow bars, gold you, grey rivals, ink market) — no chart libraries, no client JS for static data.
 4. shadcn/ui components in `components/ui/` are the base layer; extend, don't fork.
 
 ## Anti-patterns
 
 - ❌ Emojis as icons (use Lucide SVGs)
+- ❌ Left-stripe accent blocks: no coloured left border or bar (wider than a 1px divider) on a card or a quote (Heinrich, palette A; `lib/palette-guard.test.ts`)
+- ❌ Highlighted phrases: no marker fill, tint or coloured background behind words inside a sentence or a quote
+- ❌ The retired green (`#0E8A5F` and its tints) anywhere in the app
 - ❌ Raw confidence/opportunity scores in client-facing UI
 - ❌ Layout-shifting hovers; instant state changes (use 150–300ms transitions)
 - ❌ Low-contrast text (4.5:1 minimum) or invisible focus states

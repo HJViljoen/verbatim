@@ -4,12 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Visual identity 2026-08-28 (design-system/verbatim/MASTER.md §Visual identity)
-   Chrome is grey-scale; colour means something and lives in the data; one green
-   (#0E8A5F) does four jobs: "you" in charts, the primary button, the active-nav
-   mark, and "good". Canvas = tile = white; depth is an ambient shadow, never
-   tone or borders. Fonts: IBM Plex Sans (UI) · Plex Serif (verbatim quotes only)
-   · Plex Mono (counts). Drift guards: scripts/check-design-drift.sh. */
+/* ── Palette A (2026-10-01, the approved page designs; MASTER.md §Color Palette)
+   A warm paper ground (#F7F6F2) under white cards, charcoal ink for text and
+   for the primary button, ONE brand yellow (#FFD43B, ink on it) that fills the
+   bars, the Agent row, badges and mastheads, a pale yellow (#FFF4C7) for soft
+   panels, and a text-safe orange (#C2410C) for small labels and links. In a
+   chart you are dark gold (#9A6B00), rivals grey (#8A9097), the market ink.
+   The 2026-08-28 green is retired from the app; the marketing site's
+   `.site-theme` keeps its own palette until Heinrich decides. Fonts unchanged:
+   IBM Plex Sans (UI) · Plex Serif (verbatim quotes only) · Plex Mono (counts).
+   Drift guards: scripts/check-design-drift.sh; lib/palette-guard.test.ts. */
 
 @theme inline {
   --color-background: var(--background);
@@ -35,7 +39,7 @@
   --color-positive: var(--positive);
   --color-warning: var(--warning);
   --color-negative: var(--negative);
-  /* Data buckets — the only hues on a page besides the green */
+  /* Data buckets — the only hues on a page besides the brand yellow */
   --color-you: var(--you);
   --color-comp: var(--comp);
   --color-comp-2: var(--comp-2);
@@ -52,6 +56,14 @@
   /* The hero tile's ground — the ONE inverted surface in the app (SH4) */
   --color-hero: var(--hero);
   --color-hero-foreground: var(--hero-foreground);
+  /* Palette A's own jobs (2026-10-01): the brand fill and the ink on it, the
+     text-safe orange (labels, links), the orange accent (never text), and the
+     track a bar is drawn on. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-orange-text: var(--orange-text);
+  --color-orange: var(--orange);
+  --color-track: var(--track);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -86,12 +98,14 @@
 :root {
   --radius: 0.375rem;
 
-  /* Canvas and tile are the same white; depth comes from --shadow-tile. */
-  --background: #FFFFFF;
+  /* PALETTE A (2026-10-01). The page is a warm paper ground; cards are white
+     on it; the inner block inside a card (a quote panel, a chip, a segmented
+     control) takes the ground again, which is what the designs draw. */
+  --background: #F7F6F2;
   --tile: #FFFFFF;
   --card: #FFFFFF;
   --popover: #FFFFFF;
-  --inner: #F6F7F8;
+  --inner: #F7F6F2;
 
   /* THE HERO TILE IS DARK (Block D wave 3, SH4; Heinrich's ruling that the
      artboard wins). `Main.dc.html` §1 paints the page's one-sentence tile
@@ -107,66 +121,70 @@
   --foreground: #26292C;
   --card-foreground: #26292C;
   --popover-foreground: #26292C;
-  --muted: #F6F7F8;
-  /* #6E7378 UNTIL BLOCK D WAVE 3 (SH7). It reads 4.79:1 on white and passes,
-     which is why it went unnoticed for a year — and 4.46:1 on `--inner`
-     (#F6F7F8), which FAILS, and the Block D ports are what put large amounts
-     of muted text inside tints: Voice's three persona cards, its tone block
-     and flags row, fourteen nodes on Market including both quote glosses and
-     the verdict words, five on This week, the record's SaveStrip, Content's
-     make cards. Three points darker clears 4.5:1 on the tint (4.66:1) and
-     reads 5.0:1 on white; it is still the same cool grey, and it is a token
-     change rather than fourteen files each reaching for
-     `text-secondary-foreground`. */
-  --muted-foreground: #6B7075;
-  --secondary: #F6F7F8;
+  --muted: #F7F6F2;
+  /* Palette A's muted (#5F656B): 5.9:1 on white and 5.5:1 on the ground, so
+     it reads on the page, on a card and inside a card's inner block alike
+     (lib/tokens-contrast.test.ts holds all three). */
+  --muted-foreground: #5F656B;
+  --secondary: #F7F6F2;
   --secondary-foreground: #45494D;
 
-  /* Verbatim green — the one brand hue */
-  --primary: #0E8A5F;
+  /* The primary button is ink with white text ("Ask", "Open"); the accent is
+     the pale yellow of a soft panel, with ink on it. */
+  --primary: #26292C;
   --primary-foreground: #FFFFFF;
-  --accent: #DDF3E9;
-  --accent-foreground: #0B6E4C;
-  --ring: #0E8A5F;
+  --accent: #FFF4C7;
+  --accent-foreground: #26292C;
+  --ring: #26292C;
 
-  /* Hairlines — inside tiles only */
-  --border: #DCDFE3;
-  --input: #DCDFE3;
+  /* The brand yellow: bars, the Agent row, badges, report mastheads. Ink on
+     it, always. Never a text colour (1.3:1 on white). */
+  --brand: #FFD43B;
+  --brand-foreground: #26292C;
+  /* Orange: the text-safe one for small labels and links (5.2:1 on white),
+     and the accent, which is never text. */
+  --orange-text: #C2410C;
+  --orange: #F2651D;
+  /* A bar's background: every share bar is drawn against 100% on this. */
+  --track: #ECEAE4;
 
-  /* Data buckets */
-  --you: #0E8A5F;
-  --comp: #F0742B;
-  /* The SECOND tracked rival. One competitor hue painted every rival the same
-     orange, so a chart with two of them drew one indistinguishable pair — and
-     the mock's Subjects board gives Patagonia its own weight. Lighter rather
+  /* Hairlines */
+  --border: #E4E2DC;
+  --input: #E4E2DC;
+
+  /* Data buckets: you are dark gold, rivals grey, the market ink. */
+  --you: #9A6B00;
+  --comp: #8A9097;
+  /* The SECOND tracked rival: the rival grey at 70% over white. Lighter rather
      than a different hue: rival is still one bucket and the ramp is lightness,
      which is the chart rule (--chart-1..5) applied inside a bucket. */
-  --comp-2: #F59E6B;
+  --comp-2: #ADB1B6;
   --cat: #9AA1A9;
   --mixed: #E6B03C;
   --neutral-seg: #CDD2D7;
 
   /* The market-first inks (decision K, WP3.10; MASTER §Color Palette). ADDITIVE:
      each names a job the tokens above already paint, so a chart says whose a
-     mark is by name. The market takes the main ink, you stay green, rivals
-     orange, and grey means the earlier month (the approved preview: September
-     #26292C beside August #9AA1A9). scripts/check-design-drift.sh (d) holds each
-     to the token it shares a value with, in both themes. */
+     mark is by name. The market takes the main ink, you dark gold, rivals
+     grey, and the lighter grey means the earlier month. scripts/
+     check-design-drift.sh (d) holds each to the token it shares a value with,
+     in both themes. */
   --ink-market: #26292C;
-  --ink-you: #0E8A5F;
-  --ink-rival: #F0742B;
+  --ink-you: #9A6B00;
+  --ink-rival: #8A9097;
   --ink-earlier: #9AA1A9;
 
-  /* Semantic status — positive shares the green ("good for you"); data only */
-  --positive: #0E8A5F;
+  /* Semantic status — positive shares "you"'s gold, as it shared the green
+     before it; data only */
+  --positive: #9A6B00;
   --warning: #E6B03C;
   --negative: #DB3B2E;
   --destructive: #DB3B2E;
 
-  /* Chart ramp — ink lightness, not a green ramp; chart-2 = the green where
-     "you"/"good" is implied (the Dashboard sentiment bar uses bg-chart-2). */
+  /* Chart ramp — ink lightness; chart-2 = the gold where "you"/"good" is
+     implied (the Dashboard sentiment bar uses bg-chart-2). */
   --chart-1: #26292C;
-  --chart-2: #0E8A5F;
+  --chart-2: #9A6B00;
   --chart-3: #6E7378;
   --chart-4: #9AA1A9;
   --chart-5: #CDD2D7;
@@ -177,19 +195,23 @@
   /* A block inside a tile (the theme map): lifted a hair off its tile, no outline. */
   --shadow-block: 0 1px 2px rgba(38, 41, 44, 0.06), 0 2px 8px rgba(38, 41, 44, 0.07);
 
-  /* Sidebar — white, same elevation as tiles; active = weight + a green bar, no pill fill */
+  /* Sidebar (sidebar2.py): white, a hairline on its right edge; rows in ink;
+     the active row is a pill of ink at 7% with weight, and no bar; the Agent
+     row is the brand yellow (`bg-sidebar-primary`), ink on it. */
   --sidebar: #FFFFFF;
-  --sidebar-foreground: #45494D;
-  --sidebar-primary: #0E8A5F;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F6F7F8;
+  --sidebar-foreground: #26292C;
+  --sidebar-primary: #FFD43B;
+  --sidebar-primary-foreground: #26292C;
+  --sidebar-accent: rgba(38, 41, 44, 0.07);
   --sidebar-accent-foreground: #26292C;
-  --sidebar-border: #DCDFE3;
-  --sidebar-ring: #0E8A5F;
+  --sidebar-border: #E4E2DC;
+  --sidebar-ring: #26292C;
 }
 
-/* Dark set — written with the palette (2026-08-28), not yet wired: there is no
-   theme toggle until Settings › Appearance ships. Every token above has a
+/* Dark set — not yet wired: there is no theme toggle until Settings ›
+   Appearance ships. Palette A on ink grounds: the yellow is the brand and the
+   primary (ink on it), you are a lighter gold, rivals the same grey, the orange
+   text lifts to the accent orange so it reads on ink. Every token above has a
    counterpart here so a surface never falls back to a light value. */
 .dark {
   --background: #141618;
@@ -208,29 +230,35 @@
   --muted-foreground: #9AA0A6;
   --secondary: #22252A;
   --secondary-foreground: #C9CCD0;
-  --primary: #2FBF85;
-  --primary-foreground: #0B1F16;
-  --accent: #173B2D;
-  --accent-foreground: #7EDDB4;
-  --ring: #2FBF85;
+  --primary: #FFD43B;
+  --primary-foreground: #26292C;
+  /* The pale yellow's job on ink: the yellow at 20% over the dark tile. */
+  --accent: #494225;
+  --accent-foreground: #ECEEF0;
+  --ring: #FFD43B;
+  --brand: #FFD43B;
+  --brand-foreground: #26292C;
+  --orange-text: #F2651D;
+  --orange: #F2651D;
+  --track: #2E3237;
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.12);
-  --you: #2FBF85;
-  --comp: #F58A4A;
-  --comp-2: #F7AE82;
+  --you: #E0A82E;
+  --comp: #8A9097;
+  --comp-2: #6B7178;
   --cat: #7C838B;
   --mixed: #E9BC55;
   --neutral-seg: #3A3F45;
   --ink-market: #ECEEF0;
-  --ink-you: #2FBF85;
-  --ink-rival: #F58A4A;
+  --ink-you: #E0A82E;
+  --ink-rival: #8A9097;
   --ink-earlier: #7C838B;
-  --positive: #2FBF85;
+  --positive: #E0A82E;
   --warning: #E9BC55;
   --negative: #E8604F;
   --destructive: #E8604F;
   --chart-1: #ECEEF0;
-  --chart-2: #2FBF85;
+  --chart-2: #E0A82E;
   --chart-3: #9AA0A6;
   --chart-4: #6B7178;
   --chart-5: #3A3F45;
@@ -238,13 +266,13 @@
   --shadow-tile-hover: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 24px rgba(0, 0, 0, 0.45);
   --shadow-block: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.3);
   --sidebar: #1B1D20;
-  --sidebar-foreground: #C9CCD0;
-  --sidebar-primary: #2FBF85;
-  --sidebar-primary-foreground: #0B1F16;
-  --sidebar-accent: #22252A;
+  --sidebar-foreground: #ECEEF0;
+  --sidebar-primary: #FFD43B;
+  --sidebar-primary-foreground: #26292C;
+  --sidebar-accent: rgba(236, 238, 240, 0.07);
   --sidebar-accent-foreground: #ECEEF0;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #2FBF85;
+  --sidebar-ring: #FFD43B;
 }
 
 @layer base {
@@ -263,11 +291,9 @@
   }
 }
 
-/* The sidebar sits on the canvas with the same elevation as a tile (rule 3):
-   white, ambient shadow, hairline on its right edge. */
-[data-slot="sidebar"][data-variant="sidebar"] [data-slot="sidebar-inner"] {
-  box-shadow: var(--shadow-tile);
-}
+/* The sidebar is white with a hairline on its right edge and no shadow
+   (sidebar2.py, palette A): the shadcn sidebar draws the `border-r` itself, so
+   the ambient tile shadow it used to carry here is gone. */
 
 /* One-time draw-in for the SSR SVG charts (component-map §5): bars grow from
    their baseline, lines trace left→right, the ring sweeps. CSS only, runs once
@@ -316,28 +342,30 @@
   --secondary: #33373B;
   --border: #3E4347;
   --input: #3E4347;
-  /* The data hues turn too, or they do not survive the ground: the product
-     green reads 3.4:1 on this charcoal and the red 3.3:1. These are the dark
-     palette's own counterparts, measured here at 6.2:1 and 4.9:1 on the tile
-     and 5.1:1 and 4.9:1 on its inner block — the same colours meaning the same
-     things, at a lightness this surface can carry. */
-  --primary: #2FBF85;
-  --primary-foreground: #0B1F16;
-  --positive: #2FBF85;
-  --you: #2FBF85;
-  --ring: #2FBF85;
-  --accent: #173B2D;
-  --accent-foreground: #7EDDB4;
+  /* The data hues turn too, or they do not survive the ground: ink is the
+     light primary and the dark gold reads 2.6:1 on this charcoal. These are the
+     dark palette's own counterparts, the same colours meaning the same things
+     at a lightness this surface can carry: the yellow primary with ink on it,
+     the lighter gold, the accent orange for text. */
+  --primary: #FFD43B;
+  --primary-foreground: #26292C;
+  --positive: #E0A82E;
+  --you: #E0A82E;
+  --ring: #FFD43B;
+  --accent: #514B2F;
+  --accent-foreground: #ECEEF0;
+  --orange-text: #F2651D;
+  --track: #3A3F45;
   --negative: #F08878;
   --destructive: #F08878;
   --warning: #E9BC55;
   --mixed: #E9BC55;
-  --comp: #F58A4A;
-  --comp-2: #F7AE82;
+  --comp: #8A9097;
+  --comp-2: #6B7178;
   --cat: #7C838B;
   --neutral-seg: #3A3F45;
   --chart-1: #ECEEF0;
-  --chart-2: #2FBF85;
+  --chart-2: #E0A82E;
   --chart-3: #A9AEB3;
   --chart-4: #7C838B;
   --chart-5: #3A3F45;
