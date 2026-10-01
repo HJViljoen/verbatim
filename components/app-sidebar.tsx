@@ -1,71 +1,91 @@
 "use client"
 
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LogOut, type LucideIcon } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut } from "@/app/login/actions"
-import { VerbatimMark } from "@/components/brand/mark"
-import { NAV_ICON, STUDIO_ICON } from "@/components/nav-icons"
-import { STUDIO_HREF } from "@/lib/studio-visibility"
-import { surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
+import { NAV_ICON } from "@/components/nav-icons"
+import { cn } from "@/lib/utils"
+import { surfaceForPath, surfacesIn, type NavGroup } from "@/lib/nav"
 
-// The nine reading surfaces, in the mock's order, from lib/nav.ts — the one
-// table the page bars and the parked pages' banners read too. Two groups, as
-// every app artboard draws them: Intelligence, then Account.
+// THE NAVIGATION OF 1 OCT (`sidebar2.py`; the sidebar of every `Page-*.dc.html`
+// artboard). Ten surfaces from lib/nav.ts, the one table the page bars and the
+// redirects read too, in four groups:
 //
-// Studio, Team and Billing left this list in Phase 1 (WP9): Team and Billing
-// are rail entries inside Settings (components/settings-frame.tsx) and reach
-// their pages from there, and the Studio is reached from Reports. Nothing was
-// orphaned by dropping them; WP16 rebuilds the Settings rail around them.
-
-// THE ICONS ARE `components/nav-icons.ts` NOW, not this file. They were here,
-// and this file is `"use client"` and wired to the router, `next/link` and a
-// server action — so `scripts/wave2-shots.ts`, which photographs every ported
-// page beside its artboard, could not import them and drew nine grey squares
-// instead. The app has never been missing an icon; the shots have never had
-// one. Moved to a leaf so the harness draws what ships.
-
-// The Studio is not one of the nine and is not in any group list (2026-09-17,
-// from main). It arrives through the `studio` slot instead, for the reason the
-// operator group does: whether this session may see it depends on the session,
-// and resolving that is async. See lib/studio-visibility.ts and
-// components/studio-nav-loader.tsx.
-const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: STUDIO_ICON }
+//   Dashboard · Your market · This week · Conversation · Competitive
+//   ──
+//   Subjects · Your moves
+//   ──
+//   Agent                      (a filled yellow row)
+//
+//   Studio · Settings          (at the foot)
+//
+// The groups are separated by space and a hairline and carry NO label (page
+// review §4: "Intelligence" and "Account" said nothing a reader needs). Log out
+// left the foot for Settings' bar (components/log-out-button.tsx), and the
+// Studio is a row of its own now that clients see it (STUDIO_TENANT_VISIBLE).
+//
+// THE ICONS ARE `components/nav-icons.ts`, a leaf, so `scripts/wave2-shots.ts`
+// can draw what ships.
 
 type NavItem = { href: string; label: string; icon: LucideIcon }
 
-// THE APPROVED PREVIEW'S ROW (design-mf2, every board's sidebar; d3 polish):
-// 40px rows 4px apart, the icon 12px in from a 12px rail, and the active page
-// in weight, a quiet pill and a 3px green bar at the pill's own left edge
-// (rule 1: green marks the active page). The pill is the ink at 7%, the
-// preview's #EFF1F3 on white, so it follows the theme rather than a hex.
-const ITEM_CLASS =
-  "relative h-10 gap-3 rounded-md px-3 text-[14px] font-normal text-sidebar-foreground " +
-  "hover:bg-sidebar-accent hover:text-foreground " +
-  "data-[active=true]:bg-foreground/[0.07] data-[active=true]:font-semibold data-[active=true]:text-foreground " +
-  "data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-2.5 data-[active=true]:before:bottom-2.5 " +
-  "data-[active=true]:before:w-[3px] data-[active=true]:before:rounded-r-[2px] data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
+// Palette A (pages build brief rule 8), used locally: the design's hairline,
+// the Agent's yellow, and the inactive icon grey `sidebar2.py` names. The
+// sidebar's own tokens are still the old brand's; the app-wide colour swap is
+// a separate task.
+const HAIR = "bg-[#E4E2DC]"
 
-// One row of the navigation, module-level so the streamed Studio item below
-// renders exactly the same markup the static groups do. `active` is a PROP
-// rather than a pathname comparison made in here: in Phase 1 the one table
-// (lib/nav.ts `surfaceForPath`) decides which row is marked, and a row that
-// worked it out for itself would disagree with the table on exactly the
-// addresses `UNDER` exists to place. setOpenMobile closes the mobile drawer
-// when a row is tapped — otherwise it stays open over the new page until the
-// backdrop is tapped.
-function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+// ONE ROW, AS THE DESIGN DRAWS IT: 40px tall, 4px apart, 12px in, the icon 12px
+// from the label, a 6px radius, 14px ink. The active page is a pill of the ink
+// at 7% (`rgba(38,41,44,0.07)`) and semibold, its icon in ink; every other icon
+// is `#6E7378`. NO LEFT BAR: the 3px green bar at the pill's edge is gone under
+// the stripe ban (pages build brief rule 7; page review §4).
+const ROW_CLASS =
+  "h-10 gap-3 rounded-[6px] px-3 text-[14px] font-normal text-foreground " +
+  "hover:bg-sidebar-accent hover:text-foreground " +
+  // `data-active` is on EVERY row ("true" or "false"), so the primitive's own
+  // `data-active:` grey and medium weight would reach the inactive rows too.
+  "data-[active=false]:bg-transparent data-[active=false]:font-normal data-[active=false]:hover:bg-sidebar-accent " +
+  "data-[active=true]:bg-foreground/[0.07] data-[active=true]:font-semibold data-[active=true]:text-foreground"
+
+// THE AGENT'S ROW (Heinrich, 30 Sep: "stands out"): filled yellow `#FFD43B`,
+// semibold ink, the Lucide `Sparkles` in ink. The design draws it the same on
+// every page, its own included, so the active pill does not apply to it; the
+// page it opens is still marked for assistive tech by `aria-current`.
+const AGENT_CLASS =
+  "h-10 gap-3 rounded-[6px] px-3 text-[14px] font-semibold text-foreground " +
+  "bg-[#FFD43B] hover:bg-[#FFD43B] hover:text-foreground " +
+  "data-[active=false]:bg-[#FFD43B] data-[active=false]:font-semibold data-[active=false]:hover:bg-[#FFD43B] " +
+  "data-[active=true]:bg-[#FFD43B] data-[active=true]:font-semibold data-[active=true]:text-foreground"
+
+/** The hairline between two groups: 1px, 12px in from each side, 8px above and
+ *  below (the design's `margin: 8px 12px`). */
+export function NavHairline() {
+  return <div aria-hidden className={cn("mx-3 my-2 h-px shrink-0", HAIR)} />
+}
+
+/**
+ * One row of the navigation, exported so the operator's group
+ * (components/ops/ops-nav.tsx) renders exactly the same markup. `active` is a
+ * PROP rather than a pathname comparison made in here: the one table
+ * (lib/nav.ts `surfaceForPath`) decides which row is marked. setOpenMobile
+ * closes the mobile drawer when a row is tapped.
+ */
+export function NavRow({ item, active, agent = false }: { item: NavItem; active: boolean; agent?: boolean }) {
   const { setOpenMobile } = useSidebar()
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active} className={ITEM_CLASS}>
-        <Link href={item.href} onClick={() => setOpenMobile(false)}>
-          <item.icon className="size-4 text-muted-foreground group-data-[active=true]/menu-button:text-foreground" aria-hidden />
+      <SidebarMenuButton asChild isActive={active} className={agent ? AGENT_CLASS : ROW_CLASS}>
+        <Link href={item.href} aria-current={active ? "page" : undefined} onClick={() => setOpenMobile(false)}>
+          <item.icon
+            className={cn("size-4", agent || active ? "text-foreground" : "text-[#6E7378]")}
+            strokeWidth={2}
+            aria-hidden
+          />
           <span>{item.label}</span>
         </Link>
       </SidebarMenuButton>
@@ -73,100 +93,49 @@ function NavRow({ item, active }: { item: NavItem; active: boolean }) {
   )
 }
 
-/** The Studio's row, rendered by `StudioNavLoader` only for a session that may
- *  see it. A client component with no props, so a server component can render
- *  it across the boundary.
- *
- *  Never marked active, and that is the table's answer rather than an
- *  oversight: `lib/nav.ts` `UNDER` maps `/dashboard/studio` onto Reports, so a
- *  reader inside the Studio is told they are in Reports and exactly one row
- *  lights — which is the rule `lib/nav.test.ts` pins. */
-export function StudioNavItem() {
-  return <NavRow item={STUDIO_ITEM} active={false} />
-}
-
-export function AppSidebar({ header, ops, studio, tenant }: { header?: React.ReactNode; ops?: React.ReactNode; studio?: React.ReactNode; tenant?: React.ReactNode }) {
+export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: React.ReactNode }) {
   const pathname = usePathname()
-  // Ask is one of the nine, unconditionally (Phase 1 WP21, decision B). It
-  // rode AGENT_ENABLED while sending was platform-admin only, on the argument
-  // that showing a client an item they cannot use is worse than showing them
-  // eight. Owners and admins can use it now, and a member's Ask page is a
-  // readable archive of every answer the workspace has — which is a page worth
-  // a sidebar item, not a dead end.
   const active = surfaceForPath(pathname)
-  const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: NAV_ICON[key] })
-  const intelligence = surfacesIn("Intelligence").map((s) => item(s.key, s.href, s.label))
-  const account = surfacesIn("Account").map((s) => item(s.key, s.href, s.label))
-
-  async function handleLogout() {
-    await signOut()
-  }
-
-  const renderGroup = (label: string, items: NavItem[], isActive: (href: string) => boolean, lead?: React.ReactNode) => (
-    <SidebarGroup className="px-3 py-0">
-      <SidebarGroupLabel className="mb-1 h-8 items-end px-3 pb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu className="gap-1">
-          {lead}
-          {items.map((navItem) => (
-            <NavRow key={navItem.href} item={navItem} active={isActive(navItem.href)} />
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+  const group = (g: NavGroup) => (
+    <SidebarMenu className="gap-1">
+      {surfacesIn(g).map((s) => (
+        <NavRow
+          key={s.key}
+          item={{ href: s.href, label: s.label, icon: NAV_ICON[s.key] }}
+          active={active?.key === s.key}
+          agent={g === "agent"}
+        />
+      ))}
+    </SidebarMenu>
   )
 
   return (
-    <Sidebar variant="sidebar" collapsible="offcanvas">
-      {/* `header` arrives as a slot rather than being rendered here because
-          this component is "use client" and the workspace switcher's loader is
-          a server component: it has to be composed above, in the layout, and
-          passed down. Without it — every user who is not a platform admin —
-          this is the wordmark, unchanged. */}
-      <SidebarHeader>
-        {header ?? (
-          <div className="flex h-14 items-center gap-2 px-4">
-            <VerbatimMark size={20} className="shrink-0 text-primary" />
-            <span className="text-[18px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
-          </div>
-        )}
+    // The design's frame: 256px of white with a 1px hairline on its right edge
+    // and no shadow; 18px above the wordmark, 12px either side, 16px below the
+    // foot. The width is the layout's `--sidebar-width`.
+    <Sidebar variant="sidebar" collapsible="offcanvas" className="border-r-[#E4E2DC]">
+      {/* `header` arrives as a slot because this component is "use client" and
+          the workspace switcher's loader is a server component. Without it,
+          every user who is not a platform admin, it is the wordmark. */}
+      <SidebarHeader className="gap-0 px-3 pt-[18px] pb-0">
+        {header}
       </SidebarHeader>
 
-      <SidebarContent className="gap-4 pt-0">
-        {renderGroup("Intelligence", intelligence, (href) => active?.href === href)}
-        {/* The Studio leads the Account group when this session may see it,
-            and is absent — not hidden, never rendered — when it may not. */}
-        {renderGroup("Account", account, (href) => active?.href === href, studio)}
-        {/* The retiring-pages group that stood here is gone
-            (2026-09-24). The parked pages still answer at their addresses and
-            carry their own banner; Content stays reachable from the "videos
-            behind" links on the new surfaces. */}
-        {/* The operator's group arrives as a slot for the same reason the
-            header does: resolving who is looking is async, and this component
-            is "use client". Absent — every user who is not a platform admin —
-            the sidebar is exactly the two groups above. */}
-        {ops}
+      <SidebarContent className="gap-1 px-3 pt-1">
+        {group("read")}
+        <NavHairline />
+        {group("steer")}
+        <NavHairline />
+        {group("agent")}
       </SidebarContent>
 
-      <SidebarFooter className="px-3 pb-6">
-        {/* WHOSE WORKSPACE, AND WHO YOU ARE IN IT (Block D wave 2,
-            `main.shell.sidebar.tenant`). The artboard draws it above Logout and
-            the footer held Logout alone, so a reader with two workspaces —
-            every platform admin, and every agency seat when Teams lands — had
-            nothing on the page telling them which one they were reading. A
-            slot, not a read: this component is "use client" and resolving the
-            session is async (the same reason `header` and `ops` are slots). */}
-        {tenant}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout} className={ITEM_CLASS}>
-              <LogOut className="size-4 text-muted-foreground" aria-hidden />
-              <span>Logout</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarFooter className="gap-1 px-3 pt-2 pb-4">
+        {/* The operator's group (operator only, above the Studio: page review
+            §4) arrives as a slot: who is looking is async, and this component
+            is "use client". Absent for every user who is not a platform
+            admin, so a client's sidebar is exactly the design's. */}
+        {ops}
+        {group("foot")}
       </SidebarFooter>
     </Sidebar>
   )

@@ -32,9 +32,11 @@ export const rowFloorPx = (rows: number): number =>
 /** The grid's own classes — exported so the test pins the floor-not-size rule. */
 export const PAGE_GRID_CLASSES = 'grid grid-cols-1 gap-4 xl:grid-cols-12 xl:auto-rows-[minmax(116px,auto)]'
 
+/** The page's column: its bar, then its blocks, 22px apart (the navigation of
+ *  1 Oct: every `Page-*.dc.html` artboard's `gap: 22px`; it was 12px). */
 export function PageFrame({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
+    <div className={cn('flex flex-col gap-[22px]', className)}>
       {children}
     </div>
   )
@@ -215,7 +217,10 @@ export function PageBar({
   // them, so the line is never squeezed into a column beside a button.
   return (
     <div className={cn('grid shrink-0 items-center gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && line ? 'sm:items-end' : null)}>
-      <h1 className="col-start-1 row-start-1 m-0 text-2xl leading-8 font-bold tracking-[-0.015em]">{title}</h1>
+      {/* 26px bold on a 40px line (the navigation of 1 Oct: every
+          `Page-*.dc.html` artboard's title, `font-size: 26px; font-weight: 700`
+          in a 40px-high bar). It was MASTER's `text-2xl`. */}
+      <h1 className="col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold">{title}</h1>
       {children ? (
         <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-3', line ? 'sm:row-end-3' : null)}>{children}</div>
       ) : null}
