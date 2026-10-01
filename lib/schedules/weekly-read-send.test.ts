@@ -131,6 +131,21 @@ describe('a run with no ready read sends NOTHING and tells the operator', () => 
     })
   }
 
+  it('the fallback: once the read is written (the Monday script), Send now takes the skipped send over and holds it for review', async () => {
+    const w = world({ status: 'failed', data: null })
+    const first = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(first.status).toBe('skipped')
+    // scripts/week-read.ts --write replaces the run's row with a ready read.
+    Object.assign(w.tables.week_reads[0], { status: 'ready', data: frozen(sealandRead()) })
+    const again = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(again.status).toBe('ready')
+    expect(again.sendId).toBe(first.sendId)
+    expect(w.tables.report_sends).toHaveLength(1)
+    expect(w.tables.report_sends[0]).toMatchObject({ status: 'ready' })
+    expect(mail.review).toHaveLength(1)
+    expect(mail.report).toEqual([])
+  })
+
   it('a test send over a run with no read emails nobody and alerts nobody', async () => {
     const w = world({ status: 'thin', data: null })
     const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'test', to: ['heinrich@verbatim.test'] })

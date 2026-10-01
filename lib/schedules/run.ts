@@ -186,9 +186,11 @@ async function runDocumentSchedule(
 /**
  * The operator hears that a weekly read was held back (plan T7: "a week with
  * no read sends nothing and alerts the operator; never an empty report"). Once
- * per held send: the runner's claim makes a retried step find the row already
- * skipped and return before this. The fallback is the Monday script, then a
- * Send now from the Studio, which takes the skipped row over.
+ * per update: the route answers 200 for a skipped send, so Inngest does not
+ * retry the `send:<id>` step, and a completed step is never run again on
+ * replay. A Send now that finds the read still missing alerts again, which is
+ * the operator asking. The fallback is the Monday script, then a Send now from
+ * the Studio, which takes the skipped row over (`claimDecision`).
  */
 async function alertWeeklyReadHeld(a: { schedule: ScheduleRow; runId: string; company: string; reason: string; message: string }): Promise<void> {
   const who = a.company || a.schedule.client_id
