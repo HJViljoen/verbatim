@@ -182,7 +182,8 @@ export const READING_CARDS: readonly ReadingCard[] = [
     ],
   },
   {
-    key: 'reports',
+    // The Studio's card since 1 Oct: Reports folded into it (lib/nav.ts).
+    key: 'studio',
     // REPORTS (plan §2.9): the monthly reads the month that has just ended,
     // one update past its end (MONTHLY_UPDATES_PAST_END, the fast track's
     // rule of 27 Sep), and every document keeps the figures it was sent with.

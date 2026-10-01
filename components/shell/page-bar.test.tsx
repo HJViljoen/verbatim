@@ -89,9 +89,9 @@ describe('SurfacePageBar', () => {
     expect(text).not.toContain('Last 3 months')
   })
 
-  it('gives Reports a title and nothing else to read', () => {
-    const markup = render(<SurfacePageBar nav="reports" context={CONTEXT} />)
-    expect(markup).toContain('Reports')
+  it('gives the Studio a title and nothing else to read', () => {
+    const markup = render(<SurfacePageBar nav="studio" context={CONTEXT} />)
+    expect(markup).toContain('Studio')
     expect(markup).not.toContain('Last 12 months')
     expect(markup).not.toContain('September 2026')
   })

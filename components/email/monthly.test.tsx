@@ -160,7 +160,7 @@ describe('the monthly email: "September in your market"', () => {
   it('names the month on the button and opens the app on it, and offers the share page only with a link', () => {
     const html = body(snapshot())
     expect(markupText(html)).toContain('Open September in Verbatim')
-    expect(html).toContain(`href="${APP}/dashboard?month=2026-09"`)
+    expect(html).toContain(`href="${APP}/dashboard/overview?month=2026-09"`)
     expect(markupText(html)).toContain('Open the share page')
     expect(markupText(body(snapshot(), null))).not.toContain('Open the share page')
     expect(markupText(html)).toContain('The PDF of this report is attached.')

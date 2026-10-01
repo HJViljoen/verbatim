@@ -84,8 +84,8 @@ describe('catalogueReaderTitle', () => {
     expect(catalogueReaderTitle('market', 'Market Intelligence')).toBe('Your moves')
     // "Conversation" since deploy 3 (market-first WP2.4).
     expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Conversation')
-    // "Brands" since deploy 5 (market-first WP3.5).
-    expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Brands')
+    // "Competitive" again since 1 Oct (it was "Brands" from deploy 5).
+    expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Competitive')
   })
 
   it('keeps the module’s own title where no surface names the page', () => {

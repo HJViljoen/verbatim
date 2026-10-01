@@ -139,5 +139,6 @@ export async function setRecommendationStatus(id: string, status: string): Promi
   revalidatePath('/dashboard/market-intel')
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/overview')
   return { ok: true, message: '' }
 }

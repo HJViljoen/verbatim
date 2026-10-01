@@ -2,6 +2,7 @@ import type { RunDelta } from '../../lib/report-delta'
 import type { DeltaVerdict } from '../../lib/report-bands'
 import type { DashboardData } from '../../lib/pages/dashboard'
 import { fmtInt, shortDate } from '../../lib/format'
+import { surface } from '../../lib/nav'
 import { MOVEMENT_WORDS } from '../delta-badge'
 import { Chip, Row, Section } from './primitives'
 
@@ -36,7 +37,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       // or the two read as one metric contradicting itself.
       const s = delta.sentiment
       rows.push(
-        <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}/dashboard`} linkText="See where you stand">
+        <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}${surface('overview').href}`} linkText="See where you stand">
           <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated for sentiment this update read positive
         </Row>,
       )
@@ -85,7 +86,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
   return (
     <Section title="Where you stand" meta="your first update">
       {s ? (
-        <Row label="Sentiment" href={`${appUrl}/dashboard`} linkText="See where you stand">
+        <Row label="Sentiment" href={`${appUrl}${surface('overview').href}`} linkText="See where you stand">
           <strong>{Math.round(s.positivePct)}%</strong> of the {fmtInt(s.judged)} conversations rated for sentiment read positive
         </Row>
       ) : null}

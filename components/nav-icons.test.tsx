@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 
 import { SURFACES } from '@/lib/nav'
-import { NAV_ICON, STUDIO_ICON } from './nav-icons'
+import { NAV_ICON } from './nav-icons'
 
 // ONE ICON MAP, READ BY THE APP AND BY THE SHOT HARNESS.
 //
@@ -37,7 +37,7 @@ describe('the sidebar’s icons', () => {
     expect(markup).toContain('height="16"')
   })
 
-  it('draws the artboard’s glyph on each of the nine, not a near-enough one', () => {
+  it('draws the artboard’s glyph on each of the ten, not a near-enough one', () => {
     // THE MOCK IS THE SPEC (the lead's ruling, 2026-09-19), and five of these
     // nine were something else until 2026-09-24 — Layers, MessageCircle,
     // Swords, Sparkles and a gear. A name in a map is not a shape, so each
@@ -64,9 +64,14 @@ describe('the sidebar’s icons', () => {
     expect(draw('competitive')).toContain('lucide-tag')
     expect(draw('competitive')).not.toContain('M13 17V5')
     expect(draw('competitive')).not.toContain('lucide-swords')
-    // circle r9 + a question hook + M12 17h.01 — a question, not a sparkle.
-    expect(draw('ask')).toContain('M12 17h.01')
-    expect(draw('ask')).not.toContain('lucide-sparkles')
+    // The Agent is the original Lucide Sparkles again (Heinrich, 30 Sep; the
+    // navigation of 1 Oct), no longer the question mark it wore as Ask.
+    expect(draw('ask')).toContain('lucide-sparkles')
+    expect(draw('ask')).not.toContain('M12 17h.01')
+    // The Dashboard (1 Oct): Lucide's LayoutDashboard, four tiles.
+    expect(draw('home')).toContain('lucide-layout-dashboard')
+    // The Studio, one of the ten since 1 Oct, keeps the template it always had.
+    expect(draw('studio')).toContain('lucide-layout-template')
     // Three VERTICAL tracks crossed by horizontal handles. `SlidersHorizontal`
     // is the same glyph turned 90° and would pass a looser assertion, so the
     // one pinned here is a track the vertical form has and the horizontal
@@ -80,13 +85,6 @@ describe('the sidebar’s icons', () => {
     expect(draw('overview')).toContain('lucide-globe')
     expect(draw('market')).toContain('lucide-target')
     expect(draw('week')).toContain('lucide-calendar-days')
-    expect(draw('reports')).toContain('lucide-file-text')
-  })
-
-  it('keeps the Studio in the same map', () => {
-    // It is not a surface and has no `NavKey`, but it is still a sidebar icon
-    // and still has to be reachable from outside a client component.
-    expect(STUDIO_ICON).toBeTruthy()
   })
 
   it('is the only map — neither consumer declares its own', () => {

@@ -651,7 +651,7 @@ describe('clientReadiness', () => {
     expect(NOT_BUILT.length).toBeGreaterThan(0)
     for (const n of NOT_BUILT) {
       // The pages by their names in the menu (sw-2 item 6).
-      expect(['Your moves', 'Brands', 'Subjects', 'This week']).toContain(n.page)
+      expect(['Your moves', 'Competitive', 'Subjects', 'This week']).toContain(n.page)
       expect(n.what).not.toMatch(/\d{4}|—/)
     }
   })
@@ -736,7 +736,7 @@ describe('clientReadiness, row by row (sw-2 item 6)', () => {
   })
 
   it('names the rivals’ block by the page it is on', () => {
-    expect(clientReadiness([readyRow({ id: 'rival-accounts', block: 'Competitive', owner: 'client' })]).rows[0].block).toBe('Brands')
+    expect(clientReadiness([readyRow({ id: 'rival-accounts', block: 'Competitive', owner: 'client' })]).rows[0].block).toBe('Competitive')
   })
 
   it('keeps each row’s own words where its fact is absent', () => {

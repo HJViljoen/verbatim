@@ -340,8 +340,8 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   })
 
   it('brands in one line, naming the brands page by its current label', () => {
-    // "Brands" since deploy 5 (WP3.5).
-    expect(text).toContain('Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Brands lists what was filed under each brand you track.')
+    // "Competitive" again since 1 Oct (it was "Brands" from deploy 5).
+    expect(text).toContain('Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Competitive lists what was filed under each brand you track.')
   })
 
   it('what changed: the refusal, the first pair read the same way, and the link to the dated list', () => {

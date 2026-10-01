@@ -15,7 +15,7 @@ import { surface } from '@/lib/nav'
 export const metadata: Metadata = { title: 'Page not found' }
 
 export default function DashboardNotFound() {
-  const front = surface('overview')
+  const front = surface('home')
   return (
     <PageFrame>
       <PageBar title="Page not found" />

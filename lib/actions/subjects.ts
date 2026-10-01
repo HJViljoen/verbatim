@@ -100,6 +100,7 @@ const firstIssue = (e: z.ZodError): string => {
 function revalidateSubjects(): void {
   revalidatePath('/dashboard/subjects')
   revalidatePath('/dashboard')
+  revalidatePath('/dashboard/overview')
   revalidatePath('/dashboard/settings')
   revalidatePath('/dashboard/market')
 }
