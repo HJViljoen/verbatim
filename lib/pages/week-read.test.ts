@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { SEALAND_CLIENT_ID } from '../config'
 import type { AttributionInputs, TrackedBrands } from '../brands/attribution'
@@ -119,6 +119,19 @@ describe('weekReadPage', () => {
 })
 
 describe('loadWeekReadPage', () => {
+  it('a failed week_reads read is logged and the page draws without it, never a crash (fresh review H2)', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const db = fakeDb({ clients: [{ id: SEALAND_CLIENT_ID, company_name: 'Sealand' }], competitors: [] })
+    const broken = {
+      select: () => broken, eq: () => broken, in: () => broken, not: () => broken, order: () => broken, limit: () => broken,
+      then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok),
+    }
+    const reading = { from: (t: string) => (t === 'week_reads' ? broken : (db.client as { from: (t: string) => unknown }).from(t)) }
+    expect(await loadWeekReadPage({ supabase: db.client, clientId: SEALAND_CLIENT_ID, reading: readingHandle(SEALAND_CLIENT_ID, reading as never), params: {} })).toBeNull()
+    expect(err.mock.calls.some((c) => String(c[0]).startsWith('[pages] week.read:'))).toBe(true)
+    err.mockRestore()
+  })
+
   it('reads the newest ready read for the session’s client and who its talk is about', async () => {
     const stored = frozen(read())
     const db = fakeDb({

@@ -282,8 +282,11 @@ async function loadQuoteOrigins(db: SupabaseClient, refs: readonly string[]): Pr
 
 /**
  * This week, for one tenant. Null where no ready read exists yet (the route
- * prints one neutral line, ruling U2). `now` is injectable for a script and
- * the test; the page passes nothing.
+ * prints one neutral line, ruling U2), and where the read itself failed: a
+ * `week_reads` error is logged and the page draws without the read, never a
+ * crash (fresh review H2; the Dashboard, Subjects and Your market each lose
+ * only their block the same way). `now` is injectable for a script and the
+ * test; the page passes nothing.
  */
 export async function loadWeekReadPage(scope: Scope, opts: { now?: string } = {}): Promise<WeekReadPageData | null> {
   const supabase = scope.supabase as SupabaseClient
@@ -293,7 +296,10 @@ export async function loadWeekReadPage(scope: Scope, opts: { now?: string } = {}
 
   const [clientRes, latest, rivals] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    loadLatestWeekRead(db, clientId),
+    loadLatestWeekRead(db, clientId).catch((error: unknown) => {
+      console.error(`[pages] week.read: ${(error as Error)?.message ?? String(error)}; the page draws without it`)
+      return null
+    }),
     loadCompetitors(supabase, clientId).catch((error: unknown) => {
       if (!isMissingCompetitors(error)) console.error(`[pages] week.rivals: ${(error as Error)?.message ?? String(error)}`)
       return []
