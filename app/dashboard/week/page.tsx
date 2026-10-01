@@ -1,7 +1,7 @@
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
-import { loadWeek } from '@/lib/pages/week'
-import { WeekPage } from '@/components/pages/week'
+import { loadWeekReadPage } from '@/lib/pages/week-read'
+import { WeekReadPage } from '@/components/pages/week/read-page'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 
@@ -9,21 +9,17 @@ import { surface } from '@/lib/nav'
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('week').label }
 
-// This week — "what needs attention this week?" (Phase 1 WP15, decision P).
+// This week: the latest weekly read, in full (the pages build, 1 Oct; the
+// approved artboard Page-This-week.dc.html). lib/pages/week-read.ts reads the
+// newest ready `week_reads` row for the session's client and who each item is
+// about; components/pages/week/read-page.tsx draws it.
 //
-// The one Phase 1 surface dated by the UPDATE rather than by the month:
-// lib/pages/week.ts reads the run's own frozen window and hands back seven
-// blocks, and components/pages/week draws them in the weekly report's order.
-// WP17 arranges the same block keys into the email, so the page and the
-// artefact are one reading rather than two.
+// The earlier page (`WeekPage`, `loadWeek`, `WEEK_BLOCKS`) stays in the tree
+// for the export module and stored snapshots that name its block keys; this
+// route no longer renders it.
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | undefined>>
-}) {
-  const sp = (await searchParams) ?? {}
+export default async function Page() {
   const { supabase, clientId } = await getSessionContext()
-  const data = await loadWeek({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  return <WeekPage data={data} params={sp} />
+  const data = await loadWeekReadPage({ supabase, clientId, reading: readingHandle(clientId), params: {} })
+  return <WeekReadPage data={data} title={surface('week').label} />
 }
