@@ -34,6 +34,7 @@ import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
+import { measureStatements, measureSummary, statementMonth, STATEMENTS_STEP_BUDGET_MS } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
@@ -2044,7 +2045,30 @@ export const runPipeline = inngest.createFunction(
             runDate: ((run?.started_at as string | null) ?? new Date().toISOString()).slice(0, 10),
             companyName: (client?.company_name as string) ?? 'the client',
           })
-          return { checks: results.length, moved: results.reduce((n, r) => n + r.moved.length, 0) }
+          // YOUR STATEMENTS (pages build, MOVES): the client's own claims,
+          // re-measured on this run's month in the same step that re-reads its
+          // plans, because they are the same act (a client input read again
+          // against the new conversation). NO NEW STEP ID. It never throws: a
+          // failure is logged and the previous readings stand, so a retry of
+          // this step never re-buys the plan re-checks for it. Bounded by its
+          // own clock inside the route's 300 s; with no table it no-ops.
+          let statements: { measured: number; skipped: string | null; costUsd: number } | null = null
+          try {
+            const { data: win } = await admin.from('pipeline_runs').select('window_start, window_end').eq('id', runId).maybeSingle()
+            const w = win as { window_start: string | null; window_end: string | null } | null
+            const r = await measureStatements(admin, {
+              clientId,
+              runId,
+              month: statementMonth(w?.window_start && w.window_end ? { from: w.window_start, to: w.window_end } : null),
+              write: true,
+              deadlineMs: STATEMENTS_STEP_BUDGET_MS,
+            })
+            for (const x of r.results) console.log(`[statements] ${measureSummary(x)}`)
+            statements = { measured: r.results.filter((x) => x.reading).length, skipped: r.skipped, costUsd: r.costUsd }
+          } catch (e) {
+            console.error(`[statements] not measured: ${e instanceof Error ? e.message : String(e)}`)
+          }
+          return { checks: results.length, moved: results.reduce((n, r) => n + r.moved.length, 0), statements }
         })
         .catch((e) => {
           console.error(`[ask-reevaluate] out of retries: ${e instanceof Error ? e.message : String(e)}`)
