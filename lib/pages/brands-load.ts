@@ -5,7 +5,7 @@ import { monthBrandCounts, type PlannedMention } from '../brands/mentions'
 import { ownerOfVideos, type IdentityRow } from '../brands/owners'
 import { BRAND_READINGS_TABLE, isMissingBrandReadings } from '../brands/readings'
 import { readRivalFound, withoutRivalSearches } from '../brands/rival-searches'
-import { chunk, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { readingOf, readTranslations } from '../quotes'
 import { freezeBoundary } from '../reading/monthly'
@@ -18,13 +18,18 @@ import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_KIND_READINGS, RPC_WINDOW_THEME_REA
 import type { ScheduleConfig } from '../pipeline/schedule-due'
 import type { Quote } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
-import { INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import {
-  ASKED_PARAM, buildAsked, buildContent, buildFindings, buildInFull, buildNameBlock, buildPosts, buildShare, buildTopics,
-  leadTheme, ninetyDays, recurrenceMonths,
-  type BrandMonthIn, type BrandsPageData,
+  ASKED_PARAM, buildAsked, buildContent, buildFindings, buildInFull, buildNameBlock, buildPosts, buildShare, buildTopics, buildWorks,
+  leadTheme, ninetyDays, recurrenceMonths, SAID_SHOWN,
+  type BrandMonthIn, type BrandsPageData, type FindingAbout, type SaidAbout, type WorksVideo,
 } from './brands'
+import { WHAT_THEY_SELL } from './market-frame'
+import { workedLabel } from './week'
+import { platformLabel } from '../format'
+import { fetchQuoteCitationsByAudience } from '../quotes'
+import { namesBrand, pickEligible } from '../quote-gate'
 import { fetchRunningRunIds } from './latest-video-run'
 import { marketMonthIds } from './overview-brands'
 import { pickQuotes, type QuoteCandidate } from './overview-market/voices'
@@ -88,6 +93,9 @@ export interface BrandsLoadInput {
   ownPosts: Promise<readonly OwnPostCensusInput[]>
   /** The month's playbook; B6 reads its category column. */
   playbook: Promise<PlaybookBlock | null>
+  /** The playbook's own videos, for what works in your market's videos (the
+   *  Competitive page). Optional: a caller without them draws no such block. */
+  playbookVideos?: Promise<readonly WorksVideo[] | null>
   hrefFor: (rival: string) => string
 }
 
@@ -106,12 +114,15 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
   // staging), so they are read for every live brand at once, one page, beside
   // the rest, and the selected brand's list is taken after.
   const running = fetchRunningRunIds(input.db, input.clientId, 'brands').catch((e: unknown) => { say('running', e); return [] as string[] })
-  const [b1, windowReads, findingsRaw, claims, share, questions] = await Promise.all([
+  // THE SHARE OF WHAT OUR SEARCHES FOUND IS CUT (pages build, 1 Oct: it read
+  // as share of voice, BR-26), and so are its two reads: the field keeps its
+  // shape, unread, for the block still registered for older readers.
+  const share = buildShare({ month, stats: null, rivals: live, startsWith: null })
+  const [b1, windowReads, findingsRaw, claims, questions] = await Promise.all([
     readBrandCounts(input, month, prev, live).catch((e: unknown) => { say('topics', e); return null }),
     readWindow(input.db, input.clientId, window).catch((e: unknown) => { say('window', e); return null }),
     running.then((r) => readFindings(input.db, input.clientId, month, live, r)).catch((e: unknown) => { say('findings', e); return [] as FindingRead[] }),
     readClaims(input.db, input.clientId, input.ownPosts).catch((e: unknown) => { say('claims', e); return null }),
-    readShare(input, month, live).catch((e: unknown) => { say('share', e); return buildShare({ month, stats: null, rivals: live, startsWith: null }) }),
     running.then((r) => readQuestions(input.db, input.clientId, month, window, live, r)).catch((e: unknown) => { say('asked', e); return null }),
   ])
 
@@ -125,6 +136,12 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     unsearched: b1?.unsearched,
   })
   const selected = inFull.selected ? { name: inFull.selected.label, audience: inFull.selected.audience } : null
+  // WHAT IS SAID ABOUT THE BRAND READ IN FULL: its own voices over the same
+  // ninety days, through the quote gate. It waits on the pick, so it starts
+  // here, beside the posts and the playbook below.
+  const saidAhead = selected
+    ? readSaidAbout(input.db, input.clientId, selected, window).catch((e: unknown) => { say('said', e); return null })
+    : Promise.resolve(null)
   const asked = selected && windowReads && questions
     ? buildAsked({
         rival: selected,
@@ -146,9 +163,11 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     floor: COMPETITIVE_MIN_VIDEOS,
   })
 
-  const [ownInputs, playbook] = await Promise.all([
+  const [ownInputs, playbook, playbookVideos, saidAbout] = await Promise.all([
     input.ownPosts.catch((e: unknown) => { say('posts', e); return [] as OwnPostCensusInput[] }),
     input.playbook.catch((e: unknown) => { say('playbook', e); return null }),
+    (input.playbookVideos ?? Promise.resolve(null)).catch((e: unknown) => { say('works', e); return null }),
+    saidAhead,
   ])
   const censuses: OwnPostCensus[] = ownInputs.map((ci) => ownPostCensus({ ...ci, claims: claims?.get(ci.audience) ?? [] }))
 
@@ -160,10 +179,27 @@ export async function loadBrandsPage(input: BrandsLoadInput): Promise<BrandsPage
     inFull,
     asked,
     findings,
-    posts: buildPosts({ month, censuses }),
+    posts: buildPosts({ month, censuses, platforms: postPlatforms(ownInputs, month) }),
     content: playbook ? buildContent({ month, formats: playbook.formats, hooks: playbook.hooks, audience: INDUSTRY_AUDIENCE }) : null,
     share,
+    noun: WHAT_THEY_SELL[input.clientId] ?? null,
+    saidAbout,
+    works: playbookVideos ? buildWorks({ month, videos: playbookVideos, audience: INDUSTRY_AUDIENCE, label: workedLabel }) : null,
   }
+}
+
+/** Each brand's platforms in the month, A to Z, off its own posts. */
+export function postPlatforms(inputs: readonly OwnPostCensusInput[], month: string): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const ci of inputs) {
+    const names = new Set<string>()
+    for (const v of ci.videos as readonly { upload_date: string | null; platform?: string | null }[]) {
+      if (!v.platform || !v.upload_date || monthStartOf(v.upload_date) !== month) continue
+      names.add(platformLabel(v.platform))
+    }
+    out.set(ci.audience, [...names].sort((a, b) => a.localeCompare(b)))
+  }
+  return out
 }
 
 // ---- B1 ------------------------------------------------------------------------
@@ -465,6 +501,68 @@ async function readQuestions(
   return out
 }
 
+// ---- what is said about the brand read in full -----------------------------------
+
+/**
+ * What is said about one tracked brand over the ninety days: the voices under
+ * the videos filed under it (videos about the brand), dated in the window,
+ * through the quote gate as that brand's block (its own voice, never a line
+ * naming only another brand, readable and on the market). Reads: the brand's
+ * analysed videos (1), their current insights (per 250), the insights'
+ * evidence (chunked), the comments' dates (chunked), and the gate's context.
+ */
+async function readSaidAbout(
+  db: SupabaseClient,
+  clientId: string,
+  brand: { name: string; audience: string },
+  window: { from: string; to: string },
+): Promise<SaidAbout | null> {
+  const videos = await selectAll<{ id: string }>(() =>
+    db.from('videos').select('id').eq('client_id', clientId).eq('is_competitor', true).eq('competitor_name', brand.name)
+      .not('analyzed_run_id', 'is', null).order('id'))
+  if (videos.length === 0) return null
+  const insightPages = await mapWithLimit(chunk(videos.map((v) => String(v.id)), UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<{ id: string }>(() => db.from('audience_insights_current').select('id').eq('client_id', clientId).in('source_video_id', part).order('id')))
+  const insightIds = insightPages.flat().map((r) => String(r.id))
+  if (insightIds.length === 0) return null
+  const citations = [...(await fetchQuoteCitationsByAudience(db, insightIds)).values()].flat().filter((c) => c.commentId)
+  const commentIds = [...new Set(citations.map((c) => String(c.commentId)))]
+  const metaPages = await mapWithLimit(chunk(commentIds, UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
+    const r = await db.from('comments').select('id, platform, comment_date').eq('client_id', clientId).in('id', part)
+    if (r.error) throw new Error(`comments: ${r.error.message}`)
+    return (r.data ?? []) as { id: string; platform: string | null; comment_date: string | null }[]
+  })
+  const meta = new Map(metaPages.flat().map((c) => [String(c.id), c]))
+  const dayOf = (id: string | null): string => (id ? meta.get(id)?.comment_date ?? '' : '').slice(0, 10)
+  const inWindow = citations
+    .filter((c) => { const d = dayOf(c.commentId); return d !== '' && d >= window.from && d < window.to })
+    .sort((a, b) => a.rank - b.rank || dayOf(b.commentId).localeCompare(dayOf(a.commentId)) || a.evidenceId.localeCompare(b.evidenceId))
+  if (inWindow.length === 0) return null
+  const ctx = await readQuoteContext(db, clientId, { commentIds: inWindow.map((c) => c.commentId) }, db)
+  const picked = pickEligible(inWindow, (c) => ({
+    text: c.quote,
+    lang: c.lang ?? null,
+    english: c.english ?? null,
+    video: ctx.forComment(c.commentId),
+  }), SAID_SHOWN, gateFor(clientId, { brand: brand.name }))
+  if (picked.length === 0) return null
+  return {
+    audience: brand.audience,
+    label: brand.name,
+    quotes: picked.map((c) => {
+      const m = c.commentId ? meta.get(String(c.commentId)) : undefined
+      return {
+        ref: quoteRef.comment(String(c.commentId)),
+        text: c.quote,
+        lang: c.lang ?? null,
+        english: c.english ?? null,
+        platform: m?.platform ?? null,
+        date: m?.comment_date ?? null,
+      }
+    }),
+  }
+}
+
 // ---- B4 -------------------------------------------------------------------------
 
 interface FindingRead {
@@ -473,15 +571,53 @@ interface FindingRead {
   category: string
   impact: string | null
   title: string
+  body: string | null
+  about: FindingAbout | null
   quote: Quote | null
   seen: { months: number; of: number } | null
 }
 
+/**
+ * WHO A FINDING'S TALK IS ABOUT, from the buckets of the themes it cites
+ * (brand attribution, pages build rule 6): a tracked brand's bucket is talk
+ * about that brand, the category's is the market's, the client's is yours.
+ * Never read from the finding's words, except that a finding naming the
+ * client is set against the client. Null where nothing it cites was found.
+ */
+export function findingAbout(input: {
+  rival: string
+  /** Buckets of the themes the finding's cited insights fall in, most cited first. */
+  buckets: readonly string[]
+  /** Live tracked brands, by audience. */
+  brands: ReadonlyMap<string, string>
+  client: string | null
+  body: string | null
+}): FindingAbout | null {
+  const others: string[] = []
+  let market = false
+  let client = false
+  for (const b of input.buckets) {
+    if (b === INDUSTRY_AUDIENCE) market = true
+    else if (b === CLIENT_AUDIENCE) client = true
+    else {
+      const name = input.brands.get(b)
+      if (name && norm(name) !== norm(input.rival) && !others.includes(name)) others.push(name)
+    }
+  }
+  if (!client && input.client && input.body && namesBrand(input.client, input.body)) client = true
+  if (input.buckets.length === 0 && !client) return null
+  return { brands: others, market, client }
+}
+
 async function readFindings(db: SupabaseClient, clientId: string, month: string, live: readonly { name: string; audience: string }[], running: readonly string[]): Promise<FindingRead[]> {
-  const res = await db.from('competitive_insights').select('id, run_id, category, competitor_name, title, evidence, impact_level, created_at')
-    .eq('client_id', clientId).order('created_at', { ascending: false }).limit(60)
+  const [res, clientRes] = await Promise.all([
+    db.from('competitive_insights').select('id, run_id, category, competitor_name, title, finding, evidence, impact_level, created_at')
+      .eq('client_id', clientId).order('created_at', { ascending: false }).limit(60),
+    db.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+  ])
   if (res.error) throw new Error(`competitive_insights: ${res.error.message}`)
-  type Row = { id: string; run_id: string | null; category: string; competitor_name: string | null; title: string; evidence: { supporting_theme_ids?: string[] } | null; impact_level: string | null; created_at: string }
+  const clientName = ((clientRes.data ?? null) as { company_name?: string | null } | null)?.company_name ?? null
+  type Row = { id: string; run_id: string | null; category: string; competitor_name: string | null; title: string; finding: string | null; evidence: { supporting_theme_ids?: string[] } | null; impact_level: string | null; created_at: string }
   const all = ((res.data ?? []) as Row[]).filter((r) => r.run_id && !running.includes(r.run_id))
   const runId = all[0]?.run_id ?? null
   if (!runId) return []
@@ -515,11 +651,26 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
     if (reg.error) throw new Error(`theme_registry: ${reg.error.message}`)
     for (const r of (reg.data ?? []) as { id: string; bucket: string }[]) buckets.set(String(r.id), String(r.bucket))
   }
+  const brandByAudience = new Map(live.map((r) => [r.audience, r.name]))
+  const abouts = new Map<string, FindingAbout | null>()
   for (const f of rows) {
     const cited = new Set(f.evidence?.supporting_theme_ids ?? [])
     const obs = (observed.find((o) => o.finding === f.id)?.obs ?? []).map((o) => ({ ...o, bucket: buckets.get(o.themeId) ?? '' }))
     const lead = leadTheme(cited, obs, byName.get(norm(f.competitor_name ?? ''))?.audience ?? '')
     if (lead) leads.set(f.id, lead)
+    // The buckets its cited insights fall in, the most cited first.
+    const hits = new Map<string, number>()
+    for (const o of obs) {
+      const n = o.members.filter((m) => cited.has(m)).length
+      if (n > 0 && o.bucket) hits.set(o.bucket, (hits.get(o.bucket) ?? 0) + n)
+    }
+    abouts.set(f.id, findingAbout({
+      rival: f.competitor_name ?? '',
+      buckets: [...hits.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([b]) => b),
+      brands: brandByAudience,
+      client: clientName,
+      body: f.finding ?? null,
+    }))
   }
 
   // THE MONTHS AND THE QUOTE, FROM THE MONTH READINGS: where the lead theme
@@ -571,6 +722,8 @@ async function readFindings(db: SupabaseClient, clientId: string, month: string,
       category: String(f.category),
       impact: f.impact_level ?? null,
       title: String(f.title),
+      body: f.finding ? String(f.finding) : null,
+      about: abouts.get(f.id) ?? null,
       quote: picked && picked.commentId
         ? { ref: quoteRef.comment(picked.commentId), text: picked.quote, lang: picked.lang ?? null, english: picked.english ?? null }
         : null,
@@ -663,26 +816,7 @@ async function readClaims(
   return out
 }
 
-// ---- B7 -------------------------------------------------------------------------
-
-async function readShare(input: BrandsLoadInput, month: string, live: readonly { name: string; audience: string }[]): Promise<BrandsPageData['share']> {
-  const { db, clientId } = input
-  const [stats, panels] = await Promise.all([
-    db.from('month_audience_stats').select('audience, panel_videos').eq('client_id', clientId).eq('month', month).not('panel_videos', 'is', null),
-    db.from('attention_panels').select('id').eq('client_id', clientId).limit(1),
-  ])
-  if (stats.error && !missing(stats.error, 'month_audience_stats')) throw new Error(`month_audience_stats: ${stats.error.message}`)
-  const statsRows = stats.error
-    ? null
-    : ((stats.data ?? []) as { audience: string; panel_videos: number }[]).map((r) => ({ audience: String(r.audience), panelVideos: Number(r.panel_videos) || 0 }))
-  const hasPanel = !panels.error && (panels.data ?? []).length > 0
-  return buildShare({
-    month,
-    stats: statsRows,
-    rivals: live,
-    startsWith: hasPanel || input.reading.paused ? null : firstPanelUpdate(input),
-  })
-}
+// ---- B7 (cut from the page; its first-panel rule is kept for Settings) ----
 
 /** The update the first attention panel freezes with: the first scheduled
  *  update after the oldest filling month's freeze line (the panel freezes

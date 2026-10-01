@@ -5,7 +5,8 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { TOPICS_NOT_READ } from '@/lib/pages/brands'
-import { BRANDS_LINES, COMPETITIVE_BLOCKS, CompetitiveSurfacePage } from '../index'
+import { surface } from '@/lib/nav'
+import { CompetitiveSurfacePage } from '../index'
 import { competitiveFixture } from '../fixture'
 import { competitiveRivals } from '../rivals'
 import { competitiveQuestions } from '../questions'
@@ -304,38 +305,24 @@ describe('B7 · share of what our searches found', () => {
   })
 })
 
-describe('the Brands page', () => {
-  it('is titled Competitive (its label again since 1 Oct), with the month selector and its one line, no horizon pills and no Export', () => {
+describe('the page (Competitive, pages build 1 Oct)', () => {
+  // The page itself is drawn to the approved artboard by ../page and pinned in
+  // ../page/page.test.tsx. These keep the old blocks' guarantees on it.
+  it('is titled with the surface label alone: no month selector line, no horizon pills and no Export', () => {
     const t = text(<CompetitiveSurfacePage data={brandsFixture()} />)
-    expect(t.startsWith('Competitive ')).toBe(true)
-    expect(t).toContain('as at the 20 Sep update')
+    expect(t.startsWith(`${surface('competitive').label} `)).toBe(true)
+    expect(t).not.toContain('as at the 20 Sep update')
     // T0 ruling U12 (BR-2): the page key `competitive` exports the parked
-    // Competitive Intelligence page, with deltas no pair judge saw, so Brands
-    // carries no Export until it has an export module of its own.
+    // Competitive Intelligence page, with deltas no pair judge saw, so the
+    // page carries no Export until it has an export module of its own.
     expect(t).not.toContain('Export')
     expect(render(<CompetitiveSurfacePage data={brandsFixture()} />)).not.toContain('Export this tile')
     expect(t).not.toMatch(/Last 3 months|Last 12 months|Since we started/)
   })
 
-  it('draws the preview’s blocks in its order and spans', () => {
-    const markup = render(<CompetitiveSurfacePage data={brandsFixture()} />)
-    const tiles = [...markup.matchAll(/data-col="(\d+)"[\s\S]*?<h2[^>]*>([^<]+)<\/h2>/g)].map((m) => [m[2], Number(m[1])])
-    expect(tiles).toEqual([
-      ['Your name in your market', 12],
-      ['Brands in your market', 12],
-      ['A brand in full, last 90 days', 8],
-      ['Asked under their content', 4],
-      ['Where a rival’s talk differs', 12],
-      ['What they post and say about themselves', 12],
-      ['How the market makes content', 6],
-      ['Share of what our searches found', 6],
-    ])
-    expect(BRANDS_LINES.flat().map((x) => x.block.key)).toEqual(COMPETITIVE_BLOCKS.slice(0, 8).map((b) => b.key))
-  })
-
-  it('draws no name tile for a tenant with no brand rule (Össur)', () => {
+  it('draws no brand list for a tenant with no brand rule (Össur), and its pane', () => {
     const t = text(<CompetitiveSurfacePage data={ossurBrandsFixture()} />)
-    expect(t).not.toContain('Your name in your market')
-    expect(t).toContain('Ottobock in full of its 88 videos')
+    expect(t).not.toContain('Brands in your market')
+    expect(t).toContain('Ottobock in full What people did in the comments, of its 88 videos')
   })
 })

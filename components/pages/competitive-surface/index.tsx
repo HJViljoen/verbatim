@@ -2,10 +2,12 @@ import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { HowToRead } from '@/components/how-to-read'
-import { PageFrame, PageGrid } from '@/components/shell/page-grid'
+import { PageBar, PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { barContext } from '@/lib/shell/bar'
-import { Tile, TileEmpty } from '@/components/shell/tile'
+import { Tile } from '@/components/shell/tile'
+import { surface } from '@/lib/nav'
+import { CompetitivePage } from './page'
 import type { GlossaryKey } from '@/lib/calibration'
 import { saidAboutUnread, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import { competitiveRivals } from './rivals'
@@ -72,21 +74,6 @@ export const COMPETITIVE_BLOCKS: readonly Block<CompetitiveSurfaceData>[] = [
   competitiveHeadToHead,
   competitiveSaidAbout,
 ]
-
-/** The Brands page's tiles, a line at a time, with the preview's spans. */
-export const BRANDS_LINES: readonly (readonly { block: Block<CompetitiveSurfaceData>; col: 4 | 6 | 8 | 12 }[])[] = [
-  [{ block: competitiveName, col: 12 }],
-  [{ block: competitiveTopics, col: 12 }],
-  [{ block: brandsInFull, col: 8 }, { block: brandsAsked, col: 4 }],
-  [{ block: competitiveFindings, col: 12 }],
-  [{ block: brandsPosts, col: 12 }],
-  [{ block: brandsContent, col: 6 }, { block: brandsShare, col: 6 }],
-]
-
-/** Is the name block drawn? A tenant with no brand rule (Össur) has no name
- *  to read, so its tile is not drawn (an absence is a line, never a card). */
-export const brandsDrawn = (block: Block<CompetitiveSurfaceData>, data: CompetitiveSurfaceData): boolean =>
-  block !== competitiveName || data.brands?.name != null
 
 /** The blocks that are TILES, in the artboard's order. CO1 is drawn inline
  *  above the grid and is deliberately absent. */
@@ -207,23 +194,19 @@ export function CompetitiveSurfacePage({
   data: CompetitiveSurfaceData | null
   params?: Record<string, string | undefined>
 }) {
+  // THE COMPETITIVE PAGE (pages build, 1 Oct): the approved artboard, drawn
+  // by ./page. With nothing read it is the title alone: no empty state, no
+  // line about what has not been read (rules 1 and 2).
   if (!data) {
     return (
-      <PageFrame>
-        <SurfacePageBar nav="competitive" params={params} />
-        <PageGrid>
-          <Tile col={12} row={2}>
-            <TileEmpty>
-              Nothing has been read for this workspace yet. Your rivals&rsquo; standings land with the first update.
-            </TileEmpty>
-          </Tile>
-        </PageGrid>
+      <PageFrame className="gap-[22px]">
+        <PageBar title={surface('competitive').label} />
       </PageFrame>
     )
   }
+  if (data.brands) return <CompetitivePage data={data} />
 
   const ctx = competitiveContext(params)
-  if (data.brands) return <BrandsPage data={data} params={params} ctx={ctx} />
   // NO EXPORT ON BRANDS (T0 ruling U12; BR-2): the page key `competitive`
   // resolves to the parked Competitive Intelligence module
   // (components/pages/registry.ts), so "Export" printed that page's
@@ -258,42 +241,6 @@ export function CompetitiveSurfacePage({
           method, and stays. */}
       {data.method ? (
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{data.method.privacy}</p>
-      ) : null}
-    </PageFrame>
-  )
-}
-
-/**
- * THE BRANDS PAGE (deploy 5): the preview's bar (the month selector, its one
- * line, Export as the 40px button, no horizon pills and no "How to read"
- * pill, as Your market's bar) and its grid, 24px between tiles, each block
- * drawing its own 32px inset. A pair shares its row and its height, as the
- * preview draws it (`align-items: stretch`); each block fills its tile so its
- * footer sits on the floor.
- */
-function BrandsPage({ data, params, ctx }: { data: CompetitiveSurfaceData; params: Record<string, string | undefined>; ctx: BlockContext }) {
-  const lines = BRANDS_LINES.map((line) => line.filter(({ block }) => brandsDrawn(block, data))).filter((line) => line.length > 0)
-  return (
-    <PageFrame className="gap-6">
-      {/* No Export here either (T0 ruling U12; BR-2): see `CompetitiveSurfacePage`. */}
-      <SurfacePageBar nav="competitive" params={params} context={barContext(data)} />
-      <PageGrid className="gap-6 xl:auto-rows-auto">
-        {lines.flat().map(({ block, col }) => (
-          <Tile
-            key={block.key}
-            col={col}
-            row={1}
-            flush
-            className="min-h-0"
-            bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
-            distribute="between"
-          >
-            {block.render(data, 'app', ctx)}
-          </Tile>
-        ))}
-      </PageGrid>
-      {data.method ? (
-        <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{data.method.privacy}</p>
       ) : null}
     </PageFrame>
   )

@@ -9,12 +9,12 @@ import { surface } from '@/lib/nav'
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('competitive').label }
 
-// Brands (market-first WP3.5, deploy 5; was Competitive, Phase 1 WP14). The
-// address Competitive Intelligence used to hold; that page is parked at
-// /dashboard/competitive-intel until OLD_PAGES_RETIRE_ON.
+// Competitive (renamed from Brands; pages build, 1 Oct), drawn to the approved
+// artboard Page-Competitive.dc.html by components/pages/competitive-surface/
+// page. The address Competitive Intelligence used to hold; that page is parked
+// at /dashboard/competitive-intel until OLD_PAGES_RETIRE_ON.
 //
-// `?vs=<brand>` names the brand read in full and `?asked=all` lists every
-// question theme under it. Neither this page nor its loader reads
+// `?vs=<brand>` names the brand read in full. Neither this page nor its loader reads
 // `run_summary.period_share_of_voice`: the parked page keeps that layer, and
 // this one is the monthly reading. The page asks its loader for the Brands
 // readings (`{ brands: true }`); the quarterly and the briefs do not.
