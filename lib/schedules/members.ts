@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SCHEDULE_RECIPIENTS_MAX } from '../config'
-import { STUDIO_TENANT_VISIBLE } from '../studio-visibility'
+import { STUDIO_TENANT_REVIEWS } from '../studio-visibility'
 import { tenantLocked } from '../tenant-locks'
 import { normaliseRecipients } from './validate'
 
@@ -21,8 +21,9 @@ export async function memberEmails(admin: SupabaseClient, clientId: string): Pro
 /**
  * WHO READS A BUILD BEFORE IT GOES OUT (writing back, T7's review fix).
  *
- * The review email links into the Studio, and the Studio is hidden from
- * tenant users (`STUDIO_TENANT_VISIBLE`, lib/studio-visibility.ts): a member
+ * The review email links into the Studio, and the Studio's review controls
+ * are operator-only (`STUDIO_TENANT_REVIEWS`, lib/studio-visibility.ts; it
+ * was `STUDIO_TENANT_VISIBLE` until clients could open the Studio): a member
  * who got it landed on Reports with nothing to read and no Send to press.
  * And a send-locked tenant's members may not send at all (`TENANT_LOCKS`,
  * decision J: during the trial sending is Heinrich's). For either, the review
@@ -38,7 +39,7 @@ export function reviewAudience(
   clientId: string,
   opts: { studioVisible?: boolean; sendsLocked?: boolean } = {},
 ): 'operator' | 'members' {
-  const studioVisible = opts.studioVisible ?? STUDIO_TENANT_VISIBLE
+  const studioVisible = opts.studioVisible ?? STUDIO_TENANT_REVIEWS
   const sendsLocked = opts.sendsLocked ?? tenantLocked(clientId, 'sends')
   return !studioVisible || sendsLocked ? 'operator' : 'members'
 }

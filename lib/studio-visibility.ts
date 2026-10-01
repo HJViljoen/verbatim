@@ -18,7 +18,24 @@ import type { SessionContext } from './auth'
 //
 // To bring the Studio back for clients, flip this one constant to true. Every
 // surface reads `canSeeStudio`, so that is the whole change.
-export const STUDIO_TENANT_VISIBLE = false
+//
+// FLIPPED 1 OCT (the navigation build, page review §4): the Studio is shown to
+// clients, Reports folds into it, and it is a sidebar row of its own. What a
+// client may DO there is the Studio page's split (build, templates, review and
+// Send stay operator-only), and who reviews a build is a separate constant,
+// STUDIO_TENANT_REVIEWS below, so opening the page did not hand a held build
+// or its review email to the members.
+export const STUDIO_TENANT_VISIBLE = true
+
+/**
+ * WHETHER A TENANT'S MEMBERS REVIEW A BUILD before it goes out. False: the
+ * review controls and Send are operator-only in the Studio (1 Oct), so the
+ * review email goes to the operator and a held build is readable by the
+ * operator alone (`reviewAudience`, lib/schedules/members.ts; `mayReadHeld`,
+ * lib/reports/held.ts). It used to ride STUDIO_TENANT_VISIBLE, which was right
+ * while "may see the Studio" and "may review in it" were the same question.
+ */
+export const STUDIO_TENANT_REVIEWS = false
 
 /** The Studio's route. One spelling, so hiding it stays one search. */
 export const STUDIO_HREF = '/dashboard/studio'
@@ -43,8 +60,10 @@ export function canSeeStudio(
   return tenantVisible || session.operator !== null
 }
 
-/** Where a session that may not see the Studio lands instead: Reports. */
-export const STUDIO_AWAY_HREF = '/dashboard/reports'
+/** Where a session that may not see the Studio lands instead: the Dashboard.
+ *  It was Reports, which redirects INTO the Studio since 1 Oct, so with the
+ *  flag off the two would have sent a tenant round in a loop. */
+export const STUDIO_AWAY_HREF = '/dashboard'
 
 /**
  * The Studio pages' route guard (finish-list item 16): null for a session that

@@ -24,7 +24,10 @@ describe.each(pages)('the %s page', (_name, page) => {
   })
 
   it('makes no promise the product has turned off', () => {
-    for (const banned of [/\bgaining\b/i, /\bfading\b/i, /\bemerging\b/i, /sentiment/i, /\bstudio\b/i, /inbox/i, /digest/i, /schedul/i, /PDF attached/i, /[↑↓]/, /\d conversations/]) {
+    // The Studio left this list on 1 Oct: clients see it again
+    // (STUDIO_TENANT_VISIBLE), and the how-it-works page lists it as one of
+    // the app's pages from lib/nav.ts.
+    for (const banned of [/\bgaining\b/i, /\bfading\b/i, /\bemerging\b/i, /sentiment/i, /inbox/i, /digest/i, /schedul/i, /PDF attached/i, /[↑↓]/, /\d conversations/]) {
       expect(text, String(banned)).not.toMatch(banned)
     }
   })

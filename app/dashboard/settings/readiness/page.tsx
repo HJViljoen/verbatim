@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 import { ReadinessTable } from '@/components/ops/readiness-table'
 import { SettingsFrame } from '@/components/settings-frame'
@@ -13,7 +13,7 @@ import { CONFIG_CHANGES_TABLE } from '@/lib/config-log'
 import { settingsBar } from '@/lib/settings/bar'
 import { tenantLocked } from '@/lib/tenant-locks'
 import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { surface, tenantAway } from '@/lib/nav'
 import { settingsSubPage } from '@/lib/settings/rail'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -43,7 +43,11 @@ export const metadata: Metadata = { title: `${settingsSubPage('readiness').label
 // applied the load is told which client it is on and row 8 withholds its
 // discard half instead of measuring a silence.
 export default async function SettingsReadinessPage() {
-  const { supabase, clientId, role, operator } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant no longer reaches this page (lib/nav.ts TENANT_RETIRED, 1 Oct); the operator keeps it.
+  const away = tenantAway(session, '/dashboard/settings/readiness')
+  if (away) redirect(away)
+  const { supabase, clientId, role, operator } = session
   if (!canManageTenant(role)) notFound()
 
   const now = new Date()

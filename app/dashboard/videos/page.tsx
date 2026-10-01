@@ -1,9 +1,10 @@
+import { redirect } from 'next/navigation'
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadContent, type ContentParams } from '@/lib/pages/content'
 import { ContentPage } from '@/components/pages/content'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
-import { oldPage } from '@/lib/nav'
+import { oldPage, tenantAway } from '@/lib/nav'
 import type { Metadata } from 'next'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -19,7 +20,11 @@ export const metadata: Metadata = { title: oldPage('/dashboard/videos').label }
 // Exports, 2026-08-29).
 
 export default async function Page({ searchParams }: { searchParams?: Promise<ContentParams> }) {
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  // A tenant no longer reaches this page (lib/nav.ts TENANT_RETIRED, 1 Oct); the operator keeps it.
+  const away = tenantAway(session, '/dashboard/videos')
+  if (away) redirect(away)
+  const { supabase, clientId } = session
   const sp = (await searchParams) ?? {}
   // The quote gate on the inbox (lib/quote-gate.ts); the weekly report's call does not pass it.
   const data = await loadContent({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { gate: true })

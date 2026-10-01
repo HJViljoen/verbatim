@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation'
 import { RETIRED_ADDRESSES } from '@/lib/nav'
 
-// The Guide retired in Phase 1 (decision C): its nine per-page sections and
-// its glossary become Settings › How to read, one card per page, beside the
-// thirteen words. WP16 builds that sub-page; until it exists this lands on
-// Settings itself, because a redirect to an unbuilt route is a bare 404.
+// The Guide retired in Phase 1 (decision C) into Settings › How to read, which
+// is cut for clients since 1 Oct (page review §1 Settings), so the Guide lands
+// on Settings itself (page review §4).
 export default function Page() {
   redirect(RETIRED_ADDRESSES['/dashboard/guide'])
 }
