@@ -36,6 +36,7 @@ import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { measureStatements, measureSummary, statementMonth, STATEMENTS_STEP_BUDGET_MS } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
+import { runLongRunStep } from '@/lib/written/longrun'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
@@ -2097,6 +2098,32 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[write-week-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+
+    // The month's long-run read ("What holds across ...", the top of Your
+    // market; lib/written/longrun.ts). ITS OWN STEP (pages build integration,
+    // 1 Oct; the lead's ruling): the week's read and this one each take two to
+    // three minutes, which one step's 250 s could not hold. An ADDITIVE id in
+    // its own position, after write-week-read and before close-run: 64 ids
+    // before it, 65 with it. It writes only on the run that closes a month
+    // (the first after a month ends); every other run returns at once, having
+    // read one row and spent nothing.
+    //
+    // NON-FATAL in the week's way: the body never throws, its model calls are
+    // capped on this step's own clock, and a failure stores a `failed` month
+    // row and alerts the operator INSIDE the step, once, with the script to
+    // run. Logged here, never noteError'd: a clean run must not read
+    // 'partial' because the long-run read had a bad month.
+    await step
+      .run('write-longrun-read', async () => {
+        const admin = createAdminClient()
+        const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+        const company = ((client?.company_name as string | undefined) ?? '').trim() || clientId
+        return runLongRunStep(admin, { clientId, runId, company })
+      })
+      .catch((e) => {
+        console.error(`[write-longrun-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
 

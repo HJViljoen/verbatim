@@ -7,7 +7,6 @@ import { composeWeekRead } from './compose'
 import { callBudget, type CallBudget } from './deadline'
 import { loadTrackedBrands } from './evidence'
 import { fitQuotes, type FitParagraph, type QuoteFit } from './fit'
-import { maybeWriteLongRun, type LongRunStepResult } from './longrun'
 import { loadWeekPool } from './pool'
 import { scrubWeekRead, weekAllowTokens, type WeekScrubCounts } from './scrub'
 import { loadStanding } from './standing'
@@ -211,8 +210,6 @@ export interface WeekReadStepResult {
   held: number
   costUsd: number
   error?: string
-  /** ADDITIVE (pages build): the month's long-run read, where the hook ran. */
-  longRun?: LongRunStepResult
 }
 
 /** What the step needs from the world, so a test can stand them in. */
@@ -221,12 +218,13 @@ export interface WeekReadStepDeps {
   build: typeof buildWeekRead
   save: (admin: SupabaseClient, row: WeekReadRow) => Promise<void>
   alert: (subject: string, text: string) => Promise<{ sent: boolean }>
-  /** The long-run read's hook (lib/written/longrun.ts `maybeWriteLongRun`),
-   *  run after the week's read is stored. Never throws. */
-  longRun: (admin: SupabaseClient, opts: { clientId: string; runId: string; company: string; startedAt: number }, deps: Pick<WeekReadStepDeps, 'save' | 'alert'>) => Promise<LongRunStepResult>
 }
 
-const DEFAULT_DEPS: WeekReadStepDeps = { applied: weekReadsApplied, build: buildWeekRead, save: saveWeekRead, alert: sendAlertEmail, longRun: maybeWriteLongRun }
+// The month's long-run read is NOT written here: it has its own step,
+// `write-longrun-read`, after this one (lib/written/longrun.ts
+// `runLongRunStep`; the integration of 1 Oct moved it out, because the two
+// reads together overran one step's 250 s).
+const DEFAULT_DEPS: WeekReadStepDeps = { applied: weekReadsApplied, build: buildWeekRead, save: saveWeekRead, alert: sendAlertEmail }
 
 const FALLBACK = (clientId: string, runId: string) =>
   `Fallback, once the cause is fixed: node --env-file=.env.local --import tsx scripts/week-read.ts --client ${clientId} --run ${runId} (dry), then again with --write.`
@@ -269,11 +267,6 @@ export async function runWeekReadStep(
         `The writer ran on run ${opts.runId} and every finding it wrote was held, so the read is stored as thin and nothing will be sent from it.\n\nHeld:\n${built.data.held.map((h) => `- ${h.headline || '(no headline)'}: ${h.reason}`).join('\n') || '- nothing written'}\n\nClient: ${who} (${opts.clientId})`,
       )
     }
-    // THE MONTH'S LONG-RUN READ, ONCE THE WEEK'S IS STORED (pages build: no
-    // new step id). Its own failures are its own: it never throws and never
-    // touches the week's result.
-    result.longRun = await d.longRun(admin, { clientId: opts.clientId, runId: opts.runId, company: who, startedAt }, { save: d.save, alert: d.alert })
-      .catch((e: unknown): LongRunStepResult => ({ status: 'skipped', month: null, ideas: 0, costUsd: 0, error: e instanceof Error ? e.message : String(e) }))
     return result
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)

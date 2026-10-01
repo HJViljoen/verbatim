@@ -12,9 +12,9 @@
 //
 // --write stores the month's row (`kind = 'month'`, ready or thin) under the
 // run named by --run, or the newest delivered run, logging both calls as the
-// pipeline's hook does (`maybeWriteLongRun`, inside `write-week-read`). It is a
-// paste for Heinrich against production, and the fallback when the hook could
-// not write it. It refuses to replace a month that has a ready read unless
+// pipeline's own step does (`runLongRunStep`, `write-longrun-read`, on the run
+// that closes a month). It is a paste for Heinrich against production, and the
+// fallback when that step could not write it (its alert names this command). It refuses to replace a month that has a ready read unless
 // --replace is given.
 //
 //   --prompt-only --save-inputs <file.json>   reads the pool and the company,

@@ -61,7 +61,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
   throws: a failure stores a `failed` row and alerts the operator inside the
   step, because an alert in a `.catch` beside `step.run` is sent again on
   every later step's replay. A thin week makes no model call, and with no
-  `week_reads` table it no-ops and spends nothing. Re-register
+  `week_reads` table it no-ops and spends nothing. **The pages build (1 Oct)
+  adds one, immediately after it and before `close-run`:**
+  `write-longrun-read` (64 ids, 65 after; `scripts/pipeline-step-ids.sh
+  5d591359 --expect-before close-run write-longrun-read` is the check, and
+  `lib/written/step.test.ts` pins both). It writes the month's long-run read
+  (a `week_reads` row of `kind = 'month'`, `lib/written/longrun.ts`
+  `runLongRunStep`) on the run that CLOSES a month only (`closesMonth`: the
+  window holds the first day of the month it ends in, one run a month); every
+  other run returns at once. Same contract as the week's: the body never
+  throws, its model calls are capped on its own clock, and a failure stores a
+  `failed` row and alerts once with the script (`scripts/longrun-read.ts`),
+  because no later run writes an ended month. It was a hook inside
+  `write-week-read` on the market branch and moved out because the two reads
+  overran one step's 250 s. Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read

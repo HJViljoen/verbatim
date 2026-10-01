@@ -16,7 +16,6 @@ import { writerFigures } from './write'
 
 const admin = {} as SupabaseClient
 const OPTS = { clientId: 'client-1', runId: 'run-27', company: 'Sealand' }
-const NOT_DUE = { status: 'not_due' as const, month: '2026-08-01', ideas: 0, costUsd: 0 }
 
 function built(findings: number, called = true): BuiltWeekRead {
   const cs = [candidate({ id: 'C1' }), candidate({ id: 'C2' }), candidate({ id: 'C3' })]
@@ -47,7 +46,6 @@ function deps(over: Partial<WeekReadStepDeps> = {}) {
     build: async () => built(2),
     save: async (_a, row) => { saved.push(row) },
     alert: async (subject, text) => { alerts.push({ subject, text }); return { sent: true } },
-    longRun: async () => NOT_DUE,
     ...over,
   }
   return { d, saved, alerts }
@@ -57,7 +55,7 @@ describe('runWeekReadStep', () => {
   it('stores a ready read and says nothing to the operator', async () => {
     const { d, saved, alerts } = deps()
     const r = await runWeekReadStep(admin, OPTS, d)
-    expect(r).toEqual({ status: 'ready', findings: 2, held: 0, costUsd: 0.21, longRun: NOT_DUE })
+    expect(r).toEqual({ status: 'ready', findings: 2, held: 0, costUsd: 0.21 })
     expect(saved).toHaveLength(1)
     expect(saved[0]).toMatchObject({ client_id: 'client-1', run_id: 'run-27', kind: 'week', month: '2026-09-01', status: 'ready', cost_usd: 0.21 })
     expect(saved[0].window_start).toBe('2026-09-20T04:18:00+00:00')
@@ -108,31 +106,6 @@ describe('runWeekReadStep', () => {
     expect(builds).toBe(0)
     expect(saved).toEqual([])
     expect(alerts).toHaveLength(1)
-  })
-
-  it('runs the long-run hook after the week is stored, with the step clock and its own save and alert', async () => {
-    const calls: { opts: unknown; saved: number }[] = []
-    const { d, saved } = deps({ longRun: async (_a, opts) => { calls.push({ opts, saved: saved.length }); return NOT_DUE } })
-    const r = await runWeekReadStep(admin, OPTS, d)
-    expect(calls).toHaveLength(1)
-    expect(calls[0].saved).toBe(1)
-    expect(calls[0].opts).toMatchObject({ clientId: 'client-1', runId: 'run-27', company: 'Sealand' })
-    expect(r.longRun).toEqual(NOT_DUE)
-  })
-
-  it('a long-run hook that throws never fails the week', async () => {
-    const { d, alerts } = deps({ longRun: async () => { throw new Error('boom') } })
-    const r = await runWeekReadStep(admin, OPTS, d)
-    expect(r.status).toBe('ready')
-    expect(r.longRun).toMatchObject({ status: 'skipped', error: 'boom' })
-    expect(alerts).toEqual([])
-  })
-
-  it('a failed week runs no long-run hook', async () => {
-    let ran = 0
-    const { d } = deps({ build: async () => { throw new Error('x') }, longRun: async () => { ran++; return NOT_DUE } })
-    await runWeekReadStep(admin, OPTS, d)
-    expect(ran).toBe(0)
   })
 
   it('rowOf keeps quotes as refs, the story\'s too, and stores the v3 shape', () => {
@@ -222,12 +195,25 @@ describe('the pipeline carries write-week-read', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id: 64 in all, immediately after ask-reevaluate and before close-run', () => {
-    expect(ids).toHaveLength(64)
+  it('as one additive id, immediately after ask-reevaluate; the long-run read\'s own step follows it, then close-run (65 in all)', () => {
+    expect(ids).toHaveLength(65)
     expect(ids.filter((id) => id === 'write-week-read')).toHaveLength(1)
     const at = ids.indexOf('write-week-read')
     expect(ids[at - 1]).toBe('ask-reevaluate')
-    expect(ids[at + 1]).toBe('close-run')
+    expect(ids[at + 1]).toBe('write-longrun-read')
+    expect(ids[at + 2]).toBe('close-run')
+  })
+
+  it('write-longrun-read: one additive id in its own position, fail-soft like the week\'s, outside the consumer-profile flag', () => {
+    expect(ids.filter((id) => id === 'write-longrun-read')).toHaveLength(1)
+    const body = src.slice(src.indexOf(".run('write-longrun-read'"), src.indexOf('// 7. Close the run.'))
+    expect(body).toContain('runLongRunStep(admin, { clientId, runId')
+    const handler = body.slice(body.indexOf('.catch('))
+    expect(handler).toMatch(/console\.error\(`\[write-longrun-read\] out of retries/)
+    expect(handler).toMatch(/return null/)
+    expect(handler).not.toMatch(/sendAlertEmail|noteError/)
+    // And the week's step no longer writes it (the hook MARKET put there).
+    expect(src.slice(src.indexOf(".run('write-week-read'"), src.indexOf(".run('write-longrun-read'"))).not.toMatch(/longRun|LongRun/)
   })
 
   it('outside the consumer-profile flag, fail-soft: its .catch logs and returns null, and sends nothing', () => {

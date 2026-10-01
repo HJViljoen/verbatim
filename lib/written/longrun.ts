@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { sendAlertEmail } from '../email'
+
 import { longMonth } from '../format'
 import { COMMENTS_READ_LANE } from '../pipeline/pass-a'
 import { rowWindow, type WindowColumns } from '../pipeline/run-bookkeeping'
@@ -13,13 +15,13 @@ import { CLIENT_AUDIENCE, loadCompetitors } from '../rivals'
 import { loadCommentNamings, namesByComment, trackedBrands, whoSplit, type WhoVideo } from '../brands/attribution'
 import { checkWeekRead, type WeekCheck } from './check'
 import { loadCompanyContext, type CompanyContext } from './company'
-import { callBudget, WEEK_READ_STEP_BUDGET_MS, type CallBudget } from './deadline'
+import { callBudget, type CallBudget } from './deadline'
 import { judge, loadDatedEvidence, loadTrackedBrands, type DatedEvidence } from './evidence'
 import { generateLongRun, LONGRUN_MAX, LONGRUN_MODEL, LONGRUN_PROMPT_VERSION, type LongRunOutput } from './longrun-write'
-import { readingMonthOf } from './month'
+import { coveredDays, readingMonthOf } from './month'
 import { dominantKindOf, isMakerLed, lenientGateFor, loadPoolThemes, notesOf, POOL_MIN_VIDEOS, type PoolTheme } from './pool'
 import { ADVICE, scrubWeekText, toldWhatToDo, type WeekScrubCounts } from './scrub'
-import { WEEK_READS_TABLE, longRunWritten, saveWeekRead, type WeekReadRow } from './store'
+import { WEEK_READS_TABLE, longRunWritten, saveWeekRead, weekReadsApplied, type WeekReadRow } from './store'
 import { sureOf } from './sure'
 import type { LongRunIdea, LongRunReadData, WeekReadHeld, WhoPart } from './types'
 import type { ParseClient } from './write-model'
@@ -47,6 +49,10 @@ import type { ParseClient } from './write-model'
 // counts is a citation the LENIENT gate passes (`lenientGateFor`). No quote is
 // picked: the section prints none.
 //
+// ITS OWN STEP (integration, 1 Oct; the lead's ruling): `write-longrun-read`,
+// after `write-week-read` and before `close-run`, on the run that closes a
+// month only (`closesMonth`), with its own clock (`runLongRunStep`).
+//
 // WHO IT IS ABOUT, per video (lib/brands/attribution.ts, the one rule every
 // page uses): the brand a counted comment names, else the video's audience.
 // Frozen with the read.
@@ -72,10 +78,6 @@ export const LONGRUN_CAP = 20
 /** Of those, kept for themes led by the client's talk, and as many for the
  *  rivals', whatever their size (`selectLongRun`). */
 export const LONGRUN_BRAND_SLOTS = 3
-/** The least of the step's budget left for the hook to start: its reads
- *  (about half a minute), the writer's floor and the self-check's cap. Less
- *  than this, it is not started (`maybeWriteLongRun`). */
-export const LONGRUN_STEP_FLOOR_MS = 150_000
 
 // ---- The window ---------------------------------------------------------------------------
 
@@ -107,6 +109,19 @@ export function windowOfMonths(months: readonly string[]): { from: string; to: s
  *  closes: the month before the one its window ends in. Pure. */
 export function endedMonthOf(window: { from: string; to: string }): string {
   return prevMonth(readingMonthOf(window).endMonth)
+}
+
+/**
+ * Does this run close a month: is it the first run after a month ended? Its
+ * window holds the first day of the month it ends in, so the month before is
+ * whole behind it. Windows follow one another (`lib/pipeline/window.ts`), so
+ * one run a month answers yes: the week of 28 Sep to 4 Oct closes September,
+ * the weeks after it close nothing. Pure.
+ */
+export function closesMonth(window: { from: string; to: string }): boolean {
+  const covered = coveredDays(window)
+  if (!covered) return false
+  return covered.first <= `${covered.last.slice(0, 7)}-01`
 }
 
 // ---- One theme over the window --------------------------------------------------------------
@@ -497,7 +512,7 @@ export function composeLongRun(input: {
   }
 }
 
-// ---- Build, store, and the step's hook ------------------------------------------------------------
+// ---- Build, store, and its own step ----------------------------------------------------------------
 
 export interface BuiltLongRun {
   status: 'ready' | 'thin'
@@ -590,6 +605,8 @@ export interface LongRunStepResult {
 }
 
 export interface LongRunStepDeps {
+  /** Is the `week_reads` table there? */
+  applied: (admin: SupabaseClient) => Promise<boolean>
   /** Is the month's read written already (ready or thin)? */
   written: (admin: SupabaseClient, clientId: string, month: string) => Promise<boolean>
   /** The run's frozen window. */
@@ -608,51 +625,54 @@ async function runWindow(admin: SupabaseClient, clientId: string, runId: string)
   return w?.start && w.end ? { from: w.start, to: w.end } : null
 }
 
-const LONGRUN_FALLBACK = (clientId: string, month: string) =>
-  `Fallback: node --env-file=.env.local --import tsx scripts/longrun-read.ts --client ${clientId} --month ${month.slice(0, 7)} (dry), then again with --write.`
+const LONGRUN_FALLBACK = (clientId: string, month: string | null) =>
+  `To write it by hand: node --env-file=.env.local --import tsx scripts/longrun-read.ts --client ${clientId} --month ${month ? month.slice(0, 7) : '<YYYY-MM, the month that ended>'} (dry), then again with --write.`
+
+const DEFAULT_LONGRUN_DEPS: LongRunStepDeps = {
+  applied: weekReadsApplied, written: longRunWritten, window: runWindow, build: buildLongRunRead, save: saveWeekRead, alert: sendAlertEmail,
+}
 
 /**
- * THE PIPELINE HOOK, inside the existing `write-week-read` step (no new step
- * id). At the first run after a month ends, write that month's long-run read:
- * the month the run's window has carried past (`endedMonthOf`), unless a
- * ready or thin read of it is stored already. NEVER THROWS, and never touches
- * the week's read:
- *  · the due check cannot be read: nothing is written and nobody is alerted
- *    (the next run asks again);
- *  · the build fails or runs out of the step's time (its calls share the
- *    step's budget, counted from `startedAt`, so the week's save is never put
- *    at risk): a failed row is stored, the operator is alerted once with the
- *    script to run, and the next run tries again.
+ * THE `write-longrun-read` STEP'S BODY (its own step since the integration of
+ * 1 Oct: the week's read and this one each take two to three minutes, which
+ * one step's 250 s could not hold). On the run that closes a month
+ * (`closesMonth`), write that month's long-run read, unless a ready or thin
+ * read of it is stored already (the script may have written it). Every other
+ * run returns at once and spends nothing. NEVER THROWS, and the operator
+ * hears of anything that went wrong once, inside the step, with the script
+ * to run, because no later run writes this month:
+ *  · no `week_reads` table: a no-op that spends nothing and says nothing (the
+ *    week's step already said so);
+ *  · the window or the due check cannot be read: nothing is written;
+ *  · the build fails or runs out of time (its calls are capped on this
+ *    step's own clock, `WEEK_READ_STEP_BUDGET_MS` from its start, as the
+ *    week's are): a failed row is stored.
  */
-export async function maybeWriteLongRun(
+export async function runLongRunStep(
   admin: SupabaseClient,
-  opts: { clientId: string; runId: string; company: string; startedAt?: number },
-  deps: Partial<LongRunStepDeps> & Pick<LongRunStepDeps, 'save' | 'alert'>,
+  opts: { clientId: string; runId: string; company: string },
+  deps: Partial<LongRunStepDeps> = {},
 ): Promise<LongRunStepResult> {
-  const d: LongRunStepDeps = { written: longRunWritten, window: runWindow, build: buildLongRunRead, ...deps }
-  let month: string
+  const d: LongRunStepDeps = { ...DEFAULT_LONGRUN_DEPS, ...deps }
+  const startedAt = (d.now ?? Date.now)()
+  const tell = (subject: string, text: string) => d.alert(subject, text).catch(() => ({ sent: false }))
+  let month: string | null = null
   try {
+    if (!(await d.applied(admin))) {
+      console.warn('[write-longrun-read] week_reads is not in this database yet; nothing was written or spent')
+      return { status: 'skipped', month: null, ideas: 0, costUsd: 0, error: 'week_reads is not in this database yet' }
+    }
     const window = await d.window(admin, opts.clientId, opts.runId)
-    if (!window) return { status: 'not_due', month: null, ideas: 0, costUsd: 0 }
+    if (!window || !closesMonth(window)) return { status: 'not_due', month: null, ideas: 0, costUsd: 0 }
     month = endedMonthOf(window)
     if (await d.written(admin, opts.clientId, month)) return { status: 'not_due', month, ideas: 0, costUsd: 0 }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
-    console.warn(`[longrun-read] not checked: ${error}; the next run asks again`)
-    return { status: 'skipped', month: null, ideas: 0, costUsd: 0, error }
-  }
-  // NOT STARTED WITHOUT TIME FOR IT: the week's read went first and its
-  // calls share the step's budget. Said to the operator, with the script, and
-  // asked again next run.
-  const startedAt = opts.startedAt ?? Date.now()
-  const left = startedAt + WEEK_READ_STEP_BUDGET_MS - (d.now ?? Date.now)()
-  if (left < LONGRUN_STEP_FLOOR_MS) {
-    const error = `only ${Math.max(0, Math.round(left / 1000))} s of the step's time left after the week's read`
-    console.warn(`[longrun-read] not started: ${error}`)
-    await d.alert(
-      `Verbatim long-run read deferred: ${opts.company}`,
-      `The long-run read for ${longMonth(month)} (the top of Your market) was not started on run ${opts.runId}: ${error}. The week's read is unaffected, and the next run tries again.\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
-    ).catch(() => ({ sent: false }))
+    console.error(`[write-longrun-read] not checked: ${error}`)
+    await tell(
+      `Verbatim long-run read not checked: ${opts.company}`,
+      `Run ${opts.runId} could not tell whether it closes a month${month ? ` (${longMonth(month)})` : ''}, so no long-run read ("What holds across ...", the top of Your market) was written. The week's read and the run are unaffected. Later runs do not write a month that has ended.\n\nError: ${error}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
+    )
     return { status: 'skipped', month, ideas: 0, costUsd: 0, error }
   }
   try {
@@ -661,21 +681,21 @@ export async function maybeWriteLongRun(
       budget: callBudget({ startedAt, now: d.now }),
     })
     await d.save(admin, longRunRowOf(opts.clientId, opts.runId, built))
-    console.log(`[longrun-read] ${built.status}: ${built.data.ideas.length} idea(s) for ${month}, $${built.data.costUsd}`)
+    console.log(`[write-longrun-read] ${built.status}: ${built.data.ideas.length} idea(s) for ${month}, $${built.data.costUsd}`)
     return { status: built.status, month, ideas: built.data.ideas.length, costUsd: built.data.costUsd }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
-    console.error(`[longrun-read] failed: ${error}`)
+    console.error(`[write-longrun-read] failed: ${error}`)
     let stored = true
     try {
       await d.save(admin, { client_id: opts.clientId, run_id: opts.runId, kind: 'month', month: null, window_start: null, window_end: null, data: null, status: 'failed', cost_usd: 0 })
     } catch {
       stored = false
     }
-    await d.alert(
+    await tell(
       `Verbatim long-run read not written: ${opts.company}`,
-      `The long-run read for ${longMonth(month)} ("What holds across ...", the top of Your market) could not be written on run ${opts.runId}. The week's read and the run are unaffected, and the next run tries again.\n\nError: ${error}\n${stored ? 'A failed row is stored in week_reads.' : 'No row could be stored.'}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
-    ).catch(() => ({ sent: false }))
+      `The long-run read for ${longMonth(month)} ("What holds across ...", the top of Your market) could not be written on run ${opts.runId}, the run that closes the month. The week's read and the run are unaffected; Your market keeps the read it had.\n\nError: ${error}\n${stored ? 'A failed row is stored in week_reads.' : 'No row could be stored.'}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
+    )
     return { status: 'failed', month, ideas: 0, costUsd: 0, error }
   }
 }

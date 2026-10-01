@@ -6,8 +6,8 @@ import type { QuoteVideo } from '../quote-gate'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import type { DatedEvidence } from './evidence'
 import {
-  buildLongRunPool, CHANGE, composeLongRun, endedMonthOf, isLongRunEligible, judgeLongRunTheme, longRunMonths, longRunRowOf,
-  LONGRUN_STEP_FLOOR_MS, maybeWriteLongRun, monthsPhrase, rankLongRun, scrubLongRun, selectLongRun, themesToJudge, windowOfMonths,
+  buildLongRunPool, CHANGE, closesMonth, composeLongRun, endedMonthOf, isLongRunEligible, judgeLongRunTheme, longRunMonths, longRunRowOf,
+  monthsPhrase, rankLongRun, runLongRunStep, scrubLongRun, selectLongRun, themesToJudge, windowOfMonths,
   type BuiltLongRun, type LongRunCandidate, type LongRunJudgement, type LongRunPool,
 } from './longrun'
 import { buildLongRunPrompts, longRunSchema, whoWords } from './longrun-write'
@@ -15,8 +15,8 @@ import type { PoolTheme } from './pool'
 import type { WeekReadRow } from './store'
 
 // The long-run read (pages build, 1 Oct): its window, its pool's rules, the
-// scrub's no-change rule, compose's floors, and the step hook's never-throw
-// contract. No database and no model: the reads are the week pool's own.
+// scrub's no-change rule, compose's floors, and its own step's never-throw
+// contract (`write-longrun-read`). No database and no model: the reads are the week pool's own.
 
 const SEALAND = SEALAND_CLIENT_ID
 const AUG = '2026-08-01'
@@ -342,6 +342,7 @@ function hookDeps(over: Record<string, unknown> = {}) {
   const alerts: { subject: string; text: string }[] = []
   const builds: { month: string; logRunId?: string }[] = []
   const deps = {
+    applied: async () => true,
     written: async () => false,
     window: async () => WINDOW_OCT,
     build: (async (_a: SupabaseClient, o: { month: string; logRunId?: string }) => { builds.push(o); return builtLongRun() }) as never,
@@ -353,45 +354,89 @@ function hookDeps(over: Record<string, unknown> = {}) {
   return { deps, saved, alerts, builds }
 }
 
-const HOOK = { clientId: 'client-1', runId: 'run-oct', company: 'Sealand', startedAt: 1_000 }
+const STEP = { clientId: 'client-1', runId: 'run-oct', company: 'Sealand' }
+/** The week after the one that closed September. */
+const WINDOW_OCT_2 = { from: '2026-10-04T04:02:00Z', to: '2026-10-11T04:01:00Z' }
 
-describe('maybeWriteLongRun', () => {
-  it('writes the month the run closed, under the run, as a month row', async () => {
+describe('closesMonth: the first run after a month ends', () => {
+  it('a window holding the first of the month it ends in closes the month before', () => {
+    expect(closesMonth(WINDOW_OCT)).toBe(true)
+    expect(endedMonthOf(WINDOW_OCT)).toBe(SEP)
+    // A window that starts on the first holds it too.
+    expect(closesMonth({ from: '2026-10-01T00:00:00Z', to: '2026-10-08T00:00:00Z' })).toBe(true)
+  })
+
+  it('the weeks after it, and the weeks inside a month, close nothing', () => {
+    expect(closesMonth(WINDOW_OCT_2)).toBe(false)
+    expect(closesMonth({ from: '2026-09-20T04:02:00Z', to: '2026-09-27T04:03:00Z' })).toBe(false)
+    // A window that ends exactly as the month does holds none of the next.
+    expect(closesMonth({ from: '2026-09-24T00:00:00Z', to: '2026-10-01T00:00:00Z' })).toBe(false)
+    expect(closesMonth({ from: 'x', to: 'y' })).toBe(false)
+  })
+
+  it('one run a month answers yes over contiguous weekly windows', () => {
+    const start = Date.parse('2026-08-02T04:00:00Z')
+    const windows = Array.from({ length: 13 }, (_, i) => ({ from: new Date(start + i * 7 * 86_400_000).toISOString(), to: new Date(start + (i + 1) * 7 * 86_400_000).toISOString() }))
+    expect(windows.filter(closesMonth).map(endedMonthOf)).toEqual(['2026-08-01', '2026-09-01', '2026-10-01'])
+  })
+})
+
+describe('runLongRunStep (write-longrun-read)', () => {
+  it('on the run that closes a month, writes that month under the run, as a month row, on its own clock', async () => {
     const { deps, saved, alerts, builds } = hookDeps()
-    const r = await maybeWriteLongRun(admin, HOOK, deps)
+    const r = await runLongRunStep(admin, STEP, deps)
     expect(r).toMatchObject({ status: 'ready', month: SEP, ideas: 2 })
     expect(builds[0]).toMatchObject({ month: SEP, logRunId: 'run-oct' })
+    expect((builds[0] as unknown as { budget?: unknown }).budget).toBeDefined()
     expect(saved[0]).toMatchObject({ client_id: 'client-1', run_id: 'run-oct', kind: 'month', month: SEP, status: 'ready', window_start: '2026-08-01T00:00:00.000Z', window_end: '2026-10-01T00:00:00.000Z' })
     expect(alerts).toEqual([])
   })
 
-  it('is not due once the month is written', async () => {
-    const { deps, saved, builds } = hookDeps({ written: async () => true })
-    expect((await maybeWriteLongRun(admin, HOOK, deps)).status).toBe('not_due')
+  it('every other run is a no-op: reads the window, writes nothing, spends nothing', async () => {
+    let checked = 0
+    const { deps, saved, alerts, builds } = hookDeps({ window: async () => WINDOW_OCT_2, written: async () => { checked++; return false } })
+    expect(await runLongRunStep(admin, STEP, deps)).toEqual({ status: 'not_due', month: null, ideas: 0, costUsd: 0 })
+    expect(checked).toBe(0)
     expect(builds).toEqual([])
-    expect(saved).toEqual([])
-  })
-
-  it('a due check that cannot be read writes nothing and alerts nobody', async () => {
-    const { deps, saved, alerts } = hookDeps({ written: async () => { throw new Error('read failed') } })
-    expect(await maybeWriteLongRun(admin, HOOK, deps)).toMatchObject({ status: 'skipped', error: 'read failed' })
     expect(saved).toEqual([])
     expect(alerts).toEqual([])
   })
 
-  it('without the time for it, it is not started, and the operator is told once with the script', async () => {
-    const { deps, alerts, builds } = hookDeps({ now: () => 1_000 + 250_000 - LONGRUN_STEP_FLOOR_MS + 1 })
-    expect((await maybeWriteLongRun(admin, HOOK, deps)).status).toBe('skipped')
+  it('is not due once the month is written (the script may have written it)', async () => {
+    const { deps, saved, builds } = hookDeps({ written: async () => true })
+    expect((await runLongRunStep(admin, STEP, deps)).status).toBe('not_due')
     expect(builds).toEqual([])
+    expect(saved).toEqual([])
+  })
+
+  it('no week_reads table: a quiet no-op (the week\'s step already says so)', async () => {
+    const { deps, saved, alerts, builds } = hookDeps({ applied: async () => false })
+    expect((await runLongRunStep(admin, STEP, deps)).status).toBe('skipped')
+    expect(builds).toEqual([])
+    expect(saved).toEqual([])
+    expect(alerts).toEqual([])
+  })
+
+  it('a due check that cannot be read writes nothing and tells the operator once, with the script', async () => {
+    const { deps, saved, alerts } = hookDeps({ written: async () => { throw new Error('read failed') } })
+    expect(await runLongRunStep(admin, STEP, deps)).toMatchObject({ status: 'skipped', month: SEP, error: 'read failed' })
+    expect(saved).toEqual([])
     expect(alerts).toHaveLength(1)
     expect(alerts[0].text).toContain('scripts/longrun-read.ts --client client-1 --month 2026-09')
   })
 
-  it('a failed build stores a failed month row, alerts once, and never throws', async () => {
+  it('a failed build stores a failed month row, alerts once with the script, and never throws', async () => {
     const { deps, saved, alerts } = hookDeps({ build: async () => { throw new Error('writer 500') } })
-    expect(await maybeWriteLongRun(admin, HOOK, deps)).toMatchObject({ status: 'failed', error: 'writer 500' })
+    expect(await runLongRunStep(admin, STEP, deps)).toMatchObject({ status: 'failed', error: 'writer 500' })
     expect(saved).toEqual([{ client_id: 'client-1', run_id: 'run-oct', kind: 'month', month: null, window_start: null, window_end: null, data: null, status: 'failed', cost_usd: 0 }])
     expect(alerts).toHaveLength(1)
+    expect(alerts[0].text).toContain('scripts/longrun-read.ts --client client-1 --month 2026-09')
+    expect(alerts[0].text).not.toMatch(/next run tries again/)
+  })
+
+  it('an alert that fails is swallowed: the step still returns', async () => {
+    const { deps } = hookDeps({ build: async () => { throw new Error('x') }, alert: async () => { throw new Error('smtp') } })
+    expect((await runLongRunStep(admin, STEP, deps)).status).toBe('failed')
   })
 
   it('the row keeps the read whole', () => {
