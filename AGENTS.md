@@ -380,6 +380,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Treat that as the shape of the rule, not as a closed list: before you
   "fix" a vector read you have found, check which table it is on and how many
   rows it bounds, and count the predicate rather than the column either way.
+- **The fail-open admissions, and the regate that finished them** (the
+  backfill, 1 Oct evening). Before the 24 Sep fix a relevance batch OpenAI
+  refused kept its videos unjudged (`gate_verdicts.source = 'default'`), and a
+  resurfaced video is never judged again. `market_week_volumes`' `unchecked`
+  now reads the NEWEST verdict (migration `20261106091000`): a video is
+  unchecked while that is the default or a drop. `scripts/backfill-platform.ts
+  --regate --yes` (`lib/gather/rejudge.ts`, `scripts/backfill-regate.ts`)
+  judges the market-lane ones with today's check, appends today's verdicts
+  (`run_id` null; the default rows stay), and removes the ones it drops with
+  `regate_videos` (migration `20261106092000`), which copies every row it
+  takes (14 tables, embeddings included) into `regate_backup` first and logs
+  ONE `gate_rule` / `relevance_gate` change (the fix's own shape, so the pair
+  judge measures it, `lib/provenance/measure.ts`, instead of counting an
+  unmeasured `regate` as a tenth); undo is `regate_restore(batch)`. A video
+  something stored cites is kept and named. Deletion, not exclusion: a video
+  counts through sixteen SQL functions, two views, TypeScript readers and the
+  pipeline's own re-reads, with no single place to exclude it.
 - **Production reads from agents are serialised and rationed.** Five agents
   reading production at once is what caused the outage above, so this is the
   fix and not caution. Before the first read of a session, `select 1` through
@@ -529,7 +546,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     stored snapshots, exports and the monthly. A block leaves a page's list,
     not the registry.
   - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
-    week stays hidden until two settled clean weeks exist. Your market: the
+    week draws from ONE clean week, from the week of 21 September
+    (`HOME_FIRST_WEEK`, the Dashboard's own constant: the week line's
+    `WEEK_LINE_FIRST_WEEK` is not moved), a filling week faint; the two
+    fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix and the
+    backfill's regate) cut no week, because `unchecked` counts exactly their
+    videos (`isFailOpenFix`). The Competitive tile's row is "Named most in
+    {Month}" off Competitive's own brand list (`loadBrandList`, the page's
+    reader and `brandList`, over the page's reading month); no week reading
+    of who was named exists, so never "this week", and nothing says what
+    brands are "compared on", so that row is not drawn. Your market: the
     PUBLISHED `kind = 'month'` long-run read (`data.kind = 'longrun'`,
     `scripts/longrun-read.ts`, through `loadPublishedLongRun`), then
     standing, the top five conversations and the kinds. This week: the published read in full, with additive
