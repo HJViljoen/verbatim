@@ -81,9 +81,11 @@ export interface AgentAnswer {
 
 /** Shown when the question is about the client's own metrics. Fixed text, like
  *  the silence sentence: a promise about what we can see is not something to
- *  let a model rephrase each time. */
+ *  let a model rephrase each time. Said about the client's numbers, never
+ *  about what we read (§0a); a stored answer is shown today's wording
+ *  (lib/pages/agent-thread.ts). */
 export const OUT_OF_CORPUS_NOTICE =
-  'This asks about your own numbers, which we cannot see. We only read public conversation. What follows is what people are saying around the subject, not an answer about your results.'
+  'This asks about your own numbers, which are not public. What follows is what people in your market say around the subject, not an answer about your results.'
 
 export type AgentOutcome = 'answered' | 'partial' | 'silent'
 
@@ -157,6 +159,29 @@ export function saidHeading(points: readonly { voices: 'client' | 'category' }[]
 export const NEAREST_HEADING = 'Not what you asked, but close'
 
 export const JUDGEMENT_HEADING = 'What I’d take from that'
+
+/**
+ * An ANSWER's judgement register, under the answer and above the evidence
+ * (1 Oct, Heinrich: it reads as part of the answer). Its entries are what to
+ * do, why the evidence points there and what it looks like in practice
+ * (`agent_answer_v4`), so it is named for that. A plan check's own reading
+ * keeps `JUDGEMENT_HEADING`.
+ */
+export const DO_HEADING = 'What I’d do'
+
+/** "1", "1 and 2", "1, 2 and 3". */
+const andList = (ns: readonly number[]): string =>
+  ns.length <= 1 ? String(ns[0] ?? '') : `${ns.slice(0, -1).join(', ')} and ${ns[ns.length - 1]}`
+
+/** The line under one entry of `DO_HEADING`: which findings it is based on,
+ *  and where they sit (`below` on screen; nothing on paper, where they are on
+ *  the next sheets). */
+export function basedOnLine(cites: readonly number[], where: 'below' | null = 'below'): string {
+  const at = where ? ` ${where}` : ''
+  return cites.length > 0
+    ? `Based on ${cites.length === 1 ? 'finding' : 'findings'} ${andList(cites)}${at}.`
+    : `Not based on any single finding${at}.`
+}
 
 // ── Where a quoted voice was said, said once (Phase 1 WP21 fix pass) ────────
 //

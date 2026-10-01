@@ -51,7 +51,8 @@ export interface ResearchPoint {
    *  none, and is measured against nothing. */
   registryIds?: string[]
   /** The scrubbers emptied this point's own sentence and `text` is the
-   *  reading in its place, saying so (`groundedFallback`). */
+   *  product's own finding in its place where it was measured, empty where it
+   *  was not (`groundedFallback`). */
   replaced?: boolean
   conversationCount: number
   quotes: ResearchQuote[]
@@ -202,8 +203,9 @@ async function measureResearch(admin: SupabaseClient, clientId: string, answers:
  *
  * The Ask page's rule, applied the same way (`scrubThreadAnswer`): a digit the
  * model typed drops its sentence, a direction word no verdict earned drops
- * its sentence, a point whose sentence goes is given the reading in its place
- * and says so, and the quotes are never touched. The allow-list is the
+ * its sentence, a point whose sentence goes is given the product's own
+ * finding in its place where it was measured, and the quotes are never
+ * touched. The allow-list is the
  * question and the theme labels, never the model's own prose.
  */
 export function scrubResearch(answers: readonly ResearchAnswer[], measure: AnswerMeasure): ResearchAnswer[] {

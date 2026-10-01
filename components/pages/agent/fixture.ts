@@ -1,8 +1,9 @@
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
-import { measureAnswer, type AnswerMeasure } from '@/lib/agent/measure'
+import { measureAnswer, scrubThreadAnswer, type AnswerMeasure } from '@/lib/agent/measure'
 import {
   askHistory,
   askReads,
+  inHouseStyle,
   NO_ASK_READING,
   type AgentThreadData,
   type AskPlanChip,
@@ -501,4 +502,160 @@ export function thinRefusedAskFixture(): AgentThreadData {
     ON_2_OCT,
   )
   return agentFixture({ measure, about: [about] })
+}
+
+// ── The live thread Heinrich asked about (1 Oct) ─────────────────────────────
+
+/** Sealand's September as the pages read it on 1 Oct (prod
+ *  `month_denominators`, read 1 Oct): 796 in the category and 38 about a
+ *  tracked brand (Cotopaxi 9, Freedom of Movement 1, Freitag 6, Patagonia 13,
+ *  The North Face 9), so 834 in the market, the Dashboard's figure; the
+ *  client's own 10. */
+export const SEALAND_OCT_READING: AskReading = {
+  reading: sealandReading('2026-10-01T19:36:00.000Z'),
+  market: { month: MONTH, videos: 834, comments: 20680, category: 796, rivalFiled: 38 },
+  own: 10,
+  monthsRead: ['2026-08-01', MONTH],
+  earliest: '2020-12-01',
+  next: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z' },
+}
+
+/** One grounded point of the live thread: its sentence, and each theme it
+ *  rests on with the category's August and September videos (prod
+ *  `month_theme_readings`, read 1 Oct; a month with no row is 0). */
+const LIVE_POINTS: { id: string; text: string; themes: { id: string; label: string; aug: number; sep: number }[] }[] = [
+  {
+    id: 'G1',
+    text: 'Durability over years is a purchase and loyalty driver; people describe long-lasting products as worth the higher upfront price and something they would repurchase or recommend.',
+    themes: [
+      { id: '63cf730a-fb7b-4ca1-92d6-66c0a6dedb47', label: 'Products that hold up well', aug: 0, sep: 2 },
+      { id: 'a1aa48ac-610d-4d45-a75e-d98d3ec1d270', label: 'Loyalty to preferred bag brands', aug: 2, sep: 6 },
+      { id: '5f28f90b-5fd8-4168-9d0f-fb3094061a29', label: 'Trust in long-lasting bag quality', aug: 5, sep: 13 },
+      { id: '688c284f-1af1-43e1-97ba-be5489a97956', label: 'Willing to pay for quality', aug: 0, sep: 6 },
+    ],
+  },
+  {
+    id: 'G2',
+    text: 'Repairability, replacement parts, and dependable warranties shape brand preference; people cite these services as reasons to trust, stay with, or switch to a brand.',
+    themes: [
+      { id: '5082d6c6-5019-4cd4-bcf0-387e8c16121d', label: 'Would replace with the same gear', aug: 1, sep: 1 },
+      { id: 'dcf603ab-5651-4990-a69b-65e5f2dc2bcf', label: 'Gear built to repair', aug: 0, sep: 1 },
+      { id: '352ce404-9016-4291-bdc6-e071bc568b40', label: 'Trust built through warranties', aug: 0, sep: 1 },
+      { id: 'c730d7b3-2fbc-4a1b-b5f2-60637637cf01', label: 'Open to switching backpack brands', aug: 3, sep: 5 },
+    ],
+  },
+  {
+    id: 'G3',
+    text: 'Shoppers question whether a premium bag really changes their experience, and skepticism rises when quality feels inconsistent or has declined.',
+    themes: [
+      { id: '2d1bcf91-5b6b-407f-b391-5ab7df040c35', label: 'Is the premium worth it', aug: 0, sep: 1 },
+      { id: '541543c9-eecb-4a16-b043-9c2c259da3c0', label: 'Frustration with declining product quality', aug: 0, sep: 8 },
+      { id: '13da13bd-2afd-4dcf-a1a7-b807943dcee1', label: 'Buy less, make it better', aug: 0, sep: 3 },
+    ],
+  },
+  {
+    id: 'G4',
+    text: 'People evaluate bags through practical questions about fit, compartments, features, and even how to find the brand; unanswered questions can lose support.',
+    themes: [
+      { id: '2c72bebd-15cf-4836-8f9b-25a6e3d6d026', label: 'Basic product questions before buying', aug: 0, sep: 3 },
+      { id: '6977b4c0-9a4e-4a8b-b2ec-101e93740d01', label: 'Curiosity about featured product details', aug: 7, sep: 22 },
+      { id: 'd812ace3-47a1-405d-a7c0-0b5b0e4dbe82', label: 'Intent to shop the brand', aug: 3, sep: 18 },
+    ],
+  },
+]
+
+/** When the live thread is read: the evening it was asked. */
+const ON_1_OCT = '2026-10-01T19:40:00.000Z'
+
+/**
+ * The live thread Heinrich screenshotted (Sealand, 1 Oct, "what's something
+ * long term we should work on the next year"; prod thread 0845c247).
+ *
+ * REAL: the question, the answer, the four grounded sentences, the judgement,
+ * every point's theme labels and registry ids, the themes' category videos in
+ * August and September, and September's denominators (`SEALAND_OCT_READING`).
+ * HYPOTHETICAL: the August denominator (351, staging's), the client's own
+ * side (0 of 10 on every theme, as the live page printed for the first) and
+ * the quote words, which are stored as comment ids and are placeholders here.
+ *
+ * Everything else runs through the product's own functions: the judge refuses
+ * August against September (as it did on 1 Oct), the measurement chooses each
+ * point's side, and the scrub empties G1 and G3 (both on the direction rule),
+ * so those two print the product's own sentence in their place.
+ */
+export function sealandLongTermFixture(): AgentThreadData {
+  const judge = pairOn(sealandJudge(ON_1_OCT))
+  const series_ = LIVE_POINTS.flatMap((p) => p.themes.flatMap((t) => [
+    series(INDUSTRY_AUDIENCE, [['2026-08-01', t.aug, 351], [MONTH, t.sep, 796]], t.id, t.label),
+    series(CLIENT_AUDIENCE, [[MONTH, 0, 10]], t.id, t.label),
+  ]))
+  const measure = measureAnswer({
+    pair: judge,
+    asOf: ON_1_OCT,
+    findings: LIVE_POINTS.map((p) => ({ findingId: `0:${p.id}`, registryIds: p.themes.map((t) => t.id) })),
+    series: series_,
+    month: MONTH,
+    directionWords: true,
+    ownAudience: CLIENT_AUDIENCE,
+    hasJudgement: true,
+    market: { category: 796, rivalFiled: 38 },
+  })
+  const quote = (n: number) => ({
+    ref: `c:live-${n}`,
+    text: ['Six years on this pack and it still looks new.', 'They replaced the buckle for free, that is why I stay.', 'Is the expensive one actually any better?', 'Does it fit a 16 inch laptop?'][n - 1],
+    commentId: `live-${n}`,
+    videoId: null,
+    n,
+  })
+  const raw = {
+    answer: 'Over the next year, I’d work on making long-term ownership a pillar of the brand: design for repair, offer clear aftercare and spare-part support, and make the warranty easy to understand. In this category, that is one of the clearest ways to justify a premium, earn repeat buying, and make sustainability feel real.',
+    grounded: LIVE_POINTS.map((p, i) => ({
+      id: p.id,
+      text: p.text,
+      insightIds: p.themes.map((t) => `ins-${t.id.slice(0, 8)}`),
+      themeRefs: p.themes.map((t) => ({ themeId: `th-${t.id.slice(0, 8)}`, registryId: t.id, label: t.label })),
+      voices: 'category' as const,
+      conversationCount: 4,
+      quotes: [quote(i + 1)],
+    })),
+  }
+  const scrubbed = scrubThreadAnswer(raw, measure, { keyOf: (g) => `0:${g.id}` })
+  const base = agentFixture()
+  return agentFixture({
+    threadId: '0845c247-7bdb-44dc-9148-1c12549b35eb',
+    title: 'what’s something long term we should work on the next year',
+    createdAt: '2026-10-01T19:36:06.447Z',
+    turns: [{
+      question: 'what’s something long term we should work on the next year',
+      askedAt: '2026-10-01T19:36:06.505Z',
+      prose: null,
+      outcome: 'answered',
+      updateAt: '2026-09-27T04:00:00.000Z',
+      // The loader's read-time house style, as the page gets it.
+      answer: inHouseStyle({
+        answer: scrubbed.answer,
+        silent: false,
+        nearest: [],
+        judgement: [
+          { text: 'The long-term priority should be an ownership program, not just a product claim: repairs, spare hardware, refurbishment or refresh services, and a clear warranty and care promise attached to every bag.', basedOn: ['G1', 'G2', 'G3'] },
+          { text: 'For the next product cycle, treat repairability as a design requirement by standardizing replaceable components and choosing materials that can be maintained or reconditioned. That turns sustainability into a practical reason to buy.', basedOn: ['G1', 'G2', 'G3'] },
+          { text: 'Communicate this more operationally on product pages and in content: what lasts, what can be fixed, how support works, and the key specs people ask about. The market is looking for proof, not just positioning.', basedOn: ['G3', 'G4'] },
+        ],
+        runId: 'f3646446',
+        costUsd: 0.05,
+        window: 'all' as const,
+        scrub: scrubbed.scrub,
+        fallback: null,
+        grounded: scrubbed.grounded,
+      }),
+    }],
+    citations: [1, 2, 3, 4].map((n) => ({ n, ref: `c:live-${n}`, text: quote(n).text, platform: ['tiktok', 'youtube', 'reddit', 'instagram'][n - 1], date: '2026-09-2' + n, href: `https://example.com/${n}`, commentLevel: n === 3 })),
+    measure,
+    reads: askReads(SEALAND_OCT_READING, 'all'),
+    bar: { ...base.bar, reading: SEALAND_OCT_READING.reading },
+    planChip: null,
+    window: 'all',
+    // What the loader writes for a question: who and when, nothing else.
+    method: { company: 'Sealand', period: 'Asked Thu 1 Oct', platforms: [], videos: null, comments: null, note: null },
+  })
 }

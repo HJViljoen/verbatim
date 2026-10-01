@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, partlyAnswered, storedAnswerThin, tooLittleToAnswer } from './floor'
+import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, storedAnswerThin, tooLittleToAnswer } from './floor'
 
 // Walkthrough item 4. "What's people's perception of Sealand?" was answered
 // "perception is mixed…" over findings measured at 0, 1 and 0 of 360 videos.
@@ -27,7 +27,7 @@ describe('floorAnswer', () => {
     expect(out.answer.grounded).toEqual([])
     expect(out.answer.judgement).toEqual([])
     expect(out.answer.answer).toBe('')
-    expect(out.lead).toBe(tooLittleToAnswer(floor))
+    expect(out.lead).toBe(tooLittleToAnswer())
     expect(out.dropped).toEqual(['G1', 'G2', 'G3'])
   })
 
@@ -44,9 +44,11 @@ describe('floorAnswer', () => {
       { text: 'from G1', basedOn: ['G1'] },
       { text: 'from G1 and G2', basedOn: ['G1'] },
     ])
-    // The lead summarised both points, so it gives way.
+    // The lead summarised both points, so it gives way; the caller prints its
+    // own sentence for the point that stands, and nothing says one was left
+    // out (§0a).
     expect(out.answer.answer).toBe('')
-    expect(out.lead).toBe(partlyAnswered(1, 2, floor))
+    expect(out.lead).toBeNull()
   })
 
   it('leaves a whole answer alone', () => {
@@ -78,9 +80,9 @@ describe('floorAnswer', () => {
     expect(out.answer.nearest).toEqual([])
   })
 
-  it('writes the too-little sentence without a digit where the floor is one', () => {
-    expect(tooLittleToAnswer(1)).not.toMatch(/\d/)
-    expect(tooLittleToAnswer(5)).toContain('5 or more videos')
+  it('writes the too-little sentence as a finding, with nothing about the floor (§0a)', () => {
+    expect(tooLittleToAnswer()).toBe('There is too little in your market about this to answer it.')
+    expect(tooLittleToAnswer()).not.toMatch(/\d|\bwe\b|videos behind/)
   })
 })
 

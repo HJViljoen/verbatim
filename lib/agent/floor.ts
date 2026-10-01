@@ -1,4 +1,3 @@
-import { fmtInt } from '../format'
 import { readableQuote } from '../quotes'
 import { readsAsOffer } from '../pages/overview-market/offers'
 
@@ -34,17 +33,10 @@ import { readsAsOffer } from '../pages/overview-market/offers'
  */
 export const ASK_FINDING_FLOOR = 5
 
-/** What the answer says where nothing it found clears the floor. */
-export const tooLittleToAnswer = (floor: number = ASK_FINDING_FLOOR): string =>
-  floor <= 1
-    ? 'There is too little in your market about this to answer it: nothing we found on it has a video behind it we can count.'
-    : `There is too little in your market about this to answer it: nothing we found on it has ${fmtInt(floor)} or more videos behind it, which is the least we draw a conclusion from.`
-
-/** What the answer says where only some of its points clear the floor. */
-export const partlyAnswered = (kept: number, of: number, floor: number = ASK_FINDING_FLOOR): string =>
-  `Only ${fmtInt(kept)} of the ${fmtInt(of)} points this answer made ${kept === 1 ? 'has' : 'have'} ` +
-  `${floor <= 1 ? 'videos' : `${fmtInt(floor)} or more videos`} behind ${kept === 1 ? 'it' : 'them'}, ` +
-  `so only ${kept === 1 ? 'that one is' : 'those are'} shown, and the rest are left out.`
+/** What the answer says where nothing it found clears the floor: an absence
+ *  that is itself information, said as a finding, and nothing about the
+ *  floor that decided it (§0a). */
+export const tooLittleToAnswer = (): string => 'There is too little in your market about this to answer it.'
 
 /** How an answer fared against the floor. `whole`: every point stands (or it
  *  had none and was silent). `partial`: some do. `thin`: none does. */
@@ -68,8 +60,9 @@ export interface Floored<A> {
   state: FloorState
   /** The ids of the points taken out. */
   dropped: string[]
-  /** What the answer says in place of its lead, where the lead cannot stand:
-   *  null on a whole answer. */
+  /** What the answer says in place of its lead where nothing stands (`thin`);
+   *  null otherwise. A partial answer's lead is the caller's own sentence for
+   *  the points that stand. */
   lead: string | null
 }
 
@@ -79,7 +72,8 @@ export interface Floored<A> {
  * `supportOf` names a point's support: the measured k the page prints beside
  * it, else the videos behind its evidence. The lead sentence is the model's
  * summary of EVERY point, so it stands only where every point does; otherwise
- * `lead` carries the product's sentence and the caller prints it instead.
+ * it gives way, to `lead` where nothing stands and to the caller's own
+ * sentence for the points that do.
  */
 export function floorAnswer<P extends FloorPoint, A extends FloorAnswer<P>>(
   answer: A,
@@ -100,7 +94,7 @@ export function floorAnswer<P extends FloorPoint, A extends FloorAnswer<P>>(
       answer: { ...answer, answer: '', grounded: [], judgement: [], nearest },
       state: 'thin',
       dropped,
-      lead: tooLittleToAnswer(floor),
+      lead: tooLittleToAnswer(),
     }
   }
   // Part of it stands: the judgement keeps what reasons from a point that
@@ -108,11 +102,15 @@ export function floorAnswer<P extends FloorPoint, A extends FloorAnswer<P>>(
   const judgement = answer.judgement
     .map((j) => ({ ...j, basedOn: j.basedOn.filter((ref) => keptIds.has(ref)) }))
     .filter((j) => j.basedOn.length > 0)
+  // NO LEAD OF ITS OWN: the points left out are left out without a word, and
+  // the caller prints its own sentence for the points that stand in place of
+  // the model's (`answerFallback`), never a note about how many were left out
+  // (§0a: honesty by omission).
   return {
     answer: { ...answer, answer: '', grounded: kept, judgement, nearest },
     state: 'partial',
     dropped,
-    lead: partlyAnswered(kept.length, answer.grounded.length, floor),
+    lead: null,
   }
 }
 

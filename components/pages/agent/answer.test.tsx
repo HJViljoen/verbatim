@@ -4,7 +4,7 @@ import { agentFixture, followUpFixture, refusedFixture } from './fixture'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
-import { citationWhere, saidHeading } from '@/lib/agent/types'
+import { saidHeading } from '@/lib/agent/types'
 import { PREVALENCE_LABEL } from '@/lib/calibration'
 import { scrubThreadAnswer } from '@/lib/agent/measure'
 
@@ -23,8 +23,6 @@ const tile = (d: ReturnType<typeof agentFixture>, i = 0) => (
     turn={d.turns[i]}
     turnIndex={i}
     measure={d.measure}
-    citations={d.citations}
-    basis={d.basis}
   />
 )
 
@@ -39,11 +37,11 @@ describe('the answer keeps the copy contract', () => {
     assertCopyContract(tile(refused))
   })
 
-  it('marks a commenter’s own words as theirs', () => {
-    // Rule (c) is about what the PRODUCT claims. 41% of stored quotes are
-    // non-ASCII and one of Össur's says "double"; the marker is what keeps the
-    // sweep off a speaker's sentence.
-    expect(render(tile(measured))).toContain('data-copy="quote"')
+  it('prints no quotes register: "What people said" is the evidence (Heinrich, 1 Oct)', () => {
+    const text = renderText(tile(measured))
+    expect(text).not.toContain('In their words')
+    expect(text).not.toContain('Three winters on the bike')
+    expect(render(tile(measured))).not.toContain('data-copy="quote"')
   })
 })
 
@@ -82,13 +80,21 @@ describe('the measurement half', () => {
     expect(render(tile(measured))).toContain('title="moved beyond the 2 pt margin of this measurement"')
   })
 
-  it('prints the direction word only where three readings earned one', () => {
+  it('prints the direction word only where three months earned one', () => {
     // Ask is the one reader whose flag is true, and the word still has to be
     // earned — `directionWord` over three consecutive months in one regime.
-    expect(text).toContain('growing over 3 readings')
+    expect(text).toContain('growing over 3 months')
     // Finding 2's months are flat, so it earns the non-answer and no word.
     expect(text).toContain(MOVEMENT_WORDS.no_clear_change)
-    expect(text).not.toContain('fading over 3 readings')
+    expect(text).not.toContain('fading over 3')
+  })
+
+  it('states each base against the market, not as "the category" (1 Oct)', () => {
+    // The fixture hands the measurement no market count, so the clause names
+    // no number; `answer-copy.test.tsx` holds the counted one.
+    expect(text).toContain('130 of 1,388 videos')
+    expect(text).toContain('in your market in September, not counting the videos about brands you track')
+    expect(text).not.toContain('in the category')
   })
 
   it('states the client’s own thin side rather than comparing it', () => {
@@ -119,28 +125,16 @@ describe('the measurement half', () => {
     expect(copyViolations(tile(measured))).toEqual([])
   })
 
-  it('names what the figures are figures OF, rather than dropping a bare label', () => {
-    // The theme name printed as an orphaned 11px line under the own-side
-    // sentence. It is introduced now, and it is still the model's words with
-    // its slot named.
-    expect(text).toContain('measured on Will it survive a wet commute')
+  it('says what a point covers in one short line, the model’s words with their slot', () => {
+    // It said "measured on", our word for our method (§0a).
+    expect(text).toContain('Covers: Will it survive a wet commute')
+    expect(text).not.toContain('measured on')
     expect(render(tile(measured))).toContain('data-slot="pass_b_theme"')
   })
 
-  it('keeps the own-thin caveat under its finding and out of the judgement', () => {
-    // `measure.caveats` carries one own-thin sentence per finding and every one
-    // was already printed beside the counted pair it qualifies. Four lines
-    // where the artboard has one, and a caveat moved away from its figure.
-    expect(text).toContain('Interpretation, not counted.')
+  it('keeps the own-thin caveat under its finding, and no method note under the judgement', () => {
+    expect(text).not.toContain('Interpretation, not counted.')
     expect(text).not.toContain('Your own side of Will it survive a wet commute')
-  })
-
-  it('names what a provenance link opens, by platform', () => {
-    // The artboard says "the video →" and "the thread →". Branching on
-    // `commentLevel` alone made a TikTok video and a Reddit thread read
-    // identically, which is the one thing a provenance link has to say.
-    expect(text).toContain('the video →')
-    expect(text).toContain('the thread →')
   })
 
   it('draws one line, and never a rival’s', () => {
@@ -156,14 +150,14 @@ describe('the measurement half', () => {
 describe('with no reading behind it', () => {
   const text = renderText(tile(refused))
 
-  it('says so rather than printing a level of nothing', () => {
-    expect(text).toContain('no month reading stands behind this one')
+  it('prints no level and no line about there being none (§0a)', () => {
+    expect(text).not.toContain('no month reading')
     expect(text).not.toContain('0 of 0')
   })
 
-  it('still prints the answer, the quotes and the judgement', () => {
+  it('still prints the answer, the finding and what I’d do', () => {
     expect(text).toContain('Durability')
-    expect(text).toContain('Three winters on the bike')
+    expect(text).toContain('The wet-commute question is the one nobody answers on camera.')
     expect(text).toContain('this one is inference')
   })
 })
@@ -173,23 +167,27 @@ describe('the registers', () => {
     expect(renderText(tile(measured))).toContain(saidHeading(measured.turns[0].answer!.grounded))
   })
 
-  it('marks the whole judgement as inference, not only the points that cite nothing', () => {
+  it('marks the whole of "What I’d do" as inference, with its trace to the findings below', () => {
     // The build marked an uncited point and left a well-cited judgement
     // unmarked, so the register that is our opinion read as a finding.
     const text = renderText(tile(measured))
+    expect(text).toContain('What I’d do')
     expect(text).toContain('this one is inference')
-    expect(text).toContain('Reasoning from finding 1 above.')
-    expect(text).toContain('Interpretation, not counted.')
+    expect(text).toContain('Based on finding 1 below.')
   })
 
-  it('dates every quoted voice and links to it', () => {
+  it('puts "What I’d do" under the answer and above the evidence (Heinrich, 1 Oct)', () => {
     const text = renderText(tile(measured))
-    expect(text).toContain(citationWhere(measured.citations[0]))
-    expect(render(tile(measured))).toContain(measured.citations[0].href!)
+    const answer = text.indexOf('Durability')
+    const doing = text.indexOf('What I’d do')
+    const said = text.indexOf(saidHeading(measured.turns[0].answer!.grounded))
+    expect(answer).toBeGreaterThan(-1)
+    expect(doing).toBeGreaterThan(answer)
+    expect(said).toBeGreaterThan(doing)
   })
 
-  it('says what the answer was answered against', () => {
-    expect(renderText(tile(measured))).toContain('Answered against the update of 27 Sep')
+  it('names no update the answer was given against (§0a.1)', () => {
+    expect(renderText(tile(measured))).not.toMatch(/update of|Answered against/)
   })
 })
 
@@ -225,8 +223,6 @@ describe('a follow-up prints its own turn’s figure', () => {
       turn={thread.turns[1]}
       turnIndex={1}
       measure={thread.measure}
-      citations={thread.citations}
-      basis={thread.basis}
     />
   )
 
@@ -241,33 +237,6 @@ describe('a follow-up prints its own turn’s figure', () => {
     expect(copyViolations(followUp)).toEqual([])
   })
 
-  it('prints AS3 where it changes and not under every turn', () => {
-    // A thread answered inside one week carries one `updateAt` on every turn,
-    // so the same two-line mono paragraph printed under each answer — five
-    // times on a five-turn thread. The line says WHICH update an answer rests
-    // on, so it belongs where that stops being true.
-    const same = renderText(
-      <AnswerTile
-        turn={thread.turns[1]} turnIndex={1} measure={thread.measure}
-        citations={thread.citations} basis={thread.basis}
-        prevUpdateAt={thread.turns[0].updateAt}
-      />,
-    )
-    expect(same).not.toContain('Answered against the update of')
-
-    // The first turn always states it, and so does a turn answered against a
-    // different update from the one before it.
-    expect(renderText(followUp)).toContain('Answered against the update of')
-    const moved = renderText(
-      <AnswerTile
-        turn={thread.turns[1]} turnIndex={1} measure={thread.measure}
-        citations={thread.citations} basis={thread.basis}
-        prevUpdateAt="2026-08-01T00:00:00.000Z"
-      />,
-    )
-    expect(moved).toContain('Answered against the update of')
-  })
-
   it('prints no footer at all where the turn measured nothing', () => {
     // A turn whose points rest on no theme the months carry: absent, not zero,
     // and never the neighbouring turn's figure.
@@ -276,8 +245,6 @@ describe('a follow-up prints its own turn’s figure', () => {
         turn={thread.turns[1]}
         turnIndex={9}
         measure={thread.measure}
-        citations={thread.citations}
-        basis={thread.basis}
       />
     )
     expect(renderText(unmeasured)).not.toContain('Open the')
@@ -340,8 +307,6 @@ describe('THE SEAM: the scrubber licenses a direction word the contract refuses'
         turn={leaky.turns[0]}
         turnIndex={0}
         measure={leaky.measure}
-        citations={leaky.citations}
-        basis={leaky.basis}
       />,
     )
     expect(violations.map((v) => v.rule)).toContain('direction-word')
@@ -384,13 +349,13 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
 
   // T0a (AK-5; ruling U6): a provisional subject's level rests on its
   // unverified matching; it is named with no figure and no word.
-  it('names a provisional subject with no figure, and says "not read yet" where nothing was counted', () => {
+  it('names a provisional subject, and one nothing has counted, by name alone (§0a)', () => {
     const text = renderText(<AboutReadings readings={[provisional, brand]} />)
     expect(text).toContain('Waterproofing')
     expect(text).not.toContain('provisional')
     expect(text).not.toContain('33 of 626')
     expect(text).toContain('Cotopaxi')
-    expect(text).toContain('not read yet')
+    expect(text).not.toContain('not read yet')
   })
 
   // Community & purpose on staging: named 24 Sep at 12:41, after the update
@@ -402,10 +367,10 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
     '2026-09-01', judge, '2026-10-02T06:00:00.000Z',
   )
 
-  it('a subject the month was not read for says "no reading yet", as Subjects does, never "0 of 654"', () => {
+  it('a subject the month was not counted for is its name, never "no reading yet" and never "0 of 654"', () => {
     const text = renderText(<AboutReadings readings={[unread]} />)
     expect(text).toContain('Community & purpose')
-    expect(text).toContain('no reading yet')
+    expect(text).not.toContain('no reading yet')
     expect(text).not.toContain('provisional')
     expect(text).not.toMatch(/\b0 of 654\b/)
   })
@@ -437,7 +402,7 @@ describe('an answer with too little behind it', () => {
     const d = agentFixture()
     const zero = { ...d.measure!, findings: d.measure!.findings.map((f) => ({ ...f, value: { ...f.value, k: 0 } })) }
     const text = renderText(
-      <AnswerTile turn={d.turns[0]} turnIndex={0} measure={zero} citations={d.citations} basis={d.basis} />,
+      <AnswerTile turn={d.turns[0]} turnIndex={0} measure={zero} />,
     )
     expect(text).not.toMatch(/Open the 0 videos/)
   })
@@ -446,10 +411,10 @@ describe('an answer with too little behind it', () => {
     const d = agentFixture()
     const answer = d.turns[0].answer!
     const thin = { ...d.turns[0], answer: { ...answer, answer: '', grounded: [], judgement: [], fallback: 'There is too little in your market about this to answer it.' } }
-    const text = renderText(<AnswerTile turn={thin} turnIndex={0} measure={null} citations={d.citations} basis={d.basis} />)
+    const text = renderText(<AnswerTile turn={thin} turnIndex={0} measure={null} />)
     expect(text).toContain('There is too little in your market about this to answer it.')
     expect(text).not.toContain('Open the')
     expect(text).not.toContain('What I’d take from that')
-    expect(copyViolations(<AnswerTile turn={thin} turnIndex={0} measure={null} citations={d.citations} basis={d.basis} />)).toEqual([])
+    expect(copyViolations(<AnswerTile turn={thin} turnIndex={0} measure={null} />)).toEqual([])
   })
 })

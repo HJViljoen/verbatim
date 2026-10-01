@@ -2,22 +2,18 @@ import { Fragment } from 'react'
 import Link from 'next/link'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockMovement } from '@/components/blocks/movement'
-import { QuoteBlock } from '@/components/quote-block'
 import { Tile, TileBlock } from '@/components/shell/tile'
-import { askBasisLine, type AskBasis } from '@/lib/agent/basis'
-import { INTERPRETATION_CAVEAT, TOO_FEW, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
+import { TOO_FEW, answerFallback, findingBase, findingSentence, findingSentenceParts, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
+import { DO_HEADING, NEAREST_HEADING, basedOnLine, saidHeading } from '@/lib/agent/types'
 import { monthlyLineLabel } from '@/lib/pages/overview'
 import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
-import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
+import type { ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
 import { priorPrintable } from '@/lib/reading/verdicts'
 import { printsMarket } from '@/lib/subjects/calibration-state'
 import { monthStartOf } from '@/lib/reading/month-key'
-import { CalibrationTag } from '@/components/blocks/calibration-tag'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
-import { NO_READING_YET } from '@/lib/subjects/read-in'
 import { findingKey } from '@/lib/pages/agent-thread'
 import { DirectionWord, FindingLevel, InferencePill } from './marks'
 
@@ -54,6 +50,19 @@ import { DirectionWord, FindingLevel, InferencePill } from './marks'
 //     Freitag beside it; a rival's filed videos are read only when a question
 //     names that rival (WP3.9's market scope), and its months stay the brands
 //     view's, so a finding's line is never a rival's drawn beside the market.
+//
+// AND NOTHING ON IT ABOUT HOW IT WAS MADE (§0a, 1 Oct). Heinrich, on Sealand's
+// live answer: "what's this 796 number". The page said "The sentence here named
+// a figure we did not measure, so this is the reading instead", "Sep only /
+// Two readings: months named, not drawn", "measured on …", "in the category"
+// beside a base the Dashboard calls 834, and "Answered against the update of".
+// Now: an emptied point is the product's plain finding; a base is worded
+// against the market (`findingBase`); a finding with no line to draw has an
+// empty right column; what a point covers is one short line; the update line,
+// the "Interpretation, not counted." note and the quotes register are gone
+// (Heinrich, 1 Oct: "What people said" is the evidence); and "What I'd do"
+// sits under the answer, as part of it. `answer-copy.test.tsx` guards the
+// words.
 
 /**
  * One finding's measurement — the row of marks under its sentence.
@@ -63,7 +72,11 @@ import { DirectionWord, FindingLevel, InferencePill } from './marks'
  * readings in one regime earned it), then the month it is a level of. A badge
  * before a level is a change with nothing to change.
  */
-function Marks({ f }: { f: FindingMeasure }) {
+function Marks({ f, level = true }: { f: FindingMeasure; level?: boolean }) {
+  // A REPLACED POINT'S SENTENCE IS ITS LEVEL, BASE AND COMPARISON ALREADY
+  // (`findingSentence`), so the row keeps only the direction word, the one
+  // thing that sentence does not say, and is not drawn without one.
+  if (!level) return f.direction ? <div className="flex flex-wrap items-center gap-2"><DirectionWord direction={f.direction} /></div> : null
   return (
     <div className="flex flex-wrap items-center gap-2">
       <FindingLevel value={f.value} />
@@ -78,8 +91,11 @@ function Marks({ f }: { f: FindingMeasure }) {
           thing that makes it checkable. */}
       <span className="inline-flex items-center gap-2">
         <DirectionWord direction={f.direction} />
-        <span className="font-mono text-[11px] text-muted-foreground">
-          in {f.audienceLabel.toLowerCase()} · <span data-copy="figure">{longMonth(f.verdict?.window.from ?? '')}</span>
+        {/* THE BASE, WORDED AGAINST THE MARKET (`findingBase`): "in your
+            market in September, not counting the 38 about brands you track",
+            so 796 here and the Dashboard's 834 add up. */}
+        <span data-copy="figure" className="font-mono text-[11px] text-muted-foreground">
+          {findingBase(f)}
         </span>
       </span>
     </div>
@@ -154,28 +170,16 @@ const CHART_BOX = 'min-w-0 basis-[380px] grow-0'
  * The finding's chart.
  *
  * D3: a chart is a direction claim too, so a line is drawn only where there is
- * a line to draw. Under three readings the axis is LABELLED instead —
- * `monthlyLineLabel` is the product's existing answer to exactly this ("Aug →
- * Sep only"), the words the approved mock itself prints on four rows of Main,
- * and reusing it means Ask and Overview cannot refuse a line in two different
- * vocabularies.
+ * a line to draw (three months or more, `monthlyLineLabel`). Where there is
+ * not, the column is EMPTY: it printed "Sep only" over "Two readings: months
+ * named, not drawn." (on one month) and "no month reads" over "No month on
+ * this axis carries a reading.", which is our machinery explaining a chart
+ * that is not there (§0a). The finding's level and month are on the row
+ * beside it already.
  */
 function FindingChart({ f }: { f: FindingMeasure }) {
   const values = f.chart.line.points.map((p) => p.value)
-  const label = monthlyLineLabel(values, f.chart.axis)
-  const readable = values.filter((v) => v != null).length
-  if (label) {
-    return (
-      <div className={`flex flex-col justify-center gap-1 ${CHART_BOX}`}>
-        <p className="m-0 font-mono text-[11px] text-muted-foreground">{label}</p>
-        <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-          {readable === 0
-            ? 'No month on this axis carries a reading.'
-            : 'Two readings: months named, not drawn.'}
-        </p>
-      </div>
-    )
-  }
+  if (monthlyLineLabel(values, f.chart.axis)) return null
   return (
     <div className={`flex flex-col gap-1 ${CHART_BOX}`}>
       <CalendarLine
@@ -266,6 +270,19 @@ function MonthTrail({ f }: { f: FindingMeasure }) {
 }
 
 /**
+ * The product's own sentence for a finding (`findingSentence`), set as the
+ * page sets a finding: the counted pair in its level chip, inside the
+ * sentence, so a replaced point keeps the colour every other finding's level
+ * has. The theme's label is marked as the model's words it is
+ * (`pass_b_theme`): a label can carry a direction word ("Frustration with
+ * declining product quality") that is the subject's name, not a claim of ours.
+ */
+function Sentence({ f }: { f: FindingMeasure }) {
+  const { label, level, base, after } = findingSentenceParts(f)
+  return <><span data-copy="subject" data-slot="pass_b_theme">{label}</span>: <FindingLevel value={level} /> <span data-copy="figure">{base}</span>.{after}</>
+}
+
+/**
  * The findings THIS TURN produced, in the turn's own order.
  *
  * ONE MEASUREMENT PER THREAD, INDEXED BY TURN. `AnswerMeasure.findings` holds
@@ -298,6 +315,14 @@ function Finding({
   turnIndex: number
 }) {
   const f = measure?.findings.find((x) => x.findingId === findingKey(turnIndex, point.id)) ?? null
+  // WHAT THE POINT COVERS: its themes' names, the model's words. Not where
+  // the point's own sentence is the product's and names the one theme it
+  // covers, which would be the same name twice.
+  const labels = point.themeRefs.map((t) => t.label).filter(Boolean)
+  const covers = point.replaced && f && labels.length === 1 && labels[0] === f.label ? [] : labels
+  // A point with nothing to say is not drawn (§0a.2): its sentence was
+  // emptied, nothing measured it and it names no theme.
+  if (!point.text && !f && covers.length === 0) return null
   return (
     // WRAPS, AND THE PROSE HAS A FLOOR — see `CHART_BOX`. `basis-[16rem]` is
     // the hypothetical size the wrap is decided on: with `flex-1` (basis 0) the
@@ -308,44 +333,36 @@ function Finding({
         {index + 1}
       </span>
       <div className="flex min-w-0 grow basis-[16rem] flex-col gap-1.5">
-        {/* A REPLACED POINT IS MUTED, not hidden: its own sentence named a
-            figure nothing measured, the text here is the product's reading in
-            its place, and the quotes it rested on are untouched. */}
-        <p
-          data-copy={point.replaced ? undefined : 'prose'}
-          className={`m-0 text-[12.5px] leading-[1.5] ${point.replaced ? 'text-muted-foreground' : 'text-foreground'}`}
-        >
-          {point.text}
-        </p>
+        {/* A REPLACED POINT READS AS A FINDING: its sentence is the product's
+            own (`findingSentence`, code's digits, so not a `prose` node), in
+            the same ink as any other, and nothing says it was replaced. */}
+        {point.replaced && f && point.text === findingSentence(f) ? (
+          <p className="m-0 text-[12.5px] leading-[1.5] text-foreground"><Sentence f={f} /></p>
+        ) : point.text ? (
+          <p data-copy={point.replaced ? undefined : 'prose'} className="m-0 text-[12.5px] leading-[1.5] text-foreground">
+            {point.text}
+          </p>
+        ) : null}
+        {/* NO MEASUREMENT PRINTS NOTHING, never a zero and never a line about
+            it: the point stands on its sentence and what it covers. */}
         {f ? (
           <>
-            <Marks f={f} />
+            <Marks f={f} level={!point.replaced} />
             <Baseline f={f} />
             <OwnSide f={f} />
           </>
-        ) : (
-          // NO MEASUREMENT IS A STATE, NOT A ZERO. The months are not recorded
-          // for this workspace, or this point rests on no theme the months
-          // carry. Either way the sentence stands on its quotes alone and the
-          // page says so rather than printing a level of nothing.
+        ) : null}
+        {covers.length > 0 && (
+          // ONE SHORT LINE: what the point covers. It said "measured on", our
+          // word for our method (§0a). The separator is a dot because a label
+          // can carry a comma ("Buy less, make it better").
           <p className="m-0 font-mono text-[11px] text-muted-foreground">
-            no month reading stands behind this one
-          </p>
-        )}
-        {point.themeRefs.length > 0 && (
-          // THE NAME IS INTRODUCED, not dropped. This printed as a bare 11px
-          // line with no label, so a finding ended with "Will it survive a wet
-          // commute" floating under the own-side sentence and read as orphaned
-          // text — worst in the refused state, where a finding is prose, one
-          // mono refusal and then a bare name. Naming what the figures above
-          // are figures OF is also the only place this page says it.
-          <p className="m-0 font-mono text-[11px] text-muted-foreground">
-            measured on{' '}
+            Covers:{' '}
             {/* The theme's label is the model's words (`pass_b_theme`), which
                 the prose policy never direction-scrubs — so the node names its
                 slot rather than silencing rule (c) for free. */}
             <span data-copy="subject" data-slot="pass_b_theme" className="text-secondary-foreground">
-              {point.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}
+              {covers.join(' · ')}
             </span>
           </p>
         )}
@@ -355,91 +372,27 @@ function Finding({
   )
 }
 
-/** Where one quoted voice was said (AS4) — the deck's own number, so the
- *  superscript here, the appendix on paper and a share link name one voice. */
-function Provenance({ q, meta }: { q: ThreadAnswer['grounded'][number]['quotes'][number]; meta?: Citation }) {
-  const where = citationWhere(meta)
-  return (
-    <span className="tabular-nums">
-      {q.n}
-      {where ? ` · ${where}` : ' · source on file'}
-      {meta?.href && (
-        <>
-          {' · '}
-          <a
-            href={meta.href}
-            target="_blank"
-            rel="noreferrer"
-            className="font-sans text-[12px] font-medium text-foreground hover:underline"
-          >
-            {citationDestination(meta)} →
-          </a>
-        </>
-      )}
-    </span>
-  )
-}
-
 /**
- * "In their words" — a register of its own, not quotes nested in each card.
+ * "What I'd do": the judgement register, under the answer it belongs to.
  *
- * The artboard's arrangement, and the honest one: a quote is the speaker's
- * words with its own ref and its own provenance, and rule (c) may not police
- * it. Nesting it inside a finding's card invites a reader to read it as
- * evidence OF that sentence rather than as what somebody said.
- */
-function Quotes({ answer, citations }: { answer: ThreadAnswer; citations: readonly Citation[] }) {
-  const metaByRef = new Map(citations.map((c) => [c.ref, c]))
-  const quotes = answer.grounded.flatMap((g) => g.quotes)
-  if (quotes.length === 0) return null
-  return (
-    <section className="flex flex-col gap-2.5">
-      <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">In their words</h3>
-      <div className="flex flex-col gap-2.5">
-        {quotes.map((q) => (
-          <QuoteBlock
-            key={q.ref + q.n}
-            quote={{ text: q.text, lang: q.lang, english: q.english }}
-            cite={<Provenance q={q} meta={metaByRef.get(q.ref)} />}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/**
- * The judgement register, with the block-level inference pill.
+ * UNDER THE ANSWER, ABOVE THE EVIDENCE (Heinrich, 1 Oct): it reads as part of
+ * the answer, and the findings below are what it is based on. Old answers get
+ * the same order; only the heading and the trace line changed words.
  *
  * THE PILL IS ON THE BLOCK, NOT ON THE POINTS THAT CITE NOTHING. The build
  * marked only an uncited point as inference, so a well-cited judgement carried
- * no marker at all and read as a finding. The whole register is inference — it
- * is the product arguing from findings, not a count — and the caveat under it
- * says so in the fixed sentence `measureAnswer` owes (`INTERPRETATION_CAVEAT`).
- * The per-point citation line stays: it is the trace back to the evidence.
+ * no marker at all and read as a finding. The whole register is inference, and
+ * the pill says so; the note under it ("Interpretation, not counted.") said it
+ * again in our method's words, and is gone (§0a). The per-point line stays: it
+ * is the trace to the findings below.
  */
-function Judgement({
-  answer, measure,
-}: {
-  answer: ThreadAnswer
-  measure: AnswerMeasure | null
-}) {
+function Judgement({ answer }: { answer: ThreadAnswer }) {
   if (answer.judgement.length === 0) return null
   const numberOf = new Map(answer.grounded.map((g, i) => [g.id, i + 1]))
-  // THE INTERPRETATION SENTENCE, AND NOT THE FINDINGS AGAIN. `measure.caveats`
-  // is the interpretation caveat followed by one own-thin sentence PER FINDING
-  // ("Your own side of Will it survive a wet commute is 26 of 84 videos in
-  // September — too few to compare"), and every one of those was already
-  // printed by `OwnSide` under the finding it belongs to, beside the counted
-  // pair it is about. Reprinted here they turned the page's one tinted panel
-  // into its longest stack of grey metadata — four lines where the artboard has
-  // one — and moved a caveat away from the figure it qualifies. The own-thin
-  // caveats stay on the findings; this register keeps its own sentence.
-  const caveats = measure?.caveats?.filter((c) => c === INTERPRETATION_CAVEAT) ?? [INTERPRETATION_CAVEAT]
   return (
-    <TileBlock className="flex flex-col gap-1.5">
+    <TileBlock className="flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
-        <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{JUDGEMENT_HEADING}</h3>
+        <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{DO_HEADING}</h3>
         <InferencePill />
       </div>
       {answer.judgement.map((j, i) => {
@@ -447,20 +400,10 @@ function Judgement({
         return (
           <div key={i} className="flex flex-col gap-0.5">
             <p data-copy="prose" className="m-0 max-w-[82ch] text-[12.5px] leading-[1.5] text-foreground">{j.text}</p>
-            <p className="m-0 text-[11px] text-muted-foreground">
-              {cites.length > 0
-                ? `Reasoning from ${cites.length === 1 ? 'finding' : 'findings'} ${cites.join(', ')} above.`
-                : 'Not drawn from any single finding above.'}
-            </p>
+            <p className="m-0 text-[11px] text-muted-foreground">{basedOnLine(cites, answer.grounded.length > 0 ? 'below' : null)}</p>
           </div>
         )
       })}
-      {/* The caveats `measureAnswer` says are owed — the interpretation
-          sentence first, then the client's own thin side of each finding.
-          Code's sentences, with code's digits in them. */}
-      {caveats.map((c) => (
-        <p key={c} className="m-0 text-[11.5px] leading-[1.45] text-muted-foreground">{c}</p>
-      ))}
     </TileBlock>
   )
 }
@@ -530,9 +473,8 @@ function aboutLabel(r: ObjectReading): string {
  * trail month by month, and the month pair's answer, which on a refused pair
  * is the refusal in the pair rule's own words and never "moved". The figures
  * are the product's, counted off the same rows Subjects prints (decision E),
- * never a model's. A provisional subject carries its word and no comparison
- * (decision C); a failed one says it is being re-described; an object nothing
- * has counted yet says so.
+ * never a model's. A subject that is not ready, and an object nothing has
+ * counted yet, is its name alone: no figure and no word about why (§0a).
  */
 export function AboutReadings({ readings }: { readings: readonly ObjectReading[] }) {
   if (readings.length === 0) return null
@@ -566,12 +508,14 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
           <TileBlock key={`${r.object.kind}:${r.object.id}`} className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[13px] font-semibold text-foreground">{label}</span>
-              {r.object.kind === 'subject' && !failed ? <CalibrationTag calibration={r.object.calibration ?? null} unread={unread ? r.unread ?? NO_READING_YET : null} /> : null}
+
             </div>
             {failed ? null : unread ? (
               trailLine
             ) : r.state === 'not_read' || !r.curr || r.curr.n == null || r.curr.k == null ? (
-              <p className="m-0 text-[12.5px] text-muted-foreground">not read yet</p>
+              // NOTHING COUNTED IT YET: the name alone, never "not read yet"
+              // or "no reading yet", which are our process (§0a).
+              null
             ) : (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -596,39 +540,18 @@ export function AnswerTile({
   turn,
   turnIndex,
   measure,
-  citations,
-  basis,
-  prevUpdateAt,
   row = 6,
   about,
 }: {
   turn: Turn
   turnIndex: number
   measure: AnswerMeasure | null
-  citations: readonly Citation[]
-  basis: AskBasis
-  /**
-   * The update the turn BEFORE this one was answered against — `undefined` on
-   * the first turn of a thread, which always prints its basis.
-   *
-   * AS3 is per turn because turns can be answered against different updates,
-   * and on a thread answered inside one week they are not: `askBasisLine`
-   * composed the same two-line mono paragraph under every answer, five times
-   * on a five-turn thread. The line is a fact about WHICH update an answer
-   * rests on, so it is printed where it CHANGES — the first turn, and any turn
-   * whose update is not its predecessor's. A reader scrolling a thread sees
-   * the basis once, and sees it again exactly where it stopped being true.
-   * (The deck is untouched: `index.tsx`'s `Question` prints it on every slide
-   * because a slide can leave the building on its own.)
-   */
-  prevUpdateAt?: string | null
   row?: number
   /** What the question named, read on the market (WP3.9), under the first
    *  answer. */
   about?: readonly ObjectReading[]
 }) {
   const answer = turn.answer
-  const basisChanged = turnIndex === 0 || prevUpdateAt === undefined || prevUpdateAt !== turn.updateAt
   // THIS TURN's best-evidenced finding, never the thread's first — see
   // `turnFindings`. A turn that measured nothing prints no footer rather than
   // another turn's figure.
@@ -665,16 +588,26 @@ export function AnswerTile({
           {/* THE FALLBACK IS PRINTED INSTEAD OF THE ANSWER, never beside it. A
               scrub that removes every sentence used to render as an empty
               paragraph over a page of evidence; `fallback` is the product's own
-              reading of the same verdicts and says in its first sentence that
-              it is. It is not a `prose` node — the product wrote it, and the
-              digits in it are code's. */}
+              plain finding for this turn (`answerFallback`), or "too little in
+              your market" (`tooLittleToAnswer`). It is not a `prose` node: the
+              product wrote it, and the digits in it are code's. */}
           {answer.answer.trim() !== '' ? (
             <p data-copy="prose" className="m-0 text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">
               {answer.answer}
             </p>
           ) : answer.fallback ? (
-            <p className="m-0 text-[15px] leading-[1.45] text-muted-foreground">{answer.fallback}</p>
+            <p className="m-0 text-[15px] leading-[1.45] text-foreground">
+              {/* The turn's own findings, labels marked, where that is what
+                  the fallback is; any other fixed sentence as it stands. */}
+              {measure && answer.fallback === answerFallback(measure, answer.grounded.map((g) => findingKey(turnIndex, g.id)))
+                ? turnFindings(turn, measure, turnIndex).slice(0, 3).map((x, i) => <Fragment key={x.findingId}>{i > 0 ? ' ' : null}<Sentence f={x} /></Fragment>)
+                : answer.fallback}
+            </p>
           ) : null}
+
+          {/* WHAT I'D DO, AS PART OF THE ANSWER (Heinrich, 1 Oct): directly
+              under it and above the evidence it is based on. */}
+          <Judgement answer={answer} />
 
           {about && about.length > 0 ? <AboutReadings readings={about} /> : null}
 
@@ -701,26 +634,16 @@ export function AnswerTile({
             </section>
           )}
 
-          <Quotes answer={answer} citations={citations} />
-          <Judgement answer={answer} measure={measure} />
-
-          {/* AS3 under the answer it is about: which update it was answered
-              against, and how much of the corpus could be searched when it was.
-              Mono here as it is on the deck — it is metadata, and the eye
-              should skip it until it wants it. Printed where it CHANGES; see
-              `prevUpdateAt`. */}
-          {basisChanged && (
-            <p className="m-0 font-mono text-[11px] leading-[1.45] text-muted-foreground">
-              {askBasisLine({ ...basis, updateAt: turn.updateAt }, { asked: true })}
-            </p>
-          )}
+          {/* NO QUOTES REGISTER (Heinrich, 1 Oct): "What people said" is the
+              evidence, and the videos behind it are one link away in the
+              footer. NO UPDATE LINE: "Answered against the update of …" named
+              our update as an event (§0a.1); the question's own date is above. */}
         </>
       ) : turn.prose ? (
         <p className="m-0 text-[15px] leading-[1.45] text-foreground">{turn.prose}</p>
       ) : (
         <p className="m-0 text-[12.5px] text-negative">
-          That question did not get an answer &mdash; something went wrong on our side rather than in your data.
-          Asking it again is safe.
+          That question did not get an answer. Asking it again is safe.
         </p>
       )}
     </Tile>

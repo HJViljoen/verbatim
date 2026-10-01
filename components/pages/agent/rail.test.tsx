@@ -106,7 +106,7 @@ describe('earlier questions', () => {
   })
 })
 
-describe('what an answer reads (WP3.9)', () => {
+describe('what answers cover (WP3.9; §0a, 1 Oct)', () => {
   it('keeps the copy contract in both states', () => {
     assertCopyContract(<ReadsTile reads={measured.reads} />)
     assertCopyContract(<ReadsTile reads={refused.reads} />)
@@ -116,22 +116,21 @@ describe('what an answer reads (WP3.9)', () => {
     const text = renderText(<ReadsTile reads={measured.reads} />)
     expect(text).toContain('Your market, not only your own posts.')
     expect(text).toMatch(/Your market\s*655/)
-    expect(text).toContain('videos in September so far; 626 in the category, where themes are grouped')
-    expect(text).toContain('of those 655, filed under a brand; read when a question names one')
-    expect(text).toContain('with a reading in September so far, marked as yours and never counted as the market')
-    expect(text).toContain('August, and September so far')
-    expect(text).toContain('October against November, from the 6 Dec update')
+    expect(text).toContain('What answers cover')
+    expect(text).toContain('videos in September so far')
+    expect(text).toContain('of those 655, about a brand you track')
+    expect(text).toContain('in September so far, kept apart from your market')
   })
 
-  it('links to where the method is said, and carries no meta', () => {
+  it('says nothing about how it reads: no months read, no comparisons, no method link', () => {
     const text = renderText(<ReadsTile reads={measured.reads} />)
-    expect(text).toContain('What we read, and how →')
-    expect(render(<ReadsTile reads={measured.reads} />)).toContain('/dashboard/settings/how-to-read')
+    expect(text).not.toMatch(/What an answer reads|where themes are grouped|Months read|Comparisons|read the same way|What we read/)
+    expect(render(<ReadsTile reads={measured.reads} />)).not.toContain('/dashboard/settings/how-to-read')
   })
 
   it('prints no zero for a count nobody read', () => {
     const text = renderText(<ReadsTile reads={refused.reads} />)
-    expect(text).toContain('not read for this month yet')
+    expect(text).toContain('none this month yet')
     expect(text).not.toMatch(/Your market\s*0/)
   })
 })
@@ -146,8 +145,8 @@ describe('not answered this month', () => {
   it('prints the reader’s own question and the reason in the reader’s words', () => {
     const text = renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)
     expect(text).toContain('Anything compared against Poler?')
-    expect(text).toContain('nothing in the conversation we read speaks to this')
-    expect(text).toContain('this asks about your own numbers, which we do not read')
+    expect(text).toContain('nothing in your market speaks to this')
+    expect(text).toContain('this asks about your own numbers, which are not public')
   })
 
   it('prints the budget with its own denominator', () => {

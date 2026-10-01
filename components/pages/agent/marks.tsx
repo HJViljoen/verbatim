@@ -84,15 +84,16 @@ export function FindingLevel({ value, noun = 'videos' }: { value: Counted; noun?
  * already done all of that — this prints `FindingMeasure.direction` and
  * computes nothing.
  *
- * "over 3 readings" rather than the mock's "3rd month": the run is
- * `DIRECTION_RUN` readings, and "3rd month" claims a position in a sequence
- * that the word does not carry. Same node, same length, one fewer claim.
+ * "over 3 months" rather than the mock's "3rd month": the run is
+ * `DIRECTION_RUN` consecutive months, and "3rd month" claims a position in a
+ * sequence that the word does not carry. It said "over 3 readings", which is
+ * our word for how a month is counted (§0a).
  */
 export function DirectionWord({ direction }: { direction: Direction | null | undefined }) {
   if (!direction) return null
   return (
     <span data-copy="verdict" className="whitespace-nowrap text-[12px] font-medium text-muted-foreground">
-      {direction} over 3 readings
+      {direction} over 3 months
     </span>
   )
 }

@@ -5,12 +5,12 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { AGENT_MOVEMENT_MONTHS, ASK_THEMES_PER_CLAIM, directionWordsFor } from '../config'
-import { fmtInt, longMonth, shortDate, weekdayDate } from '../format'
+import { fmtInt, longMonth, weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
 import { loadPlanChecks, PLAN_VERDICT_LABEL, type PlanCheckCard } from '../ask/plan-cards'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, OUT_OF_CORPUS_NOTICE, type AgentAnswer } from '../agent/types'
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
 import {
   answerFallback,
@@ -39,6 +39,8 @@ import { loadObjectReadings, type ObjectReading } from '../agent/movement'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '../agent/scope'
 import { starterQuestions, type StarterQuestion } from '../agent/starters'
 import { loadOverview } from './overview'
+import { noDashes } from '../reports/documents/scrub'
+import { SILENCE_SENTENCE, SILENCE_SENTENCE_V1 } from '../agent/enforce'
 import { ASK_FINDING_FLOOR, askQuoteOk, floorAnswer, type AskQuoteVideo } from '../agent/floor'
 import { RPC_SEGMENTS_FOR_VIDEOS } from './noise'
 import { segmentRulesEnabled } from '../segments/rules'
@@ -273,6 +275,10 @@ export interface AskReading {
   earliest: string | null
   /** The first pair read the same way, assuming nothing further changes. */
   next: { prevMonth: string; month: string; sameAgeFrom: string } | null
+  /** The market by month, the same pooled count (`pooledDenominators`): what
+   *  an answer measured on an earlier month states its base against. Absent
+   *  where nothing was read. */
+  months?: ReadonlyMap<string, MarketCount>
 }
 
 export const NO_ASK_READING: AskReading = { reading: null, market: null, own: null, monthsRead: [], earliest: null, next: null }
@@ -310,6 +316,7 @@ export function askReadingFrom(input: Parameters<typeof readingViewFrom>[0] & {
     monthsRead,
     earliest: months[0] ?? null,
     next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom } : null,
+    months: pooled,
   }
 }
 
@@ -333,13 +340,18 @@ export interface AskReads {
 const monthPhrase = (r: ReadingMonth | null, month: string): string =>
   r && monthStartOf(r.month) === monthStartOf(month) && r.state === 'so_far' ? `${longMonth(month)} so far` : longMonth(month)
 
-const listOf = (items: readonly string[]): string =>
-  items.length <= 1 ? items[0] ?? '' : `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
-
 /**
  * The rail's words, off the reading (the approved preview's "What an answer
  * reads"). Pure. Every count is the market's own, one denominator a line, and
- * a count nobody read says so rather than printing a zero.
+ * a count nobody has yet prints no zero.
+ *
+ * WHAT THE MARKET IS, AND NOTHING ABOUT HOW IT IS READ (§0a, 1 Oct). The rows
+ * said where themes are grouped, when a brand's videos are read and that the
+ * client's posts are "never counted as the market", and the facts named the
+ * months read and the first comparison "read the same way": our machinery. The
+ * three counts stay, because they are what a finding's base adds up to
+ * ("13 of 796 … not counting the 38 about brands you track", 834 in all), and
+ * so does the window an answer looks over.
  */
 export function askReads(r: AskReading, window: AskWindowChoice | null): AskReads {
   const month = r.reading ? monthStartOf(r.reading.month) : null
@@ -350,21 +362,19 @@ export function askReads(r: AskReading, window: AskWindowChoice | null): AskRead
       key: 'market',
       label: 'Your market',
       value: total,
-      line: total == null || !when
-        ? 'not read for this month yet'
-        : `videos in ${when}${r.market?.category != null ? `; ${fmtInt(r.market.category)} in the category, where themes are grouped` : ''}`,
+      line: total == null || !when ? 'none this month yet' : `videos in ${when}`,
     },
     {
       key: 'brands',
       label: 'Brands you track',
       value: r.market?.rivalFiled ?? null,
-      line: total == null ? 'filed under a brand; read when a question names one' : `of those ${fmtInt(total)}, filed under a brand; read when a question names one`,
+      line: total == null ? 'videos about a brand you track' : `of those ${fmtInt(total)}, about a brand you track`,
     },
     {
       key: 'own',
       label: 'Your own posts',
       value: r.own,
-      line: when ? `with a reading in ${when}, marked as yours and never counted as the market` : 'marked as yours and never counted as the market',
+      line: when ? `in ${when}, kept apart from your market` : 'kept apart from your market',
     },
   ]
   const facts = [
@@ -373,18 +383,6 @@ export function askReads(r: AskReading, window: AskWindowChoice | null): AskRead
       value: window == null
         ? 'the last 90 days, or all time'
         : window === 'all' ? `${ASK_WINDOW_WORDS.all.toLowerCase()}` : 'the last 90 days',
-    },
-    {
-      term: 'Months read',
-      value: r.monthsRead.length === 0
-        ? 'no month yet carries enough videos to compare on'
-        : listOf(r.monthsRead.map((m) => monthPhrase(r.reading, m))),
-    },
-    {
-      term: 'Comparisons',
-      value: r.next
-        ? `the first read the same way: ${longMonth(r.next.prevMonth)} against ${longMonth(r.next.month)}, from the ${shortDate(r.next.sameAgeFrom)} update`
-        : 'none read the same way yet',
     },
   ]
   return { rows, facts }
@@ -620,6 +618,26 @@ export async function loadAskHistory(
   )
   const oldest = row<{ created_at: string }>(oldestRes, 'askHistory.oldest')
   return { ...history, earliest: oldest?.created_at ?? history.earliest }
+}
+
+/**
+ * A stored answer, in today's house style (§0a, 1 Oct). Pure.
+ *
+ * AT READ TIME, so every stored answer is held to it: no dashes in the
+ * model's prose (the written read's own rule, `noDashes`); the quotes are the
+ * speaker's and are not touched. And the product's fixed sentences in today's
+ * words: the only notice ever stored is `OUT_OF_CORPUS_NOTICE`, and the
+ * silence sentence and that notice both said, before 1 Oct, what we read.
+ */
+export function inHouseStyle<A extends Pick<ThreadAnswer, 'answer' | 'grounded' | 'judgement' | 'nearest'> & { notice?: string }>(a: A): A {
+  return {
+    ...a,
+    answer: a.answer === SILENCE_SENTENCE_V1 ? SILENCE_SENTENCE : noDashes(a.answer ?? ''),
+    grounded: a.grounded.map((g) => ({ ...g, text: noDashes(g.text ?? '') })),
+    judgement: (a.judgement ?? []).map((j) => ({ ...j, text: noDashes(j.text ?? '') })),
+    nearest: (a.nearest ?? []).map((n) => ({ ...n, text: noDashes(n.text ?? '') })),
+    ...(a.notice ? { notice: OUT_OF_CORPUS_NOTICE } : {}),
+  }
 }
 
 /** `n` months before `month`, as a month start. */
@@ -876,7 +894,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
             n: 0,
           })),
       }))
-      answer = { ...reply.result, grounded }
+      answer = inHouseStyle({ ...reply.result, grounded })
     }
     replyIdOf.push(reply?.id ?? null)
     turns.push({
@@ -917,6 +935,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const set = await seriesP
   const seeded = set != null && set.substrate === 'seeded' && set.numeratorSubstrate === 'seeded'
   const about = await aboutP
+  // The market's two parts in the measured month, off the pages' own count:
+  // a theme's base is the category's, worded against the market (`brandsTracked`).
+  const askReading = await askReadingP
+  const marketThen = askReading.months?.get(readMonth) ?? null
   const measured = withObjectVerdicts(measureAnswer({
     findings: answerFindings(turns),
     series: seeded ? (set as NonNullable<typeof set>).series : [],
@@ -926,6 +948,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     directionWords: directionWordsFor('agent.movement'),
     ownAudience: CLIENT_AUDIENCE,
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
+    market: marketThen ? { category: marketThen.category, rivalFiled: marketThen.rivalFiled } : null,
   }), about)
   // ── the evidence floor (walkthrough item 4) ─────────────────────────────
   //
@@ -964,17 +987,11 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     return { n: c.n, ref: c.ref, text: c.text, platform: m?.platform ?? null, date: m?.date ?? null, href: m?.href ?? null, commentLevel: m?.commentLevel ?? false }
   })
   const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
-  // FINDINGS, WHICH IS WHAT THEY ARE AND WHAT THIS PAGE CALLS THEM. The set is
-  // `insightIds` — `audience_insights` rows — and the note under every printed
-  // slide used to name the table: "Findings rest on N distinct audience
-  // insights". "insight" is in neither THIRTEEN_WORDS nor GLOSSARY, and one
-  // file over `lib/agent/basis.ts` composes this same page's AS3 line as "N of
-  // M findings searchable", with a docblock at `:136` explaining exactly that
-  // choice. So the bar said `findings` and the PDF footer said `audience
-  // insights`, for one object.
-  // Counted after the floor, over the findings this answer prints.
-  const findings = new Set(turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => g.insightIds)))
-  const fallback = answerFallback(measure)
+  // THE PRODUCT'S OWN SENTENCE FOR A TURN IS THAT TURN'S: its own findings,
+  // never the thread's first three (`findingKey`), which printed the first
+  // answer's figures as a follow-up's lead.
+  const fallbackOf = (i: number): string | null =>
+    answerFallback(measure, (turns[i].answer?.grounded ?? []).map((g) => findingKey(i, g.id)))
   // The thread's own inputs, never its output: the client's questions and the
   // theme labels the answer rests on. A product name with a digit in it
   // ("3R78", "L5999") is a NAME, and without this every sentence carrying one
@@ -1004,13 +1021,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       // opinion rather than as a replacement. Both renderers print this INSTEAD
       // OF `answer` — an emptied head used to render as a blank paragraph,
       // which is a worse artefact than the prose it replaced.
-      fallback: leads.get(i) ?? (scrubbed.answer.trim() === '' ? fallback : null),
+      fallback: leads.get(i) ?? (scrubbed.answer.trim() === '' ? fallbackOf(i) : null),
     }
   })
 
   const planChip = askPlanChip(await plansP)
   const basis: AskBasis = { updateAt: newestUpdateAt, ...facts }
-  const askReading = await askReadingP
   // The window the newest answer was read over. An answer stored before
   // WP3.9 carries none, and was read over all time.
   const newestAnswer = [...turns].reverse().find((t) => t.answer)?.answer ?? null
@@ -1041,21 +1057,20 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     bar: { question: surface('ask').question ?? '', context: askBasisLine(basis, { short: true }), reading: askReading.reading },
     about,
     window,
-    method: {
-      company: brand,
-      period: `Asked ${weekdayDate(thread.created_at as string)}`,
-      platforms,
-      videos: null,
-      comments: citations.length || null,
-      note: document
-        ? `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested.`
-        : findings.size > 0
-          ? `Every quoted voice is a real comment, listed in the appendix. This answer rests on ${findings.size} distinct findings; our own reading is marked as such.`
-          : [...thinReply.values()].some(Boolean)
-            // Held to the floor (item 4): something was found, too little of it.
-            ? 'Too little in the conversation analysed spoke to what was asked to draw a conclusion from.'
-            : 'Nothing in the conversation analysed related to what was asked.',
-    },
+    // A QUESTION'S FOOTER IS WHO AND WHEN, and nothing about how (§0a): the
+    // note said what the answer "rests on" and where the quotes were listed,
+    // and the platforms and the comment count were the quotes', which an
+    // answer no longer prints (1 Oct). A document check keeps its tally.
+    method: document
+      ? {
+          company: brand,
+          period: `Asked ${weekdayDate(thread.created_at as string)}`,
+          platforms,
+          videos: null,
+          comments: citations.length || null,
+          note: `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested.`,
+        }
+      : { company: brand, period: `Asked ${weekdayDate(thread.created_at as string)}`, platforms: [], videos: null, comments: null, note: null },
   }
 }
 
@@ -1123,9 +1138,17 @@ export function numberThreadQuotes(turns: Turn[]): { ref: string; commentId: str
 
 // ── print pagination (pure) ───────────────────────────────────────────────
 
-export const GROUNDED_PER_SLIDE = 2
-export const CITATIONS_PER_SLIDE = 9
+/** Findings a sheet: four, two rows of two, since they carry no quotes (1 Oct). */
+export const GROUNDED_PER_SLIDE = 4
+/** A plan check's claims a sheet: two, with their quotes (unchanged). */
+export const CLAIMS_PER_SLIDE = 2
 export const SEGMENT_CHARS_PER_SLIDE = 2600
+/** Under this many characters of answer and "What I'd do" together, the two
+ *  share the turn's first sheet; over it, "What I'd do" takes a sheet of its
+ *  own (`agent_answer_v4` writes a paragraph for each, and a sheet is a fixed
+ *  box that clips). The `SEGMENT_CHARS_PER_SLIDE` precedent: a count, not a
+ *  measurement, set where the four 1 Oct shots fit. */
+export const LEAD_AND_DO_CHARS = 1400
 
 /** Split the document's segments into slide-sized runs (never inside a
  *  marked span). Returns index ranges into `segments`. */
@@ -1150,17 +1173,28 @@ export function agentThreadSlides(d: AgentThreadData): Slide[] {
   if (d.document) {
     const pages = documentPages(d.document.segments)
     pages.forEach((_, p) => slides.push({ title: p === 0 ? `The brief, checked${d.document?.sourceFilename ? ` · ${d.document.sourceFilename}` : ''}` : 'The brief, checked (continued)', keys: [`agent.doc:${p}`], layout: 'single' }))
-    for (let c = 0; c < Math.ceil(d.document.claims.length / GROUNDED_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Claim by claim' : 'Claim by claim (continued)', keys: [`agent.claims:${c}`], layout: 'single' })
+    for (let c = 0; c < Math.ceil(d.document.claims.length / CLAIMS_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Claim by claim' : 'Claim by claim (continued)', keys: [`agent.claims:${c}`], layout: 'single' })
     if (d.document.judgement.length) slides.push({ title: JUDGEMENT_HEADING, keys: ['agent.judgement'], layout: 'single' })
     return slides
   }
+  // THE SCREEN'S ORDER (1 Oct): the question and the answer, "What I'd do",
+  // the findings, then what was not asked but close. No appendix of quotes:
+  // an answer prints none.
   d.turns.forEach((t, i) => {
-    const grounded = t.answer?.grounded.length ?? 0
-    const parts = Math.max(1, Math.ceil(grounded / GROUNDED_PER_SLIDE))
-    for (let p = 0; p < parts; p++) slides.push({ title: i === 0 ? d.title : `Follow-up ${i}`, keys: [`agent.turn:${i}:${p}`], layout: 'single' })
-    if (t.answer && (t.answer.nearest.length || t.answer.judgement.length)) slides.push({ title: `${NEAREST_HEADING}, and ${JUDGEMENT_HEADING.charAt(0).toLowerCase()}${JUDGEMENT_HEADING.slice(1)}`, keys: [`agent.turn:${i}:more`], layout: 'single' })
+    const title = i === 0 ? d.title : `Follow-up ${i}`
+    const a = t.answer
+    const lead = `agent.turn:${i}:lead`
+    if (a && a.judgement.length > 0) {
+      const chars = (a.answer.trim() || a.fallback || '').length + (a.notice ?? '').length + a.judgement.reduce((n, j) => n + j.text.length, 0)
+      if (chars <= LEAD_AND_DO_CHARS) slides.push({ title, keys: [lead, `agent.turn:${i}:do`], layout: 'single' })
+      else slides.push({ title, keys: [lead], layout: 'single' }, { title, keys: [`agent.turn:${i}:do`], layout: 'single' })
+    } else {
+      slides.push({ title, keys: [lead], layout: 'single' })
+    }
+    const parts = Math.ceil((a?.grounded.length ?? 0) / GROUNDED_PER_SLIDE)
+    for (let p = 0; p < parts; p++) slides.push({ title, keys: [`agent.turn:${i}:${p}`], layout: 'single' })
+    if (a && a.nearest.length > 0) slides.push({ title: NEAREST_HEADING, keys: [`agent.turn:${i}:more`], layout: 'single' })
   })
-  for (let c = 0; c < Math.ceil(d.citations.length / CITATIONS_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Evidence: every quoted voice' : 'Evidence (continued)', keys: [`agent.citations:${c}`], layout: 'single' })
-  if (d.silentQuestions.length) slides.push({ title: 'Nothing in the data speaks to this', keys: ['agent.silent'], layout: 'single' })
+  if (d.silentQuestions.length) slides.push({ title: 'Nothing in your market speaks to this', keys: ['agent.silent'], layout: 'single' })
   return slides
 }

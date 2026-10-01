@@ -68,7 +68,7 @@ import { AnswerTile } from '../components/pages/agent/answer'
 import { AskBoxTile } from '../components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '../components/pages/agent/rail'
 import { ASK_TILE_ROW, AskColumns, AskShell } from '../components/pages/agent/surface'
-import { agentFixture } from '../components/pages/agent/fixture'
+import { agentFixture, sealandLongTermFixture } from '../components/pages/agent/fixture'
 import { askHistory } from '../lib/pages/agent-thread'
 import { ExportScope } from '../components/export-menu'
 import { PageTitle } from '../components/pages/studio/ui'
@@ -232,8 +232,7 @@ const agentIndex = (open: boolean, first = false) => h(PageFrame, {
 
 /** app/dashboard/agent/[id]/page.tsx, the question branch, on the fixture's
  *  measured thread. */
-const agentThread = () => {
-  const data = agentFixture()
+const agentThread = (data = agentFixture()) => {
   const planLimit = 'PDF, up to 4 MB'
   const rail = h(Fragment, null,
     h(EarlierQuestionsTile, { history: data.history, row: ASK_TILE_ROW, openThread: true }),
@@ -242,8 +241,7 @@ const agentThread = () => {
   const column = h(Fragment, null,
     h(AskBoxTile, { basis: data.basis, plan: data.planChip, row: ASK_TILE_ROW, composer: h(AgentComposer, { canSend: true, planLimit }) }),
     ...data.turns.map((turn, i) => h(AnswerTile, {
-      key: i, turn, turnIndex: i, measure: data.measure, citations: data.citations, basis: data.basis, row: ASK_TILE_ROW,
-      prevUpdateAt: i > 0 ? data.turns[i - 1].updateAt : undefined, about: i === 0 ? data.about : undefined,
+      key: i, turn, turnIndex: i, measure: data.measure, row: ASK_TILE_ROW, about: i === 0 ? data.about : undefined,
     })),
     h('div', { className: 'w-full pt-1' },
       h(AgentComposer, { canSend: true, threadId: data.threadId, placeholder: 'Ask a follow-up in this thread', window: data.window ?? undefined, planLimit })),
@@ -275,7 +273,8 @@ const PAGES: Page[] = [
   { key: 'agent', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(false) },
   { key: 'agent-first', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(false, true) },
   { key: 'agent-history', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(true) },
-  { key: 'agent-thread', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: agentThread },
+  { key: 'agent-thread', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentThread() },
+  { key: 'agent-thread-live', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentThread(sealandLongTermFixture()) },
   {
     key: 'studio', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html',
     page: () => h('div', { className: 'flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]' },

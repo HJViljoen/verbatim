@@ -19,17 +19,37 @@ const slide = (d: AgentThreadData, key: string) => {
   return renderText(r!.render(d, 'print'))
 }
 
-describe('the deck prints a voice’s English under it', () => {
-  // Sweep 2026-09-24: the PDF printed a quote's raw words alone, so a
-  // non-English voice read untranslated on paper and translated on screen.
-  it('stamps the language and prints the English beneath the original', () => {
-    const d = agentFixture()
-    const q = d.turns[0].answer!.grounded[0].quotes[0]
-    Object.assign(q, { text: '기내반입되나요??', lang: 'ko', english: 'Is it allowed as carry-on luggage??' })
-    const text = slide(d, 'agent.turn:0:0')
-    expect(text).toContain('기내반입되나요??')
-    expect(text).toContain('Korean · machine translation')
-    expect(text).toContain('Is it allowed as carry-on luggage??')
+describe('the deck in the screen’s order, with no quotes (1 Oct)', () => {
+  // Heinrich: "What I'd do" under the answer and above "What people said", and
+  // no quotes register. The deck and the PNG card follow the screen.
+  const d = agentFixture()
+
+  it('opens on the question and the answer, with "What I’d do" on the same sheet when both are short', () => {
+    const slides = agentPage.slides(d, 'default')
+    expect(slides[0].keys).toEqual(['agent.turn:0:lead', 'agent.turn:0:do'])
+    expect(slides[1].keys).toEqual(['agent.turn:0:0'])
+    expect(slide(d, 'agent.turn:0:lead')).toContain('Durability')
+    expect(slide(d, 'agent.turn:0:do')).toContain('What I’d do')
+    expect(slide(d, 'agent.turn:0:do')).toContain('Based on finding 1.')
+  })
+
+  it('gives "What I’d do" a sheet of its own when the two are long', () => {
+    const long = agentFixture({
+      turns: [{ ...d.turns[0], answer: { ...d.turns[0].answer!, judgement: [1, 2, 3].map(() => ({ text: 'x'.repeat(500), basedOn: ['G1'] })) } }],
+    })
+    expect(agentPage.slides(long, 'default').slice(0, 2).map((s) => s.keys)).toEqual([['agent.turn:0:lead'], ['agent.turn:0:do']])
+  })
+
+  it('prints no quote, no appendix of them and no update line', () => {
+    const all = agentPage.slides(d, 'default').flatMap((s) => s.keys).map((k) => slide(d, k)).join(' ')
+    expect(all).not.toContain('Three winters on the bike')
+    expect(agentPage.slides(d, 'default').flatMap((s) => s.keys).some((k) => k.startsWith('agent.citations'))).toBe(false)
+    expect(all).not.toMatch(/update of|Answered against/)
+    // The PNG card too.
+    const card = slide(d, 'agent.answer:0')
+    expect(card).not.toContain('Three winters on the bike')
+    expect(card.indexOf('What I’d do')).toBeGreaterThan(card.indexOf('Durability'))
+    expect(card.indexOf('What people said')).toBeGreaterThan(card.indexOf('What I’d do'))
   })
 })
 
@@ -43,10 +63,14 @@ describe('the deck prints the screen’s figures', () => {
     expect(text).not.toMatch(/\d+ conversations?\b/)
   })
 
-  it('says a point has no reading rather than printing a count instead', () => {
+  it('prints no count where nothing measured a point, and no line about it (§0a)', () => {
     const text = slide(refusedFixture(), 'agent.turn:0:0')
-    expect(text).toContain('no month reading behind this')
+    expect(text).not.toContain('no month reading')
     expect(text).not.toMatch(/\d+ conversations?\b/)
+  })
+
+  it('prints each level’s base as the screen does', () => {
+    expect(slide(measured, 'agent.turn:0:0')).toContain('in your market in September, not counting the videos about brands you track')
   })
 
   it('resolves a follow-up’s level by its OWN turn', () => {

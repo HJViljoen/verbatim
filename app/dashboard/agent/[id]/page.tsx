@@ -179,12 +179,6 @@ export default async function AgentThreadPage({
               turn={turn}
               turnIndex={i}
               measure={data.measure}
-              citations={data.citations}
-              basis={data.basis}
-              // AS3 where it CHANGES, not under every answer — a five-turn
-              // thread answered inside one week printed the same two-line mono
-              // paragraph five times (`AnswerTile.prevUpdateAt`).
-              prevUpdateAt={i > 0 ? data.turns[i - 1].updateAt : undefined}
               row={ASK_TILE_ROW}
               // What the question NAMES, read on the market (WP3.9): a
               // subject's own figure and trail, under the first answer.

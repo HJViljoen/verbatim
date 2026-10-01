@@ -4,13 +4,12 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import type { MonthPoint, MonthSeries } from '../reading/series'
 import {
   DECLINED_WHY,
-  FALLBACK_NOTE,
   INTERPRETATION_CAVEAT,
   NOT_ANSWERED_HREF,
-  POINT_REMOVED_NOTE,
-  POINT_REPLACED_NOTE,
   TOO_FEW,
   answerFallback,
+  findingBase,
+  findingSentence,
   loadNotAnswered,
   magnitudeWords,
   measureAnswer,
@@ -300,7 +299,7 @@ describe('scrubThreadAnswer', () => {
     expect(out.scrub).toEqual({ dropped: 2, droppedDigits: 2, droppedDirection: 0, magnitude: 0, leaked: true })
   })
 
-  it('never leaves an evidence card blank: an emptied point gets the reading', () => {
+  it('never leaves a measured evidence card blank: an emptied point gets the plain finding', () => {
     // "3D printing" is the production case — FIGURE_RE matches the 3, the
     // allow-list's ordinal rule drops that shape, and the sentence goes.
     const answer = {
@@ -308,25 +307,27 @@ describe('scrubThreadAnswer', () => {
       grounded: [{ text: 'There is clear openness to innovation through 3D printing.', quotes: [] }],
     }
     const out = scrubThreadAnswer(answer, measure, { keyOf: () => 'G1' })
-    expect(out.grounded[0].text).not.toBe('')
-    expect(out.grounded[0].text.startsWith(POINT_REPLACED_NOTE)).toBe(true)
-    // The reading itself, with its own denominator.
-    expect(out.grounded[0].text).toContain('320 of 1,388 videos')
+    // The finding itself, with its own denominator and base, and nothing
+    // saying a sentence was replaced (§0a, 1 Oct).
+    expect(out.grounded[0].text).toBe(findingSentence(measure.findings[0]))
+    expect(out.grounded[0].text).toContain('320 of 1,388 videos in your market in September')
+    expect(out.grounded[0].text).not.toMatch(/did not measure|instead|reading/)
     expect(out.grounded[0].replaced).toBe(true)
     // A point that survived is not marked.
     expect(scrubThreadAnswer({ answer: 'x', grounded: [{ text: 'Nothing numeric here.' }] }, measure).grounded[0].replaced)
       .toBeUndefined()
   })
 
-  it('says the sentence went where there is no reading to put in its place', () => {
+  it('leaves the sentence empty, and says nothing about it, where nothing measured the point', () => {
     const nothing = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [], series: [], month: MONTH, directionWords: true })
     const out = scrubThreadAnswer(
       { answer: 'x', grounded: [{ text: 'It came up in 305 of 1,388 videos.' }] },
       nothing,
       { keyOf: () => '0:G1' },
     )
-    expect(out.grounded[0].text).toBe(POINT_REMOVED_NOTE)
-    expect(groundedFallback(null, '0:G1')).toBe(POINT_REMOVED_NOTE)
+    expect(out.grounded[0].text).toBe('')
+    expect(out.grounded[0].replaced).toBe(true)
+    expect(groundedFallback(null, '0:G1')).toBe('')
   })
 
   it('keeps a sentence naming a product whose name carries a digit', () => {
@@ -360,12 +361,31 @@ describe('scrubThreadAnswer', () => {
 })
 
 describe('answerFallback', () => {
-  it('writes the reading itself, and says that it did', () => {
+  it('writes the finding itself, plainly, and nothing about how it was made', () => {
     const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
     const text = answerFallback(m) as string
-    expect(text.startsWith(FALLBACK_NOTE)).toBe(true)
-    expect(text).toContain('320 of 1,388 videos in the category')
-    expect(text).toContain('moved (')
+    expect(text).toContain('320 of 1,388 videos in your market in September, not counting the videos about brands you track.')
+    expect(text).toMatch(/points on August, more than the usual swing of \d/)
+    expect(text).not.toMatch(/did not measure|reading|the category|band/)
+  })
+
+  it('names the base against the market where its two parts were read (1 Oct: "what is this 796")', () => {
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true, market: { category: 1388, rivalFiled: 38 } })
+    expect(m.findings[0].brandsTracked).toBe(38)
+    expect(findingBase(m.findings[0])).toBe('in your market in September, not counting the 38 about brands you track')
+    // Two reads that disagree about the category name no count.
+    const off = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true, market: { category: 1400, rivalFiled: 38 } })
+    expect(off.findings[0].brandsTracked).toBeNull()
+    expect(findingBase(off.findings[0])).toBe('in your market in September, not counting the videos about brands you track')
+    // No tracked brand at all: the category IS the market.
+    const none = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true, market: { category: 1388, rivalFiled: 0 } })
+    expect(findingBase(none.findings[0])).toBe('in your market in September')
+  })
+
+  it('writes only that turn’s findings where it is told which', () => {
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
+    expect(answerFallback(m, ['9:G9'])).toBeNull()
+    expect(answerFallback(m, [m.findings[0].findingId])).toBe(answerFallback(m))
   })
 
   it('writes nothing when nothing was measured', () => {

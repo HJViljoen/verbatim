@@ -54,7 +54,11 @@ const clean = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
  *  prose: "I don't know" is a promise about the data, and a model that phrases
  *  it freshly each time will eventually phrase it as a hedge. */
 export const SILENCE_SENTENCE =
-  'Nothing in the conversation we have analysed relates to this.'
+  'Nothing in your market speaks to this.'
+
+/** The silence sentence stored before 1 Oct, which said what we had analysed
+ *  (§0a). A thread page shows a stored answer today's sentence in its place. */
+export const SILENCE_SENTENCE_V1 = 'Nothing in the conversation we have analysed relates to this.'
 
 export function enforceRegisters(
   raw: RawAnswer,

@@ -7,6 +7,7 @@ import { proseFigures } from '../prose/figures'
 import { MAGNITUDE_RE, allowTokens, replaceOutsideQuotes, scrubProse, type ProseScrub } from '../prose/scrub'
 import { rows as readRows } from '../pages/read'
 import { audienceLabel } from '../readiness/types'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { clearsFloor, monthChange, type Direction } from '../reading/bands'
 import { joinedRun, pairTools, type PairOn } from '../reading/pairs'
 import { joins } from '../reading/comparability'
@@ -119,6 +120,27 @@ export interface FindingMeasure {
    * second line on the chart.
    */
   own?: { value: Counted; thin: boolean }
+  /**
+   * WHAT THE DENOMINATOR LEAVES OUT OF THE MARKET (1 Oct, "what's this 796
+   * number").
+   *
+   * A theme is grouped within the category (decision E: clustering runs per
+   * audience and registry matching never crosses one, so a tracked brand's
+   * videos are clustered into themes of their own and none of them is ever in
+   * a category theme's count). So a theme's n is the category's videos, 796 on
+   * Sealand in September, while every page states the market, 834: the
+   * category plus the 38 videos about a brand the client tracks. Recounting the
+   * theme over the market is not possible honestly (its k cannot include
+   * videos it was never grouped over), so the base stays the category's and is
+   * WORDED against the market: "in your market in September, not counting the
+   * 38 about brands you track" (`findingBase`).
+   *
+   * Present only where the side drawn is the category. A number where the
+   * market's two parts were read for the measured month and the category's
+   * part is this n; null where they were not, and the words then name no
+   * count.
+   */
+  brandsTracked?: number | null
   /** The banded comparison, where one was drawn. */
   verdict: Verdict | null
   /** Only where `directionWordsFor('agent.movement')` is true AND three
@@ -191,6 +213,11 @@ export interface MeasureAnswerInput {
   /** The instant the measurement is taken at: a direction word's newest month
    *  must have ended by it. */
   asOf: string
+  /** The market's two parts in the measured month (`pooledDenominators`, the
+   *  pages' own count): the category and the videos about a tracked brand.
+   *  Omit it and a category finding names no count beside "not counting the
+   *  videos about brands you track". */
+  market?: { category: number | null; rivalFiled: number | null } | null
 }
 
 /** The sentence the product owes on a judgement register. Fixed, like the
@@ -450,9 +477,18 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       measure: 'share',
     })
 
+    // The base the category's n leaves out, stated only where the market's
+    // category part IS this n: two reads that disagree name no count.
+    const brandsTracked = series.audience !== INDUSTRY_AUDIENCE
+      ? undefined
+      : input.market && input.market.rivalFiled != null && input.market.category === value.n
+        ? input.market.rivalFiled
+        : null
+
     findings.push({
       findingId: finding.findingId,
       value,
+      ...(brandsTracked !== undefined ? { brandsTracked } : {}),
       audience: series.audience,
       audienceLabel: audienceLabel(series.audience),
       label,
@@ -587,15 +623,19 @@ export interface ScrubbedAnswer<T> {
  * refuses is a number the MODEL typed inside quotation marks in its own
  * sentence — that is `dropDigitSentences`' job and it does it here.
  *
- * AND NO PROSE NODE IS LEFT EMPTY. A scrub that empties a grounded point used
- * to hand the page a numbered evidence card carrying a conversation count, a
- * quote and NO SENTENCE — a worse artefact than the unchecked prose this set
- * out to fix, and not hypothetical: one stored answer in production loses its
+ * AN EMPTIED POINT GETS THE PRODUCT'S OWN SENTENCE. A scrub that empties a
+ * grounded point used to hand the page a numbered evidence card with NO
+ * SENTENCE, and not hypothetically: one stored answer in production loses its
  * only grounded sentence to "3D printing", where the `3` is a name and the
  * allow-list cannot rescue it either (`allowTokens`' ordinal rule drops that
- * shape deliberately). An emptied point is given the READING in place of the
- * sentence, and says that it was. `keyOf` is how a point finds its own
- * measurement — `findingKey` in lib/pages/agent-thread.ts, so both ends agree.
+ * shape deliberately). Where the point was measured, its finding stands in
+ * its place as a plain sentence (`findingSentence`), and nothing on the page
+ * says a sentence was taken out: that note printed "named a figure we did not
+ * measure" over a sentence the DIRECTION rule had dropped (Sealand, 1 Oct),
+ * and either way it is our machinery, not the client's market (§0a). Where it
+ * was not measured the text is empty and the card keeps what it covers.
+ * `replaced` marks both. `keyOf` is how a point finds its own measurement —
+ * `findingKey` in lib/pages/agent-thread.ts, so both ends agree.
  */
 export function scrubThreadAnswer<T extends { text: string }>(
   answer: { answer: string; grounded: T[] },
@@ -635,62 +675,81 @@ export function askAllowList(texts: readonly (string | null | undefined)[]): str
   return allowTokens(texts.filter((t): t is string => Boolean(t)))
 }
 
-/** What the page says when the scrubbers empty an answer's own sentences. The
- *  saying-so is the honest half: a reader who cannot tell our sentence from the
- *  model's cannot calibrate either (lib/prose/interpret.ts's rule, one surface
- *  over). */
-export const FALLBACK_NOTE = 'The answer’s own sentences named figures we did not measure, so this is the reading itself.'
+/**
+ * The words a finding's level is stated against: where its videos are, and
+ * which month. Shared by the screen, the deck and the product's own sentence,
+ * so the three cannot name one base three ways.
+ *
+ * THE CATEGORY IS WORDED AGAINST THE MARKET (see `brandsTracked`): a reader
+ * who has just read "834 videos in your market in September" on the Dashboard
+ * meets "13 of 796" here, and the clause after it is what makes the two add
+ * up. Plain words only: no "category", no "reading", nothing about how the
+ * count was made (§0a).
+ */
+export function findingBase(f: Pick<FindingMeasure, 'audience' | 'audienceLabel' | 'brandsTracked' | 'verdict'>, month?: string): string {
+  const when = longMonth(month ?? f.verdict?.window.from ?? '')
+  if (f.audience === INDUSTRY_AUDIENCE) {
+    const b = f.brandsTracked
+    if (b === 0) return `in your market in ${when}`
+    return b == null
+      ? `in your market in ${when}, not counting the videos about brands you track`
+      : `in your market in ${when}, not counting the ${fmtInt(b)} about brands you track`
+  }
+  if (f.audience === CLIENT_AUDIENCE) return `in your own audience in ${when}`
+  return `about ${f.audienceLabel} in ${when}`
+}
 
-/** The same sentence for ONE evidence card, where the card's own sentence is
- *  gone and the reading takes its place. */
-export const POINT_REPLACED_NOTE = 'The sentence here named a figure we did not measure, so this is the reading instead:'
+/**
+ * One finding, as the product states it for itself: what it is about, its
+ * level with its own base, and the comparison only where one was drawn and
+ * answered. A plain finding and nothing about how it was made: no note that a
+ * sentence was replaced, no "too few", no refusal (§0a). The digits are
+ * code's.
+ *
+ * The label leads and a colon follows, because a theme's label is model
+ * prose of any shape ("Is the premium worth it", "Buy less, make it better")
+ * and a sentence built around it reads wrong for half of them.
+ */
+export function findingSentence(f: FindingMeasure): string {
+  const { label, level, base, after } = findingSentenceParts(f)
+  return `${label}: ${fmtInt(level.k)} of ${fmtInt(level.n)} videos ${base}.${after}`
+}
 
-/** And where there is no reading either — the answer's sentence is gone, the
- *  quotes under it are not, and the card says which. It is deliberately not an
- *  apology: the voices below are still the evidence the point rested on, and
- *  they are a commenter's own words either way. */
-export const POINT_REMOVED_NOTE =
-  'The sentence here named a figure we did not measure and was removed. The voices below are what the point rested on.'
-
-/** One finding, as the product states it for itself: the level with its own
- *  denominator, then the banded comparison beside it. */
-function findingLine(f: FindingMeasure): string {
+/** `findingSentence` in its parts, for a surface that sets them apart: the
+ *  theme's label (model prose, which it marks as its slot's), the counted
+ *  pair (which it draws as the level it is), the base, and the comparison
+ *  after the full stop, where one was drawn and answered ('' otherwise). */
+export function findingSentenceParts(f: FindingMeasure): { label: string; level: Counted; base: string; after: string } {
+  const parts = { label: f.label, level: f.value, base: findingBase(f) }
   const v = f.verdict
-  const level = `${f.label}: ${fmtInt(f.value.k)} of ${fmtInt(f.value.n)} videos in ${f.audienceLabel.toLowerCase()}`
-  // A refused comparison is not mentioned at all (T0a): the level alone.
-  if (v && !priorPrintable(v)) return `${level}.`
-  // A thin pair the judge accepted is "too few", never "no clear change" with
-  // the change the band withholds beside it (T0a review, finding 1).
-  if (!v || !isAnswer(v.state) || v.changePts == null || v.bandPts == null) return `${level}, ${TOO_FEW} with the month before.`
+  if (!v || !priorPrintable(v) || !isAnswer(v.state) || v.changePts == null || v.bandPts == null || !v.basis?.from) return { ...parts, after: '' }
+  const prev = longMonth(v.basis.from)
+  if (v.state !== 'moved') return { ...parts, after: ` About where it was in ${prev}.` }
   const sign = v.changePts > 0 ? '+' : ''
-  return `${level}, ${v.state === 'moved' ? 'moved' : 'no clear change'} (${sign}${v.changePts} pts, band ${v.bandPts} pts).`
+  return { ...parts, after: ` ${sign}${v.changePts} points on ${prev}, more than the usual swing of ${v.bandPts}.` }
 }
 
 /**
  * The answer the product writes for itself when nothing of the model's
- * survives.
- *
- * Composed from the verdicts alone, and the digits in it are CODE's — the rule
- * is about a figure a model typed, not about a figure the product counted. Null
- * where nothing was measured either, which is a page with an empty state rather
- * than a page with a sentence about nothing.
+ * survives: its own sentence for each finding of THAT turn (`findingIds`; the
+ * whole thread's when omitted), at most three. Null where nothing was
+ * measured, which is a page with no lead rather than a sentence about nothing.
  */
-export function answerFallback(measure: AnswerMeasure): string | null {
-  if (measure.findings.length === 0) return null
-  return [FALLBACK_NOTE, ...measure.findings.slice(0, 3).map(findingLine)].join(' ')
+export function answerFallback(measure: AnswerMeasure, findingIds?: readonly string[]): string | null {
+  const own = findingIds ? measure.findings.filter((f) => findingIds.includes(f.findingId)) : measure.findings
+  if (own.length === 0) return null
+  return own.slice(0, 3).map(findingSentence).join(' ')
 }
 
 /**
- * What ONE evidence card says when the scrubbers empty its sentence.
- *
- * Never empty, which is the whole reason it exists. Where the card's own
- * finding was measured the reading stands in its place; where it was not, the
- * card says the sentence was removed and leaves the quotes to speak, which they
- * can — they are the commenter's own words and were never scrubbed.
+ * What ONE evidence card says when the scrubbers empty its sentence: the
+ * product's own sentence for the card's finding, where it was measured. Where
+ * it was not, nothing: the card keeps what it covers and says no more, and
+ * nothing on it says a sentence was taken out (§0a).
  */
 export function groundedFallback(measure: AnswerMeasure | null, findingId: string): string {
   const f = measure?.findings.find((x) => x.findingId === findingId)
-  return f ? `${POINT_REPLACED_NOTE} ${findingLine(f)}` : POINT_REMOVED_NOTE
+  return f ? findingSentence(f) : ''
 }
 
 // ── What was not answered, and what the workspace may still spend ───────────
@@ -710,8 +769,8 @@ export interface NotAnswered {
  *  real results rather than failures: the corpus genuinely does not speak to
  *  some questions, and it structurally cannot see a client's own numbers. */
 export const DECLINED_WHY = {
-  silent: 'nothing in the conversation we read speaks to this',
-  out_of_corpus: 'this asks about your own numbers, which we do not read',
+  silent: 'nothing in your market speaks to this',
+  out_of_corpus: 'this asks about your own numbers, which are not public',
   /** The answer's own words since the evidence floor (walkthrough item 4,
    *  `tooLittleToAnswer`): nothing it found had enough videos behind it. */
   too_little: 'there is too little in your market about this to answer it',

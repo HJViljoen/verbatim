@@ -29,7 +29,6 @@ vi.mock('../../agent/answer', () => ({
 }))
 
 import { fakeDb } from '../../test/fake-db'
-import { POINT_REMOVED_NOTE } from '../../agent/measure'
 import { runResearch } from './research'
 
 describe('the brief research path: the Ask page’s measurement and scrub (WP3.9)', () => {
@@ -46,9 +45,9 @@ describe('the brief research path: the Ask page’s measurement and scrub (WP3.9
     expect(a.answer).toBe('People ask which bag fits the cabin.')
     expect(a.answer).not.toMatch(/growing/)
     const [g1, g2] = a.grounded
-    // The point whose only sentence named a figure keeps its voices and says
-    // why its sentence is gone.
-    expect(g1.text).toBe(POINT_REMOVED_NOTE)
+    // The point whose only sentence named a figure keeps its voices; nothing
+    // measured it, so it has no sentence, and nothing says why (§0a).
+    expect(g1.text).toBe('')
     expect(g1.replaced).toBe(true)
     expect(g1.quotes).toHaveLength(1)
     expect(g1.registryIds).toEqual(['reg-airline'])

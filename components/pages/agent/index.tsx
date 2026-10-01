@@ -2,36 +2,32 @@ import type { ReactNode } from 'react'
 import { weekdayDate } from '@/lib/format'
 import type { Verdict } from '@/lib/ask/types'
 import {
-  agentThreadSlides, loadAgentThread, documentPages, findingKey, CITATIONS_PER_SLIDE, GROUNDED_PER_SLIDE,
+  agentThreadSlides, loadAgentThread, documentPages, findingKey, CLAIMS_PER_SLIDE, GROUNDED_PER_SLIDE,
   type AgentThreadData, type ThreadAnswer, type Turn,
 } from '@/lib/pages/agent-thread'
 import { fmtInt } from '@/lib/format'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
-import type { AnswerMeasure, FindingMeasure } from '@/lib/agent/measure'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
+import { findingBase, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
+import { DO_HEADING, JUDGEMENT_HEADING, NEAREST_HEADING, basedOnLine, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
 import { surface } from '@/lib/nav'
 import { translationLabel, translationNote } from '@/components/quote-block'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
-// mode: the question, the answer, "what your customers said" with a
-// superscript per quote, then the evidence appendix — every quoted voice
-// with platform · date · link — and, honestly, the questions nothing in the
-// data spoke to. Document mode: the client's own brief with the verdicts in
-// the margin, then claim by claim, then the agent's reading.
+// mode, in the screen's order (1 Oct): the question and the answer, "What I'd
+// do", then "What people said", then anything not asked but close. Document
+// mode: the client's own brief with the verdicts in the margin, then claim by
+// claim, then the agent's reading.
 //
-// The three registers keep their words: what the customers said · not what you
-// asked, but close · what I'd take from that. A reader must never mistake the
-// third for the first.
+// THE SCREEN'S WORDS AND NOTHING ELSE (§0a, 1 Oct): no "Answered against the
+// update of", no line where a point was not measured, a replaced point as the
+// product's plain finding, and no quotes and no appendix of them (Heinrich:
+// "What people said" is the evidence). A reader must still never mistake "What
+// I'd do" for a finding: it carries the screen's own trace to the findings.
 //
-// EVERY FIGURE ON THIS DECK IS THE SCREEN'S FIGURE (E-ask fix pass). Each
-// grounded point printed `conversationCount` — a retrieval count with no
-// denominator, in the noun AGENTS.md reserves for the legacy pages — while the
-// screen beside it printed the month table's k with its n. The route that
-// mounts Export says in its own header that what leaves as a PDF is what is on
-// screen, so the level comes off `AnswerMeasure`, resolved BY TURN through
-// `findingKey`, and a point nothing measured says so rather than printing a
-// count instead.
+// EVERY FIGURE ON THIS DECK IS THE SCREEN'S FIGURE (E-ask fix pass). The level
+// comes off `AnswerMeasure`, resolved BY TURN through `findingKey`, with the
+// screen's own base words (`findingBase`).
 
 type D = AgentThreadData
 
@@ -51,31 +47,16 @@ function Question({ t, first, d }: { t: Turn; first: boolean; d: D }) {
       {!first && <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Follow-up</p>}
       <p className="font-serif text-[19px] font-medium leading-snug [text-wrap:pretty]">{t.question}</p>
       <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{d.brand} · {weekdayDate(t.askedAt)}</p>
-      {/* AS3 on the artefact. A deck that leaves the building carries what it
-          was answered against, or a reader six weeks later has no way to know
-          which update — or how much of the corpus — is behind it. */}
-      <p className="mt-1 font-mono text-[9.5px] text-muted-foreground">{askBasisLine({ ...d.basis, updateAt: t.updateAt }, { asked: true })}</p>
     </div>
   )
 }
 
 /**
- * A finding's level ON PAPER — the same counted pair the screen prints.
- *
- * WHAT THIS REPLACED, AND WHY IT HAD TO. This slide printed
- * `GroundedPoint.conversationCount` as "130 conversations": a bare retrieval
- * count with no denominator, in the one noun AGENTS.md reserves for the legacy
- * pages that still compute it, and the exact figure `AnswerFooter`'s own
- * docstring says must never be used. The route that mounts Export states in its
- * header that "what leaves as a PDF is what is on screen" — and the screen
- * prints the month table's k with its n. A deck that disagrees with the screen
- * about one answer is worse than a deck with no figure on it.
+ * A finding's level ON PAPER — the same counted pair the screen prints, with
+ * the screen's base words under the sentence (`findingBase`): "13 of 796" alone
+ * beside a Dashboard that says 834 is the question Heinrich asked (1 Oct).
  */
-function Level({ f }: { f: FindingMeasure | null }) {
-  if (!f) {
-    // Absent, not zero — the screen's own sentence for the same state.
-    return <span className="shrink-0 font-mono text-[10px] text-muted-foreground">no month reading behind this</span>
-  }
+function Level({ f }: { f: FindingMeasure }) {
   return (
     <span data-copy="level" className="shrink-0 font-mono text-[10.5px] text-foreground tabular-nums">
       {fmtInt(f.value.k)} of {fmtInt(f.value.n)} videos
@@ -88,7 +69,44 @@ function Level({ f }: { f: FindingMeasure | null }) {
 const levelFor = (measure: AnswerMeasure | null, turnIndex: number, id: string): FindingMeasure | null =>
   measure?.findings.find((x) => x.findingId === findingKey(turnIndex, id)) ?? null
 
-function AnswerBody({ a, from, to, measure, turnIndex }: {
+/** The answer itself: the notice, then the model's paragraph or, instead of
+ *  it and never beside it, the product's own sentence. */
+function Lead({ a }: { a: ThreadAnswer }) {
+  return (
+    <div className="space-y-4">
+      {a.notice && <p className="rounded-lg border border-dashed border-border/60 px-4 py-3 text-[12.5px] text-muted-foreground">{a.notice}</p>}
+      {a.answer.trim() !== ''
+        ? <p data-copy="prose" className="text-[15px] leading-relaxed text-foreground">{a.answer}</p>
+        : a.fallback ? <p className="text-[15px] leading-relaxed text-foreground">{a.fallback}</p> : null}
+    </div>
+  )
+}
+
+/** "What I'd do", as the screen draws it: under the answer, each entry with
+ *  its trace to the findings (on the sheets after it, so no "below"). */
+function DoBody({ a }: { a: ThreadAnswer }) {
+  if (a.judgement.length === 0) return null
+  const numberOf = new Map(a.grounded.map((g, i) => [g.id, i + 1]))
+  return (
+    <section className="mt-5 space-y-3">
+      <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{DO_HEADING}</h3>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg bg-muted p-3">
+        {a.judgement.map((j, i) => {
+          const cites = j.basedOn.map((r) => numberOf.get(r)).filter((n): n is number => !!n).sort((x, y) => x - y)
+          return (
+            <div key={i} className="space-y-1">
+              <p data-copy="prose" className="text-[13px] leading-snug text-foreground/85">{j.text}</p>
+              <p className="text-[10.5px] text-muted-foreground">{basedOnLine(cites, null)}</p>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/** "What people said": the findings, with no quotes under them (1 Oct). */
+function FindingsBody({ a, from, to, measure, turnIndex }: {
   a: ThreadAnswer
   from: number
   to: number
@@ -96,113 +114,63 @@ function AnswerBody({ a, from, to, measure, turnIndex }: {
   turnIndex: number
 }) {
   const points = a.grounded.slice(from, to)
+  if (points.length === 0) return null
   return (
-    <div className="space-y-4">
-      {from === 0 && a.notice && <p className="rounded-lg border border-dashed border-border/60 px-4 py-3 text-[12.5px] text-muted-foreground">{a.notice}</p>}
-      {/* Instead of, never beside — see AgentAnswerView. A deck that leaves the
-          building may not carry a blank where the answer was. */}
-      {from === 0 && a.answer.trim() !== '' && <p className="text-[15px] leading-relaxed text-foreground">{a.answer}</p>}
-      {from === 0 && a.answer.trim() === '' && a.fallback && <p className="text-[15px] leading-relaxed text-muted-foreground">{a.fallback}</p>}
-      {points.length > 0 && (
-        <section className="space-y-3">
-          {/* The heading FOLLOWS THE EVIDENCE, as it does on screen. It was
-              hard-coded here while the field that decides it travelled through
-              the loader untouched — so the one renderer that leaves the
-              building was the one that could print "your customers" over
-              another brand's audience. Judged over the whole answer, not over
-              this slide's two points, or a spill onto page two could disagree
-              with page one about whose customers spoke. */}
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{saidHeading(a.grounded)}{from > 0 ? ' (continued)' : ''}</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {points.map((p, i) => (
-              <div key={p.id} className="space-y-2 rounded-lg bg-inner p-3">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="min-w-0 flex-1 text-[13px] leading-snug"><span className="mr-2 font-mono text-[10.5px] font-semibold text-muted-foreground">{from + i + 1}</span>{p.text}</p>
-                  <Level f={levelFor(measure, turnIndex, p.id)} />
-                </div>
-                {p.quotes.map((q) => (
-                  <blockquote key={q.n} className="font-serif text-[12.5px] leading-[1.45] text-foreground">“{q.text}”<Sup n={q.n} /><PdfEnglish q={q} /></blockquote>
-                ))}
-                {p.themeRefs.length > 0 && <p className="text-[10.5px] text-muted-foreground">{p.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}</p>}
+    <section className="space-y-3">
+      {/* The heading FOLLOWS THE EVIDENCE, as it does on screen, judged over
+          the whole answer so a spill onto the next sheet cannot disagree with
+          the first about whose customers spoke. */}
+      <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{saidHeading(a.grounded)}{from > 0 ? ' (continued)' : ''}</h3>
+      <div className="grid grid-cols-2 gap-3">
+        {points.map((p, i) => {
+          const f = levelFor(measure, turnIndex, p.id)
+          // A replaced point's sentence is its level and base already.
+          const measured = f && !p.replaced ? f : null
+          const labels = p.themeRefs.map((t) => t.label).filter(Boolean)
+          return (
+            <div key={p.id} className="space-y-1.5 rounded-lg bg-inner p-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="min-w-0 flex-1 text-[13px] leading-snug"><span className="mr-2 font-mono text-[10.5px] font-semibold text-muted-foreground">{from + i + 1}</span><span data-copy={p.replaced ? undefined : 'prose'}>{p.text}</span></p>
+                {measured ? <Level f={measured} /> : null}
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  )
-}
-
-function MoreBody({ a }: { a: ThreadAnswer }) {
-  const numberOf = new Map(a.grounded.map((g, i) => [g.id, i + 1]))
-  return (
-    <div className="grid h-full min-h-0 grid-cols-2 gap-8">
-      {a.nearest.length > 0 && (
-        <section className="space-y-3">
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{NEAREST_HEADING}</h3>
-          {a.nearest.map((n, i) => (
-            // NO FIGURE ON A NEAREST POINT. It is not a finding, nothing
-            // measured it, and the count that used to sit here was the same
-            // denominator-less retrieval figure. The screen prints none either.
-            <div key={i} className="rounded-lg border border-dashed border-border/60 p-3">
-              <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground/90">{n.text}</p>
+              {measured ? <p data-copy="figure" className="font-mono text-[10px] text-muted-foreground">{findingBase(measured)}</p> : null}
+              {labels.length > 0 && <p className="text-[10.5px] text-muted-foreground">Covers: <span data-copy="subject" data-slot="pass_b_theme">{labels.join(' · ')}</span></p>}
             </div>
-          ))}
-        </section>
-      )}
-      {a.judgement.length > 0 && (
-        <section className="space-y-3">
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{JUDGEMENT_HEADING}</h3>
-          <div className="space-y-3 rounded-lg bg-muted p-3">
-            {a.judgement.map((j, i) => {
-              const cites = j.basedOn.map((r) => numberOf.get(r)).filter((n): n is number => !!n).sort((x, y) => x - y)
-              return (
-                <div key={i} className="space-y-1">
-                  <p className="text-[13px] leading-snug text-foreground/85">{j.text}</p>
-                  <p className="text-[10.5px] text-muted-foreground">{cites.length ? `Reasoning from ${cites.length === 1 ? 'finding' : 'findings'} ${cites.join(', ')}.` : 'Not drawn from any single finding. This one is inference.'}</p>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-    </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
-function Citations({ d, from, to }: { d: D; from: number; to: number }) {
-  const rows = d.citations.slice(from, to)
+function NearestBody({ a }: { a: ThreadAnswer }) {
+  if (a.nearest.length === 0) return null
   return (
-    <div className="grid h-full min-h-0 grid-cols-3 gap-x-6 gap-y-3 content-start">
-      {rows.map((c) => (
-        <div key={c.n} className="flex gap-2 text-[12px] leading-[1.4]">
-          <span className="w-5 shrink-0 font-mono text-[10.5px] text-muted-foreground">{c.n}</span>
-          <div className="min-w-0">
-            <p className="font-serif text-foreground">“{c.text}”</p>
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-              {/* The screen's own rendering, through the shared helper: this
-                  appendix printed the stored `2026-08-30` while the answer on
-                  screen said "30 Aug" for the same numbered quote. */}
-              {citationWhere(c) || 'source on file'}
-              {c.href && <> · <a href={c.href} className="underline decoration-dotted underline-offset-2">{citationDestination(c)}</a></>}
-            </p>
-          </div>
+    <section className="max-w-[46rem] space-y-3">
+      <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{NEAREST_HEADING}</h3>
+      {a.nearest.map((n, i) => (
+        // NO FIGURE ON A NEAREST POINT. It is not a finding and nothing
+        // measured it. The screen prints none either.
+        <div key={i} className="rounded-lg border border-dashed border-border/60 p-3">
+          <p data-copy="prose" className="min-w-0 flex-1 text-[13px] leading-snug text-foreground/90">{n.text}</p>
         </div>
       ))}
-    </div>
+    </section>
   )
 }
 
 function Silent({ d }: { d: D }) {
   return (
     <div className="max-w-[46rem] space-y-4">
-      <p className="text-[13px] text-secondary-foreground">The conversation analysed for {d.brand} did not speak to these.</p>
+      <p className="text-[13px] text-secondary-foreground">Nothing in {d.brand}&rsquo;s market speaks to these questions.</p>
       <ul className="space-y-2">
         {d.silentQuestions.map((q, i) => <li key={i} className="font-serif text-[15px] leading-snug">“{q}”</li>)}
       </ul>
     </div>
   )
 }
+
+const NO_ANSWER = 'That question did not get an answer. Asking it again is safe.'
 
 /** The client's brief with the verdicts in the margin. */
 function DocumentPage({ d, page }: { d: D; page: number }) {
@@ -265,7 +233,7 @@ function DocumentPage({ d, page }: { d: D; page: number }) {
 
 function ClaimsPage({ d, page }: { d: D; page: number }) {
   const doc = d.document!
-  const claims = doc.claims.slice(page * GROUNDED_PER_SLIDE, page * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE)
+  const claims = doc.claims.slice(page * CLAIMS_PER_SLIDE, page * CLAIMS_PER_SLIDE + CLAIMS_PER_SLIDE)
   return (
     <div className="grid h-full min-h-0 grid-cols-2 gap-4 content-start">
       {claims.map((c) => {
@@ -314,41 +282,52 @@ function DocJudgement({ d }: { d: D }) {
   )
 }
 
-/** One answer as a standalone card (PNG export): the question and the whole answer. */
+/** One answer as a standalone card (PNG export): the question and the whole
+ *  answer, in the screen's order. */
 function AnswerCard({ d, turn }: { d: D; turn: number }) {
   const t = d.turns[turn]
   if (!t) return null
   return (
     <div data-tile="" style={{ '--vb-span': 8 } as React.CSSProperties} className="space-y-4 rounded-lg bg-tile p-6">
       <Question t={t} first={turn === 0} d={d} />
-      {t.answer ? <AnswerBody a={t.answer} from={0} to={t.answer.grounded.length} measure={d.measure} turnIndex={turn} /> : <p className="text-[13px]">{t.prose}</p>}
-      {t.answer && t.answer.judgement.length > 0 && <MoreBody a={{ ...t.answer, nearest: [] }} />}
-      <p className="border-t border-border/70 pt-2 font-mono text-[9.5px] text-muted-foreground">Prepared by {d.brand} · with Verbatim · quoted voices are real comments, on file</p>
+      {t.answer ? (
+        <>
+          <Lead a={t.answer} />
+          <DoBody a={t.answer} />
+          <FindingsBody a={t.answer} from={0} to={t.answer.grounded.length} measure={d.measure} turnIndex={turn} />
+        </>
+      ) : <p className="text-[13px]">{t.prose ?? NO_ANSWER}</p>}
+      <p className="border-t border-border/70 pt-2 font-mono text-[9.5px] text-muted-foreground">Prepared by {d.brand} · with Verbatim</p>
     </div>
   )
 }
 
-/** Keys are computed (`agent.turn:<i>:<p>`, `agent.citations:<c>`, …), so a
- *  Proxy resolves them; the static map lists what is stable. */
+/** Keys are computed (`agent.turn:<i>:<part>`, …), so a Proxy resolves them.
+ *  A turn's parts, in order: `lead` (the question and the answer), `do`
+ *  ("What I'd do"), `0`, `1`, … (the findings, `GROUNDED_PER_SLIDE` a sheet)
+ *  and `more` (not what was asked, but close). */
 function resolve(key: string): Renderable<D> | undefined {
   const mk = (title: string, render: (d: D) => ReactNode): Renderable<D> => ({ key, title, render })
   let m: RegExpExecArray | null
-  if ((m = /^agent\.turn:(\d+):(\d+|more)$/.exec(key))) {
+  if ((m = /^agent\.turn:(\d+):(lead|do|\d+|more)$/.exec(key))) {
     const i = Number(m[1]); const part = m[2]
     return mk('Answer', (d) => {
       const t = d.turns[i]; if (!t) return null
-      if (part === 'more') return t.answer ? <MoreBody a={t.answer} /> : null
+      if (part === 'more') return t.answer ? <NearestBody a={t.answer} /> : null
+      if (part === 'do') return t.answer ? <DoBody a={t.answer} /> : null
+      if (part === 'lead') {
+        return (
+          <div className="min-h-0 overflow-hidden">
+            <Question t={t} first={i === 0} d={d} />
+            {t.answer ? <Lead a={t.answer} /> : <p className="text-[13px]">{t.prose ?? NO_ANSWER}</p>}
+          </div>
+        )
+      }
       const p = Number(part)
-      return (
-        <div className="min-h-0 overflow-hidden">
-          {p === 0 && <Question t={t} first={i === 0} d={d} />}
-          {t.answer ? <AnswerBody a={t.answer} from={p * GROUNDED_PER_SLIDE} to={p * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE} measure={d.measure} turnIndex={i} /> : <p className="text-[13px]">{t.prose ?? 'That question did not get an answer. Something went wrong on our side rather than in the data.'}</p>}
-        </div>
-      )
+      return t.answer ? <FindingsBody a={t.answer} from={p * GROUNDED_PER_SLIDE} to={p * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE} measure={d.measure} turnIndex={i} /> : null
     })
   }
-  if ((m = /^agent\.citations:(\d+)$/.exec(key))) { const c = Number(m[1]); return mk('Evidence', (d) => <Citations d={d} from={c * CITATIONS_PER_SLIDE} to={c * CITATIONS_PER_SLIDE + CITATIONS_PER_SLIDE} />) }
-  if (key === 'agent.silent') return mk('Nothing in the data speaks to this', (d) => <Silent d={d} />)
+  if (key === 'agent.silent') return mk('Nothing in your market speaks to this', (d) => <Silent d={d} />)
   if ((m = /^agent\.doc:(\d+)$/.exec(key))) { const p = Number(m[1]); return mk('The brief, checked', (d) => (d.document ? <DocumentPage d={d} page={p} /> : null)) }
   if ((m = /^agent\.claims:(\d+)$/.exec(key))) { const p = Number(m[1]); return mk('Claim by claim', (d) => (d.document ? <ClaimsPage d={d} page={p} /> : null)) }
   if (key === 'agent.judgement') return mk(JUDGEMENT_HEADING, (d) => (d.document ? <DocJudgement d={d} /> : null))

@@ -91,7 +91,7 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2, openThread = 
   )
 }
 
-/** The swatch each row of "What an answer reads" carries: the market in the
+/** The swatch each row of "What answers cover" carries: the market in the
  *  main ink (decision K), the brands you track in theirs, your own posts in
  *  yours. */
 const READ_SWATCH: Record<AskReads['rows'][number]['key'], string> = {
@@ -112,16 +112,20 @@ const READ_SWATCH: Record<AskReads['rows'][number]['key'], string> = {
  * on, and the first pair read the same way. Every count is the pooled market's
  * own (decision E), one denominator a line.
  *
- * TITLE ALONE, LINK ALONE (25 Sep rulings). Nothing sits beside the title and
- * the footer is one link, to where the method is said in full.
+ * TITLE ALONE (25 Sep rulings). Nothing sits beside the title.
+ *
+ * WHAT ANSWERS COVER, NOT HOW WE READ (§0a, 1 Oct). It was "What an answer
+ * reads", with "What we read, and how →" to the method page (operator-only
+ * since the pages build) and the months read and the first comparison "read
+ * the same way" under the counts. The counts stay: they are what a finding's
+ * base adds up to (796 + 38 = 834, the Dashboard's figure).
  */
 export function ReadsTile({ reads, col = 12, row = 2 }: { reads: AskReads; col?: number; row?: number }) {
   return (
     <Tile
       col={col}
       row={row}
-      eyebrow="What an answer reads"
-      footer={<Link href={HOW_TO_READ_HREF} className="hover:underline">What we read, and how →</Link>}
+      eyebrow="What answers cover"
       distribute="between"
     >
       <p className="m-0 text-[13px] text-foreground">Your market, not only your own posts.</p>
@@ -154,10 +158,6 @@ export function ReadsTile({ reads, col = 12, row = 2 }: { reads: AskReads; col?:
     </Tile>
   )
 }
-
-/** Where "What we read, and how →" goes: Settings › How to read, where the
- *  method is said in full (25 Sep rulings: that is its job, not a footnote's). */
-export const HOW_TO_READ_HREF = '/dashboard/settings/how-to-read'
 
 /**
  * "Not answered this month".

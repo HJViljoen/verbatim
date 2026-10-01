@@ -61,11 +61,11 @@ describe('agent thread data', () => {
     expect(thawed.citations[0].text).toBe('fit was the deciding thing')
   })
 
-  it('paginates: one slide per turn, the appendix, and the silent list', () => {
+  it('paginates in the screen’s order: the answer with what I’d do, the findings, the silent list, and no appendix of quotes', () => {
     const slides = agentThreadSlides({ ...base, silentQuestions: ['Is price the main thing?'] })
-    expect(slides.map((s) => s.keys[0])).toEqual(['agent.turn:0:0', 'agent.turn:0:more', 'agent.citations:0', 'agent.silent'])
-    const many = { ...base, turns: [{ ...base.turns[0], answer: { ...base.turns[0].answer!, grounded: Array.from({ length: 6 }, (_, i) => ({ ...base.turns[0].answer!.grounded[0], id: `G${i}` })), judgement: [], nearest: [] } }] }
-    expect(agentThreadSlides(many).map((s) => s.keys[0])).toEqual(['agent.turn:0:0', 'agent.turn:0:1', 'agent.turn:0:2', 'agent.citations:0'])
+    expect(slides.map((s) => s.keys)).toEqual([['agent.turn:0:lead', 'agent.turn:0:do'], ['agent.turn:0:0'], ['agent.silent']])
+    const many = { ...base, turns: [{ ...base.turns[0], answer: { ...base.turns[0].answer!, grounded: Array.from({ length: 6 }, (_, i) => ({ ...base.turns[0].answer!.grounded[0], id: `G${i}` })), judgement: [], nearest: [{ text: 'close', insightIds: [], conversationCount: 9 }] } }] }
+    expect(agentThreadSlides(many).map((s) => s.keys[0])).toEqual(['agent.turn:0:lead', 'agent.turn:0:0', 'agent.turn:0:1', 'agent.turn:0:more'])
   })
 
   it('splits a document into slide-sized runs without cutting a span', () => {
@@ -134,7 +134,7 @@ describe('the Ask fixtures', () => {
     const d = refusedFixture()
     expect(d.measure).toBeNull()
     expect(d.planChip).toBeNull()
-    expect(d.reads.rows[0].line).toBe('not read for this month yet')
+    expect(d.reads.rows[0].line).toBe('none this month yet')
     expect(d.turns[0].answer!.grounded[0].quotes[0].text).toContain('Three winters')
     // The bar still prints: Ask's context is the basis, not a month reading.
     expect(d.bar.question).toBe('What does the conversation say about this?')
@@ -152,19 +152,17 @@ describe('the Ask fixtures', () => {
 
 // ── Block D wave 2 (E-ask): what the rail and the chip say ──────────────────
 
-describe('what an answer reads (WP3.9)', () => {
-  it('says the market, its two parts and the client’s own posts, one denominator a line', () => {
+describe('what answers cover (WP3.9; §0a, 1 Oct)', () => {
+  it('says the market, the brands you track and the client’s own posts, one denominator a line, and nothing about how', () => {
     const r = askReads(SEALAND_ASK_READING, 'days90')
     expect(r.rows).toEqual([
-      { key: 'market', label: 'Your market', value: 655, line: 'videos in September so far; 626 in the category, where themes are grouped' },
-      { key: 'brands', label: 'Brands you track', value: 29, line: 'of those 655, filed under a brand; read when a question names one' },
-      { key: 'own', label: 'Your own posts', value: 9, line: 'with a reading in September so far, marked as yours and never counted as the market' },
+      { key: 'market', label: 'Your market', value: 655, line: 'videos in September so far' },
+      { key: 'brands', label: 'Brands you track', value: 29, line: 'of those 655, about a brand you track' },
+      { key: 'own', label: 'Your own posts', value: 9, line: 'in September so far, kept apart from your market' },
     ])
-    expect(r.facts).toEqual([
-      { term: 'Window', value: 'the last 90 days' },
-      { term: 'Months read', value: 'August, and September so far' },
-      { term: 'Comparisons', value: 'the first read the same way: October against November, from the 6 Dec update' },
-    ])
+    // The months read and the first comparison "read the same way" were our
+    // machinery; the window is what an answer looks over.
+    expect(r.facts).toEqual([{ term: 'Window', value: 'the last 90 days' }])
   })
 
   it('names both windows where no answer has chosen one, and all time where one did', () => {
@@ -175,9 +173,8 @@ describe('what an answer reads (WP3.9)', () => {
   it('says what is not read rather than printing a zero for it', () => {
     const r = askReads(NO_ASK_READING, null)
     expect(r.rows.map((x) => x.value)).toEqual([null, null, null])
-    expect(r.rows[0].line).toBe('not read for this month yet')
-    expect(r.facts[1].value).toBe('no month yet carries enough videos to compare on')
-    expect(r.facts[2].value).toBe('none read the same way yet')
+    expect(r.rows[0].line).toBe('none this month yet')
+    expect(r.facts).toHaveLength(1)
   })
 
   it('reads the market off the pages’ own rows: pooled, the client left out, months over the floor', () => {
