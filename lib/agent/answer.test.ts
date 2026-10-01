@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { movementBlock } from './answer'
+import { PROMPT_VERSION_ANSWER, buildAnswerPrompt, movementBlock } from './answer'
+import { CALIBRATED_PROSE_RULE } from '../pipeline/prose-rules'
 import { NO_MOVEMENT_BLOCK, type MovementReading } from './movement'
 
 // The answering call itself is I/O (retrieval, one synthesis call, the audit
@@ -67,5 +68,28 @@ describe('movementBlock', () => {
     // mentioned", and the block must not let the model say it was.
     expect(movementBlock([], 'trend', true)).toBe(NO_MOVEMENT_BLOCK)
     expect(movementBlock(null, 'trend', true)).toBe(NO_MOVEMENT_BLOCK)
+  })
+})
+
+describe('the answer prompt (agent_answer_v4, 1 Oct: "let the agent write more")', () => {
+  const prompt = buildAnswerPrompt('Sealand', false)
+
+  it('asks for a full opening paragraph, the answer first', () => {
+    expect(PROMPT_VERSION_ANSWER).toBe('agent_answer_v4')
+    expect(prompt).toContain('a full opening paragraph of about 3-6 sentences')
+    expect(prompt).toContain('The first sentence answers what was asked, directly.')
+    expect(prompt).not.toContain('1-3 sentences')
+  })
+
+  it('asks for 2-4 judgement entries of about 2-4 sentences each', () => {
+    expect(prompt).toContain('Write 2-4 entries, each a substantive paragraph of about 2-4 sentences')
+    expect(prompt).toContain('what to do, why the evidence points there, and what it would look like in practice')
+  })
+
+  it('keeps every honesty rule', () => {
+    expect(prompt).toContain('Never invent an insight id.')
+    expect(prompt).toContain('Never quote a comment yourself')
+    expect(prompt).toContain('`based_on`')
+    expect(prompt).toContain(CALIBRATED_PROSE_RULE)
   })
 })
