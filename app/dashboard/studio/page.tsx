@@ -21,6 +21,7 @@ import { catalogueTitle } from '@/lib/reports/catalogue'
 import { AUDIENCES, type CoverSpec, type CoverText, type FigureTable, type ReportSection } from '@/lib/reports/types'
 import { CADENCES, type ScheduleRow } from '@/lib/schedules/types'
 import { artefactTitle, scheduleArtefact, sendsArtefact } from '@/lib/schedules/artefact'
+import { reviewAudience } from '@/lib/schedules/members'
 import { sendFailureSentence } from '@/lib/schedules/copy'
 import { claimDecision } from '@/lib/schedules/claim'
 import { cn } from '@/lib/utils'
@@ -223,6 +224,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
                   userEmail={email ?? null}
                   sendable={sendable}
                   ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
+                  reviewer={reviewAudience(clientId)}
                 />
                 {history.length > 0 && (
                   <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">
@@ -269,6 +271,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
                   sendable={sendable}
                   isDocument={isDocument}
                   ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
+                  reviewer={reviewAudience(clientId)}
                 />
                 {history.length > 0 && (
                   <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">

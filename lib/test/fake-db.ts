@@ -13,15 +13,24 @@
  * NOT A DATABASE. No joins, no counts beyond `head: true` over the filtered
  * rows, no ordering beyond one column at a time. It is the smallest thing
  * that lets a loader run end to end without a network.
+ *
+ * AND THE THREE WRITES, for a writer's glue (writing back, the weekly read's
+ * send path): `insert(row | rows)` appends to the table (an `id` is made up
+ * where the row has none) and hands the rows back through `select` /
+ * `single` / `maybeSingle`; `update(patch)` and `delete()` apply to the rows
+ * the filters match, when the chain is awaited. Each is recorded with its
+ * rows or patch (`FakeCall.values`), so a test can assert what was written.
  */
 
 type Row = Record<string, unknown>
 
 export interface FakeCall {
   table: string
-  op: 'select' | 'rpc'
+  op: 'select' | 'rpc' | 'insert' | 'update' | 'delete'
   columns?: string
   filters: string[]
+  /** The rows an insert wrote, or the patch an update applied. */
+  values?: unknown
 }
 
 export interface FakeDb {
@@ -39,11 +48,15 @@ export function fakeDb(
   rpcs: Record<string, (args: Record<string, unknown>) => Row[] | { error: { code?: string; message: string } }> = {},
 ): FakeDb {
   const calls: FakeCall[] = []
+  let seq = 0
 
   function query(table: string) {
     const call: FakeCall = { table, op: 'select', filters: [] }
     calls.push(call)
     const preds: ((r: Row) => boolean)[] = []
+    let written: Row[] | null = null
+    let patch: Row | null = null
+    let removing = false
     let orderCol: string | null = null
     let asc = true
     let from = 0
@@ -53,6 +66,18 @@ export function fakeDb(
 
     const run = () => {
       if (!(table in tables)) return { data: null, error: missing(table), count: null }
+      if (written) return { data: written, error: null, count: null }
+      if (patch) {
+        const hit = tables[table].filter((r) => preds.every((p) => p(r)))
+        for (const r of hit) Object.assign(r, patch)
+        return { data: hit, error: null, count: null }
+      }
+      if (removing) {
+        const keep = tables[table].filter((r) => !preds.every((p) => p(r)))
+        const gone = tables[table].length - keep.length
+        tables[table].splice(0, tables[table].length, ...keep)
+        return { data: null, error: null, count: gone }
+      }
       let rows = tables[table].filter((r) => preds.every((p) => p(r)))
       if (orderCol) {
         const col = orderCol
@@ -68,6 +93,15 @@ export function fakeDb(
     }
 
     const builder: Record<string, unknown> = {
+      insert(v: Row | Row[]) {
+        call.op = 'insert'
+        written = (Array.isArray(v) ? v : [v]).map((r) => ({ ...r, id: r.id ?? `fake-${table}-${++seq}` }))
+        call.values = written
+        if (table in tables) tables[table].push(...written)
+        return builder
+      },
+      update(v: Row) { call.op = 'update'; patch = v; call.values = v; return builder },
+      delete() { call.op = 'delete'; removing = true; return builder },
       select(columns?: string, opts?: { count?: string; head?: boolean }) {
         call.columns = columns
         head = Boolean(opts?.head)

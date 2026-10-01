@@ -137,6 +137,30 @@ export interface ReviewEmail {
   /** When the build finished, already formatted for reading. */
   builtOn: string
   studioUrl: string
+  /** The review goes to the operator, not the workspace (lib/schedules/members.ts
+   *  `reviewAudience`): the email then says which workspace to view first,
+   *  because the Studio opens on whichever one the operator last chose. */
+  forOperator?: boolean
+  /** How many people the report goes to once sent, where known. */
+  recipients?: number
+  /** Whether there is anything to edit before sending: a report the Studio
+   *  edits, yes; an artefact Verbatim writes whole (the weekly read), no. */
+  editable?: boolean
+}
+
+/** The lines of the review email's body, in order (pure, for the test). */
+export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: string; after: string } {
+  const who = review.recipients != null
+    ? `the ${review.recipients} ${review.recipients === 1 ? 'recipient' : 'recipients'}`
+    : 'the recipients'
+  const workspace = review.forOperator && review.companyName
+    ? ` In Verbatim, view ${review.companyName} in the workspace switcher first.`
+    : ''
+  return {
+    lead: `${review.reportTitle} was built on ${review.builtOn} from the latest update.`,
+    steps: `${review.editable === false ? 'Read it, then send it.' : 'Read it, edit it if anything needs a change, then send it.'}${workspace}`,
+    after: `Nothing goes to ${who} until someone presses Send.`,
+  }
 }
 
 // A report built on a review schedule is waiting for a person. Thin by design:
@@ -149,13 +173,14 @@ export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: bool
     return { sent: false }
   }
   const subject = review.companyName ? `${review.companyName}: ${review.reportTitle} is ready for review` : `${review.reportTitle} is ready for review`
+  const lines = reviewEmailLines(review)
   const text = [
-    `${review.reportTitle} was built on ${review.builtOn} from the latest update.`,
+    lines.lead,
     ``,
-    `Read it, edit it if anything needs a change, then send it:`,
+    lines.steps,
     review.studioUrl,
     ``,
-    `Nothing goes to the recipients until someone presses Send.`,
+    lines.after,
   ].join('\n')
   const html = `<!doctype html>
 <html>
@@ -168,7 +193,7 @@ export async function sendReviewEmail(review: ReviewEmail): Promise<{ sent: bool
               <strong>${escapeHtml(review.reportTitle)}</strong> is ready for review.
             </p>
             <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#475569">
-              Built on ${escapeHtml(review.builtOn)} from the latest update. Read it, edit it if anything needs a change, then send it. Nothing goes to the recipients until someone presses Send.
+              Built on ${escapeHtml(review.builtOn)} from the latest update. ${escapeHtml(lines.steps)} ${escapeHtml(lines.after)}
             </p>
             <a href="${review.studioUrl}"
                style="display:inline-block;background:#1E40AF;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">

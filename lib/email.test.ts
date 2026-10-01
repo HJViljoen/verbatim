@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderInviteEmail } from './email'
+import { renderInviteEmail, reviewEmailLines } from './email'
 
 // The invite email's copy and addressing. Pure: `renderInviteEmail` reads only
 // its argument plus the module-level EMAIL_FROM, and no Resend client is
@@ -123,5 +123,22 @@ describe('renderInviteEmail — the invariants the copy rests on', () => {
   it('uses no em-dashes or en-dashes', () => {
     expect(r.text).not.toMatch(/[—–]/)
     expect(r.html).not.toMatch(/[—–]/)
+  })
+})
+
+describe('reviewEmailLines: the review email, to the members or to the operator', () => {
+  const base = { to: ['heinrich@verbatim.test'], companyName: 'Sealand', reportTitle: 'This week in your market', builtOn: '4 October 2026', studioUrl: 'https://app.verbatimintel.com/dashboard/studio?item=schedule%3As1' }
+  it('tells the operator which workspace to view first, and how many it goes to', () => {
+    const l = reviewEmailLines({ ...base, forOperator: true, recipients: 2, editable: false })
+    expect(l.lead).toBe('This week in your market was built on 4 October 2026 from the latest update.')
+    // The weekly read is written whole: there is nothing to edit, only to read and send.
+    expect(l.steps).toBe('Read it, then send it. In Verbatim, view Sealand in the workspace switcher first.')
+    expect(l.after).toBe('Nothing goes to the 2 recipients until someone presses Send.')
+  })
+  it('says nothing about switching to a member, who is already in the workspace', () => {
+    const l = reviewEmailLines(base)
+    expect(l.steps).toBe('Read it, edit it if anything needs a change, then send it.')
+    expect(l.after).toBe('Nothing goes to the recipients until someone presses Send.')
+    expect(reviewEmailLines({ ...base, recipients: 1 }).after).toBe('Nothing goes to the 1 recipient until someone presses Send.')
   })
 })

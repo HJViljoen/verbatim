@@ -4,7 +4,8 @@ import { sendReportEmail, sendReviewEmail, type EmailAttachment } from '../email
 import { EMAIL_IMAGE_TILES, renderDigestEmail } from '../email/digest'
 import { documentSubject, renderDocumentEmail } from '../email/document-brief'
 import { applyEdits, loadEdits } from '../reports/documents/edits'
-import { memberEmails } from './members'
+import { reviewRecipients } from './members'
+import { sendsArtefact } from './artefact'
 import { renderMany } from '../render/render'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
@@ -66,9 +67,16 @@ const EMAIL_FAILED = 'email not sent, provider not configured or the send failed
 
 /**
  * The build stands, and a person is asked to look at it: the send row becomes
- * `ready` with the subject it will carry, and every member of the workspace
- * gets the review email with the Studio link. Nothing reaches the schedule's
- * recipients until someone presses Send.
+ * `ready` with the subject it will carry, and the review email goes out with
+ * the Studio link. Nothing reaches the schedule's recipients until someone
+ * presses Send.
+ *
+ * WHO GETS THE REVIEW EMAIL (writing back, T7): the workspace's members where
+ * they can open the Studio and send; the OPERATOR where the Studio is hidden
+ * from the tenant or the tenant is send-locked (`reviewAudience`,
+ * lib/schedules/members.ts). Until this, a hidden-Studio tenant's members got
+ * a link to a page that sent them to Reports, and the operator, who was the
+ * only one who could press Send, heard nothing.
  *
  * The row must already name its snapshot (both doors set it before calling).
  */
@@ -101,21 +109,28 @@ export async function readyForReview(
     .eq('id', a.sendId)
 
   const { data: client } = await admin.from('clients').select('company_name').eq('id', row.client_id).maybeSingle()
-  const members = await memberEmails(admin, row.client_id)
+  const reviewers = await reviewRecipients(admin, row.client_id)
   const reportId = schedule?.report_id ?? null
   // The report's own name, not the snapshot's: a snapshot title carries the
-  // company, and the subject already leads with it.
+  // company, and the subject already leads with it. An artefact schedule has
+  // no report: its title is its name.
   const { data: report } = reportId ? await admin.from('reports').select('title').eq('id', reportId).maybeSingle() : { data: null }
+  // WHERE THE STUDIO LISTS IT. A report by its id; an artefact schedule (no
+  // `reports` row) under `schedule:<id>`, which is where its Send button is.
+  const item = reportId ?? (schedule && sendsArtefact(schedule) ? `schedule:${schedule.id}` : null)
   const { sent } = await sendReviewEmail({
-    to: members,
+    to: reviewers.to,
     companyName: (client?.company_name as string | undefined) ?? '',
-    reportTitle: (report?.title as string | undefined) ?? snapRow.title,
+    reportTitle: (report?.title as string | undefined) ?? (reportId ? snapRow.title : schedule?.name ?? snapRow.title),
     builtOn: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-    studioUrl: `${a.baseUrl}/dashboard/studio${reportId ? `?item=${reportId}` : ''}`,
+    studioUrl: `${a.baseUrl}/dashboard/studio${item ? `?item=${encodeURIComponent(item)}` : ''}`,
+    forOperator: reviewers.audience === 'operator',
+    editable: reportId != null,
+    recipients: schedule?.recipients.length,
   })
   // The build stands either way; the copy must not claim an email that the
   // provider refused or that no provider was configured to send.
-  if (!sent) console.warn(`[deliver ${a.sendId}] the review email was not sent (${members.length} member(s))`)
+  if (!sent) console.warn(`[deliver ${a.sendId}] the review email was not sent (${reviewers.to.length} ${reviewers.audience === 'operator' ? 'operator address(es); is ALERT_EMAIL set?' : 'member(s)'})`)
   return { status: 'ready', subject, notified: sent }
 }
 

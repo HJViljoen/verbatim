@@ -37,6 +37,10 @@ interface Props {
   ready?: { id: string; subject: string | null; readyAt: string | null; error: string | null; stalled?: boolean } | null
   /** A written report is edited block by block before it goes; an arranged one is not. */
   isDocument?: boolean
+  /** Who gets the review email (lib/schedules/members.ts `reviewAudience`):
+   *  the workspace's members, or the operator where the Studio is hidden from
+   *  the tenant or its sending is locked. The form says which. */
+  reviewer?: 'operator' | 'members'
 }
 
 const inputCls = 'h-8 w-full rounded-[4px] border border-input bg-tile px-2.5 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60'
@@ -45,7 +49,7 @@ const btn = 'inline-flex h-8 items-center rounded-full px-3 text-[12px] font-med
 const btnPrimary = `${btn} bg-primary text-primary-foreground hover:bg-accent-foreground`
 const btnQuiet = `${btn} bg-tile text-secondary-foreground ring-1 ring-border hover:bg-inner`
 
-export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedule, canManage, userEmail, sendable, ready, isDocument }: Props) {
+export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedule, canManage, userEmail, sendable, ready, isDocument, reviewer = 'members' }: Props) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [cadence, setCadence] = useState<ScheduleRow['cadence']>(schedule?.cadence ?? 'every_update')
@@ -57,6 +61,11 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
   const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null)
   const [confirm, setConfirm] = useState<'send' | 'delete' | 'deliver' | null>(null)
   const [preview, setPreview] = useState(false)
+  // THE HELD BUILD'S OWN EMAIL. "Read the email" on a build waiting for review
+  // used to open the dry preview at today's data, which rebuilds from scratch;
+  // the reviewer must read the email that Send will deliver, so it opens the
+  // send's own snapshot (`?send=`), the "email as sent" path.
+  const [heldPreview, setHeldPreview] = useState(false)
   const [busy, setBusy] = useState<'test' | 'now' | 'deliver' | null>(null)
 
   const parsedRecipients = splitRecipients(recipients)
@@ -131,7 +140,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
           <p className="text-[12px] leading-[1.45] text-muted-foreground">
             {ready.stalled
               ? `The report is built, and nothing was recorded as sent. It stopped partway, so it is possible some of the ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} already have it; sending it again goes to all of them. Anyone here can send it.`
-              : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}. Anyone here can send it.`}
+              : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}`}
           </p>
           {ready.error && <p className="text-[12px] text-negative">The last attempt did not go: {ready.error}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -148,8 +157,14 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
             )}
             {isDocument
               ? <Link href={`/dashboard/studio/edit/${reportId}`} className={btnQuiet}>Read and edit it</Link>
-              : <button type="button" onClick={() => setPreview((v) => !v)} className={btnQuiet}>{preview ? 'Hide the email' : 'Read the email'}</button>}
+              : <button type="button" onClick={() => setHeldPreview((v) => !v)} className={btnQuiet}>{heldPreview ? 'Hide the email' : 'Read the email'}</button>}
           </div>
+          {heldPreview && !isDocument && (
+            <div className="mt-2 flex flex-col gap-1">
+              <span className={labelCls}>The email as it will go out</span>
+              <iframe src={`/api/schedules/${schedule.id}/preview?send=${ready.id}`} sandbox="allow-popups allow-popups-to-escape-sandbox" title="The email waiting for review" className="h-[720px] w-full rounded-[4px] bg-tile ring-1 ring-border" />
+            </div>
+          )}
         </div>
       )}
       <label className="flex flex-col gap-1">
@@ -181,7 +196,13 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
         <label className="flex items-center gap-2"><input type="checkbox" checked={active} disabled={readOnly} onChange={(e) => setActive(e.target.checked)} className="size-3.5 accent-primary" /> Sending is on</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={review} disabled={readOnly} onChange={(e) => setReview(e.target.checked)} className="size-3.5 accent-primary" /> Review before sending</label>
       </div>
-      {review && <p className="-mt-2 text-[11px] text-muted-foreground">Everyone in this workspace gets an email when it is ready; any of them can read, edit and send it. Nothing goes to the list above until then.</p>}
+      {review && (
+        <p className="-mt-2 text-[11px] text-muted-foreground">
+          {reviewer === 'operator'
+            ? 'The review email goes to Heinrich at Verbatim, not to this workspace: he reads it and presses Send. Nothing goes to the list above until then.'
+            : 'Everyone in this workspace gets an email when it is ready; any of them can read, edit and send it. Nothing goes to the list above until then.'}
+        </p>
+      )}
 
       {canManage && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
