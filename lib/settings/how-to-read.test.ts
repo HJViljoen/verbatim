@@ -327,9 +327,8 @@ describe('How-to-read legend pills', () => {
     for (const p of pills) expect(anchors.has(p.anchor), `${p.file} → #${p.anchor}`).toBe(true)
   })
 
-  it('keeps the same pill where a page still draws one: Subjects, and Competitive’s stored copy', () => {
+  it('keeps the same pill where a page still draws one: Competitive’s stored copy', () => {
     const pages = {
-      subjects: 'components/pages/subjects/index.tsx',
       competitive: 'components/pages/competitive-surface/index.tsx',
     }
     for (const [key, file] of Object.entries(pages)) {
@@ -341,7 +340,9 @@ describe('How-to-read legend pills', () => {
   it('leaves Your moves, This week and Ask with no pill, as the approved preview draws them (deploy 5)', () => {
     // How to read stays one click away in Settings; This week's Week by week
     // footer links its own section.
-    for (const file of ['components/pages/market-surface/index.tsx', 'components/pages/week/index.tsx', 'components/pages/agent/surface.tsx']) {
+    // Subjects and the Agent too since the pages rebuild (1 Oct): How to read is
+    // removed for tenants, and neither artboard draws a pill.
+    for (const file of ['components/pages/market-surface/index.tsx', 'components/pages/week/index.tsx', 'components/pages/agent/surface.tsx', 'components/pages/subjects/index.tsx', 'components/pages/subjects/page.tsx', 'app/dashboard/agent/page.tsx']) {
       expect(readFileSync(join(ROOT, file), 'utf8'), file).not.toMatch(/<HowToRead\b/)
     }
     expect(readFileSync(join(ROOT, 'components/pages/week/index.tsx'), 'utf8')).toMatch(/<ExportMenu variant="button" \/>/)
