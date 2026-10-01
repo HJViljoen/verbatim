@@ -21,6 +21,7 @@ function CardBones({ children, className }: { children: React.ReactNode; classNa
 export default function CompetitiveLoading() {
   return (
     <PageFrame className="gap-[22px]">
+      <span role="status" className="sr-only">Loading {surface('competitive').label}…</span>
       <PageBar title={surface('competitive').label} />
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,0.62fr)_minmax(0,1.38fr)]">
         <CardBones><BoneTable rows={6} cols={2} /></CardBones>
