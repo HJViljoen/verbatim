@@ -53,7 +53,7 @@ function TalkColumn({ reading }: { reading: StatementReading }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2">
-        <span data-copy="figure" className="font-mono text-[26px] font-medium leading-[1.2] text-[#26292C]">{share}%</span>
+        <span data-copy="figure" className="font-mono text-[26px] font-medium text-[#26292C]">{share}%</span>
         <span className="text-[13px] text-[#5F656B]">{OF_MARKET_VIDEOS}</span>
       </div>
       <Bar width={share} />

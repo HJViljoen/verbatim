@@ -21,12 +21,14 @@ function Pills({ rows }: { rows: InFullBlock['rows'] }) {
           scroll={false}
           aria-current={r.selected ? 'true' : undefined}
           className={cn(
-            'inline-flex h-9 items-center gap-2 rounded-[8px] px-3.5 text-[14px] text-foreground no-underline',
-            r.selected ? 'bg-foreground/[0.07] font-bold' : 'border border-border font-medium hover:bg-foreground/[0.04]',
+            'inline-flex items-center gap-2 rounded-[8px] px-3.5 text-[14px] text-foreground no-underline',
+            // As drawn: a bordered chip is 36px inside its 1px border (38),
+            // the selected one 36 with none.
+            r.selected ? 'h-9 bg-foreground/[0.07] font-bold' : 'h-[38px] border border-border font-medium hover:bg-foreground/[0.04]',
           )}
         >
           {r.label}
-          <span data-copy="figure" className="font-mono text-[12px] font-normal text-muted-foreground">{fmtInt(r.videos)}</span>
+          <span data-copy="figure" className="font-mono text-[12px] text-muted-foreground">{fmtInt(r.videos)}</span>
         </Link>
       ))}
     </nav>
@@ -43,7 +45,7 @@ function Said({ said }: { said: SaidAbout }) {
         return (
           <figure key={q.ref} className="m-0 flex flex-col gap-2 rounded-[12px] bg-inner px-[18px] py-4">
             <blockquote data-copy="quote" className="m-0 font-serif text-[15px] italic leading-[1.5] text-foreground">“{words}”</blockquote>
-            <figcaption className="text-[12px] leading-[1.45] text-muted-foreground">
+            <figcaption className="text-[12px] text-muted-foreground">
               {src}{src ? <span> · </span> : null}<BrandName kind="brand">{said.label}</BrandName>
             </figcaption>
           </figure>
@@ -89,11 +91,11 @@ export function BrandPaneCard({ inFull, asked, said, noun }: { inFull: InFullBlo
     <Card className="gap-3.5 px-7 pt-6 pb-7">
       <div className="flex flex-col gap-1">
         <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{PANE_TITLE}</h2>
-        <div className="text-[13px] leading-[1.45] text-muted-foreground">Videos about each brand you track, last 90 days ({windowWords(inFull.window)})</div>
+        <div className="text-[13px] text-muted-foreground">Videos about each brand you track, last 90 days ({windowWords(inFull.window)})</div>
       </div>
       {filed.length > 0 ? <Pills rows={filed} /> : null}
       {none.length > 0 ? (
-        <div className="-mt-1 text-[13px] leading-[1.45] text-muted-foreground">No videos in the last 90 days: {none.join(', ')}.</div>
+        <div className="-mt-1 text-[13px] text-muted-foreground">No videos in the last 90 days: {none.join(', ')}.</div>
       ) : null}
       {sel ? (
         <div className="grid grid-cols-1 gap-x-8 border-t border-border pt-2 md:grid-cols-2">

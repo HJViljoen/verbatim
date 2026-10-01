@@ -95,8 +95,8 @@ describe('the sidebar', () => {
     expect(renderText(<SidebarProvider><OpsNavGroup /></SidebarProvider>)).not.toContain('Operator')
   })
 
-  it('is 256px wide with a hairline right edge and no shadow (the layout and the stylesheet)', () => {
-    expect(readFileSync('app/dashboard/layout.tsx', 'utf8')).toContain("'--sidebar-width': '16rem'")
+  it('is 281px wide as the artboards render it (256px rows, 12px in, the hairline) with no shadow', () => {
+    expect(readFileSync('app/dashboard/layout.tsx', 'utf8')).toContain("'--sidebar-width': '281px'")
     expect(sidebar('/dashboard')).toContain('border-r-[#E4E2DC]')
     expect(readFileSync('app/globals.css', 'utf8')).not.toMatch(/\[data-slot="sidebar-inner"\]\s*\{\s*box-shadow/)
   })

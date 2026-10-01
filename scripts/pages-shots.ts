@@ -64,7 +64,7 @@ import { AskCard } from '../components/pages/agent/ask-card'
 import { EarlierQuestions } from '../components/pages/agent/earlier'
 import { PageTitle } from '../components/pages/studio/ui'
 import { YourReports } from '../components/pages/studio/your-reports'
-import { studioRows } from '../lib/pages/studio'
+import { shownStudioRows, studioRows } from '../lib/pages/studio'
 import { PRIVACY_LINE } from '../lib/reading/method'
 import { SettingsFrame } from '../components/settings-frame'
 import { SearchTerms } from '../components/pages/settings/search-terms'
@@ -142,7 +142,8 @@ function movesData() {
 /** Studio: what production holds for Sealand on 1 Oct (the weekly read's one
  *  schedule, Daniela and Brayden; no brief schedule yet), seen by an owner. */
 function studioData() {
-  return studioRows({
+  // The route shows the weekly alone until the briefs are built.
+  return shownStudioRows(studioRows({
     tenant: 'Sealand',
     schedules: [{ id: 's-wr', name: 'This week in your market', artefact: 'weekly_read', starter_key: 'weekly_read', recipients: ['daniela@sealandgear.com', 'brayden@sealandgear.com'], active: true }],
     sends: [],
@@ -151,7 +152,7 @@ function studioData() {
       { email: 'brayden@sealandgear.com', full_name: 'Brayden' },
     ],
     now: new Date('2026-10-01T12:00:00Z'),
-  })
+  }))
 }
 
 /** Settings: Sealand's tracking config as the artboard read it
@@ -258,7 +259,7 @@ const wordmark = () =>
 const shell = (path: string, page: ReactNode) =>
   h(AppRouterContext.Provider, { value: router as never },
     h(PathnameContext.Provider, { value: path },
-      h(SidebarProvider, { style: { '--sidebar-width': '16rem' } as never },
+      h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never },
         h(AppSidebar, { header: wordmark() }),
         h('div', { className: 'relative flex flex-col flex-1 min-w-0 min-h-dvh bg-[#F7F6F2]' },
           h('main', { className: 'relative z-10 flex-1 min-h-0 p-6 pt-14 md:px-10 md:pt-7 md:pb-10' }, page),
@@ -277,7 +278,7 @@ const doc = (style: string, body: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${FONTS}"><style>${style}
 html,body{margin:0;padding:0}
 :root{--font-plex-sans:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;--font-plex-serif:'IBM Plex Serif',Georgia,serif;--font-plex-mono:'IBM Plex Mono',ui-monospace,monospace;--font-emoji:'Apple Color Emoji','Segoe UI Emoji',sans-serif;--font-sans:var(--font-plex-sans);--font-serif:var(--font-plex-serif);--font-mono:var(--font-plex-mono)}
-body{font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-sans)}
 </style></head><body>${body}</body></html>`
 
 const pair = (artboard: string, built: string, title: string) =>

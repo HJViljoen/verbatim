@@ -29,7 +29,7 @@ export function TitleStack({ title, sub }: { title: ReactNode; sub?: ReactNode }
   return (
     <div className="flex flex-col gap-1">
       <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{title}</h2>
-      {sub ? <div className="text-[13px] leading-[1.45] text-muted-foreground">{sub}</div> : null}
+      {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </div>
   )
 }
@@ -39,7 +39,7 @@ export function TitleRow({ title, sub }: { title: ReactNode; sub?: ReactNode }) 
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <h2 className="m-0 text-[20px] font-bold leading-[1.3] text-foreground">{title}</h2>
-      {sub ? <div className="text-[13px] leading-[1.45] text-muted-foreground">{sub}</div> : null}
+      {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </div>
   )
 }
@@ -49,7 +49,7 @@ export function SubHead({ title, sub }: { title: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex flex-col gap-[3px]">
       <h3 className="m-0 text-[16px] font-bold leading-[1.35] text-foreground">{title}</h3>
-      {sub ? <div className="text-[13px] leading-[1.45] text-muted-foreground">{sub}</div> : null}
+      {sub ? <div className="text-[13px] text-muted-foreground">{sub}</div> : null}
     </div>
   )
 }
@@ -82,7 +82,7 @@ export function CountWords({ value, one, many, you = false }: { value: number; o
 export function CountRow({ label, k, of }: { label: ReactNode; k: number; of: number }) {
   return (
     <div className="flex items-center gap-3.5 border-t border-border py-2">
-      <div className="w-[196px] min-w-0 shrink-0 text-[14px] leading-[1.4] text-foreground max-sm:w-[150px]">{label}</div>
+      <div className="w-[196px] min-w-0 shrink-0 text-[14px] text-foreground max-sm:w-[150px]">{label}</div>
       <Bar pct={of > 0 ? (100 * k) / of : 0} className="grow" />
       <Num value={k} className="w-[34px] shrink-0 text-right text-[14px] font-medium text-foreground" />
     </div>

@@ -12,10 +12,12 @@ import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace
 // duration. The proxy already gates anonymous users; the page resolves the
 // session (request-cached) and the billing banner streams in behind Suspense.
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // Sidebar 256px (16rem), the width every `Page-*.dc.html` artboard draws
-  // (the navigation of 1 Oct). It was 14rem from the 2026-08-28 walk-through.
+  // Sidebar 281px, the width every `Page-*.dc.html` artboard RENDERS: it
+  // declares 256px on a content-box column with 12px padding each side and a
+  // 1px hairline, so its rows are 256px and the pane starts at 281
+  // (integration, 1 Oct; it was 16rem, 25px narrower than drawn).
   return (
-    <SidebarProvider style={{ '--sidebar-width': '16rem' } as React.CSSProperties}>
+    <SidebarProvider style={{ '--sidebar-width': '281px' } as React.CSSProperties}>
       {/* The sidebar header streams: the shell paints the wordmark immediately
           and, for a platform admin only, the tenant switcher replaces it when
           the session resolves. Same reason as the banner below — this layout

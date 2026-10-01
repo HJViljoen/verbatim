@@ -87,6 +87,23 @@ describe('the sidebar’s icons', () => {
     expect(draw('week')).toContain('lucide-calendar-days')
   })
 
+  it('draws four glyphs with the artboards\' exact paths, not the installed Lucide\'s newer ones', () => {
+    // components/design-icons.ts, copied from `sidebar2.py` (integration, 1 Oct).
+    const draw = (key: keyof typeof NAV_ICON) => renderToStaticMarkup(createElement(NAV_ICON[key], { width: 16, height: 16 }))
+    // The Agent: a small "+" at the lower left (M4 17v2 / M5 18H3), not the newer ring.
+    expect(draw('ask')).toContain('M4 17v2')
+    expect(draw('ask')).not.toMatch(/<circle/)
+    // Conversation: two lines of text in the square.
+    expect(draw('voice')).toContain('M13 8H7')
+    expect(draw('voice')).toContain('M17 12H7')
+    // Subjects: rows at 6, 12 and 18.
+    expect(draw('subjects')).toContain('M8 6h13')
+    expect(draw('subjects')).toContain('M8 18h13')
+    // Settings: the handles at 14, 8 and 16.
+    expect(draw('settings')).toContain('M2 14h4')
+    expect(draw('settings')).toContain('M18 16h4')
+  })
+
   it('is the only map — neither consumer declares its own', () => {
     const sidebar = readFileSync('components/app-sidebar.tsx', 'utf8')
     const shots = readFileSync('scripts/wave2-shots.ts', 'utf8')

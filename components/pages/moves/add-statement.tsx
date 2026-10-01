@@ -28,7 +28,7 @@ export function AddStatement() {
             autoComplete="off"
             placeholder={STATEMENT_PLACEHOLDER}
             disabled={pending}
-            className="h-11 min-w-0 flex-grow rounded-[10px] border-[1.5px] border-[#26292C] bg-white px-4 text-[15px] text-[#26292C] outline-none placeholder:text-[#5F656B] focus-visible:ring-2 focus-visible:ring-[#26292C]/20 disabled:opacity-60"
+            className="h-11 min-w-0 flex-grow rounded-[10px] border-[1.5px] border-[#26292C] bg-white px-4 text-[15px] text-[#26292C] outline-none placeholder:text-[#757575] focus-visible:ring-2 focus-visible:ring-[#26292C]/20 disabled:opacity-60"
           />
         </label>
         <button type="submit" disabled={pending} className={BTN_PRIMARY}>

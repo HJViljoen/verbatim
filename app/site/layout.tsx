@@ -30,7 +30,10 @@ export default function MarketingLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className={`site-theme ${bricolage.variable}`}>
+    // `antialiased` lives here, not on <html>: the app renders text at the
+    // browser's default smoothing, as the artboards do (integration, 1 Oct),
+    // and the marketing site keeps the weight it has always had.
+    <div className={`site-theme antialiased ${bricolage.variable}`}>
       <a
         href="#content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground"

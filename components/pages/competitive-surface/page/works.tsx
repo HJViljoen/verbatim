@@ -23,7 +23,7 @@ function Row({ r, of }: { r: WorksRow; of: number }) {
   const pct = sharePct(r.k, of)
   return (
     <div className="flex items-center gap-3.5 border-t border-border py-2">
-      <div className="w-[150px] min-w-0 shrink-0 text-[14px] leading-[1.4] text-foreground max-sm:w-[120px]">{r.label}</div>
+      <div className="w-[150px] min-w-0 shrink-0 text-[14px] text-foreground max-sm:w-[120px]">{r.label}</div>
       <Bar pct={of > 0 ? (100 * r.k) / of : 0} className="grow" />
       <div className="w-10 shrink-0 text-right font-mono text-[14px] font-medium text-foreground">
         {of < SMALL_BASE ? <Num value={r.k} /> : <span data-copy="figure">{pct}%</span>}

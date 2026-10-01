@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Sparkles } from '@/components/design-icons'
 import { BrandWho, WhoInline, WHO_GOLD } from '@/components/brand-who'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import type { AboutPart } from '@/lib/brands/attribution'
@@ -256,7 +256,7 @@ function WhereCard({ data, params }: { data: VoiceSurfaceData; params: Record<st
       <H2 stacked title="Where your market talks" sub={`Accounts with 3 or more of the category’s videos in ${longMonth(data.month)}`} />
       <div className="flex flex-col">
         {rows.map((a) => (
-          <div key={a.key} className={cn('flex h-10 items-center gap-3 border-t', HAIR)}>
+          <div key={a.key} className={cn('flex h-[41px] items-center gap-3 border-t', HAIR)}>
             <div className="min-w-0 grow truncate text-[14.5px] font-semibold">{stripEmoji(a.name)}</div>
             <div className={cn('w-[112px] shrink-0 whitespace-nowrap text-[13px] max-sm:hidden', MUTED)}>{platformLabel(a.platform)}{w.segments === 'measured' && a.maker ? ' · makers' : ''}</div>
             <div className="w-[66px] shrink-0 text-right text-[13px]"><span data-copy="figure" className="font-mono">{fmtInt(a.videos)}</span> videos</div>

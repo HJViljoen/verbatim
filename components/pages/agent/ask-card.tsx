@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowUp, FileUp, Loader2, Sparkles } from 'lucide-react'
+import { ArrowUp, FileUp, Loader2 } from 'lucide-react'
+import { Sparkles } from '@/components/design-icons'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '@/lib/agent/scope'
 
 // The Agent's question box (pages rebuild, 1 Oct; Page-Agent.dc.html). One
@@ -125,14 +126,14 @@ export function AskCard({ canSend, disabledNote = 'Only an owner or admin can as
             }}
             disabled={!canSend || busy}
             placeholder={canSend ? 'Ask about anything your market talks about' : disabledNote}
-            className="box-border min-h-[190px] w-full resize-y rounded-[14px] border-[1.5px] border-[#26292C] bg-white px-5 py-[18px] text-[17px] leading-[1.5] text-[#26292C] placeholder:text-[#5F656B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            className="box-border min-h-[190px] w-full resize-y rounded-[14px] border-[1.5px] border-[#26292C] bg-white px-5 py-[18px] text-[17px] leading-[1.5] text-[#26292C] placeholder:text-[#757575] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
           />
         </label>
 
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-[18px]">
             <label
-              className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-[10px] border border-[#E4E2DC] bg-white px-3.5 text-[14px] font-semibold text-[#26292C] hover:bg-[#F7F6F2] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${live ? '' : 'pointer-events-none opacity-50'}`}
+              className={`inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-[10px] border border-[#E4E2DC] bg-white px-3.5 text-[14px] font-semibold text-[#26292C] hover:bg-[#F7F6F2] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${live ? '' : 'pointer-events-none opacity-50'}`}
             >
               <FileUp className="size-4" aria-hidden />
               Check a plan

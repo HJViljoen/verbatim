@@ -14,8 +14,8 @@ export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly Br
   if (!canEdit && brands.length === 0) return null
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="pt-1"><CardTitle>Brands you track</CardTitle></div>
+      <div className="flex items-center justify-between gap-3">
+        <CardTitle>Brands you track</CardTitle>
         {canEdit ? (
           <InlineAdd
             label="Add a brand"
@@ -59,8 +59,8 @@ export function Communities({ communities, canEdit }: { communities: readonly st
   if (!canEdit && communities.length === 0) return null
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="pt-1"><CardTitle>Communities</CardTitle></div>
+      <div className="flex items-center justify-between gap-3">
+        <CardTitle>Communities</CardTitle>
         {canEdit ? (
           <InlineAdd
             label="Add a community"
