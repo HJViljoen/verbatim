@@ -15,6 +15,7 @@ import { renderQuarterlyEmail } from '@/lib/email/quarterly'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { renderWeeklyReadEmail } from '@/lib/email/weekly-read'
 import { runSchedule } from '@/lib/schedules/run'
+import { mayReadHeld } from '@/lib/reports/held'
 import type { ScheduleRow } from '@/lib/schedules/types'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 
@@ -44,9 +45,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (!schedule) return note('No such schedule.', 404)
   const s = schedule as ScheduleRow
   const sendId = new URL(request.url).searchParams.get('send')
+  // A BUILD THAT HAS NOT GONE OUT IS ITS REVIEWER'S (lib/reports/held.ts):
+  // to anyone else, a send shows only once it is sent, and a schedule whose
+  // builds wait for review has no preview at today's data (it would be the
+  // held build, rebuilt).
+  const readsHeld = mayReadHeld(session, session.clientId)
+  const HELD = 'This report shows here once it has been sent.'
 
   if (sendId) {
-    const { data: send } = await admin.from('report_sends').select('snapshot_id, share_link_id').eq('id', sendId).eq('schedule_id', id).eq('client_id', session.clientId).maybeSingle()
+    const { data: send } = await admin.from('report_sends').select('snapshot_id, share_link_id, status').eq('id', sendId).eq('schedule_id', id).eq('client_id', session.clientId).maybeSingle()
+    if (!readsHeld && (send as { status?: string } | null)?.status !== 'sent') return note(HELD, 404)
     const sid = (send as { snapshot_id: string | null } | null)?.snapshot_id
     const row = sid ? await loadSnapshot(admin, sid) : null
     if (!row || row.kind !== 'report') return note('This send has no stored build to show.', 404)
@@ -83,6 +91,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
     return page(renderDigestEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf, cadenceWord: s.cadence === 'monthly' ? 'monthly' : 'weekly' }).html)
   }
+
+  if (!readsHeld && s.review) return note(HELD, 403)
 
   // A written report is not built here: writing one costs money and minutes.
   // The dry preview shows the email over the last brief this report built.

@@ -22,6 +22,7 @@ import { AUDIENCES, type CoverSpec, type CoverText, type FigureTable, type Repor
 import { CADENCES, type ScheduleRow } from '@/lib/schedules/types'
 import { artefactTitle, scheduleArtefact, sendsArtefact } from '@/lib/schedules/artefact'
 import { reviewAudience } from '@/lib/schedules/members'
+import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
 import { sendFailureSentence } from '@/lib/schedules/copy'
 import { claimDecision } from '@/lib/schedules/claim'
 import { cn } from '@/lib/utils'
@@ -152,8 +153,13 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
 
   // The viewer over the page (?view=): a build's frozen pages, read here
   // rather than downloaded. The loader scopes it to this workspace.
+  // A build that has not gone out is its reviewer's (lib/reports/held.ts):
+  // the operator today; this guard is for the day the Studio opens to a
+  // tenant whose sending is still locked.
   let viewer: ViewerSnapshot | null = null
-  if (sp.view) viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  if (sp.view && (mayReadHeld(session, clientId) || !(await snapshotHeld(createAdminClient(), clientId, sp.view)))) {
+    viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  }
   const itemKey = pickedArtefact ? artefactKey(pickedArtefact) : selectedId ?? undefined
   const openViewer = (snapshotId: string) => viewerHref(BASE, { item: itemKey }, snapshotId)
   const closeViewer = viewerHref(BASE, { item: itemKey }, null)

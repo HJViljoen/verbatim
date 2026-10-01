@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
 import { SHARE_DEFAULT_EXPIRY_DAYS, SHARE_EXPIRY_CHOICES } from '@/lib/config'
 import { expiryFromDays, hashSharePassword, mintShareToken } from '@/lib/reports/share'
+import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
 
 // POST /api/share { snapshotId, expiresDays?: 7|30|90|null, password?: string }
 // → { id, url, expiresAt }. The snapshot must be the session tenant's and a
@@ -30,6 +31,11 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: snap } = await admin.from('report_snapshots').select('id, kind, title').eq('id', snapshotId).eq('client_id', session.clientId).maybeSingle()
   if (!snap || snap.kind !== 'report') return NextResponse.json({ error: 'Only a built report can be shared.' }, { status: 404 })
+  // A build that has not gone out is its reviewer's (lib/reports/held.ts):
+  // nobody else may put it on a public link before it is approved and sent.
+  if (!mayReadHeld(session, session.clientId) && (await snapshotHeld(admin, session.clientId, snapshotId))) {
+    return NextResponse.json({ error: 'Only a built report can be shared.' }, { status: 404 })
+  }
 
   const token = mintShareToken()
   const expiresAt = expiryFromDays(days)

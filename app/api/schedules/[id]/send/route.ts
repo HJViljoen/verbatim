@@ -7,6 +7,7 @@ import { appBaseUrl } from '@/lib/site'
 import { renderBaseUrl } from '@/lib/render/render'
 import { deliverSend } from '@/lib/schedules/deliver'
 import { runSchedule } from '@/lib/schedules/run'
+import { mayReadHeld } from '@/lib/reports/held'
 import type { ScheduleRow, SendRow } from '@/lib/schedules/types'
 
 // POST /api/schedules/[id]/send — firing or finishing a schedule by hand.
@@ -45,6 +46,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const admin = createAdminClient()
   const { data: schedule } = await admin.from('report_schedules').select('*').eq('id', id).eq('client_id', session.clientId).maybeSingle()
   if (!schedule) return NextResponse.json({ error: 'No such schedule.' }, { status: 404 })
+  // A TEST OF A REVIEWED REPORT IS ITS REVIEWER'S (lib/reports/held.ts): it
+  // would put this update's report, unapproved, in the caller's inbox.
+  if (mode === 'test' && (schedule as ScheduleRow).review && !mayReadHeld(session, session.clientId)) {
+    return NextResponse.json({ error: 'This report is read before it goes out, so its test is sent by Verbatim.' }, { status: 403 })
+  }
 
   if (mode === 'deliver') {
     const sendId = z.uuid().safeParse(body?.sendId).data

@@ -35,6 +35,7 @@ import { BRIEFS_META, BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefMo
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
+import { heldSnapshotIds, mayReadHeld, snapshotHeld } from '@/lib/reports/held'
 import { CONTACT_EMAIL } from '@/lib/legal'
 import type { Metadata } from 'next'
 
@@ -213,12 +214,24 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const allSends = readRows<SendRow>(sendRes, 'reports.sends')
   const allLegacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
   const sentSnapshotIds = new Set(allSends.map((s) => s.snapshot_id).filter(Boolean))
+  // A BUILD THAT HAS NOT GONE OUT IS ITS REVIEWER'S (writing back, review B1;
+  // lib/reports/held.ts). A review schedule's build waits as a `ready` send,
+  // which this page's send list does not hold, so it fell into Built, "Built
+  // for you", with the report and its PDF one click away before anyone had
+  // approved it. Whoever may not read held builds sees none of them: not in
+  // Built or the cards, not in the viewer, and a send that has not gone out
+  // shows its status and nothing it carries. Null: the sends could not be
+  // read, and nothing a send carries is shown.
+  const readsHeld = mayReadHeld(session, clientId)
+  const held = readsHeld ? new Set<string>() : await heldSnapshotIds(createAdminClient(), clientId)
+  const showsBuild = (id: string) => readsHeld || (held != null && !held.has(id))
+  const showsSend = (s: Pick<SendRow, 'status'>) => readsHeld || s.status === 'sent'
   // EVERY build, before the Sent group takes its own back. The Built LIST
   // subtracts what was sent (an artefact belongs in one group), but a card's
   // "last one built" must not: once a brief is emailed once, subtracting it
   // would make the card name an older build, or say the brief has never been
   // built at all.
-  const everyBuild = readRows<BuildRow>(buildRes, 'reports.builds')
+  const everyBuild = readRows<BuildRow>(buildRes, 'reports.builds').filter((b) => showsBuild(b.id))
   const allBuilds = everyBuild.filter((b) => !sentSnapshotIds.has(b.id))
   const exportSnapshots = readRows<ExportSnapshot>(exportRes, 'reports.exports')
   const allExports = exportedRows(exportSnapshots)
@@ -233,7 +246,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   const totals = {
     sent: (sendTotal.count ?? allSends.length) + (legacyTotal.count ?? allLegacy.length),
-    built: Math.max((builtTotal.count ?? allBuilds.length) - sentSnapshotIds.size, allBuilds.length),
+    // Held builds a send list does not already account for are not this
+    // reader's to count either.
+    built: Math.max((builtTotal.count ?? allBuilds.length) - sentSnapshotIds.size - (held ? [...held].filter((id) => !sentSnapshotIds.has(id)).length : 0), allBuilds.length),
     exported: exportTotal.count ?? allExports.length,
   }
 
@@ -326,7 +341,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // Share links for the selected item — read server-side (the token is
   // withheld from the workspace's RLS reads), scoped to the tenant.
   let shareLinks: ShareLinkView[] = []
-  const linkSnapshot = selectedSend?.snapshot_id ?? selectedBuild?.id ?? null
+  // What a send carries is shown only once it has gone out, to anyone who may
+  // not read held builds (B1): its figures, its PDF, its links, its email.
+  const sendContent = selectedSend ? showsSend(selectedSend) : false
+  const linkSnapshot = (sendContent ? selectedSend?.snapshot_id : null) ?? selectedBuild?.id ?? null
   if (linkSnapshot) {
     const admin = createAdminClient()
     const base = await getBaseUrl()
@@ -345,7 +363,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // the Built group and the cards did not.
   interface SentSnapshot { id: string; created_at: string; figures: StoredFigures | null; reading: unknown; readingAt: string | null; dataMonth: string | null; monthStatus: string | null }
   let sentSnapshot: SentSnapshot | null = null
-  if (selectedSend?.snapshot_id) {
+  if (sendContent && selectedSend?.snapshot_id) {
     const { data: snap } = await supabase.from('report_snapshots')
       .select('id, created_at, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, dataMonth:data->>month, monthStatus:data->>monthStatus')
       .eq('client_id', clientId).eq('id', selectedSend.snapshot_id).maybeSingle()
@@ -354,7 +372,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   type ArtifactLite = { id: string; format: string; bytes: number; stale: boolean }
   let artifact: ArtifactLite | null = null
-  if (selectedSend?.artifact_id) {
+  if (sendContent && selectedSend?.artifact_id) {
     const { data: a } = await supabase.from('artifacts').select('id, format, bytes, stale').eq('id', selectedSend.artifact_id).maybeSingle()
     artifact = (a as ArtifactLite | null) ?? null
   }
@@ -368,7 +386,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // instead of downloaded. Scoped to this workspace by the loader; an id that
   // names nothing simply does not open.
   let viewer: ViewerSnapshot | null = null
-  if (sp.view) viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  if (sp.view && (readsHeld || !(await snapshotHeld(createAdminClient(), clientId, sp.view)))) {
+    viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  }
   const closeViewer = viewerHref(BASE, { group: sp.group, item: buildId ?? sentId ?? undefined }, null)
 
   const carry: Record<string, string | undefined> = {
@@ -531,15 +551,15 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
             )}
           </DetailSection>
         )}
-        <DetailSection label="Files and links">
+        {sendContent && <DetailSection label="Files and links">
           <div className="flex flex-wrap items-center gap-3">
             {artifact ? (
               <a href={`/api/artifacts/${artifact.id}`} className="text-[12px] font-medium underline underline-offset-2">Download the PDF · {fmtBytes(artifact.bytes)}{artifact.stale ? ' · rebuilt on download' : ''}{selectedSend.report_schedules?.attach_pdf ? ' · was attached' : ''}</a>
             ) : <span className="text-[12px] text-muted-foreground">No PDF stored.</span>}
           </div>
           <div className="mt-3"><ShareLinks snapshotId={selectedSend.snapshot_id} links={shareLinks} /></div>
-        </DetailSection>
-        {selectedSend.snapshot_id && selectedSend.schedule_id && (
+        </DetailSection>}
+        {sendContent && selectedSend.snapshot_id && selectedSend.schedule_id && (
           <DetailSection label="The email as sent">
             <iframe src={`/api/schedules/${selectedSend.schedule_id}/preview?send=${selectedSend.id}`} sandbox="allow-popups allow-popups-to-escape-sandbox" title={selectedSend.subject ?? 'Update'} className="h-[720px] w-full rounded-[4px] bg-tile ring-1 ring-border" />
           </DetailSection>

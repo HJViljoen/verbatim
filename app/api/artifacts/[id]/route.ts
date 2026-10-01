@@ -6,6 +6,7 @@ import { artifactFilename, logExport, replaceArtifactFile, signedArtifactUrl, ty
 import { dayStartIso } from '@/lib/ask/quota'
 import { EXPORT_DAILY_LIMIT } from '@/lib/config'
 import { renderArtifact, renderBaseUrl } from '@/lib/render/render'
+import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
 
 // GET /api/artifacts/<id> — download a stored export: tenant check, then a
 // one-hour signed Storage URL. A STALE artifact (its file deleted by the
@@ -30,6 +31,11 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   if (error) return NextResponse.json({ error: 'Could not read that export.' }, { status: 503 })
   if (!data) return NextResponse.json({ error: 'No such export.' }, { status: 404 })
   const row = data as ArtifactRow & { report_snapshots: { title: string; kind: string; ref: { page?: string } } }
+  // The PDF of a build that has not gone out is its reviewer's
+  // (lib/reports/held.ts): to anyone else it is not there.
+  if (!mayReadHeld(session, session.clientId) && (await snapshotHeld(admin, session.clientId, row.snapshot_id))) {
+    return NextResponse.json({ error: 'No such export.' }, { status: 404 })
+  }
   let artifact: ArtifactRow = row
 
   try {
