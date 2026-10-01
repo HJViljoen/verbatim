@@ -91,7 +91,7 @@ export const ANALYSIS_TEMPERATURE = 0
 // Gather stores the raw item + resolves one transcript per kept video (caption
 // when present, else Whisper). Pass A reads them behind the same flag (v4:
 // classification grounding on every bucket; industry-other transcripts as
-// evidence; client/competitor claims). See _Claude/Projects/SaaS/Architecture/Video-Transcripts.
+// evidence; client/competitor claims). See Projects/SaaS/Architecture/Video-Transcripts.
 
 /** Master switch. Off by default — when unset, gather is byte-identical to
  *  before (no raw capture, no transcription). Set TRANSCRIPTS_ENABLED=1 to bank
