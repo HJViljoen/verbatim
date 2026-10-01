@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-img-element -- an email document, not a page */
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { translationLabel, translationNote } from '@/components/quote-block'
-import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
+import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { FONT } from '@/lib/email/theme'
 import { substituteFigures } from '@/lib/reports/cover'
 import type { FigureTable } from '@/lib/reports/types'
@@ -192,7 +192,6 @@ export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full =
     )
   }
   const v: WeeklyReadView = weeklyReadView(data.read)
-  const month = longMonth(v.month)
   const mark = markSrc ?? `${appUrl}/brand/verbatim-mark-ink.png`
   const market = v.market
   const hasNumbers = Boolean(market && [market.week.videos, market.week.comments, market.month.videos, market.month.comments].some((x) => x != null))
@@ -220,7 +219,7 @@ export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full =
         {hasNumbers && market ? (
           <Band padding="10px 24px 6px">
             <NumberPair label="Your market this week" videos={market.week.videos} comments={market.week.comments} />
-            <NumberPair label={`${month} so far`} videos={market.month.videos} comments={market.month.comments} />
+            <NumberPair label={v.monthHeading} videos={market.month.videos} comments={market.month.comments} />
           </Band>
         ) : null}
 

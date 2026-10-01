@@ -1,9 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { longMonth } from '../format'
 import { WHAT_THEY_SELL } from '../pages/market-frame'
 import { loadBrandClaims, type BrandClaims } from '../pipeline/claims'
-import { monthStartOf } from '../reading/month-key'
+import { inMonth, readingMonthOf } from './month'
 
 // The company, as the writer needs it for "What it means for {company}"
 // (writer v3, the lead's ruling of 30 Sep: "implications must be about
@@ -67,23 +66,25 @@ export function ownClaimsOf(claims: Pick<BrandClaims, 'client'>, max = COMPANY_C
 }
 
 /** The census's two periods, as dates (`upload_date` is a date): the week's
- *  days `[from, to)` and the month to date `[month start, to)`. Pure. */
+ *  days `[from, to)` and its month, `[month start, to)` so far, or the month
+ *  the week started in, in full, for a week that carried past its end (M2,
+ *  lib/written/month.ts). Pure. */
 export function postPeriods(window: { from: string; to: string }): { week: { from: string; to: string }; month: { from: string; to: string } } {
   const to = window.to.slice(0, 10)
-  return { week: { from: window.from.slice(0, 10), to }, month: { from: monthStartOf(window.to), to } }
+  const reading = readingMonthOf(window)
+  return { week: { from: window.from.slice(0, 10), to }, month: { from: reading.month, to: reading.complete ? reading.to.slice(0, 10) : to } }
 }
 
 /** The context as the writer reads it, in words and without a number. Pure. */
-export function companyLines(company: string, ctx: CompanyContext | null | undefined, month: string): string {
+export function companyLines(company: string, ctx: CompanyContext | null | undefined, month: string, complete = false): string {
   if (!ctx) return ''
-  const name = longMonth(month)
   const sells = [
     ctx.sells.noun ? `${company} sells ${ctx.sells.noun}.` : '',
     ctx.sells.description ? `In its own words, its market is: ${ctx.sells.description}` : '',
     ctx.sells.keywords.length ? `Its market is followed by these words: ${ctx.sells.keywords.join(', ')}.` : '',
   ].filter(Boolean)
   const posted = (n: number | null, when: string) => (n == null ? '' : n > 0 ? `${company} published posts of its own ${when}.` : `${company} published no post of its own ${when}.`)
-  const posts = [posted(ctx.posts.week, 'this week'), posted(ctx.posts.month, `in ${name} so far`)].filter(Boolean)
+  const posts = [posted(ctx.posts.week, 'this week'), posted(ctx.posts.month, inMonth(month, complete))].filter(Boolean)
   return [
     `About ${company} (context for "What it means for ${company}"; none of this is what the market said):`,
     sells.length ? `- What ${company} sells: ${sells.join(' ')}` : '',

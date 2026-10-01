@@ -439,7 +439,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (`weekReadSendState`, `runSchedule`). A review schedule's email goes to the
   OPERATOR (`ALERT_EMAIL`), not the members, wherever the Studio is hidden from
   the tenant or its sending is locked (`reviewAudience`,
-  `lib/schedules/members.ts`). Offline preview of a stored read:
+  `lib/schedules/members.ts`), and a build that has not gone out is readable
+  by its reviewer alone (`lib/reports/held.ts`). A week that STARTS in one
+  month and ends in the next is restated against the month it started in,
+  in full ("16 in September", "September in total"), never "October so far";
+  a week inside one month, against that month so far (`readingMonthOf`,
+  `lib/written/month.ts`). Offline preview of a stored read:
   `scripts/weekly-read-email.ts`.
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
   the email body are produced in route handlers (`/api/export`,

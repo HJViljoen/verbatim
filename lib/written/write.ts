@@ -7,6 +7,7 @@ import { CALIBRATED_PROSE_RULE, noDirectionRule } from '../pipeline/prose-rules'
 import { noDashes } from '../reports/documents/scrub'
 import type { FigureTable } from '../reports/types'
 import { companyLines, type CompanyContext } from './company'
+import { inMonth, readingMonthOf } from './month'
 import { standsAlone } from './sure'
 import { firstHeardThisWeek, type PoolCandidate, type StandingFact, type WeekPool } from './types'
 
@@ -145,15 +146,26 @@ export const candidateKeys = (c: Pick<PoolCandidate, 'id'>) => ({ week: `${c.id.
  * category, where the theme is counted. Compose adds its own lines' keys to
  * the stored table; these stay in it, so a key the writer cited resolves.
  */
-export function writerFigures(pool: Pick<WeekPool, 'month' | 'candidates'>): FigureTable {
-  const month = longMonth(pool.month)
+export function writerFigures(pool: Pick<WeekPool, 'month' | 'candidates' | 'monthComplete'>): FigureTable {
+  // The month so far, or the month the week started in, in full (M2).
+  const inM = inMonth(pool.month, pool.monthComplete)
   const out: FigureTable = {}
   for (const c of pool.candidates) {
     const k = candidateKeys(c)
     out[k.week] = { label: `videos this week in which people talked about "${c.label}"`, value: fmtInt(c.weekVideos), kind: 'count' }
-    out[k.month] = { label: `videos in ${month} so far in which people talked about "${c.label}"`, value: fmtInt(c.monthK), kind: 'count' }
+    out[k.month] = { label: `videos ${inM} in which people talked about "${c.label}"`, value: fmtInt(c.monthK), kind: 'count' }
   }
   return out
+}
+
+/** The week's line in the writer's user message: the month it falls in, or,
+ *  for a week that carried past the end of the month it started in, both
+ *  months and which one "this month" means (M2). Pure. */
+export function weekPromptLine(pool: Pick<WeekPool, 'month' | 'window' | 'monthComplete'>): string {
+  const month = longMonth(pool.month)
+  if (!pool.monthComplete) return `The week: the latest seven days, in ${month}.`
+  const end = longMonth(readingMonthOf(pool.window).endMonth)
+  return `The week: the latest seven days, from the end of ${month} into the start of ${end}. "This month" below means ${month}, the whole month.`
 }
 
 // ---- The prompt ------------------------------------------------------------------------------
@@ -222,7 +234,6 @@ function heardLine(c: PoolCandidate, window: WeekPool['window']): string {
 }
 
 export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user: string; subjects: WriterSubject[] } {
-  const month = longMonth(a.pool.month)
   const subjects = writerSubjects(a.standing)
   const co = a.company
   // The front page's own words for what the market is (market-frame.ts): the
@@ -328,7 +339,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
   const firstHeard = a.pool.candidates.filter((c) => firstHeardThisWeek(c, a.pool.window)).map((c) => c.id)
   const user = [
     `Company: ${co}`,
-    `The week: the latest seven days, in ${month}.`,
+    weekPromptLine(a.pool),
     a.previous && a.previous.headlines.length
       ? `Last week's headlines:\n${a.previous.headlines.map((h) => `- ${h}`).join('\n')}`
       : 'Last week: no read.',
@@ -338,7 +349,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
       ? `First heard this week: ${firstHeard.join(', ')}. Only these may go under new_this_week.`
       : 'First heard this week: none. new_this_week is empty.',
     subjectLines.length ? `Subjects ${co} follows:\n${subjectLines.join('\n\n')}` : `Subjects ${co} follows: none with anything said this month.`,
-    companyLines(co, a.context, a.pool.month) || `About ${co}: nothing recorded beyond its name.`,
+    companyLines(co, a.context, a.pool.month, a.pool.monthComplete) || `About ${co}: nothing recorded beyond its name.`,
   ].join('\n\n')
   return { system, user, subjects }
 }

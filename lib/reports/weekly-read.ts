@@ -1,4 +1,5 @@
 import { longMonth } from '../format'
+import { coveredDays, monthHeading } from '../written/month'
 import type { FigureTable } from './types'
 import type { StoredWeekRead } from '../written/store'
 import type { QuoteRef, WeekMarketFigures, WeekReadData } from '../written/types'
@@ -18,38 +19,25 @@ export const WEEKLY_READ_TITLE = 'This week in your market'
  *  nothing in an inbox is cut mid-claim. */
 export const WEEKLY_READ_SUBJECT_MAX = 140
 
-const DAY_MS = 86_400_000
-
-function utcDay(ms: number): { y: number; m: number; d: number } {
-  const t = new Date(ms)
-  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }
-}
-
-const monthOf = (x: { y: number; m: number }) => longMonth(`${x.y}-${String(x.m).padStart(2, '0')}-01`)
+const monthOf = (day: string) => longMonth(`${day.slice(0, 7)}-01`)
+const dayOf = (day: string) => Number(day.slice(8, 10))
 
 /**
- * "21 to 27 September": the days the read covers, named as the reader counts
- * them. The window is the run's frozen, half-open `[from, to)`, and on the
- * Sunday cadence it is seven days ending on the morning of the run, so it is
- * named as the seven calendar days ending on the run's day (UTC, as every
- * date in the product is printed): the window's length in whole days, ending
- * on the day of its last instant. A thirty-day window is named as thirty days
+ * "28 September to 4 October": the comment dates the read covers, named as
+ * the reader counts them (`coveredDays`, lib/written/month.ts). A comment is
+ * dated by its date alone, so the Sunday window [Sun 27 Sep 04:03, Sun 4 Oct
+ * 04:02) holds 28 September to 4 October: a comment dated 27 September sits at
+ * 00:00, before the window opens. A thirty-day window is named as thirty days
  * and a mid-week manual run as the days it covers; nothing here assumes a week.
  */
 export function weekReadDates(window: { from: string; to: string } | null | undefined): string {
-  if (!window) return ''
-  const from = Date.parse(window.from)
-  const to = Date.parse(window.to)
-  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return ''
-  const days = Math.max(1, Math.round((to - from) / DAY_MS))
-  const lastMs = to - 1
-  const last = utcDay(lastMs)
-  const lastStart = Date.UTC(last.y, last.m - 1, last.d)
-  const first = utcDay(lastStart - (days - 1) * DAY_MS)
-  if (days === 1) return `${last.d} ${monthOf(last)}`
-  if (first.y === last.y && first.m === last.m) return `${first.d} to ${last.d} ${monthOf(last)}`
-  if (first.y === last.y) return `${first.d} ${monthOf(first)} to ${last.d} ${monthOf(last)}`
-  return `${first.d} ${monthOf(first)} ${first.y} to ${last.d} ${monthOf(last)} ${last.y}`
+  const c = coveredDays(window)
+  if (!c) return ''
+  const [first, last] = [c.first, c.last]
+  if (c.days === 1) return `${dayOf(last)} ${monthOf(last)}`
+  if (first.slice(0, 7) === last.slice(0, 7)) return `${dayOf(first)} to ${dayOf(last)} ${monthOf(last)}`
+  if (first.slice(0, 4) === last.slice(0, 4)) return `${dayOf(first)} ${monthOf(first)} to ${dayOf(last)} ${monthOf(last)}`
+  return `${dayOf(first)} ${monthOf(first)} ${first.slice(0, 4)} to ${dayOf(last)} ${monthOf(last)} ${last.slice(0, 4)}`
 }
 
 /** The week in one line as the read stores it: v3's headline; an older read
@@ -129,6 +117,10 @@ export interface WeeklyReadView {
    *  seen and the finding's quote as well). */
   findings: { headline: string; line: string; evidence: string; saw: string; quote: ResolvedQuote | null }[]
   market: WeekMarketFigures | null
+  /** The heading over the month's two numbers: "September so far" while the
+   *  month is under way, "September in total" for a week that carried past
+   *  its end (lib/written/month.ts). */
+  monthHeading: string
   /** The read's printed figures: every `[[key]]` above resolves here. */
   figures: FigureTable
   month: string
@@ -184,7 +176,7 @@ export function weeklyReadView(read: WeekReadData): WeeklyReadView {
     return {
       lead: inShort ? { label: 'In short', body: inShort } : null,
       story: [], implications: [], watch: [], newThisWeek: [],
-      findings, market: null, figures, month: read.month,
+      findings, market: null, monthHeading: monthHeading(read.month, false), figures, month: read.month,
     }
   }
   const line = weekReadLine(read)
@@ -196,6 +188,7 @@ export function weeklyReadView(read: WeekReadData): WeeklyReadView {
     newThisWeek: (read.newThisWeek ?? []).map((x) => ({ body: (x.body ?? '').trim(), evidence: (x.evidence ?? '').trim() })).filter((x) => x.body),
     findings,
     market: read.market ?? null,
+    monthHeading: monthHeading(read.month, read.monthComplete),
     figures,
     month: read.month,
   }

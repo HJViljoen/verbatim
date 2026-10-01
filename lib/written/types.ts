@@ -124,6 +124,11 @@ export interface WeekPool {
   weekVideos: number; weekComments: number; monthVideos: number   // category, read lane
   candidates: PoolCandidate[]            // eligible (T3b) = lenientVideos ≥ 3 AND gatedVideos ≥ 1, maker segments excluded, maker-led themes out (maker share of the window's videos over HEADLINE_MAX_MAKER_SHARE); ranked lenientVideos, then gatedVideos, then weekVideos; cap 12
   thin: boolean                          // < 3 eligible candidates
+  /** ADDITIVE (M2, 1 Oct): the week started in the month before the one it
+   *  ended in, so `month` is the month it started in and every month figure
+   *  is that month IN FULL ("in September", "September in total"), not "so
+   *  far" (lib/written/month.ts `readingMonthOf`). Absent is false. */
+  monthComplete?: boolean
   /** ADDITIVE (v3): the market's week and month to date. Absent on a pool
    *  saved before v3. */
   market?: WeekMarketFigures | null
@@ -345,6 +350,9 @@ export interface WeekReadDataV2 extends WeekReadCommon {
   newThisWeek: WeekReadNewItem[]
   watch: WeekReadWatchItem[]
   market: WeekMarketFigures | null
+  /** ADDITIVE (M2): the month figures are `month` in full, the week having
+   *  carried past its end; absent or false, the month so far. */
+  monthComplete?: boolean
   promptVersion: 'week_read_v3'
 }
 

@@ -51,6 +51,7 @@ import type { QuoteFit } from '../lib/written/fit'
 import { buildWeekRead, finishWeekRead, loadWeekReadInputs, rowOf, type BuiltWeekRead, type WeekReadInputs } from '../lib/written/step'
 import { loadWeekReadRow, saveWeekRead, weekReadsApplied } from '../lib/written/store'
 import { companyLines, loadCompanyContext } from '../lib/written/company'
+import { inMonth } from '../lib/written/month'
 import { quoteValue } from '../lib/written/substance'
 import { firstHeardThisWeek, type PoolCandidate, type QuoteRef, type WeekReadDataV2 } from '../lib/written/types'
 import { buildWeekReadPrompts, writerFigures } from '../lib/written/write'
@@ -175,10 +176,10 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
     '## The market this week (the Dashboard\'s figures)',
     '',
     m
-      ? `${fig('market_week_videos')} videos and ${fig('market_week_comments')} comments in your market this week · ${fig('market_month_videos')} videos and ${fig('market_month_comments')} comments in ${month} so far`
+      ? `${fig('market_week_videos')} videos and ${fig('market_week_comments')} comments in your market this week · ${fig('market_month_videos')} videos and ${fig('market_month_comments')} comments ${inMonth(d.month, d.monthComplete)}`
       : '_(not read)_',
     '',
-    `<sub>Market = the category and the tracked brands, the client's own posts out (the standing levels' base). The category alone: ${built.pool.weekVideos} videos and ${built.pool.weekComments} comments this week, ${built.pool.monthVideos} videos in the month so far.</sub>`,
+    `<sub>Market = the category and the tracked brands, the client's own posts out (the standing levels' base). The category alone: ${built.pool.weekVideos} videos and ${built.pool.weekComments} comments this week, ${built.pool.monthVideos} videos ${inMonth(built.pool.month, built.pool.monthComplete)}.</sub>`,
     '',
     '---',
     '',
@@ -253,7 +254,7 @@ function render(company: string, runId: string, built: BuiltWeekRead, words: Map
   }
   out.push(`### About ${company} (the writer's context for "What it means")`, '')
   if (context) {
-    out.push(companyLines(company, context, d.month), '', `<sub>Own posts (dated by the post): ${context.posts.week ?? '—'} this week, ${context.posts.month ?? '—'} in ${month} so far.</sub>`, '')
+    out.push(companyLines(company, context, d.month, d.monthComplete), '', `<sub>Own posts (dated by the post): ${context.posts.week ?? '—'} this week, ${context.posts.month ?? '—'} ${inMonth(d.month, d.monthComplete)}.</sub>`, '')
   } else out.push('_(none: the writer was told nothing about the company)_', '')
   out.push('### The subjects', '')
   for (const f of built.standing) {

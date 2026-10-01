@@ -59,6 +59,20 @@ describe('the weekly read email: the approved design, top to bottom', () => {
     expect(withNew.indexOf('New this week')).toBeLessThan(withNew.indexOf('This week’s findings'))
   })
 
+  it('the month\'s two numbers: "September so far" for a week inside September, "September in total" for a week that carried into October (M2)', () => {
+    expect(cardText()).toContain('September so far')
+    expect(cardText()).not.toContain('September in total')
+    const crossing = cardText(sealandSnapshot(sealandRead({
+      window: { from: '2026-09-27T04:03:42.768Z', to: '2026-10-04T04:02:10.000Z' },
+      monthComplete: true,
+      findings: sealandRead().findings.map((f, i) => ({ ...f, evidence: `[[f${i + 1}_week]] videos this week · [[f${i + 1}_month]] in September` })),
+    })))
+    expect(crossing).toContain('28 September to 4 October')
+    expect(crossing).toContain('September in total')
+    expect(crossing).not.toContain('so far')
+    expect(crossing).toContain('7 videos this week · 16 in September')
+  })
+
   it('a read with no watch line, no implications and no numbers prints none of those headings', () => {
     const bare = cardText(sealandSnapshot(sealandRead({ watch: [], implications: [], market: null })))
     for (const heading of ['Worth watching next week', 'What it means for Sealand', 'Your market this week', '4,777', '21,468']) expect(bare).not.toContain(heading)

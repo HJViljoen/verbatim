@@ -12,6 +12,7 @@ import {
   type WeekReadImplication, type WeekReadNewItem, type WeekReadParagraph, type WeekReadStanding, type WeekReadWatchItem,
 } from './types'
 import { WEEK_FINDINGS_MAX, WEEK_READ_MAX, WEEK_READ_PROMPT_VERSION, type WriterSubject } from './write'
+import { inMonth } from './month'
 
 // From the scrubbed writer's output to the stored read (plan T3; v3 30 Sep).
 // Pure.
@@ -62,16 +63,18 @@ import { WEEK_FINDINGS_MAX, WEEK_READ_MAX, WEEK_READ_PROMPT_VERSION, type Writer
 export { evidenceOf, monthEvidenceOf, sureOf } from './sure'
 
 /** An evidence line: what a finding (or a first-heard conversation) rests on
- *  this week, stated again as its month to date (AGENTS.md: a week is never
- *  printed alone). `key` names its figures (`f1` → `f1_week`, `f1_month`);
- *  `about` is what the label says they are behind. */
-export function evidenceLine(key: string, videos: { week: number; month: number }, about: string, month: string): TokenSentence {
-  const name = longMonth(month)
+ *  this week, stated again as its month (AGENTS.md: a week is never printed
+ *  alone): the month so far, or, for a week that carried past the end of the
+ *  month it started in, that month in full ("16 in September", M2;
+ *  lib/written/month.ts). `key` names its figures (`f1` → `f1_week`,
+ *  `f1_month`); `about` is what the label says they are behind. */
+export function evidenceLine(key: string, videos: { week: number; month: number }, about: string, month: string, complete = false): TokenSentence {
+  const inM = inMonth(month, complete)
   return {
-    body: `[[${key}_week]] videos this week · [[${key}_month]] in ${name} so far`,
+    body: `[[${key}_week]] videos this week · [[${key}_month]] ${inM}`,
     figures: {
       [`${key}_week`]: { label: `videos this week behind ${about}`, value: fmtInt(videos.week), kind: 'count' },
-      [`${key}_month`]: { label: `videos in ${name} so far behind ${about}`, value: fmtInt(videos.month), kind: 'count' },
+      [`${key}_month`]: { label: `videos ${inM} behind ${about}`, value: fmtInt(videos.month), kind: 'count' },
     },
   }
 }
@@ -103,17 +106,17 @@ export function contextLine(subject: StandingFact | null | undefined, isNew: boo
  * `market_week_videos`, `market_week_comments`, `market_month_videos`,
  * `market_month_comments`, each only where it was read.
  */
-export function marketFigureTable(m: WeekMarketFigures | null | undefined, month: string): FigureTable {
+export function marketFigureTable(m: WeekMarketFigures | null | undefined, month: string, complete = false): FigureTable {
   const out: FigureTable = {}
   if (!m) return out
-  const name = longMonth(month)
+  const inM = inMonth(month, complete)
   const put = (key: string, label: string, v: number | null) => {
     if (v != null && Number.isFinite(v)) out[key] = { label, value: fmtInt(v), kind: 'count' }
   }
   put('market_week_videos', 'videos in your market this week', m.week.videos)
   put('market_week_comments', 'comments in your market this week', m.week.comments)
-  put('market_month_videos', `videos in your market in ${name} so far`, m.month.videos)
-  put('market_month_comments', `comments in your market in ${name} so far`, m.month.comments)
+  put('market_month_videos', `videos in your market ${inM}`, m.month.videos)
+  put('market_month_comments', `comments in your market ${inM}`, m.month.comments)
   return out
 }
 
@@ -202,6 +205,8 @@ const excerpt = (s: string): string => (s.length > 80 ? `${s.slice(0, 77).trimEn
 export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
   const { pool } = a
   const month = pool.month
+  // The month in full for a week that carried past its end (M2).
+  const complete = pool.monthComplete === true
   const byId = new Map(pool.candidates.map((c) => [c.id.toUpperCase(), c]))
   const orderOf = new Map(pool.candidates.map((c, i) => [c.id.toUpperCase(), i]))
   const held: WeekReadHeld[] = []
@@ -270,7 +275,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     const quote = pickFindingQuote(preferred, j.cited, usedQuotes, a.fit?.get(j.i) ?? null)
     if (!quote) { held.push({ reason: 'no quote left to print', headline: j.f.headline }); continue }
     const n = findings.length + 1
-    const evidence = evidenceLine(`f${n}`, videos, `the finding "${j.f.headline}"`, month)
+    const evidence = evidenceLine(`f${n}`, videos, `the finding "${j.f.headline}"`, month, complete)
     // The finding's subject: the one its candidates name, where they name one.
     // Two subjects (a price finding resting on a comfort theme too) name
     // neither: "Part of Comfort" would misplace it.
@@ -320,7 +325,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     if (newThisWeek.length >= WEEK_READ_MAX.newItems) { hold(`past the first ${WEEK_READ_MAX.newItems}`, text, 'new'); continue }
     newSeen.add(c.id)
     const videos = { week: evidenceOf([c]), month: monthEvidenceOf([c]) }
-    const evidence = evidenceLine(`n${newThisWeek.length + 1}`, videos, `the conversation "${c.label}"`, month)
+    const evidence = evidenceLine(`n${newThisWeek.length + 1}`, videos, `the conversation "${c.label}"`, month, complete)
     Object.assign(figures, evidence.figures)
     backing.add(c.id.toUpperCase())
     newThisWeek.push({ themeId: c.themeId, body: text, videos, evidence: evidence.body })
@@ -418,7 +423,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
 
   // The market's week and month (the Dashboard's figures), frozen here.
   const market = pool.market ?? null
-  Object.assign(figures, marketFigureTable(market, month))
+  Object.assign(figures, marketFigureTable(market, month, complete))
 
   return {
     version: 2,
@@ -432,6 +437,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     findings,
     standing,
     market,
+    ...(complete ? { monthComplete: true } : {}),
     figures,
     held,
     model: a.model,
