@@ -25,7 +25,6 @@ const tile = (d: ReturnType<typeof agentFixture>, i = 0) => (
     measure={d.measure}
     citations={d.citations}
     basis={d.basis}
-    composer={<p>Check a plan</p>}
   />
 )
 
@@ -206,15 +205,6 @@ describe('the tile’s chrome', () => {
     // note beside the link.
     const markup = render(tile(measured))
     expect(markup.slice(markup.indexOf('Open the'))).not.toContain('the category · September')
-  })
-
-  it('gives the follow-up control its own rail above the footer', () => {
-    // The control is a SLOT (see `AnswerTile.composer`): the route mounts the
-    // client component, this block owns where it sits. The stand-in proves the
-    // slot renders inside the tile and above the footer rail.
-    const markup = render(tile(measured))
-    expect(markup).toContain('Check a plan')
-    expect(markup.indexOf('Check a plan')).toBeLessThan(markup.indexOf('Open the'))
   })
 
   it('reports no contract violation for either state', () => {

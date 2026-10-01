@@ -8,21 +8,22 @@ import { ASK_PDF_MAX_BYTES } from '@/lib/config'
 import { loadAskHistory } from '@/lib/pages/agent-thread'
 import { surface } from '@/lib/nav'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { AskCard } from '@/components/pages/agent/ask-card'
-import { EarlierQuestions } from '@/components/pages/agent/earlier'
+import { AskPill } from '@/components/pages/agent/ask-pill'
+import { HistoryDrawer } from '@/components/pages/agent/history-drawer'
 import type { Metadata } from 'next'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('ask').label }
 
-/** Earlier questions drawn on this page (the thread page's rail draws three). */
+/** Earlier questions in the sheet (the thread page's rail draws three). */
 const EARLIER_SHOWN = 20
 
-// The Agent (renamed from Ask; pages rebuild, 1 Oct; Page-Agent.dc.html): a
-// clean question box with the month's allowance inside it, and earlier
-// questions once there are any. No starters, no "what an answer reads", no
-// "not answered this month", no context line and no Export.
+// The Agent (renamed from Ask; pages rebuild, 1 Oct). The page centres on the
+// pill (Heinrich, 1 Oct: the 22 Aug pill back, with the rebuild's window,
+// "Check a plan" and allowance around it), and earlier questions live in a
+// sheet whose handle sits at the bottom of the pane. No starters, no "what an
+// answer reads", no "not answered this month", no context line and no Export.
 //
 // ONE WAVE: the role check, whether anything is searchable, the history and
 // the month's asking leave together. `?ask=` is a question another page sent
@@ -60,19 +61,23 @@ export default async function AgentPage({
   }
 
   return (
-    <PageFrame className="gap-[22px]">
+    // The page is the pane's height (`min-h-full`), so the pill can sit in the
+    // middle of what is left under the bar and the sheet's handle on its floor.
+    <PageFrame className="min-h-full">
       <PageBar title={surface('ask').label} />
-      <AskCard
-        // Keyed by the sent question: a new `?ask=` opens a new box.
-        key={ask ?? ''}
-        canSend={canSend && !blocked}
-        disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
-        ask={ask}
-        window={{ current: window, href: { days90: href('days90'), all: href('all') } }}
-        asked={notAnswered ? { asked: notAnswered.asked, cap: notAnswered.cap } : null}
-        planLimit={`PDF, up to ${Math.round(ASK_PDF_MAX_BYTES / (1024 * 1024))} MB`}
-      />
-      <EarlierQuestions history={history} />
+      <div className="flex flex-1 items-center justify-center pt-4 pb-24 max-sm:pb-20">
+        <AskPill
+          // Keyed by the sent question: a new `?ask=` opens a new box.
+          key={ask ?? ''}
+          canSend={canSend && !blocked}
+          disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
+          ask={ask}
+          window={{ current: window, href: { days90: href('days90'), all: href('all') } }}
+          asked={notAnswered ? { asked: notAnswered.asked, cap: notAnswered.cap } : null}
+          planLimit={`PDF, up to ${Math.round(ASK_PDF_MAX_BYTES / (1024 * 1024))} MB`}
+        />
+      </div>
+      <HistoryDrawer history={history} />
     </PageFrame>
   )
 }

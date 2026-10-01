@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment } from 'react'
 import Link from 'next/link'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockMovement } from '@/components/blocks/movement'
@@ -598,7 +598,6 @@ export function AnswerTile({
   measure,
   citations,
   basis,
-  composer,
   prevUpdateAt,
   row = 6,
   about,
@@ -608,18 +607,6 @@ export function AnswerTile({
   measure: AnswerMeasure | null
   citations: readonly Citation[]
   basis: AskBasis
-  /**
-   * The follow-up control, as a SLOT.
-   *
-   * `AgentComposer` is a client component that calls `useRouter`, and the
-   * render tier is one `renderToStaticMarkup` per block with no jsdom and no
-   * router — so a block that constructs it cannot be rendered in a test at
-   * all, which is a block whose printed words nothing checks. The route mounts
-   * the control; this block owns where it sits and what the rail under it
-   * says. (lib/test/render.ts: "a block that needs a click needs a different
-   * kind of test and probably a different kind of block".)
-   */
-  composer?: ReactNode
   /**
    * The update the turn BEFORE this one was answered against — `undefined` on
    * the first turn of a thread, which always prints its basis.
@@ -736,11 +723,6 @@ export function AnswerTile({
           Asking it again is safe.
         </p>
       )}
-
-      {/* The follow-up composer INSIDE the answer tile, above the footer rail —
-          where the artboard puts it. It carries "Check a plan" now, which the
-          thread page suppressed. */}
-      {composer ? <div className="border-t border-border/70 pt-3">{composer}</div> : null}
     </Tile>
   )
 }

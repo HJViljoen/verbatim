@@ -338,7 +338,7 @@ describe('T0a structural check 5: a refused pair on THIN data prints no month be
     expect(Object.keys(data.measure!.figures).filter((k) => /_prev_|_change$|_band$/.test(k))).toEqual([])
     // The page: the answer, its object readings and its fallbacks.
     const tile = markupText(render(
-      <AnswerTile turn={data.turns[0]} turnIndex={0} measure={data.measure} citations={data.citations} basis={data.basis} composer={null} />,
+      <AnswerTile turn={data.turns[0]} turnIndex={0} measure={data.measure} citations={data.citations} basis={data.basis} />,
     ))
     const about = markupText(render(<AboutReadings readings={data.about} />))
     const fallback = `${answerFallback(data.measure!)} ${groundedFallback(data.measure, f.findingId)}`

@@ -28,8 +28,8 @@ describe('the question another page sends to Ask', () => {
 
   it('is what the Ask index reads, and it keys the box, so a starter card refills it', () => {
     expect(page).toMatch(/const ask = sentQuestion\(sp\.ask\)/)
-    // The Agent's box since the pages rebuild (1 Oct): `AskCard`, keyed the same way.
-    expect(page).toMatch(/<AskCard\s+(?:\/\/[^\n]*\n\s*)*key=\{ask \?\? ''\}/)
+    // The Agent's box since the pill came back (1 Oct): `AskPill`, keyed the same way.
+    expect(page).toMatch(/<AskPill\s+(?:\/\/[^\n]*\n\s*)*key=\{ask \?\? ''\}/)
     // The window switch keeps the question, so it keeps the key and the box.
     expect(page).toMatch(/if \(ask\) q\.set\('ask', ask\)/)
   })
