@@ -18,10 +18,16 @@
  *    report_schedules either; the table is read to protect its parents.
  *
  * 2. "Delivered" is the line `drafts` will not cross. A snapshot was delivered
- *    if a `report_sends` row in status 'sent' points at it, or if a share link
- *    on it has ever been viewed. Either way a person outside this app has seen
- *    that report, and the `drafts` scope leaves it alone.
+ *    if a `report_sends` row ON THE PLATFORM points at it (`onPlatform`: sent,
+ *    or put on the client's platform without its email, `published_at`; the
+ *    backfill of 1 Oct, migration 20261106090000), or if a share link on it
+ *    has ever been viewed. Either way the client has it, and the `drafts`
+ *    scope leaves it alone. A published build that was never emailed is still
+ *    `ready`, which is not terminal, so `all` refuses it too (a blocker, below):
+ *    no purge removes a build the client's pages are reading.
  */
+
+import { onPlatform, publishedNotEmailed } from '../schedules/platform-state'
 
 export type PurgeScope = 'drafts' | 'all'
 
@@ -45,6 +51,10 @@ export interface SendRow {
   status: string
   claimed_at: string
   sent_at: string | null
+  /** When the operator put it on the client's platform without its email.
+   *  Absent where the script read a database the publish migration has not
+   *  reached (every row then reads unpublished, which each one is). */
+  published_at?: string | null
 }
 export interface BuildRow {
   id: string
@@ -167,17 +177,25 @@ export function planPurge(t: PurgeTables, opts: PurgeOptions): PurgePlan {
   const snapshotIds = new Set(t.snapshots.map((s) => s.id))
 
   // ── which snapshots were delivered to somebody ──────────────────────────
+  // Emailed, or published to the client's platform without the email: the
+  // one rule the pages, `heldOf` and the RLS policy read (`onPlatform`).
   const sentSnapshotIds = new Set(
     t.sends.filter((s) => s.status === 'sent' && s.snapshot_id).map((s) => s.snapshot_id as string),
+  )
+  const publishedSnapshotIds = new Set(
+    t.sends.filter((s) => onPlatform(s) && s.status !== 'sent' && s.snapshot_id).map((s) => s.snapshot_id as string),
   )
   const viewedSnapshotIds = new Set(
     t.links.filter((l) => l.view_count > 0 && l.snapshot_id).map((l) => l.snapshot_id as string),
   )
   const deliveredReason = (id: string): string | null => {
     const sent = sentSnapshotIds.has(id)
+    const published = !sent && publishedSnapshotIds.has(id)
     const viewed = viewedSnapshotIds.has(id)
     if (sent && viewed) return 'emailed, and its share link has been opened'
     if (sent) return 'emailed to a recipient list'
+    if (published && viewed) return "put on the client's platform, and its share link has been opened"
+    if (published) return "put on the client's platform (not emailed)"
     if (viewed) return 'its share link has been opened'
     return null
   }
@@ -202,7 +220,12 @@ export function planPurge(t: PurgeTables, opts: PurgeOptions): PurgePlan {
       kept.push({ table: 'report_sends', id: s.id, label: `${s.subject ?? 'no subject'} · ${s.status} · ${day(s.sent_at ?? s.claimed_at)}`, why: 'a delivery record, out of scope for drafts' })
       continue
     }
-    if (!TERMINAL_SEND.has(s.status)) {
+    if (publishedNotEmailed(s)) {
+      blockers.push(
+        `report_sends ${short(s.id)} is on the client's platform (published ${day(s.published_at ?? null)}, not emailed): ` +
+        `its build is what the client's pages read. A purge never removes a published build.`,
+      )
+    } else if (!TERMINAL_SEND.has(s.status)) {
       blockers.push(
         `report_sends ${short(s.id)} is in status '${s.status}', which is not terminal: a runner may still be working on it. ` +
         `Let it settle (or close it) before deleting its history.`,

@@ -17,6 +17,7 @@ import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { renderWeeklyReadEmail } from '@/lib/email/weekly-read'
 import { runSchedule } from '@/lib/schedules/run'
 import { mayReadHeld } from '@/lib/reports/held'
+import { isMissingPublishColumns, onPlatform, type PlatformSendState } from '@/lib/schedules/platform-state'
 import type { ScheduleRow } from '@/lib/schedules/types'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 
@@ -29,9 +30,11 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 //   without      → a dry preview at the workspace's current data: loaders +
 //                  cover, no PDF, no link, no send, no rows left behind
 //
-// A client reads an issue once it is SENT (`?send=` of a sent send); the dry
-// preview at today's data is the operator's (integration, 1 Oct; lead's
-// ruling 6: `mayBuildReports`), as building and sending are.
+// A client reads an issue once it is ON THE PLATFORM (`?send=` of a send that
+// is sent, or that the operator published without its email: `onPlatform`,
+// the rule the pages, `heldOf` and the snapshots' RLS read); the dry preview at
+// today's data is the operator's (integration, 1 Oct; lead's ruling 6:
+// `mayBuildReports`), as building and sending are.
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -49,21 +52,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const s = schedule as ScheduleRow
   const sendId = new URL(request.url).searchParams.get('send')
   // A BUILD THAT HAS NOT GONE OUT IS ITS REVIEWER'S (lib/reports/held.ts):
-  // to anyone else, a send shows only once it is sent, and a schedule whose
-  // builds wait for review has no preview at today's data (it would be the
-  // held build, rebuilt).
+  // to anyone else, a send shows only once it is on the platform (sent, or
+  // published without its email), and a schedule whose builds wait for review
+  // has no preview at today's data (it would be the held build, rebuilt).
   const readsHeld = mayReadHeld(session, session.clientId)
   const HELD = 'This report shows here once it has been sent.'
 
   if (sendId) {
-    const { data: send } = await admin.from('report_sends').select('snapshot_id, share_link_id, status').eq('id', sendId).eq('schedule_id', id).eq('client_id', session.clientId).maybeSingle()
-    if (!readsHeld && (send as { status?: string } | null)?.status !== 'sent') return note(HELD, 404)
-    const sid = (send as { snapshot_id: string | null } | null)?.snapshot_id
+    // With `published_at`, or without it on a database the publish migration
+    // has not reached (every row then reads unpublished, which each one is).
+    const readSend = (cols: string) => admin.from('report_sends').select(cols).eq('id', sendId).eq('schedule_id', id).eq('client_id', session.clientId).maybeSingle()
+    let sendRes = await readSend('snapshot_id, share_link_id, status, published_at')
+    if (sendRes.error && isMissingPublishColumns(sendRes.error)) sendRes = await readSend('snapshot_id, share_link_id, status')
+    const send = sendRes.data as unknown as (PlatformSendState & { snapshot_id: string | null; share_link_id: string | null }) | null
+    if (!readsHeld && !(send && onPlatform(send))) return note(HELD, 404)
+    const sid = send?.snapshot_id
     const row = sid ? await loadSnapshot(admin, sid) : null
     if (!row || row.kind !== 'report') return note('This send has no stored build to show.', 404)
     const data = await hydrateSnapshot<ReportSnapshotData>(admin, row)
     let shareUrl: string | null = null
-    const linkId = (send as { share_link_id: string | null } | null)?.share_link_id
+    const linkId = send?.share_link_id
     if (linkId) {
       const { data: link } = await admin.from('share_links').select('token, revoked_at').eq('id', linkId).maybeSingle()
       const l = link as { token: string; revoked_at: string | null } | null
@@ -117,8 +125,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { data: run } = await admin.from('pipeline_runs').select('id').eq('client_id', session.clientId).in('status', ['completed', 'partial']).order('completed_at', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
   const runId = (run as { id: string } | null)?.id
   if (!runId) return note('Nothing to show yet — your first update has not landed.', 409)
-  // Already sent for this update? Show that — free, and exactly what went out.
-  const { data: latest } = await admin.from('report_sends').select('id').eq('schedule_id', id).eq('run_id', runId).eq('status', 'sent').not('snapshot_id', 'is', null).maybeSingle()
+  // Already out for this update (sent, or published to the platform without
+  // its email)? Show that — free, and exactly what the client has.
+  const readLatest = (published: boolean) => {
+    const q = admin.from('report_sends').select('id').eq('schedule_id', id).eq('run_id', runId).not('snapshot_id', 'is', null)
+    return (published ? q.or('status.eq.sent,published_at.not.is.null') : q.eq('status', 'sent'))
+      .order('claimed_at', { ascending: false }).limit(1).maybeSingle()
+  }
+  let latestRes = await readLatest(true)
+  if (latestRes.error && isMissingPublishColumns(latestRes.error)) latestRes = await readLatest(false)
+  const latest = latestRes.data
   const latestId = (latest as { id: string } | null)?.id
   if (latestId) return Response.redirect(new URL(`/api/schedules/${id}/preview?send=${latestId}`, request.url), 307)
   const r = await runSchedule({ admin, schedule: s, runId, baseUrl: appBaseUrl(), mode: 'preview' })

@@ -112,10 +112,15 @@ describe('past issues: a build put on the platform without its email (the backfi
   const published: StudioSend = { id: 'p', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-p', artifact_id: null, subject: 'Sealand: the week', sent_at: null, published_at: '2026-10-01T18:00:00Z' }
   const sent: StudioSend = { id: 's', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-s', artifact_id: 'pdf-s', subject: 'Sealand: the next week', sent_at: '2026-10-05T07:00:00Z' }
 
-  it('is listed by when it reached the platform, and says honestly that it was not emailed', () => {
+  it('is listed by when it reached the platform, and prints that day like any issue (never how it got there)', () => {
     const issues = pastIssues([published, sent], [weeklyRead])
-    expect(issues.map((i) => [i.id, i.sentOn])).toEqual([['s', 'Mon 5 Oct'], ['p', 'On the platform · not emailed']])
+    expect(issues.map((i) => [i.id, i.sentOn])).toEqual([['s', 'Mon 5 Oct'], ['p', 'Thu 1 Oct']])
     expect(issues[1]).toMatchObject({ snapshotId: 'snap-p', artifactId: null, sentAt: '2026-10-01T18:00:00Z' })
+    expect(issues.map((i) => i.sentOn).join(' ')).not.toMatch(/platform|emailed/i)
+  })
+
+  it('a publish late in the UTC day prints the South African day', () => {
+    expect(pastIssues([{ ...published, published_at: '2026-10-01T22:30:00Z' }], [weeklyRead])[0].sentOn).toBe('Fri 2 Oct')
   })
 
   it('a published build that was emailed afterwards prints its email\'s day', () => {

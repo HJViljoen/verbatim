@@ -36,6 +36,39 @@ const schedule = (id: string, reportId: string, over: Partial<PurgeTables['sched
 const weekly = (id: string, over: Partial<PurgeTables['weekly'][number]> = {}) =>
   ({ id, subject: 'Update', week_start: '2026-08-02', week_end: '2026-08-09', sent_at: null, sent_to: [], ...over })
 
+describe('planPurge — a build published to the platform, not emailed, counts as delivered (release/oct2 review)', () => {
+  const t = tables({
+    snapshots: [snapshot('draft'), snapshot('published'), snapshot('both')],
+    sends: [
+      send('s-pub', { snapshot_id: 'published', status: 'ready', sent_at: null, published_at: ago(10 * DAY) }),
+      send('s-both', { snapshot_id: 'both', status: 'sent', published_at: ago(12 * DAY) }),
+      send('s-held', { snapshot_id: 'draft', status: 'ready', sent_at: null, published_at: null }),
+    ],
+  })
+
+  it('drafts keeps it, as it keeps an emailed one, and says why', () => {
+    const p = planPurge(t, { scope: 'drafts', now: NOW })
+    expect(ids(p.snapshots)).toEqual(['draft'])
+    expect(keptIds(p, 'report_snapshots')).toEqual(['both', 'published'])
+    expect(p.kept.find((k) => k.id === 'published')?.why).toBe("delivered: put on the client's platform (not emailed)")
+    expect(p.kept.find((k) => k.id === 'both')?.why).toBe('delivered: emailed to a recipient list')
+  })
+
+  it('all refuses it outright: a purge never removes a build the client\'s pages read', () => {
+    const p = planPurge(t, { scope: 'all', now: NOW })
+    expect(p.blockers.some((b) => b.includes('s-pub'.slice(0, 8)) && b.includes("on the client's platform"))).toBe(true)
+    // The held, unpublished `ready` row blocks as it always has (not terminal),
+    // and not under the published wording.
+    expect(p.blockers.some((b) => b.includes('s-held') && b.includes('not terminal'))).toBe(true)
+    expect(p.blockers.some((b) => b.includes('s-held') && b.includes('platform'))).toBe(false)
+  })
+
+  it('a row read without the column (a database before the publish migration) reads unpublished', () => {
+    const before = tables({ snapshots: [snapshot('x')], sends: [send('s-x', { snapshot_id: 'x', status: 'ready', sent_at: null })] })
+    expect(ids(planPurge(before, { scope: 'drafts', now: NOW }).snapshots)).toEqual(['x'])
+  })
+})
+
 describe('planPurge — what counts as delivered', () => {
   const t = tables({
     snapshots: [snapshot('draft'), snapshot('emailed'), snapshot('opened'), snapshot('minted')],

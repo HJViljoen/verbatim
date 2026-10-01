@@ -5,9 +5,13 @@ import { buttonClass, Card, CardTitle } from './ui'
 import { ShareLinkButton } from './share-link-button'
 
 // Past issues: every issue that went out, newest first, to open in the
-// viewer, download as a PDF or share by link. Only SENT issues reach this list
-// (a held or unreviewed build is its reviewer's, lib/reports/held.ts), and the
-// card is not drawn until there is one.
+// viewer, download as a PDF or share by link. Only issues ON THE PLATFORM reach
+// this list: sent, or published without their email (`onPlatform`,
+// lib/schedules/platform-state.ts; a held or unreviewed build is its
+// reviewer's, lib/reports/held.ts), and the card is not drawn until there is
+// one. Each prints the day it reached the platform and nothing about how: that
+// a build was not emailed is the operator's to know (the workbench's history),
+// never a client's (§0a.1).
 //
 // THE ARTBOARD DOES NOT DRAW THIS CARD: Sealand had no sent issue when it was
 // made. It is the "Your reports" card's idiom (the same title, head and rows)

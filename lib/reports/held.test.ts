@@ -79,7 +79,8 @@ describe('every door into a build asks the rule', () => {
     ['app/dashboard/studio/page.tsx', [/mayReadHeld\(session, clientId\) \|\| !\(await snapshotHeld\(createAdminClient\(\), clientId, viewId\)\)/, /q\.or\('status\.eq\.sent,published_at\.not\.is\.null'\)/, /\.filter\(\(s\) => onPlatform\(s\) && \(s\.sent_at \|\| s\.published_at\)\)/]],
     ['app/api/share/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, snapshotId\)/]],
     ['app/api/artifacts/[id]/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /snapshotHeld\(admin, session\.clientId, row\.snapshot_id\)/]],
-    ['app/api/schedules/[id]/preview/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /status !== 'sent'\) return note\(HELD/, /!readsHeld && s\.review\) return note\(HELD/]],
+    // The email of a send: on the platform, the pages' rule (release/oct2 review).
+    ['app/api/schedules/[id]/preview/route.ts', [/mayReadHeld\(session, session\.clientId\)/, /!readsHeld && !\(send && onPlatform\(send\)\)\) return note\(HELD/, /!readsHeld && s\.review\) return note\(HELD/]],
     ['app/api/schedules/[id]/send/route.ts', [/mode === 'test' && \(schedule as ScheduleRow\)\.review && !mayReadHeld\(session, session\.clientId\)/]],
   ]
   for (const [file, patterns] of doors) {

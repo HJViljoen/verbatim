@@ -107,9 +107,14 @@ describe('mayBuildReports: building and sending are the operator\'s (lead\'s rul
     })
   }
 
-  it('the dry preview is the operator\'s; a client reads a sent send\'s email only', () => {
+  it('the dry preview is the operator\'s; a client reads the email of a send on the platform only', () => {
     const text = src('app/api/schedules/[id]/preview/route.ts')
-    const sentOnly = text.indexOf("if (!readsHeld && (send as { status?: string } | null)?.status !== 'sent') return note(HELD, 404)")
+    // On the platform: sent, or published without its email (`onPlatform`, the
+    // rule the pages and the snapshots' RLS read; release/oct2 review item 5).
+    const sentOnly = text.indexOf('if (!readsHeld && !(send && onPlatform(send))) return note(HELD, 404)')
+    expect(text).toContain("readSend('snapshot_id, share_link_id, status, published_at')")
+    expect(text).not.toMatch(/status !== 'sent'\) return note/)
+    expect(text).not.toMatch(/\.eq\('status', 'sent'\)\.not\('snapshot_id'/)
     const dry = text.indexOf('if (!mayBuildReports(session)) return note(HELD, 403)')
     const build = text.indexOf("runSchedule({ admin, schedule: s, runId, baseUrl: appBaseUrl(), mode: 'preview' })")
     expect(sentOnly).toBeGreaterThan(0)

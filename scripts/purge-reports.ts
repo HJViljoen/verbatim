@@ -3,6 +3,7 @@ import {
   planPurge, planTotal,
   type PurgeScope, type PurgeTables, type PurgePlan,
 } from '../lib/reports/purge'
+import { isMissingPublishColumns } from '../lib/schedules/platform-state'
 
 // Delete a workspace's reports. Dry by default.
 //
@@ -16,7 +17,8 @@ import {
 // each, so the scope can be confirmed before anything is deleted.
 //
 //   --scope drafts  everything that was never delivered to anybody: snapshots
-//                   with no `sent` send row and no share link that has ever
+//                   with no send row on the platform (`sent`, or published
+//                   without its email) and no share link that has ever
 //                   been opened, their builds (plus failed and orphan builds),
 //                   artifacts and their Storage objects, export events, share
 //                   links nothing has opened, `weekly_reports` rows that were
@@ -25,7 +27,9 @@ import {
 //                   share links and views, `report_sends`, emailed
 //                   `weekly_reports`. This breaks URLs that are sitting in
 //                   emails people already received. Read the KEPT section of a
-//                   `drafts` run first to see what that is.
+//                   `drafts` run first to see what that is. A build published
+//                   to the client's platform and never emailed blocks `all`
+//                   outright: the client's pages are reading it.
 //
 // WHAT IT WILL NOT DO, and why the rule is worth the code:
 //
@@ -75,10 +79,25 @@ const kb = (n: number | null) => (n === null ? '?' : n >= 1_000_000 ? `${(n / 1_
 async function load(admin: ReturnType<typeof createAdminClient>, clientId: string): Promise<PurgeTables> {
   const eq = <T>(table: string, cols: string) =>
     selectAll<T>(() => admin.from(table).select(cols).eq('client_id', clientId) as never)
+  // The sends with `published_at` (a build put on the client's platform without
+  // its email is delivered, lib/reports/purge.ts), or without it on a database
+  // the publish migration has not reached, where every row reads unpublished.
+  // selectAll rethrows with the message only, so the column is matched by name
+  // as lib/reports/held.ts does.
+  const SEND_COLS = 'id, snapshot_id, share_link_id, subject, recipients, status, claimed_at, sent_at'
+  const sendsOf = async (): Promise<PurgeTables['sends']> => {
+    try {
+      return await eq<PurgeTables['sends'][number]>('report_sends', `${SEND_COLS}, published_at`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      if (!isMissingPublishColumns(e) && !(/published_at/.test(message) && /does not exist|schema cache/.test(message))) throw e
+      return eq<PurgeTables['sends'][number]>('report_sends', SEND_COLS)
+    }
+  }
 
   const [snapshots, sends, builds, artifacts, links, exportEvents, edits, reports, schedules, weekly] = await Promise.all([
     eq<PurgeTables['snapshots'][number]>('report_snapshots', 'id, kind, title, report_id, created_at'),
-    eq<PurgeTables['sends'][number]>('report_sends', 'id, snapshot_id, share_link_id, subject, recipients, status, claimed_at, sent_at'),
+    sendsOf(),
     eq<PurgeTables['builds'][number]>('report_builds', 'id, report_id, snapshot_id, status, started_at, error'),
     eq<PurgeTables['artifacts'][number]>('artifacts', 'id, snapshot_id, format, bytes, storage_path, rendered_at'),
     eq<PurgeTables['links'][number]>('share_links', 'id, snapshot_id, title, view_count, last_viewed_at, created_at'),
@@ -114,7 +133,7 @@ function printPlan(p: PurgePlan, t: PurgeTables) {
   section('artifacts (+ Storage object)', p.artifacts.map((a) => `${short(a.id)}  ${a.format}  ${kb(a.bytes)}  ${day(a.rendered_at)}  ${a.storage_path}`))
   section('share_links (+ their share_views)', p.links.map((l) => `${short(l.id)}  ${l.title ?? 'untitled'}  ${l.view_count} view${l.view_count === 1 ? '' : 's'}  last viewed ${day(l.last_viewed_at)}  created ${day(l.created_at)}`))
   section('report_builds', p.builds.map((b) => `${short(b.id)}  ${b.status}  ${day(b.started_at)}  snapshot ${b.snapshot_id ? short(b.snapshot_id) : '(none)'}${b.error ? `  "${b.error}"` : ''}`))
-  section('report_sends', p.sends.map((s) => `${short(s.id)}  ${s.status}  ${day(s.sent_at ?? s.claimed_at)}  "${s.subject ?? 'no subject'}"  to ${(s.recipients ?? []).join(', ') || 'nobody'}`))
+  section('report_sends', p.sends.map((s) => `${short(s.id)}  ${s.status}${s.published_at ? ` (published ${day(s.published_at)})` : ''}  ${day(s.sent_at ?? s.claimed_at)}  "${s.subject ?? 'no subject'}"  to ${(s.recipients ?? []).join(', ') || 'nobody'}`))
   section('report_snapshots', p.snapshots.map((s) => `${short(s.id)}  ${s.kind}  ${day(s.created_at)}  "${s.title ?? 'untitled'}"`))
   section('weekly_reports (legacy)', p.weekly.map((w) => `${short(w.id)}  ${day(w.week_start)} to ${day(w.week_end)}  ${w.sent_at ? `emailed ${day(w.sent_at)} to ${(w.sent_to ?? []).join(', ') || 'nobody'}` : 'never emailed'}  "${w.subject ?? 'no subject'}"`))
   section('reports (definitions)', p.reports.map((r) => `${short(r.id)}  ${r.kind ?? '?'}/${r.template_key ?? '?'}  ${day(r.created_at)}  "${r.title ?? 'untitled'}"`))

@@ -13,7 +13,6 @@
  */
 
 import { artefactTitle, scheduleArtefact } from '@/lib/schedules/artefact'
-import { PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 
 export type StudioArtefact = 'weekly_read' | 'brief:sales' | 'brief:marketing' | 'brief:content' | 'brief:leadership'
 
@@ -219,7 +218,7 @@ export function studioRows(input: {
     const schedule = input.schedules.find((s) => studioArtefactOf(s) === def.artefact) ?? null
     const ids = new Set(input.schedules.filter((s) => studioArtefactOf(s) === def.artefact).map((s) => s.id))
     // The latest ISSUE is the latest email: a build put on the platform
-    // without its email is not one (it is listed in the past issues, saying so).
+    // without its email is not one (it is listed in the past issues, by the day it was published).
     const newest = input.sends
       .filter((x): x is StudioSend & { sent_at: string } => x.schedule_id != null && ids.has(x.schedule_id) && Boolean(x.sent_at))
       .sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0] ?? null
@@ -249,8 +248,10 @@ export interface PastIssue {
   id: string
   title: string
   report: string
-  /** "Mon 5 Oct", or `PUBLISHED_NOT_EMAILED` for a build on the platform that
-   *  was not emailed. */
+  /** "Mon 5 Oct": the day it reached the platform (its email, else its
+   *  publishing). Clients read the day alone, like any issue: that a build
+   *  went on the platform without its email is the operator's to know (the
+   *  workbench's history says it; §0a.1, no delivery mechanics). */
   sentOn: string
   /** When it reached the platform (its email, else its publishing). */
   sentAt: string
@@ -259,8 +260,10 @@ export interface PastIssue {
 }
 
 /** Every issue on the platform, newest first, named by the report it belongs
- *  to: each one sent, and each one put on the platform without its email,
- *  which says so (`PUBLISHED_NOT_EMAILED`) where the others print their day. */
+ *  to: each one sent, and each one put on the platform without its email.
+ *  Both print the day they reached the platform; the list never says how
+ *  (the fresh review of release/oct2, item 1: "On the platform · not emailed"
+ *  under a client's "Sent" was process talk, and the issue lost its date). */
 export function pastIssues(sends: readonly StudioSend[], schedules: readonly StudioSchedule[]): PastIssue[] {
   return [...sends]
     .filter((s) => issueAt(s) !== '')
@@ -275,7 +278,7 @@ export function pastIssues(sends: readonly StudioSend[], schedules: readonly Stu
         id: s.id,
         title: s.subject?.trim() || report,
         report,
-        sentOn: s.sent_at ? issueDay(s.sent_at) : PUBLISHED_NOT_EMAILED,
+        sentOn: issueDay(issueAt(s)),
         sentAt: issueAt(s),
         snapshotId: s.snapshot_id,
         artifactId: s.artifact_id,
