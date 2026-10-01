@@ -8,9 +8,8 @@ import { selectAll } from '../supabase-admin'
 import { loadChanges, loadWindowReading, readingHandle } from '../reading/read'
 import { marketAudiences } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
-import { loadDeliveredRuns, marketRivalAudiences, updateInstant } from '../reading/reading-view'
+import { loadDeliveredRuns, loadReadingMonth, marketRivalAudiences, updateInstant } from '../reading/reading-view'
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
-import { WEEK_LINE_EXCLUDED, WEEK_LINE_FIRST_WEEK } from '../reading/week-line'
 import {
   addDays, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, weekRules, weeksSinceOurChanges,
   type MarketWeekRowRaw, type WeekVolume,
@@ -22,6 +21,8 @@ import { loadPublishedWeekRead } from '../written/published'
 import type { WeekReadData, WeekReadStanding } from '../written/types'
 import type { FigureTable } from '../reports/types'
 import { adviceShortlist } from './advice-shortlist'
+import type { BrandList } from './brands'
+import { loadBrandList } from './brands-load'
 import { buildAdviceRows, type RecCopy } from './market-surface'
 import { POOL_FLOOR, segmentOf, THEME_FLOOR } from './overview-market/board'
 import { monthPhrase } from './week'
@@ -35,8 +36,9 @@ import { TABLE_MOVES } from '../subjects/types'
 //      run (`week_reads.data.market`, the market base: the category plus the
 //      tracked brands' audiences, the client's own posts out);
 //   2. "Week by week": the market's weekly videos and comments from the week
-//      of 28 September, only weeks that are settled and read one way; the
-//      block is omitted until two such weeks exist (rule 2: no empty frame);
+//      of 21 September (`HOME_FIRST_WEEK`), only weeks read one way; a week
+//      still filling is drawn faint, and the block is omitted until one such
+//      week exists (rule 2: no empty frame);
 //   3. the Agent box (the page draws it; nothing is read);
 //   4. six tiles, one number and a few short rows each, each appearing only
 //      when its fact exists.
@@ -128,12 +130,44 @@ export const HOME_TILES: readonly { key: HomeTileKey; title: string }[] = [
 /** Rows a tile prints at most (the artboard: three). */
 export const TILE_ROWS = 3
 
-/** Columns "Week by week" frames (the artboard: eight weeks from 28 Sep). */
+/** Columns "Week by week" frames (the artboard: eight weeks). */
 export const WEEK_COLUMNS = 8
 
 /** Clean weeks the chart needs before it is drawn at all (Heinrich, 1 Oct:
  *  from ONE clean week; a week still filling is drawn faint). */
 export const WEEKS_MIN = 1
+
+/**
+ * THE CHART'S FIRST WEEK: 21 September (the backfill's regate, 1 Oct evening;
+ * measured read-only on production, research/empty-blocks.md). That week was
+ * searched with today's search set (the 20 and 27 Sep gathers' lists are
+ * identical), gathered by one weekly gather (the 27 Sep run), and, once the
+ * regate has judged the videos the old check let in unjudged and removed the
+ * ones today's check drops, holds no video without a check that stands
+ * (`market_week_volumes`' `unchecked` reads the newest verdict, migration
+ * 20261106091000). Until then it holds such videos and is not drawn, by the
+ * same rule as any week. Weeks before it were gathered on other search sets
+ * (terms changed on 9, 13 and 17 Sep) and are never drawn.
+ *
+ * The Dashboard's own constant: the week line's `WEEK_LINE_FIRST_WEEK` and
+ * `WEEK_LINE_EXCLUDED` (the pipeline's kept same-age weeks, lib/reading/
+ * week-line.ts) are not moved.
+ */
+export const HOME_FIRST_WEEK = '2026-09-21'
+
+/**
+ * The relevance changes whose whole effect is the videos the gate let in
+ * unjudged: the 24 Sep fix (commit 6efc8588, logged `gate_rule` /
+ * `relevance_gate` by `log-tracking-eras --gate-fix-at`) and the regate that
+ * finished it (the same shape, `regate_videos`, migration 20261106092000).
+ * Neither changed a judgement rule, so neither cuts a week by itself:
+ * `unchecked` counts exactly the videos they concern, week by week, and keeps
+ * any week that still holds one off the chart. Any OTHER relevance change
+ * still cuts, as every search change does. Pure.
+ */
+export function isFailOpenFix(row: { surface: string; field?: string | null }): boolean {
+  return row.surface === 'gate_rule' && row.field === 'relevance_gate'
+}
 
 const hrefOf = (key: HomeTileKey): string => surface(key as NavKey).href
 const titleOf = (key: HomeTileKey): string => HOME_TILES.find((t) => t.key === key)?.title ?? key
@@ -169,13 +203,12 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
 // ---- 2. Week by week -------------------------------------------------------------
 
 /**
- * The weeks the chart may draw: from the week of 28 September (the first week
- * read on one search set and one update a week, `WEEK_LINE_FIRST_WEEK`; the
- * weeks before it span our September search and relevance changes and are
- * never drawn), the excluded week out, ONLY weeks read one way: none before
- * our latest search or relevance change, none holding videos let in before
- * relevance was checked, none with nothing gathered (`weeksSinceOurChanges`,
- * T0a's rule for the weekly bars).
+ * The weeks the chart may draw: from the week of 21 September
+ * (`HOME_FIRST_WEEK`; the weeks before it span our September search changes
+ * and are never drawn), ONLY weeks read one way: none before our latest
+ * search or relevance change (the fail-open fixes aside, `isFailOpenFix`),
+ * none holding videos let in without a check that still stands, none with
+ * nothing gathered (`weeksSinceOurChanges`, T0a's rule for the weekly bars).
  *
  * DRAWN FROM ONE SUCH WEEK (Heinrich, 1 Oct): a week still filling (under
  * way, or fewer than two updates since it ended, `weekStateOf`) is drawn at
@@ -183,9 +216,9 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
  * settled. Null only where no such week exists: the block is omitted rather
  * than drawn as an empty frame.
  *
- * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight from 28 Sep),
- * the latest eight once the series is longer; a framed week with nothing to
- * draw is an empty column.
+ * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight), from
+ * `HOME_FIRST_WEEK`, the latest eight once the series is longer; a framed
+ * week with nothing to draw is an empty column.
  */
 export function homeWeeks(input: {
   rows: readonly MarketWeekRowRaw[]
@@ -196,9 +229,7 @@ export function homeWeeks(input: {
 }): HomeWeeks | null {
   const current = isoWeekOf(input.now)
   const axis: string[] = []
-  for (let w = WEEK_LINE_FIRST_WEEK; w <= current; w = addDays(w, 7)) {
-    if (!WEEK_LINE_EXCLUDED.includes(w)) axis.push(w)
-  }
+  for (let w = HOME_FIRST_WEEK; w <= current; w = addDays(w, 7)) axis.push(w)
   if (axis.length === 0) return null
   const weeks = pooledWeekVolumes(input.rows.map(marketWeekRowOf), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
   const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis))
@@ -207,10 +238,9 @@ export function homeWeeks(input: {
   const byWeek = new Map<string, WeekVolume>(clean.map((w) => [w.week, w]))
   const last = clean[clean.length - 1].week
   let first = addDays(last, -7 * (WEEK_COLUMNS - 1))
-  if (first < WEEK_LINE_FIRST_WEEK) first = WEEK_LINE_FIRST_WEEK
+  if (first < HOME_FIRST_WEEK) first = HOME_FIRST_WEEK
   const columns: HomeWeekColumn[] = []
   for (let w = first; columns.length < WEEK_COLUMNS; w = addDays(w, 7)) {
-    if (WEEK_LINE_EXCLUDED.includes(w)) continue
     const v = byWeek.get(w)
     columns.push({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: v ? v.videos : null, comments: v ? v.comments : null, settled: v?.state === 'settled' })
   }
@@ -333,16 +363,33 @@ function shareOf(k: number, n: number): { pct: number | null; value: string } {
   return { pct, value: `${pct}%` }
 }
 
-/** Competitive: the brands you track. Null where none is tracked. */
-export function competitiveTile(brands: number | null): HomeTile | null {
+/** The brands a "Named most" row lists (the artboard: two). */
+export const NAMED_MOST = 2
+
+/**
+ * Competitive: the brands you track, and the ones the market named most,
+ * off Competitive's own "Brands in your market" (`loadBrandList`, the page's
+ * reader and its `brandList`, over the page's reading month; the backfill, 1
+ * Oct evening). Unprompted counts, most first, ties by name: what the page
+ * lists at its top. The artboard's "Named most this week" needs a week's
+ * reading of who was named, and none exists (a mention carries the month it
+ * was written in, never the week), so the row reads the month; its
+ * "Compared on" row has no source that says what brands are compared on, so
+ * it is not drawn (a row that cannot be built is dropped, Heinrich, 1 Oct).
+ * Null where no brand is tracked.
+ */
+export function competitiveTile(brands: number | null, named: Pick<BrandList, 'month' | 'rows'> | null = null): HomeTile | null {
   if (!isCount(brands) || brands === 0) return null
+  const top = (named?.rows ?? []).filter((r) => r.k > 0).slice(0, NAMED_MOST)
   return {
     key: 'competitive',
     title: titleOf('competitive'),
     href: hrefOf('competitive'),
     big: fmtInt(brands),
     sub: `${plural(brands, 'brand', 'brands')} you track`,
-    rows: [],
+    rows: named && top.length > 0
+      ? [{ kind: 'text', label: `Named most in ${longMonth(named.month)}`, copy: null, value: top.map((r) => r.label).join(', ') }]
+      : [],
   }
 }
 
@@ -565,7 +612,7 @@ async function loadMonthThemes(
 /** `market_week_volumes` over the chart's weeks. */
 async function loadWeekRows(reading: SupabaseClient, clientId: string, now: string): Promise<MarketWeekRowRaw[]> {
   const to = addDays(isoWeekOf(now), 7)
-  const res = await reading.rpc('market_week_volumes', { p_client: clientId, p_from: WEEK_LINE_FIRST_WEEK, p_to: to })
+  const res = await reading.rpc('market_week_volumes', { p_client: clientId, p_from: HOME_FIRST_WEEK, p_to: to })
   if (res.error) throw new Error(`market_week_volumes: ${res.error.message}`)
   return (res.data ?? []) as MarketWeekRowRaw[]
 }
@@ -592,10 +639,26 @@ export async function loadHome(session: HomeSession, opts: { now?: string } = {}
   ]).then(([rows, runs, changeRows, rivals]) => homeWeeks({
     rows,
     rivalAudiences: marketRivalAudiences(rivals ?? []),
-    changes: ourChangesWithoutGatherFlags(changeRows),
+    changes: ourChangesWithoutGatherFlags(changeRows.filter((r) => !isFailOpenFix(r))),
     updates: runs.map(updateInstant),
     now,
   })))
+
+  // Competitive's "Brands in your market", over the page's own reading month
+  // (`loadReadingMonth`, the month every reading page reads).
+  const namedAhead = soft('named', Promise.all([
+    loadReadingMonth(supabase, readingHandle(clientId), now),
+    rivalsAhead,
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+  ]).then(([rm, rivals, client]) => rm && rivals
+    ? loadBrandList({
+        db: reading,
+        clientId,
+        month: rm.month,
+        rivals,
+        client: ((client.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'you',
+      })
+    : null))
 
   // The reads that need the latest read's month, run and window.
   const read = await readAhead
@@ -610,8 +673,8 @@ export async function loadHome(session: HomeSession, opts: { now?: string } = {}
     ]).then(([weekThemes, m]) => voiceTile({ weekThemes, monthThemes: m.themes, categoryN: m.categoryN })))
     : Promise.resolve(null)
 
-  const [rivals, subjects, advice, moves, weeks, posts, voice] = await Promise.all([
-    rivalsAhead, subjectsAhead, adviceAhead, movesAhead, weeksAhead, postsAhead, voiceAhead,
+  const [rivals, subjects, advice, moves, weeks, posts, voice, named] = await Promise.all([
+    rivalsAhead, subjectsAhead, adviceAhead, movesAhead, weeksAhead, postsAhead, voiceAhead, namedAhead,
   ])
   const data = read?.data ?? null
   const tracked = rivals ? rivals.filter((r) => r.retiredAt == null).length : null
@@ -623,7 +686,7 @@ export async function loadHome(session: HomeSession, opts: { now?: string } = {}
       overviewTile(data),
       weekTile(data),
       voice,
-      competitiveTile(tracked),
+      competitiveTile(tracked, named),
       subjectsTile({ subjects, read: data, now }),
       movesTile({ month, posts, advice, moves }),
     ]),

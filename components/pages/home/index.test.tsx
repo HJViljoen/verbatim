@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { HOME_DATA } from '@/lib/pages/home-fixture'
-import { homeTiles, type HomeData } from '@/lib/pages/home'
+import { competitiveTile, homeTiles, type HomeData } from '@/lib/pages/home'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { HomePage } from '.'
@@ -74,6 +74,17 @@ describe('the Dashboard', () => {
 
   it('prints nothing about how it is made', () => {
     expect(text).not.toMatch(/\b(update|updates|search|searches|gathered|coverage|readiness|placeholder|as at|so far this update)\b/i)
+  })
+})
+
+describe('the Competitive tile names the brands named most (the backfill, 1 Oct)', () => {
+  it('prints the row off Competitive\'s own brand list, with no "Insufficient data"', () => {
+    const tile = competitiveTile(9, { month: '2026-09-01', rows: [{ label: 'Cotopaxi', k: 21, you: false }, { label: 'Patagonia', k: 12, you: false }] })
+    const data: HomeData = { ...HOME_DATA, tiles: HOME_DATA.tiles.map((t) => (t.key === 'competitive' ? tile! : t)) }
+    const text = renderText(<HomePage data={data} />)
+    expect(text).toMatch(/Competitive Open → 9 brands you track Named most in September Cotopaxi, Patagonia/)
+    expect(text).not.toMatch(/brands you track Insufficient data/)
+    assertCopyContract(<HomePage data={data} />)
   })
 })
 

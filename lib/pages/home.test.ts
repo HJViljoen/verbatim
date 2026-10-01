@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import type { OurChange } from '../reading/comparability'
@@ -5,7 +7,7 @@ import type { MarketWeekRowRaw } from '../reading/weeks'
 import type { WeekReadDataV1, WeekReadDataV2 } from '../written/types'
 import type { RecCopy } from './market-surface'
 import {
-  adviceCount, competitiveTile, homeNumbers, homeTiles, homeWeeks, INSUFFICIENT, movesTile, overviewTile, standingLevel, tileInsufficient,
+  adviceCount, competitiveTile, HOME_FIRST_WEEK, homeNumbers, homeTiles, homeWeeks, INSUFFICIENT, isFailOpenFix, movesTile, overviewTile, standingLevel, tileInsufficient,
   subjectsTile, voiceTile, weekTile, MOVES_NONE, WEEK_COLUMNS, type HomeTheme,
 } from './home'
 import { HOME_READ } from './home-fixture'
@@ -52,34 +54,34 @@ describe('Week by week', () => {
   const sundays = ['2026-10-04T06:10:00Z', '2026-10-11T06:10:00Z', '2026-10-18T06:10:00Z', '2026-10-25T06:10:00Z']
   const base = { rows, rivalAudiences: [], changes: [] as OurChange[] }
 
-  it('is drawn from ONE clean week from 28 September, a week still filling marked as such (Heinrich, 1 Oct)', () => {
-    // Before any update has closed it, the week of 28 September is under way:
-    // drawn, faint.
+  it('is drawn from ONE clean week from 21 September, a week still filling marked as such (Heinrich, 1 Oct; the regate)', () => {
+    // On 1 October the week of 21 September has ended with no update since,
+    // and the week of 28 September is under way: both drawn, faint.
     const one = homeWeeks({ ...base, updates: [], now: '2026-10-01T08:00:00Z' })
-    expect(one!.columns.map((c) => c.videos)).toEqual([281, null, null, null, null, null, null, null])
-    expect(one!.columns[0].settled).toBe(false)
-    // On 19 October only the week of 28 September has two updates behind it;
-    // the weeks of 5 and 12 October are drawn, still filling.
+    expect(one!.columns.map((c) => c.videos)).toEqual([262, 281, null, null, null, null, null, null])
+    expect(one!.columns.map((c) => c.settled).slice(0, 2)).toEqual([false, false])
+    // On 19 October the weeks of 21 and 28 September have two updates behind
+    // them; the weeks of 5 and 12 October are drawn, still filling.
     const three = homeWeeks({ ...base, updates: sundays.slice(0, 3), now: '2026-10-19T08:00:00Z' })
-    expect(three!.columns.map((c) => c.videos)).toEqual([281, 254, 120, null, null, null, null, null])
-    expect(three!.columns.map((c) => c.settled)).toEqual([true, false, false, false, false, false, false, false])
+    expect(three!.columns.map((c) => c.videos)).toEqual([262, 281, 254, 120, null, null, null, null])
+    expect(three!.columns.map((c) => c.settled)).toEqual([true, true, false, false, false, false, false, false])
   })
 
-  it('is omitted only where no clean week exists', () => {
+  it('is omitted only where no clean week exists; weeks before 21 September are never drawn', () => {
+    expect(HOME_FIRST_WEEK).toBe('2026-09-21')
     expect(homeWeeks({ ...base, rows: [], updates: sundays, now: '2026-10-26T08:00:00Z' })).toBeNull()
-    // The week of 21 September is before the series starts: never drawn.
-    expect(homeWeeks({ ...base, rows: [row('2026-09-21', 262, 4528)], updates: [], now: '2026-09-27T08:00:00Z' })).toBeNull()
+    // The week of 14 September was gathered on other searches: never drawn.
+    expect(homeWeeks({ ...base, rows: [row('2026-09-14', 345, 5918)], updates: [], now: '2026-09-20T08:00:00Z' })).toBeNull()
   })
 
-  it('frames eight weeks from 28 September; settled weeks solid, the filling one faint', () => {
+  it('frames eight weeks from 21 September; settled weeks solid, the filling one faint', () => {
     const w = homeWeeks({ ...base, updates: sundays, now: '2026-10-26T08:00:00Z' })
     expect(w).not.toBeNull()
     expect(w!.columns).toHaveLength(WEEK_COLUMNS)
-    expect(w!.columns.map((c) => c.label)).toEqual(['28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov', '16 Nov'])
-    // The week of 21 September is never drawn; the week of 12 October is still filling.
-    expect(w!.columns.map((c) => c.videos)).toEqual([281, 254, 120, null, null, null, null, null])
-    expect(w!.columns.map((c) => c.comments)).toEqual([4902, 4210, 1500, null, null, null, null, null])
-    expect(w!.columns.map((c) => c.settled)).toEqual([true, true, false, false, false, false, false, false])
+    expect(w!.columns.map((c) => c.label)).toEqual(['21 Sep', '28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov'])
+    expect(w!.columns.map((c) => c.videos)).toEqual([262, 281, 254, 120, null, null, null, null])
+    expect(w!.columns.map((c) => c.comments)).toEqual([4528, 4902, 4210, 1500, null, null, null, null])
+    expect(w!.columns.map((c) => c.settled)).toEqual([true, true, true, false, false, false, false, false])
     expect(w!.maxVideos).toBe(281)
     expect(w!.maxComments).toBe(4902)
   })
@@ -91,22 +93,44 @@ describe('Week by week', () => {
       row('2026-09-28', 99, 999, { audience: 'client' }),
     ]
     const w = homeWeeks({ ...base, rows: pooled, rivalAudiences: ['competitor:Patagonia'], updates: sundays, now: '2026-10-26T08:00:00Z' })
-    expect(w!.columns[0]).toMatchObject({ videos: 291, comments: 5002 })
+    expect(w!.columns[1]).toMatchObject({ videos: 291, comments: 5002 })
   })
 
   it('never spans a change to our searches: weeks before it are not drawn', () => {
     const change: OurChange = { id: 'c1', surface: 'terms', changedAt: '2026-10-07T10:00:00Z', note: null, affects: [] }
     const w = homeWeeks({ ...base, changes: [change], updates: sundays, now: '2026-10-26T08:00:00Z' })
     // Only the week of 12 October is after the change: drawn alone, still filling.
-    expect(w!.columns.map((c) => c.videos)).toEqual([null, null, 120, null, null, null, null, null])
-    expect(w!.columns[2].settled).toBe(false)
+    expect(w!.columns.map((c) => c.videos)).toEqual([null, null, null, 120, null, null, null, null])
+    expect(w!.columns[3].settled).toBe(false)
   })
 
-  it('leaves out a week holding videos let in before relevance was checked', () => {
-    const dirty = [row('2026-09-28', 281, 4902, { unchecked: 3 }), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
+  it('leaves out a week holding videos let in without a check that still stands', () => {
+    // Before the regate: the week of 21 September holds 19 such videos.
+    const dirty = [row('2026-09-21', 274, 4777, { unchecked: 19 }), row('2026-09-28', 281, 4902), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
     const w = homeWeeks({ ...base, rows: dirty, updates: sundays, now: '2026-10-26T08:00:00Z' })
-    expect(w!.columns.map((c) => c.videos)).toEqual([null, 254, 120, null, null, null, null, null])
-    expect(w!.columns.map((c) => c.settled).slice(0, 3)).toEqual([false, true, false])
+    expect(w!.columns.map((c) => c.videos)).toEqual([null, 281, 254, 120, null, null, null, null])
+    // And a later unchecked week cuts everything before it.
+    const later = [row('2026-09-21', 262, 4528), row('2026-09-28', 281, 4902, { unchecked: 3 }), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
+    const v = homeWeeks({ ...base, rows: later, updates: sundays, now: '2026-10-26T08:00:00Z' })
+    expect(v!.columns.map((c) => c.videos)).toEqual([null, null, 254, 120, null, null, null, null])
+  })
+
+  it('the fail-open fixes cut no week by themselves (their whole effect is `unchecked`); any other relevance change does', () => {
+    expect(isFailOpenFix({ surface: 'gate_rule', field: 'relevance_gate' })).toBe(true)
+    expect(isFailOpenFix({ surface: 'gate_rule', field: 'relevance_prompt' })).toBe(false)
+    expect(isFailOpenFix({ surface: 'regate', field: null })).toBe(false)
+    expect(isFailOpenFix({ surface: 'terms', field: null })).toBe(false)
+    // Had the loader passed it on, a relevance change dated 25 Sep would cut
+    // the week of 21 September: that is why the loader leaves the fixes out
+    // (`changeRows.filter((r) => !isFailOpenFix(r))`) and nothing else.
+    const other: OurChange = { id: 'g2', surface: 'gate_rule', changedAt: '2026-09-25T16:18:00Z', note: null, affects: [] }
+    const cut = homeWeeks({ ...base, changes: [other], updates: sundays, now: '2026-10-26T08:00:00Z' })
+    expect(cut!.columns.map((c) => c.videos)).toEqual([null, 281, 254, 120, null, null, null, null])
+  })
+
+  it('the loader leaves the fail-open fixes out of the cut, and only them', () => {
+    const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
+    expect(src).toMatch(/changes: ourChangesWithoutGatherFlags\(changeRows\.filter\(\(r\) => !isFailOpenFix\(r\)\)\)/)
   })
 })
 
@@ -178,6 +202,22 @@ describe('the tiles', () => {
     expect(competitiveTile(1)?.sub).toBe('brand you track')
     expect(competitiveTile(0)).toBeNull()
     expect(competitiveTile(null)).toBeNull()
+  })
+
+  it('Competitive: the two brands named most in the page\'s month, off the page\'s own brand list (the backfill, 1 Oct)', () => {
+    const list = {
+      month: '2026-09-01',
+      rows: [{ label: 'Cotopaxi', k: 21, you: false }, { label: 'Patagonia', k: 12, you: false }, { label: 'Sealand', k: 12, you: true }],
+    }
+    expect(competitiveTile(9, list)!.rows).toEqual([{ kind: 'text', label: 'Named most in September', copy: null, value: 'Cotopaxi, Patagonia' }])
+    // One named brand prints one; none named, or no list read, prints the
+    // tile with no row (Insufficient data). There is no week reading of who
+    // was named and no source for "compared on": neither row is drawn.
+    expect(competitiveTile(9, { month: '2026-09-01', rows: [{ label: 'Cotopaxi', k: 3, you: false }] })!.rows[0].value).toBe('Cotopaxi')
+    expect(competitiveTile(9, { month: '2026-09-01', rows: [] })!.rows).toEqual([])
+    expect(competitiveTile(9, null)!.rows).toEqual([])
+    expect(tileInsufficient(competitiveTile(9, null)!)).toBe(true)
+    expect(tileInsufficient(competitiveTile(9, list)!)).toBe(false)
   })
 
   it('Subjects: how many you follow, the biggest this month and the one added last', () => {
