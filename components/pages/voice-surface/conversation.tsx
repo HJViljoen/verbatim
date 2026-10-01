@@ -98,7 +98,7 @@ export function QuotePanel({ q, names, size = 15 }: { q: ConvQuote; names: Conve
     <div className="flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
       <p data-copy="quote" className="m-0 font-serif italic leading-[1.5] text-[#26292C]" style={{ fontSize: size }}>“{stripEmoji(q.quote.text)}”</p>
       {label ? <div className={cn('text-[12px]', MUTED)}>{label}</div> : null}
-      {note.english ? <p data-copy="quote" className={cn('m-0 font-serif text-[14px] leading-[1.5]', MUTED)}>{note.english}</p> : null}
+      {note.english ? <p data-copy="quote" className={cn('m-0 font-serif text-[14px] leading-[1.5]', MUTED)}>{stripEmoji(note.english)}</p> : null}
       <div className={cn('text-[12px]', MUTED)}>
         {q.source}
         {q.who.length > 0 && names ? <><span> · </span><WhoInline parts={q.who} names={names} /></> : null}

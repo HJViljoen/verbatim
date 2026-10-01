@@ -66,7 +66,7 @@ function CodeLine({ body, figures, className, verdict = false }: { body: string;
 
 /** Emoji out of printed words (the artboard prints none). */
 export function stripEmoji(s: string): string {
-  return s.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{2B00}-\u{2BFF}]/gu, '').replace(/\s+/g, ' ').trim()
+  return s.replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}]/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
 /** The quote panel: serif italic on the ground, no stripe; its source line
@@ -81,7 +81,7 @@ export function QuotePanel({ quote, names, size = 17 }: { quote: WeekReadQuote; 
     <div className="flex flex-col gap-2 rounded-xl bg-[#F7F6F2] px-[18px] py-4">
       <p data-copy="quote" className={cn('m-0 font-serif italic leading-[1.5]', INK)} style={{ fontSize: size }}>“{words}”</p>
       {label ? <div className={cn('text-[12px]', WHO_MUTED)}>{label}</div> : null}
-      {note.english ? <p data-copy="quote" className={cn('m-0 font-serif text-[14px] leading-[1.5]', WHO_MUTED)}>{note.english}</p> : null}
+      {note.english ? <p data-copy="quote" className={cn('m-0 font-serif text-[14px] leading-[1.5]', WHO_MUTED)}>{stripEmoji(note.english)}</p> : null}
       {source || quote.who ? (
         <div className={cn('text-[12px]', WHO_MUTED)}>
           {source}
