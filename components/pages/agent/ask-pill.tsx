@@ -6,8 +6,9 @@ import type { AskWindowChoice } from '@/lib/agent/scope'
 // page was from 22 Aug (1671e484) until the 18 Sep port, with what the pages
 // rebuild added drawn around it: "Check a plan", the window and the month's
 // allowance, close under the pill and not in a card. The Agent's yellow mark
-// stands where the 22 Aug figure stood (no crowd or figure: the pages carry no
-// backdrop). No subheading and no how-it-works line: the shape explains itself.
+// stands where the 22 Aug figure stood; the crowd that page stood in is the
+// shell's backdrop again (CROWD, 2 Oct), behind the pill rather than drawn by
+// it. No subheading and no how-it-works line: the shape explains itself.
 
 export interface AskPillProps {
   canSend: boolean

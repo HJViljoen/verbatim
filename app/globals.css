@@ -229,6 +229,14 @@
   --sidebar-accent-foreground: #26292C;
   --sidebar-border: #E4E2DC;
   --sidebar-ring: #26292C;
+
+  /* The crowd backdrop (`.crowd-bg`; CROWD, 2 Oct). The art is a mask, so
+     its colour is this token: the ink by default. `--crowd-gain` scales the
+     opacity, so a lighter hue can be given the same perceived strength. The
+     warm variant (`[data-crowd="warm"]`, below the `.crowd-bg` rules) is the
+     gold; shipping it is moving its two values here. */
+  --crowd: #26292C;
+  --crowd-gain: 1;
 }
 
 /* Dark set — not yet wired: there is no theme toggle until Settings ›
@@ -301,6 +309,9 @@
   --sidebar-accent-foreground: #ECEEF0;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #FFD43B;
+  /* Light lines on the ink ground read stronger than ink on paper. */
+  --crowd: #ECEEF0;
+  --crowd-gain: 0.7;
 }
 
 @layer base {
@@ -492,26 +503,54 @@
   [data-ring-sync] [data-seg]:not(circle) { transition: background-color 120ms ease-out; }
 }
 
-/* Ambient crowd layer — the login page and, since 2026-09-24, every dashboard
-   page (MASTER rule 6; mounted in app/dashboard/layout.tsx behind <main>).
-   Absolute inside its container, never fixed. */
+/* Ambient crowd layer: the signed-out frame (components/auth/auth-card.tsx)
+   and, since CROWD (2 Oct), every dashboard page, mounted in
+   app/dashboard/layout.tsx in the pane right of the sidebar, behind <main>.
+   Absolute inside its container, never fixed: the pane does not scroll, so
+   the crowd holds still while <main> scrolls the cards over it.
+   The element carries the top fade and the opacity; its ::before is one fill
+   of `--crowd` cut to the art by the SVG as a mask, so the colour is a token
+   rather than baked into the file. The fade is a mask on the art's own alpha,
+   never a wash: nothing is painted where no line is. */
 .crowd-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: url("/crowd.svg") center bottom / cover no-repeat;
-  opacity: 0.1;
+  opacity: calc(0.1 * var(--crowd-gain, 1));
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.35) 8%, #000 34%, #000 100%);
   mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.35) 8%, #000 34%, #000 100%);
 }
-.crowd-bg--live {
-  background-image: url("/crowd-live.svg");
-  opacity: 0.18;
+.crowd-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--crowd, #26292C);
+  -webkit-mask: url("/crowd.svg") center bottom / cover no-repeat;
+  mask: url("/crowd.svg") center bottom / cover no-repeat;
 }
-/* Behind the dashboard: fainter than login (Heinrich, 2026-09-24). */
+.crowd-bg--live::before {
+  -webkit-mask-image: url("/crowd-live.svg");
+  mask-image: url("/crowd-live.svg");
+}
+.crowd-bg--live {
+  opacity: calc(0.18 * var(--crowd-gain, 1));
+}
+/* Behind the dashboard: fainter than the signed-out frame, where only one
+   card sits on it (Heinrich, 24 Sep, and again for CROWD, 2 Oct). */
 .crowd-bg--shell {
-  opacity: 0.07;
+  opacity: calc(0.07 * var(--crowd-gain, 1));
+}
+/* The warm variant, for comparison (CROWD, 2 Oct): the same crowd in the
+   gold, given more gain because the gold is lighter than the ink. Unset in
+   the app; set `data-crowd="warm"` on <html> to see it. */
+[data-crowd="warm"] {
+  --crowd: #9A6B00;
+  --crowd-gain: 1.15;
+}
+.dark[data-crowd="warm"], .dark [data-crowd="warm"], [data-crowd="warm"] .dark {
+  --crowd: #E0A82E;
+  --crowd-gain: 0.8;
 }
 @media print { .crowd-bg { display: none; } }
 

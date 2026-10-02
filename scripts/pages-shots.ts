@@ -4,6 +4,7 @@
 //
 //   node --import tsx scripts/pages-shots.ts --out <dir> --artboards <dir>
 //     [--only agent,agent-history] [--width 390] [--scale 2]
+//     [--screen] [--scrolled] [--crowd warm] [--tag -warm]
 //
 // WHAT IS REAL. Each page is its route's own composition (the components the
 // route renders, in its order), fed the package's render fixture: the same
@@ -91,6 +92,17 @@ const only = flag('only', '')
 const width = Number(flag('width', '1440'))
 /** Device pixels per CSS pixel (`--scale 2` for a sharp shot). */
 const scale = Number(flag('scale', '1'))
+/** `--screen`: every page in the shipped pane, one screen tall, the way a
+ *  reader first sees it. The crowd backdrop is the pane's, not the page's, so
+ *  only this mode draws it where the app does. `--scrolled` scrolls <main> to
+ *  its end first (the crowd stays, the cards move over it). */
+const screen = args.includes('--screen') || args.includes('--scrolled')
+const scrolled = args.includes('--scrolled')
+/** `--crowd warm`: the crowd's warm variant (`[data-crowd="warm"]`).
+ *  `--crowd none`: no crowd, the page as it was before CROWD (2 Oct). */
+const crowd = flag('crowd', '')
+/** Appended to every file name (`--tag -warm`). */
+const fileTag = flag('tag', '')
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
@@ -321,14 +333,18 @@ const wordmark = () =>
   )
 
 /** app/dashboard/layout.tsx, as a client sees it. The harness's one change:
- *  the pane grows to the page (`h-dvh` and the inner scroll go), except for a
- *  `fixed` page, which is shot in the shipped pane. */
+ *  the pane grows to the page (`h-dvh` and the inner scroll go, and with them
+ *  the crowd backdrop), except for a `fixed` page or `--screen`, which is shot
+ *  in the shipped pane. */
 const shell = (path: string, page: ReactNode, fixed = false) =>
   h(AppRouterContext.Provider, { value: router as never },
     h(PathnameContext.Provider, { value: path },
       h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never },
         h(AppSidebar, { header: wordmark() }),
         h('div', { className: `relative flex flex-col flex-1 min-w-0 bg-[#F7F6F2] ${fixed ? 'h-dvh overflow-hidden' : 'min-h-dvh'}` },
+          // The crowd holds still while <main> scrolls, which a page grown to
+          // its full height cannot show; only the shipped pane draws it.
+          fixed ? h('div', { className: 'crowd-bg crowd-bg--shell', 'aria-hidden': true }) : null,
           h(SidebarTrigger, { 'aria-label': 'Open navigation', className: 'absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden' }),
           h('main', { className: `relative z-10 flex-1 min-h-0 p-6 pt-14 md:px-10 md:pt-7 md:pb-10 ${fixed ? 'overflow-y-auto' : ''}` }, page),
         ),
@@ -339,14 +355,17 @@ const shell = (path: string, page: ReactNode, fixed = false) =>
 async function css(): Promise<string> {
   const src = readFileSync('app/globals.css', 'utf8')
   const res = await postcss([tailwind()]).process(src, { from: 'app/globals.css' })
-  return res.css
+  // The app's static art by its root path: a file:// page cannot reach
+  // `/crowd.svg`, and a mask image is fetched in CORS mode, so it goes inline.
+  return res.css.replace(/url\((["']?)\/(crowd(?:-live)?\.svg)\1\)/g, (_m, _q, f: string) =>
+    `url("data:image/svg+xml;base64,${readFileSync(join('public', f)).toString('base64')}")`)
 }
 
 const doc = (style: string, body: string) =>
-  `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${FONTS}"><style>${style}
+  `<!doctype html><html${crowd ? ` data-crowd="${crowd}"` : ''}><head><meta charset="utf-8"><link rel="stylesheet" href="${FONTS}"><style>${style}
 html,body{margin:0;padding:0}
 :root{--font-plex-sans:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;--font-plex-serif:'IBM Plex Serif',Georgia,serif;--font-plex-mono:'IBM Plex Mono',ui-monospace,monospace;--font-emoji:'Apple Color Emoji','Segoe UI Emoji',sans-serif;--font-sans:var(--font-plex-sans);--font-serif:var(--font-plex-serif);--font-mono:var(--font-plex-mono)}
-body{font-family:var(--font-sans)}
+body{font-family:var(--font-sans)}${crowd === 'none' ? '\n.crowd-bg{display:none}' : ''}
 </style></head><body>${body}</body></html>`
 
 const pair = (artboard: string, built: string, title: string) =>
@@ -366,8 +385,8 @@ async function main() {
   mkdirSync(out, { recursive: true })
   const style = await css()
   const pages = PAGES.filter((p) => !only || only.split(',').includes(p.key))
-  const tag = width === 1440 ? '' : `-${width}`
-  for (const p of pages) writeFileSync(join(out, `built-${p.key}${tag}.html`), doc(style, renderToStaticMarkup(shell(p.path, p.page(), p.fixed))))
+  const tag = `${width === 1440 ? '' : `-${width}`}${scrolled ? '-scrolled' : ''}${fileTag}`
+  for (const p of pages) writeFileSync(join(out, `built-${p.key}${tag}.html`), doc(style, renderToStaticMarkup(shell(p.path, p.page(), p.fixed || screen))))
 
   await withBrowser(async (page) => {
     const tall = width < 768 ? 844 : 900
@@ -375,6 +394,7 @@ async function main() {
       await page.setViewport({ width, height: tall, deviceScaleFactor: scale })
       await page.goto(url, { waitUntil: 'networkidle0' })
       await page.evaluate(() => document.fonts.ready)
+      if (scrolled) await page.evaluate(() => { const m = document.querySelector('main'); if (m) m.scrollTop = m.scrollHeight })
       if (!fixed) {
         const height = await page.evaluate(() => Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)))
         await page.setViewport({ width, height, deviceScaleFactor: scale })
@@ -382,8 +402,8 @@ async function main() {
       writeFileSync(file, await page.screenshot({ type: 'png' }))
     }
     for (const p of pages) {
-      await shoot(`file://${join(out, `built-${p.key}${tag}.html`)}`, join(out, `built-${p.key}${tag}.png`), p.fixed)
-      if (tag) { console.log(`built-${p.key}${tag}.png`); continue }
+      await shoot(`file://${join(out, `built-${p.key}${tag}.html`)}`, join(out, `built-${p.key}${tag}.png`), p.fixed || screen)
+      if (tag || screen) { console.log(`built-${p.key}${tag}.png`); continue }
       const art = join(artboards, p.artboard)
       if (!existsSync(art)) { console.log(`no artboard for ${p.key}`); continue }
       await shoot(`file://${art}`, join(out, `artboard-${p.key}.png`))

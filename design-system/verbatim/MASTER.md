@@ -74,10 +74,15 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 5. **Claims are clickable evidence** (the Agent page's document-review pattern): a sentence with voices behind it
    gets a quiet grey dotted underline; click → popover with count, platform split, two quotes, link to the page
    that holds the rest. **Nothing is underlined that cannot be clicked.** No highlighter fills, no coloured tints.
-6. **The crowd backdrop is back in the app shell** (reversed 2026-09-24, Heinrich's call; it left on 2026-08-28).
-   `.crowd-bg` (`public/crowd.svg`, centre bottom, cover, 10% with the top fade) sits behind every dashboard page,
-   absolute in the non-scrolling pane right of the sidebar (`app/dashboard/layout.tsx`): `aria-hidden`, never
-   interactive, no scroll height, hidden in print. Tiles stay opaque white on top of it. Login keeps its own.
+6. **The crowd backdrop is in the app shell** (Heinrich's call; it left on 2026-08-28, came back 2026-09-24, left
+   with the 1 Oct navigation build and came back with CROWD on 2 Oct: "it would add a nice depth to the page").
+   `.crowd-bg crowd-bg--shell` (`public/crowd.svg`, centre bottom, cover, 7% with the top fade) sits on the
+   `#F7F6F2` ground behind every dashboard page, absolute in the non-scrolling pane right of the sidebar
+   (`app/dashboard/layout.tsx`): one element, `aria-hidden`, never interactive, no scroll height, never behind the
+   sidebar, hidden in print. Cards stay opaque white on top of it, so it shows in the gutters and the open ground.
+   The art is a mask over one fill of `--crowd` (the ink; `.dark` has its own), scaled by `--crowd-gain`; a warm
+   variant (`[data-crowd="warm"]`, the gold at gain 1.15) is kept for comparison and is not set anywhere.
+   The signed-out frame keeps its own, at 10%.
 7. **Pages may scroll.** The 2026-08-22 "one screen, no scroll at 1440×900" rule is **retired** — it is no longer
    a constraint, not a new requirement. The 12-column grid, `Tile`, `PageGrid` and `Drawer` stay; the 6-row height
    cap goes. Whether a given page fits one screen or scrolls is a per-page judgment.
@@ -256,8 +261,8 @@ paragraph); no gradient; the orange never as text (drift guard (h), `lib/palette
 
 ## Signature components
 
-- **`.crowd-bg`** — ambient crowd illustration, on `/login` and (since 2026-09-24, rule 6) behind every
-  dashboard page via the shell.
+- **`.crowd-bg`** — ambient crowd illustration, on the signed-out frame and (rule 6) behind every dashboard page
+  via the shell. Its colour is `--crowd`, never baked into the SVG.
 - **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
   (grey, always), sentiment uses `SENTIMENT_BADGE`, prevalence uses `PREVALENCE_BADGE`,
   evidence tiers show "Strong evidence" (pale yellow) / "Early signal" (warning tint) — never numeric scores.

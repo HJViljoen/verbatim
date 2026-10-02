@@ -46,13 +46,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           the mobile sidebar trigger — is gone; on phones the trigger floats in
           the top-left corner.
           1 Oct (the navigation build, every `Page-*.dc.html` artboard): the
-          pane is the design's ground, Palette A `#F7F6F2`, with no crowd
-          backdrop behind it (it came back on 2026-09-24 and the approved
-          designs draw none), and <main> sits 28px from the top and 40px from
-          the other three edges. Palette A is used locally: the app's own
-          --background is still the old white, and the app-wide colour swap is
-          a separate task. */}
+          pane is the design's ground, Palette A `#F7F6F2`, and <main> sits
+          28px from the top and 40px from the other three edges. Palette A is
+          used locally: the app's own --background is still the old white, and
+          the app-wide colour swap is a separate task.
+          2 Oct (CROWD, Heinrich: "add the background art back again … it would
+          add a nice depth to the page"): the crowd backdrop is back on that
+          ground, as it was from 24 Sep until the navigation build took it out.
+          It is absolute inside this pane, not inside <main>: the pane does not
+          scroll, so the crowd stays put while <main> scrolls the cards over
+          it, adds no scroll height, never reaches behind the sidebar, and
+          follows it when it collapses. <main> is `relative z-10`, so every
+          white card paints on top and the crowd shows in the gutters and the
+          open ground. One element, aria-hidden, pointer-events none, hidden
+          in print (`.crowd-bg`, app/globals.css). */}
       <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden bg-[#F7F6F2]">
+        <div className="crowd-bg crowd-bg--shell" aria-hidden />
         <SidebarTrigger
           aria-label="Open navigation"
           className="absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden"
