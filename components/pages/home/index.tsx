@@ -72,8 +72,8 @@ export function HomePage({ data }: { data: HomeData }) {
 function NumbersBlock({ numbers }: { numbers: HomeNumbers | null }) {
   const halves = [numbers?.week, numbers?.month].filter((h): h is HomeNumbersHalf => h != null)
   return (
-    <section className={`${CARD} gap-[18px]`} aria-labelledby="home-numbers">
-      <div className="flex items-baseline gap-2.5">
+    <section data-w="card" data-w-tile="numbers" className={`${CARD} gap-[18px]`} aria-labelledby="home-numbers">
+      <div data-w="head" className="flex items-baseline gap-2.5">
         <IconTile icon={Hash} />
         <h2 id="home-numbers" className="m-0 text-[17px] font-bold">Your market in numbers</h2>
       </div>
@@ -81,7 +81,7 @@ function NumbersBlock({ numbers }: { numbers: HomeNumbers | null }) {
         // Nothing read: the tiles' empty line, under the title.
         <div className={`border-t ${HAIR} py-1.5 text-[13px] ${MUTED}`}>{INSUFFICIENT}</div>
       ) : (
-        <div className={halves.length === 2 ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0' : 'grid grid-cols-1'}>
+        <div data-w="figures" className={halves.length === 2 ? 'grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0' : 'grid grid-cols-1'}>
           {halves.map((h, i) => (
             <div
               key={h.heading}
@@ -110,8 +110,8 @@ function NumbersBlock({ numbers }: { numbers: HomeNumbers | null }) {
  *  videos a yellow bar, the comments the orange line. */
 function SeriesKey({ series }: { series: 'videos' | 'comments' }) {
   return series === 'videos'
-    ? <span aria-hidden className="size-2.5 shrink-0 rounded-[2px] bg-brand" />
-    : <span aria-hidden className="h-0.5 w-3 shrink-0 rounded-full bg-orange" />
+    ? <span aria-hidden data-w-key="videos" className="size-2.5 shrink-0 rounded-[2px] bg-brand" />
+    : <span aria-hidden data-w-key="comments" className="h-0.5 w-3 shrink-0 rounded-full bg-orange" />
 }
 
 function Stat({ value, unit, series }: { value: string; unit: string; series: 'videos' | 'comments' }) {
@@ -145,18 +145,19 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
     .filter((c) => c.videos != null && c.comments != null)
     .map((c) => `${c.label}: ${fmtInt(c.videos!)} videos, ${fmtInt(c.comments!)} comments`)
   return (
-    <section className={`${CARD} gap-[14px]`} aria-labelledby="home-weeks">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+    <section data-w="card" data-w-tile="weeks" className={`${CARD} gap-[14px]`} aria-labelledby="home-weeks">
+      <div data-w="head" className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
         <div className="flex items-baseline gap-2.5">
           <IconTile icon={ChartColumn} />
           <h2 id="home-weeks" className="m-0 text-[17px] font-bold">Week by week</h2>
         </div>
         <div className={`flex gap-4 text-[12px] ${MUTED}`} aria-hidden>
-          <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded-[3px] bg-brand" />Videos</span>
-          <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3.5 rounded-full bg-orange" />Comments</span>
+          <span className="inline-flex items-center gap-1.5"><span data-w-key="videos" className="size-3 rounded-[3px] bg-brand" />Videos</span>
+          <span className="inline-flex items-center gap-1.5"><span data-w-key="comments" className="h-0.5 w-3.5 rounded-full bg-orange" />Comments</span>
         </div>
       </div>
       <div
+        data-w="chart"
         className="relative flex h-[190px]"
         {...(drawable
           ? { role: 'img', 'aria-label': `Videos and comments in your market, week by week. ${summary.join('; ')}.` }
@@ -227,13 +228,15 @@ function AgentBlock() {
     <form
       action={surface('ask').href}
       method="get"
+      data-w="card"
+      data-w-tile="agent"
       className={`flex h-full flex-col gap-[14px] rounded-[16px] bg-white p-[22px] ${SHADOW}`}
       aria-labelledby="home-agent"
     >
       {/* The header on the pale yellow, bled to the card's edges (a small
           surface: one line high), the Agent's own yellow tile on it. */}
       <div data-agent-head="" className="-mx-[22px] -mt-[22px] flex items-center gap-2.5 rounded-t-[16px] bg-accent px-[22px] pt-[22px] pb-4">
-        <div className="flex size-8 items-center justify-center rounded-[8px] bg-brand">
+        <div data-w="agent-mark" className="flex size-8 items-center justify-center rounded-[8px] bg-brand">
           <Sparkles className="size-4 text-[#26292C]" strokeWidth={2} aria-hidden />
         </div>
         <h2 id="home-agent" className="m-0 text-[17px] font-bold">Agent</h2>
@@ -249,6 +252,7 @@ function AgentBlock() {
       </label>
       <button
         type="submit"
+        data-w="primary"
         className="flex min-h-11 items-center justify-center rounded-[10px] bg-[#26292C] text-[14px] font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-[#FFD43B] focus-visible:ring-offset-2"
       >
         Ask
@@ -263,8 +267,8 @@ function PageTile({ tile }: { tile: HomeTile }) {
   const bars = tile.rows.filter((r): r is Extract<HomeTileRow, { kind: 'bar' }> => r.kind === 'bar')
   const texts = tile.rows.filter((r): r is Extract<HomeTileRow, { kind: 'text' }> => r.kind === 'text')
   return (
-    <section className={`flex min-w-0 flex-col gap-2.5 rounded-[14px] bg-white px-[22px] py-5 ${SHADOW}`} aria-label={tile.title}>
-      <div className="flex items-center justify-between">
+    <section data-w="card" data-w-tile={tile.key} className={`flex min-w-0 flex-col gap-2.5 rounded-[14px] bg-white px-[22px] py-5 ${SHADOW}`} aria-label={tile.title}>
+      <div data-w="head" className="flex items-center justify-between">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <IconTile icon={NAV_ICON[tile.key]} />
           <h2 className="m-0 text-[15px] font-bold">{tile.title}</h2>
@@ -289,14 +293,14 @@ function PageTile({ tile }: { tile: HomeTile }) {
         <div className={`border-t ${HAIR} py-1.5 text-[13px] ${MUTED}`}>{INSUFFICIENT}</div>
       ) : null}
       {bars.length > 0 ? (
-        <div className="flex flex-col gap-[7px]">
+        <div data-w="rank" className="flex flex-col gap-[7px]">
           {bars.map((r) => (
             <div key={r.label} className="flex items-center gap-2.5">
               <div className="w-[150px] shrink-0 truncate text-[13px]" title={r.label}>
                 <Label copy={r.copy}>{r.label}</Label>
               </div>
-              <div className="h-1.5 grow overflow-hidden rounded-[3px] bg-[#ECEAE4]">
-                {r.pct != null ? <div className={`h-1.5 ${BAR_FILL.market}`} style={{ width: `${Math.min(100, Math.max(0, r.pct))}%` }} /> : null}
+              <div data-w="track" className="h-1.5 grow overflow-hidden rounded-[3px] bg-[#ECEAE4]">
+                {r.pct != null ? <div data-w="bar" className={`h-1.5 ${BAR_FILL.market}`} style={{ width: `${Math.min(100, Math.max(0, r.pct))}%` }} /> : null}
               </div>
               <div data-copy="figure" className={`${r.pct != null ? 'w-[34px]' : ''} shrink-0 text-right font-mono text-[12px] tabular-nums`}>{r.value}</div>
             </div>

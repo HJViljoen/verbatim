@@ -217,6 +217,7 @@ export function AgentComposer({
     <div className="flex w-full min-w-0 flex-col gap-3">
       <form
         onSubmit={onSubmit}
+        data-w="composer"
         // The soft card shadow (brand/colour's elevation) and a hairline; the
         // ring that shows focus is the border turning ink, on the pill itself,
         // because the field inside it draws no outline of its own.
@@ -245,6 +246,7 @@ export function AgentComposer({
           type="submit"
           disabled={!live}
           aria-label="Ask"
+          data-w="send"
           className={`grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-40 ${s.send}`}
         >
           {busy ? <Loader2 className="size-[18px] animate-spin" aria-hidden /> : <ArrowUp className="size-5" aria-hidden />}
@@ -271,6 +273,7 @@ export function AgentComposer({
           {/* LABELLED, AND ON BOTH ROUTES. The file input inside is `sr-only`
               and is the thing that takes focus, so the label wears the ring. */}
           <label
+            data-w="plan"
             className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-border bg-tile px-3.5 text-[13.5px] font-semibold text-foreground transition-colors hover:bg-background has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${live ? '' : 'pointer-events-none opacity-50'}`}
           >
             <FileUp className="size-4" aria-hidden />
@@ -285,7 +288,7 @@ export function AgentComposer({
             {windowSwitch ? (
               <div className="flex items-center gap-2.5">
                 <span className="text-[13px] text-muted-foreground">Window</span>
-                <div role="group" aria-label="Window" className="inline-flex gap-0.5 rounded-full bg-track p-[3px]">
+                <div role="group" aria-label="Window" data-w="window" className="inline-flex gap-0.5 rounded-full bg-track p-[3px]">
                   {(['days90', 'all'] as const).map((w) => (
                     <Link
                       key={w}

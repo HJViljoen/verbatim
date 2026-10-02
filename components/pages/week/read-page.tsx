@@ -39,7 +39,7 @@ export function PageTitle({ children }: { children: ReactNode }) {
 /** A card on the page: paper, 16px corners, on the card shadow (Heinrich,
  *  1 Oct: the shadows back). */
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={cn('flex min-w-0 flex-col rounded-[16px] bg-white shadow-card', className)}>{children}</section>
+  return <section data-w="card" className={cn('flex min-w-0 flex-col rounded-[16px] bg-white shadow-card', className)}>{children}</section>
 }
 
 /** The writer's sentences (slot `week_read`, scrubbed when stored), any
@@ -83,7 +83,7 @@ export function QuotePanel({ quote, names, size = 17 }: { quote: WeekReadQuote; 
   const words = stripEmoji(quote.text)
   if (!words) return null
   return (
-    <div className="flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
+    <div data-w="quote" className="flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
       <p data-copy="quote" className={cn('m-0 font-serif italic leading-[1.5]', INK)} style={{ fontSize: size }}>“{words}”</p>
       {label ? <div className={cn('text-[12px]', WHO_MUTED)}>{label}</div> : null}
       {note.english ? <p data-copy="quote" className={cn('m-0 font-serif text-[14px] leading-[1.5]', WHO_MUTED)}>{stripEmoji(note.english)}</p> : null}
@@ -133,10 +133,12 @@ export function WeekReadCard({ data }: { data: WeekReadPageData }) {
   return (
     <Card className="gap-3.5 px-8 pt-7 pb-2.5">
       {data.lead ? (
-        <>
-          <div className={EYEBROW}>In short</div>
+        // One block (the card's own 14px gap inside it), so a direction can
+        // set the lead on a panel or band (the WARM mock, 2 Oct).
+        <div data-w="lead" className="flex flex-col gap-3.5">
+          <div data-w="eyebrow" className={EYEBROW}>In short</div>
           <Stored body={data.lead} figures={data.figures} className={cn('m-0 max-w-[1000px] font-serif text-[24px] leading-[1.4] font-medium', INK)} />
-        </>
+        </div>
       ) : null}
       {/* 14px between findings, the card's own gap in the artboard. */}
       <div className="flex flex-col gap-3.5">
@@ -151,7 +153,7 @@ export function AlsoHeardCard({ data }: { data: WeekReadPageData }) {
   if (data.alsoHeard.length === 0) return null
   return (
     <Card className="gap-3.5 px-7 py-6">
-      <div className="flex items-baseline gap-2.5">
+      <div data-w="head" className="flex items-baseline gap-2.5">
         <IconTile icon={Ear} />
         <h2 className={cn('m-0 text-[20px] font-bold', INK)}>Also heard this week</h2>
       </div>

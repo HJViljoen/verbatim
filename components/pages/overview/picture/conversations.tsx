@@ -25,7 +25,7 @@ export function ConversationsBlockView({ block, brand, noun }: { block: Conversa
           ? <>Videos of the category’s <span data-copy="figure">{fmtInt(block.n)}</span></>
           : <>Share of the category’s <span data-copy="figure">{fmtInt(block.n)}</span> videos</>}
       />
-      <div className="flex flex-col">
+      <div data-w="rank" className="flex flex-col">
         {block.rows.map((r) => (
           <div key={r.registryId} className={`flex items-center gap-3.5 border-t ${HAIR} py-[9px]`}>
             <div className="flex min-w-0 shrink-0 basis-[45%] flex-col gap-0.5 sm:basis-[300px]">
@@ -62,7 +62,7 @@ export function KindsBlockView({ block, brand, noun, monthText }: { block: Kinds
           ? <>Videos of the <span data-copy="figure">{fmtInt(block.n)}</span> in {monthText}, and who the videos are about</>
           : <>Share of the <span data-copy="figure">{fmtInt(block.n)}</span> videos in {monthText}, and who the videos are about</>}
       />
-      <div className="flex flex-col">
+      <div data-w="rank" className="flex flex-col">
         {block.rows.map((r) => (
           <div key={r.kind} className={`flex flex-col gap-1 border-t ${HAIR} py-[9px]`}>
             <div className="flex items-center gap-3.5">

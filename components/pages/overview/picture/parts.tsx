@@ -18,7 +18,7 @@ export const HAIR = 'border-[#E4E2DC]'
 /** A white card on the page's ground, radius 16, on the card shadow. */
 export function Card({ children, className, label }: { children: ReactNode; className: string; label?: string }) {
   return (
-    <section aria-label={label} className={`flex flex-col rounded-[16px] bg-white shadow-card ${className}`}>
+    <section data-w="card" aria-label={label} className={`flex flex-col rounded-[16px] bg-white shadow-card ${className}`}>
       {children}
     </section>
   )
@@ -28,7 +28,7 @@ export function Card({ children, className, label }: { children: ReactNode; clas
  *  in front of it. */
 export function TitleRow({ title, sub, icon }: { title: string; sub?: ReactNode; icon?: LucideIcon }) {
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <div data-w="head" className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <div className="flex items-baseline gap-2.5">
         {icon ? <IconTile icon={icon} /> : null}
         <h2 className="m-0 text-[20px] font-bold">{title}</h2>
@@ -42,7 +42,7 @@ export function TitleRow({ title, sub, icon }: { title: string; sub?: ReactNode;
  *  tile in front of it. */
 export function TitleStack({ title, sub, icon }: { title: string; sub: ReactNode; icon?: LucideIcon }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div data-w="head" className="flex flex-col gap-1">
       <div className="flex items-baseline gap-2.5">
         {icon ? <IconTile icon={icon} /> : null}
         <h2 className="m-0 text-[20px] font-bold">{title}</h2>
@@ -57,8 +57,8 @@ export function TitleStack({ title, sub, icon }: { title: string; sub: ReactNode
 export function Bar({ pct, height = 8, className = 'flex-grow', who = 'market' }: { pct: number; height?: 8 | 10; className?: string; who?: BarWho }) {
   const w = Math.max(0, Math.min(100, pct))
   return (
-    <div aria-hidden className={`${className} overflow-hidden bg-[#ECEAE4] ${height === 10 ? 'h-[10px] rounded-[5px]' : 'h-[8px] rounded-[4px]'}`}>
-      <div className={`${BAR_FILL[who]} ${height === 10 ? 'h-[10px]' : 'h-[8px]'}`} style={{ width: `${w}%` }} />
+    <div aria-hidden data-w="track" className={`${className} overflow-hidden bg-[#ECEAE4] ${height === 10 ? 'h-[10px] rounded-[5px]' : 'h-[8px] rounded-[4px]'}`}>
+      <div data-w="bar" className={`${BAR_FILL[who]} ${height === 10 ? 'h-[10px]' : 'h-[8px]'}`} style={{ width: `${w}%` }} />
     </div>
   )
 }

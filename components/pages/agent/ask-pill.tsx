@@ -26,7 +26,7 @@ export function AskPill({ canSend, disabledNote, ask, window, asked, planLimit }
   return (
     <section aria-labelledby="agent-ask-title" className="flex w-full max-w-[800px] flex-col items-center gap-7 leading-[normal]">
       <div className="flex flex-col items-center gap-4 text-center">
-        <span className="flex size-12 items-center justify-center rounded-[14px] bg-brand" aria-hidden>
+        <span data-w="agent-mark" className="flex size-12 items-center justify-center rounded-[14px] bg-brand" aria-hidden>
           <Sparkles className="size-[22px] text-brand-foreground" />
         </span>
         <h2 id="agent-ask-title" className="m-0 text-[28px] font-bold leading-[1.2] tracking-[-0.01em] text-foreground [text-wrap:balance] max-sm:text-[23px]">

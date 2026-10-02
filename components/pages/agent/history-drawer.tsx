@@ -78,6 +78,7 @@ export function HistoryDrawer({ history, defaultOpen = false }: {
           const next = e.relatedTarget as Node | null
           if (open && next && !e.currentTarget.contains(next)) setOpen(false)
         }}
+        data-w="drawer"
         className="pointer-events-auto absolute inset-x-0 bottom-0 mx-auto flex max-w-[840px] flex-col rounded-t-[24px] bg-tile shadow-[0_-1px_2px_rgba(0,0,0,0.04),0_-6px_24px_rgba(0,0,0,0.07)]"
       >
         <button
@@ -89,6 +90,7 @@ export function HistoryDrawer({ history, defaultOpen = false }: {
             raised.current = !open
             setOpen((v) => !v)
           }}
+          data-w="drawer-head"
           className="group flex h-[58px] w-full shrink-0 flex-col items-center justify-center gap-[7px] rounded-t-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <span className="h-1 w-9 rounded-full bg-border transition-colors group-hover:bg-muted-foreground/50" aria-hidden />

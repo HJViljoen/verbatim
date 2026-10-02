@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* The WARM mock's three directions (2 Oct), each scoped to [data-warm]; inert
+   until something sets the attribute. */
+@import "./warm.css";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -18,7 +18,7 @@ function QuotePanel({ q }: { q: PictureQuote }) {
   const label = translationLabel(note)
   const where = [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(`${q.date}T00:00:00Z`) : null].filter(Boolean).join(' · ')
   return (
-    <div className="flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
+    <div data-w="quote" className="flex flex-col gap-2 rounded-[12px] bg-[#F7F6F2] px-[18px] py-4">
       <p data-copy="quote" className="m-0 font-serif text-[15px] italic leading-[1.5] text-[#26292C]">“{q.text}”</p>
       {label ? <div className={`text-[12px] ${MUTED}`}>{label}</div> : null}
       {note.english ? <p data-copy="quote" className={`m-0 font-serif text-[14px] leading-[1.5] ${MUTED}`}>{note.english}</p> : null}
@@ -38,7 +38,7 @@ export function StandsBlockView({ block, monthText }: { block: StandsBlock; mont
   return (
     <Card label="Where your market stands" className="gap-[14px] px-5 pb-2.5 pt-6 sm:px-7">
       <TitleRow icon={Layers} title="Where your market stands" sub={sub} />
-      <div className="flex flex-col">
+      <div data-w="rank" className="flex flex-col">
         {block.rows.map((r) => r.level ? (
           <div key={r.subjectId} className={`grid grid-cols-1 gap-8 border-t ${HAIR} py-5 md:grid-cols-2`}>
             <div className="flex flex-col gap-2.5">

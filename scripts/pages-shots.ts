@@ -3,7 +3,11 @@
 // artboard (`Page-*.dc.html`).
 //
 //   node --import tsx scripts/pages-shots.ts --out <dir> --artboards <dir>
-//     [--only agent,agent-history] [--width 390] [--scale 2]
+//     [--only agent,agent-history] [--width 390] [--scale 2] [--warm a|b|c]
+//
+// `--warm` sets `data-warm` on the app root, so the WARM mock's directions
+// (app/warm.css, 2 Oct) draw over the same pages; shots are suffixed
+// `-warm-<x>` and shot alone, with no artboard beside them.
 //
 // WHAT IS REAL. Each page is its route's own composition (the components the
 // route renders, in its order), fed the package's render fixture: the same
@@ -91,6 +95,8 @@ const only = flag('only', '')
 const width = Number(flag('width', '1440'))
 /** Device pixels per CSS pixel (`--scale 2` for a sharp shot). */
 const scale = Number(flag('scale', '1'))
+/** A WARM direction to draw the pages in (app/warm.css), or none. */
+const warm = flag('warm', '')
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
@@ -326,7 +332,7 @@ const wordmark = () =>
 const shell = (path: string, page: ReactNode, fixed = false) =>
   h(AppRouterContext.Provider, { value: router as never },
     h(PathnameContext.Provider, { value: path },
-      h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never },
+      h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never, ...(warm ? { 'data-warm': warm } : {}) } as never,
         h(AppSidebar, { header: wordmark() }),
         h('div', { className: `relative flex flex-col flex-1 min-w-0 bg-[#F7F6F2] ${fixed ? 'h-dvh overflow-hidden' : 'min-h-dvh'}` },
           h(SidebarTrigger, { 'aria-label': 'Open navigation', className: 'absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden' }),
@@ -366,7 +372,7 @@ async function main() {
   mkdirSync(out, { recursive: true })
   const style = await css()
   const pages = PAGES.filter((p) => !only || only.split(',').includes(p.key))
-  const tag = width === 1440 ? '' : `-${width}`
+  const tag = `${width === 1440 ? '' : `-${width}`}${warm ? `-warm-${warm}` : ''}`
   for (const p of pages) writeFileSync(join(out, `built-${p.key}${tag}.html`), doc(style, renderToStaticMarkup(shell(p.path, p.page(), p.fixed))))
 
   await withBrowser(async (page) => {

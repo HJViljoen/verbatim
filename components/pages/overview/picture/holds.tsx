@@ -13,21 +13,25 @@ export function HoldsBlock({ read, brand, noun }: { read: LongRunReadData; brand
   const months = monthsPhrase(read.months)
   return (
     <Card label={`What holds across ${months}`} className="gap-[14px] px-5 pb-2.5 pt-7 sm:px-8">
-      <div className="flex items-baseline justify-between gap-4">
-        <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#C2410C]">What holds across {months}</div>
+      {/* One block (the card's own 14px gap inside it), so a direction can
+          set the lead on a panel or band (the WARM mock, 2 Oct). */}
+      <div data-w="lead" className="flex flex-col gap-[14px]">
+        <div data-w="eyebrow" className="flex items-baseline justify-between gap-4">
+          <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#C2410C]">What holds across {months}</div>
+        </div>
+        {read.inShort ? (
+          <p data-copy="stored" data-slot="week_read" className="m-0 max-w-[1000px] font-serif text-[20px] font-medium leading-[1.4] sm:text-[24px]">
+            {read.inShort}
+          </p>
+        ) : null}
       </div>
-      {read.inShort ? (
-        <p data-copy="stored" data-slot="week_read" className="m-0 max-w-[1000px] font-serif text-[20px] font-medium leading-[1.4] sm:text-[24px]">
-          {read.inShort}
-        </p>
-      ) : null}
       {read.ideas.map((idea, i) => {
         const heard = idea.months.filter((m) => m.videos > 0).map((m) => m.month)
         return (
           <article key={idea.headline} className={`grid grid-cols-1 gap-6 border-t ${HAIR} py-6 md:grid-cols-5 md:gap-9`}>
             <div className="flex flex-col gap-3 md:col-span-3">
               <div className="flex items-start gap-3">
-                <div aria-hidden className="flex size-[26px] shrink-0 items-center justify-center rounded-[13px] bg-[#FFD43B] text-[13px] font-bold">{i + 1}</div>
+                <div aria-hidden data-w="idea-n" className="flex size-[26px] shrink-0 items-center justify-center rounded-[13px] bg-[#FFD43B] text-[13px] font-bold">{i + 1}</div>
                 <h3 data-copy="stored" data-slot="week_read" className="m-0 text-[21px] font-bold leading-[1.3]">{idea.headline}</h3>
               </div>
               {idea.body.map((p) => (

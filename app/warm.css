@@ -1,0 +1,264 @@
+/* ── WARM (2 Oct, a MOCK: nothing here ships yet) ─────────────────────────────
+   Heinrich, 2 Oct: "We need some more colour than just the yellow on the page
+   … there's almost only the one yellow, and the darker colours should be used
+   less. Maybe some more shades of yellow, or some more of the orange on the
+   actual page." Three directions over the same pages, each scoped to
+   `[data-warm="a"|"b"|"c"]` on the app root (scripts/pages-shots.ts
+   `--warm x` sets it):
+
+     A  MORE SHADES     a yellow ramp and an orange ramp in the data and the
+                        small surfaces; ink for body text only
+     B  WARM SURFACES   the card chrome: each card's header row on a light
+                        yellow or orange band, panels on the pale yellow;
+                        card bodies stay white
+     C  BOLD            a few confident blocks: the numbers card in yellow,
+                        the Agent's header in orange, In short on yellow 100
+
+   The pages are reached through `data-w` hooks (card, head, lead, eyebrow,
+   figures, rank, bar, track, chart, primary, quote, idea-n, agent-mark,
+   composer, send, plan, window, drawer, drawer-head; `data-w-tile` names a
+   Dashboard block) and the colour roles' own attributes (data-icon-tile,
+   data-new-number, data-agent-head, data-week-state). The meanings hold in
+   all three: gold is Sealand, grey is a rival, the orange is never a text
+   colour (#C2410C and #A3360A are the orange TEXT), AA for every word, no
+   left stripe, no gradient, no fill behind words in a sentence, no beige.
+
+   SHIPPING ONE: fold its ramp into `:root`, then either keep the scope (set
+   `data-warm` on app/dashboard/layout.tsx's root) or move each rule into the
+   component it names. Not wired into the drift guard: this file is a mock. */
+
+[data-warm] {
+  /* The yellow ramp (by eye from the brief's: 50 and 100 kept clearly
+     yellow, 400 added between the brand and its 500). */
+  --y-50: #FFF8D6;
+  --y-100: #FFF4C7;
+  --y-200: #FFE88A;
+  --y-300: #FFD43B;
+  --y-400: #FFC61A;
+  --y-500: #F5B300;
+  --y-700: #B88400;
+  /* The orange ramp. 50 is the lightest tint the orange text holds AA on
+     (4.55:1); 600 the lightest a white word holds AA on (4.53:1); 800 the
+     orange text for a band or a deeper tint (5.2:1 or more on all of them). */
+  --o-50: #FFEDE0;
+  --o-100: #FFE6D5;
+  --o-200: #FFD3B5;
+  --o-300: #FFA56B;
+  --o-500: #F2651D;
+  --o-600: #CF4A0C;
+  --o-700: #C2410C;
+  --o-800: #A3360A;
+}
+
+/* ── Shared machinery: a header band bled to its card's edges ───────────────
+   The band is a pseudo-element behind the header row, pulled past the card's
+   padding on three sides and clipped by the card's own rounded edge, so no
+   card's padding has to be known here. The header keeps its box; the band's
+   bottom is the header's own bottom padding (`--band-pb`), the one spacing
+   this mock adds. */
+[data-warm="b"] [data-w="card"],
+[data-warm="c"] [data-w="card"] {
+  isolation: isolate;
+  overflow: hidden;
+}
+[data-warm="b"] [data-w="head"],
+[data-warm="b"] [data-w="lead"] [data-w="eyebrow"],
+[data-warm="c"] [data-w="lead"] {
+  position: relative;
+  padding-bottom: var(--band-pb, 14px);
+}
+[data-warm="b"] [data-w="head"]::before,
+[data-warm="b"] [data-w="lead"] [data-w="eyebrow"]::before,
+[data-warm="c"] [data-w="lead"]::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -80px -80px 0 -80px;
+  background: var(--band, var(--y-100));
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   A · MORE SHADES
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* The primary button turns from ink to the brand yellow, ink on it (10:1);
+   ink is left for words. */
+[data-warm="a"] {
+  --primary: var(--y-300);
+  --primary-foreground: #26292C;
+}
+[data-warm="a"] [data-w="primary"] {
+  background: var(--y-300);
+  color: #26292C;
+}
+
+/* Icon tiles alternate a yellow and an orange tint, card by card (a
+   checkerboard across the Dashboard's six). The glyph is the orange text. */
+[data-warm="a"] [data-icon-tile="soft"] {
+  background: var(--y-200);
+  color: var(--o-700);
+}
+[data-warm="a"] [data-w="card"]:nth-child(even) [data-icon-tile="soft"] {
+  background: var(--o-100);
+  color: var(--o-700);
+}
+
+/* Bars graded by rank: the biggest the darkest yellow, then lighter, each
+   on a pale yellow track instead of the grey. */
+[data-warm="a"] [data-w="track"] { background: var(--y-100); }
+[data-warm="a"] [data-w="rank"] > :nth-child(1) [data-w="bar"] { background: var(--y-500); }
+[data-warm="a"] [data-w="rank"] > :nth-child(2) [data-w="bar"] { background: var(--y-400); }
+[data-warm="a"] [data-w="rank"] > :nth-child(3) [data-w="bar"] { background: var(--y-300); }
+[data-warm="a"] [data-w="rank"] > :nth-child(n+4) [data-w="bar"] { background: var(--y-200); }
+
+/* A market read's numbered ideas, graded the same way. */
+[data-warm="a"] article:nth-of-type(1) [data-w="idea-n"] { background: var(--y-500); }
+[data-warm="a"] article:nth-of-type(2) [data-w="idea-n"] { background: var(--y-400); }
+[data-warm="a"] article:nth-of-type(n+3) [data-w="idea-n"] { background: var(--y-300); }
+
+/* Week by week: settled weeks a step deeper, the week still filling the
+   yellow 200 (solid, where it was the brand at 45%); the comments line and
+   its points the orange, each point ringed in white. */
+[data-warm="a"] [data-week-state="settled"] { background: var(--y-400); }
+[data-warm="a"] [data-week-state="filling"] { background: var(--y-200); opacity: 1; }
+[data-warm="a"] [data-w="chart"] .bg-orange { box-shadow: 0 0 0 2px #FFFFFF; }
+[data-warm="a"] [data-w-key="videos"] { background: var(--y-400); }
+[data-warm="a"] [data-w="chart"] > div > div:first-child { border-bottom-color: var(--y-300); }
+[data-warm="a"] [data-w="chart"] > div > div:first-child > span { border-left-color: var(--y-200); }
+
+/* The Dashboard's Agent: its header a step deeper (the yellow 200), its mark
+   the yellow 500, the button the brand yellow: three shades in one card. */
+[data-warm="a"] [data-agent-head] { background: var(--y-200); }
+[data-warm="a"] [data-agent-head] [data-w="agent-mark"] { background: var(--y-500); }
+
+/* The numbers' half headings ("This week, 21 to 27 September") in the orange
+   text, and the rule between the halves in the yellow 200. */
+[data-warm="a"] [data-w="figures"] > div > div:first-child { color: var(--o-700); }
+[data-warm="a"] [data-w="figures"] > div { border-color: var(--y-200); }
+
+/* The rules inside a card: the yellow 200 where they divide a card's own
+   sections (a finding, an idea, a subject). */
+[data-warm="a"] [data-w="card"] article,
+[data-warm="a"] [data-w="rank"] > * { border-color: var(--y-200); }
+
+/* Tags step up to the yellow 200. */
+[data-warm="a"] [data-slot="pass_b_theme"].rounded-full { background: var(--y-200); }
+
+/* The Agent's page: the send arrow on the yellow (it reads --primary), the
+   pill's edge in the yellow 300, "Check a plan" on the orange tint, the
+   window's tray the yellow 100 with the chosen window on the yellow 300. */
+[data-warm="a"] [data-w="composer"] { border-color: var(--y-300); }
+[data-warm="a"] [data-w="plan"] { background: var(--o-100); border-color: var(--o-100); }
+[data-warm="a"] [data-w="plan"] svg { color: var(--o-700); }
+[data-warm="a"] [data-w="window"] { background: var(--y-100); }
+[data-warm="a"] [data-w="window"] [aria-current="true"] { background: var(--y-300); box-shadow: none; }
+[data-warm="a"] [data-w="drawer-head"] > span:first-child { background: var(--y-300); }
+[data-warm="a"] [data-w="drawer-head"] svg { color: var(--o-700); }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   B · WARM SURFACES
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* Header bands: titles on the yellow 100, eyebrows on the orange 50 (the
+   eyebrow's orange text holds 4.6:1 there). An icon tile on a band turns
+   white, so it still reads as a tile. */
+[data-warm="b"] [data-w="head"] { --band: var(--y-100); }
+[data-warm="b"] [data-w="lead"] [data-w="eyebrow"] { --band: var(--o-50); --band-pb: 12px; margin-top: -8px; }
+[data-warm="b"] [data-w="head"] [data-icon-tile="soft"] { background: #FFFFFF; color: var(--o-700); }
+[data-warm="b"] [data-w="head"] a { color: var(--o-800); }
+
+/* Your market: the pair below alternates (the conversations orange, the
+   comments yellow). */
+[data-warm="b"] [data-w="card"][aria-label="The biggest conversations"] [data-w="head"] { --band: var(--o-50); }
+
+/* The Dashboard: every block on its own warm tint. */
+[data-warm="b"] [data-w-tile="numbers"] [data-w="head"] { --band: var(--o-50); }
+[data-warm="b"] [data-w-tile="weeks"] [data-w="head"] { --band: var(--y-100); }
+[data-warm="b"] [data-w-tile="overview"] [data-w="head"] { --band: var(--y-100); }
+[data-warm="b"] [data-w-tile="week"] [data-w="head"] { --band: var(--o-50); }
+[data-warm="b"] [data-w-tile="voice"] [data-w="head"] { --band: #FFEDB3; }
+[data-warm="b"] [data-w-tile="competitive"] [data-w="head"] { --band: var(--o-100); }
+[data-warm="b"] [data-w-tile="subjects"] [data-w="head"] { --band: var(--y-200); }
+[data-warm="b"] [data-w-tile="market"] [data-w="head"] { --band: var(--o-200); }
+[data-warm="b"] [data-w-tile] [data-w="head"] { --band-pb: 12px; }
+
+/* Under a band its edge is the rule: a list's first hairline goes. */
+[data-warm="b"] [data-w="head"] + div > :first-child { border-top-color: transparent; }
+
+/* The numbers card's figures on a pale yellow panel, pulled into the card's
+   padding so the card keeps its size; the rule between the halves the yellow
+   200. */
+[data-warm="b"] [data-w="figures"] {
+  background: var(--y-100);
+  border-radius: 12px;
+  margin: -4px -14px -8px;
+  padding: 14px 14px 12px;
+}
+[data-warm="b"] [data-w="figures"] > div { border-color: var(--y-200); }
+
+/* Panels: a quote on the pale yellow instead of the grey ground. */
+[data-warm="b"] [data-w="quote"] { background: var(--y-100); }
+
+/* The Agent's page, which has no card: the sheet of earlier questions gets
+   its header band; the window's tray the yellow 100. */
+[data-warm="b"] [data-w="drawer"] { overflow: hidden; }
+[data-warm="b"] [data-w="drawer-head"] { background: var(--y-100); }
+[data-warm="b"] [data-w="drawer-head"] > span:first-child { background: var(--y-300); }
+[data-warm="b"] [data-w="window"] { background: var(--y-100); }
+[data-warm="b"] [data-w="plan"] svg { color: var(--o-700); }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   C · BOLD
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* Fewer ink blocks: the primary button the brand yellow, ink on it. */
+[data-warm="c"] {
+  --primary: var(--y-300);
+  --primary-foreground: #26292C;
+}
+[data-warm="c"] [data-w="primary"] { background: var(--y-300); color: #26292C; }
+
+/* "Your market in numbers" in full yellow, ink on it. The muted words go to
+   the second ink (6.4:1 on the yellow; the muted grey is 4.1:1 there), the
+   rules to the ink at 18%, the icon tile white, the keys the yellow 500 and
+   the deep orange (the yellow key would vanish on its own ground). */
+[data-warm="c"] [data-w-tile="numbers"] { background: var(--y-300); }
+[data-warm="c"] [data-w-tile="numbers"] [class*="text-[#5F656B]"] { color: #45494D; }
+[data-warm="c"] [data-w-tile="numbers"] [class*="border-[#E4E2DC]"] { border-color: rgba(38, 41, 44, 0.18); }
+[data-warm="c"] [data-w-tile="numbers"] [data-icon-tile] { background: #FFFFFF; color: var(--o-700); }
+[data-warm="c"] [data-w-tile="numbers"] [data-w-key="videos"] { background: var(--y-500); }
+[data-warm="c"] [data-w-tile="numbers"] [data-w-key="comments"] { background: var(--o-600); }
+
+/* The Agent card's header in orange, white on it (4.5:1 on the 600); its
+   mark the brand yellow, which now stands out of the band. */
+[data-warm="c"] [data-agent-head] { background: var(--o-600); }
+[data-warm="c"] [data-agent-head] h2 { color: #FFFFFF; }
+
+/* Week by week: the bars the yellow 500, the line the orange. */
+[data-warm="c"] [data-week-state="settled"] { background: var(--y-500); }
+[data-warm="c"] [data-week-state="filling"] { background: var(--y-200); opacity: 1; }
+[data-warm="c"] [data-w-key="videos"]:not([data-w-tile="numbers"] *) { background: var(--y-500); }
+
+/* Every bar the yellow 500, and a read's numbered ideas with them. */
+[data-warm="c"] [data-w="bar"] { background: var(--y-500); }
+[data-warm="c"] [data-w="idea-n"] { background: var(--y-500); }
+
+/* Icon tiles solid: the brand yellow, ink on it (the Agent's own tone). */
+[data-warm="c"] [data-icon-tile="soft"] { background: var(--y-300); color: #26292C; }
+
+/* This week's "In short" (and Your market's long-run lead) on the yellow 100,
+   bled to the card's top and sides; the first finding's rule goes, the band's
+   edge is the rule. */
+[data-warm="c"] [data-w="lead"] { --band: var(--y-100); --band-pb: 26px; }
+[data-warm="c"] [data-w="lead"] + div > article:first-child,
+[data-warm="c"] [data-w="lead"] + article { border-top-color: transparent; }
+
+/* The Agent's page: the send arrow on the yellow (it reads --primary), the
+   chosen window the yellow, and the sheet of earlier questions headed in the
+   Agent's orange, white on it. */
+[data-warm="c"] [data-w="window"] [aria-current="true"] { background: var(--y-300); box-shadow: none; }
+[data-warm="c"] [data-w="drawer"] { overflow: hidden; }
+[data-warm="c"] [data-w="drawer-head"] { background: var(--o-600); }
+[data-warm="c"] [data-w="drawer-head"] > span:first-child { background: rgba(255, 255, 255, 0.55); }
+[data-warm="c"] [data-w="drawer-head"] > span:last-child,
+[data-warm="c"] [data-w="drawer-head"] svg { color: #FFFFFF; }
