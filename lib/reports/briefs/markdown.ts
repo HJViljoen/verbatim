@@ -83,7 +83,7 @@ function sectionBlock(s: BriefSection, textOf: TextOf, company: string, noun: st
   for (const g of s.groups) {
     if (g.label) out.push(`**${g.label}**`, '')
     for (const i of g.items) {
-      const title = i.title ? `${i.title}${i.tag === 'you' ? ' (you)' : ''}` : ''
+      const title = i.title ?? ''
       const head = title ? `**${/[.!?]$/.test(title) ? title : `${title}.`}** ` : ''
       const tag = i.tag && i.tag !== 'you' ? ` _(${i.tag}.)_` : ''
       const who = i.videos != null && i.who ? ` _(${whoLine(i.videos, i.who, company, noun)})_` : ''

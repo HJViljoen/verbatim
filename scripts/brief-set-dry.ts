@@ -236,6 +236,8 @@ async function main() {
     ...(previous ? { ideas: { raw: previous.ideas, contradicted: previous.check.contradicted } } : {}),
     spent,
     ...(written ? { written } : {}),
+    // A recompose that calls no writer keeps the summaries' last check.
+    ...(RECOMPOSE && REWRITE.length === 0 && previous?.check?.summaries ? { summaries: { contradicted: previous.check.summaries.contradicted } } : {}),
   })
   console.log(`ideas: ${set.allocation.ideas.map((i) => `${i.id}→${i.home}(${i.placed}, ${i.videos}v): ${i.headline}`).join(' | ')}`)
   console.log(`held ideas: ${set.allocation.held.map((h) => `${h.headline} [${h.reason}]`).join(' | ') || 'none'}`)

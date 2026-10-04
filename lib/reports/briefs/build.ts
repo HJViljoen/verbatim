@@ -249,6 +249,10 @@ export async function writeBriefSet(
     /** A writer's output kept from an earlier write, by role: that brief is
      *  composed again from it and its writer is not called. */
     written?: Partial<Record<BriefRole, BriefOutput>>
+    /** Check the summaries again (default). A recompose whose writers were not
+     *  called keeps the earlier check's answer instead: pass its contradicted
+     *  summaries. */
+    summaries?: { contradicted: [string, string | null][] }
   },
 ): Promise<BriefSet> {
   const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client }
@@ -305,7 +309,9 @@ export async function writeBriefSet(
   // long-run read's rule for its lead): a summary the conversation
   // contradicts does not print, and In short keeps its figures and lines.
   const summaries = Object.values(briefs).map((b) => b.data.inShort.summary.trim()).filter(Boolean)
-  const summaryCheck = i.themedRunId && summaries.length
+  const summaryCheck = opts.summaries
+    ? { contradicted: new Map(opts.summaries.contradicted), verdicts: [], costUsd: 0, ran: true }
+    : i.themedRunId && summaries.length
     ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: summaries, persist: opts.log })
     : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
   cost += summaryCheck.costUsd
