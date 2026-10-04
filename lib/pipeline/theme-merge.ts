@@ -82,6 +82,13 @@ export interface ThemeMergeOptions {
   logCall?: boolean
   /** ai_call_log call_index — one merge call per bucket, numbered by the caller. */
   callIndex?: number
+  /** The pipeline's bound on the call (THEME_MERGE_TIMEOUT_MS), with no SDK
+   *  retries: the Inngest step retries instead. Scripts leave it unset and
+   *  keep the SDK's defaults. */
+  timeoutMs?: number
+  /** A failed or timed-out call applies no merges and returns, instead of
+   *  throwing. The pipeline sets it on the step's LAST attempt only. */
+  failSoft?: boolean
 }
 
 export interface ThemeMergeResult {
@@ -93,6 +100,8 @@ export interface ThemeMergeResult {
   promptTokens: number
   completionTokens: number
   costUsd: number
+  /** The call failed and failSoft kept the clusters unmerged. */
+  skipped?: boolean
 }
 
 export interface ProposedMerge {
@@ -155,7 +164,8 @@ export function applyMergeGroups(
 
 /**
  * Merge same-concern clusters within one bucket. An API failure throws (the
- * Inngest step retries); an unparseable response applies no merges — honest
+ * Inngest step retries), except under failSoft, where it applies no merges
+ * and returns; an unparseable response applies no merges — honest
  * fragmentation over silent guessing — and logs as parse_error.
  */
 export async function mergeClusterLabels(opts: ThemeMergeOptions): Promise<ThemeMergeResult> {
@@ -191,7 +201,7 @@ export async function mergeClusterLabels(opts: ThemeMergeOptions): Promise<Theme
         { role: 'user', content: userPrompt },
       ],
       response_format: zodResponseFormat(MergeSchema, 'theme_merge'),
-    })
+    }, opts.timeoutMs ? { timeout: opts.timeoutMs, maxRetries: 0 } : undefined)
     parsed = completion.choices[0]?.message?.parsed ?? null
     if (completion.usage) {
       usage = { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }
@@ -200,6 +210,10 @@ export async function mergeClusterLabels(opts: ThemeMergeOptions): Promise<Theme
     const error = e instanceof Error ? e.message : String(e)
     if (opts.logCall) {
       await logAiCall(createAdminClient(), { clientId, runId, pass: 'theme_merge', callIndex: opts.callIndex ?? 1, model, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: null, error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
+    }
+    if (opts.failSoft) {
+      console.error(`[theme-merge] ${bucket}: ${error}; last attempt, so the bucket keeps its ${clusters.length} clusters unmerged`)
+      return { ...base, skipped: true }
     }
     throw new Error(`theme merge (${bucket}) failed: ${error}`)
   }

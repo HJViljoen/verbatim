@@ -286,6 +286,8 @@ interface ProcessGroupOptions {
   merge: boolean
   mergeModel?: string
   logCalls?: boolean
+  mergeTimeoutMs?: number
+  mergeFailSoft?: boolean
 }
 
 interface ProcessGroupResult {
@@ -328,6 +330,7 @@ async function processGroup(
     const m = await mergeClusterLabels({
       clientId, runId, bucket: grp.bucket, clusters,
       model: opts.mergeModel, logCall: opts.logCalls, callIndex,
+      timeoutMs: opts.mergeTimeoutMs, failSoft: opts.mergeFailSoft,
     })
     clusters = m.clusters
     mergeCostUsd += m.costUsd
@@ -412,6 +415,9 @@ export interface RunStepA2BucketOptions {
   merge?: boolean
   mergeModel?: string
   logCalls?: boolean
+  /** The merge call's bound and last-attempt fail-soft (see ThemeMergeOptions). */
+  mergeTimeoutMs?: number
+  mergeFailSoft?: boolean
 }
 
 export interface StepA2BucketResult {
@@ -438,6 +444,7 @@ export async function runStepA2Bucket(opts: RunStepA2BucketOptions): Promise<Ste
     clientId: opts.clientId, runId: opts.runId, method: opts.method, threshold: opts.threshold,
     evidenceFloor: opts.evidenceFloor ?? EVIDENCE_FLOOR, merge: opts.merge ?? true,
     mergeModel: opts.mergeModel, logCalls: opts.logCalls,
+    mergeTimeoutMs: opts.mergeTimeoutMs, mergeFailSoft: opts.mergeFailSoft,
   })
   return { bucket: grp.bucket, insightCount: grp.insights.length, themes: r.themes, mergesApplied: r.mergesApplied, mergeCostUsd: r.mergeCostUsd }
 }

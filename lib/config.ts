@@ -872,6 +872,14 @@ export const PASS_B_PARALLEL = 6
  *  reads and logging. 120 s (when every wave shared one step) cut off the two
  *  largest Sealand chunks on 2026-10-04, which then kept slug labels. */
 export const PASS_B_TIMEOUT_MS = 240_000
+/** The theme-merge call's bound inside a `themes:<bucket>` step, which also
+ *  reloads and clusters the bucket first (~45 s for Sealand's industry-other).
+ *  The call grows with the bucket: 183 s for Össur's 759 clusters (13 Sep),
+ *  193 s for Sealand's (4 Oct), where an earlier attempt of the same step had
+ *  already died at the route's 300 s. Bounded, a slow call throws and the step
+ *  retries; on the step's last attempt it applies no merges instead, so the
+ *  bucket's themes stay fragmented that week rather than the run failing. */
+export const THEME_MERGE_TIMEOUT_MS = 200_000
 
 // --- Data retention (Tier 0 T0-9, 2026-08-18) --------------------------------
 // The windows the privacy notice states. Nothing in the product deleted source
