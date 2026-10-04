@@ -86,6 +86,7 @@ export interface ComposeInput {
 
 const pct1 = (k: number, n: number): string => `${(Math.round((k / n) * 1000) / 10).toFixed(1)}%`
 const pct0 = (k: number, n: number): string => `${Math.round((k / n) * 100)}%`
+const COUNT_WORD = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 const RANK = ['largest', 'second largest', 'third largest', 'fourth largest', 'fifth largest', 'sixth largest', 'seventh largest', 'eighth largest']
 const BIGGEST = ['biggest', 'second biggest', 'third biggest', 'fourth biggest', 'fifth biggest', 'sixth biggest', 'seventh biggest', 'eighth biggest']
 
@@ -406,11 +407,11 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
         })
       }
       const at = brands.findIndex((b) => b.you)
-      lines.push(`Of ${co} and the ${rivals.length === 1 ? 'rival' : `${rivals.length} rivals`} beside it, ${co} draws the ${RANK[at] ?? `${at + 1}th largest`} share of ${month}'s comments.`)
+      lines.push(`Of ${co} and the ${rivals.length === 1 ? 'rival' : `${COUNT_WORD[rivals.length] ?? fmtInt(rivals.length)} rivals`} beside it, ${co} draws the ${RANK[at] ?? `${at + 1}th largest`} share of ${month}'s comments.`)
       if (category) lines.push(`The rest of the market holds ${pct1(category.comments, comments)} of the comments.`)
     }
     const groups = [
-      ...(items.length ? [{ label: `Share of ${month}'s talk: ${fmtInt(comments)} comments on ${fmtInt(videos)} videos`, items, ...(lines.length ? { lines } : {}) }] : []),
+      ...(items.length ? [{ label: `Share of ${month}'s talk, ${co}'s own posts included: ${fmtInt(comments)} comments on ${fmtInt(videos)} videos`, items, ...(lines.length ? { lines } : {}) }] : []),
       ...standGroups,
     ]
     if (groups.length === 0) return null
