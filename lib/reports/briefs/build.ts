@@ -87,8 +87,9 @@ export interface BriefSetInputs {
 
 /** A caption that runs a giveaway or a competition: its comments are entries,
  *  not talk about the product (Sealand's DELI2SEA giveaway carried about 149
- *  of its 256 September comments). */
-export const GIVEAWAY = /\b(?:give\s?-?aways?|win\s+(?:a|an|one|this|your)\b|competition|enter\s+to\s+win|to\s+enter\b|tag\s+(?:a|your|two|three|\d+)\s+(?:friends?|mates?)|prizes?|winners?\s+will)\b/i
+ *  of its 256 September comments). Not "prizes": an event post that names
+ *  its prizes is not a giveaway (Sealand's Move for the Coast posts). */
+export const GIVEAWAY = /\b(?:give\s?-?aways?|win\s+(?:a|an|one|this|your)\b|competition|enter\s+to\s+win|to\s+enter\b|tag\s+(?:a|your|two|three|\d+)\s+(?:friends?|mates?))\b/i
 
 /** The company's own giveaway posts and their comments dated in the month.
  *  Two small reads; null where none or not read. */
