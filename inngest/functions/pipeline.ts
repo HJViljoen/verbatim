@@ -7,7 +7,7 @@ import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
 import { decideAnalysis, emptyReasonTally, type SelectReason } from '@/lib/pipeline/pass-a-plan'
 import { pruneStaleAnalysis, trimFreezeHold, trimStaleMemberships, trimSummary } from '@/lib/pipeline/stale-analysis'
 import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
-import { runPassB } from '@/lib/pipeline/pass-b'
+import { planPassB, labelPassBWave, applyPassBLabels, type PassBWaveResult } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
 import { runPassD } from '@/lib/pipeline/pass-d'
 import { runCrossReference } from '@/lib/pipeline/cross-reference'
@@ -59,7 +59,7 @@ import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, is
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { brandConfirmEnabled, CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { brandConfirmEnabled, CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_B_PARALLEL, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -1538,16 +1538,33 @@ export const runPipeline = inngest.createFunction(
 
     // Pass B labels BOTH tiers (early signals surface on the pages too); the
     // cross-bucket strength sort happens here, where the buckets recombine.
+    // Rank, not strongest-member (Tier 1). This sort survives into
+    // persist-themes and is the order Pass C/D-a read the theme index in.
+    // Pure, so every replay cuts the same chunks with the same T# indices.
+    const allThemes = bucketResults.flatMap((r) => r.themes)
+    allThemes.sort(compareThemes)
+    const passBChunks = planPassB(allThemes)
+    // One step per wave (2026-10-04): with every wave in one step, the step
+    // grew with the theme set until Sealand's 20 chunks ran past the route's
+    // 300 s on all three attempts and failed the run. A wave step lasts one
+    // wave, at most PASS_B_TIMEOUT_MS, however many chunks there are.
+    const passBWaveCount = Math.ceil(passBChunks.length / PASS_B_PARALLEL)
+    const passBWaves: PassBWaveResult[] = []
+    for (let w = 0; w < passBWaveCount; w++) {
+      passBWaves.push(await step.run(`pass-b:${w + 1}-of-${passBWaveCount}`, async () => {
+        const admin = createAdminClient()
+        const { data: client } = await admin.from('clients')
+          .select('company_name').eq('id', clientId).maybeSingle()
+        return labelPassBWave({
+          clientId, runId, brandName: client?.company_name ?? undefined, persist: true,
+          chunks: passBChunks.slice(w * PASS_B_PARALLEL, (w + 1) * PASS_B_PARALLEL),
+          firstCallIndex: w * PASS_B_PARALLEL + 1, totalChunks: passBChunks.length,
+        })
+      }))
+    }
     const themed = await step.run('pass-b', async () => {
-      const admin = createAdminClient()
-      const { data: client } = await admin.from('clients')
-        .select('company_name').eq('id', clientId).maybeSingle()
-      const allThemes = bucketResults.flatMap((r) => r.themes)
-      // Rank, not strongest-member (Tier 1). This sort survives into
-      // persist-themes and is the order Pass C/D-a read the theme index in.
-      allThemes.sort(compareThemes)
-      console.log(`[themes] ${allThemes.length} themes from ${bucketResults.length} buckets, step payload ${JSON.stringify(allThemes).length} bytes`)
-      const b = await runPassB({ clientId, runId, themes: allThemes, brandName: client?.company_name ?? undefined, persist: true })
+      console.log(`[themes] ${allThemes.length} themes from ${bucketResults.length} buckets in ${passBChunks.length} labelling calls, step payload ${JSON.stringify(allThemes).length} bytes`)
+      applyPassBLabels(passBChunks, passBWaves)
       const mergeCostUsd = bucketResults.reduce((s, r) => s + r.mergeCostUsd, 0)
       return {
         allThemes,
@@ -1555,7 +1572,7 @@ export const runPipeline = inngest.createFunction(
           themes: allThemes.filter((t) => !t.singleSource).length,
           earlySignals: allThemes.filter((t) => t.singleSource).length,
           themeMerges: bucketResults.reduce((s, r) => s + r.mergesApplied.length, 0),
-          labelCost: b.costUsd + mergeCostUsd,
+          labelCost: passBWaves.reduce((s, w) => s + w.costUsd, 0) + mergeCostUsd,
         },
       }
     })

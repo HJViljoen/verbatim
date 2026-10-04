@@ -854,16 +854,24 @@ export const PASS_A_RECHECK_SHARE = 0.2
 /** Themes per labelling call. 120 keeps the worst measured run (550 themes)
  *  under ~60s per call. */
 export const PASS_B_CHUNK = 120
-/** Labelling calls in flight at once. Sequential chunks would not fix the
- *  wall clock. 3 was "well inside the cap" until 2026-09-15, when gpt-5.4
+/** Labelling calls in flight at once, and so the size of one `pass-b:i-of-n`
+ *  step. 3 was "well inside the cap" until 2026-09-15, when gpt-5.4
  *  answered 53% slower than two days earlier (mean 46 → 71 s a call, same
  *  prompts) and Sealand's 12 chunks in 4 waves ran 257–273 s three times
- *  against the route's 300 s ceiling and failed the rehearsal run; Össur's
- *  8 chunks would have had ~24 s to spare. 6 halves the waves: the same
- *  measured durations replay at ~175 s (Sealand) and ~115 s (Össur). The
- *  cost of 6 in flight is a 429, which a chunk already survives — it keeps
- *  its slug labels and logs `parse_error` — where a timeout takes the run. */
+ *  against the route's 300 s ceiling and failed the rehearsal run. 6 halved
+ *  the waves, but all of them still shared ONE step, and the theme set grows
+ *  with every gather: on 2026-10-04 Sealand had 20 chunks (4 waves), calls
+ *  averaged 87 s, two chunks hit the 120 s bound on every attempt, and the
+ *  step died at 300 s three times and failed the Sunday run. Since then each
+ *  wave is its own step, so a step lasts one wave (at most PASS_B_TIMEOUT_MS)
+ *  however many chunks there are. The cost of 6 in flight is a 429, which a
+ *  chunk already survives: it keeps its slug labels and logs `parse_error`. */
 export const PASS_B_PARALLEL = 6
+/** One labelling call's bound. A wave step lasts as long as its slowest call,
+ *  so this keeps it inside the route's 300 s with room for the step's own
+ *  reads and logging. 120 s (when every wave shared one step) cut off the two
+ *  largest Sealand chunks on 2026-10-04, which then kept slug labels. */
+export const PASS_B_TIMEOUT_MS = 240_000
 
 // --- Data retention (Tier 0 T0-9, 2026-08-18) --------------------------------
 // The windows the privacy notice states. Nothing in the product deleted source

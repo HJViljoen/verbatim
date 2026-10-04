@@ -2,7 +2,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { chunk } from '../chunk'
 import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
-import { SYNTHESIS_MODEL, estimateCost, PASS_B_CHUNK, PASS_B_PARALLEL } from '../config'
+import { SYNTHESIS_MODEL, estimateCost, PASS_B_CHUNK, PASS_B_PARALLEL, PASS_B_TIMEOUT_MS } from '../config'
 import { PassBSchema, type PassBOutput } from './schemas'
 import { logAiCall } from './ai-log'
 import { indexThemes } from './pass-c'
@@ -39,6 +39,20 @@ export interface RunPassBResult {
   completionTokens: number
   costUsd: number
   dryRun: boolean
+}
+
+type IndexedTheme = { label: string; theme: AggregatedTheme }
+
+/** One wave of labelling calls, small enough to cross an Inngest step
+ *  boundary: the labels it accepted, keyed by the theme's global index (T#)
+ *  and carrying the theme's slug and bucket so the apply can refuse a key
+ *  that names a different theme, plus the wave's spend. */
+export interface PassBWaveResult {
+  labels: { key: string; slug: string; bucket: string; label: string; description: string }[]
+  rejectedRefs: number
+  promptTokens: number
+  completionTokens: number
+  costUsd: number
 }
 
 /** Fallback label when Pass B misses a theme: the slug as words. */
@@ -100,33 +114,48 @@ export function chunkThemesForLabelling(
   return chunks
 }
 
-export async function runPassB(opts: RunPassBOptions): Promise<RunPassBResult> {
-  const { clientId, runId, themes } = opts
-  const dryRun = opts.dryRun ?? false
-  const persist = opts.persist ?? !dryRun
-  const admin = createAdminClient()
-
-  const result: RunPassBResult = {
-    labelled: 0, fallbacks: 0, rejectedRefs: 0,
-    promptTokens: 0, completionTokens: 0, costUsd: 0, dryRun,
-  }
-
-  // Fallbacks up front — every theme leaves this pass with a usable label.
+/**
+ * Fallback labels on every theme, then the labelling calls cut. Every theme
+ * leaves Pass B with a usable label even if no call answers for it. Pure: the
+ * pipeline calls it on every replay, so the wave steps and the step that
+ * applies their labels all see the same chunks and the same T# indices.
+ */
+export function planPassB(themes: AggregatedTheme[]): IndexedTheme[][] {
   for (const t of themes) {
     t.label = humaniseSlug(t.theme)
     t.description = t.description ?? t.sampleDescriptions[0]
   }
-  if (themes.length === 0 || dryRun) return result
+  if (themes.length === 0) return []
+  return chunkThemesForLabelling(indexThemes(themes))
+}
 
-  const themeIndex = indexThemes(themes)
+export interface LabelPassBWaveOptions {
+  clientId: string
+  runId: string
+  brandName?: string
+  /** This wave's chunks: at most PASS_B_PARALLEL, all in flight at once. */
+  chunks: IndexedTheme[][]
+  /** The 1-based call index of this wave's first chunk, across the run. */
+  firstCallIndex: number
+  totalChunks: number
+  persist: boolean
+}
+
+/**
+ * One wave of labelling calls. Mutates nothing: it returns the labels each
+ * chunk's answer earned, so the wave can be its own step and the labels can
+ * be applied after every wave has answered. A failed call returns nothing for
+ * its chunk, and those themes simply keep their slug fallback: labelling must
+ * never sink the run.
+ */
+export async function labelPassBWave(opts: LabelPassBWaveOptions): Promise<PassBWaveResult> {
+  const { clientId, runId, chunks, firstCallIndex, totalChunks, persist } = opts
+  const admin = createAdminClient()
   const systemPrompt = buildSystemPrompt(opts.brandName)
-  const chunks = chunkThemesForLabelling(themeIndex)
+  const result: PassBWaveResult = { labels: [], rejectedRefs: 0, promptTokens: 0, completionTokens: 0, costUsd: 0 }
 
-  /** One labelling call. Returns what it labelled; a failure returns null and
-   *  those themes simply keep their slug fallback — labelling must never sink
-   *  the run, and now one bad chunk no longer costs the whole run its labels. */
   const labelChunk = async (
-    chunk: { label: string; theme: AggregatedTheme }[],
+    chunk: IndexedTheme[],
     callIndex: number,
   ): Promise<{ parsed: PassBOutput | null; usage: { prompt_tokens: number; completion_tokens: number }; durationMs: number; userPrompt: string }> => {
     const userPrompt = buildUserPrompt(chunk)
@@ -142,12 +171,12 @@ export async function runPassB(opts: RunPassBOptions): Promise<RunPassBResult> {
         ],
         response_format: zodResponseFormat(PassBSchema, 'pass_b'),
       }, {
-        // The bound that keeps the whole step inside the route's 300 s: two
-        // waves of at most 120 s each. A call that runs past it is treated
-        // like any other failed chunk (slug labels, logged) rather than the
-        // SDK's default of ten minutes and two silent retries, which is how
-        // the 2026-09-15 rehearsal spent three attempts on one step.
-        timeout: 120_000,
+        // The bound that keeps this wave's step inside the route's 300 s. A
+        // call that runs past it is treated like any other failed chunk (slug
+        // labels, logged) rather than the SDK's default of ten minutes and two
+        // silent retries, which is how the 2026-09-15 rehearsal spent three
+        // attempts on one step.
+        timeout: PASS_B_TIMEOUT_MS,
         maxRetries: 0,
       })
       if (completion.usage) {
@@ -156,7 +185,7 @@ export async function runPassB(opts: RunPassBOptions): Promise<RunPassBResult> {
       return { parsed: completion.choices[0]?.message?.parsed ?? null, usage, durationMs: Date.now() - startedAt, userPrompt }
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
-      console.error(`[pass-b] chunk ${callIndex}/${chunks.length} failed: ${error}`)
+      console.error(`[pass-b] chunk ${callIndex}/${totalChunks} failed: ${error}`)
       if (persist) {
         await logAiCall(admin, { clientId, runId, pass: 'pass_b', callIndex, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: null, error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
       }
@@ -164,51 +193,107 @@ export async function runPassB(opts: RunPassBOptions): Promise<RunPassBResult> {
     }
   }
 
-  const seen = new Set<string>()
-  for (let w = 0; w < chunks.length; w += PASS_B_PARALLEL) {
-    const wave = await Promise.all(
-      chunks.slice(w, w + PASS_B_PARALLEL).map((chunk, j) => labelChunk(chunk, w + j + 1)),
-    )
-    for (let j = 0; j < wave.length; j++) {
-      const { parsed, usage, durationMs, userPrompt } = wave[j]
-      result.promptTokens += usage.prompt_tokens
-      result.completionTokens += usage.completion_tokens
-      result.costUsd += estimateCost(SYNTHESIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
-      if (!parsed) continue
+  const wave = await Promise.all(chunks.map((chunk, j) => labelChunk(chunk, firstCallIndex + j)))
+  for (let j = 0; j < wave.length; j++) {
+    const { parsed, usage, durationMs, userPrompt } = wave[j]
+    result.promptTokens += usage.prompt_tokens
+    result.completionTokens += usage.completion_tokens
+    result.costUsd += estimateCost(SYNTHESIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
+    if (!parsed) continue
 
-      // The lookup is scoped to THIS chunk. Indices are globally unique and
-      // non-contiguous within a chunk (themes are strength-sorted before being
-      // grouped by bucket), which is exactly the shape a model "helpfully"
-      // renumbers from T1. A global map would resolve that renumbering to some
-      // other chunk's theme and silently overwrite its label, with
-      // rejectedRefs 0 and validation 'ok'. Scoped, it is rejected.
-      const byLabel = new Map(chunks[w + j].map((t) => [t.label.toLowerCase(), t.theme]))
-      let labelledHere = 0
-      let rejectedHere = 0
-      for (const tl of parsed.theme_labels ?? []) {
-        const key = tl.index.toLowerCase().trim()
-        const theme = byLabel.get(key)
-        if (!theme || seen.has(key) || !tl.label.trim()) {
-          rejectedHere++
-          continue
-        }
-        seen.add(key)
-        theme.label = tl.label.trim()
-        theme.description = tl.description.trim() || theme.description
-        labelledHere++
+    // The lookup is scoped to THIS chunk. Indices are globally unique and
+    // non-contiguous within a chunk (themes are strength-sorted before being
+    // grouped by bucket), which is exactly the shape a model "helpfully"
+    // renumbers from T1. A global map would resolve that renumbering to some
+    // other chunk's theme and silently overwrite its label, with
+    // rejectedRefs 0 and validation 'ok'. Scoped, it is rejected.
+    const byLabel = new Map(chunks[j].map((t) => [t.label.toLowerCase(), t.theme]))
+    const seen = new Set<string>()
+    let labelledHere = 0
+    let rejectedHere = 0
+    for (const tl of parsed.theme_labels ?? []) {
+      const key = tl.index.toLowerCase().trim()
+      const theme = byLabel.get(key)
+      if (!theme || seen.has(key) || !tl.label.trim()) {
+        rejectedHere++
+        continue
       }
-      result.labelled += labelledHere
-      result.rejectedRefs += rejectedHere
-
-      if (persist) {
-        await logAiCall(admin, {
-          clientId, runId, pass: 'pass_b', callIndex: w + j + 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
-          response: { labelled: labelledHere, rejected_refs: rejectedHere, chunk: `${w + j + 1}/${chunks.length}` },
-          error: null, usage, durationMs,
-          validationStatus: rejectedHere > 0 ? 'ref_rejected' : 'ok',
-        })
-      }
+      seen.add(key)
+      result.labels.push({ key, slug: theme.theme, bucket: theme.bucket, label: tl.label.trim(), description: tl.description.trim() })
+      labelledHere++
     }
+    result.rejectedRefs += rejectedHere
+
+    if (persist) {
+      await logAiCall(admin, {
+        clientId, runId, pass: 'pass_b', callIndex: firstCallIndex + j, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
+        response: { labelled: labelledHere, rejected_refs: rejectedHere, chunk: `${firstCallIndex + j}/${totalChunks}` },
+        error: null, usage, durationMs,
+        validationStatus: rejectedHere > 0 ? 'ref_rejected' : 'ok',
+      })
+    }
+  }
+  return result
+}
+
+/**
+ * Put the waves' labels on the themes `planPassB` cut into `chunks`. A key
+ * whose theme is not the one the wave labelled (a different slug or bucket at
+ * that index) is refused and its theme keeps its fallback, so a replay that
+ * ever indexed differently could not move one theme's label onto another.
+ */
+export function applyPassBLabels(
+  chunks: IndexedTheme[][],
+  waves: PassBWaveResult[],
+): { labelled: number; rejectedRefs: number } {
+  const byKey = new Map(chunks.flat().map((t) => [t.label.toLowerCase(), t.theme]))
+  let labelled = 0
+  let rejectedRefs = 0
+  for (const wave of waves) {
+    rejectedRefs += wave.rejectedRefs
+    for (const l of wave.labels) {
+      const theme = byKey.get(l.key)
+      if (!theme || theme.theme !== l.slug || theme.bucket !== l.bucket) {
+        rejectedRefs++
+        continue
+      }
+      theme.label = l.label
+      theme.description = l.description || theme.description
+      labelled++
+    }
+  }
+  return { labelled, rejectedRefs }
+}
+
+/** All of Pass B in one call, for scripts. The pipeline runs the same pieces
+ *  with each wave as its own step (`pass-b:i-of-n`). */
+export async function runPassB(opts: RunPassBOptions): Promise<RunPassBResult> {
+  const { clientId, runId, themes } = opts
+  const dryRun = opts.dryRun ?? false
+  const persist = opts.persist ?? !dryRun
+
+  const result: RunPassBResult = {
+    labelled: 0, fallbacks: 0, rejectedRefs: 0,
+    promptTokens: 0, completionTokens: 0, costUsd: 0, dryRun,
+  }
+
+  const chunks = planPassB(themes)
+  if (chunks.length === 0 || dryRun) return result
+
+  const waves: PassBWaveResult[] = []
+  for (let w = 0; w < chunks.length; w += PASS_B_PARALLEL) {
+    waves.push(await labelPassBWave({
+      clientId, runId, brandName: opts.brandName, persist,
+      chunks: chunks.slice(w, w + PASS_B_PARALLEL), firstCallIndex: w + 1, totalChunks: chunks.length,
+    }))
+  }
+  const applied = applyPassBLabels(chunks, waves)
+  result.labelled = applied.labelled
+  result.rejectedRefs = applied.rejectedRefs
+  for (const w of waves) {
+    result.promptTokens += w.promptTokens
+    result.completionTokens += w.completionTokens
+    result.costUsd += w.costUsd
   }
   result.fallbacks = themes.length - result.labelled
   return result
