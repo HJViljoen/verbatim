@@ -228,7 +228,12 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const quote = quoteFor(ids, [...believe.items, ...doubt.items].map((i) => i.text).join(' '))
     built['marketing.believe'] = groups.length ? section('marketing.believe', groups, { ...(believe.lead ? { lead: believe.lead } : {}), ...(quote ? { quote } : {}) }) : null
     const words = itemsOf('words')
-    const voices = a.quotes.phrases(words.pointIds.length ? words.pointIds : ids, words.items.map((i) => i.text).join(' '), PHRASES_MAX - 1)
+    // The market's own words: short voices from every point the marketing
+    // research grounded, judged against everything this section and the
+    // beliefs say, so the page carries real words even where the writer's
+    // own items are few.
+    const marketingPoints = a.points.filter((p) => p.role === 'marketing' && p.usable).map((p) => p.id)
+    const voices = a.quotes.phrases(marketingPoints, [...words.items, ...believe.items, ...doubt.items].map((i) => `${i.title ?? ''} ${i.text}`).join(' '), PHRASES_MAX - 1)
     const wordGroups = [
       ...(words.items.length ? [{ items: words.items }] : []),
     ]
