@@ -1,4 +1,4 @@
-import { quoteGate, readableEnglish } from '../../quote-gate'
+import { quoteGate, readableEnglish, stem } from '../../quote-gate'
 import { quoteRef } from '../../renderables/quotes-freeze'
 import { CLIENT_AUDIENCE } from '../../rivals'
 import { gateInputOf, type DatedEvidence } from '../../written/evidence'
@@ -33,6 +33,43 @@ export const QUOTE_MAX_CHARS = 280
 export const PHRASE_MIN_CHARS = 16
 export const PHRASE_MAX_CHARS = 120
 
+/** A claim word that most of the voices on offer share ("bag", "people",
+ *  "use") says nothing about which voice fits: past this share of the
+ *  candidates it is not counted. Read from the candidates themselves, so it
+ *  holds for any tenant and any market without a word list. */
+export const GENERIC_SHARE = 0.4
+/** Candidates needed before any word is called generic. */
+export const GENERIC_MIN_CANDIDATES = 5
+
+const WORD = /[\p{L}]{4,}/gu
+const FILLER = new Set([
+  'that', 'this', 'with', 'they', 'them', 'their', 'there', 'when', 'what', 'which', 'from', 'have', 'into', 'about', 'than', 'then', 'also',
+  'more', 'some', 'only', 'just', 'over', 'even', 'very', 'will', 'would', 'could', 'should', 'does', 'were', 'been', 'being', 'your', 'ours',
+  // Words a comment uses whatever it is about.
+  'like', 'love', 'want', 'wanna', 'need', 'make', 'made', 'know', 'think', 'really', 'much', 'many', 'good', 'great', 'nice', 'look', 'looks',
+  'people', 'thing', 'things', 'still', 'well', 'back', 'best', 'never', 'always', 'every', 'here', 'where', 'other', 'because', 'thank', 'thanks',
+])
+export const stemsOf = (text: string): Set<string> =>
+  new Set((text.toLowerCase().match(WORD) ?? []).filter((w) => !FILLER.has(w)).map(stem))
+
+/**
+ * How many of the claim's SPECIFIC words a voice says: the claim's stems,
+ * less those most of the candidates share. Pure.
+ */
+export function specificRelevance(claim: ReadonlySet<string>, voice: ReadonlySet<string>, generic: ReadonlySet<string>): number {
+  let n = 0
+  for (const s of claim) if (!generic.has(s) && voice.has(s)) n += 1
+  return n
+}
+
+/** The claim's stems that most of the candidates share. Pure. */
+export function genericStems(claim: ReadonlySet<string>, voices: readonly ReadonlySet<string>[]): Set<string> {
+  const out = new Set<string>()
+  if (voices.length < GENERIC_MIN_CANDIDATES) return out
+  for (const s of claim) if (voices.filter((v) => v.has(s)).length / voices.length > GENERIC_SHARE) out.add(s)
+  return out
+}
+
 export interface PoolOptions {
   clientId: string
   company: string
@@ -66,8 +103,10 @@ export class QuotePool {
 
   private candidates(pointIds: readonly string[], claim: string, threads: ReadonlySet<string>, minRelevance = 1): Scored[] {
     const seen = new Set<string>()
-    const out: Scored[] = []
-    const gate = briefGateFor(this.o.clientId, claim)
+    const passed: { e: DatedEvidence; english: string; score: number; stems: Set<string> }[] = []
+    // The gate judges quality only here (no claim): which voice FITS is
+    // measured below on the claim's specific words.
+    const gate = briefGateFor(this.o.clientId, null)
     for (const id of pointIds) {
       for (const e of this.counted.get(id) ?? []) {
         const ref = quoteRef.evidence(e.evidenceId)
@@ -78,13 +117,20 @@ export class QuotePool {
         if (threads.has(thread)) continue
         const j = asJudged(e, gate)
         const v = quoteGate(gateInputOf(j.e), j.gate)
-        // A voice that says nothing about what the item says does not print
-        // beside it, however well it reads.
-        if (!v.ok || (claim.trim() && v.relevance < minRelevance)) continue
+        if (!v.ok) continue
         const english = readableEnglish(gateInputOf(e)) ?? ''
-        const form = quoteForm(english)
-        out.push({ e, english, value: v.relevance * 2 + FORM_VALUE[form] * 3 + Math.min(v.score, 6) * 0.25 })
+        passed.push({ e, english, score: v.score, stems: stemsOf(english) })
       }
+    }
+    const want = stemsOf(claim)
+    const generic = genericStems(want, passed.map((p) => p.stems))
+    const out: Scored[] = []
+    for (const p of passed) {
+      // A voice that says nothing specific about what the item says does not
+      // print beside it, however well it reads.
+      const relevance = specificRelevance(want, p.stems, generic)
+      if (claim.trim() && relevance < minRelevance) continue
+      out.push({ e: p.e, english: p.english, value: relevance * 2 + FORM_VALUE[quoteForm(p.english)] * 3 + Math.min(p.score, 6) * 0.25 })
     }
     return out.sort((a, b) => b.value - a.value || a.e.rank - b.e.rank || a.e.evidenceId.localeCompare(b.e.evidenceId))
   }

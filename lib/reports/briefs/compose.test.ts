@@ -15,7 +15,7 @@ const SEP = '2026-09-01'
 
 function setup(points: GroundedPoint[]) {
   const whoVideos = new Map<string, WhoVideo[]>(points.map((p) => [p.id, p.videoIds.map((id) => ({ id, audience: 'industry-other', named: [] }))]))
-  const counted = new Map(points.map((p, i) => [p.id, [cite({ insight: p.insightIds[0], video: `qv${i}`, text: `Owners describe point ${p.id} in their own words and say it decided the purchase.` })]]))
+  const counted = new Map(points.map((p, i) => [p.id, [cite({ insight: p.insightIds[0], video: `qv${i}`, text: `Buyers say the route to buy and the price decided point ${p.id} for them, after they asked where to order.` })]]))
   return { whoVideos, quotes: new QuotePool(counted, { clientId: CLIENT, company: 'Acme', brandsOf: new Map() }) }
 }
 
@@ -198,7 +198,7 @@ describe('the reading copy', () => {
     expect(md).toContain('**Also this month, in the other briefs**')
     expect(md).toContain('- Leadership brief: Owners judge the brand by how it handles repairs')
     expect(md).toContain('_Heard in August and September, on 12 videos, others in your market._')
-    expect(md).toMatch(/> "Owners describe point G1/)
+    expect(md).toMatch(/> "Buyers say the route to buy and the price decided point G1/)
     expect(md).toMatch(/> YouTube · 12 Sep · others in your market/)
     expect(md).not.toMatch(/—/)
   })

@@ -38,6 +38,11 @@ const cover = (ids: readonly string[], of: readonly string[]): number => {
   return ids.filter((id) => set.has(id)).length / ids.length
 }
 
+/** Specific words a printed voice must share with what it sits beside
+ *  (quotes.ts `specificRelevance`): two, so one shared word ("price") is not
+ *  enough to call a voice an illustration. */
+export const QUOTE_MIN_RELEVANCE = 2
+
 /** Claims on "What the company says, and what comes back". */
 export const SAY_HEAR_MAX = 4
 
@@ -128,8 +133,8 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       videos: ev.videos,
       who: ev.who,
       quotes: [
-        ...a.quotes.pick(idea.points, `${idea.headline} ${saw.join(' ')}`, 1),
-        ...a.quotes.pick(idea.points, idea.headline, 1, { minRelevance: 2 }),
+        ...a.quotes.pick(idea.points, `${idea.headline} ${saw.join(' ')}`, 1, { minRelevance: QUOTE_MIN_RELEVANCE }),
+        ...a.quotes.pick(idea.points, idea.headline, 1, { minRelevance: QUOTE_MIN_RELEVANCE }),
       ],
     })
   }
@@ -181,7 +186,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     for (const x of h) held.push({ what: `${key}: ${x.what}`, reason: x.reason })
     return { lead: run(part.lead, BRIEF_MAX.lead, key === 'risks' || key === 'decisions' ? 'interpret' : 'market', { maxSentences: 2, whole: true }), items: kept as (BriefItem & { videos: number })[], pointIds: [...used] }
   }
-  const quoteFor = (ids: readonly string[], claim: string) => (ids.length ? a.quotes.pick(ids, claim, 1)[0] ?? null : null)
+  const quoteFor = (ids: readonly string[], claim: string) => (ids.length ? a.quotes.pick(ids, claim, 1, { minRelevance: QUOTE_MIN_RELEVANCE })[0] ?? null : null)
   const section = (key: SectionKey, groups: BriefSection['groups'], extra: Partial<BriefSection> = {}): BriefSection => {
     const spec = ROLE_SECTIONS[a.role].find((s) => s.key === key)!
     return { key, title: sectionTitle(spec, co), groups, ...extra }
@@ -280,6 +285,14 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       if (!heard || ids.length === 0) { held.push({ what: `say_hear: ${claim.claim}`, reason: 'nothing that stood came back on it' }); continue }
       const ev = evidenceOf(ids)
       if (!ev.who.some((w) => w.about === 'client' && w.videos > 0)) { held.push({ what: `say_hear: ${claim.claim}`, reason: `none of its videos is about ${co}` }); continue }
+      // Two claims answered from the same talk are one answer told twice: the
+      // one with more behind it stays.
+      const twin = items.find((x) => overlapOfSmaller(x.basedOn ?? [], ids) >= SAME_AS_FINDING)
+      if (twin && (twin.videos ?? 0) >= ev.videos) { held.push({ what: `say_hear: ${claim.claim}`, reason: `the same talk answers "${twin.title}"` }); continue }
+      if (twin) {
+        held.push({ what: `say_hear: ${twin.title}`, reason: `the same talk answers "${claim.claim}"` })
+        items.splice(items.indexOf(twin), 1)
+      }
       items.push({ title: claim.claim, text: heard, videos: ev.videos, who: ev.who, basedOn: ids })
     }
     const { kept, held: h } = standingItems(items)
@@ -364,7 +377,9 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const rivals = rows.filter((r) => isRivalAudience(r.audience) && r.videos >= SHARE_MIN_VIDEOS)
       .filter((r) => a.rivals.some((n) => n.toLowerCase() === (rivalNameOf(r.audience) ?? '').toLowerCase()))
     const category = rows.find((r) => r.audience === INDUSTRY_AUDIENCE) ?? null
-    const stand = itemsOf('stand')
+    // Where the company stands needs talk about the company: rival praise
+    // alone does not put the company behind it.
+    const stand = itemsOf('stand', { aboutClient: true })
     const standGroups = ['Ahead on', 'Behind on']
       .map((label) => ({ label, items: stand.items.filter((i) => (i.title ?? '').toLowerCase() === label.toLowerCase()).map(untitled) }))
       .filter((g) => g.items.length > 0)

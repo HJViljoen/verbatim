@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { DatedEvidence } from '../../written/evidence'
 import { cite } from './test-fixtures'
 import { groundPoint, unionOf } from './ground'
-import { QuotePool } from './quotes'
+import { QuotePool, genericStems, specificRelevance, stemsOf } from './quotes'
 
 // A tenant with no market lexicon and no maker rule: the gate's quality rules
 // alone (the brief is tenant-general).
@@ -105,7 +105,7 @@ describe('the quotes a set prints', () => {
 
   it('prefers a line that says something to a bare question, and prints nothing that misses the claim', () => {
     const p = pool()
-    const [first] = p.pick(['G1'], 'buy', 1)
+    const [first] = p.pick(['G1'], 'daily walking', 1)
     expect(p.textOf(first.ref)?.text).toBe('The straps held up after a month of daily walking and I would buy it again.')
     expect(pool().pick(['G1'], 'warranty claims')).toEqual([])
   })
@@ -122,5 +122,16 @@ describe('the quotes a set prints', () => {
     const [q] = p.pick(['G1'], 'straps')
     expect(q.lang).toBe('es')
     expect(p.textOf(q.ref)?.english).toBe('The straps lasted a whole month of daily walks.')
+  })
+})
+
+describe('which voice fits', () => {
+  it('a word most of the voices share says nothing about fit; the claim\'s specific words do', () => {
+    const voices = ['My backpack ripped at the seam', 'The backpack holds a laptop', 'A backpack in bright colours', 'This backpack smells after rain', 'Backpack straps dig in'].map(stemsOf)
+    const claim = stemsOf('The backpack seam ripped after rain')
+    const generic = genericStems(claim, voices)
+    expect([...generic]).toEqual(['backp'])
+    expect(specificRelevance(claim, voices[0], generic)).toBe(2)
+    expect(specificRelevance(claim, voices[1], generic)).toBe(0)
   })
 })
