@@ -36,6 +36,7 @@ const POINTS = [
   point('G5', 'sales', 5, { questionId: 'sales.rivals', text: 'Buyers compare packs on weight.' }),
   point('G6', 'sales', 4, { questionId: 'sales.rivals', text: 'Rival owners complain that the pack price is high.' }),
   point('G9', 'leadership', 8, { questionId: 'leadership.risk', text: 'Owners judge the brand by how it handles repairs.' }),
+  point('G10', 'leadership', 6, { questionId: 'leadership.risk', text: 'Owners worry that repairs take months.' }),
 ]
 const RIVAL_ABOUT = { G4: 'competitor:Rival' }
 
@@ -157,9 +158,13 @@ describe('composing one brief', () => {
 describe('leadership', () => {
   const out: BriefOutput = {
     findings: [{ idea: 'I2', saw: 'Owners describe the repair service in detail.', means: 'Repairs carry the brand\'s name with owners.', practice: [] }],
-    stand: part([]), weigh: part([]), stay: part([]), move: part([]), risks: part([]),
+    stand: part([]), weigh: part([]), stay: part([]), move: part([]),
     // The writer put the question in the title of an untitled part.
-    decisions: part([{ title: 'How does Acme handle repairs for owners?', text: '', based_on: ['G9'] }]),
+    decisions: part([
+      { title: 'How does Acme handle repairs for owners?', text: '', based_on: ['G9'] },
+      { title: 'How long do owners wait for repairs?', text: '', based_on: ['G10'] },
+    ]),
+    risks: part([{ title: 'Repair waits', text: 'Owners worry that repairs take months.', based_on: ['G10'] }]),
     subjects: [{ subject: 'S1', sentence: 'People talk about the fit of the socket through a long day.' }, { subject: 'S2', sentence: 'People compare running blades.' }],
     in_short: 'Repairs matter.',
   }
@@ -178,7 +183,10 @@ describe('leadership', () => {
     ])
     expect(market.lines).toBeUndefined()
     expect(data.held.map((h) => h.what)).toEqual(expect.arrayContaining(['subject: Cost & access', 'subject: Look & style']))
+    // A question may rest on the finding; one that only asks the risk above
+    // it again, on its videos, is held.
     expect(data.sections.find((s) => s.key === 'leadership.decisions')?.groups[0].items.map((i) => i.text)).toEqual(['How does Acme handle repairs for owners?'])
+    expect(data.held).toContainEqual({ what: 'decisions: How long do owners wait for repairs?', reason: 'says what "Repair waits" says' })
   })
 
   it('talk about each brand: rivals as a share of the market, the company\'s own posts as a count with any giveaway named, and no rank', () => {

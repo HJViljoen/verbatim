@@ -241,7 +241,10 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       const finding = key === 'decisions' ? null : mine.find((i) => cover(ids, i.points) >= SAME_AS_FINDING
         || (overlapOfSmaller(ev.videoIds, ideaVideos.get(i.id) ?? []) >= SAME_AS_FINDING && a.meaning.sim(said, i.headline) >= FIT.same))
       if (finding) { held.push({ what, reason: `says what the finding "${finding.headline}" says` }); continue }
-      const twin = printed.find((p) => overlapOfSmaller(ev.videoIds, p.videoIds) >= SAME_AS_FINDING && a.meaning.sim(said, `${p.item.title ?? ''} ${p.item.text}`) >= FIT.same)
+      // A question for the business that only asks an item above it again is
+      // that item twice (the review: "Can demand hold…" asked the risk).
+      const twinFit = key === 'decisions' ? FIT.askTwin : FIT.same
+      const twin = printed.find((p) => overlapOfSmaller(ev.videoIds, p.videoIds) >= SAME_AS_FINDING && a.meaning.sim(said, `${p.item.title ? `${p.item.title}. ` : ''}${p.item.text}`) >= twinFit)
       if (twin) { held.push({ what, reason: `says what "${(twin.item.title ?? twin.item.text).slice(0, 60)}" says` }); continue }
       // Another brief's idea is NAMED here in a line, never argued.
       const elsewhere = key === 'decisions' ? null : otherIdeas.find((o) => cover(ids, o.points) >= SAME_AS_FINDING

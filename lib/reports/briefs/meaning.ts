@@ -32,6 +32,10 @@ export const FIT = {
   summary: 0.55,
   /** Two items say the same thing (with shared videos). */
   same: 0.6,
+  /** A question for the business that only asks an item above it again (on
+   *  its videos): measured 0.48 and 0.54 for Sealand's two that restated a
+   *  weigh and a risk, 0.36 and under for the questions that add something. */
+  askTwin: 0.45,
   /** A quote's insight illustrates what it sits beside. */
   quote: 0.42,
   /** A short phrase's insight says what its point says. */
