@@ -16,9 +16,11 @@ describe('the role sections', () => {
   })
 
   it('carries the sections the rebuild named for each reader', () => {
-    expect(ROLE_SECTIONS.sales.map((s) => s.key)).toEqual(['sales.buyers', 'sales.stops', 'sales.settle', 'sales.triggers', 'sales.rivals', 'sales.care'])
+    expect(ROLE_SECTIONS.sales.map((s) => s.key)).toEqual(['sales.buyers', 'sales.deciders', 'sales.stops', 'sales.settle', 'sales.triggers', 'sales.rivals', 'sales.care'])
     expect(ROLE_SECTIONS.marketing.map((s) => s.key)).toEqual(expect.arrayContaining(['marketing.believe', 'marketing.words', 'marketing.say_hear', 'marketing.recall', 'marketing.rivals']))
     expect(ROLE_SECTIONS.content.map((s) => s.key)).toEqual(expect.arrayContaining(['content.questions', 'content.formats', 'content.borrow']))
+    const titles = Object.values(ROLE_SECTIONS).flat().map((x) => x.title).join(' ')
+    expect(titles).not.toMatch(/\b(?:loses?|viewers come|ahead|behind|against its rivals)\b/i)
     expect(ROLE_SECTIONS.leadership.map((s) => s.key)).toEqual(expect.arrayContaining(['leadership.market', 'leadership.shares', 'leadership.risks', 'leadership.decisions']))
   })
 
@@ -63,8 +65,8 @@ describe('what prints', () => {
     expect(itemStands(ITEM_MIN_VIDEOS)).toBe(true)
     expect(itemStands(ITEM_MIN_VIDEOS - 1)).toBe(false)
     const r = standingItems([{ text: 'Heard widely', videos: 12 }, { title: 'One voice', text: 'Heard once', videos: 1 }, { text: 'Two threads', videos: 2 }])
-    expect(r.kept.map((i) => i.text)).toEqual(['Heard widely', 'Two threads'])
-    expect(r.held).toEqual([{ what: 'One voice', reason: 'too little behind it (1 videos)' }])
+    expect(r.kept.map((i) => i.text)).toEqual(['Heard widely'])
+    expect(r.held).toEqual([{ what: 'One voice', reason: 'too little behind it (1 videos)' }, { what: 'Two threads', reason: 'too little behind it (2 videos)' }])
   })
 })
 

@@ -71,8 +71,10 @@ export interface GroundedPoint {
    *  those the makers': the maker share's two halves. */
   seenVideos: number
   makerVideos: number
-  /** Counted at all, and not a conversation of makers talking to makers. */
+  /** Counted on enough videos, not makers talking to makers, not a label. */
   usable: boolean
+  /** The research scrub replaced its sentence with a theme label. */
+  labelOnly?: boolean
 }
 
 /** One of the month's ideas as the ideas call drafts it. */
@@ -140,6 +142,8 @@ export interface BriefItem {
   videos?: number
   who?: AboutPart[]
   basedOn?: string[]
+  /** The distinct counted videos behind it (the repeat checks read these). */
+  videoIds?: string[]
 }
 
 export interface BriefSection {
@@ -177,7 +181,7 @@ export interface BriefFigure {
 }
 
 export type SectionKey =
-  | 'sales.buyers' | 'sales.stops' | 'sales.settle' | 'sales.triggers' | 'sales.rivals' | 'sales.care'
+  | 'sales.buyers' | 'sales.deciders' | 'sales.stops' | 'sales.settle' | 'sales.triggers' | 'sales.rivals' | 'sales.care'
   | 'marketing.believe' | 'marketing.words' | 'marketing.say_hear' | 'marketing.recall' | 'marketing.rivals'
   | 'content.questions' | 'content.formats' | 'content.watch' | 'content.more' | 'content.confusion' | 'content.borrow'
   | 'leadership.market' | 'leadership.shares' | 'leadership.weigh' | 'leadership.risks' | 'leadership.decisions'

@@ -40,7 +40,7 @@ const values = (name: string): string[] =>
   argv.flatMap((a, i) => (a === `--${name}` && argv[i + 1] && !argv[i + 1].startsWith('--') ? [argv[i + 1]] : []))
 const flag = (name: string, fallback = ''): string => values(name)[0] ?? fallback
 for (const a of argv) {
-  if (a.startsWith('--') && !['client', 'month', 'out', 'cache', 'cap', 'spent-before', 'concurrency', 'reuse', 'stage', 'roles', 'recompose', 'rewrite'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
+  if (a.startsWith('--') && !['client', 'month', 'out', 'cache', 'cap', 'spent-before', 'concurrency', 'reuse', 'stage', 'roles', 'recompose', 'rewrite', 'reask'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
 }
 const CLIENT = flag('client')
 const MONTH = flag('month')
@@ -56,6 +56,7 @@ const STAGE = flag('stage', 'write')
 // the roles named by --rewrite, whose writer is called again.
 const RECOMPOSE = argv.includes('--recompose')
 const REWRITE = values('rewrite')
+const REASK = values('reask')
 if (!/^[0-9a-f-]{36}$/.test(CLIENT)) throw new Error('--client <uuid> is required')
 if (!/^\d{4}-\d{2}$/.test(MONTH)) throw new Error('--month YYYY-MM is required')
 if (!OUT || !CACHE) throw new Error('--out <dir> and --cache <dir> are required')
@@ -182,9 +183,27 @@ async function main() {
   // Research (cached: the expensive half).
   const researchFile = join(CACHE, 'research.json')
   let research: { answers: Awaited<ReturnType<typeof build.researchBriefSet>>['answers']; window: { from: string; to: string } | null; costUsd: number }
+  let researchTopUp = false
   if (REUSE.has('research') && existsSync(researchFile)) {
     research = JSON.parse(readFileSync(researchFile, 'utf8'))
     console.log(`research: from cache ($${research.costUsd.toFixed(3)} when it was asked)`)
+    // Top up: questions the cache has not asked (a new one), and those named
+    // by --reask (a question reworded). Only those go to the agent; their
+    // points are numbered after the cache's, so every G id stays unique.
+    const have = new Set(research.answers.map((a) => a.question.id))
+    const ask = questions.filter((q) => !have.has(q.id) || REASK.includes(q.id))
+    if (ask.length) {
+      ledger.phase = 'research'
+      const t = Date.now()
+      const r = await build.researchBriefSet(db, inputs, ask, { now, budgetUsd: Math.max(0, CAP - spentTotal() - 0.6), parallel: 3 })
+      let g = Math.max(0, ...research.answers.flatMap((a) => a.grounded.map((p) => Number(p.id.slice(1)) || 0)))
+      const fresh = (freezeQuotes(r.answers).data as typeof r.answers).map((a) => ({ ...a, grounded: a.grounded.map((p) => ({ ...p, id: `G${++g}` })) }))
+      const byId = new Map([...research.answers.filter((a) => !ask.some((q) => q.id === a.question.id)), ...fresh].map((a) => [a.question.id, a]))
+      research = { answers: questions.map((q) => byId.get(q.id)).filter((a): a is NonNullable<typeof a> => a != null), window: research.window, costUsd: research.costUsd + r.costUsd }
+      writeFileSync(researchFile, JSON.stringify(research, null, 2))
+      researchTopUp = true
+      console.log(`research top-up: ${fresh.map((a) => `${a.question.id}=${a.outcome}/${a.grounded.length}`).join(' ')} · $${r.costUsd.toFixed(3)} · ${Math.round((Date.now() - t) / 1000)} s`)
+    }
   } else {
     ledger.phase = 'research'
     const t = Date.now()
@@ -199,7 +218,7 @@ async function main() {
   // Grounding (cached in the scratch directory only: it carries comment words).
   const groundFile = join(CACHE, 'grounding.json')
   let grounded: Awaited<ReturnType<typeof build.groundBriefResearch>>
-  if (REUSE.has('grounding') && existsSync(groundFile)) {
+  if (REUSE.has('grounding') && existsSync(groundFile) && !researchTopUp) {
     const g = JSON.parse(readFileSync(groundFile, 'utf8'))
     grounded = { points: g.points, counted: new Map(g.counted), whoVideos: new Map(g.whoVideos), brandsOf: new Map(g.brandsOf) }
     console.log('grounding: from cache')
@@ -231,7 +250,10 @@ async function main() {
     ...k.brief.findings.flatMap((f) => f.quotes.map((q) => q.ref)),
     ...k.brief.sections.flatMap((s) => [...(s.quote ? [s.quote.ref] : []), ...(s.voices ?? []).map((v) => v.ref)]),
   ])
+  const vectorsFile = join(CACHE, 'vectors.json')
+  const vectorsBefore: [string, number[]][] = existsSync(vectorsFile) ? JSON.parse(readFileSync(vectorsFile, 'utf8')) : []
   const set = await build.writeBriefSet(db, inputs, questions, grounded, {
+    vectors: vectorsBefore,
     log: false, researchCostUsd: 0, roles,
     ...(previous ? { ideas: { raw: previous.ideas, contradicted: previous.check.contradicted } } : {}),
     spent,
@@ -239,6 +261,8 @@ async function main() {
     // A recompose that calls no writer keeps the summaries' last check.
     ...(RECOMPOSE && REWRITE.length === 0 && previous?.check?.summaries ? { summaries: { contradicted: previous.check.summaries.contradicted } } : {}),
   })
+  writeFileSync(vectorsFile, JSON.stringify([...set.vectors]))
+  console.log(`meaning: ${set.vectors.size} texts embedded (${set.vectors.size - vectorsBefore.length} new, $${set.embedUsd.toFixed(4)})`)
   console.log(`ideas: ${set.allocation.ideas.map((i) => `${i.id}→${i.home}(${i.placed}, ${i.videos}v): ${i.headline}`).join(' | ')}`)
   console.log(`held ideas: ${set.allocation.held.map((h) => `${h.headline} [${h.reason}]`).join(' | ') || 'none'}`)
 
@@ -256,7 +280,7 @@ async function main() {
     // the … brief", the who lines) are not prose and are not scanned.
     const others = new Set(b.data.inShort.also.map((x) => x.headline))
     for (const raw of md.split('\n').filter((l) => !l.startsWith('>') && !l.startsWith('#') && !/^- "/.test(l) && !l.startsWith('**Also this month'))) {
-      const line = raw.replace(/_\((?:Argued in the [A-Za-z]+ brief\.|\d[^)]*)\)_/g, '').replace(/^_Heard in .*_$/, '')
+      const line = raw.replace(/_\((?:(?:Argued|Also) in the [A-Za-z]+ brief\.|\d[^)]*)\)_/g, '').replace(/^_Heard in .*_$/, '')
       if ([...others].some((h) => line.endsWith(h))) continue
       for (const sentence of line.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)) {
         for (const rule of [...bannedHits(sentence, BANNED_PHRASES), ...briefBreaks(sentence)]) flags.push({ role, rule, sentence })

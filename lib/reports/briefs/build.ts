@@ -8,7 +8,7 @@ import { WHAT_THEY_SELL } from '../../pages/market-frame'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from '../../pages/playbook'
 import type { SayVsHearEntry } from '../../pipeline/schemas'
 import { marketAudiences } from '../../reading/market'
-import { monthStartOf, nextMonth } from '../../reading/month-key'
+import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { readingHandle } from '../../reading/read'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../../reading/reading-view'
 import { CLIENT_AUDIENCE, isRivalAudience, loadCompetitors, rivalNameOf } from '../../rivals'
@@ -22,7 +22,10 @@ import type { StandingFact } from '../../written/types'
 import type { ParseClient } from '../../written/write-model'
 import { allPoints, runResearch, type ResearchAnswer } from '../documents/research'
 import { allocateIdeas } from './allocate'
-import { composeBrief, SHARE_MIN_VIDEOS, type AudienceRow } from './compose'
+import { composeBrief, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow } from './compose'
+import { Meaning } from './meaning'
+import { embedTexts } from '../../pipeline/cluster'
+import { EMBEDDING_MODEL, estimateCost } from '../../config'
 import { groundPoint, groundedPointOf } from './ground'
 import { BRIEF_MODEL, draftIdeas, writeBrief } from './model'
 import { allBriefQuestions, type BriefQuestion } from './questions'
@@ -74,6 +77,29 @@ export interface BriefSetInputs {
   /** Every brand a commenter may work for (the insider rule). */
   brands: string[]
   rivalAudiences: string[]
+  /** The company's own giveaway posts' comments in the month (flagged on the
+   *  shares line), or null where none or not read. */
+  giveaway?: { posts: number; comments: number } | null
+}
+
+/** A caption that runs a giveaway or a competition: its comments are entries,
+ *  not talk about the product (Sealand's DELI2SEA giveaway carried about 149
+ *  of its 256 September comments). */
+export const GIVEAWAY = /\b(?:give\s?-?aways?|win\s+(?:a|an|one|this|your)\b|competition|enter\s+to\s+win|to\s+enter\b|tag\s+(?:a|your|two|three|\d+)\s+(?:friends?|mates?)|prizes?|winners?\s+will)\b/i
+
+/** The company's own giveaway posts and their comments dated in the month.
+ *  Two small reads; null where none or not read. */
+export async function loadGiveaway(admin: SupabaseClient, clientId: string, month: string): Promise<{ posts: number; comments: number } | null> {
+  const from = prevMonth(prevMonth(monthStartOf(month)))
+  const to = nextMonth(monthStartOf(month))
+  const own = await admin.from('videos').select('video_id, caption').eq('client_id', clientId).eq('is_client', true).gte('upload_date', from).lt('upload_date', to)
+  if (own.error) throw new Error(`briefs: own posts: ${own.error.message}`)
+  const ids = ((own.data ?? []) as { video_id: string | null; caption: string | null }[]).filter((v) => v.video_id && GIVEAWAY.test(v.caption ?? '')).map((v) => v.video_id as string)
+  if (ids.length === 0) return null
+  const res = await admin.from('comments').select('id', { count: 'exact', head: true }).eq('client_id', clientId).in('video_id', ids)
+    .gte('comment_date', `${monthStartOf(month)}T00:00:00.000Z`).lt('comment_date', `${to}T00:00:00.000Z`)
+  if (res.error) throw new Error(`briefs: giveaway comments: ${res.error.message}`)
+  return (res.count ?? 0) > 0 ? { posts: ids.length, comments: res.count ?? 0 } : null
 }
 
 const warn = (what: string) => (e: unknown) => {
@@ -119,6 +145,7 @@ export async function loadBriefSetInputs(admin: SupabaseClient, opts: { clientId
     .catch(warn('playbook'))
   const sh = await admin.from('run_summary').select('say_vs_hear').eq('client_id', clientId).eq('run_id', runId).maybeSingle()
   const themedRunId = await themedRunAsOf(admin, clientId, opts.now.toISOString()).catch(warn('themed run'))
+  const giveaway = await loadGiveaway(admin, clientId, month).catch(warn('giveaway posts'))
   return {
     clientId,
     company,
@@ -137,6 +164,7 @@ export async function loadBriefSetInputs(admin: SupabaseClient, opts: { clientId
     runId,
     brands,
     rivalAudiences,
+    giveaway,
   }
 }
 
@@ -229,6 +257,8 @@ export interface BriefSet {
   allocation: Allocation
   briefs: Record<BriefRole, { data: MonthlyBriefData; raw: BriefOutput | null; prompts: { system: string; user: string } | null; costUsd: number; scrub: unknown }>
   quotes: QuotePool
+  vectors: Map<string, number[]>
+  embedUsd: number
   costUsd: number
 }
 
@@ -254,6 +284,10 @@ export async function writeBriefSet(
      *  called keeps the earlier check's answer instead: pass its contradicted
      *  summaries. */
     summaries?: { contradicted: [string, string | null][] }
+    /** Vectors kept from an earlier write, by text. */
+    vectors?: Iterable<[string, number[]]>
+    /** The embedder (a test's stand-in); the product's by default. */
+    embed?: (texts: string[]) => Promise<number[][]>
   },
 ): Promise<BriefSet> {
   const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client }
@@ -278,51 +312,88 @@ export async function writeBriefSet(
     allocation.held.unshift({ headline: d.headline, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
   }
 
-  const quotes = new QuotePool(grounded.counted, { clientId: i.clientId, company: i.company, brandsOf: grounded.brandsOf })
-  quotes.spend(opts.spent ?? [])
   const claims = claimsFor(i)
   const subjects = i.standing.map((fact, n) => ({ id: `S${n + 1}`, fact }))
-  const briefs = {} as BriefSet['briefs']
-  for (const role of opts.roles ?? BRIEF_ROLES) {
+  const roles = opts.roles ?? BRIEF_ROLES
+  // 1. The writers (or the outputs a dry run kept).
+  const raws = {} as Record<BriefRole, { raw: BriefOutput; prompts: { system: string; user: string } | null; costUsd: number }>
+  for (const role of roles) {
+    const kept = opts.written?.[role] ?? null
+    if (kept) { raws[role] = { raw: kept, prompts: null, costUsd: 0 }; continue }
     const mine = allocation.ideas.filter((x) => x.home === role)
     const others = allocation.ideas.filter((x) => x.home !== role).map((x) => ({ headline: x.headline, brief: x.home }))
-    let raw: BriefOutput | null = opts.written?.[role] ?? null
-    let prompts: { system: string; user: string } | null = null
-    let callCost = 0
-    if (!raw) {
-      const w = await writeBrief(call, {
-        role, company: i.company, month: i.month, noun: i.noun, ideas: mine, others, points: grounded.points, questions,
-        context: i.context, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
-      })
-      raw = w.output
-      prompts = w.prompts
-      callCost = w.costUsd
-      cost += callCost
-    }
-    const composed = composeBrief({
-      role, company: i.company, month: i.month, noun: i.noun, allocation, points: grounded.points, whoVideos: grounded.whoVideos, quotes,
-      written: raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
-      audiences: i.audiences, market: i.market, ownPosts: i.context?.posts.month ?? null, playbook: i.playbook, model: BRIEF_MODEL, costUsd: callCost,
-      brandsCounted: brandsCountedFor(i.clientId, i.company, i.tracked),
+    const w = await writeBrief(call, {
+      role, company: i.company, month: i.month, noun: i.noun, ideas: mine, others, points: grounded.points, questions,
+      context: i.context, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
     })
-    briefs[role] = { data: composed.data, raw, prompts, costUsd: callCost, scrub: composed.counts }
+    raws[role] = { raw: w.output, prompts: w.prompts, costUsd: w.costUsd }
+    cost += w.costUsd
   }
-  // The summaries go through the same self-check as the ideas' headlines (the
-  // long-run read's rule for its lead): a summary the conversation
-  // contradicts does not print, and In short keeps its figures and lines.
-  const summaries = Object.values(briefs).map((b) => b.data.inShort.summary.trim()).filter(Boolean)
+
+  // 2. Compose by meaning: a first pass names every text a judgement needs,
+  //    those are embedded (writer prose, research paraphrases and insight
+  //    descriptions, never a comment's words), and the set is composed again
+  //    with the vectors. A text a later pass still wants is embedded and the
+  //    pass runs once more.
+  const vectors = new Map<string, number[]>(opts.vectors ?? [])
+  const brands = [i.company, ...i.tracked]
+  const counted = brandsCountedFor(i.clientId, i.company, i.tracked)
+  const composeAll = (meaning: Meaning) => {
+    const quotes = new QuotePool(grounded.counted, { clientId: i.clientId, company: i.company, brandsOf: grounded.brandsOf, meaning })
+    quotes.spend(opts.spent ?? [])
+    const out = {} as Record<BriefRole, ReturnType<typeof composeBrief>>
+    for (const role of roles) {
+      out[role] = composeBrief({
+        role, company: i.company, month: i.month, noun: i.noun, allocation, points: grounded.points, whoVideos: grounded.whoVideos, quotes, meaning,
+        written: raws[role].raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
+        audiences: i.audiences, market: i.market, ownPosts: i.context?.posts.month ?? null, giveaway: i.giveaway ?? null, playbook: i.playbook,
+        model: BRIEF_MODEL, costUsd: raws[role].costUsd, brandsCounted: counted,
+      })
+    }
+    // The set: another brief's section named in a line, then In short against
+    // what printed.
+    const named = namedAcross(roles.map((r) => out[r].data), meaning)
+    const finished = named.map((d) => summaryAgainstPrinted(d, meaning, brands))
+    return { out, finished, quotes }
+  }
+  const collect = new Meaning(vectors, 'collect')
+  composeAll(collect)
+  let embedUsd = 0
+  const embedMissing = async (texts: readonly string[]) => {
+    const missing = [...new Set(texts)].filter((t) => t && !vectors.has(t))
+    if (missing.length === 0) return 0
+    const got = await (opts.embed ?? embedTexts)(missing)
+    missing.forEach((t, n) => vectors.set(t, got[n]))
+    embedUsd += estimateCost(EMBEDDING_MODEL, Math.ceil(missing.join(' ').length / 4), 0)
+    return missing.length
+  }
+  await embedMissing(collect.wanted())
+  let meaning = new Meaning(vectors, 'vectors')
+  let pass = composeAll(meaning)
+  for (let n = 0; n < 2 && meaning.wanted().length > 0; n++) {
+    await embedMissing(meaning.wanted())
+    meaning = new Meaning(vectors, 'vectors')
+    pass = composeAll(meaning)
+  }
+  cost += embedUsd
+
+  // 3. The self-check on the summaries AS THEY PRINT (the review: it had
+  //    passed summaries that rested on held items).
+  const briefs = {} as BriefSet['briefs']
+  for (const d of pass.finished) briefs[d.role] = { data: d, raw: raws[d.role].raw, prompts: raws[d.role].prompts, costUsd: raws[d.role].costUsd, scrub: { counts: pass.out[d.role].counts, dropped: pass.out[d.role].scrubbed } }
+  const summaries = Object.values(briefs).map((x) => x.data.inShort.summary.trim()).filter(Boolean)
   const summaryCheck = opts.summaries
     ? { contradicted: new Map(opts.summaries.contradicted), verdicts: [], costUsd: 0, ran: true }
     : i.themedRunId && summaries.length
     ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: summaries, persist: opts.log })
     : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
   cost += summaryCheck.costUsd
-  for (const b of Object.values(briefs)) {
-    const s = b.data.inShort.summary.trim()
+  for (const x of Object.values(briefs)) {
+    const s = x.data.inShort.summary.trim()
     if (!s || !summaryCheck.contradicted.has(s)) continue
     const says = summaryCheck.contradicted.get(s)
-    b.data.held.push({ what: `in short: ${s.slice(0, 80)}`, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
-    b.data.inShort.summary = ''
+    x.data.held.push({ what: `in short: ${s.slice(0, 80)}`, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
+    x.data.inShort.summary = ''
   }
   return {
     inputs: i,
@@ -335,7 +406,9 @@ export async function writeBriefSet(
     },
     allocation,
     briefs,
-    quotes,
+    quotes: pass.quotes,
+    vectors,
+    embedUsd,
     costUsd: cost,
   }
 }

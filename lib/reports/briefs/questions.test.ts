@@ -17,16 +17,19 @@ describe('the research questions', () => {
   it('asks about the rivals from each reader\'s own angle, and content not at all', () => {
     const rivalQs = allBriefQuestions(SEALANDISH).filter((q) => q.text.includes('Rival One'))
     expect(rivalQs.map((q) => q.id).sort()).toEqual(['leadership.stand', 'marketing.rivals', 'sales.rivals'])
-    expect(rivalQs.find((q) => q.id === 'sales.rivals')?.text).toMatch(/buy .* for/)
+    expect(rivalQs.find((q) => q.id === 'sales.rivals')?.text).toMatch(/choose .* for/)
     expect(rivalQs.find((q) => q.id === 'marketing.rivals')?.text).toMatch(/known for/)
-    expect(rivalQs.find((q) => q.id === 'leadership.stand')?.text).toMatch(/ahead .* behind/)
+    expect(rivalQs.find((q) => q.id === 'leadership.stand')?.text).toMatch(/praise and criticise/)
+    // Every rival question is asked about the tenant's own market, so a
+    // rival's other businesses do not come back as its job here.
+    for (const q of rivalQs) expect(q.text).toMatch(/products like Acme's/)
   })
 
   it('without rivals, drops the rival questions and asks leadership against the other choices', () => {
     const qs = allBriefQuestions({ ...SEALANDISH, rivals: [] })
     expect(qs.map((q) => q.id)).not.toContain('sales.rivals')
     expect(qs.map((q) => q.id)).not.toContain('marketing.rivals')
-    expect(qs.find((q) => q.id === 'leadership.stand')?.text).toMatch(/other choices people consider/)
+    expect(qs.find((q) => q.id === 'leadership.stand')?.text).toBe("When people talk about products like Acme's (eco backpack, travel gear), what do they praise and criticise Acme for?")
   })
 
   it('names at most four rivals in one question', () => {
@@ -41,6 +44,13 @@ describe('the research questions', () => {
     for (const r of BRIEF_ROLES) for (const q of briefQuestions(r, { company: 'X', industryKeywords: [], rivals: [] })) {
       expect(q.text).not.toMatch(/\bbags?\b|backpack|prosthe|sailcloth/i)
     }
+  })
+
+  it('asks who else is in the decision, for every tenant, and asks of posts only what the comments say', () => {
+    const qs = allBriefQuestions(PROSTHETIC)
+    expect(qs.find((q) => q.id === 'sales.deciders')?.text).toMatch(/recommends, fits, sells or pays/)
+    for (const q of qs.filter((x) => /posts|videos/.test(x.text))) expect(q.text).toMatch(/comments/)
+    for (const q of qs) expect(q.text).not.toMatch(/stop on|share|kept them watching|lost them|wins? (?:it )?the sale|ahead|behind/i)
   })
 
   it('feeds every question to its own section', () => {

@@ -1,4 +1,5 @@
 import { foldText, names } from '../../agent/scope'
+import { POOL_MIN_VIDEOS } from '../../written/pool'
 import type { BriefItem, BriefRole, BriefSection, SectionKey } from './types'
 
 // The role sections (pure). Point 2 of the rebuild: the sections are where
@@ -10,11 +11,15 @@ import type { BriefItem, BriefRole, BriefSection, SectionKey } from './types'
 // WHAT PRINTS. A section prints when it has something to say, and only then
 // (§0a.2: no empty section, no placeholder, no "nothing this month" line):
 //  · an item written from the research prints only on `ITEM_MIN_VIDEOS`
-//    distinct counted videos across the points it cites, so no item rests on
-//    one thread ("rests on 7 conversations, three of its five points on one
-//    each", the 30 Sep Leadership regarded answer). Two, not more: an item is
-//    a line in a list, not a finding (a finding needs five), and its count
-//    and who it is about print beside it;
+//    distinct counted videos across the points it rests on, so no item rests
+//    on one thread ("rests on 7 conversations, three of its five points on one
+//    each", the 30 Sep Leadership regarded answer). Three: the week pool's own
+//    floor for a theme (`POOL_MIN_VIDEOS`, lib/written/pool.ts). An item rests
+//    only on the cited points whose meaning it carries (compose.ts), and its
+//    count comes from those;
+//  · an item that names a brand (the company or a rival) rests on at least
+//    `BRAND_MIN_VIDEOS` videos ABOUT that brand: the Alpine Sea video was
+//    credited to Sealand, and a market-wide complaint was pinned on Ottobock;
 //  · an item that says what one of the brief's own findings says (half or
 //    more of its points are the finding's) is held: the reader would read it
 //    twice;
@@ -23,13 +28,14 @@ import type { BriefItem, BriefRole, BriefSection, SectionKey } from './types'
 //    rival section rather than an invented one;
 //  · a section with no item that stands is dropped, and the held list says
 //    why (the operator's, never the reader's).
-// Two absences ARE information and print: a claim of the company's own that
-// the market does not take up (say vs hear, the pipeline's own `silent`
-// verdict, never the writer's guess), and a tracked subject, which always
-// appears (§0a.2's first exception) with what people say about it.
+// A tracked subject prints with what people say about it (§0a.2's first
+// exception); a subject with nothing said prints nothing, not its bare name
+// (the review, 4 Oct: a list of names says nothing).
 
-/** Distinct counted videos an item needs to print. */
-export const ITEM_MIN_VIDEOS = 2
+/** Distinct counted videos an item needs to print: the week pool's floor. */
+export const ITEM_MIN_VIDEOS = POOL_MIN_VIDEOS
+/** Videos about a brand an item that names it needs. */
+export const BRAND_MIN_VIDEOS = POOL_MIN_VIDEOS
 
 export interface SectionSpec {
   key: SectionKey
@@ -42,6 +48,7 @@ export interface SectionSpec {
 export const ROLE_SECTIONS: Readonly<Record<BriefRole, readonly SectionSpec[]>> = {
   sales: [
     { key: 'sales.buyers', title: 'Who is buying', source: 'writer' },
+    { key: 'sales.deciders', title: 'Who else is in the decision', source: 'writer' },
     { key: 'sales.stops', title: 'What stops them', source: 'writer' },
     { key: 'sales.settle', title: 'What they want settled first', source: 'writer' },
     { key: 'sales.triggers', title: 'What tips them into buying', source: 'writer' },
@@ -58,14 +65,14 @@ export const ROLE_SECTIONS: Readonly<Record<BriefRole, readonly SectionSpec[]>> 
   content: [
     { key: 'content.questions', title: 'The questions people ask', source: 'writer' },
     { key: 'content.formats', title: 'What works in the market\'s videos', source: 'code' },
-    { key: 'content.watch', title: 'What viewers come for, and what loses them', source: 'writer' },
+    { key: 'content.watch', title: 'What comments say about the videos', source: 'writer' },
     { key: 'content.more', title: 'What people want to be shown', source: 'writer' },
     { key: 'content.confusion', title: 'Where the confusion starts', source: 'writer' },
     { key: 'content.borrow', title: 'Words to borrow', source: 'code' },
   ],
   leadership: [
     { key: 'leadership.market', title: 'Where the market stands', source: 'code' },
-    { key: 'leadership.shares', title: 'Where {company} stands against its rivals', source: 'code' },
+    { key: 'leadership.shares', title: 'Where {company} stands', source: 'code' },
     { key: 'leadership.weigh', title: 'What buyers weigh, and what makes them switch', source: 'writer' },
     { key: 'leadership.risks', title: 'The risks, in business terms', source: 'writer' },
     { key: 'leadership.decisions', title: 'Questions for the business', source: 'writer' },

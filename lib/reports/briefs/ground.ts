@@ -6,7 +6,7 @@ import type { GateOptions } from '../../quote-gate'
 import { monthStartOf } from '../../reading/month-key'
 import { CLIENT_AUDIENCE } from '../../rivals'
 import { judge, type DatedEvidence } from '../../written/evidence'
-import { makerShareOf } from '../../written/pool'
+import { makerShareOf, POOL_MIN_VIDEOS } from '../../written/pool'
 import type { BriefRole, GroundedPoint } from './types'
 
 // The research, grounded in the comment evidence (pure).
@@ -22,8 +22,9 @@ import type { BriefRole, GroundedPoint } from './types'
 //    read lane, not a maker's video, not a brand insider, and it passes the
 //    tenant's lenient gate (`briefGateFor`: the gate's quality rules, the
 //    point's text as the claim to rank by, nothing required);
-//  · a point is usable when at least one citation counts and makers are not
-//    the majority of its talk (`isMakerPoint`). The front page's line is a
+//  · a point is usable when `POINT_MIN_VIDEOS` distinct videos count, makers
+//    are not the majority of its talk (`isMakerPoint`), and it is more than a
+//    theme label the research scrub put in its place. The front page's line is a
 //    quarter (`HEADLINE_MAX_MAKER_SHARE`), because a theme there LEADS; a
 //    research point leads nothing, its makers' videos already count for
 //    nothing and print nothing, so it is held only where makers are the
@@ -59,6 +60,13 @@ export function asJudged<T extends Pick<DatedEvidence, 'video' | 'context'>>(e: 
 
 /** Makers' share of a point's talk past which the point is not used. */
 export const BRIEF_MAKER_LINE = 0.5
+
+/** Distinct counted videos a point needs to be shown to any writer: the week
+ *  pool's floor for a theme (`POOL_MIN_VIDEOS`). Below it a point is one or
+ *  two threads, and a detail from it is a single-video claim (the review, 4
+ *  Oct: "the product page contains the bag shown", "some owners say the
+ *  quality does not match", one video each). */
+export const POINT_MIN_VIDEOS = POOL_MIN_VIDEOS
 
 /** Is a point's talk mostly makers talking to makers? */
 export const isMakerPoint = (j: { seenVideos: number; makerVideos: number }): boolean => makerShareOf(j) > BRIEF_MAKER_LINE
@@ -128,14 +136,18 @@ export function groundPoint(a: {
     whoVideos,
     who: whoSplit(whoVideos, a.company),
     ...judged,
-    usable: byVideo.size > 0 && !isMakerPoint(judged),
+    usable: byVideo.size >= POINT_MIN_VIDEOS && !isMakerPoint(judged),
     counted: scored.sort((x, y) => y.score - x.score || x.e.rank - y.e.rank || x.e.evidenceId.localeCompare(y.e.evidenceId)).map((s) => s.e),
   }
 }
 
 /** A grounded point as the brief keeps it (no words), from the research
  *  point and its grounding. */
-export function groundedPointOf(p: { id: string; text: string; insightIds: string[]; questionId: string }, role: BriefRole, g: PointGrounding): GroundedPoint {
+export function groundedPointOf(p: { id: string; text: string; insightIds: string[]; questionId: string; replaced?: boolean }, role: BriefRole, g: PointGrounding): GroundedPoint {
+  // A point the research scrub replaced with the product's own theme label
+  // ("Advanced knee technology impresses") says nothing of its own: it is a
+  // label, never evidence for a claim (the review's addendum, 4 Oct).
+  const labelOnly = p.replaced === true
   return {
     id: p.id,
     role,
@@ -147,7 +159,8 @@ export function groundedPointOf(p: { id: string; text: string; insightIds: strin
     who: g.who,
     seenVideos: g.seenVideos,
     makerVideos: g.makerVideos,
-    usable: g.usable,
+    usable: g.usable && !labelOnly,
+    ...(labelOnly ? { labelOnly: true } : {}),
   }
 }
 

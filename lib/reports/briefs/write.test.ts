@@ -1,3 +1,4 @@
+import { zodResponseFormat } from 'openai/helpers/zod'
 import { describe, expect, it } from 'vitest'
 
 import { fact } from '../../written/test-fixtures'
@@ -59,11 +60,22 @@ describe('the brief call', () => {
     expect(user).not.toMatch(/\d+%/)
   })
 
-  it('no example or instruction names what a tenant sells', () => {
+  it('no example or instruction, in the prompt or the schema, carries a tenant\'s vocabulary', () => {
+    const TENANT = /\b(?:bags?|backpacks?|school|sails?|upcycl\w*|recycl\w*|eco|prosthe\w*|sockets?|knees?|amputees?|limbs?|liners?|blades?|wheelchairs?)\b/i
     for (const r of BRIEF_ROLES) {
       const { system } = buildBriefPrompts({ role: r, company: 'X', month: '2026-09-01', noun: null, ideas: [], others: [], points: [], questions: [], context: null, rivals: [] })
-      expect(system).not.toMatch(/\bbags?\b|backpack|prosthe|socket|sailcloth/i)
+      expect(system).not.toMatch(TENANT)
+      expect(JSON.stringify(zodResponseFormat(briefSchema(r), 'b'))).not.toMatch(TENANT)
     }
+    const ideas = buildIdeasPrompts({ company: 'X', month: '2026-09-01', noun: null, points: [], questions: [], context: null })
+    expect(ideas.system).not.toMatch(TENANT)
+    expect(JSON.stringify(zodResponseFormat(ideasSchema(), 'i'))).not.toMatch(TENANT)
+  })
+
+  it('tells the writer what is measured: comments, never attention, rank or sales', () => {
+    const { system } = buildBriefPrompts({ role: 'content', company: 'X', month: '2026-09-01', noun: null, ideas: [], others: [], points: [], questions: [], context: null, rivals: [] })
+    expect(system).toContain('NOTHING UNMEASURED')
+    expect(system).toContain('"comments ask for"')
   })
 })
 

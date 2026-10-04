@@ -18,13 +18,15 @@ export function cite(o: {
   insider?: boolean
   author?: string
   account?: string
+  /** The insight's paraphrase; the quote's text where not given. */
+  description?: string
 }): DatedEvidence {
   n += 1
   const audience = o.audience ?? 'industry-other'
   return {
     insightId: o.insight,
     kind: 'objection',
-    description: 'A paraphrase.',
+    description: o.description ?? o.text ?? 'I would buy the knee brace if the straps held up after a month of walking.',
     evidenceId: `ev${n}`,
     rank: n,
     commentId: `c${n}`,
