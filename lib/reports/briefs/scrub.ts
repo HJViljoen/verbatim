@@ -69,7 +69,9 @@ export const BRIEF_PROCESS: readonly Rule[] = [
   // How sure the reading is. Not "buyers lack confidence in the knee", not
   // "the reading on the app".
   { name: 'confidence', re: /\bconfidence\s+(?:is|was|here|in\s+(?:this|the)\s+(?:reading|finding))\b|\bhow\s+sure\b|\b(?:solid|reasonable|firm)\s+(?:reading|evidence|basis)\b|\bthe\s+(?:evidence|basis)\s+(?:is|was|remains|rests)\b|\b(?:this|the)\s+reading\s+(?:is|was|rests|shows|of|here)\b/i },
-  { name: 'not settled', re: /\bnot\s+(?:yet\s+)?settled\b|\bopen\s+questions?\b|\bunanswered\s+by\b|\bit\s+(?:is|remains)\s+unclear\b|\bremains\s+unclear\s+(?:from|in)\b/i },
+  // "The open question is…" is ours; "buyers treat durability as an open
+  // question" is theirs.
+  { name: 'not settled', re: /\bnot\s+(?:yet\s+)?settled\b|\b(?:the|one|an)\s+open\s+questions?\s+(?:is|are|remains?|here)\b|\bremains?\s+an?\s+open\s+question\b|\bunanswered\s+by\b|\bit\s+(?:is|remains)\s+unclear\b|\bremains\s+unclear\s+(?:from|in)\b/i },
   // Our method. Not "gait analysis", which a clinic does to a walker.
   { name: 'method', re: /\bmethodolog\w*|\b(?:the|our|this)\s+(?:analysis|method)\b|\banaly(?:sed|zed)\s+(?:the|our|this|these)\s+(?:data|comments|videos|posts|conversation)\b|\bextracted\s+from\b|\bverified\s+(?:by|against|in)\b/i },
   { name: 'counted', re: /\bconversations?\s+across\b|\bcomments\s+read\b|\bvideos\s+read\b|\bread\s+for\s+the\s+category\b|\bas\s+at\b|\bstill\s+filling\b/i },
@@ -84,24 +86,32 @@ export const UNMEASURED: readonly Rule[] = [
   // largest share". Not "owns a Rheo knee".
   { name: 'ranking', re: /\bowns?\s+(?:the\s+)?(?:[\w-]+\s+){0,3}(?:talk|conversation|category|market|space|segment)\b|\bleads?\s+(?:the\s+)?(?:talk|conversation|category|market|field|pack)\b|\bdominat\w+|\b(?:second|third|fourth|fifth)[\s-]largest\b|\blargest\s+share\b|\bahead\s+of\s+(?:the\s+)?(?:rivals?|competitors?|others|the\s+pack)\b|\b(?:falls?|sits?|lags?|trails?)\s+behind\b/i },
   // A comparison with no counted base. Not "more than one job".
-  { name: 'more than', re: /\b(?:more|less|fewer)\s+(?:often\s+)?than\s+(?!one\b)|\bmost\s+often\b/i },
+  // Not what a product costs, weighs or holds ("costs more than a cheaper
+  // option").
+  { name: 'more than', re: /(?<!\b(?:costs?|costing|pay|pays|paid|paying|spend|spends|spent|charges?|charged|weighs?|worth|lasts?|holds?|carry|carries|fits?)\s+(?:\w+\s+)?)\b(?:more|less|fewer)\s+(?:often\s+)?than\s+(?!one\b|just\b|a\s+(?:few|couple)\b)|\bmost\s+often\b/i },
   // Sales won or lost: the product reads talk, not tills.
-  { name: 'sales outcome', re: /\bwins?\s+(?:it\s+|them\s+)?(?:the\s+)?(?:[\w-]+\s+)?sales?\b|\bwins?\s+(?:buyers|customers|over)\b|\bloses?\s+(?:the\s+)?(?:sales?|buyers|customers)\b|\bclos(?:e|es|ed|ing)\s+the\s+sale\b|\bconver(?:t|ts|ted|ting|sion)\b|\bmakes?\s+the\s+sale\b/i },
+  { name: 'sales outcome', re: /\b(?:stops?|kills?|blocks?|drives?|lifts?|hurts?|boosts?)\s+(?:the\s+)?(?:demand|sales)\b|\bwins?\s+(?:it\s+|them\s+)?(?:the\s+)?(?:[\w-]+\s+)?sales?\b|\bwins?\s+(?:buyers|customers|over)\b|\bloses?\s+(?:the\s+)?(?:sales?|buyers|customers)\b|\bclos(?:e|es|ed|ing)\s+the\s+sale\b|\bconver(?:t|ts|ted|ting|sion)\b|\bmakes?\s+the\s+sale\b/i },
   // The order buyers ask in. Not "before buying", which is when, not order.
   { name: 'order', re: /\bbefore\s+(?:they\s+)?(?:ask|asks|asking|look|looks|looking|consider)\b|\b(?:first|then)\s+(?:ask|asks|look|looks|turn|turns)\b|\bstarts?\s+with\b|\bthe\s+first\s+(?:thing|question)\b/i },
   // What an audience does with a post: the product counts comments, not
   // watching, scrolling or sharing. Not "price stops people from buying".
-  { name: 'attention', re: /\b(?:viewers?|people|audiences?|they)\s+(?:stay|stays|stayed)\b|\bkeeps?\s+(?:[\w-]+\s+){0,2}(?:watching|engaged|hooked)\b|\bkeeps?\s+(?:their\s+)?attention\b|\bholds?\s+(?:their\s+)?attention\b|\bloses?\s+(?:them|viewers|people|attention|interest)\b|\bwhat\s+loses\b|\bshareable\b|\b(?:share|shares|shared|sharing)\s+(?:it|them|the\s+post|posts?|videos?)\b|\bstops?\s+(?:people|viewers|them)\s+(?:on|scrolling|in\s+their)\b|\bstops?\s+the\s+scroll\b|\bscroll\w*\b|\bdrives?\s+(?:comments|engagement|attention|shares)\b|\bgo(?:es|ing)?\s+viral\b|\bdraws?\s+(?:viewers|people)\s+in\b/i },
+  // Not "people stay with bags they have owned for years" (loyalty, which
+  // comments say).
+  { name: 'attention', re: /\b(?:viewers?|people|audiences?|they)\s+(?:stay|stays|stayed)\b(?!\s+(?:with|loyal)\b)|\bkeeps?\s+(?:[\w-]+\s+){0,2}(?:watching|engaged|hooked)\b|\bkeeps?\s+(?:their\s+)?attention\b|\bholds?\s+(?:their\s+)?attention\b|\bloses?\s+(?:them|viewers|people|attention|interest)\b|\bwhat\s+loses\b|\bshareable\b|\b(?:share|shares|shared|sharing)\s+(?:it|them|the\s+post|posts?|videos?)\b|\bstops?\s+(?:people|viewers|them)\s+(?:on|scrolling|in\s+their)\b|\bstops?\s+the\s+scroll\b|\bscroll\w*\b|\bdrives?\s+(?:comments|engagement|attention|shares)\b|\bgo(?:es|ing)?\s+viral\b|\bdraws?\s+(?:viewers|people)\s+in\b/i },
 ]
 
 /** BANNED_PHRASES with its "readiness" entry narrowed to our machinery: in a
  *  prosthetics market "readiness", "provisional" and "calibrate" are the
  *  market's own words (a provisional socket, calibrating a knee). */
 export const BRIEF_BANNED: readonly Rule[] = [
-  ...BANNED_PHRASES.filter((r) => r.name !== 'readiness'),
+  ...BANNED_PHRASES.filter((r) => r.name !== 'readiness' && r.name !== 'coverage'),
+  // Our coverage, not a buyer's: "cost and coverage" is insurance.
+  { name: 'coverage', re: /\b(?:our|data|search|platform|source)\s+coverage\b|\bcoverage\s+of\s+(?:the\s+)?(?:data|platforms?|sources?|searches|market)\b|\b(?:thin|limited|partial)\s+coverage\b/i },
   { name: 'readiness', re: /\b(?:data|update|reading|subject)\s+readiness\b|\breadiness\s+(?:check|score|state)\b|\bcalibrat\w*\s+(?:subjects?|figures?|readings?|matching|the\s+(?:subject|reading))\b|\bprovisional\s+(?:readings?|figures?|subjects?|levels?|counts?|results?|shares?)\b/i },
   { name: 'first person', re: /\b(?:[Ww]e|[Oo]urs?|us)\b/ },
-  { name: 'pipeline words', re: /\b(?:candidates?|insights?|clustering|clustered|the\s+pipeline)\b|\b(?:this|last|next|each|every|latest)\s+runs?\b/i },
+  // Our machinery. Not "who is a candidate for a mechanical leg", which a
+  // clinic decides.
+  { name: 'pipeline words', re: /\b(?:quote|theme|insight|evidence|search|video)\s+candidates?\b|\b(?:insights?|clustering|clustered|the\s+pipeline)\b|\b(?:this|last|next|each|every|latest)\s+runs?\b/i },
   { name: 'AI', re: /\bAI\b|\bthe\s+(?:language\s+)?model\s+(?:wrote|read|found|says?)\b/ },
 ]
 
@@ -243,24 +253,30 @@ export function varySubjects(text: string): string {
   return text.split(/\n\s*\n/).map((para) => {
     const ss = splitSentences(para)
     for (let i = 1; i < ss.length; i++) {
-      const prev = subjectOf(ss[i - 1])
-      const cur = subjectOf(ss[i])
-      if (prev && cur && prev.toLowerCase() === cur.toLowerCase()) ss[i] = `They${ss[i].slice(cur.length)}`
+      const shared = sharedSubject(ss[i - 1], ss[i])
+      if (shared) ss[i] = `They${ss[i].slice(shared.length)}`
     }
     return ss.join(' ')
   }).join('\n\n')
 }
 
-/** The opening plural subject of a sentence ("Buyers", "Current leg users"):
- *  a capitalised word and up to three more, the last a plural, before a verb
- *  of saying or doing. Null otherwise. */
-const VERBS = 'ask|asks|want|wants|say|says|describe|describes|talk|talks|look|looks|treat|treats|judge|judges|praise|praises|question|questions|compare|compares|use|uses|are|have|need|needs|come|see|read|reads|test|tests|name|names|hold|holds|pause|pauses|hesitate|hesitates|expect|expects|find|finds|tie|ties|weigh|weighs|link|links|credit|credits|react|reacts|respond|responds|move|moves|stay|stays|buy|buys|report|reports|worry|worries|put|puts|picture|pictures|place|places|shop|shops|focus|focuses|frame|frames|connect|connects|separate|separates|value|values|call|calls'
-const SUBJECT = new RegExp(`^([A-Z][\\w-]*(?:\\s+[a-z][\\w-]*){0,3})\\s+(?:${VERBS})\\b`)
-function subjectOf(sentence: string): string | null {
-  const m = SUBJECT.exec(sentence)
-  if (!m) return null
-  const words = m[1].split(/\s+/)
-  return /s$/i.test(words[words.length - 1]) ? m[1] : null
+/** Words a sentence may open on that are not a subject of its own. */
+const NOT_SUBJECT = /^(?:the|a|an|this|that|these|those|they|it|its|their|some|many|most|all|each|every|one|other|both|when|where|while|if|for|in|on|at|as|but|and|so|what|how|why|is|was|has|does)$/i
+
+/** The subject two sentences share at their start ("Buyers", "Current leg
+ *  users"): the shortest run of the same words, at most four, that ends on a
+ *  plural and is followed in both by a lower-case word (the verb). Null
+ *  otherwise. Pure. */
+export function sharedSubject(prev: string, cur: string): string | null {
+  const a = prev.trim().split(/\s+/)
+  const b = cur.trim().split(/\s+/)
+  if (!b[0] || !/^[A-Z][\w-]*$/.test(b[0]) || NOT_SUBJECT.test(b[0])) return null
+  for (let n = 1; n <= 4 && n < a.length && n < b.length; n++) {
+    if (a[n - 1].toLowerCase() !== b[n - 1].toLowerCase() || !/^[\w-]+$/.test(b[n - 1])) return null
+    const last = b[n - 1]
+    if (/[a-z]s$/i.test(last) && !/(?:ss|us|is)$/i.test(last) && /^[a-z]/.test(a[n]) && /^[a-z]/.test(b[n])) return b.slice(0, n).join(' ')
+  }
+  return null
 }
 
 export const ZERO_COUNTS: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }

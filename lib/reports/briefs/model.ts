@@ -6,6 +6,7 @@ import { SYNTHESIS_MODEL, SYNTHESIS_REASONING_EFFORT, estimateCost } from '../..
 import { openai } from '../../openai'
 import { logAiCall } from '../../pipeline/ai-log'
 import type { ParseClient } from '../../written/write-model'
+import { REPEATS_PROMPT_VERSION, buildRepeatsPrompts, repeatsSchema, type RepeatsOutput } from './repeats'
 import type { BriefRole } from './types'
 import { BRIEF_PROMPT_VERSION, IDEAS_PROMPT_VERSION, briefSchema, buildBriefPrompts, buildIdeasPrompts, ideasSchema, type BriefArgs, type BriefOutput, type IdeasArgs, type IdeasOutput } from './write'
 
@@ -81,5 +82,12 @@ export async function draftIdeas(c: CallArgs, args: IdeasArgs): Promise<{ output
 export async function writeBrief(c: CallArgs, args: BriefArgs): Promise<{ output: BriefOutput; costUsd: number; ms: number; prompts: { system: string; user: string } }> {
   const prompts = buildBriefPrompts(args)
   const r = await structured<BriefOutput>(c, `monthly_brief_${args.role satisfies BriefRole}`, BRIEF_PROMPT_VERSION, briefSchema(args.role), 'monthly_brief', prompts)
+  return { ...r, prompts }
+}
+
+/** The set's repeat judge (repeats.ts): the printed prose only. */
+export async function judgeRepeats(c: CallArgs, args: Parameters<typeof buildRepeatsPrompts>[0]): Promise<{ output: RepeatsOutput; costUsd: number; ms: number; prompts: { system: string; user: string } }> {
+  const prompts = buildRepeatsPrompts(args)
+  const r = await structured<RepeatsOutput>(c, 'brief_repeats', REPEATS_PROMPT_VERSION, repeatsSchema(), 'brief_repeats', prompts)
   return { ...r, prompts }
 }

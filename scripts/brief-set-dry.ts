@@ -40,7 +40,7 @@ const values = (name: string): string[] =>
   argv.flatMap((a, i) => (a === `--${name}` && argv[i + 1] && !argv[i + 1].startsWith('--') ? [argv[i + 1]] : []))
 const flag = (name: string, fallback = ''): string => values(name)[0] ?? fallback
 for (const a of argv) {
-  if (a.startsWith('--') && !['client', 'month', 'out', 'cache', 'cap', 'spent-before', 'concurrency', 'reuse', 'stage', 'roles', 'recompose', 'rewrite', 'reask'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
+  if (a.startsWith('--') && !['client', 'month', 'out', 'cache', 'cap', 'spent-before', 'concurrency', 'reuse', 'stage', 'roles', 'recompose', 'rewrite', 'reask', 'rejudge', 'recheck'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
 }
 const CLIENT = flag('client')
 const MONTH = flag('month')
@@ -57,6 +57,8 @@ const STAGE = flag('stage', 'write')
 const RECOMPOSE = argv.includes('--recompose')
 const REWRITE = values('rewrite')
 const REASK = values('reask')
+const REJUDGE = argv.includes('--rejudge')
+const RECHECK = argv.includes('--recheck')
 if (!/^[0-9a-f-]{36}$/.test(CLIENT)) throw new Error('--client <uuid> is required')
 if (!/^\d{4}-\d{2}$/.test(MONTH)) throw new Error('--month YYYY-MM is required')
 if (!OUT || !CACHE) throw new Error('--out <dir> and --cache <dir> are required')
@@ -258,12 +260,17 @@ async function main() {
     ...(previous ? { ideas: { raw: previous.ideas, contradicted: previous.check.contradicted } } : {}),
     spent,
     ...(written ? { written } : {}),
+    // A recompose that calls no writer keeps the repeat judge's answer too.
+    ...(RECOMPOSE && REWRITE.length === 0 && !REJUDGE && previous?.repeatJudge ? { repeats: previous.repeatJudge } : {}),
     // A recompose that calls no writer keeps the summaries' last check.
-    ...(RECOMPOSE && REWRITE.length === 0 && previous?.check?.summaries ? { summaries: { contradicted: previous.check.summaries.contradicted } } : {}),
+    // --rejudge runs the set's two checks again (the repeat judge, then the
+    // summaries as they now print).
+    ...(RECOMPOSE && REWRITE.length === 0 && !REJUDGE && !RECHECK && previous?.check?.summaries ? { summaries: { contradicted: previous.check.summaries.contradicted } } : {}),
   })
   writeFileSync(vectorsFile, JSON.stringify([...set.vectors]))
   console.log(`meaning: ${set.vectors.size} texts embedded (${set.vectors.size - vectorsBefore.length} new, $${set.embedUsd.toFixed(4)})`)
   console.log(`ideas: ${set.allocation.ideas.map((i) => `${i.id}→${i.home}(${i.placed}, ${i.videos}v): ${i.headline}`).join(' | ')}`)
+  console.log(`repeat judge: ${set.repeats.items.length} items, ${set.repeats.verdicts.filter((v) => v.idea || v.sameAs).length} restate something · $${set.repeats.costUsd.toFixed(3)}`)
   console.log(`held ideas: ${set.allocation.held.map((h) => `${h.headline} [${h.reason}]`).join(' | ') || 'none'}`)
 
   // The files.
@@ -308,7 +315,7 @@ async function main() {
     ...(roles || RECOMPOSE ? { rewritten: [...(previous?.rewritten ?? []), { roles: roles ?? BRIEF_ROLES, writers: RECOMPOSE ? REWRITE : roles, at: now.toISOString(), meteredUsd: meteredWrite }] } : {}),
     questions: questions.map((q) => ({ id: q.id, section: q.section, text: q.text })),
     ideas: set.ideas.raw, check: previous && (roles || RECOMPOSE) ? { ...previous.check, summaries: set.check.summaries } : set.check, allocation: set.allocation, homes: Object.fromEntries(ideaHomes(briefs)),
-    repeats: repeatsAcross(briefs), flags: [...priorFlags, ...flags],
+    repeats: repeatsAcross(briefs), repeatJudge: set.repeats.raw, repeatItems: set.repeats.items.map((x) => `${x.id} ${x.key}`), repeatVerdicts: set.repeats.verdicts.filter((v) => v.idea || v.sameAs), flags: [...priorFlags, ...flags],
     points: { total: set.grounded.points.length, usable: set.grounded.points.filter((p) => p.usable).length, byRole: Object.fromEntries(BRIEF_ROLES.map((r) => [r, set.grounded.points.filter((p) => p.role === r && p.usable).length])) },
     cost: previous && (roles || RECOMPOSE)
       ? { ...previous.cost, rewriteMeteredUsd: (previous.cost.rewriteMeteredUsd ?? 0) + meteredWrite }

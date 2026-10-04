@@ -49,6 +49,12 @@ describe('the time-comparison scrub', () => {
       'Users ask whether gait analysis is part of the fitting.',
       'A move to a new socket is the moment users ask about comfort.',
       'People are beginning to walk again after the fitting.',
+      // The September Sealand run dropped these (4 Oct, second run).
+      'Shoppers hold back when a bag does not show why it costs more than a cheaper functional option.',
+      'People stay with bags they have owned for years.',
+      'Buyers treat durability and practicality as open questions.',
+      'People ask who is a suitable candidate for a mechanical leg.',
+      'People ask what insurance coverage pays for.',
     ]) expect(clean(s), s).toBe(s)
   })
 })
@@ -69,6 +75,7 @@ describe('claims nothing measures', () => {
       'Visible progress stops people on the post.',
       'Plain talk about lived experience drives comments.',
       'Owners mention repairs more than comfort.',
+      'Awkward looks and insecure closures can stop demand.',
     ]) expect(clean(s), s).toBe('')
   })
 
@@ -96,6 +103,8 @@ describe('the §0a backstop', () => {
       'Separate work covers size and pockets.',
       'Tracked rivals are talked about in concrete terms.',
       'Subjects with provisional figures look small.',
+      'Our coverage of the platforms is limited.',
+      'The insight candidates were few.',
     ]) expect(clean(s), s).toBe('')
     expect(scrubBriefText('Tracked rivals are talked about.', 200, { company: 'Acme', field: 'market' }).dropped).toEqual([{ sentence: 'Tracked rivals are talked about.', rule: 'tracked' }])
   })
@@ -116,6 +125,7 @@ describe('the §0a backstop', () => {
     expect(clean('Buyers ask where to order (G12, G14).')).toBe('Buyers ask where to order.')
     expect(clean('Buyers ask about the color and odor — and the price.')).toBe('Buyers ask about the colour and odour, and the price.')
     expect(clean('Buyers stall on the route to buy.', 'headline')).toBe('Buyers stall on the route to buy')
+    expect(clean('Cost and coverage', 'headline')).toBe('Cost and coverage')
   })
 })
 
@@ -134,5 +144,10 @@ describe('what survives, put right', () => {
     expect(varySubjects('Current leg users want comfort. Current leg users talk about gait. Buyers ask about cost.'))
       .toBe('Current leg users want comfort. They talk about gait. Buyers ask about cost.')
     expect(varySubjects('Buyers ask about cost. Buyers compare clinics.')).toBe('Buyers ask about cost. They compare clinics.')
+    expect(varySubjects('Commenters describe a good bag as light. Commenters add weather-protective.')).toBe('Commenters describe a good bag as light. They add weather-protective.')
+    expect(varySubjects('Buyers do not take it on trust. Buyers ask for proof.')).toBe('Buyers do not take it on trust. They ask for proof.')
+    // Not a subject: a shared opening that is not a plural before a verb.
+    expect(varySubjects('The price matters. The price is shown.')).toBe('The price matters. The price is shown.')
+    expect(varySubjects('Comfort matters. Comfort wins.')).toBe('Comfort matters. Comfort wins.')
   })
 })

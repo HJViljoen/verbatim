@@ -54,7 +54,7 @@ function input(role: BriefRole, written: BriefOutput, points: GroundedPoint[], o
 }
 
 const salesOut = (over: Partial<BriefOutput> = {}): BriefOutput => ({
-  findings: [{ idea: 'I1', saw: 'Buyers ask where to order and who ships to them.\n\nThey ask about delivery too.', means: 'The route to buy decides whether interest becomes an order.', practice: ['A buyer who asks about shipping has chosen the product.', 'Acme should list the shops.'] }],
+  findings: [{ idea: 'I1', saw: 'Buyers ask where to order and who ships to them. People under Acme\'s posts ask for the price.\n\nThey ask about delivery too.', means: 'The route to buy decides whether interest becomes an order.', practice: ['A buyer who asks about shipping has chosen the product.', 'Acme should list the shops.'] }],
   buyers: part([]), deciders: part([]),
   stops: part([{ title: 'The price', text: 'People hold back when the price of the pack is not shown.', based_on: ['G2'] }, { title: 'One voice', text: 'One owner says the zip broke.', based_on: ['G3'] }]),
   settle: part([]),
@@ -86,6 +86,9 @@ describe('composing one brief', () => {
   it('scrubs advice out of what it means, and records every sentence it drops with the rule', () => {
     const { data, scrubbed } = composeBrief(input('sales', salesOut(), POINTS))
     expect(data.findings[0].practice).toEqual(['A buyer who asks about shipping has chosen the product.'])
+    // What was heard about a brand rests on videos about it.
+    expect(data.findings[0].saw).toEqual(['Buyers ask where to order and who ships to them.', 'They ask about delivery too.'])
+    expect(scrubbed).toContainEqual({ field: 'I1.saw', sentence: 'People under Acme\'s posts ask for the price.', rule: 'names Acme on 0 videos about it' })
     expect(scrubbed).toContainEqual(expect.objectContaining({ field: 'in_short', rule: 'now reads as' }))
   })
 
@@ -154,7 +157,9 @@ describe('composing one brief', () => {
 describe('leadership', () => {
   const out: BriefOutput = {
     findings: [{ idea: 'I2', saw: 'Owners describe the repair service in detail.', means: 'Repairs carry the brand\'s name with owners.', practice: [] }],
-    stand: part([]), weigh: part([]), stay: part([]), move: part([]), risks: part([]), decisions: part([]),
+    stand: part([]), weigh: part([]), stay: part([]), move: part([]), risks: part([]),
+    // The writer put the question in the title of an untitled part.
+    decisions: part([{ title: 'How does Acme handle repairs for owners?', text: '', based_on: ['G9'] }]),
     subjects: [{ subject: 'S1', sentence: 'People talk about the fit of the socket through a long day.' }, { subject: 'S2', sentence: 'People compare running blades.' }],
     in_short: 'Repairs matter.',
   }
@@ -173,6 +178,7 @@ describe('leadership', () => {
     ])
     expect(market.lines).toBeUndefined()
     expect(data.held.map((h) => h.what)).toEqual(expect.arrayContaining(['subject: Cost & access', 'subject: Look & style']))
+    expect(data.sections.find((s) => s.key === 'leadership.decisions')?.groups[0].items.map((i) => i.text)).toEqual(['How does Acme handle repairs for owners?'])
   })
 
   it('talk about each brand: rivals as a share of the market, the company\'s own posts as a count with any giveaway named, and no rank', () => {
@@ -227,6 +233,16 @@ describe('the set', () => {
     const out = summaryAgainstPrinted(d, words(), ['Acme', 'Rival'])
     expect(out.inShort.summary).toBe('Rival is chosen for long trips.')
     expect(out.held.map((h) => h.reason)).toEqual(['nothing printed about Acme says it', 'nothing the brief printed says it'])
+  })
+
+  it('In short does not summarise what another brief argues', () => {
+    const d = brief('sales', [{ text: 'Rival is chosen for long trips and its warranty.', videoIds: ['a', 'b', 'c'] }, { text: 'Owners wash straps after rainy hikes.', videoIds: ['d', 'e', 'f'] }],
+      'Rival is chosen for long trips. Owners clean straps after muddy hikes.')
+    d.sections[0].groups[0].items.push({ text: 'Owners clean straps after muddy hikes.', tag: 'Argued in the Content brief', basedOn: [], videos: 3 })
+    d.inShort.also = [{ headline: 'Owners clean straps after muddy hikes', brief: 'content' }]
+    const out = summaryAgainstPrinted(d, words(), ['Acme', 'Rival'])
+    expect(out.inShort.summary).toBe('Rival is chosen for long trips.')
+    expect(out.held.map((h) => h.reason)).toEqual(['it says what another brief argues'])
   })
 
   it('finds two briefs resting on the same research, and says whether it is named in a line', () => {

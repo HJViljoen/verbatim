@@ -1,4 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
+import { buildRepeatsPrompts, repeatsSchema } from './repeats'
 import { describe, expect, it } from 'vitest'
 
 import { fact } from '../../written/test-fixtures'
@@ -69,6 +70,8 @@ describe('the brief call', () => {
     }
     const ideas = buildIdeasPrompts({ company: 'X', month: '2026-09-01', noun: null, points: [], questions: [], context: null })
     expect(ideas.system).not.toMatch(TENANT)
+    expect(buildRepeatsPrompts({ ideas: [], findings: new Map(), items: [] }).system).not.toMatch(TENANT)
+    expect(JSON.stringify(zodResponseFormat(repeatsSchema(), 'r'))).not.toMatch(TENANT)
     expect(JSON.stringify(zodResponseFormat(ideasSchema(), 'i'))).not.toMatch(TENANT)
   })
 

@@ -22,14 +22,20 @@ export type MeaningMode = 'collect' | 'vectors' | 'words'
 
 /** Cosine floors, measured on the September runs (README: calibration). */
 export const FIT = {
-  /** An item carries a point's meaning. */
+  /** An item carries a point's meaning (measured: items 0.63 to 0.90 on the
+   *  points they rest on). */
   item: 0.5,
+  /** A question for the business grows out of a point: a short abstract
+   *  question sits further from it (measured 0.29 to 0.65 for grounded ones). */
+  question: 0.28,
   /** An In short sentence says something the brief printed. */
   summary: 0.55,
   /** Two items say the same thing (with shared videos). */
   same: 0.6,
   /** A quote's insight illustrates what it sits beside. */
   quote: 0.42,
+  /** A short phrase's insight says what its point says. */
+  phrase: 0.55,
 } as const
 
 export class Meaning {

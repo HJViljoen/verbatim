@@ -148,10 +148,22 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   for (const idea of mine) {
     const w = (a.written?.findings ?? []).find((f) => String(f.idea).trim().toUpperCase() === idea.id)
     if (!w) { held.push({ what: idea.headline, reason: 'the writer wrote nothing for it' }); continue }
-    const saw = run(w.saw, BRIEF_MAX.saw, 'market', `${idea.id}.saw`).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+    // What was heard about a brand rests on videos about it: a sentence that
+    // names one with fewer than BRAND_MIN_VIDEOS of the idea's videos about
+    // it drops ("People under Össur's posts ask…" on one video). What it
+    // means for the company may name the company.
+    const shortBrand = (s: string) => brandsNamed(s, true).find((b) => videosAbout(idea.points, b.about) < BRAND_MIN_VIDEOS)
+    const heardOnly = (text: string, where: string) => text.split(/\n\s*\n/).map((para) => splitSentences(para).filter((s) => {
+      const b = shortBrand(s)
+      if (b) scrubbed.push({ field: where, sentence: s, rule: `names ${b.name} on ${videosAbout(idea.points, b.about)} videos about it` })
+      return !b
+    }).join(' ')).filter(Boolean).join('\n\n')
+    const short = shortBrand(idea.headline)
+    if (short) { held.push({ what: idea.headline, reason: `only ${videosAbout(idea.points, short.about)} of its videos are about ${short.name}` }); continue }
+    const saw = heardOnly(run(w.saw, BRIEF_MAX.saw, 'market', `${idea.id}.saw`), `${idea.id}.saw`).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
     const means = run(w.means, BRIEF_MAX.means, 'interpret', `${idea.id}.means`)
     if (saw.length === 0 || !means) { held.push({ what: idea.headline, reason: 'the scrub left no saw or no means' }); continue }
-    const practice = (w.practice ?? []).map((x, i) => run(x, BRIEF_MAX.practice, 'interpret', `${idea.id}.practice${i}`, { maxSentences: 1, whole: true })).filter(Boolean).slice(0, BRIEF_MAX.practiceItems)
+    const practice = (w.practice ?? []).map((x, i) => heardOnly(run(x, BRIEF_MAX.practice, 'interpret', `${idea.id}.practice${i}`, { maxSentences: 1, whole: true }), `${idea.id}.practice${i}`)).filter(Boolean).slice(0, BRIEF_MAX.practiceItems)
     const ev = evidenceOf(idea.points)
     findings.push({
       ideaId: idea.id,
@@ -187,11 +199,16 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const used = new Set<string>()
     for (const [n, it] of part.items.slice(0, spec?.max ?? BRIEF_MAX.items).entries()) {
       const what = `${key}: ${it.title || it.text.slice(0, 60)}`
-      const rawTitle = it.title.trim() === '""' ? '' : it.title.trim()
+      // A part with no title whose writer put the line in the title (Össur's
+      // questions for the business came back that way) prints it as the text.
+      const untitledPart = spec?.title === '""'
+      const moved = untitledPart && !it.text.trim() && it.title.trim() && it.title.trim() !== '""'
+      const rawTitle = untitledPart || it.title.trim() === '""' ? '' : it.title.trim()
+      const rawText = moved ? it.title : it.text
       const t = rawTitle ? scrub(rawTitle, BRIEF_MAX.title, 'headline', `${key}${n}.title`, { whole: true }) : { text: '', rule: null }
       if (rawTitle && !t.text) { held.push({ what, reason: `its label broke a rule (${t.rule ?? 'the scrub'})` }); continue }
       let title = t.text
-      const tx = scrub(it.text, BRIEF_MAX.text, field, `${key}${n}.text`)
+      const tx = scrub(rawText, BRIEF_MAX.text, field, `${key}${n}.text`)
       if (!tx.text) { held.push({ what, reason: `its text broke a rule (${tx.rule ?? 'the scrub'})` }); continue }
       const text = tx.text
       const rawDetail = it.detail.trim() === '""' ? '' : it.detail
@@ -199,7 +216,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       const cited = [...new Set((it.based_on ?? []).map((x) => String(x).trim().toUpperCase()))].filter(mayCite)
       if (cited.length === 0) { held.push({ what, reason: 'it cites no point its part is written from' }); continue }
       const said = `${title ? `${title}. ` : ''}${text}`
-      let ids = cited.filter((id) => a.meaning.sim(said, byId.get(id)!.text) >= FIT.item)
+      let ids = cited.filter((id) => a.meaning.sim(said, byId.get(id)!.text) >= (key === 'decisions' ? FIT.question : FIT.item))
       if (ids.length === 0) { held.push({ what, reason: 'it says nothing the points it cites say' }); continue }
       if (opts.rival) {
         const rival = groundedRival(rawTitle, a.rivals, ids.map((id) => byId.get(id)?.text ?? ''))
@@ -244,6 +261,13 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     return { lead: kept.length ? lead : '', items: kept, pointIds: [...used] }
   }
   const quoteFor = (ids: readonly string[], claim: string) => (ids.length ? a.quotes.pick(ids, claim, 1)[0] ?? null : null)
+  /** A section's voice comes from what the section argues: never from an
+   *  item that only names another brief's idea. */
+  const argued = (items: readonly BriefItem[]) => items.filter((i) => !i.tag)
+  const voiceFor = (items: readonly BriefItem[], lead = '') => {
+    const own = argued(items)
+    return quoteFor([...new Set(own.flatMap((i) => i.basedOn ?? []))], [lead, ...own.map((i) => `${i.title ?? ''} ${i.text}`)].join(' '))
+  }
   const section = (key: SectionKey, groups: BriefSection['groups'], extra: Partial<BriefSection> = {}): BriefSection => {
     const spec = ROLE_SECTIONS[a.role].find((s) => s.key === key)!
     return { key, title: sectionTitle(spec, co), groups, ...extra }
@@ -251,7 +275,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   const simple = (key: SectionKey, part: string, opts: { rival?: boolean; quote?: boolean } = {}): BriefSection | null => {
     const p = itemsOf(part, opts)
     if (p.items.length === 0) return null
-    const quote = opts.quote ? quoteFor(p.pointIds, [p.lead, ...p.items.map((i) => `${i.title ?? ''} ${i.text}`)].join(' ')) : null
+    const quote = opts.quote ? voiceFor(p.items, p.lead) : null
     return section(key, [{ items: p.items }], { ...(p.lead ? { lead: p.lead } : {}), ...(quote ? { quote } : {}) })
   }
   /** Items grouped by their title ("Praised for", "Criticised for"). */
@@ -277,14 +301,13 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       { label: 'What it believes', items: believe.items },
       { label: 'What it doubts', items: doubt.items },
     ].filter((g) => g.items.length > 0)
-    const ids = [...believe.pointIds, ...doubt.pointIds]
-    const quote = quoteFor(ids, [...believe.items, ...doubt.items].map((i) => i.text).join(' '))
+    const quote = voiceFor([...believe.items, ...doubt.items])
     built['marketing.believe'] = groups.length ? section('marketing.believe', groups, { ...(believe.lead ? { lead: believe.lead } : {}), ...(quote ? { quote } : {}) }) : null
     const words = itemsOf('words')
     const wordGroups = grouped('marketing.words', words, ['What they praise', 'What they argue about', 'How they describe it'])
     // The market's own words: short voices from the points this section rests
     // on, close in meaning to what it says.
-    const voices = words.items.length ? a.quotes.phrases(words.pointIds, words.items.map((i) => i.text).join(' '), PHRASES_MAX - 1) : []
+    const voices = words.items.length ? a.quotes.phrases(words.pointIds.map((id) => ({ id, text: byId.get(id)!.text })), PHRASES_MAX - 1) : []
     built['marketing.words'] = wordGroups.length ? section('marketing.words', wordGroups, { ...(words.lead ? { lead: words.lead } : {}), ...(voices.length ? { voices } : {}) }) : null
     built['marketing.say_hear'] = sayHear()
     const recall = itemsOf('recall', { aboutClient: true })
@@ -305,7 +328,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     built['content.more'] = simple('content.more', 'more', { quote: true })
     built['content.confusion'] = simple('content.confusion', 'confusion')
     const ownPts = a.points.filter((p) => p.role === 'content' && p.usable)
-    const phrases = a.quotes.phrases(ownPts.map((p) => p.id), ownPts.map((p) => p.text).join(' '), PHRASES_MAX)
+    const phrases = a.quotes.phrases([...ownPts].sort((x, y) => y.videoIds.length - x.videoIds.length).map((p) => ({ id: p.id, text: p.text })), PHRASES_MAX)
     built['content.borrow'] = phrases.length ? section('content.borrow', [], { voices: phrases }) : null
   }
   if (a.role === 'leadership') {
@@ -319,7 +342,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       { label: 'What keeps them', items: stay.items },
       { label: 'What moves them', items: move.items },
     ].filter((g) => g.items.length > 0)
-    const wq = quoteFor([...weigh.pointIds, ...move.pointIds], [...weigh.items, ...move.items].map((i) => i.text).join(' '))
+    const wq = voiceFor([...weigh.items, ...move.items])
     built['leadership.weigh'] = wg.length ? section('leadership.weigh', wg, { ...(weigh.lead ? { lead: weigh.lead } : {}), ...(wq ? { quote: wq } : {}) }) : null
     const r = itemsOf('risks')
     built['leadership.risks'] = r.items.length ? section('leadership.risks', [{ items: r.items }], r.lead ? { lead: r.lead } : {}) : null
@@ -522,9 +545,11 @@ export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 
 /** Every printed text of a brief: what an In short sentence must find itself
  *  in. */
 export function printedTexts(d: MonthlyBriefData): { text: string; brands: string }[] {
+  // An item that only names another brief's idea is not this brief's to
+  // summarise: In short says what THIS brief argues.
   return [
     ...d.findings.flatMap((f) => [f.headline, ...f.saw, f.means, ...f.practice]),
-    ...d.sections.flatMap((s) => [...(s.lead ? [s.lead] : []), ...s.groups.flatMap((g) => g.items.map((i) => `${i.title ? `${i.title}. ` : ''}${i.text}${i.detail ? ` ${i.detail}` : ''}`))]),
+    ...d.sections.flatMap((s) => [...(s.lead ? [s.lead] : []), ...s.groups.flatMap((g) => g.items.filter((i) => !i.tag).map((i) => `${i.title ? `${i.title}. ` : ''}${i.text}${i.detail ? ` ${i.detail}` : ''}`))]),
   ].map((text) => ({ text, brands: text }))
 }
 
@@ -536,13 +561,23 @@ export function printedTexts(d: MonthlyBriefData): { text: string; brands: strin
  */
 export function summaryAgainstPrinted(d: MonthlyBriefData, meaning: Meaning, brands: readonly string[]): MonthlyBriefData {
   const printed = printedTexts(d).map((p) => p.text)
+  // What another brief argues: its ideas, and this brief's lines naming them.
+  const elsewhere = [
+    ...d.inShort.also.map((x) => x.headline),
+    ...d.sections.flatMap((s) => s.groups.flatMap((g) => g.items.filter((i) => i.tag).map((i) => `${i.title ? `${i.title}. ` : ''}${i.text}`))),
+  ]
   const kept: string[] = []
   const held = [...d.held]
   for (const sentence of splitSentences(d.inShort.summary)) {
     const named = brands.filter((b) => names(sentence, b))
     const pool = named.length ? printed.filter((t) => named.every((b) => names(t, b))) : printed
-    if (pool.length === 0 || meaning.best(sentence, pool) < FIT.summary) {
+    const own = pool.length ? meaning.best(sentence, pool) : 0
+    if (own < FIT.summary) {
       held.push({ what: `in short: ${sentence.slice(0, 90)}`, reason: named.length ? `nothing printed about ${named.join(' and ')} says it` : 'nothing the brief printed says it' })
+      continue
+    }
+    if (elsewhere.length && meaning.best(sentence, elsewhere) > own) {
+      held.push({ what: `in short: ${sentence.slice(0, 90)}`, reason: 'it says what another brief argues' })
       continue
     }
     kept.push(sentence)

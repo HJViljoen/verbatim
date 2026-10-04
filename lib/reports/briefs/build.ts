@@ -24,10 +24,13 @@ import { allPoints, runResearch, type ResearchAnswer } from '../documents/resear
 import { allocateIdeas } from './allocate'
 import { composeBrief, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow } from './compose'
 import { Meaning } from './meaning'
+import { applyRepeats, REPEATS_IDEA_CHARS, repeatItemsOf, verdictsOf, type RepeatItem, type RepeatsOutput, type RepeatVerdict } from './repeats'
+import { capText } from '../documents/scrub'
+import { splitSentences } from '../../prose/scrub'
 import { embedTexts } from '../../pipeline/cluster'
 import { EMBEDDING_MODEL, estimateCost } from '../../config'
 import { groundPoint, groundedPointOf } from './ground'
-import { BRIEF_MODEL, draftIdeas, writeBrief } from './model'
+import { BRIEF_MODEL, draftIdeas, judgeRepeats, writeBrief } from './model'
 import { allBriefQuestions, type BriefQuestion } from './questions'
 import { QuotePool } from './quotes'
 import type { Allocation, BriefRole, GroundedPoint, IdeaDraft, MonthlyBriefData } from './types'
@@ -257,6 +260,7 @@ export interface BriefSet {
   allocation: Allocation
   briefs: Record<BriefRole, { data: MonthlyBriefData; raw: BriefOutput | null; prompts: { system: string; user: string } | null; costUsd: number; scrub: unknown }>
   quotes: QuotePool
+  repeats: { raw: RepeatsOutput; items: RepeatItem[]; verdicts: RepeatVerdict[]; costUsd: number }
   vectors: Map<string, number[]>
   embedUsd: number
   costUsd: number
@@ -284,6 +288,8 @@ export async function writeBriefSet(
      *  called keeps the earlier check's answer instead: pass its contradicted
      *  summaries. */
     summaries?: { contradicted: [string, string | null][] }
+    /** The repeat judge's answer from an earlier write of the same set. */
+    repeats?: RepeatsOutput
     /** Vectors kept from an earlier write, by text. */
     vectors?: Iterable<[string, number[]]>
     /** The embedder (a test's stand-in); the product's by default. */
@@ -338,7 +344,7 @@ export async function writeBriefSet(
   const vectors = new Map<string, number[]>(opts.vectors ?? [])
   const brands = [i.company, ...i.tracked]
   const counted = brandsCountedFor(i.clientId, i.company, i.tracked)
-  const composeAll = (meaning: Meaning) => {
+  const composeAll = (meaning: Meaning, verdicts: readonly RepeatVerdict[] | null, ideaTexts: ReadonlyMap<string, string> = new Map()) => {
     const quotes = new QuotePool(grounded.counted, { clientId: i.clientId, company: i.company, brandsOf: grounded.brandsOf, meaning })
     quotes.spend(opts.spent ?? [])
     const out = {} as Record<BriefRole, ReturnType<typeof composeBrief>>
@@ -350,14 +356,16 @@ export async function writeBriefSet(
         model: BRIEF_MODEL, costUsd: raws[role].costUsd, brandsCounted: counted,
       })
     }
-    // The set: another brief's section named in a line, then In short against
-    // what printed.
-    const named = namedAcross(roles.map((r) => out[r].data), meaning)
+    // The set: the repeat judge's verdicts, another brief's section named in
+    // a line, then In short against what printed.
+    const composed = roles.map((r) => out[r].data)
+    const judged = verdicts ? applyRepeats(composed, verdicts, allocation.ideas, { meaning, texts: ideaTexts }) : composed
+    const named = namedAcross(judged, meaning)
     const finished = named.map((d) => summaryAgainstPrinted(d, meaning, brands))
-    return { out, finished, quotes }
+    return { out, composed, finished, quotes }
   }
   const collect = new Meaning(vectors, 'collect')
-  composeAll(collect)
+  composeAll(collect, null)
   let embedUsd = 0
   const embedMissing = async (texts: readonly string[]) => {
     const missing = [...new Set(texts)].filter((t) => t && !vectors.has(t))
@@ -369,11 +377,25 @@ export async function writeBriefSet(
   }
   await embedMissing(collect.wanted())
   let meaning = new Meaning(vectors, 'vectors')
-  let pass = composeAll(meaning)
+  let pass = composeAll(meaning, null)
+  // The repeat judge reads the composed set (or a dry run's kept answer).
+  const repeatItems = repeatItemsOf(pass.composed)
+  // Each idea as its finding printed it (what was heard, capped): the
+  // headline alone, or its first sentence, can miss the idea's matter.
+  const firstSaw = new Map(pass.composed.flatMap((d) => d.findings.map((f) => [f.ideaId, capText(f.saw.join(' '), REPEATS_IDEA_CHARS)] as [string, string])))
+  const judge = opts.repeats
+    ? { output: opts.repeats, costUsd: 0, prompts: null }
+    : repeatItems.length
+      ? await judgeRepeats(call, { ideas: allocation.ideas, findings: firstSaw, items: repeatItems })
+      : { output: { items: [] }, costUsd: 0, prompts: null }
+  cost += judge.costUsd
+  const verdicts = verdictsOf(judge.output, repeatItems, allocation.ideas)
+  const ideaTexts = new Map(allocation.ideas.map((x) => [x.id, `${x.headline}. ${firstSaw.get(x.id) ?? ''}`.trim()]))
+  pass = composeAll(meaning, verdicts, ideaTexts)
   for (let n = 0; n < 2 && meaning.wanted().length > 0; n++) {
     await embedMissing(meaning.wanted())
     meaning = new Meaning(vectors, 'vectors')
-    pass = composeAll(meaning)
+    pass = composeAll(meaning, verdicts, ideaTexts)
   }
   cost += embedUsd
 
@@ -381,7 +403,8 @@ export async function writeBriefSet(
   //    passed summaries that rested on held items).
   const briefs = {} as BriefSet['briefs']
   for (const d of pass.finished) briefs[d.role] = { data: d, raw: raws[d.role].raw, prompts: raws[d.role].prompts, costUsd: raws[d.role].costUsd, scrub: { counts: pass.out[d.role].counts, dropped: pass.out[d.role].scrubbed } }
-  const summaries = Object.values(briefs).map((x) => x.data.inShort.summary.trim()).filter(Boolean)
+  // Sentence by sentence: one contradicted sentence drops, not the summary.
+  const summaries = [...new Set(Object.values(briefs).flatMap((x) => splitSentences(x.data.inShort.summary.trim()).map((s) => s.trim())).filter(Boolean))]
   const summaryCheck = opts.summaries
     ? { contradicted: new Map(opts.summaries.contradicted), verdicts: [], costUsd: 0, ran: true }
     : i.themedRunId && summaries.length
@@ -389,11 +412,13 @@ export async function writeBriefSet(
     : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
   cost += summaryCheck.costUsd
   for (const x of Object.values(briefs)) {
-    const s = x.data.inShort.summary.trim()
-    if (!s || !summaryCheck.contradicted.has(s)) continue
-    const says = summaryCheck.contradicted.get(s)
-    x.data.held.push({ what: `in short: ${s.slice(0, 80)}`, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
-    x.data.inShort.summary = ''
+    const kept: string[] = []
+    for (const s of splitSentences(x.data.inShort.summary.trim()).map((y) => y.trim()).filter(Boolean)) {
+      if (!summaryCheck.contradicted.has(s)) { kept.push(s); continue }
+      const says = summaryCheck.contradicted.get(s)
+      x.data.held.push({ what: `in short: ${s.slice(0, 80)}`, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
+    }
+    x.data.inShort.summary = kept.join(' ')
   }
   return {
     inputs: i,
@@ -407,6 +432,7 @@ export async function writeBriefSet(
     allocation,
     briefs,
     quotes: pass.quotes,
+    repeats: { raw: judge.output, items: repeatItems, verdicts, costUsd: judge.costUsd },
     vectors,
     embedUsd,
     costUsd: cost,

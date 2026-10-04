@@ -5,7 +5,7 @@ import { gateInputOf, type DatedEvidence } from '../../written/evidence'
 import { isOwnAccount } from '../../written/pool'
 import { quoteForm, FORM_VALUE } from '../../written/substance'
 import { aboutCitation, asJudged, briefGateFor } from './ground'
-import { FIT, type Meaning } from './meaning'
+import { FIT, stemsOf, type Meaning } from './meaning'
 import type { BriefQuote } from './types'
 
 // Which real voices a brief prints (pure; one pool per brief SET).
@@ -38,6 +38,18 @@ export const QUOTE_MAX_CHARS = 280
 /** A phrase to borrow: short, and a statement. */
 export const PHRASE_MIN_CHARS = 16
 export const PHRASE_MAX_CHARS = 120
+/** A phrase says something: at least this many content words, and this many
+ *  of them its point's own (a phrase to borrow is in the point's terms; the
+ *  insight's fit alone let "I neeed the link for the first one" through). */
+export const PHRASE_MIN_STEMS = 3
+export const PHRASE_SHARED_STEMS = 2
+
+const sharedStems = (a: string, b: string): number => {
+  const B = stemsOf(b)
+  let n = 0
+  for (const s of stemsOf(a)) if (B.has(s)) n += 1
+  return n
+}
 
 export interface PoolOptions {
   clientId: string
@@ -138,18 +150,27 @@ export class QuotePool {
     return out
   }
 
-  /** Short phrases people use, for "words to borrow": statements, not
-   *  questions or fragments, each from its own video, close in meaning to
-   *  what the section is about. */
-  phrases(pointIds: readonly string[], claim: string, n: number, o: { minFit?: number } = {}): BriefQuote[] {
+  /** Short phrases people use, for "words to borrow" and "in its own
+   *  words": one per point in turn, each the closest claim to THAT
+   *  point's own text (a section's points pooled into one claim matched
+   *  "That's so well fantastic good job"), with something specific in it
+   *  (`PHRASE_MIN_STEMS` content words), each from its own video. */
+  phrases(points: readonly { id: string; text: string }[], n: number, o: { minFit?: number } = {}): BriefQuote[] {
     const out: BriefQuote[] = []
     const videos = new Set<string>()
-    for (let i = 0; i < n; i++) {
-      const best = this.candidates(pointIds, claim, videos, o.minFit ?? FIT.quote).find((s) =>
-        s.english.length >= PHRASE_MIN_CHARS && s.english.length <= PHRASE_MAX_CHARS && ['claim', 'statement'].includes(quoteForm(s.english)))
-      if (!best) break
-      videos.add(videoKey(best.e))
-      out.push(this.take(best))
+    for (let round = 0; round < n && out.length < n; round++) {
+      let took = false
+      for (const p of points) {
+        if (out.length >= n) break
+        const best = this.candidates([p.id], p.text, videos, o.minFit ?? FIT.phrase).find((s) =>
+          s.english.length >= PHRASE_MIN_CHARS && s.english.length <= PHRASE_MAX_CHARS && quoteForm(s.english) === 'claim'
+          && stemsOf(s.english).size >= PHRASE_MIN_STEMS && sharedStems(s.english, p.text) >= PHRASE_SHARED_STEMS)
+        if (!best) continue
+        videos.add(videoKey(best.e))
+        out.push(this.take(best))
+        took = true
+      }
+      if (!took) break
     }
     return out
   }
