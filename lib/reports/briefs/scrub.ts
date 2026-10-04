@@ -23,12 +23,13 @@ import { ADVICE, scrubWeekText, toldWhatToDo, type WeekScrubCounts } from '../..
 // Each entry names the false positive it steps round, as BANNED_PHRASES does.
 
 export const TIME_COMPARISON: readonly { name: string; re: RegExp }[] = [
-  // The long-run read's list (lib/written/longrun.ts `CHANGE`), less three
-  // forms a buyer uses about their OWN bag ("when the old one no longer fits
-  // the commute", "the bag they used to carry", "it would not close any
-  // more"), which a brief's sections describe and which claim nothing about
-  // the market. Those three are caught below only with the market as subject.
-  { name: 'change over time', re: /\b(?:increasingly|more\s+and\s+more|less\s+and\s+less|these\s+days|lately|recently|over\s+time|over\s+the\s+months|month\s+(?:after|on|by)\s+month|compared\s+(?:with|to)\s+(?:earlier|before|last|the\s+previous)|than\s+(?:before|earlier|last\s+month))\b/i },
+  // The long-run read's list (lib/written/longrun.ts `CHANGE`), less four
+  // forms a buyer uses about their OWN product ("when the old one no longer
+  // fits the commute", "the bag they used to carry", "it would not close any
+  // more", "what life with the leg feels like over time"), which a brief's
+  // sections describe and which claim nothing about the market. The first
+  // three are caught below only with the market as subject.
+  { name: 'change over time', re: /\b(?:increasingly|more\s+and\s+more|less\s+and\s+less|these\s+days|lately|recently|over\s+the\s+months|month\s+(?:after|on|by)\s+month|compared\s+(?:with|to)\s+(?:earlier|before|last|the\s+previous)|than\s+(?:before|earlier|last\s+month))\b/i },
   { name: 'since a month', re: /\bsince\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|last\s+month|the\s+start)\b/i },
   { name: 'became', re: /\b(?:shift(?:s|ed|ing)?\s+(?:to|toward|towards|from|away)|settl(?:es|ed|ing)\s+(?:on|into|around)|is\s+becoming|are\s+becoming|became|has\s+become|have\s+become|emerg(?:es|ed|ing)|starting\s+to|beginning\s+to)\b/i },
   { name: 'no longer', re: /\b(?:buyers|people|shoppers|owners|users|customers|the\s+market|demand|interest|talk)\s+(?:no\s+longer|used\s+to)\b|\b(?:is|are)\s+no\s+longer\s+(?:the|a|an|what)\b/i },

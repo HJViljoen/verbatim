@@ -31,6 +31,7 @@ function input(role: BriefRole, written: BriefOutput, points: GroundedPoint[], o
   return {
     role, company: 'Acme', month: SEP, noun: null, allocation, points, whoVideos, quotes, written,
     rivals: ['Rival'], audiences: null, market: { videos: 900, comments: 20000 }, ownPosts: 5, playbook: null,
+    brandsCounted: { client: true, rivals: ['Rival', 'Tiny'] },
     model: 'test', costUsd: 0.1, ...over,
   }
 }
@@ -167,15 +168,22 @@ describe('leadership: where the market stands', () => {
     const { data } = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival', 'Tiny'] }))
     const shares = data.sections.find((s) => s.key === 'leadership.shares')!
     expect(shares.groups[0].items.map((i) => i.title)).toEqual(['Rival', 'Acme'])
-    expect(shares.groups[0].lines?.[0]).toBe('Of Acme and the rival beside it, Acme draws the second largest share of September\'s comments.')
+    expect(shares.groups[0].lines?.[0]).toBe('Acme draws a smaller share of September\'s comments than Rival.')
     expect(data.findings.map((f) => f.ideaId)).toEqual(['I2'])
+  })
+
+  it('no share of talk by brand where the product does not count the brands', () => {
+    const audiences = [{ audience: 'client', videos: 19, comments: 150 }, { audience: 'competitor:Rival', videos: 42, comments: 650 }, { audience: 'industry-other', videos: 388, comments: 10500 }]
+    const { data } = composeBrief(input('leadership', out, POINTS, { audiences, brandsCounted: { client: false, rivals: [] } }))
+    expect(data.sections.find((s) => s.key === 'leadership.shares')).toBeUndefined()
+    expect(data.inShort.figures.map((f) => f.label)).toEqual(['videos in your market in September, with 20,000 comments'])
   })
 })
 
 describe('the figures In short prints', () => {
   it('the market for every reader, then the reader\'s own: never a figure for an uncalibrated subject', () => {
     const subjects = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Cost & access', calibration: 'provisional', level: null, rank: 0 }) }]
-    const base = { company: 'Össur', month: SEP, market: { videos: 430, comments: 11000 }, subjects, ownPosts: 19, playbook: null, audiences: null }
+    const base = { company: 'Össur', month: SEP, market: { videos: 430, comments: 11000 }, subjects, ownPosts: 19, playbook: null, audiences: null, brandsCounted: { client: false, rivals: [] } }
     expect(figuresFor({ ...base, role: 'sales' })).toEqual([{ value: '430', label: 'videos in your market in September, with 11,000 comments' }])
     expect(figuresFor({ ...base, role: 'marketing' })[1]).toEqual({ value: '19', label: 'posts Össur published in September' })
   })

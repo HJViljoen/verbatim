@@ -39,6 +39,7 @@ describe('the time-comparison scrub', () => {
       'People lack confidence in the waterproof claim.',
       'The buying moment comes when the current bag no longer suits the commute.',
       'Owners describe the bag they used to carry.',
+      'Buyers ask what life with the leg feels like over time.',
     ]) expect(clean(s), s).toBe(s)
   })
 })

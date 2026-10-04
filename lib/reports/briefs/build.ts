@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadAskFrame } from '../../agent/answer'
 import { askWindow } from '../../agent/scope'
 import { loadCommentNamings, namesByComment, trackedBrands, type WhoVideo } from '../../brands/attribution'
+import { brandCountState } from '../../brands/precision'
 import { WHAT_THEY_SELL } from '../../pages/market-frame'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from '../../pages/playbook'
 import type { SayVsHearEntry } from '../../pipeline/schemas'
@@ -302,6 +303,7 @@ export async function writeBriefSet(
       role, company: i.company, month: i.month, noun: i.noun, allocation, points: grounded.points, whoVideos: grounded.whoVideos, quotes,
       written: raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
       audiences: i.audiences, market: i.market, ownPosts: i.context?.posts.month ?? null, playbook: i.playbook, model: BRIEF_MODEL, costUsd: callCost,
+      brandsCounted: brandsCountedFor(i.clientId, i.company, i.tracked),
     })
     briefs[role] = { data: composed.data, raw, prompts, costUsd: callCost, scrub: composed.counts }
   }
@@ -335,6 +337,15 @@ export async function writeBriefSet(
     briefs,
     quotes,
     costUsd: cost,
+  }
+}
+
+/** Which brands the product counts talk for: the hand-check gate every page
+ *  uses (lib/brands/precision.ts). Pure. */
+export function brandsCountedFor(clientId: string, company: string, rivals: readonly string[]): { client: boolean; rivals: string[] } {
+  return {
+    client: brandCountState(clientId, company) === 'counted',
+    rivals: rivals.filter((r) => brandCountState(clientId, r) === 'counted'),
   }
 }
 

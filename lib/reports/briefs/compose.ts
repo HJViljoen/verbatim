@@ -79,6 +79,12 @@ export interface ComposeInput {
   market: { videos: number | null; comments: number | null } | null
   /** Posts the company published in the month, or null where not read. */
   ownPosts: number | null
+  /** Which brands the product counts talk for (the hand-checked brand rules,
+   *  lib/brands/precision.ts): the client, and the rivals by name. A tenant
+   *  whose brands are not counted (Össur today: its Competitive page is empty)
+   *  gets no share of talk by brand, rather than one its own pages do not
+   *  show, measured one way for itself and another for its rivals. */
+  brandsCounted: { client: boolean; rivals: readonly string[] }
   playbook: PlaybookBlock | null
   model: string
   costUsd: number
@@ -382,6 +388,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const client = rows.find((r) => r.audience === CLIENT_AUDIENCE) ?? null
     const rivals = rows.filter((r) => isRivalAudience(r.audience) && r.videos >= SHARE_MIN_VIDEOS)
       .filter((r) => a.rivals.some((n) => n.toLowerCase() === (rivalNameOf(r.audience) ?? '').toLowerCase()))
+      .filter((r) => a.brandsCounted.rivals.some((n) => n.toLowerCase() === (rivalNameOf(r.audience) ?? '').toLowerCase()))
     const category = rows.find((r) => r.audience === INDUSTRY_AUDIENCE) ?? null
     // Where the company stands needs talk about the company: rival praise
     // alone does not put the company behind it.
@@ -393,7 +400,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const videos = rows.reduce((n, r) => n + r.videos, 0)
     const items: BriefItem[] = []
     const lines: string[] = []
-    if (client && client.videos > 0 && rivals.length > 0 && comments > 0 && videos > 0) {
+    if (a.brandsCounted.client && client && client.videos > 0 && rivals.length > 0 && comments > 0 && videos > 0) {
       const brands = [
         { name: co, row: client, you: true },
         ...rivals.map((r) => ({ name: rivalNameOf(r.audience) ?? r.audience, row: r, you: false })),
@@ -407,7 +414,12 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
         })
       }
       const at = brands.findIndex((b) => b.you)
-      lines.push(`Of ${co} and the ${rivals.length === 1 ? 'rival' : `${COUNT_WORD[rivals.length] ?? fmtInt(rivals.length)} rivals`} beside it, ${co} draws the ${RANK[at] ?? `${at + 1}th largest`} share of ${month}'s comments.`)
+      if (rivals.length === 1) {
+        const other = brands.find((b) => !b.you)!
+        lines.push(`${co} draws a ${at === 0 ? 'larger' : 'smaller'} share of ${month}'s comments than ${other.name}.`)
+      } else {
+        lines.push(`Of ${co} and the ${COUNT_WORD[rivals.length] ?? fmtInt(rivals.length)} rivals beside it, ${co} draws the ${RANK[at] ?? `${at + 1}th largest`} share of ${month}'s comments.`)
+      }
       if (category) lines.push(`The rest of the market holds ${pct1(category.comments, comments)} of the comments.`)
     }
     const groups = [
@@ -458,7 +470,7 @@ const untitled = (i: BriefItem): BriefItem => {
 
 /** The figures In short prints, each from a count code holds: the market's
  *  month for everyone, then one that belongs to the reader. Pure. */
-export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 'market' | 'subjects' | 'ownPosts' | 'playbook' | 'audiences'>): BriefFigure[] {
+export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 'market' | 'subjects' | 'ownPosts' | 'playbook' | 'audiences' | 'brandsCounted'>): BriefFigure[] {
   const month = longMonth(a.month)
   const out: BriefFigure[] = []
   if (a.market?.videos) out.push({ value: fmtInt(a.market.videos), label: `videos in your market in ${month}${a.market.comments ? `, with ${fmtInt(a.market.comments)} comments` : ''}` })
@@ -474,7 +486,7 @@ export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 
       out.push({ value: `${best.engagement.median!.toFixed(1)}%`, label: `median engagement on the market's ${best.label.toLowerCase()} videos, against ${cat.median.value.toFixed(1)}% for all its videos` })
     }
   }
-  if (a.role === 'leadership') {
+  if (a.role === 'leadership' && a.brandsCounted.client) {
     const rows = a.audiences ?? []
     const client = rows.find((r) => r.audience === CLIENT_AUDIENCE)
     const comments = rows.reduce((n, r) => n + r.comments, 0)
