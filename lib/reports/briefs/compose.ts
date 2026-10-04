@@ -27,6 +27,20 @@ export interface AudienceRow {
   comments: number
 }
 
+/** An item whose cited points are at least this share the brief's own
+ *  finding's is that finding again. */
+export const SAME_AS_FINDING = 0.5
+
+/** The share of an item's points that are among `of`. */
+const cover = (ids: readonly string[], of: readonly string[]): number => {
+  if (ids.length === 0) return 0
+  const set = new Set(of)
+  return ids.filter((id) => set.has(id)).length / ids.length
+}
+
+/** Claims on "What the company says, and what comes back". */
+export const SAY_HEAR_MAX = 4
+
 /** A rival takes a row on the shares section with at least this many videos
  *  in the month. */
 export const SHARE_MIN_VIDEOS = 3
@@ -113,13 +127,16 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       months: ev.months,
       videos: ev.videos,
       who: ev.who,
-      quotes: a.quotes.pick(idea.points, `${idea.headline} ${saw.join(' ')}`, 2),
+      quotes: [
+        ...a.quotes.pick(idea.points, `${idea.headline} ${saw.join(' ')}`, 1),
+        ...a.quotes.pick(idea.points, idea.headline, 1, { minRelevance: 2 }),
+      ],
     })
   }
 
   // ---- the writer's parts, as items ---------------------------------------------------------
   const otherIdeas = a.allocation.ideas.filter((i) => i.home !== a.role)
-  const itemsOf = (key: string, opts: { rival?: boolean } = {}): { lead: string; items: (BriefItem & { videos: number })[]; pointIds: string[] } => {
+  const itemsOf = (key: string, opts: { rival?: boolean; aboutClient?: boolean } = {}): { lead: string; items: (BriefItem & { videos: number })[]; pointIds: string[] } => {
     const part = a.written ? partOf(a.written, key) : { lead: '', items: [] }
     const spec = PARTS[a.role].find((p) => p.key === key)
     const out: (BriefItem & { videos: number })[] = []
@@ -135,13 +152,34 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       }
       const text = run(it.text, BRIEF_MAX.text, key === 'risks' || key === 'decisions' ? 'interpret' : 'market')
       const detail = it.detail.trim() === '""' ? '' : run(it.detail, BRIEF_MAX.detail, 'market')
+      // One idea, one home, inside the brief too: an item that is the brief's
+      // own finding again is held. A question for the business may rest on a
+      // finding: asking what it means is not saying it twice.
+      const finding = key === 'decisions' ? null : mine.find((i) => overlapOfSmaller(ids, i.points) >= SAME_AS_FINDING && cover(ids, i.points) >= SAME_AS_FINDING)
+      if (finding) { held.push({ what: `${key}: ${it.title || it.text.slice(0, 60)}`, reason: `says what the finding "${finding.headline}" says` }); continue }
       const ev = evidenceOf(ids)
+      // How the company is remembered, and what comes back on its claims, is
+      // talk ABOUT the company: an item none of whose videos are about it
+      // (its own posts, or a comment naming it) is someone else's story.
+      if (opts.aboutClient && !ev.who.some((w) => w.about === 'client' && w.videos > 0)) {
+        held.push({ what: `${key}: ${it.title || it.text.slice(0, 60)}`, reason: `none of its videos is about ${co}` })
+        continue
+      }
+      // Another brief's idea is NAMED here in a line, never argued: an item
+      // that rests mostly on it keeps its title and first sentence and says
+      // where it is argued. A question for the business is not an argument.
+      const elsewhere = key === 'decisions' ? null : otherIdeas.find((o) => cover(ids, o.points) >= SAME_AS_FINDING)
+      const shown = elsewhere ? (text.split(/(?<=[.!?])\s+/)[0] ?? text) : text
       for (const id of ids) used.add(id)
-      out.push({ ...(title ? { title } : {}), text, ...(detail ? { detail } : {}), videos: ev.videos, who: ev.who, basedOn: ids })
+      out.push({
+        ...(title ? { title } : {}), text: shown, ...(detail && !elsewhere ? { detail } : {}),
+        ...(elsewhere ? { tag: `Argued in the ${BRIEF_NAME[elsewhere.home]}` } : {}),
+        videos: ev.videos, who: ev.who, basedOn: ids,
+      })
     }
     const { kept, held: h } = standingItems(out)
     for (const x of h) held.push({ what: `${key}: ${x.what}`, reason: x.reason })
-    return { lead: run(part.lead, BRIEF_MAX.lead, key === 'risks' || key === 'decisions' ? 'interpret' : 'market', { maxSentences: 2 }), items: kept as (BriefItem & { videos: number })[], pointIds: [...used] }
+    return { lead: run(part.lead, BRIEF_MAX.lead, key === 'risks' || key === 'decisions' ? 'interpret' : 'market', { maxSentences: 2, whole: true }), items: kept as (BriefItem & { videos: number })[], pointIds: [...used] }
   }
   const quoteFor = (ids: readonly string[], claim: string) => (ids.length ? a.quotes.pick(ids, claim, 1)[0] ?? null : null)
   const section = (key: SectionKey, groups: BriefSection['groups'], extra: Partial<BriefSection> = {}): BriefSection => {
@@ -155,8 +193,8 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     return section(key, [{ items: p.items }], { ...(p.lead ? { lead: p.lead } : {}), ...(quote ? { quote } : {}) })
   }
   /** Items grouped by their title ("Remembered for", "Ahead on"). */
-  const grouped = (key: SectionKey, part: string, order: readonly string[]): BriefSection | null => {
-    const p = itemsOf(part)
+  const grouped = (key: SectionKey, part: string, order: readonly string[], opts: { aboutClient?: boolean } = {}): BriefSection | null => {
+    const p = itemsOf(part, opts)
     if (p.items.length === 0) return null
     const groups = order
       .map((label) => ({ label, items: p.items.filter((i) => (i.title ?? '').toLowerCase() === label.toLowerCase()).map(untitled) }))
@@ -193,7 +231,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       ? section('marketing.words', wordGroups, { ...(words.lead ? { lead: words.lead } : {}), ...(voices.length ? { voices } : {}) })
       : null
     built['marketing.say_hear'] = sayHear()
-    built['marketing.recall'] = grouped('marketing.recall', 'recall', ['Remembered for', 'Held against it'])
+    built['marketing.recall'] = grouped('marketing.recall', 'recall', ['Remembered for', 'Held against it'], { aboutClient: true })
     built['marketing.rivals'] = simple('marketing.rivals', 'rivals', { rival: true })
   }
   if (a.role === 'content') {
@@ -208,8 +246,8 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     built['content.watch'] = watchGroups.length ? section('content.watch', watchGroups, come.lead ? { lead: come.lead } : {}) : null
     built['content.more'] = simple('content.more', 'more', { quote: true })
     built['content.confusion'] = simple('content.confusion', 'confusion')
-    const own = a.points.filter((p) => p.role === 'content' && p.usable).map((p) => p.id)
-    const phrases = a.quotes.phrases(own, '', PHRASES_MAX)
+    const ownPts = a.points.filter((p) => p.role === 'content' && p.usable)
+    const phrases = a.quotes.phrases(ownPts.map((p) => p.id), ownPts.map((p) => p.text).join(' '), PHRASES_MAX)
     built['content.borrow'] = phrases.length ? section('content.borrow', [], { voices: phrases }) : null
   }
   if (a.role === 'leadership') {
@@ -241,11 +279,15 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       const heard = run(w.heard, BRIEF_MAX.text, 'market')
       if (!heard || ids.length === 0) { held.push({ what: `say_hear: ${claim.claim}`, reason: 'nothing that stood came back on it' }); continue }
       const ev = evidenceOf(ids)
+      if (!ev.who.some((w) => w.about === 'client' && w.videos > 0)) { held.push({ what: `say_hear: ${claim.claim}`, reason: `none of its videos is about ${co}` }); continue }
       items.push({ title: claim.claim, text: heard, videos: ev.videos, who: ev.who, basedOn: ids })
     }
     const { kept, held: h } = standingItems(items)
     for (const x of h) held.push({ what: `say_hear: ${x.what}`, reason: x.reason })
-    return kept.length ? section('marketing.say_hear', [{ items: kept }]) : null
+    // The claims with the most behind them, at most `SAY_HEAR_MAX`.
+    const top = [...kept].sort((x, y) => (y.videos ?? 0) - (x.videos ?? 0)).slice(0, SAY_HEAR_MAX)
+    for (const x of kept.filter((k) => !top.includes(k))) held.push({ what: `say_hear: ${x.title ?? ''}`, reason: 'over the section\'s cap' })
+    return top.length ? section('marketing.say_hear', [{ items: kept.filter((k) => top.includes(k)) }]) : null
   }
 
   // ---- content: what works in the market's videos (counted) -----------------------------------
@@ -253,6 +295,9 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const pb = a.playbook
     if (!pb || pb.unread) return null
     const linesFor = (m: PlaybookBlock['formats'], share: (pct: string) => string, kind: string): { items: BriefItem[]; line: string | null } => {
+      // The client's own column prints its "of N" only where every post it
+      // published carries a format; otherwise a count alone, where it has one,
+      // so "9 of its 12" never sits beside "27 posts published" elsewhere.
       const cat = m.sides[0]
       const own = m.sides.find((s) => s.audience === CLIENT_AUDIENCE) ?? null
       if (!cat || cat.of === 0) return { items: [], line: null }
@@ -262,7 +307,12 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
         if (!row || row.value.k === 0) continue
         const median = row.engagement.median != null && row.engagement.n >= FORMAT_LINE_MIN_RATED ? `, at a median engagement of ${row.engagement.median.toFixed(1)}%` : ''
         const mineRow = own && !own.unread ? own.byKey[k.key] : null
-        const detail = own && !own.unread && own.of > 0 ? `${co}: ${fmtInt(mineRow?.value.k ?? 0)} of its ${fmtInt(own.of)} posts.` : ''
+        const mine = mineRow?.value.k ?? 0
+        const detail = !own || own.unread || own.of === 0
+          ? ''
+          : own.of >= own.published
+            ? `${co}: ${fmtInt(mine)} of its ${fmtInt(own.of)} posts.`
+            : mine > 0 ? `${co}: ${fmtInt(mine)} ${mine === 1 ? 'post' : 'posts'}.` : ''
         items.push({ title: k.label, text: `${share(pct0(row.value.k, cat.of))}${median}.`, ...(detail ? { detail } : {}) })
       }
       const rated = Object.values(cat.byKey).filter((r): r is NonNullable<typeof r> => r != null && r.engagement.median != null && r.engagement.n >= FORMAT_LINE_MIN_RATED)
@@ -276,12 +326,11 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const f = linesFor(pb.formats, (p) => `${p} of the market's videos published in ${month}`, 'videos')
     const h = linesFor(pb.hooks, (p) => `${p} of them open this way`, 'openings')
     const groups = [
-      ...(f.items.length ? [{ label: 'Formats', items: f.items }] : []),
-      ...(h.items.length ? [{ label: 'Openings', items: h.items }] : []),
+      ...(f.items.length ? [{ label: 'Formats', items: f.items, ...(f.line ? { lines: [f.line] } : {}) }] : []),
+      ...(h.items.length ? [{ label: 'Openings', items: h.items, ...(h.line ? { lines: [h.line] } : {}) }] : []),
     ]
-    const lines = [f.line, h.line].filter((x): x is string => Boolean(x))
     if (groups.length === 0) return null
-    return section('content.formats', groups, { lead: `The videos published in the market in ${month}, by format and by how they open, with ${co}'s own posts beside them.`, ...(lines.length ? { lines } : {}) })
+    return section('content.formats', groups, { lead: `The videos published in the market in ${month}, by format and by how they open, with ${co}'s own posts beside them.` })
   }
 
   // ---- leadership: where the market stands (every tracked subject) ---------------------------------
@@ -341,24 +390,18 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       if (category) lines.push(`The rest of the market holds ${pct1(category.comments, comments)} of the comments.`)
     }
     const groups = [
-      ...(items.length ? [{ label: `Share of ${month}'s talk: ${fmtInt(comments)} comments on ${fmtInt(videos)} videos`, items }] : []),
+      ...(items.length ? [{ label: `Share of ${month}'s talk: ${fmtInt(comments)} comments on ${fmtInt(videos)} videos`, items, ...(lines.length ? { lines } : {}) }] : []),
       ...standGroups,
     ]
     if (groups.length === 0) return null
-    return section('leadership.shares', groups, { ...(lines.length ? { lines } : {}), ...(stand.lead ? { lead: stand.lead } : {}) })
+    return section('leadership.shares', groups, stand.lead ? { lead: stand.lead } : {})
   }
 
   // ---- leadership: the risks (another brief's idea is named, not argued) ---------------------------
   function risks(): BriefSection | null {
     const p = itemsOf('risks')
     if (p.items.length === 0) return null
-    const items = p.items.map((i) => {
-      const idea = otherIdeas.find((o) => overlapOfSmaller(i.basedOn ?? [], o.points) >= 0.5)
-      if (!idea) return i
-      const first = i.text.split(/(?<=[.!?])\s+/)[0] ?? i.text
-      return { ...i, text: first, tag: `Argued in the ${BRIEF_NAME[idea.home]}` }
-    })
-    return section('leadership.risks', [{ items }], p.lead ? { lead: p.lead } : {})
+    return section('leadership.risks', [{ items: p.items }], p.lead ? { lead: p.lead } : {})
   }
 
   const { sections, held: sectionHeld } = selectRoleSections(a.role, built)

@@ -62,8 +62,8 @@ describe('what prints', () => {
   it('an item prints only on enough distinct videos', () => {
     expect(itemStands(ITEM_MIN_VIDEOS)).toBe(true)
     expect(itemStands(ITEM_MIN_VIDEOS - 1)).toBe(false)
-    const r = standingItems([{ text: 'Heard widely', videos: 12 }, { title: 'One voice', text: 'Heard once', videos: 1 }])
-    expect(r.kept.map((i) => i.text)).toEqual(['Heard widely'])
+    const r = standingItems([{ text: 'Heard widely', videos: 12 }, { title: 'One voice', text: 'Heard once', videos: 1 }, { text: 'Two threads', videos: 2 }])
+    expect(r.kept.map((i) => i.text)).toEqual(['Heard widely', 'Two threads'])
     expect(r.held).toEqual([{ what: 'One voice', reason: 'too little behind it (1 videos)' }])
   })
 })

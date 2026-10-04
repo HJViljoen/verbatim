@@ -4,8 +4,9 @@ import { COMMENTS_READ_LANE } from '../../pipeline/pass-a'
 import { gateFor } from '../../quote-context'
 import type { GateOptions } from '../../quote-gate'
 import { monthStartOf } from '../../reading/month-key'
+import { CLIENT_AUDIENCE } from '../../rivals'
 import { judge, type DatedEvidence } from '../../written/evidence'
-import { isMakerLed } from '../../written/pool'
+import { makerShareOf } from '../../written/pool'
 import type { BriefRole, GroundedPoint } from './types'
 
 // The research, grounded in the comment evidence (pure).
@@ -21,14 +22,46 @@ import type { BriefRole, GroundedPoint } from './types'
 //    read lane, not a maker's video, not a brand insider, and it passes the
 //    tenant's lenient gate (`briefGateFor`: the gate's quality rules, the
 //    point's text as the claim to rank by, nothing required);
-//  · a point is usable when at least one citation counts and its talk is not
-//    makers talking to makers (`isMakerLed`, the product's one line).
+//  · a point is usable when at least one citation counts and makers are not
+//    the majority of its talk (`isMakerPoint`). The front page's line is a
+//    quarter (`HEADLINE_MAX_MAKER_SHARE`), because a theme there LEADS; a
+//    research point leads nothing, its makers' videos already count for
+//    nothing and print nothing, so it is held only where makers are the
+//    majority of its talk, when its paraphrase is mostly makers' audiences
+//    talking. (The 30 Sep lead finding was half makers: its market half now
+//    stands on its own count, and no quote can come from a maker's thread.)
 // The gate is the tenant's own (`gateFor`): Sealand's market lexicon and
 // maker rule apply to Sealand only, and another tenant gets the quality rules
 // alone, so nothing here assumes what a tenant sells.
 
 /** The tenant's lenient gate, with the client's own posts allowed. */
 export const briefGateFor = (clientId: string, claim: string | null): GateOptions => ({ ...gateFor(clientId, { claim }), allowOwn: true })
+
+/**
+ * One citation as the gate should read it. Under the client's OWN post three
+ * rules are about someone else and do not apply: the market lexicon (it keeps
+ * talk about other things, a fishing lure or a jacket, out of the market's
+ * counts, and under the client's own post the thing talked about is the
+ * client), and the seller and maker words on the post itself (the client's
+ * own post sells its own product: that is what it is). Without this, "Huge
+ * respect for putting responsibility behind the adventure" under a clean-up
+ * post fails as a seller's post, and the brief can say nothing about how the
+ * company is remembered. Every rule about the comment itself (readable, not a
+ * bot, not a sale ad, not a brand insider) still holds. Pure.
+ */
+export function asJudged<T extends Pick<DatedEvidence, 'video' | 'context'>>(e: T, gate: GateOptions): { e: T; gate: GateOptions } {
+  if (e.video.audience !== CLIENT_AUDIENCE || !e.context) return { e, gate }
+  return {
+    e: { ...e, context: { ...e.context, caption: null, hashtags: null, topics: null, accountName: null, source: 'owned' } },
+    gate: { ...gate, market: null },
+  }
+}
+
+/** Makers' share of a point's talk past which the point is not used. */
+export const BRIEF_MAKER_LINE = 0.5
+
+/** Is a point's talk mostly makers talking to makers? */
+export const isMakerPoint = (j: { seenVideos: number; makerVideos: number }): boolean => makerShareOf(j) > BRIEF_MAKER_LINE
 
 /** May this citation count at all (before the gate)? */
 export function countsForTheBrief(e: Pick<DatedEvidence, 'video' | 'context'>, universe: ReadonlySet<string>): boolean {
@@ -72,7 +105,8 @@ export function groundPoint(a: {
   const scored: { e: DatedEvidence; score: number }[] = []
   for (const e of onLane) {
     if (!countsForTheBrief(e, a.universe)) continue
-    const v = judge(e, gate)
+    const j = asJudged(e, gate)
+    const v = judge(j.e, j.gate)
     if (v.ok) scored.push({ e, score: v.score })
   }
   const byMonth = new Map<string, Set<string>>()
@@ -94,7 +128,7 @@ export function groundPoint(a: {
     whoVideos,
     who: whoSplit(whoVideos, a.company),
     ...judged,
-    usable: byVideo.size > 0 && !isMakerLed(judged),
+    usable: byVideo.size > 0 && !isMakerPoint(judged),
     counted: scored.sort((x, y) => y.score - x.score || x.e.rank - y.e.rank || x.e.evidenceId.localeCompare(y.e.evidenceId)).map((s) => s.e),
   }
 }
@@ -106,7 +140,7 @@ export function groundedPointOf(p: { id: string; text: string; insightIds: strin
     id: p.id,
     role,
     questionId: p.questionId,
-    text: p.text,
+    text: pointText(p.text),
     insightIds: [...p.insightIds],
     videoIds: g.videoIds,
     monthVideoIds: g.monthVideoIds,
@@ -115,6 +149,17 @@ export function groundedPointOf(p: { id: string; text: string; insightIds: strin
     makerVideos: g.makerVideos,
     usable: g.usable,
   }
+}
+
+/**
+ * A point's text as the writer may read it. Where the research scrub emptied
+ * the agent's own sentence it put the product's finding in its place, with
+ * its count ("Durability and wear concerns: 14 of 900 videos."); the count is
+ * a figure the writer must not see or repeat, so it is cut and the label
+ * stays. Pure.
+ */
+export function pointText(text: string): string {
+  return text.replace(/[:,]?\s*\d[\d,]*\s+of\s+\d[\d,]*\s+videos\.?/gi, '').trim()
 }
 
 /** What a set of points rests on together: distinct videos, by month, and who

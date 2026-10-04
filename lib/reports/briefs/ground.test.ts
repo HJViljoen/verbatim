@@ -44,7 +44,7 @@ describe('a research point, counted', () => {
     expect(g.who).toEqual([{ about: 'client', videos: 1 }])
   })
 
-  it('is not usable where its talk is makers talking to makers', () => {
+  it('is not usable where makers are the majority of its talk; at half it stands on its market videos', () => {
     const g = ground([
       cite({ insight: 'i1', video: 'm1', segment: 'maker' }),
       cite({ insight: 'i1', video: 'm2', segment: 'maker' }),
@@ -52,6 +52,13 @@ describe('a research point, counted', () => {
     ])
     expect(g.videoIds).toEqual(['v1'])
     expect(g.usable).toBe(false)
+    const half = ground([cite({ insight: 'i1', video: 'm3', segment: 'maker' }), cite({ insight: 'i1', video: 'v2' })])
+    expect(half.usable).toBe(true)
+  })
+
+  it('judges talk under the client\'s own post without the rules about who posted it', () => {
+    const own = cite({ insight: 'i1', video: 'own', audience: 'client', account: 'Acme Bags shop', text: 'Huge respect for putting responsibility behind the adventure.' })
+    expect(ground([own]).videoIds).toEqual(['own'])
   })
 
   it('files a video under the tracked brand its counted comment names, else its audience', () => {
@@ -96,11 +103,11 @@ describe('the quotes a set prints', () => {
     expect(new Set(refs).size).toBe(refs.length)
   })
 
-  it('prefers a line that says something to a bare question', () => {
+  it('prefers a line that says something to a bare question, and prints nothing that misses the claim', () => {
     const p = pool()
-    const picked = p.pick(['G1'], 'where to buy', 3).map((q) => p.textOf(q.ref)?.text)
-    expect(picked[picked.length - 1]).not.toBe('The straps held up after a month of daily walking and I would buy it again.')
-    expect(picked).not.toContain('Where can I buy it?')
+    const [first] = p.pick(['G1'], 'buy', 1)
+    expect(p.textOf(first.ref)?.text).toBe('The straps held up after a month of daily walking and I would buy it again.')
+    expect(pool().pick(['G1'], 'warranty claims')).toEqual([])
   })
 
   it('never prints a creator answering under their own post', () => {

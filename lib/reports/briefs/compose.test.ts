@@ -85,11 +85,47 @@ describe('composing one brief', () => {
     const rivals = data.sections.find((s) => s.key === 'sales.rivals')!
     expect(rivals.groups[0].items.map((i) => i.title)).toEqual(['Rival'])
     expect(data.held.map((h) => h.reason)).toEqual(expect.arrayContaining(['too little behind it (1 videos)', 'not a tracked rival a cited point names']))
+    expect(data.held.find((h) => h.what.includes('One voice'))).toBeDefined()
   })
 
   it('drops a section with nothing that stands, rather than printing it empty', () => {
     const { data } = composeBrief(input('sales', salesOut(), POINTS))
     expect(data.sections.map((s) => s.key)).toEqual(['sales.stops', 'sales.rivals'])
+  })
+
+  it('an item that is the brief\'s own finding again is held', () => {
+    const out = salesOut({ stops: part([{ title: 'No route to buy', text: 'Buyers cannot find where to order.', based_on: ['G1'] }, { title: 'The price', text: 'People hold back when the price is not shown.', based_on: ['G2'] }]) })
+    const { data } = composeBrief(input('sales', out, POINTS))
+    expect(data.sections.find((s) => s.key === 'sales.stops')!.groups[0].items.map((i) => i.title)).toEqual(['The price'])
+    expect(data.held).toContainEqual({ what: 'stops: No route to buy', reason: 'says what the finding "Buyers stall when the route to buy is hidden" says' })
+  })
+
+  it('names another brief\'s idea in a line where an item rests on it, and never argues it', () => {
+    const allocation = allocateIdeas([
+      { headline: 'Buyers stall when the route to buy is hidden', basedOn: ['G1'], home: 'sales', second: null },
+      { headline: 'Price is weighed against years of use', basedOn: ['G2', 'G9'], home: 'leadership', second: null },
+    ], POINTS, { month: SEP })
+    const out = salesOut({ stops: part([{ title: 'The price', text: 'People hold back when the price is not shown. They compare it with cheaper bags.', detail: 'More detail.', based_on: ['G2'] }]) })
+    const { data } = composeBrief(input('sales', out, POINTS, { allocation }))
+    expect(data.sections.find((s) => s.key === 'sales.stops')!.groups[0].items[0]).toMatchObject({
+      title: 'The price', text: 'People hold back when the price is not shown.', tag: 'Argued in the Leadership brief',
+    })
+    expect(data.sections.find((s) => s.key === 'sales.stops')!.groups[0].items[0].detail).toBeUndefined()
+  })
+
+  it('how the company is remembered must be talk about the company', () => {
+    const pts = [...POINTS, point('G20', 'marketing', 3, { questionId: 'marketing.recall' }), point('G21', 'marketing', 3, { questionId: 'marketing.recall' })]
+    const { whoVideos } = setup(pts)
+    whoVideos.set('G21', pts.find((p) => p.id === 'G21')!.videoIds.map((id) => ({ id, audience: 'client', named: [] })))
+    const out: BriefOutput = {
+      findings: [], believe: part([]), doubt: part([]), words: part([]), rivals: part([]), say_hear: [],
+      recall: part([{ title: 'Held against it', text: 'Customers report slow replies.', based_on: ['G20'] }, { title: 'Remembered for', text: 'People praise the clean-up days.', based_on: ['G21'] }]),
+      in_short: '',
+    }
+    const { data } = composeBrief({ ...input('marketing', out, pts), whoVideos })
+    const recall = data.sections.find((s) => s.key === 'marketing.recall')!
+    expect(recall.groups.map((g) => g.label)).toEqual(['Remembered for'])
+    expect(data.held).toContainEqual({ what: 'recall: Held against it', reason: 'none of its videos is about Acme' })
   })
 
   it('an item may only cite points the writer was shown', () => {
@@ -131,7 +167,7 @@ describe('leadership: where the market stands', () => {
     const { data } = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival', 'Tiny'] }))
     const shares = data.sections.find((s) => s.key === 'leadership.shares')!
     expect(shares.groups[0].items.map((i) => i.title)).toEqual(['Rival', 'Acme'])
-    expect(shares.lines?.[0]).toBe('Of Acme and the rival beside it, Acme draws the second largest share of September\'s comments.')
+    expect(shares.groups[0].lines?.[0]).toBe('Of Acme and the rival beside it, Acme draws the second largest share of September\'s comments.')
     expect(data.findings.map((f) => f.ideaId)).toEqual(['I2'])
   })
 })
@@ -161,7 +197,7 @@ describe('the reading copy', () => {
     expect(md).toContain('# Sales brief · Acme · September 2026')
     expect(md).toContain('**Also this month, in the other briefs**')
     expect(md).toContain('- Leadership brief: Owners judge the brand by how it handles repairs')
-    expect(md).toContain('_Heard in August and September: 12 videos, others in your market._')
+    expect(md).toContain('_Heard in August and September, on 12 videos, others in your market._')
     expect(md).toMatch(/> "Owners describe point G1/)
     expect(md).toMatch(/> YouTube · 12 Sep · others in your market/)
     expect(md).not.toMatch(/—/)

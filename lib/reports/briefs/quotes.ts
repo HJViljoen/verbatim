@@ -4,7 +4,7 @@ import { CLIENT_AUDIENCE } from '../../rivals'
 import { gateInputOf, type DatedEvidence } from '../../written/evidence'
 import { isOwnAccount } from '../../written/pool'
 import { quoteForm, FORM_VALUE } from '../../written/substance'
-import { aboutCitation, briefGateFor } from './ground'
+import { aboutCitation, asJudged, briefGateFor } from './ground'
 import type { BriefQuote } from './types'
 
 // Which real voices a brief prints (pure; one pool per brief SET).
@@ -64,7 +64,7 @@ export class QuotePool {
     return [...this.used]
   }
 
-  private candidates(pointIds: readonly string[], claim: string, threads: ReadonlySet<string>): Scored[] {
+  private candidates(pointIds: readonly string[], claim: string, threads: ReadonlySet<string>, minRelevance = 1): Scored[] {
     const seen = new Set<string>()
     const out: Scored[] = []
     const gate = briefGateFor(this.o.clientId, claim)
@@ -76,8 +76,11 @@ export class QuotePool {
         if (isOwnAccount(e)) continue
         const thread = `${e.video.platform.toLowerCase()}::${e.video.videoId}`
         if (threads.has(thread)) continue
-        const v = quoteGate(gateInputOf(e), gate)
-        if (!v.ok) continue
+        const j = asJudged(e, gate)
+        const v = quoteGate(gateInputOf(j.e), j.gate)
+        // A voice that says nothing about what the item says does not print
+        // beside it, however well it reads.
+        if (!v.ok || (claim.trim() && v.relevance < minRelevance)) continue
         const english = readableEnglish(gateInputOf(e)) ?? ''
         const form = quoteForm(english)
         out.push({ e, english, value: v.relevance * 2 + FORM_VALUE[form] * 3 + Math.min(v.score, 6) * 0.25 })
@@ -104,11 +107,11 @@ export class QuotePool {
 
   /** Up to `n` quotes for an item that rests on `pointIds` and says `claim`,
    *  from different threads, best first. */
-  pick(pointIds: readonly string[], claim: string, n = 1): BriefQuote[] {
+  pick(pointIds: readonly string[], claim: string, n = 1, o: { minRelevance?: number } = {}): BriefQuote[] {
     const out: BriefQuote[] = []
     const threads = new Set<string>()
     for (let i = 0; i < n; i++) {
-      const best = this.candidates(pointIds, claim, threads).find((s) => s.english.length >= QUOTE_MIN_CHARS && s.english.length <= QUOTE_MAX_CHARS)
+      const best = this.candidates(pointIds, claim, threads, o.minRelevance ?? 1).find((s) => s.english.length >= QUOTE_MIN_CHARS && s.english.length <= QUOTE_MAX_CHARS)
       if (!best) break
       threads.add(`${best.e.video.platform.toLowerCase()}::${best.e.video.videoId}`)
       out.push(this.take(best))

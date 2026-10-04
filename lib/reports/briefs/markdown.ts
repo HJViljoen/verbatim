@@ -45,8 +45,11 @@ export function quoteSource(q: BriefQuote, company: string, noun: string | null)
  *  your market 9 · Cotopaxi 2 · Sealand 1". */
 export function whoLine(videos: number, who: readonly AboutPart[], company: string, noun: string | null): string {
   const market = marketLabelsOf(noun).inline
-  const parts = who.filter((p) => p.videos > 0).map((p) => `${p.about === 'market' ? market : aboutName(p.about, { client: company })} ${fmtInt(p.videos)}`)
-  return `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}${parts.length > 1 ? `: ${parts.join(' · ')}` : parts.length === 1 ? `, ${parts[0].replace(/ \d[\d,]*$/, '')}` : ''}`
+  // Most first, as a split by audience prints on the pages.
+  const sorted = [...who].filter((p) => p.videos > 0).sort((a, b) => b.videos - a.videos)
+  const name = (p: AboutPart) => (p.about === 'market' ? market : p.about === 'client' ? `about ${company}` : `about ${aboutName(p.about, { client: company })}`)
+  const parts = sorted.map((p) => `${name(p)} ${fmtInt(p.videos)}`)
+  return `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}${parts.length > 1 ? `: ${parts.join(' · ')}` : sorted.length === 1 ? `, ${name(sorted[0])}` : ''}`
 }
 
 type TextOf = (ref: string) => { text: string; english: string | null; lang: string | null } | null
@@ -69,7 +72,7 @@ function findingBlock(f: BriefFinding, role: MonthlyBriefData['role'], textOf: T
     '',
     ...(f.practice.length ? ['**In practice**', ...f.practice.map((p) => `- ${p}`), ''] : []),
     ...f.quotes.flatMap((q) => quoteBlock(q, textOf, company, noun)),
-    `_Heard in ${monthsPhrase(heard)}: ${whoLine(f.videos, f.who, company, noun)}._`,
+    `_Heard in ${monthsPhrase(heard)}, on ${whoLine(f.videos, f.who, company, noun)}._`,
     '',
   ]
 }
@@ -80,12 +83,14 @@ function sectionBlock(s: BriefSection, textOf: TextOf, company: string, noun: st
   for (const g of s.groups) {
     if (g.label) out.push(`**${g.label}**`, '')
     for (const i of g.items) {
-      const head = i.title ? `**${i.title}${i.tag === 'you' ? ' (you)' : ''}.** ` : ''
+      const title = i.title ? `${i.title}${i.tag === 'you' ? ' (you)' : ''}` : ''
+      const head = title ? `**${/[.!?]$/.test(title) ? title : `${title}.`}** ` : ''
       const tag = i.tag && i.tag !== 'you' ? ` _(${i.tag}.)_` : ''
       const who = i.videos != null && i.who ? ` _(${whoLine(i.videos, i.who, company, noun)})_` : ''
       out.push(`- ${head}${i.text}${i.detail ? ` ${i.detail}` : ''}${tag}${who}`)
     }
     out.push('')
+    for (const l of g.lines ?? []) out.push(l, '')
   }
   for (const l of s.lines ?? []) out.push(l, '')
   for (const v of s.voices ?? []) {

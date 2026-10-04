@@ -194,7 +194,7 @@ async function main() {
   // Grounding (cached in the scratch directory only: it carries comment words).
   const groundFile = join(CACHE, 'grounding.json')
   let grounded: Awaited<ReturnType<typeof build.groundBriefResearch>>
-  if ((REUSE.has('grounding') || REUSE.has('research')) && existsSync(groundFile)) {
+  if (REUSE.has('grounding') && existsSync(groundFile)) {
     const g = JSON.parse(readFileSync(groundFile, 'utf8'))
     grounded = { points: g.points, counted: new Map(g.counted), whoVideos: new Map(g.whoVideos), brandsOf: new Map(g.brandsOf) }
     console.log('grounding: from cache')
@@ -224,7 +224,12 @@ async function main() {
     writeFileSync(join(OUT, `${BRIEF_FILE[role]}.md`), md)
     // §0a flags over the printed text, sentence by sentence (quotes excluded:
     // a commenter's words are theirs).
-    for (const line of md.split('\n').filter((l) => !l.startsWith('>') && !/^- "/.test(l))) {
+    // Code's own lines (headings, the other briefs named, a risk's "Argued in
+    // the … brief", the who lines) are not prose and are not scanned.
+    const others = new Set(b.data.inShort.also.map((x) => x.headline))
+    for (const raw of md.split('\n').filter((l) => !l.startsWith('>') && !l.startsWith('#') && !/^- "/.test(l) && !l.startsWith('**Also this month'))) {
+      const line = raw.replace(/_\((?:Argued in the [A-Za-z]+ brief\.|\d[^)]*)\)_/g, '').replace(/^_Heard in .*_$/, '')
+      if ([...others].some((h) => line.endsWith(h))) continue
       for (const sentence of line.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean)) {
         for (const rule of [...bannedHits(sentence, BANNED_PHRASES), ...briefBreaks(sentence)]) flags.push({ role, rule, sentence })
       }

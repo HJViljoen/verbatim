@@ -11,8 +11,13 @@ import type { BriefItem, BriefRole, BriefSection, SectionKey } from './types'
 // (§0a.2: no empty section, no placeholder, no "nothing this month" line):
 //  · an item written from the research prints only on `ITEM_MIN_VIDEOS`
 //    distinct counted videos across the points it cites, so no item rests on
-//    one voice ("rests on 7 conversations, three of its five points on one
-//    each", the 30 Sep Leadership regarded answer);
+//    one thread ("rests on 7 conversations, three of its five points on one
+//    each", the 30 Sep Leadership regarded answer). Two, not more: an item is
+//    a line in a list, not a finding (a finding needs five), and its count
+//    and who it is about print beside it;
+//  · an item that says what one of the brief's own findings says (half or
+//    more of its points are the finding's) is held: the reader would read it
+//    twice;
 //  · a rival item prints only for a rival the tenant tracks AND that a cited
 //    point names, so a tenant whose rivals were never talked about gets no
 //    rival section rather than an invented one;
@@ -24,7 +29,7 @@ import type { BriefItem, BriefRole, BriefSection, SectionKey } from './types'
 // appears (§0a.2's first exception) with what people say about it.
 
 /** Distinct counted videos an item needs to print. */
-export const ITEM_MIN_VIDEOS = 3
+export const ITEM_MIN_VIDEOS = 2
 
 export interface SectionSpec {
   key: SectionKey

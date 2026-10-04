@@ -147,7 +147,7 @@ export interface BriefSection {
   title: string
   /** One or two sentences that open the section. */
   lead?: string
-  groups: { label?: string; items: BriefItem[] }[]
+  groups: { label?: string; items: BriefItem[]; lines?: string[] }[]
   /** Sentences code wrote from counts (shares, formats). */
   lines?: string[]
   quote?: BriefQuote | null

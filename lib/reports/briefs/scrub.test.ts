@@ -25,6 +25,7 @@ describe('the time-comparison scrub', () => {
       'Colour came up for the first time.',
       'Price is no longer the first question.',
       'In earlier months owners praised the straps.',
+      'Buyers no longer ask about the zip.',
     ]) expect(clean(s), s).toBe('')
   })
 
@@ -36,6 +37,8 @@ describe('the time-comparison scrub', () => {
       'Owners complain about thin straps that dig in.',
       'Buyers research the material before they pay.',
       'People lack confidence in the waterproof claim.',
+      'The buying moment comes when the current bag no longer suits the commute.',
+      'Owners describe the bag they used to carry.',
     ]) expect(clean(s), s).toBe(s)
   })
 })
@@ -49,6 +52,9 @@ describe('the §0a backstop', () => {
       'Confidence is higher on how rivals are framed.',
       'The analysis extracted grounded points from the data.',
       'Our searches found fewer videos this update.',
+      'Elsewhere this month, buyers ask about price.',
+      'Other briefs cover adult style cues and price.',
+      'Separate work covers size and pockets.',
     ]) expect(clean(s), s).toBe('')
   })
 

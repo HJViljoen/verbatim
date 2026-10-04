@@ -217,7 +217,10 @@ export interface BriefSet {
   questions: BriefQuestion[]
   grounded: Grounded
   ideas: { raw: IdeasOutput; costUsd: number; prompts: { system: string; user: string } }
-  check: { contradicted: [string, string | null][]; ran: boolean; costUsd: number }
+  check: {
+    contradicted: [string, string | null][]; ran: boolean; costUsd: number
+    summaries: { contradicted: [string, string | null][]; verdicts: { headline: string; verdict: string }[]; ran: boolean }
+  }
   allocation: Allocation
   briefs: Record<BriefRole, { data: MonthlyBriefData; raw: BriefOutput | null; prompts: { system: string; user: string } | null; costUsd: number; scrub: unknown }>
   quotes: QuotePool
@@ -276,12 +279,30 @@ export async function writeBriefSet(
     })
     briefs[role] = { data: composed.data, raw, prompts, costUsd: callCost, scrub: composed.counts }
   }
+  // The summaries go through the same self-check as the ideas' headlines (the
+  // long-run read's rule for its lead): a summary the conversation
+  // contradicts does not print, and In short keeps its figures and lines.
+  const summaries = Object.values(briefs).map((b) => b.data.inShort.summary.trim()).filter(Boolean)
+  const summaryCheck = i.themedRunId && summaries.length
+    ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: summaries, persist: opts.log })
+    : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
+  cost += summaryCheck.costUsd
+  for (const b of Object.values(briefs)) {
+    const s = b.data.inShort.summary.trim()
+    if (!s || !summaryCheck.contradicted.has(s)) continue
+    const says = summaryCheck.contradicted.get(s)
+    b.data.held.push({ what: `in short: ${s.slice(0, 80)}`, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
+    b.data.inShort.summary = ''
+  }
   return {
     inputs: i,
     questions,
     grounded,
     ideas: { raw: ideas.output, costUsd: ideas.costUsd, prompts: ideas.prompts },
-    check: { contradicted: [...check.contradicted.entries()], ran: check.ran, costUsd: check.costUsd },
+    check: {
+      contradicted: [...check.contradicted.entries()], ran: check.ran, costUsd: check.costUsd + summaryCheck.costUsd,
+      summaries: { contradicted: [...summaryCheck.contradicted.entries()], verdicts: summaryCheck.verdicts, ran: summaryCheck.ran },
+    },
     allocation,
     briefs,
     quotes,
