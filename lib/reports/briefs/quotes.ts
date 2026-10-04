@@ -48,6 +48,8 @@ const FILLER = new Set([
   // Words a comment uses whatever it is about.
   'like', 'love', 'want', 'wanna', 'need', 'make', 'made', 'know', 'think', 'really', 'much', 'many', 'good', 'great', 'nice', 'look', 'looks',
   'people', 'thing', 'things', 'still', 'well', 'back', 'best', 'never', 'always', 'every', 'here', 'where', 'other', 'because', 'thank', 'thanks',
+  'these', 'those', 'such', 'each', 'both', 'most', 'after', 'before', 'while', 'doing', 'done', 'going', 'gets', 'getting', 'makes', 'using', 'used',
+  'uses', 'want', 'wants', 'went', 'come', 'came', 'take', 'took', 'give', 'gave', 'sure', 'lot', 'lots', 'kind', 'actually', 'pretty', 'maybe',
 ])
 export const stemsOf = (text: string): Set<string> =>
   new Set((text.toLowerCase().match(WORD) ?? []).filter((w) => !FILLER.has(w)).map(stem))
@@ -94,6 +96,11 @@ export class QuotePool {
   /** The words behind a picked ref, for a renderer. */
   textOf(ref: string): { text: string; english: string | null; lang: string | null } | null {
     return this.words.get(ref) ?? null
+  }
+
+  /** Refs another write of the set already prints: never picked here. */
+  spend(refs: readonly string[]): void {
+    for (const r of refs) this.used.add(r)
   }
 
   /** Every ref picked so far. */

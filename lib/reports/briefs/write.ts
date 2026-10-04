@@ -253,7 +253,7 @@ export function briefSchema(role: BriefRole) {
   if (role === 'marketing') {
     extra.say_hear = z.array(z.object({
       claim: z.string().describe('The id of the company\'s claim as listed, e.g. "A2".'),
-      heard: z.string().describe(`What comes back when people meet that claim, from the points, under ${BRIEF_MAX.text} characters.`),
+      heard: z.string().describe(`What comes back when people meet that claim, from the points, under ${BRIEF_MAX.text} characters. Only from points about the claim's own subject (its initiative, its product, its certification): talk about the company's values in general answers a claim about values, never a specific claim such as a certification or a named initiative.`),
       based_on: z.array(z.string()).describe('The point ids it rests on. At least one.'),
     })).describe('What the company says, and what comes back: one entry per listed claim the points speak to. Leave out a claim the points do not speak to: code prints the ones the market does not take up.')
   }

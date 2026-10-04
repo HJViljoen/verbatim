@@ -40,7 +40,7 @@ const values = (name: string): string[] =>
   argv.flatMap((a, i) => (a === `--${name}` && argv[i + 1] && !argv[i + 1].startsWith('--') ? [argv[i + 1]] : []))
 const flag = (name: string, fallback = ''): string => values(name)[0] ?? fallback
 for (const a of argv) {
-  if (a.startsWith('--') && !['client', 'month', 'out', 'cache', 'cap', 'spent-before', 'concurrency', 'reuse', 'stage', 'roles'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
+  if (a.startsWith('--') && !['client', 'month', 'out', 'cache', 'cap', 'spent-before', 'concurrency', 'reuse', 'stage', 'roles', 'recompose', 'rewrite'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
 }
 const CLIENT = flag('client')
 const MONTH = flag('month')
@@ -51,6 +51,11 @@ const SPENT_BEFORE = Number(flag('spent-before', '0'))
 const CONCURRENCY = Math.max(1, Number(flag('concurrency', '1')))
 const REUSE = new Set(values('reuse'))
 const STAGE = flag('stage', 'write')
+// --recompose: every brief is composed again from its kept writer output
+// (OUT/<role>_brief.json) against the kept ideas, with no model call, except
+// the roles named by --rewrite, whose writer is called again.
+const RECOMPOSE = argv.includes('--recompose')
+const REWRITE = values('rewrite')
 if (!/^[0-9a-f-]{36}$/.test(CLIENT)) throw new Error('--client <uuid> is required')
 if (!/^\d{4}-\d{2}$/.test(MONTH)) throw new Error('--month YYYY-MM is required')
 if (!OUT || !CACHE) throw new Error('--out <dir> and --cache <dir> are required')
@@ -210,13 +215,34 @@ async function main() {
 
   ledger.phase = 'write'
   const roles = values('roles').length ? values('roles') as typeof BRIEF_ROLES[number][] : undefined
-  const set = await build.writeBriefSet(db, inputs, questions, grounded, { log: false, researchCostUsd: 0, roles })
+  // --reuse ideas: the ideas and their self-check from the last full write
+  // (OUT/_set.json), so one brief can be written again against the same
+  // allocation; the other briefs' quotes are spent first, so none repeats.
+  const setFile = join(OUT, '_set.json')
+  const previous = (REUSE.has('ideas') || RECOMPOSE) && existsSync(setFile) ? JSON.parse(readFileSync(setFile, 'utf8')) : null
+  if ((REUSE.has('ideas') || RECOMPOSE) && !previous) throw new Error('--reuse ideas and --recompose need OUT/_set.json from a full write')
+  const written = RECOMPOSE
+    ? Object.fromEntries(BRIEF_ROLES.filter((r) => !REWRITE.includes(r)).map((r) => [r, JSON.parse(readFileSync(join(OUT, `${BRIEF_FILE[r]}.json`), 'utf8')).workings.writer]))
+    : undefined
+  const others = roles ? BRIEF_ROLES.filter((r) => !roles.includes(r)) : []
+  type Stored = { brief: import('../lib/reports/briefs/types').MonthlyBriefData }
+  const kept: Stored[] = others.map((r) => JSON.parse(readFileSync(join(OUT, `${BRIEF_FILE[r]}.json`), 'utf8')) as Stored)
+  const spent = kept.flatMap((k) => [
+    ...k.brief.findings.flatMap((f) => f.quotes.map((q) => q.ref)),
+    ...k.brief.sections.flatMap((s) => [...(s.quote ? [s.quote.ref] : []), ...(s.voices ?? []).map((v) => v.ref)]),
+  ])
+  const set = await build.writeBriefSet(db, inputs, questions, grounded, {
+    log: false, researchCostUsd: 0, roles,
+    ...(previous ? { ideas: { raw: previous.ideas, contradicted: previous.check.contradicted } } : {}),
+    spent,
+    ...(written ? { written } : {}),
+  })
   console.log(`ideas: ${set.allocation.ideas.map((i) => `${i.id}→${i.home}(${i.placed}, ${i.videos}v): ${i.headline}`).join(' | ')}`)
   console.log(`held ideas: ${set.allocation.held.map((h) => `${h.headline} [${h.reason}]`).join(' | ') || 'none'}`)
 
   // The files.
   const textOf = (ref: string) => set.quotes.textOf(ref)
-  const briefs = Object.values(set.briefs).map((b) => b.data)
+  const briefs = [...Object.values(set.briefs).map((b) => b.data), ...kept.map((k) => k.brief)]
   const flags: { role: string; rule: string; sentence: string }[] = []
   for (const role of Object.keys(set.briefs) as (keyof typeof BRIEF_FILE)[]) {
     const b = set.briefs[role]
@@ -243,19 +269,24 @@ async function main() {
         points: ownPoints,
         ideas: set.allocation.ideas.filter((i) => i.home === role),
         writer: b.raw,
+        ...(RECOMPOSE && !REWRITE.includes(role) ? { recomposed: now.toISOString() } : {}),
         scrub: b.scrub,
         costUsd: b.costUsd,
       },
     }, null, 2)}\n`)
   }
   const meteredWrite = ledger.calls.filter((c) => c.phase === 'write').reduce((n, c) => n + c.usd, 0)
+  const priorFlags = previous && roles ? (previous.flags as typeof flags).filter((f) => !roles.includes(f.role as typeof roles[number])) : []
   writeFileSync(join(OUT, '_set.json'), `${JSON.stringify({
-    clientId: CLIENT, company: inputs.company, month, builtAt: now.toISOString(), researchWindow: research.window,
+    clientId: CLIENT, company: inputs.company, month, builtAt: previous?.builtAt ?? now.toISOString(), researchWindow: research.window,
+    ...(roles || RECOMPOSE ? { rewritten: [...(previous?.rewritten ?? []), { roles: roles ?? BRIEF_ROLES, writers: RECOMPOSE ? REWRITE : roles, at: now.toISOString(), meteredUsd: meteredWrite }] } : {}),
     questions: questions.map((q) => ({ id: q.id, section: q.section, text: q.text })),
-    ideas: set.ideas.raw, check: set.check, allocation: set.allocation, homes: Object.fromEntries(ideaHomes(briefs)),
-    repeats: repeatsAcross(briefs), flags,
+    ideas: set.ideas.raw, check: previous && (roles || RECOMPOSE) ? { ...previous.check, summaries: set.check.summaries } : set.check, allocation: set.allocation, homes: Object.fromEntries(ideaHomes(briefs)),
+    repeats: repeatsAcross(briefs), flags: [...priorFlags, ...flags],
     points: { total: set.grounded.points.length, usable: set.grounded.points.filter((p) => p.usable).length, byRole: Object.fromEntries(BRIEF_ROLES.map((r) => [r, set.grounded.points.filter((p) => p.role === r && p.usable).length])) },
-    cost: { researchUsd: research.costUsd, writeEngineUsd: set.costUsd, writeMeteredUsd: meteredWrite, meteredThisProcess: spentHere(), spentTotal: spentTotal(), cap: CAP },
+    cost: previous && (roles || RECOMPOSE)
+      ? { ...previous.cost, rewriteMeteredUsd: (previous.cost.rewriteMeteredUsd ?? 0) + meteredWrite }
+      : { researchUsd: research.costUsd, writeEngineUsd: set.costUsd, writeMeteredUsd: meteredWrite, meteredThisProcess: spentHere(), spentTotal: spentTotal(), cap: CAP },
     guard: { reads: ledger.readsByPhase, blocked: ledger.blocked.reduce<Record<string, number>>((m, b) => ({ ...m, [`${b.phase} ${b.method} ${b.path}`]: (m[`${b.phase} ${b.method} ${b.path}`] ?? 0) + 1 }), {}) },
   }, null, 2)}\n`)
   console.log(`flags: ${flags.length} · repeats: ${repeatsAcross(briefs).length}`)

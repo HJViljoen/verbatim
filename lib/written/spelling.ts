@@ -77,6 +77,17 @@ export const BRITISH_SPELLINGS: Readonly<Record<string, string>> = {
   // label
   labeled: 'labelled',
   labeling: 'labelling',
+  // odour, mould, aluminium (the monthly briefs, 4 Oct: a headline printed
+  // "odor"; a prosthetic socket is moulded, its frame aluminium)
+  odor: 'odour',
+  odors: 'odours',
+  odorless: 'odourless',
+  mold: 'mould',
+  molds: 'moulds',
+  molded: 'moulded',
+  molding: 'moulding',
+  moldy: 'mouldy',
+  aluminum: 'aluminium',
   // grey, jewellery, fibre
   gray: 'grey',
   jewelry: 'jewellery',

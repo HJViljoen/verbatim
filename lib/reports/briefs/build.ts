@@ -28,7 +28,8 @@ import { allBriefQuestions, type BriefQuestion } from './questions'
 import { QuotePool } from './quotes'
 import type { Allocation, BriefRole, GroundedPoint, IdeaDraft, MonthlyBriefData } from './types'
 import { BRIEF_ROLES, isBriefRole } from './types'
-import type { BriefOutput, IdeasOutput } from './write'
+import { scrubBriefText } from './scrub'
+import { BRIEF_MAX, type BriefOutput, type IdeasOutput } from './write'
 
 // The month's four briefs, end to end (the I/O half; every decision is in the
 // pure modules beside it). READ-ONLY but for the model calls' `ai_call_log`
@@ -202,14 +203,17 @@ export async function groundBriefResearch(
   return out
 }
 
-/** The ideas call's output as drafts. Pure. */
-export function draftsOf(out: IdeasOutput | null): IdeaDraft[] {
+/** The ideas call's output as drafts, each headline through the brief's
+ *  scrub (it prints in every brief: as a finding's headline in one and as the
+ *  line that names it in the others). A headline the scrub empties is no
+ *  idea. Pure. */
+export function draftsOf(out: IdeasOutput | null, company: string): IdeaDraft[] {
   return (out?.ideas ?? []).map((d) => ({
-    headline: d.headline,
+    headline: scrubBriefText(d.headline ?? '', Math.round(BRIEF_MAX.headline * 1.25), { company, field: 'headline', whole: true }).text,
     basedOn: d.based_on ?? [],
     home: isBriefRole(d.home) ? d.home : null,
     second: isBriefRole(d.second) ? d.second : null,
-  }))
+  })).filter((d) => d.headline)
 }
 
 export interface BriefSet {
@@ -236,16 +240,31 @@ export async function writeBriefSet(
   i: BriefSetInputs,
   questions: BriefQuestion[],
   grounded: Grounded,
-  opts: { log: boolean; client?: ParseClient; researchCostUsd?: number; roles?: readonly BriefRole[] },
+  opts: {
+    log: boolean; client?: ParseClient; researchCostUsd?: number; roles?: readonly BriefRole[]
+    /** The ideas and their self-check from an earlier write of the same set. */
+    ideas?: { raw: IdeasOutput; contradicted: [string, string | null][] }
+    /** Quote refs the set's other briefs already print. */
+    spent?: readonly string[]
+    /** A writer's output kept from an earlier write, by role: that brief is
+     *  composed again from it and its writer is not called. */
+    written?: Partial<Record<BriefRole, BriefOutput>>
+  },
 ): Promise<BriefSet> {
   const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client }
   let cost = opts.researchCostUsd ?? 0
-  const ideas = await draftIdeas(call, { company: i.company, month: i.month, noun: i.noun, points: grounded.points, questions, context: i.context })
+  // The ideas and their self-check, or the ones a dry run kept (so one brief
+  // can be written again against the same allocation as the other three).
+  const ideas = opts.ideas
+    ? { output: opts.ideas.raw, costUsd: 0, prompts: { system: '', user: '' } }
+    : await draftIdeas(call, { company: i.company, month: i.month, noun: i.noun, points: grounded.points, questions, context: i.context })
   cost += ideas.costUsd
-  const drafts = draftsOf(ideas.output)
-  const check = i.themedRunId
-    ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: drafts.map((d) => d.headline), persist: opts.log })
-    : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
+  const drafts = draftsOf(ideas.output, i.company)
+  const check = opts.ideas
+    ? { contradicted: new Map(opts.ideas.contradicted), verdicts: [], costUsd: 0, ran: true }
+    : i.themedRunId
+      ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: drafts.map((d) => d.headline), persist: opts.log })
+      : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
   cost += check.costUsd
   const standing = drafts.filter((d) => !check.contradicted.has(d.headline.trim()))
   const allocation = allocateIdeas(standing, grounded.points, { month: i.month })
@@ -255,23 +274,26 @@ export async function writeBriefSet(
   }
 
   const quotes = new QuotePool(grounded.counted, { clientId: i.clientId, company: i.company, brandsOf: grounded.brandsOf })
+  quotes.spend(opts.spent ?? [])
   const claims = claimsFor(i)
   const subjects = i.standing.map((fact, n) => ({ id: `S${n + 1}`, fact }))
   const briefs = {} as BriefSet['briefs']
   for (const role of opts.roles ?? BRIEF_ROLES) {
     const mine = allocation.ideas.filter((x) => x.home === role)
     const others = allocation.ideas.filter((x) => x.home !== role).map((x) => ({ headline: x.headline, brief: x.home }))
-    let raw: BriefOutput | null = null
+    let raw: BriefOutput | null = opts.written?.[role] ?? null
     let prompts: { system: string; user: string } | null = null
     let callCost = 0
-    const w = await writeBrief(call, {
-      role, company: i.company, month: i.month, noun: i.noun, ideas: mine, others, points: grounded.points, questions,
-      context: i.context, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
-    })
-    raw = w.output
-    prompts = w.prompts
-    callCost = w.costUsd
-    cost += callCost
+    if (!raw) {
+      const w = await writeBrief(call, {
+        role, company: i.company, month: i.month, noun: i.noun, ideas: mine, others, points: grounded.points, questions,
+        context: i.context, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
+      })
+      raw = w.output
+      prompts = w.prompts
+      callCost = w.costUsd
+      cost += callCost
+    }
     const composed = composeBrief({
       role, company: i.company, month: i.month, noun: i.noun, allocation, points: grounded.points, whoVideos: grounded.whoVideos, quotes,
       written: raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
