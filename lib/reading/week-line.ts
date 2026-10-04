@@ -353,7 +353,7 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   'ocr', 'plan-ocr', 'ocr-backfill', 'plan-ocr-backfill',
   'translate', 'plan-translate',
   'pass-a', 'replan-pass-a', 'replan-pass-a-ocr', 'replan-pass-a-translated',
-  'persist-themes', 'keyword-attribution',
+  'themes', 'persist-themes', 'keyword-attribution',
   'owned-posts', 'owned-comments', 'owned-events',
 ]
 

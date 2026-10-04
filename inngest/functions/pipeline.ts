@@ -59,7 +59,7 @@ import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, is
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { brandConfirmEnabled, CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_B_PARALLEL, THEME_MERGE_TIMEOUT_MS, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { brandConfirmEnabled, CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_B_PARALLEL, THEME_MERGE_STEP_BUDGET_MS, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -1532,13 +1532,19 @@ export const runPipeline = inngest.createFunction(
               // `attempt` is this step's retry count. Every attempt but the
               // last may throw on a slow merge and retry; the last keeps the
               // clusters unmerged so the run goes on.
-              mergeTimeoutMs: THEME_MERGE_TIMEOUT_MS,
+              mergeBudgetMs: THEME_MERGE_STEP_BUDGET_MS,
               mergeFailSoft: attempt >= (maxAttempts ?? 3) - 1,
             }),
           ),
         ),
       )
       bucketResults.push(...wave)
+    }
+    // A merge skipped on its step's last attempt left that bucket's themes
+    // fragmented, and a month this run freezes keeps them so: an error, not a
+    // log line that ages out.
+    for (const r of bucketResults) {
+      if (r.mergeSkipped) noteError(`themes:${r.bucket}`, 'the merge call failed on the last attempt; this bucket\'s themes are unmerged this run')
     }
 
     // Pass B labels BOTH tiers (early signals surface on the pages too); the

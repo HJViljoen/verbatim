@@ -286,7 +286,7 @@ interface ProcessGroupOptions {
   merge: boolean
   mergeModel?: string
   logCalls?: boolean
-  mergeTimeoutMs?: number
+  mergeDeadline?: number
   mergeFailSoft?: boolean
 }
 
@@ -295,6 +295,8 @@ interface ProcessGroupResult {
   themes: AggregatedTheme[]
   mergesApplied: StepA2Result['mergesApplied']
   mergeCostUsd: number
+  /** The merge call failed under failSoft: the clusters went on unmerged. */
+  mergeSkipped?: boolean
 }
 
 // One bucket's slice of Step A2: cluster, label-merge same-concern clusters
@@ -326,12 +328,14 @@ async function processGroup(
   let clusters = await clusterInsights(grp.insights, { method, threshold })
   const mergesApplied: StepA2Result['mergesApplied'] = []
   let mergeCostUsd = 0
+  let mergeSkipped = false
   if (opts.merge) {
     const m = await mergeClusterLabels({
       clientId, runId, bucket: grp.bucket, clusters,
       model: opts.mergeModel, logCall: opts.logCalls, callIndex,
-      timeoutMs: opts.mergeTimeoutMs, failSoft: opts.mergeFailSoft,
+      deadline: opts.mergeDeadline, failSoft: opts.mergeFailSoft,
     })
+    if (m.skipped) mergeSkipped = true
     clusters = m.clusters
     mergeCostUsd += m.costUsd
     for (const a of m.applied) mergesApplied.push({ bucket: grp.bucket, ...a })
@@ -356,7 +360,7 @@ async function processGroup(
     theme.singleSource = theme.evidenceCount < opts.evidenceFloor
     themes.push(theme)
   }
-  return { themes, mergesApplied, mergeCostUsd }
+  return { themes, mergesApplied, mergeCostUsd, mergeSkipped }
 }
 
 export async function runStepA2(opts: RunStepA2Options): Promise<StepA2Result> {
@@ -415,8 +419,10 @@ export interface RunStepA2BucketOptions {
   merge?: boolean
   mergeModel?: string
   logCalls?: boolean
-  /** The merge call's bound and last-attempt fail-soft (see ThemeMergeOptions). */
-  mergeTimeoutMs?: number
+  /** The step's budget up to the end of its merge call, counted from this
+   *  function's start (THEME_MERGE_STEP_BUDGET_MS), and the last-attempt
+   *  fail-soft (see ThemeMergeOptions). */
+  mergeBudgetMs?: number
   mergeFailSoft?: boolean
 }
 
@@ -428,6 +434,8 @@ export interface StepA2BucketResult {
   themes: AggregatedTheme[]
   mergesApplied: StepA2Result['mergesApplied']
   mergeCostUsd: number
+  /** The merge was skipped on the step's last attempt (the run records it). */
+  mergeSkipped?: boolean
 }
 
 /** One bucket's Step A2 — the per-bucket Inngest step body. Reloads the corpus
@@ -437,6 +445,7 @@ export interface StepA2BucketResult {
  *  (unreachable with per-client concurrency 1; Inngest retries cover a
  *  transient read first). */
 export async function runStepA2Bucket(opts: RunStepA2BucketOptions): Promise<StepA2BucketResult> {
+  const startedAt = Date.now()
   const { groups, distinctVideoCount } = await loadGroupedInsights(opts.clientId, opts.runId)
   const grp = groups.find((g) => g.bucket === opts.bucket)
   if (!grp) throw new Error(`[a2] bucket "${opts.bucket}" missing on reload for run ${opts.runId}`)
@@ -444,9 +453,9 @@ export async function runStepA2Bucket(opts: RunStepA2BucketOptions): Promise<Ste
     clientId: opts.clientId, runId: opts.runId, method: opts.method, threshold: opts.threshold,
     evidenceFloor: opts.evidenceFloor ?? EVIDENCE_FLOOR, merge: opts.merge ?? true,
     mergeModel: opts.mergeModel, logCalls: opts.logCalls,
-    mergeTimeoutMs: opts.mergeTimeoutMs, mergeFailSoft: opts.mergeFailSoft,
+    mergeDeadline: opts.mergeBudgetMs ? startedAt + opts.mergeBudgetMs : undefined, mergeFailSoft: opts.mergeFailSoft,
   })
-  return { bucket: grp.bucket, insightCount: grp.insights.length, themes: r.themes, mergesApplied: r.mergesApplied, mergeCostUsd: r.mergeCostUsd }
+  return { bucket: grp.bucket, insightCount: grp.insights.length, themes: r.themes, mergesApplied: r.mergesApplied, mergeCostUsd: r.mergeCostUsd, mergeSkipped: r.mergeSkipped }
 }
 
 export { CLUSTER_SIMILARITY_THRESHOLD }

@@ -82,10 +82,12 @@ export interface ThemeMergeOptions {
   logCall?: boolean
   /** ai_call_log call_index — one merge call per bucket, numbered by the caller. */
   callIndex?: number
-  /** The pipeline's bound on the call (THEME_MERGE_TIMEOUT_MS), with no SDK
-   *  retries: the Inngest step retries instead. Scripts leave it unset and
-   *  keep the SDK's defaults. */
-  timeoutMs?: number
+  /** The pipeline's deadline for the call (epoch ms; the step's start plus
+   *  THEME_MERGE_STEP_BUDGET_MS). One abort signal covers the call and its one
+   *  SDK retry, so a brief 429 or 5xx is retried inside the step and the total
+   *  never runs past the deadline. Scripts leave it unset and keep the SDK's
+   *  defaults. */
+  deadline?: number
   /** A failed or timed-out call applies no merges and returns, instead of
    *  throwing. The pipeline sets it on the step's LAST attempt only. */
   failSoft?: boolean
@@ -201,7 +203,7 @@ export async function mergeClusterLabels(opts: ThemeMergeOptions): Promise<Theme
         { role: 'user', content: userPrompt },
       ],
       response_format: zodResponseFormat(MergeSchema, 'theme_merge'),
-    }, opts.timeoutMs ? { timeout: opts.timeoutMs, maxRetries: 0 } : undefined)
+    }, opts.deadline ? { signal: AbortSignal.timeout(Math.max(1_000, opts.deadline - Date.now())), maxRetries: 1 } : undefined)
     parsed = completion.choices[0]?.message?.parsed ?? null
     if (completion.usage) {
       usage = { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }
