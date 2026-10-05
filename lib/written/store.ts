@@ -135,8 +135,8 @@ export function isLongRunData(data: unknown): data is LongRunReadData {
 }
 
 // A page reads the long-run read through `loadPublishedLongRun`
-// (lib/written/published.ts), which holds it back under review like the week
-// read (fresh review B1): never straight off this table.
+// (lib/written/published.ts), the one selector the week read's pages use too:
+// never straight off this table.
 
 /** Does this stored row stand as its month's long-run read? Ready or thin (a
  *  month that had nothing durable to say is not written again), and not a

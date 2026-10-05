@@ -32,9 +32,9 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 //
 // A client reads an issue once it is ON THE PLATFORM (`?send=` of a send that
 // is sent, or that the operator published without its email: `onPlatform`,
-// the rule the pages, `heldOf` and the snapshots' RLS read); the dry preview at
-// today's data is the operator's (integration, 1 Oct; lead's ruling 6:
-// `mayBuildReports`), as building and sending are.
+// the rule the Studio's past issues, `heldOf` and the snapshots' RLS read);
+// the dry preview at today's data is the operator's (integration, 1 Oct;
+// lead's ruling 6: `mayBuildReports`), as building and sending are.
 
 export const runtime = 'nodejs'
 export const maxDuration = 300

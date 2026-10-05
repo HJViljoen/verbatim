@@ -49,7 +49,7 @@ import { assertTenantMay } from '@/lib/tenant-locks'
 // evening). The Studio's Recipients editor is open to every owner and admin,
 // and a tenant with no weekly_read row saving a list used to create an ACTIVE
 // one with review OFF (the column's default): every Sunday a model-written
-// read emailed with nobody reviewing it, and the pages printing it ungated.
+// read emailed with nobody reviewing it.
 // So a tenant's save keeps a schedule that sends sending, and never switches
 // one on or creates one switched on; and every row this inserts is born with
 // review ON, so whoever later arms it arms a reviewed send.

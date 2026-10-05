@@ -227,8 +227,8 @@ export const monthPrefix = (month: string): string => `In ${longMonth(month)}: `
 
 // ---- the reads -----------------------------------------------------------------
 
-/** The PUBLISHED week read of this client (`loadPublishedWeekRead`: under a
- *  review schedule, the newest one that was sent), or null (none, one with no
+/** The PUBLISHED week read of this client (`loadPublishedWeekRead`: the
+ *  newest ready one, as soon as the run writes it), or null (none, one with no
  *  findings, or the table is not in this database). */
 export async function loadLatestWeekRead(admin: SupabaseClient, clientId: string): Promise<{ runId: string; data: WeekReadData } | null> {
   const row = await loadPublishedWeekRead(admin, clientId)

@@ -178,7 +178,8 @@ export function planPurge(t: PurgeTables, opts: PurgeOptions): PurgePlan {
 
   // ── which snapshots were delivered to somebody ──────────────────────────
   // Emailed, or published to the client's platform without the email: the
-  // one rule the pages, `heldOf` and the RLS policy read (`onPlatform`).
+  // one rule the Studio's past issues, `heldOf` and the RLS policy read
+  // (`onPlatform`).
   const sentSnapshotIds = new Set(
     t.sends.filter((s) => s.status === 'sent' && s.snapshot_id).map((s) => s.snapshot_id as string),
   )

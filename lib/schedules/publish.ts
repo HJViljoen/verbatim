@@ -11,12 +11,13 @@ import type { ScheduleRow } from './types'
  * migration 20261106090000_platform_publish.sql).
  *
  * A review schedule's build stands as a `ready` send until Heinrich presses
- * Send, and nothing of it reaches the client until then: not the email, and
- * not the pages (`loadPublishedWeekRead` / `loadPublishedLongRun` print only a
- * read whose send went out). Publishing puts a held weekly build, and so its
- * week read and the long-run read the same run wrote, on the client's pages
- * WITHOUT emailing anyone. It is Heinrich's decision, so it is the operator's
- * alone (the route asks `mayBuildReports`; the script is his paste).
+ * Send, and its email reaches nobody until then. Its READS do not wait: the
+ * pages print the newest ready read as soon as the run writes it
+ * (`loadPublishedWeekRead` / `loadPublishedLongRun`, 5 Oct). Publishing puts
+ * the held build itself on the client's platform, an issue in the Studio's
+ * past issues with its viewer, PDF and share link, WITHOUT emailing anyone.
+ * It is Heinrich's decision, so it is the operator's alone (the route asks
+ * `mayBuildReports`; the script is his paste).
  *
  * A RECORDED STATE OF ITS OWN, NEVER A FAKE SEND. `published_at` and
  * `published_by` on the send row; the status stays `ready`, so Send still

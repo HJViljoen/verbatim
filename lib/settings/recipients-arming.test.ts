@@ -7,11 +7,11 @@ import { fakeDb, type FakeDb } from '../test/fake-db'
 // review H1, lead's ruling, 1 Oct evening). It is open to every owner and
 // admin, and on an unlocked tenant with no weekly_read row, saving a list used
 // to create an ACTIVE weekly_read schedule with review OFF: the model-written
-// read emailed every Sunday with nobody reviewing it, and the pages printing
-// it ungated. Now a tenant's save keeps a schedule as it is, never switches
-// one on or creates one switched on, and every new row is born reviewed;
-// arming one is the operator's. (The tenant lock's refusal for a locked
-// tenant is pinned in lib/tenant-locks.test.ts.)
+// read emailed every Sunday with nobody reviewing it. Now a tenant's save
+// keeps a schedule as it is, never switches one on or creates one switched
+// on, and every new row is born reviewed; arming one is the operator's. (The
+// tenant lock's refusal for a locked tenant is pinned in
+// lib/tenant-locks.test.ts.)
 
 const h = vi.hoisted(() => ({ session: null as null | Record<string, unknown>, db: null as unknown }))
 

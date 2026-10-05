@@ -539,33 +539,45 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Settings' tabs are What you track, Team and Billing (Readiness, The record
     and How to read are the operator's); Log out sits in its bar.
   - **The published read** (`lib/written/published.ts`): the ONLY way a page
-    reads `week_reads`. Under an active `weekly_read` schedule with review on,
-    a page prints the newest read whose send went out; otherwise the newest
-    ready one. It fails closed. This week, the Dashboard, the Subjects pane
-    and Your market's subject sentences all use it (pinned). The long-run
-    read passes the same gate (`loadPublishedLongRun`, fresh review B1):
-    under review it shows only once the weekly_read send of the SAME run
-    (the one that closed the month and wrote it) went out, and that run's
-    operator review email carries its title, lead, headlines and sentences
-    under "Also published when you send" (`readyForReview`); the client's
-    email is unchanged. **"Went out" means ON THE PLATFORM** (the backfill,
-    1 Oct evening; migration `20261106090000_platform_publish.sql`): sent, or
-    put there by the operator WITHOUT its email (`report_sends.published_at`
-    and `published_by`, the Studio's "Publish to the platform (not emailed)"
-    or `scripts/backfill-platform.ts --publish`; `lib/schedules/publish.ts`).
-    One rule, `onPlatform` (`lib/schedules/platform-state.ts`), read by the page
-    gate, `heldOf`, `report_snapshots`' RLS policy, the email preview
-    (`/api/schedules/[id]/preview`) and the purge's "delivered" line
-    (`lib/reports/purge.ts`: `drafts` keeps a published build, `all` refuses
-    one) alike; wherever "sent" means visible or kept, it means this. It is a
-    recorded state, never a `sent` row with no recipients: the status stays
-    `ready`, so Send still emails it, and the operator's workbench says "On the
-    platform · not emailed". A client's Past issues print the day it was
-    published, like any issue, and never how it got there (§0a.1).
-    Publishing is the operator's alone (`mayBuildReports` on
-    `/api/schedules/[id]/publish`). A long-run read written before its month
-    closed carries `partialThrough` and does not stand as the month's
-    (`standsAsMonthRead`), so the month-closing run still writes the full one. A read's facts worded against a month say "this
+    reads `week_reads`. A page prints the newest READY read as soon as the run
+    writes it, whatever its schedule or its send (Heinrich, 5 Oct: "This
+    should be happening by itself when everything runs"). **Review holds the
+    EMAIL only**: the review email (`reviewAudience`), Send in the Studio and
+    the held snapshot (`mayReadHeld` / `heldOf`, `report_snapshots`' RLS
+    policy) belong to the email build and wait for Send; the pages never do.
+    Until 5 Oct they waited too (under an active `weekly_read` schedule with
+    review on, a page printed only a read whose send was on the platform), so
+    Sealand's 4 Oct run never reached its pages and Össur, reviewed with no
+    recipients, printed nothing. It fails closed: a `week_reads` read that
+    fails throws, and the page loses only that block. This week, the
+    Dashboard, the Subjects pane and Your market's subject sentences read the
+    week read through it, and Your market's long-run read comes through
+    `loadPublishedLongRun`; `lib/written/published.test.ts` pins every one,
+    and pins that the selector reads no schedule and no send. A weekly read's
+    review email says the read is on the platform already and Send emails the
+    list (`readOnPlatform`); the run that closes a month also writes the
+    long-run read, and that run's operator review email carries its title,
+    lead, headlines and sentences under "Already on Your market"
+    (`readyForReview`). The client's email is unchanged. **"On the platform"
+    is about the ISSUE, not the pages** (the backfill, 1 Oct evening;
+    migration `20261106090000_platform_publish.sql`): sent, or put there by
+    the operator WITHOUT its email (`report_sends.published_at` and
+    `published_by`, the Studio's "Publish to the platform (not emailed)" or
+    `scripts/backfill-platform.ts --publish`; `lib/schedules/publish.ts`).
+    One rule, `onPlatform` (`lib/schedules/platform-state.ts`), read by
+    `heldOf`, `report_snapshots`' RLS policy, the email preview
+    (`/api/schedules/[id]/preview`), the Studio's past issues and the purge's
+    "delivered" line (`lib/reports/purge.ts`: `drafts` keeps a published
+    build, `all` refuses one) alike; wherever "sent" means visible or kept, it
+    means this. It is a recorded state, never a `sent` row with no
+    recipients: the status stays `ready`, so Send still emails it, and the
+    operator's workbench says "On the platform · not emailed". A client's
+    Past issues print the day it was published, like any issue, and never how
+    it got there (§0a.1). Publishing is the operator's alone
+    (`mayBuildReports` on `/api/schedules/[id]/publish`). A long-run read
+    written before its month closed carries `partialThrough` and does not
+    stand as the month's (`standsAsMonthRead`), so the month-closing run
+    still writes the full one. A read's facts worded against a month say "this
     month" only while the read's month is the calendar month, and its name
     otherwise (`monthPhrase`: This week's context line, the Dashboard's
     Subjects tile; fresh review B2).

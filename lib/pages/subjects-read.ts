@@ -21,9 +21,8 @@ export async function loadSubjectReadLine(
   clientId: string,
   subjectId: string,
 ): Promise<SubjectReadLine | null> {
-  // The PUBLISHED read (lib/written/published.ts): under a review schedule,
-  // the newest one that was sent, so the pane prints nothing Heinrich has not
-  // approved.
+  // The PUBLISHED read (lib/written/published.ts): the newest ready one, as
+  // soon as the run writes it (review holds the email, never the pane).
   const row = await loadPublishedWeekRead(admin, clientId)
   const month = row?.data?.month ?? row?.month ?? null
   const standing = row?.data?.standing?.find((s) => s.subjectId === subjectId) ?? null

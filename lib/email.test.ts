@@ -142,8 +142,20 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
     expect(reviewEmailLines({ ...base, recipients: 1 }).after).toBe('Nothing goes to the 1 recipient until someone presses Send.')
   })
 
+  // 5 Oct: a weekly read is on the client's pages as soon as the run writes it
+  // (lib/written/published.ts); review holds the email only, and says so.
+  it('a weekly read: the read is on the platform already, and Send emails the list', () => {
+    const l = reviewEmailLines({ ...base, forOperator: true, recipients: 2, editable: false, readOnPlatform: true })
+    expect(l.steps).toBe('Read it, then send it. In Verbatim, view Sealand in the workspace switcher first.')
+    expect(l.after).toBe('The read is on the platform already. Send emails it to the 2 recipients; nobody is emailed until someone presses it.')
+    const body = reviewEmailBody({ ...base, forOperator: true, recipients: 2, editable: false, readOnPlatform: true })
+    expect(body.text).toContain('The read is on the platform already.')
+    expect(body.html).toContain('The read is on the platform already.')
+    expect(body.text + body.html).not.toMatch(/until someone presses Send|[—–]/)
+  })
+
   // Fresh review B1: the operator's email for the run that closes a month
-  // carries the long-run read the Send also publishes on Your market.
+  // carries the long-run read, which Your market prints already (5 Oct).
   const also = {
     title: 'What holds across August and September',
     inShort: 'Buyers ask harder questions before they commit.',
@@ -153,10 +165,10 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
     ],
   }
 
-  it('adds "Also published when you send" with the read\'s title, lead, headlines and sentences, after the button', () => {
-    const body = reviewEmailBody({ ...base, forOperator: true, editable: false, alsoPublished: also })
+  it('adds "Already on Your market" with the read\'s title, lead, headlines and sentences, after the button', () => {
+    const body = reviewEmailBody({ ...base, forOperator: true, editable: false, readOnPlatform: true, alsoPublished: also })
     expect(body.text).toContain([
-      'Also published when you send: What holds across August and September',
+      'Already on Your market: What holds across August and September',
       '',
       'Buyers ask harder questions before they commit.',
       '',
@@ -167,7 +179,9 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
       '2. Rivals are known for concrete jobs',
       'Cotopaxi is talked about as a travel tool.',
     ].join('\n'))
-    expect(body.html.indexOf('Also published when you send: What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
+    expect(body.html.indexOf('Already on Your market: What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
+    // Never the old promise that Send publishes it: it is on the platform already.
+    expect(body.text + body.html).not.toMatch(/published when you send/i)
     expect(body.html).toContain('2. Rivals are known for concrete jobs')
     expect(body.html).toContain('Price &amp; size come &lt;with&gt; it.')
     expect(body.text + body.html).not.toMatch(/[—–]/)
@@ -175,9 +189,10 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
 
   it('says so where the read could not be read, and adds nothing on any other review', () => {
     expect(reviewEmailBody({ ...base, forOperator: true, alsoPublished: { unread: true } }).text).toContain(ALSO_PUBLISHED_UNREAD)
+    expect(ALSO_PUBLISHED_UNREAD).toMatch(/^Already on Your market: /)
     const plain = reviewEmailBody({ ...base, forOperator: true })
-    expect(plain.text).not.toContain('Also published')
-    expect(plain.html).not.toContain('Also published')
+    expect(plain.text).not.toContain('Already on Your market')
+    expect(plain.html).not.toContain('Already on Your market')
     expect(plain.subject).toBe('Sealand: This week in your market is ready for review')
   })
 })

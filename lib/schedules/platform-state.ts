@@ -2,10 +2,11 @@
 // migration 20261106090000_platform_publish.sql). A weekly build is on the
 // client's platform when it was emailed (`status = 'sent'`) or when the
 // operator put it there without its email (`published_at`, the writes in
-// lib/schedules/publish.ts). The page gate (lib/written/published.ts), the
-// held-build rule (lib/reports/held.ts) and the Studio all ask this one rule,
-// which has no imports at all, so a page reader and a client component can
-// both take it.
+// lib/schedules/publish.ts). The held-build rule (lib/reports/held.ts), the
+// email preview and the Studio all ask this one rule, which has no imports at
+// all, so a route and a client component can both take it. The pages do NOT:
+// they print the newest ready read whatever its send (lib/written/published.ts,
+// 5 Oct), because review holds the email only.
 
 /** The Studio's words for a build that is on the platform and was not
  *  emailed (the lead's wording). */

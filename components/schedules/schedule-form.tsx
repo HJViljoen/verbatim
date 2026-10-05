@@ -130,8 +130,9 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
   }
 
   // ON THE PLATFORM, NOT EMAILED (the backfill, 1 Oct; lib/schedules/publish.ts):
-  // the operator puts a held weekly build's reads on the client's pages
-  // without emailing anyone. Send still emails it afterwards, as before.
+  // the operator puts a held weekly build on the client's platform as an issue
+  // without emailing anyone (its reads are on the pages already, 5 Oct). Send
+  // still emails it afterwards, as before.
   const publish = async () => {
     if (!schedule || !ready) return
     setBusy('publish'); setConfirm(null); setStatus(null)

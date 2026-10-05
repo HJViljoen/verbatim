@@ -24,8 +24,8 @@ import { fetchThemedRunId } from './themed-run'
 // `Page-Your-market.dc.html`). Four blocks, in order:
 //  (a) "What holds across {months}": the PUBLISHED long-run read
 //      (`week_reads` kind 'month', lib/written/longrun.ts, through
-//      `loadPublishedLongRun`: under review, only once its run's weekly read
-//      was sent), as stored. None published: the block is omitted;
+//      `loadPublishedLongRun`: the newest ready one, as soon as the run that
+//      closed the month writes it), as stored. None: the block is omitted;
 //  (b) "Where your market stands": EVERY tracked subject in one list
 //      (`loadStanding`, the written read's own standing facts: its levels are
 //      the Subjects page's). A ready subject prints its share, the latest
@@ -280,8 +280,8 @@ export function themeWho(
 // ---- The reads ----------------------------------------------------------------------------
 
 /** The PUBLISHED week read's stored sentences on each subject (lib/written/
- *  published.ts: under a review schedule, the newest read that was sent),
- *  where that read is of `month`. Empty where there is none. */
+ *  published.ts: the newest ready read), where that read is of `month`.
+ *  Empty where there is none. */
 async function loadWeekSentences(admin: SupabaseClient, clientId: string, month: string): Promise<Map<string, string>> {
   const data = (await loadPublishedWeekRead(admin, clientId, { month }))?.data
   return new Map((data?.standing ?? []).filter((s) => s.sentence?.trim()).map((s) => [s.subjectId, s.sentence.trim()]))

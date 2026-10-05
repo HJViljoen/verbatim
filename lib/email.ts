@@ -147,9 +147,14 @@ export interface ReviewEmail {
   /** Whether there is anything to edit before sending: a report the Studio
    *  edits, yes; an artefact Verbatim writes whole (the weekly read), no. */
   editable?: boolean
-  /** What else the Send publishes, for the operator to read first: the
-   *  month's long-run read, which Your market prints once this run's weekly
-   *  read is sent (fresh review B1). Absent on every other review. */
+  /** The build is a weekly read, whose read the client's pages print already
+   *  (the newest ready read, as soon as the run writes it; lib/written/
+   *  published.ts). The email then says so, and that Send emails the list:
+   *  review holds the email only. */
+  readOnPlatform?: boolean
+  /** The month's long-run read this run also wrote, for the operator to read:
+   *  Your market prints it already, as soon as the run wrote it (fresh review
+   *  B1; 5 Oct). Absent on every other review. */
   alsoPublished?: AlsoPublished | null
 }
 
@@ -159,7 +164,7 @@ export interface ReviewEmail {
  * headline and sentences, the writer's words as stored (scrubbed when they
  * were written; no comment's words, no figure). `unread` where the run's
  * long-run read could not be read into the email: the email then says so
- * rather than leave it out, because the Send publishes it either way.
+ * rather than leave it out, because Your market prints it either way.
  */
 export type AlsoPublished =
   | { title: string; inShort: string; ideas: { headline: string; body: string[] }[] }
@@ -167,14 +172,14 @@ export type AlsoPublished =
 
 /** The section's heading where the long-run read could not be read. */
 export const ALSO_PUBLISHED_UNREAD =
-  'Also published when you send: the long-run read on Your market, if this update wrote one. It could not be read into this email, so check it before you send.'
+  'Already on Your market: the long-run read, if this update wrote one. It could not be read into this email, so read it there.'
 
-/** The review email's "Also published when you send" section, as plain
- *  paragraphs in order (pure, for the test and the text body). */
+/** The review email's "Already on Your market" section, as plain paragraphs
+ *  in order (pure, for the test and the text body). */
 export function alsoPublishedLines(also: AlsoPublished): { heading: string; lead: string | null; ideas: { headline: string; body: string[] }[] } {
   if ('unread' in also) return { heading: ALSO_PUBLISHED_UNREAD, lead: null, ideas: [] }
   return {
-    heading: `Also published when you send: ${also.title}`,
+    heading: `Already on Your market: ${also.title}`,
     lead: also.inShort.trim() || null,
     ideas: also.ideas.map((idea, i) => ({ headline: `${i + 1}. ${idea.headline}`, body: idea.body })),
   }
@@ -191,7 +196,11 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
   return {
     lead: `${review.reportTitle} was built on ${review.builtOn} from the latest update.`,
     steps: `${review.editable === false ? 'Read it, then send it.' : 'Read it, edit it if anything needs a change, then send it.'}${workspace}`,
-    after: `Nothing goes to ${who} until someone presses Send.`,
+    // A weekly read's pages do not wait for Send (lib/written/published.ts):
+    // only the email does.
+    after: review.readOnPlatform
+      ? `The read is on the platform already. Send emails it to ${who}; nobody is emailed until someone presses it.`
+      : `Nothing goes to ${who} until someone presses Send.`,
   }
 }
 
@@ -200,9 +209,9 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
 // and the body stays free of anything an erasure would have to chase. Same
 // optional posture as the rest of this module. ONE exception (fresh review
 // B1): the operator's email for a run that also wrote the month's long-run
-// read carries that read's own words, because the Send publishes it on Your
-// market and the Studio does not show it. They are the writer's sentences,
-// never a comment's, so there is still nothing for an erasure to chase.
+// read carries that read's own words, because Your market prints it already
+// and the Studio does not show it. They are the writer's sentences, never a
+// comment's, so there is still nothing for an erasure to chase.
 /** The review email's subject, text and HTML (pure, for the test). */
 export function reviewEmailBody(review: ReviewEmail): { subject: string; text: string; html: string } {
   const subject = review.companyName ? `${review.companyName}: ${review.reportTitle} is ready for review` : `${review.reportTitle} is ready for review`
@@ -224,8 +233,8 @@ export function reviewEmailBody(review: ReviewEmail): { subject: string; text: s
       ]
       : []),
   ].join('\n')
-  // Below the button, after a hairline: the long-run read the Send publishes
-  // too, for the operator to read before pressing it.
+  // Below the button, after a hairline: the long-run read the run also wrote,
+  // on Your market already, for the operator to read.
   const alsoHtml = also
     ? `
           <tr><td style="padding-top:24px">

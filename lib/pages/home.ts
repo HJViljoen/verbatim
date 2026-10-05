@@ -505,8 +505,8 @@ export interface HomeSession {
   clientId: string
 }
 
-/** The tenant's PUBLISHED weekly read (`loadPublishedWeekRead`: under a review
- *  schedule, the newest one that was sent), or null. Service role:
+/** The tenant's PUBLISHED weekly read (`loadPublishedWeekRead`: the newest
+ *  ready one, as soon as the run writes it), or null. Service role:
  *  `week_reads` is never read by a tenant session (review L2); the tenant id
  *  is the session's. */
 async function loadLatestRead(admin: SupabaseClient, clientId: string): Promise<{ runId: string; data: WeekReadData } | null> {

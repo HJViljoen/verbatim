@@ -81,13 +81,14 @@ export function alsoPublishedOf(read: LongRunReadData): AlsoPublished | null {
 }
 
 /**
- * WHAT THE SEND ALSO PUBLISHES (fresh review B1, lead's ruling, 1 Oct
- * evening). The run that closes a month writes the month's long-run read
- * beside its week read, and Your market prints it once THIS run's weekly read
- * is sent (`loadPublishedLongRun`). So the operator's review email for that
- * run carries it, for Heinrich to read before he presses Send. Null where the
- * run wrote none that prints (every other week); `unread` where it could not
- * be read, so the email says so rather than leave it out.
+ * WHAT THE RUN ALSO PUT ON THE PLATFORM (fresh review B1, 1 Oct evening; 5
+ * Oct). The run that closes a month writes the month's long-run read beside
+ * its week read, and Your market prints it as soon as it is written
+ * (`loadPublishedLongRun`: review holds the email only). The Studio does not
+ * show it, so the operator's review email for that run carries it, for
+ * Heinrich to read. Null where the run wrote none that prints (every other
+ * week); `unread` where it could not be read, so the email says so rather
+ * than leave it out.
  */
 async function loadAlsoPublished(admin: SupabaseClient, clientId: string, runId: string): Promise<AlsoPublished | null> {
   try {
@@ -153,8 +154,9 @@ export async function readyForReview(
   // WHERE THE STUDIO LISTS IT. A report by its id; an artefact schedule (no
   // `reports` row) under `schedule:<id>`, which is where its Send button is.
   const item = reportId ?? (schedule && sendsArtefact(schedule) ? `schedule:${schedule.id}` : null)
-  // The OPERATOR's email for a weekly read: the long-run read its Send also
-  // publishes, where this run wrote one. The client's email is unchanged.
+  // The OPERATOR's email for a weekly read: the long-run read this run also
+  // wrote, on Your market already, where it wrote one. The client's email is
+  // unchanged.
   const alsoPublished = reviewers.audience === 'operator' && isWeeklyReadData(data)
     ? await loadAlsoPublished(admin, row.client_id, data.runId)
     : null
@@ -167,6 +169,8 @@ export async function readyForReview(
     forOperator: reviewers.audience === 'operator',
     editable: reportId != null,
     recipients: schedule?.recipients.length,
+    // A weekly read is on the client's pages already; Send emails the list.
+    readOnPlatform: isWeeklyReadData(data),
     alsoPublished,
   })
   // The build stands either way; the copy must not claim an email that the

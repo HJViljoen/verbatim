@@ -8,10 +8,12 @@ import { publishSend } from '@/lib/schedules/publish'
 
 // POST /api/schedules/[id]/publish  { sendId }
 //
-// "Publish to the platform (not emailed)": a held weekly build, and so its
-// week read and the long-run read the same run wrote, goes onto the client's
-// pages WITHOUT emailing anyone (the backfill, 1 Oct evening; lead's ruling 3;
-// lib/schedules/publish.ts). The status stays `ready`, so Send still emails it.
+// "Publish to the platform (not emailed)": a held weekly build goes onto the
+// client's platform as an issue (the Studio's past issues, its viewer, PDF and
+// share link) WITHOUT emailing anyone (the backfill, 1 Oct evening; lead's
+// ruling 3; lib/schedules/publish.ts). The status stays `ready`, so Send still
+// emails it. Its reads are on the client's pages already: the pages print the
+// newest ready read whatever its send (lib/written/published.ts, 5 Oct).
 //
 // THE OPERATOR'S ALONE. What goes on the platform is Heinrich's decision, so
 // a client's session, owner or admin included, is refused here before

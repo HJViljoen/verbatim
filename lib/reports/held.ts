@@ -23,8 +23,9 @@ import { selectAll } from '../supabase-admin'
  * preview, no test send. Once it is sent it is the workspace's, as every sent
  * report is. And once the operator puts it ON THE PLATFORM without its email
  * (`published_at`, lib/schedules/publish.ts; the backfill of 1 Oct), it is the
- * workspace's too: its reads are on the client's pages, so the build that
- * carries them is not held back (`onPlatform`, the same rule the pages ask).
+ * workspace's too: an issue on the platform like a sent one (`onPlatform`,
+ * the rule the Studio's past issues ask). The pages are not this rule's: they
+ * print the newest ready read whatever its send (lib/written/published.ts).
  *
  * FAILS CLOSED. Where the sends cannot be read, nothing a send carries is
  * shown to someone who may not read held builds.

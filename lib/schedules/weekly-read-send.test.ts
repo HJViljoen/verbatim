@@ -17,7 +17,7 @@ import type { ScheduleRow } from './types'
 const mail = vi.hoisted(() => ({
   report: [] as { to: string[]; subject: string; html: string }[],
   alert: [] as { subject: string; text: string }[],
-  review: [] as { to: string[]; studioUrl: string; forOperator?: boolean; reportTitle: string; recipients?: number; editable?: boolean; alsoPublished?: unknown }[],
+  review: [] as { to: string[]; studioUrl: string; forOperator?: boolean; reportTitle: string; recipients?: number; editable?: boolean; readOnPlatform?: boolean; alsoPublished?: unknown }[],
 }))
 
 vi.mock('../email', () => ({
@@ -180,6 +180,9 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.review[0].reportTitle).toBe('This week in your market')
     expect(mail.review[0].recipients).toBe(2)
     expect(mail.review[0].editable).toBe(false)
+    // The read is on the client's pages already (lib/written/published.ts):
+    // the review email says so, and that Send emails the list.
+    expect(mail.review[0].readOnPlatform).toBe(true)
     expect(mail.alert).toEqual([])
   })
 
@@ -239,7 +242,7 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
   })
 })
 
-describe('the run that closes a month: the operator reads the long-run read before Send publishes it (fresh review B1)', () => {
+describe('the run that closes a month: the operator\'s review email carries the long-run read Your market prints already (fresh review B1; 5 Oct)', () => {
   const longRun = (over: Record<string, unknown> = {}) => ({
     client_id: CLIENT, run_id: RUN, kind: 'month', status: 'ready', month: '2026-09-01', created_at: '2026-10-04T08:41:00Z',
     data: {
