@@ -1,11 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { markSnapshotsStale } from '../../artifacts'
 import { longMonth } from '../../format'
 import { freezeStateFor } from '../../reading/monthly'
+import { freezeQuotes } from '../../renderables/quotes-freeze'
 import { createSnapshot } from '../../snapshots'
 import { stampSnapshotReading } from '../reading-stamp'
 import type { BriefRole, MonthlyBriefData } from './types'
-import { BRIEF_NAME, BRIEF_ROLES } from './types'
+import { BRIEF_NAME, BRIEF_ROLES, storedBrief } from './types'
 
 // Where the month's briefs live (the pipeline's `briefs:compose` step, and the
 // script's --write).
@@ -16,7 +18,15 @@ import { BRIEF_NAME, BRIEF_ROLES } from './types'
 // is a ref with `text: ''` and its refs are `evidence_ids` (which is also what
 // keeps a cited insight from being pruned: `citedEvidenceIds` protects frozen
 // exports). Numbers are frozen, words resolve at render. The viewer, the
-// render route, the PDF and erasure all already read that table.
+// render route, the PDF and erasure all already read that table. A tenant's
+// session reads that row, so its `data` is the brief less what was held and
+// what it cost (`storedBrief`); those are the ledger's.
+//
+// ONE SNAPSHOT PER (client, month, role), found by its ref: a retried compose
+// step, or the script's --replace, rewrites the role's snapshot in place
+// (its stored PDF flagged stale, so the next download prints the new one)
+// rather than adding a second, and a role that is thin this time has its
+// earlier snapshot removed. No retry leaves a snapshot no ledger row names.
 //
 // THE LEDGER IS `monthly_briefs` (migration 20261107093000): one row per
 // client, month and role, saying whether that brief is ready, thin or failed,
@@ -41,6 +51,9 @@ export interface MonthlyBriefRow {
   cost_usd: number
   /** Why it failed or is thin; the operator's, never a reader's. */
   error: string | null
+  /** What the brief wrote and does not print, and why: the operator's,
+   *  never in the snapshot a tenant reads. */
+  held: MonthlyBriefData['held']
 }
 
 /** The table is not in this database yet (its migration has not been
@@ -86,7 +99,7 @@ export async function saveBriefRows(admin: SupabaseClient, rows: readonly Monthl
 
 /** The failed set's four rows. */
 export function failedRows(clientId: string, month: string, runId: string | null, error: string): MonthlyBriefRow[] {
-  return BRIEF_ROLES.map((role) => ({ client_id: clientId, month, role, run_id: runId, status: 'failed', snapshot_id: null, cost_usd: 0, error: error.slice(0, 1000) }))
+  return BRIEF_ROLES.map((role) => ({ client_id: clientId, month, role, run_id: runId, status: 'failed', snapshot_id: null, cost_usd: 0, error: error.slice(0, 1000), held: [] }))
 }
 
 /** Does a composed brief print anything beyond its In short? A brief with no
@@ -97,26 +110,58 @@ export const briefPrints = (d: Pick<MonthlyBriefData, 'findings' | 'sections'>):
  *  September 2026". Pure. */
 export const briefTitle = (d: Pick<MonthlyBriefData, 'role' | 'month'>): string => `${BRIEF_NAME[d.role]} · ${longMonth(d.month)} ${d.month.slice(0, 4)}`
 
+/** Is this a snapshot id at all? The PDF route answers anything else "no
+ *  such brief" before it reads, rather than letting Postgres refuse the cast
+ *  (a 503 "could not read"). Pure. */
+export const isBriefSnapshotId = (x: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x)
+
 /** The snapshot's ref: which artefact, for which month. */
 export const briefRef = (d: Pick<MonthlyBriefData, 'role' | 'month'>) => ({ artefact: `brief:${d.role}`, params: { month: d.month.slice(0, 7), role: d.role } })
 
+/** The role's stored snapshot for the month, by its ref: the newest, where
+ *  an earlier store left more than one. */
+export async function briefSnapshotOf(admin: SupabaseClient, clientId: string, month: string, role: BriefRole): Promise<string | null> {
+  const ref = briefRef({ role, month })
+  const res = await admin.from('report_snapshots').select('id')
+    .eq('client_id', clientId).eq('kind', 'report')
+    .eq('ref->>artefact', ref.artefact).eq('ref->params->>month', ref.params.month)
+    .order('created_at', { ascending: false }).limit(1)
+  if (res.error) throw new Error(`brief snapshot: ${res.error.message}`)
+  return ((res.data ?? [])[0] as { id: string } | undefined)?.id ?? null
+}
+
 /**
- * Freeze one brief as the month's snapshot and stamp what it is a reading of.
- * The stamp is the non-fatal update every artefact makes (reading-stamp.ts).
+ * Freeze one brief as the month's snapshot and stamp what it is a reading of:
+ * the role's existing snapshot rewritten in place (its stored files flagged
+ * stale), else a new one. The stamp is the non-fatal update every artefact
+ * makes (reading-stamp.ts).
  */
 export async function storeBriefSnapshot(
   admin: SupabaseClient,
   a: { clientId: string; runId: string | null; data: MonthlyBriefData; asOf: string },
 ): Promise<{ id: string; evidenceIds: string[] }> {
-  const snap = await createSnapshot(admin, {
-    clientId: a.clientId,
-    userId: null,
-    kind: 'report',
-    ref: briefRef(a.data),
-    title: briefTitle(a.data),
-    runId: a.runId,
-    data: a.data,
-  })
+  const data = storedBrief(a.data)
+  const existing = await briefSnapshotOf(admin, a.clientId, a.data.month, a.data.role)
+  let snap: { id: string; evidenceIds: string[] }
+  if (existing) {
+    const { data: frozen, refs } = freezeQuotes(data)
+    const res = await admin.from('report_snapshots')
+      .update({ data: frozen, evidence_ids: refs, title: briefTitle(a.data), run_id: a.runId })
+      .eq('id', existing).eq('client_id', a.clientId)
+    if (res.error) throw new Error(`brief snapshot: update failed: ${res.error.message}`)
+    await markSnapshotsStale(admin, [existing], { apply: true })
+    snap = { id: existing, evidenceIds: refs }
+  } else {
+    snap = await createSnapshot(admin, {
+      clientId: a.clientId,
+      userId: null,
+      kind: 'report',
+      ref: briefRef(a.data),
+      title: briefTitle(a.data),
+      runId: a.runId,
+      data,
+    })
+  }
   await stampSnapshotReading(admin, a.clientId, snap.id, {
     readingAt: a.asOf,
     month: a.data.month,
@@ -126,12 +171,25 @@ export async function storeBriefSnapshot(
   return snap
 }
 
+/** A role that is thin this time: its earlier snapshot for the month, if a
+ *  first attempt or an earlier write left one, is removed (its files go with
+ *  it), so no snapshot stands that the ledger does not name. */
+async function dropBriefSnapshot(admin: SupabaseClient, clientId: string, month: string, role: BriefRole): Promise<void> {
+  const existing = await briefSnapshotOf(admin, clientId, month, role)
+  if (!existing) return
+  await markSnapshotsStale(admin, [existing], { apply: true })
+  const res = await admin.from('report_snapshots').delete().eq('id', existing).eq('client_id', clientId)
+  if (res.error) throw new Error(`brief snapshot: delete failed: ${res.error.message}`)
+  console.warn(`[briefs] the ${role} brief for ${month} is thin this time; its earlier snapshot ${existing} was removed`)
+}
+
 /**
- * Store a composed set: each brief that prints as its snapshot, then the
- * ledger's four rows (ready with the snapshot, or thin with why). The
+ * Store a composed set: each brief that prints as its snapshot (one per
+ * client, month and role), then the ledger's four rows (ready with the
+ * snapshot, or thin with why; each with what it held and what it cost). The
  * snapshots go first, so a ledger row never names a snapshot that is not
- * there; a set stored twice (a retried step) leaves an earlier snapshot no row
- * names, which nothing lists.
+ * there; stored twice (a retried step), the second store rewrites the first's
+ * snapshots and rows rather than adding to them.
  */
 export async function storeBriefSet(
   admin: SupabaseClient,
@@ -139,13 +197,14 @@ export async function storeBriefSet(
 ): Promise<MonthlyBriefRow[]> {
   const rows: MonthlyBriefRow[] = []
   for (const d of a.briefs) {
-    const cost = Math.round((a.costUsd[d.role] ?? 0) * 10_000) / 10_000
+    const cost = Math.round((a.costUsd[d.role] ?? d.costUsd ?? 0) * 10_000) / 10_000
     if (!briefPrints(d)) {
-      rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'thin', snapshot_id: null, cost_usd: cost, error: 'nothing in it stood: no finding and no section' })
+      await dropBriefSnapshot(admin, a.clientId, a.month, d.role)
+      rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'thin', snapshot_id: null, cost_usd: cost, error: 'nothing in it stood: no finding and no section', held: d.held })
       continue
     }
     const snap = await storeBriefSnapshot(admin, { clientId: a.clientId, runId: a.runId, data: d, asOf: a.asOf })
-    rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'ready', snapshot_id: snap.id, cost_usd: cost, error: null })
+    rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'ready', snapshot_id: snap.id, cost_usd: cost, error: null, held: d.held })
   }
   await saveBriefRows(admin, rows)
   return rows

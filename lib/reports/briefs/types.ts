@@ -49,12 +49,23 @@ export const BRIEF_LENS: Readonly<Record<BriefRole, string>> = {
 
 export const isBriefRole = (x: unknown): x is BriefRole => typeof x === 'string' && (BRIEF_ROLES as readonly string[]).includes(x)
 
+/** A brief as its snapshot stores it, which a tenant's session can read:
+ *  what was held and what it cost are the operator's, kept in the
+ *  service-role `monthly_briefs` row (`held`, `cost_usd`), never here. */
+export type StoredBriefData = Omit<MonthlyBriefData, 'held' | 'costUsd'>
+
+/** The brief less what only the operator reads. Pure. */
+export function storedBrief(d: MonthlyBriefData): StoredBriefData {
+  const { held: _held, costUsd: _cost, ...stored } = d
+  return stored
+}
+
 /** A stored monthly brief (a `report_snapshots` row's data): the viewer, the
  *  render route and a share link tell it apart by this, as the other
  *  artefacts that share kind 'report' are told apart inside `data`. */
-export const isMonthlyBriefData = (x: unknown): x is MonthlyBriefData => {
+export const isMonthlyBriefData = (x: unknown): x is StoredBriefData => {
   if (!x || typeof x !== 'object') return false
-  const d = x as Partial<MonthlyBriefData>
+  const d = x as Partial<StoredBriefData>
   return d.kind === 'monthly_brief' && d.version === 1 && isBriefRole(d.role) && Array.isArray(d.sections) && Array.isArray(d.findings) && !!d.inShort
 }
 

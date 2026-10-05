@@ -21,7 +21,9 @@
 --
 -- SERVICE ROLE ONLY: RLS is on with NO policy and no grant to `authenticated`
 -- or `anon`, so a tenant's session reads nothing here even through PostgREST
--- (a failed row's error and a brief's cost are the operator's). The Studio
+-- (a failed row's error, a brief's cost and what it held are the operator's:
+-- `held` is what a brief wrote and does not print, and why, kept here and
+-- never in the snapshot's data, which a tenant reads). The Studio
 -- reads it with the service role, scoped to the session's own client; the
 -- briefs themselves are report_snapshots rows no send carries, which the
 -- tenant reads under that table's own policy.
@@ -53,6 +55,11 @@ create table if not exists public.monthly_briefs (
 
 comment on table public.monthly_briefs is
   'The monthly department briefs, one row per client, month and role: ready (snapshot_id names the frozen report_snapshots row), thin or failed. Written by the pipeline''s briefs:* steps and scripts/monthly-briefs.ts; read by the Studio with the service role.';
+
+-- What the brief wrote and does not print, and why ({what, reason}[]): the
+-- operator's. A column added on its own, so a database that has the table
+-- without it gains it, and a second run is a no-op.
+alter table public.monthly_briefs add column if not exists held jsonb not null default '[]'::jsonb;
 
 -- The Studio lists a client's ready briefs, newest month first.
 create index if not exists monthly_briefs_client_month_idx

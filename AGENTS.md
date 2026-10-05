@@ -78,7 +78,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (a `week_reads` row of `kind = 'month'`, `lib/written/longrun.ts`
   `runLongRunStep`) on the run that CLOSES a month only (`closesMonth`: the
   window holds the first day of the month it ends in, one run a month); every
-  other run returns at once. Same contract as the week's: a transient failure
+  other run returns at once, decided from the run's own window (the
+  pipeline's `runWindow`) before any read, so it never alerts. A TEST run
+  (`isTestRun`) that closes a month writes nothing and alerts once with the
+  script: test runs never publish. Same contract as the week's: a transient failure
   before the last attempt throws for Inngest to retry; otherwise the body
   never throws, its model calls are capped on its own clock, and a failure
   stores a `failed` row and alerts once with the script
@@ -771,26 +774,48 @@ This version has breaking changes — APIs, conventions, and file structure may 
   self-check, the allocation), `briefs:write-${role}` (one writer a step:
   four never fit 250 s), `briefs:compose` (the set composed against the
   ideas step's allocation, the repeat judge, the summaries' self-check, then
-  stored). Every other run runs `plan-briefs` alone: one window read, one
-  ledger read, nothing spent. **Fail-soft, the long-run read's contract:** a
+  stored). Every other run runs `plan-briefs` alone, decided from the run's
+  own window before any read: nothing read, nothing spent, nobody told. A
+  TEST run (`isTestRun`: a rehearsal that gathered nothing, a capped run,
+  `publish: false`) that closes a month writes no brief and alerts once,
+  naming the month and the script, because test runs never publish and no
+  later run writes an ended month (`write-longrun-read` has the same guard).
+  **Fail-soft, the long-run read's contract:** a
   transient failure before a step's last attempt throws for Inngest to retry;
-  otherwise the body never throws: the set is stored `failed` and the
-  operator alerted ONCE, in the step that gave up, with the script; the steps
+  otherwise the body never throws: the set is stored `failed` (never where
+  the due check itself failed, so a failure never overwrites a ready brief)
+  and the operator alerted ONCE, naming the month, in the step that gave up,
+  with the script; the steps
   after it see the failure and do nothing; a research question that never
   answers is a failed answer, not a failed set. Every model call is capped on
   its step's own clock (`lib/reports/briefs/clock.ts`, 250 s; no SDK retry).
-  **Spend:** about $2 to $2.50 a workspace a month (September's dry builds),
-  capped at `BRIEF_SET_BUDGET_USD` ($4, research $3), logged under the run;
-  the set starts only where the run has `BRIEF_HEADROOM_USD` left under
-  `RUN_MODEL_BUDGET_USD` (`briefHeadroom`), so it can never trip
-  `assertWithinBudget` and fail the run; a run near its budget stores the
-  set failed and says so. **Storage:** each brief that prints is a
+  A PostgREST that cannot load its schema cache (PGRST002) is transient
+  (`isTransient`); a missing table (PGRST205) is not.
+  **Spend, a hard cap:** about $2 to $2.50 a workspace a month (September's
+  dry builds), capped at `BRIEF_SET_BUDGET_USD` ($5), logged under the run.
+  The set starts only where the run has `BRIEF_HEADROOM_USD` left under
+  `RUN_MODEL_BUDGET_USD` (`briefHeadroom`), and EVERY `briefs:*` step reads
+  the run's spend again before it calls anything (`runSpendSoFar`, so a
+  retried attempt's calls count): the set's spend is the run's since
+  `plan-briefs` (`spentAtPlan`), and a step goes on only where the room
+  (`briefRoom`: the set's cap, and the run's budget less
+  `BRIEF_RUN_MARGIN_USD`) covers its worst case and every later step's
+  (`BRIEF_STEP_MAX_USD`, about three times September's). A research wave
+  asks only as many questions as the room leaves after the later steps'
+  worst case, each given its share, never the whole (`researchAllowance`).
+  So the set stops, stored failed and alerted once, before it could trip
+  `assertWithinBudget` and fail the run. **Storage:** each brief that prints is a
   `report_snapshots` row (kind 'report', `data.kind = 'monthly_brief'`,
   `ref.artefact = 'brief:<role>'`, quotes as refs, `evidence_ids`, stamped
-  `month` / `window_basis = 'month'`); the ledger is `monthly_briefs`
-  (migration `20261107093000`, additive, service role only): one row per
-  client, month and role, `ready` (with its snapshot), `thin` (nothing stood,
-  never shown) or `failed`. A month is written when every role is ready or
+  `month` / `window_basis = 'month'`), ONE per client, month and role: a
+  retried compose step or `--replace` rewrites it in place (its PDF flagged
+  stale) and a role thin this time loses its earlier one, so no retry leaves
+  an orphan. Its `data` is what a tenant reads, so it holds neither what the
+  brief held nor what it cost (`storedBrief`); those are the ledger's. The
+  ledger is `monthly_briefs` (migration `20261107093000`, additive, service
+  role only): one row per client, month and role, `ready` (with its
+  snapshot), `thin` (nothing stood, never shown) or `failed`, with `held`
+  and `cost_usd`. A month is written when every role is ready or
   thin; no later run writes an ended month. **Shown:** the Studio's "Monthly
   briefs" card (`lib/pages/studio-briefs.ts`, `components/pages/studio/
   monthly-briefs.tsx`) lists every ready brief, newest month first, to Open
@@ -819,7 +844,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   rule on. **PDF:** `GET /api/briefs/<snapshot>/pdf` prints on the first
   download (the export route's pattern: session tenant, the daily export cap,
   Chrome at `/render`, Storage, `artifacts`, `export_events`), then reuses the
-  file; a stale one prints again. **By hand:** `scripts/monthly-briefs.ts
+  file; a stale one prints again; an id that is not a UUID is a 404. **By hand:** `scripts/monthly-briefs.ts
   --client <uuid> --month YYYY-MM --run <uuid>` (`--plan` free, dry by
   default and paid for, `--write` stores, `--replace` over a written month);
   September 2026, which closed before the steps existed:

@@ -12,7 +12,7 @@ import { deckSlides } from './compose'
 import { documentSheetCount } from './documents/compose'
 import type { ReportSnapshotData } from './types'
 import { deckPages } from './briefs/deck'
-import { isMonthlyBriefData, type MonthlyBriefData } from './briefs/types'
+import { isMonthlyBriefData, type StoredBriefData } from './briefs/types'
 
 // The in-app viewer's data (2026-09-09). Opening a build is a URL — `?view=`
 // on Reports and on the Studio — so the panel is server-rendered, shareable
@@ -28,7 +28,7 @@ export interface ViewerSnapshot {
   kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly' | 'weekly_read' | 'monthly_brief'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData | WeeklyReadSnapshotData | MonthlyBriefData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData | WeeklyReadSnapshotData | StoredBriefData
   title: string
   builtAt: string
   pageCount: number

@@ -37,6 +37,7 @@ import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { measureStatements, measureSummary, statementMonth, statementsBudget } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
 import { runLongRunStep } from '@/lib/written/longrun'
+import { isTestRun } from '@/lib/schedules/due'
 import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep, type BriefWave, type BriefWritten } from '@/lib/reports/briefs/step'
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -2179,12 +2180,18 @@ export const runPipeline = inngest.createFunction(
     // and alerts the operator INSIDE the step, once, with the script to run.
     // Logged here, never noteError'd: a clean run must not read 'partial'
     // because the long-run read had a bad month.
+    // The run's own window and whether it is a test, for the month-closing
+    // steps below: no read decides either. The row's options are this
+    // event's (open-run writes them, a resume included), so `isTestRun` reads
+    // what report.ts reads off the row.
+    const closingWindow = runWindow?.start ? { from: runWindow.start, to: runWindow.end } : null
+    const testRun = isTestRun({ id: runId, options })
     await step
       .run('write-longrun-read', async () => {
         const admin = createAdminClient()
         const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
         const company = ((client?.company_name as string | undefined) ?? '').trim() || clientId
-        return runLongRunStep(admin, { clientId, runId, company, lastAttempt: attempt >= (maxAttempts ?? 3) - 1 })
+        return runLongRunStep(admin, { clientId, runId, company, lastAttempt: attempt >= (maxAttempts ?? 3) - 1, window: closingWindow, testRun })
       })
       .catch((e) => {
         console.error(`[write-longrun-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
@@ -2202,9 +2209,11 @@ export const runPipeline = inngest.createFunction(
     // is the check; lib/reports/briefs/step.test.ts pins them).
     //
     // ON THE RUN THAT CLOSES A MONTH ONLY (`closesMonth`, the long-run read's
-    // rule): every other run runs plan-briefs alone, which reads the window and
-    // one ledger row and spends nothing. The set is stored as four frozen
-    // report snapshots and four `monthly_briefs` rows; the Studio lists them.
+    // rule): every other run runs plan-briefs alone, which reads
+    // nothing, from the run's own window, and spends nothing; a TEST run that
+    // closes one writes nothing and alerts once with the script. The set is
+    // stored as four frozen report snapshots and four `monthly_briefs` rows;
+    // the Studio lists them.
     //
     // NON-FATAL, the long-run read's contract: a transient failure before a
     // step's last attempt throws, so Inngest retries that step; on the last
@@ -2212,17 +2221,15 @@ export const runPipeline = inngest.createFunction(
     // set is stored failed and the operator is alerted ONCE, inside the step
     // that gave up, with the script; the steps after it see the failure and do
     // nothing. Each `.catch` only logs. Never noteError'd: a clean run must not
-    // read 'partial' because the month's briefs had a bad day. The set starts
-    // only where the run can afford it under RUN_MODEL_BUDGET_USD
-    // (`briefHeadroom`), so the briefs never trip the run's kill switch.
+    // read 'partial' because the month's briefs had a bad day. A HARD SPEND
+    // CAP: the set starts only where the run can afford all of it under
+    // RUN_MODEL_BUDGET_USD (`briefHeadroom`), and every briefs step reads the
+    // run's spend again (retried attempts' calls included) and stops before
+    // the worst case of what is left could pass the set's cap or the run's,
+    // so the briefs never trip the run's kill switch.
     const briefsLast = () => attempt >= (maxAttempts ?? 3) - 1
     const briefPlan = await step
-      .run('plan-briefs', async () => {
-        const admin = createAdminClient()
-        const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
-        const company = ((client?.company_name as string | undefined) ?? '').trim() || clientId
-        return planBriefsStep(admin, { clientId, runId, company, lastAttempt: briefsLast() })
-      })
+      .run('plan-briefs', () => planBriefsStep(createAdminClient(), { clientId, runId, window: closingWindow, testRun, lastAttempt: briefsLast() }))
       .catch((e) => {
         console.error(`[plan-briefs] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
@@ -2230,10 +2237,9 @@ export const runPipeline = inngest.createFunction(
     if (briefPlan?.status === 'due') {
       const briefWaves: (BriefWave | null)[] = []
       for (let w = 0; w < briefPlan.waves.length; w++) {
-        const spentUsd = briefWaves.reduce((n, x) => n + (x?.costUsd ?? 0), 0)
         briefWaves.push(await step
           .run(`briefs:research-${w + 1}-of-${briefPlan.waves.length}`, () =>
-            briefResearchStep(createAdminClient(), briefPlan, w, { spentUsd, lastAttempt: briefsLast() }))
+            briefResearchStep(createAdminClient(), briefPlan, w, { lastAttempt: briefsLast() }))
           .catch((e) => {
             console.error(`[briefs:research-${w + 1}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
             return null

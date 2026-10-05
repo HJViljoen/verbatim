@@ -134,6 +134,13 @@ const transientStatus = (s: number): boolean => s === 408 || s === 429 || (s >= 
  *  Ask engine re-throws the message, a Supabase read reports `fetch failed`). */
 const TRANSIENT_WORDS = /\b(?:connection error|fetch failed|socket hang up|request was aborted|rate limit|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|EPIPE|UND_ERR_[A-Z_]+)\b/i
 
+/** PostgREST that could not reach its own database to load the schema cache
+ *  (PGRST002, "Could not query the database for the schema cache. Retrying."):
+ *  the 16 Sep outage's shape, which passes on its own. Not PGRST205 ("Could
+ *  not find the table … in the schema cache"), which is a missing table and
+ *  fails the same way every time. */
+const SCHEMA_CACHE_DOWN = /could not query the database for the schema cache/i
+
 /**
  * Might the same step, tried again, succeed? A call that ran out of time or
  * was aborted (`isTimeout`, our own budget's included), a 408, 429 or 5xx, or
@@ -152,6 +159,7 @@ export function isTransient(e: unknown): boolean {
     if (err.code === 'insufficient_quota' || (typeof err.message === 'string' && /insufficient_quota|exceeded your current quota/i.test(err.message))) return false
     if (typeof err.status === 'number' && transientStatus(err.status)) return true
     if (typeof err.message === 'string' && TRANSIENT_WORDS.test(err.message)) return true
+    if (err.code === 'PGRST002' || (typeof err.message === 'string' && SCHEMA_CACHE_DOWN.test(err.message))) return true
     x = err.cause
   }
   return false

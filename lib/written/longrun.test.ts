@@ -402,6 +402,33 @@ describe('runLongRunStep (write-longrun-read)', () => {
     expect(alerts).toEqual([])
   })
 
+  it('given the run\'s own window, a run that closes no month returns before any read, and never alerts', async () => {
+    for (const window of [WINDOW_OCT_2, null]) {
+      for (const testRun of [false, true]) {
+        let reads = 0
+        const read = async () => { reads++; throw new Error('PGRST002 Could not query the database for the schema cache') }
+        const { deps, saved, alerts, builds } = hookDeps({ applied: read, window: read, written: read })
+        expect(await runLongRunStep(admin, { ...STEP, window, testRun }, deps)).toEqual({ status: 'not_due', month: null, ideas: 0, costUsd: 0 })
+        expect(reads).toBe(0)
+        expect([builds, saved, alerts]).toEqual([[], [], []])
+      }
+    }
+  })
+
+  it('a test run that closes a month writes nothing and tells the operator once, naming the month and the script', async () => {
+    const { deps, saved, alerts, builds } = hookDeps()
+    expect(await runLongRunStep(admin, { ...STEP, window: WINDOW_OCT, testRun: true }, deps)).toMatchObject({ status: 'not_due', month: SEP, costUsd: 0 })
+    expect(builds).toEqual([])
+    expect(saved).toEqual([])
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].text).toContain('September 2026')
+    expect(alerts[0].text).toContain('scripts/longrun-read.ts --client client-1 --month 2026-09')
+    // The month already written: nothing is missing, nothing is said.
+    const done = hookDeps({ written: async () => true })
+    expect((await runLongRunStep(admin, { ...STEP, window: WINDOW_OCT, testRun: true }, done.deps)).status).toBe('not_due')
+    expect(done.alerts).toEqual([])
+  })
+
   it('is not due once the month is written (the script may have written it)', async () => {
     const { deps, saved, builds } = hookDeps({ written: async () => true })
     expect((await runLongRunStep(admin, STEP, deps)).status).toBe('not_due')

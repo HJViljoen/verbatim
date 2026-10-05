@@ -111,6 +111,12 @@ describe('the budget: caps, no retry, one clock for the step', () => {
     // A Supabase read that lost its connection.
     expect(isTransient(new Error('week read client: TypeError: fetch failed'))).toBe(true)
     expect(isTransient(new Error('read ECONNRESET'))).toBe(true)
+    // PostgREST that could not load its schema cache (PGRST002, the 16 Sep
+    // outage's shape) passes on its own; a missing table (PGRST205) does not.
+    expect(isTransient({ code: 'PGRST002', message: 'Could not query the database for the schema cache. Retrying.' })).toBe(true)
+    expect(isTransient(new Error('monthly_briefs written: Could not query the database for the schema cache. Retrying.'))).toBe(true)
+    expect(isTransient({ code: 'PGRST205', message: "Could not find the table 'public.monthly_briefs' in the schema cache" })).toBe(false)
+    expect(isTransient(new Error("monthly_briefs written: Could not find the table 'public.monthly_briefs' in the schema cache"))).toBe(false)
     // Through the writer's cause ("could not be written twice over").
     expect(isTransient(new WeekReadWriteError("The week's read could not be written twice over: 503 Service Unavailable", { cause: status(503, '503 Service Unavailable') }))).toBe(true)
     // Not transient: trying again fails the same way, at a model call's price.

@@ -3,7 +3,7 @@ import {
   SHEET, SUBTITLE, contentsOf, continuedTitle, deckPages, heardIn, monthYear, pairColumn, quoteCite, quoteWords, whoLineOf, writtenOn,
   type DeckPage, type FindingPlan, type WhoLine,
 } from '@/lib/reports/briefs/deck'
-import { BRIEF_LENS, BRIEF_NAME, type BriefFinding, type BriefItem, type BriefQuote, type BriefRole, type BriefSection, type MonthlyBriefData } from '@/lib/reports/briefs/types'
+import { BRIEF_LENS, BRIEF_NAME, type BriefFinding, type BriefItem, type BriefQuote, type BriefRole, type BriefSection, type StoredBriefData } from '@/lib/reports/briefs/types'
 
 /**
  * The monthly department brief as a deck of 1280×720 sheets, drawn to the
@@ -183,7 +183,7 @@ function ItemText({ i, size = 15 }: { i: BriefItem; size?: number }) {
 // ---- The frame ---------------------------------------------------------------------------------------
 
 interface Ctx {
-  data: MonthlyBriefData
+  data: StoredBriefData
   date: string
   pages: DeckPage[]
   total: number
@@ -1017,7 +1017,7 @@ function SectionPage({ ctx, page }: { ctx: Ctx; page: DeckPage }) {
  * the other. `print` adds the sheet's page size and breaks for the render
  * route; on screen the viewer scales the column to its pane.
  */
-export function BriefDeck({ data, builtAt, print = false, gap = 24 }: { data: MonthlyBriefData; builtAt: string; print?: boolean; gap?: number }) {
+export function BriefDeck({ data, builtAt, print = false, gap = 24 }: { data: StoredBriefData; builtAt: string; print?: boolean; gap?: number }) {
   const pages = deckPages(data)
   const ctx: Ctx = { data, date: writtenOn(builtAt), pages, total: pages.length }
   return (
@@ -1049,4 +1049,4 @@ export function BriefDeck({ data, builtAt, print = false, gap = 24 }: { data: Mo
 }
 
 /** How many pages a brief prints: the viewer's header and the PDF agree. */
-export const briefPageCount = (data: MonthlyBriefData): number => deckPages(data).length
+export const briefPageCount = (data: StoredBriefData): number => deckPages(data).length

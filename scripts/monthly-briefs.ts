@@ -50,7 +50,7 @@ import {
   groundBriefResearch, loadBriefSetInputs, questionsFor, researchBriefSet, writeBriefSet,
 } from '../lib/reports/briefs/build'
 import { briefMarkdown } from '../lib/reports/briefs/markdown'
-import { BRIEF_RESEARCH_BUDGET_USD } from '../lib/reports/briefs/step'
+import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
 import { BRIEF_NAME, BRIEF_ROLES, type MonthlyBriefData } from '../lib/reports/briefs/types'
 import { closesMonth, endedMonthOf, themedRunAsOf } from '../lib/written/longrun'
@@ -134,7 +134,7 @@ async function main() {
   const inputs = await loadBriefSetInputs(db, { clientId, month, now, runId: researchRun })
   const questions = questionsFor(inputs)
   console.log(`Inputs: ${inputs.company} · market ${inputs.market?.videos ?? '?'} videos · rivals ${inputs.rivals.join(', ') || 'none'} · ${questions.length} questions`)
-  const research = await researchBriefSet(db, inputs, questions, { now, budgetUsd: BRIEF_RESEARCH_BUDGET_USD, parallel: 3, persist: write })
+  const research = await researchBriefSet(db, inputs, questions, { now, budgetUsd: BRIEF_SET_BUDGET_USD - BRIEF_AFTER_RESEARCH_USD, parallel: 3, persist: write })
   if (!research.window) throw new Error('the research has no window')
   console.log(`Research: ${research.answers.filter((a) => a.grounded.length > 0).length} of ${questions.length} questions answered · $${research.costUsd.toFixed(3)} · ${Math.round((Date.now() - started) / 1000)} s`)
   const grounded = await groundBriefResearch(db, inputs, research.answers, questions, research.window)

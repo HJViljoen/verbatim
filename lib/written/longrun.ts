@@ -672,6 +672,15 @@ export async function runLongRunStep(
     clientId: string; runId: string; company: string
     /** Is this the step's last attempt? (`attempt >= maxAttempts - 1`.) */
     lastAttempt?: boolean
+    /** The run's own window, frozen at open-run (null: it has none). Given,
+     *  a run that closes no month returns before any read and never alerts;
+     *  left out, the window is read off the run row. */
+    window?: { from: string; to: string } | null
+    /** `isTestRun` of the run (lib/schedules/due.ts): a rehearsal that
+     *  gathered nothing, a capped run, `publish: false`. A test run never
+     *  publishes, so it writes no long-run read, and on the run that closes
+     *  a month it tells the operator once, with the script. */
+    testRun?: boolean
   },
   deps: Partial<LongRunStepDeps> = {},
 ): Promise<LongRunStepResult> {
@@ -686,12 +695,15 @@ export async function runLongRunStep(
     throw e
   }
   let month: string | null = null
+  // Due from the run's own window, before any read: a run that closes no
+  // month reads nothing and tells nobody.
+  if (opts.window !== undefined && (!opts.window || !closesMonth(opts.window))) return { status: 'not_due', month: null, ideas: 0, costUsd: 0 }
   try {
     if (!(await d.applied(admin))) {
       console.warn('[write-longrun-read] week_reads is not in this database yet; nothing was written or spent')
       return { status: 'skipped', month: null, ideas: 0, costUsd: 0, error: 'week_reads is not in this database yet' }
     }
-    const window = await d.window(admin, opts.clientId, opts.runId)
+    const window = opts.window !== undefined ? opts.window : await d.window(admin, opts.clientId, opts.runId)
     if (!window || !closesMonth(window)) return { status: 'not_due', month: null, ideas: 0, costUsd: 0 }
     month = endedMonthOf(window)
     if (await d.written(admin, opts.clientId, month)) return { status: 'not_due', month, ideas: 0, costUsd: 0 }
@@ -704,6 +716,14 @@ export async function runLongRunStep(
       `Run ${opts.runId} could not tell whether it closes a month${month ? ` (${longMonth(month)})` : ''}, so no long-run read ("What holds across ...", the top of Your market) was written. The week's read and the run are unaffected. Later runs do not write a month that has ended.\n\nError: ${error}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
     )
     return { status: 'skipped', month, ideas: 0, costUsd: 0, error }
+  }
+  if (opts.testRun) {
+    console.warn(`[write-longrun-read] run ${opts.runId} closes ${longMonth(month)} but is a test run: no long-run read is written`)
+    await tell(
+      `Verbatim long-run read not written (a test run): ${opts.company}`,
+      `Run ${opts.runId} closes ${longMonth(month)} ${month.slice(0, 4)}, but it is a test run (a rehearsal that gathered nothing, a capped run, or one told not to publish), and test runs never publish: the long-run read for ${longMonth(month)} ("What holds across ...", the top of Your market) was not written, and no later run writes a month that has ended.\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
+    )
+    return { status: 'not_due', month, ideas: 0, costUsd: 0, error: 'a test run' }
   }
   try {
     const built = await d.build(admin, {

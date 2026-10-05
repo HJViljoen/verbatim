@@ -3,7 +3,7 @@ import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { languageName } from './markdown'
 import { FINDINGS_AFTER } from './sections'
-import type { BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, MonthlyBriefData, SectionKey } from './types'
+import type { BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
 import { BRIEF_NAME } from './types'
 
 // The brief as pages (pure): which page holds what, in the order the design
@@ -626,7 +626,7 @@ export function inShortSizes(summary: string, toc: readonly string[]): { summary
  * (Leadership's after where the company stands), then the role's sections.
  * Pure.
  */
-export function deckPages(d: MonthlyBriefData): DeckPage[] {
+export function deckPages(d: StoredBriefData): DeckPage[] {
   const pages: Omit<DeckPage, 'n'>[] = [{ eyebrow: '', toc: null, body: { kind: 'cover' } }, { eyebrow: 'In short', toc: null, body: { kind: 'in_short', summarySize: 22, tocSize: 14 } }]
   const findings = () => d.findings.forEach((f, index) => {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`

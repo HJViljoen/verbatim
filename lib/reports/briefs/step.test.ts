@@ -6,9 +6,11 @@ import { describe, expect, it } from 'vitest'
 import { BuildBlockedError, type ResearchAnswer } from '../documents/research'
 import { alsoOnlyPrinted, numberPoints, type BriefSetInputs } from './build'
 import { briefClock } from './clock'
+import { RUN_MODEL_BUDGET_USD } from '../../config'
 import {
-  BRIEF_HEADROOM_USD, BRIEF_RESEARCH_WAVE, BRIEFS_FALLBACK, briefComposeStep, briefHeadroom, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep,
-  researchWaves, stepSafeInputs, type BriefIdeas, type BriefPlan, type BriefStepDeps, type BriefWave, type BriefWritten,
+  BRIEF_AFTER_RESEARCH_USD, BRIEF_HEADROOM_USD, BRIEF_RESEARCH_WAVE, BRIEF_RUN_MARGIN_USD, BRIEF_SET_BUDGET_USD, BRIEF_STEP_MAX_USD, BRIEFS_FALLBACK,
+  briefComposeStep, briefHeadroom, briefIdeasStep, briefResearchStep, briefRoom, briefWriteStep, planBriefsStep, researchAllowance, researchWaves,
+  stepSafeInputs, stillToCome, type BriefIdeas, type BriefPlan, type BriefStepDeps, type BriefWave, type BriefWritten,
 } from './step'
 import { briefPrints, failedRows, monthlyBriefsApplied, setWritten, type MonthlyBriefRow } from './store'
 import { point } from './test-fixtures'
@@ -26,7 +28,7 @@ const SEP = '2026-09-01'
 // The week of 28 Sep to 4 Oct: it holds 1 Oct, so it closes September.
 const CLOSING = { from: '2026-09-28T00:00:00.000Z', to: '2026-10-05T00:00:00.000Z' }
 const MID_MONTH = { from: '2026-10-05T00:00:00.000Z', to: '2026-10-12T00:00:00.000Z' }
-const OPTS = { clientId: 'client-1', runId: 'run-oct', company: 'Acme' }
+const OPTS = { clientId: 'client-1', runId: 'run-oct', window: CLOSING, testRun: false }
 
 const INPUTS = {
   clientId: 'client-1', company: 'Acme', month: SEP, noun: 'packs', industryKeywords: ['hiking pack'], tracked: ['Rival'], rivals: ['Rival'],
@@ -50,7 +52,7 @@ function hookDeps(over: Partial<BriefStepDeps> = {}) {
   const deps: Partial<BriefStepDeps> = {
     applied: async () => true,
     written: async () => false,
-    window: async () => CLOSING,
+    company: async () => 'Acme',
     spent: async () => 12,
     inputs: async () => INPUTS,
     frame: async () => ({ frame: {} as never, window: { from: '2026-07-03', to: '2026-10-01' } }),
@@ -66,6 +68,15 @@ function hookDeps(over: Partial<BriefStepDeps> = {}) {
 }
 
 const duePlan = async (over: Partial<BriefStepDeps> = {}): Promise<BriefPlan> => planBriefsStep(admin, OPTS, hookDeps(over).deps)
+/** Every I/O a plan may make, counted: the read-free paths make none. */
+function counting(over: Partial<BriefStepDeps> = {}) {
+  const calls: string[] = []
+  const h = hookDeps(over)
+  const wrapped = Object.fromEntries(Object.entries(h.deps).map(([k, f]) => [k, typeof f === 'function' && k !== 'alert' && k !== 'saveRows'
+    ? (...args: unknown[]) => { calls.push(k); return (f as (...a: unknown[]) => unknown)(...args) }
+    : f])) as Partial<BriefStepDeps>
+  return { ...h, deps: wrapped, calls }
+}
 const timedOut = () => new Error('the writer call timed out (cap 200 s): Request timed out.')
 
 describe('researchWaves and numberPoints', () => {
@@ -156,13 +167,73 @@ describe('plan-briefs', () => {
     expect(seen).toBe('run-oct')
   })
 
-  it('every other run is a no-op: reads the window and spends nothing', async () => {
-    let written = 0
-    const { deps, alerts, saved } = hookDeps({ window: async () => MID_MONTH, written: async () => { written++; return false }, inputs: async () => { throw new Error('read') } })
-    expect(await planBriefsStep(admin, OPTS, deps)).toMatchObject({ status: 'not_due', month: null, waves: [] })
-    expect(written).toBe(0)
-    expect(alerts).toEqual([])
+  it('every other run is a no-op decided from its own window: no read, no alert, nothing spent', async () => {
+    for (const window of [MID_MONTH, null]) {
+      for (const testRun of [false, true]) {
+        const { deps, alerts, saved, calls } = counting({ applied: async () => { throw new Error('PGRST002 Could not query the database for the schema cache') } })
+        expect(await planBriefsStep(admin, { ...OPTS, window, testRun }, deps)).toMatchObject({ status: 'not_due', month: null, waves: [] })
+        expect(calls).toEqual([])
+        expect(alerts).toEqual([])
+        expect(saved).toEqual([])
+      }
+    }
+  })
+
+  it('a test run that closes a month publishes nothing: not due, nothing spent, ONE alert naming the month and the script', async () => {
+    const { deps, alerts, saved, calls } = counting()
+    expect(await planBriefsStep(admin, { ...OPTS, testRun: true }, deps)).toMatchObject({ status: 'not_due', month: SEP, inputs: null, waves: [] })
+    expect(calls).not.toContain('inputs')
+    expect(calls).not.toContain('spent')
     expect(saved).toEqual([])
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].text).toContain('September 2026')
+    expect(alerts[0].text).toContain('scripts/monthly-briefs.ts --client client-1 --month 2026-09')
+    // Once the month is written (the script ran), a test run says nothing.
+    const quiet = counting({ written: async () => true })
+    expect((await planBriefsStep(admin, { ...OPTS, testRun: true }, quiet.deps)).status).toBe('not_due')
+    expect(quiet.alerts).toEqual([])
+  })
+
+  it('every alert names the month it is about, never "the month that ended"', async () => {
+    const texts: string[] = []
+    for (const over of [{ spent: async () => 57 }, { inputs: async () => { throw new Error('boom') } }] as Partial<BriefStepDeps>[]) {
+      const { deps, alerts } = hookDeps(over)
+      await planBriefsStep(admin, OPTS, deps)
+      texts.push(...alerts.map((a) => a.text))
+    }
+    expect(texts).toHaveLength(2)
+    for (const t of texts) {
+      expect(t).toMatch(/^The September 2026 briefs/)
+      expect(t).not.toMatch(/the month that ended|The the/)
+    }
+  })
+
+  it('a due check that cannot be read stores no row (the month may be written: a failure never overwrites a ready brief)', async () => {
+    const { deps, alerts, saved } = hookDeps({ written: async () => { throw new Error('monthly_briefs written: permission denied') } })
+    expect((await planBriefsStep(admin, { ...OPTS, lastAttempt: true }, deps)).status).toBe('failed')
+    expect(saved).toEqual([])
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0].text).toMatch(/^The September 2026 briefs/)
+    // A test run whose check failed is still a test run: nothing stored, the test run's alert.
+    const test = hookDeps({ written: async () => { throw new Error('monthly_briefs written: permission denied') } })
+    expect((await planBriefsStep(admin, { ...OPTS, testRun: true, lastAttempt: true }, test.deps)).status).toBe('not_due')
+    expect(test.saved).toEqual([])
+    expect(test.alerts.map((a) => a.subject)).toEqual(['Verbatim monthly briefs not written (a test run): Acme'])
+  })
+
+  it('the company\'s name is for the alert alone: a read of it that fails fails nothing', async () => {
+    const plan = await duePlan({ company: async () => { throw new Error('clients: fetch failed') } })
+    expect(plan.status).toBe('due')
+  })
+
+  it('a schema cache that cannot be loaded (PGRST002) is transient: thrown before the last attempt', async () => {
+    const down = Object.assign(new Error('monthly_briefs written: Could not query the database for the schema cache. Retrying.'), { code: 'PGRST002' })
+    const early = hookDeps({ written: async () => { throw down } })
+    await expect(planBriefsStep(admin, { ...OPTS, lastAttempt: false }, early.deps)).rejects.toThrow(/schema cache/)
+    expect(early.alerts).toEqual([])
+    const last = hookDeps({ written: async () => { throw down } })
+    expect((await planBriefsStep(admin, { ...OPTS, lastAttempt: true }, last.deps)).status).toBe('failed')
+    expect(last.alerts).toHaveLength(1)
   })
 
   it('is not due once the month is written (the script may have written it)', async () => {
@@ -204,7 +275,7 @@ describe('briefs:research-i-of-n', () => {
   it('asks its wave\'s questions, each once, and returns the answers frozen', async () => {
     const plan = await duePlan()
     const { deps, spentOn, alerts } = hookDeps()
-    const w = await briefResearchStep(admin, plan, 0, { spentUsd: 0 }, deps)
+    const w = await briefResearchStep(admin, plan, 0, {}, deps)
     expect(spentOn).toEqual(plan.waves[0])
     expect(w.status).toBe('ok')
     expect(w.answers.flatMap((a) => a.grounded.flatMap((p) => p.quotes.map((q) => q.text)))).toEqual(Array(8).fill(''))
@@ -217,9 +288,9 @@ describe('briefs:research-i-of-n', () => {
     let t = 0
     const slow = { research: async () => new Promise<never>(() => {}), now: () => t }
     const clock = briefClock({ startedAt: 0, budgetMs: 5_010, now: () => t })
-    await expect(briefResearchStep(admin, plan, 1, { spentUsd: 0, lastAttempt: false, clock }, hookDeps(slow).deps)).rejects.toThrow(/ran past the step's time/)
+    await expect(briefResearchStep(admin, plan, 1, { lastAttempt: false, clock }, hookDeps(slow).deps)).rejects.toThrow(/ran past the step's time/)
     t = 0
-    const last = await briefResearchStep(admin, plan, 1, { spentUsd: 0, lastAttempt: true, clock }, hookDeps(slow).deps)
+    const last = await briefResearchStep(admin, plan, 1, { lastAttempt: true, clock }, hookDeps(slow).deps)
     expect(last.failed).toEqual(plan.waves[1])
     expect(last.answers.every((a) => a.outcome === 'failed')).toBe(true)
   })
@@ -227,22 +298,161 @@ describe('briefs:research-i-of-n', () => {
   it('a failed answer the agent returned for a dropped call retries the wave too', async () => {
     const plan = await duePlan()
     const dropped = { research: async (_a: unknown, args: { questions: { id: string }[] }) => ({ answers: [{ ...answer(args.questions[0].id, 0, 'failed'), error: '429 Rate limit reached' }], costUsd: 0, stoppedForBudget: false }) }
-    await expect(briefResearchStep(admin, plan, 0, { spentUsd: 0, lastAttempt: false }, hookDeps(dropped as never).deps)).rejects.toThrow(/429/)
+    await expect(briefResearchStep(admin, plan, 0, { lastAttempt: false }, hookDeps(dropped as never).deps)).rejects.toThrow(/429/)
   })
 
   it('a workspace with no searchable index blocks the set without alerting here', async () => {
     const plan = await duePlan()
     const { deps, alerts } = hookDeps({ research: async () => { throw new BuildBlockedError('This workspace has no searchable index yet') } })
-    const w = await briefResearchStep(admin, plan, 0, { spentUsd: 0 }, deps)
+    const w = await briefResearchStep(admin, plan, 0, {}, deps)
     expect(w.status).toBe('blocked')
     expect(alerts).toEqual([])
   })
 
-  it('asks nothing once the research budget is spent', async () => {
+  it('asks nothing once the set\'s room is down to what the later steps need', async () => {
     const plan = await duePlan()
-    const { deps, spentOn } = hookDeps()
-    expect((await briefResearchStep(admin, plan, 2, { spentUsd: 3 }, deps)).status).toBe('skipped')
+    // The set has spent all but the later steps' worst case and a little.
+    const { deps, spentOn } = hookDeps({ spent: async () => plan.spentAtPlan + BRIEF_SET_BUDGET_USD - BRIEF_AFTER_RESEARCH_USD - 0.1 })
+    const w = await briefResearchStep(admin, plan, 2, {}, deps)
+    expect(w.status).toBe('skipped')
+    expect(w.error).toMatch(/no room left/)
     expect(spentOn).toEqual([])
+  })
+
+  it('splits the room among the wave\'s questions: never the whole to each, and only as many as fit', async () => {
+    const plan = await duePlan()
+    // Room for two questions' worst case after the later steps are kept back.
+    const room = BRIEF_AFTER_RESEARCH_USD + 2 * BRIEF_STEP_MAX_USD.question + 0.05
+    const given: number[] = []
+    const { deps, spentOn } = hookDeps({
+      spent: async () => plan.spentAtPlan + BRIEF_SET_BUDGET_USD - room,
+      research: async (_a, args) => { given.push(args.budgetUsd); spentOn.push(args.questions[0].id); return { answers: [answer(args.questions[0].id, 2)], costUsd: 0.08, stoppedForBudget: false } },
+    })
+    const w = await briefResearchStep(admin, plan, 0, {}, deps)
+    expect(spentOn).toEqual(plan.waves[0].slice(0, 2))
+    expect(given.reduce((n, x) => n + x, 0)).toBeLessThanOrEqual(room - BRIEF_AFTER_RESEARCH_USD + 1e-9)
+    expect(given.every((x) => x < room - BRIEF_AFTER_RESEARCH_USD)).toBe(true)
+    expect(w.answers.map((a) => a.outcome)).toEqual(['answered', 'answered', 'unasked', 'unasked'])
+    expect(w.failed).toEqual(plan.waves[0].slice(2))
+  })
+
+  it('reads the run\'s spend again on a retried attempt, so the calls of the attempt that failed are counted', async () => {
+    const plan = await duePlan()
+    let runSpent = plan.spentAtPlan
+    let first = true
+    const deps = hookDeps({
+      spent: async () => runSpent,
+      // The first attempt's calls are logged under the run, then the call drops.
+      research: async (_a, args) => {
+        runSpent += BRIEF_STEP_MAX_USD.question
+        if (first) throw new Error('TypeError: fetch failed')
+        return { answers: [answer(args.questions[0].id, 2)], costUsd: BRIEF_STEP_MAX_USD.question, stoppedForBudget: false }
+      },
+    }).deps
+    await expect(briefResearchStep(admin, plan, 0, { lastAttempt: false }, deps)).rejects.toThrow(/fetch failed/)
+    first = false
+    const before = runSpent
+    const asked: string[] = []
+    const room = briefRoom({ runSpent: before, spentAtPlan: plan.spentAtPlan })
+    await briefResearchStep(admin, plan, 0, { lastAttempt: true }, { ...deps, research: async (a, args) => { asked.push(args.questions[0].id); return deps.research!(a, args) } })
+    expect(asked).toHaveLength(researchAllowance(room, 4).ask)
+    expect(room).toBeCloseTo(BRIEF_SET_BUDGET_USD - 4 * BRIEF_STEP_MAX_USD.question)
+  })
+})
+
+describe('the hard spend cap', () => {
+  it('the room is the less of the set\'s cap and the run\'s budget less a margin', () => {
+    expect(briefRoom({ runSpent: 10, spentAtPlan: 10, budget: 60 })).toBe(BRIEF_SET_BUDGET_USD)
+    expect(briefRoom({ runSpent: 12, spentAtPlan: 10, budget: 60 })).toBe(BRIEF_SET_BUDGET_USD - 2)
+    expect(briefRoom({ runSpent: 57, spentAtPlan: 56.5, budget: 60 })).toBeCloseTo(60 - BRIEF_RUN_MARGIN_USD - 57)
+  })
+
+  it('keeps every later step\'s worst case back', () => {
+    expect(stillToCome('ideas')).toBeCloseTo(BRIEF_STEP_MAX_USD.ideas + 4 * BRIEF_STEP_MAX_USD.writer + BRIEF_STEP_MAX_USD.compose)
+    expect(stillToCome('sales')).toBeCloseTo(4 * BRIEF_STEP_MAX_USD.writer + BRIEF_STEP_MAX_USD.compose)
+    expect(stillToCome('leadership')).toBeCloseTo(BRIEF_STEP_MAX_USD.writer + BRIEF_STEP_MAX_USD.compose)
+    expect(stillToCome('compose')).toBe(BRIEF_STEP_MAX_USD.compose)
+    expect(BRIEF_AFTER_RESEARCH_USD).toBeCloseTo(stillToCome('ideas'))
+  })
+
+  it('a wave asks only what its share of the room covers', () => {
+    expect(researchAllowance(BRIEF_AFTER_RESEARCH_USD - 0.01, 4)).toEqual({ ask: 0, eachUsd: 0 })
+    expect(researchAllowance(BRIEF_AFTER_RESEARCH_USD + 1.5 * BRIEF_STEP_MAX_USD.question, 4).ask).toBe(1)
+    const full = researchAllowance(BRIEF_SET_BUDGET_USD, 4)
+    expect(full.ask).toBe(4)
+    expect(full.ask * full.eachUsd).toBeLessThanOrEqual(BRIEF_SET_BUDGET_USD - BRIEF_AFTER_RESEARCH_USD + 1e-9)
+  })
+
+  it('at September\'s measured costs every question is still asked', async () => {
+    let runSpent = 20
+    const plan = await planBriefsStep(admin, OPTS, hookDeps({ spent: async () => runSpent }).deps)
+    const asked: string[] = []
+    const deps = hookDeps({
+      spent: async () => runSpent,
+      research: async (_a, args) => { asked.push(args.questions[0].id); runSpent += 0.12; return { answers: [answer(args.questions[0].id, 2)], costUsd: 0.12, stoppedForBudget: false } },
+    }).deps
+    for (let w = 0; w < plan.waves.length; w++) await briefResearchStep(admin, plan, w, {}, deps)
+    expect(asked).toEqual(plan.questions.map((q) => q.id))
+  })
+
+  it('never lets the set push the run past its budget, whatever each call costs up to its worst case', async () => {
+    for (const start of [10, RUN_MODEL_BUDGET_USD - BRIEF_HEADROOM_USD, RUN_MODEL_BUDGET_USD - BRIEF_HEADROOM_USD - 0.3]) {
+      for (const scale of [0.3, 1]) {
+        let runSpent = start
+        const spend = (usd: number) => { runSpent += usd * scale; return usd * scale }
+        const { deps, alerts } = hookDeps({
+          spent: async () => runSpent,
+          research: async (_a, args) => ({ answers: [answer(args.questions[0].id, 2)], costUsd: spend(BRIEF_STEP_MAX_USD.question), stoppedForBudget: false }),
+          ideas: async () => ({ raw: { ideas: [] }, costUsd: spend(BRIEF_STEP_MAX_USD.ideas), prompts: { system: '', user: '' }, check: { contradicted: new Map(), ran: true, costUsd: 0 }, allocation: { ideas: [], byRole: { sales: [], marketing: [], content: [], leadership: [] }, held: [] } }),
+          write: async () => ({ raw: { findings: [] } as never, prompts: { system: '', user: '' }, costUsd: spend(BRIEF_STEP_MAX_USD.writer) }),
+          compose: (async () => { spend(BRIEF_STEP_MAX_USD.compose); return { briefs: {}, costUsd: 0 } }) as never,
+          store: (async () => []) as never,
+        })
+        const plan = await planBriefsStep(admin, OPTS, deps)
+        expect(plan.status).toBe('due')
+        const waves: BriefWave[] = []
+        for (let w = 0; w < plan.waves.length; w++) waves.push(await briefResearchStep(admin, plan, w, {}, deps))
+        const ideas = await briefIdeasStep(admin, plan, waves, {}, deps)
+        expect(ideas.status).toBe('ok')
+        const written: BriefWritten[] = []
+        for (const role of BRIEF_ROLES) written.push(await briefWriteStep(admin, plan, ideas, role, {}, deps))
+        expect(written.every((w) => w.status === 'ok')).toBe(true)
+        await briefComposeStep(admin, plan, waves, ideas, written, {}, deps)
+        expect(runSpent - start).toBeLessThanOrEqual(BRIEF_SET_BUDGET_USD + 1e-9)
+        expect(runSpent).toBeLessThanOrEqual(RUN_MODEL_BUDGET_USD - BRIEF_RUN_MARGIN_USD + 1e-9)
+        expect(alerts).toEqual([])
+      }
+    }
+  })
+
+  it('a later step the room no longer covers stops the set before it calls anything: stored failed, alerted once', async () => {
+    const plan = await duePlan()
+    const waves = [{ status: 'ok', answers: [answer('sales.who', 2)], window: { from: '2026-07-03', to: '2026-10-01' }, costUsd: 0.1, failed: [] } as BriefWave]
+    let called = 0
+    const broke = hookDeps({ spent: async () => plan.spentAtPlan + BRIEF_SET_BUDGET_USD - stillToCome('ideas') + 0.01, ideas: async () => { called++; throw new Error('no') } })
+    const ideas = await briefIdeasStep(admin, plan, waves, {}, broke.deps)
+    expect(ideas.status).toBe('failed')
+    expect(ideas.error).toMatch(/budget is spent/)
+    expect(called).toBe(0)
+    expect(broke.alerts).toHaveLength(1)
+    expect(broke.alerts[0].text).toContain('The September 2026 briefs')
+    expect(broke.saved[0].map((r) => r.status)).toEqual(['failed', 'failed', 'failed', 'failed'])
+    const okIdeas = await briefIdeasStep(admin, plan, waves, {}, hookDeps().deps)
+    let wrote = 0
+    const late = hookDeps({ spent: async () => plan.spentAtPlan + BRIEF_SET_BUDGET_USD - stillToCome('content') + 0.01, write: async () => { wrote++; throw new Error('no') } })
+    expect((await briefWriteStep(admin, plan, okIdeas, 'content', {}, late.deps)).error).toMatch(/budget is spent/)
+    expect(wrote).toBe(0)
+    expect(late.alerts).toHaveLength(1)
+  })
+
+  it('a spend read that fails is retried before the last attempt and fails the set on it: the cap is never guessed', async () => {
+    const plan = await duePlan()
+    const okIdeas = await briefIdeasStep(admin, plan, [{ status: 'ok', answers: [answer('sales.who', 2)], window: { from: '2026-07-03', to: '2026-10-01' }, costUsd: 0.1, failed: [] }], {}, hookDeps().deps)
+    const down = async () => { throw new Error('ai_call_log: TypeError: fetch failed') }
+    await expect(briefWriteStep(admin, plan, okIdeas, 'sales', { lastAttempt: false }, hookDeps({ spent: down }).deps)).rejects.toThrow(/fetch failed/)
+    const last = hookDeps({ spent: down })
+    expect((await briefWriteStep(admin, plan, okIdeas, 'sales', { lastAttempt: true }, last.deps)).status).toBe('failed')
+    expect(last.alerts).toHaveLength(1)
   })
 })
 
@@ -250,7 +460,7 @@ describe('briefs:ideas, briefs:write-role and briefs:compose', () => {
   const wavesOf = async (plan: BriefPlan): Promise<BriefWave[]> => {
     const { deps } = hookDeps()
     const out: BriefWave[] = []
-    for (let w = 0; w < plan.waves.length; w++) out.push(await briefResearchStep(admin, plan, w, { spentUsd: 0 }, deps))
+    for (let w = 0; w < plan.waves.length; w++) out.push(await briefResearchStep(admin, plan, w, {}, deps))
     return out
   }
 
@@ -367,6 +577,12 @@ describe('the pipeline carries the month\'s briefs', () => {
   const src = readFileSync(new URL('../../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
+  it('hands both month-closing steps the run\'s own window and whether it is a test, read off nothing', () => {
+    expect(src).toContain('const closingWindow = runWindow?.start ? { from: runWindow.start, to: runWindow.end } : null')
+    expect(src).toContain('const testRun = isTestRun({ id: runId, options })')
+    expect(src).toMatch(/runLongRunStep\(admin, \{ clientId, runId, company, lastAttempt: [^}]*, window: closingWindow, testRun \}\)/)
+  })
+
   it('as five additive ids in their own position: after write-longrun-read, immediately before close-run, in this order (71 in all)', () => {
     expect(ids).toHaveLength(71)
     const at = ids.indexOf('plan-briefs')
@@ -392,6 +608,8 @@ describe('the pipeline carries the month\'s briefs', () => {
       expect(h).toMatch(/return null/)
       expect(h).not.toMatch(/sendAlertEmail|noteError/)
     }
+    // Due from the run's own window, and a test run named, with no read.
+    expect(body).toContain('planBriefsStep(createAdminClient(), { clientId, runId, window: closingWindow, testRun, lastAttempt: briefsLast() })')
     // Only a due plan runs the rest; a failed writer stops the writers.
     expect(body).toContain("if (briefPlan?.status === 'due')")
     expect(body).toContain("if (w?.status !== 'ok') break")

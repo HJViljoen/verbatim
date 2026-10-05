@@ -7,6 +7,7 @@ import { dayStartIso } from '@/lib/ask/quota'
 import { EXPORT_DAILY_LIMIT } from '@/lib/config'
 import { renderArtifact, renderBaseUrl } from '@/lib/render/render'
 import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
+import { isBriefSnapshotId } from '@/lib/reports/briefs/store'
 
 // GET /api/briefs/<snapshot>/pdf: a month's department brief as a PDF (T8
 // wired). The pipeline stores the brief as a frozen snapshot and prints
@@ -17,8 +18,9 @@ import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
 // A later download reuses the stored file; a STALE one (its file deleted by
 // the erasure sweep) is printed again, as /api/artifacts does.
 //
-// The tenant comes from the SESSION: a snapshot of another workspace, or one
-// that is not a monthly brief, is "no such brief". A new print counts toward
+// The tenant comes from the SESSION: a snapshot of another workspace, one
+// that is not a monthly brief, or an id that is not a snapshot id at all, is
+// "no such brief". A new print counts toward
 // the daily export cap and fails closed on a read error, as every render does.
 // No dot in the path (proxy.ts would skip the auth check).
 
@@ -37,6 +39,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ snapshotId
   const session = await getRouteSession()
   if (!session) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   const { snapshotId } = await ctx.params
+  if (!isBriefSnapshotId(snapshotId)) return NextResponse.json({ error: 'No such brief.' }, { status: 404 })
   const { clientId, userId } = session
   const admin = createAdminClient()
 
