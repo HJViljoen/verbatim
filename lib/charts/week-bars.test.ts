@@ -11,7 +11,7 @@ import { SEALAND_CLIENT_ID } from '../config'
 import {
   placeTicks, weekBarsLayout, weekChangeSentence, weekDetail, weekPlotMin, WEEK_PLOT_MIN,
   dayList, pendingBlankLabel, pendingRowGeometry, pendingWaitingLine, WEEK_BARS, weekBarsAriaLabel, weekBarsGeometry,
-  weekBarsTable, weekHover, weekRuleKey,
+  weekBarsTable, weekDetailLabel, weekHover, weekRuleKey, STILL_FILLING,
 } from './week-bars'
 
 // The weekly volume bars' geometry and words (WP2.9 "Design"), on staging's
@@ -269,5 +269,17 @@ describe('the chart’s words', () => {
     ])
     // The week of 31 Aug spans two months: its comments by month.
     expect(weekDetail(WEEKS.find((w) => w.week === '2026-08-31')!).panel[1].sub).toBe('384 dated in August and 2,891 in September')
+  })
+
+  it('says "still filling" of a week drawn outlined, and names each week in one line for its button (Heinrich, 5 Oct)', () => {
+    const at = (week: string) => WEEKS.find((w) => w.week === week)!
+    expect(STILL_FILLING).toBe('still filling')
+    expect(weekDetail({ ...at('2026-09-07'), state: 'filling' }).state).toBe('still filling')
+    expect(weekDetail({ ...at('2026-09-07'), state: 'so_far' }).state).toBe('still filling')
+    expect(weekDetail({ ...at('2026-09-07'), state: 'settled' }).state).toBeNull()
+    expect(weekDetail({ ...at('2026-09-07'), state: 'filling' }).label).toBe(
+      'Week of 7 Sep, 404 videos, 389 in the category, 15 filed under a brand you track, 7,851 comments, all dated in September, 10 median comments a video, 27 let in before we checked relevance, still filling',
+    )
+    expect(weekDetailLabel({ title: 'Week of 28 Sep', lines: [{ value: '265', words: 'videos', strong: true, gap: false }], state: null })).toBe('Week of 28 Sep, 265 videos')
   })
 })

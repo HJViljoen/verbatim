@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { STILL_FILLING, weekDetailLabel, type WeekDetail } from '../charts/week-bars'
 import { fmtInt, longMonth, shortDate } from '../format'
 import { surface, type NavKey } from '../nav'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -276,6 +277,25 @@ export function homeWeeksFrame(now: string): HomeWeeks {
 
 /** Whether "Week by week" has a week to draw; where not, it prints `INSUFFICIENT`. */
 export const weeksDrawable = (weeks: HomeWeeks): boolean => weeks.columns.some((c) => c.videos != null)
+
+/**
+ * A drawn week's numbers, for its tooltip and its button's accessible name
+ * (Heinrich, 5 Oct: the numbers show on hover, on a tap on a phone, and to a
+ * keyboard): "Week of 28 Sep", its videos and its comments as the column
+ * draws them, and "still filling" where the column is drawn faint. Read off
+ * the column itself, never recomputed, in the shape the weekly bars' card
+ * prints (`WeekDetail`, `weekDetail`). Null for a column with nothing drawn.
+ */
+export function homeWeekDetail(c: HomeWeekColumn): WeekDetail | null {
+  if (c.videos == null || c.comments == null) return null
+  const title = `Week of ${c.label}`
+  const lines = [
+    { value: fmtInt(c.videos), words: 'videos', strong: true, gap: false },
+    { value: fmtInt(c.comments), words: 'comments', strong: true, gap: false },
+  ]
+  const state = c.settled ? null : STILL_FILLING
+  return { week: c.week, title, lines, panel: [], state, label: weekDetailLabel({ title, lines, state }) }
+}
 
 // ---- 4. The tiles ------------------------------------------------------------------
 

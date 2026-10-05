@@ -705,6 +705,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     before its run's gather at that run, at weeks off the cadence (a run that
     gathered nothing not counted) and at weeks with nothing gathered;
     a bar counts checked videos only, `checkedRows`), a filling week faint;
+    a drawn week's numbers (the week, its videos and comments, "still
+    filling" where faint) show on hover, on keyboard focus and on a tap, off
+    the column itself (`homeWeekDetail`, the client leaf `HomeWeeksPlot`),
+    with the weekly bars' card and the same behaviour as Your market's and
+    This week's (`useWeekTip`, `WEEK_TIP_CARD`, components/charts/week-tip.tsx;
+    their cards and panel say "still filling" too, `STILL_FILLING`);
     the two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
     and the backfill's regate) cut no week, because `unchecked` counts
     exactly their videos (`isFailOpenFix`). The Competitive tile's row is "Named most in

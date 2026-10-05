@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { markInView, wholeWeeksWidth } from './week-bars-hover'
+import { markInView, WeekBarsHover, wholeWeeksWidth } from './week-bars-hover'
 
 import type { RenderMode } from '@/lib/blocks/types'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { changesFromLog } from '@/lib/reading/comparability'
 import { assertCopyContract, directionRe } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { weekVolumesBlock } from '@/lib/pages/overview-market/weeks'
 import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
 import { WEEK_LINE } from '@/lib/week-line-config'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { dueHasPassed, passedBeforeOf, type PendingWeekLine } from '@/lib/reading/week-line'
 import { WeekBars, WeekPendingRow } from './week-bars'
-import { weekBarsLayout, weekPlotMin } from '@/lib/charts/week-bars'
-import { weekRuleGroupOf } from '@/lib/reading/weeks'
+import { weekBarsLayout, weekDetail, weekName, weekPlotMin } from '@/lib/charts/week-bars'
+import { weekRuleGroupOf, weeksSinceOurChanges } from '@/lib/reading/weeks'
 
 // The weekly volume bars (WP2.9), on staging's own weeks read at the two
 // clocks the renders use: 11 Oct (September read, the axis 27 Jul to 5 Oct)
@@ -318,5 +318,54 @@ describe('markInView (sw-3 item 3)', () => {
     const week = render(<WeekBars block={CLEAN11} mode="app" variant="week" surface="tile" />)
     expect(front).not.toContain('data-edge-x="')
     expect(week).not.toContain('data-edge-x="')
+  })
+})
+
+// The tooltip, as on the Dashboard (Heinrich, 5 Oct): a week's numbers show on
+// hover, on keyboard focus and on a tap, from the rows the bars draw.
+describe('a week\'s numbers on hover, focus or a tap', () => {
+  const weeks = weeksSinceOurChanges(CLEAN11.weeks, CLEAN11.rules)
+  const L = weekBarsLayout(weeks, [], { size: 'large', ticks: 'top' })
+  const details = weeks.map(weekDetail)
+  const buttonsOf = (markup: string): [string, string][] =>
+    [...markup.matchAll(/<button type="button" aria-label="([^"]*)" data-week="([^"]*)"/g)].map((m) => [m[2], m[1]])
+  const tooltipOf = (markup: string): string | null => {
+    const i = markup.indexOf('role="tooltip"')
+    return i < 0 ? null : markup.slice(markup.lastIndexOf('<div', i))
+  }
+
+  it('names every week\'s button with the counts its bars print, and "still filling" where the week is drawn outlined', () => {
+    for (const variant of ['front', 'week'] as const) {
+      const buttons = buttonsOf(render(<WeekBars block={CLEAN11} mode="app" variant={variant} surface="inner" />))
+      expect(buttons.map(([w]) => w)).toEqual(L.columns.map((c) => c.week))
+      for (const [i, c] of L.columns.entries()) {
+        const label = buttons[i][1]
+        expect(label.startsWith(`Week of ${weekName(c.week)}, `)).toBe(true)
+        expect(label).toContain(`${c.videos!.label} videos`)
+        expect(label).toContain(`${c.comments!.label} comments`)
+        expect(label.endsWith(', still filling')).toBe(c.outlined)
+      }
+    }
+    // Print and email draw no button.
+    expect(render(<WeekBars block={CLEAN11} mode="print" variant="front" surface="inner" />)).not.toContain('<button')
+  })
+
+  it('opens the card on a week with the figures its bars print, and the week\'s state, in the copy contract', () => {
+    for (const [i, c] of L.columns.entries()) {
+      const node = <WeekBarsHover details={details} labels={null} plot={null} height={L.height} minWidth={weekPlotMin(L.n)} labelWidth="wide" surface="inner" detail="card" initial={null} open={i} />
+      const tip = tooltipOf(render(node))!
+      expect(tip).toContain(`data-week="${c.week}"`)
+      const figures = [...tip.matchAll(/data-copy="figure"[^>]*>([^<]*)</g)].map((m) => m[1])
+      expect(figures).toContain(c.videos!.label)
+      expect(figures).toContain(c.comments!.label)
+      expect(markupText(tip).includes('still filling')).toBe(c.outlined)
+      expect(markupText(tip)).not.toContain('\u2014')
+      assertCopyContract(node)
+    }
+  })
+
+  it('says "still filling" in This week\'s panel for a week still being read', () => {
+    // The panel's default week, 14 Sep, is filling on 11 Oct.
+    expect(renderText(<WeekBars block={CLEAN11} mode="app" variant="week" surface="tile" />)).toMatch(/Week of 14 Sep still filling 318 videos/)
   })
 })

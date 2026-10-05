@@ -655,20 +655,36 @@ export function weekChangeSentence(rules: readonly WeekRule[]): string {
   return `We changed ${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`
 }
 
+/** What a week's tooltip says of a week drawn faint (so far, or filling: ended
+ *  with under two updates since), on every weekly bar chart (Heinrich, 5 Oct). */
+export const STILL_FILLING = 'still filling'
+
 /** A week's facts for its hover card (`lines`, the front page's preview) and
  *  for This week's side panel (`panel`, its preview): each a figure and its
- *  words; `gap` starts a new group of the card. One count, one base, per line. */
+ *  words; `gap` starts a new group of the card. One count, one base, per line.
+ *  `state` is `STILL_FILLING` on a week drawn faint, and `label` is the week's
+ *  accessible name, the same words in one line (`weekDetailLabel`): what its
+ *  bar's button says to a screen reader. */
 export interface WeekDetail {
   week: string
   title: string
   lines: { value: string; words: string; strong: boolean; gap: boolean }[]
   panel: { value: string; words: string; sub: string }[]
+  state: string | null
+  label: string
+}
+
+/** A week's accessible name: its title, each figure with its words, and its
+ *  state. "Week of 28 Sep, 265 videos, 5,028 comments, still filling". */
+export function weekDetailLabel(d: Pick<WeekDetail, 'title' | 'lines' | 'state'>): string {
+  return [d.title, ...d.lines.map((l) => `${l.value} ${l.words}`.trim()), ...(d.state ? [d.state] : [])].join(', ')
 }
 
 export function weekDetail(v: WeekVolume): WeekDetail {
   const title = `Week of ${weekName(v.week)}`
   if (v.state === 'none_gathered' || v.videos === 0) {
-    return { week: v.week, title, lines: [{ value: '', words: 'none gathered', strong: false, gap: false }], panel: [] }
+    const lines = [{ value: '', words: 'none gathered', strong: false, gap: false }]
+    return { week: v.week, title, lines, panel: [], state: null, label: weekDetailLabel({ title, lines, state: null }) }
   }
   const lines: WeekDetail['lines'] = [{ value: fmtInt(v.videos), words: 'videos', strong: true, gap: false }]
   const panel: WeekDetail['panel'] = []
@@ -696,5 +712,6 @@ export function weekDetail(v: WeekVolume): WeekDetail {
     lines.push({ value: fmtInt(v.unchecked), words: 'let in before we checked relevance', strong: false, gap: true })
     panel.push({ value: fmtInt(v.unchecked), words: v.unchecked === 1 ? 'video let in' : 'videos let in', sub: 'before we checked relevance' })
   }
-  return { week: v.week, title, lines, panel }
+  const state = v.state === 'so_far' || v.state === 'filling' ? STILL_FILLING : null
+  return { week: v.week, title, lines, panel, state, label: weekDetailLabel({ title, lines, state }) }
 }
