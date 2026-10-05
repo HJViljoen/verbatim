@@ -1,7 +1,7 @@
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { appBaseUrl } from '@/lib/site'
-import { reportTargets } from '@/lib/schedules/due'
+import { isTestRun, reportTargets } from '@/lib/schedules/due'
 import type { ScheduleRow } from '@/lib/schedules/types'
 
 // After a scheduled update: every schedule of the workspace that is due
@@ -16,7 +16,9 @@ import type { ScheduleRow } from '@/lib/schedules/types'
 // `manual: true`, and `reportTargets` (lib/schedules/due.ts) fires its active
 // weekly-read schedules alone, each with `noEmail`: built, held and put in the
 // client's past issues, no list and no reviewer emailed, no other schedule
-// started. A scheduled run fires every due schedule as before, plus any active
+// started; unless the run is a test (`isTestRun`: a rehearsal that gathered
+// nothing, a capped run, `options.publish: false`), which fires nothing. A
+// scheduled run fires every due schedule as before, plus any active
 // weekly-read schedule that is not due, with `noEmail`. An event without
 // `manual` (every one emitted before 5 Oct) is a scheduled run's.
 //
@@ -48,18 +50,20 @@ export const sendWeeklyReport = inngest.createFunction(
 
     const due = await step.run('find-due-schedules', async () => {
       const admin = createAdminClient()
-      const [{ data: schedules, error }, { data: run }] = await Promise.all([
+      const [{ data: schedules, error }, { data: run, error: runError }] = await Promise.all([
         // `*`, not a column list: `artefact` is M8's column, and a select
         // naming it fails outright on a database a migration behind.
         admin.from('report_schedules').select('*').eq('client_id', clientId).order('created_at'),
-        admin.from('pipeline_runs').select('completed_at, started_at').eq('id', runId).maybeSingle(),
+        admin.from('pipeline_runs').select('id, completed_at, started_at, options').eq('id', runId).maybeSingle(),
       ])
       // A failed read throws, so the step retries: an empty answer would
-      // leave the run's issue off the platform with nothing said.
+      // leave the run's issue off the platform with nothing said, and a run
+      // unread could not be told from a test.
       if (error) throw new Error(`report_schedules: ${error.message}`)
-      const r = run as { completed_at: string | null; started_at: string | null } | null
+      if (runError) throw new Error(`pipeline_runs: ${runError.message}`)
+      const r = run as { id: string; completed_at: string | null; started_at: string | null; options: unknown } | null
       const runDate = r?.completed_at ?? r?.started_at ?? new Date().toISOString()
-      return reportTargets((schedules ?? []) as ScheduleRow[], runDate, { manual: manual === true })
+      return reportTargets((schedules ?? []) as ScheduleRow[], runDate, { manual: manual === true, testRun: isTestRun(r) })
     })
 
     const results: { id: string; name: string; status: string; ms?: number; error?: string }[] = []

@@ -22,11 +22,12 @@ export function claimDecision(row: ExistingSend, now = Date.now()): ClaimDecisio
 /**
  * HOW ONE RUN'S WEEKLY READ GOES OUT (5 Oct; Heinrich: "a finished run
  * reaches the platform by itself; review holds ONLY the email"). Every path
- * builds the issue and every path but `send` puts it in the client's past
- * issues at once (`publishSend`); what differs is who is emailed:
+ * builds the issue and puts it in the client's past issues at once
+ * (`publishSend`), before any email; what differs is who is emailed:
  *
  *   'send'   review off, a list, an update allowed to email: the list gets it
- *            (and an emailed issue is on the platform by being sent);
+ *            (through `deliverSend`, after the publish, so a refused email
+ *            leaves it on the platform and waiting for Send);
  *   'review' review on, a list, an update allowed to email: the review email
  *            to the reviewer (`reviewAudience`), and the list waits for Send;
  *   'hold'   nobody is emailed at all: an update that may email nobody (a

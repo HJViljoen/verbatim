@@ -552,18 +552,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
   the email"): the pipeline emits `report/send.requested` after every run, a
   manual one's marked `manual`; `reportTargets` (`lib/schedules/due.ts`) fires
   a scheduled run's due schedules as before, plus any active weekly-read
-  schedule not due, and a manual run's active weekly-read schedules ALONE,
-  both of those with `noEmail` (nothing else starts: not a legacy digest, the
+  schedule not due, and a manual run's active weekly-read schedules ALONE
+  (none at all for a TEST run, `isTestRun`: a rehearsal that gathered
+  nothing, a capped `videoLimit` / `maxVideos` run, or `options.publish:
+  false`; a real manual run such as Össur's `555af400` publishes), both of
+  those with `noEmail` (nothing else starts: not a legacy digest, the
   monthly or a brief, and `runSchedule` refuses any non-weekly-read schedule
   under `noEmail` before it claims). `weeklyReadPath`
   (`lib/schedules/claim.ts`) says who is emailed: `send` (review off, a list:
   the list), `review` (review on, a list: the review email, the list waits
   for Send) or `hold` (`noEmail`, or nobody on the list: nobody at all, which
-  is how Össur's schedule with no recipients still gets its issue); every path
-  but `send` stands the build `ready` and `publishSend`s it, with the pipeline
-  as actor (`pipelineActor`; Send now passes the operator, the scripts
-  `scriptActor`), before the review email, which then says it is in the past
-  issues (`inPastIssues`). Idempotent on the (schedule, run) claim: a retried
+  is how Össur's schedule with no recipients still gets its issue); EVERY path
+  stands the build `ready` and `publishSend`s it, with the pipeline as actor
+  (`pipelineActor`; Send now passes the operator, the scripts
+  `scriptActor`), before any email: the review email then says it is in the
+  past issues (`inPastIssues`), and `send` emails the list through
+  `deliverSend` (its CAS on `ready`), so a refused email leaves the read on
+  the platform, `ready` with the reason, for Send (no automatic re-send). Idempotent on the (schedule, run) claim: a retried
   `send:<scheduleId>` step finds the row `ready` (`waiting`) and only
   publishes it, a no-op once it is there, so there is never a second build or
   review email; a publish that is refused answers 500 with one

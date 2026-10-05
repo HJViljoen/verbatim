@@ -1,4 +1,5 @@
 import { REVIEW_TZ, quarterOfIn } from '../reports/quarterly'
+import { gatheredNothing } from '../pipeline/run-bookkeeping'
 import { sendsWeeklyRead } from './artefact'
 import type { ScheduleCadence, ScheduleRow } from './types'
 
@@ -52,6 +53,22 @@ export interface ReportTarget {
 }
 
 /**
+ * A RUN THAT IS A TEST, whose weekly read must not become an issue by itself
+ * (the lead's call, 5 Oct: test runs do not publish): a rehearsal that
+ * gathered nothing (`gatheredNothing`, lib/pipeline/run-bookkeeping.ts), a
+ * capped run (`options.videoLimit` or `options.maxVideos` set), or one told
+ * not to (`options.publish === false`). A real manual run, a full gather such
+ * as Össur's 4 Oct `555af400`, is not one. A run row that is not there counts
+ * as one: fail closed, nothing is published on a guess. Pure.
+ */
+export function isTestRun(run: { id: string; options?: unknown } | null): boolean {
+  if (!run) return true
+  if (gatheredNothing(run)) return true
+  const o = (run.options && typeof run.options === 'object' ? run.options : {}) as { videoLimit?: unknown; maxVideos?: unknown; publish?: unknown }
+  return o.videoLimit != null || o.maxVideos != null || o.publish === false
+}
+
+/**
  * WHICH SCHEDULES AN UPDATE FIRES (5 Oct; Heinrich: "a finished run reaches
  * the platform by itself; review holds ONLY the email").
  *
@@ -61,15 +78,17 @@ export interface ReportTarget {
  *   client's past issues.
  *   A MANUAL update (trigger-run without `sendReport`): the active weekly-read
  *   schedules alone, each with `noEmail`. Nothing else fires (a legacy digest,
- *   the monthly, the briefs), and nobody is emailed.
+ *   the monthly, the briefs), and nobody is emailed. A manual TEST run
+ *   (`isTestRun`: a rehearsal, a capped run, `publish: false`) fires nothing.
  *
  * Pure: `inngest/functions/report.ts` asks it in `find-due-schedules`.
  */
 export function reportTargets(
   schedules: readonly (Pick<ScheduleRow, 'id' | 'name' | 'cadence' | 'active' | 'last_sent_at' | 'starter_key'> & { artefact?: string | null })[],
   runDate: string,
-  opts: { manual?: boolean } = {},
+  opts: { manual?: boolean; testRun?: boolean } = {},
 ): ReportTarget[] {
+  if (opts.manual && opts.testRun) return []
   const out: ReportTarget[] = []
   for (const s of schedules) {
     if (!opts.manual && scheduleDue(s, s.last_sent_at, runDate)) out.push({ id: s.id, name: s.name })

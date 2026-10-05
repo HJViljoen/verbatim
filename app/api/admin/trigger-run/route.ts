@@ -11,8 +11,10 @@ import { inngest } from '@/inngest/client'
 // it grants. Sends the same pipeline/run.requested event the scheduler emits,
 // minus sendReport — manual runs never email the client. Since 5 Oct a manual
 // run's weekly read is still built and put in the client's past issues, with
-// no email to anyone (`reportTargets`, lib/schedules/due.ts); pass
-// `options.sendReport: true` only to replay a scheduled run, which emails.
+// no email to anyone (`reportTargets`, lib/schedules/due.ts), unless the run
+// is a test (`isTestRun`: a rehearsal that gathers nothing, `videoLimit` /
+// `maxVideos`, or `options.publish: false`). Pass `options.sendReport: true`
+// only to replay a scheduled run, which emails.
 
 export async function POST(req: Request): Promise<Response> {
   if (!adminKeyValid(req.headers.get('x-admin-key'))) {

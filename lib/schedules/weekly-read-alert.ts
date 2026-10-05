@@ -36,7 +36,7 @@ const NEXT: Record<WeeklyReadAlertKind, string> = {
   failed: 'Nothing reached the list. Open the schedule in the Studio (view the workspace first): Send now builds it again and holds it for review.',
   review_unsent: 'It is built and held. Open the schedule in the Studio (view the workspace first), read the email and press Send.',
   delivery_failed: 'It is held again with the reason. Open the schedule in the Studio (view the workspace first) and press Send again once the cause is fixed.',
-  unpublished: 'It is built and held, and an update tries again by itself. If it is still not in the past issues when you look, open the schedule in the Studio (view the workspace first) and press "Add to past issues (not emailed)".',
+  unpublished: 'It is built and held. The update\'s step retries it twice and then nothing does (Send now in the Studio does not retry at all). If it is not in the past issues when you look, open the schedule in the Studio (view the workspace first) and press "Add to past issues (not emailed)".',
 }
 
 /** The alert's subject and text. Pure. */

@@ -30,7 +30,7 @@ import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly, sendsWee
 import { snapshotWeeklyRead, WeeklyReadNotReadyError, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
 import { renderWeeklyReadEmail } from '../email/weekly-read'
 import { alertWeeklyRead } from './weekly-read-alert'
-import { readyForReview } from './deliver'
+import { deliverSend, readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, weeklyReadPath, type ExistingSend } from './claim'
 import { publishSend, type PublishOutcome } from './publish'
@@ -492,9 +492,12 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
 
     // 3. The PDF, then the PNGs the email may carry inline, one browser session.
     // A review build renders no PNGs: the recipient email comes later, from
-    // deliverSend, which renders its own. A weekly read that emails nobody
-    // ('hold') is built exactly as a review build is, minus the review email.
-    const reviewing = recording && (path ? path !== 'send' : schedule.review)
+    // deliverSend, which renders its own. EVERY weekly read is built exactly
+    // as a review build is (5 Oct): stood `ready` and put in the past issues
+    // first, and only then emailed: to the reviewer ('review'), to nobody
+    // ('hold'), or to the list through deliverSend ('send'), so a refused
+    // email never keeps a ready read off the platform.
+    const reviewing = recording && (path ? true : schedule.review)
     // The weekly report says every number in words (lib/email/weekly.tsx), so
     // it asks the runner for no PNGs at all and an image-blocking client loses
     // nothing.
@@ -559,9 +562,10 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // delivers it (deliverSend). Nothing reaches the recipients yet.
     if (reviewing && sendId) {
       const now = new Date().toISOString()
-      // A weekly read that emails nobody ('hold') stands as `ready` here, as
-      // `readyForReview` would stand it, and no review email is sent.
-      const hold = path === 'hold'
+      // A weekly read that emails no reviewer ('hold', and 'send', whose email
+      // is the list's) stands as `ready` here, as `readyForReview` would
+      // stand it, and no review email is sent.
+      const hold = path === 'hold' || path === 'send'
       const { error: heldError } = await admin
         .from('report_sends')
         .update({
@@ -592,6 +596,19 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
       }
       if (weeklyReadSend) {
         const out = published.out ?? await publishHeld()
+        // REVIEW OFF, A LIST ('send'): in the past issues already, the list
+        // gets it now, through the Send's own door (deliverSend: a CAS on
+        // `ready`, so a Send pressed meanwhile cannot email it twice). A
+        // refused email puts it back to `ready` with the reason and alerts
+        // ('delivery_failed'); it stays on the platform, and Send emails it.
+        if (path === 'send') {
+          const d = await deliverSend({ admin, sendId: heldId, baseUrl: a.baseUrl, renderBaseUrl: a.renderBaseUrl, mode: 'auto' })
+          // Neither emailed nor published: the retry publishes it, as below.
+          if (d.status === 'failed' && out.status === 'refused') {
+            await alertWeeklyRead('unpublished', { schedule, runId, company: companyForAlert, reason: `"${ready.subject ?? snap.title}": Built and held, and not added to the past issues: ${out.error}` })
+          }
+          return { status: d.status, sendId, snapshotId, artifactId, subject: d.subject ?? ready.subject, ms: ms(), ...(d.error ? { error: d.error } : {}) }
+        }
         // Built and held, and not in the past issues. The row stays `ready`
         // (nothing about the build failed); the operator hears once, and the
         // route answers 500, so Inngest retries the step, which finds the row

@@ -97,6 +97,11 @@ export interface PipelineRunOptions {
   // rather than a recomputation from tracking_configs. Absent on a manual run,
   // which is exactly the distinction worth keeping.
   scheduledFor?: string | null
+  // `false`: a manual run's weekly read is NOT put in the client's past issues
+  // (a test; `isTestRun`, lib/schedules/due.ts, read off the run row's
+  // options). Absent, a real manual run's read is (5 Oct). A rehearsal that
+  // gathered nothing, or a capped run (videoLimit / maxVideos), never is.
+  publish?: boolean
   // Analysis-only resume: reuse an existing run row (reset to 'running') and
   // skip the gather fan-out entirely — the corpus is already in the DB. The
   // operator lever for finishing a run whose analysis half died, without
@@ -226,7 +231,7 @@ export const runPipeline = inngest.createFunction(
     // the run row at 'running' forever — pages and monitors need a terminal
     // state (found live: the first cloud run's gather timeouts did exactly this).
     onFailure: async ({ event }) => {
-      const original = (event.data as { event?: { data?: { clientId?: string } } }).event
+      const original = (event.data as { event?: { data?: { clientId?: string; options?: PipelineRunOptions } } }).event
       const clientId = original?.data?.clientId
       if (!clientId) return
       const message = (event.data as { error?: { message?: string } }).error?.message ?? 'pipeline function failed'
@@ -240,7 +245,13 @@ export const runPipeline = inngest.createFunction(
         .select('company_name').eq('id', clientId).maybeSingle()
       await sendAlertEmail(
         `Verbatim run FAILED — ${client?.company_name ?? clientId}`,
-        `Pipeline run failed after retries.\n\nClient: ${client?.company_name ?? '?'} (${clientId})\nError: ${message}\n\nResume lever: POST /api/admin/trigger-run with options {runId, skipGather:true}.`,
+        `Pipeline run failed after retries.\n\nClient: ${client?.company_name ?? '?'} (${clientId})\nError: ${message}\n\nResume lever: POST /api/admin/trigger-run with options {runId, skipGather:true}.` +
+          // A resume without sendReport is a MANUAL run (5 Oct): its weekly
+          // read goes in the past issues and nobody, the reviewer included,
+          // is emailed. A scheduled run's resume must say it is one.
+          (original?.data?.options?.sendReport
+            ? ` This was a SCHEDULED run: add "sendReport": true to those options, so its report runs as scheduled and the review email still goes out.`
+            : ''),
       )
     },
   },
@@ -482,7 +493,7 @@ export const runPipeline = inngest.createFunction(
               .select('company_name').eq('id', clientId).maybeSingle()
             return sendAlertEmail(
               `Verbatim run SKIPPED — ${client?.company_name ?? clientId}`,
-              `A scheduled run was skipped because another run is already in flight.\n\nClient: ${client?.company_name ?? '?'} (${clientId})\nReason: ${reason}\n\nNo report was sent for this period. Resume lever: POST /api/admin/trigger-run once the in-flight run closes.`,
+              `A scheduled run was skipped because another run is already in flight.\n\nClient: ${client?.company_name ?? '?'} (${clientId})\nReason: ${reason}\n\nNo report was sent for this period. Resume lever: POST /api/admin/trigger-run with options {"sendReport": true} once the in-flight run closes (without it the run is a manual one, and the review email does not go out).`,
             )
           })
           .catch(() => ({ sent: false }))

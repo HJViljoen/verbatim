@@ -376,12 +376,24 @@ describe('L1: a Chromium hiccup never stops the weekly read, and every failure r
     expect(mail.alert[0].subject).toBe('Verbatim weekly read waiting for review (the review email did not go): Sealand')
   })
 
-  it('the email to the list not accepted (review off): failed, and the operator is told at once', async () => {
+  it('the email to the list not accepted (review off): failed and told at once, and the read stays in the past issues for Send', async () => {
     vi.mocked(emailMod.sendReportEmail).mockResolvedValueOnce({ sent: false })
     const w = world({ status: 'ready', data: frozen(sealandRead()) }, schedule({ review: false }))
     const r = await runSchedule({ admin: w.admin, schedule: schedule({ review: false }), runId: RUN, baseUrl: APP, mode: 'send' })
     expect(r.status).toBe('failed')
-    expect(mail.alert.map((x) => x.subject)).toEqual(['Verbatim weekly read failed on its way out: Sealand'])
+    // Published before the email was tried (5 Oct), and held again with the
+    // reason, so the operator's Send emails it.
+    expect(w.tables.report_sends[0]).toMatchObject({ status: 'ready', published_at: expect.any(String), error: expect.stringMatching(/email not sent/) })
+    expect(mail.alert.map((x) => x.subject)).toEqual(['Verbatim weekly read did not reach its list: Sealand'])
+    // Inngest retries the step: it finds the build waiting, and emails nobody.
+    const again = await runSchedule({ admin: w.admin, schedule: schedule({ review: false }), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(again.status).toBe('ready')
+    expect(mail.report).toEqual([])
+    expect(w.tables.report_snapshots).toHaveLength(1)
+    const out = await deliverSend({ admin: w.admin, sendId: r.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'op' })
+    expect(out.status).toBe('sent')
+    expect(mail.report).toHaveLength(1)
+    expect(mail.report[0].to).toEqual(RECIPIENTS)
   })
 
   it("the operator's Send not accepted: it waits again, and the operator is told", async () => {
@@ -539,14 +551,27 @@ describe('5 Oct: every weekly read the runner builds is in the client\'s past is
     expect(publishMod.publishSend).not.toHaveBeenCalled()
   })
 
-  it('review off, a list, a scheduled update: straight to the list as before, on the platform by being sent, nothing published', async () => {
+  it('review off, a list, a scheduled update: in the past issues BEFORE the email is tried, then straight to the list', async () => {
     const s = schedule({ review: false })
     const w = world(ready(), s)
+    let publishedWhenEmailed: unknown = 'not emailed'
+    vi.mocked(emailMod.sendReportEmail).mockImplementationOnce(async (m) => {
+      publishedWhenEmailed = sendRow(w).published_at
+      mail.report.push(m as (typeof mail.report)[number])
+      return { sent: true }
+    })
     const r = await runSchedule({ admin: w.admin, schedule: s, runId: RUN, baseUrl: APP, mode: 'send' })
     expect(r.status).toBe('sent')
-    expect(sendRow(w).published_at ?? null).toBeNull()
-    expect(changes(w)).toEqual([])
+    expect(publishedWhenEmailed).toEqual(expect.any(String))
+    expect(sendRow(w)).toMatchObject({ status: 'sent', published_at: expect.any(String), approved_by: null })
+    expect(changes(w)).toEqual([expect.objectContaining({ field: 'published', actor_kind: 'pipeline', run_id: RUN })])
+    expect(mail.report).toHaveLength(1)
     expect(mail.report[0].to).toEqual(RECIPIENTS)
+    expect(mail.review).toEqual([])
+    // A retry finds it sent: nothing more.
+    const again = await runSchedule({ admin: w.admin, schedule: s, runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(again.status).toBe('already_sent')
+    expect(mail.report).toHaveLength(1)
   })
 
   it('Send now by a person: that person is the actor and published_by', async () => {

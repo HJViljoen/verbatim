@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { monthKey, quarterKey, reportTargets, scheduleDue } from './due'
+import { isTestRun, monthKey, quarterKey, reportTargets, scheduleDue } from './due'
 
 const run = '2026-09-06T04:05:00Z' // Sunday 06:05 SAST
 
@@ -83,5 +83,27 @@ describe('reportTargets: which schedules an update fires (5 Oct)', () => {
   it('the weekly read is named by its starter key where the artefact column is absent', () => {
     const legacy = sched({ id: 'wr', name: 'This week in your market', starter_key: 'weekly_read', artefact: undefined })
     expect(reportTargets([legacy], run, { manual: true })).toEqual([{ id: 'wr', name: 'This week in your market', noEmail: true }])
+  })
+})
+
+describe('isTestRun: a test run never publishes (the lead\'s call, 5 Oct)', () => {
+  it('a real manual run is not one: a full gather (Össur\'s 4 Oct run, options {}), or a resume of its own row', () => {
+    expect(isTestRun({ id: '555af400', options: {} })).toBe(false)
+    expect(isTestRun({ id: '555af400', options: null })).toBe(false)
+    expect(isTestRun({ id: 'r1', options: { runId: 'r1', skipGather: true } })).toBe(false)
+    expect(isTestRun({ id: 'r1', options: { publish: true } })).toBe(false)
+  })
+  it('a rehearsal that gathered nothing, a capped run, publish:false, or a run row not read, is one', () => {
+    expect(isTestRun({ id: 'e80e9347', options: { skipGather: true } })).toBe(true)
+    expect(isTestRun({ id: 'r1', options: { videoLimit: 5 } })).toBe(true)
+    expect(isTestRun({ id: 'r1', options: { maxVideos: 20 } })).toBe(true)
+    expect(isTestRun({ id: 'r1', options: { publish: false } })).toBe(true)
+    expect(isTestRun(null)).toBe(true)
+  })
+  it('a manual test run fires nothing; a scheduled run is never dropped for it', () => {
+    const read = { id: 'wr', name: 'This week in your market', cadence: 'every_update' as const, active: true, last_sent_at: null, starter_key: 'weekly_read', artefact: 'weekly_read' }
+    expect(reportTargets([read], run, { manual: true, testRun: true })).toEqual([])
+    expect(reportTargets([read], run, { manual: true, testRun: false })).toEqual([{ id: 'wr', name: 'This week in your market', noEmail: true }])
+    expect(reportTargets([read], run, { testRun: true })).toEqual([{ id: 'wr', name: 'This week in your market' }])
   })
 })
