@@ -101,6 +101,8 @@ describe('the budget: caps, no retry, one clock for the step', () => {
     // The one that cost Össur its read, and our own budget's.
     expect(isTransient(asTimeout(new Error('Ask verdict call failed: Request timed out.'), 'check'))).toBe(true)
     expect(isTransient(new Error('Ask verdict call failed: Request timed out.'))).toBe(true)
+    expect(isTransient(Object.assign(new Error('429 You exceeded your current quota'), { status: 429, code: 'insufficient_quota' }))).toBe(false)
+    expect(isTransient(new Error('writer failed', { cause: Object.assign(new Error('quota'), { status: 429, code: 'insufficient_quota' }) }))).toBe(false)
     expect(isTransient(new WeekReadTimeoutError('no time left for the check call: 4 s free of the step\'s 250 s'))).toBe(true)
     expect(isTransient(new Error('Request was aborted.'))).toBe(true)
     // The OpenAI SDK's statuses (it names no class; `status` is set).

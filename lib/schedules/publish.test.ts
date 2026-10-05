@@ -7,7 +7,7 @@ import { fakeDb } from '../test/fake-db'
 import { isMissingPublishColumns, onPlatform, publishedNotEmailed, PUBLISHED_NOT_EMAILED } from './platform-state'
 import { publishRefusal, publishSend } from './publish'
 
-// "Publish to the platform (not emailed)" (the backfill, 1 Oct evening; lead's
+// "Add to past issues (not emailed)", once "Publish to the platform" (the backfill, 1 Oct evening; lead's
 // ruling 3): a held weekly build goes on the client's pages without an email,
 // as a recorded state of its own (`published_at`), never a fake send.
 

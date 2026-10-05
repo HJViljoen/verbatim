@@ -130,9 +130,9 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
   }
 
   // ON THE PLATFORM, NOT EMAILED (the backfill, 1 Oct; lib/schedules/publish.ts):
-  // the operator puts a held weekly build on the client's platform as an issue
-  // without emailing anyone (its reads are on the pages already, 5 Oct). Send
-  // still emails it afterwards, as before.
+  // the operator adds a held weekly build to the client's past issues without
+  // emailing anyone. Its reads are on the pages already, from the run on (5 Oct),
+  // so this no longer puts anything on the pages. Send still emails it, as before.
   const publish = async () => {
     if (!schedule || !ready) return
     setBusy('publish'); setConfirm(null); setStatus(null)
@@ -167,7 +167,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
               ? `The report is built, and nothing was recorded as sent. It stopped partway, so it is possible some of the ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} already have it; sending it again goes to all of them. Anyone here can send it.`
               : published
                 ? `Its read is on the client's pages, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
-                : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}${canPublish ? ' Or put it on the platform without emailing anyone.' : ''}`}
+                : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}${canPublish ? ' Or add it to the past issues without emailing anyone.' : ''}`}
           </p>
           {ready.error && <p className="text-[12px] text-negative">The last attempt did not go: {ready.error}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -187,13 +187,13 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
               : <button type="button" onClick={() => setHeldPreview((v) => !v)} className={btnQuiet}>{heldPreview ? 'Hide the email' : 'Read the email'}</button>}
             {canPublish && (confirm === 'publish' ? (
               <span className="inline-flex items-center gap-2 text-[12px]">
-                Put it on the platform without emailing anyone?
+                Add it to the past issues without emailing anyone?
                 <button type="button" onClick={publish} className={btnPrimary}>Yes, publish</button>
                 <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
               </span>
             ) : (
               <button type="button" onClick={() => setConfirm('publish')} disabled={busy != null} className={btnQuiet}>
-                {busy === 'publish' ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Publishing…</> : 'Publish to the platform (not emailed)'}
+                {busy === 'publish' ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Publishing…</> : 'Add to past issues (not emailed)'}
               </button>
             ))}
           </div>

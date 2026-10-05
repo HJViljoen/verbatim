@@ -147,7 +147,9 @@ export function isTransient(e: unknown): boolean {
   for (let depth = 0; depth < 5 && x != null; depth++) {
     if (isTimeout(x)) return true
     if (typeof x !== 'object') return false
-    const err = x as { status?: unknown; message?: unknown; cause?: unknown }
+    const err = x as { status?: unknown; message?: unknown; cause?: unknown; code?: unknown }
+    // Out of credits is a 429 that no retry fixes: alert on the first attempt.
+    if (err.code === 'insufficient_quota' || (typeof err.message === 'string' && /insufficient_quota|exceeded your current quota/i.test(err.message))) return false
     if (typeof err.status === 'number' && transientStatus(err.status)) return true
     if (typeof err.message === 'string' && TRANSIENT_WORDS.test(err.message)) return true
     x = err.cause
