@@ -44,7 +44,7 @@ describe('the five reports', () => {
     expect(personOf('press@agency.example', members)).toEqual({ name: 'press@agency.example', initials: 'P', email: 'press@agency.example' })
   })
 
-  it('latest issue: the newest sent day; else the weekly\'s first Monday where it sends; else early in the briefs\' month', () => {
+  it('latest issue: the newest issue\'s day; else the weekly\'s first Monday where it sends; else early in the briefs\' month', () => {
     const none = studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [], members, now: NOW })
     expect(none[0].latest).toBe('First issue Mon 5 Oct')
     expect(none.slice(1).map((r) => r.latest)).toEqual(Array(4).fill('First issue early October'))
@@ -127,9 +127,17 @@ describe('past issues: a build put on the platform without its email (the backfi
     expect(pastIssues([{ ...published, sent_at: '2026-10-05T07:00:00Z' }], [weeklyRead])[0].sentOn).toBe('Mon 5 Oct')
   })
 
-  it('is not the weekly\'s latest issue: that is the latest EMAIL', () => {
+  // 5 Oct: the row never contradicts the list. A published issue is the
+  // weekly's latest issue, by the day it reached the platform.
+  it('is the weekly\'s latest issue, as the past issues date it', () => {
     const rows = studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [published], members, now: NOW })
-    expect(rows.find((r) => r.artefact === 'weekly_read')?.latest).toBe('First issue Mon 5 Oct')
+    expect(rows.find((r) => r.artefact === 'weekly_read')?.latest).toBe('Thu 1 Oct')
+    // The newer of a published and a sent issue, whichever way it got there.
+    expect(studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [published, sent], members, now: NOW })[0].latest).toBe('Mon 5 Oct')
+    const laterPublished = { ...published, id: 'p2', published_at: '2026-10-12T05:00:00Z' }
+    expect(studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [sent, laterPublished], members, now: NOW })[0].latest).toBe('Mon 12 Oct')
+    // With nobody on the list, a published issue is still the latest (no "First issue" promise needed).
+    expect(studioRows({ tenant: 'Ossur', schedules: [{ ...weeklyRead, recipients: [] }], sends: [published], members, now: NOW })[0].latest).toBe('Thu 1 Oct')
   })
 })
 

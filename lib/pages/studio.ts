@@ -217,15 +217,18 @@ export function studioRows(input: {
   return STUDIO_REPORTS.map((def) => {
     const schedule = input.schedules.find((s) => studioArtefactOf(s) === def.artefact) ?? null
     const ids = new Set(input.schedules.filter((s) => studioArtefactOf(s) === def.artefact).map((s) => s.id))
-    // The latest ISSUE is the latest email: a build put on the platform
-    // without its email is not one (it is listed in the past issues, by the day it was published).
+    // The latest ISSUE is the newest one in the past issues: on the platform,
+    // emailed or put there without its email, dated as the list dates it
+    // (`issueAt`). It was the latest email alone until 5 Oct, when every
+    // weekly read began reaching the platform by itself, and the row then
+    // contradicted the list ("First issue" beside two past issues).
     const newest = input.sends
-      .filter((x): x is StudioSend & { sent_at: string } => x.schedule_id != null && ids.has(x.schedule_id) && Boolean(x.sent_at))
-      .sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0] ?? null
+      .filter((x) => x.schedule_id != null && ids.has(x.schedule_id) && issueAt(x) !== '')
+      .sort((a, b) => issueAt(b).localeCompare(issueAt(a)))[0] ?? null
     const recipients = schedule?.recipients ?? []
     const sending = Boolean(schedule?.active) && recipients.length > 0
     const latest = newest
-      ? issueDay(newest.sent_at)
+      ? issueDay(issueAt(newest))
       : def.kind === 'weekly'
         ? (sending ? `First issue ${issueDay(nextMonday(input.now))}` : null)
         : `First issue early ${firstBriefMonth(input.now)}`
