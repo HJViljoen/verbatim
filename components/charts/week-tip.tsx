@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useState, type FocusEvent, type KeyboardEvent, type PointerEvent, type RefObject } from 'react'
 
 // THE WEEK CHARTS' TOOLTIP, ONE BEHAVIOUR FOR ALL THREE (Heinrich, 5 Oct: "make
 // it so the numbers show when I hover over the bar in the graph? Because
@@ -45,14 +45,17 @@ export function tipListeners(active: number | null, pinned: number | null): { es
 /**
  * The state of one chart's tooltip. `open` is the week shown before anything
  * is hovered, focused or tapped (a static render; null on the pages). Returns
- * the week shown (or null), the ref for the chart's box (a tap outside it
- * closes a tapped week), and the handlers for week `i`'s button.
+ * the week shown (or null) and the handlers for week `i`'s button. `box` is
+ * the caller's ref on the chart's box (a tap outside it closes a tapped week);
+ * the caller owns it, so nothing this returns holds a ref and the handlers can
+ * be built during render (React's refs rule).
  */
-export function useWeekTip(open: number | null = null) {
+export function useWeekTip(box: RefObject<HTMLElement | null>, open: number | null = null) {
   const [active, setActive] = useState<number | null>(null)
   const [pinned, setPinned] = useState<number | null>(open)
-  const pointer = useRef<string | null>(null)
-  const box = useRef<HTMLDivElement>(null)
+  // The pointer that pressed last, as state rather than a ref: pointerdown and
+  // click are separate discrete events, so the click's handler reads it fresh.
+  const [pointer, setPointer] = useState<string | null>(null)
 
   const listen = tipListeners(active, pinned)
   useEffect(() => {
@@ -73,7 +76,7 @@ export function useWeekTip(open: number | null = null) {
     }
     document.addEventListener('pointerdown', outside)
     return () => document.removeEventListener('pointerdown', outside)
-  }, [listen.outside])
+  }, [listen.outside, box])
 
   const target = (i: number) => ({
     onPointerEnter: (e: PointerEvent<HTMLElement>) => {
@@ -83,14 +86,14 @@ export function useWeekTip(open: number | null = null) {
       if (e.pointerType === 'mouse') setActive((a) => (a === i ? null : a))
     },
     onPointerDown: (e: PointerEvent<HTMLElement>) => {
-      pointer.current = e.pointerType
+      setPointer(e.pointerType)
     },
     // A tap pins the week and a second tap on it lets it go. A mouse shows it
     // on hover already, and Enter or Space on a focused button (no pointer)
     // shows it through the focus.
     onClick: () => {
-      const kind = pointer.current
-      pointer.current = null
+      const kind = pointer
+      setPointer(null)
       if (kind === 'touch' || kind === 'pen') setPinned((p) => (p === i ? null : i))
     },
     onFocus: (e: FocusEvent<HTMLElement>) => {
@@ -105,5 +108,5 @@ export function useWeekTip(open: number | null = null) {
     },
   })
 
-  return { shown: active ?? pinned, box, target }
+  return { shown: active ?? pinned, target }
 }

@@ -24,6 +24,6 @@ describe('the week tooltip\'s document listeners', () => {
     const src = readFileSync(resolve(__dirname, 'week-tip.tsx'), 'utf8')
     expect(src).toMatch(/const listen = tipListeners\(active, pinned\)/)
     expect(src).toMatch(/if \(!listen\.escape\) return\s+const escape[\s\S]*?addEventListener\('keydown', escape\)[\s\S]*?\}, \[listen\.escape\]\)/)
-    expect(src).toMatch(/if \(!listen\.outside\) return\s+const outside[\s\S]*?addEventListener\('pointerdown', outside\)[\s\S]*?\}, \[listen\.outside\]\)/)
+    expect(src).toMatch(/if \(!listen\.outside\) return\s+const outside[\s\S]*?addEventListener\('pointerdown', outside\)[\s\S]*?\}, \[listen\.outside, box\]\)/)
   })
 })

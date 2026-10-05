@@ -122,10 +122,11 @@ export function WeekBarsHover({
    *  static render; the pages pass none). */
   open?: number | null
 }) {
-  const tip = useWeekTip(open)
-  const hover = tip.shown
   const n = Math.max(1, details.length)
   const boxRef = useRef<HTMLDivElement>(null)
+  const tipBox = useRef<HTMLDivElement>(null)
+  const tip = useWeekTip(tipBox, open)
+  const hover = tip.shown
   const plotRef = useRef<HTMLDivElement>(null)
   const [fit, setFit] = useState<number | null>(null)
   const weeks = slots ?? details.length
@@ -167,7 +168,7 @@ export function WeekBarsHover({
   const shown = hover ?? (detail === 'panel' ? initial : null)
   const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
   const chart = (
-    <div ref={tip.box} className={cn('grid min-w-0', labelWidth === 'wide' ? 'grid-cols-[88px_minmax(0,1fr)] xl:grid-cols-[116px_minmax(0,1fr)]' : 'grid-cols-[88px_minmax(0,1fr)]')}>
+    <div ref={tipBox} className={cn('grid min-w-0', labelWidth === 'wide' ? 'grid-cols-[88px_minmax(0,1fr)] xl:grid-cols-[116px_minmax(0,1fr)]' : 'grid-cols-[88px_minmax(0,1fr)]')}>
       <div className="relative" style={{ height }}>{labels}</div>
       {/* UNDER THE PLOT'S NARROWEST WIDTH THE STRIP SCROLLS SIDEWAYS, AND IT
           OPENS AT THE LATEST WEEK, with no script: the SCROLL BOX ITSELF is the

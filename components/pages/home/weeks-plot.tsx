@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { WeekDetailRows } from '@/components/charts/week-bars-hover'
 import { useWeekTip, WEEK_TIP_CARD } from '@/components/charts/week-tip'
 import type { WeekDetail } from '@/lib/charts/week-bars'
@@ -35,7 +36,8 @@ export function HomeWeeksPlot({ weeks, details, label, open = null }: {
    *  static render; the page passes none). */
   open?: number | null
 }) {
-  const tip = useWeekTip(open)
+  const box = useRef<HTMLDivElement>(null)
+  const tip = useWeekTip(box, open)
   const n = weeks.columns.length
   const at = (v: number, max: number) => (max > 0 ? (v / max) * PLOT_TOP * 100 : 0)
   // The comments line: one segment per run of consecutive weeks that have a figure.
@@ -51,7 +53,7 @@ export function HomeWeeksPlot({ weeks, details, label, open = null }: {
   const pct = (f: number): string => `${(f * 100).toFixed(3)}%`
   return (
     <div
-      ref={tip.box}
+      ref={box}
       className="relative flex h-[190px]"
       {...(label ? { role: 'group', 'aria-label': label } : { 'aria-hidden': true })}
     >
