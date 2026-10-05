@@ -5,7 +5,7 @@
 -- One tenant, in the week of 28 Sep (Sealand's shape: one unchecked video
 -- among checked ones):
 --   y1  kept by GPT at its gather, 3 comments            → checked
---   y2  the heuristic default, never judged, 1 comment   → unchecked
+--   y2  the heuristic default, never judged, 1 comment   → unchecked (uploaded 1 Sep: older; its comment dated in October)
 --   y3  default, judged later and DROPPED, 2 comments    → unchecked
 --   y4  default, judged later and KEPT, 4 comments       → checked
 --   r1  a rival's video, the default, 5 comments         → unchecked (its own audience row)
@@ -16,13 +16,13 @@ begin;
 insert into public.clients (id, company_name) values ('00000000-0000-4000-8000-00000000c0c2', 'Unchecked comments check');
 insert into public.pipeline_runs (id, client_id, status)
   values ('00000000-0000-4000-8000-0000000000a2', '00000000-0000-4000-8000-00000000c0c2', 'completed');
-insert into public.videos (id, client_id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name, analyzed_lane, caption, hashtags, topics, source_keywords)
+insert into public.videos (id, client_id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name, analyzed_lane, caption, hashtags, topics, source_keywords, upload_date)
 values
-  ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y1', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}'),
-  ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y2', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}'),
-  ('00000000-0000-4000-8000-0000000000d3', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y3', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}'),
-  ('00000000-0000-4000-8000-0000000000d4', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y4', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}'),
-  ('00000000-0000-4000-8000-0000000000d5', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'r1', 'u', 'a', false, true, 'Rival', 'full', 'a bag', '{}', '{}', '{}');
+  ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y1', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}', '2026-09-28'),
+  ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y2', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}', '2026-09-01'),
+  ('00000000-0000-4000-8000-0000000000d3', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y3', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}', '2026-09-28'),
+  ('00000000-0000-4000-8000-0000000000d4', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'y4', 'u', 'a', false, false, null, 'full', 'a bag', '{}', '{}', '{}', '2026-09-28'),
+  ('00000000-0000-4000-8000-0000000000d5', '00000000-0000-4000-8000-00000000c0c2', 'youtube', 'r1', 'u', 'a', false, true, 'Rival', 'full', 'a bag', '{}', '{}', '{}', '2026-09-28');
 -- Comments dated in the week of 28 Sep: y1 x3, y2 x1, y3 x2, y4 x4, r1 x5;
 -- and y2 x6 in the week of 21 Sep.
 insert into public.comments (client_id, run_id, platform, video_id, comment_id, comment_date)
@@ -45,19 +45,25 @@ insert into public.gate_verdicts (client_id, run_id, platform, video_id, kept, r
   ('00000000-0000-4000-8000-00000000c0c2', null, 'youtube', 'y4', true, 're-judged: about bags', 'gpt', '2026-10-01 18:00Z');
 
 -- The week of 28 Sep, per audience: the category holds y1-y4 (two unchecked,
--- y2 and y3, with 1 + 2 comments), the rival r1 (unchecked, 5 comments).
+-- y2 and y3, with 1 + 2 comments, y2's dated in October; both under 5, as
+-- are y1 and y4; y2 older), the rival r1 (unchecked, 5 comments dated in October).
 do $$ declare r record; begin
-  select videos, comments, unchecked, unchecked_comments into r
+  select videos, comments, comments_next_month, under_5, older_videos, unchecked,
+         unchecked_comments, unchecked_comments_next_month, unchecked_under_5, unchecked_older_videos into r
   from public.market_week_volumes('00000000-0000-4000-8000-00000000c0c2', '2026-09-28', '2026-10-05')
   where audience = 'industry-other';
-  if (r.videos, r.comments, r.unchecked, r.unchecked_comments) is distinct from (4, 10, 2, 3) then
-    raise exception 'category 28 Sep: % videos, % comments, % unchecked, % unchecked comments; expected 4, 10, 2, 3', r.videos, r.comments, r.unchecked, r.unchecked_comments;
+  if (r.videos, r.comments, r.comments_next_month, r.under_5, r.older_videos, r.unchecked) is distinct from (4, 10, 5, 4, 1, 2) then
+    raise exception 'category 28 Sep: %; expected videos 4, comments 10, next month 5, under 5 4, older 1, unchecked 2', r;
   end if;
-  select videos, comments, unchecked, unchecked_comments into r
+  if (r.unchecked_comments, r.unchecked_comments_next_month, r.unchecked_under_5, r.unchecked_older_videos) is distinct from (3, 1, 2, 1) then
+    raise exception 'category 28 Sep, the unchecked: %; expected comments 3, next month 1, under 5 2, older 1', r;
+  end if;
+  select videos, comments, unchecked, unchecked_comments, unchecked_comments_next_month, unchecked_under_5, unchecked_older_videos into r
   from public.market_week_volumes('00000000-0000-4000-8000-00000000c0c2', '2026-09-28', '2026-10-05')
   where audience = 'competitor:Rival';
-  if (r.videos, r.comments, r.unchecked, r.unchecked_comments) is distinct from (1, 5, 1, 5) then
-    raise exception 'rival 28 Sep: % videos, % comments, % unchecked, % unchecked comments; expected 1, 5, 1, 5', r.videos, r.comments, r.unchecked, r.unchecked_comments;
+  if (r.videos, r.comments, r.unchecked, r.unchecked_comments, r.unchecked_comments_next_month, r.unchecked_under_5, r.unchecked_older_videos)
+     is distinct from (1, 5, 1, 5, 5, 0, 0) then
+    raise exception 'rival 28 Sep: %; expected 1 video, 5 comments, 1 unchecked with 5 comments, 5 next month, none under 5, none older', r;
   end if;
 end $$;
 
@@ -75,11 +81,11 @@ end $$;
 insert into public.gate_verdicts (client_id, run_id, platform, video_id, kept, reason, source, created_at) values
   ('00000000-0000-4000-8000-00000000c0c2', null, 'youtube', 'r1', true, 're-judged: about bags', 'gpt', '2026-10-01 18:00Z');
 do $$ declare r record; begin
-  select videos, comments, unchecked, unchecked_comments into r
+  select unchecked, unchecked_comments, unchecked_comments_next_month, unchecked_under_5, unchecked_older_videos into r
   from public.market_week_volumes('00000000-0000-4000-8000-00000000c0c2', '2026-09-28', '2026-10-05')
   where audience = 'competitor:Rival';
-  if (r.unchecked, r.unchecked_comments) is distinct from (0, 0) then
-    raise exception 'rival kept: % unchecked, % unchecked comments; expected 0 and 0', r.unchecked, r.unchecked_comments;
+  if (r.unchecked, r.unchecked_comments, r.unchecked_comments_next_month, r.unchecked_under_5, r.unchecked_older_videos) is distinct from (0, 0, 0, 0, 0) then
+    raise exception 'rival kept: %; expected nothing unchecked, every share 0', r;
   end if;
 end $$;
 

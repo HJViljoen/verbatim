@@ -7,7 +7,7 @@ import {
   buildWeekLine, dueHasPassed, passedBeforeOf, pendingWeekLine, pooledWeekPoints, withChartCadence, type ChartRun, type WeekLineBlock, type WeekLineObject, type WeekPoint,
   type WeekRead,
 } from '../../reading/week-line'
-import { pooledWeekVolumes, weekAxis, weekRules, weeksSinceOurChanges, type MarketWeekRow, type WeekVolumesBlock } from '../../reading/weeks'
+import { checkedRows, pooledWeekVolumes, weekAxis, weekRules, weeksSinceOurChanges, type MarketWeekRow, type WeekVolumesBlock } from '../../reading/weeks'
 import { subjectCalibration } from '../../subjects/calibration-state'
 import { selectAll } from '../../supabase-admin'
 import type { WeekLineConfig } from '../../week-line-config'
@@ -46,9 +46,10 @@ export interface WeekVolumesInput {
   /** The kept reads and points, once the line prints (`cfg.print`). */
   line?: { reads: readonly WeekRead[]; points: readonly WeekPoint[]; objects?: readonly WeekLineObject[] } | null
   nextUpdateAfter?: ((instant: string) => string | null) | null
-  /** Every run, any status, with its errors (`loadCadenceRuns`), for the
-   *  bars' cadence test (`chartCadenceBroken`). Absent: no week is cut for
-   *  cadence (a fixture). */
+  /** Every run, any status, with its errors and window (`loadCadenceRuns`),
+   *  for the bars' cadence test (`chartCadenceBroken`) and where a change made
+   *  inside a run before its gather starts (`preGatherCutBefore`). Absent: no
+   *  week is cut for cadence, and every change cuts at its own week (a fixture). */
   runs?: readonly ChartRun[] | null
 }
 
@@ -56,12 +57,17 @@ export interface WeekVolumesInput {
  * The weeks on the axis as counts, our changes on their weeks, and the
  * same-age line: its block when Heinrich has said print and points are kept,
  * its pending state until then, and nothing for a tenant with no entry.
+ *
+ * Counted and cut as the Dashboard's (`homeWeeks`, 5 Oct), so no page draws a
+ * week another cuts: checked videos only (`checkedRows`), and a change made
+ * inside a run before its gather starting at that run (`weekRules` with the
+ * runs, `preGatherCutBefore`). The line keeps its own rule (decision M).
  */
 export function weekVolumesBlock(input: WeekVolumesInput): WeekVolumesBlock {
   const axis = weekAxis(input.reading, input.now)
-  const pooled = pooledWeekVolumes(input.rows, input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  const pooled = pooledWeekVolumes(checkedRows(input.rows), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
   const weeks = input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled
-  const rules = weekRules(input.changes, axis)
+  const rules = weekRules(input.changes, axis, input.runs ?? undefined)
   const cfg = input.cfg
   const line = !cfg
     ? null

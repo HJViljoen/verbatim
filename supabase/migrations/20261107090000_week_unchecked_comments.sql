@@ -1,4 +1,4 @@
--- The unchecked videos' comments, so the Dashboard's week can leave them out
+-- The unchecked videos' own counts, so the weekly bars can leave them out
 -- (the lead's ruling, 5 Oct: "one unchecked video must not blank a week").
 --
 -- WHAT WAS WRONG. `market_week_volumes` (20261106091000) says how many of a
@@ -8,15 +8,18 @@
 -- videos and 5,029 comments, one video unchecked (a heuristic default of the
 -- 20 Sep gather, with one comment that week), and the Dashboard drew nothing.
 --
--- THE CHANGE. One column at the END of the result, `unchecked_comments`: the
--- comments dated in the week on that audience's unchecked videos, the same
--- distinct count `comments` sums (0 where none is unchecked). Every other
--- column, every row and the function's body are unchanged, byte for byte; a
--- caller that does not read the new column reads what it read before
--- (lib/reading/week-keep.ts, scripts/week-points.ts). The Dashboard
--- (lib/pages/home.ts `homeWeeks`, `checkedWeek` in lib/reading/weeks.ts)
--- subtracts it with `unchecked` from the week's counts; until this is applied
--- it reads no `unchecked_comments` and keeps dropping such a week (fail closed).
+-- THE CHANGE. Four columns at the END of the result: the unchecked videos'
+-- own share of the counts the row already returns, so every count can be
+-- restated without them. `unchecked_comments` (their comments dated in the
+-- week, the same distinct count `comments` sums), `unchecked_comments_next_month`,
+-- `unchecked_under_5` and `unchecked_older_videos`; 0 where none is unchecked.
+-- Every other column, every row and the function's body are unchanged, byte
+-- for byte; a caller that does not read the new columns reads what it read
+-- before (lib/reading/week-keep.ts, scripts/week-points.ts). The weekly bars
+-- (the Dashboard's `homeWeeks`, Your market's and This week's
+-- `weekVolumesBlock`, through `checkedRows` in lib/reading/weeks.ts) subtract
+-- them with `unchecked` from each row; until this is applied they read none
+-- and keep dropping such a week (fail closed).
 --
 -- WHY A DROP. `create or replace` cannot change a function's result columns,
 -- so the function is dropped and created again in this one transaction, then
@@ -40,7 +43,7 @@ create function public.market_week_volumes(
 )
 returns table (week date, audience text, videos int, comments int, comments_next_month int,
                under_5 int, median_dated numeric, mean_dated numeric, older_videos int, unchecked int,
-               unchecked_comments int)
+               unchecked_comments int, unchecked_comments_next_month int, unchecked_under_5 int, unchecked_older_videos int)
 language sql
 stable
 security definer
@@ -119,7 +122,10 @@ as $$
          m.mean_dated,
          (count(*) filter (where f.older))::int,
          (count(*) filter (where f.unchecked))::int,
-         (coalesce(sum(f.dated) filter (where f.unchecked), 0))::int
+         (coalesce(sum(f.dated) filter (where f.unchecked), 0))::int,
+         (coalesce(sum(f.next_month) filter (where f.unchecked), 0))::int,
+         (count(*) filter (where f.unchecked and f.dated < 5))::int,
+         (count(*) filter (where f.unchecked and f.older))::int
   from flags f
   join market m on m.week = f.week
   group by f.week, f.audience, m.median_dated, m.mean_dated
@@ -127,7 +133,7 @@ as $$
 $$;
 
 comment on function public.market_week_volumes(uuid, date, date, timestamptz) is
-  'Per ISO week (Monday, UTC, by comment date) overlapping [p_from, p_to) and per market audience (the client''s own posts dropped; full-lane videos): videos and comments dated in the week, those dated in a month that starts inside it, videos under 5, the market''s median and mean dated comments a video (repeated on each row of the week), older and unchecked videos (newest relevance verdict not a clean keep), and the comments dated in the week on those unchecked videos. Only comments first captured before p_captured_before count. Counts only.';
+  'Per ISO week (Monday, UTC, by comment date) overlapping [p_from, p_to) and per market audience (the client''s own posts dropped; full-lane videos): videos and comments dated in the week, those dated in a month that starts inside it, videos under 5, the market''s median and mean dated comments a video (repeated on each row of the week), older and unchecked videos (newest relevance verdict not a clean keep), and the unchecked videos'' own comments dated in the week, of them dated in the next month, videos under 5 and older videos. Only comments first captured before p_captured_before count. Counts only.';
 
 revoke all on function public.market_week_volumes(uuid, date, date, timestamptz) from public, anon, authenticated;
 grant execute on function public.market_week_volumes(uuid, date, date, timestamptz) to service_role;

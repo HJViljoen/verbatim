@@ -12,8 +12,8 @@ import { loadCadenceRuns, loadDeliveredRuns, loadReadingMonth, marketRivalAudien
 import { withChartCadence, type ChartRun } from '../reading/week-line'
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import {
-  addDays, checkedWeek, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, weekRules, weeksSinceOurChanges,
-  type CheckedWeek, type MarketWeekRowRaw,
+  addDays, checkedRows, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, weekRules, weeksSinceOurChanges,
+  type MarketWeekRowRaw, type WeekVolume,
 } from '../reading/weeks'
 import { isFailOpenFix, type OurChange } from '../reading/comparability'
 import { weekReadDates } from '../reports/weekly-read'
@@ -148,8 +148,8 @@ export const WEEKS_MIN = 1
  * latest search or relevance change on the axis (the fail-open fixes aside,
  * `isFailOpenFix`), with something gathered, and counting no video let in
  * without a check that stands (`unchecked`, the newest verdict: left out of
- * the counts where its comments are known, `checkedWeek`, else the week is
- * not drawn). A change before the axis leaves every axis week after it, so
+ * the counts where the SQL says what it holds, `checkedRows`, else the week
+ * is not drawn). A change before the axis leaves every axis week after it, so
  * nothing older is needed. On Sealand (5 Oct) that is: the 17 Sep search
  * change cuts everything to the week of 14 Sep, the week of 21 Sep is off the
  * cadence (three runs), and the week of 28 Sep is drawn with its one
@@ -207,9 +207,10 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
  * change made inside a run before its gather cuts only the weeks before that
  * run's, `preGatherCutBefore`), none with nothing gathered
  * (`weeksSinceOurChanges`, T0a's rule for the weekly bars). A bar counts only
- * CHECKED videos and their comments (`checkedWeek`, 5 Oct): a video let in
- * without a check that still stands is left out of its week's counts, and a
- * week whose unchecked videos' comments are not known is not drawn.
+ * CHECKED videos and their comments (`checkedRows`, 5 Oct; Your market and
+ * This week count the same way): a video let in without a check that still
+ * stands is left out of its week's counts, and a week whose unchecked videos'
+ * counts are not known is not drawn.
  *
  * DRAWN FROM ONE SUCH WEEK (Heinrich, 1 Oct): a week still filling (under
  * way, or fewer than two updates since it ended, `weekStateOf`) is drawn at
@@ -235,12 +236,12 @@ export function homeWeeks(input: {
   now: string
 }): HomeWeeks | null {
   const axis = homeAxis(input.now)
-  const pooled = pooledWeekVolumes(input.rows.map(marketWeekRowOf), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
-  const weeks = (input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled).map(checkedWeek)
+  const pooled = pooledWeekVolumes(checkedRows(input.rows.map(marketWeekRowOf)), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  const weeks = input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled
   const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis, input.runs))
     .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')
   if (clean.length < WEEKS_MIN) return null
-  const byWeek = new Map<string, CheckedWeek>(clean.map((w) => [w.week, w]))
+  const byWeek = new Map<string, WeekVolume>(clean.map((w) => [w.week, w]))
   const last = clean[clean.length - 1].week
   // The frame opens at the first week drawn: an earlier week is not a silent
   // market, it is a week not read one way, and it is left off the frame.

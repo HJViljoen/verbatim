@@ -10,9 +10,13 @@ import {
   STAGING_UPDATES, STAGING_WEEK_VOLUMES, standInSundayRuns,
 } from '../../test/week-fixture'
 import { WEEK_LINE, weekLineConfigFor } from '../../week-line-config'
+import type { OurChange } from '../../reading/comparability'
+import type { ChartRun } from '../../reading/week-line'
+import { marketWeekRowOf, type MarketWeekRowRaw } from '../../reading/weeks'
+import { homeWeeks } from '../home'
 import { loadWeekVolumes } from '../week'
 import {
-  keptLineAsAt, loadKeptWeekLine, loadWeekStrip, WEEK_STRIP_TOO_FEW, WEEKS_EMPTY, weekStripFor, weekVolumesBlock, weekVolumesEmpty,
+  keptLineAsAt, loadKeptWeekLine, loadWeekStrip, WEEK_STRIP_TOO_FEW, WEEKS_EMPTY, weekBarsBlock, weekStripFor, weekVolumesBlock, weekVolumesEmpty,
 } from './weeks'
 
 // Week by week's builder (WP2.9), on staging's real weeks. On the 11 Oct
@@ -50,6 +54,55 @@ describe('weekVolumesBlock', () => {
       line: { reads: [], points: [] },
     })
     expect(b.line && 'state' in b.line ? b.line.state : null).toBe('pending')
+  })
+
+  // The lead's rulings of 5 Oct: Your market and This week draw the weeks the
+  // Dashboard draws, counted and cut the same way (`checkedRows`, the
+  // pre-gather cut), so no page shows a week another cuts.
+  describe('agrees with the Dashboard', () => {
+    const raw = (week: string, videos: number, comments: number, unchecked = 0, uc?: number): MarketWeekRowRaw => ({
+      week, audience: 'industry-other', videos, comments, comments_next_month: 0, under_5: 0, median_dated: 9, mean_dated: 18,
+      older_videos: 0, unchecked,
+      ...(uc === undefined ? {} : { unchecked_comments: uc, unchecked_comments_next_month: 0, unchecked_under_5: 0, unchecked_older_videos: 0 }),
+    })
+    const SEALAND_RUNS: ChartRun[] = [
+      { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T15:54:51Z', errors: ['ocr: failed'] },
+      { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T17:35:55Z', errors: ['ocr: failed'] },
+      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z', errors: ['transcript-backfill: Apify 408'] },
+      { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [] },
+    ]
+    const NOW = '2026-10-05T07:00:00Z'
+    const updates = SEALAND_RUNS.map((r) => r.finishedAt!)
+    const search: OurChange = { id: 's17', surface: 'terms', changedAt: '2026-09-17T16:02:56Z', note: null, affects: [] }
+    const drawnBy = (rows: MarketWeekRowRaw[], changes: OurChange[], runs = SEALAND_RUNS) => {
+      const block = weekVolumesBlock({ rows: rows.map(marketWeekRowOf), rivalAudiences: [], updates, changes, runs, reading: { month: '2026-09-01' }, now: NOW, cfg: null })
+      const home = homeWeeks({ rows, rivalAudiences: [], changes, updates, runs, now: NOW })
+      return {
+        block: weekBarsBlock(block).weeks.map((w) => [w.week, w.videos, w.comments]),
+        home: (home?.columns ?? []).filter((c) => c.videos != null).map((c) => [c.week, c.videos, c.comments]),
+      }
+    }
+
+    it('Sealand, 5 Oct: the week of 28 Sep drawn with its unchecked video left out (265, 5,028) on both, and cut on both before the migration', () => {
+      const after = drawnBy([raw('2026-09-21', 301, 4990, 0, 0), raw('2026-09-28', 266, 5029, 1, 1)], [search])
+      expect(after.block).toEqual([['2026-09-28', 265, 5028]])
+      expect(after.home).toEqual(after.block)
+      const before = drawnBy([raw('2026-09-21', 301, 4990), raw('2026-09-28', 266, 5029, 1)], [search])
+      expect(before.block).toEqual([])
+      expect(before.home).toEqual([])
+    })
+
+    it('a pre-gather change in the 4 Oct run cuts neither page at the week that run gathered; the same change by hand cuts both', () => {
+      const rows = [raw('2026-09-28', 177, 3217, 0, 0)]
+      const probe: OurChange = { id: 'p4', surface: 'subreddits', changedAt: '2026-10-04T04:02:30Z', note: null, affects: [], preGatherRunId: '393b95df' }
+      const kept = drawnBy(rows, [search, probe])
+      expect(kept.block).toEqual([['2026-09-28', 177, 3217]])
+      expect(kept.home).toEqual(kept.block)
+      const { preGatherRunId: _r, ...byHand } = probe
+      const cut = drawnBy(rows, [search, byHand])
+      expect(cut.block).toEqual([])
+      expect(cut.home).toEqual([])
+    })
   })
 
   it('is empty when no week on the axis has a dated comment', () => {

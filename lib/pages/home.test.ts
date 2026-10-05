@@ -178,8 +178,10 @@ describe('Week by week', () => {
     expect(w!.columns.map((c) => c.videos)).toEqual([254, 120, null, null, null, null, null, null])
   })
 
-  it('where their comments are known, draws that week with the unchecked videos and their comments left out (5 Oct)', () => {
-    const uc = (r: MarketWeekRowRaw, n: number): MarketWeekRowRaw => ({ ...r, unchecked_comments: n })
+  // The unchecked videos' own counts, as market_week_volumes returns them from migration 20261107090000.
+  const uc = (r: MarketWeekRowRaw, n: number): MarketWeekRowRaw => ({ ...r, unchecked_comments: n, unchecked_comments_next_month: 0, unchecked_under_5: 0, unchecked_older_videos: 0 })
+
+  it('where their counts are known, draws that week with the unchecked videos and their comments left out (5 Oct)', () => {
     const known = [uc(row('2026-09-21', 262, 4528), 0), uc(row('2026-09-28', 281, 4902, { unchecked: 3 }), 40), uc(row('2026-10-05', 254, 4210), 0), uc(row('2026-10-12', 120, 1500), 0)]
     const w = homeWeeks({ ...base, rows: known, updates: sundays, now: '2026-10-26T08:00:00Z' })
     expect(w!.columns.map((c) => c.videos)).toEqual([262, 278, 254, 120, null, null, null, null])
@@ -203,15 +205,12 @@ describe('Week by week', () => {
   const MONDAY = '2026-10-05T07:00:00Z'
 
   it('Sealand, 5 Oct: the week of 28 Sep is drawn with its one unchecked video left out (265 videos, 5,028 comments), faint; 21 Sep stays off the cadence', () => {
-    const rows = [
-      row('2026-09-21', 301, 4990, { unchecked_comments: 0 }),
-      row('2026-09-28', 266, 5029, { unchecked: 1, unchecked_comments: 1 }),
-    ]
+    const rows = [uc(row('2026-09-21', 301, 4990), 0), uc(row('2026-09-28', 266, 5029, { unchecked: 1 }), 1)]
     const w = homeWeeks({ ...base, rows, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })
     expect(w!.columns[0]).toEqual({ week: '2026-09-28', label: '28 Sep', videos: 265, comments: 5028, settled: false })
     expect(w!.columns.slice(1).every((c) => c.videos == null)).toBe(true)
     // Before the migration the function returns no unchecked_comments: the week stays off, as on 5 Oct.
-    const before = rows.map(({ unchecked_comments: _u, ...r }) => r)
+    const before = [row('2026-09-21', 301, 4990), row('2026-09-28', 266, 5029, { unchecked: 1 })]
     expect(homeWeeks({ ...base, rows: before, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })).toBeNull()
   })
 
@@ -232,7 +231,7 @@ describe('Week by week', () => {
 
   it('the loader counts checked videos only, and hands the runs to the cut as well as the cadence', () => {
     const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
-    expect(src).toMatch(/\.map\(checkedWeek\)/)
+    expect(src).toMatch(/pooledWeekVolumes\(checkedRows\(input\.rows\.map\(marketWeekRowOf\)\)/)
     expect(src).toMatch(/weekRules\(input\.changes, axis, input\.runs\)/)
   })
 })

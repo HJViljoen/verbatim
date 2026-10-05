@@ -84,11 +84,6 @@ export interface WeekVolume {
   olderVideos: number
   /** Videos let in before we checked relevance (a kept gate verdict with source 'default'). */
   unchecked: number
-  /** The comments dated in the week on those `unchecked` videos (counted in
-   *  `comments`). Present only where every pooled row carries it
-   *  (`market_week_volumes` from migration 20261107090000); absent, the
-   *  unchecked videos' comments are not known and cannot be left out. */
-  uncheckedComments?: number
   /** Why the week was not read on the one weekly cadence (`chartCadenceBroken`,
    *  lib/reading/week-line.ts: not exactly one completed Sunday gather in it and
    *  in each of the two weeks after), or null where it was. Absent where the
@@ -135,9 +130,14 @@ export interface MarketWeekRow {
   meanDated: number | null
   olderVideos: number
   unchecked: number
-  /** Comments dated in the week on the `unchecked` videos (migration
-   *  20261107090000); absent from a function that predates it. */
+  /** The `unchecked` videos' own share of the counts above (migration
+   *  20261107090000): their comments dated in the week, those dated in the
+   *  next month, those of them under 5, and those that are older. Absent from
+   *  a function that predates the migration; `checkedRows` reads them. */
   uncheckedComments?: number
+  uncheckedCommentsNextMonth?: number
+  uncheckedUnder5?: number
+  uncheckedOlderVideos?: number
 }
 
 // ---- Days and weeks ----------------------------------------------------------
@@ -275,9 +275,6 @@ export function pooledWeekVolumes(
     for (const k of ['videos', 'comments', 'commentsNextMonth', 'under5', 'olderVideos', 'unchecked'] as const) {
       if (!isCount(r[k])) throw new Error(`pooledWeekVolumes: ${k} is not a count for ${r.audience} in the week of ${week}: ${String(r[k])}`)
     }
-    if (r.uncheckedComments !== undefined && !(isCount(r.uncheckedComments) && r.uncheckedComments <= r.comments)) {
-      throw new Error(`pooledWeekVolumes: uncheckedComments is not a count of the comments for ${r.audience} in the week of ${week}: ${String(r.uncheckedComments)}`)
-    }
     slot.parts.set(r.audience, r)
     slot.medians.add(typeof r.medianDated === 'number' && Number.isFinite(r.medianDated) && r.medianDated >= 0 ? r.medianDated : null)
   }
@@ -301,10 +298,6 @@ export function pooledWeekVolumes(
     const category = parts.filter((r) => r.audience === INDUSTRY_AUDIENCE).reduce((a, r) => a + r.videos, 0)
     const medians = slot ? [...slot.medians] : []
     const medianDated = slot && !slot.unpooled && medians.length === 1 ? medians[0] : null
-    // Known only where every pooled row carries it.
-    const uncheckedComments = parts.every((r) => r.uncheckedComments !== undefined)
-      ? parts.reduce((a, r) => a + (r.uncheckedComments as number), 0)
-      : undefined
     return {
       week,
       state: weekStateOf(week, clock.now, clock.updates),
@@ -318,7 +311,6 @@ export function pooledWeekVolumes(
       under5: sum('under5'),
       olderVideos: sum('olderVideos'),
       unchecked: sum('unchecked'),
-      ...(uncheckedComments !== undefined ? { uncheckedComments } : {}),
     }
   })
 }
@@ -338,6 +330,9 @@ export interface MarketWeekRowRaw {
   unchecked: number | string
   /** From migration 20261107090000; absent before it is applied. */
   unchecked_comments?: number | string
+  unchecked_comments_next_month?: number | string
+  unchecked_under_5?: number | string
+  unchecked_older_videos?: number | string
 }
 
 const num = (v: number | string | null | undefined): number => (v == null ? Number.NaN : typeof v === 'number' ? v : Number(v))
@@ -357,9 +352,12 @@ export function marketWeekRowOf(raw: MarketWeekRowRaw): MarketWeekRow {
     meanDated: numOrNull(raw.mean_dated),
     olderVideos: num(raw.older_videos),
     unchecked: num(raw.unchecked),
-    // Absent where the function predates the column: the week's unchecked
-    // videos then stay in its counts, and the chart cuts it (`checkedWeek`).
+    // Absent where the function predates the columns: the week's unchecked
+    // videos then stay in its counts, and the bars cut it (`checkedRows`).
     ...(raw.unchecked_comments !== undefined ? { uncheckedComments: num(raw.unchecked_comments) } : {}),
+    ...(raw.unchecked_comments_next_month !== undefined ? { uncheckedCommentsNextMonth: num(raw.unchecked_comments_next_month) } : {}),
+    ...(raw.unchecked_under_5 !== undefined ? { uncheckedUnder5: num(raw.unchecked_under_5) } : {}),
+    ...(raw.unchecked_older_videos !== undefined ? { uncheckedOlderVideos: num(raw.unchecked_older_videos) } : {}),
   }
 }
 
@@ -419,6 +417,9 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
   return out.sort((a, b) => a.ms - b.ms || a.surface.localeCompare(b.surface)).map(({ ms: _ms, ...r }) => r)
 }
 
+/** A run whose `started_at` is this far after its `window_end` was reopened. */
+const RESUME_GAP_MS = 60_000
+
 /**
  * A PIPELINE CHANGE MADE INSIDE A RUN, BEFORE THAT RUN'S GATHER, STARTS AT
  * THAT RUN (the lead's ruling, 5 Oct). Subreddit discovery writes its row
@@ -438,7 +439,11 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
  *
  * Null, so the change cuts at its own week as before, unless the change names
  * a run in `runs` and was written inside it: at or after the moment it opened
- * and, once it has finished, before it finished. Null too where another run
+ * and, once it has finished, before it finished. Null for a change written
+ * during a resume of the run (its `started_at` moved more than a minute past
+ * its opening, and the change at or after it): a resume that gathers again
+ * runs discovery again, after the run's own first gather, which was made
+ * under the old setting and is not bounded here. Null too where another run
  * that may have opened before the change has no finish, or where no bound
  * exists. It fails closed: never earlier than any gather made before the
  * change, and null never draws a week the old rule would not. Pure.
@@ -451,6 +456,13 @@ export function preGatherCutBefore(change: Pick<OurChange, 'changedAt' | 'preGat
   const opened = msOfInstant(run.windowEnd ?? '')
   const finished = msOfInstant(run.finishedAt ?? '')
   if (Number.isNaN(opened) || at < opened || (!Number.isNaN(finished) && at > finished)) return null
+  // Written during a RESUME (`trigger-run` reopens a run: `window_end` kept,
+  // `started_at` moved to the resume): a resume that gathers again runs
+  // discovery again, after the run's own first gather, made under the old
+  // setting. That gather is not bounded below, so refuse. A fresh run starts
+  // within a moment of its opening.
+  const started = msOfInstant(run.startedAt ?? '')
+  if (!Number.isNaN(started) && started - opened > RESUME_GAP_MS && at >= started) return null
   let bound = msOfInstant(run.windowStart ?? '')
   for (const r of runs) {
     if (r.id === run.id) continue
@@ -501,23 +513,20 @@ export const WEEK_CUT_SURFACES: readonly OurChangeSurface[] = ['terms', 'subredd
  *     empty slot that reads as a silent market;
  *   - and no week whose counts hold videos let in before we checked relevance
  *     (`unchecked`): its bar would count them, and so would its comments, so
- *     the week is not drawn and the run starts after it. The Dashboard leaves
- *     them out of its counts first where their comments are known
- *     (`checkedWeek`), which makes `unchecked` 0.
+ *     the week is not drawn and the run starts after it. The builders leave
+ *     them out of the counts first where the SQL says what they hold
+ *     (`checkedRows`), which makes `unchecked` 0.
  *
  * The weeks come back in axis order; none, where nothing is left (the caller
  * then omits the chart). Pure, and idempotent.
  */
-export function weeksSinceOurChanges<W extends Pick<WeekVolume, 'week' | 'state' | 'videos' | 'unchecked' | 'cadence'>>(
-  weeks: readonly W[],
-  rules: readonly WeekRule[],
-): W[] {
+export function weeksSinceOurChanges(weeks: readonly WeekVolume[], rules: readonly WeekRule[]): WeekVolume[] {
   const cut = rules
     .filter((r) => WEEK_CUT_SURFACES.includes(r.surface))
     .map(lastWeekCut)
     .sort()
     .pop() ?? null
-  const gathered = (w: W): boolean => w.state !== 'none_gathered' && w.videos > 0
+  const gathered = (w: WeekVolume): boolean => w.state !== 'none_gathered' && w.videos > 0
   let end = weeks.length
   while (end > 0 && !gathered(weeks[end - 1])) end--
   let start = end
@@ -537,48 +546,50 @@ function lastWeekCut(r: WeekRule): string {
   return Number.isNaN(ms) ? isoWeekOf(r.week) : isoWeekOf(new Date(ms - 1).toISOString())
 }
 
-/** A week as the Dashboard's bars count it (`checkedWeek`). */
-export interface CheckedWeek extends Pick<WeekVolume, 'week' | 'state' | 'cadence'> {
-  /** The checked videos with a comment dated in the week, and those comments. */
-  videos: number
-  comments: number
-  /** Unchecked videos still IN `videos` and `comments` because their comments
-   *  are not known: `weeksSinceOurChanges` then cuts the week. 0 once left out. */
-  unchecked: number
-  /** Unchecked videos left out of `videos`, their comments out of `comments`. */
-  uncheckedLeftOut: number
-}
-
 /**
- * THE DASHBOARD'S BARS COUNT CHECKED VIDEOS ONLY (the lead's ruling, 5 Oct).
- * A week holding videos let in before we checked relevance (`unchecked`: the
- * newest verdict not a clean keep) is drawn with those videos and their
- * comments left out, rather than not at all: one such video of 266 kept
- * Sealand's week of 28 Sep off the chart. The rule the bars keep is the same
- * (they never count an unchecked video); only the remedy changes, from
- * dropping the week to dropping the video.
+ * THE WEEKLY BARS COUNT CHECKED VIDEOS ONLY (the lead's ruling, 5 Oct; the
+ * Dashboard, Your market and This week alike). A week holding videos let in
+ * before we checked relevance (`unchecked`: the newest verdict not a clean
+ * keep) is drawn with those videos left out of every count, rather than not
+ * at all: one such video of 266 kept Sealand's week of 28 Sep off the chart.
+ * The rule the bars keep is the same (they never count an unchecked video);
+ * only the remedy changes, from dropping the week to dropping the video.
  *
- * Exact, or nothing: the comments come from `market_week_volumes`
- * (`uncheckedComments`, migration 20261107090000). Where they are not known
- * the week comes back with its unchecked videos still counted and `unchecked`
- * above 0, so `weeksSinceOurChanges` cuts it as before. A week whose every
- * video is unchecked has nothing checked gathered. Only the bars' two counts
- * are restated, which is why this is its own shape and not a `WeekVolume`:
- * the median and the hover counts of a `WeekVolume` cannot be split by
- * verdict. Pure.
+ * Per `market_week_volumes` row, before pooling: the row less its unchecked
+ * videos and their own share of every count (`uncheckedComments`,
+ * `uncheckedCommentsNextMonth`, `uncheckedUnder5`, `uncheckedOlderVideos`,
+ * migration 20261107090000), `unchecked` 0, and no median or mean, which no
+ * count can be split into (so the week prints no median, `pooledWeekVolumes`).
+ * Exact, or nothing: a row without those counts (the function before the
+ * migration) comes back as it is, its `unchecked` above 0, so
+ * `weeksSinceOurChanges` cuts the week as before. A share that is not a count
+ * within its total is refused (thrown), as `pooledWeekVolumes` refuses a
+ * malformed count. The same-age line keeps its own rule and never reads
+ * this. Pure.
  */
-export function checkedWeek(w: WeekVolume): CheckedWeek {
-  const at = { week: w.week, state: w.state, cadence: w.cadence }
-  if (w.unchecked === 0 || w.uncheckedComments === undefined) {
-    return { ...at, videos: w.videos, comments: w.comments, unchecked: w.unchecked, uncheckedLeftOut: 0 }
-  }
-  const videos = w.videos - w.unchecked
-  return {
-    ...at,
-    state: videos > 0 ? w.state : 'none_gathered',
-    videos,
-    comments: w.comments - w.uncheckedComments,
-    unchecked: 0,
-    uncheckedLeftOut: w.unchecked,
-  }
+export function checkedRows(rows: readonly MarketWeekRow[]): MarketWeekRow[] {
+  return rows.map((r) => {
+    if (!(r.unchecked > 0)) return r
+    const { uncheckedComments: c, uncheckedCommentsNextMonth: n, uncheckedUnder5: u, uncheckedOlderVideos: o } = r
+    if (c === undefined || n === undefined || u === undefined || o === undefined) return r
+    const within = (part: number, ...totals: number[]): boolean => isCount(part) && totals.every((t) => part <= t)
+    if (!(r.unchecked <= r.videos && within(c, r.comments) && within(n, r.commentsNextMonth, c) && within(u, r.under5, r.unchecked) && within(o, r.olderVideos, r.unchecked))) {
+      throw new Error(`checkedRows: the unchecked videos' counts are not within the row for ${r.audience} in the week of ${r.week}`)
+    }
+    return {
+      ...r,
+      videos: r.videos - r.unchecked,
+      comments: r.comments - c,
+      commentsNextMonth: r.commentsNextMonth - n,
+      under5: r.under5 - u,
+      olderVideos: r.olderVideos - o,
+      unchecked: 0,
+      uncheckedComments: 0,
+      uncheckedCommentsNextMonth: 0,
+      uncheckedUnder5: 0,
+      uncheckedOlderVideos: 0,
+      medianDated: null,
+      meanDated: null,
+    }
+  })
 }

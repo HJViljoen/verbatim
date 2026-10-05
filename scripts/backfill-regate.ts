@@ -292,11 +292,17 @@ export async function chartWith(db: SupabaseClient, clientId: string, now: strin
   if (vol.error) throw new Error(`market_week_volumes: ${vol.error.message}`)
   const market = new Set(marketAudiences(marketRivalAudiences(rivals)))
   const base = new Map<string, { videos: number; comments: number; unchecked: number }>()
+  // The unchecked videos' comments per week (migration 20261107090000), so the
+  // preview leaves them out as the Dashboard does (`checkedRows`); null where
+  // a row does not carry them (the function before the migration).
+  const baseUnchecked = new Map<string, number | null>()
   for (const r of (vol.data ?? []) as MarketWeekRowRaw[]) {
     if (!market.has(String(r.audience))) continue
     const w = String(r.week).slice(0, 10)
     const t = base.get(w) ?? { videos: 0, comments: 0, unchecked: 0 }
     base.set(w, { videos: t.videos + Number(r.videos), comments: t.comments + Number(r.comments), unchecked: t.unchecked + Number(r.unchecked) })
+    const u = baseUnchecked.has(w) ? baseUnchecked.get(w)! : 0
+    baseUnchecked.set(w, u == null || r.unchecked_comments === undefined ? null : u + Number(r.unchecked_comments))
   }
   // Each changed video's comments, by ISO week, over the axis.
   const all = new Map<string, UnjudgedVideo>()
@@ -321,23 +327,32 @@ export async function chartWith(db: SupabaseClient, clientId: string, now: strin
       }
     }
   }
-  const rowsOf = (week: Map<string, { videos: number; comments: number; unchecked: number }>): MarketWeekRowRaw[] =>
-    [...week.entries()].map(([w, t]) => ({ week: w, audience: 'industry-other', videos: t.videos, comments: t.comments, comments_next_month: 0, under_5: 0, median_dated: null, mean_dated: null, older_videos: 0, unchecked: t.unchecked }) as unknown as MarketWeekRowRaw)
+  const rowsOf = (week: Map<string, { videos: number; comments: number; unchecked: number }>, unchecked: Map<string, number | null>): MarketWeekRowRaw[] =>
+    [...week.entries()].map(([w, t]) => {
+      const uc = unchecked.get(w)
+      return {
+        week: w, audience: 'industry-other', videos: t.videos, comments: t.comments, comments_next_month: 0, under_5: 0, median_dated: null, mean_dated: null, older_videos: 0, unchecked: t.unchecked,
+        ...(uc == null ? {} : { unchecked_comments: uc, unchecked_comments_next_month: 0, unchecked_under_5: 0, unchecked_older_videos: 0 }),
+      } as unknown as MarketWeekRowRaw
+    })
   const ours = ourChangesWithoutGatherFlags(changeRows.filter((r) => !isFailOpenFix(r)))
   const updates = runs.map(updateInstant)
   const out: Record<string, HomeWeeks | null> = {}
   const weeks: Record<string, Record<string, { videos: number; comments: number; unchecked: number }>> = {}
   for (const [name, c] of Object.entries(changes)) {
     const week = new Map([...base.entries()].map(([w, t]) => [w, { ...t }]))
+    const unchecked = new Map(baseUnchecked)
+    // Every changed video is unchecked today: removing or clearing it takes its comments out of the unchecked ones.
+    const unflag = (w: string, n: number) => { const u = unchecked.get(w); if (u != null) unchecked.set(w, Math.max(0, u - n)) }
     for (const v of c.removed) for (const [w, n] of perVideo.get(v.id) ?? []) {
       const t = week.get(w)
-      if (t) { t.videos = Math.max(0, t.videos - 1); t.comments = Math.max(0, t.comments - n); t.unchecked = Math.max(0, t.unchecked - 1) }
+      if (t) { t.videos = Math.max(0, t.videos - 1); t.comments = Math.max(0, t.comments - n); t.unchecked = Math.max(0, t.unchecked - 1); unflag(w, n) }
     }
-    for (const v of c.cleared) for (const [w] of perVideo.get(v.id) ?? []) {
+    for (const v of c.cleared) for (const [w, n] of perVideo.get(v.id) ?? []) {
       const t = week.get(w)
-      if (t) t.unchecked = Math.max(0, t.unchecked - 1)
+      if (t) { t.unchecked = Math.max(0, t.unchecked - 1); unflag(w, n) }
     }
-    out[name] = homeWeeks({ rows: rowsOf(week), rivalAudiences: [], changes: ours, updates, runs: cadenceRuns, now })
+    out[name] = homeWeeks({ rows: rowsOf(week, unchecked), rivalAudiences: [], changes: ours, updates, runs: cadenceRuns, now })
     weeks[name] = Object.fromEntries(week)
   }
   return Object.assign(out, { weeks })

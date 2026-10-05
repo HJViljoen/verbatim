@@ -440,8 +440,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   at the change itself), so the week the run gathered is drawn. It fails
   closed to the old rule unless the change was written inside the run it
   names (between its `window_end`, the opening a resume keeps, and its
-  finish); a person's or a script's change, or a row with no run, keeps the
-  old rule. `lib/reading/week-cuts.test.ts` pins the step order and the
+  finish), and for a change written during a resume of the run (`started_at`
+  more than a minute past `window_end`, the change at or after it: a resume
+  that gathers again runs discovery again, after the run's own first gather
+  under the old setting); a person's or a script's change, or a row with no
+  run, keeps the old rule. `lib/reading/week-cuts.test.ts` pins the step order and the
   labels to the source. The bars draw only weeks on the one weekly cadence:
   exactly one completed Sunday gather in the week and in each of the two
   after (`chartCadenceBroken`, the line's own `cadenceBroken` on the clock;
@@ -450,11 +453,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   after the gather (`AFTER_GATHER_STEPS`, fail closed). **A bar never counts
   a video let in before we checked relevance** (`unchecked`, the newest
   verdict not a clean keep), and since 5 Oct one such video no longer blanks
-  its week: the Dashboard leaves those videos and their comments out of the
-  week's two counts (`checkedWeek`), from `market_week_volumes`'
-  `unchecked_comments` (migration `20261107090000`, which the operator
-  applies; until then the function returns no such column and the week is
-  cut as before). The same-age line keeps its own rule (unchecked at 10% or
+  its week: every weekly-bar builder (the Dashboard's `homeWeeks`, Your
+  market's and This week's `weekVolumesBlock`, and the regate preview) leaves
+  those videos out of every count of their row before pooling (`checkedRows`:
+  the row less the unchecked videos' own `unchecked_comments`,
+  `unchecked_comments_next_month`, `unchecked_under_5` and
+  `unchecked_older_videos`, migration `20261107090000`, which the operator
+  applies; a restated week prints no median). Until it is applied the
+  function returns none of them and the week is cut as before. The pages
+  count and cut the same way, so none draws a week another cuts. The same-age line keeps its own rule (unchecked at 10% or
   more of either week's videos refuses a pair, `weekPairOf`): its points are
   read once at the cut and kept, never recomputed, so a kept read cannot drop
   them afterwards, and a share with under a tenth unchecked is what decision
@@ -638,7 +645,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     constant (`homeAxis`: the last eight weeks; `weeksSinceOurChanges` cuts at
     the latest search or relevance change on them, a pipeline change made
     before its run's gather at that run, and at weeks with nothing gathered;
-    a bar counts checked videos only, `checkedWeek`), a filling week faint;
+    a bar counts checked videos only, `checkedRows`), a filling week faint;
     the two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
     and the backfill's regate) cut no week, because `unchecked` counts
     exactly their videos (`isFailOpenFix`). The Competitive tile's row is "Named most in
