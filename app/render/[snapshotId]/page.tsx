@@ -27,6 +27,9 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 import { MethodNote, type MethodNoteData } from '@/components/print/method-note'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
+import { BriefDeck } from '@/components/briefs/brief-deck'
+import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
+import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
 
 // Print-mode HTML for one snapshot, fetched by the export route's headless
 // Chrome. proxy.ts lets /render through without a session; the signed token
@@ -140,6 +143,17 @@ export default async function RenderPage({
       return (
         <PrintRoot style={style}>
           <QuarterlyDeck data={data} />
+        </PrintRoot>
+      )
+    }
+    // A MONTH'S DEPARTMENT BRIEF (T8 wired): its deck of 1280×720 sheets, one
+    // a page, the sheet's own @page size (the deck sets it under `print`).
+    // No tiles.
+    if (isMonthlyBriefData(data)) {
+      if (token.tileKey) notFound()
+      return (
+        <PrintRoot style={style}>
+          <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={row.created_at} print /></div>
         </PrintRoot>
       )
     }

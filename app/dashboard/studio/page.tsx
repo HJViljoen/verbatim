@@ -3,6 +3,8 @@ import { isMissingPublishColumns, onPlatform } from '@/lib/schedules/platform-st
 import { PageTitle } from '@/components/pages/studio/ui'
 import { YourReports } from '@/components/pages/studio/your-reports'
 import { PastIssues } from '@/components/pages/studio/past-issues'
+import { MonthlyBriefs } from '@/components/pages/studio/monthly-briefs'
+import { loadStudioBriefs } from '@/lib/pages/studio-briefs'
 import { ReportViewer } from '@/components/reports/report-viewer'
 import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/reports/viewer'
 import { mayReadHeld, snapshotHeld } from '@/lib/reports/held'
@@ -69,7 +71,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   const { supabase, clientId, role } = session
   const isOperator = session.operator != null
 
-  const [clientRes, scheduleRes, sendRes, memberRes] = await Promise.all([
+  const [clientRes, scheduleRes, sendRes, memberRes, briefs] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // `*`, not a column list: `artefact` is M8's column, and a select naming
     // it fails outright on a database a migration behind.
@@ -78,6 +80,9 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
     // Names for the recipients: the workspace's own people (Team reads the
     // same rows on the session client).
     supabase.from('users').select('email, full_name').eq('client_id', clientId),
+    // The month's department briefs, on the platform as soon as a run writes
+    // them (lib/pages/studio-briefs.ts; the ledger is service role only).
+    loadStudioBriefs(createAdminClient(), clientId),
   ])
 
   const tenant = ((clientRes.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'you'
@@ -114,6 +119,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
     <div className="flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]">
       <PageTitle title={surface('studio').label} />
       <YourReports rows={rows} canEdit={canManageTenant(role)} privacy={PRIVACY_LINE} />
+      <MonthlyBriefs briefs={briefs} openHref={openHref} />
       <PastIssues issues={issues} openHref={openHref} />
       {isOperator ? <OperatorWorkbench session={session} sp={{ item: sp.group === 'sent' ? undefined : sp.item }} /> : null}
       {viewer && <ReportViewer snapshot={viewer} closeHref={closeHref} showStudio={isOperator} />}

@@ -11,6 +11,8 @@ import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
 import { documentSheetCount } from './documents/compose'
 import type { ReportSnapshotData } from './types'
+import { deckPages } from './briefs/deck'
+import { isMonthlyBriefData, type MonthlyBriefData } from './briefs/types'
 
 // The in-app viewer's data (2026-09-09). Opening a build is a URL — `?view=`
 // on Reports and on the Studio — so the panel is server-rendered, shareable
@@ -23,15 +25,18 @@ export interface ViewerSnapshot {
   id: string
   /** Which deck draws it. Three kinds share `report_snapshots.kind = 'report'`
    *  and are told apart inside `data` — the `isDocumentData` precedent. */
-  kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly' | 'weekly_read'
+  kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly' | 'weekly_read' | 'monthly_brief'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData | WeeklyReadSnapshotData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData | WeeklyReadSnapshotData | MonthlyBriefData
   title: string
   builtAt: string
   pageCount: number
   /** The stored PDF, when there is one; the header hides Download otherwise. */
   artifactId: string | null
+  /** Where Download goes where it is not the stored file: a monthly brief's
+   *  PDF is printed on its first download (`/api/briefs/<id>/pdf`). */
+  pdfHref?: string | null
   /** The reports row this build came from; null for a build made on the
    *  command line, which has no report to open in the Studio. */
   reportId: string | null
@@ -108,6 +113,13 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
     return { ...common, kind: 'quarterly', data: raw, pageCount: quarterlyViewerPages(raw.keys) }
   }
 
+  // THE MONTH'S DEPARTMENT BRIEFS (T8 wired): a deck of 1280×720 sheets,
+  // paginated by lib/reports/briefs/deck.ts, which the PDF prints from too.
+  // No stored file at first: Download prints it on the first ask.
+  if (isMonthlyBriefData(raw)) {
+    return { ...common, kind: 'monthly_brief', data: raw, pageCount: deckPages(raw).length, pdfHref: briefPdfHref(row.id) }
+  }
+
   // THE WEEKLY READ (writing back): one column, one page in the viewer, for
   // the reason the three above are here (the arranged path below reads
   // `data.sections`, which it has none of).
@@ -179,6 +191,9 @@ export function monthlyViewerPages(
 export function quarterlyViewerPages(keys: readonly string[]): number {
   return Math.max(1, keys.filter((k) => (QUARTERLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
 }
+
+/** A monthly brief's PDF: the stored file, printed on the first ask. */
+export const briefPdfHref = (snapshotId: string): string => `/api/briefs/${snapshotId}/pdf`
 
 /**
  * The URL that opens (or closes) the viewer over a page, keeping every other

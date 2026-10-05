@@ -762,8 +762,7 @@ function FormatsPage({ ctx, s, continued }: { ctx: Ctx; s: BriefSection; continu
 
 /** Where the market stands: each subject's share as a bar, what people say
  *  about it beside it. */
-function MarketPage({ ctx, s, continued }: { ctx: Ctx; s: BriefSection; continued: boolean }) {
-  const { data } = ctx
+function MarketPage({ s, continued }: { ctx: Ctx; s: BriefSection; continued: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, height: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24 }}>

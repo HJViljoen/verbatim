@@ -17,6 +17,10 @@ import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
+import { BriefDeck } from '@/components/briefs/brief-deck'
+import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
+import { FitWidth } from '@/components/reports/fit-width'
+import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
 
 // /r/<token> — a shared report (Stage 2, D5/D6). Public prefix in proxy.ts;
 // everything else is checked here: the token, expiry, revocation, the
@@ -104,6 +108,19 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     return (
       <main>
         <QuarterlyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
+  // A month's department brief (T8 wired): its sheets as printed, one under
+  // the other, scaled to the reader's screen.
+  if (isMonthlyBriefData(data)) {
+    return (
+      <main>
+        <div className="mx-auto flex w-full max-w-[1328px] flex-col gap-6 px-4 py-8 md:px-6">
+          <FitWidth base={1280}>
+            <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={snapshot.created_at} gap={20} /></div>
+          </FitWidth>
+        </div>
       </main>
     )
   }

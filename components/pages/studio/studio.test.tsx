@@ -6,6 +6,8 @@ import { PRIVACY_LINE } from '@/lib/reading/method'
 import { pastIssues, studioRows, type StudioSchedule, type StudioSend } from '@/lib/pages/studio'
 import { YourReports } from './your-reports'
 import { PastIssues } from './past-issues'
+import { MonthlyBriefs } from './monthly-briefs'
+import { studioBriefs } from '@/lib/pages/studio-briefs'
 
 // The Studio's client half, as the Page-Studio artboard draws it: what each
 // block PRINTS (the render tier, AGENTS.md).
@@ -87,5 +89,33 @@ describe('Past issues', () => {
     expect(text).not.toContain('PDF')
     assertCopyContract(markup)
     bans(markup, text)
+  })
+})
+
+describe('Monthly briefs', () => {
+  const briefs = studioBriefs([
+    { role: 'sales', month: '2026-09-01', status: 'ready', snapshot_id: 'snap-s', report_snapshots: { created_at: '2026-10-04T05:30:00.000Z' } },
+    { role: 'leadership', month: '2026-09-01', status: 'ready', snapshot_id: 'snap-l', report_snapshots: { created_at: '2026-10-04T05:30:00.000Z' } },
+  ])
+  const open = (id: string) => `/dashboard/studio?view=${id}`
+  const markup = render(<MonthlyBriefs briefs={briefs} openHref={open} />)
+  const text = renderText(<MonthlyBriefs briefs={briefs} openHref={open} />)
+
+  it('lists the month\'s briefs in the Your reports idiom: who each is for, the month, the day it was written, Open and PDF', () => {
+    expect(text).toContain('Monthly briefs Brief For Month Written')
+    expect(text).toContain('Sales brief Who is buying, what holds them back, and the words to use. Sales September 2026 Sun 4 Oct Open PDF')
+    expect(text).toContain('Leadership brief Where your market stands, where you stand against rivals, and the risks. Leadership, and anyone outside a team September 2026 Sun 4 Oct Open PDF')
+    expect(markup).toContain('href="/dashboard/studio?view=snap-s"')
+    expect(markup).toContain('href="/api/briefs/snap-s/pdf"')
+  })
+
+  it('draws nothing until a brief is on the platform', () => {
+    expect(render(<MonthlyBriefs briefs={[]} openHref={open} />)).toBe('')
+  })
+
+  it('keeps the copy contract and the design bans, and scrolls inside the card on a phone', () => {
+    assertCopyContract(markup)
+    bans(markup, text)
+    expect(markup).toContain('overflow-x-auto')
   })
 })

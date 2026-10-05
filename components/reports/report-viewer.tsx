@@ -15,6 +15,9 @@ import { WeeklyReadPage } from '@/components/email/weekly-read'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { STUDIO_HREF } from '@/lib/studio-visibility'
+import { BriefDeck } from '@/components/briefs/brief-deck'
+import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
+import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
 
 // Read a build in the app (Heinrich, 2026-09-09): the pages the PDF prints,
 // on a panel over the page, with the sidebar still showing and still working.
@@ -36,7 +39,14 @@ const PILL = 'inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px]
 export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snapshot: ViewerSnapshot; closeHref: string; showStudio?: boolean }) {
   const { data, title, builtAt, pageCount, artifactId, reportId } = snapshot
   const date = fmtDate(builtAt)
-  const deck = isDocumentData(data)
+  const pdf = snapshot.pdfHref ?? (artifactId ? `/api/artifacts/${artifactId}` : null)
+  // A monthly brief is its own deck of 1280-wide sheets (the canvas's), not
+  // the print root's 297mm slides.
+  const brief = isMonthlyBriefData(data)
+
+  const deck = isMonthlyBriefData(data)
+    ? null
+    : isDocumentData(data)
     ? <DocumentDeck data={data} date={date} />
     : isWeeklyData(data)
       ? <WeeklyDeck data={data} date={date} />
@@ -68,15 +78,21 @@ export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snap
           <h2 className="min-w-0 truncate text-[15px] font-semibold leading-[1.3] tracking-[-0.005em]">{title}</h2>
           <p className="font-mono text-[11px] text-muted-foreground">{date} · {pageCount} {pageCount === 1 ? 'page' : 'pages'}</p>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {artifactId && <a href={`/api/artifacts/${artifactId}`} className={PILL}>Download PDF</a>}
+            {pdf && <a href={pdf} className={PILL}>Download PDF</a>}
             {showStudio && reportId && <Link href={`${STUDIO_HREF}?item=${reportId}`} className={PILL}>Open in the Studio</Link>}
             <Link href={closeHref} scroll={false} className={PILL}>Close</Link>
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto bg-inner px-3 py-3 md:px-6 md:py-5">
-          <FitWidth base={1123}>
-            <div className="vb-print vb-preview" data-print-variant="b">{deck}</div>
-          </FitWidth>
+          {brief && isMonthlyBriefData(data) ? (
+            <FitWidth base={1280}>
+              <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={builtAt} gap={20} /></div>
+            </FitWidth>
+          ) : (
+            <FitWidth base={1123}>
+              <div className="vb-print vb-preview" data-print-variant="b">{deck}</div>
+            </FitWidth>
+          )}
         </div>
       </div>
       <ViewerEscape closeHref={closeHref} />
