@@ -1,8 +1,9 @@
 // ON THE PLATFORM, NOT EMAILED: the pure rule (the backfill, 1 Oct evening;
 // migration 20261106090000_platform_publish.sql). A weekly build is on the
-// client's platform when it was emailed (`status = 'sent'`) or when the
-// operator put it there without its email (`published_at`, the writes in
-// lib/schedules/publish.ts). The held-build rule (lib/reports/held.ts), the
+// client's platform when it was emailed (`status = 'sent'`) or when it was
+// put there without its email (`published_at`, the writes in
+// lib/schedules/publish.ts: by the runner for every weekly read it builds
+// since 5 Oct, or by the operator for an older build). The held-build rule (lib/reports/held.ts), the
 // email preview and the Studio all ask this one rule, which has no imports at
 // all, so a route and a client component can both take it. The pages do NOT:
 // they print the newest ready read whatever its send (lib/written/published.ts,

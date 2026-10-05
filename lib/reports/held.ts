@@ -21,9 +21,10 @@ import { selectAll } from '../supabase-admin'
  * is every tenant today; the members once neither holds). Everyone else meets
  * none of it: not in Built, not in the viewer, no PDF, no share link, no
  * preview, no test send. Once it is sent it is the workspace's, as every sent
- * report is. And once the operator puts it ON THE PLATFORM without its email
- * (`published_at`, lib/schedules/publish.ts; the backfill of 1 Oct), it is the
- * workspace's too: an issue on the platform like a sent one (`onPlatform`,
+ * report is. And once it is put ON THE PLATFORM without its email
+ * (`published_at`, lib/schedules/publish.ts: the operator's since the backfill
+ * of 1 Oct, and the runner's for every weekly read it builds since 5 Oct), it
+ * is the workspace's too: an issue on the platform like a sent one (`onPlatform`,
  * the rule the Studio's past issues ask). The pages are not this rule's: they
  * print the newest ready read whatever its send (lib/written/published.ts).
  *

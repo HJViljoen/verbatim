@@ -28,7 +28,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   disagreed by exactly one until this line was written:
   `grep -c '\.run(' inngest/functions/pipeline.ts` gives **48 on `main` and 53
   on the branch**, and the one `step.sendEvent('request-report')` — which
-  Inngest memoises by id like any other step — makes it 49 and 54. Either pair
+  Inngest memoises by id like any other step, and which since 5 Oct runs on
+  EVERY finished run (a manual one's event marked `manual`), same id, same
+  position — makes it 49 and 54. Either pair
   is honest; mixing them reads as a missing step. **The check before a deploy
   is the ordered DIFF of the ids, not the count**: five pure insertions, zero
   removals, zero reorderings. All five
@@ -544,7 +546,29 @@ This version has breaking changes — APIs, conventions, and file structure may 
   the viewer and the A4 PDF (`components/email/weekly-read.tsx`), quotes as
   refs, `sent_figures` none. A run whose read is thin, failed, missing or empty
   sends NOTHING: the send is `skipped` and the operator is alerted
-  (`weekReadSendState`, `runSchedule`). A review schedule's email goes to the
+  (`weekReadSendState`, `runSchedule`). **A READY read is built on EVERY
+  finished run and goes in the client's past issues at once** (5 Oct;
+  Heinrich: "a finished run reaches the platform by itself; review holds ONLY
+  the email"): the pipeline emits `report/send.requested` after every run, a
+  manual one's marked `manual`; `reportTargets` (`lib/schedules/due.ts`) fires
+  a scheduled run's due schedules as before, plus any active weekly-read
+  schedule not due, and a manual run's active weekly-read schedules ALONE,
+  both of those with `noEmail` (nothing else starts: not a legacy digest, the
+  monthly or a brief, and `runSchedule` refuses any non-weekly-read schedule
+  under `noEmail` before it claims). `weeklyReadPath`
+  (`lib/schedules/claim.ts`) says who is emailed: `send` (review off, a list:
+  the list), `review` (review on, a list: the review email, the list waits
+  for Send) or `hold` (`noEmail`, or nobody on the list: nobody at all, which
+  is how Össur's schedule with no recipients still gets its issue); every path
+  but `send` stands the build `ready` and `publishSend`s it, with the pipeline
+  as actor (`pipelineActor`; Send now passes the operator, the scripts
+  `scriptActor`), before the review email, which then says it is in the past
+  issues (`inPastIssues`). Idempotent on the (schedule, run) claim: a retried
+  `send:<scheduleId>` step finds the row `ready` (`waiting`) and only
+  publishes it, a no-op once it is there, so there is never a second build or
+  review email; a publish that is refused answers 500 with one
+  `unpublished` alert, and the retry publishes. Every other schedule still
+  skips with "no recipients". A review schedule's email goes to the
   OPERATOR (`ALERT_EMAIL`), not the members, wherever the Studio is hidden from
   the tenant or its sending is locked (`reviewAudience`,
   `lib/schedules/members.ts`), and a build that has not gone out is readable
@@ -595,7 +619,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Until 5 Oct they waited too (under an active `weekly_read` schedule with
     review on, a page printed only a read whose send was on the platform), so
     Sealand's 4 Oct run never reached its pages and Össur, reviewed with no
-    recipients, printed nothing. It fails closed: a `week_reads` read that
+    recipients, printed nothing. The ISSUE no longer waits either: every
+    weekly read the runner builds is published at once (below). It fails closed: a `week_reads` read that
     fails throws, and the page loses only that block. This week, the
     Dashboard, the Subjects pane and Your market's subject sentences read the
     week read through it, and Your market's long-run read comes through
@@ -607,10 +632,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
     lead, headlines and sentences under "Already on Your market"
     (`readyForReview`). The client's email is unchanged. **"On the platform"
     is about the ISSUE, not the pages** (the backfill, 1 Oct evening;
-    migration `20261106090000_platform_publish.sql`): sent, or put there by
-    the operator WITHOUT its email (`report_sends.published_at` and
-    `published_by`, the Studio's "Add to past issues (not emailed)" or
-    `scripts/backfill-platform.ts --publish`; `lib/schedules/publish.ts`).
+    migration `20261106090000_platform_publish.sql`): sent, or put there
+    WITHOUT its email (`report_sends.published_at` and `published_by`,
+    `lib/schedules/publish.ts`): by the runner for every weekly read it
+    builds since 5 Oct (above, "The weekly read sends only a READY read"), and
+    by the operator for a build held before then or whose publishing failed
+    (the Studio's "Add to past issues (not emailed)" or
+    `scripts/backfill-platform.ts --publish`).
     One rule, `onPlatform` (`lib/schedules/platform-state.ts`), read by
     `heldOf`, `report_snapshots`' RLS policy, the email preview
     (`/api/schedules/[id]/preview`), the Studio's past issues and the purge's
@@ -620,7 +648,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     recipients: the status stays `ready`, so Send still emails it, and the
     operator's workbench says "On the platform · not emailed". A client's
     Past issues print the day it was published, like any issue, and never how
-    it got there (§0a.1). Publishing is the operator's alone
+    it got there (§0a.1). Publishing BY HAND is the operator's alone
     (`mayBuildReports` on `/api/schedules/[id]/publish`). A long-run read
     written before its month closed carries `partialThrough` and does not
     stand as the month's (`standsAsMonthRead`), so the month-closing run

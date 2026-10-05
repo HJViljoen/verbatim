@@ -9,6 +9,7 @@ import { CADENCES, type ScheduleRow } from '@/lib/schedules/types'
 import { splitRecipients } from '@/lib/schedules/validate'
 import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
 import { PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
+import { sendsWeeklyRead } from '@/lib/schedules/artefact'
 
 // A report's sending (Stage 3, reshaped 2026-08-30): who gets it, after which
 // updates, with the PDF and a share link. One schedule per report; saved
@@ -107,6 +108,10 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
     if (r.ok) router.refresh()
   })
 
+  // The weekly read: every build goes in the client's past issues as soon as
+  // it is built (5 Oct); review holds the email alone.
+  const weeklyRead = sendsWeeklyRead({ starter_key: schedule?.starter_key ?? starterKey, artefact: schedule?.artefact ?? null })
+
   const send = async (mode: 'test' | 'now' | 'deliver') => {
     if (!schedule) return
     setBusy(mode); setConfirm(null); setStatus(null)
@@ -117,7 +122,9 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
       if (!r.ok) setStatus({ ok: false, message: j.error ?? 'Could not send. Try again.' })
       else if (j.status === 'sent') setStatus({ ok: true, message: mode === 'test' ? `Sent to ${j.to}: "${j.subject}".` : `Sent to ${Array.isArray(j.to) ? j.to.length : 0} people: "${j.subject}".` })
       else if (j.status === 'enqueued') setStatus({ ok: true, message: 'Writing it now. It goes out when it is done, or comes back here for review.' })
-      else if (j.status === 'ready') setStatus({ ok: true, message: `Built and waiting for review${j.notified ? '; everyone in this workspace was emailed' : ''}. Use Send it above when you have read it.` })
+      else if (j.status === 'ready') setStatus({ ok: true, message: weeklyRead
+        ? `Built, and in the client's past issues${j.notified ? '; the review email went' : ''}. Nobody on the list was emailed: use Send it above to email them.`
+        : `Built and waiting for review${j.notified ? '; everyone in this workspace was emailed' : ''}. Use Send it above when you have read it.` })
       else if (j.status === 'already_sent') setStatus({ ok: true, message: 'This update already went out to this list.' })
       else if (j.status === 'skipped') setStatus({ ok: false, message: j.error ?? 'Nothing was sent.' })
       else setStatus({ ok: false, message: j.error ?? 'Could not send.' })
@@ -131,8 +138,10 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
 
   // ON THE PLATFORM, NOT EMAILED (the backfill, 1 Oct; lib/schedules/publish.ts):
   // the operator adds a held weekly build to the client's past issues without
-  // emailing anyone. Its reads are on the pages already, from the run on (5 Oct),
-  // so this no longer puts anything on the pages. Send still emails it, as before.
+  // emailing anyone. Since 5 Oct every weekly read the update (or Send now)
+  // builds is put there by itself (lib/schedules/run.ts), so this button is
+  // for a build held before then, or one whose publishing failed. Its reads are
+  // on the pages already, from the run on. Send still emails it, as before.
   const publish = async () => {
     if (!schedule || !ready) return
     setBusy('publish'); setConfirm(null); setStatus(null)
@@ -166,7 +175,9 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
             {ready.stalled
               ? `The report is built, and nothing was recorded as sent. It stopped partway, so it is possible some of the ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} already have it; sending it again goes to all of them. Anyone here can send it.`
               : published
-                ? `It is in the client's past issues, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
+                ? schedule.recipients.length === 0
+                  ? 'It is in the client\'s past issues, and nobody was emailed. Nobody is on the list below: add someone there to email it.'
+                  : `It is in the client's past issues, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
                 : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}${canPublish ? ' Or add it to the past issues without emailing anyone.' : ''}`}
           </p>
           {ready.error && <p className="text-[12px] text-negative">The last attempt did not go: {ready.error}</p>}
@@ -236,6 +247,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
       </div>
       {review && (
         <p className="-mt-2 text-[11px] text-muted-foreground">
+          {weeklyRead ? 'Each issue is in the client\'s past issues as soon as it is built; only the email waits. ' : ''}
           {reviewer === 'operator'
             ? 'The review email goes to Heinrich at Verbatim, not to this workspace: he reads it and presses Send. Nothing goes to the list above until then.'
             : 'Everyone in this workspace gets an email when it is ready; any of them can read, edit and send it. Nothing goes to the list above until then.'}

@@ -16,8 +16,15 @@ import type { ScheduleRow } from './types'
  * (`loadPublishedWeekRead` / `loadPublishedLongRun`, 5 Oct). Publishing puts
  * the held build itself on the client's platform, an issue in the Studio's
  * past issues with its viewer, PDF and share link, WITHOUT emailing anyone.
- * It is Heinrich's decision, so it is the operator's alone (the route asks
- * `mayBuildReports`; the script is his paste).
+ *
+ * THE RUNNER DOES IT ITSELF SINCE 5 OCT (Heinrich: "a finished run reaches
+ * the platform by itself; review holds ONLY the email"). Every weekly read
+ * `runSchedule` builds, scheduled or manual, review on or off, with a list or
+ * without, is published here the moment it is held, with the pipeline as the
+ * actor (or the person or script that fired it), before any review email. By
+ * hand it is the operator's alone (the route asks `mayBuildReports`; the
+ * script is his paste), for a build held before then or one whose publishing
+ * failed.
  *
  * A RECORDED STATE OF ITS OWN, NEVER A FAKE SEND. `published_at` and
  * `published_by` on the send row; the status stays `ready`, so Send still
