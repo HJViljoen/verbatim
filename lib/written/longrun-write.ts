@@ -210,6 +210,10 @@ export async function generateLongRun(
   const log = args.log !== false
   const budget = args.budget ?? UNTIMED_STEP
   let lastError = ''
+  // The error behind the last failed attempt, kept as the thrown error's
+  // `cause` so the step can tell a dropped call from a bad answer
+  // (`isTransient`, lib/written/deadline.ts).
+  let lastCause: unknown
   let costUsd = 0
   for (let attempt = 1; attempt <= 2; attempt++) {
     const options = budget.optionsFor('writer')
@@ -238,10 +242,11 @@ export async function generateLongRun(
           validationStatus: parsed ? 'ok' : 'parse_error',
         }).catch((e) => console.warn('[longrun_read] log failed:', e))
       }
-      if (!parsed) { lastError = 'no parsed output'; continue }
+      if (!parsed) { lastError = 'no parsed output'; lastCause = undefined; continue }
       return { written: parsed, costUsd, ms, attempts: attempt }
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e)
+      lastCause = e
       console.warn(`[longrun_read] attempt ${attempt} failed:`, lastError)
       if (log) {
         await logAiCall(admin, {
@@ -250,8 +255,8 @@ export async function generateLongRun(
           error: lastError, usage: { prompt_tokens: 0, completion_tokens: 0 }, durationMs: Date.now() - startedAt, validationStatus: 'parse_error',
         }).catch(() => {})
       }
-      if (isTimeout(e)) throw asTimeout(e, 'writer')
+      if (isTimeout(e)) throw asTimeout(e, 'writer', options.timeout)
     }
   }
-  throw new LongRunWriteError(`The long-run read could not be written twice over: ${lastError}`)
+  throw new LongRunWriteError(`The long-run read could not be written twice over: ${lastError}`, { cause: lastCause })
 }

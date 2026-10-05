@@ -9,10 +9,12 @@ import type { WeekReadRow } from './store'
 import { candidate, pool, written } from './test-fixtures'
 import { writerFigures } from './write'
 
-// The `write-week-read` step (plan T4): its body never throws, a failure
-// stores a failed row and alerts once, and the pipeline carries it as one
-// additive id in its own position. The build, the table and the mail are
-// stand-ins; the pipeline is read as text (importing it would drag Inngest in).
+// The `write-week-read` step (plan T4): a transient failure before the
+// step's last attempt is thrown for Inngest to retry (5 Oct); otherwise its
+// body never throws, a failure stores a failed row and alerts once, and the
+// pipeline carries it as one additive id in its own position. The build, the
+// table and the mail are stand-ins; the pipeline is read as text (importing
+// it would drag Inngest in).
 
 const admin = {} as SupabaseClient
 const OPTS = { clientId: 'client-1', runId: 'run-27', company: 'Sealand' }
@@ -97,6 +99,49 @@ describe('runWeekReadStep', () => {
     expect(r.status).toBe('failed')
     expect(alerts).toHaveLength(1)
     expect(alerts[0].text).toContain('No row could be stored')
+  })
+
+  // 5 Oct: Össur's run 555af400 stored `failed` on one self-check timeout,
+  // and its Dashboard has printed no figures since.
+  describe('a transient failure is retried as a step before the last attempt', () => {
+    const status = (s: number) => Object.assign(new Error(`${s} status code (no body)`), { status: s })
+    const transients: [string, () => Error][] = [
+      ['a model call that timed out', () => new Error('the check call timed out (cap 45 s): Ask verdict call failed: Request timed out.')],
+      ['a 429', () => status(429)],
+      ['a 5xx behind the writer\'s own error', () => new Error("The week's read could not be written twice over: 503", { cause: status(503) })],
+      ['a dropped connection', () => new Error('week read client: TypeError: fetch failed')],
+    ]
+    for (const [what, error] of transients) {
+      it(`${what}: thrown, with no row stored and no alert`, async () => {
+        const { d, saved, alerts } = deps({ build: async () => { throw error() } })
+        await expect(runWeekReadStep(admin, { ...OPTS, lastAttempt: false }, d)).rejects.toThrow()
+        expect(saved).toEqual([])
+        expect(alerts).toEqual([])
+      })
+    }
+
+    it('on the last attempt the same failure is stored failed and alerted once, as before', async () => {
+      const { d, saved, alerts } = deps({ build: async () => { throw status(503) } })
+      expect(await runWeekReadStep(admin, { ...OPTS, lastAttempt: true }, d)).toMatchObject({ status: 'failed' })
+      expect(saved).toEqual([expect.objectContaining({ status: 'failed', data: null })])
+      expect(alerts).toHaveLength(1)
+      expect(alerts[0].text).toContain('scripts/week-read.ts --client client-1 --run run-27')
+    })
+
+    it('a failure that is not transient is stored and alerted at once, on any attempt', async () => {
+      for (const error of [new Error("The week's read could not be written twice over: no parsed output"), new Error('relation "public.week_reads" does not exist'), status(400)]) {
+        const { d, saved, alerts } = deps({ build: async () => { throw error } })
+        expect(await runWeekReadStep(admin, { ...OPTS, lastAttempt: false }, d)).toMatchObject({ status: 'failed' })
+        expect(saved).toHaveLength(1)
+        expect(alerts).toHaveLength(1)
+      }
+    })
+
+    it('a caller that names no attempt (the script) never throws', async () => {
+      const { d, alerts } = deps({ build: async () => { throw status(503) } })
+      expect((await runWeekReadStep(admin, OPTS, d)).status).toBe('failed')
+      expect(alerts).toHaveLength(1)
+    })
   })
 
   it('no table yet: nothing built, nothing spent, one alert', async () => {
@@ -208,6 +253,8 @@ describe('the pipeline carries write-week-read', () => {
     expect(ids.filter((id) => id === 'write-longrun-read')).toHaveLength(1)
     const body = src.slice(src.indexOf(".run('write-longrun-read'"), src.indexOf('// 7. Close the run.'))
     expect(body).toContain('runLongRunStep(admin, { clientId, runId')
+    // Retried on a transient failure until its last attempt (the theme merge's test).
+    expect(body).toContain('lastAttempt: attempt >= (maxAttempts ?? 3) - 1')
     const handler = body.slice(body.indexOf('.catch('))
     expect(handler).toMatch(/console\.error\(`\[write-longrun-read\] out of retries/)
     expect(handler).toMatch(/return null/)
@@ -221,6 +268,9 @@ describe('the pipeline carries write-week-read', () => {
     // comment names noteError, which is not this handler's.
     const body = src.slice(src.indexOf(".run('write-week-read'"), src.indexOf(".run('write-longrun-read'"))
     expect(body).toContain('runWeekReadStep(admin, { clientId, runId')
+    // Retried on a transient failure until its last attempt (the theme merge's test).
+    expect(body).toContain('lastAttempt: attempt >= (maxAttempts ?? 3) - 1')
+    expect(src).toMatch(/async \(\{ event, step, attempt, maxAttempts \}\)/)
     const at = body.indexOf('.catch(')
     const handler = body.slice(at, body.indexOf('})', at) + 2)
     expect(handler).toMatch(/console\.error\(`\[write-week-read\] out of retries/)

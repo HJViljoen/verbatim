@@ -2124,17 +2124,24 @@ export const runPipeline = inngest.createFunction(
     // the pair rows) and before close-run — never a rename, a renumber or a
     // reorder (AGENTS.md). 63 ids before it, 64 with it.
     //
-    // NON-FATAL, and more than that: the body never throws. A failure stores a
-    // `failed` row and alerts the operator INSIDE the step, once; an alert in
-    // this `.catch` would be sent again on every later step's replay. A thin
-    // week makes no model call. No table yet: a no-op that spends nothing.
-    // Logged, not noteError'd — the keyword-discovery precedent: a clean run
-    // must not read 'partial' because the written read had a bad week.
+    // NON-FATAL. A TRANSIENT failure (a model call that timed out or was
+    // aborted, a 429 or 5xx, a dropped connection) on any attempt but the
+    // last throws, so Inngest retries the step: Össur's run 555af400 lost its
+    // read, and its Dashboard its figures, to one self-check timeout. On the
+    // last attempt, and on any other failure at once, the body never throws:
+    // it stores a `failed` row and alerts the operator INSIDE the step, once;
+    // an alert in this `.catch` would be sent again on every later step's
+    // replay. `attempt` is this step's retry count, as for the theme merge.
+    // A thin week makes no model call. No table yet: a no-op that spends
+    // nothing. Logged, not noteError'd — the keyword-discovery precedent: a
+    // clean run must not read 'partial' because the written read had a bad
+    // week.
     await step
       .run('write-week-read', async () => {
         const admin = createAdminClient()
         const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
-        return runWeekReadStep(admin, { clientId, runId, company: (client?.company_name as string | undefined) ?? undefined })
+        const company = (client?.company_name as string | undefined) ?? undefined
+        return runWeekReadStep(admin, { clientId, runId, company, lastAttempt: attempt >= (maxAttempts ?? 3) - 1 })
       })
       .catch((e) => {
         console.error(`[write-week-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
@@ -2150,17 +2157,19 @@ export const runPipeline = inngest.createFunction(
     // (the first after a month ends); every other run returns at once, having
     // read one row and spent nothing.
     //
-    // NON-FATAL in the week's way: the body never throws, its model calls are
-    // capped on this step's own clock, and a failure stores a `failed` month
-    // row and alerts the operator INSIDE the step, once, with the script to
-    // run. Logged here, never noteError'd: a clean run must not read
-    // 'partial' because the long-run read had a bad month.
+    // NON-FATAL in the week's way: its model calls are capped on this step's
+    // own clock; a transient failure before the last attempt throws, so
+    // Inngest retries the step; on the last attempt, and on any other failure
+    // at once, the body never throws: a failure stores a `failed` month row
+    // and alerts the operator INSIDE the step, once, with the script to run.
+    // Logged here, never noteError'd: a clean run must not read 'partial'
+    // because the long-run read had a bad month.
     await step
       .run('write-longrun-read', async () => {
         const admin = createAdminClient()
         const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
         const company = ((client?.company_name as string | undefined) ?? '').trim() || clientId
-        return runLongRunStep(admin, { clientId, runId, company })
+        return runLongRunStep(admin, { clientId, runId, company, lastAttempt: attempt >= (maxAttempts ?? 3) - 1 })
       })
       .catch((e) => {
         console.error(`[write-longrun-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)

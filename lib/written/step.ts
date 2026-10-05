@@ -4,7 +4,7 @@ import { sendAlertEmail } from '../email'
 import { checkWeekRead, type WeekCheck } from './check'
 import { loadCompanyContext, type CompanyContext } from './company'
 import { composeWeekRead } from './compose'
-import { callBudget, type CallBudget } from './deadline'
+import { callBudget, isTransient, type CallBudget } from './deadline'
 import { loadTrackedBrands } from './evidence'
 import { fitQuotes, type FitParagraph, type QuoteFit } from './fit'
 import { loadWeekPool } from './pool'
@@ -27,8 +27,12 @@ import { generateWeekRead, WEEK_READ_MODEL, type ParseClient } from './write-mod
 //    A THIN pool makes no model call at all: it composes the read with no
 //    findings and says `thin`;
 //  · `runWeekReadStep`: the Inngest step's body (`write-week-read`,
-//    inngest/functions/pipeline.ts). Builds, stores the row, and NEVER throws:
-//    a failure stores a `failed` row where it can and alerts the operator.
+//    inngest/functions/pipeline.ts). Builds and stores the row. A TRANSIENT
+//    failure (`isTransient`: a model call that timed out or was aborted, a
+//    429 or 5xx, a dropped connection) on any attempt but the step's last is
+//    THROWN, so Inngest retries the step: nothing stored, nothing sent. On
+//    the last attempt, and on any other failure at once, it never throws: it
+//    stores a `failed` row where it can and alerts the operator.
 //
 // WHY THE ALERT IS SENT IN HERE AND NOT IN THE STEP'S `.catch`. A step that
 // runs out of retries is memoised as failed, and every later step replays the
@@ -230,17 +234,27 @@ const FALLBACK = (clientId: string, runId: string) =>
   `Fallback, once the cause is fixed: node --env-file=.env.local --import tsx scripts/week-read.ts --client ${clientId} --run ${runId} (dry), then again with --write.`
 
 /**
- * The `write-week-read` step's body. Never throws: every outcome is a result,
- * and the ones the operator must hear about (a failure, a missing table, a
- * week whose written findings were all held) are sent as one alert.
+ * The `write-week-read` step's body. Every outcome is a result, and the ones
+ * the operator must hear about (a failure, a missing table, a week whose
+ * written findings were all held) are sent as one alert, with one exception:
+ * a transient failure before the step's last attempt (`lastAttempt: false`)
+ * is thrown, so Inngest retries the step, and nothing is stored or sent for
+ * that attempt. `lastAttempt` absent (a caller that does not retry) is the
+ * last attempt: never throws.
  */
 export async function runWeekReadStep(
   admin: SupabaseClient,
-  opts: { clientId: string; runId: string; company?: string },
+  opts: {
+    clientId: string; runId: string; company?: string
+    /** Is this the step's last attempt? The pipeline passes `attempt >=
+     *  maxAttempts - 1`, as the theme merge's `mergeFailSoft` does. */
+    lastAttempt?: boolean
+  },
   deps: Partial<WeekReadStepDeps> = {},
 ): Promise<WeekReadStepResult> {
   const d = { ...DEFAULT_DEPS, ...deps }
   const who = opts.company ?? opts.clientId
+  const lastAttempt = opts.lastAttempt ?? true
   const startedAt = Date.now()
   try {
     // No table, nothing spent: the step no-ops until its migration is applied
@@ -256,7 +270,8 @@ export async function runWeekReadStep(
     // THE STEP'S CLOCK STARTS HERE (review M4): every model call below is
     // capped, never retried by the SDK, and done by WEEK_READ_STEP_BUDGET_MS
     // (250 s), well inside the route's 300 s; one that runs out is thrown as a
-    // timeout and stored as a failed read below, with the alert naming it.
+    // timeout, retried as a step below, and on the last attempt stored as a
+    // failed read, with the alert naming it.
     const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt }) })
     await d.save(admin, rowOf(opts.clientId, opts.runId, built))
     const result: WeekReadStepResult = { status: built.status, findings: built.data.findings.length, held: built.data.held.length, costUsd: built.data.costUsd }
@@ -270,6 +285,15 @@ export async function runWeekReadStep(
     return result
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
+    // A call that dropped may well land on the next attempt (Össur's run
+    // 555af400 lost its read to one self-check timeout): before the last
+    // attempt, throw, and Inngest retries the step on a fresh clock. No row
+    // and no alert here: the alert sits in the body, not beside step.run, so
+    // the one that matters is sent once, on the last attempt.
+    if (!lastAttempt && isTransient(e)) {
+      console.warn(`[write-week-read] transient failure, the step is retried: ${message}`)
+      throw e
+    }
     console.error(`[write-week-read] failed: ${message}`)
     let stored = true
     try {

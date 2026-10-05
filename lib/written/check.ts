@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { verdictPass } from '../ask/engine'
 import type { CheckVerdict } from '../reports/documents/check'
-import { asTimeout, isTimeout, UNTIMED_STEP, type CallBudget } from './deadline'
+import { asTimeout, isTimeout, UNTIMED_STEP, WeekReadTimeoutError, type CallBudget } from './deadline'
 
 // The self-check (plan T3), the document engine's (lib/reports/documents/
 // check.ts) pointed at the week: each finding's HEADLINE, as it would print,
@@ -36,11 +36,23 @@ export async function checkWeekRead(
   const headlines = [...new Set(args.headlines.map((h) => h.trim()).filter(Boolean))]
   if (headlines.length === 0) return { contradicted: new Map(), verdicts: [], costUsd: 0, ran: true }
   // Capped, no SDK retry, and only where the step has time left: a call that
-  // cannot start, or times out, fails the read (review M4), it is not a
-  // silent pass. Any other failure keeps the findings unchecked, as before.
+  // cannot start, or times out, is thrown as a timeout (review M4), never a
+  // silent pass; the step retries it, and on its last attempt the read fails.
+  // Any other failure keeps the findings unchecked, as before.
   const request = (args.budget ?? UNTIMED_STEP).optionsFor('check')
+  // ONE CLOCK FOR THE WHOLE PASS (5 Oct). `request.timeout` caps each of the
+  // pass's two model calls (the claims' embeddings, then the verdict), so the
+  // pass alone could run twice it; the race holds the whole pass to it, which
+  // is what the step's budget counts (lib/written/deadline.ts). A pass that
+  // loses the race is left to settle on its own, its outcome ignored.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const overrun = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new WeekReadTimeoutError(
+      `the check call timed out (cap ${Math.round(request.timeout / 1000)} s): the self-check ran past its time`,
+    )), request.timeout)
+  })
   try {
-    const out = await verdictPass(admin, {
+    const pass = verdictPass(admin, {
       clientId: args.clientId,
       runId: args.runId,
       companyName: args.companyName,
@@ -48,6 +60,8 @@ export async function checkWeekRead(
       persist: args.persist,
       request,
     })
+    pass.catch(() => {})
+    const out = await Promise.race([pass, overrun])
     const byRef = new Map(out.claims.map((c) => [c.ref, c]))
     const verdicts = headlines.map((headline, i) => {
       const c = byRef.get(`C${i + 1}`)
@@ -60,8 +74,10 @@ export async function checkWeekRead(
       ran: true,
     }
   } catch (e) {
-    if (isTimeout(e)) throw asTimeout(e, 'check')
+    if (isTimeout(e)) throw asTimeout(e, 'check', request.timeout)
     console.error('[written/check] the verdict pass failed; findings kept unchecked:', e)
     return { contradicted: new Map(), verdicts: [], costUsd: 0, ran: false }
+  } finally {
+    clearTimeout(timer)
   }
 }

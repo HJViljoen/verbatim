@@ -15,7 +15,7 @@ import { CLIENT_AUDIENCE, loadCompetitors } from '../rivals'
 import { loadCommentNamings, namesByComment, trackedBrands, whoSplit, type WhoVideo } from '../brands/attribution'
 import { checkWeekRead, type WeekCheck } from './check'
 import { loadCompanyContext, type CompanyContext } from './company'
-import { callBudget, type CallBudget } from './deadline'
+import { callBudget, isTransient, type CallBudget } from './deadline'
 import { judge, loadDatedEvidence, loadTrackedBrands, type DatedEvidence } from './evidence'
 import { generateLongRun, LONGRUN_MAX, LONGRUN_MODEL, LONGRUN_PROMPT_VERSION, type LongRunOutput } from './longrun-write'
 import { coveredDays, readingMonthOf } from './month'
@@ -652,24 +652,39 @@ const DEFAULT_LONGRUN_DEPS: LongRunStepDeps = {
  * one step's 250 s could not hold). On the run that closes a month
  * (`closesMonth`), write that month's long-run read, unless a ready or thin
  * read of it is stored already (the script may have written it). Every other
- * run returns at once and spends nothing. NEVER THROWS, and the operator
- * hears of anything that went wrong once, inside the step, with the script
- * to run, because no later run writes this month:
+ * run returns at once and spends nothing. A TRANSIENT failure (`isTransient`)
+ * on any attempt but the step's last (`lastAttempt: false`) is THROWN, so
+ * Inngest retries the step, with nothing stored or sent for that attempt, as
+ * the week's step does. Otherwise it NEVER THROWS, and the operator hears of
+ * anything that went wrong once, inside the step, with the script to run,
+ * because no later run writes this month:
  *  · no `week_reads` table: a no-op that spends nothing and says nothing (the
  *    week's step already said so);
  *  · the window or the due check cannot be read: nothing is written;
  *  · the build fails or runs out of time (its calls are capped on this
  *    step's own clock, `WEEK_READ_STEP_BUDGET_MS` from its start, as the
  *    week's are): a failed row is stored.
+ * `lastAttempt` absent (a caller that does not retry) is the last attempt.
  */
 export async function runLongRunStep(
   admin: SupabaseClient,
-  opts: { clientId: string; runId: string; company: string },
+  opts: {
+    clientId: string; runId: string; company: string
+    /** Is this the step's last attempt? (`attempt >= maxAttempts - 1`.) */
+    lastAttempt?: boolean
+  },
   deps: Partial<LongRunStepDeps> = {},
 ): Promise<LongRunStepResult> {
   const d: LongRunStepDeps = { ...DEFAULT_LONGRUN_DEPS, ...deps }
   const startedAt = (d.now ?? Date.now)()
   const tell = (subject: string, text: string) => d.alert(subject, text).catch(() => ({ sent: false }))
+  // Before the last attempt a transient failure is thrown for Inngest to
+  // retry the step, on a fresh clock; nothing is stored and nobody is told.
+  const retry = (e: unknown, error: string): void => {
+    if ((opts.lastAttempt ?? true) || !isTransient(e)) return
+    console.warn(`[write-longrun-read] transient failure, the step is retried: ${error}`)
+    throw e
+  }
   let month: string | null = null
   try {
     if (!(await d.applied(admin))) {
@@ -682,6 +697,7 @@ export async function runLongRunStep(
     if (await d.written(admin, opts.clientId, month)) return { status: 'not_due', month, ideas: 0, costUsd: 0 }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
+    retry(e, error)
     console.error(`[write-longrun-read] not checked: ${error}`)
     await tell(
       `Verbatim long-run read not checked: ${opts.company}`,
@@ -699,6 +715,7 @@ export async function runLongRunStep(
     return { status: built.status, month, ideas: built.data.ideas.length, costUsd: built.data.costUsd }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
+    retry(e, error)
     console.error(`[write-longrun-read] failed: ${error}`)
     let stored = true
     try {

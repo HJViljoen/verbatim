@@ -439,6 +439,34 @@ describe('runLongRunStep (write-longrun-read)', () => {
     expect((await runLongRunStep(admin, STEP, deps)).status).toBe('failed')
   })
 
+  // 5 Oct: a transient failure before the step's last attempt is thrown, so
+  // Inngest retries the step, as the week's step does; nothing is stored and
+  // nobody is told until the last attempt.
+  it('a transient failure before the last attempt is thrown: no row, no alert; on the last, stored and alerted once', async () => {
+    const timedOut = () => new Error('the check call timed out (cap 45 s): Ask verdict call failed: Request timed out.')
+    const early = hookDeps({ build: async () => { throw timedOut() } })
+    await expect(runLongRunStep(admin, { ...STEP, lastAttempt: false }, early.deps)).rejects.toThrow(/timed out/)
+    expect(early.saved).toEqual([])
+    expect(early.alerts).toEqual([])
+    // The due check's own read dropping is retried the same way.
+    const unread = hookDeps({ written: async () => { throw new Error('week_reads long run written: TypeError: fetch failed') } })
+    await expect(runLongRunStep(admin, { ...STEP, lastAttempt: false }, unread.deps)).rejects.toThrow(/fetch failed/)
+    expect(unread.alerts).toEqual([])
+    // The last attempt: today's behaviour.
+    const last = hookDeps({ build: async () => { throw timedOut() } })
+    expect(await runLongRunStep(admin, { ...STEP, lastAttempt: true }, last.deps)).toMatchObject({ status: 'failed', month: SEP })
+    expect(last.saved).toEqual([expect.objectContaining({ kind: 'month', status: 'failed' })])
+    expect(last.alerts).toHaveLength(1)
+    expect(last.alerts[0].text).toContain('scripts/longrun-read.ts --client client-1 --month 2026-09')
+  })
+
+  it('a failure that is not transient is stored and alerted at once, on any attempt', async () => {
+    const { deps, saved, alerts } = hookDeps({ build: async () => { throw new Error('The long-run read could not be written twice over: no parsed output') } })
+    expect(await runLongRunStep(admin, { ...STEP, lastAttempt: false }, deps)).toMatchObject({ status: 'failed' })
+    expect(saved).toHaveLength(1)
+    expect(alerts).toHaveLength(1)
+  })
+
   it('the row keeps the read whole', () => {
     const row = longRunRowOf('client-1', 'run-oct', builtLongRun())
     expect(row.data).toMatchObject({ kind: 'longrun', months: [AUG, SEP] })
