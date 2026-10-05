@@ -7,7 +7,7 @@
 #   bash scripts/backfill-briefs-september.sh           # dry: builds both in memory, stores nothing (~$5 of model calls)
 #   bash scripts/backfill-briefs-september.sh --write   # builds and stores both (~$5); they appear in the Studio
 #
-# Needs supabase/migrations/20261107090000_monthly_briefs.sql applied
+# Needs supabase/migrations/20261107093000_monthly_briefs.sql applied
 # (app-setup.sh) before --write. One workspace after the other, never two at
 # once: each is a pipeline step's worth of production reads. Run it from the
 # repo root with .env.local present. A month already written is refused;

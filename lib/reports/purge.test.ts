@@ -262,3 +262,24 @@ describe('planTotal', () => {
     expect(planTotal(p)).toBe(4)
   })
 })
+
+describe("planPurge — a month's department brief is published with no send row (T8 wired)", () => {
+  const t = tables({
+    snapshots: [snapshot('brief', { data_kind: 'monthly_brief', title: 'Sales brief · September 2026' }), snapshot('draft', { data_kind: 'weekly' })],
+    artifacts: [artifact('a-brief', { snapshot_id: 'brief' }), artifact('a-draft', { snapshot_id: 'draft' })],
+  })
+
+  it('drafts never deletes it, nor its PDF, and says why', () => {
+    const p = planPurge(t, { scope: 'drafts', now: NOW })
+    expect(ids(p.snapshots)).toEqual(['draft'])
+    expect(ids(p.artifacts)).toEqual(['a-draft'])
+    expect(p.kept.find((k) => k.id === 'brief')?.why).toBe("delivered: a month's department brief, on the client's platform with no send row")
+    expect(p.blockers).toEqual([])
+  })
+
+  it('all refuses it, as it refuses any build on the platform', () => {
+    const p = planPurge(t, { scope: 'all', now: NOW })
+    expect(ids(p.snapshots)).toEqual(['draft'])
+    expect(p.blockers.some((b) => b.includes("a month's department brief") && b.includes('Sales brief · September 2026'))).toBe(true)
+  })
+})

@@ -24,7 +24,7 @@
 // or thin; the model calls are logged to `ai_call_log` under the research's
 // run. It refuses a month whose set is written unless --replace is given, and
 // a database without the ledger (apply
-// supabase/migrations/20261107090000_monthly_briefs.sql first).
+// supabase/migrations/20261107093000_monthly_briefs.sql first).
 //
 // THE RESEARCH READS THE NEWEST THEMED RUN. The `themes` table holds the
 // newest run's themes only, so the Ask agent's research reads that run's,
@@ -114,13 +114,13 @@ async function main() {
   const window = await runWindowOf(db, clientId, runId)
   const closes = window && closesMonth(window) ? endedMonthOf(window) : null
   console.log(`Ledger (monthly_briefs): ${applied ? 'applied' : 'NOT in this database'}. ${longMonth(month)}: ${written ? 'written already' : 'not written'}. Run ${runId} ${closes ? `closes ${longMonth(closes)}` : 'closes no month'}${closes && closes !== month ? ' (not this one)' : ''}.`)
-  if (write && !applied) throw new Error('monthly_briefs is not in this database: apply supabase/migrations/20261107090000_monthly_briefs.sql first')
+  if (write && !applied) throw new Error('monthly_briefs is not in this database: apply supabase/migrations/20261107093000_monthly_briefs.sql first')
   if (write && written && !has('replace')) {
     console.error(`${longMonth(month)}'s briefs are written already. Pass --replace to write them again.`)
     process.exit(4)
   }
   if (has('plan')) {
-    if (!applied) console.log('\n--write refuses until supabase/migrations/20261107090000_monthly_briefs.sql is applied (app-setup.sh).')
+    if (!applied) console.log('\n--write refuses until supabase/migrations/20261107093000_monthly_briefs.sql is applied (app-setup.sh).')
     else if (written) console.log(`\n--write refuses: ${longMonth(month)} is written (--replace writes it again).`)
     console.log(`${applied && !written ? '\n' : ''}--write would write the ${longMonth(month)} Sales, Marketing, Content and Leadership briefs, under run ${runId}, for about $2 to $2.50 of model calls.`)
     return

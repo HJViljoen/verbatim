@@ -41,6 +41,10 @@ export interface SnapshotRow {
   title: string | null
   report_id: string | null
   created_at: string
+  /** `data->>kind`: which artefact a kind 'report' snapshot holds. A month's
+   *  department brief ('monthly_brief') is on the client's platform with no
+   *  send row, so the purge reads it to keep it. Absent where not read. */
+  data_kind?: string | null
 }
 export interface SendRow {
   id: string
@@ -202,8 +206,23 @@ export function planPurge(t: PurgeTables, opts: PurgeOptions): PurgePlan {
   }
 
   // ── snapshots ───────────────────────────────────────────────────────────
+  // A MONTH'S DEPARTMENT BRIEF IS DELIVERED WITH NO SEND ROW (T8 wired, 5
+  // Oct): the run that closes a month stores it and the Studio lists it at
+  // once (lib/reports/briefs/store.ts; `monthly_briefs` names it). Read by
+  // the send rows alone it looks like a draft, so it is named here: `drafts`
+  // keeps it, and `all` refuses it as it refuses any build on the platform.
   const delSnapshots: SnapshotRow[] = []
   for (const s of t.snapshots) {
+    if (s.data_kind === 'monthly_brief') {
+      kept.push({ table: 'report_snapshots', id: s.id, label: `${s.title ?? 'untitled'} · ${s.kind} · ${day(s.created_at)}`, why: "delivered: a month's department brief, on the client's platform with no send row" })
+      if (scope === 'all') {
+        blockers.push(
+          `report_snapshots ${short(s.id)} is a month's department brief ("${s.title ?? 'untitled'}"), on the client's platform with no send row. ` +
+          `A purge never removes a published brief.`,
+        )
+      }
+      continue
+    }
     const why = deliveredReason(s.id)
     if (scope === 'drafts' && why) {
       kept.push({ table: 'report_snapshots', id: s.id, label: `${s.title ?? 'untitled'} · ${s.kind} · ${day(s.created_at)}`, why: `delivered: ${why}` })

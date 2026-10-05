@@ -96,7 +96,8 @@ async function load(admin: ReturnType<typeof createAdminClient>, clientId: strin
   }
 
   const [snapshots, sends, builds, artifacts, links, exportEvents, edits, reports, schedules, weekly] = await Promise.all([
-    eq<PurgeTables['snapshots'][number]>('report_snapshots', 'id, kind, title, report_id, created_at'),
+    // `data_kind`: a month's brief is kept by what it is (lib/reports/purge.ts).
+    eq<PurgeTables['snapshots'][number]>('report_snapshots', 'id, kind, title, report_id, created_at, data_kind:data->>kind'),
     sendsOf(),
     eq<PurgeTables['builds'][number]>('report_builds', 'id, report_id, snapshot_id, status, started_at, error'),
     eq<PurgeTables['artifacts'][number]>('artifacts', 'id, snapshot_id, format, bytes, storage_path, rendered_at'),

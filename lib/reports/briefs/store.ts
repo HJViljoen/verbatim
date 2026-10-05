@@ -18,7 +18,7 @@ import { BRIEF_NAME, BRIEF_ROLES } from './types'
 // exports). Numbers are frozen, words resolve at render. The viewer, the
 // render route, the PDF and erasure all already read that table.
 //
-// THE LEDGER IS `monthly_briefs` (migration 20261107090000): one row per
+// THE LEDGER IS `monthly_briefs` (migration 20261107093000): one row per
 // client, month and role, saying whether that brief is ready, thin or failed,
 // which snapshot is the month's, which run wrote it and what it cost. It is
 // what a later run asks before writing a month again, where a failure is

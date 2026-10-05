@@ -752,7 +752,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `report_snapshots` row (kind 'report', `data.kind = 'monthly_brief'`,
   `ref.artefact = 'brief:<role>'`, quotes as refs, `evidence_ids`, stamped
   `month` / `window_basis = 'month'`); the ledger is `monthly_briefs`
-  (migration `20261107090000`, additive, service role only): one row per
+  (migration `20261107093000`, additive, service role only): one row per
   client, month and role, `ready` (with its snapshot), `thin` (nothing stood,
   never shown) or `failed`. A month is written when every role is ready or
   thin; no later run writes an ended month. **Shown:** the Studio's "Monthly
@@ -788,8 +788,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   default and paid for, `--write` stores, `--replace` over a written month);
   September 2026, which closed before the steps existed:
   `bash scripts/backfill-briefs-september.sh --write`, once, after the
-  migration. `scripts/purge-reports.ts --scope drafts` would take a brief's
-  snapshot (no send carries it): do not run it over a month's briefs.
+  migration. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
+  reads `data->>kind` and keeps it by what it is: `drafts` keeps it, `all`
+  refuses it, as it refuses any build on the platform (`lib/reports/purge.ts`).
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
   the email body are produced in route handlers (`/api/export`,
   `/api/reports/[id]/build`, `/api/admin/schedules/run`, `/api/schedules/*`,
