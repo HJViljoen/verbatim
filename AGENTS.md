@@ -450,9 +450,24 @@ This version has breaking changes — APIs, conventions, and file structure may 
   labels to the source. The bars draw only weeks on the one weekly cadence:
   exactly one completed Sunday gather in the week and in each of the two
   after (`chartCadenceBroken`, the line's own `cadenceBroken` on the clock;
-  `loadCadenceRuns` reads every run, any status, with its window). A partial
-  run counts as a completed gather only when every recorded error is a step
-  after the gather (`AFTER_GATHER_STEPS`, fail closed). **A bar never counts
+  `loadCadenceRuns` reads every run, any status, with its window and its
+  options). A partial run counts as a completed gather only when every
+  recorded error is a step after the gather (`AFTER_GATHER_STEPS`, fail
+  closed). **A run that gathered nothing is not counted at all** (Heinrich,
+  5 Oct: "Why is the first bar on Sealand twenty eighth September when we've
+  had earlier runs"): a fresh `skipGather` run (a rehearsal) plans no search
+  and no own-posts census, so it moved no count in any week, and it is
+  neither an extra update nor a missing one (`chartRunGatheredNothing`, the
+  window anchor's `gatheredNothing` restated and pinned equal; the resume
+  lever, `runId` naming the run itself, is the gather it resumes and counts;
+  a run read without its options counts, fail closed). **The same-age line
+  does not follow** (`weekCadence` in `keepWeekPoints` counts every run, so
+  `cadenceBroken` on a kept read is unchanged): a kept read is never
+  recomputed, so counting a new way would mix two rules under one
+  `method_version`, and an analysis-only run re-runs classification and Pass
+  A, which is what the line's shares read and the bars' counts do not. The
+  two need not agree: the bars count, the line reads shares, and the line
+  leaves the week of 21 Sep out by name (`WEEK_LINE_EXCLUDED`). **A bar never counts
   a video let in before we checked relevance** (`unchecked`, the newest
   verdict not a clean keep), and since 5 Oct one such video no longer blanks
   its week: every weekly-bar builder (the Dashboard's `homeWeeks`, Your
@@ -468,15 +483,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
   read once at the cut and kept, never recomputed, so a kept read cannot drop
   them afterwards, and a share with under a tenth unchecked is what decision
   M accepted; the chart prints counts and can subtract exactly. On Sealand
-  the week of 21 Sep holds THREE runs (the two 24 Sep rehearsals, which
-  searched nothing, and the 27 Sep update `f3646446`, partial only for
-  transcripts and the own-posts census), so it is never drawn, `--keep` or
-  not; the first bar is 28 Sep (5 Oct: 266 videos and 5,029 comments, one
-  video unchecked with one comment, so 265 and 5,028 drawn). On Össur the 4
+  the week of 21 Sep holds three runs, the two 24 Sep rehearsals
+  (`e80e9347`, `03180a33`, fresh `skipGather`: they gathered nothing) and
+  the 27 Sep update `f3646446` (partial only for transcripts and the
+  own-posts census), so it holds ONE counted update, and the 4 Oct update
+  (`393b95df`, resumed with `runId` itself: the gather it resumes) holds the
+  week after. `homeWeeks` over production's 5 Oct rows draws from 21 Sep
+  (301 videos, 4,990 comments, none unchecked), then 28 Sep (266 videos and
+  5,029 comments, one video unchecked with one comment, so 265 and 5,028
+  drawn), both faint; Your market and This week draw the same two. The week
+  of 14 Sep stays cut, by the 17 Sep search change (terms, rivals, handles)
+  and by two runs in it (the failed 15 Sep resume and the 20 Sep update);
+  every week before it by the 9, 13 and 17 Sep search changes. On Össur the 4
   Oct discovery row (run `555af400`) moved no active community (amputee,
   bionics, prosthetics before and after), so `movesActiveSet` never made it a
   change, and `homeWeeks` over production's 5 Oct rows draws 28 Sep (177
-  videos, 3,217 comments) with or without the pre-gather rule.
+  videos, 3,217 comments) with or without the pre-gather rule, and with or
+  without the rehearsal rule (no Össur run on the axis gathered nothing): the
+  week of 21 Sep has no update in it (none ran between 13 Sep and 4 Oct), and
+  14 Sep is cut by the 15 Sep handles change as well.
 - **Production reads from agents are serialised and rationed.** Five agents
   reading production at once is what caused the outage above, so this is the
   fix and not caution. Before the first read of a session, `select 1` through
@@ -677,7 +702,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     week draws from ONE clean week, the first the DATA shows, never a
     constant (`homeAxis`: the last eight weeks; `weeksSinceOurChanges` cuts at
     the latest search or relevance change on them, a pipeline change made
-    before its run's gather at that run, and at weeks with nothing gathered;
+    before its run's gather at that run, at weeks off the cadence (a run that
+    gathered nothing not counted) and at weeks with nothing gathered;
     a bar counts checked videos only, `checkedRows`), a filling week faint;
     the two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
     and the backfill's regate) cut no week, because `unchecked` counts

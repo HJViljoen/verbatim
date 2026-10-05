@@ -360,11 +360,31 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
 /** A run as the chart's cadence reads it: `errors` is `pipeline_runs.errors`.
  *  The window (`window_start`, and `window_end`, the moment the run opened,
  *  which a resume keeps) is what the chart's cut reads for a change made
- *  inside the run (`preGatherCutBefore`, lib/reading/weeks.ts). */
+ *  inside the run (`preGatherCutBefore`, lib/reading/weeks.ts). `options` is
+ *  `pipeline_runs.options`, which says whether the run gathered at all
+ *  (`chartRunGatheredNothing`); absent, the run counts as a gather. */
 export interface ChartRun extends WeekRun {
   errors?: readonly unknown[] | null
   windowStart?: string | null
   windowEnd?: string | null
+  options?: unknown
+}
+
+/**
+ * Did this run gather nothing? A FRESH `skipGather` run (a rehearsal, or an
+ * analysis-only run opened on its own row) plans no search and no own-posts
+ * census, so it measured no video and no comment of the market. Restated from
+ * `gatheredNothing` (lib/pipeline/run-bookkeeping.ts) so this file stays out
+ * of the pipeline's imports, and a test pins the two equal: `skipGather`
+ * truthy and `options.runId` not the run itself (a run naming itself is the
+ * resume lever, which reopens a row whose gather already ran). Without
+ * `options` it is a gather: it fails closed to counting the run. Pure.
+ */
+export function chartRunGatheredNothing(r: Pick<ChartRun, 'id' | 'options'>): boolean {
+  const o = r.options
+  if (!o || typeof o !== 'object') return false
+  const { skipGather, runId } = o as { skipGather?: unknown; runId?: unknown }
+  return Boolean(skipGather) && runId !== r.id
 }
 
 /** The `errors` list close-run writes is capped (`RUN_ERROR_CAP`,
@@ -398,6 +418,17 @@ export function gatherCompleted(r: ChartRun): boolean {
  * still in flight in such a week is not counted until it finishes; an extra,
  * failed, late or off-day run is a break at once.
  *
+ * A RUN THAT GATHERED NOTHING IS NOT COUNTED AT ALL (Heinrich, 5 Oct: "Why is
+ * the first bar on Sealand twenty eighth September when we've had earlier
+ * runs"; `chartRunGatheredNothing`). The bars count videos and comments, and a
+ * fresh `skipGather` run (Sealand's two 24 Sep rehearsals, `e80e9347` and
+ * `03180a33`) searched nothing and captured no comment of the market, so it
+ * changed no count in any week: it is neither an extra update nor a missing
+ * one. A run that did gather is counted however it ended. The same-age line
+ * keeps counting every run (`weekCadence`, `keepWeekPoints`): its kept reads
+ * are never recomputed, and an analysis-only run re-reads the shares it
+ * measures.
+ *
  * Returns the reason a week breaks, or null. Pure.
  */
 export function chartCadenceBroken(week: string, runs: readonly ChartRun[], now: string): string | null {
@@ -410,6 +441,8 @@ export function chartCadenceBroken(week: string, runs: readonly ChartRun[], now:
     return Number.isNaN(anchor) ? -1 : Math.floor((anchor - start) / (7 * DAY_MS))
   }
   const counted = runs
+    // Gathered nothing: no count of the market moved.
+    .filter((r) => !chartRunGatheredNothing(r))
     // In flight in a week not yet over: not counted until it finishes.
     .filter((r) => !(r.finishedAt == null && r.status === 'running' && nowMs < slotEnd(slotOf(r))))
     .map((r): WeekRun => ({ id: r.id, status: gatherCompleted(r) ? 'completed' : r.status, finishedAt: r.finishedAt, startedAt: r.startedAt }))

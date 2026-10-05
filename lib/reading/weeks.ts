@@ -507,7 +507,9 @@ export const WEEK_CUT_SURFACES: readonly OurChangeSurface[] = ['terms', 'subredd
  *     the run itself gathered was read under the change from its start;
  *   - only weeks read on the one weekly cadence (`cadence`, set by the caller
  *     from the runs with `chartCadenceBroken`): exactly one completed Sunday
- *     gather in the week and in each of the two after, as the line requires;
+ *     gather in the week and in each of the two after, as the line requires,
+ *     a run that gathered nothing (a fresh `skipGather` rehearsal) not
+ *     counted at all;
  *   - only the unbroken run of weeks with something gathered that ends at the
  *     latest such week: a week with nothing gathered is off the axis, never an
  *     empty slot that reads as a silent market;

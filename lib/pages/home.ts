@@ -151,9 +151,10 @@ export const WEEKS_MIN = 1
  * the counts where the SQL says what it holds, `checkedRows`, else the week
  * is not drawn). A change before the axis leaves every axis week after it, so
  * nothing older is needed. On Sealand (5 Oct) that is: the 17 Sep search
- * change cuts everything to the week of 14 Sep, the week of 21 Sep is off the
- * cadence (three runs), and the week of 28 Sep is drawn with its one
- * unchecked video left out.
+ * change cuts everything to the week of 14 Sep, the week of 21 Sep is drawn
+ * (its two 24 Sep rehearsals gathered nothing, so they are not runs of the
+ * cadence, `chartRunGatheredNothing`), and the week of 28 Sep is drawn with
+ * its one unchecked video left out.
  */
 export function homeAxis(now: string): string[] {
   const current = isoWeekOf(now)

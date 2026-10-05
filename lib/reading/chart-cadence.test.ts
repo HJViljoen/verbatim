@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { changesFromLog, isFailOpenFix, type OurChange } from './comparability'
 import type { ConfigChange } from '../config-log'
+import { gatheredNothing } from '../pipeline/run-bookkeeping'
 import {
-  AFTER_GATHER_STEPS, chartCadenceBroken, gatherCompleted, weekPairOf, withChartCadence,
+  AFTER_GATHER_STEPS, chartCadenceBroken, chartRunGatheredNothing, gatherCompleted, keepWeekPoints, weekPairOf, withChartCadence,
   WEEK_GATE_SURFACES, WEEK_SEARCH_SURFACES, type ChartRun, type WeekRead,
 } from './week-line'
 import { weekRules, weeksSinceOurChanges, WEEK_CUT_SURFACES, type WeekVolume } from './weeks'
@@ -12,14 +13,16 @@ import { weekRules, weeksSinceOurChanges, WEEK_CUT_SURFACES, type WeekVolume } f
 // handles cutting it, and the fail-open fixes exempt from the week line as
 // they are from the Dashboard.
 
-// Sealand's runs, 13 Sep to 1 Oct, as production holds them (read 1 Oct).
+// Sealand's runs, 13 Sep to 1 Oct, as production holds them (read 1 Oct;
+// their options read 5 Oct). The 15 Sep row is a resume (`runId` itself); the
+// two 24 Sep rows are fresh analysis-only rehearsals, which gathered nothing.
 const SEALAND_RUNS: ChartRun[] = [
-  { id: '5a2ebc43', status: 'failed', startedAt: '2026-09-15T08:21:22Z', finishedAt: '2026-09-15T08:38:58Z', errors: [] },
-  { id: 'b67b56de', status: 'partial', startedAt: '2026-09-20T04:02:57Z', finishedAt: '2026-09-20T08:33:47Z', errors: ['owned-posts:instagram:rareform: instagram census read returned 0 posts'] },
-  { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', errors: ['ocr: failed', 'persist-themes:registry: failed'] },
-  { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', errors: ['ocr: failed'] },
+  { id: '5a2ebc43', status: 'failed', startedAt: '2026-09-15T08:21:22Z', finishedAt: '2026-09-15T08:38:58Z', errors: [], options: { runId: '5a2ebc43', skipGather: true } },
+  { id: 'b67b56de', status: 'partial', startedAt: '2026-09-20T04:02:57Z', finishedAt: '2026-09-20T08:33:47Z', errors: ['owned-posts:instagram:rareform: instagram census read returned 0 posts'], options: { sendReport: true, scheduledFor: '2026-09-20T04:00:00.000Z' } },
+  { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', errors: ['ocr: failed', 'persist-themes:registry: failed'], options: { skipGather: true } },
+  { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', errors: ['ocr: failed'], options: { skipGather: true } },
   {
-    id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z',
+    id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', options: { sendReport: true, scheduledFor: '2026-09-27T04:00:00.000Z' },
     errors: [
       'owned-posts:instagram:rareform: instagram census read returned 0 posts; fell back to the profile summary (0 in window)',
       'transcript-backfill: transcript-backfill step failed: Apify 408: {"error":{"type":"run-timeout"}}',
@@ -60,12 +63,63 @@ describe('gatherCompleted: a partial run counts as a completed gather only on it
 describe('chartCadenceBroken: one completed Sunday gather in the week and in each of the two after', () => {
   const NOW = '2026-10-01T19:00:00Z'
 
-  it('on 1 Oct the week of 21 Sep is broken: the two 24 Sep rehearsals make three updates in it, keep or no keep', () => {
-    expect(chartCadenceBroken('2026-09-21', SEALAND_RUNS, NOW)).toMatch(/3 updates in the week/)
+  it('the two 24 Sep rehearsals gathered nothing, so the week of 21 Sep holds its one Sunday update (Heinrich, 5 Oct)', () => {
+    expect(chartCadenceBroken('2026-09-21', SEALAND_RUNS, NOW)).toBeNull()
   })
 
-  it('the week of 14 Sep is broken too (a failed run inside it, and the week after holds three)', () => {
-    expect(chartCadenceBroken('2026-09-14', SEALAND_RUNS, NOW)).toMatch(/2 updates in the week/)
+  it('read without the runs\' options the rehearsals count, and the week is broken as before: it fails closed', () => {
+    const unread = SEALAND_RUNS.map(({ options: _o, ...r }) => r)
+    expect(chartCadenceBroken('2026-09-21', unread, NOW)).toMatch(/3 updates in the week/)
+  })
+
+  it('the week of 14 Sep is still broken: a failed resume on Tue 15 Sep beside the 20 Sep update', () => {
+    expect(chartCadenceBroken('2026-09-14', SEALAND_RUNS, NOW)).toBe('week of 14 Sep: 2 updates in the week')
+  })
+
+  it('only a run that gathered nothing is left out: a resume of a gathered run, or an extra gather, still breaks the week', () => {
+    const at = (id: string, day: string, options: unknown): ChartRun => ({ id, status: 'completed', startedAt: `${day}T15:00:00Z`, finishedAt: `${day}T15:30:00Z`, errors: [], options })
+    const clean = [sunday('2026-10-04'), sunday('2026-10-11'), sunday('2026-10-18')]
+    const NOW_19 = '2026-10-19T08:00:00Z'
+    // A rehearsal on any day of the three weeks: not counted.
+    expect(chartCadenceBroken('2026-09-28', [...clean, at('r', '2026-10-07', { skipGather: true })], NOW_19)).toBeNull()
+    expect(chartCadenceBroken('2026-09-28', [...clean, at('r', '2026-10-07', { skipGather: 'yes' })], NOW_19)).toBeNull()
+    // A failed rehearsal is not counted either: it gathered nothing whatever its status.
+    expect(chartCadenceBroken('2026-09-28', [...clean, { ...at('r', '2026-10-07', { skipGather: true }), status: 'failed' }], NOW_19)).toBeNull()
+    // The resume lever (`runId` itself), an extra gather, or a run with no options read: counted.
+    expect(chartCadenceBroken('2026-09-28', [...clean, at('r', '2026-10-07', { runId: 'r', skipGather: true })], NOW_19)).toMatch(/2 in the week after/)
+    expect(chartCadenceBroken('2026-09-28', [...clean, at('r', '2026-10-07', { sendReport: true })], NOW_19)).toMatch(/2 in the week after/)
+    expect(chartCadenceBroken('2026-09-28', [...clean, at('r', '2026-10-07', undefined)], NOW_19)).toMatch(/2 in the week after/)
+    expect(chartCadenceBroken('2026-09-28', [...clean, at('r', '2026-10-07', null)], NOW_19)).toMatch(/2 in the week after/)
+    // A rehearsal is no update either: a week with only a rehearsal in it has none.
+    expect(chartCadenceBroken('2026-09-28', [at('r', '2026-10-04', { skipGather: true }), ...clean.slice(1)], NOW_19)).toMatch(/0 updates in the week/)
+  })
+
+  it('reads a run that gathered nothing exactly as the pipeline\'s window anchor does (`gatheredNothing`)', () => {
+    const cases: { id: string; options?: unknown }[] = [
+      { id: 'a', options: { skipGather: true } },
+      { id: 'a', options: { skipGather: true, runId: 'b' } },
+      { id: 'a', options: { skipGather: true, runId: 'a' } },
+      { id: 'a', options: { skipGather: false } },
+      { id: 'a', options: { skipGather: 1 } },
+      { id: 'a', options: { skipGather: '' } },
+      { id: 'a', options: { sendReport: true } },
+      { id: 'a', options: {} },
+      { id: 'a', options: null },
+      { id: 'a', options: 'skipGather' },
+      { id: 'a' },
+    ]
+    for (const c of cases) expect(chartRunGatheredNothing(c), JSON.stringify(c)).toBe(gatheredNothing(c))
+  })
+
+  it('the same-age line keeps counting every run: its kept reads are never recomputed', () => {
+    const rehearsals = SEALAND_RUNS.filter((r) => chartRunGatheredNothing(r))
+    expect(rehearsals.map((r) => r.id)).toEqual(['e80e9347', '03180a33'])
+    const { read } = keepWeekPoints({
+      candidate: { week: '2026-09-21', ageDays: 14, cutoff: '2026-10-12T00:00:00Z', ageRun: sunday('2026-10-11') },
+      runs: [...SEALAND_RUNS, sunday('2026-10-04'), sunday('2026-10-11')],
+      volumes: [], readings: [], promptVersion: 'v1', laneRule: 'l1', methodVersion: 'm1', computedAt: '2026-10-12T08:00:00Z',
+    })
+    expect(read.runsInWeek).toBe(3)
   })
 
   it('the week under way is not broken for an update that has not come round', () => {
@@ -91,8 +145,8 @@ describe('chartCadenceBroken: one completed Sunday gather in the week and in eac
   })
 
   it('withChartCadence sets each week\'s cadence', () => {
-    const weeks = withChartCadence([{ week: '2026-09-21' }, { week: '2026-09-28' }], SEALAND_RUNS, NOW)
-    expect(weeks.map((w) => w.cadence === null)).toEqual([false, true])
+    const weeks = withChartCadence([{ week: '2026-09-14' }, { week: '2026-09-21' }, { week: '2026-09-28' }], SEALAND_RUNS, NOW)
+    expect(weeks.map((w) => w.cadence === null)).toEqual([false, true, true])
   })
 })
 

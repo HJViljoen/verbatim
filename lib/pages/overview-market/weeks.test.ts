@@ -66,10 +66,10 @@ describe('weekVolumesBlock', () => {
       ...(uc === undefined ? {} : { unchecked_comments: uc, unchecked_comments_next_month: 0, unchecked_under_5: 0, unchecked_older_videos: 0 }),
     })
     const SEALAND_RUNS: ChartRun[] = [
-      { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T15:54:51Z', errors: ['ocr: failed'] },
-      { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T17:35:55Z', errors: ['ocr: failed'] },
-      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z', errors: ['transcript-backfill: Apify 408'] },
-      { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [] },
+      { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T15:54:51Z', errors: ['ocr: failed'], options: { skipGather: true } },
+      { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T17:35:55Z', errors: ['ocr: failed'], options: { skipGather: true } },
+      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z', errors: ['transcript-backfill: Apify 408'], options: { sendReport: true } },
+      { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [], options: { runId: '393b95df', sendReport: true, skipGather: true } },
     ]
     const NOW = '2026-10-05T07:00:00Z'
     const updates = SEALAND_RUNS.map((r) => r.finishedAt!)
@@ -83,10 +83,14 @@ describe('weekVolumesBlock', () => {
       }
     }
 
-    it('Sealand, 5 Oct: the week of 28 Sep drawn with its unchecked video left out (265, 5,028) on both, and cut on both before the migration', () => {
+    it('Sealand, 5 Oct: both start at the week of 21 Sep (the rehearsals gathered nothing), 28 Sep with its unchecked video left out (265, 5,028), and both cut before the migration', () => {
       const after = drawnBy([raw('2026-09-21', 301, 4990, 0, 0), raw('2026-09-28', 266, 5029, 1, 1)], [search])
-      expect(after.block).toEqual([['2026-09-28', 265, 5028]])
+      expect(after.block).toEqual([['2026-09-21', 301, 4990], ['2026-09-28', 265, 5028]])
       expect(after.home).toEqual(after.block)
+      // Read without the runs' options, the rehearsals break the week of 21 Sep on both.
+      const unread = drawnBy([raw('2026-09-21', 301, 4990, 0, 0), raw('2026-09-28', 266, 5029, 1, 1)], [search], SEALAND_RUNS.map(({ options: _o, ...r }) => r))
+      expect(unread.block).toEqual([['2026-09-28', 265, 5028]])
+      expect(unread.home).toEqual(unread.block)
       const before = drawnBy([raw('2026-09-21', 301, 4990), raw('2026-09-28', 266, 5029, 1)], [search])
       expect(before.block).toEqual([])
       expect(before.home).toEqual([])
