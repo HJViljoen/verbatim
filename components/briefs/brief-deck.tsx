@@ -774,15 +774,15 @@ function MarketPage({ s, continued }: { ctx: Ctx; s: BriefSection; continued: bo
         {allItems(s).map((i, k) => (
           <div key={k} style={{ display: 'grid', gridTemplateColumns: 'repeat(24, minmax(0, 1fr))', gap: 24, alignItems: 'center', padding: '8px 0', borderTop: `1px solid ${P.hair}` }}>
             <div style={{ gridColumn: 'span 5', fontSize: 18, fontWeight: 700 }}>{i.title}</div>
-            <div style={{ gridColumn: 'span 8', display: 'flex', alignItems: 'center', gap: 14 }}>
-              {i.measure?.pct != null ? (
-                <>
-                  <Bar pct={i.measure.pct} h={12} />
-                  <div data-copy="figure" style={{ width: 48, fontFamily: MONO, fontSize: 16, fontWeight: 500 }}>{i.measure.pct}%</div>
-                </>
-              ) : null}
-            </div>
-            <div style={{ gridColumn: 'span 11' }}>
+            {/* A subject with no level (its matching is still settling) has
+                no bar: what people say takes the bar's room. */}
+            {i.measure?.pct != null ? (
+              <div style={{ gridColumn: 'span 8', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <Bar pct={i.measure.pct} h={12} />
+                <div data-copy="figure" style={{ width: 48, fontFamily: MONO, fontSize: 16, fontWeight: 500 }}>{i.measure.pct}%</div>
+              </div>
+            ) : null}
+            <div style={{ gridColumn: i.measure?.pct != null ? 'span 11' : 'span 19' }}>
               <p {...STORED} style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>{i.text}</p>
               <Who line={null} tag={i.tag} style={{ paddingTop: 2 }} />
             </div>

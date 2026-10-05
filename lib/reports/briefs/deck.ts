@@ -25,8 +25,8 @@ import { BRIEF_NAME } from './types'
 // "Who is buying, continued"). Heights are estimated from the text's length
 // at the page's measured type (characters per line from the column width and
 // the font size), never measured in a browser: the plan has to be the same in
-// the viewer, the PDF and a test. The estimate errs high; scripts/brief-render
-// checks the real pages for clipping.
+// the viewer, the PDF and a test. The estimate errs high; scripts/brief-render.ts
+// measures the real pages for clipping.
 
 /** The sheet, as the design draws it. */
 export const SHEET = { width: 1280, height: 720 } as const

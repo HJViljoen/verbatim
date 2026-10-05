@@ -84,7 +84,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stores a `failed` row and alerts once with the script
   (`scripts/longrun-read.ts`), because no later run writes an ended month. It was a hook inside
   `write-week-read` on the market branch and moved out because the two reads
-  overran one step's 250 s. Re-register
+  overran one step's 250 s. **The month's briefs (T8 wired, 5 Oct) add five,
+  after `write-longrun-read` and immediately before `close-run`, in this
+  order:** `plan-briefs`, `briefs:research-${i}-of-${n}`, `briefs:ideas`,
+  `briefs:write-${role}`, `briefs:compose` (66 ids before, 71 after;
+  `scripts/pipeline-step-ids.sh origin/main --expect-before close-run briefs`
+  is the check, and `lib/reports/briefs/step.test.ts` pins them; the bullet
+  "The monthly department briefs" below says what they do). Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
@@ -717,6 +723,73 @@ This version has breaking changes — APIs, conventions, and file structure may 
     most of `components/settings/tracking/*`, the What-we-read loaders in
     `lib/settings/*`); `StarterCards`, `AskIndexColumns`, `loadAskFront`,
     `lib/agent/starters.ts`.
+- **The monthly department briefs (T8 wired, 5 Oct; Heinrich: "a finished
+  run reaches the platform by itself; review holds ONLY the email").** The
+  engine is `lib/reports/briefs/` (one idea, one home; role sections; the
+  evidence floor; who the talk is about; the scrubs). It runs ONLY on the run
+  that closes a month (`closesMonth`, the long-run read's rule) as five
+  steps (`lib/reports/briefs/step.ts`): `plan-briefs` (due? the inputs, read
+  once and carried, frozen, no comment's words; the 19 questions in waves of
+  four), `briefs:research-${i}-of-${n}` (each question held to the step's
+  clock), `briefs:ideas` (the evidence counted, one ideas call, its
+  self-check, the allocation), `briefs:write-${role}` (one writer a step:
+  four never fit 250 s), `briefs:compose` (the set composed against the
+  ideas step's allocation, the repeat judge, the summaries' self-check, then
+  stored). Every other run runs `plan-briefs` alone: one window read, one
+  ledger read, nothing spent. **Fail-soft, the long-run read's contract:** a
+  transient failure before a step's last attempt throws for Inngest to retry;
+  otherwise the body never throws: the set is stored `failed` and the
+  operator alerted ONCE, in the step that gave up, with the script; the steps
+  after it see the failure and do nothing; a research question that never
+  answers is a failed answer, not a failed set. Every model call is capped on
+  its step's own clock (`lib/reports/briefs/clock.ts`, 250 s; no SDK retry).
+  **Spend:** about $2 to $2.50 a workspace a month (September's dry builds),
+  capped at `BRIEF_SET_BUDGET_USD` ($4, research $3), logged under the run;
+  the set starts only where the run has `BRIEF_HEADROOM_USD` left under
+  `RUN_MODEL_BUDGET_USD` (`briefHeadroom`), so it can never trip
+  `assertWithinBudget` and fail the run; a run near its budget stores the
+  set failed and says so. **Storage:** each brief that prints is a
+  `report_snapshots` row (kind 'report', `data.kind = 'monthly_brief'`,
+  `ref.artefact = 'brief:<role>'`, quotes as refs, `evidence_ids`, stamped
+  `month` / `window_basis = 'month'`); the ledger is `monthly_briefs`
+  (migration `20261107090000`, additive, service role only): one row per
+  client, month and role, `ready` (with its snapshot), `thin` (nothing stood,
+  never shown) or `failed`. A month is written when every role is ready or
+  thin; no later run writes an ended month. **Shown:** the Studio's "Monthly
+  briefs" card (`lib/pages/studio-briefs.ts`, `components/pages/studio/
+  monthly-briefs.tsx`) lists every ready brief, newest month first, to Open
+  in the viewer (`?view=<snapshot>`) or download; no review holds them (there
+  is no email). "Your reports"' brief rows stay hidden (`BRIEFS_BUILT`: they
+  are email schedules no brief has), and the August engine's document builds
+  are not in the ledger and are never listed. **Drawn:** `components/briefs/
+  brief-deck.tsx`, the approved "Monthly briefs" boards (design round 6, 1
+  Oct: 1280×720 sheets, each brief's cover colour, palette A, no stripes, no
+  highlights, who the talk was about on every item), one body for the viewer,
+  the PDF and a share link; `lib/reports/briefs/deck.ts` (pure) decides the
+  pages by an estimate of each layout's height (character widths measured in
+  Chrome), carries a long section on to "…, continued", and sends a voice that
+  fits nowhere to its finding's second page. The estimate errs high and is
+  measured by `scripts/brief-render.ts --in <brief.json> --out <dir>` (local
+  Chrome, a PNG a page, exits 1 on any clipping): run it on a real brief and
+  a worst case whenever a page pattern changes. The writers' words are the `monthly_brief` prose slot.
+  **Where the canvas drew no page** the deck follows its nearest pattern:
+  Who else is in the decision (the What stops them rows), How {company} is
+  remembered (the believes and doubts columns), Words to borrow (quote panels,
+  two by two), a section's "…, continued" page, a finding's second page; and
+  the data drew some canvas pages differently: no persona columns (want,
+  stops, moves) or "For a sale" row, no status pills on says and hears, no
+  rival posts table, no stacked share bars (the company's share is a count,
+  never a share or a rank), no What holds so far page. Each is Heinrich's to
+  rule on. **PDF:** `GET /api/briefs/<snapshot>/pdf` prints on the first
+  download (the export route's pattern: session tenant, the daily export cap,
+  Chrome at `/render`, Storage, `artifacts`, `export_events`), then reuses the
+  file; a stale one prints again. **By hand:** `scripts/monthly-briefs.ts
+  --client <uuid> --month YYYY-MM --run <uuid>` (`--plan` free, dry by
+  default and paid for, `--write` stores, `--replace` over a written month);
+  September 2026, which closed before the steps existed:
+  `bash scripts/backfill-briefs-september.sh --write`, once, after the
+  migration. `scripts/purge-reports.ts --scope drafts` would take a brief's
+  snapshot (no send carries it): do not run it over a month's briefs.
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
   the email body are produced in route handlers (`/api/export`,
   `/api/reports/[id]/build`, `/api/admin/schedules/run`, `/api/schedules/*`,
