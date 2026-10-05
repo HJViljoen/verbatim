@@ -154,6 +154,19 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
     expect(body.text + body.html).not.toMatch(/until someone presses Send|[—–]/)
   })
 
+  // 5 Oct: every weekly read the runner builds is in the client's past issues
+  // before this email is written; it says so only where it is.
+  it('a weekly read in the past issues already: the email says so, and that Send emails the list', () => {
+    const l = reviewEmailLines({ ...base, forOperator: true, recipients: 2, editable: false, readOnPlatform: true, inPastIssues: true })
+    expect(l.after).toBe('The read is on the client\'s pages and the issue is in their past issues already. Send emails it to the 2 recipients; nobody is emailed until someone presses it.')
+    const body = reviewEmailBody({ ...base, forOperator: true, recipients: 2, editable: false, readOnPlatform: true, inPastIssues: true })
+    expect(body.text).toContain('in their past issues already')
+    expect(body.html).toContain('in their past issues already')
+    expect(body.text + body.html).not.toMatch(/[—–]/)
+    // Where publishing failed, it claims the pages only.
+    expect(reviewEmailLines({ ...base, recipients: 2, readOnPlatform: true, inPastIssues: false }).after).not.toContain('past issues')
+  })
+
   // Fresh review B1: the operator's email for the run that closes a month
   // carries the long-run read, which Your market prints already (5 Oct).
   const also = {

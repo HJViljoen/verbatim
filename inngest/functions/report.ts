@@ -1,14 +1,24 @@
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { appBaseUrl } from '@/lib/site'
-import { scheduleDue } from '@/lib/schedules/due'
+import { reportTargets } from '@/lib/schedules/due'
 import type { ScheduleRow } from '@/lib/schedules/types'
 
 // After a scheduled update: every schedule of the workspace that is due
 // builds its report and emails its list (Stage 3). Decoupled from the
 // pipeline by an event so a slow report never blocks a run: runPipeline emits
-// `report/send.requested` { clientId, runId } after a scheduled run (manual
-// "Run now" runs don't, so they never email).
+// `report/send.requested` { clientId, runId } after every run that finishes.
+//
+// A MANUAL RUN EMAILS NOBODY, AND ITS WEEKLY READ STILL REACHES THE PLATFORM
+// (5 Oct; Heinrich: "a finished run reaches the platform by itself; review
+// holds ONLY the email"). Until 5 Oct a manual run emitted nothing, so Össur's
+// 4 Oct read never became an issue. Now a manual run's event carries
+// `manual: true`, and `reportTargets` (lib/schedules/due.ts) fires its active
+// weekly-read schedules alone, each with `noEmail`: built, held and put in the
+// client's past issues, no list and no reviewer emailed, no other schedule
+// started. A scheduled run fires every due schedule as before, plus any active
+// weekly-read schedule that is not due, with `noEmail`. An event without
+// `manual` (every one emitted before 5 Oct) is a scheduled run's.
 //
 // This function only ORCHESTRATES. The work — loaders, cover, Chromium,
 // Storage, share link, Resend — happens in POST /api/admin/schedules/run, one
@@ -20,7 +30,9 @@ import type { ScheduleRow } from '@/lib/schedules/types'
 // workspace's other schedules still go out.
 //
 // Steps (ids are a stability contract — see AGENTS.md): 'find-due-schedules',
-// then one `send:<scheduleId>` per schedule (stable per schedule).
+// then one `send:<scheduleId>` per schedule (stable per schedule). Unchanged
+// on 5 Oct: what `find-due-schedules` returns gained an optional `noEmail`
+// per schedule, which a run memoised before then simply does not carry.
 
 export const sendWeeklyReport = inngest.createFunction(
   {
@@ -30,21 +42,24 @@ export const sendWeeklyReport = inngest.createFunction(
     retries: 2,
   },
   async ({ event, step }) => {
-    const { clientId, runId } = event.data as { clientId?: string; runId?: string }
+    const { clientId, runId, manual } = event.data as { clientId?: string; runId?: string; manual?: boolean }
     if (!clientId) throw new Error('report/send.requested missing clientId')
     if (!runId) throw new Error('report/send.requested missing runId')
 
     const due = await step.run('find-due-schedules', async () => {
       const admin = createAdminClient()
-      const [{ data: schedules }, { data: run }] = await Promise.all([
-        admin.from('report_schedules').select('id, name, cadence, active, last_sent_at').eq('client_id', clientId).order('created_at'),
+      const [{ data: schedules, error }, { data: run }] = await Promise.all([
+        // `*`, not a column list: `artefact` is M8's column, and a select
+        // naming it fails outright on a database a migration behind.
+        admin.from('report_schedules').select('*').eq('client_id', clientId).order('created_at'),
         admin.from('pipeline_runs').select('completed_at, started_at').eq('id', runId).maybeSingle(),
       ])
+      // A failed read throws, so the step retries: an empty answer would
+      // leave the run's issue off the platform with nothing said.
+      if (error) throw new Error(`report_schedules: ${error.message}`)
       const r = run as { completed_at: string | null; started_at: string | null } | null
       const runDate = r?.completed_at ?? r?.started_at ?? new Date().toISOString()
-      return ((schedules ?? []) as Pick<ScheduleRow, 'id' | 'name' | 'cadence' | 'active' | 'last_sent_at'>[])
-        .filter((s) => scheduleDue(s, s.last_sent_at, runDate))
-        .map((s) => ({ id: s.id, name: s.name }))
+      return reportTargets((schedules ?? []) as ScheduleRow[], runDate, { manual: manual === true })
     })
 
     const results: { id: string; name: string; status: string; ms?: number; error?: string }[] = []
@@ -54,7 +69,7 @@ export const sendWeeklyReport = inngest.createFunction(
           const r = await fetch(`${appBaseUrl()}/api/admin/schedules/run`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'x-admin-key': process.env.ADMIN_API_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '' },
-            body: JSON.stringify({ scheduleId: s.id, runId }),
+            body: JSON.stringify({ scheduleId: s.id, runId, ...(s.noEmail ? { noEmail: true } : {}) }),
           })
           const j = (await r.json().catch(() => ({}))) as { status?: string; ms?: number; error?: string }
           if (!r.ok) throw new Error(`schedules/run ${r.status}: ${j.error ?? j.status ?? 'no body'}`)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { monthKey, quarterKey, scheduleDue } from './due'
+import { monthKey, quarterKey, reportTargets, scheduleDue } from './due'
 
 const run = '2026-09-06T04:05:00Z' // Sunday 06:05 SAST
 
@@ -43,5 +43,45 @@ describe('quarterly (Phase 1 WP16)', () => {
 
   it('never fires while the schedule is off', () => {
     expect(scheduleDue({ cadence: 'quarterly', active: false }, null, '2026-07-05T06:00:00Z')).toBe(false)
+  })
+})
+
+describe('reportTargets: which schedules an update fires (5 Oct)', () => {
+  const sched = (over: Record<string, unknown>) => ({
+    id: 'x', name: 'x', cadence: 'every_update' as const, active: true, last_sent_at: null, starter_key: null, artefact: null, ...over,
+  })
+  // Össur today: the legacy digest (a template, review on, nobody on it) and
+  // the weekly read (review on, nobody on it).
+  const digest = sched({ id: 'dg', name: 'Weekly digest', last_sent_at: '2026-09-13T06:28:00Z' })
+  const read = sched({ id: 'wr', name: 'This week in your market', starter_key: 'weekly_read', artefact: 'weekly_read' })
+  // Sealand's retired weekly report, switched off.
+  const off = sched({ id: 'wk', name: 'Weekly digest', starter_key: 'weekly_report', artefact: 'weekly', active: false })
+
+  it('a scheduled update fires every due schedule as before, each free to email', () => {
+    expect(reportTargets([digest, read, off], run)).toEqual([{ id: 'dg', name: 'Weekly digest' }, { id: 'wr', name: 'This week in your market' }])
+  })
+
+  it('a manual update fires the active weekly read alone, emailing nobody: no digest, no monthly, no brief', () => {
+    const monthly = sched({ id: 'mo', name: 'Monthly', cadence: 'monthly', starter_key: 'monthly_report', artefact: 'monthly' })
+    const brief = sched({ id: 'br', name: 'Sales brief', artefact: 'brief:sales' })
+    expect(reportTargets([digest, read, off, monthly, brief], run, { manual: true })).toEqual([{ id: 'wr', name: 'This week in your market', noEmail: true }])
+  })
+
+  it('a weekly read that is not due still builds on a scheduled update, emailing nobody', () => {
+    const monthlyRead = sched({ id: 'wr', name: 'This week in your market', cadence: 'monthly', starter_key: 'weekly_read', artefact: 'weekly_read', last_sent_at: '2026-09-01T06:00:00Z' })
+    expect(reportTargets([monthlyRead], '2026-09-13T04:05:00Z')).toEqual([{ id: 'wr', name: 'This week in your market', noEmail: true }])
+    // Due again in October: free to email.
+    expect(reportTargets([monthlyRead], '2026-10-04T04:05:00Z')).toEqual([{ id: 'wr', name: 'This week in your market' }])
+  })
+
+  it('a weekly read that is switched off fires on no update', () => {
+    const paused = { ...read, active: false }
+    expect(reportTargets([paused], run)).toEqual([])
+    expect(reportTargets([paused], run, { manual: true })).toEqual([])
+  })
+
+  it('the weekly read is named by its starter key where the artefact column is absent', () => {
+    const legacy = sched({ id: 'wr', name: 'This week in your market', starter_key: 'weekly_read', artefact: undefined })
+    expect(reportTargets([legacy], run, { manual: true })).toEqual([{ id: 'wr', name: 'This week in your market', noEmail: true }])
   })
 })

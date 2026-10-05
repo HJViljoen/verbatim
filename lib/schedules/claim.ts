@@ -19,6 +19,29 @@ export function claimDecision(row: ExistingSend, now = Date.now()): ClaimDecisio
   return 'takeover'
 }
 
+/**
+ * HOW ONE RUN'S WEEKLY READ GOES OUT (5 Oct; Heinrich: "a finished run
+ * reaches the platform by itself; review holds ONLY the email"). Every path
+ * builds the issue and every path but `send` puts it in the client's past
+ * issues at once (`publishSend`); what differs is who is emailed:
+ *
+ *   'send'   review off, a list, an update allowed to email: the list gets it
+ *            (and an emailed issue is on the platform by being sent);
+ *   'review' review on, a list, an update allowed to email: the review email
+ *            to the reviewer (`reviewAudience`), and the list waits for Send;
+ *   'hold'   nobody is emailed at all: an update that may email nobody (a
+ *            manual run, or a schedule that is not due), or a schedule with
+ *            nobody on its list, where there is nothing for Send to do.
+ *
+ * Pure: the runner asks it once (lib/schedules/run.ts).
+ */
+export type WeeklyReadPath = 'send' | 'review' | 'hold'
+
+export function weeklyReadPath(schedule: { review: boolean; recipients: readonly string[] }, noEmail = false): WeeklyReadPath {
+  if (noEmail || schedule.recipients.length === 0) return 'hold'
+  return schedule.review ? 'review' : 'send'
+}
+
 /** Inline images the email did not reference (a tile that rendered its
  *  honest empty line has no picture to show) must not travel as stray
  *  attachments. */

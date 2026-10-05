@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claimDecision, pruneInlineImages } from './claim'
+import { claimDecision, pruneInlineImages, weeklyReadPath } from './claim'
 import { SCHEDULE_CLAIM_STALE_MS } from '../config'
 
 const now = Date.parse('2026-09-06T04:10:00Z')
@@ -30,5 +30,21 @@ describe('pruneInlineImages', () => {
     const html = '<img src="cid:dashboard-movement@verbatim">'
     const out = pruneInlineImages(html, [png('dashboard-movement@verbatim'), png('dashboard-accounts@verbatim'), { filename: 'update.pdf', content: Buffer.alloc(1) }])
     expect(out.map((a) => a.filename)).toEqual(['dashboard-movement@verbatim.png', 'update.pdf'])
+  })
+})
+
+describe('weeklyReadPath: who a weekly read emails (5 Oct: every path but send puts it in the past issues)', () => {
+  const list = ['a@client.test', 'b@client.test']
+  it('a list and an update allowed to email: the list without review, the reviewer with it', () => {
+    expect(weeklyReadPath({ review: false, recipients: list })).toBe('send')
+    expect(weeklyReadPath({ review: true, recipients: list })).toBe('review')
+  })
+  it('nobody on the list: hold, review or not (there is nothing for Send to do)', () => {
+    expect(weeklyReadPath({ review: true, recipients: [] })).toBe('hold')
+    expect(weeklyReadPath({ review: false, recipients: [] })).toBe('hold')
+  })
+  it('an update that may email nobody (a manual run, a schedule not due): hold, whatever the list and the review flag', () => {
+    expect(weeklyReadPath({ review: false, recipients: list }, true)).toBe('hold')
+    expect(weeklyReadPath({ review: true, recipients: list }, true)).toBe('hold')
   })
 })

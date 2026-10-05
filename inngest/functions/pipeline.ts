@@ -87,8 +87,10 @@ export interface PipelineRunOptions {
   maxVideos?: number
   videoLimit?: number
   period?: string
-  // When set, emit a `report/send.requested` after the run completes so the
-  // periodic report goes out. The scheduler sets this; manual "Run now" doesn't.
+  // When set, the `report/send.requested` emitted after the run completes is a
+  // scheduled one, and the periodic report goes out. The scheduler sets this;
+  // manual "Run now" doesn't, and its event is `manual`: the weekly read is
+  // built and put in the past issues, and nobody is emailed (5 Oct).
   sendReport?: boolean
   // The dispatcher slot this run is serving (ISO, the 06:00 SAST slot for the
   // day). Recorded on the run row so "was Sunday's run started?" is a column
@@ -2305,14 +2307,17 @@ export const runPipeline = inngest.createFunction(
         return { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0, heldForSubjects: 0, failed: true }
       })
 
-    // 8. Periodic report — only when requested (the scheduler sets this), so a
-    //    manual "Run now" refreshes data without emailing the client.
-    if (options.sendReport) {
-      await step.sendEvent('request-report', {
-        name: 'report/send.requested',
-        data: { clientId, runId },
-      })
-    }
+    // 8. Periodic report. A scheduled run (the scheduler sets sendReport)
+    //    fires every due schedule, as it always has. A manual run fires too
+    //    since 5 Oct, marked `manual`, and `send-weekly-report` then builds
+    //    its weekly read alone and puts it in the client's past issues,
+    //    emailing nobody (`reportTargets`, lib/schedules/due.ts; Heinrich: "a
+    //    finished run reaches the platform by itself"). Same step id, same
+    //    position: only the condition around it went.
+    await step.sendEvent('request-report', {
+      name: 'report/send.requested',
+      data: { clientId, runId, ...(options.sendReport ? {} : { manual: true }) },
+    })
 
     // 9. Operator alert for a degraded run. Only 'failed' and zero-video runs
     //    alerted before 2026-08-16, so a 'partial' run — report delivered,

@@ -1,4 +1,5 @@
 import { adminKeyValid } from '@/lib/admin-auth'
+import { scriptActor } from '@/lib/config-log'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { appBaseUrl } from '@/lib/site'
 import { renderBaseUrl } from '@/lib/render/render'
@@ -42,6 +43,6 @@ export async function POST(req: Request): Promise<Response> {
 
   const mode = body?.mode === 'preview' ? 'preview' : body?.mode === 'test' ? 'test' : 'send'
   const to = Array.isArray(body?.to) ? (body!.to as unknown[]).filter((x): x is string => typeof x === 'string') : undefined
-  const result = await runSchedule({ admin, schedule: schedule as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode, to })
+  const result = await runSchedule({ admin, schedule: schedule as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode, to, actor: scriptActor(`POST /api/admin/send-report ${(schedule as ScheduleRow).id} ${runId}`) })
   return Response.json(result, { status: result.status === 'failed' ? 500 : 200 })
 }

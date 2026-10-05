@@ -20,12 +20,15 @@ export type WeeklyReadAlertKind =
   | 'review_unsent'
   /** The operator's Send (or the delivery after it) failed; it waits again. */
   | 'delivery_failed'
+  /** Built and held, and it could not be put in the client's past issues. */
+  | 'unpublished'
 
 const SUBJECT: Record<WeeklyReadAlertKind, string> = {
   not_sent: 'Verbatim weekly read not sent',
   failed: 'Verbatim weekly read failed on its way out',
   review_unsent: 'Verbatim weekly read waiting for review (the review email did not go)',
   delivery_failed: 'Verbatim weekly read did not reach its list',
+  unpublished: 'Verbatim weekly read built, and not in the past issues',
 }
 
 const NEXT: Record<WeeklyReadAlertKind, string> = {
@@ -33,6 +36,7 @@ const NEXT: Record<WeeklyReadAlertKind, string> = {
   failed: 'Nothing reached the list. Open the schedule in the Studio (view the workspace first): Send now builds it again and holds it for review.',
   review_unsent: 'It is built and held. Open the schedule in the Studio (view the workspace first), read the email and press Send.',
   delivery_failed: 'It is held again with the reason. Open the schedule in the Studio (view the workspace first) and press Send again once the cause is fixed.',
+  unpublished: 'It is built and held, and an update tries again by itself. If it is still not in the past issues when you look, open the schedule in the Studio (view the workspace first) and press "Add to past issues (not emailed)".',
 }
 
 /** The alert's subject and text. Pure. */

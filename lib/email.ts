@@ -152,6 +152,10 @@ export interface ReviewEmail {
    *  published.ts). The email then says so, and that Send emails the list:
    *  review holds the email only. */
   readOnPlatform?: boolean
+  /** And the issue itself is in the client's past issues already: every
+   *  weekly read the runner builds is put there at once (5 Oct;
+   *  lib/schedules/run.ts), before this email is written. */
+  inPastIssues?: boolean
   /** The month's long-run read this run also wrote, for the operator to read:
    *  Your market prints it already, as soon as the run wrote it (fresh review
    *  B1; 5 Oct). Absent on every other review. */
@@ -198,7 +202,9 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
     steps: `${review.editable === false ? 'Read it, then send it.' : 'Read it, edit it if anything needs a change, then send it.'}${workspace}`,
     // A weekly read's pages do not wait for Send (lib/written/published.ts):
     // only the email does.
-    after: review.readOnPlatform
+    after: review.readOnPlatform && review.inPastIssues
+      ? `The read is on the client's pages and the issue is in their past issues already. Send emails it to ${who}; nobody is emailed until someone presses it.`
+      : review.readOnPlatform
       ? `The read is on the client's pages already. Send emails it to ${who}; nobody is emailed until someone presses it.`
       : `Nothing goes to ${who} until someone presses Send.`,
   }

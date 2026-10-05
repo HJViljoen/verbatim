@@ -12,6 +12,7 @@
 
 import { writeFileSync } from 'fs'
 import { createAdminClient } from '../lib/supabase-admin'
+import { scriptActor } from '../lib/config-log'
 import { OSSUR_CLIENT_ID } from '../lib/config'
 import { resolveScheduleReport } from '../lib/schedules/resolve'
 import { snapshotReport } from '../lib/reports/build'
@@ -41,7 +42,7 @@ async function main() {
     const { runSchedule } = await import('../lib/schedules/run')
     const runId = flag('run') || (await latestRun(admin))
     if (!runId) throw new Error('no completed update to send')
-    const res = await runSchedule({ admin, schedule: s, runId, baseUrl: appUrl, renderBaseUrl, mode: has('test') ? 'test' : 'send', to: has('test') ? [flag('test')] : undefined })
+    const res = await runSchedule({ admin, schedule: s, runId, baseUrl: appUrl, renderBaseUrl, mode: has('test') ? 'test' : 'send', to: has('test') ? [flag('test')] : undefined, actor: scriptActor(`scripts/send-report.ts --commit --client ${clientId} --run ${runId}`) })
     console.log(`${res.status} · ${res.ms} ms${res.subject ? ` · "${res.subject}"` : ''}${res.shareUrl ? ` · ${res.shareUrl}` : ''}${res.error ? ` · ${res.error}` : ''}`)
     return
   }

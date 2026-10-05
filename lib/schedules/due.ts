@@ -1,5 +1,6 @@
 import { REVIEW_TZ, quarterOfIn } from '../reports/quarterly'
-import type { ScheduleCadence } from './types'
+import { sendsWeeklyRead } from './artefact'
+import type { ScheduleCadence, ScheduleRow } from './types'
 
 /** Calendar month of an instant in a timezone, as "YYYY-MM". */
 export function monthKey(iso: string, tz: string): string {
@@ -38,4 +39,41 @@ export function scheduleDue(
   if (!lastSentAt) return true
   if (s.cadence === 'quarterly') return quarterKey(lastSentAt, tz) !== quarterKey(runDate, tz)
   return monthKey(lastSentAt, tz) !== monthKey(runDate, tz)
+}
+
+/** One schedule an update fires, and whether its build may email anyone. */
+export interface ReportTarget {
+  id: string
+  name: string
+  /** The build emails nobody, not the list and not a reviewer: a weekly read
+   *  is built and put in the client's past issues, and any other artefact is
+   *  not built at all (`runSchedule`'s `noEmail`). */
+  noEmail?: true
+}
+
+/**
+ * WHICH SCHEDULES AN UPDATE FIRES (5 Oct; Heinrich: "a finished run reaches
+ * the platform by itself; review holds ONLY the email").
+ *
+ *   A SCHEDULED update (`sendReport`): every due schedule, exactly as before,
+ *   each free to email as it always has; and every ACTIVE weekly-read schedule
+ *   that is not due, with `noEmail`, so the run's issue still reaches the
+ *   client's past issues.
+ *   A MANUAL update (trigger-run without `sendReport`): the active weekly-read
+ *   schedules alone, each with `noEmail`. Nothing else fires (a legacy digest,
+ *   the monthly, the briefs), and nobody is emailed.
+ *
+ * Pure: `inngest/functions/report.ts` asks it in `find-due-schedules`.
+ */
+export function reportTargets(
+  schedules: readonly (Pick<ScheduleRow, 'id' | 'name' | 'cadence' | 'active' | 'last_sent_at' | 'starter_key'> & { artefact?: string | null })[],
+  runDate: string,
+  opts: { manual?: boolean } = {},
+): ReportTarget[] {
+  const out: ReportTarget[] = []
+  for (const s of schedules) {
+    if (!opts.manual && scheduleDue(s, s.last_sent_at, runDate)) out.push({ id: s.id, name: s.name })
+    else if (s.active && sendsWeeklyRead(s)) out.push({ id: s.id, name: s.name, noEmail: true })
+  }
+  return out
 }

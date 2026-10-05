@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { canManageTenant, getRouteSession } from '@/lib/auth'
+import { actorStamp } from '@/lib/config-log'
 import { BUILDS_ARE_OURS, mayBuildReports } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { assertTenantMay } from '@/lib/tenant-locks'
@@ -74,7 +75,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const runId = (run as { id: string } | null)?.id
   if (!runId) return NextResponse.json({ error: 'Nothing to send yet — your first update has not landed.' }, { status: 409 })
 
-  const r = await runSchedule({ admin, schedule: schedule as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode, to: mode === 'test' ? [session.email!] : undefined })
+  // A weekly read built here goes in the client's past issues at once, as the
+  // update's does (lib/schedules/run.ts); the operator who pressed is its actor.
+  const r = await runSchedule({
+    admin, schedule: schedule as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode, to: mode === 'test' ? [session.email!] : undefined,
+    actor: actorStamp(session, 'Send now: built and put in the past issues, not emailed'), publishedBy: session.userId,
+  })
   return NextResponse.json(
     { status: r.status, subject: r.subject, shareUrl: r.shareUrl, notified: r.notified, ms: r.ms, error: r.error, to: mode === 'test' ? session.email : (schedule as ScheduleRow).recipients },
     { status: r.status === 'failed' ? 500 : 200 },

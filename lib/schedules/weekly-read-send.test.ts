@@ -7,6 +7,7 @@ import { frozen, sealandRead } from '../test/weekly-read-fixture'
 import { SEALAND_CLIENT_ID } from '../config'
 import { scheduleArtefact, sendsArtefact, sendsBlockArtefact, sendsWeeklyRead, starterKeyFor, artefactTitle, WEEKLY_READ_STARTER_KEY } from './artefact'
 import { operatorEmails, reviewAudience, reviewRecipients } from './members'
+import { onPlatform } from './platform-state'
 import type { ScheduleRow } from './types'
 
 // The weekly read's send rules (plan T7), through the real runner
@@ -17,7 +18,7 @@ import type { ScheduleRow } from './types'
 const mail = vi.hoisted(() => ({
   report: [] as { to: string[]; subject: string; html: string }[],
   alert: [] as { subject: string; text: string }[],
-  review: [] as { to: string[]; studioUrl: string; forOperator?: boolean; reportTitle: string; recipients?: number; editable?: boolean; readOnPlatform?: boolean; alsoPublished?: unknown }[],
+  review: [] as { to: string[]; studioUrl: string; forOperator?: boolean; reportTitle: string; recipients?: number; editable?: boolean; readOnPlatform?: boolean; inPastIssues?: boolean; alsoPublished?: unknown }[],
 }))
 
 vi.mock('../email', () => ({
@@ -35,6 +36,11 @@ vi.mock('../artifacts', () => ({
   logExport: vi.fn(async () => {}),
   artifactFilename: () => 'this-week-in-your-market.pdf',
 }))
+// The real publish, wrapped so one test can make it refuse.
+vi.mock('./publish', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./publish')>()
+  return { ...real, publishSend: vi.fn(real.publishSend) }
+})
 vi.mock('../quotes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../quotes')>()),
   // The words behind each ref, as the live read would resolve them.
@@ -46,6 +52,7 @@ const { deliverSend } = await import('./deliver')
 const emailMod = await import('../email')
 const renderMod = await import('../render/render')
 const artifactsMod = await import('../artifacts')
+const publishMod = await import('./publish')
 
 const CLIENT = SEALAND_CLIENT_ID
 const RUN = 'run-27'
@@ -75,6 +82,7 @@ function world(read: Stored, s = schedule()) {
     report_schedules: [s as unknown as Record<string, unknown>],
     reports: [],
     users: [{ client_id: CLIENT, email: 'member@sealandgear.com', created_at: '2026-09-01T00:00:00Z' }],
+    config_changes: [],
   }
   if (read !== 'no-table') {
     tables.week_reads = read
@@ -91,6 +99,7 @@ beforeEach(() => {
   mail.review.length = 0
   vi.mocked(renderMod.renderMany).mockClear()
   vi.mocked(artifactsMod.storeArtifact).mockClear()
+  vi.mocked(publishMod.publishSend).mockClear()
   vi.stubEnv('ALERT_EMAIL', 'heinrich@verbatim.test')
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -392,5 +401,180 @@ describe('L1: a Chromium hiccup never stops the weekly read, and every failure r
     const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'test', to: ['heinrich@verbatim.test'] })
     expect(r.status).toBe('failed')
     expect(mail.alert).toEqual([])
+  })
+})
+
+describe('5 Oct: every weekly read the runner builds is in the client\'s past issues at once; review holds the email only', () => {
+  const ready = (): Stored => ({ status: 'ready', data: frozen(sealandRead()) })
+  const changes = (w: ReturnType<typeof world>) => w.tables.config_changes as Record<string, unknown>[]
+  const sendRow = (w: ReturnType<typeof world>) => w.tables.report_sends[0] as Record<string, unknown>
+
+  it('review on: held for the Send, AND in the past issues, put there by the pipeline before the review email says so', async () => {
+    const w = world(ready())
+    let publishedWhenEmailed: unknown = 'not emailed'
+    vi.mocked(emailMod.sendReviewEmail).mockImplementationOnce(async (r) => {
+      publishedWhenEmailed = sendRow(w).published_at
+      mail.review.push(r as (typeof mail.review)[number])
+      return { sent: true }
+    })
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('ready')
+    expect(w.tables.report_sends).toHaveLength(1)
+    // On the platform, as the operator's own publish leaves it: the status
+    // stays ready, published_at is set, nobody's user id on it.
+    expect(sendRow(w)).toMatchObject({ status: 'ready', snapshot_id: r.snapshotId, published_at: expect.any(String), published_by: null })
+    expect(onPlatform(sendRow(w) as { status: string; published_at?: string | null })).toBe(true)
+    expect(publishedWhenEmailed).toEqual(expect.any(String))
+    // One logged change, naming the pipeline and the run.
+    expect(changes(w)).toEqual([expect.objectContaining({ surface: 'schedule', field: 'published', actor_kind: 'pipeline', run_id: RUN })])
+    // The operator's review email says it is in the past issues already; the
+    // list has nothing, and no public link was minted.
+    expect(mail.review).toHaveLength(1)
+    expect(mail.review[0]).toMatchObject({ to: ['heinrich@verbatim.test'], readOnPlatform: true, inPastIssues: true, recipients: 2 })
+    expect(mail.report).toEqual([])
+    expect(w.tables.share_links).toEqual([])
+    expect(mail.alert).toEqual([])
+    // Send still emails the list, once.
+    const out = await deliverSend({ admin: w.admin, sendId: r.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'op' })
+    expect(out.status).toBe('sent')
+    expect(mail.report).toHaveLength(1)
+    expect(mail.report[0].to).toEqual(RECIPIENTS)
+  })
+
+  it('a retried step (a lost response, a replay) builds nothing twice, emails nobody twice and publishes once', async () => {
+    const w = world(ready())
+    const first = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    const again = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(again).toMatchObject({ status: 'ready', sendId: first.sendId })
+    expect(w.tables.report_sends).toHaveLength(1)
+    expect(w.tables.report_snapshots).toHaveLength(1)
+    expect(mail.review).toHaveLength(1)
+    expect(mail.report).toEqual([])
+    expect(changes(w)).toHaveLength(1)
+  })
+
+  it('a build held before 5 Oct (ready, not in the past issues): the same call adds it, with no build and no email', async () => {
+    const w = world(ready())
+    w.tables.report_sends.push({
+      id: 'send-held', client_id: CLIENT, schedule_id: 'sched-wr', run_id: RUN, status: 'ready', snapshot_id: 'snap-held',
+      subject: 'Sealand: the week', claimed_at: '2026-10-04T12:13:00Z', ready_at: '2026-10-04T12:13:58Z', published_at: null,
+    })
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r).toMatchObject({ status: 'ready', sendId: 'send-held' })
+    expect(w.tables.report_snapshots).toEqual([])
+    expect(sendRow(w)).toMatchObject({ status: 'ready', snapshot_id: 'snap-held', published_at: expect.any(String) })
+    expect(mail.review).toEqual([])
+    expect(mail.report).toEqual([])
+    expect(mail.alert).toEqual([])
+    expect(changes(w)).toHaveLength(1)
+  })
+
+  for (const review of [true, false]) {
+    it(`NO RECIPIENTS (Össur), review ${review ? 'on' : 'off'}: built, held and in the past issues; nobody emailed, no review email, no alert`, async () => {
+      const s = schedule({ recipients: [], review })
+      const w = world(ready(), s)
+      const r = await runSchedule({ admin: w.admin, schedule: s, runId: RUN, baseUrl: APP, mode: 'send' })
+      expect(r.status).toBe('ready')
+      expect(r.subject).toMatch(/^Sealand: Buyers treated bag choice/)
+      expect(sendRow(w)).toMatchObject({ status: 'ready', subject: r.subject, snapshot_id: r.snapshotId, ready_at: expect.any(String), published_at: expect.any(String) })
+      expect(changes(w)).toEqual([expect.objectContaining({ field: 'published', actor_kind: 'pipeline', run_id: RUN })])
+      expect(mail.report).toEqual([])
+      expect(mail.review).toEqual([])
+      expect(mail.alert).toEqual([])
+      expect(w.tables.share_links).toEqual([])
+      expect(renderMod.renderMany).not.toHaveBeenCalled()
+    })
+  }
+
+  for (const review of [true, false]) {
+    it(`A MANUAL RUN (noEmail), review ${review ? 'on' : 'off'}, a list of two: built and in the past issues, and nobody at all is emailed`, async () => {
+      const s = schedule({ review })
+      const w = world(ready(), s)
+      const r = await runSchedule({ admin: w.admin, schedule: s, runId: RUN, baseUrl: APP, mode: 'send', noEmail: true })
+      expect(r.status).toBe('ready')
+      expect(sendRow(w)).toMatchObject({ status: 'ready', published_at: expect.any(String) })
+      expect(mail.report).toEqual([])
+      expect(mail.review).toEqual([])
+      expect(mail.alert).toEqual([])
+      expect(w.tables.share_links).toEqual([])
+      // Send in the Studio emails it later, exactly as a reviewed build.
+      const out = await deliverSend({ admin: w.admin, sendId: r.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'op' })
+      expect(out.status).toBe('sent')
+      expect(mail.report[0].to).toEqual(RECIPIENTS)
+    })
+  }
+
+  it('a manual run over a thin read: skipped, and no "not sent" alert (nothing was going to be sent)', async () => {
+    const w = world({ status: 'thin', data: frozen(sealandRead({ findings: [] })) })
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send', noEmail: true })
+    expect(r.status).toBe('skipped')
+    expect(sendRow(w)).toMatchObject({ status: 'skipped' })
+    expect(mail.alert).toEqual([])
+    expect(changes(w)).toEqual([])
+  })
+
+  it('a manual run never starts another schedule: a legacy digest or weekly report is refused before any row is written', async () => {
+    for (const other of [
+      schedule({ id: 'sched-dg', name: 'Weekly digest', starter_key: 'weekly_report', artefact: 'weekly', recipients: [] }),
+      schedule({ id: 'sched-dg', name: 'Weekly digest', starter_key: 'weekly_report', artefact: 'weekly', review: false }),
+    ]) {
+      const w = world(ready(), other)
+      const r = await runSchedule({ admin: w.admin, schedule: other, runId: RUN, baseUrl: APP, mode: 'send', noEmail: true })
+      expect(r).toMatchObject({ status: 'skipped', error: expect.stringMatching(/weekly read only/) })
+      expect(w.tables.report_sends).toEqual([])
+      expect(w.tables.report_snapshots).toEqual([])
+    }
+    expect(mail.report).toEqual([])
+    expect(mail.review).toEqual([])
+  })
+
+  it('every other schedule still needs a list: a scheduled update skips it with "no recipients", as before', async () => {
+    const digest = schedule({ id: 'sched-dg', name: 'Weekly digest', starter_key: 'weekly_report', artefact: 'weekly', recipients: [] })
+    const w = world(ready(), digest)
+    const r = await runSchedule({ admin: w.admin, schedule: digest, runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r).toMatchObject({ status: 'skipped', error: 'no recipients' })
+    expect(sendRow(w)).toMatchObject({ status: 'skipped' })
+    expect(w.tables.report_snapshots).toEqual([])
+    expect(changes(w)).toEqual([])
+    expect(publishMod.publishSend).not.toHaveBeenCalled()
+  })
+
+  it('review off, a list, a scheduled update: straight to the list as before, on the platform by being sent, nothing published', async () => {
+    const s = schedule({ review: false })
+    const w = world(ready(), s)
+    const r = await runSchedule({ admin: w.admin, schedule: s, runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('sent')
+    expect(sendRow(w).published_at ?? null).toBeNull()
+    expect(changes(w)).toEqual([])
+    expect(mail.report[0].to).toEqual(RECIPIENTS)
+  })
+
+  it('Send now by a person: that person is the actor and published_by', async () => {
+    const w = world(ready())
+    const actor = { kind: 'operator' as const, user_id: 'user-op', label: 'heinrich@verbatim.test · Send now', at: '2026-10-05T09:00:00.000Z' }
+    await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send', actor, publishedBy: 'user-op' })
+    expect(sendRow(w)).toMatchObject({ published_by: 'user-op' })
+    expect(changes(w)).toEqual([expect.objectContaining({ actor_kind: 'operator', actor_user_id: 'user-op' })])
+  })
+
+  it('publishing refused: the build stands held, the review email does not claim the past issues, the operator hears once, and the retry adds it', async () => {
+    vi.mocked(publishMod.publishSend).mockResolvedValueOnce({ status: 'refused', error: 'The send could not be published: connection reset' })
+    const w = world(ready())
+    const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    // 'failed' answers 500 from the route, so Inngest retries the step.
+    expect(r).toMatchObject({ status: 'failed', error: expect.stringMatching(/not added to the past issues: The send could not be published/) })
+    expect(sendRow(w)).toMatchObject({ status: 'ready', snapshot_id: r.snapshotId })
+    expect(sendRow(w).published_at ?? null).toBeNull()
+    expect(mail.review).toHaveLength(1)
+    expect(mail.review[0].inPastIssues).toBe(false)
+    expect(mail.alert.map((x) => x.subject)).toEqual(['Verbatim weekly read built, and not in the past issues: Sealand'])
+    expect(mail.alert[0].text).toContain('Add to past issues (not emailed)')
+    // The retry finds it waiting and adds it: no second build, email or alert.
+    const again = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(again.status).toBe('ready')
+    expect(sendRow(w)).toMatchObject({ status: 'ready', published_at: expect.any(String) })
+    expect(w.tables.report_snapshots).toHaveLength(1)
+    expect(mail.review).toHaveLength(1)
+    expect(mail.alert).toHaveLength(1)
   })
 })

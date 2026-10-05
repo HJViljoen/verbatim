@@ -115,10 +115,14 @@ async function loadAlsoPublished(admin: SupabaseClient, clientId: string, runId:
  * only one who could press Send, heard nothing.
  *
  * The row must already name its snapshot (both doors set it before calling).
+ *
+ * `publish` (a weekly read, 5 Oct): runs once the row stands as `ready` and
+ * before the email is composed, and answers whether the issue is now in the
+ * client's past issues, so the email says so only where it is.
  */
 export async function readyForReview(
   admin: SupabaseClient,
-  a: { sendId: string; baseUrl: string },
+  a: { sendId: string; baseUrl: string; publish?: () => Promise<boolean> },
 ): Promise<{ status: 'ready' | 'failed'; subject?: string; error?: string; notified?: boolean }> {
   const { data: sendRow } = await admin.from('report_sends').select('*').eq('id', a.sendId).maybeSingle()
   const row = sendRow as SendRow | null
@@ -143,6 +147,7 @@ export async function readyForReview(
     .from('report_sends')
     .update({ status: 'ready', ready_at: new Date().toISOString(), error: null, subject })
     .eq('id', a.sendId)
+  const inPastIssues = a.publish ? await a.publish() : false
 
   const { data: client } = await admin.from('clients').select('company_name').eq('id', row.client_id).maybeSingle()
   const reviewers = await reviewRecipients(admin, row.client_id)
@@ -171,6 +176,8 @@ export async function readyForReview(
     recipients: schedule?.recipients.length,
     // A weekly read is on the client's pages already; Send emails the list.
     readOnPlatform: isWeeklyReadData(data),
+    // And, from 5 Oct, the issue is in their past issues already.
+    inPastIssues: isWeeklyReadData(data) && inPastIssues,
     alsoPublished,
   })
   // The build stands either way; the copy must not claim an email that the

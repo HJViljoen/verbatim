@@ -32,7 +32,9 @@ import { renderWeeklyReadEmail } from '../email/weekly-read'
 import { alertWeeklyRead } from './weekly-read-alert'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
-import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
+import { claimDecision, pruneInlineImages, weeklyReadPath, type ExistingSend } from './claim'
+import { publishSend, type PublishOutcome } from './publish'
+import { pipelineActor, type ConfigActor } from '../config-log'
 import { cadenceWordOf } from './types'
 import type { ScheduleRow } from './types'
 
@@ -48,6 +50,11 @@ import type { ScheduleRow } from './types'
  *   4  a share link (open with the link, the schedule's expiry, no password)
  *   5  the email from the same snapshot data → Resend, PDF attached if asked
  *   6  record: the send row, last_sent_at, a Studio template's build state
+ *
+ * A WEEKLY READ (5 Oct) is built even with nobody on its list, emails whom
+ * `weeklyReadPath` says (the list, the reviewer, or nobody), and is put in
+ * the client's past issues the moment it is held (`publishSend`), so review
+ * holds the email and nothing else.
  *
  * Modes: 'send' does all of it. 'test' renders and emails the caller only —
  * no claim, no stored artifact, no share link, no export event, nothing
@@ -73,6 +80,16 @@ export interface RunScheduleArgs {
   mode: RunMode
   /** 'test': the only addresses the email goes to. */
   to?: string[]
+  /** 'send': this update may email NOBODY, not the list and not a reviewer
+   *  (a manual run, or a weekly read that is not due: `reportTargets`,
+   *  lib/schedules/due.ts). A weekly read is built, held and put in the
+   *  client's past issues; any other schedule is not built at all. */
+  noEmail?: boolean
+  /** Who put a weekly read's build on the platform (`config_changes`): the
+   *  pipeline when not said; a person or a script where one fired it. */
+  actor?: ConfigActor
+  /** `report_sends.published_by`: the user who fired it, where one did. */
+  publishedBy?: string | null
 }
 
 export interface RunScheduleResult {
@@ -203,12 +220,49 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
   let companyForAlert = ''
   const alertFailed = (reason: string) =>
     weeklyReadSend ? alertWeeklyRead('failed', { schedule, runId, company: companyForAlert, reason }) : Promise.resolve()
+  // AN UPDATE THAT MAY EMAIL NOBODY BUILDS THE WEEKLY READ ONLY (5 Oct). A
+  // manual run must not start the legacy digest, the monthly or a brief, and
+  // nothing but the weekly read has a way onto the platform without its
+  // email. Refused before the claim, so no send row is left behind.
+  const noEmail = recording && a.noEmail === true
+  if (noEmail && !weeklyReadSend) {
+    return { status: 'skipped', ms: ms(), error: 'An update that emails nobody builds the weekly read only.' }
+  }
+  // ON THE PLATFORM BY ITSELF (5 Oct; Heinrich: "a finished run reaches the
+  // platform by itself; review holds ONLY the email"). Every weekly read this
+  // runner builds goes in the client's past issues at once: `publishSend`,
+  // the operator's own write (`published_at`, a `config_changes` row naming
+  // who, the status left `ready` so Send still emails it). Idempotent: a
+  // build already published or sent is `already`, and nothing is written.
+  // Never throws: a throw is a refusal, which the callers below report.
+  const publish = async (id: string): Promise<PublishOutcome> => {
+    try {
+      return await publishSend(admin, {
+        clientId: schedule.client_id,
+        sendId: id,
+        scheduleId: schedule.id,
+        by: a.publishedBy ?? null,
+        actor: a.actor ?? pipelineActor(runId, 'weekly read built: in the past issues, not emailed'),
+      })
+    } catch (e) {
+      return { status: 'refused', error: e instanceof Error ? e.message : String(e) }
+    }
+  }
 
   if (recording) {
     const claim = await claimSend(admin, schedule, runId)
     // 'waiting': this update is already built and sitting with the reviewers.
-    // Sending it is their Send, not another build.
-    if (claim.status === 'waiting') return { status: 'ready', sendId: claim.id, ms: ms() }
+    // Sending it is their Send, not another build. A weekly read's build is
+    // put on the platform here too, so a retry after a lost response (or an
+    // older build held before 5 Oct) reaches the past issues without a second
+    // build or a second review email; the publish is a no-op once it is there.
+    if (claim.status === 'waiting') {
+      if (weeklyReadSend) {
+        const out = await publish(claim.id)
+        if (out.status === 'refused') return { status: 'failed', sendId: claim.id, ms: ms(), error: `Built and held, and not added to the past issues: ${out.error}` }
+      }
+      return { status: 'ready', sendId: claim.id, ms: ms() }
+    }
     if (claim.status !== 'claimed') return { status: claim.status, sendId: claim.id, ms: ms() }
     sendId = claim.id
   }
@@ -245,7 +299,12 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
       return { status: 'failed', sendId, ms: ms(), error: 'The template this schedule sends no longer exists.' }
     }
     const to = a.mode === 'test' ? (a.to ?? []).filter(Boolean) : schedule.recipients
-    if (a.mode !== 'preview' && !to.length) {
+    // A WEEKLY READ IS BUILT WITH NOBODY ON ITS LIST (5 Oct): the issue goes
+    // in the past issues all the same, and an empty list means only that
+    // nothing is emailed (`weeklyReadPath` 'hold'). Every other schedule, and
+    // a test, still needs someone to send to.
+    const path = weeklyReadSend ? weeklyReadPath(schedule, noEmail) : null
+    if (a.mode !== 'preview' && !to.length && !path) {
       await mark('skipped', 'no recipients')
       return { status: 'skipped', sendId, ms: ms(), error: 'no recipients' }
     }
@@ -291,7 +350,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
           // Inngest does not retry the `send:<id>` step, and a completed step
           // is never run again on replay. A Send now that finds the read still
           // missing alerts again, which is the operator asking.
-          if (recording) await alertWeeklyRead('not_sent', { schedule, runId, company: resolved.company, reason: `${e.message} (${e.reason})` })
+          // An update that was to email nobody has nothing "not sent" to
+          // report: a failed read alerts from its own step (write-week-read).
+          if (recording && !noEmail) await alertWeeklyRead('not_sent', { schedule, runId, company: resolved.company, reason: `${e.message} (${e.reason})` })
           return { status: 'skipped', sendId, ms: ms(), error: e.message }
         }
         throw e
@@ -431,8 +492,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
 
     // 3. The PDF, then the PNGs the email may carry inline, one browser session.
     // A review build renders no PNGs: the recipient email comes later, from
-    // deliverSend, which renders its own.
-    const reviewing = recording && schedule.review
+    // deliverSend, which renders its own. A weekly read that emails nobody
+    // ('hold') is built exactly as a review build is, minus the review email.
+    const reviewing = recording && (path ? path !== 'send' : schedule.review)
     // The weekly report says every number in words (lib/email/weekly.tsx), so
     // it asks the runner for no PNGs at all and an image-blocking client loses
     // nothing.
@@ -497,22 +559,48 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // delivers it (deliverSend). Nothing reaches the recipients yet.
     if (reviewing && sendId) {
       const now = new Date().toISOString()
-      await admin
+      // A weekly read that emails nobody ('hold') stands as `ready` here, as
+      // `readyForReview` would stand it, and no review email is sent.
+      const hold = path === 'hold'
+      const { error: heldError } = await admin
         .from('report_sends')
-        .update({ snapshot_id: snapshotId, artifact_id: artifactId ?? null, share_link_id: shareLinkId })
+        .update({
+          snapshot_id: snapshotId, artifact_id: artifactId ?? null, share_link_id: shareLinkId,
+          ...(hold ? { status: 'ready', ready_at: now, error: null, subject: (snap.data as WeeklyReadSnapshotData).subject } : {}),
+        })
         .eq('id', sendId)
+      if (hold && heldError) throw new Error(`send: the build could not be held: ${heldError.message}`)
       // The send row names the build now, file or no file: it is kept.
       buildRecorded = true
       if (schedule.report_id) await admin.from('reports').update({ status: 'built', latest_snapshot_id: snapshotId, updated_at: now }).eq('id', schedule.report_id)
-      const ready = await readyForReview(admin, { sendId, baseUrl: a.baseUrl })
+      // A weekly read goes in the past issues BEFORE the review email, so the
+      // email can say it is there (and does not where publishing failed).
+      const heldId = sendId
+      const published: { out?: PublishOutcome } = {}
+      const publishHeld = async (): Promise<PublishOutcome> => (published.out = await publish(heldId))
+      const ready = hold
+        ? { status: 'ready' as const, subject: (snap.data as WeeklyReadSnapshotData).subject, notified: false, error: undefined }
+        : await readyForReview(admin, { sendId, baseUrl: a.baseUrl, ...(weeklyReadSend ? { publish: async () => (await publishHeld()).status !== 'refused' } : {}) })
       if (ready.status === 'failed') {
         await mark('failed', ready.error ?? 'Could not put this out for review.')
         await alertFailed(`It could not be held for review: ${ready.error ?? 'no reason given'}`)
         return { status: 'failed', sendId, snapshotId, artifactId, ms: ms(), error: ready.error }
       }
       // Held, and nobody told: the reviewer would never know it waits.
-      if (weeklyReadSend && !ready.notified) {
+      if (weeklyReadSend && !hold && !ready.notified) {
         await alertWeeklyRead('review_unsent', { schedule, runId, company: companyForAlert, reason: `"${ready.subject ?? snap.title}" is built and held for review, and the review email was not sent (is ALERT_EMAIL set, and is the email service up?).` })
+      }
+      if (weeklyReadSend) {
+        const out = published.out ?? await publishHeld()
+        // Built and held, and not in the past issues. The row stays `ready`
+        // (nothing about the build failed); the operator hears once, and the
+        // route answers 500, so Inngest retries the step, which finds the row
+        // waiting and publishes it then (the 'waiting' arm above).
+        if (out.status === 'refused') {
+          const error = `Built and held, and not added to the past issues: ${out.error}`
+          await alertWeeklyRead('unpublished', { schedule, runId, company: companyForAlert, reason: `"${ready.subject ?? snap.title}": ${error}` })
+          return { status: 'failed', sendId, snapshotId, artifactId, subject: ready.subject, notified: ready.notified, ms: ms(), error }
+        }
       }
       return { status: 'ready', sendId, snapshotId, artifactId, shareUrl: shareUrl ?? undefined, subject: ready.subject, notified: ready.notified, ms: ms() }
     }

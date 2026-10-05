@@ -9,6 +9,11 @@ import type { ScheduleRow } from '@/lib/schedules/types'
 // POST /api/admin/schedules/run — fire ONE schedule for ONE update (Stage 3).
 //
 //   { scheduleId, runId }   — X-Admin-Key (ADMIN_API_KEY), the trigger-run idiom
+//   { …, noEmail: true }    — the update may email NOBODY (a manual run, or a
+//                             weekly read that is not due: `reportTargets`):
+//                             a weekly read is built, held and put in the
+//                             client's past issues; any other schedule is
+//                             skipped before it is claimed (5 Oct).
 //
 // Called by the Inngest function after a scheduled update, one step per
 // schedule: the render (Chromium, seconds, 2 GB) lives here in a route
@@ -16,23 +21,27 @@ import type { ScheduleRow } from '@/lib/schedules/types'
 // shared with the pipeline. Under /api/admin because the proxy lets that
 // prefix through to the key check. Safe to call twice: the runner claims
 // report_sends (schedule_id, run_id) before it renders, so a retry after a
-// lost response returns already_sent instead of a second email.
+// lost response returns already_sent instead of a second email. A weekly
+// read's build is put in the client's past issues whatever the review flag
+// (5 Oct; lib/schedules/run.ts), and a call for an update whose build is
+// already held puts THAT build there, with no second build and no email.
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
   if (!adminKeyValid(request.headers.get('x-admin-key'))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const body = (await request.json().catch(() => null)) as { scheduleId?: unknown; runId?: unknown } | null
+  const body = (await request.json().catch(() => null)) as { scheduleId?: unknown; runId?: unknown; noEmail?: unknown } | null
   const scheduleId = typeof body?.scheduleId === 'string' ? body.scheduleId : null
   const runId = typeof body?.runId === 'string' ? body.runId : null
+  const noEmail = body?.noEmail === true
   if (!scheduleId || !runId) return NextResponse.json({ error: 'scheduleId and runId required' }, { status: 400 })
 
   const admin = createAdminClient()
   const { data } = await admin.from('report_schedules').select('*').eq('id', scheduleId).maybeSingle()
   if (!data) return NextResponse.json({ error: 'no such schedule' }, { status: 404 })
 
-  const r = await runSchedule({ admin, schedule: data as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode: 'send' })
+  const r = await runSchedule({ admin, schedule: data as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode: 'send', noEmail })
   // The HTML never leaves the runner here; the row and the snapshot are the record.
   return NextResponse.json(
     { status: r.status, sendId: r.sendId, snapshotId: r.snapshotId, artifactId: r.artifactId, shareUrl: r.shareUrl, subject: r.subject, ms: r.ms, error: r.error },
