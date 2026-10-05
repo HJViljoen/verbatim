@@ -108,7 +108,8 @@ describe('weekVolumesBlock', () => {
       expect(w21).toMatchObject({ state: 'filling', updatesSince: 1 })
       expect(weekHover(w21)).toContain('read by 1 update since it ended')
       const home = homeWeeks({ rows, rivalAudiences: [], changes: [search], updates: all, runs, now })
-      expect(home!.columns[0]).toMatchObject({ week: '2026-09-21', settled: false })
+      // The Dashboard frames 17 Aug to 5 Oct on 9 Oct (the eight weeks ending now): 21 Sep is the sixth column.
+      expect(home!.columns[5]).toMatchObject({ week: '2026-09-21', videos: 301, settled: false })
     })
 
     it('a pre-gather change in the 4 Oct run cuts neither page at the week that run gathered; the same change by hand cuts both', () => {

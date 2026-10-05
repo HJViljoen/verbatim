@@ -114,7 +114,9 @@ const TOP = /<div class="grid grid-cols-1 gap-5 xl:grid-cols-3"><div class="flex
 /** The words between a block's title and the next block's. */
 const between = (text: string, from: string, to: string): string => text.slice(text.indexOf(from), text.indexOf(to))
 
-const AXIS = ['28 Sep', '5 Oct', '12 Oct', '19 Oct', '26 Oct', '2 Nov', '9 Nov', '16 Nov']
+/** The empty frame on the artboard's day (`HOME_NOW`, 1 Oct): the eight weeks
+ *  ending at the current one (Heinrich, 5 Oct). */
+const AXIS = ['10 Aug', '17 Aug', '24 Aug', '31 Aug', '7 Sep', '14 Sep', '21 Sep', '28 Sep']
 
 describe('the top keeps its two columns, the Agent on the right, whatever the data (Heinrich, 1 Oct)', () => {
   it('the full state: both blocks drawn as today, with no "Insufficient data" in either', () => {

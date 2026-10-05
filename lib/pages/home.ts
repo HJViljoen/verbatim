@@ -220,9 +220,10 @@ export function homeNumbers(read: WeekReadData | null): HomeNumbers | null {
  * settled. Null only where no such week exists: the loader then hands the
  * page `homeWeeksFrame`, the empty frame with "Insufficient data".
  *
- * The chart frames `WEEK_COLUMNS` weeks (the artboard's eight), opening at
- * the first week drawn, the latest eight once the series is longer; a week
- * still to come is an empty column.
+ * The chart frames the last `WEEK_COLUMNS` weeks ENDING AT THE CURRENT WEEK
+ * (`homeAxis`; Heinrich, 5 Oct: "have the bars go all the way to the right"):
+ * the newest week sits on the right edge, and a week not drawn (before the
+ * series could be read one way) is an empty column on the left.
  */
 export function homeWeeks(input: {
   rows: readonly MarketWeekRowRaw[]
@@ -245,16 +246,10 @@ export function homeWeeks(input: {
     .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')
   if (clean.length < WEEKS_MIN) return null
   const byWeek = new Map<string, WeekVolume>(clean.map((w) => [w.week, w]))
-  const last = clean[clean.length - 1].week
-  // The frame opens at the first week drawn: an earlier week is not a silent
-  // market, it is a week not read one way, and it is left off the frame.
-  let first = addDays(last, -7 * (WEEK_COLUMNS - 1))
-  if (first < clean[0].week) first = clean[0].week
-  const columns: HomeWeekColumn[] = []
-  for (let w = first; columns.length < WEEK_COLUMNS; w = addDays(w, 7)) {
+  const columns: HomeWeekColumn[] = axis.map((w) => {
     const v = byWeek.get(w)
-    columns.push({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: v ? v.videos : null, comments: v ? v.comments : null, settled: v?.state === 'settled' })
-  }
+    return { week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: v ? v.videos : null, comments: v ? v.comments : null, settled: v?.state === 'settled' }
+  })
   return {
     columns,
     maxVideos: Math.max(...clean.map((w) => w.videos)),
@@ -265,14 +260,11 @@ export function homeWeeks(input: {
 /**
  * THE EMPTY FRAME (Heinrich, 1 Oct: a block without enough data shows
  * "Insufficient data", not nothing). Where `homeWeeks` finds no week to draw,
- * the block is the artboard's empty frame: `WEEK_COLUMNS` blank columns from
- * the current week on, labelled as drawn (28 Sep to 16 Nov on 1 October).
+ * the block is the same frame the bars use: the last `WEEK_COLUMNS` weeks
+ * ending at the current week, blank and labelled as drawn.
  */
 export function homeWeeksFrame(now: string): HomeWeeks {
-  const columns: HomeWeekColumn[] = []
-  for (let w = isoWeekOf(now); columns.length < WEEK_COLUMNS; w = addDays(w, 7)) {
-    columns.push({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: null, comments: null, settled: false })
-  }
+  const columns: HomeWeekColumn[] = homeAxis(now).map((w) => ({ week: w, label: shortDate(`${w}T00:00:00.000Z`), videos: null, comments: null, settled: false }))
   return { columns, maxVideos: 0, maxComments: 0 }
 }
 
