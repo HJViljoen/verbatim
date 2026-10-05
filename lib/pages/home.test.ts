@@ -170,6 +170,20 @@ describe('Week by week', () => {
     expect(homeWeeks({ ...base, rows: judged, updates: [], now: '2026-10-01T08:00:00Z' })!.columns[0]).toMatchObject({ label: '21 Sep' })
   })
 
+  it('a rehearsal finishing after a week ends does not settle it: the week stays faint until two real updates', () => {
+    const judged = [row('2026-09-21', 264, 4597), row('2026-09-28', 281, 4902)]
+    const sunday = (id: string, day: string) => ({ id, status: 'completed', startedAt: `${day}T04:03:00Z`, finishedAt: `${day}T07:30:00Z`, errors: [], options: { sendReport: true } })
+    const rehearsal = { id: 'r1', status: 'partial', startedAt: '2026-10-08T15:00:00Z', finishedAt: '2026-10-08T15:20:00Z', errors: ['ocr: failed'], options: { skipGather: true } }
+    const runs = [sunday('s27', '2026-09-27'), sunday('s04', '2026-10-04'), rehearsal]
+    const updates = runs.map((r) => r.finishedAt)
+    const now = '2026-10-09T08:00:00Z'
+    // The week of 21 Sep ended 28 Sep: one real update (4 Oct) and the rehearsal since. Filling.
+    const w = homeWeeks({ ...base, rows: judged, updates, runs, now })
+    expect(w!.columns[0]).toMatchObject({ label: '21 Sep', settled: false })
+    // Counted as an update (a run not known to have gathered nothing), the same finish settles it.
+    expect(homeWeeks({ ...base, rows: judged, updates, runs: runs.slice(0, 2), now })!.columns[0]).toMatchObject({ label: '21 Sep', settled: true })
+  })
+
   it('the loader reads each run\'s options, which say whether it gathered', () => {
     const src = readFileSync(resolve(__dirname, '../reading/reading-view.ts'), 'utf8')
     expect(src).toMatch(/select\('id, status, started_at, completed_at, errors, window_start, window_end, options'\)/)

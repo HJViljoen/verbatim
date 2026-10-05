@@ -4,7 +4,7 @@ import { changesFromLog, isFailOpenFix, type OurChange } from './comparability'
 import type { ConfigChange } from '../config-log'
 import { gatheredNothing } from '../pipeline/run-bookkeeping'
 import {
-  AFTER_GATHER_STEPS, chartCadenceBroken, chartRunGatheredNothing, gatherCompleted, keepWeekPoints, weekPairOf, withChartCadence,
+  AFTER_GATHER_STEPS, chartCadenceBroken, chartRunGatheredNothing, chartSettlingUpdates, gatherCompleted, keepWeekPoints, weekPairOf, withChartCadence,
   WEEK_GATE_SURFACES, WEEK_SEARCH_SURFACES, type ChartRun, type WeekRead,
 } from './week-line'
 import { weekRules, weeksSinceOurChanges, WEEK_CUT_SURFACES, type WeekVolume } from './weeks'
@@ -99,6 +99,10 @@ describe('chartCadenceBroken: one completed Sunday gather in the week and in eac
       { id: 'a', options: { skipGather: true } },
       { id: 'a', options: { skipGather: true, runId: 'b' } },
       { id: 'a', options: { skipGather: true, runId: 'a' } },
+      { id: 'a', options: { skipGather: true, runId: 'A' } },
+      { id: 'A', options: { skipGather: true, runId: 'a' } },
+      { id: '393b95df', options: { skipGather: true, runId: '393B95DF' } },
+      { id: 'a', options: { skipGather: true, runId: 7 } },
       { id: 'a', options: { skipGather: false } },
       { id: 'a', options: { skipGather: 1 } },
       { id: 'a', options: { skipGather: '' } },
@@ -109,6 +113,16 @@ describe('chartCadenceBroken: one completed Sunday gather in the week and in eac
       { id: 'a' },
     ]
     for (const c of cases) expect(chartRunGatheredNothing(c), JSON.stringify(c)).toBe(gatheredNothing(c))
+  })
+
+  it('a run that gathered nothing settles no week: its finish leaves the updates (chartSettlingUpdates)', () => {
+    const updates = SEALAND_RUNS.filter((r) => r.status !== 'failed').map((r) => r.finishedAt!)
+    expect(chartSettlingUpdates(updates, SEALAND_RUNS)).toEqual(['2026-09-20T08:33:47Z', '2026-09-27T07:28:35Z'])
+    // Matched by instant: Postgres's text form of the same finish.
+    expect(chartSettlingUpdates(['2026-09-24 16:16:13+00', '2026-09-27 07:28:35+00'], SEALAND_RUNS)).toEqual(['2026-09-27 07:28:35+00'])
+    // No runs (a fixture), or runs read without options: every update counts.
+    expect(chartSettlingUpdates(updates, null)).toEqual(updates)
+    expect(chartSettlingUpdates(updates, SEALAND_RUNS.map(({ options: _o, ...r }) => r))).toEqual(updates)
   })
 
   it('the same-age line keeps counting every run: its kept reads are never recomputed', () => {

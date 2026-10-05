@@ -147,8 +147,10 @@ export function gatheredNothing(row: { id: string; options?: unknown }): boolean
   const o = row.options
   if (!o || typeof o !== 'object') return false
   const { skipGather, runId } = o as { skipGather?: unknown; runId?: unknown }
+  // A run id is a uuid: one typed in capitals still names the row itself.
+  const itself = typeof runId === 'string' && runId.toLowerCase() === String(row.id).toLowerCase()
   // Truthiness, as the pipeline itself reads it (`if (options.skipGather)`).
-  return Boolean(skipGather) && runId !== row.id
+  return Boolean(skipGather) && !itself
 }
 
 /** The columns a run writes about itself at open whose migration is applied by

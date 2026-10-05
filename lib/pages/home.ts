@@ -10,7 +10,7 @@ import { loadChanges, loadWindowReading, readingHandle } from '../reading/read'
 import { marketAudiences } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
 import { loadCadenceRuns, loadDeliveredRuns, loadReadingMonth, marketRivalAudiences, updateInstant } from '../reading/reading-view'
-import { withChartCadence, type ChartRun } from '../reading/week-line'
+import { chartSettlingUpdates, withChartCadence, type ChartRun } from '../reading/week-line'
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import {
   addDays, checkedRows, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, weekRules, weeksSinceOurChanges,
@@ -238,7 +238,8 @@ export function homeWeeks(input: {
   now: string
 }): HomeWeeks | null {
   const axis = homeAxis(input.now)
-  const pooled = pooledWeekVolumes(checkedRows(input.rows.map(marketWeekRowOf)), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  // A run that gathered nothing settles no week (`chartSettlingUpdates`).
+  const pooled = pooledWeekVolumes(checkedRows(input.rows.map(marketWeekRowOf)), input.rivalAudiences, axis, { now: input.now, updates: chartSettlingUpdates(input.updates, input.runs) })
   const weeks = input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled
   const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis, input.runs))
     .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')

@@ -459,8 +459,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   and no own-posts census, so it moved no count in any week, and it is
   neither an extra update nor a missing one (`chartRunGatheredNothing`, the
   window anchor's `gatheredNothing` restated and pinned equal; the resume
-  lever, `runId` naming the run itself, is the gather it resumes and counts;
-  a run read without its options counts, fail closed). **The same-age line
+  lever, `runId` naming the run itself in either case, is the gather it
+  resumes and counts; a run read without its options counts, fail closed),
+  and it settles no week either: its finish is not one of the two updates a
+  week turns solid by, nor in a hover's "read by N updates"
+  (`chartSettlingUpdates`, in `homeWeeks` and `weekVolumesBlock`; a page's
+  latest update and the line's due dates read every finish). **The same-age line
   does not follow** (`weekCadence` in `keepWeekPoints` counts every run, so
   `cadenceBroken` on a kept read is unchanged): a kept read is never
   recomputed, so counting a new way would mix two rules under one

@@ -33,6 +33,16 @@ function keyboardFocus(el: Element): boolean {
 }
 
 /**
+ * Which document listeners a chart's tooltip needs: Escape whenever a week is
+ * shown (by hover, focus or a tap: what a pointer or focus shows must be
+ * dismissable without moving it), and a tap outside the chart only while a
+ * week is pinned by a tap. Pure.
+ */
+export function tipListeners(active: number | null, pinned: number | null): { escape: boolean; outside: boolean } {
+  return { escape: (active ?? pinned) != null, outside: pinned != null }
+}
+
+/**
  * The state of one chart's tooltip. `open` is the week shown before anything
  * is hovered, focused or tapped (a static render; null on the pages). Returns
  * the week shown (or null), the ref for the chart's box (a tap outside it
@@ -44,24 +54,26 @@ export function useWeekTip(open: number | null = null) {
   const pointer = useRef<string | null>(null)
   const box = useRef<HTMLDivElement>(null)
 
+  const listen = tipListeners(active, pinned)
   useEffect(() => {
-    if (pinned == null) return
-    const outside = (e: globalThis.PointerEvent) => {
-      if (box.current && e.target instanceof Node && !box.current.contains(e.target)) setPinned(null)
-    }
+    if (!listen.escape) return
     const escape = (e: globalThis.KeyboardEvent) => {
       if (e.key === 'Escape') {
         setPinned(null)
         setActive(null)
       }
     }
-    document.addEventListener('pointerdown', outside)
     document.addEventListener('keydown', escape)
-    return () => {
-      document.removeEventListener('pointerdown', outside)
-      document.removeEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  }, [listen.escape])
+  useEffect(() => {
+    if (!listen.outside) return
+    const outside = (e: globalThis.PointerEvent) => {
+      if (box.current && e.target instanceof Node && !box.current.contains(e.target)) setPinned(null)
     }
-  }, [pinned])
+    document.addEventListener('pointerdown', outside)
+    return () => document.removeEventListener('pointerdown', outside)
+  }, [listen.outside])
 
   const target = (i: number) => ({
     onPointerEnter: (e: PointerEvent<HTMLElement>) => {

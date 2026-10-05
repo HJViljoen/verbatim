@@ -13,6 +13,7 @@ import { WEEK_LINE, weekLineConfigFor } from '../../week-line-config'
 import type { OurChange } from '../../reading/comparability'
 import type { ChartRun } from '../../reading/week-line'
 import { marketWeekRowOf, type MarketWeekRowRaw } from '../../reading/weeks'
+import { weekHover } from '../../charts/week-bars'
 import { homeWeeks } from '../home'
 import { loadWeekVolumes } from '../week'
 import {
@@ -94,6 +95,20 @@ describe('weekVolumesBlock', () => {
       const before = drawnBy([raw('2026-09-21', 301, 4990), raw('2026-09-28', 266, 5029, 1)], [search])
       expect(before.block).toEqual([])
       expect(before.home).toEqual([])
+    })
+
+    it('a rehearsal after a week ends settles it on neither page, and the hover counts real updates only', () => {
+      const rehearsal: ChartRun = { id: 'r8', status: 'partial', startedAt: '2026-10-08T15:00:00Z', finishedAt: '2026-10-08T15:20:00Z', errors: ['ocr: failed'], options: { skipGather: true } }
+      const runs = [...SEALAND_RUNS, rehearsal]
+      const now = '2026-10-09T08:00:00Z'
+      const rows = [raw('2026-09-21', 301, 4990, 0, 0), raw('2026-09-28', 266, 5029, 1, 1)]
+      const all = [...updates, rehearsal.finishedAt!]
+      const block = weekVolumesBlock({ rows: rows.map(marketWeekRowOf), rivalAudiences: [], updates: all, changes: [search], runs, reading: { month: '2026-09-01' }, now, cfg: null })
+      const w21 = weekBarsBlock(block).weeks.find((w) => w.week === '2026-09-21')!
+      expect(w21).toMatchObject({ state: 'filling', updatesSince: 1 })
+      expect(weekHover(w21)).toContain('read by 1 update since it ended')
+      const home = homeWeeks({ rows, rivalAudiences: [], changes: [search], updates: all, runs, now })
+      expect(home!.columns[0]).toMatchObject({ week: '2026-09-21', settled: false })
     })
 
     it('a pre-gather change in the 4 Oct run cuts neither page at the week that run gathered; the same change by hand cuts both', () => {

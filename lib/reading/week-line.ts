@@ -331,6 +331,23 @@ export function withChartCadence<W extends { week: string }>(weeks: readonly W[]
 }
 
 /**
+ * The updates a week SETTLES by (`weekStateOf`: two since it ended, and the
+ * "read by N updates" a hover prints): the finish instants less those of runs
+ * that gathered nothing (`chartRunGatheredNothing`), because a rehearsal read
+ * no comment of any week and must not turn a faint week solid. Matched by
+ * instant, so a finish written in Postgres's text form still matches. Without
+ * the runs (a fixture), the updates as they are. Only the bars' state reads
+ * this: a page's latest update and its pending row's dates read every finish.
+ * Pure.
+ */
+export function chartSettlingUpdates(updates: readonly string[], runs?: readonly ChartRun[] | null): readonly string[] {
+  if (!runs) return updates
+  const skip = new Set(runs.filter(chartRunGatheredNothing).map((r) => msOfInstant(r.finishedAt ?? r.startedAt ?? '')).filter((ms) => !Number.isNaN(ms)))
+  if (skip.size === 0) return updates
+  return updates.filter((u) => !skip.has(msOfInstant(u)))
+}
+
+/**
  * THE STEPS AFTER THE GATHER (the release fix, 1 Oct night). The labels a
  * run's `errors` entry starts with (`noteError`'s `where`, up to the first
  * ':') for the steps that run on what was already gathered and move no week
@@ -376,15 +393,18 @@ export interface ChartRun extends WeekRun {
  * census, so it measured no video and no comment of the market. Restated from
  * `gatheredNothing` (lib/pipeline/run-bookkeeping.ts) so this file stays out
  * of the pipeline's imports, and a test pins the two equal: `skipGather`
- * truthy and `options.runId` not the run itself (a run naming itself is the
- * resume lever, which reopens a row whose gather already ran). Without
- * `options` it is a gather: it fails closed to counting the run. Pure.
+ * truthy and `options.runId` not the run itself, either id in any case (a
+ * run naming itself is the resume lever, which reopens a row whose gather
+ * already ran). Without `options` it is a gather: it fails closed to counting
+ * the run. Pure.
  */
 export function chartRunGatheredNothing(r: Pick<ChartRun, 'id' | 'options'>): boolean {
   const o = r.options
   if (!o || typeof o !== 'object') return false
   const { skipGather, runId } = o as { skipGather?: unknown; runId?: unknown }
-  return Boolean(skipGather) && runId !== r.id
+  // A run id is a uuid: one typed in capitals still names the run itself.
+  const itself = typeof runId === 'string' && runId.toLowerCase() === String(r.id).toLowerCase()
+  return Boolean(skipGather) && !itself
 }
 
 /** The `errors` list close-run writes is capped (`RUN_ERROR_CAP`,
