@@ -10,7 +10,7 @@ import {
   BRIEF_HEADROOM_USD, BRIEF_RESEARCH_WAVE, BRIEFS_FALLBACK, briefComposeStep, briefHeadroom, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep,
   researchWaves, stepSafeInputs, type BriefIdeas, type BriefPlan, type BriefStepDeps, type BriefWave, type BriefWritten,
 } from './step'
-import { briefPrints, failedRows, setWritten, type MonthlyBriefRow } from './store'
+import { briefPrints, failedRows, monthlyBriefsApplied, setWritten, type MonthlyBriefRow } from './store'
 import { point } from './test-fixtures'
 import type { Allocation, MonthlyBriefData } from './types'
 import { BRIEF_ROLES } from './types'
@@ -113,6 +113,14 @@ describe('the ledger\'s rules', () => {
     const rows = failedRows('client-1', SEP, 'run-oct', 'writer 500')
     expect(rows.map((r) => r.role)).toEqual([...BRIEF_ROLES])
     expect(rows.every((r) => r.status === 'failed' && r.snapshot_id === null && r.run_id === 'run-oct' && r.error === 'writer 500')).toBe(true)
+  })
+
+  it('asks whether the ledger is there with a read PostgREST answers in words (a HEAD on a missing table reads as no error)', async () => {
+    const db = (res: { error: unknown; status: number }) => ({ from: () => ({ select: () => ({ limit: async () => res }) }) }) as unknown as SupabaseClient
+    expect(await monthlyBriefsApplied(db({ error: null, status: 200 }))).toBe(true)
+    expect(await monthlyBriefsApplied(db({ error: { code: 'PGRST205', message: "Could not find the table 'public.monthly_briefs' in the schema cache" }, status: 404 }))).toBe(false)
+    expect(await monthlyBriefsApplied(db({ error: null, status: 404 }))).toBe(false)
+    await expect(monthlyBriefsApplied(db({ error: { code: '57014', message: 'canceling statement due to statement timeout' }, status: 500 }))).rejects.toThrow(/statement timeout/)
   })
 
   it('a brief with no finding and no section is thin and never shown', () => {

@@ -52,12 +52,17 @@ export function isMissingMonthlyBriefs(error: { code?: string | null; message?: 
   return /monthly_briefs/.test(message) && /does not exist|schema cache/.test(message)
 }
 
-/** Is the ledger there? One head read, no rows. */
+/** Is the ledger there? One read of at most one id. Not a HEAD read: a HEAD
+ *  on a table PostgREST does not know comes back 404 with no body, which
+ *  supabase-js reports as no error at all (measured against production
+ *  before the migration, 5 Oct), so a missing table would read as there. */
 export async function monthlyBriefsApplied(admin: SupabaseClient): Promise<boolean> {
-  const res = await admin.from(MONTHLY_BRIEFS_TABLE).select('id', { count: 'exact', head: true }).limit(0)
-  if (!res.error) return true
-  if (isMissingMonthlyBriefs(res.error)) return false
-  throw new Error(`monthly_briefs: ${res.error.message}`)
+  const res = await admin.from(MONTHLY_BRIEFS_TABLE).select('id').limit(1)
+  if (res.error) {
+    if (isMissingMonthlyBriefs(res.error)) return false
+    throw new Error(`monthly_briefs: ${res.error.message}`)
+  }
+  return res.status !== 404
 }
 
 /** Is the month's set written already: every role ready or thin? A failed

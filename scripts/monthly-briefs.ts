@@ -120,7 +120,9 @@ async function main() {
     process.exit(4)
   }
   if (has('plan')) {
-    console.log(`\nWould write: the ${longMonth(month)} Sales, Marketing, Content and Leadership briefs, under run ${runId}, for about $2 to $2.50 of model calls.`)
+    if (!applied) console.log('\n--write refuses until supabase/migrations/20261107090000_monthly_briefs.sql is applied (app-setup.sh).')
+    else if (written) console.log(`\n--write refuses: ${longMonth(month)} is written (--replace writes it again).`)
+    console.log(`${applied && !written ? '\n' : ''}--write would write the ${longMonth(month)} Sales, Marketing, Content and Leadership briefs, under run ${runId}, for about $2 to $2.50 of model calls.`)
     return
   }
 
