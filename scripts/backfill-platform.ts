@@ -72,12 +72,15 @@
 //             `operatorKeepChange`). Only videos flagged unchecked (newest
 //             verdict the default or a drop) are taken; any other is refused.
 //   --yes     writes 1 to 3 (each only where missing). Emails nobody.
-//   --publish puts the held build ON THE PLATFORM without its email
-//             (`publishSend`, lib/schedules/publish.ts: `published_at`, and a
-//             `config_changes` row naming this command). Its week read, and
-//             the long-run read the same run wrote, then show on the client's
-//             pages; Send in the Studio still emails it, as before. Separate
-//             from --yes on purpose: Heinrich reads the text first.
+//   --publish adds the held build to the client's PAST ISSUES without its
+//             email (`publishSend`, lib/schedules/publish.ts: `published_at`,
+//             and a `config_changes` row naming this command). Send in the
+//             Studio still emails it, as before.
+//   NOTE (5 Oct): the pages print the newest READY read from the run on, so
+//             what --yes stores goes on the client's pages AT ONCE, and --yes
+//             calls the model again: the stored text is a fresh write, not the
+//             dry run's. Read the dry run as a preview of its kind, not of its
+//             exact words.
 //
 // BOUNDED: one run and one month; every model call has a hard cap (twice the
 // step's: writer 300 s, self-check 90 s, quote fit 40 s) and no SDK retry. It refuses on a Sunday before 13:00 SAST
@@ -533,7 +536,7 @@ async function main() {
 
   // ---- Publishing ---------------------------------------------------------------------------
   say()
-  say(`Publishing is a separate step (--publish), after Heinrich has read the text above.${send && onPlatform({ status: send.status, published_at: send.published_at }) ? ' This build is on the platform already.' : ''}`)
+  say(`What --yes stores goes on the client's pages at once (a fresh write, not this text). --publish only adds the build to the past issues.${send && onPlatform({ status: send.status, published_at: send.published_at }) ? ' This build is on the platform already.' : ''}`)
   return finish(block, fail, cost)
 }
 

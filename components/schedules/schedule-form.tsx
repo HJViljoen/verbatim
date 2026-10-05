@@ -141,7 +141,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
       const j = (await r.json().catch(() => ({}))) as { status?: string; error?: string }
       if (!r.ok) setStatus({ ok: false, message: j.error ?? 'Could not publish it. Try again.' })
       else if (j.status === 'published') setStatus({ ok: true, message: 'On the platform. Nobody was emailed.' })
-      else if (j.status === 'already') setStatus({ ok: true, message: 'It is on the platform already.' })
+      else if (j.status === 'already') setStatus({ ok: true, message: 'It is in the past issues already.' })
       else setStatus({ ok: false, message: j.error ?? 'Could not publish it.' })
       router.refresh()
     } catch {
@@ -166,7 +166,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
             {ready.stalled
               ? `The report is built, and nothing was recorded as sent. It stopped partway, so it is possible some of the ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} already have it; sending it again goes to all of them. Anyone here can send it.`
               : published
-                ? `Its read is on the client's pages, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
+                ? `It is in the client's past issues, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
                 : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}${canPublish ? ' Or add it to the past issues without emailing anyone.' : ''}`}
           </p>
           {ready.error && <p className="text-[12px] text-negative">The last attempt did not go: {ready.error}</p>}
@@ -188,12 +188,12 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
             {canPublish && (confirm === 'publish' ? (
               <span className="inline-flex items-center gap-2 text-[12px]">
                 Add it to the past issues without emailing anyone?
-                <button type="button" onClick={publish} className={btnPrimary}>Yes, publish</button>
+                <button type="button" onClick={publish} className={btnPrimary}>Yes, add it</button>
                 <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
               </span>
             ) : (
               <button type="button" onClick={() => setConfirm('publish')} disabled={busy != null} className={btnQuiet}>
-                {busy === 'publish' ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Publishing…</> : 'Add to past issues (not emailed)'}
+                {busy === 'publish' ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Adding…</> : 'Add to past issues (not emailed)'}
               </button>
             ))}
           </div>

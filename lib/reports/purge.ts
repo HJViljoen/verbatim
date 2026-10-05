@@ -24,7 +24,7 @@
  *    has ever been viewed. Either way the client has it, and the `drafts`
  *    scope leaves it alone. A published build that was never emailed is still
  *    `ready`, which is not terminal, so `all` refuses it too (a blocker, below):
- *    no purge removes a build the client's pages are reading.
+ *    no purge removes a build that is in the client's past issues.
  */
 
 import { onPlatform, publishedNotEmailed } from '../schedules/platform-state'
@@ -224,7 +224,7 @@ export function planPurge(t: PurgeTables, opts: PurgeOptions): PurgePlan {
     if (publishedNotEmailed(s)) {
       blockers.push(
         `report_sends ${short(s.id)} is on the client's platform (published ${day(s.published_at ?? null)}, not emailed): ` +
-        `its build is what the client's pages read. A purge never removes a published build.`,
+        `its build is in the client's past issues. A purge never removes a published build.`,
       )
     } else if (!TERMINAL_SEND.has(s.status)) {
       blockers.push(

@@ -144,13 +144,13 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
 
   // 5 Oct: a weekly read is on the client's pages as soon as the run writes it
   // (lib/written/published.ts); review holds the email only, and says so.
-  it('a weekly read: the read is on the platform already, and Send emails the list', () => {
+  it('a weekly read: the read is on the client\'s pages already, and Send emails the list', () => {
     const l = reviewEmailLines({ ...base, forOperator: true, recipients: 2, editable: false, readOnPlatform: true })
     expect(l.steps).toBe('Read it, then send it. In Verbatim, view Sealand in the workspace switcher first.')
-    expect(l.after).toBe('The read is on the platform already. Send emails it to the 2 recipients; nobody is emailed until someone presses it.')
+    expect(l.after).toBe('The read is on the client\'s pages already. Send emails it to the 2 recipients; nobody is emailed until someone presses it.')
     const body = reviewEmailBody({ ...base, forOperator: true, recipients: 2, editable: false, readOnPlatform: true })
-    expect(body.text).toContain('The read is on the platform already.')
-    expect(body.html).toContain('The read is on the platform already.')
+    expect(body.text).toContain('pages already. Send emails it')
+    expect(body.html).toContain('pages already. Send emails it')
     expect(body.text + body.html).not.toMatch(/until someone presses Send|[—–]/)
   })
 

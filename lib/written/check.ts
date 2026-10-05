@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { verdictPass } from '../ask/engine'
 import type { CheckVerdict } from '../reports/documents/check'
-import { asTimeout, isTimeout, UNTIMED_STEP, WeekReadTimeoutError, type CallBudget } from './deadline'
+import { asTimeout, isTimeout, isTransient, UNTIMED_STEP, WeekReadTimeoutError, type CallBudget } from './deadline'
 
 // The self-check (plan T3), the document engine's (lib/reports/documents/
 // check.ts) pointed at the week: each finding's HEADLINE, as it would print,
@@ -75,6 +75,10 @@ export async function checkWeekRead(
     }
   } catch (e) {
     if (isTimeout(e)) throw asTimeout(e, 'check', request.timeout)
+    // A provider error (429, 5xx, a dropped connection) is retried like a timeout:
+    // the pages print a ready read at once (5 Oct), so an unchecked one must not
+    // pass as checked. The step retries, and fails and alerts on its last attempt.
+    if (isTransient(e)) throw e
     console.error('[written/check] the verdict pass failed; findings kept unchecked:', e)
     return { contradicted: new Map(), verdicts: [], costUsd: 0, ran: false }
   } finally {

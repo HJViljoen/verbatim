@@ -570,7 +570,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     is about the ISSUE, not the pages** (the backfill, 1 Oct evening;
     migration `20261106090000_platform_publish.sql`): sent, or put there by
     the operator WITHOUT its email (`report_sends.published_at` and
-    `published_by`, the Studio's "Publish to the platform (not emailed)" or
+    `published_by`, the Studio's "Add to past issues (not emailed)" or
     `scripts/backfill-platform.ts --publish`; `lib/schedules/publish.ts`).
     One rule, `onPlatform` (`lib/schedules/platform-state.ts`), read by
     `heldOf`, `report_snapshots`' RLS policy, the email preview

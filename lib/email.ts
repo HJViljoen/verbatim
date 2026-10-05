@@ -199,7 +199,7 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
     // A weekly read's pages do not wait for Send (lib/written/published.ts):
     // only the email does.
     after: review.readOnPlatform
-      ? `The read is on the platform already. Send emails it to ${who}; nobody is emailed until someone presses it.`
+      ? `The read is on the client's pages already. Send emails it to ${who}; nobody is emailed until someone presses it.`
       : `Nothing goes to ${who} until someone presses Send.`,
   }
 }
