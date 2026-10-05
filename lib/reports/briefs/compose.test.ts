@@ -178,10 +178,12 @@ describe('leadership', () => {
     const { data } = composeBrief(input('leadership', out, POINTS, { subjects }))
     const market = data.sections.find((s) => s.key === 'leadership.market')!
     expect(market.groups[0].items).toEqual([
-      { title: 'Function', text: 'People compare running blades.', detail: '23% of September\'s videos in the market, the biggest subject.' },
+      // The level as a measure too: the deck draws its bar from it.
+      { title: 'Function', text: 'People compare running blades.', detail: '23% of September\'s videos in the market, the biggest subject.', measure: { pct: 23 } },
       { title: 'Fit & comfort', text: 'People talk about the fit of the socket through a long day.' },
     ])
     expect(market.lines).toBeUndefined()
+    expect(market.base).toMatch(/^Share of the [\d,]+ videos in your market in September$/)
     expect(data.held.map((h) => h.what)).toEqual(expect.arrayContaining(['subject: Cost & access', 'subject: Look & style']))
     // A question may rest on the finding; one that only asks the risk above
     // it again, on its videos, is held.

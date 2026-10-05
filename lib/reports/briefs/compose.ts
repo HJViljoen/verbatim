@@ -391,10 +391,10 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   function formats(): BriefSection | null {
     const pb = a.playbook
     if (!pb || pb.unread) return null
-    const linesFor = (m: PlaybookBlock['formats'], share: (pct: string) => string, kind: string): { items: BriefItem[]; line: string | null } => {
+    const linesFor = (m: PlaybookBlock['formats'], share: (pct: string) => string, kind: string): { items: BriefItem[]; line: string | null; base: string } => {
       const cat = m.sides[0]
       const own = m.sides.find((s) => s.audience === CLIENT_AUDIENCE) ?? null
-      if (!cat || cat.of === 0) return { items: [], line: null }
+      if (!cat || cat.of === 0) return { items: [], line: null, base: '' }
       const items: BriefItem[] = []
       const listed = m.keys.slice(0, FORMAT_ROWS)
       for (const k of listed) {
@@ -408,7 +408,14 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
           : own.of >= own.published
             ? `${co}: ${fmtInt(mine)} of its ${fmtInt(own.of)} posts.`
             : mine > 0 ? `${co}: ${fmtInt(mine)} ${mine === 1 ? 'post' : 'posts'}.` : ''
-        items.push({ title: k.label, text: `${share(pct0(row.value.k, cat.of))}${median}.`, ...(detail ? { detail } : {}) })
+        items.push({
+          title: k.label, text: `${share(pct0(row.value.k, cat.of))}${median}.`, ...(detail ? { detail } : {}),
+          measure: {
+            pct: Math.round((row.value.k / cat.of) * 1000) / 10,
+            median: row.engagement.median != null && row.engagement.n >= FORMAT_LINE_MIN_RATED ? row.engagement.median : null,
+            ...(own && !own.unread && own.of > 0 ? { own: mine, ownOf: own.of } : {}),
+          },
+        })
       }
       // The line names only a listed row, and only one whose band clears the
       // market's median video: a median over a few videos whose band takes in
@@ -420,13 +427,14 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       const line = best && overall != null
         ? `${best.label} ${kind} run at a median engagement of ${best.engagement.median!.toFixed(1)}%, against ${overall.toFixed(1)}% for all the market's videos.`
         : null
-      return { items, line }
+      const ownBase = own && !own.unread && own.of > 0 ? ` · counts of ${fmtInt(own.of)} ${co} ${own.of === 1 ? 'post' : 'posts'}` : ''
+      return { items, line, base: `Shares of ${fmtInt(cat.of)} videos in the market${ownBase}` }
     }
     const f = linesFor(pb.formats, (p) => `${p} of the market's videos published in ${month}`, 'videos')
     const h = linesFor(pb.hooks, (p) => `${p} of them open this way`, 'openings')
     const groups = [
-      ...(f.items.length ? [{ label: 'Formats', items: f.items, ...(f.line ? { lines: [f.line] } : {}) }] : []),
-      ...(h.items.length ? [{ label: 'Openings', items: h.items, ...(h.line ? { lines: [h.line] } : {}) }] : []),
+      ...(f.items.length ? [{ label: 'Formats', items: f.items, base: f.base, ...(f.line ? { lines: [f.line] } : {}) }] : []),
+      ...(h.items.length ? [{ label: 'Openings', items: h.items, base: h.base, ...(h.line ? { lines: [h.line] } : {}) }] : []),
     ]
     if (groups.length === 0) return null
     return section('content.formats', groups, { lead: `The videos published in the market in ${month}, by format and by how they open, with ${co}'s own posts beside them.` })
@@ -449,10 +457,12 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       // A subject with nothing said about it prints nothing, not its bare
       // name (the review's addendum: a list of names says nothing).
       if (!sentence) { held.push({ what: `subject: ${fact.name}`, reason: 'nothing was said about it' }); continue }
-      items.push({ title: fact.name, text: sentence, ...(level ? { detail: level } : {}) })
+      const pct = fact.calibration === 'ready' && fact.level && fact.level.n > 0 ? Math.round((fact.level.k / fact.level.n) * 100) : null
+      items.push({ title: fact.name, text: sentence, ...(level ? { detail: level } : {}), ...(pct != null ? { measure: { pct } } : {}) })
     }
     for (const { fact } of subjects) if (fact.calibration === 'failed') held.push({ what: `subject: ${fact.name}`, reason: 'its matching is not trusted, so nothing about it prints' })
-    return items.length ? section('leadership.market', [{ items }]) : null
+    const n = ready[0]?.fact.level?.n ?? 0
+    return items.length ? section('leadership.market', [{ items }], n > 0 ? { base: `Share of the ${fmtInt(n)} videos in your market in ${month}` } : {}) : null
   }
 
   // ---- leadership: where the company stands ---------------------------------------------------
@@ -475,7 +485,10 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     if (a.brandsCounted.client && mc > 0 && mv > 0) {
       for (const r of [...rivals].sort((x, y) => y.comments - x.comments)) {
         const name = rivalNameOf(r.audience) ?? r.audience
-        items.push({ title: name, text: `${pct1(r.comments, mc)} of the market's comments and ${pct1(r.videos, mv)} of its videos, on videos about ${name}.` })
+        items.push({
+          title: name, text: `${pct1(r.comments, mc)} of the market's comments and ${pct1(r.videos, mv)} of its videos, on videos about ${name}.`,
+          measure: { comments: Math.round((r.comments / mc) * 1000) / 10, videos: Math.round((r.videos / mv) * 1000) / 10 },
+        })
       }
       if (client && client.comments > 0) {
         const g = a.giveaway && a.giveaway.comments > 0 ? a.giveaway : null
@@ -501,6 +514,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     role: a.role,
     title: `${BRIEF_NAME[a.role]} · ${month}`,
     company: co,
+    noun: a.noun,
     month: a.month,
     heardMonths: [...new Set(findings.flatMap((f) => f.months.filter((m) => m.videos > 0).map((m) => m.month)))].sort(),
     inShort: { summary, figures: figuresFor(a), also: referencesFor(a.role, a.allocation) },

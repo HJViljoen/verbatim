@@ -49,6 +49,15 @@ export const BRIEF_LENS: Readonly<Record<BriefRole, string>> = {
 
 export const isBriefRole = (x: unknown): x is BriefRole => typeof x === 'string' && (BRIEF_ROLES as readonly string[]).includes(x)
 
+/** A stored monthly brief (a `report_snapshots` row's data): the viewer, the
+ *  render route and a share link tell it apart by this, as the other
+ *  artefacts that share kind 'report' are told apart inside `data`. */
+export const isMonthlyBriefData = (x: unknown): x is MonthlyBriefData => {
+  if (!x || typeof x !== 'object') return false
+  const d = x as Partial<MonthlyBriefData>
+  return d.kind === 'monthly_brief' && d.version === 1 && isBriefRole(d.role) && Array.isArray(d.sections) && Array.isArray(d.findings) && !!d.inShort
+}
+
 /** A research point after code has grounded it in the comment evidence. */
 export interface GroundedPoint {
   /** `G12`: numbered across every role's research, stable within one set. */
@@ -144,6 +153,23 @@ export interface BriefItem {
   basedOn?: string[]
   /** The distinct counted videos behind it (the repeat checks read these). */
   videoIds?: string[]
+  /** Code's numbers for an item the deck draws as a bar or a table row (a
+   *  format's share, a subject's level, a brand's share of talk): measured,
+   *  never prose, and printed beside the words `text` already says them in. */
+  measure?: BriefMeasure
+}
+
+export interface BriefMeasure {
+  /** A share, 0 to 100, of the group's base. */
+  pct?: number
+  /** A format's median engagement, in percent, where enough were rated. */
+  median?: number | null
+  /** The company's own posts of this format, of `ownOf`. */
+  own?: number | null
+  ownOf?: number | null
+  /** A brand's share of the market's comments and of its videos, 0 to 100. */
+  comments?: number
+  videos?: number
 }
 
 export interface BriefSection {
@@ -151,7 +177,9 @@ export interface BriefSection {
   title: string
   /** One or two sentences that open the section. */
   lead?: string
-  groups: { label?: string; items: BriefItem[]; lines?: string[] }[]
+  groups: { label?: string; items: BriefItem[]; lines?: string[]; base?: string }[]
+  /** What the section's numbers are shares of, said once (code's). */
+  base?: string
   /** Sentences code wrote from counts (shares, formats). */
   lines?: string[]
   quote?: BriefQuote | null
@@ -192,6 +220,10 @@ export interface MonthlyBriefData {
   role: BriefRole
   title: string
   company: string
+  /** What the company sells, where the product has a noun for it ("bags"):
+   *  the deck's "other bags in your market". Absent on a brief written before
+   *  it was stored. */
+  noun?: string | null
   /** The month the brief is about, `YYYY-MM-01`. */
   month: string
   /** The months the evidence behind its findings was written in. */

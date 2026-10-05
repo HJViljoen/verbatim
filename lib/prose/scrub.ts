@@ -435,6 +435,7 @@ export const PROSE_SLOTS = [
   'document_write',
   'week_read',
   'statement_says',
+  'monthly_brief',
   'interpretation_monthly',
   'interpretation_quarterly',
   'interpretation_anomaly',
@@ -546,6 +547,11 @@ export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   // a client's statement, written with no verdicts and run through the
   // written read's scrubber (lib/statements/measure.ts scrubSays).
   statement_says: 'both',
+  // The monthly department briefs (T8): every sentence the ideas call and the
+  // four writers wrote, run through the written read's scrubber at write time
+  // (lib/reports/briefs/scrub.ts `scrubBriefText`, `scrubProse('week_read')`
+  // with no verdicts), and replayed by the brief deck as `stored`.
+  monthly_brief: 'both',
   interpretation_monthly: 'both',
   interpretation_quarterly: 'both',
   interpretation_anomaly: 'both',
