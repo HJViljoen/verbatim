@@ -357,9 +357,14 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   'owned-posts', 'owned-comments', 'owned-events',
 ]
 
-/** A run as the chart's cadence reads it: `errors` is `pipeline_runs.errors`. */
+/** A run as the chart's cadence reads it: `errors` is `pipeline_runs.errors`.
+ *  The window (`window_start`, and `window_end`, the moment the run opened,
+ *  which a resume keeps) is what the chart's cut reads for a change made
+ *  inside the run (`preGatherCutBefore`, lib/reading/weeks.ts). */
 export interface ChartRun extends WeekRun {
   errors?: readonly unknown[] | null
+  windowStart?: string | null
+  windowEnd?: string | null
 }
 
 /** The `errors` list close-run writes is capped (`RUN_ERROR_CAP`,

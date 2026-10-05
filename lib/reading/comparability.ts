@@ -133,6 +133,34 @@ export interface OurChange {
    *  `unchecked` keeps any week that still holds such a video off both. Absent
    *  on a hand-built change: it then cuts, which fails closed. */
   failOpenFix?: boolean
+  /** The run this change was made INSIDE, before that run's gather: every row
+   *  of it is the pipeline's own pre-gather write (`PRE_GATHER_ACTOR_LABELS`),
+   *  stamped with that one run. The week chart then reads it as starting at
+   *  that run's gather (`preGatherCutBefore`, lib/reading/weeks.ts), not at its
+   *  own week. Absent on any other change, which keeps the change's own week. */
+  preGatherRunId?: string
+}
+
+/**
+ * THE PIPELINE'S CONFIGURATION WRITES THAT COME BEFORE ITS GATHER. Subreddit
+ * discovery (`discover-subreddits`) runs before `plan-gather` "so a
+ * newly-promoted community is available to this run" (inngest/functions/
+ * pipeline.ts), and writes `tracking_configs.subreddits` stamped
+ * `pipelineActor(runId, …)` with one of these labels (lib/gather/
+ * subreddit-discovery.ts), so the audit trigger logs it with `actor_kind`
+ * 'pipeline' and that `run_id`. Its probes search nothing into the corpus
+ * (lib/gather/subreddit-probe.ts writes no video or comment). A test pins the
+ * labels and the step order to the source (lib/reading/week-cuts.test.ts).
+ * No other pipeline write is here: `freeze-months` runs after the gather and
+ * writes no cut surface, and a queued tracking edit is logged with no run.
+ */
+export const PRE_GATHER_ACTOR_LABELS: readonly string[] = ['subreddit discovery · probe', 'subreddit discovery · strikes']
+
+/** The run a change-log row was written in before that run's gather, or null:
+ *  the pipeline's own pre-gather write (`PRE_GATHER_ACTOR_LABELS`) carrying a
+ *  run id. Pure. */
+export function preGatherRunOf(row: Pick<ConfigChange, 'actor_kind' | 'actor_label' | 'run_id'>): string | null {
+  return row.actor_kind === 'pipeline' && row.run_id && PRE_GATHER_ACTOR_LABELS.includes(row.actor_label ?? '') ? row.run_id : null
 }
 
 /**
@@ -334,6 +362,10 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
     const first = g.rows[0]
     const surface: OurChangeSurface = isOurSurface(first.surface) ? first.surface : 'other'
     if (surface === 'subreddits' && !g.rows.some(movesActiveSet)) continue
+    // Inside one run, before its gather, only when EVERY row is that run's
+    // pre-gather write: a person's edit grouped with it keeps the change's own week.
+    const runs = new Set(g.rows.map(preGatherRunOf))
+    const preGatherRunId = runs.size === 1 ? [...runs][0] : null
     out.push({
       id: first.id,
       surface,
@@ -342,6 +374,7 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
       affects: isPanelFreeze(first) ? [] : VIEWS_BY_SURFACE[surface],
       rowIds: g.rows.map((r) => r.id),
       ...(g.rows.every(isFailOpenFix) ? { failOpenFix: true } : {}),
+      ...(preGatherRunId ? { preGatherRunId } : {}),
     })
   }
   return out

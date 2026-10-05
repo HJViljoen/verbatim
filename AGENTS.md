@@ -422,20 +422,52 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `lib/reading/comparability.ts`; `changesFromLog` sets `failOpenFix` on a
   change whose every row is `gate_rule` / `relevance_gate`): neither the
   Dashboard's chart, the weekly bars (`weekRules`) nor the same-age line
-  (`weekPairOf`'s gate reason) cuts at them; `unchecked` carries their weeks.
-- **The week chart's cut and cadence** (the release fix, 1 Oct night;
-  `weeksSinceOurChanges`, `lib/reading/weeks.ts`). The bars never span a
-  change on `WEEK_CUT_SURFACES` (the same-age line's search and gate surfaces,
-  rivals and handles included; a test pins them equal), and draw only weeks
-  on the one weekly cadence: exactly one completed Sunday gather in the week
-  and in each of the two after (`chartCadenceBroken`, the line's own
-  `cadenceBroken` on the clock; `loadCadenceRuns` reads every run, any
-  status). A partial run counts as a completed gather only when every
-  recorded error is a step after the gather (`AFTER_GATHER_STEPS`, fail
-  closed). On Sealand the week of 21 Sep holds THREE runs (the two 24 Sep
-  rehearsals, which searched nothing, and the 27 Sep update `f3646446`,
-  partial only for transcripts and the own-posts census), so it is never
-  drawn, `--keep` or not; the first bar is 28 Sep.
+  (`weekPairOf`'s gate reason) cuts at them; `unchecked` carries their
+  videos (left out of the Dashboard's bars, counted against the line's 10%).
+- **The week chart's cut and cadence** (the release fix, 1 Oct night; made
+  precise 5 Oct; `weeksSinceOurChanges`, `lib/reading/weeks.ts`). The bars
+  never span a change on `WEEK_CUT_SURFACES` (the same-age line's search and
+  gate surfaces, rivals and handles included; a test pins them equal): a
+  change cuts its own week and every week before it. **Except a change the
+  pipeline made inside a run before that run's gather**: subreddit
+  discovery's write (`discover-subreddits` runs before `plan-gather`; its
+  probes store nothing), logged with `actor_kind` 'pipeline', one of
+  `PRE_GATHER_ACTOR_LABELS` and that `run_id`. `changesFromLog` marks it
+  `preGatherRunId` only when every row of the change is such a write of one
+  run, and it then cuts only the weeks that BEGIN before every earlier gather
+  ended (`preGatherCutBefore`: the later of the run's `window_start` and the
+  finish of each run opened before the change, a later-resumed one bounded
+  at the change itself), so the week the run gathered is drawn. It fails
+  closed to the old rule unless the change was written inside the run it
+  names (between its `window_end`, the opening a resume keeps, and its
+  finish); a person's or a script's change, or a row with no run, keeps the
+  old rule. `lib/reading/week-cuts.test.ts` pins the step order and the
+  labels to the source. The bars draw only weeks on the one weekly cadence:
+  exactly one completed Sunday gather in the week and in each of the two
+  after (`chartCadenceBroken`, the line's own `cadenceBroken` on the clock;
+  `loadCadenceRuns` reads every run, any status, with its window). A partial
+  run counts as a completed gather only when every recorded error is a step
+  after the gather (`AFTER_GATHER_STEPS`, fail closed). **A bar never counts
+  a video let in before we checked relevance** (`unchecked`, the newest
+  verdict not a clean keep), and since 5 Oct one such video no longer blanks
+  its week: the Dashboard leaves those videos and their comments out of the
+  week's two counts (`checkedWeek`), from `market_week_volumes`'
+  `unchecked_comments` (migration `20261107090000`, which the operator
+  applies; until then the function returns no such column and the week is
+  cut as before). The same-age line keeps its own rule (unchecked at 10% or
+  more of either week's videos refuses a pair, `weekPairOf`): its points are
+  read once at the cut and kept, never recomputed, so a kept read cannot drop
+  them afterwards, and a share with under a tenth unchecked is what decision
+  M accepted; the chart prints counts and can subtract exactly. On Sealand
+  the week of 21 Sep holds THREE runs (the two 24 Sep rehearsals, which
+  searched nothing, and the 27 Sep update `f3646446`, partial only for
+  transcripts and the own-posts census), so it is never drawn, `--keep` or
+  not; the first bar is 28 Sep (5 Oct: 266 videos and 5,029 comments, one
+  video unchecked with one comment, so 265 and 5,028 drawn). On Össur the 4
+  Oct discovery row (run `555af400`) moved no active community (amputee,
+  bionics, prosthetics before and after), so `movesActiveSet` never made it a
+  change, and `homeWeeks` over production's 5 Oct rows draws 28 Sep (177
+  videos, 3,217 comments) with or without the pre-gather rule.
 - **Production reads from agents are serialised and rationed.** Five agents
   reading production at once is what caused the outage above, so this is the
   fix and not caution. Before the first read of a session, `select 1` through
@@ -604,11 +636,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
     week draws from ONE clean week, the first the DATA shows, never a
     constant (`homeAxis`: the last eight weeks; `weeksSinceOurChanges` cuts at
-    the latest search or relevance change on them, at unchecked weeks and at
-    weeks with nothing gathered), a filling week faint; the two
-    fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix and the
-    backfill's regate) cut no week, because `unchecked` counts exactly their
-    videos (`isFailOpenFix`). The Competitive tile's row is "Named most in
+    the latest search or relevance change on them, a pipeline change made
+    before its run's gather at that run, and at weeks with nothing gathered;
+    a bar counts checked videos only, `checkedWeek`), a filling week faint;
+    the two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
+    and the backfill's regate) cut no week, because `unchecked` counts
+    exactly their videos (`isFailOpenFix`). The Competitive tile's row is "Named most in
     {Month}" off Competitive's own brand list (`loadBrandList`, the page's
     reader and `brandList`, over the page's reading month); no week reading
     of who was named exists, so never "this week", and nothing says what

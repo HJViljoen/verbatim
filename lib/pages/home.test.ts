@@ -172,10 +172,68 @@ describe('Week by week', () => {
     expect(src).toMatch(/runs: cadenceRuns,/)
   })
 
-  it('leaves out a week holding videos let in without a check that still stands, and everything before it', () => {
+  it('leaves out a week holding videos let in without a check that still stands, and everything before it, where their comments are not known', () => {
     const dirty = [row('2026-09-21', 262, 4528), row('2026-09-28', 281, 4902, { unchecked: 3 }), row('2026-10-05', 254, 4210), row('2026-10-12', 120, 1500)]
     const w = homeWeeks({ ...base, rows: dirty, updates: sundays, now: '2026-10-26T08:00:00Z' })
     expect(w!.columns.map((c) => c.videos)).toEqual([254, 120, null, null, null, null, null, null])
+  })
+
+  it('where their comments are known, draws that week with the unchecked videos and their comments left out (5 Oct)', () => {
+    const uc = (r: MarketWeekRowRaw, n: number): MarketWeekRowRaw => ({ ...r, unchecked_comments: n })
+    const known = [uc(row('2026-09-21', 262, 4528), 0), uc(row('2026-09-28', 281, 4902, { unchecked: 3 }), 40), uc(row('2026-10-05', 254, 4210), 0), uc(row('2026-10-12', 120, 1500), 0)]
+    const w = homeWeeks({ ...base, rows: known, updates: sundays, now: '2026-10-26T08:00:00Z' })
+    expect(w!.columns.map((c) => c.videos)).toEqual([262, 278, 254, 120, null, null, null, null])
+    expect(w!.columns.map((c) => c.comments)).toEqual([4528, 4862, 4210, 1500, null, null, null, null])
+    expect(w!.maxVideos).toBe(278)
+  })
+
+  // Production on Mon 5 Oct (read that morning): the runs as they stand.
+  const SEALAND_RUNS = [
+    { id: 'b67b56de', status: 'partial', startedAt: '2026-09-20T04:02:57Z', finishedAt: '2026-09-20T08:33:47Z', windowStart: '2026-09-10T07:02:10Z', windowEnd: '2026-09-20T04:02:57Z', errors: ['owned-posts:instagram:rareform: 0 posts'] },
+    { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T15:54:51Z', errors: ['ocr: failed', 'persist-themes: failed'] },
+    { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T17:35:55Z', errors: ['ocr: failed'] },
+    { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z', errors: ['owned-posts:instagram:rareform: 0 posts', 'transcript-backfill: Apify 408', 'transcribe:youtube: 7 of 54 recovered', 'pass-a: 1 re-asked'] },
+    // Resumed analysis-only the same day: its started_at is the resume's, its window_end the 04:01 opening.
+    { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [] },
+  ]
+  const OSSUR_RUNS = [
+    { id: 'd346b0f7', status: 'completed', startedAt: '2026-09-13T04:06:38Z', finishedAt: '2026-09-13T06:26:49Z', windowStart: '2026-09-06T04:06:38Z', windowEnd: '2026-09-13T04:06:38Z', errors: [] },
+    { id: '555af400', status: 'partial', startedAt: '2026-10-04T11:45:54Z', finishedAt: '2026-10-04T14:46:27Z', windowStart: '2026-09-13T04:06:38Z', windowEnd: '2026-10-04T11:45:54Z', errors: ['themes: failed', 'transcribe: failed', 'pass-a: failed'] },
+  ]
+  const MONDAY = '2026-10-05T07:00:00Z'
+
+  it('Sealand, 5 Oct: the week of 28 Sep is drawn with its one unchecked video left out (265 videos, 5,028 comments), faint; 21 Sep stays off the cadence', () => {
+    const rows = [
+      row('2026-09-21', 301, 4990, { unchecked_comments: 0 }),
+      row('2026-09-28', 266, 5029, { unchecked: 1, unchecked_comments: 1 }),
+    ]
+    const w = homeWeeks({ ...base, rows, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })
+    expect(w!.columns[0]).toEqual({ week: '2026-09-28', label: '28 Sep', videos: 265, comments: 5028, settled: false })
+    expect(w!.columns.slice(1).every((c) => c.videos == null)).toBe(true)
+    // Before the migration the function returns no unchecked_comments: the week stays off, as on 5 Oct.
+    const before = rows.map(({ unchecked_comments: _u, ...r }) => r)
+    expect(homeWeeks({ ...base, rows: before, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })).toBeNull()
+  })
+
+  it('Össur, 5 Oct: a change subreddit discovery made inside the 4 Oct run, before its searches, does not cut the week that run gathered', () => {
+    const rows = [row('2026-09-21', 143, 2625), row('2026-09-28', 177, 3217)]
+    const handles: OurChange = { id: 'h15', surface: 'handles', changedAt: '2026-09-15T07:22:47Z', note: null, affects: [] }
+    // Had the 4 Oct probe moved the active set (production's did not: amputee, bionics and prosthetics before and after).
+    const probe: OurChange = { id: 'p4', surface: 'subreddits', changedAt: '2026-10-04T11:46:25Z', note: null, affects: [], preGatherRunId: '555af400' }
+    const updates = OSSUR_RUNS.map((r) => r.finishedAt)
+    const w = homeWeeks({ ...base, rows, changes: [handles, probe], updates, runs: OSSUR_RUNS, now: MONDAY })
+    expect(w!.columns[0]).toEqual({ week: '2026-09-28', label: '28 Sep', videos: 177, comments: 3217, settled: false })
+    // The same change made by a person at that instant cuts the week of 28 Sep, and the block is the empty frame.
+    const { preGatherRunId: _r, ...byHand } = probe
+    expect(homeWeeks({ ...base, rows, changes: [handles, byHand], updates, runs: OSSUR_RUNS, now: MONDAY })).toBeNull()
+    // And production's log as it stands (no probe change, the 15 Sep handles change): 28 Sep is drawn.
+    expect(homeWeeks({ ...base, rows, changes: [handles], updates, runs: OSSUR_RUNS, now: MONDAY })!.columns[0]).toMatchObject({ videos: 177, comments: 3217 })
+  })
+
+  it('the loader counts checked videos only, and hands the runs to the cut as well as the cadence', () => {
+    const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
+    expect(src).toMatch(/\.map\(checkedWeek\)/)
+    expect(src).toMatch(/weekRules\(input\.changes, axis, input\.runs\)/)
   })
 })
 

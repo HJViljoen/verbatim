@@ -4,9 +4,10 @@ import {
   STAGING_CHANGES, STAGING_CLIENT_WEEKS, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES,
 } from '../test/week-fixture'
 import { changesFromLog } from './comparability'
+import type { ChartRun } from './week-line'
 import {
-  isoWeekOf, marketWeekRowOf, pooledWeekVolumes, updatesSinceWeek, WEEK_AXIS_MAX, weekAxis, weekEndInstant, weekRuleGroupOf,
-  weekRules, weeksSinceOurChanges, weekStateOf, type WeekRule, type WeekVolume,
+  checkedWeek, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, preGatherCutBefore, updatesSinceWeek, WEEK_AXIS_MAX, weekAxis,
+  weekEndInstant, weekRuleGroupOf, weekRules, weeksSinceOurChanges, weekStateOf, type MarketWeekRow, type WeekRule, type WeekVolume,
 } from './weeks'
 
 // Week by week (decision M, part 1; WP2.9). The volumes are staging's real rows
@@ -158,6 +159,21 @@ describe('pooledWeekVolumes', () => {
     expect(() => pooledWeekVolumes(bad, STAGING_RIVALS, STAGING_AXIS, { now: AT_STAGING_END, updates: STAGING_UPDATES })).toThrow(/comments is not a count/)
   })
 
+  it('carries the unchecked videos\' comments only where every pooled row does (migration 20261107090000), and refuses more than the week holds', () => {
+    // No row carries them (the function before the migration): not known.
+    expect(weeks.every((w) => w.uncheckedComments === undefined)).toBe(true)
+    const withUc = STAGING_WEEK_VOLUMES.map((r) => ({ ...r, uncheckedComments: r.unchecked > 0 ? r.unchecked * 5 : 0 }))
+    const known = pooledWeekVolumes(withUc, STAGING_RIVALS, STAGING_AXIS, { now: AT_STAGING_END, updates: STAGING_UPDATES })
+    expect(measured.map((w) => known.find((x) => x.week === w)!.uncheckedComments)).toEqual([0, 0, 0, 20, 135, 270])
+    // One row of a week without it: that week's is not known; the others are.
+    const partly = withUc.map((r) => (r.week === '2026-09-14' && r.audience === 'competitor:Patagonia' ? { ...r, uncheckedComments: undefined } : r))
+    const mixed = pooledWeekVolumes(partly, STAGING_RIVALS, STAGING_AXIS, { now: AT_STAGING_END, updates: STAGING_UPDATES })
+    expect(mixed.find((x) => x.week === '2026-09-14')!.uncheckedComments).toBeUndefined()
+    expect(mixed.find((x) => x.week === '2026-09-07')!.uncheckedComments).toBe(135)
+    const over = withUc.map((r) => (r.week === '2026-09-07' && r.audience === 'industry-other' ? { ...r, uncheckedComments: r.comments + 1 } : r))
+    expect(() => pooledWeekVolumes(over, STAGING_RIVALS, STAGING_AXIS, { now: AT_STAGING_END, updates: STAGING_UPDATES })).toThrow(/uncheckedComments is not a count/)
+  })
+
   it('reads PostgREST rows, numeric strings included', () => {
     expect(marketWeekRowOf({
       week: '2026-09-14', audience: 'industry-other', videos: 306, comments: 5309, comments_next_month: 0, under_5: 88,
@@ -166,6 +182,15 @@ describe('pooledWeekVolumes', () => {
       week: '2026-09-14', audience: 'industry-other', videos: 306, comments: 5309, commentsNextMonth: 0, under5: 88,
       medianDated: 9.5, meanDated: 17.18, olderVideos: 38, unchecked: 53,
     })
+  })
+
+  it('reads the unchecked videos\' comments where the function returns them, and leaves them unknown where it does not', () => {
+    const raw = {
+      week: '2026-09-28', audience: 'industry-other', videos: 259, comments: 4930, comments_next_month: 0, under_5: 0,
+      median_dated: '9', mean_dated: '18.9', older_videos: 40, unchecked: 1,
+    }
+    expect(marketWeekRowOf({ ...raw, unchecked_comments: '1' }).uncheckedComments).toBe(1)
+    expect('uncheckedComments' in marketWeekRowOf(raw)).toBe(false)
   })
 })
 
@@ -254,5 +279,137 @@ describe('weeksSinceOurChanges', () => {
     const once = weeksSinceOurChanges(weeks, [rule('2026-09-13', 'terms')])
     expect(weeksSinceOurChanges(once, [])).toEqual(once)
     expect(once.map((w) => w.week)).toEqual([...once.map((w) => w.week)].sort())
+  })
+})
+
+// The lead's ruling of 5 Oct, part 1: one unchecked video must not blank a
+// week. The Dashboard's bar counts only the CHECKED videos and their comments.
+describe('checkedWeek', () => {
+  // Sealand, the week of 28 Sep, read 5 Oct: 266 market videos and 5,029
+  // comments, one video unchecked (a heuristic default of the 20 Sep gather)
+  // with one comment dated in the week.
+  const sealand: WeekVolume = {
+    week: '2026-09-28', state: 'filling', updatesSince: 0, videos: 266, comments: 5029, category: 259, rivalFiled: 7,
+    commentsNextMonth: 0, medianDated: 9, under5: 90, olderVideos: 40, unchecked: 1, uncheckedComments: 1, cadence: null,
+  }
+
+  it('leaves the unchecked video and its comment out: 265 videos and 5,028 comments, nothing unchecked left in', () => {
+    expect(checkedWeek(sealand)).toEqual({
+      week: '2026-09-28', state: 'filling', cadence: null, videos: 265, comments: 5028, unchecked: 0, uncheckedLeftOut: 1,
+    })
+  })
+
+  it('without the unchecked videos\' comments (the function before its migration), keeps them counted and unchecked, so the cut still drops the week', () => {
+    const { uncheckedComments: _u, ...unknown } = sealand
+    const w = checkedWeek(unknown)
+    expect(w).toMatchObject({ videos: 266, comments: 5029, unchecked: 1, uncheckedLeftOut: 0 })
+    expect(weeksSinceOurChanges([w], [])).toEqual([])
+    expect(weeksSinceOurChanges([checkedWeek(sealand)], []).map((x) => x.videos)).toEqual([265])
+  })
+
+  it('a week with nothing unchecked is its own counts (Össur, the week of 28 Sep: 177 videos, 3,217 comments)', () => {
+    const ossur: WeekVolume = { ...sealand, videos: 177, comments: 3217, category: 166, rivalFiled: 11, unchecked: 0, uncheckedComments: 0 }
+    expect(checkedWeek(ossur)).toMatchObject({ videos: 177, comments: 3217, unchecked: 0, uncheckedLeftOut: 0 })
+  })
+
+  it('a week whose every video is unchecked has nothing checked gathered, and is not drawn', () => {
+    const w = checkedWeek({ ...sealand, videos: 3, comments: 12, unchecked: 3, uncheckedComments: 12 })
+    expect(w).toMatchObject({ state: 'none_gathered', videos: 0, comments: 0, unchecked: 0 })
+    expect(weeksSinceOurChanges([w], [])).toEqual([])
+  })
+
+  it('is exact on the rows: per audience, comments less the unchecked videos\' comments (production, 5 Oct)', () => {
+    const row = (audience: string, videos: number, comments: number, unchecked = 0, uncheckedComments = 0): MarketWeekRow => ({
+      week: '2026-09-28', audience, videos, comments, commentsNextMonth: 0, under5: 0, medianDated: 9, meanDated: 18.9, olderVideos: 0, unchecked, uncheckedComments,
+    })
+    const rows = [
+      row('competitor:Cotopaxi', 1, 1), row('competitor:Freitag', 1, 7), row('competitor:Patagonia', 2, 63),
+      row('competitor:The North Face', 3, 28), row('industry-other', 259, 4930, 1, 1),
+    ]
+    const rivals = ['competitor:Cotopaxi', 'competitor:Freitag', 'competitor:Patagonia', 'competitor:The North Face']
+    const [w] = pooledWeekVolumes(rows, rivals, ['2026-09-28'], { now: '2026-10-05T07:00:00Z', updates: [] })
+    expect(w).toMatchObject({ videos: 266, comments: 5029, unchecked: 1, uncheckedComments: 1 })
+    expect(checkedWeek(w)).toMatchObject({ videos: 265, comments: 5028, unchecked: 0 })
+  })
+})
+
+// The lead's ruling of 5 Oct, part 2: a pipeline change made inside a run,
+// before that run's gather, starts at that run.
+describe('preGatherCutBefore', () => {
+  // Össur's runs, as production holds them (read 5 Oct): the 13 Sep update and
+  // the manual 4 Oct run, whose window reaches back to the 13 Sep update's
+  // opening, and whose subreddit discovery wrote its row at 11:46:25, before
+  // its searches.
+  const OSSUR_RUNS: ChartRun[] = [
+    { id: 'd346b0f7', status: 'completed', startedAt: '2026-09-13T04:06:38Z', finishedAt: '2026-09-13T06:26:49Z', windowStart: '2026-09-06T04:06:38Z', windowEnd: '2026-09-13T04:06:38Z' },
+    {
+      id: '555af400', status: 'partial', startedAt: '2026-10-04T11:45:54Z', finishedAt: '2026-10-04T14:46:27Z',
+      windowStart: '2026-09-13T04:06:38Z', windowEnd: '2026-10-04T11:45:54Z', errors: ['themes: failed', 'transcribe: failed', 'pass-a: failed'],
+    },
+  ]
+  const probe = { changedAt: '2026-10-04T11:46:25Z', preGatherRunId: '555af400' }
+
+  it('a discovery change inside the 4 Oct run starts where every earlier gather had ended: the 13 Sep update\'s finish', () => {
+    expect(preGatherCutBefore(probe, OSSUR_RUNS)).toBe('2026-09-13T06:26:49.000Z')
+  })
+
+  it('cuts only the weeks that begin before it, so the week the run gathered is drawn (28 Sep and the two before it)', () => {
+    const rules = weekRules([{ id: 'p', surface: 'subreddits', changedAt: probe.changedAt, note: null, affects: [], preGatherRunId: '555af400' }],
+      ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05'], OSSUR_RUNS)
+    expect(rules).toEqual([{ date: '2026-10-04', week: '2026-09-28', surface: 'subreddits', words: 'our search changes', cutBefore: '2026-09-13T06:26:49.000Z' }])
+    const at = (week: string): WeekVolume => ({
+      week, state: 'filling', updatesSince: 0, videos: 100, comments: 1000, category: 100, rivalFiled: 0,
+      commentsNextMonth: 0, medianDated: null, under5: 0, olderVideos: 0, unchecked: 0,
+    })
+    const weeks = ['2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28'].map(at)
+    expect(weeksSinceOurChanges(weeks, rules).map((w) => w.week)).toEqual(['2026-09-14', '2026-09-21', '2026-09-28'])
+    // The same change with no run (an operator's edit at that instant) cuts its own week, as before.
+    const own = weekRules([{ id: 'o', surface: 'subreddits', changedAt: probe.changedAt, note: null, affects: [] }], ['2026-09-28'], OSSUR_RUNS)
+    expect(own[0].cutBefore).toBeUndefined()
+    expect(weeksSinceOurChanges(weeks, own)).toEqual([])
+    // Without the runs (a fixture), every change cuts at its own week.
+    expect(weekRules([{ id: 'p', surface: 'subreddits', changedAt: probe.changedAt, note: null, affects: [], preGatherRunId: '555af400' }], ['2026-09-28'])[0].cutBefore).toBeUndefined()
+  })
+
+  it('a week that begins exactly at the instant is not cut; one that begins before it is', () => {
+    const rule = (cutBefore: string): WeekRule => ({ date: '2026-10-04', week: '2026-09-28', surface: 'terms', words: '', cutBefore })
+    const at = (week: string): WeekVolume => ({
+      week, state: 'settled', updatesSince: 2, videos: 10, comments: 100, category: 10, rivalFiled: 0,
+      commentsNextMonth: 0, medianDated: null, under5: 0, olderVideos: 0, unchecked: 0,
+    })
+    const weeks = ['2026-09-21', '2026-09-28'].map(at)
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-28T00:00:00.000Z')]).map((w) => w.week)).toEqual(['2026-09-28'])
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-28T00:00:00.001Z')])).toEqual([])
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-20T06:00:00.000Z')]).map((w) => w.week)).toEqual(['2026-09-21', '2026-09-28'])
+    // The latest cut of all the rules wins: an operator's change in the week of 21 Sep still cuts it.
+    const operator: WeekRule = { date: '2026-09-23', week: '2026-09-21', surface: 'terms', words: '' }
+    expect(weeksSinceOurChanges(weeks, [rule('2026-09-20T06:00:00.000Z'), operator]).map((w) => w.week)).toEqual(['2026-09-28'])
+  })
+
+  it('Sealand\'s shape: a change in the 4 Oct run (resumed, its started_at the resume\'s) starts after the 27 Sep update finished', () => {
+    const runs: ChartRun[] = [
+      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z' },
+      { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z' },
+    ]
+    // Written at 04:01:40, after the run opened and hours before the resume restamped started_at.
+    expect(preGatherCutBefore({ changedAt: '2026-10-04T04:01:40Z', preGatherRunId: '393b95df' }, runs)).toBe('2026-09-27T07:28:35.000Z')
+  })
+
+  it('fails closed (the change\'s own week) unless the change was written inside the run it names', () => {
+    expect(preGatherCutBefore({ changedAt: probe.changedAt }, OSSUR_RUNS)).toBeNull()
+    expect(preGatherCutBefore({ ...probe, preGatherRunId: 'not-a-run' }, OSSUR_RUNS)).toBeNull()
+    expect(preGatherCutBefore({ ...probe, changedAt: '2026-10-04T11:40:00Z' }, OSSUR_RUNS)).toBeNull() // before it opened
+    expect(preGatherCutBefore({ ...probe, changedAt: '2026-10-04T15:00:00Z' }, OSSUR_RUNS)).toBeNull() // after it finished
+    expect(preGatherCutBefore(probe, OSSUR_RUNS.map((r) => (r.id === '555af400' ? { ...r, windowEnd: null } : r)))).toBeNull()
+  })
+
+  it('never earlier than a gather made before the change: an earlier run resumed after it bounds at the change itself, and an unfinished one refuses', () => {
+    const resumed: ChartRun = { id: 'r1', status: 'completed', startedAt: '2026-10-04T13:00:00Z', finishedAt: '2026-10-04T13:30:00Z', windowEnd: '2026-10-04T04:00:00Z' }
+    expect(preGatherCutBefore(probe, [...OSSUR_RUNS, resumed])).toBe('2026-10-04T11:46:25.000Z')
+    const stuck: ChartRun = { id: 'r2', status: 'running', startedAt: '2026-09-20T04:00:00Z', finishedAt: null }
+    expect(preGatherCutBefore(probe, [...OSSUR_RUNS, stuck])).toBeNull()
+    // A run opened after the change gathered under it, and does not bound it.
+    const later: ChartRun = { id: 'r3', status: 'completed', startedAt: '2026-10-11T04:00:00Z', finishedAt: '2026-10-11T07:00:00Z', windowEnd: '2026-10-11T04:00:00Z' }
+    expect(preGatherCutBefore(probe, [...OSSUR_RUNS, later])).toBe('2026-09-13T06:26:49.000Z')
   })
 })
