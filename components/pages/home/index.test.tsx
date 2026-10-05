@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { HOME_DATA, HOME_EMPTY, HOME_NO_WEEKS } from '@/lib/pages/home-fixture'
-import { competitiveTile, homeTiles, INSUFFICIENT, type HomeData } from '@/lib/pages/home'
+import { competitiveTile, homeTiles, homeWeekDetail, homeWeeks, INSUFFICIENT, type HomeData, type HomeWeeks } from '@/lib/pages/home'
+import type { MarketWeekRowRaw } from '@/lib/reading/weeks'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { HomePage } from '.'
 import { HomeSkeleton } from './skeleton'
+import { HomeWeeksPlot } from './weeks-plot'
 
 // The Dashboard's render tier: what the page PRINTS, against the approved
 // artboard (`Page-Dashboard.dc.html`), the copy contract and the design bans.
@@ -121,7 +123,7 @@ describe('the top keeps its two columns, the Agent on the right, whatever the da
     expect(markup).toMatch(TOP)
     expect(markup).not.toContain('xl:col-span-3')
     expect(between(text, 'Your market in numbers', 'Agent')).not.toContain(INSUFFICIENT)
-    expect(markup).toContain('role="img" aria-label="Videos and comments in your market, week by week. 28 Sep: 281 videos, 4,902 comments; 5 Oct: 254 videos, 4,210 comments."')
+    expect(markup).toContain('role="group" aria-label="Videos and comments in your market, week by week. 28 Sep: 281 videos, 4,902 comments; 5 Oct: 254 videos, 4,210 comments."')
     expect(markup.match(/data-week-state=/g)).toHaveLength(2)
   })
 
@@ -139,6 +141,8 @@ describe('the top keeps its two columns, the Agent on the right, whatever the da
     expect(markup).not.toContain('data-week-state=')
     expect(markup).not.toContain('<polyline')
     expect(markup).not.toContain('role="img"')
+    expect(markup).not.toContain('role="group"')
+    expect(markup).not.toContain('<button type="button" aria-label="Week of')
     // Two blocks and six tiles, each saying so once.
     expect(markup.match(/Insufficient data/g)).toHaveLength(8)
     expect(text).toContain('Ask what your market thinks about anything')
@@ -175,5 +179,81 @@ describe('the Dashboard skeleton', () => {
     expect(text).toContain('Dashboard')
     expect(text).not.toContain('\u2014')
     expect(render(<HomeSkeleton />)).not.toMatch(STRIPE)
+  })
+})
+
+// ---- Week by week's numbers on hover, focus or a tap (Heinrich, 5 Oct) ------------------
+
+/** The tooltip's markup: it is the plot's last child, so from its opening tag to the end. */
+const tooltipOf = (markup: string): string | null => {
+  const i = markup.indexOf('role="tooltip"')
+  return i < 0 ? null : markup.slice(markup.lastIndexOf('<div', i))
+}
+const figuresOf = (markup: string): string[] => [...markup.matchAll(/data-copy="figure"[^>]*>([^<]*)</g)].map((m) => m[1])
+const buttonsOf = (markup: string): [string, string][] =>
+  [...markup.matchAll(/<button type="button" aria-label="([^"]*)" data-week="([^"]*)"/g)].map((m) => [m[2], m[1]])
+
+describe('Week by week shows a week\'s numbers on hover, focus or a tap (Heinrich, 5 Oct: "currently there\'s no numbers, it\'s just like a shape")', () => {
+  it('makes every drawn week a button named with its numbers, the faint one "still filling", and no button on a week not drawn', () => {
+    const markup = render(<HomePage data={HOME_DATA} />)
+    expect(buttonsOf(markup)).toEqual([
+      ['2026-09-28', 'Week of 28 Sep, 281 videos, 4,902 comments'],
+      ['2026-10-05', 'Week of 5 Oct, 254 videos, 4,210 comments, still filling'],
+    ])
+    // Nothing shows until a week is hovered, focused or tapped.
+    expect(markup).not.toContain('role="tooltip"')
+    // The native title is gone: one tooltip, not two.
+    expect(markup).not.toMatch(/title="28 Sep/)
+    expect(buttonsOf(render(<HomePage data={HOME_NO_WEEKS} />))).toEqual([])
+  })
+
+  it('opens on a week: the week, its videos and comments as figures with thousands separators, "still filling" where faint, in palette A and the copy contract', () => {
+    const weeks = HOME_DATA.weeks
+    const details = weeks.columns.map(homeWeekDetail)
+    const settled = render(<HomeWeeksPlot weeks={weeks} details={details} label="Week by week" open={0} />)
+    const tip = tooltipOf(settled)!
+    expect(tip).toContain('data-week="2026-09-28"')
+    expect(figuresOf(tip)).toEqual(['281', '4,902'])
+    expect(markupText(tip)).toBe('Week of 28 Sep 281 videos 4,902 comments')
+    const faint = tooltipOf(render(<HomeWeeksPlot weeks={weeks} details={details} label="Week by week" open={1} />))!
+    expect(markupText(faint)).toBe('Week of 5 Oct still filling 254 videos 4,210 comments')
+    for (const t of [tip, faint]) {
+      expect(t).toContain('bg-tile')
+      expect(t).not.toMatch(/#[0-9A-Fa-f]{6}/)
+      expect(markupText(t)).not.toContain('\u2014')
+      expect(t).not.toMatch(STRIPE)
+    }
+    assertCopyContract(<HomeWeeksPlot weeks={weeks} details={details} label="Week by week" open={1} />)
+  })
+
+  it('prints the numbers of the rows the bars draw, never counted again: Sealand, 5 Oct, with the unchecked video left out', () => {
+    // Production's rows on Mon 5 Oct, through the Dashboard's own builder.
+    const row = (week: string, videos: number, comments: number, unchecked: number, uc: number): MarketWeekRowRaw => ({
+      week, audience: 'industry-other', videos, comments, comments_next_month: 0, under_5: 0, median_dated: 6, mean_dated: 9,
+      older_videos: 0, unchecked, unchecked_comments: uc, unchecked_comments_next_month: 0, unchecked_under_5: 0, unchecked_older_videos: 0,
+    })
+    const weeks: HomeWeeks = homeWeeks({
+      rows: [row('2026-09-21', 301, 4990, 0, 0), row('2026-09-28', 266, 5029, 1, 1)],
+      rivalAudiences: [], changes: [], updates: ['2026-09-27T07:28:35Z', '2026-10-04T12:13:08Z'], now: '2026-10-05T07:00:00Z',
+    })!
+    const details = weeks.columns.map(homeWeekDetail)
+    const drawn = weeks.columns.filter((c) => c.videos != null)
+    expect(drawn.map((c) => [c.label, c.videos, c.comments])).toEqual([['21 Sep', 301, 4990], ['28 Sep', 265, 5028]])
+    for (const [i, c] of weeks.columns.entries()) {
+      if (c.videos == null || c.comments == null) {
+        expect(details[i]).toBeNull()
+        continue
+      }
+      const markup = render(<HomeWeeksPlot weeks={weeks} details={details} label="Week by week" open={i} />)
+      // The bar this week draws, at its height off the same column.
+      const bar = markup.match(new RegExp(`data-week-state="[a-z]+" data-week="${c.week}" style="height:([0-9.]+)%"`))
+      expect(Number(bar![1])).toBeCloseTo((c.videos / weeks.maxVideos) * 88, 6)
+      // The tooltip and the button print that column's figures.
+      const tip = tooltipOf(markup)!
+      expect(tip).toContain(`data-week="${c.week}"`)
+      expect(figuresOf(tip)).toEqual([c.videos.toLocaleString('en-US'), c.comments.toLocaleString('en-US')])
+      expect(markupText(tip)).toContain('still filling')
+      expect(buttonsOf(markup).find(([w]) => w === c.week)![1]).toBe(`Week of ${c.label}, ${c.videos.toLocaleString('en-US')} videos, ${c.comments.toLocaleString('en-US')} comments, still filling`)
+    }
   })
 })

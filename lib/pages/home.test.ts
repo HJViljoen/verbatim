@@ -148,22 +148,45 @@ describe('Week by week', () => {
     expect(src).not.toMatch(/HOME_FIRST_WEEK|WEEK_LINE_FIRST_WEEK/)
   })
 
-  it('draws only weeks on the one weekly cadence: on Sealand the week of 21 Sep stays off once its videos are all judged (the release fix, 1 Oct night)', () => {
-    // Production's runs (read 1 Oct): two rehearsal runs on Thu 24 Sep and the
-    // 27 Sep update make three updates in the week of 21 Sep.
+  it('draws only weeks on the one weekly cadence, and a run that gathered nothing is not one: on Sealand the week of 21 Sep is drawn (Heinrich, 5 Oct)', () => {
+    // Production's runs: two analysis-only rehearsals on Thu 24 Sep (fresh
+    // skipGather runs, which searched nothing) and the 27 Sep update, partial
+    // only after its gather.
     const runs = [
-      { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', errors: ['ocr: failed'] },
-      { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', errors: ['ocr: failed'] },
-      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', errors: ['transcript-backfill: Apify 408', 'owned-posts:instagram:rareform: 0 posts'] },
+      { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', errors: ['ocr: failed'], options: { skipGather: true } },
+      { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', errors: ['ocr: failed'], options: { skipGather: true } },
+      { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', errors: ['transcript-backfill: Apify 408', 'owned-posts:instagram:rareform: 0 posts'], options: { sendReport: true } },
     ]
     const judged = [row('2026-09-21', 264, 4597), row('2026-09-28', 281, 4902)]
     const w = homeWeeks({ ...base, rows: judged, updates: [], runs, now: '2026-10-01T08:00:00Z' })
-    expect(w!.columns[0]).toMatchObject({ label: '28 Sep', videos: 281 })
+    expect(w!.columns[0]).toMatchObject({ label: '21 Sep', videos: 264 })
+    // Read without their options (the loader before 5 Oct) the rehearsals count: three updates in the week, and 21 Sep is off.
+    const unread = runs.map(({ options: _o, ...r }) => r)
+    expect(homeWeeks({ ...base, rows: judged, updates: [], runs: unread, now: '2026-10-01T08:00:00Z' })!.columns[0]).toMatchObject({ label: '28 Sep', videos: 281 })
+    // An extra run that DID gather in the week still breaks it.
+    const extra = [...runs, { id: 'x1', status: 'completed', startedAt: '2026-09-24T15:00:00Z', finishedAt: '2026-09-24T16:00:00Z', errors: [], options: { sendReport: true } }]
+    expect(homeWeeks({ ...base, rows: judged, updates: [], runs: extra, now: '2026-10-01T08:00:00Z' })!.columns[0]).toMatchObject({ label: '28 Sep' })
     // Without the runs (a fixture) the cadence cuts nothing.
     expect(homeWeeks({ ...base, rows: judged, updates: [], now: '2026-10-01T08:00:00Z' })!.columns[0]).toMatchObject({ label: '21 Sep' })
-    // One clean Sunday update each, and the 27 Sep one partial only after its gather: 21 Sep is drawn.
-    const clean = homeWeeks({ ...base, rows: judged, updates: [], runs: runs.slice(2), now: '2026-10-01T08:00:00Z' })
-    expect(clean!.columns[0]).toMatchObject({ label: '21 Sep', videos: 264 })
+  })
+
+  it('a rehearsal finishing after a week ends does not settle it: the week stays faint until two real updates', () => {
+    const judged = [row('2026-09-21', 264, 4597), row('2026-09-28', 281, 4902)]
+    const sunday = (id: string, day: string) => ({ id, status: 'completed', startedAt: `${day}T04:03:00Z`, finishedAt: `${day}T07:30:00Z`, errors: [], options: { sendReport: true } })
+    const rehearsal = { id: 'r1', status: 'partial', startedAt: '2026-10-08T15:00:00Z', finishedAt: '2026-10-08T15:20:00Z', errors: ['ocr: failed'], options: { skipGather: true } }
+    const runs = [sunday('s27', '2026-09-27'), sunday('s04', '2026-10-04'), rehearsal]
+    const updates = runs.map((r) => r.finishedAt)
+    const now = '2026-10-09T08:00:00Z'
+    // The week of 21 Sep ended 28 Sep: one real update (4 Oct) and the rehearsal since. Filling.
+    const w = homeWeeks({ ...base, rows: judged, updates, runs, now })
+    expect(w!.columns[0]).toMatchObject({ label: '21 Sep', settled: false })
+    // Counted as an update (a run not known to have gathered nothing), the same finish settles it.
+    expect(homeWeeks({ ...base, rows: judged, updates, runs: runs.slice(0, 2), now })!.columns[0]).toMatchObject({ label: '21 Sep', settled: true })
+  })
+
+  it('the loader reads each run\'s options, which say whether it gathered', () => {
+    const src = readFileSync(resolve(__dirname, '../reading/reading-view.ts'), 'utf8')
+    expect(src).toMatch(/select\('id, status, started_at, completed_at, errors, window_start, window_end, options'\)/)
   })
 
   it('the loader reads every run for the cadence test', () => {
@@ -189,26 +212,33 @@ describe('Week by week', () => {
     expect(w!.maxVideos).toBe(278)
   })
 
-  // Production on Mon 5 Oct (read that morning): the runs as they stand.
+  // Production on Mon 5 Oct (read that morning): the runs as they stand, with
+  // their options (read 5 Oct, 07:50 UTC).
   const SEALAND_RUNS = [
-    { id: 'b67b56de', status: 'partial', startedAt: '2026-09-20T04:02:57Z', finishedAt: '2026-09-20T08:33:47Z', windowStart: '2026-09-10T07:02:10Z', windowEnd: '2026-09-20T04:02:57Z', errors: ['owned-posts:instagram:rareform: 0 posts'] },
-    { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T15:54:51Z', errors: ['ocr: failed', 'persist-themes: failed'] },
-    { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T17:35:55Z', errors: ['ocr: failed'] },
-    { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z', errors: ['owned-posts:instagram:rareform: 0 posts', 'transcript-backfill: Apify 408', 'transcribe:youtube: 7 of 54 recovered', 'pass-a: 1 re-asked'] },
-    // Resumed analysis-only the same day: its started_at is the resume's, its window_end the 04:01 opening.
-    { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [] },
+    { id: 'b67b56de', status: 'partial', startedAt: '2026-09-20T04:02:57Z', finishedAt: '2026-09-20T08:33:47Z', windowStart: '2026-09-10T07:02:10Z', windowEnd: '2026-09-20T04:02:57Z', errors: ['owned-posts:instagram:rareform: 0 posts'], options: { sendReport: true, scheduledFor: '2026-09-20T04:00:00.000Z' } },
+    { id: 'e80e9347', status: 'partial', startedAt: '2026-09-24T15:54:51Z', finishedAt: '2026-09-24T16:16:13Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T15:54:51Z', errors: ['ocr: failed', 'persist-themes: failed'], options: { skipGather: true } },
+    { id: '03180a33', status: 'partial', startedAt: '2026-09-24T17:35:55Z', finishedAt: '2026-09-24T17:51:08Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-24T17:35:55Z', errors: ['ocr: failed'], options: { skipGather: true } },
+    { id: 'f3646446', status: 'partial', startedAt: '2026-09-27T04:03:42Z', finishedAt: '2026-09-27T07:28:35Z', windowStart: '2026-09-20T04:02:57Z', windowEnd: '2026-09-27T04:03:42Z', errors: ['owned-posts:instagram:rareform: 0 posts', 'transcript-backfill: Apify 408', 'transcribe:youtube: 7 of 54 recovered', 'pass-a: 1 re-asked'], options: { sendReport: true, scheduledFor: '2026-09-27T04:00:00.000Z' } },
+    // Resumed analysis-only the same day: its started_at is the resume's, its
+    // window_end the 04:01 opening, and its options name itself (the resume
+    // lever), so it is the gather it resumes.
+    { id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z', windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [], options: { runId: '393b95df', sendReport: true, skipGather: true } },
   ]
   const OSSUR_RUNS = [
-    { id: 'd346b0f7', status: 'completed', startedAt: '2026-09-13T04:06:38Z', finishedAt: '2026-09-13T06:26:49Z', windowStart: '2026-09-06T04:06:38Z', windowEnd: '2026-09-13T04:06:38Z', errors: [] },
-    { id: '555af400', status: 'partial', startedAt: '2026-10-04T11:45:54Z', finishedAt: '2026-10-04T14:46:27Z', windowStart: '2026-09-13T04:06:38Z', windowEnd: '2026-10-04T11:45:54Z', errors: ['themes: failed', 'transcribe: failed', 'pass-a: failed'] },
+    { id: 'd346b0f7', status: 'completed', startedAt: '2026-09-13T04:06:38Z', finishedAt: '2026-09-13T06:26:49Z', windowStart: '2026-09-06T04:06:38Z', windowEnd: '2026-09-13T04:06:38Z', errors: [], options: { sendReport: true } },
+    { id: '555af400', status: 'partial', startedAt: '2026-10-04T11:45:54Z', finishedAt: '2026-10-04T14:46:27Z', windowStart: '2026-09-13T04:06:38Z', windowEnd: '2026-10-04T11:45:54Z', errors: ['themes: failed', 'transcribe: failed', 'pass-a: failed'], options: {} },
   ]
   const MONDAY = '2026-10-05T07:00:00Z'
 
-  it('Sealand, 5 Oct: the week of 28 Sep is drawn with its one unchecked video left out (265 videos, 5,028 comments), faint; 21 Sep stays off the cadence', () => {
+  it('Sealand, 5 Oct: the chart starts at the week of 21 Sep (301 videos, 4,990 comments), then 28 Sep with its one unchecked video left out (265, 5,028), both faint', () => {
     const rows = [uc(row('2026-09-21', 301, 4990), 0), uc(row('2026-09-28', 266, 5029, { unchecked: 1 }), 1)]
     const w = homeWeeks({ ...base, rows, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })
-    expect(w!.columns[0]).toEqual({ week: '2026-09-28', label: '28 Sep', videos: 265, comments: 5028, settled: false })
-    expect(w!.columns.slice(1).every((c) => c.videos == null)).toBe(true)
+    expect(w!.columns[0]).toEqual({ week: '2026-09-21', label: '21 Sep', videos: 301, comments: 4990, settled: false })
+    expect(w!.columns[1]).toEqual({ week: '2026-09-28', label: '28 Sep', videos: 265, comments: 5028, settled: false })
+    expect(w!.columns.slice(2).every((c) => c.videos == null)).toBe(true)
+    // The week of 14 Sep stays off: the 17 Sep search change, and two runs in it.
+    const withEarlier = [uc(row('2026-09-14', 332, 5426), 0), ...rows]
+    expect(homeWeeks({ ...base, rows: withEarlier, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })!.columns[0].week).toBe('2026-09-21')
     // Before the migration the function returns no unchecked_comments: the week stays off, as on 5 Oct.
     const before = [row('2026-09-21', 301, 4990), row('2026-09-28', 266, 5029, { unchecked: 1 })]
     expect(homeWeeks({ ...base, rows: before, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })).toBeNull()

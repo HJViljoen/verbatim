@@ -4,7 +4,7 @@ import type { OurChange } from '../../reading/comparability'
 import type { ReadingMonth } from '../../reading/reading-month'
 import { pointOfStored, readOfStored, TABLE_WEEK_LINE_POINTS, TABLE_WEEK_LINE_READS } from '../../reading/week-keep'
 import {
-  buildWeekLine, dueHasPassed, passedBeforeOf, pendingWeekLine, pooledWeekPoints, withChartCadence, type ChartRun, type WeekLineBlock, type WeekLineObject, type WeekPoint,
+  buildWeekLine, chartSettlingUpdates, dueHasPassed, passedBeforeOf, pendingWeekLine, pooledWeekPoints, withChartCadence, type ChartRun, type WeekLineBlock, type WeekLineObject, type WeekPoint,
   type WeekRead,
 } from '../../reading/week-line'
 import { checkedRows, pooledWeekVolumes, weekAxis, weekRules, weeksSinceOurChanges, type MarketWeekRow, type WeekVolumesBlock } from '../../reading/weeks'
@@ -65,7 +65,9 @@ export interface WeekVolumesInput {
  */
 export function weekVolumesBlock(input: WeekVolumesInput): WeekVolumesBlock {
   const axis = weekAxis(input.reading, input.now)
-  const pooled = pooledWeekVolumes(checkedRows(input.rows), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  // A run that gathered nothing settles no week (`chartSettlingUpdates`);
+  // the line's latest update below reads every finish.
+  const pooled = pooledWeekVolumes(checkedRows(input.rows), input.rivalAudiences, axis, { now: input.now, updates: chartSettlingUpdates(input.updates, input.runs) })
   const weeks = input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled
   const rules = weekRules(input.changes, axis, input.runs ?? undefined)
   const cfg = input.cfg

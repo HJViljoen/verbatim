@@ -186,6 +186,9 @@ describe('gatheredNothing — which closed runs cannot anchor a window', () => {
 
   it('a resume of itself, a gathering run and a row without options did gather', () => {
     expect(gatheredNothing({ id: 'a', options: { skipGather: true, runId: 'a' } })).toBe(false)
+    // A uuid in either case names the same row.
+    expect(gatheredNothing({ id: '393b95df-705c', options: { skipGather: true, runId: '393B95DF-705C' } })).toBe(false)
+    expect(gatheredNothing({ id: '393B95DF-705C', options: { skipGather: true, runId: '393b95df-705c' } })).toBe(false)
     expect(gatheredNothing({ id: 'a', options: { skipGather: false } })).toBe(false)
     expect(gatheredNothing({ id: 'a', options: { sendReport: true } })).toBe(false)
     expect(gatheredNothing({ id: 'a', options: null })).toBe(false)

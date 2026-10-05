@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { STILL_FILLING, weekDetailLabel, type WeekDetail } from '../charts/week-bars'
 import { fmtInt, longMonth, shortDate } from '../format'
 import { surface, type NavKey } from '../nav'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -9,7 +10,7 @@ import { loadChanges, loadWindowReading, readingHandle } from '../reading/read'
 import { marketAudiences } from '../reading/market'
 import { nextMonth } from '../reading/month-key'
 import { loadCadenceRuns, loadDeliveredRuns, loadReadingMonth, marketRivalAudiences, updateInstant } from '../reading/reading-view'
-import { withChartCadence, type ChartRun } from '../reading/week-line'
+import { chartSettlingUpdates, withChartCadence, type ChartRun } from '../reading/week-line'
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import {
   addDays, checkedRows, isoWeekOf, marketWeekRowOf, pooledWeekVolumes, weekRules, weeksSinceOurChanges,
@@ -151,9 +152,10 @@ export const WEEKS_MIN = 1
  * the counts where the SQL says what it holds, `checkedRows`, else the week
  * is not drawn). A change before the axis leaves every axis week after it, so
  * nothing older is needed. On Sealand (5 Oct) that is: the 17 Sep search
- * change cuts everything to the week of 14 Sep, the week of 21 Sep is off the
- * cadence (three runs), and the week of 28 Sep is drawn with its one
- * unchecked video left out.
+ * change cuts everything to the week of 14 Sep, the week of 21 Sep is drawn
+ * (its two 24 Sep rehearsals gathered nothing, so they are not runs of the
+ * cadence, `chartRunGatheredNothing`), and the week of 28 Sep is drawn with
+ * its one unchecked video left out.
  */
 export function homeAxis(now: string): string[] {
   const current = isoWeekOf(now)
@@ -236,7 +238,8 @@ export function homeWeeks(input: {
   now: string
 }): HomeWeeks | null {
   const axis = homeAxis(input.now)
-  const pooled = pooledWeekVolumes(checkedRows(input.rows.map(marketWeekRowOf)), input.rivalAudiences, axis, { now: input.now, updates: input.updates })
+  // A run that gathered nothing settles no week (`chartSettlingUpdates`).
+  const pooled = pooledWeekVolumes(checkedRows(input.rows.map(marketWeekRowOf)), input.rivalAudiences, axis, { now: input.now, updates: chartSettlingUpdates(input.updates, input.runs) })
   const weeks = input.runs ? withChartCadence(pooled, input.runs, input.now) : pooled
   const clean = weeksSinceOurChanges(weeks, weekRules(input.changes, axis, input.runs))
     .filter((w) => w.state === 'settled' || w.state === 'filling' || w.state === 'so_far')
@@ -275,6 +278,25 @@ export function homeWeeksFrame(now: string): HomeWeeks {
 
 /** Whether "Week by week" has a week to draw; where not, it prints `INSUFFICIENT`. */
 export const weeksDrawable = (weeks: HomeWeeks): boolean => weeks.columns.some((c) => c.videos != null)
+
+/**
+ * A drawn week's numbers, for its tooltip and its button's accessible name
+ * (Heinrich, 5 Oct: the numbers show on hover, on a tap on a phone, and to a
+ * keyboard): "Week of 28 Sep", its videos and its comments as the column
+ * draws them, and "still filling" where the column is drawn faint. Read off
+ * the column itself, never recomputed, in the shape the weekly bars' card
+ * prints (`WeekDetail`, `weekDetail`). Null for a column with nothing drawn.
+ */
+export function homeWeekDetail(c: HomeWeekColumn): WeekDetail | null {
+  if (c.videos == null || c.comments == null) return null
+  const title = `Week of ${c.label}`
+  const lines = [
+    { value: fmtInt(c.videos), words: 'videos', strong: true, gap: false },
+    { value: fmtInt(c.comments), words: 'comments', strong: true, gap: false },
+  ]
+  const state = c.settled ? null : STILL_FILLING
+  return { week: c.week, title, lines, panel: [], state, label: weekDetailLabel({ title, lines, state }) }
+}
 
 // ---- 4. The tiles ------------------------------------------------------------------
 

@@ -9,7 +9,8 @@ import { NAV_ICON } from '@/components/nav-icons'
 import { PageBar } from '@/components/shell/page-grid'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { INSUFFICIENT, tileInsufficient, weeksDrawable, type HomeData, type HomeNumbers, type HomeNumbersHalf, type HomeTile, type HomeTileRow, type HomeWeeks } from '@/lib/pages/home'
+import { homeWeekDetail, INSUFFICIENT, tileInsufficient, weeksDrawable, type HomeData, type HomeNumbers, type HomeNumbersHalf, type HomeTile, type HomeTileRow, type HomeWeeks } from '@/lib/pages/home'
+import { HomeWeeksPlot } from './weeks-plot'
 
 // THE DASHBOARD, drawn to the approved artboard `Page-Dashboard.dc.html`
 // (pages build, HOME package, 1 Oct): the title; "Your market in numbers" and
@@ -125,22 +126,10 @@ function Stat({ value, unit, series }: { value: string; unit: string; series: 'v
 
 // ---- 2. Week by week -----------------------------------------------------------------
 
-/** Headroom over the tallest bar and the highest point, so neither touches the top. */
-const PLOT_TOP = 0.88
-
+/** The block: its title and key here, the plot in the client leaf
+ *  (`HomeWeeksPlot`), which shows a week's numbers on hover, focus or a tap. */
 function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
   const drawable = weeksDrawable(weeks)
-  const n = weeks.columns.length
-  const at = (v: number, max: number) => (max > 0 ? (v / max) * PLOT_TOP * 100 : 0)
-  // The comments line: one segment per run of consecutive weeks that have a figure.
-  const runs: { x: number; y: number; settled: boolean }[][] = []
-  weeks.columns.forEach((c, i) => {
-    if (c.comments == null) return runs.push([])
-    const point = { x: ((i + 0.5) / n) * 100, y: 100 - at(c.comments, weeks.maxComments), settled: c.settled }
-    if (runs.length === 0) runs.push([])
-    runs[runs.length - 1].push(point)
-  })
-  const segments = runs.filter((r) => r.length > 0)
   const summary = weeks.columns
     .filter((c) => c.videos != null && c.comments != null)
     .map((c) => `${c.label}: ${fmtInt(c.videos!)} videos, ${fmtInt(c.comments!)} comments`)
@@ -156,60 +145,11 @@ function WeeksBlock({ weeks }: { weeks: HomeWeeks }) {
           <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3.5 rounded-full bg-orange" />Comments</span>
         </div>
       </div>
-      <div
-        className="relative flex h-[190px]"
-        {...(drawable
-          ? { role: 'img', 'aria-label': `Videos and comments in your market, week by week. ${summary.join('; ')}.` }
-          : { 'aria-hidden': true })}
-      >
-        {weeks.columns.map((c, i) => (
-          <div key={c.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-            <div
-              // The baseline is a solid bottom border under all eight weeks, as
-              // drawn, with the bars standing on it; the dashed gridline is its
-              // own element, because `border-dashed` would style every side.
-              className={`relative flex w-full grow items-end justify-center border-b ${HAIR}`}
-              title={c.videos != null && c.comments != null ? `${c.label}: ${fmtInt(c.videos)} videos, ${fmtInt(c.comments)} comments` : undefined}
-            >
-              {i > 0 ? <span aria-hidden className={`absolute inset-y-0 left-0 border-l border-dashed ${HAIR}`} /> : null}
-              {c.videos != null ? (
-                // A week still filling: the same yellow, faint, with no words
-                // (Heinrich, 1 Oct); solid once it has settled.
-                <div className={`w-[44%] max-w-8 rounded-t-[3px] bg-brand ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
-              ) : null}
-            </div>
-            <div className={`whitespace-nowrap text-[12px] max-sm:text-[10px] ${MUTED}`}>{c.label}</div>
-          </div>
-        ))}
-        {/* The comments line, over the plot area: the 190px less the labels'
-            row (12px at normal leading, 15.6), its 8px gap and the 1px baseline.
-            The second series, so the orange (its key above and in the numbers). */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[24.6px]" aria-hidden>
-          <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {segments.map((seg, i) =>
-              seg.length > 1 ? (
-                <polyline
-                  key={i}
-                  points={seg.map((p) => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="var(--orange)"
-                  strokeWidth={2}
-                  vectorEffect="non-scaling-stroke"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
-              ) : null,
-            )}
-          </svg>
-          {segments.flat().map((p, i) => (
-            <span
-              key={i}
-              className={`absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange ${p.settled ? '' : 'opacity-45'}`}
-              style={{ left: `${p.x}%`, top: `${p.y}%` }}
-            />
-          ))}
-        </div>
-      </div>
+      <HomeWeeksPlot
+        weeks={weeks}
+        details={weeks.columns.map(homeWeekDetail)}
+        label={drawable ? `Videos and comments in your market, week by week. ${summary.join('; ')}.` : null}
+      />
       {/* No week to draw: the artboard's empty frame, and this line where it
           prints its note. */}
       {drawable ? null : <div className={`text-[12px] ${MUTED}`}>{INSUFFICIENT}</div>}
