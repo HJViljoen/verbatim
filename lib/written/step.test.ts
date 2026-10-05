@@ -240,18 +240,21 @@ describe('the pipeline carries write-week-read', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id, immediately after ask-reevaluate; the long-run read\'s own step follows it, then close-run (66 in all, with the pass-b wave family since 4 Oct)', () => {
-    expect(ids).toHaveLength(66)
+  it('as one additive id, immediately after ask-reevaluate; the long-run read\'s own step follows it, then the month\'s briefs and close-run (71 in all: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct)', () => {
+    expect(ids).toHaveLength(71)
     expect(ids.filter((id) => id === 'write-week-read')).toHaveLength(1)
     const at = ids.indexOf('write-week-read')
     expect(ids[at - 1]).toBe('ask-reevaluate')
     expect(ids[at + 1]).toBe('write-longrun-read')
-    expect(ids[at + 2]).toBe('close-run')
+    // The briefs' own steps sit between it and close-run
+    // (lib/reports/briefs/step.test.ts pins them).
+    expect(ids[at + 2]).toBe('plan-briefs')
+    expect(ids[at + 7]).toBe('close-run')
   })
 
   it('write-longrun-read: one additive id in its own position, fail-soft like the week\'s, outside the consumer-profile flag', () => {
     expect(ids.filter((id) => id === 'write-longrun-read')).toHaveLength(1)
-    const body = src.slice(src.indexOf(".run('write-longrun-read'"), src.indexOf('// 7. Close the run.'))
+    const body = src.slice(src.indexOf(".run('write-longrun-read'"), src.indexOf("// The month's four department briefs"))
     expect(body).toContain('runLongRunStep(admin, { clientId, runId')
     // Retried on a transient failure until its last attempt (the theme merge's test).
     expect(body).toContain('lastAttempt: attempt >= (maxAttempts ?? 3) - 1')

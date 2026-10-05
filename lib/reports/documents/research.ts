@@ -86,6 +86,9 @@ export async function runResearch(
     /** The frame, read once for every question (WP3.9); read here when absent. */
     frame?: AskFrame
     now?: Date
+    /** Log the engine's calls to ai_call_log (default). False only for a dry
+     *  run that may write to no database (scripts/monthly-briefs.ts). */
+    persist?: boolean
   },
 ): Promise<{ answers: ResearchAnswer[]; costUsd: number; stoppedForBudget: boolean; measure?: AnswerMeasure | null }> {
   const parallel = Math.max(1, args.parallel ?? DOCUMENT_RESEARCH_PARALLEL)
@@ -108,7 +111,7 @@ export async function runResearch(
     const results = await Promise.all(wave.map(async (q): Promise<ResearchAnswer> => {
       const started = Date.now()
       try {
-        const a = await answerQuestion(admin, { clientId: args.clientId, companyName: args.companyName, question: q.text, runId: args.runId, allowNearest: false, persist: true, frame, now })
+        const a = await answerQuestion(admin, { clientId: args.clientId, companyName: args.companyName, question: q.text, runId: args.runId, allowNearest: false, persist: args.persist !== false, frame, now })
         return {
           question: q,
           answer: a.answer,

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { loadAskFrame } from '../../agent/answer'
+import { loadAskFrame, type AskFrame } from '../../agent/answer'
 import { askWindow } from '../../agent/scope'
 import { loadCommentNamings, namesByComment, trackedBrands, type WhoVideo } from '../../brands/attribution'
 import { brandCountState } from '../../brands/precision'
@@ -34,7 +34,8 @@ import { BRIEF_MODEL, draftIdeas, judgeRepeats, writeBrief } from './model'
 import { allBriefQuestions, type BriefQuestion } from './questions'
 import { QuotePool } from './quotes'
 import type { Allocation, BriefRole, GroundedPoint, IdeaDraft, MonthlyBriefData } from './types'
-import { BRIEF_ROLES, isBriefRole } from './types'
+import { callOptions, checkBudget, type BriefClock } from './clock'
+import { BRIEF_NAME, BRIEF_ROLES, isBriefRole } from './types'
 import { scrubBriefText } from './scrub'
 import { BRIEF_MAX, type BriefOutput, type IdeasOutput } from './write'
 
@@ -114,16 +115,30 @@ const warn = (what: string) => (e: unknown) => {
 /** The month's window, `[month start, next month start)`. */
 export const monthWindow = (month: string) => ({ from: `${monthStartOf(month)}T00:00:00.000Z`, to: `${nextMonth(monthStartOf(month))}T00:00:00.000Z` })
 
-export async function loadBriefSetInputs(admin: SupabaseClient, opts: { clientId: string; month: string; now: Date }): Promise<BriefSetInputs> {
+export async function loadBriefSetInputs(
+  admin: SupabaseClient,
+  opts: {
+    clientId: string; month: string; now: Date
+    /** The run the research reads (its themes) and the model calls are logged
+     *  under. The pipeline's step passes ITS run, which is not completed yet
+     *  (and whose themes have replaced the last one's); the script, the newest
+     *  delivered run. */
+    runId?: string
+  },
+): Promise<BriefSetInputs> {
   const { clientId } = opts
   const month = monthStartOf(opts.month)
   const window = monthWindow(month)
   const [client, config, run] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     admin.from('tracking_configs').select('competitor_names, industry_keywords').eq('client_id', clientId).maybeSingle(),
-    admin.from('pipeline_runs').select('id').eq('client_id', clientId).in('status', ['completed', 'partial']).order('started_at', { ascending: false }).limit(1).maybeSingle(),
+    opts.runId
+      ? Promise.resolve({ data: { id: opts.runId }, error: null })
+      : admin.from('pipeline_runs').select('id').eq('client_id', clientId).in('status', ['completed', 'partial']).order('started_at', { ascending: false }).limit(1).maybeSingle(),
   ])
   if (client.error) throw new Error(`briefs: client: ${client.error.message}`)
+  if (config.error) throw new Error(`briefs: tracking config: ${config.error.message}`)
+  if (run.error) throw new Error(`briefs: run: ${run.error.message}`)
   const company = String((client.data as { company_name?: string } | null)?.company_name ?? '').trim() || 'the company'
   const runId = (run.data as { id?: string } | null)?.id
   if (!runId) throw new Error('briefs: no completed run')
@@ -185,14 +200,36 @@ export async function researchBriefSet(
   admin: SupabaseClient,
   i: Pick<BriefSetInputs, 'clientId' | 'company' | 'runId' | 'month'>,
   questions: readonly BriefQuestion[],
-  opts: { now: Date; budgetUsd: number; parallel?: number },
+  opts: { now: Date; budgetUsd: number; parallel?: number; persist?: boolean },
 ): Promise<{ answers: ResearchAnswer[]; window: { from: string; to: string } | null; costUsd: number }> {
-  const frame = await loadAskFrame(admin, i.clientId, opts.now)
-  const reading = await loadReadingMonth(admin, readingHandle(i.clientId, admin), opts.now.toISOString(), { explicit: i.month }).catch(warn('reading month'))
-  const framed = { ...frame, reading: reading ?? frame.reading }
-  const window = askWindow(framed.reading, 'days90', opts.now.toISOString())
-  const r = await runResearch(admin, { clientId: i.clientId, companyName: i.company, runId: i.runId, questions: [...questions], budgetUsd: opts.budgetUsd, frame: framed, now: opts.now, parallel: opts.parallel })
+  const { frame, window } = await briefResearchFrame(admin, i, opts.now)
+  const r = await runResearch(admin, { clientId: i.clientId, companyName: i.company, runId: i.runId, questions: [...questions], budgetUsd: opts.budgetUsd, frame, now: opts.now, parallel: opts.parallel, persist: opts.persist })
   return { answers: r.answers, window, costUsd: r.costUsd }
+}
+
+/** The research's frame (the Ask agent's, its reading month set to the
+ *  brief's) and the 90 days it reads. Read once and shared by every question
+ *  asked with it. */
+export async function briefResearchFrame(
+  admin: SupabaseClient,
+  i: Pick<BriefSetInputs, 'clientId' | 'month'>,
+  now: Date,
+): Promise<{ frame: AskFrame; window: { from: string; to: string } | null }> {
+  const frame = await loadAskFrame(admin, i.clientId, now)
+  const reading = await loadReadingMonth(admin, readingHandle(i.clientId, admin), now.toISOString(), { explicit: i.month }).catch(warn('reading month'))
+  const framed = { ...frame, reading: reading ?? frame.reading }
+  return { frame: framed, window: askWindow(framed.reading, 'days90', now.toISOString()) }
+}
+
+/** The answers of several research runs (the pipeline asks them a wave per
+ *  step), in question order, their points numbered G1… across all of them,
+ *  as one run numbers them (`runResearch`), so every id is unique in the set.
+ *  Pure. */
+export function numberPoints(answers: readonly ResearchAnswer[], questions: readonly Pick<BriefQuestion, 'id'>[]): ResearchAnswer[] {
+  const order = new Map(questions.map((q, n) => [q.id, n]))
+  const sorted = [...answers].sort((a, b) => (order.get(a.question.id) ?? 999) - (order.get(b.question.id) ?? 999))
+  let g = 0
+  return sorted.map((a) => ({ ...a, grounded: a.grounded.map((p) => ({ ...p, id: `G${++g}` })) }))
 }
 
 export interface Grounded {
@@ -267,6 +304,84 @@ export interface BriefSet {
   costUsd: number
 }
 
+/** The month's ideas, their self-check and where each lives: the set's first
+ *  half after the research. One ideas call, one verdict pass, the pure
+ *  allocation. A dry run may hand back the ideas and verdicts it kept. */
+export async function ideasForSet(
+  admin: SupabaseClient,
+  i: BriefSetInputs,
+  questions: readonly BriefQuestion[],
+  points: readonly GroundedPoint[],
+  opts: { log: boolean; client?: ParseClient; clock?: BriefClock; ideas?: { raw: IdeasOutput; contradicted: [string, string | null][] } },
+): Promise<{
+  raw: IdeasOutput; costUsd: number; prompts: { system: string; user: string }
+  check: { contradicted: Map<string, string | null>; ran: boolean; costUsd: number }
+  allocation: Allocation
+}> {
+  const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client, clock: opts.clock }
+  const ideas = opts.ideas
+    ? { output: opts.ideas.raw, costUsd: 0, prompts: { system: '', user: '' } }
+    : await draftIdeas(call, { company: i.company, month: i.month, noun: i.noun, points: [...points], questions: [...questions], context: i.context })
+  const drafts = draftsOf(ideas.output, i.company)
+  const check = opts.ideas
+    ? { contradicted: new Map(opts.ideas.contradicted), costUsd: 0, ran: true }
+    : i.themedRunId
+      ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: drafts.map((d) => d.headline), persist: opts.log, budget: checkBudget(opts.clock) })
+      : { contradicted: new Map<string, string | null>(), costUsd: 0, ran: false }
+  const standing = drafts.filter((d) => !check.contradicted.has(d.headline.trim()))
+  const allocation = allocateIdeas(standing, [...points], { month: i.month })
+  for (const d of drafts) if (check.contradicted.has(d.headline.trim())) {
+    const says = check.contradicted.get(d.headline.trim())
+    allocation.held.unshift({ headline: d.headline, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
+  }
+  return { raw: ideas.output, costUsd: ideas.costUsd, prompts: ideas.prompts, check: { contradicted: check.contradicted, ran: check.ran, costUsd: check.costUsd }, allocation }
+}
+
+/** One department's writer: the ideas homed there developed into findings,
+ *  and the role's own sections from its own research. */
+export async function writeRoleBrief(
+  admin: SupabaseClient,
+  i: BriefSetInputs,
+  questions: readonly BriefQuestion[],
+  points: readonly GroundedPoint[],
+  allocation: Pick<Allocation, 'ideas'>,
+  role: BriefRole,
+  opts: { log: boolean; client?: ParseClient; clock?: BriefClock },
+): Promise<{ raw: BriefOutput; prompts: { system: string; user: string }; costUsd: number }> {
+  const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client, clock: opts.clock }
+  const mine = allocation.ideas.filter((x) => x.home === role)
+  const others = allocation.ideas.filter((x) => x.home !== role).map((x) => ({ headline: x.headline, brief: x.home }))
+  const w = await writeBrief(call, {
+    role, company: i.company, month: i.month, noun: i.noun, ideas: mine, others, points: [...points], questions: [...questions],
+    context: i.context, rivals: i.tracked,
+    claims: role === 'marketing' ? claimsFor(i) : undefined,
+    subjects: role === 'leadership' ? i.standing.map((fact, n) => ({ id: `S${n + 1}`, fact })) : undefined,
+  })
+  return { raw: w.output, prompts: w.prompts, costUsd: w.costUsd }
+}
+
+/**
+ * "Also this month, in the other briefs" names only an idea some brief of the
+ * set PRINTED as a finding: an idea whose writer wrote nothing, or whose
+ * finding was held, is argued nowhere, and a line pointing at it would send a
+ * reader to a page that does not exist. Only for a whole set: a dry run that
+ * composes one brief cannot see the others' findings. Pure.
+ */
+export function alsoOnlyPrinted(briefs: readonly MonthlyBriefData[], allocation: Pick<Allocation, 'ideas'>): MonthlyBriefData[] {
+  const printed = new Set(briefs.flatMap((d) => d.findings.map((f) => f.ideaId)))
+  const headlines = new Set(allocation.ideas.filter((x) => printed.has(x.id)).map((x) => x.headline))
+  return briefs.map((d) => {
+    const also = d.inShort.also.filter((a) => headlines.has(a.headline))
+    if (also.length === d.inShort.also.length) return d
+    const dropped = d.inShort.also.filter((a) => !headlines.has(a.headline))
+    return {
+      ...d,
+      inShort: { ...d.inShort, also },
+      held: [...d.held, ...dropped.map((a) => ({ what: `also: ${a.headline.slice(0, 80)}`, reason: `no brief printed it as a finding (it was homed in the ${BRIEF_NAME[a.brief]})` }))],
+    }
+  })
+}
+
 /**
  * From grounded research to four composed briefs. The research is passed in
  * (a dry run caches it and writes again without asking twice).
@@ -280,6 +395,10 @@ export async function writeBriefSet(
     log: boolean; client?: ParseClient; researchCostUsd?: number; roles?: readonly BriefRole[]
     /** The ideas and their self-check from an earlier write of the same set. */
     ideas?: { raw: IdeasOutput; contradicted: [string, string | null][] }
+    /** The allocation an earlier step made of those ideas (the pipeline's
+     *  `briefs:ideas`), so the briefs are composed against exactly what their
+     *  writers were given. Recomputed from the ideas when absent. */
+    allocation?: Allocation
     /** Quote refs the set's other briefs already print. */
     spent?: readonly string[]
     /** A writer's output kept from an earlier write, by role: that brief is
@@ -293,31 +412,22 @@ export async function writeBriefSet(
     repeats?: RepeatsOutput
     /** Vectors kept from an earlier write, by text. */
     vectors?: Iterable<[string, number[]]>
-    /** The embedder (a test's stand-in); the product's by default. */
+    /** The embedder (a test's stand-in); the product's by default, each
+     *  request capped (clock.ts). */
     embed?: (texts: string[]) => Promise<number[][]>
+    /** The step's clock (the pipeline's `briefs:compose`); absent outside a step. */
+    clock?: BriefClock
   },
 ): Promise<BriefSet> {
-  const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client }
+  const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client, clock: opts.clock }
   let cost = opts.researchCostUsd ?? 0
   // The ideas and their self-check, or the ones a dry run kept (so one brief
   // can be written again against the same allocation as the other three).
-  const ideas = opts.ideas
-    ? { output: opts.ideas.raw, costUsd: 0, prompts: { system: '', user: '' } }
-    : await draftIdeas(call, { company: i.company, month: i.month, noun: i.noun, points: grounded.points, questions, context: i.context })
-  cost += ideas.costUsd
-  const drafts = draftsOf(ideas.output, i.company)
-  const check = opts.ideas
-    ? { contradicted: new Map(opts.ideas.contradicted), verdicts: [], costUsd: 0, ran: true }
-    : i.themedRunId
-      ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: drafts.map((d) => d.headline), persist: opts.log })
-      : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
-  cost += check.costUsd
-  const standing = drafts.filter((d) => !check.contradicted.has(d.headline.trim()))
-  const allocation = allocateIdeas(standing, grounded.points, { month: i.month })
-  for (const d of drafts) if (check.contradicted.has(d.headline.trim())) {
-    const says = check.contradicted.get(d.headline.trim())
-    allocation.held.unshift({ headline: d.headline, reason: `the conversation contradicts it${says ? `: ${says}` : ''}` })
-  }
+  const set = await ideasForSet(admin, i, questions, grounded.points, { log: opts.log, client: opts.client, clock: opts.clock, ideas: opts.ideas })
+  const ideas = { output: set.raw, costUsd: set.costUsd, prompts: set.prompts }
+  const check = set.check
+  cost += ideas.costUsd + check.costUsd
+  const allocation = opts.allocation ?? set.allocation
 
   const claims = claimsFor(i)
   const subjects = i.standing.map((fact, n) => ({ id: `S${n + 1}`, fact }))
@@ -327,13 +437,8 @@ export async function writeBriefSet(
   for (const role of roles) {
     const kept = opts.written?.[role] ?? null
     if (kept) { raws[role] = { raw: kept, prompts: null, costUsd: 0 }; continue }
-    const mine = allocation.ideas.filter((x) => x.home === role)
-    const others = allocation.ideas.filter((x) => x.home !== role).map((x) => ({ headline: x.headline, brief: x.home }))
-    const w = await writeBrief(call, {
-      role, company: i.company, month: i.month, noun: i.noun, ideas: mine, others, points: grounded.points, questions,
-      context: i.context, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
-    })
-    raws[role] = { raw: w.output, prompts: w.prompts, costUsd: w.costUsd }
+    const w = await writeRoleBrief(admin, i, questions, grounded.points, allocation, role, { log: opts.log, client: opts.client, clock: opts.clock })
+    raws[role] = w
     cost += w.costUsd
   }
 
@@ -368,10 +473,11 @@ export async function writeBriefSet(
   const collect = new Meaning(vectors, 'collect')
   composeAll(collect, null)
   let embedUsd = 0
+  const embed = opts.embed ?? ((texts: string[]) => embedTexts(texts, callOptions(opts.clock, 'embed')))
   const embedMissing = async (texts: readonly string[]) => {
     const missing = [...new Set(texts)].filter((t) => t && !vectors.has(t))
     if (missing.length === 0) return 0
-    const got = await (opts.embed ?? embedTexts)(missing)
+    const got = await embed(missing)
     missing.forEach((t, n) => vectors.set(t, got[n]))
     embedUsd += estimateCost(EMBEDDING_MODEL, Math.ceil(missing.join(' ').length / 4), 0)
     return missing.length
@@ -402,14 +508,16 @@ export async function writeBriefSet(
 
   // 3. The self-check on the summaries AS THEY PRINT (the review: it had
   //    passed summaries that rested on held items).
+  const whole = BRIEF_ROLES.every((r) => roles.includes(r))
+  const finished = whole ? alsoOnlyPrinted(pass.finished, allocation) : pass.finished
   const briefs = {} as BriefSet['briefs']
-  for (const d of pass.finished) briefs[d.role] = { data: d, raw: raws[d.role].raw, prompts: raws[d.role].prompts, costUsd: raws[d.role].costUsd, scrub: { counts: pass.out[d.role].counts, dropped: pass.out[d.role].scrubbed } }
+  for (const d of finished) briefs[d.role] = { data: d, raw: raws[d.role].raw, prompts: raws[d.role].prompts, costUsd: raws[d.role].costUsd, scrub: { counts: pass.out[d.role].counts, dropped: pass.out[d.role].scrubbed } }
   // Sentence by sentence: one contradicted sentence drops, not the summary.
   const summaries = [...new Set(Object.values(briefs).flatMap((x) => splitSentences(x.data.inShort.summary.trim()).map((s) => s.trim())).filter(Boolean))]
   const summaryCheck = opts.summaries
     ? { contradicted: new Map(opts.summaries.contradicted), verdicts: [], costUsd: 0, ran: true }
     : i.themedRunId && summaries.length
-    ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: summaries, persist: opts.log })
+    ? await checkWeekRead(admin, { clientId: i.clientId, runId: i.themedRunId, companyName: i.company, headlines: summaries, persist: opts.log, budget: checkBudget(opts.clock) })
     : { contradicted: new Map<string, string | null>(), verdicts: [], costUsd: 0, ran: false }
   cost += summaryCheck.costUsd
   for (const x of Object.values(briefs)) {

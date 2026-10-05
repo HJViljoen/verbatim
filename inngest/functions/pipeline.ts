@@ -37,6 +37,8 @@ import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { measureStatements, measureSummary, statementMonth, statementsBudget } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
 import { runLongRunStep } from '@/lib/written/longrun'
+import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep, type BriefWave, type BriefWritten } from '@/lib/reports/briefs/step'
+import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
@@ -2188,6 +2190,84 @@ export const runPipeline = inngest.createFunction(
         console.error(`[write-longrun-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
+
+    // The month's four department briefs (T8 wired, 5 Oct; Heinrich: "a
+    // finished run reaches the platform by itself; review holds ONLY the
+    // email"; lib/reports/briefs/step.ts). ADDITIVE ids in their own position,
+    // after write-longrun-read and immediately before close-run, in this
+    // order: plan-briefs, `briefs:research-${i}-of-${n}`, briefs:ideas,
+    // `briefs:write-${role}` (sales, marketing, content, leadership),
+    // briefs:compose. 66 ids before them, 71 with them
+    // (`scripts/pipeline-step-ids.sh <base> --expect-before close-run briefs`
+    // is the check; lib/reports/briefs/step.test.ts pins them).
+    //
+    // ON THE RUN THAT CLOSES A MONTH ONLY (`closesMonth`, the long-run read's
+    // rule): every other run runs plan-briefs alone, which reads the window and
+    // one ledger row and spends nothing. The set is stored as four frozen
+    // report snapshots and four `monthly_briefs` rows; the Studio lists them.
+    //
+    // NON-FATAL, the long-run read's contract: a transient failure before a
+    // step's last attempt throws, so Inngest retries that step; on the last
+    // attempt, and on any other failure at once, the body never throws: the
+    // set is stored failed and the operator is alerted ONCE, inside the step
+    // that gave up, with the script; the steps after it see the failure and do
+    // nothing. Each `.catch` only logs. Never noteError'd: a clean run must not
+    // read 'partial' because the month's briefs had a bad day. The set starts
+    // only where the run can afford it under RUN_MODEL_BUDGET_USD
+    // (`briefHeadroom`), so the briefs never trip the run's kill switch.
+    const briefsLast = () => attempt >= (maxAttempts ?? 3) - 1
+    const briefPlan = await step
+      .run('plan-briefs', async () => {
+        const admin = createAdminClient()
+        const { data: client } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+        const company = ((client?.company_name as string | undefined) ?? '').trim() || clientId
+        return planBriefsStep(admin, { clientId, runId, company, lastAttempt: briefsLast() })
+      })
+      .catch((e) => {
+        console.error(`[plan-briefs] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    if (briefPlan?.status === 'due') {
+      const briefWaves: (BriefWave | null)[] = []
+      for (let w = 0; w < briefPlan.waves.length; w++) {
+        const spentUsd = briefWaves.reduce((n, x) => n + (x?.costUsd ?? 0), 0)
+        briefWaves.push(await step
+          .run(`briefs:research-${w + 1}-of-${briefPlan.waves.length}`, () =>
+            briefResearchStep(createAdminClient(), briefPlan, w, { spentUsd, lastAttempt: briefsLast() }))
+          .catch((e) => {
+            console.error(`[briefs:research-${w + 1}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+            return null
+          }))
+      }
+      const briefIdeas = await step
+        .run('briefs:ideas', () => briefIdeasStep(createAdminClient(), briefPlan, briefWaves, { lastAttempt: briefsLast() }))
+        .catch((e) => {
+          console.error(`[briefs:ideas] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+      if (briefIdeas?.status === 'ok') {
+        const briefWritten: (BriefWritten | null)[] = []
+        for (const role of BRIEF_ROLES) {
+          const w = await step
+            .run(`briefs:write-${role}`, () => briefWriteStep(createAdminClient(), briefPlan, briefIdeas, role, { lastAttempt: briefsLast() }))
+            .catch((e) => {
+              console.error(`[briefs:write-${role}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+              return null
+            })
+          briefWritten.push(w)
+          // A writer that failed has failed the set (stored, alerted once).
+          if (w?.status !== 'ok') break
+        }
+        if (briefWritten.length === BRIEF_ROLES.length && briefWritten.every((w) => w?.status === 'ok')) {
+          await step
+            .run('briefs:compose', () => briefComposeStep(createAdminClient(), briefPlan, briefWaves, briefIdeas, briefWritten, { lastAttempt: briefsLast() }))
+            .catch((e) => {
+              console.error(`[briefs:compose] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+              return null
+            })
+        }
+      }
+    }
 
     // 7. Close the run.
     await step.run('close-run', async () => {

@@ -22,6 +22,9 @@ export interface SnapshotRef {
   tileKey?: string
   /** kind 'report': the reports row this build came from. */
   reportId?: string
+  /** kind 'report' with no reports row: the artefact it is ('brief:sales',
+   *  the month's department briefs, lib/reports/briefs/store.ts). */
+  artefact?: string
   params: Record<string, string | undefined>
   variant?: PrintVariant
 }
