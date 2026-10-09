@@ -41,6 +41,9 @@ const SHARED: Readonly<Record<string, string>> = {
  *  loader lives in the (home) route group, and nothing wraps the catch-all. */
 const NO_LOADER: Readonly<Record<string, string>> = {
   '[...rest]': 'throws notFound(); a loader above it turns the 404 into a streamed 200',
+  // Operator only (9 Oct 2026): a client who guesses the address must get a
+  // real 404, and a loader would stream a 200 before the gate's notFound().
+  'ops/costs': 'throws notFound() for anyone but a platform admin; a loader would stream a 200 first',
 }
 
 /** Redirect-only pages allowed to inherit whatever is above them. */

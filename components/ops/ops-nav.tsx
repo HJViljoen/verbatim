@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Gauge } from "lucide-react"
+import { Gauge, Receipt } from "lucide-react"
 
 import { SidebarMenu } from "@/components/ui/sidebar"
 import { NavHairline, NavRow } from "@/components/app-sidebar"
@@ -16,7 +16,11 @@ import { NavHairline, NavRow } from "@/components/app-sidebar"
 // rows' own markup (`NavRow`): a hairline above it, no label, and the active
 // page a pill rather than the green bar the stripe ban took out.
 
-const OPS = [{ href: "/dashboard/ops/readiness", label: "Readiness", icon: Gauge }]
+const OPS = [
+  { href: "/dashboard/ops/readiness", label: "Readiness", icon: Gauge },
+  // What Verbatim costs to run (9 Oct 2026). The page 404s for anyone else.
+  { href: "/dashboard/ops/costs", label: "Costs", icon: Receipt },
+]
 
 export function OpsNavGroup() {
   const pathname = usePathname()

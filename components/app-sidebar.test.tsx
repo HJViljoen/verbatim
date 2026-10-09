@@ -96,6 +96,14 @@ describe('the sidebar', () => {
     expect(renderText(<SidebarProvider><OpsNavGroup /></SidebarProvider>)).not.toContain('Operator')
   })
 
+  it('gives the operator Costs after Readiness, lit on its own page', () => {
+    const html = sidebar('/dashboard/ops/costs', <OpsNavGroup />)
+    expect(html).toContain('href="/dashboard/ops/costs"')
+    expect(html.indexOf('>Costs<')).toBeGreaterThan(html.indexOf('>Readiness<'))
+    expect(html.indexOf('>Costs<')).toBeLessThan(html.indexOf('>Studio<'))
+    expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Costs<\/span>/)
+  })
+
   it('is 281px wide as the artboards render it (256px rows, 12px in, the hairline), with the sidebar\'s own shadow on its edge', () => {
     expect(readFileSync('app/dashboard/layout.tsx', 'utf8')).toContain("'--sidebar-width': '281px'")
     expect(sidebar('/dashboard')).toContain('border-r-[#E4E2DC] shadow-sidebar')
