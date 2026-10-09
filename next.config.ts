@@ -58,6 +58,29 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: '/r/:path*', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }] }]
   },
+  // DESIGN TEST (Oct 2026, design/hairline-conversation): `?look=hairline` on
+  // Conversation draws the same page in the Hairline look, from its own route
+  // (app/dashboard/voice/hairline). A REWRITE, never a redirect: the address
+  // stays /dashboard/voice, and `beforeFiles` rewrites run AFTER proxy.ts
+  // (node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/
+  // proxy.md, "Execution order"), so the session gate and the host routing see
+  // the request first, unlike the config redirects the note above rules out.
+  // Without the param nothing matches and the shipped route is untouched. The
+  // second rule is the screenshot harness's (app/render/conversation-look),
+  // development only.
+  async rewrites() {
+    const look = [{ type: 'query' as const, key: 'look', value: 'hairline' }]
+    return {
+      beforeFiles: [
+        { source: '/dashboard/voice', has: look, destination: '/dashboard/voice/hairline' },
+        ...(process.env.NODE_ENV === 'development'
+          ? [{ source: '/render/conversation-look', has: look, destination: '/render/conversation-look/hairline' }]
+          : []),
+      ],
+      afterFiles: [],
+      fallback: [],
+    }
+  },
   experimental: {
     // Client router cache. Every dashboard route is dynamic (cookies), and the
     // default for dynamic segments is 0s — so going Dashboard → Voice → back

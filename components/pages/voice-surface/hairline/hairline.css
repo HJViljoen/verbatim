@@ -1,0 +1,1216 @@
+/*
+ * DESIGN TEST: Conversation in the Hairline look (hairline.lucasmarkes.com),
+ * `/dashboard/voice?look=hairline` only. Deliberately departs from
+ * design-system/verbatim/MASTER.md: ink and one grey, Geist, Geist Mono,
+ * Instrument Serif, no palette A, no yellow.
+ *
+ * SCOPE. Every rule is under `[data-look="hairline"]`, or under an ancestor
+ * that `:has()` it (the pane, the sidebar). Those match only while the
+ * variant is mounted, so the shell's overrides end the moment the page
+ * unmounts and nothing reaches any other page. Unlayered on purpose: it wins
+ * over Tailwind's layers without `!important`.
+ *
+ * Values are the site's own, read off its computed styles (Oct 2026): ink
+ * #0a0a0a, muted #737373, stone #f4f4f4, line #00000012, the `--lift` and
+ * `--card` shadows, 14px tiles, 9px buttons, a 34px shelf row. One departure
+ * for contrast: the site sets its mono counts in #a3a3a3 (2.5:1); here every
+ * count and every line of text is #737373 or darker (4.7:1 and up, AA).
+ */
+
+/* ---- tokens and frame ------------------------------------------------------ */
+
+[data-look="hairline"] {
+  --hx-ink: #0a0a0a;
+  --hx-ink-2: #404040;
+  --hx-muted: #737373;
+  --hx-faint: #a3a3a3; /* decoration only, never text */
+  --hx-stone: #f4f4f4;
+  --hx-wash: #fafafa;
+  --hx-line: rgba(0, 0, 0, 0.07);
+  --hx-card: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06), 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+  --hx-lift: 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 28px -16px rgba(0, 0, 0, 0.14);
+  --hx-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --hx-mono-stack: var(--hx-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --hx-serif-stack: var(--hx-serif), Georgia, serif;
+
+  /* The figures are themed only through these. */
+  --hairline-plate: #ffffff;
+  --hairline-hi: #0a0a0a;
+  --hairline-edge: #a3a3a3;
+  --hairline-mid: #cacaca;
+  --hairline-lo: #e6e6e6;
+  --hairline-stroke: 0.9;
+
+  max-width: 1040px;
+  margin: 0 auto;
+  font-family: var(--hx-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--hx-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[data-look="hairline"] :where(h1, h2, h3, p, ol, ul, figure, blockquote) {
+  margin: 0;
+}
+
+[data-look="hairline"] :where(ol, ul) {
+  list-style: none;
+  padding: 0;
+}
+
+[data-look="hairline"] a {
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-look="hairline"] :is(a, button):focus-visible {
+  outline: 1.5px solid var(--hx-ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+[data-look="hairline"] .hl-mono {
+  font-family: var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.94em;
+}
+
+[data-look="hairline"] .hl-muted {
+  color: var(--hx-muted);
+}
+
+/* ---- the shell, while this page is mounted ----------------------------------- */
+
+/* The pane: the site's white ground, and no crowd behind it. */
+div:has(> main [data-look="hairline"]) {
+  background: #ffffff;
+}
+
+div:has(> main [data-look="hairline"]) > .crowd-bg {
+  display: none;
+}
+
+main:has(> [data-look="hairline"]) {
+  scroll-behavior: smooth;
+}
+
+/* The sidebar in ink and one grey: the /figures shelf rows, the Agent row as
+   the site's black button, a hairline edge instead of the shadow. */
+body:has([data-look="hairline"]) [data-sidebar="sidebar"] {
+  background: #ffffff;
+  font-family: var(--hx-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body:has([data-look="hairline"]) [data-slot="sidebar-container"] {
+  box-shadow: none;
+  border-right-color: rgba(0, 0, 0, 0.07);
+}
+
+body:has([data-look="hairline"]) [data-sidebar="sidebar"] .text-brand {
+  color: #0a0a0a;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="sidebar"] .bg-\[\#E4E2DC\] {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"] {
+  height: 34px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #737373;
+  background: transparent;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"] svg {
+  color: currentColor;
+  opacity: 0.55;
+  transition: opacity 0.24s;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"]:hover {
+  color: #0a0a0a;
+  background: #fafafa;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"]:hover svg,
+body:has([data-look="hairline"]) [data-sidebar="menu-button"][data-active="true"] svg {
+  opacity: 1;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"][data-active="true"] {
+  color: #0a0a0a;
+  background: #f4f4f4;
+  font-weight: 500;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"].bg-\[\#FFD43B\] {
+  margin-top: 4px;
+  color: #ffffff;
+  background: #0a0a0a;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 10px 28px -16px rgba(0, 0, 0, 0.14);
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"].bg-\[\#FFD43B\] svg {
+  color: #ffffff;
+  opacity: 1;
+}
+
+body:has([data-look="hairline"]) [data-sidebar="menu-button"]:focus-visible {
+  outline: 1.5px solid #0a0a0a;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ---- the quiet bar ------------------------------------------------------------ */
+
+[data-look="hairline"] .hl-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 36px;
+}
+
+[data-look="hairline"] .hl-topbar-name {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+[data-look="hairline"] .hl-topbar-meta {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-topbar-link {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  margin-right: -10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--hx-muted);
+  transition: color 0.2s;
+}
+
+[data-look="hairline"] .hl-topbar-link:hover {
+  color: var(--hx-ink);
+}
+
+/* ---- the hero ------------------------------------------------------------------ */
+
+[data-look="hairline"] .hl-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-top: 76px;
+}
+
+[data-look="hairline"] .hl-title {
+  max-width: 24ch;
+  font-size: clamp(27px, 4vw, 34px);
+  font-weight: 500;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+[data-look="hairline"] .hl-title em {
+  font-family: var(--hx-serif-stack);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.1em;
+  letter-spacing: -0.01em;
+}
+
+[data-look="hairline"] .hl-sub {
+  max-width: 44ch;
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--hx-muted);
+  text-wrap: pretty;
+}
+
+[data-look="hairline"] .hl-get {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 28px;
+}
+
+[data-look="hairline"] .hl-pill {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  margin-right: 4px;
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--hx-stone), var(--hx-lift);
+  font: 400 13px/1 var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  color: var(--hx-ink);
+  text-align: left;
+}
+
+[data-look="hairline"] .hl-pill-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-pill-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-look="hairline"] .hl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--hx-stone), var(--hx-lift);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--hx-ink);
+  transition: transform 0.16s var(--hx-ease);
+}
+
+[data-look="hairline"] .hl-btn:active {
+  transform: scale(0.96);
+}
+
+[data-look="hairline"] .hl-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+[data-look="hairline"] .hl-btn-primary {
+  background: var(--hx-ink);
+  color: #ffffff;
+  box-shadow: var(--hx-lift);
+}
+
+[data-look="hairline"] .hl-aside-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  font-size: 13px;
+  color: var(--hx-muted);
+  transition: color 0.2s;
+}
+
+[data-look="hairline"] .hl-aside-link svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0.8;
+}
+
+[data-look="hairline"] .hl-aside-link:hover {
+  color: var(--hx-ink);
+}
+
+/* The figure draws low in its 5:4 box; the margins take up its empty top
+   and bottom so the hero does not stand taller than it reads. */
+[data-look="hairline"] .hl-hero-figure {
+  width: min(100%, 480px);
+  margin: -20px 0 -36px;
+}
+
+[data-look="hairline"] .hl-hero-figure-sm {
+  width: min(100%, 360px);
+}
+
+[data-look="hairline"] .hl-hero-empty {
+  padding-bottom: 48px;
+}
+
+/* ---- the body: the index beside the blocks ------------------------------------- */
+
+[data-look="hairline"] .hl-body {
+  margin-top: 32px;
+  padding-top: 40px;
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-main {
+  min-width: 0;
+}
+
+[data-look="hairline"] .hl-shelves ul {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+[data-look="hairline"] .hl-shelf {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--hx-muted);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+[data-look="hairline"] .hl-shelf-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  opacity: 0.45;
+  transition: opacity 0.24s;
+}
+
+[data-look="hairline"] .hl-shelf-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+[data-look="hairline"] .hl-shelf-n {
+  font: 400 11.5px/1 var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-shelf:hover,
+[data-look="hairline"] .hl-shelf[aria-current="true"] {
+  color: var(--hx-ink);
+}
+
+[data-look="hairline"] .hl-shelf:hover .hl-shelf-icon,
+[data-look="hairline"] .hl-shelf[aria-current="true"] .hl-shelf-icon {
+  opacity: 1;
+}
+
+[data-look="hairline"] .hl-shelf[aria-current="true"] {
+  background: var(--hx-stone);
+}
+
+@media (min-width: 1280px) {
+  [data-look="hairline"] .hl-body {
+    display: grid;
+    grid-template-columns: 212px minmax(0, 1fr);
+    column-gap: 56px;
+    align-items: start;
+  }
+
+  [data-look="hairline"] .hl-shelves {
+    position: sticky;
+    top: 0;
+    margin: 0 -10px;
+  }
+
+  [data-look="hairline"] .hl-shelf-sub .hl-shelf {
+    padding-left: 20px;
+  }
+}
+
+/* Below 1280px the index is a strip of pills over the blocks. */
+@media (max-width: 1279.98px) {
+  [data-look="hairline"] .hl-shelves {
+    margin: 0 -4px 8px;
+    padding: 2px 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  [data-look="hairline"] .hl-shelves::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-look="hairline"] .hl-shelves ul {
+    display: flex;
+    gap: 4px;
+    width: max-content;
+  }
+
+  [data-look="hairline"] .hl-shelf-sub {
+    display: none;
+  }
+
+  [data-look="hairline"] .hl-shelf {
+    height: 32px;
+    padding: 0 12px;
+    gap: 7px;
+    border-radius: 999px;
+  }
+
+  [data-look="hairline"] .hl-shelf-label {
+    overflow: visible;
+  }
+}
+
+/* ---- a section ------------------------------------------------------------------ */
+
+[data-look="hairline"] .hl-sec {
+  padding-top: 56px;
+  scroll-margin-top: 8px;
+}
+
+[data-look="hairline"] .hl-main > .hl-sec:first-child {
+  padding-top: 0;
+}
+
+[data-look="hairline"] .hl-head-wrap {
+  margin-bottom: 16px;
+}
+
+[data-look="hairline"] .hl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+[data-look="hairline"] .hl-head h2 {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+}
+
+[data-look="hairline"] .hl-count {
+  font: 400 12px/1 var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-lede {
+  max-width: 64ch;
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--hx-muted);
+  text-wrap: pretty;
+}
+
+/* The site's tile: white, 14px corners, a stone ring and the soft lift. */
+[data-look="hairline"] .hl-tile {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--hx-stone), var(--hx-lift);
+}
+
+[data-look="hairline"] .hl-foot {
+  border-top: 1px solid var(--hx-line);
+  padding: 12px 18px 14px;
+}
+
+[data-look="hairline"] .hl-mini-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hx-muted);
+}
+
+/* A hairline bar against 100%: a 1px track and a 3px ink stroke. */
+[data-look="hairline"] .hl-bar {
+  position: relative;
+  display: block;
+  height: 3px;
+}
+
+[data-look="hairline"] .hl-bar::before {
+  content: "";
+  position: absolute;
+  inset: 1px 0 auto;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* The scale's end: 100%. */
+[data-look="hairline"] .hl-bar::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 1px;
+  height: 7px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+[data-look="hairline"] .hl-bar > span {
+  position: relative;
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hx-ink);
+}
+
+/* Who talk is about: ink and one grey, no chips. */
+[data-look="hairline"] .hl-who {
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-who-you {
+  color: var(--hx-ink);
+  font-weight: 500;
+}
+
+[data-look="hairline"] .hl-who-rival {
+  color: var(--hx-ink-2);
+}
+
+[data-look="hairline"] .hl-who-market,
+[data-look="hairline"] .hl-who-sep {
+  color: var(--hx-muted);
+}
+
+/* ---- every conversation ------------------------------------------------------------ */
+
+[data-look="hairline"] .hl-rows > li + li {
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px 44px;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px;
+  transition: background-color 0.15s;
+}
+
+[data-look="hairline"] .hl-row:hover {
+  background: var(--hx-wash);
+}
+
+[data-look="hairline"] .hl-row[aria-current="true"] {
+  background: var(--hx-stone);
+}
+
+[data-look="hairline"] .hl-row:focus-visible {
+  outline-offset: -3px;
+  border-radius: 12px;
+}
+
+[data-look="hairline"] .hl-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-look="hairline"] .hl-row-label {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+[data-look="hairline"] .hl-row-meta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-row-n {
+  font: 400 13px/1 var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+[data-look="hairline"] .hl-makers {
+  padding: 14px 20px 16px;
+}
+
+[data-look="hairline"] .hl-foot-label {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-makers p {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--hx-ink-2);
+}
+
+/* ---- one in full ------------------------------------------------------------------- */
+
+[data-look="hairline"] .hl-pane-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px 24px 22px;
+}
+
+[data-look="hairline"] .hl-pane-title {
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+[data-look="hairline"] .hl-pane-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  font-size: 13.5px;
+}
+
+[data-look="hairline"] .hl-big {
+  font: 400 32px/1 var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+[data-look="hairline"] .hl-pane-who {
+  font-size: 13px;
+}
+
+[data-look="hairline"] .hl-pane-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+
+[data-look="hairline"] .hl-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--hx-stone);
+  font-size: 12px;
+  color: var(--hx-ink);
+}
+
+[data-look="hairline"] .hl-pane-part {
+  border-top: 1px solid var(--hx-line);
+  padding: 18px 24px 20px;
+}
+
+[data-look="hairline"] .hl-kv li {
+  display: grid;
+  grid-template-columns: minmax(0, 200px) minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 0;
+}
+
+[data-look="hairline"] .hl-kv li + li {
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-kv-label {
+  font-size: 13.5px;
+}
+
+[data-look="hairline"] .hl-kv-n {
+  font: 400 13px/1 var(--hx-mono-stack);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+[data-look="hairline"] .hl-voices {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+[data-look="hairline"] .hl-voice {
+  padding: 16px 18px 14px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--hx-card);
+}
+
+[data-look="hairline"] .hl-voice p[data-copy="quote"] {
+  font-family: var(--hx-serif-stack);
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+  color: var(--hx-ink);
+  text-wrap: pretty;
+}
+
+[data-look="hairline"] .hl-voice p.hl-voice-en {
+  margin-top: 4px;
+  font-family: inherit;
+  font-style: normal;
+  font-size: 14px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  color: var(--hx-ink-2);
+}
+
+[data-look="hairline"] .hl-voice-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-voice figcaption {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--hx-muted);
+}
+
+
+[data-look="hairline"] .hl-pane-actions {
+  display: flex;
+  border-top: 1px solid var(--hx-line);
+  padding: 16px 24px 18px;
+}
+
+/* ---- where your market talks --------------------------------------------------------- */
+
+[data-look="hairline"] .hl-where {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+[data-look="hairline"] .hl-where-figure {
+  display: flex;
+  align-items: center;
+  padding: 8px 6px;
+  border-right: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-where-figure > div {
+  width: 100%;
+}
+
+[data-look="hairline"] .hl-where-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 4px 0 6px;
+}
+
+[data-look="hairline"] .hl-accounts {
+  align-self: stretch;
+}
+
+[data-look="hairline"] .hl-accounts li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 112px;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+}
+
+[data-look="hairline"] .hl-accounts li + li {
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-acc-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+[data-look="hairline"] .hl-acc-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+[data-look="hairline"] .hl-acc-meta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-acc-n,
+[data-look="hairline"] .hl-acc-c {
+  font-size: 12.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+[data-look="hairline"] .hl-acc-c {
+  color: var(--hx-muted);
+}
+
+[data-look="hairline"] .hl-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 20px 10px;
+  font-size: 13px;
+}
+
+[data-look="hairline"] .hl-more-text {
+  text-decoration: underline;
+  text-decoration-color: var(--hx-faint);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 0.2s;
+}
+
+[data-look="hairline"] .hl-more:hover .hl-more-text {
+  text-decoration-color: var(--hx-ink);
+}
+
+[data-look="hairline"] .hl-more svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- who is talking --------------------------------------------------------------- */
+
+[data-look="hairline"] .hl-people > li {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 24px;
+  padding: 20px 24px;
+}
+
+[data-look="hairline"] .hl-people > li + li {
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-person-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+[data-look="hairline"] .hl-person-name .hl-muted {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+[data-look="hairline"] .hl-person-line {
+  font-size: 14px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+[data-look="hairline"] .hl-person-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 12px;
+}
+
+[data-look="hairline"] .hl-person-cols p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--hx-ink-2);
+  text-wrap: pretty;
+}
+
+/* ---- the market's words ---------------------------------------------------------- */
+
+[data-look="hairline"] .hl-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 14px;
+}
+
+[data-look="hairline"] .hl-kind {
+  display: flex;
+  flex-direction: column;
+  scroll-margin-top: 8px;
+}
+
+[data-look="hairline"] .hl-kind-stage {
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-kind-stage .hl-voice {
+  padding: 18px 18px 14px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+[data-look="hairline"] .hl-kind-stage .hl-voice p[data-copy="quote"] {
+  font-size: 18px;
+}
+
+[data-look="hairline"] .hl-kind-part {
+  border-top: 1px solid var(--hx-line);
+  padding: 14px 18px 10px;
+}
+
+[data-look="hairline"] .hl-said li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 7px 0;
+}
+
+[data-look="hairline"] .hl-said li + li,
+[data-look="hairline"] .hl-brands li + li {
+  border-top: 1px solid var(--hx-line);
+}
+
+[data-look="hairline"] .hl-said-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+[data-look="hairline"] .hl-said-who {
+  font-size: 11.5px;
+}
+
+[data-look="hairline"] .hl-said .hl-mono,
+[data-look="hairline"] .hl-brands .hl-mono {
+  font-size: 12.5px;
+}
+
+[data-look="hairline"] .hl-brands li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+[data-look="hairline"] .hl-kind-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 12px;
+  padding: 14px 18px 13px;
+}
+
+[data-look="hairline"] .hl-kind-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-look="hairline"] .hl-kind-name svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--hx-ink);
+}
+
+[data-look="hairline"] .hl-kind-name h3 {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+[data-look="hairline"] .hl-kind-n {
+  font-size: 12px;
+  color: var(--hx-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+[data-look="hairline"] .hl-kind-who {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ---- the legacy brand board, under ?brand= ------------------------------------------- */
+
+[data-look="hairline"] .hl-legacy {
+  padding: 24px;
+}
+
+/* ---- the skeleton (./skeleton.tsx) ------------------------------------------------- */
+
+[data-look="hairline"] .hl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+[data-look="hairline"] .hl-bone {
+  display: block;
+  max-width: 100%;
+  border-radius: 6px;
+  background: var(--hx-stone);
+}
+
+[data-look="hairline"] .hl-skel-tile {
+  margin-top: 18px;
+  padding: 4px 0;
+}
+
+[data-look="hairline"] .hl-skel-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 20px;
+}
+
+[data-look="hairline"] .hl-skel-row + .hl-skel-row {
+  border-top: 1px solid var(--hx-line);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-look="hairline"] .hl-bone {
+    animation: hl-breathe 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes hl-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ---- phones and narrow panes --------------------------------------------------------- */
+
+@media (max-width: 767.98px) {
+  [data-look="hairline"] .hl-hero {
+    padding-top: 40px;
+  }
+
+  [data-look="hairline"] .hl-pill-extra {
+    display: none;
+  }
+
+  [data-look="hairline"] .hl-body {
+    margin-top: 32px;
+    padding-top: 28px;
+  }
+
+  [data-look="hairline"] .hl-sec {
+    padding-top: 44px;
+  }
+
+  [data-look="hairline"] .hl-row {
+    grid-template-columns: minmax(0, 1fr) 52px 38px;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  [data-look="hairline"] .hl-makers {
+    padding: 12px 16px 14px;
+  }
+
+  [data-look="hairline"] .hl-pane-top,
+  [data-look="hairline"] .hl-pane-part,
+  [data-look="hairline"] .hl-pane-actions {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  [data-look="hairline"] .hl-kv li {
+    grid-template-columns: minmax(0, 1fr) 56px 30px;
+    gap: 12px;
+  }
+
+  [data-look="hairline"] .hl-where {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-look="hairline"] .hl-where-figure {
+    display: none;
+  }
+
+  [data-look="hairline"] .hl-accounts li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 16px;
+  }
+
+  [data-look="hairline"] .hl-acc-c {
+    display: none;
+  }
+
+  [data-look="hairline"] .hl-more {
+    margin-left: 16px;
+  }
+
+  [data-look="hairline"] .hl-people > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 18px;
+  }
+
+  [data-look="hairline"] .hl-person-cols {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  [data-look="hairline"] .hl-voice p[data-copy="quote"] {
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main:has(> [data-look="hairline"]) {
+    scroll-behavior: auto;
+  }
+
+  [data-look="hairline"] *,
+  body:has([data-look="hairline"]) [data-sidebar="menu-button"] {
+    transition: none;
+  }
+
+  [data-look="hairline"] .hl-btn:active {
+    transform: none;
+  }
+}
