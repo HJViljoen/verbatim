@@ -8,6 +8,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - **Verify claims against code and DB, not docs or notes.** Shipped-state
   comments and older docs drift; the code is the record.
+- **Schema changes are migration files, never live SQL on prod.** There is no
+  local Supabase stack, and the Supabase MCP points at the real projects. Write
+  `supabase/migrations/<timestamp>_<name>.sql`, test it on the staging branch
+  (`phase1-staging`), then apply it to prod. The `supabase` agent skill's
+  advice to iterate with `execute_sql` / `supabase db query` assumes a local
+  database — never follow it against prod (`mkwjlckescdveosvrvaq`).
 - **Inngest step IDs are a stability contract.** Completed steps replay by ID
   string; renaming/renumbering strands in-flight runs across a deploy. Change
   step shape only between runs, and re-register after function changes:
