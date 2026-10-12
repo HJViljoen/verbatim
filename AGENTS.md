@@ -779,8 +779,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   clock), `briefs:ideas` (the evidence counted, one ideas call, its
   self-check, the allocation), `briefs:write-${role}` (one writer a step:
   four never fit 250 s), `briefs:compose` (the set composed against the
-  ideas step's allocation, the repeat judge, the summaries' self-check, then
-  stored). Every other run runs `plan-briefs` alone, decided from the run's
+  ideas step's allocation, the repeat judge, the set paginated, the In short
+  check against its printed pages, the summaries' self-check, then stored). Every other run runs `plan-briefs` alone, decided from the run's
   own window before any read: nothing read, nothing spent, nobody told. A
   TEST run (`isTestRun`: a rehearsal that gathered nothing, a capped run,
   `publish: false`) that closes a month writes no brief and alerts once,
@@ -862,6 +862,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stays in the stored brief; the cover's contents and "In this brief · N
   pages", In short's contents and the page numbers are the printed pages';
   a brief with no finding and no page past In short is thin (`briefPrints`).
+  **In short says only what prints** (the September dry build, 12 Oct): the
+  writer writes it before the paginator leaves pages out, so inside
+  `briefs:compose` (no new step) the set is paginated as it will draw (every
+  quote's words in hand, a subject's voice read once) and ONE call
+  (`lib/reports/briefs/inshort.ts`, gpt-5.4 at low effort, about a cent a
+  set) reads each brief's PRINTED pages, never a voice's words, against its
+  In short; a sentence no printed page carries drops whole into `held`, then
+  the conversation self-check reads what is left. In short's summary is its
+  page's main piece: where the checks leave none, the In short page is left
+  out like any page missing a main piece, its figures and "Also this month"
+  stay stored, and the brief prints on. "Also this month" names only an idea
+  some brief of the set prints as a finding (`alsoOnlyPrinted`; a finding's
+  page is never left out). Several footnotes on one page naming the same
+  brief the same way are one line ("A, B and C are argued in full in the
+  Content brief."; `footnoteOf`); one keeps the canvas's line.
   The writer always writes the leads the canvas draws (Where the confusion
   starts' paragraph too) where the part has items, summing up the items and
   claiming nothing they do not, under the same evidence floors and scrubs; a
@@ -911,10 +926,24 @@ This version has breaking changes — APIs, conventions, and file structure may 
   default and paid for, `--write` stores, `--replace` over a written month).
   A dry build (the default) is also drawn, as the product draws it, into
   `--designed` (default `~/Documents/Heinrich/Verbatim/Briefs-YYYY-MM-designed/
-  <tenant>/`): `<role>.json` (`{ data, texts }`), `<role>.pdf`, a PNG a page.
-  September 2026, which closed before the steps existed: `bash
-  scripts/backfill-briefs-september.sh` (dry, drawn) to read it designed, then
-  `--write`, once, after the migration. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
+  <tenant>/`, never over a folder that holds a build): `<role>.json`
+  (`{ data, texts }`, a thin role's too), `<role>.pdf`, a PNG a page, and
+  `set.json` (`lib/reports/briefs/saved.ts`: the client, the run, when it was
+  read, the set's spend and each role's ledger fields, the evidence ids, the
+  pages drawn, the In short check's record, the month's ideas). **Store what
+  was reviewed with `--write --from <dir>`**: no model call; it checks every
+  saved brief (it parses against this code's stored-brief shape, held equal
+  to the type at compile time; it is the client's, month's and run's named;
+  its status, evidence ids and pages are what was saved; its In short still
+  holds to what prints; it draws with no clipping) and stores the same
+  snapshots and ledger rows `--write` stores, or nothing and why. `texts` is
+  never stored. A plain `--write` calls the models again, so its words are
+  not the dry build's. A dry build ends by saying whether `--from` will take
+  its folder. September 2026, which closed before the steps existed: `bash
+  scripts/backfill-briefs-september.sh [--designed-root <dir>]` (dry, drawn
+  and saved) to read it designed, then `--write --from <root>`, once, after
+  the migration. The first September dry build (12 Oct) predates `set.json`
+  and cannot be stored by `--from`. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
   reads `data->>kind` and keeps it by what it is: `drafts` keeps it, `all`
   refuses it, as it refuses any build on the platform (`lib/reports/purge.ts`).
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
