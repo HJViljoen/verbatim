@@ -155,8 +155,13 @@ export interface BriefItem {
   text: string
   /** A second line (a rival's pushback, what is behind a question). */
   detail?: string
-  /** A status word code owns (say vs hear). */
+  /** A status word code owns (say vs hear), or the line naming another
+   *  brief ("Argued in the Marketing brief", "Also in the Sales brief"). */
   tag?: string
+  /** What a tagged item names in another brief: the idea its finding argues,
+   *  or that brief's item (its `itemKey`). The set keeps a tag only where
+   *  what it names prints there (compose.ts `footnotesOnlyPrinted`). */
+  named?: { brief: BriefRole; idea: string } | { brief: BriefRole; item: string }
   /** The distinct counted videos behind it, and who they are about. Absent on
    *  a code line that rests on a count of its own. */
   videos?: number

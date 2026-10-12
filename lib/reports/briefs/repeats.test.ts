@@ -46,10 +46,11 @@ describe('the repeat judge', () => {
     ] }, items, IDEAS)
     expect(verdicts).toHaveLength(4)
     const [s, m, l] = applyRepeats(set, verdicts, IDEAS)
-    expect(s.sections[0].groups[0].items).toEqual([{ title: 'Wear doubts', text: 'Shoppers doubt the straps hold.', tag: 'Argued in the Content brief', videoIds: ['a'] }])
+    // Each tag records what it names, so the set keeps it only where that prints.
+    expect(s.sections[0].groups[0].items).toEqual([{ title: 'Wear doubts', text: 'Shoppers doubt the straps hold.', tag: 'Argued in the Content brief', named: { brief: 'content', idea: 'I1' }, videoIds: ['a'] }])
     expect(s.held).toEqual([{ what: 'sales.stops: Route', reason: 'says what the finding "Buyers ask where to order" says' }])
     expect(m.sections[0].groups[0].items[0].tag).toBeUndefined()
-    expect(l.sections.find((x) => x.key === 'leadership.weigh')!.groups[0].items[0]).toMatchObject({ text: 'Rival is chosen for travel packs.', tag: 'Also in the Marketing brief' })
+    expect(l.sections.find((x) => x.key === 'leadership.weigh')!.groups[0].items[0]).toMatchObject({ text: 'Rival is chosen for travel packs.', tag: 'Also in the Marketing brief', named: { brief: 'marketing', item: 'marketing|marketing.rivals|Rival|Rival is known for travel packs. People like it.' } })
     // A subject line keeps its level and is named.
     expect(l.sections.find((x) => x.key === 'leadership.market')!.groups[0].items[0]).toMatchObject({ detail: '7% of videos.', tag: 'Argued in the Content brief' })
   })

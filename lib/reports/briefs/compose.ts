@@ -9,12 +9,16 @@ import { splitSentences } from '../../prose/scrub'
 import type { StandingFact } from '../../written/types'
 import type { WeekScrubCounts } from '../../written/scrub'
 import { monthsPhrase } from '../../written/month'
+import { collectQuoteRefs, resolveQuotes } from '../../renderables/quotes-freeze'
+import type { QuoteResolution } from '../../renderables/types'
 import { overlapOfSmaller, referencesFor } from './allocate'
+import { printedSections } from './deck'
 import { unionOf } from './ground'
 import { FIT, type Meaning } from './meaning'
+import { itemKey } from './repeats'
 import type { QuotePool } from './quotes'
 import { addCounts, hyphenatedNames, restoreNames, scrubBriefText, tradeOff, varySubjects, ZERO_COUNTS, type BriefField } from './scrub'
-import { BRAND_MIN_VIDEOS, ITEM_MIN_VIDEOS, ROLE_SECTIONS, groundedRival, printsSection, sectionTitle, selectRoleSections, standingItems } from './sections'
+import { BRAND_MIN_VIDEOS, ITEM_MIN_VIDEOS, ROLE_SECTIONS, groundedRival, printsSection, sectionSays, sectionTitle, selectRoleSections, standingItems } from './sections'
 import type { AllocatedIdea, Allocation, BriefFigure, BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, GroundedPoint, MonthlyBriefData, SectionKey, ShareBar } from './types'
 import { BRIEF_NAME, BRIEF_ROLES, SAY_HEAR_STATUSES, type SayHearStatus } from './types'
 import { BRIEF_MAX, BRIEF_PROMPT_VERSION, EXTRA_MAX, PARTS, partCaps, partOf, type BriefLineOutput, type BriefOutput, type BriefPartItem, type BriefWordsGroup } from './write'
@@ -393,7 +397,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       for (const id of ids) used.add(id)
       const item: BriefItem & { videos: number } = {
         ...(title ? { title } : {}), text: elsewhere ? firstSentence(text) : text, ...(detail && !elsewhere ? { detail } : {}),
-        ...(elsewhere ? { tag: `Argued in the ${BRIEF_NAME[elsewhere.home]}` } : {}),
+        ...(elsewhere ? { tag: `Argued in the ${BRIEF_NAME[elsewhere.home]}`, named: { brief: elsewhere.home, idea: elsewhere.id } } : {}),
         ...(elsewhere ? { ...extra, persona: undefined } : extra),
         videos: ev.videos, who: ev.who, basedOn: ids, videoIds: ev.videoIds,
       }
@@ -968,14 +972,36 @@ const itemWords = (i: BriefItem): string => [
   i.persona?.want ?? '', i.persona?.stops ?? '', i.persona?.moves ?? '', i.persona?.forSale ?? '',
 ].filter(Boolean).join(' ')
 
+/** The words a quote ref resolves to, where the set has them (the quote
+ *  pool's `textOf`): the deck fits a page by its voices' length, so what a
+ *  page prints is judged with them. */
+export type QuoteWordsOf = (ref: string) => { text: string; english: string | null; lang: string | null } | null
+
+/** The brief's sections as the deck prints them: its pages that stand, each
+ *  cut to what fits, its quotes' words resolved where `words` has them. */
+function printedOf(d: MonthlyBriefData, words?: QuoteWordsOf): BriefSection[] {
+  if (!words) return printedSections(d)
+  const texts = new Map<string, QuoteResolution>()
+  for (const ref of collectQuoteRefs(d)) {
+    const w = words(ref)
+    if (w?.text) texts.set(ref, w)
+  }
+  return printedSections(resolveQuotes(d, texts))
+}
+
+/** The keys (`itemKey`) of the items a brief prints. */
+const printedKeys = (d: MonthlyBriefData, words?: QuoteWordsOf): Set<string> =>
+  new Set(printedOf(d, words).flatMap((s) => s.groups.flatMap((g) => g.items.map((i) => itemKey(d.role, s.key, i)))))
+
 /** Every printed text of a brief: what an In short sentence must find itself
- *  in. A section the deck does not print is not printed text. */
-export function printedTexts(d: MonthlyBriefData): { text: string; brands: string }[] {
+ *  in. A page the deck leaves out, or a section it has no page for, is not
+ *  printed text; nor is an item that did not fit its page. */
+export function printedTexts(d: MonthlyBriefData, words?: QuoteWordsOf): { text: string; brands: string }[] {
   // An item that only names another brief's idea is not this brief's to
   // summarise: In short says what THIS brief argues.
   return [
     ...d.findings.flatMap((f) => [f.headline, ...f.saw, f.means, ...f.practice]),
-    ...d.sections.filter((s) => printsSection(s.key)).flatMap((s) => [
+    ...printedOf(d, words).flatMap((s) => [
       ...(s.lead ? [s.lead] : []),
       ...(s.note ? [s.note] : []),
       ...(s.also ? [s.also] : []),
@@ -992,8 +1018,8 @@ export function printedTexts(d: MonthlyBriefData): { text: string; brands: strin
  * (`FIT.summary`), and a sentence that names a brand must sit close to a
  * printed text that names it too. The rest drop, into `held`. Pure.
  */
-export function summaryAgainstPrinted(d: MonthlyBriefData, meaning: Meaning, brands: readonly string[]): MonthlyBriefData {
-  const printed = printedTexts(d).map((p) => p.text)
+export function summaryAgainstPrinted(d: MonthlyBriefData, meaning: Meaning, brands: readonly string[], words?: QuoteWordsOf): MonthlyBriefData {
+  const printed = printedTexts(d, words).map((p) => p.text)
   // What another brief argues: its ideas, and this brief's lines naming them.
   const elsewhere = [
     ...d.inShort.also.map((x) => x.headline),
@@ -1022,12 +1048,14 @@ export function summaryAgainstPrinted(d: MonthlyBriefData, meaning: Meaning, bra
  * One idea, one home, across the set's SECTIONS too (the review: Sealand's
  * rivals described three times, its own-post community praise three times).
  * In role order, an item that says what an earlier brief's item says, on the
- * same videos, keeps its first sentence and names that brief. A section the
- * deck does not print is never the earlier brief's: it names no page. Pure.
+ * same videos, keeps its first sentence and names that brief. Only an item
+ * the earlier brief PRINTS is named (Heinrich, 12 Oct: a footnote never
+ * points at a page that did not print): not one in a section the canvas has
+ * no page for, on a page left out as thin, or past what fits its page. Pure.
  */
-export function namedAcross(briefs: readonly MonthlyBriefData[], meaning: Meaning): MonthlyBriefData[] {
+export function namedAcross(briefs: readonly MonthlyBriefData[], meaning: Meaning, words?: QuoteWordsOf): MonthlyBriefData[] {
   const order = [...briefs].sort((x, y) => BRIEF_ROLES.indexOf(x.role) - BRIEF_ROLES.indexOf(y.role))
-  const seen: { role: BriefRole; text: string; videoIds: string[] }[] = []
+  const seen: { role: BriefRole; key: string; text: string; videoIds: string[] }[] = []
   const out = new Map<BriefRole, MonthlyBriefData>()
   for (const d of order) {
     const sections = d.sections.map((s) => ({
@@ -1039,20 +1067,68 @@ export function namedAcross(briefs: readonly MonthlyBriefData[], meaning: Meanin
           const said = `${i.title ? `${i.title}. ` : ''}${i.text}`
           const earlier = seen.find((e) => e.role !== d.role && overlapOfSmaller(i.videoIds!, e.videoIds) >= SAME_AS_FINDING && meaning.sim(said, e.text) >= FIT.same)
           if (!earlier) return i
-          const rest: BriefItem = { ...i, text: firstSentence(i.text), tag: `Also in the ${BRIEF_NAME[earlier.role]}` }
+          const rest: BriefItem = { ...i, text: firstSentence(i.text), tag: `Also in the ${BRIEF_NAME[earlier.role]}`, named: { brief: earlier.role, item: earlier.key } }
           delete rest.detail
           delete rest.persona
           return rest
         }),
       })),
     }))
+    const named = { ...d, sections }
+    const printed = printedKeys(named, words)
     for (const s of sections) {
-      if (!printsSection(s.key)) continue
-      for (const g of s.groups) for (const i of g.items) if (!i.tag && i.videoIds?.length) seen.push({ role: d.role, text: `${i.title ? `${i.title}. ` : ''}${i.text}`, videoIds: i.videoIds })
+      for (const g of s.groups) {
+        for (const i of g.items) {
+          const key = itemKey(d.role, s.key, i)
+          if (!i.tag && i.videoIds?.length && printed.has(key)) seen.push({ role: d.role, key, text: `${i.title ? `${i.title}. ` : ''}${i.text}`, videoIds: i.videoIds })
+        }
+      }
     }
-    out.set(d.role, { ...d, sections })
+    out.set(d.role, named)
   }
   return briefs.map((d) => out.get(d.role)!)
+}
+
+/**
+ * A footnote never points at what did not print (Heinrich, 12 Oct). Every
+ * item that names another brief ("… is argued in full in the Marketing
+ * brief", "… is also in the Sales brief", a risk card's foot) keeps its tag
+ * only where what it names prints there: the idea's finding page, or that
+ * brief's item on a page the deck prints. One that points at nothing is held
+ * (it was cut to its first sentence to name the other brief, so it does not
+ * stand on its own). In role order, each brief against the earlier briefs as
+ * they finally print, so a page that a held line leaves thin is accounted for
+ * by the briefs after it. A brief outside the set is not judged. Pure.
+ */
+export function footnotesOnlyPrinted(briefs: readonly MonthlyBriefData[], words?: QuoteWordsOf): MonthlyBriefData[] {
+  const order = [...briefs].sort((x, y) => BRIEF_ROLES.indexOf(x.role) - BRIEF_ROLES.indexOf(y.role))
+  const done = new Map<BriefRole, MonthlyBriefData>()
+  const keys = new Map<BriefRole, Set<string>>()
+  const prints = (n: NonNullable<BriefItem['named']>): boolean => {
+    const target = done.get(n.brief) ?? briefs.find((b) => b.role === n.brief)
+    if (!target) return true
+    if ('idea' in n) return target.findings.some((f) => f.ideaId === n.idea)
+    // An earlier brief is final once done, so its pages are read once.
+    if (!done.has(n.brief)) return printedKeys(target, words).has(n.item)
+    if (!keys.has(n.brief)) keys.set(n.brief, printedKeys(target, words))
+    return keys.get(n.brief)!.has(n.item)
+  }
+  for (const d of order) {
+    const held = [...d.held]
+    const sections = d.sections.map((s) => ({
+      ...s,
+      groups: s.groups.map((g) => ({
+        ...g,
+        items: g.items.filter((i) => {
+          if (!i.tag || !i.named || prints(i.named)) return true
+          held.push({ what: `${s.key}: ${(i.title ?? i.text).slice(0, 60)}`, reason: `it names the ${BRIEF_NAME[i.named.brief]}, which does not print what it names` })
+          return false
+        }),
+      })).filter((g) => g.items.length > 0 || (g.lines?.length ?? 0) > 0),
+    })).filter((s) => sectionSays(s))
+    done.set(d.role, held.length === d.held.length ? d : { ...d, sections, held })
+  }
+  return briefs.map((d) => done.get(d.role)!)
 }
 
 /** Where two briefs of one set rest on the same research: each pair of items

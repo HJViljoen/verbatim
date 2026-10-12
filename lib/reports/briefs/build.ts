@@ -27,7 +27,7 @@ import type { StandingFact } from '../../written/types'
 import type { ParseClient } from '../../written/write-model'
 import { allPoints, runResearch, type ResearchAnswer } from '../documents/research'
 import { allocateIdeas } from './allocate'
-import { composeBrief, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount } from './compose'
+import { composeBrief, footnotesOnlyPrinted, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount } from './compose'
 import { Meaning } from './meaning'
 import { applyRepeats, REPEATS_IDEA_CHARS, repeatItemsOf, verdictsOf, type RepeatItem, type RepeatsOutput, type RepeatVerdict } from './repeats'
 import { capText } from '../documents/scrub'
@@ -574,11 +574,14 @@ export async function writeBriefSet(
       })
     }
     // The set: the repeat judge's verdicts, another brief's section named in
-    // a line, then In short against what printed.
+    // a line, every such line kept only where what it names prints, then In
+    // short against what printed. What prints is the deck's, its voices'
+    // words in hand (the pool's), as the page will draw them.
+    const words = (ref: string) => quotes.textOf(ref)
     const composed = roles.map((r) => out[r].data)
     const judged = verdicts ? applyRepeats(composed, verdicts, allocation.ideas, { meaning, texts: ideaTexts }) : composed
-    const named = namedAcross(judged, meaning)
-    const finished = named.map((d) => summaryAgainstPrinted(d, meaning, brands))
+    const named = footnotesOnlyPrinted(namedAcross(judged, meaning, words), words)
+    const finished = named.map((d) => summaryAgainstPrinted(d, meaning, brands, words))
     return { out, composed, finished, quotes }
   }
   const collect = new Meaning(vectors, 'collect')

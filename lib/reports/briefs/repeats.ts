@@ -164,11 +164,11 @@ export function applyRepeats(
   }
   // A pair names the EARLIER brief on the later item, whichever side the
   // judge wrote it on.
-  const alsoIn = new Map<string, BriefRole>()
+  const alsoIn = new Map<string, string>()
   for (const v of verdicts) {
     if (!v.sameAs || !pairPlausible(v.key, v.sameAs)) continue
     const [a, b] = [v.key, v.sameAs].sort((x, y) => order(roleOfKey(x)) - order(roleOfKey(y)))
-    if (!alsoIn.has(b)) alsoIn.set(b, roleOfKey(a))
+    if (!alsoIn.has(b)) alsoIn.set(b, a)
   }
   return briefs.map((d) => {
     const held = [...d.held]
@@ -187,10 +187,13 @@ export function applyRepeats(
             held.push({ what: `${s.key}: ${(i.title ?? i.text).slice(0, 60)}`, reason: `says what the finding "${idea.headline}" says` })
             return []
           }
-          const tag = idea ? `Argued in the ${BRIEF_NAME[idea.home]}` : alsoIn.has(key) ? `Also in the ${BRIEF_NAME[alsoIn.get(key)!]}` : null
-          if (!tag) return [i]
-          if (subjectLine) return [{ ...i, tag }]
-          const out: BriefItem = { ...i, text: splitSentences(i.text)[0] ?? i.text, tag }
+          // What the tag names, so the set keeps it only where that prints.
+          const earlier = alsoIn.get(key)
+          const named: BriefItem['named'] | null = idea ? { brief: idea.home, idea: idea.id } : earlier ? { brief: roleOfKey(earlier), item: earlier } : null
+          if (!named) return [i]
+          const tag = `${idea ? 'Argued' : 'Also'} in the ${BRIEF_NAME[named.brief]}`
+          if (subjectLine) return [{ ...i, tag, named }]
+          const out: BriefItem = { ...i, text: splitSentences(i.text)[0] ?? i.text, tag, named }
           delete out.detail
           delete out.persona
           delete out.quote

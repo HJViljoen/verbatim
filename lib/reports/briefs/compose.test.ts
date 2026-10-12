@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest'
 import type { WhoVideo } from '../../brands/attribution'
 import { fact } from '../../written/test-fixtures'
 import { allocateIdeas } from './allocate'
-import { composeBrief, figuresFor, namedAcross, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
+import { composeBrief, figuresFor, footnotesOnlyPrinted, namedAcross, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
 import { briefMarkdown } from './markdown'
 import { Meaning } from './meaning'
 import { QuotePool } from './quotes'
+import { briefFixture } from '../../../components/briefs/fixture'
 import { cite, point } from './test-fixtures'
 import type { BriefRole, GroundedPoint, MonthlyBriefData } from './types'
 import type { BriefOutput } from './write'
@@ -237,10 +238,13 @@ describe('the figures In short prints', () => {
 })
 
 describe('the set', () => {
-  const brief = (role: BriefRole, items: { text: string; videoIds: string[] }[], summary = ''): MonthlyBriefData => ({
+  // A page of rows that prints: its items and a second line beside them (a
+  // page needs two), on videos of its own.
+  const FILLER = { text: 'Owners oil zips every spring.', videoIds: ['x', 'y', 'z'] }
+  const brief = (role: BriefRole, items: { text: string; videoIds: string[] }[], summary = '', filler = true): MonthlyBriefData => ({
     version: 1, kind: 'monthly_brief', role, title: role, company: 'Acme', month: SEP, heardMonths: [],
     inShort: { summary, figures: [], also: [] }, findings: [],
-    sections: [{ key: role === 'sales' ? 'sales.rivals' : 'marketing.rivals', title: 'x', groups: [{ items: items.map((i) => ({ ...i, basedOn: [], videos: i.videoIds.length })) }] }],
+    sections: [{ key: role === 'sales' ? 'sales.care' : 'marketing.say_hear', title: 'x', groups: [{ items: [...items, ...(filler ? [FILLER] : [])].map((i) => ({ ...i, basedOn: [], videos: i.videoIds.length })) }] }],
     held: [], promptVersion: 'v', model: 'm', costUsd: 0,
   })
 
@@ -249,6 +253,40 @@ describe('the set', () => {
     const marketing = brief('marketing', [{ text: 'Rival is chosen for long trips and its warranty. People like it.', videoIds: ['a', 'b', 'c', 'd'] }])
     const [, m] = namedAcross([sales, marketing], words())
     expect(m.sections[0].groups[0].items[0]).toMatchObject({ tag: 'Also in the Sales brief', text: 'Rival is chosen for long trips and its warranty.' })
+  })
+
+  it('names only an item the earlier brief prints: never one on a page left out as thin', () => {
+    const marketing = () => brief('marketing', [{ text: 'Rival is chosen for long trips and its warranty. People like it.', videoIds: ['a', 'b', 'c', 'd'] }])
+    // The Sales page holds one line: a page needs two, so it does not print.
+    const thin = brief('sales', [{ text: 'Rival is chosen for long trips. It has a warranty.', videoIds: ['a', 'b', 'c'] }], '', false)
+    const [, m] = namedAcross([thin, marketing()], words())
+    expect(m.sections[0].groups[0].items[0].tag).toBeUndefined()
+    expect(m.sections[0].groups[0].items[0].text).toBe('Rival is chosen for long trips and its warranty. People like it.')
+    const [, named] = namedAcross([brief('sales', [{ text: 'Rival is chosen for long trips. It has a warranty.', videoIds: ['a', 'b', 'c'] }]), marketing()], words())
+    expect(named.sections[0].groups[0].items[0].named).toEqual({ brief: 'sales', item: 'sales|sales.care||Rival is chosen for long trips. It has a warranty.' })
+  })
+
+  it('a footnote never points at what did not print: an idea with no finding, or an item on a page left out', () => {
+    const argued = (idea: string) => ({ title: 'Wear doubts', text: 'Shoppers doubt the straps hold.', tag: 'Argued in the Content brief', named: { brief: 'content' as const, idea }, basedOn: [], videos: 3, videoIds: ['p', 'q', 'r'] })
+    const sales = brief('sales', [{ text: 'Rival is chosen for long trips and its warranty.', videoIds: ['a', 'b', 'c'] }, { text: 'Owners wash straps after rainy hikes.', videoIds: ['d', 'e', 'f'] }])
+    sales.sections[0].groups[0].items.push(argued('I3'), argued('I4'))
+    const content = { ...brief('content', []), sections: [], findings: [{ ...briefFixture('content').findings[0], ideaId: 'I3' }] }
+    const [s] = footnotesOnlyPrinted([sales, content])
+    expect(s.sections[0].groups[0].items.map((i) => (i.named && 'idea' in i.named ? i.named.idea : i.text))).toEqual(['Rival is chosen for long trips and its warranty.', 'Owners wash straps after rainy hikes.', 'Owners oil zips every spring.', 'I3'])
+    expect(s.held).toEqual([{ what: 'sales.care: Wear doubts', reason: 'it names the Content brief, which does not print what it names' }])
+
+    // An item naming a line on a page the earlier brief leaves out is held;
+    // the same line on a page that prints keeps it.
+    const thin = brief('sales', [{ text: 'Rival is chosen for long trips.', videoIds: ['a', 'b', 'c'] }], '', false)
+    const also = (key: string) => brief('marketing', [{ text: 'Owners clean straps.', videoIds: ['d', 'e', 'f'] }, { text: 'Rival is chosen for long trips.', videoIds: ['a', 'b'] }].map((i, k) => (k === 1 ? { ...i, tag: 'Also in the Sales brief', named: { brief: 'sales' as const, item: key } } : i)))
+    const key = 'sales|sales.care||Rival is chosen for long trips.'
+    const [, gone] = footnotesOnlyPrinted([thin, also(key)])
+    expect(gone.sections[0].groups[0].items.map((i) => i.text)).toEqual(['Owners clean straps.', 'Owners oil zips every spring.'])
+    const printing = brief('sales', [{ text: 'Rival is chosen for long trips.', videoIds: ['a', 'b', 'c'] }])
+    const [, kept] = footnotesOnlyPrinted([printing, also(key)])
+    expect(kept.sections[0].groups[0].items.map((i) => i.text)).toEqual(['Owners clean straps.', 'Rival is chosen for long trips.', 'Owners oil zips every spring.'])
+    // A brief outside the set is not judged.
+    expect(footnotesOnlyPrinted([also(key)])[0].sections[0].groups[0].items).toHaveLength(3)
   })
 
   it('In short keeps only what the brief printed, and a sentence naming a brand only what it printed about that brand', () => {
