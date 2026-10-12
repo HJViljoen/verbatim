@@ -23,9 +23,10 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, MERGE_CHUNK_MAX, OSSUR_CL
 //                        counted from the start of the load, with the step's
 //                        last-attempt fail-soft so a failed part is reported
 //                        rather than thrown. Writes NOTHING (no ai_call_log
-//                        row, no theme). One production read: the run row,
-//                        then the loader (no embedding column). Spends one
-//                        embeddings pass over the bucket and its merge calls.
+//                        row, no theme). Production reads: the run row (the
+//                        probe), then the loader (no embedding column).
+//                        Spends one embeddings pass over the bucket and its
+//                        merge calls.
 
 
 interface Args {

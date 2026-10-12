@@ -4,11 +4,13 @@ import { EMBEDDING_MODEL, CLUSTER_SIMILARITY_THRESHOLD } from '../config'
 import type { InsightRow } from './types'
 
 // Step A2 clustering seam (Architecture/Analysis-Passes §Step A2). The pipeline
-// only calls `clusterInsights`; the implementation behind it can swap without
-// touching Step A2. v4.1 specced case-insensitive string match on the theme
-// slug; the first real Ossur run showed near-zero exact collisions (free-text
-// labels rarely match), so the pre-approved embedding-similarity merge is the
-// default. `'string'` is retained for A/B and as a no-cost fallback.
+// only calls `clusterInsights` (or `clusterInsightsWithCentroids`: the same
+// clusters plus each one's centroid); the implementation behind them can swap
+// without touching Step A2. v4.1 specced case-insensitive string match on the
+// theme slug; the first real Ossur run showed near-zero exact collisions
+// (free-text labels rarely match), so the pre-approved embedding-similarity
+// merge is the default. `'string'` is retained for A/B and as a no-cost
+// fallback.
 //
 // Input to clusterInsights is assumed homogeneous — one entity BUCKET, which
 // is what the caller in step-a2.ts groups by. Categories deliberately merge

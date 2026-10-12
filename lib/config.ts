@@ -912,9 +912,13 @@ export const THEME_MERGE_STEP_BUDGET_MS = 255_000
  *  together, so inside a part the rate was 0.44-0.88 s a cluster, not 0.24.
  *  At the worst of that, 120 clusters is about 106 s; 45% slow, about 153 s;
  *  after the ~57 s of load and clustering (growing with the bucket), about
- *  210 s of the 255 s. Bisection halves, so a part lands between about half
- *  this and this: Sealand's 1,879 is about sixteen calls, Össur's 921 about
- *  eight. 120 is set from that measurement and not yet proven live itself.
+ *  210 s of the 255 s. Measured live at 120 the same day (the same bucket,
+ *  5,488 insights, nothing written): 1,879 clusters in 22 parts of 38-117,
+ *  every call answered first time (no 429, no retry), the slowest part in
+ *  130.5 s and the whole step body in 174.5 s of the 255 s (171 merges
+ *  applied, 0 groups rejected, $1.54). A part can be well under half the
+ *  cap: packing joins whole leaves only, so a small leaf a lopsided split
+ *  peeled off goes alone when the part beside it is full.
  *
  *  Deliberately NOT in the clustering key (Heinrich, 12 Oct): the merge's
  *  prompt, model and threshold are unchanged, so this is capacity, not a new

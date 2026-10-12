@@ -105,7 +105,8 @@ export interface ThemeMergeOptions {
    *  merged in parts logs one row a part at `callIndex * 1000 + part` (part
    *  1-based), so bucket 3's parts are 3001, 3002, … and can collide neither
    *  with another bucket's parts nor with a one-call bucket's index (a run has
-   *  tens of buckets and a bucket a handful of parts, never a thousand).
+   *  tens of buckets and a bucket tens of parts at most, 22 for Sealand's
+   *  1,879 clusters, never a thousand).
    *  Nothing keys on the column (no constraint; run-costs and the Costs page
    *  sum cost by pass); the spacing is for a person reading the ledger. */
   callIndex?: number
@@ -322,8 +323,8 @@ export function partitionByCentroid(centroids: readonly ArrayLike<number>[], max
 
 /** The 'string' method's split, which has no vectors to split by: the
  *  clusters in their own order, cut into the fewest parts of at most `max`,
- *  sized evenly (1,884 at 300 is seven parts of 269-270, not six of 300 and
- *  one of 84). */
+ *  sized evenly (1,884 at 120 is sixteen parts of 117-118, not fifteen of 120
+ *  and one of 84). */
 export function partitionByOrder(n: number, max: number): number[][] {
   if (!Number.isInteger(max) || max < 1) throw new Error(`partitionByOrder: max must be a positive integer, got ${max}`)
   const count = Math.ceil(n / max)
