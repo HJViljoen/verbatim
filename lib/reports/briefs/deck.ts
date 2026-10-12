@@ -367,7 +367,10 @@ export const H = {
   care: (i: BriefItem): number => 45 + Math.max(heightOf(i.title ?? '', 467, 32, 1.15, 'bold'), heightOf(i.text, 665, 20, 1.5)),
   bullet: (i: BriefItem, w: number): number => 23 + heightOf(i.text, w - 18, 15, 1.55),
   sayHear: (i: BriefItem): number => 35 + Math.max(heightOf(i.title ?? '', 420, 16, 1.45, 'bold'), heightOf(i.text, 518, 16, 1.5), 22),
-  heardCard: (i: BriefItem, w: number): number => 34 + 15 + 8 + heightOf(i.pill ?? '', w - 42, 22, 1.2, 'bold') + 8 + heightOf(i.text, w - 42, 14, 1.5),
+  // The card's idea at 22px 700 runs wider than a title (about 0.55 of its
+  // size a character, measured on "Community environmental action", 12 Oct),
+  // so its measure is taken narrower.
+  heardCard: (i: BriefItem, w: number): number => 34 + 15 + 8 + heightOf(i.pill ?? '', (w - 42) * 0.87, 22, 1.2, 'bold') + 8 + heightOf(i.text, w - 42, 14, 1.5),
   question: (i: BriefItem): number => 31 + heightOf(i.text, 514, 18, 1.3, 'bold') + (i.detail ? 4 + heightOf(i.detail, 514, 14, 1.5) : 0),
   watch: (i: BriefItem): number => 37 + heightOf(i.title ?? '', 556, 21, 1.2, 'bold') + 6 + heightOf(i.text, 556, 17, 1.55),
   more: (i: BriefItem): number => 39 + Math.max(heightOf(i.title ?? '', 196, 21, 1.3, 'bold'), heightOf(i.text, 490, 17, 1.55)),
@@ -506,7 +509,10 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const w = (W - 14 * (n - 1)) / n
       const cardsH = shown.length ? Math.max(...shown.map((i) => H.heardCard(i, w))) : 0
       const room = BODY_HEIGHT - titleH(sub, 30) - 16 - (cardsH ? cardsH + 16 : 0)
-      const rows = (s.posts?.rows ?? []).slice(0, Math.max(0, Math.floor((room - 6 - 15 - 8 - 34) / 31)))
+      // The table: its label, the header (its "Five or more comments" wraps
+      // to two lines), and a row 32px as Chrome draws it (measured on
+      // Sealand's September, 12 Oct), counted at 33 to err high.
+      const rows = (s.posts?.rows ?? []).slice(0, Math.max(0, Math.floor((room - 6 - 15 - 8 - 34) / 33)))
       const out = only(s, shown)
       if (s.posts) out.posts = rows.length ? { ...s.posts, rows } : undefined
       if (!out.posts) delete out.posts
