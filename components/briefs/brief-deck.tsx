@@ -326,8 +326,10 @@ function BuyersPage({ s, continued, sub, footnote }: PageProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       <TitleBlock title={titleOf(s, continued)} sub={sub} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flexGrow: 1, minHeight: 0 }}>
+        {/* Equal halves, as the canvas draws them; a card never draws
+            shorter than its words (the plan fits two only where both do). */}
         {items.map((i, k) => (
-          <div key={k} style={{ flex: 1, minHeight: 0, border: `1px solid ${P.hair}`, borderRadius: 16, padding: '14px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div key={k} style={{ flex: 1, border: `1px solid ${P.hair}`, borderRadius: 16, padding: '14px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ display: 'flex', gap: 24 }}>
               <div style={{ flex: 1.15, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div {...STORED} style={{ fontSize: 24, fontWeight: 700, ...(i.muted ? { color: P.muted } : {}) }}>{i.title}</div>
@@ -349,7 +351,8 @@ function BuyersPage({ s, continued, sub, footnote }: PageProps) {
             ) : null}
           </div>
         ))}
-        {/* Two to a page, as the canvas draws them: one buyer keeps half. */}
+        {/* Two to a page, as the canvas draws them: one buyer keeps half, or
+            what it needs. */}
         {items.length === 1 ? <div style={{ flex: 1 }} /> : null}
       </div>
       <Footnote text={footnote} />

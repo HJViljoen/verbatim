@@ -339,14 +339,15 @@ const FOOT_GAP = 16
 
 /** Heights of each layout's pieces, at the canvas's type and measure. Pure. */
 export const H = {
-  /** A buyer card's need: its columns, its name and pill, and For a sale. */
+  /** A buyer card's need: its columns, its name (which may wrap) and pill,
+   *  and For a sale under the card's spacer (a gap either side of it). */
   buyer: (i: BriefItem): number => {
     const inner = W - 46
     const unit = (inner - 72) / 4.15
-    const col1 = 29 + (i.pill ? 8 + 22 : 0) + 8 + heightOf(i.text, unit * 1.15, 15, 1.45, true)
-    const cols = [i.persona?.want, i.persona?.stops, i.persona?.moves].map((t) => (t ? 16 + heightOf(t, unit, 13, 1.45) : 0))
+    const col1 = heightOf(i.title ?? '', unit * 1.15, 24, 1.3, 'bold') + (i.pill ? 8 + 22 : 0) + 8 + heightOf(i.text, unit * 1.15, 15, 1.45, true)
+    const cols = [i.persona?.want, i.persona?.stops, i.persona?.moves].map((t) => (t ? 17 + heightOf(t, unit, 13, 1.45) : 0))
     const sale = i.persona?.forSale ? 11 + Math.max(22, heightOf(i.persona.forSale, inner - 104, 14, 1.45)) : 0
-    return 30 + Math.max(col1, ...cols) + (sale ? 10 + sale : 0)
+    return 30 + Math.max(col1, ...cols) + 10 + (sale ? 10 + sale : 0)
   },
   stop: (i: BriefItem): number => 25 + Math.max(heightOf(i.title ?? '', 196, 18, 1.3, 'bold'), heightOf(i.text, 490, 15, 1.55)),
   settle: (i: BriefItem): number => 15 + heightOf(i.text, 350, 14, 1.5),
@@ -369,6 +370,10 @@ export const H = {
   risk: (i: BriefItem, w: number): number => 44 + 14 + 10 + heightOf(i.title ?? '', w - 52, 23, 1.25, 'bold') + 10 + heightOf(i.text, w - 52, 15, 1.55) + (i.tag ? 10 + 18 : 0),
   decision: (i: BriefItem): number => 21 + heightOf(i.text, 537, 15, 1.45),
   pattern: (i: BriefItem): number => 37 + heightOf(i.text, 610, 22, 1.45, true),
+  /** What holds so far's position card, and its panel of the month's ideas
+   *  (the right column, 442 wide). */
+  position: (text: string): number => 36 + 14 + 6 + heightOf(text, 398, 18, 1.4, 'bold'),
+  ideas: (headlines: readonly string[]): number => (headlines.length ? 22 + 15 + 8 + headlines.reduce((n, h) => n + 23 + 15 + 3 + heightOf(h, 398, 15, 1.35, 'bold'), 0) : 0),
 }
 
 /**
@@ -394,10 +399,20 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
   }
   switch (s.key) {
     case 'sales.buyers': {
-      // Two a page, the canvas's page and its one continuation.
-      const shown = all.slice(0, max * BUYERS_PAGES)
-      const pages = [shown.slice(0, max), shown.slice(max, max * 2)].filter((p) => p.length > 0)
-      const whole = only(s, shown)
+      // Two a page, the canvas's page and its one continuation. The two
+      // cards share the page equally, so two go on a page only where the
+      // taller fits half of it; one that does not waits for the next page,
+      // and what neither page holds stays in the stored brief.
+      const pairFits = (xs: readonly BriefItem[], first: boolean) =>
+        2 * Math.max(...xs.map(H.buyer)) + 12 <= BODY_HEIGHT - titleH(first ? sub : null) - 16 - foot(xs)
+      const pages: BriefItem[][] = []
+      for (let at = 0; pages.length < BUYERS_PAGES && at < all.length;) {
+        const next = all.slice(at, at + max)
+        const p = next.length > 1 && pairFits(next, pages.length === 0) ? next : next.slice(0, 1)
+        pages.push(p)
+        at += p.length
+      }
+      const whole = only(s, pages.flat())
       return pages.map((p, k) => page(only(s, p), { continued: k > 0, sub: k === 0 ? subtitleOf(s, d, whole) : null }))
     }
     case 'sales.stops': {
@@ -561,7 +576,13 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
     }
     case 'leadership.holds': {
       const rows = fitItems(all, H.pattern, BODY_HEIGHT - titleH(sub) - 16, max)
-      return [page(only(s, rows))]
+      const out = only(s, rows)
+      // The right column: the position in one line over the month's ideas.
+      // The ideas print whole (their label counts them), so where the two do
+      // not fit together the position stays in the stored brief.
+      const ideas = [...d.inShort.also.map((a) => a.headline), ...d.findings.map((f) => f.headline)]
+      if (out.position && H.position(out.position.text) + 16 + H.ideas(ideas) > BODY_HEIGHT) delete out.position
+      return [page(out)]
     }
     default: {
       // A section the canvas draws no page for, where the switch prints it:

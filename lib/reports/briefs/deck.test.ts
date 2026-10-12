@@ -92,6 +92,24 @@ describe('the canvas\'s counts: what does not fit stays in the stored brief', ()
     expect(shown(d, 'sales.buyers')).toHaveLength(4)
   })
 
+  it('two buyers share a page only where the taller fits half of it; one that does not waits, and the rest stays stored', () => {
+    const d = briefFixture('sales')
+    const buyers = d.sections.find((s) => s.key === 'sales.buyers')!
+    const long = 'Buyers ask whether the pack keeps out rain, how the straps sit when loaded, what the fabric is made from and where to order one. '.repeat(3).slice(0, 330)
+    buyers.groups[0].items = buyers.groups[0].items.map((i) => ({ ...i, persona: { ...i.persona, want: long, stops: long, moves: long } }))
+    expect(page(d, 'sales.buyers')).toHaveLength(2)
+    expect(page(d, 'sales.buyers').map((p) => (p.body.kind === 'section' ? p.body.section.groups.flatMap((g) => g.items).length : 0))).toEqual([1, 1])
+  })
+
+  it('What holds so far lists every idea; where the position and the ideas do not fit together, the position stays stored', () => {
+    const d = briefFixture('leadership')
+    const position = () => page(d, 'leadership.holds').map((p) => (p.body.kind === 'section' ? p.body.section.position ?? null : null))[0]
+    expect(position()).not.toBeNull()
+    d.inShort.also = [...d.inShort.also, d.inShort.also[0]].map((a) => ({ ...a, headline: `${a.headline}, as buyers weigh it against what they own` }))
+    expect(position()).toBeNull()
+    expect(d.sections.find((s) => s.key === 'leadership.holds')!.position).toBeTruthy()
+  })
+
   it('five objections, three rivals, five words to handle with care, eight questions', () => {
     const d = briefFixture('sales')
     const many = (key: BriefSection['key'], n: number) => {
