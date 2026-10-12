@@ -866,8 +866,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   writer writes it before the paginator leaves pages out, so inside
   `briefs:compose` (no new step) the set is paginated as it will draw (every
   quote's words in hand, a subject's voice read once) and ONE call
-  (`lib/reports/briefs/inshort.ts`, gpt-5.4 at low effort, about a cent a
-  set) reads each brief's PRINTED pages, never a voice's words, against its
+  (`lib/reports/briefs/inshort.ts`, gpt-5.4 at low effort, $0.023 and $0.024 on
+  September's two sets) reads each brief's PRINTED pages, never a voice's words, against its
   In short; a sentence no printed page carries drops whole into `held`, then
   the conversation self-check reads what is left. In short's summary is its
   page's main piece: where the checks leave none, the In short page is left
@@ -942,8 +942,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   its folder. September 2026, which closed before the steps existed: `bash
   scripts/backfill-briefs-september.sh [--designed-root <dir>]` (dry, drawn
   and saved) to read it designed, then `--write --from <root>`, once, after
-  the migration. The first September dry build (12 Oct) predates `set.json`
-  and cannot be stored by `--from`. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
+  the migration. The first September dry build (12 Oct,
+  `Briefs-2026-09-designed`) predates `set.json` and cannot be stored by
+  `--from`; the second (`Briefs-2026-09-designed-v2`, $4.56) can. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
   reads `data->>kind` and keeps it by what it is: `drafts` keeps it, `all`
   refuses it, as it refuses any build on the platform (`lib/reports/purge.ts`).
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
