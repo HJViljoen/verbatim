@@ -168,19 +168,59 @@ export interface BriefItem {
    *  format's share, a subject's level, a brand's share of talk): measured,
    *  never prose, and printed beside the words `text` already says them in. */
   measure?: BriefMeasure
+  /** A short label beside the title, as the canvas draws one: a buyer who
+   *  mostly does not buy ("Mostly makes, rarely buys"), the job a rival is
+   *  bought for ("Bought for travel utility"), the idea a brand stands for
+   *  ("A travel tool with personality"). The writer's, scrubbed. */
+  pill?: string
+  /** Drawn quieter, as the canvas draws the Maker and the makers' question:
+   *  a buyer who mostly does not buy, a question people ask who make their
+   *  own. */
+  muted?: boolean
+  /** A buyer's columns on the canvas's buyer card: what they want, what stops
+   *  them, what moves them, and the line "For a sale". The writer's. */
+  persona?: { want?: string; stops?: string; moves?: string; forSale?: string }
+  /** Says and hears: what the market does with the company's claim (the
+   *  canvas's status pill). The writer's choice of five. */
+  status?: SayHearStatus
+  /** The company's own card among the rivals' ("{company} (you)"). */
+  you?: boolean
+  /** A real voice printed with this item (a trigger moment's, a rival's, a
+   *  subject's): code's pick. */
+  quote?: BriefQuote | null
 }
+
+/** What the market does with one of the company's claims (Says and hears). */
+export type SayHearStatus = 'heard_back' | 'not_echoed' | 'heard_as_values' | 'tested' | 'confused'
+export const SAY_HEAR_STATUSES: readonly SayHearStatus[] = ['heard_back', 'not_echoed', 'heard_as_values', 'tested', 'confused']
 
 export interface BriefMeasure {
   /** A share, 0 to 100, of the group's base. */
   pct?: number
   /** A format's median engagement, in percent, where enough were rated. */
   median?: number | null
+  /** The median's band clears the category's median video (the canvas sets
+   *  it in ink rather than muted). */
+  above?: boolean
   /** The company's own posts of this format, of `ownOf`. */
   own?: number | null
   ownOf?: number | null
-  /** A brand's share of the market's comments and of its videos, 0 to 100. */
+  /** The month's first tracked rival's videos of this format, of `rivalOf`. */
+  rival?: number | null
+  rivalOf?: number | null
+  /** A brand's share of the month's comments and of its videos, 0 to 100. */
   comments?: number
   videos?: number
+}
+
+/** One share bar of "Where {company} stands against its rivals": the company,
+ *  its rivals together and the rest, each a share of the same base. */
+export interface ShareBar {
+  client: number
+  rivals: number
+  rest: number
+  /** "Sealand 1.1% · its five rivals 3.1% · the rest of the category 95.7%". */
+  line: string
 }
 
 export interface BriefSection {
@@ -191,12 +231,41 @@ export interface BriefSection {
   groups: { label?: string; items: BriefItem[]; lines?: string[]; base?: string }[]
   /** What the section's numbers are shares of, said once (code's). */
   base?: string
+  /** The muted line under the title where code writes it from counts ("Four
+   *  kinds of people talk about…", "Patterns here describe…"). */
+  sub?: string
   /** Sentences code wrote from counts (shares, formats). */
   lines?: string[]
   quote?: BriefQuote | null
   /** Real voices the section is made of ("In its own words", "Words to
    *  borrow"): short quotes, code's picks. */
   voices?: BriefQuote[]
+  /** A second paragraph under the lead (where the confusion starts). The
+   *  writer's. */
+  note?: string
+  /** One line under the items (the rivals' "Also in the set", the subjects'
+   *  "Also following"). */
+  also?: string
+  /** The market's own words, in groups of short chips (In its own words). */
+  chips?: { label: string; words: string[] }[]
+  /** A grey panel of labelled lines ("What makes them stop, share and argue").
+   *  Each row's `title` is its label, `text` its line. */
+  panel?: { title: string; rows: BriefItem[] }
+  /** What people did in the comments, the market's top kinds, and the mood
+   *  (Where the market stands): code's counts. */
+  kinds?: { base: string; rows: { label: string; pct: number }[] }
+  mood?: { base: string; rows: { mood: string; label: string; pct: number }[] }
+  /** The company, its rivals and the rest as shares of the month's comments
+   *  and videos (Where {company} stands against its rivals): code's counts. */
+  shares?: { comments: ShareBar; videos: ShareBar | null }
+  /** Each brand's own posts published in the month, and how many drew five or
+   *  more comments (How rivals are heard): code's counts. */
+  posts?: { title: string; rows: { name: string; you: boolean; posts: number; five: number; pct: number }[] }
+  /** The company's position in one line (What holds so far): the writer's. */
+  position?: BriefItem | null
+  /** The rival whose column a table carries beside the company's (Hooks and
+   *  formats that work). */
+  rival?: string
 }
 
 export interface BriefFinding {
@@ -212,6 +281,16 @@ export interface BriefFinding {
   videos: number
   who: AboutPart[]
   quotes: BriefQuote[]
+  /** The finding's short name for the contents ("The route to buy"), the
+   *  writer's; the headline where it has none. */
+  short?: string
+  /** "Part of Buying & delivery, the biggest subject in your market: 23% of
+   *  September's videos.": code's, where half or more of the finding's
+   *  insights are members of one ready subject. */
+  subjectLine?: string
+  /** "What each brand is heard for" (the Leadership finding's chips): each
+   *  brand with the idea it is heard for, the company last and dark. */
+  heardFor?: { name: string; you: boolean; phrase: string }[]
 }
 
 export interface BriefFigure {
@@ -223,7 +302,7 @@ export type SectionKey =
   | 'sales.buyers' | 'sales.deciders' | 'sales.stops' | 'sales.settle' | 'sales.triggers' | 'sales.rivals' | 'sales.care'
   | 'marketing.believe' | 'marketing.words' | 'marketing.say_hear' | 'marketing.recall' | 'marketing.rivals'
   | 'content.questions' | 'content.formats' | 'content.watch' | 'content.more' | 'content.confusion' | 'content.borrow'
-  | 'leadership.market' | 'leadership.shares' | 'leadership.weigh' | 'leadership.risks' | 'leadership.decisions'
+  | 'leadership.market' | 'leadership.shares' | 'leadership.weigh' | 'leadership.risks' | 'leadership.decisions' | 'leadership.holds'
 
 export interface MonthlyBriefData {
   version: 1

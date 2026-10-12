@@ -52,7 +52,7 @@ export const ROLE_SECTIONS: Readonly<Record<BriefRole, readonly SectionSpec[]>> 
     { key: 'sales.stops', title: 'What stops them', source: 'writer' },
     { key: 'sales.settle', title: 'What they want settled first', source: 'writer' },
     { key: 'sales.triggers', title: 'What tips them into buying', source: 'writer' },
-    { key: 'sales.rivals', title: 'What each rival is bought for', source: 'writer' },
+    { key: 'sales.rivals', title: 'Who buyers compare you with', source: 'writer' },
     { key: 'sales.care', title: 'Language to handle with care', source: 'writer' },
   ],
   marketing: [
@@ -60,33 +60,29 @@ export const ROLE_SECTIONS: Readonly<Record<BriefRole, readonly SectionSpec[]>> 
     { key: 'marketing.words', title: 'In its own words', source: 'writer' },
     { key: 'marketing.say_hear', title: 'What {company} says, and what comes back', source: 'writer' },
     { key: 'marketing.recall', title: 'How {company} is remembered', source: 'writer' },
-    { key: 'marketing.rivals', title: 'How the rivals are heard', source: 'writer' },
+    { key: 'marketing.rivals', title: 'How rivals are heard', source: 'writer' },
   ],
   content: [
     { key: 'content.questions', title: 'The questions people ask', source: 'writer' },
-    { key: 'content.formats', title: 'What works in the market\'s videos', source: 'code' },
-    { key: 'content.watch', title: 'What comments say about the videos', source: 'writer' },
+    { key: 'content.formats', title: 'Hooks and formats that work', source: 'code' },
+    { key: 'content.watch', title: 'What viewers come for, and what loses them', source: 'writer' },
     { key: 'content.more', title: 'What people want to be shown', source: 'writer' },
     { key: 'content.confusion', title: 'Where the confusion starts', source: 'writer' },
     { key: 'content.borrow', title: 'Words to borrow', source: 'code' },
   ],
   leadership: [
     { key: 'leadership.market', title: 'Where the market stands', source: 'code' },
-    { key: 'leadership.shares', title: 'Where {company} stands', source: 'code' },
+    { key: 'leadership.shares', title: 'Where {company} stands against its rivals', source: 'code' },
     { key: 'leadership.weigh', title: 'What buyers weigh, and what makes them switch', source: 'writer' },
     { key: 'leadership.risks', title: 'The risks, in business terms', source: 'writer' },
     { key: 'leadership.decisions', title: 'Questions for the business', source: 'writer' },
+    { key: 'leadership.holds', title: 'What holds so far', source: 'code' },
   ],
 }
 
-/** Where the findings print: after this section, or straight after In short
- *  (null). Leadership opens on where the market and the company stand. */
-export const FINDINGS_AFTER: Readonly<Record<BriefRole, SectionKey | null>> = {
-  sales: null,
-  marketing: null,
-  content: null,
-  leadership: 'leadership.shares',
-}
+// What the canvas draws, and where the findings print: canvas.ts (a module
+// light enough for the deck to import).
+export { FINDINGS_AFTER, PRINT_UNDRAWN_SECTIONS, UNDRAWN_SECTIONS, printsSection } from './canvas'
 
 export const sectionTitle = (spec: Pick<SectionSpec, 'title'>, company: string): string => spec.title.replace(/\{company\}/g, company)
 
@@ -109,8 +105,9 @@ export function groundedRival(name: string, tracked: readonly string[], pointTex
 export const itemCount = (s: Pick<BriefSection, 'groups'>): number => s.groups.reduce((n, g) => n + g.items.length, 0)
 
 /** A section with something to say: an item, or a line code counted. */
-export const sectionSays = (s: Pick<BriefSection, 'groups' | 'lines' | 'voices'>): boolean =>
+export const sectionSays = (s: Pick<BriefSection, 'groups' | 'lines' | 'voices' | 'chips' | 'panel' | 'shares'>): boolean =>
   itemCount(s) > 0 || (s.lines?.length ?? 0) > 0 || (s.voices?.length ?? 0) > 0
+  || (s.chips ?? []).some((c) => c.words.length > 0) || (s.panel?.rows.length ?? 0) > 0 || s.shares != null
 
 /**
  * The sections a role's brief prints, in the role's order: those with
@@ -125,7 +122,7 @@ export function selectRoleSections(
   for (const spec of ROLE_SECTIONS[role]) {
     const s = built[spec.key]
     if (!s) { held.push({ what: spec.key, reason: 'no material for it this month' }); continue }
-    const groups = s.groups.map((g) => ({ ...g, items: g.items.filter((i) => i.text.trim()) })).filter((g) => g.items.length > 0)
+    const groups = s.groups.map((g) => ({ ...g, items: g.items.filter((i) => i.text.trim() || i.quote) })).filter((g) => g.items.length > 0)
     const kept = { ...s, groups }
     if (!sectionSays(kept)) { held.push({ what: spec.key, reason: 'nothing in it stood' }); continue }
     sections.push(kept)

@@ -1,7 +1,7 @@
 import { aboutName, marketLabelsOf, type AboutPart } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
-import { FINDINGS_AFTER } from './sections'
+import { FINDINGS_AFTER, printsSection } from './canvas'
 import type { BriefFinding, BriefQuote, BriefSection, MonthlyBriefData } from './types'
 import { BRIEF_LENS, BRIEF_NAME } from './types'
 
@@ -73,13 +73,20 @@ function findingBlock(f: BriefFinding, role: MonthlyBriefData['role'], textOf: T
     ...(f.practice.length ? ['**In practice**', ...f.practice.map((p) => `- ${p}`), ''] : []),
     ...f.quotes.flatMap((q) => quoteBlock(q, textOf, company, noun)),
     `_Heard in ${monthsPhrase(heard)}, on ${whoLine(f.videos, f.who, company, noun)}._`,
+    ...(f.subjectLine ? ['', `_${f.subjectLine}_`] : []),
+    ...(f.heardFor?.length ? ['', `**What each brand is heard for:** ${f.heardFor.map((c) => `${c.name}: ${c.phrase}`).join(' · ')}`] : []),
     '',
   ]
 }
 
+const STATUS: Readonly<Record<string, string>> = { heard_back: 'Heard back', not_echoed: 'Not echoed', heard_as_values: 'Heard as values', tested: 'Tested', confused: 'Confused' }
+
 function sectionBlock(s: BriefSection, textOf: TextOf, company: string, noun: string | null): string[] {
-  const out: string[] = [`## ${s.title}`, '']
+  const out: string[] = [`## ${s.title}${printsSection(s.key) ? '' : ' _(stored, not printed: the canvas has no page for it)_'}`, '']
+  if (s.sub) out.push(`_${s.sub}_`, '')
   if (s.lead) out.push(s.lead, '')
+  if (s.note) out.push(s.note, '')
+  for (const c of s.chips ?? []) out.push(`**${c.label}:** ${c.words.join(' · ')}`, '')
   for (const g of s.groups) {
     if (g.label) out.push(`**${g.label}**`, '')
     for (const i of g.items) {
@@ -87,12 +94,23 @@ function sectionBlock(s: BriefSection, textOf: TextOf, company: string, noun: st
       const head = title ? `**${/[.!?]$/.test(title) ? title : `${title}.`}** ` : ''
       const tag = i.tag && i.tag !== 'you' ? ` _(${i.tag}.)_` : ''
       const who = i.videos != null && i.who ? ` _(${whoLine(i.videos, i.who, company, noun)})_` : ''
-      out.push(`- ${head}${i.text}${i.detail ? ` ${i.detail}` : ''}${tag}${who}`)
+      const pill = i.pill ? ` [${i.pill}]` : ''
+      const status = i.status ? ` [${STATUS[i.status] ?? i.status}]` : ''
+      out.push(`- ${head}${pill}${status}${i.text}${i.detail ? ` ${i.detail}` : ''}${tag}${who}`)
+      if (i.persona) for (const [k, v] of Object.entries(i.persona)) if (v) out.push(`  - ${({ want: 'What they want', stops: 'What stops them', moves: 'What moves them', forSale: 'For a sale' } as Record<string, string>)[k] ?? k}: ${v}`)
+      if (i.quote) out.push(...quoteBlock(i.quote, textOf, company, noun).map((l) => (l ? `  ${l}` : l)))
     }
     out.push('')
     for (const l of g.lines ?? []) out.push(l, '')
   }
   for (const l of s.lines ?? []) out.push(l, '')
+  if (s.also) out.push(s.also, '')
+  if (s.panel?.rows.length) out.push(`**${s.panel.title}**`, '', ...s.panel.rows.map((r) => `- **${r.title}.** ${r.text}`), '')
+  if (s.shares) out.push(`Share of comments: ${s.shares.comments.line}`, ...(s.shares.videos ? [`Share of videos: ${s.shares.videos.line}`] : []), '')
+  if (s.kinds) out.push(`**What people do in the comments** (${s.kinds.base}): ${s.kinds.rows.map((r) => `${r.label} ${r.pct}%`).join(' · ')}`, '')
+  if (s.mood) out.push(`**The mood** (${s.mood.base}): ${s.mood.rows.map((r) => `${r.label} ${r.pct}%`).join(' · ')}`, '')
+  if (s.posts?.rows.length) out.push(`**${s.posts.title}**`, '', '| Brand | Posts | Five or more comments | Share |', '|---|---|---|---|', ...s.posts.rows.map((r) => `| ${r.name}${r.you ? ' (you)' : ''} | ${r.posts} | ${r.five} | ${r.pct}% |`), '')
+  if (s.position) out.push(`**${company}'s position, in one line:** ${s.position.text}`, '')
   for (const v of s.voices ?? []) {
     const t = textOf(v.ref)
     if (t) out.push(`- "${(t.english ?? t.text).replace(/\s+/g, ' ').trim()}" _(${quoteSource(v, company, noun)})_`)

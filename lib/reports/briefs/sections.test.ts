@@ -19,9 +19,15 @@ describe('the role sections', () => {
     expect(ROLE_SECTIONS.sales.map((s) => s.key)).toEqual(['sales.buyers', 'sales.deciders', 'sales.stops', 'sales.settle', 'sales.triggers', 'sales.rivals', 'sales.care'])
     expect(ROLE_SECTIONS.marketing.map((s) => s.key)).toEqual(expect.arrayContaining(['marketing.believe', 'marketing.words', 'marketing.say_hear', 'marketing.recall', 'marketing.rivals']))
     expect(ROLE_SECTIONS.content.map((s) => s.key)).toEqual(expect.arrayContaining(['content.questions', 'content.formats', 'content.borrow']))
-    const titles = Object.values(ROLE_SECTIONS).flat().map((x) => x.title).join(' ')
-    expect(titles).not.toMatch(/\b(?:loses?|viewers come|ahead|behind|against its rivals)\b/i)
-    expect(ROLE_SECTIONS.leadership.map((s) => s.key)).toEqual(expect.arrayContaining(['leadership.market', 'leadership.shares', 'leadership.risks', 'leadership.decisions']))
+    expect(ROLE_SECTIONS.leadership.map((s) => s.key)).toEqual(['leadership.market', 'leadership.shares', 'leadership.weigh', 'leadership.risks', 'leadership.decisions', 'leadership.holds'])
+  })
+
+  it('titles each section as the canvas does (Heinrich, 12 Oct: no deviation)', () => {
+    const titles = (r: BriefRole) => ROLE_SECTIONS[r].map((s) => sectionTitle(s, 'Acme'))
+    expect(titles('sales')).toEqual(['Who is buying', 'Who else is in the decision', 'What stops them', 'What they want settled first', 'What tips them into buying', 'Who buyers compare you with', 'Language to handle with care'])
+    expect(titles('marketing')).toEqual(['What the market believes, and what it doubts', 'In its own words', 'What Acme says, and what comes back', 'How Acme is remembered', 'How rivals are heard'])
+    expect(titles('content')).toEqual(['The questions people ask', 'Hooks and formats that work', 'What viewers come for, and what loses them', 'What people want to be shown', 'Where the confusion starts', 'Words to borrow'])
+    expect(titles('leadership')).toEqual(['Where the market stands', 'Where Acme stands against its rivals', 'What buyers weigh, and what makes them switch', 'The risks, in business terms', 'Questions for the business', 'What holds so far'])
   })
 
   it('leadership opens on where the market and the company stand; the others on the findings', () => {

@@ -1,66 +1,87 @@
-import { aboutName, marketLabelsOf, type AboutPart } from '../../brands/labels'
+import { aboutName } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { languageName } from './markdown'
-import { FINDINGS_AFTER } from './sections'
+import { FINDINGS_AFTER, printsSection } from './canvas'
 import type { BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
-import { BRIEF_NAME } from './types'
+import { BRIEF_NAME, BRIEF_ROLES } from './types'
 
-// The brief as pages (pure): which page holds what, in the order the design
-// draws them (the Claude Design canvas, "Monthly briefs", design round 6 as
-// approved on 1 Oct: Brief-{Sales,Marketing,Content,Leadership}-*.dc.html,
-// 1280×720 sheets). The deck component (components/briefs/brief-deck.tsx)
-// draws each page; this decides them, so the viewer's page count, the PDF and
-// the deck cannot disagree.
+// The brief as pages (pure): which page holds what, in the order the canvas
+// draws them (the Claude Design canvas "Verbatim reports and colour", page
+// "Monthly briefs": Brief-{Sales,Marketing,Content,Leadership}-*.dc.html,
+// 1280×720 sheets). Heinrich, 12 Oct: every brief looks EXACTLY like the
+// canvas, the same page set in the same order with the same components; no
+// deviation. The deck component (components/briefs/brief-deck.tsx) draws each
+// page; this decides them, so the viewer's page count, the PDF and the deck
+// cannot disagree.
 //
-// THE ORDER. Cover; In short; the findings (one a page; Leadership's after
-// where the company stands, as the design draws it); then the role's sections
-// in the role's order. Two pairs share a page, as the design draws them: what
-// stops buyers with what they want settled first, and the risks with the
-// questions for the business.
+// THE PAGE SET, per the canvas:
+//   Sales       Cover · In short · a finding a page · Who is buying · Who is
+//               buying, continued · What stops them (with what they want
+//               settled first) · What tips them into buying · Who buyers
+//               compare you with · Language to handle with care
+//   Marketing   Cover · In short · a finding a page · Believes and doubts · In
+//               its own words · Says and hears · How rivals are heard
+//   Content     Cover · In short · a finding a page · The questions people
+//               ask · Hooks and formats · What viewers come for · What people
+//               want shown · Where the confusion starts
+//   Leadership  Cover · In short · Where the market stands · Where {company}
+//               stands · a finding a page · What buyers weigh · The risks
+//               (with the questions for the business) · What holds so far
+// A page whose material does not stand is not printed; a section the canvas
+// has no page for is not printed either (sections.ts `printsSection`).
 //
-// PAGINATION BY ESTIMATE. A sheet is a fixed 1280×720 and a real brief's
-// sections run from one item to eight, so a section whose items would not fit
-// carries on to a page of its own titled "…, continued" (the design's own
-// "Who is buying, continued"). Heights are estimated from the text's length
-// at the page's measured type (characters per line from the column width and
-// the font size), never measured in a browser: the plan has to be the same in
-// the viewer, the PDF and a test. The estimate errs high; scripts/brief-render.ts
-// measures the real pages for clipping.
+// ONE PAGE A SECTION. Each page takes what fits the canvas's layout, at the
+// canvas's type, up to the canvas's count (two buyers a page and the one
+// continuation; five objections; three rivals; five words to handle with
+// care…), and what does not fit stays in the stored brief, unprinted. Heights
+// are estimated from the text's length at the page's measured type (characters
+// per line from the column width and the font size), never measured in a
+// browser: the plan has to be the same in the viewer, the PDF and a test. The
+// estimate errs high; scripts/brief-render.ts measures the real pages for
+// clipping.
 
-/** The sheet, as the design draws it. */
+/** The sheet, as the canvas draws it. */
 export const SHEET = { width: 1280, height: 720 } as const
 
 /** The body of a content page: 720 less the frame (40 top, 28 bottom, the
  *  header line and its 22px, the footer and its rule). */
 export const BODY_HEIGHT = 584
-/** The title block of a section page: a 32px title and a 15px subtitle. */
-const TITLE_BLOCK = 84
+/** The page's width inside its margins. */
+const W = 1160
 
 /** Average width of a character, as a share of the font size, measured in
- *  Chrome on English brief copy (5 Oct): IBM Plex Sans 0.447 at 400, 0.470 at
- *  700; IBM Plex Serif 0.476 at 500, 0.420 in italic. Each is rounded up. */
-const CHAR = 0.47
+ *  Chrome on English brief copy (5 Oct, and the canvas's own lines, 12 Oct):
+ *  IBM Plex Sans 0.43 to 0.447 at 400, 0.470 at 700; IBM Plex Serif 0.476 at
+ *  500, 0.420 in italic. Each is rounded up. */
+const CHAR = 0.44
+const BOLD_CHAR = 0.48
 const SERIF_CHAR = 0.48
 const ITALIC_CHAR = 0.43
 
-/** Lines a text takes in a column. `serif`: the serif, or 'italic' for a
- *  quote. Pure. */
-export function linesOf(text: string, widthPx: number, fontPx: number, serif: boolean | 'italic' = false): number {
-  const per = serif === 'italic' ? ITALIC_CHAR : serif ? SERIF_CHAR : CHAR
+/** The face a text is set in, for its width. */
+export type Face = boolean | 'italic' | 'bold'
+
+/** Lines a text takes in a column. `face`: the serif (true), 'italic' for a
+ *  quote, 'bold' for a title; the sans by default. Words wrap whole, so a line
+ *  past the first holds a little less than its characters. Pure. */
+export function linesOf(text: string, widthPx: number, fontPx: number, face: Face = false): number {
+  const per = face === 'italic' ? ITALIC_CHAR : face === 'bold' ? BOLD_CHAR : face ? SERIF_CHAR : CHAR
   const perLine = Math.max(8, Math.floor(widthPx / (fontPx * per)))
-  // Words wrap whole: a line holds less than its characters.
-  return Math.max(1, Math.ceil((text.length * 1.1) / perLine))
+  const n = (text ?? '').length
+  if (n <= perLine) return 1
+  return Math.ceil(n / Math.max(6, perLine - 2))
 }
 
 /** A text's height in px. Pure. */
-export const heightOf = (text: string, widthPx: number, fontPx: number, lineHeight: number, serif: boolean | 'italic' = false): number =>
-  linesOf(text, widthPx, fontPx, serif) * fontPx * lineHeight
+export const heightOf = (text: string, widthPx: number, fontPx: number, lineHeight: number, face: Face = false): number =>
+  text ? linesOf(text, widthPx, fontPx, face) * fontPx * lineHeight : 0
 
 // ---- Words the deck prints (code's) ---------------------------------------------------------------
 
 const PLATFORM: Readonly<Record<string, string>> = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', reddit: 'Reddit' }
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const NUMBER = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten']
 
 /** "Sales brief". */
 export const briefName = (role: BriefRole): string => BRIEF_NAME[role]
@@ -75,52 +96,33 @@ export function writtenOn(iso: string): string {
   return `${d.getUTCDate()} ${longMonth(`${d.toISOString().slice(0, 7)}-01`)} ${d.getUTCFullYear()}`
 }
 
-/** Who a piece of talk is about, as a phrase: "other bags in your market",
- *  "about Cotopaxi", "on Sealand's own posts". Pure. */
-export function aboutPhrase(p: Pick<AboutPart, 'about'>, company: string, noun: string | null | undefined, ownPost = false): string {
-  if (p.about === 'market') return marketLabelsOf(noun ?? null).inline
-  if (p.about === 'client') return ownPost ? `on ${company}'s own posts` : `about ${company}`
-  return `about ${aboutName(p.about, { client: company }) ?? 'a rival'}`
-}
-
-export interface WhoLine {
-  /** "6 videos". */
-  count: string
-  /** Each audience with its videos, most first: "other bags in your market 5". */
-  parts: { label: string; videos: string | null }[]
-}
-
-/** What an item rests on and whose talk it was: "6 videos · other bags in your
- *  market 5 · about The North Face 1", or "3 videos · other bags in your
- *  market" where it is one audience's. Brand attribution on every item
- *  (Heinrich, 1 Oct). Null where the item counts nothing. Pure. */
-export function whoLineOf(videos: number | null | undefined, who: readonly AboutPart[] | null | undefined, company: string, noun: string | null | undefined): WhoLine | null {
-  if (videos == null || videos <= 0) return null
-  const sorted = [...(who ?? [])].filter((p) => p.videos > 0).sort((a, b) => b.videos - a.videos)
-  const parts = sorted.map((p) => ({ label: aboutPhrase(p, company, noun), videos: sorted.length > 1 ? fmtInt(p.videos) : null }))
-  return { count: `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}`, parts }
-}
-
-/** The line flat, for estimates and tests. */
-export const whoText = (w: WhoLine | null): string =>
-  w ? [w.count, ...w.parts.map((p) => (p.videos ? `${p.label} ${p.videos}` : p.label))].join(' · ') : ''
-
-/** Where a quote was heard and whose talk it was: "Reddit · 26 Sep · about
- *  Cotopaxi · translated from Japanese". Pure. */
-export function quoteCite(q: Pick<BriefQuote, 'platform' | 'date' | 'about' | 'ownPost'> & { lang?: string | null; english?: string | null }, company: string, noun: string | null | undefined): string {
+/**
+ * Where a quote was heard, as the canvas cites it: "Reddit · 23 Sep",
+ * "YouTube · 23 Sep · translated from Japanese", and on the company's own
+ * posts "On a Sealand post · Instagram · 18 Sep". Talk about a brand says
+ * which ("· about Cotopaxi"), the brand attribution every voice carries,
+ * except under a label that names it already (`labelled`). Pure.
+ */
+export function quoteCite(
+  q: Pick<BriefQuote, 'platform' | 'date' | 'about' | 'ownPost'> & { lang?: string | null; english?: string | null },
+  company: string,
+  o: { labelled?: boolean } = {},
+): string {
   const date = q.date ? new Date(`${q.date.slice(0, 10)}T00:00:00.000Z`) : null
   const day = date && !Number.isNaN(date.getTime()) ? `${date.getUTCDate()} ${MON[date.getUTCMonth()]}` : null
   const lang = q.english && q.lang ? languageName(q.lang) : null
+  const brand = q.ownPost || o.labelled || q.about === 'market' ? null : `about ${aboutName(q.about, { client: company }) ?? 'a rival'}`
   return [
+    q.ownPost ? `On ${/^[aeiouäåæéöø]/i.test(company) ? 'an' : 'a'} ${company} post` : null,
     PLATFORM[(q.platform ?? '').toLowerCase()] ?? q.platform ?? null,
     day,
-    aboutPhrase({ about: q.about }, company, noun, q.ownPost),
+    brand,
     lang ? `translated from ${lang}` : null,
   ].filter(Boolean).join(' · ')
 }
 
 /** The words a quote prints: the English where the comment was in another
- *  language (the design: "translated from Japanese" in its cite line). */
+ *  language (the canvas: "translated from Japanese" in its cite line). */
 export const quoteWords = (q: { text: string; english?: string | null }): string => (q.english?.trim() || q.text).replace(/\s+/g, ' ').trim()
 
 /** "Heard in August and September", from the months a finding's videos fall
@@ -130,16 +132,33 @@ export const heardIn = (f: Pick<BriefFinding, 'months'>): string => {
   return months.length ? `Heard in ${monthsPhrase(months)}` : ''
 }
 
+/** "Who is buying, continued". */
+export const continuedTitle = (title: string): string => `${title}, continued`
+
+/** The singular of the plural noun the product stores ("bags" → "bag"). */
+function singular(noun: string): string {
+  if (noun.endsWith('ies')) return `${noun.slice(0, -3)}y`
+  return noun.endsWith('s') && noun.length > 1 ? noun.slice(0, -1) : noun
+}
+
+/** The company's product in the canvas's three phrasings: "bags like
+ *  Sealand's", "a bag like Sealand's", "the bag". Pure. */
+export function productPhrases(company: string, noun: string | null | undefined): { plural: string; one: string; the: string } {
+  const n = (noun ?? '').trim()
+  if (!n) return { plural: `products like ${company}'s`, one: `a product like ${company}'s`, the: 'the product' }
+  return { plural: `${n} like ${company}'s`, one: `a ${singular(n)} like ${company}'s`, the: `the ${singular(n)}` }
+}
+
 // ---- The section's own words on the page ------------------------------------------------------------
 
-/** The header's label, per section: short, in the design's register. */
+/** The header's label, per section: the canvas's eyebrows. */
 export const EYEBROW: Readonly<Record<SectionKey, string>> = {
   'sales.buyers': 'Who is buying',
   'sales.deciders': 'Who else decides',
   'sales.stops': 'What stops them',
   'sales.settle': 'Settled first',
   'sales.triggers': 'What tips them into buying',
-  'sales.rivals': 'Rivals',
+  'sales.rivals': 'Who buyers compare you with',
   'sales.care': 'Language to handle with care',
   'marketing.believe': 'Believes and doubts',
   'marketing.words': 'In its own words',
@@ -148,7 +167,7 @@ export const EYEBROW: Readonly<Record<SectionKey, string>> = {
   'marketing.rivals': 'How rivals are heard',
   'content.questions': 'The questions people ask',
   'content.formats': 'Hooks and formats',
-  'content.watch': 'What the comments say',
+  'content.watch': 'What viewers come for',
   'content.more': 'What people want shown',
   'content.confusion': 'Where the confusion starts',
   'content.borrow': 'Words to borrow',
@@ -157,410 +176,414 @@ export const EYEBROW: Readonly<Record<SectionKey, string>> = {
   'leadership.weigh': 'What buyers weigh',
   'leadership.risks': 'The risks',
   'leadership.decisions': 'Questions for the business',
+  'leadership.holds': 'What holds so far',
 }
 
-/** The muted line under a section's title, where the design has one: what
- *  the section is, said plainly (code's words, never a claim). */
-export const SUBTITLE: Partial<Readonly<Record<SectionKey, string>>> = {
-  'sales.buyers': 'The kinds of buyer in the market, by their situation and what they need.',
-  'sales.deciders': 'The people besides the buyer who recommend, fit, sell or pay.',
-  'sales.stops': 'The reasons a willing buyer hesitates before committing.',
-  'sales.triggers': 'The moments when interest turns into a purchase.',
-  'sales.rivals': 'The rivals in the same decision, from talk about each one.',
-  'sales.care': 'Words sellers use that buyers question, and why.',
-  'marketing.believe': 'What people bring to the category before anyone tells them anything.',
-  'marketing.words': 'What the comments praise, argue about and describe, in the market\'s terms.',
-  'marketing.say_hear': 'The company\'s own claims, and what comes back from the market.',
-  'marketing.rivals': 'What each rival is known for in the market\'s own talk.',
-  'content.questions': 'Asked in the comments, in the audience\'s own framing.',
-  'content.watch': 'What the comments say about the videos and posts themselves.',
-  'content.more': 'Asked for in the comments, in their own terms.',
-  'content.borrow': 'Short lines from the comments, in the market\'s own words.',
+/** The name the cover and In short's contents give each section: the
+ *  canvas's short names. */
+export const CONTENTS: Partial<Readonly<Record<SectionKey, string>>> = {
+  'marketing.believe': 'What the market believes and doubts',
+  'content.watch': 'What viewers come for',
 }
 
 export const eyebrowOf = (key: SectionKey, company: string): string => EYEBROW[key].replace(/\{company\}/g, company)
 
+/** The muted line under a section's title, where the canvas has one: what the
+ *  section is, said plainly (code's words, never a claim), or the line code
+ *  wrote from counts. Pure. */
+export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'>, all?: BriefSection): string | null {
+  const p = productPhrases(d.company, d.noun)
+  switch (s.key) {
+    case 'sales.buyers': {
+      const items = (all ?? s).groups.flatMap((g) => g.items)
+      const n = items.length
+      const buy = items.filter((i) => !i.muted).length
+      if (n === 0) return null
+      const kinds = n === 1 ? `One kind of person talks about ${p.plural}.` : `${NUMBER[n] ?? fmtInt(n)} kinds of people talk about ${p.plural}.`
+      return buy === n || buy === 0 ? kinds : `${kinds} ${NUMBER[buy] ?? fmtInt(buy)} of them ${buy === 1 ? 'buys' : 'buy'}.`
+    }
+    case 'sales.stops': return 'The reasons a willing buyer hesitates before committing.'
+    case 'sales.triggers': return 'The moments when interest becomes a purchase.'
+    case 'sales.rivals': return 'The rivals in the same decision, each met through a clear job.'
+    case 'sales.care': return 'Words buyers hear as a promise, and what they already think of them.'
+    case 'marketing.believe': return `What people bring to ${p.one} before anyone tells them anything.`
+    case 'marketing.words': return `What people call ${p.the}, how they praise it, and how they describe the problem it solves.`
+    case 'marketing.rivals': return `The idea each brand stands for in the market's own talk${s.posts?.rows.length ? ', and how often its own posts draw a reply' : ''}.`
+    case 'content.questions': return `Asked under posts about ${p.plural}, and left unanswered in the conversation.`
+    case 'content.formats': return `Videos published in ${longMonth(d.month)}, by format and by how they open. Engagement is the category's median for each.`
+    case 'content.more': return 'Asked for in the comments, in their own terms.'
+    case 'leadership.market': return s.base ?? null
+    case 'leadership.shares':
+    case 'leadership.holds': return s.sub ?? null
+    default: return null
+  }
+}
+
+/** Tagged items' line at the foot of a page, as the canvas writes it under
+ *  What stops them ("Trust in the eco story is argued in full in the
+ *  Marketing brief."). Risk cards carry theirs on the card. Pure. */
+export function footnoteOf(s: BriefSection): string | null {
+  if (s.key === 'leadership.risks') return null
+  const lines = s.groups.flatMap((g) => g.items).filter((i) => i.tag && i.title).map((i) => {
+    const argued = /^Argued in the (.+)$/.exec(i.tag!)
+    const also = /^Also in the (.+)$/.exec(i.tag!)
+    if (argued) return `${i.title} is argued in full in the ${argued[1]}.`
+    if (also) return `${i.title} is also in the ${also[1]}.`
+    return null
+  }).filter((x): x is string => x != null)
+  return lines.length ? lines.join(' ') : null
+}
+
+/** A risk card's foot: "Argued in full in the Marketing brief". Pure. */
+export const tagLine = (tag: string | undefined): string | null => {
+  if (!tag) return null
+  const argued = /^Argued in the (.+)$/.exec(tag)
+  return argued ? `Argued in full in the ${argued[1]}` : tag
+}
+
+/** Which of a two-column page's columns a group takes: what is believed,
+ *  earns a response or holds people on the left (0); what is doubted, loses
+ *  them, is criticised or moves people on the right (1), in the orange label,
+ *  whichever printed. Pure. */
+export const pairColumn = (label: string | undefined): 0 | 1 => (/doubt|complain|criticis|moves|loses/i.test(label ?? '') ? 1 : 0)
+
 // ---- The pages ---------------------------------------------------------------------------------------
 
-/** How a finding fills its page: the type sizes, and where each voice and the
- *  practice lines go (the right column under the reading, the left column
- *  under the practice, or the finding's second page). */
+/** How a finding fills its page: the type sizes, the practice lines that
+ *  print, and where each voice goes (the right column under the reading, the
+ *  left under the practice). A voice that fits in neither does not print. */
 export interface FindingPlan {
   headline: number
   saw: number
-  practice: 'left' | 'next'
   means: number
+  /** How many practice lines print. */
+  practice: number
   /** Each quote's place, in order. */
-  quotes: ('right' | 'left' | 'next')[]
+  quotes: ('right' | 'left' | 'none')[]
 }
 
 export type PageBody =
   | { kind: 'cover' }
   | { kind: 'in_short'; summarySize: number; tocSize: number }
-  | { kind: 'finding'; finding: BriefFinding; index: number; of: number; plan: FindingPlan; part: 1 | 2 }
-  | { kind: 'section'; section: BriefSection; continued: boolean; companion: BriefSection | null; asPair?: boolean; across?: number }
+  | { kind: 'finding'; finding: BriefFinding; index: number; of: number; plan: FindingPlan }
+  | { kind: 'section'; section: BriefSection; continued: boolean; companion: BriefSection | null; sub: string | null; footnote: string | null }
 
 export interface DeckPage {
   /** 1-based, across the whole deck. */
   n: number
   /** The header's label (the cover has none). */
   eyebrow: string
-  /** The name the contents list gives this page, on the first page of a
-   *  finding or a section; null on a continued page and on the cover. */
+  /** The name the contents give this page; null on the cover and In short. */
   toc: string | null
   body: PageBody
 }
 
-/** The two sections that share a page with the one before them, where they
- *  fit beside it (the design's What stops them with What they want settled
- *  first, and The risks with Questions for the business). */
+/** The sections that print on their partner's page, as the canvas draws them:
+ *  What they want settled first beside What stops them, the questions for the
+ *  business under the risks. */
 const COMPANION: Partial<Readonly<Record<SectionKey, SectionKey>>> = {
   'sales.stops': 'sales.settle',
   'leadership.risks': 'leadership.decisions',
 }
+const COMPANIONS = new Set(Object.values(COMPANION))
 
-/** How a section lays out, which decides how its items paginate. */
-export type SectionLayout =
-  | 'rows' | 'care' | 'say_hear' | 'buyers' | 'cards' | 'columns' | 'pair' | 'questions'
-  | 'formats' | 'market' | 'shares' | 'weigh' | 'risks' | 'confusion' | 'voices' | 'words'
+/** The canvas's counts: the most a page draws of each section. */
+export const PAGE_MAX: Partial<Readonly<Record<SectionKey, number>>> = {
+  'sales.buyers': 2,
+  'sales.stops': 5,
+  'sales.settle': 5,
+  'sales.triggers': 5,
+  'sales.rivals': 3,
+  'sales.care': 5,
+  'marketing.say_hear': 5,
+  'content.questions': 8,
+  'content.more': 5,
+  'content.confusion': 5,
+  'leadership.market': 5,
+  'leadership.risks': 3,
+  'leadership.decisions': 4,
+  'leadership.holds': 4,
+}
+/** Who is buying takes its page and the canvas's one continuation. */
+export const BUYERS_PAGES = 2
 
-export const LAYOUT: Readonly<Record<SectionKey, SectionLayout>> = {
-  'sales.buyers': 'buyers',
-  'sales.deciders': 'rows',
-  'sales.stops': 'rows',
-  'sales.settle': 'questions',
-  'sales.triggers': 'columns',
-  'sales.rivals': 'cards',
-  'sales.care': 'care',
-  'marketing.believe': 'pair',
-  'marketing.words': 'words',
-  'marketing.say_hear': 'say_hear',
-  'marketing.recall': 'pair',
-  'marketing.rivals': 'cards',
-  'content.questions': 'questions',
-  'content.formats': 'formats',
-  'content.watch': 'pair',
-  'content.more': 'rows',
-  'content.confusion': 'confusion',
-  'content.borrow': 'voices',
-  'leadership.market': 'market',
-  'leadership.shares': 'shares',
-  'leadership.weigh': 'weigh',
-  'leadership.risks': 'risks',
-  'leadership.decisions': 'questions',
+const items = (s: BriefSection): BriefItem[] => s.groups.flatMap((g) => g.items)
+
+/** The section holding only `keep` of its items (groups kept in order). */
+function only(s: BriefSection, keep: readonly BriefItem[]): BriefSection {
+  return { ...s, groups: s.groups.map((g) => ({ ...g, items: g.items.filter((i) => keep.includes(i)) })).filter((g) => g.items.length > 0 || (g.lines?.length ?? 0) > 0) }
 }
 
-/** Which of a two-column page's columns a group takes: what is believed,
- *  praised, praised for or keeps people on the left (0); what is doubted,
- *  complained about, criticised or moves people on the right (1), in the
- *  orange label, whichever printed. Pure. */
-export const pairColumn = (label: string | undefined): 0 | 1 => (/doubt|complain|criticis|moves/i.test(label ?? '') ? 1 : 0)
-
-/** The page width a block has (the design's 60px margins). */
-const W = 1160
-
-/** Whose brief a page plan is for: the who lines' words depend on it. */
-export interface WhoCtx { company: string; noun: string | null | undefined }
-const ANY: WhoCtx = { company: 'the company', noun: null }
-
-/** The height of an item's who line as it prints, at `size`, in a column
- *  `w` wide: the line is short and set in the regular weight, so it is
- *  measured at that weight's width and without the prose's wrap allowance. */
-function whoH(i: Pick<BriefItem, 'videos' | 'who' | 'tag'>, w: number, c: WhoCtx, size = 12): number {
-  if (!i.videos && !i.tag) return 0
-  const text = [i.tag ?? '', whoText(whoLineOf(i.videos, i.who, c.company, c.noun))].filter(Boolean).join(' · ')
-  const perLine = Math.max(8, Math.floor(w / (size * 0.44)))
-  return Math.ceil(text.length / perLine) * size * 1.4 + 4
-}
-
-const body = (i: BriefItem): string => `${i.text}${i.detail ? ` ${i.detail}` : ''}`
-const leadH = (lead: string | undefined, w: number, size: number): number => (lead ? heightOf(lead, w, size, 1.5, true) + 14 : 0)
-const quoteH = (q: BriefQuote | null | undefined, w: number, size: number): number => {
-  if (!q) return 0
-  const words = quoteWords(q as BriefQuote & { english?: string | null })
-  return words ? 40 + heightOf(`“${words}”`, w - 48, size, 1.5, 'italic') + 28 : 0
-}
-
-/** The room a section page's body has under its title block. */
-const ROOM = BODY_HEIGHT - TITLE_BLOCK
-
-/** Heights the planner reads, per layout, for one brief. Pure. */
-export const heightsFor = (c: WhoCtx = ANY) => {
-  const whoH_ = (i: BriefItem, w: number, size = 12): number => whoH(i, w, c, size)
-  return {
-  rows: (i: BriefItem, more: boolean) => 25 + Math.max(heightOf(i.title ?? '', 196, more ? 20 : 18, 1.3), heightOf(body(i), 490, more ? 16 : 15, 1.55) + whoH_(i, 490)),
-  settle: (i: BriefItem) => 15 + heightOf(i.text, 350, 14, 1.5) + whoH_(i, 350),
-  care: (i: BriefItem) => 41 + Math.max(heightOf(i.title ?? '', 467, 30, 1.15), heightOf(body(i), 665, 19, 1.5) + whoH_(i, 665)),
-  sayHear: (i: BriefItem) => 35 + Math.max(heightOf(i.title ?? '', 469, 16, 1.45), heightOf(i.text, 666, 16, 1.5) + whoH_(i, 666)),
-  buyer: (i: BriefItem) => 30 + Math.max(heightOf(i.title ?? '', 352, 24, 1.2), heightOf(i.text, 734, 16, 1.5, true) + (i.detail ? 30 + heightOf(i.detail, 734, 14, 1.45) : 0)) + 36,
-  card: (i: BriefItem, w: number, sales: boolean) => {
-    const inner = w - 46
-    return 36 + (sales ? 31 : 17) + 12 + (sales ? 21 : 0) + heightOf(i.text, inner, sales ? 14.5 : 17, sales ? 1.52 : 1.4) + (i.detail ? 33 + heightOf(i.detail, inner, 14.5, 1.52) : 0) + 12 + whoH_(i, inner)
-  },
-  column: (i: BriefItem, w: number) => 35 + heightOf(i.title ?? '', w, 19, 1.25) + 10 + heightOf(body(i), w, 15, 1.55) + 10 + whoH_(i, w),
-  pair: (i: BriefItem, blocks: boolean) => blocks || i.title
-    ? 28 + (i.title ? 32 : 0) + heightOf(body(i), 556, 16, 1.55) + whoH_(i, 556)
-    : 22 + heightOf(body(i), 538, 15, 1.55) + whoH_(i, 538),
-  question: (i: BriefItem) => 30 + heightOf(i.text, 514, 17, 1.3) + (i.detail ? 4 + heightOf(i.detail, 514, 14, 1.5) : 0) + whoH_(i, 514),
-  word: (i: BriefItem) => 18 + heightOf(body(i), 631, 15, 1.55) + whoH_(i, 631),
-  market: (i: BriefItem) => 17 + Math.max(28, heightOf(i.text, 518, 14, 1.5) + (i.tag ? 20 : 0)),
-  said: (i: BriefItem) => 22 + heightOf(body(i), 386, 15, 1.55) + whoH_(i, 386),
-  weigh: (i: BriefItem, w: number) => 18 + heightOf(i.title ?? '', w, 16, 1.3) + heightOf(i.text, w, 14, 1.45) + whoH_(i, w),
-  risk: (i: BriefItem, w: number) => 44 + 22 + heightOf(i.title ?? '', w - 52, 23, 1.25) + 10 + heightOf(i.text, w - 52, 15, 1.55) + 10 + whoH_(i, w - 52, 13),
-  decision: (i: BriefItem) => 20 + heightOf(i.text, 522, 15, 1.45) + whoH_(i, 522),
-  confusion: (i: BriefItem, w: number) => 34 + heightOf(i.title ?? '', w - 36, 17, 1.3) + 8 + heightOf(body(i), w - 36, 14, 1.55) + 8 + whoH_(i, w - 36),
-}
-}
-
-/** The default heights (a brief whose who lines are not known). */
-export const heights = heightsFor()
-
-/** Items into pages: each page takes items while their heights fit its room
- *  (the first page's room may be less). A page always takes one. Pure. */
-export function fillByHeight<T>(items: readonly T[], h: (x: T) => number, first: number, room = ROOM): T[][] {
-  const pages: T[][] = [[]]
-  let left = first
-  for (const x of items) {
+/** Items in order while their heights fit `room`: always the first. Pure. */
+export function fitItems<T>(xs: readonly T[], h: (x: T) => number, room: number, max = Infinity): T[] {
+  const out: T[] = []
+  let used = 0
+  for (const x of xs) {
+    if (out.length >= max) break
     const hx = h(x)
-    if (pages[pages.length - 1].length > 0 && hx > left) {
-      pages.push([])
-      left = room
-    }
-    pages[pages.length - 1].push(x)
-    left -= hx
+    if (out.length > 0 && used + hx > room) break
+    out.push(x)
+    used += hx
   }
-  return pages.filter((p) => p.length > 0)
-}
-
-/**
- * Side-by-side items into pages: as many across as fit (from `most` down),
- * laid out in `least` slots or more (the design's three rivals across, four
- * triggers), where the tallest of them fits `room`. One item too tall for its
- * slot takes a wider one, down to the whole width. Each page says how many
- * slots it is laid out in. Pure.
- */
-export function acrossPages<T>(items: readonly T[], most: number, least: number, h: (x: T, slots: number) => number, room: number): { items: T[]; slots: number }[] {
-  const pages: { items: T[]; slots: number }[] = []
-  let k = 0
-  const tallest = (xs: readonly T[], slots: number) => Math.max(...xs.map((x) => h(x, slots)))
-  while (k < items.length) {
-    let take = Math.min(most, items.length - k)
-    while (take > 1 && tallest(items.slice(k, k + take), Math.max(least, take)) > room) take--
-    let slots = Math.max(least, take)
-    while (slots > take && tallest(items.slice(k, k + take), slots) > room) slots--
-    pages.push({ items: items.slice(k, k + take), slots })
-    k += take
-  }
-  return pages
-}
-
-/** Which page a section's voice prints on: the first whose tallest item
- *  leaves room for it, else the one with the most room. Pure. */
-export function quotePage(tallest: readonly number[], quote: number, room: number): number {
-  const fits = tallest.findIndex((t) => t + quote <= room)
-  if (fits >= 0) return fits
-  return tallest.reduce((best, t, i) => (t < tallest[best] ? i : best), 0)
-}
-
-type Located = { gi: number; item: BriefItem }
-
-/** A section holding only these items (groups kept in order), the first
- *  page's lead, quote and voices on the first page only, and a group's own
- *  lines with its last item. */
-function withItems(s: BriefSection, chunk: readonly Located[], continued: boolean): BriefSection {
-  const groups = s.groups
-    .map((g, gi) => {
-      const items = chunk.filter((x) => x.gi === gi).map((x) => x.item)
-      const last = g.items.length > 0 && items.includes(g.items[g.items.length - 1])
-      const out = { ...g, items }
-      if (!last) delete out.lines
-      return out
-    })
-    .filter((g) => g.items.length > 0 || (g.lines?.length ?? 0) > 0)
-  if (!continued) return { ...s, groups }
-  const out: BriefSection = { key: s.key, title: s.title, groups }
-  if (s.base) out.base = s.base
   return out
 }
 
-/** Pages of the two-column layout: each column fills its own pages (the left
- *  with what is believed or praised, the right with what is doubted or
- *  criticised), and page n holds each column's n-th. `first` is each
- *  column's room on the first page. Pure. */
-function pairPages(s: BriefSection, all: readonly Located[], first: readonly [number, number], blocks: boolean, heights: ReturnType<typeof heightsFor>): Located[][] {
-  const col = (x: Located) => pairColumn(s.groups[x.gi]?.label)
-  const columns = ([0, 1] as const).map((c) => fillByHeight(all.filter((x) => col(x) === c), (x) => heights.pair(x.item, blocks), first[c]))
-  const n = Math.max(columns[0].length, columns[1].length)
-  // In source order on each page, so the groups keep theirs.
-  return Array.from({ length: n }, (_, k) => all.filter((x) => (columns[0][k] ?? []).includes(x) || (columns[1][k] ?? []).includes(x)))
+/** The title block: a 32px title, and the 15px muted line under it. */
+const titleH = (sub: string | null, size = 32): number => size * 1.15 + (sub ? 6 + heightOf(sub, W, 15, 1.45) : 0)
+const quoteH = (q: BriefQuote | null | undefined, w: number, size: number, pad: [number, number]): number => {
+  if (!q) return 0
+  const words = quoteWords(q as BriefQuote & { english?: string | null })
+  return words ? pad[0] * 2 + heightOf(`“${words}”`, w - pad[1] * 2, size, 1.5, 'italic') + 10 + 20 : 0
 }
+const FOOT_GAP = 16
 
-export interface SectionPlan {
-  /** `asPair`: a continued page drawn as the design's two-column page (what
-   *  the company is praised and criticised for, what keeps and moves buyers,
-   *  carried on). */
-  slices: { section: BriefSection; continued: boolean; companion: BriefSection | null; asPair?: boolean; across?: number }[]
-  /** Did the companion print beside it? Otherwise it takes pages of its own. */
-  companionPlaced: boolean
+/** Heights of each layout's pieces, at the canvas's type and measure. Pure. */
+export const H = {
+  /** A buyer card's need: its columns, its name and pill, and For a sale. */
+  buyer: (i: BriefItem): number => {
+    const inner = W - 46
+    const unit = (inner - 72) / 4.15
+    const col1 = 29 + (i.pill ? 8 + 22 : 0) + 8 + heightOf(i.text, unit * 1.15, 15, 1.45, true)
+    const cols = [i.persona?.want, i.persona?.stops, i.persona?.moves].map((t) => (t ? 16 + heightOf(t, unit, 13, 1.45) : 0))
+    const sale = i.persona?.forSale ? 11 + Math.max(22, heightOf(i.persona.forSale, inner - 104, 14, 1.45)) : 0
+    return 30 + Math.max(col1, ...cols) + (sale ? 10 + sale : 0)
+  },
+  stop: (i: BriefItem): number => 25 + Math.max(heightOf(i.title ?? '', 196, 18, 1.3, 'bold'), heightOf(i.text, 490, 15, 1.55)),
+  settle: (i: BriefItem): number => 15 + heightOf(i.text, 350, 14, 1.5),
+  trigger: (i: BriefItem, w: number): number => 28 + 10 + heightOf(i.title ?? '', w, 19, 1.25, 'bold') + 10 + heightOf(i.text, w, 15, 1.55),
+  triggerQuote: (q: BriefQuote): number => 19 + quoteH(q, (W - 40) / 3, 15, [14, 18]),
+  rival: (i: BriefItem, w: number): number => {
+    const inner = w - 46
+    return 38 + 31 + (i.pill ? 6 + 30 : 0) + 12 + 19 + heightOf(i.text, inner, 14.5, 1.52) + (i.detail ? 12 + 19 + heightOf(i.detail, inner, 14.5, 1.52) : 0)
+  },
+  care: (i: BriefItem): number => 45 + Math.max(heightOf(i.title ?? '', 467, 32, 1.15, 'bold'), heightOf(i.text, 665, 20, 1.5)),
+  bullet: (i: BriefItem, w: number): number => 23 + heightOf(i.text, w - 18, 15, 1.55),
+  sayHear: (i: BriefItem): number => 35 + Math.max(heightOf(i.title ?? '', 420, 16, 1.45, 'bold'), heightOf(i.text, 518, 16, 1.5), 22),
+  heardCard: (i: BriefItem, w: number): number => 34 + 15 + 8 + heightOf(i.pill ?? '', w - 42, 22, 1.2, 'bold') + 8 + heightOf(i.text, w - 42, 14, 1.5),
+  question: (i: BriefItem): number => 31 + heightOf(i.text, 514, 18, 1.3, 'bold') + (i.detail ? 4 + heightOf(i.detail, 514, 14, 1.5) : 0),
+  watch: (i: BriefItem): number => 37 + heightOf(i.title ?? '', 556, 21, 1.2, 'bold') + 6 + heightOf(i.text, 556, 17, 1.55),
+  more: (i: BriefItem): number => 39 + Math.max(heightOf(i.title ?? '', 196, 21, 1.3, 'bold'), heightOf(i.text, 490, 17, 1.55)),
+  confusion: (i: BriefItem, w: number): number => 38 + heightOf(i.title ?? '', w - 36, 17, 1.3, 'bold') + 8 + heightOf(i.text, w - 36, 14, 1.5),
+  subject: (i: BriefItem): number => 17 + Math.max(22, i.quote && !i.text ? heightOf(`“${quoteWords(i.quote as BriefQuote & { english?: string | null })}” Reddit · 26 Sep`, 518, 14, 1.5, 'italic') : heightOf(i.text, 518, 14, 1.5)),
+  weigh: (i: BriefItem, w: number): number => 19 + heightOf(i.title ?? '', w, 16, 1.3, 'bold') + 2 + heightOf(i.text, w, 14, 1.45),
+  risk: (i: BriefItem, w: number): number => 44 + 14 + 10 + heightOf(i.title ?? '', w - 52, 23, 1.25, 'bold') + 10 + heightOf(i.text, w - 52, 15, 1.55) + (i.tag ? 10 + 18 : 0),
+  decision: (i: BriefItem): number => 21 + heightOf(i.text, 537, 15, 1.45),
+  pattern: (i: BriefItem): number => 37 + heightOf(i.text, 610, 22, 1.45, true),
 }
 
 /**
- * A section cut into the pages it needs, by its layout's measure. The first
- * page keeps its lead, quote, voices and code's lines; a continued page has
- * its items alone. A companion prints beside its partner where both fit.
+ * A section cut to the canvas's page or pages: the items that fit at the
+ * canvas's type, up to its count, the companion beside it where it has one.
  * Pure.
  */
-export function planSection(s: BriefSection, companion: BriefSection | null = null, who: WhoCtx = ANY): SectionPlan {
-  const heights = heightsFor(who)
-  const layout = LAYOUT[s.key]
-  const all: Located[] = s.groups.flatMap((g, gi) => g.items.map((item) => ({ gi, item })))
-  const one = (companionPlaced = false): SectionPlan => ({ slices: [{ section: s, continued: false, companion: companionPlaced ? companion : null }], companionPlaced })
-  const cut = (pages: Located[][], placed: BriefSection | null = null, pairFrom = Infinity): SectionPlan => ({
-    slices: (pages.length ? pages : [[]]).map((p, k) => ({ section: withItems(s, p, k > 0), continued: k > 0, companion: k === 0 ? placed : null, ...(k >= pairFrom ? { asPair: true } : {}) })),
-    companionPlaced: placed != null,
+export function planSection(s: BriefSection, companion: BriefSection | null, d: Pick<StoredBriefData, 'company' | 'noun' | 'month' | 'findings' | 'inShort'>): { section: BriefSection; continued: boolean; companion: BriefSection | null; sub: string | null; footnote: string | null }[] {
+  const all = items(s)
+  const max = PAGE_MAX[s.key] ?? Infinity
+  const page = (section: BriefSection, o: { continued?: boolean; companion?: BriefSection | null; sub?: string | null } = {}) => ({
+    section,
+    continued: o.continued ?? false,
+    companion: o.companion ?? null,
+    sub: o.sub === undefined ? subtitleOf(section, d) : o.sub,
+    footnote: footnoteOf(section),
   })
-  /** Side by side: each page's slots, and the voice on the page with room:
-   *  in a free slot beside the items where a page has one (`beside`, the
-   *  height of the voice in a slot), else under them. */
-  const across = (pages: { items: Located[]; slots: number }[], h: (x: Located, slots: number) => number, quote: number, room: number, beside?: (slots: number) => number): SectionPlan => {
-    const plan = cut(pages.map((p) => p.items))
-    const free = beside ? pages.findIndex((p) => p.items.length < p.slots && beside(p.slots) <= room) : -1
-    const at = !s.quote || quote <= 0 ? 0 : free >= 0 ? free : quotePage(pages.map((p) => Math.max(...p.items.map((x) => h(x, p.slots)))), quote, room)
-    plan.slices = plan.slices.map((x, k) => {
-      const section = { ...x.section }
-      if (k === at && s.quote) section.quote = s.quote
-      else delete section.quote
-      return { ...x, section, across: pages[k]?.slots }
-    })
-    return plan
+  const sub = subtitleOf(s, d)
+  /** The footnote's room, in a column `w` wide, where one prints. */
+  const foot = (xs: readonly BriefItem[], w = W) => {
+    const t = footnoteOf(only(s, xs))
+    return t ? FOOT_GAP + heightOf(t, w, 13, 1.35) : 0
   }
-  const byHeight = (h: (i: BriefItem) => number, first: number) => {
-    const pages = fillByHeight(all, (x) => h(x.item), first)
-    return pages
-  }
-  switch (layout) {
-    case 'formats':
-    case 'voices':
-      return one()
-    case 'rows': {
-      const more = s.key === 'content.more'
-      const firstRoom = ROOM - leadH(s.lead, 710, 17)
-      // The companion's panel, with the section's voice above it, beside the rows.
-      const panel = companion ? 46 + allOf(companion).reduce((n, i) => n + heights.settle(i), 0) + (s.quote ? quoteH(s.quote, 406, 17) + 16 : 0) : 0
-      const placed = companion && panel <= BODY_HEIGHT ? companion : null
-      return cut(byHeight((i) => heights.rows(i, more), firstRoom), placed)
+  switch (s.key) {
+    case 'sales.buyers': {
+      // Two a page, the canvas's page and its one continuation.
+      const shown = all.slice(0, max * BUYERS_PAGES)
+      const pages = [shown.slice(0, max), shown.slice(max, max * 2)].filter((p) => p.length > 0)
+      const whole = only(s, shown)
+      return pages.map((p, k) => page(only(s, p), { continued: k > 0, sub: k === 0 ? subtitleOf(s, d, whole) : null }))
     }
-    case 'care':
-      return cut(byHeight(heights.care, ROOM))
-    case 'say_hear':
-      return cut(byHeight(heights.sayHear, ROOM - 30 + 22))
-    case 'market':
-      return cut(byHeight(heights.market, ROOM + 20 - leadH(s.lead, 1160, 17)))
-    case 'questions': {
-      // Two columns: a row is as tall as its taller question.
-      const rows: Located[][] = []
-      for (let k = 0; k < all.length; k += 2) rows.push(all.slice(k, k + 2))
-      const pages = fillByHeight(rows, (r) => Math.max(...r.map((x) => heights.question(x.item))), ROOM)
-      return cut(pages.map((p) => p.flat()))
+    case 'sales.stops': {
+      const room = BODY_HEIGHT - titleH(sub) - 14
+      const rows = fitItems(all, H.stop, room - foot(all, 710), max)
+      // The right column: the voice, then what they want settled first.
+      let settle = companion ? items(companion).slice(0, PAGE_MAX['sales.settle']) : []
+      const q = quoteH(s.quote, 406, 17, [20, 24])
+      const panel = (xs: BriefItem[]) => (xs.length ? 46 + xs.reduce((n, i) => n + H.settle(i), 0) : 0)
+      while (settle.length && q + 16 + panel(settle) > BODY_HEIGHT) settle = settle.slice(0, -1)
+      const out = { ...only(s, rows) }
+      if (q + (settle.length ? 16 + panel(settle) : 0) > BODY_HEIGHT) delete out.quote
+      return [page(out, { companion: companion && settle.length ? only(companion, settle) : null })]
     }
-    case 'words':
-      return cut(fillByHeight(all, (x) => heights.word(x.item) + (all.findIndex((y) => y.gi === x.gi) === all.indexOf(x) ? 26 : 0), ROOM - leadH(s.lead, 649, 18)))
-    case 'pair': {
-      const blocks = s.key === 'content.watch'
-      const top = ROOM - leadH(s.lead, 1080, blocks ? 22 : 18) - 22
-      // The voice prints at the foot of the right-hand column.
-      return cut(pairPages(s, all, [top, top - (s.quote ? quoteH(s.quote, 556, 17) + 10 : 0)], blocks, heights))
+    case 'sales.triggers': {
+      const shown = all.slice(0, max)
+      const w = (W - 24 * 4) / 5
+      const tallest = Math.max(...shown.map((i) => H.trigger(i, w)))
+      const room = BODY_HEIGHT - titleH(sub) - 22 - tallest - 22 - foot(shown)
+      // A voice a moment, the row as tall as its tallest.
+      let quoted = shown.filter((i) => i.quote && quoteWords(i.quote as BriefQuote & { english?: string | null }))
+      while (quoted.length && Math.max(...quoted.map((i) => H.triggerQuote(i.quote!))) > room) quoted = quoted.slice(0, -1)
+      const kept = shown.map((i) => (quoted.includes(i) || !i.quote ? i : (() => { const x = { ...i }; delete x.quote; return x })()))
+      return [page({ ...s, groups: [{ items: kept }] })]
     }
-    case 'buyers': {
-      // Two to a page, each card half the page; one too tall for half takes it all.
-      const half = (ROOM - 12) / 2
-      const pages: { items: Located[]; slots: number }[] = []
-      for (let k = 0; k < all.length;) {
-        const two = all.slice(k, k + 2)
-        const fits = Math.max(...two.map((x) => heights.buyer(x.item))) <= half
-        const take = two.length === 2 && fits ? 2 : 1
-        pages.push({ items: all.slice(k, k + take), slots: take === 2 || fits ? 2 : 1 })
-        k += take
+    case 'sales.rivals': {
+      const shown = all.slice(0, max)
+      const w = (W - 40) / 3
+      const cards = Math.max(...shown.map((i) => H.rival(i, w)))
+      const room = BODY_HEIGHT - titleH(sub) - 14 - cards - 14 - foot(shown)
+      const quoted = shown.find((i) => i.quote)
+      const alsoH = s.also ? 13 + 20 + heightOf(s.also, (W - 20) * (2 / 3), 15, 1.5) : 0
+      const qH = quoted ? 20 + quoteH(quoted.quote, (W - 20) / 3, 14, [12, 16]) : 0
+      const out = only(s, shown)
+      if (Math.max(alsoH, qH) > room) {
+        // The voice goes first, then the line.
+        out.groups = out.groups.map((g) => ({ ...g, items: g.items.map((i) => { const x = { ...i }; delete x.quote; return x }) }))
+        if (alsoH > room) delete out.also
       }
-      return across(pages, (x) => heights.buyer(x.item), 0, ROOM)
+      return [page(out)]
     }
-    case 'cards': {
-      const sales = s.key === 'sales.rivals'
-      const width = (k: number) => (W - 18 * (k - 1)) / k
-      const h = (x: Located, k: number) => heights.card(x.item, width(k), sales)
-      const room = ROOM - 14
-      return across(acrossPages(all, 4, 3, h, room), h, s.quote ? quoteH(s.quote, width(3), 14) + 14 : 0, room, (k) => quoteH(s.quote, width(k), 14))
+    case 'sales.care': {
+      const rows = fitItems(all, H.care, BODY_HEIGHT - titleH(sub) - 16 - foot(all), max)
+      return [page(only(s, rows))]
     }
-    case 'columns': {
-      const width = (k: number) => (W - 24 * (k - 1)) / k
-      const h = (x: Located, k: number) => heights.column(x.item, width(k))
-      const room = ROOM - 22
-      return across(acrossPages(all, 5, 4, h, room), h, s.quote ? quoteH(s.quote, (W - 20) / 2, 15) + 22 : 0, room, (k) => quoteH(s.quote, width(k), 15))
+    case 'marketing.believe': {
+      const col = (W - 48) / 2
+      const top = BODY_HEIGHT - titleH(sub) - 18 - 27
+      const left = s.groups.filter((g) => pairColumn(g.label) === 0).flatMap((g) => g.items)
+      const right = s.groups.filter((g) => pairColumn(g.label) === 1).flatMap((g) => g.items)
+      const q = s.quote ? quoteH(s.quote, col, 17, [20, 24]) + 10 : 0
+      const keepL = fitItems(left, (i) => H.bullet(i, col), top - foot(left, col))
+      const keepR = fitItems(right, (i) => H.bullet(i, col), top - q)
+      return [page(only(s, [...keepL, ...keepR]))]
     }
-    case 'confusion': {
-      const width = (k: number) => (W - 14 * (k - 1)) / k
-      const h = (x: Located, k: number) => heights.confusion(x.item, width(k))
-      const lead = leadH(s.lead, 1100, 24) + 8
-      const pages = acrossPages(all, 5, 4, h, ROOM - 22 - lead)
-      // Pages after the first have the lead's room as well.
-      return across(pages, h, 0, ROOM - 22)
-    }
-    case 'risks': {
-      const width = (k: number) => (W - 20 * (k - 1)) / k
-      const h = (x: Located, k: number) => heights.risk(x.item, width(k))
-      const lead = leadH(s.lead, 1160, 17)
-      const pages = acrossPages(all, 3, 1, h, ROOM + 30 - lead)
-      // The questions under the cards, two to a row, where they fit.
-      let placed: BriefSection | null = null
-      if (companion && pages.length === 1) {
-        const tallest = Math.max(0, ...pages[0].items.map((x) => h(x, pages[0].slots)))
-        const qs = allOf(companion)
-        let rowsH = 0
-        for (let k = 0; k < qs.length; k += 2) rowsH += Math.max(...qs.slice(k, k + 2).map(heights.decision))
-        if (tallest + 18 + 28 + rowsH <= ROOM + 30 - lead) placed = companion
+    case 'marketing.words': {
+      const left = (W - 48) * (1.4 / 2.4)
+      const room = BODY_HEIGHT - titleH(sub) - 18
+      const lead = s.lead ? heightOf(s.lead, left, 18, 1.5, true) + 22 : 0
+      let chips = (s.chips ?? []).map((c) => ({ ...c, words: [...c.words] }))
+      const chipsH = () => chips.reduce((n, c) => n + 24 + chipRows(c.words, left) * 39, 0) + Math.max(0, chips.length - 1) * 22
+      while (chips.length && chipsH() + lead > room) {
+        const longest = chips.reduce((x, c) => (c.words.length > x.words.length ? c : x), chips[0])
+        longest.words.pop()
+        chips = chips.filter((c) => c.words.length > 0)
       }
-      const plan = across(pages, h, 0, ROOM)
-      plan.slices[0] = { ...plan.slices[0], companion: placed }
-      plan.companionPlaced = placed != null
-      return plan
+      return [page({ ...s, chips })]
     }
-    case 'shares': {
-      // The talk table and its own-posts line stay on the first page; what
-      // the company is praised and criticised for sits in the panel beside
-      // it, and carries on, two columns, where it is long.
-      const talkGi = s.groups.findIndex((g) => g.items.some((i) => i.measure?.comments != null) || (g.lines?.length ?? 0) > 0)
-      const said = all.filter((x) => x.gi !== talkGi)
-      const talk = all.filter((x) => x.gi === talkGi)
-      const panelFirst = ROOM - 40 - leadH(s.lead, 404, 16)
-      const pages = fillByHeight(said, (x) => heights.said(x.item) + (said.findIndex((y) => y.gi === x.gi) === said.indexOf(x) ? 30 : 0), panelFirst)
-      const out: Located[][] = [[...talk, ...(pages[0] ?? [])]]
-      // Carried on in two columns, as the design's pair pages draw them.
-      const rest = pages.slice(1).flat()
-      if (rest.length) out.push(...pairPages(s, rest, [ROOM, ROOM], false, heights))
-      return cut(out, null, 1)
+    case 'marketing.say_hear': {
+      const rows = fitItems(all, H.sayHear, BODY_HEIGHT - 38 - 18 - 23 - foot(all), max)
+      return [page(only(s, rows))]
     }
-    case 'weigh': {
-      // What they weigh down the left; what keeps and what moves them side by
-      // side in the panel. Each carries on where it is long.
-      const left = all.filter((x) => x.gi === 0)
-      const panel = all.filter((x) => x.gi > 0)
-      const top = s.lead ? Math.max(leadH(s.lead, 736, 20), quoteH(s.quote, 352, 15)) + 16 : 0
-      const lw = panel.length ? 388 : 562
-      const leftPages = fillByHeight(left, (x) => heights.weigh(x.item, lw), ROOM - top - 22, ROOM - 22)
-      const panelH = (xs: readonly Located[]) => 54 + Math.max(0, ...s.groups.map((_g, gi) => xs.filter((x) => x.gi === gi).reduce((n, x) => n + heights.weigh(x.item, 332), 0)))
-      const panelFits = panelH(panel) <= ROOM - top
-      const pages: Located[][] = leftPages.length ? leftPages.map((p, k) => [...p, ...(k === 0 && panelFits ? panel : [])]) : [panelFits ? panel : []]
-      const pairFrom = pages.length
-      if (!panelFits && panel.length) pages.push(...pairPages(s, panel, [ROOM, ROOM], false, heights))
-      return cut(pages, null, pairFrom)
+    case 'marketing.rivals': {
+      const cards = all.filter((i) => !i.you).slice(0, 3)
+      const you = all.find((i) => i.you)
+      const shown = [...cards, ...(you ? [you] : [])]
+      const n = Math.max(1, shown.length)
+      const w = (W - 14 * (n - 1)) / n
+      const cardsH = shown.length ? Math.max(...shown.map((i) => H.heardCard(i, w))) : 0
+      const room = BODY_HEIGHT - titleH(sub, 30) - 16 - (cardsH ? cardsH + 16 : 0)
+      const rows = (s.posts?.rows ?? []).slice(0, Math.max(0, Math.floor((room - 6 - 15 - 8 - 34) / 31)))
+      const out = only(s, shown)
+      if (s.posts) out.posts = rows.length ? { ...s.posts, rows } : undefined
+      if (!out.posts) delete out.posts
+      return [page(out, { sub: subtitleOf(out, d) })]
+    }
+    case 'content.questions': {
+      const rows: BriefItem[][] = []
+      const shown = all.slice(0, max)
+      for (let k = 0; k < shown.length; k += 2) rows.push(shown.slice(k, k + 2))
+      const fit = fitItems(rows, (r) => Math.max(...r.map(H.question)), BODY_HEIGHT - titleH(sub) - 16 - foot(all))
+      return [page(only(s, fit.flat()))]
+    }
+    case 'content.formats':
+      return [page(s)]
+    case 'content.watch': {
+      const lead = s.lead ? 22 + heightOf(s.lead, 1080, 23, 1.5, true) : 0
+      const room = BODY_HEIGHT - 37 - lead - 22 - 23 - foot(all, (W - 48) / 2)
+      const left = s.groups.filter((g) => pairColumn(g.label) === 0).flatMap((g) => g.items)
+      const right = s.groups.filter((g) => pairColumn(g.label) === 1).flatMap((g) => g.items)
+      return [page(only(s, [...fitItems(left, H.watch, room, 3), ...fitItems(right, H.watch, room, 3)]))]
+    }
+    case 'content.more': {
+      const rows = fitItems(all, H.more, BODY_HEIGHT - titleH(sub) - 14 - foot(all, 710), max)
+      const out = only(s, rows)
+      if (s.quote && quoteH(s.quote, 406, 19, [20, 24]) > BODY_HEIGHT) delete out.quote
+      return [page(out)]
+    }
+    case 'content.confusion': {
+      const shown = all.slice(0, max)
+      const n = Math.max(1, shown.length)
+      const w = (W - 14 * (n - 1)) / n
+      const cards = Math.max(...shown.map((i) => H.confusion(i, w)))
+      const lead = s.lead ? 22 + heightOf(s.lead, 1100, 26, 1.45, true) : 0
+      const note = s.note ? 22 + heightOf(s.note, 1040, 19, 1.55) : 0
+      const out = only(s, shown)
+      if (37 + lead + note + 22 + cards + foot(shown) > BODY_HEIGHT) delete out.note
+      return [page(out)]
+    }
+    case 'leadership.market': {
+      const panel = s.kinds || s.mood ? 10 + 148 : 0
+      const room = BODY_HEIGHT - 37 - 10 - panel - 10 - 32 - foot(all)
+      const rows = fitItems(all, H.subject, room, max)
+      // The subjects past the page's room or its five, with their level:
+      // "Also following" (never a bare name: one with no level is left out).
+      const rest = all.filter((i) => !rows.includes(i) && i.measure?.pct != null)
+      const out = only(s, rows)
+      if (rest.length) out.also = `Also following: ${rest.map((i) => `${i.title} ${i.measure!.pct}%`).join(', ')}.`
+      else delete out.also
+      return [page(out)]
+    }
+    case 'leadership.shares': {
+      const brands = all.slice(0, 7)
+      return [page(only(s, brands))]
+    }
+    case 'leadership.weigh': {
+      const lw = (W - 36) / 2.9
+      const pw = (lw * 1.9 - 44 - 28) / 2
+      const top = s.lead || s.quote ? Math.max(heightOf(s.lead ?? '', lw * 1.9, 20, 1.5, true), quoteH(s.quote, lw, 15, [14, 18])) + 16 : 0
+      const room = BODY_HEIGHT - 37 - 16 - top - 21 - foot(all, lw)
+      const [first, ...rest] = s.groups
+      const keep = [
+        ...fitItems(first?.items ?? [], (i) => H.weigh(i, lw), room, 5),
+        ...rest.flatMap((g) => fitItems(g.items, (i) => H.weigh(i, pw), room - 32, 3)),
+      ]
+      return [page(only(s, keep))]
+    }
+    case 'leadership.risks': {
+      const shown = all.slice(0, max)
+      const n = Math.max(1, shown.length)
+      const w = (W - 20 * (n - 1)) / n
+      const cards = Math.max(...shown.map((i) => H.risk(i, w)))
+      let qs = companion ? items(companion).slice(0, PAGE_MAX['leadership.decisions']) : []
+      const qH = (xs: BriefItem[]) => {
+        let h = xs.length ? 18 + 21 : 0
+        for (let k = 0; k < xs.length; k += 2) h += Math.max(...xs.slice(k, k + 2).map(H.decision))
+        return h
+      }
+      while (qs.length && 37 + 18 + cards + qH(qs) > BODY_HEIGHT) qs = qs.slice(0, -1)
+      return [page(only(s, shown), { companion: companion && qs.length ? only(companion, qs) : null })]
+    }
+    case 'leadership.holds': {
+      const rows = fitItems(all, H.pattern, BODY_HEIGHT - titleH(sub) - 16, max)
+      return [page(only(s, rows))]
+    }
+    default: {
+      // A section the canvas draws no page for, where the switch prints it:
+      // the canvas's rows (What stops them).
+      const rows = fitItems(all, H.stop, BODY_HEIGHT - titleH(sub) - 14 - foot(all, 710), 6)
+      return [page(only(s, rows))]
     }
   }
 }
 
-const allOf = (s: BriefSection): BriefItem[] => s.groups.flatMap((g) => g.items)
-
-/** The section's quotes and voices, for a reader that wants them. */
-export const sectionQuotes = (s: BriefSection): BriefQuote[] => [...(s.quote ? [s.quote] : []), ...(s.voices ?? [])]
+/** Chip rows a group of words takes in a column `w` wide (15px, 500,
+ *  13px padding a side, 8px apart). Pure. */
+export function chipRows(words: readonly string[], w: number): number {
+  let rows = words.length ? 1 : 0
+  let x = 0
+  for (const word of words) {
+    const cw = 28 + word.length * 15 * 0.5
+    if (x > 0 && x + cw > w) { rows += 1; x = 0 }
+    x += cw + 8
+  }
+  return rows
+}
 
 // ---- A finding's page ----------------------------------------------------------------------------------
 
@@ -568,44 +591,52 @@ export const sectionQuotes = (s: BriefSection): BriefQuote[] => [...(s.quote ? [
 const FINDING_LEFT = 658
 const FINDING_RIGHT = 454
 
+/** The height of "What each brand is heard for" under a finding. Pure. */
+export const heardForH = (f: Pick<BriefFinding, 'heardFor'>): number => {
+  const chips = f.heardFor ?? []
+  if (chips.length === 0) return 0
+  const w = (W - 12 * (chips.length - 1)) / chips.length - 32
+  return 16 + 4 + 14 + 8 + 24 + 15 + 3 + Math.max(...chips.map((c) => heightOf(c.phrase, w, 16, 1.3)))
+}
+
 /**
- * How a finding fills its page (the design: what was heard, the practice
+ * How a finding fills its page (the canvas: what was heard, the practice
  * lines and where it was heard down the left; what it means and the voices
- * down the right). The type steps down where the words are long, and a voice
- * that fits in neither column goes to the finding's second page rather than
- * off the sheet. Pure.
+ * down the right; Leadership's brand chips under both). The type steps down
+ * where the words are long, and a voice or a practice line that fits nowhere
+ * does not print, rather than run off the sheet or onto a second page. Pure.
  */
 export function findingPlan(f: BriefFinding): FindingPlan {
   const quotes = (f.quotes as (BriefQuote & { english?: string | null })[]).filter((q) => q && quoteWords(q))
+  const body = BODY_HEIGHT - heardForH(f)
   const headline = f.headline.length > 70 ? 28 : 31
-  const headH = heightOf(f.headline, FINDING_LEFT, headline, 1.2) + 14
-  const heard = 44
-  const practiceH = (size: number) => (f.practice.length ? 26 + f.practice.reduce((n, t) => n + heightOf(t, FINDING_LEFT - 16, size, 1.5) + 6, 0) : 0)
+  const headH = heightOf(f.headline, FINDING_LEFT, headline, 1.2, 'bold') + 14
+  const heard = (heardIn(f) ? 30 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
+  const practiceH = (size: number, n: number) => (n ? 26 + f.practice.slice(0, n).reduce((m, t) => m + heightOf(t, FINDING_LEFT - 16, size, 1.5) + 6, 0) : 0)
   const sawH = (size: number) => f.saw.reduce((n, p) => n + heightOf(p, FINDING_LEFT, size, 1.58) + 14, 0)
   let saw = 16
+  let practice = f.practice.length
   for (const size of [16, 15.5, 15, 14.5, 14]) {
     saw = size
-    if (headH + sawH(size) + practiceH(Math.min(15, size)) + heard <= BODY_HEIGHT) break
+    if (headH + sawH(size) + practiceH(Math.min(15, size), practice) + heard <= body) break
   }
-  const leftUsed = headH + sawH(saw) + practiceH(Math.min(15, saw)) + heard
-  const practice: FindingPlan['practice'] = leftUsed <= BODY_HEIGHT + 8 ? 'left' : 'next'
-  const leftH = practice === 'left' ? leftUsed : headH + sawH(saw) + heard
+  while (practice > 0 && headH + sawH(saw) + practiceH(Math.min(15, saw), practice) + heard > body) practice -= 1
   let means = 17
   const meansH = (size: number) => 48 + 20 + heightOf(f.means, FINDING_RIGHT - 48, size, 1.5)
   for (const size of [17, 16, 15]) {
     means = size
-    if (meansH(size) + 14 + (quotes[0] ? quoteH(quotes[0], FINDING_RIGHT, 17) : 0) <= BODY_HEIGHT) break
+    if (meansH(size) + 14 + (quotes[0] ? quoteH(quotes[0], FINDING_RIGHT, 18, [20, 24]) : 0) <= body) break
   }
   let right = meansH(means)
-  let left = leftH
+  let left = headH + sawH(saw) + practiceH(Math.min(15, saw), practice) + heard
   const places: FindingPlan['quotes'] = quotes.map((q, k) => {
-    const inRight = quoteH(q, FINDING_RIGHT, k === 0 ? 17 : 16) + 14
-    if (right + inRight <= BODY_HEIGHT) { right += inRight; return 'right' }
-    const inLeft = quoteH(q, FINDING_LEFT, 15) + 14
-    if (k > 0 && left + inLeft <= BODY_HEIGHT) { left += inLeft; return 'left' }
-    return 'next'
+    const inRight = quoteH(q, FINDING_RIGHT, k === 0 ? 18 : 16, k === 0 ? [20, 24] : [16, 20]) + 14
+    if (right + inRight <= body) { right += inRight; return 'right' }
+    const inLeft = quoteH(q, FINDING_LEFT, 15, [14, 18]) + 14
+    if (k > 0 && left + inLeft <= body) { left += inLeft; return 'left' }
+    return 'none'
   })
-  return { headline, saw, practice, means, quotes: places }
+  return { headline, saw, means, practice, quotes: places }
 }
 
 // ---- The deck ------------------------------------------------------------------------------------------
@@ -621,34 +652,35 @@ export function inShortSizes(summary: string, toc: readonly string[]): { summary
   return { summarySize: 16, tocSize }
 }
 
+/** The name the contents give a section's page: the canvas's short names. */
+export const contentsName = (s: BriefSection, continued: boolean): string => {
+  const name = CONTENTS[s.key] ?? s.title
+  return continued ? continuedTitle(name) : name
+}
+
 /**
  * The deck's pages, in order, numbered: the cover, In short, the findings
- * (Leadership's after where the company stands), then the role's sections.
- * Pure.
+ * (Leadership's after where the company stands), then the role's sections,
+ * each on the canvas's page. Pure.
  */
 export function deckPages(d: StoredBriefData): DeckPage[] {
   const pages: Omit<DeckPage, 'n'>[] = [{ eyebrow: '', toc: null, body: { kind: 'cover' } }, { eyebrow: 'In short', toc: null, body: { kind: 'in_short', summarySize: 22, tocSize: 14 } }]
   const findings = () => d.findings.forEach((f, index) => {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`
-    const plan = findingPlan(f)
-    pages.push({ eyebrow, toc: f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan, part: 1 } })
-    if (plan.practice === 'next' || plan.quotes.includes('next')) pages.push({ eyebrow, toc: null, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan, part: 2 } })
+    pages.push({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f) } })
   })
+  const printed = d.sections.filter((s) => printsSection(s.key) && !COMPANIONS.has(s.key))
   const after = FINDINGS_AFTER[d.role]
-  let placed = after == null || !d.sections.some((s) => s.key === after)
+  let placed = after == null || !printed.some((s) => s.key === after)
   if (placed) findings()
-  const besidePartner = new Set<SectionKey>()
-  for (const s of d.sections) {
-    if (besidePartner.has(s.key)) continue
-    const partnerKey = COMPANION[s.key]
-    const companion = partnerKey ? d.sections.find((x) => x.key === partnerKey) ?? null : null
-    const plan = planSection(s, companion, { company: d.company, noun: d.noun })
-    if (plan.companionPlaced && partnerKey) besidePartner.add(partnerKey)
-    plan.slices.forEach((slice, k) => pages.push({
-      eyebrow: eyebrowOf(s.key, d.company),
-      toc: k === 0 ? s.title : null,
-      body: { kind: 'section', ...slice },
-    }))
+  for (const s of printed) {
+    const partner = COMPANION[s.key]
+    const companion = partner ? d.sections.find((x) => x.key === partner) ?? null : null
+    for (const slice of planSection(s, companion, d)) {
+      if (!draws(slice.section)) continue
+      const eyebrow = slice.continued ? continuedTitle(eyebrowOf(s.key, d.company)) : eyebrowOf(s.key, d.company)
+      pages.push({ eyebrow, toc: contentsName(s, slice.continued), body: { kind: 'section', ...slice } })
+    }
     if (!placed && s.key === after) { findings(); placed = true }
   }
   if (!placed) findings()
@@ -658,10 +690,33 @@ export function deckPages(d: StoredBriefData): DeckPage[] {
   return numbered.map((p) => (p.body.kind === 'in_short' ? { ...p, body: { kind: 'in_short' as const, ...sizes } } : p))
 }
 
-/** The contents: each finding's and section's first page, with its number.
- *  Pure. */
+/** Does a section's page draw anything? Its items, or for the pages built
+ *  from other components the canvas draws there: the market's own words,
+ *  the brands' shares, their own posts. A page that would draw only its
+ *  title is not printed. */
+function draws(s: BriefSection): boolean {
+  switch (s.key) {
+    case 'marketing.words': return (s.chips ?? []).some((c) => c.words.length > 0) || (s.panel?.rows.length ?? 0) > 0
+    case 'leadership.shares': return s.shares != null && items(s).length > 0
+    case 'marketing.rivals': return items(s).length > 0 || (s.posts?.rows.length ?? 0) > 0
+    default: return items(s).length > 0
+  }
+}
+
+/** The contents: each finding's and section's page, with its number. Pure. */
 export const contentsOf = (pages: readonly DeckPage[]): { n: number; title: string }[] =>
   pages.filter((p) => p.toc).map((p) => ({ n: p.n, title: p.toc as string }))
 
-/** "Who is buying, continued". */
-export const continuedTitle = (title: string): string => `${title}, continued`
+/** The month's ideas and where each is argued (What holds so far): the other
+ *  briefs' in role order, then this brief's own. Pure. */
+export function ideasArgued(d: Pick<StoredBriefData, 'role' | 'findings' | 'inShort'>): { brief: BriefRole; headline: string; own: boolean }[] {
+  const others = [...d.inShort.also].sort((a, b) => BRIEF_ROLES.indexOf(a.brief) - BRIEF_ROLES.indexOf(b.brief))
+  return [...others.map((a) => ({ brief: a.brief, headline: a.headline, own: false })), ...d.findings.map((f) => ({ brief: d.role, headline: f.headline, own: true }))]
+}
+
+/** The section's quotes and voices, for a reader that wants them. */
+export const sectionQuotes = (s: BriefSection): BriefQuote[] => [
+  ...(s.quote ? [s.quote] : []),
+  ...(s.voices ?? []),
+  ...s.groups.flatMap((g) => g.items.flatMap((i) => (i.quote ? [i.quote] : []))),
+]
