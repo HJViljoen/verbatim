@@ -97,7 +97,7 @@ export class QuotePool {
     return [...new Set(pointIds.flatMap((id) => (this.counted.get(id) ?? []).map((e) => e.description)).filter(Boolean))]
   }
 
-  private candidates(pointIds: readonly string[], claim: string, videos: ReadonlySet<string>, minFit: number): Scored[] {
+  private candidates(pointIds: readonly string[], claim: string, videos: ReadonlySet<string>, minFit: number, about?: string): Scored[] {
     const seen = new Set<string>()
     const out: Scored[] = []
     const gate = briefGateFor(this.o.clientId, null)
@@ -107,6 +107,8 @@ export class QuotePool {
         if (seen.has(ref) || this.used.has(ref)) continue
         seen.add(ref)
         if (isOwnAccount(e) || videos.has(videoKey(e))) continue
+        // A voice printed as one brand's ("On Cotopaxi") is talk about it.
+        if (about && aboutCitation(e, this.o.brandsOf, this.o.company) !== about) continue
         const j = asJudged(e, gate)
         if (!quoteGate(gateInputOf(j.e), j.gate).ok) continue
         const english = readableEnglish(gateInputOf(e)) ?? ''
@@ -137,11 +139,11 @@ export class QuotePool {
   /** Up to `n` quotes for an item that rests on `pointIds` and says `claim`,
    *  each from its own video, closest in meaning first. One call per item,
    *  so two quotes beside one finding never come from one video. */
-  pick(pointIds: readonly string[], claim: string, n = 1, o: { minFit?: number } = {}): BriefQuote[] {
+  pick(pointIds: readonly string[], claim: string, n = 1, o: { minFit?: number; about?: string } = {}): BriefQuote[] {
     const out: BriefQuote[] = []
     const videos = new Set<string>()
     for (let i = 0; i < n; i++) {
-      const best = this.candidates(pointIds, claim, videos, o.minFit ?? FIT.quote)
+      const best = this.candidates(pointIds, claim, videos, o.minFit ?? FIT.quote, o.about)
         .find((s) => s.english.length >= QUOTE_MIN_CHARS && s.english.length <= QUOTE_MAX_CHARS && quoteForm(s.english) !== 'fragment')
       if (!best) break
       videos.add(videoKey(best.e))

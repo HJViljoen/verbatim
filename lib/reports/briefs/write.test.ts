@@ -40,6 +40,29 @@ describe('the brief call', () => {
     }
   })
 
+  it('asks for what the canvas draws: a finding\'s short name, each role\'s own components, and each field at its page\'s measure', () => {
+    const keys = (r: (typeof BRIEF_ROLES)[number]) => Object.keys(briefSchema(r).shape)
+    expect(keys('sales')).toContain('also_set')
+    expect(keys('marketing')).toEqual(expect.arrayContaining(['own_words', 'you', 'say_hear']))
+    expect(keys('leadership')).toEqual(expect.arrayContaining(['heard_for', 'position', 'subjects']))
+    for (const r of BRIEF_ROLES) {
+      expect(Object.keys(briefSchema(r).shape.findings.element.shape)).toContain('short')
+      expect(keys(r).includes('also_set')).toBe(r === 'sales')
+      expect(keys(r).includes('own_words')).toBe(r === 'marketing')
+      expect(keys(r).includes('heard_for')).toBe(r === 'leadership')
+    }
+    const json = JSON.stringify(zodResponseFormat(briefSchema('sales'), 'b'))
+    // A buyer's columns and status, a rival's job, at the canvas's measure.
+    for (const f of ['want', 'stops', 'moves', 'for_sale', 'buys', 'status', 'job']) expect(json).toContain(`"${f}"`)
+    expect(json).toContain('Under 170 characters')
+    expect(json).toContain('Under 90 characters')
+    // A lead only where the canvas draws one.
+    expect(Object.keys(((briefSchema('sales').shape as Record<string, unknown>).stops as { shape: Record<string, unknown> }).shape)).toEqual(['items'])
+    expect(Object.keys(((briefSchema('content').shape as Record<string, unknown>).confusion as { shape: Record<string, unknown> }).shape)).toEqual(['lead', 'note', 'items'])
+    const say = JSON.stringify(zodResponseFormat(briefSchema('marketing'), 'b'))
+    for (const st of ['heard_back', 'not_echoed', 'heard_as_values', 'tested', 'confused']) expect(say).toContain(st)
+  })
+
   it('is told the month\'s other ideas by headline, never to argue them, and the rivals it may name', () => {
     const { system, user } = buildBriefPrompts({
       role: 'content', company: 'Össur', month: '2026-09-01', noun: null, ideas: [], others: [{ headline: 'Cost holds users back', brief: 'sales' }],

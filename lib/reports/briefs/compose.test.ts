@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { WhoVideo } from '../../brands/attribution'
 import { fact } from '../../written/test-fixtures'
 import { allocateIdeas } from './allocate'
-import { composeBrief, figuresFor, namedAcross, repeatsAcross, summaryAgainstPrinted, type ComposeInput } from './compose'
+import { composeBrief, figuresFor, namedAcross, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
 import { briefMarkdown } from './markdown'
 import { Meaning } from './meaning'
 import { QuotePool } from './quotes'
@@ -19,8 +19,8 @@ const words = () => new Meaning(new Map(), 'words')
 function setup(points: GroundedPoint[], about: Record<string, string> = {}) {
   const whoVideos = new Map<string, WhoVideo[]>(points.map((p) => [p.id, p.videoIds.map((id) => ({ id, audience: about[p.id] ?? 'industry-other', named: [] }))]))
   const counted = new Map(points.map((p, i) => [p.id, [
-    cite({ insight: p.insightIds[0], video: `qa${i}`, text: `Buyers said ${p.text.toLowerCase()} and that it decided the purchase for them.`, description: p.text }),
-    cite({ insight: p.insightIds[0], video: `qb${i}`, text: `Another buyer wrote that ${p.text.toLowerCase()} in their own words here.`, description: p.text }),
+    cite({ insight: p.insightIds[0], video: `qa${i}`, audience: about[p.id], text: `Buyers said ${p.text.toLowerCase()} and that it decided the purchase for them.`, description: p.text }),
+    cite({ insight: p.insightIds[0], video: `qb${i}`, audience: about[p.id], text: `Another buyer wrote that ${p.text.toLowerCase()} in their own words here.`, description: p.text }),
   ]]))
   return { whoVideos, quotes: new QuotePool(counted, { clientId: CLIENT, company: 'Acme', brandsOf: new Map(), meaning: words() }) }
 }
@@ -191,18 +191,29 @@ describe('leadership', () => {
     expect(data.held).toContainEqual({ what: 'decisions: How long do owners wait for repairs?', reason: 'says what "Repair waits" says' })
   })
 
-  it('talk about each brand: rivals as a share of the market, the company\'s own posts as a count with any giveaway named, and no rank', () => {
-    const audiences = [
-      { audience: 'client', videos: 10, comments: 256 },
-      { audience: 'competitor:Rival', videos: 42, comments: 650 },
-      { audience: 'competitor:Tiny', videos: 1, comments: 3 },
-      { audience: 'industry-other', videos: 388, comments: 10500 },
+  it('where the company stands against its rivals: each brand a share of the month\'s comments and videos, its own posts included, the bars, the table and the notes, a giveaway said', () => {
+    const audiences: AudienceRow[] = [
+      { audience: 'client', videos: 10, comments: 256, platforms: { instagram: 10 } },
+      { audience: 'competitor:Rival', videos: 42, comments: 650, platforms: { reddit: 30, youtube: 12 } },
+      { audience: 'competitor:Tiny', videos: 1, comments: 3, platforms: { tiktok: 1 } },
+      { audience: 'industry-other', videos: 388, comments: 10500, platforms: { tiktok: 200 } },
     ]
-    const { data } = composeBrief(input('leadership', out, POINTS, { audiences, giveaway: { posts: 1, comments: 149 } }))
+    const { data } = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival', 'Tiny'], giveaway: { posts: 1, comments: 149 } }))
     const shares = data.sections.find((s) => s.key === 'leadership.shares')!
-    expect(shares.groups[0].items.map((i) => i.text)).toEqual(['3.3% of the market\'s comments and 4.7% of its videos, on videos about Rival.'])
-    expect(shares.groups[0].lines).toEqual(['Acme\'s own posts drew 256 comments in September, 149 of them on one giveaway post.'])
-    expect(JSON.stringify(shares)).not.toMatch(/largest|second|smaller share|larger share/)
+    expect(shares.title).toBe('Where Acme stands against its rivals')
+    expect(shares.sub).toBe("Share of September's conversation: 11,409 comments and 441 videos, Acme's own posts included.")
+    expect(shares.groups[0].items.map((i) => [i.title, i.measure?.comments, i.measure?.videos, i.detail])).toEqual([
+      ['Rival', 5.7, 9.5, 'Reddit, YouTube'],
+      ['Acme (you)', 2.2, 2.3, 'Its own Instagram posts'],
+      ['Tiny', 0, 0.2, 'TikTok'],
+    ])
+    expect(shares.shares?.comments.line).toBe('Acme 2.2% · its two rivals 5.7% · the rest of the category 92.1%')
+    expect(shares.lines).toEqual([
+      "Acme holds 2.2% of the month's comments, second of these three brands, behind Rival's 5.7%. 149 of Acme's comments were on one giveaway post.",
+      "Acme and its two rivals together hold 7.9% of the month's comments. The rest of the category holds 92.1%.",
+      "Acme's comments sit under its own Instagram posts. Its rivals are talked about on Reddit, YouTube and TikTok.",
+    ])
+    expect(data.inShort.figures[1]).toEqual({ value: '2.2%', label: "of September's comments were under Acme's posts; Rival held 5.7%" })
   })
 
   it('no share of talk by brand where the product does not count the brands', () => {
@@ -216,9 +227,12 @@ describe('the figures In short prints', () => {
   it('the market for every reader, then the reader\'s own: never a figure for an uncalibrated subject, never a share by brand', () => {
     const subjects = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Cost & access', calibration: 'provisional', level: null, rank: 0 }) }]
     const base = { company: 'Össur', month: SEP, market: { videos: 430, comments: 11000 }, subjects, ownPosts: 19, playbook: null }
-    expect(figuresFor({ ...base, role: 'sales' })).toEqual([{ value: '430', label: 'videos in your market in September, with 11,000 comments' }])
+    expect(figuresFor({ ...base, role: 'sales' })).toEqual([{ value: '430', label: 'videos in your market in September' }])
     expect(figuresFor({ ...base, role: 'marketing' })[1]).toEqual({ value: '19', label: 'posts Össur published in September' })
-    expect(figuresFor({ ...base, role: 'leadership' })).toHaveLength(1)
+    expect(figuresFor({ ...base, role: 'leadership' })).toEqual([{ value: '430', label: 'videos and 11,000 comments in your market in September' }])
+    // The Sales figure: the biggest ready subject.
+    const ready = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Buying & delivery', calibration: 'ready', level: { k: 99, n: 430 }, rank: 1 }) }]
+    expect(figuresFor({ ...base, subjects: ready, role: 'sales' })[1]).toEqual({ value: '23%', label: 'of them about Buying & delivery, the biggest subject' })
   })
 })
 
@@ -272,5 +286,171 @@ describe('the reading copy', () => {
     expect(md).toContain('_Heard in August and September, on 12 videos, others in your market._')
     expect(md).toMatch(/> "Buyers said buyers ask where to order/)
     expect(md).not.toMatch(/—/)
+  })
+})
+
+describe('the canvas\'s components, each from material that stands', () => {
+  const SALES = [
+    point('G1', 'sales', 12, { questionId: 'sales.settle', text: 'Buyers ask where to order and who ships the pack to them.' }),
+    point('G21', 'sales', 6, { questionId: 'sales.who', text: 'Commuters carry a laptop pack every day and want room, padded straps and a laptop sleeve that keeps its shape.' }),
+    point('G22', 'sales', 5, { questionId: 'sales.who', text: 'Makers watch pack videos to sew their own pack from old jeans and rarely buy one.' }),
+    point('G23', 'sales', 6, { questionId: 'sales.trigger', text: 'Owners replace a pack when the straps tear or the zip breaks.' }),
+    point('G24', 'sales', 5, { questionId: 'sales.trigger', text: 'Students buy a new pack before the school term starts.' }),
+    point('G25', 'sales', 5, { questionId: 'sales.rivals', text: 'Rival is chosen for long trips and its warranty.' }),
+    point('G26', 'sales', 4, { questionId: 'sales.rivals', text: 'Buyers compare Rival with Trailmark and Pakt on weight and locking zips.' }),
+  ]
+  const ABOUT = { G25: 'competitor:Rival', G26: 'competitor:Rival' }
+  const out = (o: Partial<BriefOutput>): BriefOutput => salesOut({ stops: part([]), rivals: part([]), ...o })
+  const buyer = (o: Record<string, unknown>) => ({ title: 'Commuter', text: 'Commuters carry a laptop pack every day.', detail: '', based_on: ['G21'], want: 'Room, padded straps and a laptop sleeve that keeps its shape.', stops: 'Rain that soaks the bag.', moves: 'A sleeve that keeps the laptop shape.', for_sale: 'Room and straps decide it.', buys: true, status: '', ...o })
+
+  it('a buyer card carries its columns where the points carry them, and a person who mostly does not buy is drawn quieter with their status', () => {
+    const o = out({ buyers: { lead: '', items: [buyer({}), buyer({ title: 'Maker', text: 'Makers watch pack videos to sew their own pack.', based_on: ['G22'], want: 'To sew their own pack from old jeans.', stops: '', moves: '', buys: false, status: 'Mostly makes, rarely buys' })] } as never })
+    const { data, scrubbed } = composeBrief(input('sales', o, SALES, {}, ABOUT))
+    const [commuter, maker] = data.sections.find((s) => s.key === 'sales.buyers')!.groups[0].items
+    expect(commuter.persona).toEqual({ want: 'Room, padded straps and a laptop sleeve that keeps its shape.', moves: 'A sleeve that keeps the laptop shape.', forSale: 'Room and straps decide it.' })
+    // "Rain that soaks the bag." is not what the commuter's point says.
+    expect(scrubbed).toContainEqual({ field: 'buyers0.stops', sentence: 'Rain that soaks the bag.', rule: 'not carried by the points kept' })
+    expect(commuter.muted).toBeUndefined()
+    expect(maker).toMatchObject({ title: 'Maker', muted: true, pill: 'Mostly makes, rarely buys' })
+  })
+
+  it('a voice for each of the first trigger moments, from its own points', () => {
+    const o = out({ triggers: part([
+      { title: 'The old pack gives out', text: 'Owners replace a pack when the straps tear or the zip breaks.', based_on: ['G23'] },
+      { title: 'Back to school', text: 'Students buy a new pack before the school term starts.', based_on: ['G24'] },
+    ]) })
+    const items = composeBrief(input('sales', o, SALES, {}, ABOUT)).data.sections.find((s) => s.key === 'sales.triggers')!.groups[0].items
+    expect(items.map((i) => !!i.quote)).toEqual([true, true])
+    expect(items[0].quote?.text).toBe('')
+  })
+
+  it('a rival card says what it is bought for, its voice is talk about it, and the set\'s other brands are one line', () => {
+    const o = out({
+      rivals: { lead: '', items: [{ title: 'Rival', text: 'Rival is chosen for long trips and its warranty.', detail: '', based_on: ['G25'], job: 'Long trips' }] } as never,
+      also_set: { text: 'Buyers compare Rival with Trailmark and Pakt on weight and locking zips.', based_on: ['G26'] },
+    })
+    const s = composeBrief(input('sales', o, SALES, {}, ABOUT)).data.sections.find((x) => x.key === 'sales.rivals')!
+    expect(s.title).toBe('Who buyers compare you with')
+    expect(s.groups[0].items[0]).toMatchObject({ title: 'Rival', pill: 'Bought for long trips' })
+    expect(s.groups[0].items[0].quote?.about).toBe('rival:Rival')
+    expect(s.also).toBe('Buyers compare Rival with Trailmark and Pakt on weight and locking zips.')
+  })
+
+  const MKT = [
+    point('G31', 'marketing', 8, { questionId: 'marketing.notice', text: 'People call it a backpack, a rucksack or a daypack, and praise it as practical and sturdy.' }),
+    point('G32', 'marketing', 6, { questionId: 'marketing.notice', text: 'People complain the pack rips, smells after rain and soaks through.' }),
+    point('G33', 'marketing', 5, { questionId: 'marketing.notice', text: 'People argue over whether a handmade pack is worth the price.' }),
+    point('G34', 'marketing', 6, { questionId: 'marketing.claims', text: 'People under Acme posts praise the beach clean-up days and the team.' }),
+    point('G35', 'marketing', 5, { questionId: 'marketing.recall', text: 'People remember Acme for its clean-up days and its team.' }),
+  ]
+  const MABOUT = { G34: 'client', G35: 'client' }
+  const mout = (o: Partial<BriefOutput>): BriefOutput => ({ findings: [], in_short: '', believe: part([]), doubt: part([]), recall: part([]), rivals: part([]), ...o })
+
+  it('in its own words: the market\'s words as chips, only words a point uses, and what makes them stop and argue', () => {
+    const o = mout({ own_words: {
+      call_it: { words: ['backpack', 'daypack', 'rucksack', 'tote'], based_on: ['G31'] },
+      praise: { words: ['practical', 'sturdy'], based_on: ['G31'] },
+      problem: { words: ['rips', 'soaks through'], based_on: ['G32'] },
+      lead: 'People describe the problem as packs that rip, smell and soak through.',
+      stop_on: { text: 'A practical, sturdy daypack.', based_on: ['G31'] },
+      share: { text: '', based_on: [] },
+      argue: { text: 'Whether a handmade pack is worth the price.', based_on: ['G33'] },
+    } })
+    const { data } = composeBrief(input('marketing', o, MKT, {}, MABOUT))
+    const s = data.sections.find((x) => x.key === 'marketing.words')!
+    expect(s.chips).toEqual([
+      { label: 'What they call it', words: ['backpack', 'daypack', 'rucksack'] },
+      { label: 'How they praise it', words: ['practical', 'sturdy'] },
+      { label: 'The problem, in their words', words: ['rips', 'soaks through'] },
+    ])
+    expect(data.held).toContainEqual({ what: 'own_words.call_it: tote', reason: 'no point it cites uses the words' })
+    expect(s.panel?.title).toBe('What makes them stop and argue')
+    expect(s.panel?.rows.map((r) => r.title)).toEqual(['They stop on', 'They argue over'])
+    expect(s.lead).toBe('People describe the problem as packs that rip, smell and soak through.')
+  })
+
+  it('says and hears carries each claim\'s status, and how rivals are heard carries the company\'s own card and each brand\'s own posts', () => {
+    const o = mout({
+      say_hear: [{ claim: 'A1', status: 'heard_back', heard: 'People praise the beach clean-up days and the team.', based_on: ['G34'] }],
+      you: { idea: 'Values', text: 'People remember Acme for its clean-up days and its team.', based_on: ['G35'] },
+    })
+    const posts = [
+      { name: 'Acme', you: true, posts: 25, five: 11 },
+      { name: 'Rival', you: false, posts: 20, five: 15 },
+      { name: 'Quiet', you: false, posts: 0, five: 0 },
+    ]
+    const { data } = composeBrief(input('marketing', o, MKT, { claims: [{ id: 'A1', claim: 'We run beach clean-up days.' }], posts }, MABOUT))
+    expect(data.sections.find((x) => x.key === 'marketing.say_hear')!.groups[0].items[0]).toMatchObject({ title: 'We run beach clean-up days.', status: 'heard_back' })
+    const rivals = data.sections.find((x) => x.key === 'marketing.rivals')!
+    expect(rivals.groups[0].items[0]).toMatchObject({ title: 'Acme', pill: 'Values', you: true })
+    expect(rivals.posts).toEqual({ title: 'Own posts published in September', rows: [
+      { name: 'Acme', you: true, posts: 25, five: 11, pct: 44 },
+      { name: 'Rival', you: false, posts: 20, five: 15, pct: 75 },
+    ] })
+  })
+
+  it('a status the writer did not choose from the five prints no pill', () => {
+    const o = mout({ say_hear: [{ claim: 'A1', status: 'loved', heard: 'People praise the beach clean-up days and the team.', based_on: ['G34'] }] })
+    const { data } = composeBrief(input('marketing', o, MKT, { claims: [{ id: 'A1', claim: 'We run beach clean-up days.' }] }, MABOUT))
+    expect(data.sections.find((x) => x.key === 'marketing.say_hear')!.groups[0].items[0].status).toBeUndefined()
+  })
+
+  const LEAD = [
+    ...POINTS,
+    point('G41', 'leadership', 6, { questionId: 'leadership.stand', text: 'Rival is heard for travel packs that last on long trips.' }),
+    point('G42', 'leadership', 5, { questionId: 'leadership.stand', text: 'Acme is heard for its clean-up days and its team values.' }),
+  ]
+  const LABOUT = { G41: 'competitor:Rival', G42: 'client' }
+  const lout = (o: Partial<BriefOutput>): BriefOutput => ({
+    findings: [{ idea: 'I2', saw: 'Owners describe the repair service in detail.', means: 'Repairs carry the brand\'s name with owners.', practice: [] }],
+    weigh: part([]), stay: part([]), move: part([]), risks: part([]), decisions: part([]), in_short: '', ...o,
+  })
+
+  it('what each brand is heard for prints on the finding, each brand from talk about it, the company last', () => {
+    const o = lout({ heard_for: [
+      { brand: 'Acme', phrase: 'Clean-up days and team values', based_on: ['G42'] },
+      { brand: 'Rival', phrase: 'Travel packs that last', based_on: ['G41'] },
+      { brand: 'Osprey', phrase: 'Hip belts', based_on: ['G41'] },
+    ] })
+    const { data } = composeBrief(input('leadership', o, LEAD, {}, LABOUT))
+    expect(data.findings[0].heardFor).toEqual([
+      { name: 'Rival', you: false, phrase: 'Travel packs that last' },
+      { name: 'Acme', you: true, phrase: 'Clean-up days and team values' },
+    ])
+    expect(data.held).toContainEqual({ what: 'heard_for: Osprey', reason: 'not the company or a tracked rival a cited point names' })
+  })
+
+  it('what holds so far prints the month\'s long-run patterns and the company\'s position in one line', () => {
+    const o = lout({ position: { text: 'Acme is heard for its clean-up days and its team values.', based_on: ['G42'] } })
+    const longRun = { months: ['2026-08-01', SEP], ideas: [
+      { headline: 'Buyers judge a pack by how it carries a full load', videos: 30, months: [{ month: '2026-08-01', videos: 12 }, { month: SEP, videos: 20 }] },
+      { headline: 'Thin pattern', videos: 2, months: [{ month: SEP, videos: 2 }] },
+    ] }
+    const s = composeBrief(input('leadership', o, LEAD, { longRun }, LABOUT)).data.sections.find((x) => x.key === 'leadership.holds')!
+    expect(s.groups[0].items.map((i) => i.text)).toEqual(['Buyers judge a pack by how it carries a full load'])
+    expect(s.sub).toBe('Patterns here describe August and September. Each was heard in both months.')
+    expect(s.position?.text).toBe('Acme is heard for its clean-up days and its team values.')
+    // No long-run read: no page.
+    expect(composeBrief(input('leadership', o, LEAD, {}, LABOUT)).data.sections.some((x) => x.key === 'leadership.holds')).toBe(false)
+  })
+
+  it('what people did in the comments and the mood print as shares only over enough videos', () => {
+    const subjects = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Function', calibration: 'ready', level: { k: 90, n: 400 }, rank: 1 }) }]
+    const o = lout({ subjects: [{ subject: 'S1', sentence: 'People compare running packs.' }] })
+    const kinds = { n: 400, judged: 380, kinds: [{ kind: 'praise', k: 290 }, { kind: 'question', k: 200 }, { kind: 'pain_point', k: 150 }, { kind: 'objection', k: 8 }], mood: [{ mood: 'positive', k: 290 }, { mood: 'mixed', k: 50 }, { mood: 'neutral', k: 30 }, { mood: 'negative', k: 10 }] }
+    const m = composeBrief(input('leadership', o, LEAD, { subjects, kinds }, LABOUT)).data.sections.find((x) => x.key === 'leadership.market')!
+    expect(m.kinds).toEqual({ base: 'Share of the 400 videos in your market in September', rows: [{ label: 'Saying it worked', pct: 72.5 }, { label: 'Asking how it works', pct: 50 }, { label: 'Hitting a problem', pct: 37.5 }] })
+    expect(m.mood?.base).toBe('380 of the same 400 videos')
+    expect(m.mood?.rows.map((r) => r.pct)).toEqual([76.3, 13.2, 7.9, 2.6])
+    const thin = composeBrief(input('leadership', o, LEAD, { subjects, kinds: { ...kinds, n: 80 } }, LABOUT)).data.sections.find((x) => x.key === 'leadership.market')!
+    expect(thin.kinds).toBeUndefined()
+  })
+
+  it('a finding is part of the ready subject half its insights are members of, and says so with the level', () => {
+    const subjects = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Buying & delivery', calibration: 'ready', level: { k: 99, n: 430 }, rank: 1 }) }]
+    const insightSubjects = new Map([['i-G1', ['s1']]])
+    const { data } = composeBrief(input('sales', salesOut(), POINTS, { subjects, insightSubjects }))
+    expect(data.findings[0].subjectLine).toBe('Part of Buying & delivery, the biggest subject in your market: 23% of September\'s videos.')
+    expect(composeBrief(input('sales', salesOut(), POINTS, { subjects })).data.findings[0].subjectLine).toBeUndefined()
   })
 })

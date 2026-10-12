@@ -7,7 +7,12 @@ import { brandCountState } from '../../brands/precision'
 import { WHAT_THEY_SELL } from '../../pages/market-frame'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from '../../pages/playbook'
 import type { SayVsHearEntry } from '../../pipeline/schemas'
-import { marketAudiences } from '../../reading/market'
+import { marketAudiences, pooledDenominators } from '../../reading/market'
+import { buildMarketKinds } from '../../pages/overview-market/kinds'
+import { OWN_POST_COMMENT_FLOOR } from '../../reading/own-posts'
+import { selectAll } from '../../supabase-admin'
+import { WEEK_READS_TABLE, isLongRunData, isMissingWeekReads } from '../../written/store'
+import { TABLE_SUBJECT_MEMBERSHIPS, isMissingSubjects } from '../../subjects/types'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { readingHandle } from '../../reading/read'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../../reading/reading-view'
@@ -22,7 +27,7 @@ import type { StandingFact } from '../../written/types'
 import type { ParseClient } from '../../written/write-model'
 import { allPoints, runResearch, type ResearchAnswer } from '../documents/research'
 import { allocateIdeas } from './allocate'
-import { composeBrief, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow } from './compose'
+import { composeBrief, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount } from './compose'
 import { Meaning } from './meaning'
 import { applyRepeats, REPEATS_IDEA_CHARS, repeatItemsOf, verdictsOf, type RepeatItem, type RepeatsOutput, type RepeatVerdict } from './repeats'
 import { capText } from '../documents/scrub'
@@ -84,6 +89,98 @@ export interface BriefSetInputs {
   /** The company's own giveaway posts' comments in the month (flagged on the
    *  shares line), or null where none or not read. */
   giveaway?: { posts: number; comments: number } | null
+  /** What people did in the comments and the mood, pooled over the market
+   *  (Leadership's "Where the market stands"); null where not read. */
+  kinds?: MarketKindsIn | null
+  /** Each brand's own posts published in the month and how many drew five or
+   *  more comments (Marketing's "How rivals are heard"); null where not read. */
+  posts?: OwnPostCount[] | null
+  /** The month's long-run read, as "What holds so far" prints it
+   *  (Leadership); null where none is ready. */
+  longRun?: LongRunIn | null
+}
+
+/** What people did in the comments and the mood, for the month, pooled over
+ *  the market as Your market reads them (`buildMarketKinds`). Two small reads
+ *  of the month's rows; null where the tables are not there. */
+export async function loadMarketKinds(
+  admin: SupabaseClient,
+  clientId: string,
+  month: string,
+  denominators: readonly { audience: string; videos: number; comments: number }[],
+  rivalAudiences: readonly string[],
+): Promise<MarketKindsIn | null> {
+  const [kindRes, statsRes] = await Promise.all([
+    admin.from('month_kind_readings').select('month, audience, kind, videos').eq('client_id', clientId).eq('month', month),
+    admin.from('month_audience_stats').select('month, audience, judged, positive, negative, neutral, mixed').eq('client_id', clientId).eq('month', month),
+  ])
+  if (kindRes.error || statsRes.error) throw new Error(`briefs: kinds and mood: ${(kindRes.error ?? statsRes.error)?.message}`)
+  const counts = pooledDenominators(denominators.map((d) => ({ ...d, month })), rivalAudiences)
+  const m = buildMarketKinds({
+    kindRows: (kindRes.data ?? []) as { month: string; audience: string; kind: string; videos: number }[],
+    statsRows: (statsRes.data ?? []) as { month: string; audience: string; judged: number; positive: number; negative: number; neutral: number; mixed: number }[],
+    counts, month, prevMonth: null, rivalAudiences, chip: null,
+  })
+  return { n: m.n, kinds: m.kinds.map((k) => ({ kind: k.kind, k: k.k })), judged: m.judged, mood: m.mood.map((x) => ({ mood: x.mood, k: x.k })) }
+}
+
+/** Each brand's own posts published in the month (upload-dated: the
+ *  own-post census's clock, lib/reading/own-posts.ts), and how many drew
+ *  `OWN_POST_COMMENT_FLOOR` comments or more: the company's, and each tracked
+ *  rival's whose accounts are read. One read of the month's own posts. */
+export async function loadOwnPostCounts(admin: SupabaseClient, clientId: string, month: string, company: string, tracked: readonly string[]): Promise<OwnPostCount[]> {
+  const from = monthStartOf(month)
+  const to = nextMonth(from)
+  const rows = await selectAll<{ id: string; competitor_name: string | null; is_client: boolean | null; source: string | null; comments_count: number | null }>(() =>
+    admin.from('videos').select('id, competitor_name, is_client, source, comments_count').eq('client_id', clientId)
+      .in('source', ['owned', 'competitor_owned']).gte('upload_date', from).lt('upload_date', to).order('id'))
+  const fold = (x: string) => x.toLowerCase().trim()
+  const count = (vs: typeof rows) => ({ posts: vs.length, five: vs.filter((v) => Number(v.comments_count ?? 0) >= OWN_POST_COMMENT_FLOOR).length })
+  const own = rows.filter((v) => v.is_client === true)
+  return [
+    { name: company, you: true, ...count(own) },
+    ...tracked.map((t) => ({ name: t, you: false, ...count(rows.filter((v) => v.source === 'competitor_owned' && fold(v.competitor_name ?? '') === fold(t))) })),
+  ].filter((r) => r.posts > 0)
+}
+
+/** Which subjects each of these insights is a member of (the subjects the
+ *  brief reads, `member` true): what a finding's "Part of {subject}" line is
+ *  counted from. One small read a chunk of insights; empty where the table is
+ *  not there. */
+export async function loadInsightSubjects(admin: SupabaseClient, clientId: string, insightIds: readonly string[], subjectIds: readonly string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>()
+  const ids = [...new Set(insightIds)]
+  if (ids.length === 0 || subjectIds.length === 0) return out
+  for (let k = 0; k < ids.length; k += 150) {
+    const res = await admin.from(TABLE_SUBJECT_MEMBERSHIPS).select('subject_id, audience_insight_id').eq('client_id', clientId)
+      .in('audience_insight_id', ids.slice(k, k + 150)).in('subject_id', [...subjectIds]).eq('member', true)
+    if (res.error) {
+      if (isMissingSubjects(res.error)) return new Map()
+      throw new Error(`briefs: subject memberships: ${res.error.message}`)
+    }
+    for (const r of (res.data ?? []) as { subject_id: string; audience_insight_id: string }[]) {
+      const held = out.get(r.audience_insight_id) ?? []
+      if (!held.includes(r.subject_id)) held.push(r.subject_id)
+      out.set(r.audience_insight_id, held)
+    }
+  }
+  return out
+}
+
+/** The month's long-run read, as "What holds so far" prints it: a ready read
+ *  of the month, one the month's closing run wrote before one written early
+ *  (`partialThrough`). Null where none is ready or the table is not there. */
+export async function loadMonthLongRun(admin: SupabaseClient, clientId: string, month: string): Promise<LongRunIn | null> {
+  const res = await admin.from(WEEK_READS_TABLE).select('data, created_at').eq('client_id', clientId).eq('kind', 'month').eq('status', 'ready')
+    .eq('month', monthStartOf(month)).not('data', 'is', null).order('created_at', { ascending: false }).limit(10)
+  if (res.error) {
+    if (isMissingWeekReads(res.error)) return null
+    throw new Error(`briefs: long-run read: ${res.error.message}`)
+  }
+  const reads = ((res.data ?? []) as { data: unknown }[]).map((r) => r.data).filter(isLongRunData)
+  const read = reads.find((d) => !d.partialThrough) ?? reads[0] ?? null
+  if (!read) return null
+  return { months: [...read.months], ideas: read.ideas.map((i) => ({ headline: i.headline, videos: i.videos, months: i.months.map((m) => ({ month: m.month, videos: m.videos })) })) }
 }
 
 /** A caption that runs a giveaway or a competition: its comments are entries,
@@ -145,8 +242,11 @@ export async function loadBriefSetInputs(
   const cfg = (config.data ?? {}) as { competitor_names?: string[]; industry_keywords?: string[] }
   const tracked = (cfg.competitor_names ?? []).map((n) => String(n).trim()).filter(Boolean)
 
-  const rows = await admin.from('month_denominators').select('audience, videos, comments').eq('client_id', clientId).eq('month', month)
-  const audiences = rows.error ? null : ((rows.data ?? []) as AudienceRow[]).map((r) => ({ audience: r.audience, videos: Number(r.videos), comments: Number(r.comments) }))
+  const rows = await admin.from('month_denominators').select('audience, videos, comments, platform_mix').eq('client_id', clientId).eq('month', month)
+  const audiences = rows.error ? null : ((rows.data ?? []) as (AudienceRow & { platform_mix?: Record<string, number> | null })[]).map((r) => ({
+    audience: r.audience, videos: Number(r.videos), comments: Number(r.comments),
+    platforms: r.platform_mix ? Object.fromEntries(Object.entries(r.platform_mix).map(([k, v]) => [k, Number(v)])) : null,
+  }))
   const rivalAudiences = (await loadMarketRivalAudiences(admin, clientId).catch(warn('rival audiences'))) ?? []
   const rivals = (audiences ?? [])
     .filter((r) => isRivalAudience(r.audience) && r.videos >= SHARE_MIN_VIDEOS)
@@ -165,6 +265,9 @@ export async function loadBriefSetInputs(
   const sh = await admin.from('run_summary').select('say_vs_hear').eq('client_id', clientId).eq('run_id', runId).maybeSingle()
   const themedRunId = await themedRunAsOf(admin, clientId, opts.now.toISOString()).catch(warn('themed run'))
   const giveaway = await loadGiveaway(admin, clientId, month).catch(warn('giveaway posts'))
+  const kinds = audiences ? await loadMarketKinds(admin, clientId, month, audiences, rivalAudiences).catch(warn('kinds and mood')) : null
+  const posts = await loadOwnPostCounts(admin, clientId, month, company, tracked).catch(warn('own posts'))
+  const longRun = await loadMonthLongRun(admin, clientId, month).catch(warn('long-run read'))
   return {
     clientId,
     company,
@@ -184,6 +287,9 @@ export async function loadBriefSetInputs(
     brands,
     rivalAudiences,
     giveaway,
+    kinds,
+    posts,
+    longRun,
   }
 }
 
@@ -447,6 +553,10 @@ export async function writeBriefSet(
   //    descriptions, never a comment's words), and the set is composed again
   //    with the vectors. A text a later pass still wants is embedded and the
   //    pass runs once more.
+  // Which subject each finding is part of: the findings' insights' memberships.
+  const findingInsights = allocation.ideas.flatMap((x) => x.points).map((id) => grounded.points.find((p) => p.id === id)?.insightIds ?? []).flat()
+  const insightSubjects = await loadInsightSubjects(admin, i.clientId, findingInsights, i.standing.filter((f) => f.calibration === 'ready').map((f) => f.subjectId))
+    .catch(warn('subject memberships')) ?? new Map<string, string[]>()
   const vectors = new Map<string, number[]>(opts.vectors ?? [])
   const brands = [i.company, ...i.tracked]
   const counted = brandsCountedFor(i.clientId, i.company, i.tracked)
@@ -457,8 +567,9 @@ export async function writeBriefSet(
     for (const role of roles) {
       out[role] = composeBrief({
         role, company: i.company, month: i.month, noun: i.noun, allocation, points: grounded.points, whoVideos: grounded.whoVideos, quotes, meaning,
-        written: raws[role].raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects: role === 'leadership' ? subjects : undefined,
+        written: raws[role].raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects, insightSubjects,
         audiences: i.audiences, market: i.market, ownPosts: i.context?.posts.month ?? null, giveaway: i.giveaway ?? null, playbook: i.playbook,
+        kinds: i.kinds ?? null, posts: i.posts ?? null, longRun: i.longRun ?? null,
         model: BRIEF_MODEL, costUsd: raws[role].costUsd, brandsCounted: counted,
       })
     }

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { splitSentences } from '../../prose/scrub'
 import type { Meaning } from './meaning'
 import type { AllocatedIdea, BriefItem, BriefRole, MonthlyBriefData, SectionKey } from './types'
+import { printsSection, sectionSays } from './sections'
 import { BRIEF_NAME, BRIEF_ROLES } from './types'
 
 // ONE IDEA, ONE HOME, by what the words SAY (the fix pass, 4 Oct). The
@@ -29,7 +30,7 @@ export const REPEATS_IDEA_CHARS = 700
 
 /** Sections whose lines are code's counts, or questions put to the business
  *  (asking is not saying it twice): never judged. */
-const NOT_JUDGED: ReadonlySet<SectionKey> = new Set(['content.formats', 'content.borrow', 'leadership.shares', 'leadership.decisions'])
+const NOT_JUDGED: ReadonlySet<SectionKey> = new Set(['content.formats', 'content.borrow', 'leadership.shares', 'leadership.decisions', 'leadership.holds'])
 
 export interface RepeatItem {
   /** The short id the judge sees (R1, R2…). */
@@ -54,7 +55,9 @@ export function repeatItemsOf(briefs: readonly MonthlyBriefData[]): RepeatItem[]
     const d = briefs.find((b) => b.role === role)
     if (!d) continue
     for (const s of d.sections) {
-      if (NOT_JUDGED.has(s.key)) continue
+      // A section the deck does not print is not judged: a line naming it
+      // would send a reader to a page that is not there.
+      if (NOT_JUDGED.has(s.key) || !printsSection(s.key)) continue
       for (const g of s.groups) for (const i of g.items) {
         if (i.tag) continue
         out.push({ id: `R${out.length + 1}`, key: itemKey(role, s.key, i), role, section: s.key, text: said(i) })
@@ -174,7 +177,7 @@ export function applyRepeats(
       groups: s.groups.map((g) => ({
         ...g,
         items: g.items.flatMap((i): BriefItem[] => {
-          if (i.tag || NOT_JUDGED.has(s.key)) return [i]
+          if (i.tag || NOT_JUDGED.has(s.key) || !printsSection(s.key)) return [i]
           const key = itemKey(d.role, s.key, i)
           const v = byKey.get(key)
           const idea = v?.idea && plausible(said(i), v.idea) ? ideas.find((x) => x.id === v.idea) : undefined
@@ -189,6 +192,8 @@ export function applyRepeats(
           if (subjectLine) return [{ ...i, tag }]
           const out: BriefItem = { ...i, text: splitSentences(i.text)[0] ?? i.text, tag }
           delete out.detail
+          delete out.persona
+          delete out.quote
           return [out]
         }),
       })).filter((g) => g.items.length > 0 || (g.lines?.length ?? 0) > 0),
@@ -199,7 +204,7 @@ export function applyRepeats(
       const out = { ...s }
       delete out.quote
       return out
-    }).filter((s) => s.groups.length > 0 || (s.voices?.length ?? 0) > 0)
+    }).filter((s) => sectionSays(s))
     return { ...d, sections, held }
   })
 }
