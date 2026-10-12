@@ -828,34 +828,64 @@ This version has breaking changes — APIs, conventions, and file structure may 
   in the viewer (`?view=<snapshot>`) or download; no review holds them (there
   is no email). "Your reports"' brief rows stay hidden (`BRIEFS_BUILT`: they
   are email schedules no brief has), and the August engine's document builds
-  are not in the ledger and are never listed. **Drawn:** `components/briefs/
-  brief-deck.tsx`, the approved "Monthly briefs" boards (design round 6, 1
-  Oct: 1280×720 sheets, each brief's cover colour, palette A, no stripes, no
-  highlights, who the talk was about on every item), one body for the viewer,
-  the PDF and a share link; `lib/reports/briefs/deck.ts` (pure) decides the
-  pages by an estimate of each layout's height (character widths measured in
-  Chrome), carries a long section on to "…, continued", and sends a voice that
-  fits nowhere to its finding's second page. The estimate errs high and is
-  measured by `scripts/brief-render.ts --in <brief.json> --out <dir>` (local
-  Chrome, a PNG a page, exits 1 on any clipping): run it on a real brief and
-  a worst case whenever a page pattern changes. The writers' words are the `monthly_brief` prose slot.
-  **Where the canvas drew no page** the deck follows its nearest pattern:
-  Who else is in the decision (the What stops them rows), How {company} is
-  remembered (the believes and doubts columns), Words to borrow (quote panels,
-  two by two), a section's "…, continued" page, a finding's second page; and
-  the data drew some canvas pages differently: no persona columns (want,
-  stops, moves) or "For a sale" row, no status pills on says and hears, no
-  rival posts table, no stacked share bars (the company's share is a count,
-  never a share or a rank), no What holds so far page. Each is Heinrich's to
-  rule on. **PDF:** `GET /api/briefs/<snapshot>/pdf` prints on the first
+  are not in the ledger and are never listed. **Drawn EXACTLY to the canvas** (Heinrich, 12 Oct: "look just like the
+  design", no deviations; the canvas "Verbatim reports and colour", page
+  "Monthly briefs", Brief-{Sales,Marketing,Content,Leadership}-*: every size,
+  weight, colour, radius and gap is the artboard's): `components/briefs/
+  brief-deck.tsx`, 1280×720 sheets, palette A, each brief's cover colour, one
+  body for the viewer, the PDF and a share link, a hairline round a sheet on
+  screen and never a shadow. The page set and order are the canvas's (Sales
+  9: cover, In short, a finding a page, Who is buying and its one
+  continuation, What stops them with What they want settled first, What tips
+  them into buying, Who buyers compare you with, Language to handle with
+  care; Marketing 8; Content 8; Leadership 8, its findings after Where
+  {company} stands against its rivals and What holds so far last);
+  `lib/reports/briefs/deck.ts` (pure) fits each page at the canvas's type and
+  count (two buyers a page, five objections, three rival cards, five words to
+  handle with care…) by an estimate of each layout's height, and what does
+  not fit stays in the stored brief: no page carries on, no finding takes a
+  second page. A component whose material does not stand does not print; a
+  page that would draw only its title is not printed. The contents use the
+  canvas's short names (a finding's writer-made `short`). Items carry no count
+  line; brand attribution stays where the canvas carries it (a quote's cite,
+  "On a {company} post", a rival card, the "(you)" card, the brand chips).
+  Another brief's idea named in a section is the canvas's footnote ("… is
+  argued in full in the Marketing brief."), on a risk card its foot line.
+  Three sections the engine writes have no canvas page (who else is in the
+  decision, how {company} is remembered, words to borrow): they are built and
+  stored, never printed, behind ONE switch, `PRINT_UNDRAWN_SECTIONS`
+  (`lib/reports/briefs/canvas.ts`), and the set's repeat checks never name
+  them. The canvas's components come from the writer (`monthly_brief_v2`,
+  each field capped at its column's measure: a buyer's want, stops, moves and
+  "For a sale" with a status where they mostly do not buy; a rival's job; the
+  market's own words as chips and what it stops on, shares and argues over;
+  each claim's status; the company's own card; what each brand is heard for;
+  the position in one line) and from counts code reads (the Sales figure's
+  biggest subject; a finding's "Part of {subject}", from the memberships of its
+  insights, read at compose; what people did in the comments and the mood;
+  each brand's share of the month's comments and videos, the company's own
+  posts included, where it is talked about, the notes, a giveaway said; each
+  brand's own posts and how many drew five or more comments; the formats with
+  the first rival's column; What holds so far from the month's ready long-run
+  read). The estimate is measured by `scripts/brief-render.ts --in
+  <brief.json> --out <dir> [--pdf]` (local Chrome, a PNG a page, exits 1 on
+  any clipping): run it on a real brief and a worst case whenever a page
+  changes. The writers' words are the `monthly_brief` prose slot; the
+  long-run patterns are `week_read`'s. Two canvas labels claim a viewer's
+  behaviour the product reads only through comments ("What loses them", "They
+  stop on", "They share"); the writer is held to what comments show under
+  them, and the wording is Heinrich's to rule on. **PDF:** `GET /api/briefs/<snapshot>/pdf` prints on the first
   download (the export route's pattern: session tenant, the daily export cap,
   Chrome at `/render`, Storage, `artifacts`, `export_events`), then reuses the
   file; a stale one prints again; an id that is not a UUID is a 404. **By hand:** `scripts/monthly-briefs.ts
   --client <uuid> --month YYYY-MM --run <uuid>` (`--plan` free, dry by
-  default and paid for, `--write` stores, `--replace` over a written month);
-  September 2026, which closed before the steps existed:
-  `bash scripts/backfill-briefs-september.sh --write`, once, after the
-  migration. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
+  default and paid for, `--write` stores, `--replace` over a written month).
+  A dry build (the default) is also drawn, as the product draws it, into
+  `--designed` (default `~/Documents/Heinrich/Verbatim/Briefs-YYYY-MM-designed/
+  <tenant>/`): `<role>.json` (`{ data, texts }`), `<role>.pdf`, a PNG a page.
+  September 2026, which closed before the steps existed: `bash
+  scripts/backfill-briefs-september.sh` (dry, drawn) to read it designed, then
+  `--write`, once, after the migration. A brief's snapshot has no send row, so `scripts/purge-reports.ts`
   reads `data->>kind` and keeps it by what it is: `drafts` keeps it, `all`
   refuses it, as it refuses any build on the platform (`lib/reports/purge.ts`).
 - **Rendering never runs inside an Inngest step.** Chromium (PDF, PNG) and
