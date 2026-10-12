@@ -4,7 +4,7 @@
 // steps existed (September 2026: scripts/backfill-briefs-september.sh).
 //
 //   node --env-file=.env.local --import tsx scripts/monthly-briefs.ts \
-//     --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--plan] [--write [--replace]]
+//     --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan] [--write [--replace]]
 //
 // --run is the run that closed the month: the briefs are stored under it, as
 // the pipeline stores them under its own run.
@@ -13,7 +13,13 @@
 // ledger, not one `ai_call_log` row. The model calls are still made and paid
 // for (about $2 to $2.50 a workspace: the research most of it), and the four
 // briefs are printed (and written to --out as Markdown, quotes resolved, and
-// JSON, quotes as refs).
+// JSON, quotes as refs). A dry build is also DRAWN, as the product draws it
+// (the canvas's pages, scripts/brief-render-local.ts), into --designed
+// (default ~/Documents/Heinrich/Verbatim/Briefs-YYYY-MM-designed/<tenant>/):
+// for each brief `<role>.json` (`{ data, texts }`: the brief with its quotes
+// as refs, and the words each ref resolves to, kept local), `<role>.pdf` and
+// `<role>-NN.png` a page, so the month can be read designed before --write.
+// A page that clips is named; the build still finishes.
 //
 // --plan makes no model call and reads a handful of rows: the probe, whether
 // the ledger is there, whether the month is written, and the run's window.
@@ -38,11 +44,14 @@
 // workspace at a time; never beside another reader.
 
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { longMonth } from '../lib/format'
+import { fetchQuoteResolutionsByRefs } from '../lib/quotes'
+import { renderBriefLocal, type QuoteWords } from './brief-render-local'
 import { rowWindow, type WindowColumns } from '../lib/pipeline/run-bookkeeping'
 import { monthStartOf } from '../lib/reading/month-key'
 import { collectQuoteRefs } from '../lib/renderables/quotes-freeze'
@@ -62,7 +71,7 @@ const flag = (name: string, fallback = ''): string => {
 }
 const has = (name: string): boolean => args.includes(`--${name}`)
 for (const a of args) {
-  if (a.startsWith('--') && !['client', 'month', 'run', 'out', 'plan', 'write', 'replace'].includes(a.slice(2))) {
+  if (a.startsWith('--') && !['client', 'month', 'run', 'out', 'designed', 'plan', 'write', 'replace'].includes(a.slice(2))) {
     console.error(`unknown flag: ${a}`)
     process.exit(2)
   }
@@ -99,7 +108,7 @@ async function main() {
   const monthArg = flag('month')
   const runId = flag('run')
   if (!/^[0-9a-f-]{36}$/.test(clientId) || !/^\d{4}-\d{2}$/.test(monthArg) || !/^[0-9a-f-]{36}$/.test(runId)) {
-    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--plan] [--write [--replace]]')
+    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan] [--write [--replace]]')
     process.exit(2)
   }
   const month = monthStartOf(`${monthArg}-01T00:00:00.000Z`)
@@ -156,12 +165,48 @@ async function main() {
     }
   }
 
+  // The designed briefs, drawn as the product draws them: always on a dry
+  // build, and on --write where --designed is given.
+  const designed = flag('designed') || (!write ? join(homedir(), 'Documents', 'Heinrich', 'Verbatim', `Briefs-${month.slice(0, 7)}-designed`, slugOf(inputs.company)) : '')
+  if (designed) await drawDesigned(db, briefs, textOf, resolve(process.cwd(), designed), now)
+
   if (write) {
     const shared = set.costUsd / BRIEF_ROLES.length
     const rows = await storeBriefSet(db, { clientId, runId, month, asOf: now.toISOString(), briefs, costUsd: Object.fromEntries(BRIEF_ROLES.map((r) => [r, shared])) })
     console.log(`\nStored the ${longMonth(month)} briefs under run ${runId}: ${rows.map((r) => `${r.role} ${r.status}${r.snapshot_id ? ` (${r.snapshot_id})` : ''}`).join(', ')}.`)
     console.log('They are in the Studio now, under Monthly briefs.')
   }
+}
+
+/** "Össur" → "ossur": a tenant's folder. */
+function slugOf(company: string): string {
+  return company.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'tenant'
+}
+
+/**
+ * Each brief drawn into `dir`: `<role>.json` as `{ data, texts }`, its PDF
+ * and a PNG a page. The words of a quote the build picked are the build's
+ * own; any other ref the brief carries (a subject's voice) is read once, the
+ * way a stored brief resolves at render. A brief that is thin is skipped.
+ */
+async function drawDesigned(db: SupabaseClient, briefs: readonly MonthlyBriefData[], textOf: (ref: string) => { text: string; english: string | null; lang: string | null } | null, dir: string, now: Date): Promise<void> {
+  mkdirSync(dir, { recursive: true })
+  const printing = briefs.filter((d) => briefPrints(d))
+  const refs = [...new Set(printing.flatMap((d) => collectQuoteRefs(d)))]
+  const missing = refs.filter((r) => !textOf(r))
+  const fetched = missing.length ? await fetchQuoteResolutionsByRefs(db, missing) : new Map()
+  for (const d of printing) {
+    const texts: Record<string, QuoteWords> = {}
+    for (const ref of collectQuoteRefs(d)) {
+      const own = textOf(ref)
+      const got = own ?? fetched.get(ref) ?? null
+      if (got?.text) texts[ref] = { text: got.text, english: got.english ?? null, lang: got.lang ?? null }
+    }
+    writeFileSync(join(dir, `${d.role}.json`), `${JSON.stringify({ data: d, texts }, null, 2)}\n`)
+    const r = await renderBriefLocal({ data: d, texts }, dir, { name: d.role, built: now.toISOString(), pdf: true })
+    console.log(`Drawn: ${BRIEF_NAME[d.role]}, ${r.pages} pages${r.clipped.length ? `, CLIPPING on ${r.clipped.map((c) => `page ${c.page} (${c.px}px)`).join(', ')}` : ''}: ${r.pdf}`)
+  }
+  console.log(`The designed briefs are in ${dir}.`)
 }
 
 main().catch((error) => {
