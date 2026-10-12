@@ -216,9 +216,12 @@ interface PartSpec {
   /** Characters each field may run to: the canvas's measure for this part's
    *  page (a field the page draws in a narrow column is short). */
   caps?: { title?: number; text?: number; detail?: number }
-  /** The part opens with a lead (the canvas draws one on this page). */
+  /** The part opens with a lead (the canvas draws one on this page): always
+   *  written where the part has items, since a page without the lead its
+   *  canvas draws does not print (deck.ts `PAGE_NEEDS`). */
   lead?: number
-  /** A second paragraph the part's page draws under its lead. */
+  /** A second paragraph the part's page draws under its lead, written on the
+   *  same terms. */
   note?: { describe: string; max: number }
   /** Fields this part's items carry besides title, text and detail. */
   extra?: readonly FieldSpec[]
@@ -319,8 +322,8 @@ export const EXTRA_MAX = {
 export function briefSchema(role: BriefRole) {
   const parts: Record<string, z.ZodTypeAny> = {}
   for (const p of PARTS[role]) parts[p.key] = z.object({
-    ...(p.lead ? { lead: z.string().describe(`One or two sentences that open this part, or "" where the items say it all. Under ${p.lead} characters.`) } : {}),
-    ...(p.note ? { note: z.string().describe(`${p.note.describe} Under ${p.note.max} characters, or "".`) } : {}),
+    ...(p.lead ? { lead: z.string().describe(`One or two sentences that open this part: they sum up the items below and make no claim the items do not make. Always written where the part has items; "" only where it has none. Under ${p.lead} characters.`) } : {}),
+    ...(p.note ? { note: z.string().describe(`${p.note.describe} Only what the items and their points say. Always written where the part has items; "" only where it has none. Under ${p.note.max} characters.`) } : {}),
     items: z.array(item(p)).describe(`${p.ask} At most ${p.max}; fewer is fine; leave out what the points do not carry.`),
   })
   const extra: Record<string, z.ZodTypeAny> = {}
@@ -332,7 +335,7 @@ export function briefSchema(role: BriefRole) {
       call_it: wordsGroup('What people call the product.', EXTRA_MAX.callIt),
       praise: wordsGroup('How they praise it.', EXTRA_MAX.praiseWords),
       problem: wordsGroup('The problem it solves, in their words.', EXTRA_MAX.problemWords),
-      lead: z.string().describe(`One sentence on how people describe the problem the product solves, in their terms. Under ${EXTRA_MAX.ownWordsLead} characters, or "".`),
+      lead: z.string().describe(`One sentence on how people describe the problem the product solves, in their terms: it sums up the problem words and makes no claim they do not make. Always written where the problem words are given; "" only where they are not. Under ${EXTRA_MAX.ownWordsLead} characters.`),
       stop_on: line('What the comments single out and react to on sight.', EXTRA_MAX.panel),
       share: line('What people say they pass on to others or tag someone in, only where the points say so.', EXTRA_MAX.panel),
       argue: line('What the comments argue over.', EXTRA_MAX.panel),
@@ -450,6 +453,12 @@ export function buildBriefPrompts(a: BriefArgs): { system: string; user: string 
   const role = a.role
   const month = longMonth(a.month)
   const parts = PARTS[role]
+  // The leads the canvas draws for this role, each required where its part
+  // has items: a page without the lead its canvas draws does not print.
+  const leads = [
+    ...parts.filter((p) => p.lead).map((p) => (p.note ? `${p.key}.lead and ${p.key}.note` : `${p.key}.lead`)),
+    ...(role === 'marketing' ? ['own_words.lead'] : []),
+  ]
   const system = [
     `You are the consumer researcher at ${co}. You are writing the ${BRIEF_NAME[role]} for ${month}, read by ${READER[role]}. ${co}'s market is the people worldwide buying and talking about what ${co} sells, not only its own customers. The brief is intelligence about that market for this reader, not a memo and not advice.`,
     '',
@@ -475,7 +484,7 @@ export function buildBriefPrompts(a: BriefArgs): { system: string; user: string 
     '- Write every item the points carry, up to each part\'s maximum: the sections are where this brief differs from the other three, so a part with points under its question is never left empty. Every item cites in based_on the points it rests on and says nothing they do not say. Where several points say the same thing, write ONE item citing them all: an item that rests on more voices is stronger. Code decides which items have enough behind them to print; never leave one out because you judge it thin.',
     '- ONE IDEA, ONE HOME: the month\'s other ideas are argued in other briefs, and code names each of them for the reader in a line of its own. Never mention them, never refer to another brief, section or team ("elsewhere", "other briefs", "covered separately"), and never develop their argument here. A section item may still name a question, an objection or a moment that bears on one, in its own words and in one or two sentences, without arguing it.',
     '- Never restate this brief\'s own findings in its sections: an item adds what a finding does not say.',
-    '- A lead opens a part only where it adds something the items do not say; otherwise it is "". Never use a lead to list other ideas or to sum up the brief.',
+    ...(leads.length ? [`- The leads (${leads.join(', ')}) are always written where their part has items: one or two sentences that sum up the items under them, in the market's terms, making no claim the items do not make (no new fact, no new brand, nothing the items' points do not carry). Never use a lead to list other ideas or to sum up the brief.`] : []),
     `- Rivals: name only the tracked rivals listed (${a.rivals.length ? a.rivals.join(', ') : 'none'}), and only where a point names them. Never describe a rival from general knowledge.`,
     `- Intelligence, not instructions: never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", never an imperative, and never tell ${co} what to do.`,
     ...houseStyle(co),

@@ -1,6 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { buildRepeatsPrompts, repeatsSchema } from './repeats'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 
 import { fact } from '../../written/test-fixtures'
 import { allBriefQuestions } from './questions'
@@ -61,6 +62,21 @@ describe('the brief call', () => {
     expect(Object.keys(((briefSchema('content').shape as Record<string, unknown>).confusion as { shape: Record<string, unknown> }).shape)).toEqual(['lead', 'note', 'items'])
     const say = JSON.stringify(zodResponseFormat(briefSchema('marketing'), 'b'))
     for (const st of ['heard_back', 'not_echoed', 'heard_as_values', 'tested', 'confused']) expect(say).toContain(st)
+  })
+
+  it('always writes the leads the canvas draws, summing up the items and making no new claim (a page without its lead does not print)', () => {
+    const lead = (r: typeof BRIEF_ROLES[number], part: string) => JSON.stringify(zodResponseFormat(z.object({ p: (briefSchema(r).shape as Record<string, z.ZodTypeAny>)[part] }), 'b'))
+    for (const [r, part] of [['content', 'praise'], ['content', 'confusion'], ['leadership', 'weigh'], ['marketing', 'own_words']] as const) {
+      expect(lead(r, part)).toContain('Always written where')
+      expect(lead(r, part)).toContain('no claim')
+    }
+    expect(lead('content', 'confusion')).toContain('Only what the items and their points say')
+    const sys = (r: typeof BRIEF_ROLES[number]) => buildBriefPrompts({ role: r, company: 'X', month: '2026-09-01', noun: null, ideas: [], others: [], points: [], questions: [], context: null, rivals: [] }).system
+    expect(sys('content')).toContain('The leads (praise.lead, confusion.lead and confusion.note) are always written where their part has items')
+    expect(sys('marketing')).toContain('The leads (own_words.lead)')
+    expect(sys('leadership')).toContain('The leads (weigh.lead)')
+    expect(sys('sales')).not.toContain('The leads (')
+    expect(sys('content')).not.toContain('where the items say it all')
   })
 
   it('is told the month\'s other ideas by headline, never to argue them, and the rivals it may name', () => {
