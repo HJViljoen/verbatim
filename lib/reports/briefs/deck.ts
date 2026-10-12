@@ -422,9 +422,15 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
         pages.push(p)
         at += p.length
       }
+      // A sheet of one buyer prints only where that buyer fills it, too
+      // long to share (Heinrich, 12 Oct: "one long buyer that fills a sheet
+      // is fine"); a short one alone, the odd third, would leave half the
+      // sheet empty, and stays stored. The section's two then count across
+      // the sheets that print (PAGE_NEEDS).
+      const kept = pages.filter((p, k) => p.length > 1 || !pairFits([p[0], p[0]], k === 0))
       // The heading counts every buyer the brief found, printed or not
       // (Heinrich, 12 Oct): "Four kinds of people…" where two print.
-      return pages.map((p, k) => page(only(s, p), { continued: k > 0, sub: k === 0 ? subtitleOf(s, d, s) : null }))
+      return kept.map((p, k) => page(only(s, p), { continued: k > 0, sub: k === 0 ? subtitleOf(s, d, s) : null }))
     }
     case 'sales.stops': {
       const room = BODY_HEIGHT - titleH(sub) - 14

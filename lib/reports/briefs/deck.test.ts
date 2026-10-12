@@ -229,6 +229,17 @@ describe('thin pages are left out (Heinrich, 12 Oct)', () => {
     expect(why(d, 'sales.buyers')).toBe('1 of the 2 buyers a page needs')
   })
 
+  it('a sheet of one short buyer, the odd third, is left out and the buyer stays stored; the heading still counts three', () => {
+    const d = briefFixture('sales')
+    const buyers = sec(d, 'sales.buyers')
+    buyers.groups[0].items = buyers.groups[0].items.slice(0, 3)
+    const sheets = deckPages(d).filter((p) => p.body.kind === 'section' && p.body.section.key === 'sales.buyers')
+    expect(sheets.map((p) => p.eyebrow)).toEqual(['Who is buying'])
+    expect(sheets[0].body.kind === 'section' && sheets[0].body.section.groups[0].items.length).toBe(2)
+    expect(sheets[0].body.kind === 'section' && sheets[0].body.sub).toBe("Three kinds of people talk about packs like Acme's.")
+    expect(buyers.groups[0].items).toHaveLength(3)
+  })
+
   it('the heading counts every buyer found, not those printed, in words', () => {
     const d = briefFixture('sales')
     const buyers = sec(d, 'sales.buyers')
