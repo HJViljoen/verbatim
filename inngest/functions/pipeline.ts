@@ -57,7 +57,7 @@ import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, sub
 import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
-import { MERGE_REGIME as THEME_MERGE_REGIME } from '@/lib/pipeline/theme-merge'
+import { PROMPT_VERSION as THEME_MERGE_PROMPT_VERSION } from '@/lib/pipeline/theme-merge'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, isMissingClusteringKeyColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
@@ -375,10 +375,7 @@ export const runPipeline = inngest.createFunction(
         // passAPromptVersion, which is exactly what happened between 29a56395
         // and d346b0f7.
         passAInputs: { transcripts: flags.transcripts, translation: flags.translation, ocr: flags.ocr, ownPostAudience: flags.ownPostAudience },
-        // The merge prompt's version plus its chunk size (theme-merge.ts
-        // MERGE_REGIME): a bucket over MERGE_CHUNK_MAX is merged in parts, and a
-        // cluster can only fuse inside its own part.
-        mergePromptVersion: THEME_MERGE_REGIME,
+        mergePromptVersion: THEME_MERGE_PROMPT_VERSION,
       }))
       // The bookkeeping migration is applied by hand (a schema change on a live
       // pipeline is not a deploy side effect), so the code CAN reach production

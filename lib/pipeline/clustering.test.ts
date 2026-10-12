@@ -7,8 +7,7 @@ import {
   currentClusteringRegime,
   sameRegime,
 } from './clustering'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, MERGE_CHUNK_MAX, SYNTHESIS_MODEL } from '../config'
-import { MERGE_REGIME, PROMPT_VERSION } from './theme-merge'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '../config'
 
 const inputs = { transcripts: true, translation: true, ocr: true }
 const regime = {
@@ -17,14 +16,14 @@ const regime = {
   clusterThreshold: 0.58,
   evidenceFloor: 2,
   mergeModel: 'gpt-5.4',
-  mergePromptVersion: 'theme_merge_v1+chunk120',
+  mergePromptVersion: 'theme_merge_v1',
   themeKey: 'video_v1',
 }
 
 describe('clusteringKey', () => {
   it('is legible, ordered and stable', () => {
     expect(clusteringKey(regime)).toBe(
-      'a=pass_a_v4.1;i=transcripts+translation+ocr;c=0.58;f=2;m=gpt-5.4;mp=theme_merge_v1+chunk120;k=video_v1')
+      'a=pass_a_v4.1;i=transcripts+translation+ocr;c=0.58;f=2;m=gpt-5.4;mp=theme_merge_v1;k=video_v1')
     expect(clusteringKey({ ...regime, passAInputs: { transcripts: false, translation: false, ocr: false } }))
       .toContain(';i=none;')
   })
@@ -35,10 +34,7 @@ describe('clusteringKey', () => {
     expect(clusteringKey({ ...regime, clusterThreshold: 0.6 })).not.toBe(base)
     expect(clusteringKey({ ...regime, evidenceFloor: 3 })).not.toBe(base)
     expect(clusteringKey({ ...regime, mergeModel: 'gpt-5.5' })).not.toBe(base)
-    expect(clusteringKey({ ...regime, mergePromptVersion: 'theme_merge_v2+chunk120' })).not.toBe(base)
-    // The merge's chunk size is part of the regime: a cluster can only fuse
-    // inside its own part, so a moved size re-partitions every big bucket.
-    expect(clusteringKey({ ...regime, mergePromptVersion: 'theme_merge_v1+chunk200' })).not.toBe(base)
+    expect(clusteringKey({ ...regime, mergePromptVersion: 'theme_merge_v2' })).not.toBe(base)
     expect(clusteringKey({ ...regime, themeKey: 'video_v2' })).not.toBe(base)
     // The event the whole marker exists for: Össur 29a56395 → d346b0f7 flipped
     // translation and OCR on, which re-read the corpus a video at a time. The
@@ -69,18 +65,6 @@ describe('clusteringKey', () => {
     expect(clusteringKey(currentClusteringRegime({
       promptVersion: 'pass_a_v3.1', passAInputs: inputs, mergePromptVersion: 'theme_merge_v1',
     }))).toContain('a=pass_a_v3.1')
-  })
-})
-
-describe('the merge regime open-run stamps', () => {
-  it('carries the prompt version and the chunk size, derived from the constants', () => {
-    // pipeline.ts passes MERGE_REGIME as mergePromptVersion; ai_call_log rows
-    // keep PROMPT_VERSION, because the words sent did not change.
-    const key = clusteringKey(currentClusteringRegime({
-      promptVersion: 'pass_a_v4.1', passAInputs: inputs, mergePromptVersion: MERGE_REGIME,
-    }))
-    expect(key).toContain(`;mp=${PROMPT_VERSION}+chunk${MERGE_CHUNK_MAX};`)
-    expect(key).toContain(';mp=theme_merge_v1+chunk120;')
   })
 })
 

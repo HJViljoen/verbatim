@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  MERGE_REGIME, PROMPT_VERSION, applyMergeGroups, partitionByCentroid, partitionByOrder, settleParts, toBucketNumbers,
+  applyMergeGroups, partitionByCentroid, partitionByOrder, settleParts, toBucketNumbers,
   type PartAnswer,
 } from './theme-merge'
 import { MERGE_CHUNK_MAX } from '../config'
@@ -263,12 +263,5 @@ describe('settleParts', () => {
     const r = settleParts('b', six, parts, [{ merges: [] }, { merges: [{ cluster_numbers: [1, 2], reason: 'b and d' }] }], false)
     expect(r.failedChunks).toBe(0)
     expect(r.clusters).toHaveLength(5)
-  })
-})
-
-describe('MERGE_REGIME', () => {
-  it('is the prompt version plus the chunk size, the `mp=` the clustering key stamps', () => {
-    expect(MERGE_REGIME).toBe(`${PROMPT_VERSION}+chunk${MERGE_CHUNK_MAX}`)
-    expect(MERGE_REGIME).toBe('theme_merge_v1+chunk120')
   })
 })

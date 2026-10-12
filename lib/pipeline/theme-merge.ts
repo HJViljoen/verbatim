@@ -30,23 +30,17 @@ import type { InsightRow } from './types'
 // parallel under the step's one deadline. Close, because the duplicates this
 // pass exists to find are close in embedding space by construction: the
 // clustering kept them apart at its threshold, but only just. A cluster can
-// still only fuse with clusters in its own part, which is why the chunk size
-// is in the clustering regime (MERGE_REGIME). A bucket at or under the size
-// makes today's one call with today's prompt, byte for byte.
+// still only fuse with clusters in its own part; that is deliberately NOT in
+// the clustering key (lib/pipeline/clustering.ts, at `mp`, says why). A bucket
+// at or under the size makes today's one call with today's prompt, byte for
+// byte.
 
-/** The prompt that decides which clusters fuse — the version every
- *  ai_call_log row of this pass books against. */
+/** The prompt that decides which clusters fuse. Part of a run's clustering
+ *  regime (lib/pipeline/clustering.ts `mp=`), not just of its audit log: a
+ *  reworded merge prompt re-partitions the corpus exactly as a moved threshold
+ *  does. Exported as a plain string so open-run can stamp it without the
+ *  clustering module importing this one. */
 export const PROMPT_VERSION = 'theme_merge_v1'
-
-/** The merge's part of a run's clustering regime (lib/pipeline/clustering.ts
- *  `mp=`): the prompt version, plus the chunk size. A reworded prompt
- *  re-partitions the corpus exactly as a moved threshold does, and so does a
- *  moved chunk size, for every bucket over it — a cluster can only fuse with
- *  the clusters in its own part. The prompt's words did not change with
- *  chunking, so ai_call_log keeps PROMPT_VERSION; the key says both.
- *  Exported as a plain string so open-run can stamp it without the clustering
- *  module importing this one. */
-export const MERGE_REGIME = `${PROMPT_VERSION}+chunk${MERGE_CHUNK_MAX}`
 
 /** A merge group larger than this is a topic, not a theme — rejected whole. */
 const MAX_MERGE_GROUP = 8

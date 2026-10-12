@@ -916,10 +916,9 @@ export const THEME_MERGE_STEP_BUDGET_MS = 255_000
  *  this and this: Sealand's 1,879 is about sixteen calls, Össur's 921 about
  *  eight. 120 is set from that measurement and not yet proven live itself.
  *
- *  It is part of the clustering regime (`mp=` in lib/pipeline/clustering.ts,
- *  via theme-merge.ts MERGE_REGIME): a cluster can only fuse with clusters in
- *  its own part, so moving this re-partitions the corpus for every bucket over
- *  it. */
+ *  Deliberately NOT in the clustering key (Heinrich, 12 Oct): the merge's
+ *  prompt, model and threshold are unchanged, so this is capacity, not a new
+ *  grouping rule — lib/pipeline/clustering.ts, at `mp`, has the reasoning. */
 export const MERGE_CHUNK_MAX = 120
 
 // --- Data retention (Tier 0 T0-9, 2026-08-18) --------------------------------
