@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aggregate, isMegaCluster, megaClusterThreshold } from './step-a2'
+import { aggregate, isMegaCluster, megaClusterThreshold, mergeShortfall } from './step-a2'
 import type { InsightRow } from './types'
 import { MEGA_CLUSTER_MIN } from '../config'
 
@@ -65,5 +65,30 @@ describe('aggregate — what a theme carries out of clustering', () => {
     const t = aggregate([ins('a', 2, 'weak'), ins('b', 9, 'strong')], 'client')
     expect(t.sampleDescriptions[0]).toBe('strong')
     expect(t.strengthScore).toBe(9)
+  })
+})
+
+describe('mergeShortfall', () => {
+  it('says nothing when the merge applied', () => {
+    expect(mergeShortfall({})).toBeNull()
+    expect(mergeShortfall({ mergeSkipped: false, mergeChunks: 7, mergeChunksFailed: 0 })).toBeNull()
+  })
+
+  it('keeps the one-call wording runs have recorded since 5 Oct, memoised results included', () => {
+    const was = 'the merge call failed on the last attempt; this bucket\'s themes are unmerged this run'
+    expect(mergeShortfall({ mergeSkipped: true })).toBe(was)
+    expect(mergeShortfall({ mergeSkipped: true, mergeChunks: 1, mergeChunksFailed: 1 })).toBe(was)
+  })
+
+  it('says the whole bucket, or N of M parts, for a bucket merged in parts', () => {
+    expect(mergeShortfall({ mergeSkipped: true, mergeChunks: 7, mergeChunksFailed: 7 }))
+      .toBe('all 7 merge parts failed on the last attempt; this bucket\'s themes are unmerged this run')
+    expect(mergeShortfall({ mergeSkipped: false, mergeChunks: 7, mergeChunksFailed: 2 }))
+      .toBe('2 of 7 merge parts failed on the last attempt; the themes in those parts are unmerged this run')
+  })
+
+  it('stays a `themes` error to the week chart, whose cadence reads the label before the colon', () => {
+    const entry = `themes:industry-other: ${mergeShortfall({ mergeChunks: 7, mergeChunksFailed: 2 })}`
+    expect(entry.split(':')[0].trim()).toBe('themes')
   })
 })

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { averageLinkageClusters, cosine } from './cluster'
+import { averageLinkageClusters, clusterCentroids, clusterInsights, clusterInsightsWithCentroids, cosine } from './cluster'
+import type { InsightRow } from './types'
 
 // The chaining defect this linkage exists to prevent (2026-07-11): under
 // single-linkage, one generic "bridge" insight sitting between two unrelated
@@ -172,4 +173,34 @@ describe('averageLinkageClusters vs the O(n³) oracle', () => {
     expect(groups.flat()).toHaveLength(1500)
     expect(ms).toBeLessThan(COMPLEXITY_GUARD_MS)
   }, 30_000)
+})
+
+describe('clusterCentroids', () => {
+  it('is each group\'s mean direction, at unit length, in group order', () => {
+    const vecs = [at(0), at(90), [2, 0], [0, 0]]
+    const [c0, c1, c2] = clusterCentroids(vecs, [[0, 1], [2], [3]])
+    // at(0) + at(90) points at 45°.
+    expect(c0[0]).toBeCloseTo(Math.SQRT1_2)
+    expect(c0[1]).toBeCloseTo(Math.SQRT1_2)
+    // A vector that is not unit comes back unit.
+    expect([...c1]).toEqual([1, 0])
+    // A zero mean stays zero rather than dividing by it.
+    expect([...c2]).toEqual([0, 0])
+  })
+})
+
+describe('clusterInsightsWithCentroids', () => {
+  const row = (id: string, theme: string): InsightRow => ({
+    id, theme, category: 'praise', description: theme, strength_score: 5,
+    emotion: 'joyful', sentiment_impact: 'positive', source_video_id: `v-${id}`, platform: 'tiktok',
+    is_client: false, is_competitor: false, competitor_name: null,
+  })
+
+  it('the string method embeds nothing, so it carries no centroids, and clusterInsights returns the same clusters', async () => {
+    const rows = [row('1', 'Price'), row('2', 'fit'), row('3', 'price ')]
+    const r = await clusterInsightsWithCentroids(rows, { method: 'string' })
+    expect(r.centroids).toBeUndefined()
+    expect(r.clusters.map((c) => c.map((i) => i.id))).toEqual([['1', '3'], ['2']])
+    expect(await clusterInsights(rows, { method: 'string' })).toEqual(r.clusters)
+  })
 })

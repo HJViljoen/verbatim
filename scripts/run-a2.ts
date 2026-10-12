@@ -1,6 +1,8 @@
 import { runStepA2, loadGroupedInsights } from '../lib/pipeline/step-a2'
-import { similarityMatrix, type ClusterMethod } from '../lib/pipeline/cluster'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
+import { clusterInsightsWithCentroids, similarityMatrix, type ClusterMethod } from '../lib/pipeline/cluster'
+import { mergeClusterLabels } from '../lib/pipeline/theme-merge'
+import { createAdminClient } from '../lib/supabase-admin'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, MERGE_CHUNK_MAX, OSSUR_CLIENT_ID as OSSUR, THEME_MERGE_STEP_BUDGET_MS } from '../lib/config'
 
 // CLI inspector for Step A2 (theme aggregation). Run with env loaded:
 //   node --env-file=.env.local --import tsx scripts/run-a2.ts --run <id> [flags]
@@ -15,6 +17,15 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, OSSUR_CLIENT_ID as OSSUR 
 //   --merge-model <m>    model for the merge pass (default: config SYNTHESIS_MODEL)
 //   --debug              print the per-group pairwise similarity matrix and exit
 //                        (use this to tune --threshold against real data)
+//   --bucket <name>      ONE bucket, timed the way its `themes:<bucket>` step
+//                        is: load, cluster, merge (in parts over
+//                        MERGE_CHUNK_MAX), against THEME_MERGE_STEP_BUDGET_MS
+//                        counted from the start of the load, with the step's
+//                        last-attempt fail-soft so a failed part is reported
+//                        rather than thrown. Writes NOTHING (no ai_call_log
+//                        row, no theme). One production read: the run row,
+//                        then the loader (no embedding column). Spends one
+//                        embeddings pass over the bucket and its merge calls.
 
 
 interface Args {
@@ -26,6 +37,7 @@ interface Args {
   noMerge: boolean
   mergeModel?: string
   debug: boolean
+  bucket?: string
 }
 
 function parseArgs(argv: string[]): Args {
@@ -41,6 +53,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--no-merge') args.noMerge = true
     else if (a === '--merge-model') args.mergeModel = next()
     else if (a === '--debug') args.debug = true
+    else if (a === '--bucket') args.bucket = next()
     else throw new Error(`unknown flag: ${a}`)
   }
   if (!args.runId) throw new Error('--run <uuid> is required')
@@ -69,6 +82,51 @@ async function debugMatrix(clientId: string, runId: string, threshold: number) {
   }
 }
 
+/** The `themes:<bucket>` step's body, unpersisted and timed by phase. Mirrors
+ *  runStepA2Bucket → processGroup (load, cluster with centroids, merge under
+ *  the step's deadline) without the roll-up, which is pure and quick. */
+async function timeOneBucket(args: Args, method: ClusterMethod, threshold: number) {
+  const s = (ms: number) => `${(ms / 1000).toFixed(1)} s`
+  // The probe on the path the loader uses (PostgREST, not SQL — AGENTS.md:
+  // either can be down alone). Slow or failing, the loader never runs.
+  const probeAt = Date.now()
+  const { data: run, error } = await createAdminClient()
+    .from('pipeline_runs').select('id, client_id, status').eq('id', args.runId!).maybeSingle()
+  const probeMs = Date.now() - probeAt
+  if (error) throw new Error(`run read failed (PostgREST): ${error.message}`)
+  if (probeMs > 3_000) throw new Error(`PostgREST probe took ${s(probeMs)}; no production read for 15 minutes (AGENTS.md)`)
+  if (!run || run.client_id !== args.clientId) throw new Error(`run ${args.runId} is not this client's`)
+  console.log(`PostgREST probe ${probeMs} ms; run ${run.id} is ${run.status}`)
+
+  const startedAt = Date.now()
+  const deadline = startedAt + THEME_MERGE_STEP_BUDGET_MS
+  const { groups } = await loadGroupedInsights(args.clientId, args.runId!)
+  const loadedAt = Date.now()
+  const grp = groups.find((g) => g.bucket === args.bucket)
+  if (!grp) throw new Error(`bucket "${args.bucket}" not in this corpus (have: ${groups.map((g) => g.bucket).join(', ')})`)
+  const clustered = await clusterInsightsWithCentroids(grp.insights, { method, threshold })
+  const clusteredAt = Date.now()
+  console.log(`[${grp.bucket}] ${grp.insights.length} insights → ${clustered.clusters.length} clusters (load ${s(loadedAt - startedAt)}, embed + cluster ${s(clusteredAt - loadedAt)}); merge has ${s(deadline - clusteredAt)} left of ${s(THEME_MERGE_STEP_BUDGET_MS)}`)
+
+  const m = await mergeClusterLabels({
+    clientId: args.clientId, runId: args.runId!, bucket: grp.bucket, clusters: clustered.clusters, centroids: clustered.centroids,
+    model: args.mergeModel, logCall: false, callIndex: 1, deadline, failSoft: true,
+  })
+  const doneAt = Date.now()
+
+  console.log('\n=== ONE BUCKET, AS ITS STEP ===')
+  console.log(`insights:          ${grp.insights.length}`)
+  console.log(`clusters:          ${clustered.clusters.length} → ${m.clusters.length} after merge (MERGE_CHUNK_MAX ${MERGE_CHUNK_MAX})`)
+  console.log(`merge calls:       ${m.chunks}, failed ${m.failedChunks}${m.skipped ? ' (whole bucket unmerged)' : ''}`)
+  console.log(`merges applied:    ${m.applied.length}`)
+  console.log(`groups rejected:   ${m.rejectedGroups}`)
+  console.log(`tokens:            ${m.promptTokens} in, ${m.completionTokens} out`)
+  console.log(`merge cost:        $${m.costUsd.toFixed(4)}`)
+  console.log(`wall:              ${s(doneAt - startedAt)} of ${s(THEME_MERGE_STEP_BUDGET_MS)} (load ${s(loadedAt - startedAt)}, cluster ${s(clusteredAt - loadedAt)}, merge ${s(doneAt - clusteredAt)})`)
+  for (const a of m.applied.slice(0, 15)) console.log(`  + ${a.members.join('  +  ')}  — ${a.reason}`)
+  if (m.applied.length > 15) console.log(`  …and ${m.applied.length - 15} more`)
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const method = args.method ?? 'embedding'
@@ -78,6 +136,10 @@ async function main() {
 
   if (args.debug) {
     await debugMatrix(args.clientId, args.runId!, threshold)
+    return
+  }
+  if (args.bucket) {
+    await timeOneBucket(args, method, threshold)
     return
   }
 

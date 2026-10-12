@@ -6,7 +6,7 @@ import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommen
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
 import { decideAnalysis, emptyReasonTally, type SelectReason } from '@/lib/pipeline/pass-a-plan'
 import { pruneStaleAnalysis, trimFreezeHold, trimStaleMemberships, trimSummary } from '@/lib/pipeline/stale-analysis'
-import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
+import { loadGroupedInsights, mergeShortfall, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
 import { planPassB, labelPassBWave, applyPassBLabels, type PassBWaveResult } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
 import { runPassD } from '@/lib/pipeline/pass-d'
@@ -57,7 +57,7 @@ import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, sub
 import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
-import { PROMPT_VERSION as THEME_MERGE_PROMPT_VERSION } from '@/lib/pipeline/theme-merge'
+import { MERGE_REGIME as THEME_MERGE_REGIME } from '@/lib/pipeline/theme-merge'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, isMissingClusteringKeyColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
@@ -375,7 +375,10 @@ export const runPipeline = inngest.createFunction(
         // passAPromptVersion, which is exactly what happened between 29a56395
         // and d346b0f7.
         passAInputs: { transcripts: flags.transcripts, translation: flags.translation, ocr: flags.ocr, ownPostAudience: flags.ownPostAudience },
-        mergePromptVersion: THEME_MERGE_PROMPT_VERSION,
+        // The merge prompt's version plus its chunk size (theme-merge.ts
+        // MERGE_REGIME): a bucket over MERGE_CHUNK_MAX is merged in parts, and a
+        // cluster can only fuse inside its own part.
+        mergePromptVersion: THEME_MERGE_REGIME,
       }))
       // The bookkeeping migration is applied by hand (a schema change on a live
       // pipeline is not a deploy side effect), so the code CAN reach production
@@ -1558,9 +1561,13 @@ export const runPipeline = inngest.createFunction(
     }
     // A merge skipped on its step's last attempt left that bucket's themes
     // fragmented, and a month this run freezes keeps them so: an error, not a
-    // log line that ages out.
+    // log line that ages out. Since a big bucket merges in parts, that is the
+    // whole bucket or N of its M parts (`mergeShortfall`); either way the key
+    // stays `themes:<bucket>`, which the week chart's cadence reads as a step
+    // after the gather (lib/reading/week-line.ts AFTER_GATHER_STEPS).
     for (const r of bucketResults) {
-      if (r.mergeSkipped) noteError(`themes:${r.bucket}`, 'the merge call failed on the last attempt; this bucket\'s themes are unmerged this run')
+      const shortfall = mergeShortfall(r)
+      if (shortfall) noteError(`themes:${r.bucket}`, shortfall)
     }
 
     // Pass B labels BOTH tiers (early signals surface on the pages too); the

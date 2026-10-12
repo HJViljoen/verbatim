@@ -15,7 +15,7 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
 //
 // So the run records what it clustered under, at open-run, beside the frozen
 // window and the frozen flags — and the reading compares THAT. Legible rather
-// than hashed: an operator reading `a=pass_a_v4.1;i=transcripts+translation+ocr;c=0.58;f=2;m=gpt-5.4;mp=theme_merge_v1;k=video_v1`
+// than hashed: an operator reading `a=pass_a_v4.1;i=transcripts+translation+ocr;c=0.58;f=2;m=gpt-5.4;mp=theme_merge_v1+chunk120;k=video_v1`
 // off a month row can see which knob moved, where a hash would only say "not
 // the same".
 //
@@ -38,7 +38,19 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
 //      clusters fuse, so its identity is part of the clustering
 //   mp the merge PROMPT version — the model is half of that call; the words
 //      that ask it which clusters are one theme are the other half, and a
-//      rewording re-partitions the corpus exactly as a moved threshold does
+//      rewording re-partitions the corpus exactly as a moved threshold does.
+//      Since 12 Oct it carries the merge's CHUNK SIZE too (`+chunk120`,
+//      theme-merge.ts MERGE_REGIME): a bucket over MERGE_CHUNK_MAX clusters is
+//      merged in parts, a cluster can only fuse with clusters in its own part,
+//      so the size decides which clusters CAN become one theme. The first run
+//      under it opens a new regime on every tenant, which is the honest answer
+//      for the buckets it splits (and the conservative one for those it does
+//      not: the key is per run, not per bucket). freeze-months rewrites every
+//      FILLING month under the run's key, so the boundary lands on the oldest
+//      month still filling at that run (September 2026, for a run before
+//      31 Oct): August→September carries `clustering_changed` for good, and a
+//      theme direction word waits for three ended months inside the new key
+//      (`directionWord`, lib/reading/bands.ts)
 //   k  the theme-key rule — the cutover to the video key is itself an identity
 //      event, and a marker that does not carry it would make the one run that
 //      needs the marker look unremarkable. Measured with
@@ -96,8 +108,9 @@ export interface ClusteringRegime {
   clusterThreshold: number
   evidenceFloor: number
   mergeModel: string
-  /** theme-merge.ts PROMPT_VERSION, passed in for the same reason the Pass A
-   *  version is: clustering.ts must stay importable by a page. */
+  /** theme-merge.ts MERGE_REGIME (the prompt version plus the chunk size, the
+   *  `mp=` field), passed in for the same reason the Pass A version is:
+   *  clustering.ts must stay importable by a page. */
   mergePromptVersion: string
   themeKey: string
 }

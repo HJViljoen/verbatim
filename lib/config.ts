@@ -878,12 +878,49 @@ export const PASS_B_TIMEOUT_MS = 240_000
  *  merge gets what is left rather than a fixed bound. The call grows with the
  *  bucket too: 183 s for Össur's 759 clusters (13 Sep), 193 s for Sealand's
  *  (4 Oct), where an earlier attempt of the same step had already died at the
- *  route's 300 s. Out of time, the call throws and the step retries; on the
- *  step's last attempt it applies no merges instead, so the bucket's themes
- *  stay fragmented that week (recorded as a run error) rather than the run
- *  failing. 255 s leaves the rest of the 300 s for the roll-up, the log row
- *  and the request's own start. */
+ *  route's 300 s; a bucket over MERGE_CHUNK_MAX is therefore merged in parallel
+ *  parts, every part held to this same deadline. Out of time, the call throws
+ *  and the step retries; on the step's last attempt it applies no merges
+ *  instead (a part that failed keeps its clusters unmerged, the parts that
+ *  answered apply theirs), so those themes stay fragmented that week
+ *  (recorded as a run error) rather than the run failing. 255 s leaves the
+ *  rest of the 300 s for the roll-up, the log rows and the request's own
+ *  start. */
 export const THEME_MERGE_STEP_BUDGET_MS = 255_000
+/** The most clusters one theme-merge call reads. A bucket over it is split
+ *  into parts of semantically close clusters (recursive 2-means over the
+ *  cluster centroids, lib/pipeline/theme-merge.ts `partitionByCentroid`), one
+ *  call a part, all in parallel under the step's one deadline above.
+ *
+ *  Why: the single call's latency grows with the bucket, about 0.24 s a
+ *  cluster (183 s for Össur's 759 clusters on 13 Sep; 193 s for Sealand on
+ *  4 Oct), and since 4 Oct `industry-other` has timed out on every attempt on
+ *  both tenants ("Request was aborted."): Össur at 920-921 clusters (4 Oct,
+ *  12 Oct), Sealand at 1,884 (11 Oct). The last attempt's fail-soft then kept
+ *  the whole bucket unmerged and the run closed partial, so the biggest
+ *  bucket's duplicates stayed apart every week.
+ *
+ *  Why 120 and not 300. At 0.24 s a cluster, 300 is about 75 s a part (about
+ *  110 s on a day gpt-5.4 runs 45% slow, as 4 Oct did), and 300 was the first
+ *  setting. Measured live on 12 Oct (scripts/run-a2.ts --bucket, Sealand run
+ *  78a6eb3c, nothing written): 5,488 insights, 1,879 clusters, load 7.7 s and
+ *  embed + cluster 49.3 s, then 9 parts of 90-282 clusters. Eight answered in
+ *  46-172 s; the 280-cluster part was aborted at the deadline after 197 s
+ *  (157 merges applied, 0 groups rejected, $1.12). A part's time follows the
+ *  merges it finds more than its size (3 merges 46 s, 13 92 s, 29-31
+ *  143-172 s), and grouping by meaning is exactly what puts the duplicates
+ *  together, so inside a part the rate was 0.44-0.88 s a cluster, not 0.24.
+ *  At the worst of that, 120 clusters is about 106 s; 45% slow, about 153 s;
+ *  after the ~57 s of load and clustering (growing with the bucket), about
+ *  210 s of the 255 s. Bisection halves, so a part lands between about half
+ *  this and this: Sealand's 1,879 is about sixteen calls, Össur's 921 about
+ *  eight. 120 is set from that measurement and not yet proven live itself.
+ *
+ *  It is part of the clustering regime (`mp=` in lib/pipeline/clustering.ts,
+ *  via theme-merge.ts MERGE_REGIME): a cluster can only fuse with clusters in
+ *  its own part, so moving this re-partitions the corpus for every bucket over
+ *  it. */
+export const MERGE_CHUNK_MAX = 120
 
 // --- Data retention (Tier 0 T0-9, 2026-08-18) --------------------------------
 // The windows the privacy notice states. Nothing in the product deleted source
