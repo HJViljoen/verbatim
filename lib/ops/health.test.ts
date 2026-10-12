@@ -166,17 +166,21 @@ describe('assessPipelineHealth — a due run that never started', () => {
   it('is satisfied by the second client\'s run, opened when the dispatcher stopped waiting on the first', () => {
     // Sunday 11 Oct 2026, slot 04:00 UTC. The first client's run hit the
     // five-hour cap, so the second opened at the thirtieth look, 09:00 UTC
-    // (11:00 SAST), and the 12:00 SAST check finds it started.
+    // (11:00 SAST), and the 12:00 SAST check finds it started. The check is
+    // taken at 12:20 SAST, a time Hobby really fires it at ("within the hour"):
+    // the first run, still going six hours after it opened, is reported as
+    // stuck, and the second client is NOT reported as never started.
     const second = { ...sundayClient, id: 'c2', name: 'Sealand' }
     const f = assessPipelineHealth(inputs({
-      now: new Date('2026-10-11T10:00:00Z'),
+      now: new Date('2026-10-11T10:20:00Z'),
       clients: [sundayClient, second],
       runs: [
         { id: 'r1', clientId: 'c1', status: 'running', options: { sendReport: true }, startedAt: '2026-10-11T04:00:10Z', completedAt: null },
         { id: 'r2', clientId: 'c2', status: 'running', options: { sendReport: true }, startedAt: '2026-10-11T09:00:20Z', completedAt: null },
       ],
     }))
-    expect(f).toEqual([])
+    expect(kinds(f)).toEqual(['run_stuck'])
+    expect(f[0].clientId).toBe('c1')
   })
 
   it('keeps the grace past the dispatcher\'s cap, and the daily check (vercel.json) past the grace', () => {
