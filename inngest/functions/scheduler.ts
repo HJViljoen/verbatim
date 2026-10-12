@@ -60,7 +60,7 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
         `The 06:00 SAST scheduled-pipeline-dispatcher failed after retries. It dispatches due clients one at a time, so some or all of today's clients may not have been dispatched.\n\n` +
         `Error: ${message}\n\n` +
         `Check today's pipeline_runs rows (client_id, status, started_at) before running anyone by hand: a client that already has a run today must not get a second.\n` +
-        `Run a client by hand: POST /api/admin/trigger-run {"clientId":"…","options":{"sendReport":true}}\n` +
+        `Run a client by hand: POST /api/admin/trigger-run {"clientId":"…","options":{"sendReport":true}}, ONE client at a time: start the next only once the previous run has closed, or the two runs share an instance and can run it out of memory (11 Oct 2026).\n` +
         `Inngest dashboard: https://app.inngest.com`,
       )
     },
