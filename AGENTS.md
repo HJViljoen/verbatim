@@ -844,13 +844,38 @@ This version has breaking changes — APIs, conventions, and file structure may 
   count (two buyers a page, five objections, three rival cards, five words to
   handle with care…) by an estimate of each layout's height, and what does
   not fit stays in the stored brief: no page carries on, no finding takes a
-  second page. A component whose material does not stand does not print; a
-  page that would draw only its title is not printed. The contents use the
+  second page. A component whose material does not stand does not print.
+  **Thin pages are left out (Heinrich, 12 Oct):** a section's page prints
+  only with every main piece the canvas draws on it (an opening line where
+  the canvas draws one, both columns of a two-column page, the subject bars
+  and the comments' bars on Where the market stands, the paragraph where the
+  confusion starts, the panel beside or under a page's rows, an own-posts
+  table with a rival's row in it…) and at least two items in its section,
+  counted on what fits the page; Who is buying counts its page and its
+  continuation together. ONE table holds it, `PAGE_NEEDS` in
+  `lib/reports/briefs/deck.ts`, read by the paginator (`planDeck` also says
+  why a page was left out; the dry build prints it). A voice is never a main
+  piece (its words resolve at render, and a page does not come and go with
+  them), nor a footnote, a muted line under a title or "Also following". The
+  cover, In short and a finding's page are exempt. What a page left out held
+  stays in the stored brief; the cover's contents and "In this brief · N
+  pages", In short's contents and the page numbers are the printed pages';
+  a brief with no finding and no page past In short is thin (`briefPrints`).
+  The writer always writes the leads the canvas draws (Where the confusion
+  starts' paragraph too) where the part has items, summing up the items and
+  claiming nothing they do not, under the same evidence floors and scrubs; a
+  lead the scrubs empty leaves its page out. The contents use the
   canvas's short names (a finding's writer-made `short`). Items carry no count
   line; brand attribution stays where the canvas carries it (a quote's cite,
   "On a {company} post", a rival card, the "(you)" card, the brand chips).
   Another brief's idea named in a section is the canvas's footnote ("… is
-  argued in full in the Marketing brief."), on a risk card its foot line.
+  argued in full in the Marketing brief."), on a risk card its foot line; it
+  never points at what did not print there: each tagged item records what it
+  names (`named`: the idea, or that brief's item), `namedAcross` names only
+  an item the earlier brief prints, and `footnotesOnlyPrinted` holds a line
+  whose idea has no finding or whose item is on a page left out. The Who is
+  buying heading counts every buyer the brief found, printed or not, in words
+  ("Four kinds of people…" where two print; Heinrich, 12 Oct).
   Three sections the engine writes have no canvas page (who else is in the
   decision, how {company} is remembered, words to borrow): they are built and
   stored, never printed, behind ONE switch, `PRINT_UNDRAWN_SECTIONS`
@@ -871,10 +896,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   <brief.json> --out <dir> [--pdf]` (local Chrome, a PNG a page, exits 1 on
   any clipping): run it on a real brief and a worst case whenever a page
   changes. The writers' words are the `monthly_brief` prose slot; the
-  long-run patterns are `week_read`'s. Two canvas labels claim a viewer's
-  behaviour the product reads only through comments ("What loses them", "They
-  stop on", "They share"); the writer is held to what comments show under
-  them, and the wording is Heinrich's to rule on. **PDF:** `GET /api/briefs/<snapshot>/pdf` prints on the first
+  long-run patterns are `week_read`'s. Four wordings Heinrich ruled on, 12
+  Oct, to keep as built: "about {brand}" on a quote's cite; the percentages in
+  "Also following"; "videos in your market" for what people do in the
+  comments and the mood; and the canvas labels "What loses them", "They stop
+  on" and "They share", which claim a viewer's behaviour the product reads
+  only through comments, so the writer is held to what comments show under
+  them. **PDF:** `GET /api/briefs/<snapshot>/pdf` prints on the first
   download (the export route's pattern: session tenant, the daily export cap,
   Chrome at `/render`, Storage, `artifacts`, `export_events`), then reuses the
   file; a stale one prints again; an id that is not a UUID is a 404. **By hand:** `scripts/monthly-briefs.ts
