@@ -376,7 +376,7 @@ describe('the lines code writes', () => {
 
   it('names what is argued in another brief at the foot of the page, and on a risk card', () => {
     const s: BriefSection = { key: 'sales.stops', title: 'x', groups: [{ items: [item('A story that feels off', 'x', { tag: 'Argued in the Marketing brief' }), item('Price', 'y'), item('Wear', 'z', { tag: 'Also in the Content brief' })] }] }
-    expect(footnoteOf(s)).toBe('A story that feels off is argued in full in the Marketing brief. Wear is also in the Content brief.')
+    expect(footnoteOf(s)).toBe('“A story that feels off” is argued in full in the Marketing brief. “Wear” is also in the Content brief.')
     expect(footnoteOf({ ...s, key: 'leadership.risks' })).toBeNull()
     expect(tagLine('Argued in the Sales brief')).toBe('Argued in full in the Sales brief')
   })
@@ -385,14 +385,30 @@ describe('the lines code writes', () => {
     const argued = (title: string, brief = 'Content') => item(title, 'x', { tag: `Argued in the ${brief} brief` })
     const page = (items: ReturnType<typeof item>[]): BriefSection => ({ key: 'marketing.believe', title: 'x', groups: [{ label: 'What it believes', items }] })
     expect(footnoteOf(page([argued('Advanced or high tech'), item('Price', 'y'), argued('Functionality'), argued('Everyday life')])))
-      .toBe('Advanced or high tech, Functionality and Everyday life are argued in full in the Content brief.')
-    expect(footnoteOf(page([argued('Wear'), argued('Rain')]))).toBe('Wear and Rain are argued in full in the Content brief.')
+      .toBe('“Advanced or high tech”, “Functionality” and “Everyday life” are argued in full in the Content brief.')
+    expect(footnoteOf(page([argued('Wear'), argued('Rain')]))).toBe('“Wear” and “Rain” are argued in full in the Content brief.')
     // One brief at a time, in the order the page first names each; an item
     // also in a brief keeps its own wording beside one argued there.
     expect(footnoteOf(page([argued('Wear'), argued('Price', 'Sales'), argued('Rain'), item('Fit', 'z', { tag: 'Also in the Content brief' }), item('Size', 'z', { tag: 'Also in the Content brief' })])))
-      .toBe('Wear and Rain are argued in full in the Content brief. Price is argued in full in the Sales brief. Fit and Size are also in the Content brief.')
-    // A single item keeps the canvas's line exactly.
-    expect(footnoteOf(page([argued('Trust in the eco story', 'Marketing')]))).toBe('Trust in the eco story is argued in full in the Marketing brief.')
+      .toBe('“Wear” and “Rain” are argued in full in the Content brief. “Price” is argued in full in the Sales brief. “Fit” and “Size” are also in the Content brief.')
+    // A single item keeps the canvas's line, its name in quotes.
+    expect(footnoteOf(page([argued('Trust in the eco story', 'Marketing')]))).toBe('“Trust in the eco story” is argued in full in the Marketing brief.')
+  })
+
+  it('puts every name a footnote points at in curly quotes, so a name that is a clause reads as a name', () => {
+    const argued = (title: string, brief: string) => item(title, 'x', { tag: `Argued in the ${brief} brief` })
+    // Össur's September Sales, pages 6 and 7.
+    const stops: BriefSection = { key: 'sales.stops', title: 'x', groups: [{ items: [argued('Everyday wear is unclear', 'Content'), item('Price', 'y'), argued('Upkeep and failure', 'Leadership')] }] }
+    expect(footnoteOf(stops)).toBe('“Everyday wear is unclear” is argued in full in the Content brief. “Upkeep and failure” is argued in full in the Leadership brief.')
+    const care: BriefSection = { key: 'sales.care', title: 'x', groups: [{ items: [argued('Functionality', 'Marketing'), argued('Electronic', 'Marketing')] }] }
+    expect(footnoteOf(care)).toBe('“Functionality” and “Electronic” are argued in full in the Marketing brief.')
+    // The line the paginator plans (and makes room for) is the one the page prints.
+    const d = briefFixture('sales')
+    const p = planDeck(d).pages.find((x) => x.eyebrow === 'What stops them')!
+    expect(p.body.kind === 'section' && p.body.footnote).toBe('“A story that feels off” is argued in full in the Marketing brief.')
+    // A risk card's foot names no item, so it has nothing to quote.
+    expect(tagLine('Argued in the Marketing brief')).toBe('Argued in full in the Marketing brief')
+    expect(tagLine('Also in the Sales brief')).toBe('Also in the Sales brief')
   })
 
   it('leaves In short out where its summary is empty, as a page missing its main piece, and numbers the rest', () => {

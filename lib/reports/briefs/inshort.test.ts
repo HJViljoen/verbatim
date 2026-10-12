@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture, item } from '../../../components/briefs/fixture'
 import { collectQuoteRefs } from '../../renderables/quotes-freeze'
 import { planDeck } from './deck'
-import { applyInShort, buildInShortPrompts, inShortItems, inShortStillHolds, printedLines, printedPages, summarySentences } from './inshort'
+import { applyInShort, buildInShortPrompts, inShortItems, inShortStillHolds, printedLines, printedPages, sameWords, summarySentences } from './inshort'
 import type { BriefQuote, MonthlyBriefData } from './types'
 
 // In short says only what prints (the September dry build, 12 Oct): the
@@ -47,7 +47,7 @@ describe('the printed pages the In short check reads', () => {
   it('a line naming another brief prints as its row and the page\'s footnote', () => {
     const d = briefFixture('sales')
     const lines = printedLines(printedPages(d))
-    expect(lines).toContain('A story that feels off is argued in full in the Marketing brief.')
+    expect(lines).toContain('“A story that feels off” is argued in full in the Marketing brief.')
     expect(lines.some((l) => l.startsWith('A story that feels off |'))).toBe(true)
   })
 
@@ -106,5 +106,21 @@ describe('what code does with the check\'s answer', () => {
     expect(inShortStillHolds({ ...d, inShort: { ...d.inShort, summary: `${d.inShort.summary} Northpeak wins on price.` } }, record).why).toMatch(/did not pass: "Northpeak wins on price\."/)
     expect(inShortStillHolds(d, { ...record, read: [...record.read, 'A line on no page.'] }).why).toMatch(/no longer prints under the current deck: "A line on no page\."/)
     expect(inShortStillHolds({ ...d, inShort: { ...d.inShort, summary: '' } }, { read: ['A line on no page.'], kept: [] }).holds).toBe(true)
+  })
+
+  it('a record read before the footnote\'s quote marks were drawn still holds; a changed line still does not', () => {
+    const d = briefFixture('marketing')
+    const believe = d.sections.find((s) => s.key === 'marketing.believe')!
+    believe.groups[0].items[0] = { ...believe.groups[0].items[0], title: 'Everyday wear is unclear', tag: 'Argued in the Content brief' }
+    const now = printedLines(printedPages(d))
+    expect(now.some((l) => l.startsWith('“Everyday wear is unclear” is argued in full in the Content brief.'))).toBe(true)
+    // The lines as the September v2 build's check read them.
+    const before = now.map((l) => l.replace(/[“”]/g, ''))
+    expect(before.some((l) => l.startsWith('Everyday wear is unclear is argued in full in the Content brief.'))).toBe(true)
+    const kept = summarySentences(d.inShort.summary)
+    expect(inShortStillHolds(d, { read: before, kept })).toEqual({ holds: true, why: null })
+    // A name that no longer prints is still a line gone.
+    expect(inShortStillHolds(d, { read: [...before, 'Everyday fit is unclear is argued in full in the Content brief.'], kept }).why).toMatch(/no longer prints under the current deck: "Everyday fit is unclear/)
+    expect(sameWords('“Everyday wear is unclear” is argued in full in the Content brief.')).toBe('Everyday wear is unclear is argued in full in the Content brief.')
   })
 })

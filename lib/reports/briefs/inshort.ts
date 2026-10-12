@@ -198,9 +198,16 @@ export function applyInShort<T extends MonthlyBriefData>(
 /** The In short sentences a summary holds, as the check numbered them. */
 export const summarySentences = (summary: string): string[] => splitSentences(summary.trim())
 
+/** A printed line as `inShortStillHolds` compares it with a saved record:
+ *  the curly quotes round a footnote's names are how the deck draws the page,
+ *  not what it says (deck.ts `footnoteOf`; 12 Oct), so a line the check read
+ *  before them (the September v2 build) still matches the line that prints
+ *  now. Pure. */
+export const sameWords = (line: string): string => line.replace(/[“”]/g, '')
+
 /** Is every sentence of a stored summary one the check found printed, and
- *  does every line the check read still print? What a stored brief is held
- *  to without a model call (`--from`). Pure. */
+ *  does every line the check read still print (`sameWords`)? What a stored
+ *  brief is held to without a model call (`--from`). Pure. */
 export function inShortStillHolds(
   d: StoredBriefData,
   record: { read: readonly string[]; kept: readonly string[] },
@@ -211,8 +218,8 @@ export function inShortStillHolds(
   if (sentences.length === 0) return { holds: true, why: null }
   const unchecked = sentences.filter((s) => !record.kept.includes(s))
   if (unchecked.length) return { holds: false, why: `its In short has ${unchecked.length === 1 ? 'a sentence' : `${unchecked.length} sentences`} the In short check did not pass: "${unchecked[0].slice(0, 80)}"` }
-  const now = new Set(printedLines(printedPages(d, words)))
-  const gone = record.read.filter((l) => !now.has(l))
+  const now = new Set(printedLines(printedPages(d, words)).map(sameWords))
+  const gone = record.read.filter((l) => !now.has(sameWords(l)))
   if (gone.length) return { holds: false, why: `${gone.length === 1 ? 'a line' : `${gone.length} lines`} the In short check read no longer ${gone.length === 1 ? 'prints' : 'print'} under the current deck: "${gone[0].slice(0, 80)}"` }
   return { holds: true, why: null }
 }

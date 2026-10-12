@@ -141,7 +141,7 @@ describe('every canvas page, with every component it draws', () => {
   const cases: [BriefRole, string, string[]][] = [
     ['sales', 'Who is buying', ["Four kinds of people talk about packs like Acme's. Three of them buy.", 'Researcher', 'What they want', 'What stops them', 'What moves them', 'For a sale', 'Pack lover']],
     ['sales', 'Who is buying, continued', ['Who is buying, continued', 'Supporter', 'Maker', 'Mostly makes, rarely buys', 'Mostly makes rather than buys.']],
-    ['sales', 'What stops them', ['The reasons a willing buyer hesitates before committing.', 'Price that has to earn its keep', 'No way to act', 'What they want settled first', 'What it is made from: the fabric, handles and reinforcement.', 'Reddit · 23 Sep', 'A story that feels off is argued in full in the Marketing brief.']],
+    ['sales', 'What stops them', ['The reasons a willing buyer hesitates before committing.', 'Price that has to earn its keep', 'No way to act', 'What they want settled first', 'What it is made from: the fabric, handles and reinforcement.', 'Reddit · 23 Sep', '“A story that feels off” is argued in full in the Marketing brief.']],
     ['sales', 'What tips them into buying', ['01', 'The old pack gives out', '05', 'The design that lands', 'Back to school', 'TikTok · 26 Sep']],
     ['sales', 'Who buyers compare you with', ['Ridgeline', 'Bought for travel use', 'What buyers praise', 'Where buyers push back', 'Also in the set', 'On Ridgeline', 'I second ridgeline']],
     ['sales', 'Language to handle with care', ['reused or recycled', 'waterproof', 'sustainable']],
@@ -180,6 +180,14 @@ describe('every canvas page, with every component it draws', () => {
     d.findings[0].heardFor = undefined
     const t = renderText(<BriefDeck data={d} builtAt={BUILT} />)
     for (const gone of ['What people do in the comments', 'The mood', 'position, in one line', 'What each brand is heard for', 'Where the market stands', 'What holds so far']) expect(t).not.toContain(gone)
+  })
+
+  it('draws a footnote\'s names in curly quotes', () => {
+    const d = briefFixture('sales')
+    const stops = d.sections.find((s) => s.key === 'sales.stops')!
+    stops.groups[0].items[0] = { ...stops.groups[0].items[0], title: 'Everyday wear is unclear', tag: 'Argued in the Content brief' }
+    const at = deckPages(d).find((p) => p.eyebrow === 'What stops them')!
+    expect(text(page('sales', at.n, d))).toContain('“Everyday wear is unclear” is argued in full in the Content brief.')
   })
 })
 

@@ -230,12 +230,15 @@ export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' |
 const andList = (xs: readonly string[]): string => (xs.length <= 1 ? xs[0] ?? '' : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
 
 /** Tagged items' line at the foot of a page, as the canvas writes it under
- *  What stops them ("Trust in the eco story is argued in full in the
- *  Marketing brief."). Several items on one page that point at the same
- *  brief the same way make one line ("Advanced or high tech, Functionality
- *  and Everyday life are argued in full in the Content brief."), where the
- *  first of them stood; one item keeps the canvas's line. Risk cards carry
- *  theirs on the card. Pure. */
+ *  What stops them (“Trust in the eco story” is argued in full in the
+ *  Marketing brief.). Several items on one page that point at the same
+ *  brief the same way make one line (“Advanced or high tech”,
+ *  “Functionality” and “Everyday life” are argued in full in the Content
+ *  brief.), where the first of them stood. Every name is in curly quotes,
+ *  one alone too, so a name that is a clause reads as a name (12 Oct: Össur's
+ *  Sales printed "Everyday wear is unclear is argued in full in the Content
+ *  brief."); the rest of the line is the canvas's. Risk cards carry theirs
+ *  on the card. Pure. */
 export function footnoteOf(s: BriefSection): string | null {
   if (s.key === 'leadership.risks') return null
   const lines: { argued: boolean; brief: string; titles: string[] }[] = []
@@ -250,7 +253,7 @@ export function footnoteOf(s: BriefSection): string | null {
     else if (!line.titles.includes(i.title)) line.titles.push(i.title)
   }
   return lines.length
-    ? lines.map((l) => `${andList(l.titles)} ${l.titles.length === 1 ? 'is' : 'are'} ${l.argued ? 'argued in full in' : 'also in'} the ${l.brief}.`).join(' ')
+    ? lines.map((l) => `${andList(l.titles.map((t) => `“${t}”`))} ${l.titles.length === 1 ? 'is' : 'are'} ${l.argued ? 'argued in full in' : 'also in'} the ${l.brief}.`).join(' ')
     : null
 }
 
