@@ -35,6 +35,7 @@ async function main() {
   if (!isMonthlyBriefData(data)) throw new Error(`${input} is not a monthly brief`)
   const r = await renderBriefLocal({ data, texts: raw.texts ?? {} }, resolve(process.cwd(), out), { built: flag('built', new Date().toISOString()), pdf: args.includes('--pdf') })
   for (const c of r.clipped) console.log(`page ${c.page}: clips ${c.px}px`)
+  for (const l of r.left) console.log(`left out: ${l.title} (${l.why})`)
   console.log(`${data.company} · ${data.role}: ${r.pages} pages, ${r.clipped.length} clipping, in ${resolve(process.cwd(), out)}${r.pdf ? ` (and ${r.pdf})` : ''}`)
   if (r.clipped.length) process.exit(1)
 }

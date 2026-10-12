@@ -6,6 +6,7 @@ import { freezeStateFor } from '../../reading/monthly'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import { createSnapshot } from '../../snapshots'
 import { stampSnapshotReading } from '../reading-stamp'
+import { printedSections } from './deck'
 import type { BriefRole, MonthlyBriefData } from './types'
 import { BRIEF_NAME, BRIEF_ROLES, storedBrief } from './types'
 
@@ -103,8 +104,9 @@ export function failedRows(clientId: string, month: string, runId: string | null
 }
 
 /** Does a composed brief print anything beyond its In short? A brief with no
- *  finding and no section is thin: it is recorded, never shown. Pure. */
-export const briefPrints = (d: Pick<MonthlyBriefData, 'findings' | 'sections'>): boolean => d.findings.length > 0 || d.sections.length > 0
+ *  finding and no section page the deck prints (a thin page is left out,
+ *  deck.ts `PAGE_NEEDS`) is thin: it is recorded, never shown. Pure. */
+export const briefPrints = (d: MonthlyBriefData): boolean => d.findings.length > 0 || printedSections(d).length > 0
 
 /** The brief's title as the Studio and the PDF name it: "Sales brief ·
  *  September 2026". Pure. */
@@ -200,7 +202,7 @@ export async function storeBriefSet(
     const cost = Math.round((a.costUsd[d.role] ?? d.costUsd ?? 0) * 10_000) / 10_000
     if (!briefPrints(d)) {
       await dropBriefSnapshot(admin, a.clientId, a.month, d.role)
-      rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'thin', snapshot_id: null, cost_usd: cost, error: 'nothing in it stood: no finding and no section', held: d.held })
+      rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'thin', snapshot_id: null, cost_usd: cost, error: 'nothing in it stood: no finding and no section page', held: d.held })
       continue
     }
     const snap = await storeBriefSnapshot(admin, { clientId: a.clientId, runId: a.runId, data: d, asOf: a.asOf })

@@ -28,8 +28,15 @@ import { BRIEF_NAME, BRIEF_ROLES } from './types'
 //   Leadership  Cover · In short · Where the market stands · Where {company}
 //               stands · a finding a page · What buyers weigh · The risks
 //               (with the questions for the business) · What holds so far
-// A page whose material does not stand is not printed; a section the canvas
-// has no page for is not printed either (sections.ts `printsSection`).
+// A section the canvas has no page for is not printed (canvas.ts
+// `printsSection`).
+//
+// THIN PAGES ARE LEFT OUT (Heinrich, 12 Oct). A page prints only with every
+// main piece the canvas draws on it and at least two items in its section,
+// counted on what fits the page (`PAGE_NEEDS`, the one table of it). Who is
+// buying counts its two sheets together. The cover, In short and a finding's
+// page are exempt. What a page left out held stays in the stored brief, and
+// the contents, the page count and the page numbers are the printed pages'.
 //
 // ONE PAGE A SECTION. Each page takes what fits the canvas's layout, at the
 // canvas's type, up to the canvas's count (two buyers a page and the one
@@ -412,8 +419,9 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
         pages.push(p)
         at += p.length
       }
-      const whole = only(s, pages.flat())
-      return pages.map((p, k) => page(only(s, p), { continued: k > 0, sub: k === 0 ? subtitleOf(s, d, whole) : null }))
+      // The heading counts every buyer the brief found, printed or not
+      // (Heinrich, 12 Oct): "Four kinds of people…" where two print.
+      return pages.map((p, k) => page(only(s, p), { continued: k > 0, sub: k === 0 ? subtitleOf(s, d, s) : null }))
     }
     case 'sales.stops': {
       const room = BODY_HEIGHT - titleH(sub) - 14
@@ -439,12 +447,17 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       return [page({ ...s, groups: [{ items: kept }] })]
     }
     case 'sales.rivals': {
-      const shown = all.slice(0, max)
       const w = (W - 40) / 3
-      const cards = Math.max(...shown.map((i) => H.rival(i, w)))
-      const room = BODY_HEIGHT - titleH(sub) - 14 - cards - 14 - foot(shown)
-      const quoted = shown.find((i) => i.quote)
+      const roomUnder = (xs: readonly BriefItem[]) => BODY_HEIGHT - titleH(sub) - 14 - Math.max(...xs.map((i) => H.rival(i, w))) - 14 - foot(xs)
       const alsoH = s.also ? 13 + 20 + heightOf(s.also, (W - 20) * (2 / 3), 15, 1.5) : 0
+      // Also in the set is a main piece of the page (PAGE_NEEDS): where it
+      // does not fit under the cards, a card goes before it does, down to
+      // the page's two.
+      let shown = all.slice(0, max)
+      while (shown.length > PAGE_MIN_ITEMS && alsoH > roomUnder(shown)) shown = shown.slice(0, -1)
+      if (alsoH > roomUnder(shown)) shown = all.slice(0, max)
+      const room = roomUnder(shown)
+      const quoted = shown.find((i) => i.quote)
       const qH = quoted ? 20 + quoteH(quoted.quote, (W - 20) / 3, 14, [12, 16]) : 0
       const out = only(s, shown)
       if (Math.max(alsoH, qH) > room) {
@@ -522,14 +535,22 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       return [page(out)]
     }
     case 'content.confusion': {
-      const shown = all.slice(0, max)
-      const n = Math.max(1, shown.length)
-      const w = (W - 14 * (n - 1)) / n
-      const cards = Math.max(...shown.map((i) => H.confusion(i, w)))
       const lead = s.lead ? 22 + heightOf(s.lead, 1100, 26, 1.45, true) : 0
       const note = s.note ? 22 + heightOf(s.note, 1040, 19, 1.55) : 0
+      const tall = (xs: readonly BriefItem[]) => {
+        const n = Math.max(1, xs.length)
+        // The title, the lead and the note each with its gap, and the
+        // spacer's gap and the cards' under it.
+        return 37 + lead + note + 22 + 22 + Math.max(...xs.map((i) => H.confusion(i, (W - 14 * (n - 1)) / n))) + foot(xs)
+      }
+      // Where it starts is a main piece of the page (PAGE_NEEDS): where it
+      // does not fit over the cards, a card goes before it does (the rest
+      // widen), down to the page's two.
+      let shown = all.slice(0, max)
+      while (shown.length > PAGE_MIN_ITEMS && tall(shown) > BODY_HEIGHT) shown = shown.slice(0, -1)
+      if (tall(shown) > BODY_HEIGHT) shown = all.slice(0, max)
       const out = only(s, shown)
-      if (37 + lead + note + 22 + cards + foot(shown) > BODY_HEIGHT) delete out.note
+      if (tall(shown) > BODY_HEIGHT) delete out.note
       return [page(out)]
     }
     case 'leadership.market': {
@@ -679,13 +700,135 @@ export const contentsName = (s: BriefSection, continued: boolean): string => {
   return continued ? continuedTitle(name) : name
 }
 
+// ---- What a page needs to print ----------------------------------------------------------------------
+
+/** A section's page as planned: the section cut to what fits, and the
+ *  companion that shares the sheet. */
+export type PlannedPage = Pick<Extract<PageBody, { kind: 'section' }>, 'section' | 'companion'>
+
+/** One main piece the canvas draws on a page: its name (the operator's, for
+ *  why a page was left out) and whether the planned page has it. */
+interface Piece { name: string; has: (p: PlannedPage, d: Pick<StoredBriefData, 'role' | 'findings' | 'inShort'>) => boolean }
+
+/** What a section's page needs to print: every main piece the canvas draws
+ *  on it, and `min` of the items `count` counts. */
+export interface PageNeed {
+  /** What its items are, for why a page was left out ("buyers"). */
+  items: string
+  min: number
+  count: (p: PlannedPage) => number
+  pieces: readonly Piece[]
+}
+
+/** The fewest items a section's page prints with (Heinrich, 12 Oct). */
+export const PAGE_MIN_ITEMS = 2
+
+const inColumn = (s: BriefSection, col: 0 | 1): number => s.groups.filter((g) => pairColumn(g.label) === col).reduce((n, g) => n + g.items.length, 0)
+const labelled = (s: BriefSection, word: RegExp): number => s.groups.filter((g) => word.test(g.label ?? '')).reduce((n, g) => n + g.items.length, 0)
+const piece = (name: string, has: Piece['has']): Piece => ({ name, has })
+const lead = piece('the opening line', (p) => !!p.section.lead?.trim())
+const rows = (what: string, pieces: readonly Piece[] = []): PageNeed => ({ items: what, min: PAGE_MIN_ITEMS, count: (p) => items(p.section).length, pieces })
+
+/**
+ * THE ONE TABLE OF IT (Heinrich, 12 Oct: thin pages are left out). A page
+ * prints only where it has every main piece the canvas draws on it and at
+ * least `PAGE_MIN_ITEMS` of its items, counted on what fits the page. Who is
+ * buying counts across its page and its continuation, so one long buyer may
+ * fill a sheet where the section prints two. A voice (a quote) is never a
+ * main piece: its words resolve at render and a page does not come and go
+ * with them; nor is a footnote, the muted line under a title, or a line of
+ * what did not fit ("Also following"). The companions print as pieces of
+ * their partner's page (What they want settled first, Questions for the
+ * business). The cover, In short and the findings are exempt. Pure.
+ */
+export const PAGE_NEEDS: Readonly<Record<SectionKey, PageNeed>> = {
+  'sales.buyers': rows('buyers'),
+  'sales.deciders': rows('people in the decision'),
+  'sales.stops': rows('objections', [piece('What they want settled first', (p) => !!p.companion && items(p.companion).length > 0)]),
+  'sales.settle': rows('things to settle'),
+  'sales.triggers': rows('moments'),
+  'sales.rivals': rows('rivals', [piece('Also in the set', (p) => !!p.section.also?.trim())]),
+  'sales.care': rows('words'),
+  'marketing.believe': rows('beliefs and doubts', [
+    piece('What it believes', (p) => inColumn(p.section, 0) > 0),
+    piece('What it doubts', (p) => inColumn(p.section, 1) > 0),
+  ]),
+  'marketing.words': {
+    items: 'groups of words', min: PAGE_MIN_ITEMS, count: (p) => (p.section.chips ?? []).filter((c) => c.words.length > 0).length,
+    pieces: [lead, piece('What makes them stop, share and argue', (p) => (p.section.panel?.rows.length ?? 0) > 0)],
+  },
+  'marketing.say_hear': rows('claims'),
+  'marketing.recall': rows('lines'),
+  // A table of the company's own row alone is no table.
+  'marketing.rivals': rows('cards', [piece('Own posts published, with a rival', (p) => (p.section.posts?.rows ?? []).some((r) => !r.you))]),
+  'content.questions': rows('questions'),
+  'content.formats': rows('rows', [
+    piece('The formats', (p) => labelled(p.section, /format/i) > 0),
+    piece('The openings', (p) => labelled(p.section, /opening/i) > 0),
+    piece('What the numbers say', (p) => (p.section.lines?.length ?? 0) > 0),
+  ]),
+  'content.watch': rows('items', [
+    lead,
+    piece('What earns a response', (p) => inColumn(p.section, 0) > 0),
+    piece('What loses them', (p) => inColumn(p.section, 1) > 0),
+  ]),
+  'content.more': rows('rows'),
+  'content.confusion': rows('cards', [lead, piece('Where it starts', (p) => !!p.section.note?.trim())]),
+  'content.borrow': rows('voices'),
+  'leadership.market': {
+    items: 'subjects with a bar', min: PAGE_MIN_ITEMS, count: (p) => items(p.section).filter((i) => i.measure?.pct != null).length,
+    pieces: [
+      piece('What people do in the comments', (p) => (p.section.kinds?.rows.length ?? 0) > 0),
+      piece('The mood', (p) => (p.section.mood?.rows.length ?? 0) > 0),
+    ],
+  },
+  'leadership.shares': rows('brands', [
+    piece('The shares of comments and videos', (p) => !!p.section.shares?.comments && !!p.section.shares.videos),
+    piece('The notes', (p) => (p.section.lines?.length ?? 0) > 0),
+  ]),
+  'leadership.weigh': rows('items', [
+    lead,
+    piece('What they weigh', (p) => labelled(p.section, /weigh/i) > 0),
+    piece('What holds them', (p) => labelled(p.section, /holds/i) > 0),
+    piece('What moves them', (p) => labelled(p.section, /moves/i) > 0),
+  ]),
+  'leadership.risks': rows('risks', [piece('Questions for the business', (p) => !!p.companion && items(p.companion).length > 0)]),
+  'leadership.decisions': rows('questions'),
+  'leadership.holds': rows('patterns', [
+    piece('The position in one line', (p) => !!p.section.position?.text.trim()),
+    piece('The month\'s ideas', (_p, d) => ideasArgued(d).length > 0),
+  ]),
+}
+
+/**
+ * Whether a section's planned sheets print, and why not where they do not:
+ * the first main piece a sheet lacks, or too few items across the sheets.
+ * Pure.
+ */
+export function pageStands(key: SectionKey, sheets: readonly PlannedPage[], d: Pick<StoredBriefData, 'role' | 'findings' | 'inShort'>): { prints: boolean; why: string | null } {
+  const need = PAGE_NEEDS[key]
+  if (sheets.length === 0) return { prints: false, why: 'nothing fits its page' }
+  for (const sheet of sheets) {
+    const missing = need.pieces.find((x) => !x.has(sheet, d))
+    if (missing) return { prints: false, why: `missing: ${missing.name}` }
+  }
+  const n = sheets.reduce((k, sheet) => k + need.count(sheet), 0)
+  if (n < need.min) return { prints: false, why: `${n} of the ${need.min} ${need.items} a page needs` }
+  return { prints: true, why: null }
+}
+
+/** A section the canvas draws a page for that the deck leaves out, and why
+ *  (the operator's: what it held stays in the stored brief). */
+export interface LeftOut { key: SectionKey; title: string; why: string }
+
 /**
  * The deck's pages, in order, numbered: the cover, In short, the findings
  * (Leadership's after where the company stands), then the role's sections,
- * each on the canvas's page. Pure.
+ * each on the canvas's page; and the sections whose page is left out. Pure.
  */
-export function deckPages(d: StoredBriefData): DeckPage[] {
+export function planDeck(d: StoredBriefData): { pages: DeckPage[]; left: LeftOut[] } {
   const pages: Omit<DeckPage, 'n'>[] = [{ eyebrow: '', toc: null, body: { kind: 'cover' } }, { eyebrow: 'In short', toc: null, body: { kind: 'in_short', summarySize: 22, tocSize: 14 } }]
+  const left: LeftOut[] = []
   const findings = () => d.findings.forEach((f, index) => {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`
     pages.push({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f) } })
@@ -693,7 +836,10 @@ export function deckPages(d: StoredBriefData): DeckPage[] {
   const planned = d.sections.filter((s) => printsSection(s.key) && !COMPANIONS.has(s.key)).map((s) => {
     const partner = COMPANION[s.key]
     const companion = partner ? d.sections.find((x) => x.key === partner) ?? null : null
-    return { s, slices: planSection(s, companion, d).filter((slice) => draws(slice.section)) }
+    const slices = planSection(s, companion, d)
+    const stands = pageStands(s.key, slices, d)
+    if (!stands.prints) left.push({ key: s.key, title: s.title, why: stands.why ?? '' })
+    return { s, slices: stands.prints ? slices : [] }
   })
   // The findings follow the last of the role's opening sections that prints.
   const before = new Set(FINDINGS_AFTER[d.role])
@@ -709,20 +855,17 @@ export function deckPages(d: StoredBriefData): DeckPage[] {
   const numbered = pages.map((p, i) => ({ ...p, n: i + 1 }))
   // In short's type, now the contents are known.
   const sizes = inShortSizes(d.inShort.summary, contentsOf(numbered).map((t) => t.title))
-  return numbered.map((p) => (p.body.kind === 'in_short' ? { ...p, body: { kind: 'in_short' as const, ...sizes } } : p))
+  return { pages: numbered.map((p) => (p.body.kind === 'in_short' ? { ...p, body: { kind: 'in_short' as const, ...sizes } } : p)), left }
 }
 
-/** Does a section's page draw anything? Its items, or for the pages built
- *  from other components the canvas draws there: the market's own words,
- *  the brands' shares, their own posts. A page that would draw only its
- *  title is not printed. */
-function draws(s: BriefSection): boolean {
-  switch (s.key) {
-    case 'marketing.words': return (s.chips ?? []).some((c) => c.words.length > 0) || (s.panel?.rows.length ?? 0) > 0
-    case 'leadership.shares': return s.shares != null && items(s).length > 0
-    case 'marketing.rivals': return items(s).length > 0 || (s.posts?.rows.length ?? 0) > 0
-    default: return items(s).length > 0
-  }
+/** The deck's pages (`planDeck`). Pure. */
+export const deckPages = (d: StoredBriefData): DeckPage[] => planDeck(d).pages
+
+/** Each section's items as the deck prints them (with the companion on its
+ *  partner's page): what a footnote in another brief may point at, and what
+ *  In short may sum up. Pure. */
+export function printedSections(d: StoredBriefData): BriefSection[] {
+  return deckPages(d).flatMap((p) => (p.body.kind === 'section' ? [p.body.section, ...(p.body.companion ? [p.body.companion] : [])] : []))
 }
 
 /** The contents: each finding's and section's page, with its number. Pure. */

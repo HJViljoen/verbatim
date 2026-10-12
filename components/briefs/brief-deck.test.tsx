@@ -170,7 +170,7 @@ describe('every canvas page, with every component it draws', () => {
     })
   }
 
-  it('a component whose material does not stand draws nothing, never a placeholder', () => {
+  it('a component whose material does not stand draws nothing, never a placeholder; a page short of a main piece is left out', () => {
     const d = briefFixture('leadership')
     const market = d.sections.find((s) => s.key === 'leadership.market')!
     delete market.kinds
@@ -179,6 +179,25 @@ describe('every canvas page, with every component it draws', () => {
     delete holds.position
     d.findings[0].heardFor = undefined
     const t = renderText(<BriefDeck data={d} builtAt={BUILT} />)
-    for (const gone of ['What people do in the comments', 'The mood', 'position, in one line', 'What each brand is heard for']) expect(t).not.toContain(gone)
+    for (const gone of ['What people do in the comments', 'The mood', 'position, in one line', 'What each brand is heard for', 'Where the market stands', 'What holds so far']) expect(t).not.toContain(gone)
+  })
+})
+
+describe('a page left out (Heinrich, 12 Oct: thin pages are left out)', () => {
+  it('the cover\'s count and contents, In short\'s contents and every page number follow the pages that print', () => {
+    const d = briefFixture('sales')
+    const care = d.sections.find((s) => s.key === 'sales.care')!
+    care.groups[0].items = care.groups[0].items.slice(0, 1)
+    expect(briefPageCount(d)).toBe(8)
+    const cover = text(page('sales', 1, d))
+    expect(cover).toContain('In this brief · 8 pages')
+    expect(cover).not.toContain('Language to handle with care')
+    const inShort = text(page('sales', 2, d))
+    expect(inShort).toContain('8 Who buyers compare you with')
+    expect(inShort).not.toContain('Language to handle with care')
+    const words = renderText(<BriefDeck data={d} builtAt={BUILT} />)
+    expect(words).toContain('8 / 8')
+    expect(words).not.toContain('/ 9')
+    expect(words).not.toContain('reused or recycled')
   })
 })

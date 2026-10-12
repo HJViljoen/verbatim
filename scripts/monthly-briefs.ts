@@ -59,6 +59,7 @@ import {
   groundBriefResearch, loadBriefSetInputs, questionsFor, researchBriefSet, writeBriefSet,
 } from '../lib/reports/briefs/build'
 import { briefMarkdown } from '../lib/reports/briefs/markdown'
+import { ROLE_SECTIONS, printsSection, sectionTitle } from '../lib/reports/briefs/sections'
 import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
 import { BRIEF_NAME, BRIEF_ROLES, type MonthlyBriefData } from '../lib/reports/briefs/types'
@@ -205,6 +206,11 @@ async function drawDesigned(db: SupabaseClient, briefs: readonly MonthlyBriefDat
     writeFileSync(join(dir, `${d.role}.json`), `${JSON.stringify({ data: d, texts }, null, 2)}\n`)
     const r = await renderBriefLocal({ data: d, texts }, dir, { name: d.role, built: now.toISOString(), pdf: true })
     console.log(`Drawn: ${BRIEF_NAME[d.role]}, ${r.pages} pages${r.clipped.length ? `, CLIPPING on ${r.clipped.map((c) => `page ${c.page} (${c.px}px)`).join(', ')}` : ''}: ${r.pdf}`)
+    // The canvas's pages that do not print, and why: left out as thin, or
+    // no section stood to draw (the held list says why).
+    for (const l of r.left) console.log(`  left out: ${l.title} (${l.why})`)
+    const built = new Set(d.sections.map((s) => s.key))
+    for (const spec of ROLE_SECTIONS[d.role]) if (printsSection(spec.key) && !built.has(spec.key)) console.log(`  not built: ${sectionTitle(spec, d.company)} (nothing in it stood; see held)`)
   }
   console.log(`The designed briefs are in ${dir}.`)
 }

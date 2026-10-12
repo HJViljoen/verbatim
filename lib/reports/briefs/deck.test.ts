@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture, finding, item, quote } from '../../../components/briefs/fixture'
 import { PRINT_UNDRAWN_SECTIONS, UNDRAWN_SECTIONS, printsSection } from './canvas'
 import {
-  BODY_HEIGHT, chipRows, contentsOf, deckPages, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn, productPhrases,
-  quoteCite, subtitleOf, tagLine, writtenOn,
+  BODY_HEIGHT, PAGE_MIN_ITEMS, PAGE_NEEDS, chipRows, contentsOf, deckPages, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn,
+  planDeck, printedSections, productPhrases, quoteCite, subtitleOf, tagLine, writtenOn,
 } from './deck'
-import type { BriefRole, BriefSection, MonthlyBriefData } from './types'
+import type { BriefRole, BriefSection, MonthlyBriefData, SectionKey } from './types'
 
 // The deck's pages (pure): the canvas's page set and order for each role, the
 // companions that share a sheet, the canvas's counts, the estimate that fits a
@@ -101,12 +101,13 @@ describe('the canvas\'s counts: what does not fit stays in the stored brief', ()
     expect(page(d, 'sales.buyers').map((p) => (p.body.kind === 'section' ? p.body.section.groups.flatMap((g) => g.items).length : 0))).toEqual([1, 1])
   })
 
-  it('What holds so far lists every idea; where the position and the ideas do not fit together, the position stays stored', () => {
+  it('What holds so far lists every idea; where the position and the ideas do not fit together, the position stays stored and the page, short of it, is left out', () => {
     const d = briefFixture('leadership')
     const position = () => page(d, 'leadership.holds').map((p) => (p.body.kind === 'section' ? p.body.section.position ?? null : null))[0]
     expect(position()).not.toBeNull()
     d.inShort.also = [...d.inShort.also, d.inShort.also[0]].map((a) => ({ ...a, headline: `${a.headline}, as buyers weigh it against what they own` }))
-    expect(position()).toBeNull()
+    expect(page(d, 'leadership.holds')).toEqual([])
+    expect(planDeck(d).left).toEqual([{ key: 'leadership.holds', title: 'What holds so far', why: 'missing: The position in one line' }])
     expect(d.sections.find((s) => s.key === 'leadership.holds')!.position).toBeTruthy()
   })
 
@@ -143,6 +144,140 @@ describe('the canvas\'s counts: what does not fit stays in the stored brief', ()
     const d = briefFixture('sales')
     const quoted = shown(d, 'sales.triggers').filter((i) => i.quote)
     expect(quoted.map((i) => i.title)).toEqual(['Back to school', 'Money in hand', 'The design that lands'])
+  })
+})
+
+describe('thin pages are left out (Heinrich, 12 Oct)', () => {
+  const sec = (d: MonthlyBriefData, key: SectionKey) => d.sections.find((s) => s.key === key)!
+  const keys = (d: MonthlyBriefData) => deckPages(d).flatMap((p) => (p.body.kind === 'section' ? [p.body.section.key] : []))
+  const why = (d: MonthlyBriefData, key: SectionKey) => planDeck(d).left.find((l) => l.key === key)?.why ?? null
+  const long = 'Buyers ask whether the pack keeps out rain, how the straps sit when loaded, what the fabric is made from and where to order one. '.repeat(3).slice(0, 330)
+
+  it('every canvas page of the fixtures has its main pieces and its items, so nothing is left out', () => {
+    for (const role of ['sales', 'marketing', 'content', 'leadership'] as BriefRole[]) expect(planDeck(briefFixture(role)).left).toEqual([])
+    expect(PAGE_MIN_ITEMS).toBe(2)
+  })
+
+  it('a page with one item is left out; two print', () => {
+    const d = briefFixture('sales')
+    const care = sec(d, 'sales.care')
+    care.groups[0].items = care.groups[0].items.slice(0, 1)
+    expect(keys(d)).not.toContain('sales.care')
+    expect(why(d, 'sales.care')).toBe('1 of the 2 words a page needs')
+    care.groups[0].items = briefFixture('sales').sections.find((s) => s.key === 'sales.care')!.groups[0].items.slice(0, 2)
+    expect(keys(d)).toContain('sales.care')
+  })
+
+  it('a page short of a main piece the canvas draws is left out: the opening line, either column, the paragraph where it starts', () => {
+    const watch = briefFixture('content')
+    delete sec(watch, 'content.watch').lead
+    expect(keys(watch)).not.toContain('content.watch')
+    expect(why(watch, 'content.watch')).toBe('missing: the opening line')
+
+    const oneColumn = briefFixture('content')
+    sec(oneColumn, 'content.watch').groups = sec(oneColumn, 'content.watch').groups.filter((g) => g.label !== 'What loses them')
+    expect(why(oneColumn, 'content.watch')).toBe('missing: What loses them')
+
+    const confusion = briefFixture('content')
+    delete sec(confusion, 'content.confusion').note
+    expect(why(confusion, 'content.confusion')).toBe('missing: Where it starts')
+
+    const believe = briefFixture('marketing')
+    sec(believe, 'marketing.believe').groups = sec(believe, 'marketing.believe').groups.filter((g) => g.label !== 'What it doubts')
+    expect(why(believe, 'marketing.believe')).toBe('missing: What it doubts')
+
+    const weigh = briefFixture('leadership')
+    delete sec(weigh, 'leadership.weigh').lead
+    expect(why(weigh, 'leadership.weigh')).toBe('missing: the opening line')
+  })
+
+  it('Where the market stands needs its subject bars and the comments\' bars under them', () => {
+    const bars = briefFixture('leadership')
+    for (const i of sec(bars, 'leadership.market').groups[0].items) delete i.measure
+    expect(keys(bars)).not.toContain('leadership.market')
+    expect(why(bars, 'leadership.market')).toBe('0 of the 2 subjects with a bar a page needs')
+    const mood = briefFixture('leadership')
+    delete sec(mood, 'leadership.market').mood
+    expect(why(mood, 'leadership.market')).toBe('missing: The mood')
+  })
+
+  it('a companion is a piece of its partner\'s page: no settled-first panel, no What stops them; no questions, no risks', () => {
+    const sales = briefFixture('sales')
+    sales.sections = sales.sections.filter((s) => s.key !== 'sales.settle')
+    expect(why(sales, 'sales.stops')).toBe('missing: What they want settled first')
+    const lead = briefFixture('leadership')
+    lead.sections = lead.sections.filter((s) => s.key !== 'leadership.decisions')
+    expect(why(lead, 'leadership.risks')).toBe('missing: Questions for the business')
+  })
+
+  it('an own-posts table holding only the company\'s row counts as missing', () => {
+    const d = briefFixture('marketing')
+    const rivals = sec(d, 'marketing.rivals')
+    rivals.posts = { ...rivals.posts!, rows: rivals.posts!.rows.filter((r) => r.you) }
+    expect(keys(d)).not.toContain('marketing.rivals')
+    expect(why(d, 'marketing.rivals')).toBe('missing: Own posts published, with a rival')
+  })
+
+  it('Who is buying counts its two sheets together: one long buyer a sheet prints where the section prints two, and one buyer alone does not', () => {
+    const d = briefFixture('sales')
+    const buyers = sec(d, 'sales.buyers')
+    buyers.groups[0].items = buyers.groups[0].items.slice(0, 2).map((i) => ({ ...i, persona: { ...i.persona, want: long, stops: long, moves: long } }))
+    const sheets = deckPages(d).filter((p) => p.body.kind === 'section' && p.body.section.key === 'sales.buyers')
+    expect(sheets.map((p) => (p.body.kind === 'section' ? p.body.section.groups[0].items.length : 0))).toEqual([1, 1])
+    buyers.groups[0].items = buyers.groups[0].items.slice(0, 1)
+    expect(keys(d)).not.toContain('sales.buyers')
+    expect(why(d, 'sales.buyers')).toBe('1 of the 2 buyers a page needs')
+  })
+
+  it('the heading counts every buyer found, not those printed, in words', () => {
+    const d = briefFixture('sales')
+    const buyers = sec(d, 'sales.buyers')
+    buyers.groups[0].items = buyers.groups[0].items.map((i) => ({ ...i, persona: { ...i.persona, want: long, stops: long, moves: long } }))
+    const sheets = deckPages(d).filter((p) => p.body.kind === 'section' && p.body.section.key === 'sales.buyers')
+    expect(sheets.flatMap((p) => (p.body.kind === 'section' ? p.body.section.groups[0].items : []))).toHaveLength(2)
+    expect(sheets[0].body.kind === 'section' && sheets[0].body.sub).toBe("Four kinds of people talk about packs like Acme's. Three of them buy.")
+  })
+
+  it('the contents, the page count and the page numbers follow the pages that print', () => {
+    const d = briefFixture('sales')
+    sec(d, 'sales.triggers').groups[0].items = sec(d, 'sales.triggers').groups[0].items.slice(0, 1)
+    const pages = deckPages(d)
+    expect(pages).toHaveLength(8)
+    expect(pages.map((p) => p.n)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(contentsOf(pages).map((t) => t.title)).not.toContain('What tips them into buying')
+    expect(contentsOf(pages).map((t) => t.n)).toEqual([3, 4, 5, 6, 7, 8])
+    // Leadership's findings follow where the market stands when the
+    // company's standing page is left out as thin.
+    const l = briefFixture('leadership')
+    sec(l, 'leadership.shares').groups[0].items = sec(l, 'leadership.shares').groups[0].items.slice(0, 1)
+    expect(eyebrows('leadership', l)).toEqual(['', 'In short', 'Where the market stands', 'The finding', 'What buyers weigh', 'The risks', 'What holds so far'])
+  })
+
+  it('where a main piece does not fit beside the items, an item goes before it does, down to the page\'s two', () => {
+    const d = briefFixture('content')
+    const c = sec(d, 'content.confusion')
+    c.lead = long.slice(0, 300)
+    c.note = long.slice(0, 300)
+    c.groups[0].items = c.groups[0].items.map((i) => ({ ...i, text: long.slice(0, 220) }))
+    const shown = deckPages(d).find((p) => p.body.kind === 'section' && p.body.section.key === 'content.confusion')
+    expect(shown?.body.kind === 'section' && shown.body.section.note).toBeTruthy()
+    expect(shown?.body.kind === 'section' && shown.body.section.groups[0].items.length).toBeLessThan(c.groups[0].items.length)
+    expect(shown?.body.kind === 'section' && shown.body.section.groups[0].items.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('what a page left out held stays in the stored brief, and nothing of it prints', () => {
+    const d = briefFixture('content')
+    delete sec(d, 'content.confusion').lead
+    const before = JSON.stringify(d)
+    expect(printedSections(d).map((s) => s.key)).not.toContain('content.confusion')
+    expect(JSON.stringify(d)).toBe(before)
+    expect(sec(d, 'content.confusion').groups[0].items.length).toBeGreaterThan(1)
+  })
+
+  it('names every section the canvas draws a page for', () => {
+    const keys: SectionKey[] = ['sales.buyers', 'sales.stops', 'sales.triggers', 'sales.rivals', 'sales.care', 'marketing.believe', 'marketing.words', 'marketing.say_hear', 'marketing.rivals',
+      'content.questions', 'content.formats', 'content.watch', 'content.more', 'content.confusion', 'leadership.market', 'leadership.shares', 'leadership.weigh', 'leadership.risks', 'leadership.holds']
+    for (const k of keys) expect(PAGE_NEEDS[k].min).toBe(2)
   })
 })
 

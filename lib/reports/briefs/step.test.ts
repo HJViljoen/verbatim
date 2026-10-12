@@ -13,6 +13,7 @@ import {
   stepSafeInputs, stillToCome, type BriefIdeas, type BriefPlan, type BriefStepDeps, type BriefWave, type BriefWritten,
 } from './step'
 import { briefPrints, failedRows, monthlyBriefsApplied, setWritten, type MonthlyBriefRow } from './store'
+import { briefFixture } from '../../../components/briefs/fixture'
 import { point } from './test-fixtures'
 import type { Allocation, MonthlyBriefData } from './types'
 import { BRIEF_ROLES } from './types'
@@ -134,9 +135,14 @@ describe('the ledger\'s rules', () => {
     await expect(monthlyBriefsApplied(db({ error: { code: '57014', message: 'canceling statement due to statement timeout' }, status: 500 }))).rejects.toThrow(/statement timeout/)
   })
 
-  it('a brief with no finding and no section is thin and never shown', () => {
-    expect(briefPrints({ findings: [], sections: [] })).toBe(false)
-    expect(briefPrints({ findings: [], sections: [{} as never] })).toBe(true)
+  it('a brief with no finding and no section page that prints is thin and never shown', () => {
+    const d = briefFixture('sales')
+    expect(briefPrints({ ...d, findings: [], sections: [] })).toBe(false)
+    expect(briefPrints({ ...d, findings: [] })).toBe(true)
+    // A section whose page is left out as thin is no page.
+    const care = d.sections.find((s) => s.key === 'sales.care')!
+    expect(briefPrints({ ...d, findings: [], sections: [{ ...care, groups: [{ items: care.groups[0].items.slice(0, 1) }] }] })).toBe(false)
+    expect(briefPrints({ ...d, sections: [] })).toBe(true)
   })
 })
 

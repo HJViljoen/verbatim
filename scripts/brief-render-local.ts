@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import puppeteer from 'puppeteer-core'
 import { createElement } from 'react'
 
+import type { LeftOut } from '../lib/reports/briefs/deck'
 import type { StoredBriefData } from '../lib/reports/briefs/types'
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap'
@@ -22,6 +23,8 @@ export interface LocalRender {
   pages: number
   /** Pages (1-based) whose body something runs past, and by how much. */
   clipped: { page: number; px: number }[]
+  /** The canvas's pages the deck left out as thin, and why. */
+  left: LeftOut[]
   html: string
   pdf: string | null
   pngs: string[]
@@ -41,6 +44,7 @@ export async function renderBriefLocal(
   const { renderToStaticMarkup } = await import('react-dom/server')
   const { BriefDeck } = await import('../components/briefs/brief-deck')
   const { resolveQuotes } = await import('../lib/renderables/quotes-freeze')
+  const { planDeck } = await import('../lib/reports/briefs/deck')
   const name = o.name ?? input.data.role
   const texts = new Map(Object.entries(input.texts ?? {}).filter(([, v]) => v != null && v.text))
   const hydrated = resolveQuotes(input.data, texts as never)
@@ -56,7 +60,7 @@ export async function renderBriefLocal(
 
   const executablePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
   const browser = await puppeteer.launch({ executablePath, headless: true, args: ['--no-sandbox', '--font-render-hinting=none'] })
-  const out: LocalRender = { pages: 0, clipped: [], html, pdf: null, pngs: [] }
+  const out: LocalRender = { pages: 0, clipped: [], left: planDeck(hydrated).left, html, pdf: null, pngs: [] }
   try {
     const page = await browser.newPage()
     await page.setViewport({ width: 1328, height: 800, deviceScaleFactor: 1 })
