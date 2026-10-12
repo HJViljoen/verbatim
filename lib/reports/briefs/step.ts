@@ -541,8 +541,9 @@ export async function briefWriteStep(
 
 /**
  * The set composed from the four writers' output against the ideas step's
- * allocation (the repeat judge, the summaries' self-check, the quotes picked
- * by meaning), then stored: each brief that prints as its snapshot, one per
+ * allocation (the repeat judge, the In short check against the printed
+ * pages, the summaries' self-check, the quotes picked by meaning), then
+ * stored: each brief that prints as its snapshot, one per
  * client, month and role (a retry overwrites its own, never adds one), and the
  * ledger's four rows.
  */

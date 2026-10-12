@@ -9,11 +9,13 @@ import { asTimeout, isTimeout } from '../../written/deadline'
 import type { ParseClient } from '../../written/write-model'
 import { callOptions, type BriefCall, type BriefClock } from './clock'
 import { REPEATS_PROMPT_VERSION, buildRepeatsPrompts, repeatsSchema, type RepeatsOutput } from './repeats'
+import { IN_SHORT_PROMPT_VERSION, buildInShortPrompts, inShortSchema, type InShortOutput } from './inshort'
 import type { BriefRole } from './types'
 import { BRIEF_PROMPT_VERSION, IDEAS_PROMPT_VERSION, briefSchema, buildBriefPrompts, buildIdeasPrompts, ideasSchema, type BriefArgs, type BriefOutput, type IdeasArgs, type IdeasOutput } from './write'
 
-// The two calls (the document writer's shape, lib/reports/documents/
-// write-model.ts): the reasoning model at the synthesis effort, one strict
+// The calls (the document writer's shape, lib/reports/documents/
+// write-model.ts): the reasoning model at the synthesis effort (the In short
+// check, a short answer over printed pages, at low effort), one strict
 // structured call, one retry on a parse failure or an API error, each attempt
 // logged to `ai_call_log` where `log` is on (a dry run passes false and writes
 // nothing). There is no code fallback for the words: a brief the writer could
@@ -48,7 +50,7 @@ async function structured<T>(
   schema: z.ZodTypeAny,
   name: string,
   prompts: { system: string; user: string },
-  timing: { call: BriefCall; reserveMs?: number },
+  timing: { call: BriefCall; reserveMs?: number; effort?: 'low' | typeof SYNTHESIS_REASONING_EFFORT },
 ): Promise<{ output: T; costUsd: number; ms: number }> {
   const client = c.client ?? openai
   if (!c.client && !process.env.OPENAI_API_KEY) throw new BriefWriteError('OPENAI_API_KEY is not set')
@@ -63,7 +65,7 @@ async function structured<T>(
     try {
       const completion = await client.chat.completions.parse({
         model: BRIEF_MODEL,
-        reasoning_effort: SYNTHESIS_REASONING_EFFORT,
+        reasoning_effort: timing.effort ?? SYNTHESIS_REASONING_EFFORT,
         messages: [{ role: 'system', content: prompts.system }, { role: 'user', content: prompts.user }],
         response_format: zodResponseFormat(schema, name),
       }, options)
@@ -108,7 +110,18 @@ export async function writeBrief(c: CallArgs, args: BriefArgs): Promise<{ output
 /** The set's repeat judge (repeats.ts): the printed prose only. */
 export async function judgeRepeats(c: CallArgs, args: Parameters<typeof buildRepeatsPrompts>[0]): Promise<{ output: RepeatsOutput; costUsd: number; ms: number; prompts: { system: string; user: string } }> {
   const prompts = buildRepeatsPrompts(args)
-  // The summaries' self-check and the embeddings after it follow in the same step.
-  const r = await structured<RepeatsOutput>(c, 'brief_repeats', REPEATS_PROMPT_VERSION, repeatsSchema(), 'brief_repeats', prompts, { call: 'judge', reserveMs: 65_000 })
+  // The embeddings, the In short check and the summaries' self-check follow
+  // in the same step.
+  const r = await structured<RepeatsOutput>(c, 'brief_repeats', REPEATS_PROMPT_VERSION, repeatsSchema(), 'brief_repeats', prompts, { call: 'judge', reserveMs: 90_000 })
+  return { ...r, prompts }
+}
+
+/** The set's In short check (inshort.ts): each brief's printed pages, never a
+ *  voice's words, against its In short, sentence by sentence. Low effort: it
+ *  reads, it does not write. */
+export async function checkInShort(c: CallArgs, args: Parameters<typeof buildInShortPrompts>[0]): Promise<{ output: InShortOutput; costUsd: number; ms: number; prompts: { system: string; user: string } }> {
+  const prompts = buildInShortPrompts(args)
+  // The summaries' self-check follows in the same step.
+  const r = await structured<InShortOutput>(c, 'brief_in_short', IN_SHORT_PROMPT_VERSION, inShortSchema(), 'brief_in_short', prompts, { call: 'inshort', reserveMs: 30_000, effort: 'low' })
   return { ...r, prompts }
 }

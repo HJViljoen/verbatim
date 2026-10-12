@@ -19,21 +19,23 @@ import { WeekReadTimeoutError, type CallBudget, type CallOptions, type WeekReadC
 // ai_call_log); the brief writer's prompt is larger (a department's research
 // plus its ideas), so it gets 200 s, and the ideas call (every department's
 // points, a short answer) 170 s. The repeat judge reads printed prose only and
-// gets 120 s; the self-check the week read's 120 s; one embeddings request the
-// week read's 20 s. Outside a step (the backfill script) there is no shared
+// gets 120 s; the self-check the week read's 120 s; the In short check (a
+// short answer over the printed pages, at low effort) 60 s; one embeddings
+// request the week read's 20 s. Outside a step (the backfill script) there is no shared
 // clock and each call keeps a generous cap, no SDK retry.
 
 /** A step's calls end by this many ms from the step's start, leaving the
  *  store and the alert well inside the route's 300 s. */
 export const BRIEF_STEP_BUDGET_MS = 250_000
 
-export type BriefCall = 'ideas' | 'writer' | 'judge' | 'check' | 'embed'
+export type BriefCall = 'ideas' | 'writer' | 'judge' | 'inshort' | 'check' | 'embed'
 
 /** Each call's hard cap, and the least time worth starting it with. */
 export const BRIEF_CALLS: Readonly<Record<BriefCall, { capMs: number; floorMs: number }>> = {
   ideas: { capMs: 170_000, floorMs: 45_000 },
   writer: { capMs: 200_000, floorMs: 60_000 },
   judge: { capMs: 120_000, floorMs: 30_000 },
+  inshort: { capMs: 60_000, floorMs: 10_000 },
   check: { capMs: 120_000, floorMs: 10_000 },
   embed: { capMs: 20_000, floorMs: 5_000 },
 }

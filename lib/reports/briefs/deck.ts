@@ -842,18 +842,24 @@ export function pageStands(key: SectionKey, sheets: readonly PlannedPage[], d: P
   return { prints: true, why: null }
 }
 
-/** A section the canvas draws a page for that the deck leaves out, and why
- *  (the operator's: what it held stays in the stored brief). */
-export interface LeftOut { key: SectionKey; title: string; why: string }
+/** A page the canvas draws that the deck leaves out, and why (the
+ *  operator's: what it held stays in the stored brief): a section's, or In
+ *  short's where its summary is empty. */
+export interface LeftOut { key: SectionKey | 'in_short'; title: string; why: string }
 
 /**
  * The deck's pages, in order, numbered: the cover, In short, the findings
  * (Leadership's after where the company stands), then the role's sections,
- * each on the canvas's page; and the sections whose page is left out. Pure.
+ * each on the canvas's page; and the pages left out. In short's summary is
+ * its page's main piece: where the checks leave none, the page is left out,
+ * as any page missing a main piece is (`PAGE_NEEDS`), and its figures and
+ * "Also this month" stay in the stored brief. Pure.
  */
 export function planDeck(d: StoredBriefData): { pages: DeckPage[]; left: LeftOut[] } {
-  const pages: Omit<DeckPage, 'n'>[] = [{ eyebrow: '', toc: null, body: { kind: 'cover' } }, { eyebrow: 'In short', toc: null, body: { kind: 'in_short', summarySize: 22, tocSize: 14 } }]
+  const pages: Omit<DeckPage, 'n'>[] = [{ eyebrow: '', toc: null, body: { kind: 'cover' } }]
   const left: LeftOut[] = []
+  if (d.inShort.summary.trim()) pages.push({ eyebrow: 'In short', toc: null, body: { kind: 'in_short', summarySize: 22, tocSize: 14 } })
+  else left.push({ key: 'in_short', title: 'In short', why: 'missing: the summary' })
   const findings = () => d.findings.forEach((f, index) => {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`
     pages.push({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f) } })

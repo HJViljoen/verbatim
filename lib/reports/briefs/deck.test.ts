@@ -395,6 +395,16 @@ describe('the lines code writes', () => {
     expect(footnoteOf(page([argued('Trust in the eco story', 'Marketing')]))).toBe('Trust in the eco story is argued in full in the Marketing brief.')
   })
 
+  it('leaves In short out where its summary is empty, as a page missing its main piece, and numbers the rest', () => {
+    const d = briefFixture('sales')
+    const full = planDeck(d)
+    const empty = planDeck({ ...d, inShort: { ...d.inShort, summary: '  ' } })
+    expect(empty.pages.map((p) => p.eyebrow)).toEqual(full.pages.filter((p) => p.body.kind !== 'in_short').map((p) => p.eyebrow))
+    expect(empty.pages.map((p) => p.n)).toEqual(empty.pages.map((_p, k) => k + 1))
+    expect(empty.left).toEqual([{ key: 'in_short', title: 'In short', why: 'missing: the summary' }])
+    expect(contentsOf(empty.pages).map((t) => t.title)).toEqual(contentsOf(full.pages).map((t) => t.title))
+  })
+
   it('lists the month\'s ideas with where each is argued, this brief\'s last', () => {
     const ideas = ideasArgued(briefFixture('leadership'))
     expect(ideas.map((x) => (x.own ? 'this' : x.brief))).toEqual(['sales', 'marketing', 'marketing', 'content', 'this'])

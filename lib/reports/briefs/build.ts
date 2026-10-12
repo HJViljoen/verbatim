@@ -27,15 +27,19 @@ import type { StandingFact } from '../../written/types'
 import type { ParseClient } from '../../written/write-model'
 import { allPoints, runResearch, type ResearchAnswer } from '../documents/research'
 import { allocateIdeas } from './allocate'
-import { composeBrief, footnotesOnlyPrinted, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount } from './compose'
+import { composeBrief, footnotesOnlyPrinted, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount, type QuoteWordsOf } from './compose'
 import { Meaning } from './meaning'
 import { applyRepeats, REPEATS_IDEA_CHARS, repeatItemsOf, verdictsOf, type RepeatItem, type RepeatsOutput, type RepeatVerdict } from './repeats'
 import { capText } from '../documents/scrub'
 import { splitSentences } from '../../prose/scrub'
 import { embedTexts } from '../../pipeline/cluster'
+import { fetchQuoteResolutionsByRefs } from '../../quotes'
+import { collectQuoteRefs } from '../../renderables/quotes-freeze'
+import type { QuoteResolution } from '../../renderables/types'
 import { EMBEDDING_MODEL, estimateCost } from '../../config'
 import { groundPoint, groundedPointOf } from './ground'
-import { BRIEF_MODEL, draftIdeas, judgeRepeats, writeBrief } from './model'
+import { applyInShort, inShortItems, printedLines, printedPages, type InShortDrop, type InShortItem, type InShortOutput } from './inshort'
+import { BRIEF_MODEL, checkInShort, draftIdeas, judgeRepeats, writeBrief } from './model'
 import { allBriefQuestions, type BriefQuestion } from './questions'
 import { QuotePool } from './quotes'
 import type { Allocation, BriefRole, GroundedPoint, IdeaDraft, MonthlyBriefData } from './types'
@@ -402,8 +406,21 @@ export interface BriefSet {
     summaries: { contradicted: [string, string | null][]; verdicts: { headline: string; verdict: string }[]; ran: boolean }
   }
   allocation: Allocation
-  briefs: Record<BriefRole, { data: MonthlyBriefData; raw: BriefOutput | null; prompts: { system: string; user: string } | null; costUsd: number; scrub: unknown }>
+  briefs: Record<BriefRole, {
+    data: MonthlyBriefData; raw: BriefOutput | null; prompts: { system: string; user: string } | null; costUsd: number; scrub: unknown
+    /** The In short check's record: every line of the printed pages it read,
+     *  and the sentences it found they carry (`--from` holds a saved brief to
+     *  both, without a model call). */
+    printed: { read: string[]; kept: string[] }
+  }>
   quotes: QuotePool
+  /** Every quote ref the set prints, with the words it resolves to: the
+   *  pool's, and the rest (a subject's voice) read once, as the deck will
+   *  draw them. Kept in memory and in a dry build's local files; never stored. */
+  texts: Map<string, QuoteResolution>
+  /** The In short check (inshort.ts): its sentences, its answer, what it
+   *  dropped and what it cost. */
+  inShort: { items: InShortItem[]; raw: InShortOutput | null; dropped: InShortDrop[]; costUsd: number }
   repeats: { raw: RepeatsOutput; items: RepeatItem[]; verdicts: RepeatVerdict[]; costUsd: number }
   vectors: Map<string, number[]>
   embedUsd: number
@@ -523,6 +540,9 @@ export async function writeBriefSet(
     embed?: (texts: string[]) => Promise<number[][]>
     /** The step's clock (the pipeline's `briefs:compose`); absent outside a step. */
     clock?: BriefClock
+    /** The words of quote refs the pool does not hold (a subject's voice): the
+     *  render's own read by default (a test's stand-in otherwise). */
+    quoteWords?: (refs: string[]) => Promise<Map<string, QuoteResolution>>
   },
 ): Promise<BriefSet> {
   const call = { admin, clientId: i.clientId, runId: i.runId, log: opts.log, client: opts.client, clock: opts.clock }
@@ -620,13 +640,47 @@ export async function writeBriefSet(
   }
   cost += embedUsd
 
-  // 3. The self-check on the summaries AS THEY PRINT (the review: it had
-  //    passed summaries that rested on held items).
+  // 3. In short against the pages AS THEY PRINT (the September dry build,
+  //    12 Oct: the writer writes it before the paginator leaves thin pages
+  //    out). Every quote the set prints is given its words, as the deck will
+  //    draw them, so the pages fit as they print; each brief is paginated; and
+  //    one check reads each brief's printed pages (never a voice's words)
+  //    against its In short. A sentence no printed page carries drops whole.
   const whole = BRIEF_ROLES.every((r) => roles.includes(r))
-  const finished = whole ? alsoOnlyPrinted(pass.finished, allocation) : pass.finished
+  const composed = whole ? alsoOnlyPrinted(pass.finished, allocation) : pass.finished
+  const texts = new Map<string, QuoteResolution>()
+  const refs = [...new Set(composed.flatMap((d) => collectQuoteRefs(d)))]
+  for (const ref of refs) {
+    const w = pass.quotes.textOf(ref)
+    if (w?.text) texts.set(ref, w)
+  }
+  const unread = refs.filter((r) => !texts.has(r))
+  if (unread.length) {
+    const read = await (opts.quoteWords ?? ((x: string[]) => fetchQuoteResolutionsByRefs(admin, x)))(unread)
+    for (const [ref, w] of read) if (w?.text) texts.set(ref, w)
+  }
+  const words: QuoteWordsOf = (ref) => {
+    const w = texts.get(ref)
+    return w ? { text: w.text, english: w.english ?? null, lang: w.lang ?? null } : null
+  }
+  const pages = new Map(composed.map((d) => [d.role, printedPages(d, words)]))
+  const items = inShortItems(composed)
+  const printedCheck = items.length
+    ? await checkInShort(call, { company: i.company, briefs: composed.map((d) => ({ role: d.role, pages: pages.get(d.role) ?? [] })), items })
+    : { output: null, costUsd: 0 }
+  cost += printedCheck.costUsd
+  const onPages = applyInShort(composed, items, printedCheck.output)
+  const finished = onPages.briefs
   const briefs = {} as BriefSet['briefs']
-  for (const d of finished) briefs[d.role] = { data: d, raw: raws[d.role].raw, prompts: raws[d.role].prompts, costUsd: raws[d.role].costUsd, scrub: { counts: pass.out[d.role].counts, dropped: pass.out[d.role].scrubbed } }
-  // Sentence by sentence: one contradicted sentence drops, not the summary.
+  for (const d of finished) {
+    briefs[d.role] = {
+      data: d, raw: raws[d.role].raw, prompts: raws[d.role].prompts, costUsd: raws[d.role].costUsd, scrub: { counts: pass.out[d.role].counts, dropped: pass.out[d.role].scrubbed },
+      printed: { read: printedLines(pages.get(d.role) ?? []), kept: onPages.kept[d.role] ?? [] },
+    }
+  }
+  // 4. The self-check on the summaries that print, against the conversation
+  //    (the review: it had passed summaries that rested on held items).
+  //    Sentence by sentence: one contradicted sentence drops, not the summary.
   const summaries = [...new Set(Object.values(briefs).flatMap((x) => splitSentences(x.data.inShort.summary.trim()).map((s) => s.trim())).filter(Boolean))]
   const summaryCheck = opts.summaries
     ? { contradicted: new Map(opts.summaries.contradicted), verdicts: [], costUsd: 0, ran: true }
@@ -655,6 +709,8 @@ export async function writeBriefSet(
     allocation,
     briefs,
     quotes: pass.quotes,
+    texts,
+    inShort: { items, raw: printedCheck.output, dropped: onPages.dropped, costUsd: printedCheck.costUsd },
     repeats: { raw: judge.output, items: repeatItems, verdicts, costUsd: judge.costUsd },
     vectors,
     embedUsd,
