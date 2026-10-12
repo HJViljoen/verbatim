@@ -7,7 +7,7 @@ import { freezeQuotes } from '../../renderables/quotes-freeze'
 import { createSnapshot } from '../../snapshots'
 import { stampSnapshotReading } from '../reading-stamp'
 import { printedSections } from './deck'
-import type { BriefRole, MonthlyBriefData } from './types'
+import type { BriefRole, MonthlyBriefData, StoredBriefData } from './types'
 import { BRIEF_NAME, BRIEF_ROLES, storedBrief } from './types'
 
 // Where the month's briefs live (the pipeline's `briefs:compose` step, and the
@@ -132,6 +132,28 @@ export async function briefSnapshotOf(admin: SupabaseClient, clientId: string, m
   return ((res.data ?? [])[0] as { id: string } | undefined)?.id ?? null
 }
 
+/** A brief's snapshot as it is stored: kind 'report', its ref and title,
+ *  the brief less what only the operator reads with every quote frozen to a
+ *  ref (`text: ''`), and those refs as its evidence ids. What the pipeline,
+ *  --write and --from all store. Pure. */
+export function briefSnapshotRow(d: MonthlyBriefData): { kind: 'report'; ref: ReturnType<typeof briefRef>; title: string; data: StoredBriefData; evidenceIds: string[] } {
+  const { data, refs } = freezeQuotes(storedBrief(d))
+  return { kind: 'report', ref: briefRef(d), title: briefTitle(d), data, evidenceIds: refs }
+}
+
+/** A brief's ledger row: ready with its snapshot where it prints, thin with
+ *  why where it does not; what it held and what it cost either way. Pure. */
+export function briefLedgerRow(d: MonthlyBriefData, a: { clientId: string; month: string; runId: string | null; costUsd: number; snapshotId: string | null }): MonthlyBriefRow {
+  const prints = briefPrints(d)
+  return {
+    client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId,
+    status: prints ? 'ready' : 'thin', snapshot_id: prints ? a.snapshotId : null,
+    cost_usd: Math.round(a.costUsd * 10_000) / 10_000,
+    error: prints ? null : 'nothing in it stood: no finding and no section page',
+    held: d.held,
+  }
+}
+
 /**
  * Freeze one brief as the month's snapshot and stamp what it is a reading of:
  * the role's existing snapshot rewritten in place (its stored files flagged
@@ -142,26 +164,25 @@ export async function storeBriefSnapshot(
   admin: SupabaseClient,
   a: { clientId: string; runId: string | null; data: MonthlyBriefData; asOf: string },
 ): Promise<{ id: string; evidenceIds: string[] }> {
-  const data = storedBrief(a.data)
+  const row = briefSnapshotRow(a.data)
   const existing = await briefSnapshotOf(admin, a.clientId, a.data.month, a.data.role)
   let snap: { id: string; evidenceIds: string[] }
   if (existing) {
-    const { data: frozen, refs } = freezeQuotes(data)
     const res = await admin.from('report_snapshots')
-      .update({ data: frozen, evidence_ids: refs, title: briefTitle(a.data), run_id: a.runId })
+      .update({ data: row.data, evidence_ids: row.evidenceIds, title: row.title, run_id: a.runId })
       .eq('id', existing).eq('client_id', a.clientId)
     if (res.error) throw new Error(`brief snapshot: update failed: ${res.error.message}`)
     await markSnapshotsStale(admin, [existing], { apply: true })
-    snap = { id: existing, evidenceIds: refs }
+    snap = { id: existing, evidenceIds: row.evidenceIds }
   } else {
     snap = await createSnapshot(admin, {
       clientId: a.clientId,
       userId: null,
-      kind: 'report',
-      ref: briefRef(a.data),
-      title: briefTitle(a.data),
+      kind: row.kind,
+      ref: row.ref,
+      title: row.title,
       runId: a.runId,
-      data,
+      data: row.data,
     })
   }
   await stampSnapshotReading(admin, a.clientId, snap.id, {
@@ -199,14 +220,14 @@ export async function storeBriefSet(
 ): Promise<MonthlyBriefRow[]> {
   const rows: MonthlyBriefRow[] = []
   for (const d of a.briefs) {
-    const cost = Math.round((a.costUsd[d.role] ?? d.costUsd ?? 0) * 10_000) / 10_000
+    const row = { clientId: a.clientId, month: a.month, runId: a.runId, costUsd: a.costUsd[d.role] ?? d.costUsd ?? 0 }
     if (!briefPrints(d)) {
       await dropBriefSnapshot(admin, a.clientId, a.month, d.role)
-      rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'thin', snapshot_id: null, cost_usd: cost, error: 'nothing in it stood: no finding and no section page', held: d.held })
+      rows.push(briefLedgerRow(d, { ...row, snapshotId: null }))
       continue
     }
     const snap = await storeBriefSnapshot(admin, { clientId: a.clientId, runId: a.runId, data: d, asOf: a.asOf })
-    rows.push({ client_id: a.clientId, month: a.month, role: d.role, run_id: a.runId, status: 'ready', snapshot_id: snap.id, cost_usd: cost, error: null, held: d.held })
+    rows.push(briefLedgerRow(d, { ...row, snapshotId: snap.id }))
   }
   await saveBriefRows(admin, rows)
   return rows
