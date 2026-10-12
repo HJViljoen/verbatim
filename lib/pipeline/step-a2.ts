@@ -2,7 +2,7 @@ import { audienceOf } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
 import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD, MEGA_CLUSTER_MIN, MEGA_CLUSTER_SHARE, VIDEO_EVIDENCE_WEIGHT } from '../config'
-import { clusterInsights, type ClusterMethod } from './cluster'
+import { clusterInsightsWithCentroids, type ClusterMethod } from './cluster'
 import { mergeClusterLabels } from './theme-merge'
 import type { InsightRow, AggregatedTheme } from './types'
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
@@ -295,8 +295,12 @@ interface ProcessGroupResult {
   themes: AggregatedTheme[]
   mergesApplied: StepA2Result['mergesApplied']
   mergeCostUsd: number
-  /** The merge call failed under failSoft: the clusters went on unmerged. */
+  /** Every merge call failed under failSoft: the whole bucket went on unmerged. */
   mergeSkipped?: boolean
+  /** Merge calls the bucket took (1, or its number of parts over
+   *  MERGE_CHUNK_MAX) and how many of them failed under failSoft. */
+  mergeChunks?: number
+  mergeChunksFailed?: number
 }
 
 // One bucket's slice of Step A2: cluster, label-merge same-concern clusters
@@ -325,17 +329,24 @@ async function processGroup(
   opts: ProcessGroupOptions,
 ): Promise<ProcessGroupResult> {
   const { clientId, runId, method, threshold } = opts
-  let clusters = await clusterInsights(grp.insights, { method, threshold })
+  // The centroids are what a bucket over MERGE_CHUNK_MAX is split by; the
+  // insight vectors behind them are already gone (cluster.ts).
+  const clustered = await clusterInsightsWithCentroids(grp.insights, { method, threshold })
+  let clusters = clustered.clusters
   const mergesApplied: StepA2Result['mergesApplied'] = []
   let mergeCostUsd = 0
   let mergeSkipped = false
+  let mergeChunks = 0
+  let mergeChunksFailed = 0
   if (opts.merge) {
     const m = await mergeClusterLabels({
-      clientId, runId, bucket: grp.bucket, clusters,
+      clientId, runId, bucket: grp.bucket, clusters, centroids: clustered.centroids,
       model: opts.mergeModel, logCall: opts.logCalls, callIndex,
       deadline: opts.mergeDeadline, failSoft: opts.mergeFailSoft,
     })
     if (m.skipped) mergeSkipped = true
+    mergeChunks = m.chunks
+    mergeChunksFailed = m.failedChunks
     clusters = m.clusters
     mergeCostUsd += m.costUsd
     for (const a of m.applied) mergesApplied.push({ bucket: grp.bucket, ...a })
@@ -360,7 +371,7 @@ async function processGroup(
     theme.singleSource = theme.evidenceCount < opts.evidenceFloor
     themes.push(theme)
   }
-  return { themes, mergesApplied, mergeCostUsd, mergeSkipped }
+  return { themes, mergesApplied, mergeCostUsd, mergeSkipped, mergeChunks, mergeChunksFailed }
 }
 
 export async function runStepA2(opts: RunStepA2Options): Promise<StepA2Result> {
@@ -434,8 +445,33 @@ export interface StepA2BucketResult {
   themes: AggregatedTheme[]
   mergesApplied: StepA2Result['mergesApplied']
   mergeCostUsd: number
-  /** The merge was skipped on the step's last attempt (the run records it). */
+  /** The merge was skipped on the step's last attempt (the run records it):
+   *  every call failed and the whole bucket stayed unmerged. */
   mergeSkipped?: boolean
+  /** Merge calls the bucket took (1, or its parts over MERGE_CHUNK_MAX) and
+   *  how many failed on the step's last attempt, their clusters unmerged.
+   *  Absent on a result memoised before parts existed. */
+  mergeChunks?: number
+  mergeChunksFailed?: number
+}
+
+/**
+ * What the run records against `themes:<bucket>` when the merge did not fully
+ * apply, or null when it did. Either the whole bucket stayed unmerged, or some
+ * of its parts did: a partly unmerged bucket is still an error the run
+ * records, because a month this run freezes keeps those themes fragmented.
+ * The one-call wording is the one runs have recorded since 5 Oct.
+ */
+export function mergeShortfall(r: Pick<StepA2BucketResult, 'mergeSkipped' | 'mergeChunks' | 'mergeChunksFailed'>): string | null {
+  const parts = r.mergeChunks ?? 0
+  const failed = r.mergeChunksFailed ?? 0
+  if (r.mergeSkipped) {
+    return parts > 1
+      ? `all ${parts} merge parts failed on the last attempt; this bucket's themes are unmerged this run`
+      : 'the merge call failed on the last attempt; this bucket\'s themes are unmerged this run'
+  }
+  if (failed > 0) return `${failed} of ${parts} merge parts failed on the last attempt; the themes in those parts are unmerged this run`
+  return null
 }
 
 /** One bucket's Step A2 — the per-bucket Inngest step body. Reloads the corpus
@@ -455,7 +491,10 @@ export async function runStepA2Bucket(opts: RunStepA2BucketOptions): Promise<Ste
     mergeModel: opts.mergeModel, logCalls: opts.logCalls,
     mergeDeadline: opts.mergeBudgetMs ? startedAt + opts.mergeBudgetMs : undefined, mergeFailSoft: opts.mergeFailSoft,
   })
-  return { bucket: grp.bucket, insightCount: grp.insights.length, themes: r.themes, mergesApplied: r.mergesApplied, mergeCostUsd: r.mergeCostUsd, mergeSkipped: r.mergeSkipped }
+  return {
+    bucket: grp.bucket, insightCount: grp.insights.length, themes: r.themes, mergesApplied: r.mergesApplied, mergeCostUsd: r.mergeCostUsd,
+    mergeSkipped: r.mergeSkipped, mergeChunks: r.mergeChunks, mergeChunksFailed: r.mergeChunksFailed,
+  }
 }
 
 export { CLUSTER_SIMILARITY_THRESHOLD }

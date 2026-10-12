@@ -38,7 +38,16 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
 //      clusters fuse, so its identity is part of the clustering
 //   mp the merge PROMPT version — the model is half of that call; the words
 //      that ask it which clusters are one theme are the other half, and a
-//      rewording re-partitions the corpus exactly as a moved threshold does
+//      rewording re-partitions the corpus exactly as a moved threshold does.
+//      The merge's CHUNKING (a bucket over MERGE_CHUNK_MAX merged in parts,
+//      12 Oct) is deliberately NOT in the key (Heinrich, 12 Oct). The prompt,
+//      model and threshold are unchanged, so it is a capacity measure, not a
+//      new grouping rule. The merge is a reasoning-model call with no
+//      temperature, so two single calls over the same clusters already pick
+//      somewhat different duplicate sets, and a part boundary is a difference
+//      of that same kind. Keying it would draw a permanent clustering_changed
+//      boundary at September 2026. A change to the merge prompt, the model or
+//      the threshold still moves the key
 //   k  the theme-key rule — the cutover to the video key is itself an identity
 //      event, and a marker that does not carry it would make the one run that
 //      needs the marker look unremarkable. Measured with

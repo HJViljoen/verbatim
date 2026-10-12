@@ -4,11 +4,13 @@ import { EMBEDDING_MODEL, CLUSTER_SIMILARITY_THRESHOLD } from '../config'
 import type { InsightRow } from './types'
 
 // Step A2 clustering seam (Architecture/Analysis-Passes §Step A2). The pipeline
-// only calls `clusterInsights`; the implementation behind it can swap without
-// touching Step A2. v4.1 specced case-insensitive string match on the theme
-// slug; the first real Ossur run showed near-zero exact collisions (free-text
-// labels rarely match), so the pre-approved embedding-similarity merge is the
-// default. `'string'` is retained for A/B and as a no-cost fallback.
+// only calls `clusterInsights` (or `clusterInsightsWithCentroids`: the same
+// clusters plus each one's centroid); the implementation behind them can swap
+// without touching Step A2. v4.1 specced case-insensitive string match on the
+// theme slug; the first real Ossur run showed near-zero exact collisions
+// (free-text labels rarely match), so the pre-approved embedding-similarity
+// merge is the default. `'string'` is retained for A/B and as a no-cost
+// fallback.
 //
 // Input to clusterInsights is assumed homogeneous — one entity BUCKET, which
 // is what the caller in step-a2.ts groups by. Categories deliberately merge
@@ -247,8 +249,32 @@ export async function clusterInsights(
   insights: InsightRow[],
   opts: ClusterOptions = {},
 ): Promise<InsightRow[][]> {
+  return (await clusterInsightsWithCentroids(insights, opts)).clusters
+}
+
+export interface ClusteredInsights {
+  clusters: InsightRow[][]
+  /** One unit vector per cluster, in `clusters` order: the mean of its
+   *  members' embeddings, L2-normalised. What the theme merge splits a big
+   *  bucket by (theme-merge.ts `partitionByCentroid`). Absent for the 'string'
+   *  method, which embeds nothing, and for a bucket of one insight. Float32,
+   *  because a 1,884-cluster bucket is then 11.6 MB rather than 23 MB, and a
+   *  partition needs no more precision than that. */
+  centroids?: Float32Array[]
+}
+
+/**
+ * `clusterInsights`, plus each cluster's centroid. The insight vectors it
+ * embeds are dropped when it returns (only the per-cluster means survive), so
+ * a caller that holds the result through a long merge call is not holding the
+ * bucket's vectors too: this runs on a 2 GB instance.
+ */
+export async function clusterInsightsWithCentroids(
+  insights: InsightRow[],
+  opts: ClusterOptions = {},
+): Promise<ClusteredInsights> {
   const method = opts.method ?? 'embedding'
-  if (insights.length <= 1) return insights.map((i) => [i])
+  if (insights.length <= 1) return { clusters: insights.map((i) => [i]) }
 
   if (method === 'string') {
     const byTheme = new Map<string, InsightRow[]>()
@@ -258,12 +284,37 @@ export async function clusterInsights(
       if (g) g.push(ins)
       else byTheme.set(key, [ins])
     }
-    return [...byTheme.values()]
+    return { clusters: [...byTheme.values()] }
   }
 
   // embedding
   const threshold = opts.threshold ?? CLUSTER_SIMILARITY_THRESHOLD
   const vecs = await embedTexts(insights.map(embedInput))
   const groups = averageLinkageClusters(vecs, threshold)
-  return groups.map((idxs) => idxs.map((i) => insights[i]))
+  return {
+    clusters: groups.map((idxs) => idxs.map((i) => insights[i])),
+    centroids: clusterCentroids(vecs, groups),
+  }
+}
+
+/** One centroid per group: the L2-normalised mean of its members' vectors. */
+export function clusterCentroids(vecs: number[][], groups: number[][]): Float32Array[] {
+  return groups.map((idxs) => unitMean(vecs, idxs))
+}
+
+/** The L2-normalised mean of `vecs[idxs]`, summed in float64. A zero mean
+ *  (only possible for vectors that cancel exactly) stays zero. */
+function unitMean(vecs: number[][], idxs: number[]): Float32Array {
+  const dim = vecs[idxs[0]].length
+  const sum = new Float64Array(dim)
+  for (const i of idxs) {
+    const v = vecs[i]
+    for (let d = 0; d < dim; d++) sum[d] += v[d]
+  }
+  let norm = 0
+  for (let d = 0; d < dim; d++) norm += sum[d] * sum[d]
+  norm = Math.sqrt(norm)
+  const out = new Float32Array(dim)
+  if (norm > 0) for (let d = 0; d < dim; d++) out[d] = sum[d] / norm
+  return out
 }

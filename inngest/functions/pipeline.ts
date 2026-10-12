@@ -6,7 +6,7 @@ import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommen
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
 import { decideAnalysis, emptyReasonTally, type SelectReason } from '@/lib/pipeline/pass-a-plan'
 import { pruneStaleAnalysis, trimFreezeHold, trimStaleMemberships, trimSummary } from '@/lib/pipeline/stale-analysis'
-import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
+import { loadGroupedInsights, mergeShortfall, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
 import { planPassB, labelPassBWave, applyPassBLabels, type PassBWaveResult } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
 import { runPassD } from '@/lib/pipeline/pass-d'
@@ -1558,9 +1558,13 @@ export const runPipeline = inngest.createFunction(
     }
     // A merge skipped on its step's last attempt left that bucket's themes
     // fragmented, and a month this run freezes keeps them so: an error, not a
-    // log line that ages out.
+    // log line that ages out. Since a big bucket merges in parts, that is the
+    // whole bucket or N of its M parts (`mergeShortfall`); either way the key
+    // stays `themes:<bucket>`, which the week chart's cadence reads as a step
+    // after the gather (lib/reading/week-line.ts AFTER_GATHER_STEPS).
     for (const r of bucketResults) {
-      if (r.mergeSkipped) noteError(`themes:${r.bucket}`, 'the merge call failed on the last attempt; this bucket\'s themes are unmerged this run')
+      const shortfall = mergeShortfall(r)
+      if (shortfall) noteError(`themes:${r.bucket}`, shortfall)
     }
 
     // Pass B labels BOTH tiers (early signals surface on the pages too); the
