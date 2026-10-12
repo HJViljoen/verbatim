@@ -669,21 +669,22 @@ export function deckPages(d: StoredBriefData): DeckPage[] {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`
     pages.push({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f) } })
   })
-  const printed = d.sections.filter((s) => printsSection(s.key) && !COMPANIONS.has(s.key))
-  const after = FINDINGS_AFTER[d.role]
-  let placed = after == null || !printed.some((s) => s.key === after)
-  if (placed) findings()
-  for (const s of printed) {
+  const planned = d.sections.filter((s) => printsSection(s.key) && !COMPANIONS.has(s.key)).map((s) => {
     const partner = COMPANION[s.key]
     const companion = partner ? d.sections.find((x) => x.key === partner) ?? null : null
-    for (const slice of planSection(s, companion, d)) {
-      if (!draws(slice.section)) continue
+    return { s, slices: planSection(s, companion, d).filter((slice) => draws(slice.section)) }
+  })
+  // The findings follow the last of the role's opening sections that prints.
+  const before = new Set(FINDINGS_AFTER[d.role])
+  const anchor = planned.reduce((at, p, k) => (before.has(p.s.key) && p.slices.length > 0 ? k : at), -1)
+  if (anchor < 0) findings()
+  planned.forEach(({ s, slices }, k) => {
+    for (const slice of slices) {
       const eyebrow = slice.continued ? continuedTitle(eyebrowOf(s.key, d.company)) : eyebrowOf(s.key, d.company)
       pages.push({ eyebrow, toc: contentsName(s, slice.continued), body: { kind: 'section', ...slice } })
     }
-    if (!placed && s.key === after) { findings(); placed = true }
-  }
-  if (!placed) findings()
+    if (k === anchor) findings()
+  })
   const numbered = pages.map((p, i) => ({ ...p, n: i + 1 }))
   // In short's type, now the contents are known.
   const sizes = inShortSizes(d.inShort.summary, contentsOf(numbered).map((t) => t.title))

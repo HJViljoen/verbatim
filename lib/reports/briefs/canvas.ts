@@ -23,12 +23,13 @@ export const PRINT_UNDRAWN_SECTIONS = false
 /** Does this section print in the deck? Pure. */
 export const printsSection = (key: SectionKey): boolean => PRINT_UNDRAWN_SECTIONS || !UNDRAWN_SECTIONS.includes(key)
 
-/** Where the findings print: after this section, or straight after In short
- *  (null). Leadership opens on where the market and the company stand. */
-export const FINDINGS_AFTER: Readonly<Record<BriefRole, SectionKey | null>> = {
-  sales: null,
-  marketing: null,
-  content: null,
-  leadership: 'leadership.shares',
+/** Where the findings print: after the last of these sections that prints,
+ *  or straight after In short (none). Leadership opens on where the market
+ *  and the company stand, as the canvas draws it. */
+export const FINDINGS_AFTER: Readonly<Record<BriefRole, readonly SectionKey[]>> = {
+  sales: [],
+  marketing: [],
+  content: [],
+  leadership: ['leadership.market', 'leadership.shares'],
 }
 

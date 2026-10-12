@@ -134,14 +134,13 @@ export function briefMarkdown(d: MonthlyBriefData, textOf: TextOf, noun: string 
   if (d.inShort.also.length) {
     out.push('**Also this month, in the other briefs**', '', ...d.inShort.also.map((a) => `- ${BRIEF_NAME[a.brief]}: ${a.headline}`), '')
   }
-  const after = FINDINGS_AFTER[d.role]
+  const before = new Set(FINDINGS_AFTER[d.role])
   const findings = d.findings.flatMap((f) => findingBlock(f, d.role, textOf, co, noun))
-  let placed = after == null || !d.sections.some((s) => s.key === after)
-  if (placed) out.push(...findings)
-  for (const s of d.sections) {
+  const anchor = d.sections.reduce((at, s, k) => (before.has(s.key) ? k : at), -1)
+  if (anchor < 0) out.push(...findings)
+  d.sections.forEach((s, k) => {
     out.push(...sectionBlock(s, textOf, co, noun))
-    if (!placed && s.key === after) { out.push(...findings); placed = true }
-  }
-  if (!placed) out.push(...findings)
+    if (k === anchor) out.push(...findings)
+  })
   return `${out.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`
 }

@@ -31,8 +31,8 @@ describe('the role sections', () => {
   })
 
   it('leadership opens on where the market and the company stand; the others on the findings', () => {
-    expect(FINDINGS_AFTER.leadership).toBe('leadership.shares')
-    for (const r of ['sales', 'marketing', 'content'] as BriefRole[]) expect(FINDINGS_AFTER[r]).toBeNull()
+    expect(FINDINGS_AFTER.leadership).toEqual(['leadership.market', 'leadership.shares'])
+    for (const r of ['sales', 'marketing', 'content'] as BriefRole[]) expect(FINDINGS_AFTER[r]).toEqual([])
   })
 
   it('names the company in a title, never another tenant\'s words', () => {

@@ -30,6 +30,14 @@ describe('the canvas\'s page set, in its order', () => {
     expect(eyebrows('leadership')).toEqual(['', 'In short', 'Where the market stands', 'Where Acme stands', 'The finding', 'What buyers weigh', 'The risks', 'What holds so far'])
   })
 
+  it('Leadership\'s finding follows where the market stands when the company\'s standing does not print', () => {
+    const d = briefFixture('leadership')
+    d.sections = d.sections.filter((s) => s.key !== 'leadership.shares')
+    expect(eyebrows('leadership', d)).toEqual(['', 'In short', 'Where the market stands', 'The finding', 'What buyers weigh', 'The risks', 'What holds so far'])
+    d.sections = d.sections.filter((s) => s.key !== 'leadership.market')
+    expect(eyebrows('leadership', d).slice(0, 3)).toEqual(['', 'In short', 'The finding'])
+  })
+
   it('numbers every page once, in order', () => {
     const pages = deckPages(briefFixture('sales'))
     expect(pages.map((p) => p.n)).toEqual(pages.map((_p, i) => i + 1))
