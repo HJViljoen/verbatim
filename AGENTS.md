@@ -875,8 +875,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stay stored, and the brief prints on. "Also this month" names only an idea
   some brief of the set prints as a finding (`alsoOnlyPrinted`; a finding's
   page is never left out). Several footnotes on one page naming the same
-  brief the same way are one line ("A, B and C are argued in full in the
-  Content brief."; `footnoteOf`); one keeps the canvas's line.
+  brief the same way are one line (“A”, “B” and “C” are argued in full in
+  the Content brief.; `footnoteOf`); one keeps the canvas's line. Every name
+  is in curly quotes, one alone too, so a name that is a clause reads as a
+  name (12 Oct: Össur's Sales printed "Everyday wear is unclear is argued in
+  full in the Content brief."); a risk card's foot names no item. In its own
+  words draws a chip that is only another of its group's plural or singular
+  once, the first listed ("bag" / "bags": case aside, one is the other plus
+  "s" or "es", nothing else stemmed; `distinctChips`), before the page is
+  fitted and counted; the stored brief keeps every word. Both are drawing,
+  not words: `--from` compares a saved In short record's lines without them
+  (`sameWords`), so the v2 September build still stores.
   The writer always writes the leads the canvas draws (Where the confusion
   starts' paragraph too) where the part has items, summing up the items and
   claiming nothing they do not, under the same evidence floors and scrubs; a
