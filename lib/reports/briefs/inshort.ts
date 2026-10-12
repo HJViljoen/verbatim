@@ -4,7 +4,7 @@ import { splitSentences } from '../../prose/scrub'
 import { collectQuoteRefs, resolveQuotes } from '../../renderables/quotes-freeze'
 import type { QuoteResolution } from '../../renderables/types'
 import type { QuoteWordsOf } from './compose'
-import { heardIn, ideasArgued, planDeck, tagLine, type DeckPage } from './deck'
+import { distinctChips, heardIn, ideasArgued, planDeck, tagLine, type DeckPage } from './deck'
 import type { BriefRole, MonthlyBriefData, StoredBriefData } from './types'
 import { BRIEF_LENS, BRIEF_NAME, BRIEF_ROLES } from './types'
 
@@ -199,11 +199,16 @@ export function applyInShort<T extends MonthlyBriefData>(
 export const summarySentences = (summary: string): string[] => splitSentences(summary.trim())
 
 /** A printed line as `inShortStillHolds` compares it with a saved record:
- *  the curly quotes round a footnote's names are how the deck draws the page,
- *  not what it says (deck.ts `footnoteOf`; 12 Oct), so a line the check read
- *  before them (the September v2 build) still matches the line that prints
+ *  the curly quotes round a footnote's names, and a chip that only repeats
+ *  another's plural, are how the deck draws the page, not what it says
+ *  (deck.ts `footnoteOf`, `distinctChips`; 12 Oct), so a line the check read
+ *  before either (the September v2 build) still matches the line that prints
  *  now. Pure. */
-export const sameWords = (line: string): string => line.replace(/[“”]/g, '')
+export function sameWords(line: string): string {
+  const plain = line.replace(/[“”]/g, '')
+  const at = plain.indexOf(': ')
+  return at < 0 ? plain : `${plain.slice(0, at + 2)}${distinctChips(plain.slice(at + 2).split(', ')).join(', ')}`
+}
 
 /** Is every sentence of a stored summary one the check found printed, and
  *  does every line the check read still print (`sameWords`)? What a stored

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture, finding, item, quote } from '../../../components/briefs/fixture'
 import { PRINT_UNDRAWN_SECTIONS, UNDRAWN_SECTIONS, printsSection } from './canvas'
 import {
-  BODY_HEIGHT, PAGE_MIN_ITEMS, PAGE_NEEDS, chipRows, contentsOf, deckPages, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn,
+  BODY_HEIGHT, PAGE_MIN_ITEMS, PAGE_NEEDS, chipRows, contentsOf, deckPages, distinctChips, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn,
   planDeck, printedSections, productPhrases, quoteCite, subtitleOf, tagLine, writtenOn,
 } from './deck'
 import type { BriefRole, BriefSection, MonthlyBriefData, SectionKey } from './types'
@@ -409,6 +409,28 @@ describe('the lines code writes', () => {
     // A risk card's foot names no item, so it has nothing to quote.
     expect(tagLine('Argued in the Marketing brief')).toBe('Argued in full in the Marketing brief')
     expect(tagLine('Also in the Sales brief')).toBe('Also in the Sales brief')
+  })
+
+  it('leaves out a chip that is only another chip\'s plural or singular, the first the writer listed kept', () => {
+    expect(distinctChips(['bag', 'bags'])).toEqual(['bag'])
+    expect(distinctChips(['bags', 'tote', 'bag'])).toEqual(['bags', 'tote'])
+    expect(distinctChips(['prosthetics', 'prosthesis', 'device', 'prosthetic'])).toEqual(['prosthetics', 'prosthesis', 'device'])
+    expect(distinctChips(['Box', 'boxes', 'BOXS'])).toEqual(['Box'])
+    // Nothing else is stemmed.
+    expect(distinctChips(['prosthesis', 'prosthetic'])).toEqual(['prosthesis', 'prosthetic'])
+    expect(distinctChips(['bag', 'baggage', 'bagged', 'handbags'])).toEqual(['bag', 'baggage', 'bagged', 'handbags'])
+    expect(distinctChips([])).toEqual([])
+  })
+
+  it('draws In its own words with a plural pair as one chip, counts the page on what prints, and keeps every word stored', () => {
+    const d = briefFixture('marketing')
+    const words = d.sections.find((s) => s.key === 'marketing.words')!
+    words.chips = [{ label: 'What they call it', words: ['bag', 'bags'] }, { label: 'The problem, in their words', words: ['rain', 'rains', 'spills'] }]
+    const p = planDeck(d).pages.find((x) => x.eyebrow === 'In its own words')!
+    if (p.body.kind !== 'section') throw new Error('no words page')
+    expect(p.body.section.chips).toEqual([{ label: 'What they call it', words: ['bag'] }, { label: 'The problem, in their words', words: ['rain', 'spills'] }])
+    expect(PAGE_NEEDS['marketing.words'].count(p.body)).toBe(2)
+    expect(words.chips[0].words).toEqual(['bag', 'bags'])
   })
 
   it('leaves In short out where its summary is empty, as a page missing its main piece, and numbers the rest', () => {

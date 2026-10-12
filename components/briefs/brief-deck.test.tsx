@@ -182,12 +182,21 @@ describe('every canvas page, with every component it draws', () => {
     for (const gone of ['What people do in the comments', 'The mood', 'position, in one line', 'What each brand is heard for', 'Where the market stands', 'What holds so far']) expect(t).not.toContain(gone)
   })
 
-  it('draws a footnote\'s names in curly quotes', () => {
+  it('draws a footnote\'s names in curly quotes, and one chip of a plural pair, the first listed', () => {
     const d = briefFixture('sales')
     const stops = d.sections.find((s) => s.key === 'sales.stops')!
     stops.groups[0].items[0] = { ...stops.groups[0].items[0], title: 'Everyday wear is unclear', tag: 'Argued in the Content brief' }
     const at = deckPages(d).find((p) => p.eyebrow === 'What stops them')!
     expect(text(page('sales', at.n, d))).toContain('“Everyday wear is unclear” is argued in full in the Content brief.')
+
+    const m = briefFixture('marketing')
+    m.sections.find((s) => s.key === 'marketing.words')!.chips = [
+      { label: 'What they call it', words: ['prosthetics', 'prosthesis', 'device', 'prosthetic'] },
+      { label: 'How they praise it', words: ['practical'] },
+    ]
+    const w = deckPages(m).find((p) => p.eyebrow === 'In its own words')!
+    const chips = [...page('marketing', w.n, m).matchAll(/border-radius:999px[^>]*>([^<]+)</g)].map((x) => x[1])
+    expect(chips).toEqual(['prosthetics', 'prosthesis', 'device', 'practical'])
   })
 })
 

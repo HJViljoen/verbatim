@@ -510,7 +510,9 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const left = (W - 48) * (1.4 / 2.4)
       const room = BODY_HEIGHT - titleH(sub) - 18
       const lead = s.lead ? heightOf(s.lead, left, 18, 1.5, true) + 22 : 0
-      let chips = (s.chips ?? []).map((c) => ({ ...c, words: [...c.words] }))
+      // A chip that only repeats another's plural goes first, so the fit and
+      // the page's count (PAGE_NEEDS) are the chips that print.
+      let chips = (s.chips ?? []).map((c) => ({ ...c, words: distinctChips(c.words) }))
       const chipsH = () => chips.reduce((n, c) => n + 24 + chipRows(c.words, left) * 39, 0) + Math.max(0, chips.length - 1) * 22
       while (chips.length && chipsH() + lead > room) {
         const longest = chips.reduce((x, c) => (c.words.length > x.words.length ? c : x), chips[0])
@@ -640,6 +642,24 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       return [page(only(s, rows))]
     }
   }
+}
+
+/** A group's chips less any that is only another's plural or singular
+ *  ("bag" and "bags", "prosthetic" and "prosthetics"; 12 Oct), the first the
+ *  writer listed kept. Case aside, two chips are one where one is the other
+ *  plus "s" or "es"; nothing else is stemmed ("prosthesis" stays beside
+ *  "prosthetic"). The stored brief keeps every word. Pure. */
+export function distinctChips(words: readonly string[]): string[] {
+  const out: string[] = []
+  for (const word of words) {
+    const a = word.toLowerCase()
+    const repeats = out.some((kept) => {
+      const b = kept.toLowerCase()
+      return a === `${b}s` || a === `${b}es` || b === `${a}s` || b === `${a}es`
+    })
+    if (!repeats) out.push(word)
+  }
+  return out
 }
 
 /** Chip rows a group of words takes in a column `w` wide (15px, 500,

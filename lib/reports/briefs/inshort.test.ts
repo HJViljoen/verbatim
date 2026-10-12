@@ -108,19 +108,27 @@ describe('what code does with the check\'s answer', () => {
     expect(inShortStillHolds({ ...d, inShort: { ...d.inShort, summary: '' } }, { read: ['A line on no page.'], kept: [] }).holds).toBe(true)
   })
 
-  it('a record read before the footnote\'s quote marks were drawn still holds; a changed line still does not', () => {
+  it('a record read before the footnote\'s quote marks and the plural chips were drawn still holds; a changed line still does not', () => {
     const d = briefFixture('marketing')
     const believe = d.sections.find((s) => s.key === 'marketing.believe')!
     believe.groups[0].items[0] = { ...believe.groups[0].items[0], title: 'Everyday wear is unclear', tag: 'Argued in the Content brief' }
+    d.sections.find((s) => s.key === 'marketing.words')!.chips = [
+      { label: 'What they call it', words: ['bag', 'bags', 'tote'] },
+      { label: 'The problem, in their words', words: ['rain', 'spills'] },
+    ]
     const now = printedLines(printedPages(d))
+    expect(now).toContain('What they call it: bag, tote')
     expect(now.some((l) => l.startsWith('“Everyday wear is unclear” is argued in full in the Content brief.'))).toBe(true)
     // The lines as the September v2 build's check read them.
-    const before = now.map((l) => l.replace(/[“”]/g, ''))
+    const before = now.map((l) => (l === 'What they call it: bag, tote' ? 'What they call it: bag, bags, tote' : l.replace(/[“”]/g, '')))
+    expect(before).toContain('What they call it: bag, bags, tote')
     expect(before.some((l) => l.startsWith('Everyday wear is unclear is argued in full in the Content brief.'))).toBe(true)
     const kept = summarySentences(d.inShort.summary)
     expect(inShortStillHolds(d, { read: before, kept })).toEqual({ holds: true, why: null })
-    // A name that no longer prints is still a line gone.
+    // A name or a word that no longer prints is still a line gone.
     expect(inShortStillHolds(d, { read: [...before, 'Everyday fit is unclear is argued in full in the Content brief.'], kept }).why).toMatch(/no longer prints under the current deck: "Everyday fit is unclear/)
+    expect(inShortStillHolds(d, { read: [...before, 'What they call it: bag, satchel'], kept }).why).toMatch(/no longer prints under the current deck: "What they call it: bag, satchel"/)
     expect(sameWords('“Everyday wear is unclear” is argued in full in the Content brief.')).toBe('Everyday wear is unclear is argued in full in the Content brief.')
+    expect(sameWords('The problem, in their words: rain, rains, spills')).toBe('The problem, in their words: rain, spills')
   })
 })
