@@ -226,19 +226,32 @@ export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' |
   }
 }
 
+/** "A", "A and B", "A, B and C". */
+const andList = (xs: readonly string[]): string => (xs.length <= 1 ? xs[0] ?? '' : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
+
 /** Tagged items' line at the foot of a page, as the canvas writes it under
  *  What stops them ("Trust in the eco story is argued in full in the
- *  Marketing brief."). Risk cards carry theirs on the card. Pure. */
+ *  Marketing brief."). Several items on one page that point at the same
+ *  brief the same way make one line ("Advanced or high tech, Functionality
+ *  and Everyday life are argued in full in the Content brief."), where the
+ *  first of them stood; one item keeps the canvas's line. Risk cards carry
+ *  theirs on the card. Pure. */
 export function footnoteOf(s: BriefSection): string | null {
   if (s.key === 'leadership.risks') return null
-  const lines = s.groups.flatMap((g) => g.items).filter((i) => i.tag && i.title).map((i) => {
-    const argued = /^Argued in the (.+)$/.exec(i.tag!)
-    const also = /^Also in the (.+)$/.exec(i.tag!)
-    if (argued) return `${i.title} is argued in full in the ${argued[1]}.`
-    if (also) return `${i.title} is also in the ${also[1]}.`
-    return null
-  }).filter((x): x is string => x != null)
-  return lines.length ? lines.join(' ') : null
+  const lines: { argued: boolean; brief: string; titles: string[] }[] = []
+  for (const i of s.groups.flatMap((g) => g.items)) {
+    if (!i.tag || !i.title) continue
+    const argued = /^Argued in the (.+)$/.exec(i.tag)
+    const also = /^Also in the (.+)$/.exec(i.tag)
+    const brief = (argued ?? also)?.[1]
+    if (!brief) continue
+    const line = lines.find((l) => l.argued === !!argued && l.brief === brief)
+    if (!line) lines.push({ argued: !!argued, brief, titles: [i.title] })
+    else if (!line.titles.includes(i.title)) line.titles.push(i.title)
+  }
+  return lines.length
+    ? lines.map((l) => `${andList(l.titles)} ${l.titles.length === 1 ? 'is' : 'are'} ${l.argued ? 'argued in full in' : 'also in'} the ${l.brief}.`).join(' ')
+    : null
 }
 
 /** A risk card's foot: "Argued in full in the Marketing brief". Pure. */

@@ -381,6 +381,20 @@ describe('the lines code writes', () => {
     expect(tagLine('Argued in the Sales brief')).toBe('Argued in full in the Sales brief')
   })
 
+  it('merges several footnotes on one page that point at the same brief into one line, where the first stood', () => {
+    const argued = (title: string, brief = 'Content') => item(title, 'x', { tag: `Argued in the ${brief} brief` })
+    const page = (items: ReturnType<typeof item>[]): BriefSection => ({ key: 'marketing.believe', title: 'x', groups: [{ label: 'What it believes', items }] })
+    expect(footnoteOf(page([argued('Advanced or high tech'), item('Price', 'y'), argued('Functionality'), argued('Everyday life')])))
+      .toBe('Advanced or high tech, Functionality and Everyday life are argued in full in the Content brief.')
+    expect(footnoteOf(page([argued('Wear'), argued('Rain')]))).toBe('Wear and Rain are argued in full in the Content brief.')
+    // One brief at a time, in the order the page first names each; an item
+    // also in a brief keeps its own wording beside one argued there.
+    expect(footnoteOf(page([argued('Wear'), argued('Price', 'Sales'), argued('Rain'), item('Fit', 'z', { tag: 'Also in the Content brief' }), item('Size', 'z', { tag: 'Also in the Content brief' })])))
+      .toBe('Wear and Rain are argued in full in the Content brief. Price is argued in full in the Sales brief. Fit and Size are also in the Content brief.')
+    // A single item keeps the canvas's line exactly.
+    expect(footnoteOf(page([argued('Trust in the eco story', 'Marketing')]))).toBe('Trust in the eco story is argued in full in the Marketing brief.')
+  })
+
   it('lists the month\'s ideas with where each is argued, this brief\'s last', () => {
     const ideas = ideasArgued(briefFixture('leadership'))
     expect(ideas.map((x) => (x.own ? 'this' : x.brief))).toEqual(['sales', 'marketing', 'marketing', 'content', 'this'])
