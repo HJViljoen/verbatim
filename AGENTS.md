@@ -852,7 +852,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   confusion starts, the panel beside or under a page's rows, an own-posts
   table with a rival's row in it…) and at least two items in its section,
   counted on what fits the page; Who is buying counts its page and its
-  continuation together. ONE table holds it, `PAGE_NEEDS` in
+  continuation together, and a sheet of one buyer prints only where that
+  buyer fills it (a short odd buyer stays stored). ONE table holds it, `PAGE_NEEDS` in
   `lib/reports/briefs/deck.ts`, read by the paginator (`planDeck` also says
   why a page was left out; the dry build prints it). A voice is never a main
   piece (its words resolve at render, and a page does not come and go with
