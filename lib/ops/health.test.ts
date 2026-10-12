@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
-import { assessPipelineHealth, formatOpsEmail, needsRowCounts, type Finding, type HealthInputs, type HealthRun } from './health'
+import { DISPATCH_WAIT_CAP_MS, SLOT_HOUR } from '../pipeline/schedule-due'
+import { DISPATCH_POLL_MS } from '../pipeline/sequential-dispatch'
+import { assessPipelineHealth, formatOpsEmail, needsRowCounts, RUN_START_GRACE_MS, type Finding, type HealthInputs, type HealthRun } from './health'
 
 // Wednesday 2026-09-16, 12:00 SAST.
 const NOW = new Date('2026-09-16T10:00:00Z')
@@ -146,14 +149,49 @@ describe('assessPipelineHealth — a due run that never started', () => {
     expect(f).toEqual([])
   })
 
-  it('gives the run two hours to appear before complaining', () => {
+  it('gives the run the dispatcher\'s five-hour wait plus half an hour to appear before complaining', () => {
     const wednesdayClient = { ...sundayClient, config: { report_period: 'weekly', report_day: 'wednesday' } }
-    // 07:00 SAST, one hour after the slot.
-    const early = assessPipelineHealth(inputs({ now: new Date('2026-09-16T05:00:00Z'), clients: [wednesdayClient] }))
-    expect(early).toEqual([])
-    // 08:30 SAST, two and a half hours after it.
-    const late = assessPipelineHealth(inputs({ now: new Date('2026-09-16T06:30:00Z'), clients: [wednesdayClient] }))
+    // 08:30 SAST, two and a half hours after the slot: under sequential
+    // dispatch (12 Oct 2026) a client queued behind another has not had its
+    // turn yet, so this is no longer a finding.
+    const queued = assessPipelineHealth(inputs({ now: new Date('2026-09-16T06:30:00Z'), clients: [wednesdayClient] }))
+    expect(queued).toEqual([])
+    // 11:20 SAST, five hours twenty after it: still inside the grace.
+    expect(assessPipelineHealth(inputs({ now: new Date('2026-09-16T09:20:00Z'), clients: [wednesdayClient] }))).toEqual([])
+    // 12:00 SAST, when the daily check runs: six hours after it.
+    const late = assessPipelineHealth(inputs({ now: new Date('2026-09-16T10:00:00Z'), clients: [wednesdayClient] }))
     expect(kinds(late)).toEqual(['run_not_started'])
+  })
+
+  it('is satisfied by the second client\'s run, opened when the dispatcher stopped waiting on the first', () => {
+    // Sunday 11 Oct 2026, slot 04:00 UTC. The first client's run hit the
+    // five-hour cap, so the second opened at the thirtieth look, 09:00 UTC
+    // (11:00 SAST), and the 12:00 SAST check finds it started.
+    const second = { ...sundayClient, id: 'c2', name: 'Sealand' }
+    const f = assessPipelineHealth(inputs({
+      now: new Date('2026-10-11T10:00:00Z'),
+      clients: [sundayClient, second],
+      runs: [
+        { id: 'r1', clientId: 'c1', status: 'running', options: { sendReport: true }, startedAt: '2026-10-11T04:00:10Z', completedAt: null },
+        { id: 'r2', clientId: 'c2', status: 'running', options: { sendReport: true }, startedAt: '2026-10-11T09:00:20Z', completedAt: null },
+      ],
+    }))
+    expect(f).toEqual([])
+  })
+
+  it('keeps the grace past the dispatcher\'s cap, and the daily check (vercel.json) past the grace', () => {
+    // The latest a queued second client opens: the cap, plus a few seconds of
+    // scheduling on each of the thirty looks. Half an hour covers it.
+    expect(RUN_START_GRACE_MS).toBeGreaterThanOrEqual(DISPATCH_WAIT_CAP_MS + DISPATCH_POLL_MS)
+    const vercel = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8')) as { crons: { path: string; schedule: string }[] }
+    const cron = vercel.crons.find((c) => c.path === '/api/cron/ops-check')
+    expect(cron?.schedule).toMatch(/^0 \d{1,2} \* \* \*$/)
+    const hourUtc = Number(cron!.schedule.split(' ')[1])
+    // SAST is UTC+2 all year, so the slot is SLOT_HOUR - 2 in UTC. Hobby fires
+    // a cron within its hour, never before it, so the top of the hour is the
+    // earliest the check can run.
+    const slotUtcMs = (SLOT_HOUR - 2) * 3600_000
+    expect(hourUtc * 3600_000).toBeGreaterThanOrEqual(slotUtcMs + RUN_START_GRACE_MS)
   })
 
   it('flags a monthly client on the 3rd whose 1st-of-month run never ran', () => {

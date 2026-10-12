@@ -18,6 +18,24 @@ export const DEFAULT_TZ = 'Africa/Johannesburg'
 /** Local hour the dispatcher cron fires (TZ=Africa/Johannesburg 0 6 * * *). */
 export const SLOT_HOUR = 6
 
+/**
+ * The longest the dispatcher waits for one client's run to settle before it
+ * dispatches the next client anyway (sequential dispatch, 12 Oct 2026).
+ *
+ * Clients due on one slot run one after another, never together: on 11 Oct
+ * Össur and Sealand were dispatched at the same moment, their steps shared
+ * Vercel Fluid instances, eleven instances ran out of memory between 05:44 and
+ * 05:53 UTC, and Össur's synthesize died with an HTTP 500 that the same step
+ * on the same data did not repeat when it ran alone the next day.
+ *
+ * Five hours because Sealand's full run takes about 3.5 h and Össur's 2 to
+ * 3 h, so a run still going at five hours is stuck rather than slow, and a
+ * stuck run must not cost the next client its week. It is also the reason the
+ * second client due on a slot can open up to five hours after it, which the
+ * ops check's grace has to allow for (`RUN_START_GRACE_MS`, lib/ops/health.ts).
+ */
+export const DISPATCH_WAIT_CAP_MS = 5 * 3600_000
+
 /** The cadence columns of tracking_configs. Neither is constrained to an enum
  *  in the schema — 'paused' is a live value — so anything unrecognised simply
  *  never matches. */

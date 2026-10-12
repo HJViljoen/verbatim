@@ -15,8 +15,9 @@ import { touchHeartbeat } from '@/lib/ops/heartbeat'
 // dead, this is the thing that says so.
 //
 // ONE thing schedules it: the Vercel Hobby cron in vercel.json. Hobby promises
-// only "within the hour", not the minute — on 2026-09-13 the 07:00 UTC slot fired
-// at 07:40:40 — so treat the beat's timestamp as "some time in the 07:00 hour".
+// only "within the hour", not the minute — on 2026-09-13 the 07:00 UTC slot (the
+// hour it ran at then) fired at 07:40:40 — so treat the beat's timestamp as
+// "some time in the 10:00 UTC hour".
 // That cron shares a failure domain with the thing being watched (a Hobby usage
 // cap pauses the project and takes its crons with it) and Hobby keeps about an
 // hour of runtime logs, after which a historical query answers
@@ -25,13 +26,23 @@ import { touchHeartbeat } from '@/lib/ops/heartbeat'
 // route ran at all. A second, independent caller is the obvious hardening and is
 // not in place.
 //
-// Timing (vercel.json, which cannot carry a comment): 07:00 UTC = 09:00 SAST,
-// THREE hours after the 06:00 SAST dispatcher slot. The run-not-started grace is
-// two hours, so a run that starts late — queued behind the account's hard 5-slot
-// Inngest concurrency, or a slow cold start — has an hour of margin before it is
-// called missing. Hobby allows one daily cron per job, so this is a once-a-day
-// check: an Inngest outage that starts and clears between two mornings is not
-// seen. Sub-day coverage is a Pro-plan decision, not a threshold tweak.
+// Timing (vercel.json, which cannot carry a comment): 10:00 UTC = 12:00 SAST,
+// SIX hours after the 06:00 SAST dispatcher slot. It was 07:00 UTC (09:00 SAST)
+// until 12 Oct 2026, when the dispatcher started running due clients one at a
+// time (inngest/functions/scheduler.ts): it waits for each run to settle, for
+// up to five hours, before it dispatches the next, so on a Sunday the second
+// client's run opens when the first closes, two to three hours after the slot,
+// and as late as about 11:00 SAST when the first is stuck. At 09:00 that client
+// would have been reported as never started while it was waiting its turn. The
+// run-not-started grace is that five-hour cap plus half an hour
+// (RUN_START_GRACE_MS, lib/ops/health.ts), so the check runs past it even at
+// the top of the hour. The limit this leaves: with N clients due on one slot
+// the last can start up to 5 h × (N − 1) after 06:00, so a third weekly client
+// needs this hour and the grace revisited. The cost of the later hour is that
+// a dead dispatcher or a silent Inngest is reported at noon, not at nine.
+// Hobby allows one daily cron per job, so this is a once-a-day check: an
+// Inngest outage that starts and clears between two mornings is not seen.
+// Sub-day coverage is a Pro-plan decision, not a threshold tweak.
 //
 // Auth: the Authorization: Bearer CRON_SECRET header Vercel Cron sends, or the
 // same X-Admin-Key the /api/admin routes take so Heinrich can run it by hand.

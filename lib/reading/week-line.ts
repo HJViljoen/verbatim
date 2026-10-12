@@ -89,7 +89,11 @@ export const WEEK_SUBJECT_MIN_K = SHARE_BAND.minK ?? 10
  *  after it refuses the pair. */
 export const WEEK_LINE_SEARCH_SET_AT = '2026-09-20T04:18:00Z'
 /** The day of the week (UTC) an on-cadence update runs: Sunday (06:00 SAST is
- *  04:00 UTC, the same day). */
+ *  04:00 UTC, the same day). Since 12 Oct 2026 a workspace queued behind
+ *  another opens up to five hours after 06:00 (the dispatcher runs them one
+ *  at a time, `DISPATCH_WAIT_CAP_MS`), about 09:00 UTC at the latest with two
+ *  workspaces: still the same day, and still well before the Monday 00:00 UTC
+ *  that makes a finish late (`weekCadence`). */
 export const WEEK_LINE_UPDATE_DAY = 0
 
 export type WeekPairReason = 'cadence' | 'searches' | 'gate' | 'reader' | 'depth' | 'not_kept' | 'excluded'

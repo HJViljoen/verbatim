@@ -356,13 +356,15 @@ export const DEFINITIONS: readonly Definition[] = [
   {
     // The rhythm, said once (27 Sep): the Cadence section that used to carry
     // it left Settings › Tracking. SLOT_HOUR in lib/pipeline/schedule-due.ts
-    // is the 06:00; the dispatcher fires then for every workspace.
+    // is the 06:00; the dispatcher fires then and, since 12 Oct, starts the
+    // workspaces one after another (inngest/functions/scheduler.ts), so only
+    // the first update starts at 06:00 and the copy says so.
     id: 'updates',
     title: 'When updates land',
     // NOW, NOT ALWAYS (finish-list item 19): the rule is from 27 Sep, and
     // earlier updates ran on other days, some by hand; The record lists each
     // on the day it ran.
-    body: 'Every workspace is now updated once a week, on Sunday. The update starts at 06:00 South African time, and the pages move to it once it has finished. The day and the hour are the same for everyone, and neither is a setting. Earlier updates ran on other days as well, and The record lists each one on the day it ran. The bar on each page names the update it reads.',
+    body: 'Every workspace is now updated once a week, on Sunday. The updates start at 06:00 South African time, one workspace after another, and the pages move to each once it has finished. The day and the starting hour are the same for everyone, and neither is a setting. Earlier updates ran on other days as well, and The record lists each one on the day it ran. The bar on each page names the update it reads.',
   },
   {
     id: 'reddit',

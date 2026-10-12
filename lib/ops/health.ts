@@ -12,7 +12,7 @@
 import { billingAccess, type BillingClient } from '../billing'
 import { cadenceReliability } from '../pipeline/cadence'
 import { missingRunRows } from '../pipeline/run-errors'
-import { lastDailySlot, lastExpectedSlot, type ScheduleConfig } from '../pipeline/schedule-due'
+import { DISPATCH_WAIT_CAP_MS, lastDailySlot, lastExpectedSlot, type ScheduleConfig } from '../pipeline/schedule-due'
 
 /** keepWarm runs every 5 min; 30 min means six consecutive misses. */
 export const INNGEST_SILENT_MS = 30 * 60_000
@@ -24,8 +24,21 @@ export const INNGEST_SILENT_MS = 30 * 60_000
 export const DISPATCHER_BEAT_SLACK_MS = 15 * 60_000
 /** How long after the slot the dispatcher's beat is expected to have landed. */
 export const DISPATCHER_GRACE_MS = 90 * 60_000
-/** How long after its slot a run gets before "it never started". */
-export const RUN_START_GRACE_MS = 2 * 3600_000
+/** How long after its slot a run gets before "it never started".
+ *
+ *  Two hours until 12 Oct 2026, when every due client was dispatched at 06:00
+ *  and started within minutes. Now the dispatcher runs them one at a time,
+ *  oldest first, and waits up to DISPATCH_WAIT_CAP_MS (5 h) for each run to
+ *  settle before it dispatches the next (inngest/functions/scheduler.ts), so the
+ *  second client due on a slot can open five hours after it and still be on
+ *  time. Grace is that cap plus half an hour for the ten-minute polls' own
+ *  latency. The daily check runs after it (12:00 SAST, six hours after the
+ *  slot; the test reads vercel.json to keep it so).
+ *
+ *  The limit this leaves: with N clients due on one slot the last can start up
+ *  to 5 h × (N − 1) after 06:00. A third weekly client needs this grace and the
+ *  check's hour revisited, or it is reported as never started while it waits. */
+export const RUN_START_GRACE_MS = DISPATCH_WAIT_CAP_MS + 30 * 60_000
 /** A run that opened slightly early still counts as that slot's run. */
 export const RUN_START_LEAD_MS = 3600_000
 /** A run still in progress this long after it opened is not coming back. */
@@ -49,10 +62,12 @@ export const REPORT_MISSED_WINDOW_MS = 48 * 3600_000
  *  that lost its record is worth one morning's email, not a fortnight of them.
  *
  *  No grace before it. The three writes it asks about all land at or within
- *  seconds of the close, and the check runs once a day at 09:00 SAST against a
+ *  seconds of the close, and the check runs once a day at 12:00 SAST against a
  *  06:00 SAST slot — a grace wide enough to cover a retrying cost write would
  *  push Sunday's finding to Monday, which is a day of not knowing in exchange
- *  for a race nobody has observed. */
+ *  for a race nobody has observed. (A run that is still going at noon, such as
+ *  the second client's on a Sunday, is checked the next morning, inside the
+ *  same 48 h.) */
 export const RUN_INCOMPLETE_WINDOW_MS = 48 * 3600_000
 /** How far back the caller reads runs and sends. Nothing older is evidence:
  *  a run stranded at 'analyzing' since 2026-06-13 would otherwise alert every
