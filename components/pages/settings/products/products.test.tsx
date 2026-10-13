@@ -77,7 +77,7 @@ describe('the Your products tab', () => {
     expect(markup).toContain('<span data-copy="figure">38</span>')
     expect(markup).toContain('<span data-copy="figure" class="font-mono text-[14px]">6</span>')
     expect(markup).toMatch(/<a[^>]*aria-current="true"[^>]*href="\/dashboard\/settings\/products\?group=10000000-0000-4000-8000-000000000001"|<a[^>]*href="\/dashboard\/settings\/products\?group=10000000-0000-4000-8000-000000000001"[^>]*aria-current="true"/)
-    expect(markup).toContain('href="/dashboard/products?group=10000000-0000-4000-8000-000000000001"')
+    expect(markup).toContain('href="/dashboard/products?month=2026-10&amp;group=10000000-0000-4000-8000-000000000001#unclear"')
     // A product's own name is not printed again among its other names.
     expect(text(view())).not.toContain('Iceross Seal-In X Iceross Seal-In X')
   })

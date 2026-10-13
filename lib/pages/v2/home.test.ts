@@ -6,8 +6,9 @@ import { bandVerdict } from '../../reading/verdicts'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame } from '../home'
 import { parseContentParams } from './content'
+import { topProducts } from './products'
 import {
-  agentTries, dashboardBar, marketWeekOf, settleTile, shortDates, topProductsStub, weekSubjectsOf, weekTileOf, AGENT_TRIES,
+  agentTries, dashboardBar, marketWeekOf, settleTile, shortDates, weekSubjectsOf, weekTileOf, AGENT_TRIES,
 } from './home'
 import {
   dashboardFixture, fixtureContentTop, fixtureMarketTop, fixtureMovesTop, fixturePublished, fixtureStanding, fixtureVoicesTop, DASHBOARD_NOW,
@@ -148,16 +149,16 @@ describe('a tile whose read fails loses only itself', () => {
   })
 })
 
-describe('Your products until T5 merges', () => {
-  it('is the pinned type\'s honest "not applied" state, opening the page', async () => {
-    await expect(topProductsStub({ supabase: null, clientId: 'c', reading: null as never, params: {} }))
-      .resolves.toEqual({ state: 'not_applied', monthWords: '', standout: null, href: '/dashboard/products' })
+describe('Your products (T5\'s reader)', () => {
+  it('reads through topProducts, and a failed read is a quiet tile that says it failed, never a throw', async () => {
+    await expect(topProducts({ supabase: null as never, clientId: 'c', reading: null as never, now: '2026-10-13T10:00:00Z' }))
+      .resolves.toMatchObject({ state: 'quiet', standout: null, href: '/dashboard/products', note: 'failed' })
   })
 
-  it('is marked for the switch at merge', () => {
+  it('calls T5\'s reader in the one wave, not a stub', () => {
     const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
-    expect(src).toContain('// switch to import from lib/pages/v2/products at merge')
-    expect(src).toMatch(/STUB UNTIL T5 MERGES/)
+    expect(src).not.toMatch(/topProductsStub|STUB UNTIL T5 MERGES/)
+    expect(src).toMatch(/topProducts\(\{ supabase, clientId, reading, now: nowIso \}\)/)
   })
 })
 
@@ -216,7 +217,7 @@ describe('one wave (the loader\'s shape, pinned by its source)', () => {
   it('starts every tile before awaiting any, on one session client and one reading handle', () => {
     const start = src.slice(src.indexOf('export function startDashboard'), src.indexOf('export async function loadDashboard'))
     expect(start).not.toMatch(/\bawait\b/)
-    for (const t of ['topMarket(', 'topVoices(', 'topContent(', 'topMoves(', 'topProductsStub(', 'loadHomeWeeks(']) expect(start).toContain(t)
+    for (const t of ['topMarket(', 'topVoices(', 'topContent(', 'topMoves(', 'topProducts(', 'loadHomeWeeks(']) expect(start).toContain(t)
     expect(start).not.toMatch(/readingHandle\(/)
   })
 

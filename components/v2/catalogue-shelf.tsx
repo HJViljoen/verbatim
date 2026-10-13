@@ -33,8 +33,10 @@ import { SELECTED_CARD_RING } from './panel'
 export interface ShelfProduct {
   id: string
   name: string
-  /** Videos about this product in the period. */
-  videos: number
+  /** Videos about this product in the period; null where the period holds
+   *  no reading for it (added after the period was read): "not read yet",
+   *  never quiet. */
+  videos: number | null
   href: string
   /** Its verdict, for a flag chip ("New"). */
   flag?: Verdict | null
@@ -44,8 +46,9 @@ export interface ShelfColumn {
   id: string
   /** The category's name ("Liners"). */
   name: string
-  /** Videos about the category in the period, its unbranded talk included. */
-  videos: number
+  /** Videos about the category in the period, its unbranded talk included;
+   *  null where the period holds no reading for it. */
+  videos: number | null
   /** Opens the category's panel. */
   href: string
   /** Under the count: the share and its verdict ("16% of the market"). */
@@ -82,7 +85,7 @@ const TONE: Record<0 | 1 | 2 | 3, string> = {
 }
 
 function Tile({ p }: { p: ShelfProduct }) {
-  const tone = shelfTone(p.videos)
+  const tone = shelfTone(p.videos ?? 0)
   return (
     <Link
       href={p.href}
@@ -96,7 +99,9 @@ function Tile({ p }: { p: ShelfProduct }) {
         <span className="min-w-0">{p.name}</span>
         <FlagChip verdict={p.flag} size="sm" className="ml-0.5" />
       </span>
-      {tone === 0 ? (
+      {p.videos == null ? (
+        <span className="shrink-0 text-[11.5px] text-muted-foreground">not read yet</span>
+      ) : tone === 0 ? (
         <span className="shrink-0 font-mono text-[12.5px] text-muted-foreground"><span aria-hidden>–</span><span className="sr-only">no videos</span></span>
       ) : (
         <span data-copy="figure" className="shrink-0 font-mono text-[12.5px] font-semibold tabular-nums">{fmtInt(p.videos)}</span>
@@ -123,10 +128,14 @@ export function CatalogueShelf({ columns, selected = null, panelId, className }:
               )}
             >
               <h3 className="m-0 text-[15px] leading-[1.25] font-semibold">{c.name}</h3>
-              <div>
-                <span data-copy="figure" className={cn('font-mono text-[22px] leading-none font-medium tracking-[-0.02em] tabular-nums', c.videos === 0 ? 'text-muted-foreground' : null)}>{fmtInt(c.videos)}</span>
-                {' '}<span className="text-[12px] text-muted-foreground">videos</span>
-              </div>
+              {c.videos == null ? (
+                <div className="text-[12.5px] text-muted-foreground">Not read yet</div>
+              ) : (
+                <div>
+                  <span data-copy="figure" className={cn('font-mono text-[22px] leading-none font-medium tracking-[-0.02em] tabular-nums', c.videos === 0 ? 'text-muted-foreground' : null)}>{fmtInt(c.videos)}</span>
+                  {' '}<span className="text-[12px] text-muted-foreground">videos</span>
+                </div>
+              )}
               {c.line ? <div className="text-[12px] leading-[1.4] text-muted-foreground">{c.line}</div> : null}
               {c.note ? <div className="text-[12.5px] leading-[1.35]">{c.note}</div> : null}
             </Link>

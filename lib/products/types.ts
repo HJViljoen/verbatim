@@ -37,6 +37,10 @@ export const TABLE_PRODUCT_MENTIONS = 'product_mentions'
 export const TABLE_PRODUCT_TAGS = 'product_tags'
 export const TABLE_MONTH_PRODUCT_READINGS = 'month_product_readings'
 export const RPC_PRODUCT_CATALOGUE = 'product_catalogue'
+/** The month's videos a product reading counts: every audience, the client's
+ *  included, each marked owned (T5; lib/products/readings.ts
+ *  readProductMonthVideos). */
+export const RPC_PRODUCT_MONTH_VIDEOS = 'product_month_videos'
 
 /** The month table's primary key, for an upsert's `onConflict`. */
 export const MONTH_PRODUCT_READINGS_ON_CONFLICT = 'client_id,month,audience,object_kind,object_id'
@@ -283,7 +287,7 @@ export type CatalogueRead =
 
 const PRODUCT_SCHEMA_OBJECTS = [
   TABLE_PRODUCT_GROUPS, TABLE_PRODUCTS, TABLE_PRODUCT_ALIASES, TABLE_PRODUCT_MENTIONS, TABLE_PRODUCT_TAGS,
-  TABLE_MONTH_PRODUCT_READINGS, RPC_PRODUCT_CATALOGUE,
+  TABLE_MONTH_PRODUCT_READINGS, RPC_PRODUCT_CATALOGUE, RPC_PRODUCT_MONTH_VIDEOS,
 ]
 
 /** Is this error "the products migration is not applied"? Narrow: one of its

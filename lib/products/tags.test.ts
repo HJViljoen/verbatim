@@ -17,7 +17,7 @@ const t = <T extends object>(rows: T[]) => rows.map((r) => ({ client_id: OSSUR_C
 describe('the Tag control\'s options and values', () => {
   it('offers a category\'s products, then one of yours not which, the category in general, then none', () => {
     const opts = tagOptions(FIXTURE_CATALOGUE, G('Liners'))
-    expect(opts.map((o) => o.label)).toEqual(['Iceross Seal-In X5', 'Iceross Comfort', 'One of your liners, not sure which', 'Liners in general', 'Not about your products'])
+    expect(opts.map((o) => o.label)).toEqual(['Iceross Seal-In X5', 'Iceross Comfort', 'One of your products in Liners, not sure which', 'Liners in general', 'Not about your products'])
     expect(tagOptions(FIXTURE_CATALOGUE).length).toBe(FIXTURE_CATALOGUE.products.length + 2 * FIXTURE_CATALOGUE.groups.length + 1)
     expect(opts.map((o) => o.label).join(' ')).not.toMatch(/[—–]/)
   })

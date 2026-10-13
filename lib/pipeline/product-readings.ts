@@ -4,7 +4,6 @@ import type { Candidate } from '../brands/mentions'
 import { readRivalFound } from '../brands/rival-searches'
 import { PRODUCT_CLASSIFY_BUDGET_USD, PRODUCT_CLASSIFY_CAP, PRODUCT_CLASSIFY_PARALLEL, PRODUCT_STEP_MODEL_MS, productReadingsEnabled } from '../config'
 import { chunk } from '../chunk'
-import { readMonthVideos } from '../provenance/load'
 import { denominatorKey, fillingMonths, isMissingMonthlyReading, monthsToRefresh, monthStartOf, nextMonth } from '../reading/monthly'
 import { selectAll } from '../supabase-admin'
 import { PRODUCT_CLASSIFY_PASS, runClassifier, type Classifier } from '../products/classify'
@@ -12,7 +11,7 @@ import { readSearchFound, readSearchTerms } from '../products/organic'
 import type { MentionInsert } from '../products/match'
 import {
   guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, PRODUCT_COMMENT_COLUMNS, PRODUCT_READINGS_TABLE, PRODUCT_VIDEO_COLUMNS,
-  storedProductRows, writeProductRows, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
+  readProductMonthVideos, storedProductRows, writeProductRows, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../products/readings'
 import {
   isMissingProductsSchema, loadProductCatalogue, PRODUCT_TAG_COLUMNS, TABLE_PRODUCT_MENTIONS, TABLE_PRODUCT_TAGS,
@@ -96,7 +95,7 @@ export function stepProductIO(admin: SupabaseClient, clientId: string, window: {
         .order('video_id').order('source').order('field').order('comment_id'))
       return rows.map((r) => ({ ...r, comment_month: r.comment_month ? String(r.comment_month).slice(0, 10) : null }))
     },
-    monthVideos: (m) => readMonthVideos(admin, clientId, m, { n: 0 }),
+    monthVideos: (m) => readProductMonthVideos(admin, clientId, m),
     videos: async (ids) => {
       const out: ProductVideoRow[] = []
       for (const part of chunk(ids, 100)) {
@@ -135,7 +134,30 @@ export function stepProductIO(admin: SupabaseClient, clientId: string, window: {
     },
     searchTerms: () => readSearchTerms(admin, clientId),
     searchFound: (terms) => readSearchFound(admin, clientId, terms),
+    ownHandles: () => readOwnHandles(admin, clientId),
+    commentAuthors: (ids) => readCommentAuthors(admin, clientId, ids),
   }
+}
+
+/** The client's own handles (`tracking_configs.own_handles`): a comment one
+ *  of them wrote is the brand's words and never places. */
+export async function readOwnHandles(admin: SupabaseClient, clientId: string): Promise<Record<string, string> | null> {
+  const { data, error } = await admin.from('tracking_configs').select('own_handles').eq('client_id', clientId).maybeSingle()
+  if (error) throw new Error(`tracking_configs own_handles: ${error.message}`)
+  const raw = (data as { own_handles?: unknown } | null)?.own_handles
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  return Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === 'string' && v.trim() !== '')) as Record<string, string>
+}
+
+/** Who wrote each of these comments, 100 ids a read. */
+export async function readCommentAuthors(admin: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, { platform: string; author: string | null }>> {
+  const out = new Map<string, { platform: string; author: string | null }>()
+  for (const part of chunk([...ids], 100)) {
+    const rows = await selectAll<{ id: string; platform: string; author: string | null }>(() => admin.from('comments').select('id, platform, author')
+      .eq('client_id', clientId).in('id', part).order('id'))
+    for (const r of rows) out.set(String(r.id), { platform: r.platform, author: r.author ?? null })
+  }
+  return out
 }
 
 export interface ProductMonthResult {

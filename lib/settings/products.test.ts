@@ -65,6 +65,19 @@ describe('loadProductSettings', () => {
     expect(db.calls.find((c) => c.table === 'month_product_readings')?.filters).toContain('month in 1')
   })
 
+  it('reads the month Your products reads where the route names it (the reading month), else the calendar month', async () => {
+    const db = fakeDb(productsFixtureTables())
+    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { month: '2026-09-01' })
+    expect(read.state === 'ready' && read.month).toBe('2026-09-01')
+    // September holds no fixture row: nothing read, so no figure, never a zero.
+    if (read.state === 'ready') expect(productSettingsView(read, { canEdit: true }).open!.rows.every((r) => r.videos === null)).toBe(true)
+  })
+
+  it('links "Tag them" to the category\'s list on Your products, in the same month', () => {
+    const v = productSettingsView(productsFixtureRead(), { canEdit: true })
+    expect(v.open!.tagHref).toBe(`/dashboard/products?month=2026-10&group=${fid(1, 1)}#unclear`)
+  })
+
   it('answers missing, never throws, where the migration is not applied', async () => {
     const db = fakeDb({ config_changes: [] })
     expect(await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW)).toEqual({ state: 'missing' })
@@ -103,9 +116,11 @@ describe('productSettingsView', () => {
     expect(view({}, 'not-a-category').open?.name).toBe('Liners')
   })
 
-  it('counts a product\'s videos over every audience, and the category\'s unclear videos', () => {
+  it('counts a product\'s videos over every audience, the client\'s included (Your products\' basis), and the category\'s unclear videos', () => {
     const open = view().open!
     const by = Object.fromEntries(open.rows.map((r) => [r.name, r.videos]))
+    // Six videos name Seal-In X, one of them filed under the client (a
+    // creator's video about Össur, or a comment on its own post): all six.
     expect(by['Iceross Seal-In X']).toBe(6)
     expect(by['Iceross Comfort']).toBe(3)
     expect(by['Iceross Seal-In V']).toBe(0)

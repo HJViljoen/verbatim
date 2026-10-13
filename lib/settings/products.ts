@@ -17,8 +17,10 @@ import {
   type ProductGroupRow,
   type ProductRow,
 } from '../products/types'
+import { marketProductMonth } from '../products/market-month'
 import { aliasProblem } from '../products/rules'
 import { monthStartOf } from '../reading/month-key'
+import { productsHref } from '../pages/v2/products-address'
 import { selectAll } from '../supabase-admin'
 import { settingsSubPage } from './rail'
 
@@ -41,14 +43,20 @@ import { settingsSubPage } from './rail'
 // throws: a page that cannot read its settings says so, and never shows an
 // empty list as if it were the client's.
 //
-// "THIS MONTH" IS THE COMMENT'S MONTH. A product's figure is its videos in the
-// calendar month `now` falls in, from `month_product_readings` (AGENTS.md: a
-// period is dated by the comment), summed over the audiences. A video sits in
-// exactly one audience (client, a rival, the rest of the market:
-// `monthly_denominators`' rule), so the sum is the videos that named it, each
-// once. Where the month holds no product row at all, nothing has read it yet:
-// the column prints a dot, never "quiet", because quiet is a claim about the
-// market and an unread month is ours.
+// "THIS MONTH" IS THE COMMENT'S MONTH, AND YOUR PRODUCTS' MONTH. A product's
+// figure is its videos in the month Your products reads (the reading month,
+// `productsMonth`; the calendar month only where it could not be read), from
+// `month_product_readings` (AGENTS.md: a
+// period is dated by the comment), pooled over EVERY audience, the client's
+// included: creators' videos about the client and the comments on its own
+// posts count, its own posts' words never place anything
+// (`marketProductMonth`, lib/products/market-month.ts; the lead's ruling, 13
+// Oct). Your products (T5) pools through the same function, so the two
+// surfaces never print two numbers for one product. A video sits in exactly
+// one audience, so the sum is the videos that named it, each once. Where the
+// month holds no product row at all, nothing has read it yet: the column
+// prints a dot, never "quiet", because quiet is a claim about the market and
+// an unread month is ours.
 
 /** What a person is told when the products migration is not applied here. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
@@ -113,8 +121,11 @@ export function productsTabHref(groupId?: string | null): string {
   return groupId ? `${base}?group=${encodeURIComponent(groupId)}` : base
 }
 
-/** Where "couldn't tell which" talk is tagged: Your products, the category open. */
-export const productsPageHref = (groupId: string): string => `/dashboard/products?group=${encodeURIComponent(groupId)}`
+/** Where "couldn't tell which" talk is tagged: Your products, the category
+ *  open on its list, in the month this tab reads (the page's own month, so the
+ *  figure here is the figure there). */
+export const productsPageHref = (groupId: string, month?: string | null): string =>
+  productsHref({ month: month ? month.slice(0, 7) : undefined }, { kind: 'group', id: groupId }, { at: 'unclear' })
 
 // ---- The read -------------------------------------------------------------------
 
@@ -136,8 +147,11 @@ export type ProductSettingsRead =
  * client: the tenant holds SELECT on every column of these tables under its
  * own-client policy, and an operator's session is already the service role.
  */
-export async function loadProductSettings(db: SupabaseClient, clientId: string, now: Date = new Date()): Promise<ProductSettingsRead> {
-  const month = monthStartOf(now.toISOString())
+export async function loadProductSettings(db: SupabaseClient, clientId: string, now: Date = new Date(), opts: { month?: string | null } = {}): Promise<ProductSettingsRead> {
+  // THE PAGE'S MONTH (`productsMonth`, lib/pages/v2/products.ts: the reading
+  // month every reading page reads), where the route read it; the calendar
+  // month only where it could not.
+  const month = monthStartOf(opts.month ?? now.toISOString())
   try {
     const [groups, products, aliases] = await Promise.all([
       selectAll<ProductGroupRow>(() =>
@@ -233,8 +247,6 @@ const KIND_ORDER: Record<AliasKind, number> = { name: 0, nickname: 1, category_w
 const byKindThenAdded = (a: ProductAliasRow, b: ProductAliasRow): number =>
   KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 
-const sum = (rows: readonly MonthProductReadingRow[], pick: (r: MonthProductReadingRow) => number): number =>
-  rows.reduce((n, r) => n + pick(r), 0)
 
 /**
  * The tab, from the read. `selected` is the `?group=` param; an unknown or
@@ -260,14 +272,13 @@ export function productSettingsView(
     selected: g.id === open?.id,
   }))
 
-  // A PRODUCT WITH NO ROW HAS NO FIGURE. Its videos are the sum of its own
-  // rows; where the month holds none for it, nothing has read it, and a
-  // missing row is never summed to zero ("quiet" is a claim about the market).
+  // A PRODUCT WITH NO ROW HAS NO FIGURE. Its videos are its own rows pooled
+  // over every audience (`marketProductMonth`, Your products' own basis);
+  // where the month holds none for it, nothing has read it, and a missing row
+  // is never summed to zero ("quiet" is a claim about the market).
+  const pooled = (id: string) => marketProductMonth(read.readings, read.month, id)
   const isRead = read.readings.length > 0
-  const productVideos = (id: string): number | null => {
-    const rows = read.readings.filter((r) => r.object_kind === 'product' && r.object_id === id)
-    return rows.length > 0 ? sum(rows, (r) => r.k_named) : null
-  }
+  const productVideos = (id: string): number | null => pooled(id)?.k_named ?? null
 
   // THE SEED LINE names the website and the day the list was filled in, from
   // the rows themselves (`seeded_from`, `created_at`): the earliest seeded
@@ -287,14 +298,13 @@ export function productSettingsView(
       videos: productVideos(p.id),
     }))
     const own = read.aliases.filter((a) => a.group_id === open.id && a.product_id === null).sort(byKindThenAdded)
-    const groupRows = read.readings.filter((r) => r.object_kind === 'group' && r.object_id === open.id)
     openView = {
       id: open.id,
       name: open.name,
       products: rows.length,
       cameUp: isRead ? rows.filter((r) => (r.videos ?? 0) > 0).length : null,
-      unclear: groupRows.length > 0 ? sum(groupRows, (r) => r.k_unclear) : null,
-      tagHref: productsPageHref(open.id),
+      unclear: pooled(open.id)?.k_unclear ?? null,
+      tagHref: productsPageHref(open.id, read.month),
       words: own.filter((a) => a.kind === 'category_word').map(chip),
       ranges: own.filter((a) => a.kind !== 'category_word').map(chip),
       rows,

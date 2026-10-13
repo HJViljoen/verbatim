@@ -41,7 +41,7 @@ const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort()
 const TABLES = ['product_groups', 'products', 'product_aliases', 'product_tags', 'product_mentions', 'month_product_readings', 'post_ideas']
 const CATALOGUE = ['product_groups', 'products', 'product_aliases']
 const APPEND_ONLY = ['product_tags', 'product_mentions']
-const NEW_FUNCTIONS = ['product_catalogue', 'product_aliases_retire_once']
+const NEW_FUNCTIONS = ['product_catalogue', 'product_aliases_retire_once', 'product_month_videos']
 const REPLACED = ['regate_videos', 'regate_restore']
 
 const tablesOf = (s: string) => [...s.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1])
@@ -119,7 +119,7 @@ describe('the products migration: the file', () => {
     expect(sql).not.toMatch(/concurrently/i)
   })
 
-  it('creates exactly its seven tables and two functions, and replaces the regate pair', () => {
+  it('creates exactly its seven tables and three functions (product_month_videos, T5), and replaces the regate pair', () => {
     expect(tablesOf(sql).sort()).toEqual([...TABLES].sort())
     expect(functionsOf(sql).sort()).toEqual([...NEW_FUNCTIONS, ...REPLACED].sort())
   })

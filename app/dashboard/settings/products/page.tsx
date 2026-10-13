@@ -3,6 +3,8 @@ import { ProductsTab } from '@/components/pages/settings/products'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { surface } from '@/lib/nav'
 import { loadProductSettings, productSettingsView } from '@/lib/settings/products'
+import { productsMonth } from '@/lib/pages/v2/products'
+import { readingHandle } from '@/lib/reading/read'
 import { settingsSubPage } from '@/lib/settings/rail'
 import { assertTenantMay } from '@/lib/tenant-locks'
 import type { Metadata } from 'next'
@@ -16,7 +18,8 @@ export const metadata: Metadata = { title: `${settingsSubPage('products').label}
 // each. `?group=` opens a category.
 //
 // ONE READ, ON THE SESSION'S CLIENT (lib/settings/products.ts): the live
-// catalogue and this month's product readings. Until the products migration
+// catalogue and the product readings of Your products' month (`productsMonth`,
+// the reading month), so this tab and the page print one figure. Until the products migration
 // is applied the read answers `missing` and the tab says the list is not
 // switched on; any other failure keeps the frame and says the settings did not
 // load. The writes are lib/actions/products.ts, each checking the role and the
@@ -34,7 +37,9 @@ export default async function SettingsProductsPage({
   const selected = typeof sp.group === 'string' ? sp.group : null
   const session = await getSessionContext()
   const { supabase, clientId, role } = session
-  const read = await loadProductSettings(supabase, clientId).catch((error: unknown) => {
+  // The month Your products reads, so the two surfaces print one figure.
+  const { month } = await productsMonth(supabase, readingHandle(clientId), new Date().toISOString())
+  const read = await loadProductSettings(supabase, clientId, new Date(), { month }).catch((error: unknown) => {
     console.error(`[settings] products did not load for ${clientId}: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
   })
