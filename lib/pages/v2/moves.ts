@@ -717,9 +717,9 @@ async function readCited(supabase: SupabaseClient, clientId: string, ids: readon
 }
 
 /** Each audience insight's video and theme slug, for the ids given. */
-async function readAudience(supabase: SupabaseClient, ids: readonly string[]): Promise<{ videoByInsight: Map<string, string | null>; slugById: Map<string, string> }> {
+async function readAudience(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<{ videoByInsight: Map<string, string | null>; slugById: Map<string, string> }> {
   const rows = ids.length > 0
-    ? await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null }>(supabase, [...new Set(ids)], 'id, theme, source_video_id')
+    ? await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null }>(supabase, [...new Set(ids)], 'id, theme, source_video_id', clientId)
       .catch(logAs('audience', [] as { id: string; theme: string; source_video_id: string | null }[]))
     : []
   return { videoByInsight: new Map(rows.map((r) => [r.id, r.source_video_id])), slugById: new Map(rows.map((r) => [r.id, r.theme])) }
@@ -884,7 +884,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     ...insights.flatMap((mi) => mi.evidence?.supporting_theme_ids ?? []),
   ]
   const movesAhead = readMoveCards(core, core.moves ?? [], cited.market).catch(logAs('moves', [] as MoveCard[]))
-  const { videoByInsight, slugById } = await readAudience(supabase, audienceIds)
+  const { videoByInsight, slugById } = await readAudience(supabase, clientId, audienceIds)
 
   const onPage = new Set(insights.map((i) => i.id))
   const cardOf = (r: AdviceRow, quote: Quote | null = null, quoteCite: AdviceCard['quoteCite'] = null): AdviceCard => {
@@ -1057,7 +1057,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
   const cited = await readCited(core.supabase, core.clientId, lineages.flatMap((id) => core.adviceRows.find((r) => r.lineageId === id)?.basedOn ?? []))
   const evidence = top ? [...new Set(top.basedOn.flatMap((id) => cited.market.get(id)?.evidence ?? []))] : []
   const [audience, cards] = await Promise.all([
-    readAudience(core.supabase, evidence),
+    readAudience(core.supabase, core.clientId, evidence),
     readMoveCards(core, moves, cited.market).catch(logAs('top.moves', [] as MoveCard[])),
   ])
   const grounded = top

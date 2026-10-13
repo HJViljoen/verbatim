@@ -289,7 +289,7 @@ interface Ordered extends Rows {
 interface EvidenceClient {
   from(table: string): {
     select(cols: string): {
-      in(col: string, vals: string[]): Ordered & { eq(col: string, val: boolean): Ordered }
+      in(col: string, vals: string[]): Ordered & { eq(col: string, val: boolean | string): Ordered }
     }
   }
 }
@@ -876,10 +876,16 @@ export async function fetchLiveBucketsByAudience(
  *  those videos' rows but not yet pruned them, and after a failed run whose
  *  Pass A moved pointers its themes never used (incremental Pass A, 2026-08-17).
  *  Population reads ("all current insights") use the view instead. */
-export async function fetchInsightsByIds<T>(client: unknown, ids: string[], select: string): Promise<T[]> {
+export async function fetchInsightsByIds<T>(client: unknown, ids: string[], select: string, clientId?: string | null): Promise<T[]> {
   const c = client as EvidenceClient
   const unique = [...new Set(ids)]
-  return fetchChunks<T>(unique, (chunk) => c.from('audience_insights').select(select).in('id', chunk).order('id'))
+  // THE TENANT, WHERE THE CALLER NAMES IT (Phase 4 fix check): the ids are the
+  // tenant's own, but a caller on the admin client (the weekly email's build
+  // reads Your moves' tile through this) gets the tenant filter too, for
+  // defence in depth. A caller that names none reads by id alone, as before.
+  return fetchChunks<T>(unique, (chunk) => (clientId
+    ? c.from('audience_insights').select(select).in('id', chunk).eq('client_id', clientId).order('id')
+    : c.from('audience_insights').select(select).in('id', chunk).order('id')))
 }
 
 /** A per-page quote picker with cross-card de-duplication (no voice repeats on a
