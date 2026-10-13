@@ -20,13 +20,26 @@ import { cn } from '@/lib/utils'
 //
 // PALETTE A: the market's yellow bars, the orange second series, the
 // hairline and the ground's wash under the week shown.
+//
+// DESIGN V2 (depth plan T8) moves it into "Your market this week", a third of
+// the row wide (E1-Dashboard): the same chart, the same columns, the same
+// numbers on hover, focus and a tap, drawn shorter (`size="sm"`, the board's
+// 92px plot) with its week labels a step smaller so eight fit the tile.
 
 /** Headroom over the tallest bar and the highest point, so neither touches the top. */
 const PLOT_TOP = 0.88
+
+/** The two drawings: the full block's 190px, and the tile's (Design v2). The
+ *  comments line sits over the plot area: the height less the labels' row (at
+ *  normal leading, 1.3 of the type), its 8px gap and the 1px baseline. */
+const SIZES = {
+  lg: { box: 'h-[190px]', label: 'text-[12px] max-sm:text-[10px]', under: 'bottom-[24.6px]' },
+  sm: { box: 'h-[128px]', label: 'text-[10.5px]', under: 'bottom-[22.65px]' },
+} as const
 const HAIR = 'border-[#E4E2DC]'
 const MUTED = 'text-[#5F656B]'
 
-export function HomeWeeksPlot({ weeks, details, label, open = null }: {
+export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' }: {
   weeks: HomeWeeks
   /** Each column's numbers (`homeWeekDetail`), null where nothing is drawn. */
   details: readonly (WeekDetail | null)[]
@@ -35,7 +48,10 @@ export function HomeWeeksPlot({ weeks, details, label, open = null }: {
   /** The week whose numbers show before any is hovered, focused or tapped (a
    *  static render; the page passes none). */
   open?: number | null
+  /** `sm` is the Dashboard tile's drawing (Design v2). */
+  size?: keyof typeof SIZES
 }) {
+  const sz = SIZES[size]
   const box = useRef<HTMLDivElement>(null)
   const tip = useWeekTip(box, open)
   const n = weeks.columns.length
@@ -54,7 +70,7 @@ export function HomeWeeksPlot({ weeks, details, label, open = null }: {
   return (
     <div
       ref={box}
-      className="relative flex h-[190px]"
+      className={cn('relative flex', sz.box)}
       {...(label ? { role: 'group', 'aria-label': label } : { 'aria-hidden': true })}
     >
       {weeks.columns.map((c, i) => {
@@ -76,7 +92,7 @@ export function HomeWeeksPlot({ weeks, details, label, open = null }: {
                 <div className={`relative w-[44%] max-w-8 rounded-t-[3px] bg-brand ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} data-week={c.week} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
               ) : null}
             </div>
-            <div className={`whitespace-nowrap text-[12px] max-sm:text-[10px] ${MUTED}`}>{c.label}</div>
+            <div className={cn('whitespace-nowrap', sz.label, MUTED)}>{c.label}</div>
             {d ? (
               <button
                 type="button"
@@ -89,10 +105,9 @@ export function HomeWeeksPlot({ weeks, details, label, open = null }: {
           </div>
         )
       })}
-      {/* The comments line, over the plot area: the 190px less the labels'
-          row (12px at normal leading, 15.6), its 8px gap and the 1px baseline.
-          The second series, so the orange (its key above and in the numbers). */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 bottom-[24.6px]" aria-hidden>
+      {/* The comments line, over the plot area (`SIZES`). The second series,
+          so the orange (its key above and in the numbers). */}
+      <div className={cn('pointer-events-none absolute inset-x-0 top-0', sz.under)} aria-hidden>
         <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
           {segments.map((seg, i) =>
             seg.length > 1 ? (

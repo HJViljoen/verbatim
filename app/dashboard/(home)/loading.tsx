@@ -1,8 +1,8 @@
-import { HomeSkeleton } from '@/components/pages/home/skeleton'
+import { HomeSkeleton } from '@/components/pages/v2/home/skeleton'
 
 // The Dashboard's loader, in its route group so it wraps `/dashboard` alone
-// (lib/dashboard-loading.test.ts): the page's own frame with bones where its
-// words and numbers go (HOME's skeleton).
+// (lib/dashboard-loading.test.ts): the page's own frame (Design v2, T8), with
+// bones where each tile goes, the same bones each tile streams in behind.
 export default function DashboardLoading() {
   return <HomeSkeleton />
 }

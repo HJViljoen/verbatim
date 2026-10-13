@@ -4,46 +4,13 @@ import { describe, expect, it } from 'vitest'
 
 import type { OurChange } from '../reading/comparability'
 import type { MarketWeekRowRaw } from '../reading/weeks'
-import type { WeekReadDataV1, WeekReadDataV2 } from '../written/types'
-import type { RecCopy } from './market-surface'
-import {
-  adviceCount, competitiveTile, homeAxis, homeNumbers, homeTiles, homeWeeks, homeWeeksFrame, INSUFFICIENT, isFailOpenFix, movesTile, overviewTile, standingLevel, tileInsufficient, weeksDrawable,
-  subjectsTile, voiceTile, weekTile, MOVES_NONE, WEEK_COLUMNS, type HomeTheme,
-} from './home'
-import { HOME_READ } from './home-fixture'
+import { homeAxis, homeWeeks, homeWeeksFrame, isFailOpenFix, TILE_NAV, weeksDrawable, WEEK_COLUMNS } from './home'
+import { surface, SURFACES } from '../nav'
 
-// The Dashboard's rules (lib/pages/home.ts), on the artboard's Sealand
-// September (lib/pages/home-fixture.ts).
-
-describe('Your market in numbers', () => {
-  it('prints the four figures the read froze, under the read’s own dates', () => {
-    expect(homeNumbers(HOME_READ)).toEqual({
-      week: { heading: 'This week, 21 to 27 September', videos: '262', comments: '4,528' },
-      month: { heading: 'September so far', videos: '852', comments: '21,468' },
-    })
-  })
-
-  it('names the month in total once the week has carried past its end', () => {
-    const read: WeekReadDataV2 = { ...HOME_READ, window: { from: '2026-09-27T04:03:00Z', to: '2026-10-04T04:02:00Z' }, monthComplete: true }
-    const n = homeNumbers(read)
-    expect(n?.week?.heading).toBe('This week, 28 September to 4 October')
-    expect(n?.month?.heading).toBe('September in total')
-  })
-
-  it('prints a half only where both its figures were read, and nothing without either', () => {
-    const weekOnly = homeNumbers({ ...HOME_READ, market: { week: { videos: 262, comments: 4528 }, month: { videos: 852, comments: null } } })
-    expect(weekOnly?.month).toBeNull()
-    expect(weekOnly?.week?.videos).toBe('262')
-    expect(homeNumbers({ ...HOME_READ, market: { week: { videos: null, comments: 1 }, month: { videos: 1, comments: null } } })).toBeNull()
-    expect(homeNumbers({ ...HOME_READ, market: null })).toBeNull()
-    expect(homeNumbers(null)).toBeNull()
-  })
-
-  it('draws nothing from an older read, which froze no market figures', () => {
-    const v1: WeekReadDataV1 = { ...HOME_READ, version: 1, inShort: 'x', promptVersion: 'week_read_v2' }
-    expect(homeNumbers(v1)).toBeNull()
-  })
-})
+// The Dashboard's week by week (lib/pages/home.ts), the chart Design v2 keeps
+// exactly (depth plan T8), on Sealand's and Össur's production rows; and the
+// map of the rebuilt Dashboard's tiles to their pages. The tiles themselves
+// are lib/pages/v2/home.ts's (lib/pages/v2/home.test.ts).
 
 describe('Week by week', () => {
   const row = (week: string, videos: number, comments: number, extra: Partial<MarketWeekRowRaw> = {}): MarketWeekRowRaw => ({
@@ -297,161 +264,15 @@ describe('Week by week', () => {
   })
 })
 
-describe('the tiles', () => {
-  it('Your market: the month’s market videos and the three biggest subjects, as the read printed them', () => {
-    const t = overviewTile(HOME_READ)!
-    expect(t).toMatchObject({ title: 'Your market', big: '852', sub: 'videos in September' })
-    expect(t.rows).toEqual([
-      { kind: 'bar', label: 'Buying & delivery', copy: null, pct: 23, value: '23%' },
-      { kind: 'bar', label: 'Looks & style', copy: null, pct: 17, value: '17%' },
-      { kind: 'bar', label: 'Comfort', copy: null, pct: 7, value: '7%' },
-    ])
-    expect(overviewTile({ ...HOME_READ, market: null })).toBeNull()
-    expect(overviewTile(null)).toBeNull()
-  })
-
-  it('a subject that is not ready prints no figure, and a small base prints its count', () => {
-    expect(standingLevel(HOME_READ.standing[5], HOME_READ.figures)).toBeNull()
-    const small = { ...HOME_READ.standing[0] }
-    expect(standingLevel(small, {
-      subj_buying_delivery_level: { label: 'x', value: '12', kind: 'count' },
-      subj_buying_delivery_n: { label: 'x', value: '80', kind: 'count' },
-    })).toEqual({ pct: null, value: '12 of 80' })
-  })
-
-  it('This week: the findings’ count, the read’s dates and the first three headlines', () => {
-    const t = weekTile(HOME_READ)!
-    expect(t).toMatchObject({ title: 'This week', big: '4', sub: 'findings, 21 to 27 September' })
-    expect(t.rows.map((r) => r.label)).toEqual([
-      'Buyers compare bags by exact travel and carry needs',
-      'Comfort is judged with weight in the bag',
-      'Colour can decide whether someone wants the bag',
-    ])
-    expect(t.rows.every((r) => r.copy === 'finding')).toBe(true)
-    expect(weekTile({ ...HOME_READ, findings: [] })).toBeNull()
-    expect(weekTile({ ...HOME_READ, findings: HOME_READ.findings.slice(0, 1) })?.sub).toBe('finding, 21 to 27 September')
-  })
-
-  const theme = (registryId: string, label: string, k: number, makerShare: number | null = 0.1, noiseShare: number | null = 0): HomeTheme =>
-    ({ registryId, label, k, makerShare, noiseShare })
-
-  it('Conversation: this week’s count, then the month’s biggest three as the board ranks them', () => {
-    const t = voiceTile({
-      weekThemes: 40,
-      categoryN: 814,
-      monthThemes: [
-        theme('a', 'Admiration for handmade bag design', 155, 0.8),
-        theme('b', 'Ready to buy the bag', 92, 0.33),
-        theme('c', 'Questions about shipping and availability', 34),
-        theme('d', 'Curiosity about featured product details', 22),
-        theme('e', 'Price and sale status questions', 21),
-        theme('f', '', 50),
-        theme('g', 'Below the floor', 9),
-      ],
-    })!
-    expect(t).toMatchObject({ title: 'Conversation', big: '40', sub: 'conversations this week' })
-    expect(t.rows).toEqual([
-      { kind: 'bar', label: 'Ready to buy the bag', copy: 'theme', pct: 11, value: '11%' },
-      { kind: 'bar', label: 'Questions about shipping and availability', copy: 'theme', pct: 4, value: '4%' },
-      { kind: 'bar', label: 'Curiosity about featured product details', copy: 'theme', pct: 3, value: '3%' },
-    ])
-    expect(voiceTile({ weekThemes: 0, categoryN: 814, monthThemes: [] })).toBeNull()
-    expect(voiceTile({ weekThemes: null, categoryN: 814, monthThemes: [] })).toBeNull()
-    expect(voiceTile({ weekThemes: 3, categoryN: 80, monthThemes: [theme('b', 'Ready to buy the bag', 12)] })!.rows[0]).toMatchObject({ pct: null, value: '12 of 80' })
-  })
-
-  it('Competitive: the brands you track', () => {
-    expect(competitiveTile(9)).toMatchObject({ title: 'Competitive', big: '9', sub: 'brands you track', rows: [] })
-    expect(competitiveTile(1)?.sub).toBe('brand you track')
-    expect(competitiveTile(0)).toBeNull()
-    expect(competitiveTile(null)).toBeNull()
-  })
-
-  it('Competitive: the two brands named most in the page\'s month, off the page\'s own brand list (the backfill, 1 Oct)', () => {
-    const list = {
-      month: '2026-09-01',
-      rows: [{ label: 'Cotopaxi', k: 21, you: false }, { label: 'Patagonia', k: 12, you: false }, { label: 'Sealand', k: 12, you: true }],
-    }
-    expect(competitiveTile(9, list)!.rows).toEqual([{ kind: 'text', label: 'Named most in September', copy: null, value: 'Cotopaxi, Patagonia' }])
-    // One named brand prints one; none named, or no list read, prints the
-    // tile with no row (Insufficient data). There is no week reading of who
-    // was named and no source for "compared on": neither row is drawn.
-    expect(competitiveTile(9, { month: '2026-09-01', rows: [{ label: 'Cotopaxi', k: 3, you: false }] })!.rows[0].value).toBe('Cotopaxi')
-    expect(competitiveTile(9, { month: '2026-09-01', rows: [] })!.rows).toEqual([])
-    expect(competitiveTile(9, null)!.rows).toEqual([])
-    expect(tileInsufficient(competitiveTile(9, null)!)).toBe(true)
-    expect(tileInsufficient(competitiveTile(9, list)!)).toBe(false)
-  })
-
-  it('Subjects: how many you follow, the biggest this month and the one added last', () => {
-    const subjects = [
-      { name: 'Comfort', named_at: '2026-09-10T10:00:00Z' },
-      { name: 'Buying & delivery', named_at: '2026-09-24T09:00:00Z' },
-      { name: 'Price', named_at: '2026-09-12T10:00:00Z' },
-    ]
-    const now = '2026-09-29T08:00:00Z'
-    const t = subjectsTile({ subjects, read: HOME_READ, now })!
-    expect(t).toMatchObject({ title: 'Subjects', big: '3', sub: 'subjects you follow' })
-    expect(t.rows).toEqual([
-      { kind: 'text', label: 'Biggest this month', copy: null, value: 'Buying & delivery, 23%' },
-      { kind: 'text', label: 'Added most recently', copy: null, value: 'Buying & delivery, 24 Sep' },
-    ])
-    expect(subjectsTile({ subjects, read: null, now })!.rows.map((r) => r.label)).toEqual(['Added most recently'])
-    expect(subjectsTile({ subjects: [], read: HOME_READ, now })).toBeNull()
-  })
-
-  it('Subjects: a read of an ended month names it, never "this month" (fresh review B2, the crossing week)', () => {
-    // The week of 28 Sep to 4 Oct is restated against September and reaches
-    // the page once Heinrich sends it on Monday 5 Oct.
-    const crossing: WeekReadDataV2 = { ...HOME_READ, window: { from: '2026-09-27T04:03:00Z', to: '2026-10-04T04:02:00Z' }, monthComplete: true }
-    const t = subjectsTile({ subjects: [{ name: 'Comfort', named_at: null }], read: crossing, now: '2026-10-05T07:00:00Z' })!
-    expect(t.rows[0]).toEqual({ kind: 'text', label: 'Biggest in September', copy: null, value: 'Buying & delivery, 23%' })
-  })
-
-  it('Your moves: posts published in the month, the moves worth considering and the moves you dated', () => {
-    const t = movesTile({ month: '2026-09-01', posts: 25, advice: 5, moves: 0 })!
-    expect(t).toMatchObject({ title: 'Your moves', big: '25', sub: 'posts published in September' })
-    expect(t.rows).toEqual([
-      { kind: 'text', label: 'Moves worth considering', copy: null, value: '5' },
-      { kind: 'text', label: 'Moves you dated', copy: null, value: MOVES_NONE },
-    ])
-    expect(movesTile({ month: '2026-09-01', posts: 25, advice: 5, moves: 2 })!.rows[1].value).toBe('2')
-    expect(movesTile({ month: '2026-09-01', posts: 0, advice: 0, moves: 0 })).toBeNull()
-    expect(movesTile({ month: '2026-09-01', posts: null, advice: 5, moves: 1 })).toBeNull()
-  })
-
-  it('are always all six, in the artboard’s order; one not read is its title alone, marked insufficient (Heinrich, 1 Oct)', () => {
-    const tiles = homeTiles([
-      movesTile({ month: '2026-09-01', posts: 25, advice: 5, moves: 0 }),
-      competitiveTile(9),
-      null,
-      overviewTile(HOME_READ),
-      weekTile(HOME_READ),
-    ])
-    expect(tiles.map((t) => t.title)).toEqual(['Your market', 'This week', 'Conversation', 'Competitive', 'Subjects', 'Your moves'])
-    const conversation = tiles.find((t) => t.key === 'voice')!
-    // Conversation's tile opens Voices, where /dashboard/voice lands (Design v2).
-    expect(conversation).toMatchObject({ href: '/dashboard/voices', big: '', rows: [] })
-    expect(tileInsufficient(conversation)).toBe(true)
-    // Competitive keeps its number and says the rest is insufficient.
-    expect(tiles.find((t) => t.key === 'competitive')).toMatchObject({ big: '9', sub: 'brands you track', rows: [] })
-    expect(tileInsufficient(tiles.find((t) => t.key === 'competitive')!)).toBe(true)
-    expect(tileInsufficient(tiles.find((t) => t.key === 'overview')!)).toBe(false)
-    expect(INSUFFICIENT).toBe('Insufficient data')
-  })
-})
-
-describe('Moves worth considering', () => {
-  const copy = (id: string, run: string, at: string, status = 'new'): RecCopy => ({
-    id, lineage_id: id, title: `Advice ${id}`, type: 'Product', status, created_at: at, run_id: run,
-  })
-
-  it('counts what Your moves’ short list draws: the decided ideas and a handful of the current ones', () => {
-    const latest = Array.from({ length: 7 }, (_, i) => copy(`n${i}`, 'run-2', `2026-09-27T05:0${i}:00Z`))
-    const older = [copy('o1', 'run-1', '2026-09-20T05:00:00Z'), copy('o2', 'run-1', '2026-09-20T05:01:00Z', 'in_progress')]
-    // Seven current undecided ideas draw five; the decided one from the earlier update is drawn on top.
-    expect(adviceCount([...older, ...latest], [])).toBe(6)
-    expect(adviceCount(latest.slice(0, 3), null)).toBe(3)
-    expect(adviceCount([], null)).toBe(0)
+describe('the tiles open their pages (Design v2, T8)', () => {
+  it('maps each of the board\'s six tiles to a surface the sidebar serves', () => {
+    expect(Object.keys(TILE_NAV)).toEqual(['market', 'week', 'voices', 'products', 'content', 'moves'])
+    const keys = new Set(SURFACES.map((s) => s.key))
+    for (const nav of Object.values(TILE_NAV)) expect(keys.has(nav), nav).toBe(true)
+    expect(surface(TILE_NAV.market).href).toBe('/dashboard/market')
+    expect(surface(TILE_NAV.voices).href).toBe('/dashboard/voices')
+    expect(surface(TILE_NAV.products).href).toBe('/dashboard/products')
+    expect(surface(TILE_NAV.content).href).toBe('/dashboard/content')
+    expect(surface(TILE_NAV.moves).href).toBe('/dashboard/moves')
   })
 })
