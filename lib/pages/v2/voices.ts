@@ -1136,8 +1136,8 @@ export async function openPanel(ctx: VoicesContext, data: VoicesData, params: Vo
       const phrases = phrasesOf(persona.howTheyTalk).map((p) => p.text)
       const [labels, readings, voices] = await Promise.all([
         readLabels(handle, persona.registryIds).catch((e: unknown) => { say('group.labels', e); return new Map<string, string>() }),
-        phrases.length > 0 ? readTranslations(supabase, phrases) : Promise.resolve(new Map<string, { lang: string; english: string | null }>()),
-        loadVoicesMany(supabase, clientId, [{ key: persona.key, insightIds: persona.insightIds }], {
+        phrases.length > 0 ? readTranslations(handle.client, phrases) : Promise.resolve(new Map<string, { lang: string; english: string | null }>()),
+        loadVoicesMany(handle.client, clientId, [{ key: persona.key, insightIds: persona.insightIds }], {
           month: ctx.month.slice(0, 7), marketFirst: true, gate: gateFor(clientId, {}),
         }).catch((e: unknown) => { say('group.voices', e); return null }),
       ])
