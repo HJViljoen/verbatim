@@ -233,7 +233,7 @@ describe('the four places, in production\'s thin state', () => {
     const node = <Standouts slots={d.slots} monthName={d.monthName} />
     const m = render(node)
     expect(m.match(/<article /g)).toHaveLength(4)
-    expect([...m.matchAll(/data-standout="([a-z]+)" data-tier="([a-z]+)"/g)].map((x) => `${x[1]}:${x[2]}`)).toEqual(['first:next', 'general:pick', 'praised:pick', 'focus:pick'])
+    expect([...m.matchAll(/data-standout="([a-z]+)" data-tier="([a-z]+)"/g)].map((x) => `${x[1]}:${x[2]}`)).toEqual(['first:next', 'general:pick', 'praised:pick', 'focus:none'])
     const text = renderText(node)
     // Under the floor: the words "New", but no flag chip (one video earns no flag).
     expect(text).toContain('New Feet Proprio Foot came up for the first time 1 video in September')
@@ -241,13 +241,21 @@ describe('the four places, in production\'s thin state', () => {
     expect(m).not.toContain('data-flag="new"')
     expect(text).toContain('Hands talk is mostly about hands in general Hands in general 59 of 60 · 98% One of yours 1 of 60 · 2%')
     expect(text).toContain('Most Feet videos have praise in their comments 16 of its 29 videos')
-    expect(text).toContain('Liners talk is mostly about Fit & comfort 12 of its 23 videos')
+    // Össur's subjects are provisional (ruling U6): the subject place names
+    // none and prints no figure.
+    expect(text).toContain('Worth a look What one product’s talk is about Not measured yet')
+    expect(text).not.toMatch(/mostly about Fit|most often about/)
     // Past SQUARES_MAX the marks are one bar the board's row long.
     expect(m).toContain('data-units="16/29"')
     expect(m.match(/data-units="16\/29"[^>]*><i /)).toBeTruthy()
-    expect(text.match(/Open →/g)).toHaveLength(4)
+    expect(text.match(/Open →/g)).toHaveLength(3)
     expect(m).not.toContain('data-copy="quote"')
     assertCopyContract(node)
+    // Once the subjects' checks pass, the subject place is the board's card.
+    const calibrated = ossurTodayFixture({ calibrated: true })
+    const after = renderText(<Standouts slots={calibrated.slots} monthName={calibrated.monthName} />)
+    expect(after).toContain('Liners talk is mostly about Fit & comfort 12 of its 23 videos')
+    expect(after.match(/Open →/g)).toHaveLength(4)
   })
 
   it('the thin state: nothing new (the strip, hollow, and the newest on the shelf), the praise and the subject under half, worded for it', () => {
@@ -258,8 +266,10 @@ describe('the four places, in production\'s thin state', () => {
     expect(render(node)).toContain('aria-label="No product came up for the first time in September."')
     expect(text).toContain('Feet videos with praise in their comments 12 of its 29 videos')
     expect(text).not.toMatch(/Most Feet videos/)
-    expect(text).toContain('Bracing & Supports talk is most often about Fit & comfort 5 of its 12 videos')
+    expect(text).toContain('Worth a look What one product’s talk is about Not measured yet')
     expect(render(node).match(/<article /g)).toHaveLength(4)
+    const calibrated = ossurTodayFixture({ thin: true, calibrated: true })
+    expect(renderText(<Standouts slots={calibrated.slots} monthName={calibrated.monthName} />)).toContain('Bracing & Supports talk is most often about Fit & comfort 5 of its 12 videos')
     assertCopyContract(node)
   })
 
@@ -306,6 +316,33 @@ describe('the catalogue card where no month is read', () => {
     expect(m.match(/data-column=/g)).toHaveLength(6)
     expect(renderText(node).match(/Not read yet/g)).toHaveLength(6)
     expect(renderText(node)).not.toContain('not read yet')
+    assertCopyContract(node)
+  })
+})
+
+describe('ruling U6, as drawn: a provisional subject prints its name and "Not measured yet", never a figure', () => {
+  it('the shelf heads: no "leads", no subject count; one line where the lead would be', () => {
+    const d = PRODUCTS_FIXTURES['ossur-today']()
+    const text = renderText(<CatalogueCard data={d} />)
+    expect(text).not.toMatch(/ leads,/)
+    expect(text.match(/What it’s about · Not measured yet/g)).toHaveLength(6)
+    assertCopyContract(<CatalogueCard data={d} />)
+    // Some ready, some not: the ready one's level, but not "leads" over the rest.
+    const partial = { ...d.shelf[0], lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: true }
+    expect(renderText(<>{shelfColumn(partial, 'September').note}</>)).toBe('Fit & comfort, 12 of 23')
+    expect(renderText(<>{shelfColumn({ ...partial, subjectsPending: false }, 'September').note}</>)).toBe('Fit & comfort leads, 12 of 23')
+  })
+
+  it('the panel: each subject by name with "Not measured yet" where its bar and count would be; the comparison keeps its rows, every cell empty', () => {
+    const panel = PRODUCTS_FIXTURES['ossur-today-liners']().panel as CategoryPanel
+    const node = <CategoryPanelView panel={panel} monthName="September" canTag />
+    const text = renderText(node)
+    expect(text).toContain('What it’s about · of 23 Choosing the right device Not measured yet Community & encouragement Not measured yet Cost & access Not measured yet Fit & comfort Not measured yet')
+    expect(text).toContain('Your products against liners in general What it’s about All liners Iceross Seal-In X Iceross Dermo Iceross Seal-In V Choosing the right device – none')
+    expect(text).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
+    expect(text).not.toContain('Each count is videos')
+    // Kinds are not subjects: still counted.
+    expect(text).toContain('What people did · of 23 Complaints in the comments 11')
     assertCopyContract(node)
   })
 })

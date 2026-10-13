@@ -410,9 +410,10 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
       { audience: 'client', object_kind: 'denominator', object_id: 'videos', k: 8, n: 8 },
     ]
     expect(poolLens(rows)).toMatchObject({ n: 10 })
-    const c = crossesOf(rows, new Map([['s1', 'Fit & comfort']]))
+    const c = crossesOf(rows, new Map([['s1', { name: 'Fit & comfort', state: 'ready' as const }]]))
     expect(c.n).toBe(10)
     expect(c.subjects).toEqual([{ id: 's1', label: 'Fit & comfort', k: 7 }])
+    expect(c.pending).toBeUndefined()
     expect(c.kinds.map((k) => [k.id, k.k])).toEqual([['praise', 5]])
     expect(c.kinds[0].label).toBe('Praise in the comments')
   })
@@ -500,14 +501,19 @@ describe('the parity pass: the board\'s shape in the real, thin state', () => {
     expect(d.shelf.flatMap((c) => c.products)).toHaveLength(65)
     expect(d.shelf.flatMap((c) => c.products).filter((p) => (p.videos ?? 0) > 0).map((p) => `${p.name} ${p.videos}`))
       .toEqual(['Pro-Flex XC 2', 'Proprio Foot 1', 'Pro-Flex Terra 1', 'Power Knee 1', 'Total Knee 2000 1', 'Direct Socket 2', 'Rebound Post-Op Knee 1'])
-    // The strict picks the Dashboard and the email read: no first month.
-    expect(d.standouts.map((s) => s.kind)).toEqual(['general', 'praised', 'focus'])
+    // The strict picks the Dashboard and the email read: no first month, and
+    // no subject (every one of Össur's is provisional: ruling U6).
+    expect(d.standouts.map((s) => s.kind)).toEqual(['general', 'praised'])
+    expect(ossurTodayFixture({ calibrated: true }).standouts.map((s) => s.kind)).toEqual(['general', 'praised', 'focus'])
   })
 
   it('always fills the board\'s four places, in its order: a pick, else the nearest honest card, else an empty frame', () => {
     const today = ossurTodayFixture()
     expect(today.slots.map((s) => s.slot)).toEqual([...SLOT_ORDER])
-    expect(places(today)).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:pick:Feet', 'focus:pick:Liners'])
+    expect(places(today)).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:pick:Feet', 'focus:none:-'])
+    // Össur's subjects are provisional: the subject place names none.
+    expect(today.slots[3].reason).toBe('pending')
+    expect(places(ossurTodayFixture({ calibrated: true }))).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:pick:Feet', 'focus:pick:Liners'])
     // The first place under the floor: one video, and the others named for
     // the first time beside it; never the Dashboard's standout.
     const first = today.slots[0].card!
@@ -517,14 +523,16 @@ describe('the parity pass: the board\'s shape in the real, thin state', () => {
     expect(topProductsOf(today, today.standouts.filter((s) => s.kind === 'first') as never).standout).toMatchObject({ label: TOP_LABELS.most, name: 'Pro-Flex XC', k: 2 })
 
     const thin = PRODUCTS_FIXTURES['ossur-thin']()
-    expect(places(thin)).toEqual(['first:none:Proprio Foot', 'category:pick:Hands', 'praised:next:Feet', 'focus:next:Bracing & Supports'])
+    expect(places(thin)).toEqual(['first:none:Proprio Foot', 'category:pick:Hands', 'praised:next:Feet', 'focus:none:-'])
+    const thinCalibrated = ossurTodayFixture({ thin: true, calibrated: true })
+    expect(places(thinCalibrated)).toEqual(['first:none:Proprio Foot', 'category:pick:Hands', 'praised:next:Feet', 'focus:next:Bracing & Supports'])
     // Nothing new: the months read for the strip, and the newest on the shelf.
     expect(thin.slots[0]).toMatchObject({ tier: 'none', card: null, months: ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'], newest: { name: 'Proprio Foot', month: '2026-08-01' } })
     // Under half, and an object already shown is passed over where another
     // has the figure (Hands' praise is the highest, and Hands is the
     // category card).
     expect(thin.slots[2].card).toMatchObject({ kind: 'praised', praised: { k: 12, n: 29 } })
-    expect(thin.slots[3].card).toMatchObject({ kind: 'focus', subject: 'Fit & comfort', level: { k: 5, n: 12 } })
+    expect(thinCalibrated.slots[3].card).toMatchObject({ kind: 'focus', subject: 'Fit & comfort', level: { k: 5, n: 12 } })
   })
 
   it('an empty place says why: nothing to show, or not read (the crosses were not read at all)', () => {
@@ -557,13 +565,19 @@ describe('the parity pass: the board\'s shape in the real, thin state', () => {
   })
 
   it('a category with no product named keeps its comparison: the category\'s column counted, the products\' empty', () => {
-    const liners = ossurTodayLinersFixture().panel as CategoryPanel
+    const liners = ossurTodayLinersFixture(false, true).panel as CategoryPanel
     expect(liners.compare).toMatchObject({ empty: 'none_named', verdicts: [] })
     expect(liners.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X', 'Iceross Dermo', 'Iceross Seal-In V'])
     expect(liners.compare!.rows[0].cells).toEqual([{ k: 12, n: 23 }, null, null, null])
+    // Subjects not measured yet (today): the same table, each row a subject's
+    // name, every cell empty, the category's included.
+    const today = ossurTodayLinersFixture().panel as CategoryPanel
+    expect(today.compare).toMatchObject({ empty: 'pending', verdicts: [] })
+    expect(today.compare!.rows.map((r) => r.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement'])
+    expect(today.compare!.rows.every((r) => r.cells.every((c) => c === null))).toBe(true)
     // A quiet product's own panel: its one column, empty.
     const quiet = ossurTodayQuietFixture().panel as ProductPanel
-    expect(quiet.compare).toMatchObject({ empty: 'none_named' })
+    expect(quiet.compare).toMatchObject({ empty: 'pending' })
     expect(quiet.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X'])
     expect(quiet).toMatchObject({ videos: 0, market: 539, categoryVideos: 23, categoryUnbranded: 20 })
     // Named, but what their videos are about not read: said as such.
@@ -582,5 +596,48 @@ describe('the parity pass: the board\'s shape in the real, thin state', () => {
       expect(d.slots, key).toEqual([])
     }
     expect(PRODUCTS_FIXTURES.sealand().shelf).toEqual([])
+  })
+})
+
+// RULING U6 (`printsMarket`, lib/subjects/calibration-state.ts): a subject
+// whose check has not passed prints no figure that rests on its membership,
+// on this page as on Market: no count, no share, no "leads", no "mostly
+// about". Its name stands where the layout needs one.
+describe('ruling U6: Össur\'s provisional subjects print no figure', () => {
+  it('the crosses count only a ready subject; a provisional one is pending by name, whatever its count; a failed one is left out', () => {
+    const rows = [
+      { audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: 10, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'ready', k: 4, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'prov', k: 9, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'bad', k: 8, n: 10 },
+    ]
+    const subjects = new Map([
+      ['quiet', { name: 'Quiet one', state: 'provisional' as const }],
+      ['ready', { name: 'Ready one', state: 'ready' as const }],
+      ['prov', { name: 'Provisional one', state: 'provisional' as const }],
+      ['bad', { name: 'Failed one', state: 'failed' as const }],
+    ])
+    const c = crossesOf(rows, subjects)
+    expect(c.subjects).toEqual([{ id: 'ready', label: 'Ready one', k: 4 }])
+    // In the subjects' own order, a provisional one with no video here too.
+    expect(c.pending).toEqual([{ id: 'quiet', label: 'Quiet one' }, { id: 'prov', label: 'Provisional one' }])
+  })
+
+  it('Össur today: no shelf head names a subject as leading, and none prints a subject\'s count', () => {
+    const d = ossurTodayFixture()
+    expect(d.shelf.every((c) => c.lead === null && c.subjectsPending)).toBe(true)
+    const calibrated = ossurTodayFixture({ calibrated: true })
+    expect(calibrated.shelf.find((c) => c.name === 'Liners')).toMatchObject({ lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: false })
+  })
+
+  it('no card, panel or comparison draws a provisional subject\'s figure', () => {
+    const d = ossurTodayLinersFixture()
+    expect(d.slots.some((s) => s.card?.kind === 'focus' || s.card?.kind === 'gap')).toBe(false)
+    expect(d.slots.find((s) => s.slot === 'first')!.card).toMatchObject({ lead: null })
+    const panel = d.panel as CategoryPanel
+    expect(panel.crosses!.subjects).toEqual([])
+    expect(panel.crosses!.pending!.map((x) => x.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
+    const product = PRODUCTS_FIXTURES['ossur-today-product']().panel as ProductPanel
+    expect(product.crosses!.subjects).toEqual([])
   })
 })

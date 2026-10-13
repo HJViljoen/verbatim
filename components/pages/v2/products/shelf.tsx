@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Box } from 'lucide-react'
 import { CARD, CardHead, CatalogueShelf, ShelfLegend, type ShelfColumn } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { PANEL_ID, productsBasis, sharePct, shelfColumns, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
+import { PANEL_ID, productsBasis, sharePct, shelfColumns, SUBJECT_NOT_MEASURED, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
 import { cn } from '@/lib/utils'
 import { OLINK, VerdictBadge } from './parts'
 
@@ -30,9 +30,16 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
       : c.share
         ? <><span data-copy="figure">{sharePct(c.share.k, c.share.n)}</span> of the market <VerdictBadge verdict={c.verdict} answersOnly /></>
         : null,
-    note: c.lead && c.videos != null && c.videos > 0
-      ? <>{c.lead.label} leads, <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
-      : null,
+    // RULING U6: only a ready subject is counted. Where some are not measured
+    // yet, none is said to lead over them; where none is ready, the head says
+    // so where the lead would be.
+    note: c.videos == null || c.videos === 0
+      ? null
+      : c.lead
+        ? <>{c.lead.label}{c.subjectsPending ? ',' : ' leads,'} <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
+        : c.subjectsPending
+          ? <span className="text-muted-foreground">What it’s about · {SUBJECT_NOT_MEASURED}</span>
+          : null,
     products: c.products.map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),
     unclear: c.unclear > 0 ? { count: c.unclear, href: c.unclearHref } : null,
   }

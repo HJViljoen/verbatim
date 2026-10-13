@@ -408,10 +408,27 @@ function todayBuilt(thin: boolean): TodayBuilt {
 /** Össur today's month rows, June to October (`thin` for the thinner state). */
 export const ossurTodayRows = (thin = false): ProductMonthRow[] => todayBuilt(thin).rows
 
+/** Össur's six subjects as production holds them on 13 October: named and
+ *  counted, every one PROVISIONAL (no check passed yet; Market prints them
+ *  "Not measured yet"), in their own order. */
+export const OSSUR_SUBJECTS = ['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'] as const
+const subjectId = (label: string) => `s-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`
+
+/** A cross as the loader builds it with every subject provisional
+ *  (`crossesOf`, ruling U6): no subject counted, all six pending by name. */
+const pendingCross = (c: Crosses): Crosses => ({ ...c, subjects: [], pending: OSSUR_SUBJECTS.map((label) => ({ id: subjectId(label), label })) })
+
 /** September's crosses as production would read them at level 1: each
  *  category (the loader reads every category with a video, and a product only
- *  from three videos, which none has), in Össur's own subjects. */
-function todayCrosses(thin: boolean, products: readonly string[] = []): Map<string, Crosses> {
+ *  from three videos, which none has), in Össur's own subjects. `calibrated`
+ *  reads them as if every subject's check had passed (the page after
+ *  calibration); otherwise they are provisional, as today. */
+function todayCrosses(thin: boolean, products: readonly string[] = [], calibrated = false): Map<string, Crosses> {
+  const all = todayCrossesCounted(thin, products)
+  return calibrated ? all : new Map([...all].map(([k, c]) => [k, pendingCross(c)]))
+}
+
+function todayCrossesCounted(thin: boolean, products: readonly string[] = []): Map<string, Crosses> {
   const g = (name: string) => setKey('group', groupId(name))
   const p = (name: string) => setKey('product', productId(name))
   const groups: [string, Crosses][] = thin
@@ -473,7 +490,7 @@ function proFlexXcTexts(): TextRead[] {
  *  September: Össur's 15 September handles change, on the brands view). */
 const REFUSE_PAIRS: PairOn = (prevMonth, month): PairComparability => ({ prevMonth, month, mode: 'refuse', reasons: [{ kind: 'searches', changeId: null, share: null }], row: null, checkWith: null })
 
-const TODAY = (thin: boolean, over: Partial<ProductsInput> = {}): ProductsInput => {
+const TODAY = (thin: boolean, over: Partial<ProductsInput> = {}, calibrated = false): ProductsInput => {
   const b = todayBuilt(thin)
   const sep = b.months.find((m) => m.month === SEP)!
   return {
@@ -482,32 +499,33 @@ const TODAY = (thin: boolean, over: Partial<ProductsInput> = {}): ProductsInput 
     rows: b.rows,
     market: sep.market.map((v) => ({ id: v.id, audience: v.audience, platform: v.platform, owned: v.owned === true })),
     standing: b.standing,
-    crosses: todayCrosses(thin),
+    crosses: todayCrosses(thin, [], calibrated),
     pair: thin ? REFUSE_PAIRS : ACCEPT_PAIRS,
     ...over,
   }
 }
 
-/** Össur today: September, nothing open (`thin` for the thinner state). */
-export function ossurTodayFixture(opts: { thin?: boolean; params?: ProductsParams; over?: Partial<ProductsInput> } = {}): ProductsData {
-  return buildProductsData(TODAY(opts.thin ?? false, { params: opts.params ?? {}, ...opts.over }))
+/** Össur today: September, nothing open (`thin` for the thinner state;
+ *  `calibrated` for the page once its subjects' checks have passed). */
+export function ossurTodayFixture(opts: { thin?: boolean; calibrated?: boolean; params?: ProductsParams; over?: Partial<ProductsInput> } = {}): ProductsData {
+  return buildProductsData(TODAY(opts.thin ?? false, { params: opts.params ?? {}, ...opts.over }, opts.calibrated ?? false))
 }
 
 /** Össur today with the Liners open: no liner named, three couldn't tell
  *  which (two comments and a video). */
-export function ossurTodayLinersFixture(thin = false): ProductsData {
-  return buildProductsData(TODAY(thin, { params: { group: groupId('Liners') }, panelReads: { unclear: todayUnclearTexts(thin) } }))
+export function ossurTodayLinersFixture(thin = false, calibrated = false): ProductsData {
+  return buildProductsData(TODAY(thin, { params: { group: groupId('Liners') }, panelReads: { unclear: todayUnclearTexts(thin) } }, calibrated))
 }
 
 /** Össur today with the Feet open: three of its products named, one or two
  *  videos each. */
-export function ossurTodayFeetFixture(): ProductsData {
-  return buildProductsData(TODAY(false, { params: { group: groupId('Feet') }, crosses: todayCrosses(false, ['Pro-Flex XC', 'Proprio Foot', 'Pro-Flex Terra']), panelReads: { unclear: todayUnclearTexts(false, 'Feet') } }))
+export function ossurTodayFeetFixture(calibrated = false): ProductsData {
+  return buildProductsData(TODAY(false, { params: { group: groupId('Feet') }, crosses: todayCrosses(false, ['Pro-Flex XC', 'Proprio Foot', 'Pro-Flex Terra'], calibrated), panelReads: { unclear: todayUnclearTexts(false, 'Feet') } }, calibrated))
 }
 
 /** Össur today with the Pro-Flex XC open (two videos). */
-export function ossurTodayProductFixture(): ProductsData {
-  return buildProductsData(TODAY(false, { params: { product: productId('Pro-Flex XC') }, crosses: todayCrosses(false, ['Pro-Flex XC']), panelReads: { named: proFlexXcTexts() } }))
+export function ossurTodayProductFixture(calibrated = false): ProductsData {
+  return buildProductsData(TODAY(false, { params: { product: productId('Pro-Flex XC') }, crosses: todayCrosses(false, ['Pro-Flex XC'], calibrated), panelReads: { named: proFlexXcTexts() } }, calibrated))
 }
 
 /** Össur today with the Iceross Seal-In X open: nobody named it in September. */
@@ -540,4 +558,7 @@ export const PRODUCTS_FIXTURES = {
   'ossur-today-quiet': () => ossurTodayQuietFixture(),
   'ossur-thin': () => ossurTodayFixture({ thin: true }),
   'ossur-thin-liners': () => ossurTodayLinersFixture(true),
+  // After the subjects' checks pass (the lead's calibration step).
+  'ossur-today-calibrated': () => ossurTodayFixture({ calibrated: true }),
+  'ossur-today-calibrated-feet': () => ossurTodayFeetFixture(true),
 } as const

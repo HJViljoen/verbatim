@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { EYEBROW } from '@/components/colour-roles'
 import { CARD, FlagChip, UnitSquares } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
-import type {
-  FirstStandout, FocusStandout, GapStandout, GeneralStandout, PraisedStandout, SlotKey, SlotTier, Standout, StandoutSlot,
+import {
+  SUBJECT_NOT_MEASURED,
+  type FirstStandout, type FocusStandout, type GapStandout, type GeneralStandout, type PraisedStandout, type SlotKey, type SlotTier, type Standout, type StandoutSlot,
 } from '@/lib/pages/v2/products'
 import { cn } from '@/lib/utils'
 import { MidFigure, OfIts, OLINK, ShareRow, VerdictBadge } from './parts'
@@ -252,10 +253,13 @@ export function StandoutCard({ s, monthName, tier = 'pick' }: { s: Standout; mon
   )
 }
 
-/** The line a place with nothing to show prints as its title. */
+/** The line a place with nothing to show prints as its title. Subjects not
+ *  measured yet (ruling U6): the place's own title, and SUBJECT_NOT_MEASURED
+ *  under it (`emptySub`). */
 export function emptyTitle(slot: Pick<StandoutSlot, 'slot' | 'reason'>, monthName: string): string {
   if (slot.slot === 'first') return `Nothing came up for the first time in ${monthName}`
   if (slot.slot === 'category') return `No category came up in ${monthName}`
+  if (slot.reason === 'pending') return FRAME_TITLES.focus
   if (slot.reason === 'unread') return `Not read for ${monthName} yet`
   return slot.slot === 'praised' ? `No praise in the comments to show for ${monthName}` : `No subject to show for ${monthName}`
 }
@@ -263,7 +267,7 @@ export function emptyTitle(slot: Pick<StandoutSlot, 'slot' | 'reason'>, monthNam
 /** A place with nothing to show: its eyebrow, one line for a title, the
  *  card's visual with nothing in it, and (the first place) the newest
  *  product on the shelf, which it opens. */
-function EmptyCard({ slot, title, frame = false }: { slot: Pick<StandoutSlot, 'slot' | 'months' | 'newest'>; title: string; frame?: boolean }) {
+function EmptyCard({ slot, title, frame = false }: { slot: Pick<StandoutSlot, 'slot' | 'months' | 'newest' | 'reason'>; title: string; frame?: boolean }) {
   const months = slot.months ?? []
   return (
     // A frame (no month read) holds the height of the board's cards, so the
@@ -275,6 +279,7 @@ function EmptyCard({ slot, title, frame = false }: { slot: Pick<StandoutSlot, 's
         ? months.length >= 2 ? <MonthDots months={months} hollow label={`No product came up for the first time in ${longMonth(months[months.length - 1])}.`} /> : <EmptyDots />
         : slot.slot === 'category' ? <EmptyShares /> : <EmptyMarks />}
       {slot.newest ? <Sub>Newest on your shelf: {slot.newest.name}, first named in {longMonth(slot.newest.month)}.</Sub> : null}
+      {slot.reason === 'pending' ? <Sub>{SUBJECT_NOT_MEASURED}</Sub> : null}
       <Foot href={slot.newest?.href ?? null} />
     </article>
   )

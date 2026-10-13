@@ -3,7 +3,7 @@ import { FlagChip, InPlacePanel, MiniBars, PairedBars, PanelSection, PanelTitle,
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import {
-  catalogueBreak, PANEL_ID, sharePct, UNCLEAR_ID,
+  catalogueBreak, PANEL_ID, sharePct, SUBJECT_NOT_MEASURED, UNCLEAR_ID,
   type CategoryPanel, type Compare, type Crosses, type LineBar, type ProductPanel, type ProductsQuote, type UnclearLine,
 } from '@/lib/pages/v2/products'
 import { quoteWords } from '@/lib/pages/brands'
@@ -29,13 +29,31 @@ import { TagControl } from './tag-control'
 //                   category), or what people said naming it (a product).
 //                   Quotes print here and nowhere above (Heinrich's v2 rule).
 
-/** A section of subjects or kinds, k of the set's n. */
+/** A subject not measured yet (ruling U6): its name where the row's name
+ *  goes, SUBJECT_NOT_MEASURED where its bar and count would be. */
+function PendingRow({ label }: { label: string }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-2 text-[13.5px]">
+      <span className="min-w-0 leading-[1.3] text-foreground">{label}</span>
+      <span className="text-[12.5px] text-muted-foreground">{SUBJECT_NOT_MEASURED}</span>
+    </div>
+  )
+}
+
+/** A section of subjects or kinds, k of the set's n. The subjects: the
+ *  ready ones counted, then those not measured yet by name (ruling U6). */
 function CrossSection({ label, crosses, pick, empty }: { label: string; crosses: Crosses | null; pick: 'subjects' | 'kinds'; empty: string }) {
   const rows = crosses ? crosses[pick].slice(0, 6) : []
+  const pending = crosses && pick === 'subjects' ? (crosses.pending ?? []).slice(0, Math.max(0, 6 - rows.length)) : []
   return (
     <PanelSection label={crosses && crosses.n > 0 ? <>{label} · of <Fig>{fmtInt(crosses.n)}</Fig></> : label}>
-      {rows.length > 0 && crosses
-        ? rows.map((r) => <MiniRow key={r.id} size="md" label={r.label} k={r.k} of={crosses.n} tone={pick === 'subjects' ? 'market' : 'ink'} />)
+      {(rows.length > 0 || pending.length > 0) && crosses
+        ? (
+          <>
+            {rows.map((r) => <MiniRow key={r.id} size="md" label={r.label} k={r.k} of={crosses.n} tone={pick === 'subjects' ? 'market' : 'ink'} />)}
+            {pending.map((r) => <PendingRow key={r.id} label={r.label} />)}
+          </>
+        )
         : <EmptyLine>{empty}</EmptyLine>}
     </PanelSection>
   )
@@ -103,8 +121,10 @@ function CompareSection({ compare, title, products, monthName }: { compare: Comp
         label={title}
       />
       <p className="m-0 text-[12.5px] leading-[1.5] text-muted-foreground">
-        Each count is videos, out of that column’s total.{' '}
-        {compare.empty === 'none_named'
+        {compare.empty === 'pending' ? null : <>Each count is videos, out of that column’s total.{' '}</>}
+        {compare.empty === 'pending'
+          ? <>What these videos are about: {SUBJECT_NOT_MEASURED}. A subject is counted here once its check has passed.</>
+          : compare.empty === 'none_named'
           ? <>No video named {products} in {monthName}, so there is nothing yet to set against the category.</>
           : compare.empty === 'not_read'
             ? <>What the videos naming {products} are about has not been read yet.</>

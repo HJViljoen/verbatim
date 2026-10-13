@@ -32,6 +32,8 @@ import { readingMonthLabel } from '../../reading/month-label'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
 import { productsTabHref } from '../../settings/products'
 import { selectAll } from '../../supabase-admin'
+import { subjectCalibration, type SubjectCalibration } from '../../subjects/calibration-state'
+import { loadActiveSubjects } from '../../subjects/membership'
 
 // YOUR PRODUCTS (depth v2, T5; boards E4-Products and E4-Products-Liners):
 // what the market says about what the client sells, by the client's own
@@ -114,6 +116,12 @@ export const PRODUCTS_FAILED = 'Your products could not be read just now. Refres
 /** The words for a product with no video this month. */
 export const QUIET = 'Quiet'
 
+/** A subject whose check has not passed (ruling U6, `printsMarket`): its name
+ *  where the layout needs one, these words where its figure would be.
+ *  = SUBJECT_PENDING (lib/pages/v2/market.ts on parity/market), unify at
+ *  merge. */
+export const SUBJECT_NOT_MEASURED = 'Not measured yet'
+
 // ---- the shapes --------------------------------------------------------------------
 
 export type ProductsState = 'not_applied' | 'no_catalogue' | 'not_on' | 'unread' | 'failed' | 'ready'
@@ -135,8 +143,21 @@ export interface CrossCell {
  *  `null` where the cross was not read (a failed read, a shot from a dump). */
 export interface Crosses {
   n: number
+  /** The READY subjects only (ruling U6, `printsMarket`): a subject whose
+   *  check has not passed has no count here, no rank and no share. */
   subjects: CrossCell[]
   kinds: CrossCell[]
+  /** The client's subjects whose check has not passed (provisional), by name
+   *  in their own order, with no count: the page prints the name and
+   *  SUBJECT_NOT_MEASURED. A failed one is left out (no name, no figure).
+   *  Absent: every subject read is ready. */
+  pending?: { id: string; label: string }[]
+}
+
+/** A subject as the crosses read it: its name and its check's state. */
+export interface SubjectRead {
+  name: string
+  state: SubjectCalibration
 }
 
 export interface ShelfProductView {
@@ -162,8 +183,12 @@ export interface ShelfCategoryView {
   /** This month's share against last month's, banded. Null where no
    *  comparison is drawn at all. */
   verdict: Verdict | null
-  /** What most of its videos are about (the top subject), where read. */
+  /** What most of its videos are about (the top READY subject), where read. */
   lead: { label: string; k: number } | null
+  /** Some of the client's subjects are not measured yet (`Crosses.pending`):
+   *  the head names no subject as leading over them, and with no ready one
+   *  says SUBJECT_NOT_MEASURED. */
+  subjectsPending: boolean
   /** Videos about one of the client's products here, not which. */
   unclear: number
   products: ShelfProductView[]
@@ -282,9 +307,10 @@ export interface Compare {
    *  pair that clears its band is ever worded. */
   verdicts: Verdict[]
   /** The products' cells are empty, and the table says why once: none of
-   *  them was named this month (nothing to count), or they were named but
-   *  what their videos are about was not read. */
-  empty?: 'none_named' | 'not_read'
+   *  them was named this month (nothing to count), they were named but what
+   *  their videos are about was not read, or (`pending`) no subject's check
+   *  has passed, so every row is a subject's name with no count at all. */
+  empty?: 'none_named' | 'not_read' | 'pending'
 }
 
 interface PanelBase {
@@ -644,15 +670,24 @@ export const productKindLabel = (kind: string): string => PRODUCT_KIND_LABELS[ki
 /** Subjects and kinds over one set, from its `lens_readings` rows pooled over
  *  every audience (`poolLens`). A subject not active (not in `subjects`) is
  *  left out; misinformation is never a kind a page ranks (decision T). The
- *  kinds take the page's own words (`productKindLabel`). PURE. */
-export function crossesOf(rows: readonly LensRowIn[], subjects: ReadonlyMap<string, string>): Crosses {
+ *  kinds take the page's own words (`productKindLabel`).
+ *
+ *  RULING U6 (`printsMarket`, lib/subjects/calibration-state.ts): only a
+ *  READY subject is counted; one whose check has not passed is `pending`, by
+ *  name and in the subjects' own order, whatever its count (its count, and
+ *  even whether this set has any, rests on its membership); a failed one is
+ *  left out. PURE. */
+export function crossesOf(rows: readonly LensRowIn[], subjects: ReadonlyMap<string, SubjectRead>): Crosses {
   const pooled = poolLens(rows)
+  const ready = (id: string) => subjects.get(id)?.state === 'ready'
+  const pending = [...subjects].filter(([, s]) => s.state === 'provisional').map(([id, s]) => ({ id, label: s.name }))
   return {
     n: pooled.n,
-    subjects: [...pooled.subjects].filter(([id, k]) => k > 0 && subjects.has(id))
-      .map(([id, k]) => ({ id, label: subjects.get(id)!, k })).sort(byNumberThenName),
+    subjects: [...pooled.subjects].filter(([id, k]) => k > 0 && ready(id))
+      .map(([id, k]) => ({ id, label: subjects.get(id)!.name, k })).sort(byNumberThenName),
     kinds: [...pooled.kinds].filter(([id, k]) => k > 0 && id !== 'misinformation' && KIND_LABELS[id])
       .map(([id, k]) => ({ id, label: productKindLabel(id), k })).sort(byNumberThenName),
+    ...(pending.length > 0 ? { pending } : {}),
   }
 }
 
@@ -941,8 +976,10 @@ export interface StandoutSlot {
   slot: SlotKey
   tier: SlotTier
   card: Standout | null
-  /** `none`: `unread` where the crosses it reads were not read at all. */
-  reason?: 'quiet' | 'unread'
+  /** `none`: `unread` where the crosses it reads were not read at all;
+   *  `pending` (the subject place only) where no subject's check has passed
+   *  (ruling U6), so no subject may be named as what the talk is about. */
+  reason?: 'quiet' | 'unread' | 'pending'
   /** The first place's `none`: the months read, oldest first (its strip),
    *  and the newest product on the shelf (the latest earlier month that was
    *  a product's first with videos), where there is one. */
@@ -1080,8 +1117,9 @@ export function standoutSlots(input: {
       const top = c.subjects[0]
       return top ? { k: top.k, n: c.n, label: top.label } : null
     })
+    const pending = [...input.crosses.values()].some((c) => (c.pending?.length ?? 0) > 0)
     if (x) out.push({ slot: 'focus', tier: 'next', card: { kind: 'focus', open: { kind: x.o.kind, id: x.o.id }, href: hrefOf(x.o.kind, x.o.id), name: x.o.name, where: x.o.where, subject: x.hit.label, level: { k: x.hit.k, n: x.hit.n } } })
-    else out.push({ slot: 'focus', tier: 'none', card: null, reason: unread ? 'unread' : 'quiet' })
+    else out.push({ slot: 'focus', tier: 'none', card: null, reason: unread ? 'unread' : pending ? 'pending' : 'quiet' })
   }
   return out
 }
@@ -1130,6 +1168,7 @@ export function buildShelf(input: {
       share: curr && curr.n > 0 ? { k: curr.k_any, n: curr.n } : null,
       verdict: categoryShareVerdict({ group: g, month: m, curr, prev, pair: input.pair }),
       lead: top && c && c.n > 0 ? { label: top.label, k: top.k } : null,
+      subjectsPending: (c?.pending?.length ?? 0) > 0 && (curr?.k_any ?? 0) > 0,
       unclear: curr?.k_unclear ?? 0,
       products,
       href: productsHref(input.params, { kind: 'group', id: g.id }),
@@ -1202,7 +1241,23 @@ export function buildCompare(input: {
   focus?: string | null
 }): Compare | null {
   const gc = input.crosses.get(setKey('group', input.group.id))
-  if (!gc || gc.n === 0 || gc.subjects.length === 0) return null
+  if (!gc || gc.n === 0) return null
+  if (gc.subjects.length === 0) {
+    // NOT MEASURED YET (ruling U6): the table keeps its shape, each row a
+    // subject's name and every cell empty, the category's included.
+    const pending = (gc.pending ?? []).slice(0, COMPARE_ROWS)
+    if (pending.length === 0) return null
+    const named = [...input.products].filter((p) => (p.videos ?? 0) > 0)
+      .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
+    const shown = (named.length > 0 ? named : [...input.products].sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0)))
+      .slice(0, input.focus ? 1 : COMPARE_PRODUCTS)
+    return {
+      columns: [{ key: input.group.id, label: `All ${input.group.name.toLowerCase()}`, tone: 'market' }, ...shown.map((p) => ({ key: p.id, label: p.name, tone: 'you' as const }))],
+      rows: pending.map((x) => ({ key: x.id, label: x.label, cells: [null, ...shown.map(() => null)] })),
+      verdicts: [],
+      empty: 'pending',
+    }
+  }
   const ranked = [...input.products].filter((p) => (p.videos ?? 0) > 0 && (input.crosses.get(setKey('product', p.id))?.n ?? 0) > 0)
     .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     .slice(0, COMPARE_PRODUCTS)
@@ -1641,10 +1696,12 @@ async function readLens(handle: ReadingHandle, month: string, sets: readonly { k
   return out
 }
 
-async function readSubjectNames(handle: ReadingHandle): Promise<Map<string, string>> {
-  const rows = await selectAll<{ id: string; name: string | null; status: string | null }>(() =>
-    handle.client.from('subjects').select('id, name, status').eq('client_id', handle.clientId).order('id'))
-  return new Map(rows.filter((r) => r.status === 'active' && r.name).map((r) => [String(r.id), String(r.name)]))
+/** The client's active subjects, each with its check's state
+ *  (`subjectCalibration`, the three states Market reads), in their own order
+ *  (named first). */
+async function readSubjects(handle: ReadingHandle): Promise<Map<string, SubjectRead>> {
+  const rows = await loadActiveSubjects(handle.client as never, handle.clientId)
+  return new Map(rows.filter((r) => r.name).map((r) => [String(r.id), { name: String(r.name), state: subjectCalibration(r) }]))
 }
 
 /** The texts behind a panel's list: the comments' words and dates, their
@@ -1778,7 +1835,7 @@ export async function loadProducts(input: ProductsLoadInput): Promise<ProductsDa
   }
   const [lens, subjectNames, panelReads] = await Promise.all([
     wanted.length ? readLens(handle, month, wanted).catch((e: unknown) => { say('lens', e); return null }) : Promise.resolve(new Map<string, LensRowIn[]>()),
-    wanted.length ? readSubjectNames(handle).catch((e: unknown) => { say('subjects', e); return new Map<string, string>() }) : Promise.resolve(new Map<string, string>()),
+    wanted.length ? readSubjects(handle).catch((e: unknown) => { say('subjects', e); return new Map<string, SubjectRead>() }) : Promise.resolve(new Map<string, SubjectRead>()),
     open && sets && standing ? readPanelTexts(handle, month, open, sets, standing).catch((e: unknown) => { say('panel texts', e); return null }) : Promise.resolve(null),
   ])
   const crosses = new Map<string, Crosses>()
