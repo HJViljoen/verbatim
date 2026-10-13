@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { postIdeasEnabled } from '../config'
 import { AFTER_GATHER_STEPS } from '../reading/week-line'
 import { WeekReadTimeoutError } from '../written/deadline'
 import type { ParseClient } from '../written/write-model'
@@ -41,6 +42,8 @@ function deps(over: Partial<PostIdeasStepDeps> = {}) {
   const saved: PostIdeaInsert[][] = []
   const alerts: string[] = []
   const d: PostIdeasStepDeps = {
+    enabled: vi.fn(() => true),
+    company: vi.fn(async () => 'Össur'),
     existing: vi.fn(async () => 0),
     build: vi.fn(async () => READY) as unknown as PostIdeasStepDeps['build'],
     save: vi.fn(async (_a, rows) => { saved.push([...rows]) }),
@@ -54,6 +57,15 @@ describe('runPostIdeasStep: silent where it should be', () => {
   it('a TEST run reads nothing, writes nothing and tells nobody', async () => {
     const { d, saved, alerts } = deps()
     expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: true }, d)).toMatchObject({ status: 'test_run', costUsd: 0 })
+    expect(d.existing).not.toHaveBeenCalled()
+    expect(d.build).not.toHaveBeenCalled()
+    expect([saved, alerts]).toEqual([[], []])
+  })
+
+  it('a tenant switched off reads nothing, writes nothing and tells nobody', async () => {
+    const { d, saved, alerts } = deps({ enabled: vi.fn(() => false) })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, d)).toMatchObject({ status: 'disabled', costUsd: 0 })
+    expect(d.enabled).toHaveBeenCalledWith(CLIENT)
     expect(d.existing).not.toHaveBeenCalled()
     expect(d.build).not.toHaveBeenCalled()
     expect([saved, alerts]).toEqual([[], []])
@@ -114,8 +126,15 @@ describe('runPostIdeasStep: fail-soft, the week read\'s contract', () => {
   it('on the last attempt it never throws, and alerts once inside the step', async () => {
     const { d, alerts } = deps({ build: vi.fn(async () => { throw timeout() }) as unknown as PostIdeasStepDeps['build'] })
     expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false, lastAttempt: true }, d)).toMatchObject({ status: 'failed' })
-    expect(alerts).toEqual([`Verbatim post ideas failed: ${CLIENT}`])
+    // Named as the week read names it: the company, never the uuid.
+    expect(alerts).toEqual(['Verbatim post ideas failed: Össur'])
     expect((d.alert as unknown as { mock: { calls: [string, string][] } }).mock.calls[0][1]).toContain(`scripts/post-ideas.ts --client ${CLIENT} --run ${RUN} --dry-run`)
+  })
+
+  it('names the client by its id only where its name cannot be read', async () => {
+    const { d, alerts } = deps({ company: vi.fn(async () => { throw new Error('fetch failed') }), build: vi.fn(async () => { throw new PostIdeasWriteError('no parsed output') }) as unknown as PostIdeasStepDeps['build'] })
+    await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, d)
+    expect(alerts).toEqual([`Verbatim post ideas failed: ${CLIENT}`])
   })
 
   it('a failure that no retry fixes alerts at once, on any attempt; a failed alert is swallowed', async () => {
@@ -168,6 +187,8 @@ describe('the writer\'s prompt', () => {
     expect(system).toMatch(/No numbers at all/)
     expect(system).toMatch(/growing, rising, trending/)
     expect(system).toMatch(/Never use the first person/)
+    expect(system).toMatch(/in your own words: never copy a comment/)
+    expect(system).toMatch(/only a comment that asks something/)
   })
 
   it('hands the writer the conversations by handle and their comments by handle, and asks for no figure', () => {
@@ -241,5 +262,37 @@ describe('the pipeline carries write-post-ideas', () => {
 
   it('is listed after the gather, so no error of its can ever cut a week from the chart', () => {
     expect(AFTER_GATHER_STEPS).toContain('write-post-ideas')
+  })
+})
+
+describe('postIdeasEnabled: the per-tenant switch (the own-post audience\'s shape)', () => {
+  const saved = { on: process.env.POST_IDEAS, off: process.env.POST_IDEAS_OFF }
+  afterEach(() => {
+    if (saved.on === undefined) delete process.env.POST_IDEAS
+    else process.env.POST_IDEAS = saved.on
+    if (saved.off === undefined) delete process.env.POST_IDEAS_OFF
+    else process.env.POST_IDEAS_OFF = saved.off
+  })
+
+  it('is on by default, for every tenant', () => {
+    delete process.env.POST_IDEAS
+    delete process.env.POST_IDEAS_OFF
+    expect(postIdeasEnabled()).toBe(true)
+    expect(postIdeasEnabled(CLIENT)).toBe(true)
+  })
+
+  it('turns off for one tenant through POST_IDEAS_OFF, leaving the others on', () => {
+    delete process.env.POST_IDEAS
+    process.env.POST_IDEAS_OFF = ` ${CLIENT.toUpperCase()} , someone-else`
+    expect(postIdeasEnabled(CLIENT)).toBe(false)
+    expect(postIdeasEnabled('00000000-0000-4000-8000-0000000000c9')).toBe(true)
+  })
+
+  it('turns off everywhere with POST_IDEAS=0 or false', () => {
+    for (const v of ['0', 'false']) {
+      process.env.POST_IDEAS = v
+      expect(postIdeasEnabled(CLIENT)).toBe(false)
+      expect(postIdeasEnabled()).toBe(false)
+    }
   })
 })

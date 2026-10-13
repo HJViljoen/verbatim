@@ -6,6 +6,7 @@ import { WHAT_THEY_SELL } from '../pages/market-frame'
 import type { QuestionPost } from '../pages/own-post-touch'
 import { playbookAudience, type PlaybookVideo } from '../pages/playbook'
 import { rowWindow, type WindowColumns } from '../pipeline/run-bookkeeping'
+import { postIdeasEnabled } from '../config'
 import { allowTokens } from '../prose/scrub'
 import { prevMonth } from '../reading/month-key'
 import { ownedPosts } from '../reading/owned'
@@ -19,7 +20,7 @@ import type { ParseClient } from '../written/write-model'
 import { composePostIdeas, postIdeaRows, type HeldIdea, type PostIdeaDraft, type PostIdeaInsert } from './compose'
 import type { IdeaScrubCounts } from './scrub'
 import {
-  choosePlay, isQuestionConversation, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
+  choosePlay, isQuestionConversation, POST_IDEA_CANDIDATES, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
   type CoveredQuestion, type IdeaCandidate, type PlayVideo,
 } from './select'
 import { isMissingPostIdeas, POST_IDEAS_ON_CONFLICT, TABLE_POST_IDEAS } from './types'
@@ -41,7 +42,9 @@ import {
 //
 // SILENT WHERE IT SHOULD BE. A TEST run (`isTestRun`: a rehearsal that
 // gathered nothing, a capped run, `publish: false`) writes nothing and reads
-// nothing: the next real run writes its own ideas, so nobody is told. No
+// nothing: the next real run writes its own ideas, so nobody is told. A
+// tenant switched off (`postIdeasEnabled`, lib/config.ts: `POST_IDEAS=0`
+// everywhere, or its id in `POST_IDEAS_OFF`; on by default) is the same. No
 // `post_ideas` table (`isMissingPostIdeas`: the products migration not
 // applied) is a no-op that spends nothing, logged and never alerted, because
 // it is every run's state until Heinrich applies it. A run that already has
@@ -84,7 +87,12 @@ export interface PostIdeaInputs {
   candidates: IdeaCandidate[]
   /** The workings: every question conversation on three or more category
    *  videos in the window (`isQuestionConversation`), and what became of it. */
-  considered: { themeId: string; label: string; kind: string | null; dominantKind: string | null; weekVideos: number; lenientVideos: number; eligible: boolean }[]
+  considered: {
+    themeId: string; label: string; kind: string | null; dominantKind: string | null; weekVideos: number; lenientVideos: number; eligible: boolean
+    /** Its comments that ask, as sent (`questionComments`); null where it was
+     *  not read that far (not eligible, or touched by the client's posts). */
+    asks?: number | null
+  }[]
   /** Conversations left out because the client's own posts touched them. */
   covered: CoveredQuestion[]
   /** The client's own posts the touch test read, or null where unread. */
@@ -190,7 +198,12 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   } catch (e) {
     console.warn(`[post-ideas] the client's own posts could not be read; no conversation is left out for them: ${e instanceof Error ? e.message : String(e)}`)
   }
-  const { kept, covered } = untouchedQuestions(ranked, posts)
+  const { kept: untouched, covered } = untouchedQuestions(ranked, posts, Number.POSITIVE_INFINITY)
+  // A conversation whose comments in the window hold no question (they
+  // answer, advise or praise) gives the writer nothing to group: it does not
+  // take a writer's slot.
+  const asked = new Map(untouched.map(({ judgement: j }) => [j.theme.themeId, questionComments(clientId, j.theme, evidence)]))
+  const kept = untouched.filter(({ judgement: j }) => (asked.get(j.theme.themeId) ?? []).length > 0).slice(0, POST_IDEA_CANDIDATES)
 
   const videos = await loadQuestionVideos(admin, clientId, new Map(kept.map(({ judgement: j }) => [j.theme.themeId, j.theme.memberIds])))
   const candidates = withHandles(kept.map(({ judgement: j, touch }) => ({
@@ -199,14 +212,18 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
     description: j.theme.description,
     weekVideos: j.theme.weekVideos,
     lenientVideos: j.lenientVideos,
-    comments: questionComments(clientId, j.theme, evidence),
+    comments: asked.get(j.theme.themeId) ?? [],
     play: choosePlay(videos.get(j.theme.themeId) ?? [], month),
     touch,
   })))
   return {
     ...empty,
     candidates,
-    considered: judged.map((j) => ({ themeId: j.theme.themeId, label: j.theme.label, kind: j.theme.kind, dominantKind: j.dominantKind, weekVideos: j.theme.weekVideos, lenientVideos: j.lenientVideos, eligible: eligible.has(j.theme.themeId) }))
+    considered: judged.map((j) => ({
+      themeId: j.theme.themeId, label: j.theme.label, kind: j.theme.kind, dominantKind: j.dominantKind,
+      weekVideos: j.theme.weekVideos, lenientVideos: j.lenientVideos, eligible: eligible.has(j.theme.themeId),
+      asks: asked.has(j.theme.themeId) ? (asked.get(j.theme.themeId) ?? []).length : null,
+    }))
       .sort((a, b) => b.lenientVideos - a.lenientVideos || b.weekVideos - a.weekVideos || a.themeId.localeCompare(b.themeId)),
     covered,
     ownPosts: posts?.length ?? null,
@@ -294,7 +311,7 @@ export async function savePostIdeas(admin: SupabaseClient, rows: readonly PostId
 // ---- The step --------------------------------------------------------------------------
 
 export interface PostIdeasStepResult {
-  status: PostIdeasStatus | 'failed' | 'test_run' | 'missing_migration' | 'exists'
+  status: PostIdeasStatus | 'failed' | 'test_run' | 'disabled' | 'missing_migration' | 'exists'
   ideas: number
   held: number
   costUsd: number
@@ -303,13 +320,19 @@ export interface PostIdeasStepResult {
 
 /** What the step needs from the world, so a test can stand them in. */
 export interface PostIdeasStepDeps {
+  /** The per-tenant switch (`postIdeasEnabled`, lib/config.ts). */
+  enabled: (clientId: string) => boolean
+  /** The company's name, for the alert's subject (the week read's). */
+  company: (admin: SupabaseClient, clientId: string) => Promise<string>
   existing: (admin: SupabaseClient, clientId: string, runId: string) => Promise<number | null>
   build: typeof buildPostIdeas
   save: (admin: SupabaseClient, rows: readonly PostIdeaInsert[]) => Promise<void>
   alert: (subject: string, text: string) => Promise<{ sent: boolean }>
 }
 
-const DEFAULT_DEPS: PostIdeasStepDeps = { existing: existingPostIdeas, build: buildPostIdeas, save: savePostIdeas, alert: sendAlertEmail }
+const DEFAULT_DEPS: PostIdeasStepDeps = {
+  enabled: postIdeasEnabled, company: companyOf, existing: existingPostIdeas, build: buildPostIdeas, save: savePostIdeas, alert: sendAlertEmail,
+}
 
 const FALLBACK = (clientId: string, runId: string) =>
   `Fallback, once the cause is fixed: node --env-file=.env.local --import tsx scripts/post-ideas.ts --client ${clientId} --run ${runId} --dry-run, then again with --write.`
@@ -339,9 +362,17 @@ export async function runPostIdeasStep(
     console.log('[write-post-ideas] a test run: no post ideas are written')
     return { status: 'test_run', ideas: 0, held: 0, costUsd: 0 }
   }
+  // The per-tenant switch (lib/config.ts `postIdeasEnabled`): off, nothing is
+  // read, spent or written, and nobody is told, as for a test run.
+  if (!d.enabled(opts.clientId)) {
+    console.log('[write-post-ideas] post ideas are switched off for this tenant (POST_IDEAS / POST_IDEAS_OFF)')
+    return { status: 'disabled', ideas: 0, held: 0, costUsd: 0 }
+  }
   // THE STEP'S CLOCK STARTS HERE: its one call is capped and done by 250 s.
   const startedAt = Date.now()
-  let who = opts.company ?? opts.clientId
+  // The alert names the company, as the week read's does; a failed read of
+  // the name never fails the step.
+  const who = opts.company ?? (await d.company(admin, opts.clientId).catch(() => opts.clientId))
   try {
     const existing = await d.existing(admin, opts.clientId, opts.runId)
     if (existing === null) {
@@ -353,7 +384,6 @@ export async function runPostIdeasStep(
       return { status: 'exists', ideas: existing, held: 0, costUsd: 0 }
     }
     const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt, budgetMs: POST_IDEAS_STEP_BUDGET_MS }) })
-    who = opts.company ?? built.inputs.company
     if (built.status === 'thin') {
       console.log('[write-post-ideas] thin: no question conversation the client has not answered; no call, nothing stored')
       return { status: 'thin', ideas: 0, held: 0, costUsd: 0 }

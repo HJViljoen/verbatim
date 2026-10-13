@@ -123,14 +123,14 @@ function render(built: BuiltPostIdeas, mode: string): string {
   for (const x of inputs.considered) {
     const handle = inputs.candidates.find((k) => k.themeId === x.themeId)?.handle
     const covered = inputs.covered.find((k) => k.themeId === x.themeId)
-    const fate = handle ? `sent as ${handle}` : covered ? `left out: own posts touched it (${covered.posts.length})` : x.eligible ? 'not sent (past the cap)' : 'not eligible (the week pool\'s gate)'
+    const fate = handle ? `sent as ${handle} (${x.asks ?? '?'} comments that ask)` : covered ? `left out: own posts touched it (${covered.posts.length})` : !x.eligible ? 'not eligible (the week pool\'s gate)' : x.asks === 0 ? 'not sent: none of its comments asks' : 'not sent (past the cap)'
     out.push(`- "${x.label}" (filed as ${x.kind ?? '?'}, mostly ${x.dominantKind ?? '?'} this week): week ${x.weekVideos}, counted ${x.lenientVideos}; ${fate}`)
   }
   out.push(`Own posts read for the touch test: ${inputs.ownPosts ?? 'unread'}.`)
   for (const h of built.held) out.push(`Held: ${h.question} "${h.label}": ${h.reason}`)
   if (built.scrub) {
     const s = built.scrub
-    out.push(`Scrub: ${s.dropped} sentence(s) dropped (digits ${s.droppedDigits}, medical ${s.droppedMedical}${s.medical.length ? ` [${s.medical.join(', ')}]` : ''}, movement ${s.droppedMovement}, first person ${s.droppedFirstPerson}, how-it-was-made ${s.droppedBanned}, over cap ${s.droppedLong}); direction words kept and counted: ${s.flaggedDirection}.`)
+    out.push(`Scrub: ${s.dropped} sentence(s) dropped (digits ${s.droppedDigits}, medical ${s.droppedMedical}${s.medical.length ? ` [${s.medical.join(', ')}]` : ''}, movement ${s.droppedMovement}, first person ${s.droppedFirstPerson}, how-it-was-made ${s.droppedBanned}, over cap ${s.droppedLong}, copied a comment ${s.droppedCopied ?? 0}); comments under a sub-question that do not ask: ${s.droppedNotAsking ?? 0}; direction words kept and counted: ${s.flaggedDirection}.`)
   }
   for (const k of inputs.candidates) {
     const sent = built.raw?.ideas.find((i) => i.question === k.handle)
