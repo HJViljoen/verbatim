@@ -67,7 +67,7 @@ export function VerdictBadge({ verdict, answersOnly = false, className }: { verd
   if (!verdict || verdict.state === 'refused') return null
   if (answersOnly && verdict.state !== 'moved' && verdict.state !== 'no_clear_change') return null
   return (
-    <span data-copy="verdict" className={cn('whitespace-nowrap text-[11.5px]', className)}>
+    <span data-copy="verdict" className={cn('text-[11.5px]', className)}>
       <MovementBadge verdict={verdict} unit="pts" good="neutral" bandTip />
     </span>
   )

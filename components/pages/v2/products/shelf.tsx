@@ -36,14 +36,19 @@ export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'mo
   const selected = data.shelf.find((c) => c.selected)?.id ?? null
   return (
     <section aria-labelledby="catalogue-title" className={CARD}>
-      <CardHead
-        icon={Box}
-        id="catalogue-title"
-        title="Your catalogue"
-        sub={<>Every product, by category. The darker the tile, the more videos talked about it in {data.monthName}. Category counts include talk that names none of your products. {PRODUCTS_BASIS}</>}
-        action={<div className="max-md:hidden"><ShelfLegend /></div>}
-      />
-      <div className="md:hidden"><ShelfLegend /></div>
+      {/* The key sits at the head's right on a wide screen and wraps under it
+          on a phone, so the head's icon stays level with its title. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0 flex-1 basis-[420px]">
+          <CardHead
+            icon={Box}
+            id="catalogue-title"
+            title="Your catalogue"
+            sub={<>Every product, by category. The darker the tile, the more videos talked about it in {data.monthName}. Category counts include talk that names none of your products. {PRODUCTS_BASIS}</>}
+          />
+        </div>
+        <div className="pt-1"><ShelfLegend /></div>
+      </div>
       <CatalogueShelf
         columns={data.shelf.map((c) => shelfColumn(c, data.monthName))}
         selected={selected}

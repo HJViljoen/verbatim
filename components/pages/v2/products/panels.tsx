@@ -95,7 +95,7 @@ function UnclearRow({ line, options, category }: { line: UnclearLine; options: C
       <div className="min-w-0">
         {words
           ? <p data-copy="quote" lang={line.quote?.english ? 'en' : undefined} className="m-0 font-serif text-[14.5px] italic leading-[1.5] text-foreground">“{words}”</p>
-          : <p className="m-0 text-[14px] leading-[1.5] text-foreground">The video itself names one of your {category}.</p>}
+          : <p className="m-0 text-[14px] leading-[1.5] text-foreground">The video itself names one of your products here.</p>}
         {line.cite ? <span className="text-[12px] text-muted-foreground">{line.cite}</span> : null}
       </div>
       <div className="flex flex-wrap items-start gap-2 sm:justify-end">
@@ -114,7 +114,7 @@ function UnclearSection({ panel, canTag }: { panel: CategoryPanel; canTag: boole
   if (u.videos === 0) return null
   return (
     <section id={UNCLEAR_ID} aria-label="About one of yours, but we couldn’t tell which" className="flex scroll-mt-6 flex-col gap-1">
-      <p className={cn(CAPS, 'mb-1.5')}>About one of your {category}, but we couldn’t tell which · <Fig>{fmtInt(u.videos)}</Fig> videos</p>
+      <p className={cn(CAPS, 'mb-1.5')}>About one of your products, but we couldn’t tell which · <Fig>{fmtInt(u.videos)}</Fig> {u.videos === 1 ? 'video' : 'videos'}</p>
       {u.lines.length > 0 ? (
         <div role="list">{u.lines.map((l) => <UnclearRow key={l.key} line={l} options={u.options} category={category} />)}</div>
       ) : <EmptyLine>None of their comments can be quoted here.</EmptyLine>}
@@ -163,7 +163,7 @@ export function CategoryPanelView({ panel, monthName, canTag }: { panel: Categor
       {panel.split && panel.share ? (
         <StatRow>
           <StatCell value={panel.split.any} of={panel.share.n} label={<>videos talk about {word}</>} />
-          <StatCell value={panel.split.named} label={<>name one of your {word}</>} />
+          <StatCell value={panel.split.named} label="name one of your products" />
           <StatCell value={panel.split.unclear} label="are about one of yours, but we couldn’t tell which" />
           <StatCell value={panel.split.unbranded} label={<>are about {word} in general, none of yours named</>} />
         </StatRow>
@@ -175,11 +175,11 @@ export function CategoryPanelView({ panel, monthName, canTag }: { panel: Categor
         <LineSection line={panel.line} name={panel.name} mode="share" />
       </div>
 
-      {panel.compare ? <CompareSection compare={panel.compare} title={`Your ${word} against ${word} in general`} /> : null}
+      {panel.compare ? <CompareSection compare={panel.compare} title={`Your products against ${word} in general`} /> : null}
 
       <UnclearSection panel={panel} canTag={canTag} />
 
-      <Foot askHref={panel.askHref} ask={`Ask the Agent about ${word}`} settingsHref={panel.settingsHref} settings={`Edit your ${word} in Settings`} />
+      <Foot askHref={panel.askHref} ask={`Ask the Agent about ${word}`} settingsHref={panel.settingsHref} settings={`Edit ${panel.name} in Settings`} />
     </InPlacePanel>
   )
 }

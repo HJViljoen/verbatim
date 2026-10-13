@@ -33,8 +33,8 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     const at = (s: string) => text.indexOf(s)
     expect(at('Navii came up for the first time')).toBeGreaterThan(-1)
     expect(at('Navii came up for the first time')).toBeLessThan(at('Your catalogue'))
-    expect(at('Your catalogue')).toBeLessThan(at('About one of your liners, but we couldn’t tell which'))
-    expect(at('About one of your liners')).toBeLessThan(at('Edit your products in Settings'))
+    expect(at('Your catalogue')).toBeLessThan(at('About one of your products, but we couldn’t tell which'))
+    expect(at('About one of your products')).toBeLessThan(at('Edit your products in Settings'))
     expect(text).toContain('Counted over your market: rivals’ posts and everyone else’s, your own posts left out.')
   })
 
