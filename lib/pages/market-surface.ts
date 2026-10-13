@@ -48,6 +48,7 @@ import { quotesUntranslated } from './evidence-untranslated'
 import { quoteGate } from '../quote-gate'
 import { gateFor, readQuoteContext, type QuoteContext } from '../quote-context'
 import { earliestMoveDay } from '../subjects/move-day'
+import { ownedPosts } from '../reading/owned'
 import type { MoveDating } from './date-move'
 
 // Market — the decision surface (Phase 1 WP14, design §3 MK1-MK7, item 42's
@@ -1913,19 +1914,19 @@ async function loadQuestionThemes(
 }
 
 /** Your posts over the window, dated by the post (`upload_date`), with what
- *  each is about (`videos.topics`): the question rows' haystack. Null where the
- *  read failed. Five columns, never `*`. */
-async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, from: string, to: string): Promise<QuestionPost[] | null> {
-  return selectAll<QuestionPost>(() =>
-    supabase
-      .from('videos')
-      .select('id, upload_date, topics, video_url')
-      .eq('client_id', clientId)
-      .eq('is_client', true)
-      .gte('upload_date', from)
-      .lt('upload_date', to)
-      .order('id', { ascending: true }),
-  )
+ *  each is about (`videos.topics`): the question rows' haystack.
+ *
+ *  OFF YOUR OWN ACCOUNTS (depth v2, T7 for T14): `ownedPosts`
+ *  (lib/reading/owned.ts, `source = 'owned'`), the one read every page asks
+ *  "what did you publish" through. It read `is_client`, which a creator's
+ *  video naming the brand carries too, so a creator's review could "touch" a
+ *  question as one of your posts. In id order, as before; a failed read
+ *  rejects, and the caller turns that into "could not read your posts". */
+export async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, from: string, to: string): Promise<QuestionPost[] | null> {
+  const owned = await ownedPosts({ supabase, clientId }, { from, to })
+  return owned.posts
+    .map((p) => ({ id: p.id, upload_date: p.upload_date, topics: p.topics, video_url: p.video_url }))
+    .sort((a, b) => a.id.localeCompare(b.id))
 }
 
 /**
