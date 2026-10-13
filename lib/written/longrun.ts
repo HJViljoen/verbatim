@@ -27,7 +27,9 @@ import type { LongRunIdea, LongRunReadData, WeekReadHeld, WhoPart } from './type
 import type { ParseClient } from './write-model'
 
 // The long-run read (pages build, 1 Oct): "What holds across {months}", the
-// lead of Your market as the bigger picture. The week read's machinery
+// bigger picture. It led Your market until Design v2; since 13 Oct it closes
+// Market › This month for its month, below the month's data (Heinrich;
+// lib/pages/v2/market.ts `marketLongRunOf`). The week read's machinery
 // (lib/written/pool.ts, evidence.ts, scrub.ts, check.ts) over a long window.
 //
 // THE WINDOW. Whole calendar months, ending with the read's month: back to the
@@ -713,7 +715,7 @@ export async function runLongRunStep(
     console.error(`[write-longrun-read] not checked: ${error}`)
     await tell(
       `Verbatim long-run read not checked: ${opts.company}`,
-      `Run ${opts.runId} could not tell whether it closes a month${month ? ` (${longMonth(month)})` : ''}, so no long-run read ("What holds across ...", the top of Your market) was written. The week's read and the run are unaffected. Later runs do not write a month that has ended.\n\nError: ${error}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
+      `Run ${opts.runId} could not tell whether it closes a month${month ? ` (${longMonth(month)})` : ''}, so no long-run read ("What holds across ...", at the foot of Market › This month) was written. The week's read and the run are unaffected. Later runs do not write a month that has ended.\n\nError: ${error}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
     )
     return { status: 'skipped', month, ideas: 0, costUsd: 0, error }
   }
@@ -721,7 +723,7 @@ export async function runLongRunStep(
     console.warn(`[write-longrun-read] run ${opts.runId} closes ${longMonth(month)} but is a test run: no long-run read is written`)
     await tell(
       `Verbatim long-run read not written (a test run): ${opts.company}`,
-      `Run ${opts.runId} closes ${longMonth(month)} ${month.slice(0, 4)}, but it is a test run (a rehearsal that gathered nothing, a capped run, or one told not to publish), and test runs never publish: the long-run read for ${longMonth(month)} ("What holds across ...", the top of Your market) was not written, and no later run writes a month that has ended.\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
+      `Run ${opts.runId} closes ${longMonth(month)} ${month.slice(0, 4)}, but it is a test run (a rehearsal that gathered nothing, a capped run, or one told not to publish), and test runs never publish: the long-run read for ${longMonth(month)} ("What holds across ...", at the foot of Market › This month) was not written, and no later run writes a month that has ended.\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
     )
     return { status: 'not_due', month, ideas: 0, costUsd: 0, error: 'a test run' }
   }
@@ -745,7 +747,7 @@ export async function runLongRunStep(
     }
     await tell(
       `Verbatim long-run read not written: ${opts.company}`,
-      `The long-run read for ${longMonth(month)} ("What holds across ...", the top of Your market) could not be written on run ${opts.runId}, the run that closes the month. The week's read and the run are unaffected; Your market keeps the read it had.\n\nError: ${error}\n${stored ? 'A failed row is stored in week_reads.' : 'No row could be stored.'}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
+      `The long-run read for ${longMonth(month)} ("What holds across ...", at the foot of Market › This month) could not be written on run ${opts.runId}, the run that closes the month. The week's read and the run are unaffected; Market › This month for ${longMonth(month)} shows a long-run read only where one was written before the month closed, and none otherwise.\n\nError: ${error}\n${stored ? 'A failed row is stored in week_reads.' : 'No row could be stored.'}\n\n${LONGRUN_FALLBACK(opts.clientId, month)}`,
     )
     return { status: 'failed', month, ideas: 0, costUsd: 0, error }
   }

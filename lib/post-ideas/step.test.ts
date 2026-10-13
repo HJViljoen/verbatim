@@ -31,7 +31,8 @@ const CANDIDATES = withHandles([
 ])
 
 const INPUTS: PostIdeaInputs = {
-  clientId: CLIENT, runId: RUN, company: 'Össur', sells: null, window: { from: '2026-10-05T00:00:00Z', to: '2026-10-12T00:00:00Z' }, month: '2026-10-01',
+  clientId: CLIENT, runId: RUN, company: 'Össur', sells: null, window: { from: '2026-10-05T00:00:00Z', to: '2026-10-12T00:00:00Z' },
+  read: { from: '2026-09-14T00:00:00.000Z', to: '2026-10-12T00:00:00Z' }, month: '2026-10-01',
   candidates: CANDIDATES, considered: [], covered: [], ownPosts: 7, allow: [],
 }
 

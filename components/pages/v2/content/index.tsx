@@ -78,9 +78,8 @@ export function ContentPage({ data }: { data: ContentPageData }) {
         block={data.ideas}
         state={state}
         month={month}
-        weekWord={weekWord}
         panel={ideaPanel
-          ? (notchAt) => <IdeaPanelView panel={ideaPanel} state={state} count={data.ideas.cards.length} month={month} weekWord={weekWord} notchAt={notchAt} />
+          ? (notchAt) => <IdeaPanelView panel={ideaPanel} state={state} count={data.ideas.cards.length} month={month} notchAt={notchAt} />
           : undefined}
       />
 

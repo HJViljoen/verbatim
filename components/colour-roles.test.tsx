@@ -100,6 +100,8 @@ describe('the bans that hold with more colour, on the pages', () => {
     // The Dashboard's Voices tile names brands ("Named most", Design v2).
     ['dashboard', render(<DashboardPage data={dashboardFixture()} />), true],
     ['market', render(<MarketPage data={marketFixture()} />), true],
+    // This month closes with the month's long-run read (Heinrich, 13 Oct).
+    ['market, this month with its long-run read', render(<MarketPage data={marketFixture({ period: 'month', closed: true, longRun: 'full' })} />), true],
     ['voices', render(<VoicesPage data={VOICES_FIXTURES.sealand()} />), true],
     ['voices, a brand open', render(<VoicesPage data={VOICES_FIXTURES['sealand-brand']()} />), true],
     ['voices, a group open', render(<VoicesPage data={VOICES_FIXTURES['ossur-group']()} />), false],

@@ -265,7 +265,7 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
   })
 })
 
-describe('the run that closes a month: the operator\'s review email carries the long-run read, which no page shows since Design v2 (fresh review B1; 5 Oct; 13 Oct)', () => {
+describe('the run that closes a month: the operator\'s review email carries the long-run read and links to it on Market › This month (fresh review B1; 5 Oct; 13 Oct)', () => {
   const longRun = (over: Record<string, unknown> = {}) => ({
     client_id: CLIENT, run_id: RUN, kind: 'month', status: 'ready', month: '2026-09-01', created_at: '2026-10-04T08:41:00Z',
     data: {
@@ -281,7 +281,7 @@ describe('the run that closes a month: the operator\'s review email carries the 
     ...over,
   })
 
-  it('the operator\'s review email carries its title, lead, headlines and sentences', async () => {
+  it('the operator\'s review email carries its title, lead, headlines and sentences, and the link to its month on Market', async () => {
     const w = world({ status: 'ready', data: frozen(sealandRead()) })
     w.tables.week_reads.push(longRun())
     const r = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
@@ -292,6 +292,8 @@ describe('the run that closes a month: the operator\'s review email carries the 
       title: 'What holds across August and September',
       inShort: 'Buyers like the idea of a sustainable bag but ask harder questions before they commit.',
       ideas: [{ headline: 'Interest stalls when the way to buy isn’t clear', body: ['People who already want the bag stop on basic buying questions.', 'Price and size are asked in the same breath.'] }],
+      // Where the client reads it already: Market › This month for its month.
+      href: `${APP}/dashboard/market?period=month&month=2026-09#long-run`,
     })
     // The client's email, at the Send, is unchanged: no long-run read in it.
     await deliverSend({ admin: w.admin, sendId: r.sendId!, baseUrl: APP, mode: 'review', approvedBy: 'operator-user' })

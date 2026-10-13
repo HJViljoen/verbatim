@@ -23,7 +23,7 @@ import { IDEAS_STALE_DAYS } from '../pages/v2/content'
 import { MOVE_MONTHS_BEFORE } from '../pages/v2/moves'
 import { STANDOUT_MIN } from '../pages/v2/products'
 import { ACCOUNT_FLOOR } from '../pages/voice-surface-where'
-import { POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_RATED, POST_IDEA_MIN_VIDEOS, POST_IDEA_OWNED_MONTHS } from '../post-ideas/select'
+import { POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_RATED, POST_IDEA_MIN_VIDEOS, POST_IDEA_OWNED_MONTHS, POST_IDEAS_READ_DAYS } from '../post-ideas/select'
 import { STATEMENTS_TENANT_VISIBLE } from '../statements/visibility'
 import { SUBJECTS_MAX } from '../subjects/types'
 import { QUEUE_FLOOR } from './queue'
@@ -308,7 +308,9 @@ describe('how to read, market-first', () => {
     // over, when ideas stop printing, the format's rated floor, and the
     // word check (own-posts.ts), which Content reads since Design v2.
     expect([POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS, POST_IDEA_OWNED_MONTHS]).toEqual([3, 2, 3])
-    expect(cardText('content')).toContain('asked at least 3 times on 2 or more videos that week')
+    // …over the four weeks to an update (Heinrich, 13 Oct).
+    expect(POST_IDEAS_READ_DAYS).toBe(28)
+    expect(cardText('content')).toContain('asked at least 3 times on 2 or more videos in the four weeks to an update')
     expect(cardText('content')).toContain('from that month and the two before')
     expect(IDEAS_STALE_DAYS).toBe(28)
     expect(cardText('content')).toContain('four weeks older than the page’s')

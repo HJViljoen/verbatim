@@ -25,8 +25,10 @@ import type { WeekReadData } from './types'
  *
  * This week, the Dashboard's numbers and tiles, the Subjects pane's lines and
  * Your market's subject sentences read the week read here
- * (`loadPublishedWeekRead`); Your market's "What holds across {months}" reads
- * the month's long-run read here (`loadPublishedLongRun`).
+ * (`loadPublishedWeekRead`); the month's long-run read ("What holds across
+ * {months}") is read here too (`loadPublishedLongRun`): by Market › This
+ * month, for the month the view reads, below the month's data (Heinrich, 13
+ * Oct), and by the legacy Your market (stored snapshots only).
  *
  * FAILS CLOSED. A read that fails throws, and each page loses only that block
  * (logged); it never prints a read it could not check was ready. The table not
@@ -99,22 +101,28 @@ export async function loadPublishedWeekRead(
 }
 
 /**
- * The published long-run read of this tenant (Your market's "What holds
- * across {months}"): the newest ready one, or null (none written yet, or the
- * table not in this database). The newest month first, and within a month the
- * newest row (a read written before its month closed, `partialThrough`, is
- * followed by the full one the month-closing run writes; `standsAsMonthRead`,
+ * The published long-run read of this tenant ("What holds across {months}"):
+ * the newest ready one, or null (none written yet, or the table not in this
+ * database). The newest month first, and within a month the newest row (a
+ * read written before its month closed, `partialThrough`, is followed by the
+ * full one the month-closing run writes; `standsAsMonthRead`,
  * lib/written/store.ts); a row that is not a long-run read is passed over.
- * Throws where `week_reads` cannot be read.
+ * `month` (`YYYY-MM-01`) narrows it to that month's read, which is how Market
+ * › This month asks for the month it shows; `before` to the months before
+ * one (the newest ready read of any earlier month), which is how it asks for
+ * a stand-in where the month it shows is still filling and has none. Throws where `week_reads`
+ * cannot be read.
  */
-export async function loadPublishedLongRun(admin: SupabaseClient, clientId: string): Promise<StoredLongRun | null> {
+export async function loadPublishedLongRun(admin: SupabaseClient, clientId: string, opts: { month?: string; before?: string } = {}): Promise<StoredLongRun | null> {
   // One row a month: a chunk is every month there is, so a row that is not a
   // long-run read is passed over for the one before it.
-  const res = await admin.from(WEEK_READS_TABLE)
+  let q = admin.from(WEEK_READS_TABLE)
     .select('run_id, month, window_end, status, data, created_at')
     .eq('client_id', clientId).eq('kind', 'month').eq('status', 'ready')
     .not('data', 'is', null)
-    .order('month', { ascending: false }).order('created_at', { ascending: false }).limit(UUID_IN_CHUNK)
+  if (opts.month) q = q.eq('month', opts.month)
+  if (opts.before) q = q.lt('month', opts.before)
+  const res = await q.order('month', { ascending: false }).order('created_at', { ascending: false }).limit(UUID_IN_CHUNK)
   if (res.error) {
     if (isMissingWeekReads(res.error)) return null
     throw new Error(`week_reads published long run: ${res.error.message}`)

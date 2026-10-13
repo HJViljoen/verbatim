@@ -190,8 +190,10 @@ describe('postIdeaRows: what the step upserts', () => {
       ],
     })
     expect(out.ideas).toHaveLength(3)
-    const rows = postIdeaRows({ clientId: 'client', runId: 'run', window: { from: '2026-10-05T00:00:00Z', to: '2026-10-12T00:00:00Z' }, ideas: out.ideas, model: 'gpt-5.4', promptVersion: 'post_ideas_v1' })
+    const rows = postIdeaRows({ clientId: 'client', runId: 'run', window: { from: '2026-10-05T00:00:00Z', to: '2026-10-12T00:00:00Z' }, read: { from: '2026-09-14T00:00:00.000Z', to: '2026-10-12T00:00:00Z' }, ideas: out.ideas, model: 'gpt-5.4', promptVersion: 'post_ideas_v1' })
     expect(rows).toHaveLength(3)
+    // Every row carries the run's week and the four weeks its ideas read.
+    expect(rows.map((r) => [r.window_start, r.window_end, r.read_start, r.read_end])).toEqual(Array(3).fill(['2026-10-05T00:00:00Z', '2026-10-12T00:00:00Z', '2026-09-14T00:00:00.000Z', '2026-10-12T00:00:00Z']))
     expect(rows.map((r) => r.rank)).toEqual([1, 2, 3])
     const parsed = parsePostIdeaRow({ ...rows[0], id: 'id-1', created_at: '2026-10-12T08:00:00Z' })
     expect(parsed?.subquestions).toEqual([{ label: 'How long it should last', commentIds: ['c1-id', 'c2-id', 'c3-id'], videoIds: ['v1', 'v2'] }])

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { ALSO_PUBLISHED_UNREAD, renderInviteEmail, reviewEmailBody, reviewEmailLines } from './email'
+import { ALSO_PUBLISHED_HEADING, ALSO_PUBLISHED_UNREAD, renderInviteEmail, reviewEmailBody, reviewEmailLines } from './email'
+import { alsoPublishedOf } from './schedules/deliver'
+import { LONG_RUN_FIXTURE } from '@/components/pages/overview/picture/fixture'
 
 // The invite email's copy and addressing. Pure: `renderInviteEmail` reads only
 // its argument plus the module-level EMAIL_FROM, and no Resend client is
@@ -168,8 +170,10 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
   })
 
   // Fresh review B1: the operator's email for the run that closes a month
-  // carries the long-run read, which no page shows since Design v2 (13 Oct),
-  // under a heading that names no page.
+  // carries the long-run read. It is on Market › This month already, below
+  // the month's data (Heinrich, 13 Oct), and the email says so and links
+  // there.
+  const MONTH_HREF = 'https://app.verbatimintel.com/dashboard/market?period=month&month=2026-09#long-run'
   const also = {
     title: 'What holds across August and September',
     inShort: 'Buyers ask harder questions before they commit.',
@@ -177,12 +181,15 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
       { headline: 'Interest stalls when the way to buy isn’t clear', body: ['People stop on basic buying questions.', 'Price & size come <with> it.'] },
       { headline: 'Rivals are known for concrete jobs', body: ['Cotopaxi is talked about as a travel tool.'] },
     ],
+    href: MONTH_HREF,
   }
 
-  it('adds the long-run read with its title, lead, headlines and sentences, after the button, naming no page', () => {
+  it('adds the long-run read with its title, lead, headlines and sentences, after the button, saying it is on Market › This month and linking there', () => {
     const body = reviewEmailBody({ ...base, forOperator: true, editable: false, readOnPlatform: true, alsoPublished: also })
+    expect(ALSO_PUBLISHED_HEADING).toBe("The month's long-run read, already on Market › This month")
     expect(body.text).toContain([
-      "The month's long-run read (written; not shown on a page yet): What holds across August and September",
+      "The month's long-run read, already on Market › This month: What holds across August and September",
+      `Read it there: ${MONTH_HREF}`,
       '',
       'Buyers ask harder questions before they commit.',
       '',
@@ -193,10 +200,12 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
       '2. Rivals are known for concrete jobs',
       'Cotopaxi is talked about as a travel tool.',
     ].join('\n'))
-    expect(body.html.indexOf('long-run read (written; not shown on a page yet): What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
-    // No page prints the long-run read now: the email never sends the
-    // operator to one.
-    expect(body.text + body.html).not.toMatch(/Your market|read it there/)
+    expect(body.html.indexOf('long-run read, already on Market › This month: What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
+    // The link to Market › This month for the read's month, in the HTML too.
+    expect(body.html).toContain(`<a href="${MONTH_HREF.replace('&', '&amp;')}"`)
+    expect(body.html).toContain('Read it on Market › This month</a>')
+    // Never the retired page.
+    expect(body.text + body.html).not.toMatch(/Your market|not shown on a page/)
     // Never the old promise that Send publishes it: it is on the platform already.
     expect(body.text + body.html).not.toMatch(/published when you send/i)
     expect(body.html).toContain('2. Rivals are known for concrete jobs')
@@ -204,13 +213,27 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
     expect(body.text + body.html).not.toMatch(/[—–]/)
   })
 
-  it('says so where the read could not be read, and adds nothing on any other review', () => {
-    expect(reviewEmailBody({ ...base, forOperator: true, alsoPublished: { unread: true } }).text).toContain(ALSO_PUBLISHED_UNREAD)
-    expect(ALSO_PUBLISHED_UNREAD).toMatch(/^The month's long-run read \(written; not shown on a page yet\): /)
-    expect(ALSO_PUBLISHED_UNREAD).not.toMatch(/Your market|read it there/)
+  it('says so where the read could not be read, naming where a written one is but claiming none is there, and adds nothing on any other review', () => {
+    const unread = reviewEmailBody({ ...base, forOperator: true, alsoPublished: { unread: true } })
+    expect(unread.text).toContain(ALSO_PUBLISHED_UNREAD)
+    expect(ALSO_PUBLISHED_UNREAD).toBe("The month's long-run read: this update may have written one, and it could not be read into this email. Where it wrote one, it is on Market › This month.")
+    expect(unread.text).not.toContain('Read it there')
+    expect(unread.html).not.toContain('Read it on')
+    expect(ALSO_PUBLISHED_UNREAD).not.toMatch(/Your market/)
     const plain = reviewEmailBody({ ...base, forOperator: true })
     expect(plain.text).not.toContain('long-run read')
     expect(plain.html).not.toContain('long-run read')
     expect(plain.subject).toBe('Sealand: This week in your market is ready for review')
+  })
+})
+
+describe('the review email\'s long-run read, from the stored read (alsoPublishedOf)', () => {
+  it('links to Market › This month for the read\'s own month, at the section', () => {
+    const also = alsoPublishedOf(LONG_RUN_FIXTURE, 'https://app.verbatimintel.com')
+    expect(also).toMatchObject({
+      title: 'What holds across August and September',
+      href: 'https://app.verbatimintel.com/dashboard/market?period=month&month=2026-09#long-run',
+    })
+    expect(alsoPublishedOf({ ...LONG_RUN_FIXTURE, ideas: [] }, 'https://app.verbatimintel.com')).toBeNull()
   })
 })

@@ -2,6 +2,7 @@ import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { panelItemOrder, panelPlacement, PanelSlot, PERIODS, PeriodSwitch, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
+import { LongRunSection, LongRunUnread } from './long-run'
 import { ConversationPanel, SubjectPanelView } from './panel'
 import { RailView, railIsWide } from './rail'
 import { SubjectBoardView } from './subjects'
@@ -12,7 +13,8 @@ import { TopRowView } from './top'
 // to the boards E2-Market and E2-Market-Open (`lib/pages/v2/market.ts` says
 // what each part reads). The bar, the top row, the subject board beside the
 // rail, then every conversation; an open conversation or subject draws in
-// place under the row it was opened from.
+// place under the row it was opened from. This month ends with the month's
+// long-run read, below all of it (Heinrich, 13 Oct; `./long-run.tsx`).
 
 export const MARKET_TITLE = 'Market'
 
@@ -98,6 +100,10 @@ export function MarketPage({ data }: { data: MarketData | null }) {
       {/* An open conversation the table does not list and no card named
           (an old link to a quieter one) still opens, under the table. */}
       {data.panel && at === 'table' && !data.table?.rows.some((r) => r.open) ? convPanel() : null}
+      {/* This month only, below the month's data: the month's long-run read,
+          where one is published for the month the view reads. */}
+      {data.period === 'month' && data.longRun ? <LongRunSection read={data.longRun} data={data} /> : null}
+      {data.period === 'month' && !data.longRun && data.longRunUnread ? <LongRunUnread /> : null}
     </PageFrame>
   )
 }

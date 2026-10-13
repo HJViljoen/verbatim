@@ -6,7 +6,7 @@ import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { DatedEvidence } from '../written/evidence'
 import type { PoolTheme, ThemeJudgement } from '../written/pool'
 import {
-  bestRow, choosePlay, clearsEvidenceFloor, ideaLength, isQuestionConversation, isQuestionShaped, POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEA_MIN_RATED, POST_IDEAS_MAX,
+  bestRow, choosePlay, clearsEvidenceFloor, ideaLength, ideasReadWindow, isQuestionConversation, POST_IDEAS_READ_DAYS, isQuestionShaped, POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEA_MIN_RATED, POST_IDEAS_MAX,
   questionComments, rankQuestions, roundSeconds, untouchedQuestions, withHandles, type PlayVideo,
 } from './select'
 
@@ -337,5 +337,25 @@ describe('clearsEvidenceFloor: three asking comments across two videos (Heinrich
     expect(clearsEvidenceFloor({ comments: POST_IDEA_MIN_COMMENTS - 1, videos: 5 })).toBe(false)
     expect(clearsEvidenceFloor({ comments: 9, videos: POST_IDEA_MIN_VIDEOS - 1 })).toBe(false)
     expect(clearsEvidenceFloor({ comments: 0, videos: 0 })).toBe(false)
+  })
+})
+
+describe('ideasReadWindow: the ideas read four weeks of questions (Heinrich, 13 Oct)', () => {
+  it('is the 28 days ending at the run\'s window end, half-open, whatever the run\'s own window spans', () => {
+    expect(POST_IDEAS_READ_DAYS).toBe(28)
+    // Össur's 4 to 11 Oct run (its window opened at 11:45, not a full week).
+    expect(ideasReadWindow({ from: '2026-10-04T11:45:54.031+00:00', to: '2026-10-11T04:00:32.885+00:00' }))
+      .toEqual({ from: '2026-09-13T04:00:32.885Z', to: '2026-10-11T04:00:32.885+00:00' })
+    // A run that covered thirty days (Sealand's first) still reads four weeks.
+    expect(ideasReadWindow({ from: '2026-09-01T00:00:00Z', to: '2026-10-01T00:00:00Z' }))
+      .toEqual({ from: '2026-09-03T00:00:00.000Z', to: '2026-10-01T00:00:00Z' })
+  })
+
+  it('ends exactly where the run ended, never past it, and never on the clock', () => {
+    const w = { from: '2026-10-04T04:01:17.279Z', to: '2026-10-11T04:00:32.889Z' }
+    const r = ideasReadWindow(w)
+    expect(r.to).toBe(w.to)
+    expect(Date.parse(r.to) - Date.parse(r.from)).toBe(28 * 86_400_000)
+    expect(() => ideasReadWindow({ from: w.from, to: 'not a date' })).toThrow(/not a date/)
   })
 })

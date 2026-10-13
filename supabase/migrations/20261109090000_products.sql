@@ -653,8 +653,10 @@ create trigger month_product_readings_delete_guard
 -- 4. post_ideas (T13)
 -- =============================================================================
 
--- The run's post ideas: up to three question conversations of the week that
--- the client's own posts do not answer, biggest first. The model writes the
+-- The run's post ideas: up to three question conversations of the four weeks
+-- ending at the run's window end (read_start to read_end; Heinrich, 13 Oct:
+-- the ideas refresh every week and read four weeks of questions) that the
+-- client's own posts do not answer, biggest first. The model writes the
 -- title and the cover and groups the conversation's question comments into
 -- sub-questions BY COMMENT ID; code counts them (a sub-question's comments and
 -- videos are its ids, never a number the model typed) and picks the format and
@@ -666,9 +668,15 @@ create table if not exists public.post_ideas (
   id               uuid primary key default gen_random_uuid(),
   client_id        uuid not null references public.clients(id) on delete cascade,
   run_id           uuid not null references public.pipeline_runs(id) on delete cascade,
-  -- The run's frozen window, half-open [window_start, window_end).
+  -- The run's frozen window, half-open [window_start, window_end): the week
+  -- the ideas were written for.
   window_start     timestamptz not null,
   window_end       timestamptz not null,
+  -- The window the ideas READ their question comments from, half-open
+  -- [read_start, read_end): the four weeks ending at window_end
+  -- (lib/post-ideas/select.ts ideasReadWindow). Never past the run's end.
+  read_start       timestamptz not null,
+  read_end         timestamptz not null,
   rank             smallint not null check (rank between 1 and 3),
   -- The question conversation (theme_registry.id, the stable identity).
   registry_id      uuid not null references public.theme_registry(id) on delete cascade,
@@ -691,6 +699,7 @@ create table if not exists public.post_ideas (
   constraint post_ideas_run_rank unique (run_id, rank),
   constraint post_ideas_run_registry unique (run_id, registry_id),
   constraint post_ideas_window_check check (window_start < window_end),
+  constraint post_ideas_read_check check (read_start < read_end and read_end <= window_end),
   constraint post_ideas_title_check check (char_length(btrim(title)) between 1 and 200),
   constraint post_ideas_cover_check check (jsonb_typeof(cover) = 'object'),
   constraint post_ideas_subquestions_check check (jsonb_typeof(subquestions) = 'array'),
@@ -707,7 +716,7 @@ create index if not exists post_ideas_client_latest_idx
 create index if not exists post_ideas_registry_idx on public.post_ideas (registry_id);
 
 comment on table public.post_ideas is
-  'The run''s post ideas (up to three): a question conversation the client''s posts do not answer, the model''s title, cover and sub-questions (comment ids; code counts them), and the format and opening code chose from the market''s videos, with their multiples.';
+  'The run''s post ideas (up to three), read over the four weeks to the run''s window end (read_start, read_end): a question conversation the client''s posts do not answer, the model''s title, cover and sub-questions (comment ids; code counts them), and the format and opening code chose from the market''s videos, with their multiples.';
 
 -- =============================================================================
 -- 5. RLS, policies and grants (MF1's conventions)
@@ -768,7 +777,7 @@ grant select (client_id, month, audience, object_kind, object_id, group_id, prod
               k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, run_id, rule_version,
               catalogue_version, frozen_at)
   on public.month_product_readings to authenticated;
-grant select (id, client_id, run_id, window_start, window_end, rank, registry_id, title, cover, subquestions,
+grant select (id, client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions,
               format, format_multiple, opening, opening_multiple, model, prompt_version, created_at)
   on public.post_ideas to authenticated;
 

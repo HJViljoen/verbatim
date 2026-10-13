@@ -157,9 +157,9 @@ export interface ReviewEmail {
    *  lib/schedules/run.ts), before this email is written. */
   inPastIssues?: boolean
   /** The month's long-run read this run also wrote, for the operator to read
-   *  (fresh review B1; 5 Oct). No page prints it since Design v2 retired Your
-   *  market (where it lives next is Heinrich's call), so the email names no
-   *  page. Absent on every other review. */
+   *  (fresh review B1; 5 Oct). It is on Market › This month already, below
+   *  the month's data (Heinrich, 13 Oct), and the email links there. Absent
+   *  on every other review. */
   alsoPublished?: AlsoPublished | null
 }
 
@@ -167,29 +167,37 @@ export interface ReviewEmail {
  * The month's long-run read as the operator's review email carries it: its
  * title ("What holds across August and September"), its lead and each idea's
  * headline and sentences, the writer's words as stored (scrubbed when they
- * were written; no comment's words, no figure). `unread` where the run's
- * long-run read could not be read into the email: the email then says so
- * rather than leave it out, because it was written either way.
+ * were written; no comment's words, no figure), and the address of Market ›
+ * This month for its month, where it is on the client's page already
+ * (`href`, absolute). `unread` where the run's long-run read could not be
+ * read into the email: the email then says so rather than leave it out,
+ * because it was written either way.
  */
 export type AlsoPublished =
-  | { title: string; inShort: string; ideas: { headline: string; body: string[] }[] }
+  | { title: string; inShort: string; ideas: { headline: string; body: string[] }[]; href: string }
   | { unread: true }
 
-/** The section's heading. The long-run read (`week_reads` kind 'month') has
- *  no routed reader since Design v2 retired Your market, and where it lives
- *  next is Heinrich's call (Phase 4), so the heading names no page. */
-export const ALSO_PUBLISHED_HEADING = "The month's long-run read (written; not shown on a page yet)"
+/** Where the long-run read lives (Heinrich, 13 Oct): Market › This month,
+ *  below the month's data, as soon as the run writes it. */
+export const ALSO_PUBLISHED_PAGE = 'Market › This month'
 
-/** The section's heading where the long-run read could not be read. */
+/** The section's heading. The long-run read (`week_reads` kind 'month') is on
+ *  the client's Market › This month already when this email goes (pages do
+ *  not wait for review), so the heading says so and the section links there. */
+export const ALSO_PUBLISHED_HEADING = `The month's long-run read, already on ${ALSO_PUBLISHED_PAGE}`
+
+/** The section's heading where the long-run read could not be read: it names
+ *  where a written read is, never that one is there. */
 export const ALSO_PUBLISHED_UNREAD =
-  `${ALSO_PUBLISHED_HEADING}: this update may have written one, and it could not be read into this email.`
+  `The month's long-run read: this update may have written one, and it could not be read into this email. Where it wrote one, it is on ${ALSO_PUBLISHED_PAGE}.`
 
 /** The review email's long-run read section, as plain paragraphs in order
  *  (pure, for the test and the text body). */
-export function alsoPublishedLines(also: AlsoPublished): { heading: string; lead: string | null; ideas: { headline: string; body: string[] }[] } {
-  if ('unread' in also) return { heading: ALSO_PUBLISHED_UNREAD, lead: null, ideas: [] }
+export function alsoPublishedLines(also: AlsoPublished): { heading: string; link: string | null; lead: string | null; ideas: { headline: string; body: string[] }[] } {
+  if ('unread' in also) return { heading: ALSO_PUBLISHED_UNREAD, link: null, lead: null, ideas: [] }
   return {
     heading: `${ALSO_PUBLISHED_HEADING}: ${also.title}`,
+    link: also.href,
     lead: also.inShort.trim() || null,
     ideas: also.ideas.map((idea, i) => ({ headline: `${i + 1}. ${idea.headline}`, body: idea.body })),
   }
@@ -221,9 +229,10 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
 // and the body stays free of anything an erasure would have to chase. Same
 // optional posture as the rest of this module. ONE exception (fresh review
 // B1): the operator's email for a run that also wrote the month's long-run
-// read carries that read's own words, because neither the Studio nor any page
-// shows it. They are the writer's sentences, never a comment's, so there is
-// still nothing for an erasure to chase.
+// read carries that read's own words, and a link to where the client sees it
+// (Market › This month), because the Studio does not show it. They are the
+// writer's sentences, never a comment's, so there is still nothing for an
+// erasure to chase.
 /** The review email's subject, text and HTML (pure, for the test). */
 export function reviewEmailBody(review: ReviewEmail): { subject: string; text: string; html: string } {
   const subject = review.companyName ? `${review.companyName}: ${review.reportTitle} is ready for review` : `${review.reportTitle} is ready for review`
@@ -240,18 +249,20 @@ export function reviewEmailBody(review: ReviewEmail): { subject: string; text: s
       ? [
         ``,
         also.heading,
+        ...(also.link ? [`Read it there: ${also.link}`] : []),
         ...(also.lead ? [``, also.lead] : []),
         ...also.ideas.flatMap((idea) => [``, idea.headline, ...idea.body]),
       ]
       : []),
   ].join('\n')
   // Below the button, after a hairline: the long-run read the run also wrote,
-  // for the operator to read (no page shows it yet).
+  // for the operator to read, and the link to it on Market › This month.
   const alsoHtml = also
     ? `
           <tr><td style="padding-top:24px">
             <div style="border-top:1px solid ${EMAIL.hairline};padding-top:24px">
-              <p style="margin:0 0 12px;font-size:15px;font-weight:600;line-height:1.45">${escapeHtml(also.heading)}</p>${also.lead ? `
+              <p style="margin:0 0 12px;font-size:15px;font-weight:600;line-height:1.45">${escapeHtml(also.heading)}</p>${also.link ? `
+              <p style="margin:0 0 16px;font-size:14px;line-height:1.5"><a href="${escapeHtml(also.link)}" style="color:${EMAIL.link};font-weight:600">Read it on ${escapeHtml(ALSO_PUBLISHED_PAGE)}</a></p>` : ''}${also.lead ? `
               <p style="margin:0 0 16px;font-size:14px;line-height:1.55">${escapeHtml(also.lead)}</p>` : ''}${also.ideas.map((idea) => `
               <p style="margin:16px 0 6px;font-size:14px;font-weight:600;line-height:1.45">${escapeHtml(idea.headline)}</p>${idea.body.map((p) => `
               <p style="margin:0 0 8px;font-size:14px;line-height:1.55;color:${EMAIL.ink2}">${escapeHtml(p)}</p>`).join('')}`).join('')}

@@ -22,7 +22,7 @@ import type { ParseClient } from '../written/write-model'
 import { composePostIdeas, postIdeaRows, type HeldIdea, type PostIdeaDraft, type PostIdeaInsert } from './compose'
 import type { IdeaScrubCounts } from './scrub'
 import {
-  choosePlay, clearsEvidenceFloor, isQuestionConversation, POST_IDEA_CANDIDATES, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
+  choosePlay, clearsEvidenceFloor, ideasReadWindow, isQuestionConversation, POST_IDEA_CANDIDATES, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
   type CoveredQuestion, type IdeaCandidate, type PlayVideo,
 } from './select'
 import { isMissingPostIdeas, POST_IDEAS_ON_CONFLICT, TABLE_POST_IDEAS } from './types'
@@ -31,10 +31,13 @@ import {
 } from './write'
 
 // The week's post ideas, built and stored (depth v2, T13; plan decision 5).
-// Two entry points, the week read's shape (lib/written/step.ts):
+// Written on every run, they READ FOUR WEEKS: the question comments of the 28
+// days ending at the run's window end (`ideasReadWindow`, lib/post-ideas/
+// select.ts; Heinrich, 13 Oct), stored on each row as `read_start` /
+// `read_end`. Two entry points, the week read's shape (lib/written/step.ts):
 //
-//  · `buildPostIdeas`: the run's question conversations its client's posts
-//    have not touched (lib/post-ideas/select.ts), the writer's one call
+//  · `buildPostIdeas`: the question conversations of the ideas' window that
+//    the client's posts have not touched (lib/post-ideas/select.ts), the writer's one call
 //    (./write.ts), the scrub and compose (./compose.ts). Writes nothing but
 //    the call's `ai_call_log` rows, and not those where `log` is false (the
 //    script's dry run). A THIN week (no such conversation) makes no call;
@@ -102,11 +105,17 @@ export interface PostIdeaInputs {
   sells: string | null
   /** The run's frozen window. */
   window: { from: string; to: string }
-  /** The month the window is restated against (`readingMonthOf`). */
+  /** The window the ideas read their question comments from: the four weeks
+   *  ending at `window.to` (`ideasReadWindow`). Every count the candidates
+   *  carry is over it. */
+  read: { from: string; to: string }
+  /** The month the run's window is restated against (`readingMonthOf`):
+   *  where the client's own posts are read from (`ownedFrom`). */
   month: string
   candidates: IdeaCandidate[]
   /** The workings: every question conversation on three or more category
-   *  videos in the window (`isQuestionConversation`), and what became of it. */
+   *  videos in the ideas' window (`isQuestionConversation`), and what became
+   *  of it. */
   considered: {
     themeId: string; label: string; kind: string | null; dominantKind: string | null; weekVideos: number; lenientVideos: number; eligible: boolean
     /** Its comments that ask, as sent (`questionComments`); null where it was
@@ -186,31 +195,36 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   const { clientId, runId } = opts
   const [company, window] = await Promise.all([companyOf(admin, clientId), windowOf(admin, clientId, runId)])
   const month = readingMonthOf(window).month
+  // THE IDEAS READ FOUR WEEKS, dated by the comment: the 28 days ending at
+  // the run's window end, whatever the run's own window spans.
+  const read = ideasReadWindow(window)
   const empty: PostIdeaInputs = {
-    clientId, runId, company, sells: WHAT_THEY_SELL[clientId] ?? null, window, month,
+    clientId, runId, company, sells: WHAT_THEY_SELL[clientId] ?? null, window, read, month,
     candidates: [], considered: [], covered: [], ownPosts: null, allow: [],
   }
 
-  // The category's conversations in the window under this run's clustering;
-  // only one on three category videos can reach three gated ones.
-  const week = await loadWindowReading(admin, clientId, { from: window.from, to: window.to, runId, audiences: [INDUSTRY_AUDIENCE] })
-  if (!week.themes) throw new Error('post ideas: the window reads are not applied here')
+  // The category's conversations in the ideas' window under this run's
+  // clustering (`window_theme_readings`, an arbitrary window, never a sum of
+  // weeks); only one on three category videos can reach three gated ones.
+  const reading = await loadWindowReading(admin, clientId, { from: read.from, to: read.to, runId, audiences: [INDUSTRY_AUDIENCE] })
+  if (!reading.themes) throw new Error('post ideas: the window reads are not applied here')
   // Every conversation, not only those filed as questions: one filed under a
-  // topic is a question conversation where its comments this week mostly ask
-  // (`isQuestionConversation`), which only its evidence can say. The week
+  // topic is a question conversation where its comments in the window mostly
+  // ask (`isQuestionConversation`), which only its evidence can say. The week
   // pool reads the same.
-  const raw = week.themes.filter((t) => t.audience === INDUSTRY_AUDIENCE && t.videos >= POOL_MIN_VIDEOS)
+  const raw = reading.themes.filter((t) => t.audience === INDUSTRY_AUDIENCE && t.videos >= POOL_MIN_VIDEOS)
   const themes = await loadPoolThemes(admin, clientId, runId, raw)
   if (themes.length === 0) return empty
 
   const brands = await loadTrackedBrands(admin, clientId)
-  const evidence = await loadDatedEvidence(admin, clientId, themes.flatMap((t) => t.memberIds), window, { brands })
+  const evidence = await loadDatedEvidence(admin, clientId, themes.flatMap((t) => t.memberIds), read, { brands })
   const judged = themes.map((t) => judgeTheme(clientId, t, evidence)).filter(isQuestionConversation)
   const ranked = rankQuestions(judged)
   const eligible = new Set(ranked.map((j) => j.theme.themeId))
 
-  // The client's own posts of the reading month and the two before it. A read
-  // that fails leaves nothing out on a guess (`untouchedQuestions`).
+  // The client's own posts of the reading month and the two before it, to the
+  // run's end (the three months, not the ideas' four weeks). A read that fails
+  // leaves nothing out on a guess (`untouchedQuestions`).
   let posts: QuestionPost[] | null = null
   try {
     const own = await ownedPosts({ supabase: admin, clientId }, { from: ownedFrom(month), to: window.to })
@@ -308,7 +322,7 @@ export interface BuiltPostIdeas {
 export function finishPostIdeas(inputs: PostIdeaInputs, raw: PostIdeasOutput, costUsd: number): BuiltPostIdeas {
   const composed = composePostIdeas(inputs.candidates, raw, { allow: inputs.allow })
   const rows = postIdeaRows({
-    clientId: inputs.clientId, runId: inputs.runId, window: inputs.window, ideas: composed.ideas,
+    clientId: inputs.clientId, runId: inputs.runId, window: inputs.window, read: inputs.read, ideas: composed.ideas,
     model: POST_IDEAS_MODEL, promptVersion: POST_IDEAS_PROMPT_VERSION,
   })
   return {

@@ -213,11 +213,14 @@ export function composePostIdeas(
   return { ideas, held, scrub }
 }
 
-/** The rows the step upserts on (run_id, rank). Pure. */
+/** The rows the step upserts on (run_id, rank), each carrying the run's
+ *  window and the window the ideas read (`ideasReadWindow`). Pure. */
 export function postIdeaRows(a: {
   clientId: string
   runId: string
   window: { from: string; to: string }
+  /** The days the ideas read their question comments from. */
+  read: { from: string; to: string }
   ideas: readonly PostIdeaDraft[]
   model: string
   promptVersion: string
@@ -227,6 +230,8 @@ export function postIdeaRows(a: {
     run_id: a.runId,
     window_start: a.window.from,
     window_end: a.window.to,
+    read_start: a.read.from,
+    read_end: a.read.to,
     rank: i.rank,
     registry_id: i.registryId,
     title: i.title,
