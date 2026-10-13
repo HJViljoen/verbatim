@@ -27,6 +27,7 @@ const SHARED: Readonly<Record<string, string>> = {
   // sub-page, and components/settings-skeleton.tsx draws that shell.
   'settings/connections': 'settings', // redirects to /dashboard/settings
   'settings/how-to-read': 'settings',
+  'settings/products': 'settings', // Your products (depth v2, T10b)
   'settings/readiness': 'settings',
   'settings/record': 'settings',
   'settings/reports': 'settings',

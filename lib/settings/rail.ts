@@ -20,7 +20,7 @@
  */
 
 export type SettingsSection =
-  | 'tracking' | 'team' | 'billing' | 'readiness' | 'record' | 'guide' | 'subjects' | 'reports'
+  | 'tracking' | 'products' | 'subjects' | 'team' | 'billing' | 'readiness' | 'record' | 'guide' | 'reports'
 
 export interface SettingsSubPage {
   key: SettingsSection
@@ -40,23 +40,32 @@ export interface SettingsSubPage {
 //   - Readiness and The record are the operator's (rule 3: product health and
 //     process are not the client's), and How to read is removed for tenants;
 //     the operator keeps all three as tabs.
-//   - Subjects moved to the Subjects page and Reports and recipients to the
-//     Studio. Their entries stay, tab-less, because their addresses still
-//     answer (a redirect to the new home) and a redirect may only point at an
-//     address this table serves (`lib/nav.test.ts`).
+//   - Reports and recipients moved to the Studio. Its entry stays, tab-less,
+//     because its address still answers (a redirect to the new home) and a
+//     redirect may only point at an address this table serves
+//     (`lib/nav.test.ts`).
 //   - Billing is its own tab now; it was lit through Team.
+//
+// DESIGN V2 (depth plan T10b and T10c; board E8-Settings-Products): What you
+// track · Your products · Your subjects · Team · Billing, every one a client's
+// tab. Your products is new (the catalogue the market's talk is placed under);
+// Your subjects is the subject editor back in Settings, because Design v2
+// folded the Subjects page into Market and left the editor with no address
+// (`/dashboard/subjects` only redirects). Its key and address stay `subjects`
+// and `/dashboard/settings/subjects`, so no stored link changes.
 export const SETTINGS_SUBPAGES: readonly SettingsSubPage[] = [
   { key: 'tracking', href: '/dashboard/settings', label: 'What you track', tab: 'all' },
+  { key: 'products', href: '/dashboard/settings/products', label: 'Your products', tab: 'all' },
+  { key: 'subjects', href: '/dashboard/settings/subjects', label: 'Your subjects', tab: 'all' },
   { key: 'team', href: '/dashboard/team', label: 'Team', tab: 'all' },
   { key: 'billing', href: '/dashboard/billing', label: 'Billing', tab: 'all' },
   { key: 'readiness', href: '/dashboard/settings/readiness', label: 'Readiness', tab: 'operator' },
   { key: 'record', href: '/dashboard/settings/record', label: 'The record', tab: 'operator' },
   { key: 'guide', href: '/dashboard/settings/how-to-read', label: 'How to read', tab: 'operator' },
-  { key: 'subjects', href: '/dashboard/settings/subjects', label: 'Subjects', tab: 'none' },
   { key: 'reports', href: '/dashboard/settings/reports', label: 'Reports and recipients', tab: 'none' },
 ]
 
-/** The tabs a reader sees: the client's three, and the operator's after them. */
+/** The tabs a reader sees: the client's five, and the operator's after them. */
 export function settingsTabs(operator: boolean): SettingsSubPage[] {
   return SETTINGS_SUBPAGES.filter((s) => s.tab === 'all' || (operator && s.tab === 'operator'))
 }

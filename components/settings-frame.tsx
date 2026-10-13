@@ -19,8 +19,12 @@ import { cn } from '@/lib/utils'
 // month and "as at the update" are process talk (rule 1), so `bar` and
 // `context` are accepted and not printed.
 //
-// A ROW THAT SCROLLS SIDEWAYS ON ITS OWN. At a phone's width the tabs do not
-// fit; the row scrolls inside itself and the page never does.
+// A ROW THAT WRAPS. Five client tabs since Design v2 (E8: What you track ·
+// Your products · Your subjects · Team · Billing) do not fit a phone's width;
+// the row used to scroll sideways inside itself, which cut "Your subjects" in
+// half and hid Team and Billing. Each pill keeps its words on one line and
+// the row wraps, so every tab is on screen and the page never scrolls
+// sideways.
 //
 // SUB-PAGES THE ARTBOARD DOES NOT DRAW keep their own header (`contentMeta`,
 // `contentRule`) above their content. Its title is dropped where it only
@@ -60,7 +64,7 @@ export function SettingsFrame({
           </button>
         </form>
       </PageTitle>
-      <nav aria-label="Settings" className="flex gap-1 overflow-x-auto">
+      <nav aria-label="Settings" className="flex flex-wrap gap-1">
         {settingsTabs(operator).map((s) => (
           <Link
             key={s.key}

@@ -1,13 +1,38 @@
-import { redirect } from 'next/navigation'
-import { retiredTo } from '@/lib/nav'
+import { SettingsFrame } from '@/components/settings-frame'
+import { YourSubjectsTab } from '@/components/pages/settings/subjects'
+import { canManageTenant, getSessionContext } from '@/lib/auth'
+import { surface } from '@/lib/nav'
+import { settingsSubPage } from '@/lib/settings/rail'
+import { loadYourSubjects, yourSubjectsView } from '@/lib/settings/your-subjects'
+import type { Metadata } from 'next'
 
-// Settings › Subjects MOVED to the Subjects page (pages rebuild, 1 Oct): the
-// editor (add, rename, stop, confirm) sat on the list it changes, at
-// /dashboard/subjects, through the same write path (`lib/actions/subjects.ts`,
-// `canManageTenant` on every subject write). Design v2 folded Subjects into
-// Market, so an old link or bookmark lands where /dashboard/subjects does, in
-// one hop. The editor has no page of its own until Settings › Your subjects
-// is built (the boards: "adding and renaming go to Settings").
-export default function SettingsSubjectsMoved(): never {
-  redirect(retiredTo('/dashboard/subjects'))
+// The tab's title is the page's own name (finish-list item 25 polish; the root
+// layout's template adds ' · Verbatim').
+export const metadata: Metadata = { title: `${settingsSubPage('subjects').label} · ${surface('settings').label}` }
+
+// Settings › Your subjects (depth redesign v2, T10c). This address redirected
+// to the Subjects page from 1 Oct, and to Market once Design v2 folded that
+// page in; the editor it carried (add, rename, stop, confirm) had no home
+// left, so it is a tab again: the subjects you follow and the suggestions
+// waiting, with the same editor and the same write path
+// (lib/actions/subjects.ts, `canManageTenant` on every subject write).
+// `canEdit` is the affordance; the actions are the gate.
+
+export default async function SettingsSubjectsPage() {
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
+  const read = await loadYourSubjects(supabase, clientId).catch((error: unknown) => {
+    console.error(`[settings] subjects did not load for ${clientId}: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  })
+
+  return (
+    <SettingsFrame active="subjects" title="Settings" operator={session.operator != null}>
+      {read === null ? (
+        <p className="m-0 text-[14px] text-[#5F656B]">Your settings did not load. Refresh the page.</p>
+      ) : (
+        <YourSubjectsTab view={read.state === 'missing' ? null : yourSubjectsView(read.rows, canManageTenant(role))} />
+      )}
+    </SettingsFrame>
+  )
 }

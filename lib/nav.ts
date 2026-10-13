@@ -373,7 +373,7 @@ export function tenantAway(session: Pick<SessionContext, 'operator'>, href: stri
  * bookmark and a live legend link reached. It landed on Settings itself for
  * that window, and the Guide now points at the sub-page that replaced it.
  * `lib/nav.test.ts` pins the rule: a target must be an address something
- * actually serves — one of the nine, or one of the settings area's own seven
+ * actually serves — one of the nine, or one of the settings area's own nine
  * (`lib/settings/rail.ts` SETTINGS_ADDRESSES).
  */
 export const RETIRED_ADDRESSES: Readonly<Record<string, string>> = {
