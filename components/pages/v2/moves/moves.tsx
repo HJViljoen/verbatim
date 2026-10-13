@@ -8,7 +8,7 @@ import { inlineMonth } from '@/lib/reading/month-label'
 import { DateMove } from '@/components/pages/market-surface/date-move'
 import { canDate } from '@/lib/pages/date-move'
 import {
-  MOVES_SUB, MOVES_TITLE, MOVE_STATUS_LABEL, MOVE_UNREAD, NEXT_MOVE, NO_MOVE_YET,
+  MOVES_SUB, MOVES_TITLE, MOVES_UNREAD_TITLE, MOVE_STATUS_LABEL, MOVE_UNREAD, NEXT_MOVE, NO_MOVE_YET, READ_FAILED,
   axisLine, compareMonths, comparePrintable, moveAnchor, moveAxis, monthLabelOn, pointMonth, sharePct,
   type MoveCard, type MovePoint, type MoveSlot, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
@@ -117,7 +117,7 @@ function MoveChart({ card, readingMonth }: { card: MoveCard; readingMonth: strin
                   <text data-copy="figure" x={xs[i]} y={y - 10} textAnchor="middle" className={cn('fill-foreground font-mono text-[11.5px]', i === lastDrawn?.i ? 'font-semibold' : null)}>{sharePct(s.point.k, s.point.n)}</text>
                 </>
               ) : null}
-              <text x={xs[i]} y={128} textAnchor="middle" className={cn('font-mono text-[10.5px]', s.point ? 'fill-muted-foreground' : 'fill-muted-foreground opacity-50')}>{s.point ? pointMonth(s.point) : pointMonth({ month: s.month, soFar: false })}</text>
+              <text x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{s.point ? pointMonth(s.point) : pointMonth({ month: s.month, soFar: false })}</text>
             </g>
           )
         })}
@@ -220,8 +220,8 @@ function MoveCardView({ card, canDecide, reading }: { card: MoveCard; canDecide:
 /** The page's reading month and its label, as a move's sentence takes it. */
 const readingOf = (data: Pick<MovesPageData, 'month' | 'monthLabel'>): ReadingLabel => ({ month: data.month, label: data.monthLabel ?? null })
 
-/** The months an empty card's axis names: two before the reading month to
- *  the reading month, the board's three-month frame. */
+/** The months an empty card's axis names where it has no neighbour: two
+ *  before the reading month to the reading month, the board's frame. */
 function frameMonths(readingMonth: string): string[] {
   let at = monthStartOf(readingMonth)
   const out = [at]
@@ -232,44 +232,61 @@ function frameMonths(readingMonth: string): string[] {
   return out
 }
 
+/** A bare axis on the move chart's own geometry: the baseline and the month
+ *  names, nothing above it. `w` widens it across a row. */
+function BareAxis({ months, w = W, className }: { months: readonly string[]; w?: number; className?: string }) {
+  const n = months.length
+  const xs = months.map((_, i) => (n > 1 ? 45 + (i * (w - 90)) / (n - 1) : w / 2))
+  return (
+    <svg viewBox={`0 0 ${w} ${H}`} width="100%" aria-hidden className={cn('block overflow-visible', className)}>
+      <line x1={0} y1={BASE} x2={w} y2={BASE} className="stroke-border" />
+      {months.map((m, i) => (
+        <text key={m} x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{pointMonth({ month: m, soFar: false })}</text>
+      ))}
+    </svg>
+  )
+}
+
 /**
  * THE BOARD'S SECOND CARD WHERE THERE IS NO SECOND MOVE (and its only one
- * where there is none): the move card's own frame, title and chart, holding
- * the next move. Its chart is the axis alone (the reading month and the two
- * before, unmarked: no point, no "your move"), with one calm line where the
- * line would run. Date a move where the reader may.
+ * where there is none, or where the moves could not be read): the move
+ * card's own frame, title and chart, holding the next move. Its chart is the
+ * neighbour's axis, same months, same geometry, with nothing on it (no point,
+ * no "your move"); alone, the reading month and the two before. Its one line
+ * sits above the axis, in flow. It invites dating only where the reader may
+ * date one (an owner or an admin, where moves are recorded); otherwise its
+ * title says it.
  */
-function NextMoveCard({ data, first, wide }: { data: MovesPageData; first: boolean; wide: boolean }) {
-  const months = frameMonths(data.month)
-  const w = wide ? 2 * W : W
-  const xs = months.map((_, i) => 45 + (i * (w - 90)) / (months.length - 1))
-  const date = data.canDecide && data.dating && canDate(data.dating)
+function NextMoveCard({ data, first, wide, neighbour, failed }: { data: MovesPageData; first: boolean; wide: boolean; neighbour: MoveCard | null; failed: boolean }) {
+  const months = neighbour ? moveAxis(neighbour, data.month).map((s) => s.month) : frameMonths(data.month)
+  const invite = !failed && data.canDecide && data.moves.recorded && data.dating != null && canDate(data.dating)
+  const title = failed ? MOVES_UNREAD_TITLE : first ? NO_MOVE_YET.title : NEXT_MOVE.title
+  const sub = failed ? null : first ? NO_MOVE_YET.sub : NEXT_MOVE.sub
   return (
     <article data-move-slot="" className={cn(CARD, wide ? 'min-[1180px]:col-span-2' : null)}>
       <div className="min-w-0">
-        <h3 className="m-0 text-[17px] font-semibold leading-[1.3] text-foreground">{first ? NO_MOVE_YET.title : NEXT_MOVE.title}</h3>
-        <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">{first ? NO_MOVE_YET.sub : NEXT_MOVE.sub}</p>
+        <h3 className="m-0 text-[17px] font-semibold leading-[1.3] text-foreground">{title}</h3>
+        {sub ? <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">{sub}</p> : null}
       </div>
-      <div className="relative">
-        <svg viewBox={`0 0 ${w} ${H}`} width="100%" aria-hidden className={cn('block overflow-visible', wide ? 'max-h-[150px]' : null)} preserveAspectRatio={wide ? 'none' : undefined}>
-          <line x1={0} y1={BASE} x2={w} y2={BASE} className="stroke-border" vectorEffect="non-scaling-stroke" />
-        </svg>
-        {months.map((m, i) => (
-          <span key={m} aria-hidden className={cn(MONO, 'pointer-events-none absolute bottom-0 -translate-x-1/2 text-[10.5px] text-muted-foreground opacity-50')} style={{ left: `${(100 * xs[i]) / w}%` }}>
-            {pointMonth({ month: m, soFar: false })}
-          </span>
-        ))}
-        <p className="absolute inset-x-0 top-[30%] m-0 px-6 text-center text-[13.5px] leading-[1.5] text-muted-foreground">{NEXT_MOVE.line}</p>
-      </div>
-      {date ? <div className="mt-auto flex flex-wrap items-center gap-2"><DateMove dating={data.dating!} place="quiet" /></div> : null}
+      {failed ? <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{`Your moves ${READ_FAILED}.`}</p>
+        : invite ? <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{NEXT_MOVE.line}</p> : null}
+      {wide ? (
+        <>
+          <BareAxis months={months} className="min-[1180px]:hidden" />
+          <BareAxis months={months} w={2 * W} className="hidden min-[1180px]:block" />
+        </>
+      ) : <BareAxis months={months} />}
+      {invite ? <div className="mt-auto flex flex-wrap items-center gap-2"><DateMove dating={data.dating!} place="quiet" /></div> : null}
     </article>
   )
 }
 
 export function MovesSection({ data }: { data: MovesPageData }) {
   const cards = data.moves.cards
+  const failed = data.failed?.moves === true
   // THE BOARD'S TWO ACROSS, ALWAYS: an odd last row takes the next move's
-  // card beside it, and no move at all is that card across the row.
+  // card beside it, on its neighbour's axis; no move at all (or moves that
+  // could not be read) is that card across the row.
   const filler = cards.length % 2 === 1 || cards.length === 0
   return (
     <section aria-labelledby="moves-title" className="flex min-w-0 flex-col gap-4">
@@ -279,7 +296,7 @@ export function MovesSection({ data }: { data: MovesPageData }) {
       </div>
       <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
         {cards.map((c) => <MoveCardView key={c.id} card={c} canDecide={data.canDecide} reading={readingOf(data)} />)}
-        {filler ? <NextMoveCard data={data} first={cards.length === 0} wide={cards.length === 0} /> : null}
+        {filler ? <NextMoveCard data={data} first={cards.length === 0} wide={cards.length === 0} neighbour={cards.length > 0 ? cards[cards.length - 1] : null} failed={failed && cards.length === 0} /> : null}
       </div>
     </section>
   )

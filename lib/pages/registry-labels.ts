@@ -23,13 +23,21 @@ import { selectAll } from '../supabase-admin'
  * logged and adds no label, so a reader prints its id-less fallback rather
  * than losing the page.
  */
-export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
+export async function loadRegistryLabels(
+  supabase: SupabaseClient,
+  clientId: string,
+  ids: readonly string[],
+  /** Told of a failed chunk, for a reader that must say a read failed rather
+   *  than print the missing labels as absent. */
+  onError?: (error: unknown) => void,
+): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter(Boolean))]
   if (unique.length === 0) return new Map()
   const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
     selectAll<{ id: string; canonical_label: string | null }>(() =>
       supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
     ).catch((error: unknown) => {
+      onError?.(error)
       console.error(`[pages] registryLabels: ${error instanceof Error ? error.message : (error as { message?: string })?.message ?? String(error)}`)
       return [] as { id: string; canonical_label: string | null }[]
     }),

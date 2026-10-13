@@ -12,7 +12,7 @@ import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import type { MoveDating } from '@/lib/pages/date-move'
 import { inlineMonth } from '@/lib/reading/month-label'
 import {
-  ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_REST, ADVICE_SUB, ADVICE_TITLE, ASK_ABOUT, GROUNDED_BASIS, MOVES_PATH, NO_QUOTE, RECORD_HREF, WOULD_MOVE_NOTHING,
+  ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_REST, ADVICE_SUB, ADVICE_TITLE, ASK_ABOUT, GROUNDED_BASIS, MOVES_PATH, NO_QUOTE, READ_FAILED, RECORD_HREF, WOULD_MOVE_NOTHING,
   adviceHref, askAboutHref, decisionLine, groundedLabel, monthLabelOn, quoteCiteLine, streakLabel,
   type AdviceAim, type AdviceCard, type MovesPageData, type ReadingLabel, type RestsOnRow,
 } from '@/lib/pages/v2/moves'
@@ -107,12 +107,13 @@ function Evidence({ card }: { card: AdviceCard }) {
  *  line, the week's share read as the month's, decision 1): the conversation
  *  its evidence leads with and its level in the reading month. Nothing where
  *  the card carries no aim at all (a dump from before it). */
-function WouldMove({ aim, reading }: { aim: AdviceAim | null | undefined; reading: ReadingLabel }) {
-  if (aim === undefined) return null
+function WouldMove({ aim, reading, failed }: { aim: AdviceAim | null | undefined; reading: ReadingLabel; failed: boolean }) {
+  // A failed read leaves the field absent and says so in one line.
+  if (aim === undefined && !failed) return null
   return (
     <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">
       Would move:{' '}
-      {aim ? (
+      {aim === undefined ? READ_FAILED : aim ? (
         <span className="text-foreground">
           <span data-copy="subject" data-slot="pass_b_theme">{aim.label}</span>
           {aim.level ? (
@@ -124,7 +125,7 @@ function WouldMove({ aim, reading }: { aim: AdviceAim | null | undefined; readin
   )
 }
 
-function AdviceCardView({ card, open, canDecide, reading }: { card: AdviceCard; open: boolean; canDecide: boolean; reading: ReadingLabel }) {
+function AdviceCardView({ card, open, canDecide, reading, aimFailed }: { card: AdviceCard; open: boolean; canDecide: boolean; reading: ReadingLabel; aimFailed: boolean }) {
   const lead = whyLead(card.why)
   return (
     <article id={`advice-${card.lineageId}`} className={cn(CARD, 'flex-1 scroll-mt-6', open ? SELECTED_CARD_RING : null)}>
@@ -134,7 +135,7 @@ function AdviceCardView({ card, open, canDecide, reading }: { card: AdviceCard; 
           argument is one click down, in the panel. */}
       {lead ? <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 line-clamp-4 text-[14px] leading-[1.55] text-secondary-foreground">{lead}</p> : null}
       <Evidence card={card} />
-      <WouldMove aim={card.aim} reading={reading} />
+      <WouldMove aim={card.aim} reading={reading} failed={aimFailed} />
       <div className="mt-auto flex flex-wrap items-center gap-2" data-print-hide>
         {canDecide ? <AdviceAnswers lineageId={card.lineageId} recommendationId={card.recommendationId} title={card.title} /> : null}
         {open ? (
@@ -180,38 +181,62 @@ function RestsOn({ rows }: { rows: RestsOnRow[] }) {
   )
 }
 
-/** Every update that raised it, as dots on one line with their dates under
- *  them (the board's row); past twelve the row wraps, twelve to a line.
- *  Raised by fewer updates than the card's dots count, the row is the card's
- *  own nine latest updates: a dot and its date where one raised it, a pale
- *  dot where one did not, so a piece raised once keeps the board's row. */
+/** Which of a history row's dates print, so none run into another: every
+ *  one from 640px to the panel's two-column 1180, where the right column is
+ *  narrow, and again from 1320; on a phone and between 1180 and 1320, every
+ *  other one counted back from the newest (at most five of nine). */
+const DATE_SPACED = 'max-sm:hidden min-[1180px]:max-[1319.98px]:hidden'
+
+/**
+ * Every update that raised it, as dots on one line with their dates under
+ * them (the board's row).
+ *
+ * THE NINE-DOT ROW where every date it has is among the card's nine latest
+ * updates (`recent`): a dark dot and its date where an update raised it, a
+ * pale one where it did not, so a piece raised once or twice keeps the
+ * board's row. Its dates thin out where the column is narrow (`DATE_SPACED`).
+ *
+ * THE LIST otherwise (an older date the nine do not reach): every date, five
+ * to a row on a phone, six in the two-column panel from 1180, nine from 1320,
+ * twelve between; the line that joins them is drawn only where they fit one
+ * row everywhere (five or fewer).
+ */
 function Timeline({ history }: { history: AdviceCard['history'] }) {
   const { dates, recent } = history
-  if (dates.length === 0 && recent.length === 0) return null
-  // The latest updates' slots, each raised one dated in order: the carried
-  // slots are the last of `dates`.
-  const slots: { date: string | null; on: boolean }[] = dates.length >= recent.length
-    ? dates.map((d) => ({ date: d, on: true }))
-    : (() => {
-        const carried = recent.filter(Boolean).length
-        let at = dates.length - carried
-        return recent.map((on) => ({ on, date: on ? dates[at++] ?? null : null }))
-      })()
-  // Twelve to a row from 640px, five on a phone (where nine dates would
-  // print over each other); a phone's row of nine slots keeps them all.
-  const columns = Math.min(slots.length, 12)
-  const narrow = dates.length >= recent.length ? Math.min(slots.length, 5) : slots.length
+  if (dates.length === 0) return null
+  const carried = recent.filter(Boolean).length
+  if (carried === dates.length && dates.length < recent.length) {
+    let at = 0
+    const slots = recent.map((on) => ({ on, date: on ? dates[at++] ?? null : null }))
+    const last = slots.length - 1
+    return (
+      <ol
+        className="relative m-0 grid list-none p-0 [grid-template-columns:repeat(var(--cw),minmax(0,1fr))]"
+        style={{ '--cw': slots.length } as CSSProperties}
+        aria-label="The updates that raised it"
+      >
+        <span aria-hidden className="absolute top-[4px] h-px bg-border" style={{ left: `calc(50% / ${slots.length})`, right: `calc(50% / ${slots.length})` }} />
+        {slots.map((s, i) => (
+          <li key={`${s.date ?? 'none'}-${i}`} className="relative flex min-w-0 flex-col items-center gap-1.5" aria-hidden={s.on ? undefined : true}>
+            <span aria-hidden className={cn('size-2.5 rounded-full', s.on ? 'bg-foreground' : 'bg-track')} />
+            {s.date ? <span className={cn(MONO, 'whitespace-nowrap text-[10px] text-muted-foreground', (last - i) % 2 === 0 ? null : DATE_SPACED)}>{shortDate(s.date)}</span> : null}
+          </li>
+        ))}
+      </ol>
+    )
+  }
+  const n = dates.length
   return (
     <ol
-      className="relative m-0 grid list-none gap-y-3 p-0 [grid-template-columns:repeat(var(--cn),minmax(0,1fr))] sm:[grid-template-columns:repeat(var(--cw),minmax(0,1fr))]"
-      style={{ '--cn': narrow, '--cw': columns } as CSSProperties}
+      className="relative m-0 grid list-none gap-y-3 p-0 [grid-template-columns:repeat(var(--cn),minmax(0,1fr))] sm:[grid-template-columns:repeat(var(--cw),minmax(0,1fr))] min-[1180px]:[grid-template-columns:repeat(var(--c6),minmax(0,1fr))] min-[1320px]:[grid-template-columns:repeat(var(--c9),minmax(0,1fr))]"
+      style={{ '--cn': Math.min(n, 5), '--cw': Math.min(n, 12), '--c6': Math.min(n, 6), '--c9': Math.min(n, 9) } as CSSProperties}
       aria-label="The updates that raised it"
     >
-      {columns > 1 ? <span aria-hidden className={cn('absolute top-[4px] h-px bg-border', narrow === columns ? null : 'hidden sm:block')} style={{ left: `calc(50% / ${columns})`, right: `calc(50% / ${columns})` }} /> : null}
-      {slots.map((s, i) => (
-        <li key={`${s.date ?? 'none'}-${i}`} className="relative flex min-w-0 flex-col items-center gap-1.5" aria-hidden={s.on ? undefined : true}>
-          <span aria-hidden className={cn('size-2.5 rounded-full', s.on ? 'bg-foreground' : 'bg-track')} />
-          {s.date ? <span className={cn(MONO, 'whitespace-nowrap text-[10px] text-muted-foreground')}>{shortDate(s.date)}</span> : null}
+      {n > 1 && n <= 5 ? <span aria-hidden className="absolute top-[4px] h-px bg-border" style={{ left: `calc(50% / ${n})`, right: `calc(50% / ${n})` }} /> : null}
+      {dates.map((d, i) => (
+        <li key={`${d}-${i}`} className="relative flex min-w-0 flex-col items-center gap-1.5">
+          <span aria-hidden className="size-2.5 rounded-full bg-foreground" />
+          <span className={cn(MONO, 'whitespace-nowrap text-[10px] text-muted-foreground')}>{shortDate(d)}</span>
         </li>
       ))}
     </ol>
@@ -360,7 +385,7 @@ export function AdviceSection({ data }: { data: MovesPageData }) {
         {cards.map((c, i) => (
           <Fragment key={c.lineageId}>
             <div className="flex min-w-0 flex-col" style={panelItemOrder(i)}>
-              <AdviceCardView card={c} open={open?.card.lineageId === c.lineageId} canDecide={data.canDecide} reading={reading} />
+              <AdviceCardView card={c} open={open?.card.lineageId === c.lineageId} canDecide={data.canDecide} reading={reading} aimFailed={data.failed?.aims === true} />
             </div>
             {open && place && i === index ? (
               <PanelSlot placement={place}>

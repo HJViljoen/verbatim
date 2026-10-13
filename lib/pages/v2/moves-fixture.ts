@@ -294,6 +294,11 @@ export const THIN_MOVE = moveCards({
   levels: (_kind, _id, month) => ({ '2026-08-01': 23, '2026-09-01': 19 } as Record<string, number>)[month] ?? null,
   n: (month) => ({ '2026-08-01': 533, '2026-09-01': 521 } as Record<string, number>)[month] ?? null,
   joined: (prev) => prev !== '2026-08-01',
+  // The month-pair judge: our search change of 17 Sep refuses August against
+  // September (the record's `tracking_change`).
+  pair: (prevMonth, month) => (prevMonth === '2026-08-01'
+    ? { prevMonth, month, mode: 'refuse', row: null, reasons: [{ kind: 'searches', changeId: 'ch-0917', share: 0.3, changedAt: '2026-09-17T00:00:00Z', surface: null }] }
+    : { prevMonth, month, mode: 'comparable', row: null, reasons: [] }),
 })
 
 /** One update has raised each piece so far: a streak of one, one dot. */
@@ -330,6 +335,29 @@ export function movesThinFixture(): MovesPageData {
 export function movesThinOpenFixture(): MovesPageData {
   const base = movesThinFixture()
   return { ...base, advice: { ...base.advice, open: { card: { ...base.advice.cards[0], quote: null }, index: 0, waiting: true } } }
+}
+
+/** The thin state opened, its piece raised by the last `n` of the latest
+ *  nine updates (the history row's phone and narrow-column cases). */
+export function movesHistoryFixture(n: number): MovesPageData {
+  const days = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12']
+  const dates = days.slice(-n)
+  const base = movesThinOpenFixture()
+  const card = { ...base.advice.open!.card, history: { dates, streak: n, since: dates[0], recent: Array.from({ length: 9 }, (_, i) => i >= 9 - n) } }
+  return { ...base, advice: { ...base.advice, open: { ...base.advice.open!, card } } }
+}
+
+/** Every read that can fail, failed on one load: each section says so once. */
+export function movesFailedFixture(): MovesPageData {
+  const base = movesThinFixture()
+  return {
+    ...base,
+    counts: { ...base.counts, plans: 2 },
+    advice: { ...base.advice, cards: base.advice.cards.map(({ aim: _aim, ...c }) => c) },
+    moves: { cards: [], recorded: true },
+    conclusions: [],
+    failed: { moves: true, aims: true, plan: true, conclusions: true },
+  }
 }
 
 /** A reader who may not decide (a member): no Accept, no Not for us, no Date a

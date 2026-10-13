@@ -8,7 +8,7 @@ import { PLAN_VERDICT_LABEL, loadPlanChecks, type PlanCheckCard, type PlanClaimR
 import { fetchInsightsByIds } from '../../quotes'
 import { groundingFor, GROUNDED_BASIS } from '../../reading/afterwards'
 import { pairedVerdict } from '../../reading/bands'
-import { joins } from '../../reading/comparability'
+import { joins, pairOnVerdict } from '../../reading/comparability'
 import { loadAppPairOn } from '../../reading/gather-flags'
 import { marketAudiences, pooledDenominators } from '../../reading/market'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
@@ -19,7 +19,8 @@ import { MONTH_PARAM } from '../../reading/reading-month'
 import { inlineMonth, readingMonthLabel } from '../../reading/month-label'
 import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingSchedule, readingViewFrom } from '../../reading/reading-view'
 import type { MonthStatus } from '../../reading/types'
-import { priorPrintable, type Verdict } from '../../reading/verdicts'
+import { priorPrintable, type RefusedReason, type Verdict } from '../../reading/verdicts'
+import { REFUSAL_WHY } from '../../reading/record'
 import type { Quote, Scope } from '../../renderables/types'
 import { selectAll } from '../../supabase-admin'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
@@ -266,7 +267,7 @@ export interface MoveCard {
    *  drawn, and why: `cut` (read, but not the same way as the months drawn:
    *  `joinedRun` stopped at it) or `unread` (no reading of it). Absent in a
    *  dump from before it. */
-  gaps?: { month: string; why: 'cut' | 'unread' }[]
+  gaps?: { month: string; why: 'cut' | 'unread'; reason?: RefusedReason | null }[]
 }
 
 export interface ConclusionView {
@@ -327,6 +328,10 @@ export interface MovesPageData {
   conclusions: ConclusionView[]
   record: { open: boolean; rows: RecordRow[] }
   dating: MoveDating | null
+  /** The reads that failed on this load: each section says so in one line
+   *  rather than print the failure as an absence ("no plan", "no
+   *  conclusions", "would move nothing"). Absent in a dump from before it. */
+  failed?: Partial<Record<'moves' | 'aims' | 'plan' | 'conclusions', true>>
 }
 
 // ---- the pure half ------------------------------------------------------------------
@@ -515,7 +520,18 @@ export function moveCards(input: {
       // line under it says so).
       const drawn = new Set(points.map((p) => p.month))
       const wasRead = new Set(read.map((p) => p.month))
-      const gaps = months.filter((x) => !drawn.has(x.month)).map((x) => ({ month: x.month, why: wasRead.has(x.month) ? 'cut' as const : 'unread' as const }))
+      // A month read but not drawn is cut by the refused step at the run's
+      // near edge; that step's reason is the record's (`pairOnVerdict`).
+      const first = points[0]?.month ?? null
+      const last = points[points.length - 1]?.month ?? null
+      const stepReason = (prev: string, next: string): RefusedReason | null =>
+        input.pair ? pairOnVerdict(input.pair(prev, next, 'market')).refused : null
+      const gaps = months.filter((x) => !drawn.has(x.month)).map((x) => {
+        if (!wasRead.has(x.month)) return { month: x.month, why: 'unread' as const }
+        const reason = first && x.month < first ? stepReason(prevMonth(first), first)
+          : last && x.month > last ? stepReason(last, nextMonth(last)) : null
+        return { month: x.month, why: 'cut' as const, reason }
+      })
       if (pending) return { ...base, points, compare: null, unread: null, pending: moveMonth, gaps }
       if (points.length === 0) return { ...base, points: [], compare: null, unread: 'no_reading' as const, pending: null }
       const before = points.find((p) => p.month === prevMonth(moveMonth)) ?? null
@@ -550,6 +566,8 @@ export interface MoveSlot {
    *  no line at all (`move`: its own sentence says why), or a dump that does
    *  not say (`unknown`). Null on a drawn slot. */
   why: 'pending' | 'cut' | 'unread' | 'move' | 'unknown' | null
+  /** A cut month's refusal, where the record names it. */
+  reason?: RefusedReason | null
 }
 
 /**
@@ -568,41 +586,47 @@ export function moveAxis(card: Pick<MoveCard, 'day' | 'points' | 'unread' | 'gap
   for (let i = 0; i < MOVE_MONTHS_BEFORE; i++) at = prevMonth(at)
   const last = [moveMonth, reading, ...card.points.map((p) => p.month)].reduce((a, b) => (b > a ? b : a))
   const byMonth = new Map(card.points.map((p) => [p.month, p]))
-  const gap = new Map((card.gaps ?? []).map((g) => [g.month, g.why]))
+  const gap = new Map((card.gaps ?? []).map((g) => [g.month, g]))
   const out: MoveSlot[] = []
   for (let i = 0; at <= last && i < MOVE_MONTHS_BEFORE + 1 + MOVE_MONTHS_AFTER; i++) {
     const point = byMonth.get(at) ?? null
+    const g = gap.get(at)
     out.push({
       month: at,
       point,
-      why: point ? null : card.unread ? 'move' : at > reading ? 'pending' : gap.get(at) ?? 'unknown',
+      why: point ? null : card.unread ? 'move' : at > reading ? 'pending' : g?.why ?? 'unknown',
+      ...(!point && g?.reason ? { reason: g.reason } : {}),
     })
     at = nextMonth(at)
   }
   return out
 }
 
-/** The one quiet line under a move's chart: why its empty months are empty
- *  (a pending month says when it reads; a move with no line at all says why
- *  in its own sentence instead). Null where every slot is drawn. */
+/** The quiet line under a move's chart: why its empty months are empty, in
+ *  the record's words (`REFUSAL_WHY`, the badge's and the record's clause for
+ *  a refused comparison) and the page's own for a month still to read
+ *  (`pendingLine`). A move with no line at all says why in its own sentence.
+ *  Null where every slot is drawn. */
 export function axisLine(slots: readonly MoveSlot[]): string | null {
-  const named = (why: MoveSlot['why']) => slots.filter((s) => s.why === why).map((s) => longMonth(s.month))
   const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
-  const drawn = slots.filter((s) => s.point)
-  const beside = drawn.length === 1 ? longMonth(drawn[0].month) : 'the months drawn'
-  const be = (xs: string[]) => (xs.length === 1 ? 'is' : 'are')
+  const names = (xs: readonly MoveSlot[]) => list(xs.map((s) => longMonth(s.month)))
+  const be = (xs: readonly unknown[]) => (xs.length === 1 ? 'is' : 'are')
   const parts: string[] = []
-  const cut = named('cut')
-  if (cut.length > 0) parts.push(`${list(cut)} ${be(cut)} not read the same way as ${beside}`)
-  const unread = named('unread')
-  if (unread.length > 0) parts.push(`${list(unread)} ${unread.length === 1 ? 'has' : 'have'} no reading`)
-  const unknown = named('unknown')
-  if (unknown.length > 0) parts.push(`${list(unknown)} ${be(unknown)} not drawn beside ${beside}`)
-  const pending = named('pending')
-  if (pending.length > 0) parts.push(`${list(pending)} ${pending.length === 1 ? 'reads' : 'read'} once the month has been read`)
+  const cut = slots.filter((s) => s.why === 'cut' || s.why === 'unknown')
+  // One sentence per reason: "August is left off the line: what we track
+  // changed inside this window."
+  const byReason = new Map<string, MoveSlot[]>()
+  for (const s of cut) byReason.set(s.reason ?? '', [...(byReason.get(s.reason ?? '') ?? []), s])
+  for (const [reason, xs] of byReason) {
+    const why = reason ? REFUSAL_WHY[reason as RefusedReason] : null
+    parts.push(`${names(xs)} ${be(xs)} left off the line${why ? `: ${why}` : ''}`)
+  }
+  const unread = slots.filter((s) => s.why === 'unread')
+  if (unread.length > 0) parts.push(`${names(unread)} ${unread.length === 1 ? 'has' : 'have'} no reading`)
+  const pending = slots.filter((s) => s.why === 'pending')
+  if (pending.length > 0) parts.push(pending.length === 1 ? pendingLine(pending[0].month).slice(0, -1) : `${names(pending)} read once each month has been read`)
   if (parts.length === 0) return null
-  const line = parts.join('; ')
-  return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`
+  return parts.map((p) => `${p.charAt(0).toUpperCase()}${p.slice(1)}.`).join(' ')
 }
 
 /**
@@ -658,7 +682,9 @@ export const ADVICE_REST = {
   lead: 'Every piece of advice we have given, and what you decided on each.',
 }
 /** "Would move:" where the evidence leads to no conversation read month by month. */
-export const WOULD_MOVE_NOTHING = 'nothing the market is read on month by month'
+export const WOULD_MOVE_NOTHING = 'no conversation read month by month yet'
+/** One section's line where its read failed on this load. */
+export const READ_FAILED = 'could not be read just now'
 /** The open panel's comment row where the advice carries no comment we can show. */
 export const NO_QUOTE = 'No comment behind this advice can be shown here.'
 export const MOVES_TITLE = 'Your moves, and what happened after'
@@ -670,12 +696,6 @@ export const NO_CONCLUSIONS = 'The latest update drew no conclusions about your 
 export const PLAN_TITLE = 'Your plan, checked against the market'
 /** Where a plan is checked: the Agent's upload. */
 export const CHECK_A_PLAN_HREF = '/dashboard/agent'
-/** The plan card with no plan checked. */
-export const NO_PLAN = {
-  sub: 'No plan checked yet',
-  count: 'no claims read yet',
-  line: 'Upload a plan to the Agent as a PDF, and each of its claims is read against what your market says.',
-}
 export const STATEMENTS_TITLE = 'What you say, and what comes back'
 export const ASK_ABOUT = 'Ask the Agent about this'
 
@@ -757,8 +777,12 @@ export function compareMonths(c: NonNullable<MoveCard['compare']>, moveMonth: st
 export const NEXT_MOVE = {
   title: 'Your next move',
   sub: 'Not dated yet',
+  /** Said only where the reader may date one (an owner or an admin, where
+   *  moves are recorded): no invitation otherwise. */
   line: 'Date a change when you make it, and its months are drawn here.',
 }
+/** The moves' card where the moves could not be read on this load. */
+export const MOVES_UNREAD_TITLE = 'Your dated moves'
 export const NO_MOVE_YET = {
   title: 'No move dated yet',
   sub: 'Your first move',
@@ -921,7 +945,7 @@ async function readAudience(supabase: SupabaseClient, clientId: string, ids: rea
 }
 
 /** Each move's object, month by month in the market, pooled (Y4's read). */
-async function readMoveLevels(core: Core, moves: readonly DatedMove[], adviceTargets: ReadonlyMap<string, string>, alsoThemes: readonly string[] = []): Promise<(kind: 'subject' | 'theme', id: string, month: string) => number | null> {
+async function readMoveLevels(core: Core, moves: readonly DatedMove[], adviceTargets: ReadonlyMap<string, string>, alsoThemes: readonly string[] = [], onError?: () => void): Promise<(kind: 'subject' | 'theme', id: string, month: string) => number | null> {
   const audiences = marketAudiences(core.rivals)
   const from = moves.reduce((m, x) => {
     let at = monthStartOf(moveDay(x))
@@ -948,6 +972,7 @@ async function readMoveLevels(core: Core, moves: readonly DatedMove[], adviceTar
         }
       }
     } catch (error) {
+      onError?.()
       logAs('moveLevels', null)(error)
     }
   }
@@ -961,14 +986,17 @@ async function readMoveLevels(core: Core, moves: readonly DatedMove[], adviceTar
 /** Each piece of advice named (an advice move's, or a card's "Would move"),
  *  to the theme its evidence leads with. Reads the themed update's themes only
  *  where some lineage is named. */
-async function readAdviceTargets(core: Core, named: readonly string[], cited: Map<string, { evidence: string[] }>): Promise<Map<string, string>> {
+async function readAdviceTargets(core: Core, named: readonly string[], cited: Map<string, { evidence: string[] }>, onError?: () => void): Promise<Map<string, string>> {
   const lineages = [...new Set(named)]
   if (lineages.length === 0) return new Map()
   const themedRunId = await fetchRunningRunIds(core.supabase, core.clientId, 'moves-v2').then((ids) => fetchThemedRunId(core.supabase, core.clientId, ids, 'moves-v2'))
   const themes = await selectAll<{ supporting_insight_ids: string[] | null; registry_id: string | null }>(() =>
     core.supabase.from('themes').select('supporting_insight_ids, registry_id')
       .eq('client_id', core.clientId).eq('run_id', themedRunId ?? core.latestRunId).order('id'),
-  ).catch(logAs('adviceTargets.themes', [] as { supporting_insight_ids: string[] | null; registry_id: string | null }[]))
+  ).catch((error: unknown) => {
+    onError?.()
+    return logAs('adviceTargets.themes', [] as { supporting_insight_ids: string[] | null; registry_id: string | null }[])(error)
+  })
   const registryByInsight = registryIdsByInsight(themes)
   const out = new Map<string, string>()
   for (const lineageId of lineages) {
@@ -987,17 +1015,21 @@ async function readAdviceTargets(core: Core, named: readonly string[], cited: Ma
  * each card's "Would move" off the same reads: one themes read, one labels
  * read and one month series for the moves and the cards together.
  */
-async function readMoveCards(core: Core, moves: readonly DatedMove[], cited: Map<string, { evidence: string[] }>, aimAt: readonly string[] = []): Promise<{ cards: MoveCard[]; aims: Map<string, AdviceAim | null> }> {
-  if (moves.length === 0 && aimAt.length === 0) return { cards: [], aims: new Map() }
+async function readMoveCards(core: Core, moves: readonly DatedMove[], cited: Map<string, { evidence: string[] }>, aimAt: readonly string[] = []): Promise<{ cards: MoveCard[]; aims: Map<string, AdviceAim | null>; aimsFailed: boolean }> {
+  if (moves.length === 0 && aimAt.length === 0) return { cards: [], aims: new Map(), aimsFailed: false }
+  // A failed read under the aims is said as one ("could not be read just
+  // now"), never printed as "no conversation".
+  let aimsFailed = false
+  const failed = () => { aimsFailed = true }
   const moveLineages = moves.filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)
-  const targets = await readAdviceTargets(core, [...moveLineages, ...aimAt], cited)
+  const targets = await readAdviceTargets(core, [...moveLineages, ...aimAt], cited, failed)
   const aimThemes = aimAt.map((l) => targets.get(l)).filter((t): t is string => Boolean(t))
   const themeIds = [...moves.flatMap((m) => (m.kind === 'theme' ? m.registry_ids ?? [] : [])), ...targets.values()]
   const [themes, levels] = await Promise.all([
-    loadRegistryLabels(core.supabase, core.clientId, themeIds),
-    readMoveLevels(core, moves, targets, aimThemes),
+    loadRegistryLabels(core.supabase, core.clientId, themeIds, failed),
+    readMoveLevels(core, moves, targets, aimThemes, failed),
   ])
-  const aims = adviceAims({ lineages: aimAt, targets, labels: themes, levels, n: core.marketN, month: core.month })
+  const aims = aimsFailed ? new Map<string, AdviceAim | null>() : adviceAims({ lineages: aimAt, targets, labels: themes, levels, n: core.marketN, month: core.month })
   const cards = moveCards({
     moves,
     month: core.month,
@@ -1010,7 +1042,7 @@ async function readMoveCards(core: Core, moves: readonly DatedMove[], cited: Map
     joined: (prev, m) => joins(core.pair(prev, m, 'market')),
     pair: core.pair,
   })
-  return { cards, aims }
+  return { cards, aims, aimsFailed }
 }
 
 function subjectsOf(core: Core): Map<string, { name: string; calibration: SubjectCalibrationWord }> {
@@ -1042,12 +1074,12 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
 
   // ── the second wave: everything that waits only on the first ───────────
   const corpusAhead = countAnalysedVideos(supabase, clientId)
-  const plansAhead = corpusAhead.then((corpus) => loadPlanChecks(scope, corpus, { quotes: false })).catch(logAs('plans', [] as PlanCheckCard[]))
+  const plansAhead = corpusAhead.then((corpus) => loadPlanChecks(scope, corpus, { quotes: false })).catch(logAs('plans', null as PlanCheckCard[] | null))
   const plansCountAhead = Promise.resolve(supabase.from('plan_checks').select('id', { count: 'exact', head: true }).eq('client_id', clientId))
     .then((r) => (r.error ? null : r.count ?? null)).catch(() => null)
   const insightsAhead = selectAll<{ id: string; title: string; evidence: InsightRow['evidence'] }>(() =>
     supabase.from('market_insights').select('id, title, evidence').eq('client_id', clientId).eq('run_id', core.latestRunId).order('id', { ascending: true }),
-  ).catch(logAs('insights', [] as { id: string; title: string; evidence: InsightRow['evidence'] }[]))
+  ).catch(logAs('insights', null as { id: string; title: string; evidence: InsightRow['evidence'] }[] | null))
   const questionsAhead = core.moves == null ? Promise.resolve(null)
     : fetchRunningRunIds(supabase, clientId, 'moves-v2')
       .then((ids) => fetchThemedRunId(supabase, clientId, ids, 'moves-v2'))
@@ -1077,10 +1109,11 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   const evidenceRows = [...new Map([...waiting, ...(named ? [named] : []), ...moveLineages.map((id) => byLineage.get(id)).filter((r): r is AdviceRow => r != null)].map((r) => [r.lineageId, r])).values()]
 
   // ── the third wave: what the drawn advice cites, and the conclusions ───
-  const [cited, insights] = await Promise.all([
+  const [cited, insightsRead] = await Promise.all([
     readCited(supabase, clientId, evidenceRows.flatMap((r) => r.basedOn)),
     insightsAhead,
   ])
+  const insights = insightsRead ?? []
   const audienceIds = [
     ...evidenceRows.flatMap((r) => r.basedOn.flatMap((id) => cited.market.get(id)?.evidence ?? [])),
     ...insights.flatMap((mi) => mi.evidence?.supporting_theme_ids ?? []),
@@ -1088,7 +1121,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   // The moves' lines and the cards' "Would move" share their reads.
   const aimAt = [...new Set([...waiting.map((r) => r.lineageId), ...(named ? [named.lineageId] : [])])]
   const movesAhead = readMoveCards(core, core.moves ?? [], cited.market, aimAt)
-    .catch(logAs('moves', { cards: [] as MoveCard[], aims: new Map<string, AdviceAim | null>() }))
+    .catch(logAs('moves', null as { cards: MoveCard[]; aims: Map<string, AdviceAim | null>; aimsFailed: boolean } | null))
   const { videoByInsight, slugById } = await readAudience(supabase, clientId, audienceIds)
 
   const onPage = new Set(insights.map((i) => i.id))
@@ -1140,10 +1173,20 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     openCite = openQuote ? cites.get(named.lineageId) ?? null : null
   }
 
-  const [movesRead, plans, plansCount, questions, datable] = await Promise.all([movesAhead, plansAhead, plansCountAhead, questionsAhead, datableAhead])
-  const moveCardsRead = movesRead.cards
-  // A card's "Would move": absent where its read failed (nothing is drawn).
-  const withAim = (c: AdviceCard): AdviceCard => (movesRead.aims.has(c.lineageId) ? { ...c, aim: movesRead.aims.get(c.lineageId) ?? null } : c)
+  const [movesRead, plansRead, plansCount, questions, datable] = await Promise.all([movesAhead, plansAhead, plansCountAhead, questionsAhead, datableAhead])
+  const moveCardsRead = movesRead?.cards ?? []
+  const plans = plansRead ?? []
+  // A card's "Would move": absent where its read failed (the card then says
+  // so in one line, `failed.aims`).
+  const withAim = (c: AdviceCard): AdviceCard => (movesRead?.aims.has(c.lineageId) ? { ...c, aim: movesRead.aims.get(c.lineageId) ?? null } : c)
+  // WHAT FAILED, SAID AS SUCH. `loadPlanChecks` logs a failed `plan_checks`
+  // read and returns none, so plans counted with none read is a failure too.
+  const failed: NonNullable<MovesPageData['failed']> = {
+    ...(movesRead == null && (core.moves ?? []).length > 0 ? { moves: true as const } : {}),
+    ...(movesRead == null || movesRead.aimsFailed ? { aims: true as const } : {}),
+    ...(plansRead == null || (plans.length === 0 && (plansCount ?? 0) > 0) ? { plan: true as const } : {}),
+    ...(insightsRead == null ? { conclusions: true as const } : {}),
+  }
 
   const cards = waiting.map((r) => withAim(cardOf(r)))
   const openIndex = named ? cards.findIndex((c) => c.lineageId === named.lineageId) : -1
@@ -1201,6 +1244,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     conclusions: conclusionViews(insights, current, videoByInsight),
     record: { open: recordOpen, rows: recordOpen ? recordRows(core.adviceRows) : [] },
     dating,
+    ...(Object.keys(failed).length > 0 ? { failed } : {}),
   }
 }
 

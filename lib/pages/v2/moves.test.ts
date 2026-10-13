@@ -258,17 +258,18 @@ describe('moveAxis and axisLine: the board’s axis, the months not drawn and wh
   it('a move dated after the reading month, one month read: August cut, September drawn, October to come', () => {
     const [c] = THIN_MOVE
     expect(c.points.map((p) => p.month)).toEqual(['2026-09-01'])
-    expect(c.gaps).toEqual([{ month: '2026-08-01', why: 'cut' }])
+    // Cut by the refused step at the run's near edge, for the record's reason.
+    expect(c.gaps).toEqual([{ month: '2026-08-01', why: 'cut', reason: 'tracking_change' }])
     const slots = moveAxis(c, '2026-09-01')
     expect(slots.map((s) => [s.month, s.why])).toEqual([['2026-08-01', 'cut'], ['2026-09-01', null], ['2026-10-01', 'pending']])
-    expect(axisLine(slots)).toBe('August is not read the same way as September; October reads once the month has been read.')
+    expect(axisLine(slots)).toBe('August is left off the line: what we track changed inside this window. October reads once the month has been read.')
   })
 
   it('a dump from before `gaps` still draws its axis, and says only what it can', () => {
     const { gaps: _gaps, ...card } = THIN_MOVE[0]
     const slots = moveAxis(card, '2026-09-01')
     expect(slots.map((s) => s.why)).toEqual(['unknown', null, 'pending'])
-    expect(axisLine(slots)).toBe('August is not drawn beside September; October reads once the month has been read.')
+    expect(axisLine(slots)).toBe('August is left off the line. October reads once the month has been read.')
   })
 
   it('a month with no reading says so, and a full line says nothing', () => {

@@ -88,7 +88,7 @@ export function MovesV2Page({ data, statements }: { data: MovesPageData | null; 
           plan takes the row. */}
       <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
         {say ? <WhatYouSay data={say} /> : null}
-        <PlanCard plan={data.plan} className={say ? undefined : 'min-[1180px]:col-span-2'} />
+        <PlanCard plan={data.plan} failed={data.failed?.plan === true} className={say ? undefined : 'min-[1180px]:col-span-2'} />
       </div>
       <ConclusionsSection data={data} />
     </div>

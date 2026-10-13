@@ -2,9 +2,9 @@ import Link from 'next/link'
 import { FileText } from 'lucide-react'
 
 import { CARD, CardHead } from '@/components/v2'
-import type { PlanCheckCard, PlanClaimRow } from '@/lib/ask/plan-cards'
+import { PLAN_EMPTY, type PlanCheckCard, type PlanClaimRow } from '@/lib/ask/plan-cards'
 import { fmtInt, shortDate } from '@/lib/format'
-import { CHECK_A_PLAN_HREF, NO_PLAN, PLAN_TITLE, leadClaims } from '@/lib/pages/v2/moves'
+import { CHECK_A_PLAN_HREF, PLAN_TITLE, READ_FAILED, leadClaims } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
 import { MONO, OLINK } from './parts'
 
@@ -67,28 +67,30 @@ function Key({ counts }: { counts: PlanCheckCard['summary'] | null }) {
 }
 
 /**
- * THE BOARD'S PLAN CARD WITH NO PLAN CHECKED: its head, its bar as the empty
- * track it fills from, its key, and the three claim rows' place holding one
- * calm line; its foot is where a plan is checked. No count is drawn: nothing
- * was read, which is not zero claims.
+ * THE BOARD'S PLAN CARD WITH NO PLAN TO DRAW: its head, its bar as the empty
+ * track it fills from, its key, and ONE line for the one gap: none checked
+ * (the Agent's own words, `PLAN_EMPTY`, with the way to check one at its
+ * foot), or the read failed on this load (never "none checked" beside a
+ * count of plans). No count is drawn: nothing was read, which is not zero.
  */
-function NoPlan({ className }: { className?: string }) {
+function NoPlan({ className, failed }: { className?: string; failed: boolean }) {
   return (
     <section aria-labelledby="plan-title" data-plan-empty="" className={cn(CARD, className)}>
-      <CardHead icon={FileText} id="plan-title" title={PLAN_TITLE} sub={NO_PLAN.sub} />
-      <p className={cn(MONO, 'm-0 text-[12.5px] text-muted-foreground')}>{NO_PLAN.count}</p>
+      <CardHead icon={FileText} id="plan-title" title={PLAN_TITLE} />
       <div aria-hidden className="h-3.5 rounded-[5px] bg-track" />
       <Key counts={null} />
-      <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{NO_PLAN.line}</p>
-      <div className="mt-auto flex items-center justify-between gap-3" data-print-hide>
-        <Link href={CHECK_A_PLAN_HREF} className={OLINK}>Check a plan →</Link>
-      </div>
+      <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{failed ? `Your plan ${READ_FAILED}.` : PLAN_EMPTY}</p>
+      {failed ? null : (
+        <div className="mt-auto flex items-center justify-between gap-3" data-print-hide>
+          <Link href={CHECK_A_PLAN_HREF} className={OLINK}>Check a plan →</Link>
+        </div>
+      )}
     </section>
   )
 }
 
-export function PlanCard({ plan, className }: { plan: PlanCheckCard | null; className?: string }) {
-  if (!plan) return <NoPlan className={className} />
+export function PlanCard({ plan, className, failed = false }: { plan: PlanCheckCard | null; className?: string; failed?: boolean }) {
+  if (!plan || failed) return <NoPlan className={className} failed={failed} />
   const s = plan.summary
   const total = s.supported + s.contradicted + s.untested
   const claims = leadClaims(plan)

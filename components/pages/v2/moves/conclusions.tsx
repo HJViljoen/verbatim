@@ -5,7 +5,7 @@ import { CARD, CardHead, InPlacePanel, PanelTitle } from '@/components/v2'
 import { typeLabel } from '@/components/pages/moves/words'
 import { fmtInt, shortDate } from '@/lib/format'
 import {
-  CONCLUSIONS_SUB, CONCLUSIONS_TITLE, GROUNDED_BASIS, MOVES_PATH, NO_ADVICE_YET, NO_CONCLUSIONS, RECORD_HREF, RECORD_PANEL_ID,
+  CONCLUSIONS_SUB, CONCLUSIONS_TITLE, GROUNDED_BASIS, MOVES_PATH, NO_ADVICE_YET, NO_CONCLUSIONS, READ_FAILED, RECORD_HREF, RECORD_PANEL_ID,
   adviceHref, conclusionAnchor, type MovesPageData, type RecordRow,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
@@ -77,7 +77,10 @@ export function ConclusionsSection({ data }: { data: MovesPageData }) {
     <>
       <section aria-labelledby="conclusions-title" className={CARD}>
         <CardHead icon={Lightbulb} id="conclusions-title" title={CONCLUSIONS_TITLE} sub={CONCLUSIONS_SUB} />
-        {conclusions.length === 0 ? <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{NO_CONCLUSIONS}</p> : null}
+        {/* A failed read says so; it is never "drew no conclusions". */}
+        {data.failed?.conclusions
+          ? <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">The conclusions {READ_FAILED}.</p>
+          : conclusions.length === 0 ? <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{NO_CONCLUSIONS}</p> : null}
         <div className="flex flex-col">
           {conclusions.map((c, i) => (
             // The board's three columns on every row: the conclusion, its
