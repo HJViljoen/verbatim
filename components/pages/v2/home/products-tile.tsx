@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils'
 import { CSUB, MID, MONO_MUTED, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
 // THE DASHBOARD'S YOUR PRODUCTS TILE (Design v2, T8; E1-Dashboard's second
-// row), from T5's `TopProducts` (stubbed in lib/pages/v2/home.ts until T5
-// merges): the product that stands out this month, which opens its panel on
+// row), from T5's `TopProducts` (lib/pages/v2/products.ts, re-exported by
+// lib/pages/v2/home.ts): the product that stands out this month, which opens its panel on
 // Your products (`?product=`), how many of your products came up ("9 of your
 // 38") and the catalogue as the board's mini shelf, each product shaded by its
 // videos this month, where the read carries them; or the page's honest state

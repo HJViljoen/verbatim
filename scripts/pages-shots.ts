@@ -100,6 +100,9 @@ import type { MarketData } from '../lib/pages/v2/market'
 import { ContentPage } from '../components/pages/v2/content'
 import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
 import type { ContentPageData } from '../lib/pages/v2/content'
+import { ProductsPage } from '../components/pages/v2/products'
+import { PRODUCTS_FIXTURES } from '../lib/pages/v2/products-fixture'
+import type { ProductsData } from '../lib/pages/v2/products'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -423,6 +426,20 @@ const PAGES: Page[] = [
   // Only where a dump is named (`CONTENT_DUMP=<file>`), as `voices-real`.
   ...(process.env.CONTENT_DUMP
     ? [{ key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP as string, 'utf8')) as ContentPageData }) }]
+    : []),
+  // Your products (depth v2, T5), to the E4 boards: Össur's real catalogue over
+  // an illustrative September (the fixture), a category open (an owner, then a
+  // member: no Tag control), a product open, the Navii's first month, and the
+  // honest states (Sealand with no catalogue, production with no migration,
+  // Össur not switched on, a month not read). `PRODUCTS_JSON=<file>` draws a
+  // loader's output (or the near-real replay, scripts the package ran).
+  ...(Object.keys(PRODUCTS_FIXTURES) as (keyof typeof PRODUCTS_FIXTURES)[]).map((k): Page => ({
+    key: `products-${k}`, path: '/dashboard/products',
+    artboard: k.startsWith('ossur-liners') || k === 'ossur-product' || k === 'ossur-navii' ? 'E4-Products-Liners.dc.html' : 'E4-Products.dc.html',
+    page: () => h(ProductsPage, { data: PRODUCTS_FIXTURES[k]() }),
+  })),
+  ...(process.env.PRODUCTS_JSON
+    ? [{ key: 'products-real', path: '/dashboard/products', artboard: 'E4-Products.dc.html', page: () => h(ProductsPage, { data: JSON.parse(readFileSync(process.env.PRODUCTS_JSON as string, 'utf8')) as ProductsData }) }]
     : []),
   // The Dashboard's other states (Design v2, T8): every tile's empty, failed
   // and member states on one page each, and one real render per tenant from

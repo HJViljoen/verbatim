@@ -33,6 +33,10 @@
 --   7. config_changes takes 'products'; post_ideas reads to its tenant.
 --   8. Removing a tenant removes everything here (the delete guard's one
 --      exception, and the NO ACTION keys checked at the statement's end).
+--   9. product_month_videos (T5): the month's videos over every audience, the
+--      client's included and its own posts marked owned, dated by the comment,
+--      the claims lane never; the service role's alone. (Run before 8, while
+--      tenant A still exists.)
 
 begin;
 
@@ -375,6 +379,35 @@ do $$ declare r jsonb; n int; begin
   if n <> 3 then raise exception 'CHECK FAILED: % placements restored, expected 3', n; end if;
 end $$;
 
+-- 9. The month's videos a product reading counts (T5): every audience, the
+-- client's included, its own posts marked owned; the month by the comment.
+reset role;
+insert into public.videos (id, client_id, platform, video_id, video_url, account_name, is_client, is_competitor, competitor_name, analyzed_lane, analyzed_run_id, caption, hashtags, topics, source_keywords, source) values
+  ('0c000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'tiktok', 'tt-own', 'u', 'tenant_a', true, false, null, 'full', '00000000-0000-4000-8000-0000000000a1', 'Our Seal-In X', '{}', '{}', '{}', 'owned'),
+  ('0c000000-0000-4000-8000-000000000004', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'tiktok', 'tt-about', 'u', 'creator', true, false, null, 'full', '00000000-0000-4000-8000-0000000000a1', 'My Tenant A liner', '{}', '{}', '{}', 'discovered'),
+  ('0c000000-0000-4000-8000-000000000005', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'tiktok', 'tt-claims', 'u', 'creator', false, false, null, 'claims_only', '00000000-0000-4000-8000-0000000000a1', 'x', '{}', '{}', '{}', 'discovered');
+insert into public.comments (id, client_id, run_id, platform, video_id, comment_id, comment_date, text) values
+  ('0d000000-0000-4000-8000-000000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', 'tiktok', 'tt-own', 'c3', timestamptz '2026-09-25 10:00Z', 'is that the seal-in x?'),
+  ('0d000000-0000-4000-8000-000000000004', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', 'tiktok', 'tt-about', 'c4', timestamptz '2026-09-26 10:00Z', 'mine too'),
+  ('0d000000-0000-4000-8000-000000000005', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', 'tiktok', 'tt-about', 'c5', timestamptz '2026-10-02 10:00Z', 'october'),
+  ('0d000000-0000-4000-8000-000000000006', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', 'tiktok', 'tt-claims', 'c6', timestamptz '2026-09-26 10:00Z', 'not read');
+set local role service_role;
+do $$
+declare n int; own boolean; aud text;
+begin
+  select count(*) into n from public.product_month_videos('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', date '2026-09-01');
+  if n <> 4 then raise exception 'CHECK FAILED: September holds % videos, not 4 (two market, the own post, the video about A; never the claims lane)', n; end if;
+  select owned, audience into own, aud from public.product_month_videos('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', date '2026-09-01') where video_id = '0c000000-0000-4000-8000-000000000003';
+  if own is not true or aud <> 'client' then raise exception 'CHECK FAILED: the own post reads owned=% audience=%', own, aud; end if;
+  select owned, audience into own, aud from public.product_month_videos('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', date '2026-09-01') where video_id = '0c000000-0000-4000-8000-000000000004';
+  if own is not false or aud <> 'client' then raise exception 'CHECK FAILED: the video about A reads owned=% audience=%', own, aud; end if;
+  select count(*) into n from public.product_month_videos('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', date '2026-10-01');
+  if n <> 1 then raise exception 'CHECK FAILED: October holds % videos, not 1 (dated by the comment)', n; end if;
+  select count(*) into n from public.product_month_videos('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', date '2026-09-01');
+  if n <> 0 then raise exception 'CHECK FAILED: B read A''s videos'; end if;
+end $$;
+reset role;
+
 -- 8. Removing a tenant removes its catalogue, placements, tags, frozen months and ideas.
 delete from public.clients where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 do $$ declare n int; begin
@@ -392,6 +425,12 @@ do $$ declare n int; begin
 end $$;
 
 -- The grants, as the catalogue sees them.
+do $$ begin
+  if has_function_privilege('authenticated', 'public.product_month_videos(uuid, date)', 'execute')
+     or not has_function_privilege('service_role', 'public.product_month_videos(uuid, date)', 'execute') then
+    raise exception 'CHECK FAILED: product_month_videos is not the service role''s alone';
+  end if;
+end $$;
 do $$ begin
   if has_function_privilege('authenticated', 'public.product_catalogue(uuid)', 'execute')
      or has_function_privilege('anon', 'public.product_catalogue(uuid)', 'execute')

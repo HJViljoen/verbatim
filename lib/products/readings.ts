@@ -5,6 +5,8 @@ import type { RegexEngine } from '../brands/aliases'
 import type { MonthVideo } from '../provenance/searches'
 import { chunkByAudienceMonth, mergeMonthRows, monthStartOf, type MergeResult } from '../reading/monthly'
 import type { StoredFreeze } from '../reading/types'
+import { isOwnedPost } from '../reading/owned'
+import { readMonthVideos } from '../provenance/load'
 import { selectAll } from '../supabase-admin'
 import { callUsd, planCalls, PRODUCT_MODEL_RULE_VERSION, type ClassifyItem, type RunClassifyResult, type VideoContext } from './classify'
 import {
@@ -13,7 +15,7 @@ import {
 } from './match'
 import { cataloguePattern, compileCatalogue, PRODUCT_RULE_VERSION, readText, type CompiledCatalogue } from './rules'
 import {
-  MONTH_PRODUCT_READINGS_ON_CONFLICT, standingTags, TABLE_MONTH_PRODUCT_READINGS,
+  isMissingProductsSchema, MONTH_PRODUCT_READINGS_ON_CONFLICT, RPC_PRODUCT_MONTH_VIDEOS, standingTags, TABLE_MONTH_PRODUCT_READINGS,
   type MonthProductReadingRow, type ProductCatalogue, type ProductContentField, type ProductTagRow,
 } from './types'
 
@@ -41,8 +43,12 @@ import {
 // instead (`estimateBatchUsd` over the very prompts it would send).
 //
 // THE MONTH ROWS (month_product_readings, per month, audience and object):
-// the market set is market_month_videos' (full lane, not the client's own
-// posts, a comment dated in the month), per audience. A video counts in a
+// the month's videos are `product_month_videos`' (full lane, a comment dated
+// in the month), per audience, EVERY audience, the client's included (T5, the
+// lead's ruling of 13 Oct: a creator's video naming the client is where its
+// product talk lives, and the comments under its own posts are the market's).
+// The client's own posts' words never place anything (`contentFields`). A
+// video counts in a
 // category's month when its CONTENT stands under the category (in every month
 // it is in the market, as a brand's content mention does) or a comment on it
 // DATED IN THE MONTH does. The category split is exclusive per video: named
@@ -73,8 +79,12 @@ export interface ProductVideoRow {
   transcript: string | null
   transcript_en: string | null
   ocr_text: string | null
+  /** `videos.source`: 'owned' is the client's own post, whose words never
+   *  place anything (`contentFields`). Absent on a row read before T5 (a
+   *  recorded dump): read as not owned. */
+  source?: string | null
 }
-export const PRODUCT_VIDEO_COLUMNS = 'id, platform, video_id, account_name, caption, hashtags, transcript, transcript_en, ocr_text'
+export const PRODUCT_VIDEO_COLUMNS = 'id, platform, video_id, account_name, caption, hashtags, transcript, transcript_en, ocr_text, source'
 
 /** A comment as the pass reads it (`video_id` is the platform's id). */
 export interface ProductCommentRow {
@@ -84,8 +94,12 @@ export interface ProductCommentRow {
   text: string | null
   comment_date: string
   is_low_signal: boolean | null
+  /** Who wrote it: a comment by the client's own account is the brand's own
+   *  words and never places (`ownAuthorNames`). Absent on a row read before
+   *  T5 (a recorded dump). */
+  author?: string | null
 }
-export const PRODUCT_COMMENT_COLUMNS = 'id, platform, video_id, text, comment_date, is_low_signal'
+export const PRODUCT_COMMENT_COLUMNS = 'id, platform, video_id, text, comment_date, is_low_signal, author'
 
 /** A stored product_mentions row the pass reads back. */
 export type HeldRow = PlacedRow & Pick<MentionInsert, 'client_id' | 'rule_version' | 'catalogue_version' | 'tag_id'>
@@ -98,7 +112,9 @@ export interface ProductReadIO {
   engine: RegexEngine
   /** brand_mention_candidates over the window. */
   candidates(pattern: string): Promise<Candidate[]>
-  monthVideos(month: string): Promise<MonthVideo[] | null>
+  /** The month's videos (`readProductMonthVideos`): every audience, the
+   *  client's own posts marked owned. */
+  monthVideos(month: string): Promise<ProductMonthVideo[] | null>
   /** The videos, by uuid, with every content field. */
   videos(ids: readonly string[]): Promise<ProductVideoRow[]>
   /** The comments dated in the window on these videos. */
@@ -108,6 +124,13 @@ export interface ProductReadIO {
   held(version: string, months: readonly string[]): Promise<HeldRow[] | null>
   tags(): Promise<ProductTagRow[] | null>
   rivalFound(): Promise<ReadonlySet<string>>
+  /** `tracking_configs.own_handles` (platform → the client's handle): a
+   *  comment its own account wrote is the brand's words, never placed.
+   *  Optional: an IO without it (a recorded dump) leaves none out. */
+  ownHandles?(): Promise<Record<string, string> | null>
+  /** Who wrote each of these comments (the scan's excerpts carry no
+   *  author). Optional, as `ownHandles`. */
+  commentAuthors?(ids: readonly string[]): Promise<ReadonlyMap<string, { platform: string; author: string | null }>>
   /** Our search terms, current and retired: every term a gather ran
    *  (keyword_performance, any bucket) and every term configured now. */
   searchTerms(): Promise<string[]>
@@ -142,12 +165,45 @@ export function categorySearchFinds(byGroup: ReadonlyMap<string, readonly string
   return out
 }
 
+/** A month's video as a product reading counts it: `owned` marks the
+ *  client's own post (its words place nothing; its comments do). */
+export type ProductMonthVideo = MonthVideo & { owned?: boolean }
+
+/**
+ * The month's videos a product reading counts (`product_month_videos`, depth
+ * v2 T5): full-lane videos with a comment dated in the month over EVERY
+ * audience, the client's included (a creator's video naming the client is
+ * where talk about its products lives, and the comments under its own posts
+ * are the market's), each marked owned. Before the products migration is
+ * applied (a dry run from a seed) the function is not there and this falls
+ * back to `market_month_videos`, which has no client arm, with a line to say
+ * so. Null where neither is there. `pages` counts the requests (a script's
+ * read ration).
+ */
+export async function readProductMonthVideos(db: SupabaseClient, clientId: string, month: string, pages: { n: number } = { n: 0 }): Promise<ProductMonthVideo[] | null> {
+  try {
+    const rows = await selectAll<{ video_id: string; audience: string; platform: string; dated_comments: number; owned: boolean | null }>(() =>
+      db.rpc(RPC_PRODUCT_MONTH_VIDEOS, { p_client: clientId, p_month: monthStartOf(month) }).order('video_id'))
+    pages.n += Math.max(1, Math.ceil(rows.length / 1000))
+    return rows.map((r) => ({ id: r.video_id, platform: r.platform, audience: r.audience, dated: Number(r.dated_comments), owned: r.owned === true }))
+  } catch (e) {
+    if (!isMissingProductsSchema(e)) throw e
+    console.warn(`[products] ${RPC_PRODUCT_MONTH_VIDEOS} is not there (the products migration is not applied): ${month.slice(0, 7)} read on market_month_videos, without the client's videos`)
+    return readMonthVideos(db, clientId, month, pages)
+  }
+}
+
 const FIELD_OF: Record<ProductContentField, keyof ProductVideoRow> = {
   account: 'account_name', caption: 'caption', hashtags: 'hashtags', transcript: 'transcript', transcript_en: 'transcript_en', ocr: 'ocr_text',
 }
 
-/** A video's content fields, as the matcher reads them. PURE. */
+/** A video's content fields, as the matcher reads them; NONE for the client's
+ *  own post (depth v2 T5, the lead's ruling of 13 Oct): a product read is the
+ *  market's words about the products, never the brand's own caption,
+ *  hashtags, account, voice or on-screen text. The comments under an own post
+ *  are the market's and do place. PURE. */
 export function contentFields(v: ProductVideoRow): ContentField[] {
+  if (isOwnedPost(v)) return []
   const out: ContentField[] = []
   for (const field of Object.keys(FIELD_OF) as ProductContentField[]) {
     const raw = v[FIELD_OF[field]]
@@ -156,6 +212,33 @@ export function contentFields(v: ProductVideoRow): ContentField[] {
   }
   return out
 }
+
+const ownName = (x: string | null | undefined): string => (x ?? '').trim().toLowerCase().replace(/^@/, '')
+
+/**
+ * The client's own accounts, per platform, for "who wrote this comment": the
+ * configured handles (`tracking_configs.own_handles`, the list the owned read
+ * and the brand rules use) and the accounts of the own posts the pass read
+ * (an owned row's account, as lib/gather/owned.ts ownAccountNames adds them).
+ * A comment one of them wrote is the brand's own words, as a caption is
+ * (depth v2 T5): it never places. Case and a leading @ do not matter. PURE.
+ */
+export function ownAuthorNames(handles: Record<string, string> | null | undefined, rows: readonly Pick<ProductVideoRow, 'platform' | 'account_name' | 'source'>[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const [platform, handle] of Object.entries(handles ?? {})) {
+    const h = ownName(handle)
+    if (h) out.set(platform, new Set([h]))
+  }
+  for (const r of rows) {
+    if (!isOwnedPost(r) || !r.account_name || !out.has(r.platform)) continue
+    out.get(r.platform)!.add(ownName(r.account_name))
+  }
+  return out
+}
+
+/** Did the client's own account write it? PURE. */
+export const isOwnAuthor = (names: ReadonlyMap<string, ReadonlySet<string>>, platform: string, author: string | null | undefined): boolean =>
+  !!author && (names.get(platform)?.has(ownName(author)) ?? false)
 
 /** What the model is asked, through the caller: the confirm items and the
  *  queue, each answered by rows (written by the caller as they return). */
@@ -272,7 +355,7 @@ export async function placeProducts(args: {
   const months = monthsIn(args.window.from, args.window.to)
   const reads = { candidates: 0, videos: 0, comments: 0 }
 
-  const markets = new Map<string, MonthVideo[]>()
+  const markets = new Map<string, ProductMonthVideo[]>()
   for (const m of months) {
     const set = await io.monthVideos(m)
     if (set) markets.set(m, set)
@@ -356,11 +439,16 @@ export async function placeProducts(args: {
   // 3. The relevant videos. A video whose content holds only a generic name
   //    nobody confirmed waits on the confirm (a dry run reads none of them,
   //    and says how many there are).
-  //    Only the market's videos: a client's own post is in no month's count
-  //    (market_month_videos leaves it out), so its comments are not read.
+  //    Only the month's videos. A client's own post places nothing by its
+  //    own words (`contentFields`), so it is never relevant: its comments are
+  //    read by the rules (the scan) and the confirm call, never queued.
   let standing = standingNow(contentPlan.rows)
-  const relevant = new Set([...relevantVideos(standing)].filter((id) => inMarket.has(id)))
-  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id) && inMarket.has(id)))
+  // An own post is never relevant (its words place nothing, and a content row
+  // or a whole-video tag on one from before must not open its comments to
+  // the classifier): marked owned by the month's read or by its own row.
+  const ownedIds = new Set([...[...markets.values()].flat().filter((v) => v.owned).map((v) => v.id), ...[...videoRows.values()].filter(isOwnedPost).map((v) => v.id)])
+  const relevant = new Set([...relevantVideos(standing)].filter((id) => inMarket.has(id) && !ownedIds.has(id)))
+  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id) && inMarket.has(id) && !ownedIds.has(id)))
 
   // 4. The comments: in full under the relevant videos, the scan's excerpt
   //    elsewhere.
@@ -368,17 +456,23 @@ export async function placeProducts(args: {
   const commentRows = relevantRows.length ? await io.comments(relevantRows.map((v) => ({ platform: v.platform, video_id: v.video_id }))) : []
   reads.comments = commentRows.length
   const uuidOf = new Map(relevantRows.map((v) => [`${v.platform}\u0000${v.video_id}`, v.id]))
+  // The client's own accounts: what they write under any video is the
+  // brand's words, never placed (`ownAuthorNames`).
+  const ownNames = ownAuthorNames(io.ownHandles ? await io.ownHandles() : null, [...videoRows.values()])
   const fullComments: (CommentText & { lowSignal: boolean | null })[] = []
   for (const c of commentRows) {
     const videoId = uuidOf.get(`${c.platform}\u0000${c.video_id}`)
-    if (!videoId || !c.text) continue
+    if (!videoId || !c.text || isOwnAuthor(ownNames, c.platform, c.author)) continue
     fullComments.push({ commentId: c.id, videoId, month: monthStartOf(String(c.comment_date)), text: c.text, lowSignal: c.is_low_signal })
   }
   const readInFull = new Set(fullComments.map((c) => c.commentId))
   const commentText = new Map<string, string>(fullComments.map((c) => [c.commentId, c.text]))
   for (const c of candidates) if (c.source === 'comment' && c.comment_id && !commentText.has(c.comment_id)) commentText.set(c.comment_id, c.excerpt ?? '')
-  const excerpts: CommentText[] = candidates
-    .filter((c) => c.source === 'comment' && c.comment_id && c.comment_month && !readInFull.has(c.comment_id))
+  const ownRead = new Set(commentRows.filter((c) => isOwnAuthor(ownNames, c.platform, c.author)).map((c) => c.id))
+  const scanned = candidates.filter((c) => c.source === 'comment' && c.comment_id && c.comment_month && !readInFull.has(c.comment_id) && !ownRead.has(c.comment_id))
+  const authors = ownNames.size > 0 && io.commentAuthors && scanned.length > 0 ? await io.commentAuthors([...new Set(scanned.map((c) => c.comment_id!))]) : null
+  const excerpts: CommentText[] = scanned
+    .filter((c) => { const a = authors?.get(c.comment_id!); return !a || !isOwnAuthor(ownNames, a.platform, a.author) })
     .map((c) => ({ commentId: c.comment_id!, videoId: c.video_id, month: String(c.comment_month).slice(0, 10), text: c.excerpt ?? '' }))
   // A category word in a comment under a video no category stands on
   // (CATEGORY_WORDS_ONLY_UNDER_RELEVANT says why it still counts).
@@ -474,12 +568,16 @@ const RANK = { named: 3, unclear: 2, unbranded: 1 } as const
 export function productReadingRows(args: {
   clientId: string
   compiled: CompiledCatalogue
-  markets: ReadonlyMap<string, readonly MonthVideo[]>
+  markets: ReadonlyMap<string, readonly ProductMonthVideo[]>
   rivalFound: ReadonlySet<string>
   /** Per category, the videos a search in its own words found (`categorySearchFinds`). */
   searchFinds?: ReadonlyMap<string, ReadonlySet<string>>
   standing: ReadonlyMap<TextKey, StandingText>
 }): ProductReadingRow[] {
+  // The client's own posts: their comments count, their own words never do
+  // (`contentFields` places none; a content row or tag on one, from before,
+  // is left out here too).
+  const owned = new Set([...args.markets.values()].flat().filter((v) => v.owned).map((v) => v.id))
   const outOfBase = (groupId: string, id: string) => args.rivalFound.has(id) || (args.searchFinds?.get(groupId)?.has(id) ?? false)
   const { clientId, compiled } = args
   const groups = [...compiled.groupName.keys()]
@@ -489,7 +587,7 @@ export function productReadingRows(args: {
   const byMonth = new Map<string, Map<string, { commentId: string; placements: StandingText['placements'] }[]>>()
   for (const [key, t] of args.standing) {
     if (t.placements.length === 0) continue
-    if (key.startsWith('v:')) { content.set(t.videoId, t.placements); continue }
+    if (key.startsWith('v:')) { if (!owned.has(t.videoId)) content.set(t.videoId, t.placements); continue }
     if (!t.month || !t.commentId) continue
     const m = monthStartOf(t.month)
     const perVideo = byMonth.get(m) ?? new Map()

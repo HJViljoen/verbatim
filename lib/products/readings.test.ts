@@ -11,8 +11,8 @@ import { cataloguePattern, compileCatalogue } from './rules'
 import { catalogueCodes, PRODUCT_MODEL_RULE_VERSION, runClassifier, type Classifier } from './classify'
 import { commentKey, contentKey, type MentionInsert, type StandingText } from './match'
 import {
-  CATEGORY_WORDS_ONLY_UNDER_RELEVANT, categorySearchFinds, categorySearchTerms, guardFreeze, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
-  type Ask, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
+  CATEGORY_WORDS_ONLY_UNDER_RELEVANT, categorySearchFinds, categorySearchTerms, contentFields, guardFreeze, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
+  isOwnAuthor, ownAuthorNames, readProductMonthVideos, type Ask, type HeldRow, type ProductCommentRow, type ProductMonthVideo, type ProductReadIO, type ProductVideoRow,
 } from './readings'
 import type { ProductTagRow } from './types'
 
@@ -308,5 +308,135 @@ describe('placeProducts: the pass', () => {
     expect(r.classifyResult?.asked).toBe(1)
     expect(r.queue).toHaveLength(2)
     expect(r.priceUsd).toBeGreaterThan(0)
+  })
+})
+
+// ---- the client's own posts (depth v2 T5, the lead's ruling of 13 Oct) ------------------
+//
+// A product read is the MARKET's words about the products. The brand's own
+// words (an own post's caption, hashtags, account, voice and on-screen text)
+// never place anything; the comments under an own post are the market's and
+// do, and the video then counts in its month (the client's audience).
+
+describe('the client\'s own posts: their words never place, their comments do', () => {
+  const window = { from: SEP, to: OCT }
+  const CLIENT = 'client'
+
+  it('contentFields reads nothing of an owned video, everything of anyone else\'s', () => {
+    expect(contentFields(VIDEO(1, { caption: 'Our new Pro-Flex XC', hashtags: ['proflexxc'], source: 'owned' }))).toEqual([])
+    expect(contentFields(VIDEO(1, { caption: 'My new Pro-Flex XC', source: 'discovered' })).map((f) => f.field)).toEqual(['account', 'caption'])
+    // A row read before T5 carries no source: read as not owned.
+    expect(contentFields(VIDEO(1, { caption: 'My new Pro-Flex XC' })).map((f) => f.field)).toEqual(['account', 'caption'])
+  })
+
+  it('the pass: an own post\'s caption places nothing, a comment under it does, and the video counts under the client', async () => {
+    const { io } = world()
+    const own: ProductReadIO = {
+      ...io,
+      videos: async (ids) => (await io.videos(ids)).map((v) => (v.id === vid(1) ? { ...v, source: 'owned' } : v)),
+      monthVideos: async (m) => ((await io.monthVideos(m)) ?? []).map((v) => (v.id === vid(1) ? { ...v, audience: CLIENT, owned: true } : v)),
+    }
+    const inserted: MentionInsert[] = []
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, insert: async (rows) => { inserted.push(...rows) }, budgetUsd: 0 })
+    // "Trying the Pro-Flex XC on a hike" is the brand's own caption: no row.
+    expect(inserted.some((x) => x.video_id === vid(1) && x.source === 'content')).toBe(false)
+    // "my rheo knee beeps at night", under it, is the market's.
+    expect(inserted.find((x) => x.comment_id === 'k2')).toMatchObject({ placement: 'named', product_id: P('Rheo Knee') })
+    // Its words place nothing, so it is not category-relevant: its other comments are not queued.
+    expect(r.relevant.has(vid(1))).toBe(false)
+    expect(r.queue.some((q) => q.videoId === vid(1))).toBe(false)
+    const row = (audience: string, id: string) => r.rows.find((x) => x.audience === audience && x.object_id === id)!
+    expect(row(CLIENT, G('Knees'))).toMatchObject({ k_named: 1, k_any: 1, n: 1 })
+    expect(row(CLIENT, P('Rheo Knee'))).toMatchObject({ k_named: 1, comments: 1 })
+    expect(row(CLIENT, G('Feet'))).toMatchObject({ k_any: 0 })
+  })
+
+  it('productReadingRows counts a creator\'s video about the client, and never an own post\'s own words (a placement from before included)', () => {
+    const sep: ProductMonthVideo[] = [
+      { id: vid(1), platform: 'tiktok', audience: CLIENT, dated: 3, owned: true },
+      { id: vid(2), platform: 'tiktok', audience: CLIENT, dated: 3, owned: false },
+      { id: vid(3), platform: 'tiktok', audience: IND, dated: 3 },
+    ]
+    const standing = new Map<string, StandingText>([
+      [contentKey(vid(1)), st(vid(1), null, null, [p('named', 'Liners', 'Iceross Seal-In X5')])],
+      [commentKey('o1'), st(vid(1), SEP, 'o1', [p('unclear', 'Feet')])],
+      [contentKey(vid(2)), st(vid(2), null, null, [p('named', 'Liners', 'Iceross Seal-In X5')])],
+    ])
+    const rows = productReadingRows({ clientId: OSSUR_CLIENT_ID, compiled, markets: new Map([[SEP, sep]]), rivalFound: new Set(), standing })
+    const one = (id: string) => rows.find((r) => r.audience === CLIENT && r.object_id === id)!
+    expect(one(P('Iceross Seal-In X5'))).toMatchObject({ k_named: 1, n: 2 })
+    expect(one(G('Liners'))).toMatchObject({ k_named: 1, k_any: 1 })
+    expect(one(G('Feet'))).toMatchObject({ k_unclear: 1, k_any: 1 })
+  })
+
+  it('readProductMonthVideos: every audience with the own posts marked; market_month_videos where the migration is not applied', async () => {
+    const calls: string[] = []
+    const db = (fns: Record<string, () => { data: unknown; error: unknown }>) => ({
+      rpc: (fn: string) => { calls.push(fn); return { order: () => ({ range: async () => fns[fn]() }) } },
+    })
+    const rows = await readProductMonthVideos(db({
+      product_month_videos: () => ({ data: [{ video_id: 'a', audience: CLIENT, platform: 'tiktok', dated_comments: 4, owned: true }, { video_id: 'b', audience: IND, platform: 'youtube', dated_comments: 2, owned: false }], error: null }),
+    }) as never, OSSUR_CLIENT_ID, SEP)
+    expect(rows).toEqual([
+      { id: 'a', platform: 'tiktok', audience: CLIENT, dated: 4, owned: true },
+      { id: 'b', platform: 'youtube', audience: IND, dated: 2, owned: false },
+    ])
+    const missing = { code: 'PGRST202', message: 'Could not find the function public.product_month_videos(p_client, p_month) in the schema cache' }
+    const fallback = await readProductMonthVideos(db({
+      product_month_videos: () => ({ data: null, error: missing }),
+      market_month_videos: () => ({ data: [{ video_id: 'b', audience: IND, platform: 'youtube', dated_comments: 2 }], error: null }),
+    }) as never, OSSUR_CLIENT_ID, SEP)
+    expect(fallback).toEqual([{ id: 'b', platform: 'youtube', audience: IND, dated: 2 }])
+    expect(calls.slice(-2)).toEqual(['product_month_videos', 'market_month_videos'])
+    await expect(readProductMonthVideos(db({ product_month_videos: () => ({ data: null, error: { code: '57014', message: 'statement timeout' } }) }) as never, OSSUR_CLIENT_ID, SEP)).rejects.toThrow('statement timeout')
+  })
+})
+
+describe('the client\'s own accounts: what they write never places; an own post is never relevant', () => {
+  const window = { from: SEP, to: OCT }
+
+  it('ownAuthorNames: the configured handles and the own posts\' accounts, case and @ aside', () => {
+    const names = ownAuthorNames({ tiktok: '@Ossur', instagram: 'ossur' }, [VIDEO(9, { platform: 'tiktok', account_name: 'ossur_usa', source: 'owned' }), VIDEO(8, { account_name: 'creator' })])
+    expect(isOwnAuthor(names, 'tiktok', 'OSSUR')).toBe(true)
+    expect(isOwnAuthor(names, 'tiktok', '@ossur_usa')).toBe(true)
+    expect(isOwnAuthor(names, 'tiktok', 'creator')).toBe(false)
+    expect(isOwnAuthor(names, 'youtube', 'ossur')).toBe(false)
+    expect(isOwnAuthor(names, 'tiktok', null)).toBe(false)
+  })
+
+  it('a comment the client\'s own account wrote places nothing, read in full or found by the scan', async () => {
+    const { io } = world()
+    const own: ProductReadIO = {
+      ...io,
+      comments: async (vs) => (await io.comments(vs)).map((c) => (c.id === 'k2' ? { ...c, author: '@Ossur' } : c)),
+      ownHandles: async () => ({ tiktok: 'ossur' }),
+      commentAuthors: async (ids) => new Map(ids.map((id) => [id, { platform: 'tiktok', author: id === 'k6' ? 'ossur' : 'someone' }])),
+    }
+    const inserted: MentionInsert[] = []
+    await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, insert: async (rows) => { inserted.push(...rows) }, budgetUsd: 0 })
+    // k2 "my rheo knee beeps at night", read in full under video 1, is the brand's own reply.
+    expect(inserted.some((x) => x.comment_id === 'k2')).toBe(false)
+    // k6 "which prosthetic liner is that?", found by the scan under video 3, is too.
+    expect(inserted.some((x) => x.comment_id === 'k6')).toBe(false)
+    // Everyone else's still place.
+    expect(inserted.some((x) => x.comment_id === 'k7')).toBe(true)
+  })
+
+  it('an own post is never relevant, even where a whole-video tag from before stands on it', async () => {
+    const { io } = world()
+    const tag: ProductTagRow = {
+      id: 't9', client_id: OSSUR_CLIENT_ID, video_id: vid(3), comment_id: null, placement: 'unbranded', product_id: null, group_id: G('Feet'),
+      supersedes: null, actor_kind: 'user', actor_user_id: null, actor_label: 'member', created_at: '2026-10-13T10:00:00Z',
+    }
+    const own: ProductReadIO = {
+      ...io,
+      tags: async () => [tag],
+      monthVideos: async (m) => ((await io.monthVideos(m)) ?? []).map((v) => (v.id === vid(3) ? { ...v, audience: 'client', owned: true } : v)),
+    }
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, budgetUsd: 0 })
+    expect(r.relevant.has(vid(3))).toBe(false)
+    expect(r.queue.some((q) => q.videoId === vid(3))).toBe(false)
+    // and its tag counts nowhere: an own post's content never stands.
+    expect(r.rows.find((x) => x.audience === 'client' && x.object_id === G('Feet'))).toMatchObject({ k_any: 0 })
   })
 })
