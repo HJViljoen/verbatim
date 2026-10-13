@@ -1055,6 +1055,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
     still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
     to `clientSide: 'about'` everywhere but Content.
+  - **Panels at every width (T9).** A v2 panel opened from a card in a grid
+    is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
+    goes in a `PanelSlot` right after the clicked card, and
+    `panelPlacement(index, layout)` (`components/v2/panel-place.ts`) gives
+    its order and notch per breakpoint. The rules are plain CSS
+    (`.panel-slot` / `.panel-notch` in `app/globals.css`) because Tailwind
+    sorts `min-[1180px]:` before the named breakpoints. No page does its own
+    order arithmetic, and the panel's content is never drawn twice.
+    `InPlacePanel` scrolls itself into view when its head is off screen
+    (`panelScrollPlan`, reduced motion jumps). From 768 the sidebar takes
+    281px, so at 820 a page has 459px and three-column sections start at
+    `lg`.
+  - **The phone shell (T9).** Below 768 `PhoneTopBar`
+    (`components/shell/phone-bar.tsx`) stands in for the sidebar and opens
+    the same drawer, so its rows still come from `lib/nav.ts`; the
+    workspace name comes through `viewedClientRow` (request-cached, shared
+    with the billing banner). Phone `<main>` is `px-4 pt-[18px] pb-12`.
+    `scripts/pages-shots.ts` writes `measure-<width>.json` (scrollWidth and
+    overflow per shot); a page that scrolls sideways at 390 is a bug.
   - **A page that throws keeps the shell**: `app/dashboard/error.tsx` draws
     one calm line and Try again (`unstable_retry`) inside the sidebar; the
     Dashboard loses only a tile, and Market and Content only the block whose
