@@ -8,9 +8,10 @@ import { readMonthVideos } from '../provenance/load'
 import { denominatorKey, fillingMonths, isMissingMonthlyReading, monthsToRefresh, monthStartOf, nextMonth } from '../reading/monthly'
 import { selectAll } from '../supabase-admin'
 import { PRODUCT_CLASSIFY_PASS, runClassifier, type Classifier } from '../products/classify'
+import { readSearchFound, readSearchTerms } from '../products/organic'
 import type { MentionInsert } from '../products/match'
 import {
-  HELD_COLUMNS, mergeProductRows, placeProducts, pooledProductMonth, PRODUCT_COMMENT_COLUMNS, PRODUCT_READINGS_TABLE, PRODUCT_VIDEO_COLUMNS,
+  guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, PRODUCT_COMMENT_COLUMNS, PRODUCT_READINGS_TABLE, PRODUCT_VIDEO_COLUMNS,
   storedProductRows, writeProductRows, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../products/readings'
 import {
@@ -132,6 +133,8 @@ export function stepProductIO(admin: SupabaseClient, clientId: string, window: {
       if (error) throw new Error(`tracking_configs: ${error.message}`)
       return (await readRivalFound(admin, clientId, (data as { competitor_keywords: string[] | null } | null)?.competitor_keywords ?? null)).videos
     },
+    searchTerms: () => readSearchTerms(admin, clientId),
+    searchFound: (terms) => readSearchFound(admin, clientId, terms),
   }
 }
 
@@ -149,6 +152,9 @@ export interface ProductMonthResult {
   costUsd: number
   written: number
   frozen: number
+  /** Rows this run would have frozen, written filling because the model left
+   *  items: the next run reads the month again and freezes it. */
+  heldOpen: number
   keptFrozen: number
   refusedLate: number
   note: string
@@ -187,7 +193,7 @@ export async function runProductMonth(admin: SupabaseClient, args: {
   const month = monthStartOf(args.month)
   const base: ProductMonthResult = {
     month, status: 'skipped', catalogueVersion: null, ruleRowsInserted: 0, confirmAsked: 0, classified: 0, itemsAsked: 0, deferred: 0, costUsd: 0,
-    written: 0, frozen: 0, keptFrozen: 0, refusedLate: 0, note: '',
+    written: 0, frozen: 0, heldOpen: 0, keptFrozen: 0, refusedLate: 0, note: '',
   }
   if (!productReadingsEnabled(args.clientId)) return { ...base, note: 'off for this tenant (PRODUCT_READINGS_ENABLED)' }
   const stored = await storedProductRows(admin, args.clientId, [month], isMissingProductsSchema)
@@ -210,7 +216,11 @@ export async function runProductMonth(admin: SupabaseClient, args: {
   const fresh = pass.rows.filter((r) => r.month === month)
   const closed = await selectAll<{ month: string; audience: string }>(() => admin.from('month_denominators').select('month, audience')
     .eq('client_id', args.clientId).eq('month', month).eq('status', 'frozen').order('audience'))
-  const merged = mergeProductRows({ months: [month], fresh, stored, now: args.now, runId: args.runId, closedAudienceMonths: closed.map(denominatorKey) })
+  const left = itemsLeft(pass, args.cap)
+  // A month this run would freeze is frozen only from a pass that read it in
+  // full; otherwise it is written filling and the next run freezes it.
+  const guarded = guardFreeze(mergeProductRows({ months: [month], fresh, stored, now: args.now, runId: args.runId, closedAudienceMonths: closed.map(denominatorKey) }), left, 'filling')
+  const merged = guarded.merged!
   const { written } = await writeProductRows(admin, args.clientId, merged)
   const groups = catalogue.groups.map((g) => {
     const p = pooledProductMonth(fresh, month, g.id)
@@ -222,8 +232,8 @@ export async function runProductMonth(admin: SupabaseClient, args: {
     month, status: 'written', catalogueVersion: catalogue.version, ruleRowsInserted: pass.freshRuleRows.length,
     confirmAsked: confirm?.asked ?? 0, classified: classify?.answered ?? 0,
     itemsAsked: (confirm?.asked ?? 0) + (classify?.asked ?? 0) + (confirm?.failed ?? 0) + (classify?.failed ?? 0),
-    deferred: [confirm, classify].reduce((s, r) => s + (r ? r.deferred + r.failed + r.unplaced : 0), 0) + Math.max(0, pass.queue.length - Math.max(0, args.cap)),
-    costUsd: pass.costUsd, written, frozen: merged.writes.filter((w) => w.status === 'frozen').length,
+    deferred: left,
+    costUsd: pass.costUsd, written, frozen: merged.writes.filter((w) => w.status === 'frozen').length, heldOpen: guarded.held,
     keptFrozen: merged.keptFrozen, refusedLate: merged.refusedLate.length, note: groups.join(' · '),
   }
 }
@@ -231,7 +241,7 @@ export async function runProductMonth(admin: SupabaseClient, args: {
 export const productSummary = (r: ProductMonthResult): string =>
   r.status === 'skipped'
     ? `${r.month.slice(0, 7)}: skipped · ${r.note}`
-    : `${r.month.slice(0, 7)}: ${r.ruleRowsInserted} new rule placements, ${r.confirmAsked} generic names checked, ${r.classified} comments classified, ${r.deferred} left for the next run · $${r.costUsd.toFixed(4)} · ${r.written} rows written (${r.frozen} frozen), ${r.keptFrozen} already frozen, ${r.refusedLate} refused as late · ${r.note}`
+    : `${r.month.slice(0, 7)}: ${r.ruleRowsInserted} new rule placements, ${r.confirmAsked} generic names checked, ${r.classified} comments classified, ${r.deferred} left for the next run · $${r.costUsd.toFixed(4)} · ${r.written} rows written (${r.frozen} frozen${r.heldOpen ? `; ${r.heldOpen} held filling because items were left: the next run freezes them` : ''}), ${r.keptFrozen} already frozen, ${r.refusedLate} refused as late · ${r.note}`
 
 /** The run's item cap, for the pipeline's loop (what each month's step may
  *  still send is this less what the earlier months' returns say they sent). */

@@ -1821,14 +1821,17 @@ export const runPipeline = inngest.createFunction(
 
     // The product-readings step (depth v2 T11; plan decision 3, option B): for
     // every month the run refreshes, the catalogue's new product_mentions rows
-    // (the rules; the gpt-4.1-mini confirm of a generic name; the classifier
-    // on what the rules missed under the category-relevant videos), and
+    // (the rules; the gpt-4.1 confirm of a generic name; the gpt-4.1-mini
+    // classifier on what the rules missed under the category-relevant videos,
+    // its answers held to the comment's own words), and
     // month_product_readings per audience, category and product. Before
     // freeze-months for the brand step's reason, after it in its own place.
     // A no-op until the products migration is applied, for a tenant with no
     // catalogue, and wherever PRODUCT_READINGS_ENABLED is off. The model is
     // held to the run's item cap (counted from the memoised returns) and hard
-    // dollar cap (read from the ledger inside each step). One month a step.
+    // dollar cap (read from the ledger inside each step). A month this run
+    // would freeze is frozen only from a pass that read it in full; with items
+    // left it is written filling and the next run freezes it. One month a step.
     const productPlan = await step
       .run('plan-product-readings', async () => {
         const now = new Date().toISOString()

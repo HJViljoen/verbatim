@@ -11,7 +11,7 @@ import { cataloguePattern, compileCatalogue } from './rules'
 import { catalogueCodes, PRODUCT_MODEL_RULE_VERSION, runClassifier, type Classifier } from './classify'
 import { commentKey, contentKey, type MentionInsert, type StandingText } from './match'
 import {
-  mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
+  categorySearchFinds, categorySearchTerms, guardFreeze, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
   type Ask, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from './readings'
 import type { ProductTagRow } from './types'
@@ -108,7 +108,7 @@ const VIDEO = (n: number, over: Partial<ProductVideoRow> = {}): ProductVideoRow 
 const COMMENT = (id: string, n: number, text: string, date = '2026-09-10T10:00:00Z', lowSignal = false): ProductCommentRow =>
   ({ id, platform: 'tiktok', video_id: `tt${n}`, text, comment_date: date, is_low_signal: lowSignal })
 
-function world(opts: { held?: HeldRow[] | null; tags?: ProductTagRow[] | null } = {}) {
+function world(opts: { held?: HeldRow[] | null; tags?: ProductTagRow[] | null; searchTerms?: string[]; searchFound?: Map<string, string[]> } = {}) {
   const videos = [
     VIDEO(1, { caption: 'Trying the Pro-Flex XC on a hike' }),
     VIDEO(2, { caption: 'Unity vacuum suspension, day one' }),
@@ -121,6 +121,7 @@ function world(opts: { held?: HeldRow[] | null; tags?: ProductTagRow[] | null } 
     COMMENT('k4', 2, 'does it hiss when you sit?'),
     COMMENT('k5', 3, 'you look great'),
     COMMENT('k6', 3, 'which prosthetic liner is that?'),
+    COMMENT('k7', 1, 'my liner rubs on hills'),
   ]
   const pattern = cataloguePattern(compiled, 'js')!
   const re = new RegExp(pattern, 'isu')
@@ -144,6 +145,8 @@ function world(opts: { held?: HeldRow[] | null; tags?: ProductTagRow[] | null } 
     held: async () => (opts.held === undefined ? [] : opts.held),
     tags: async () => (opts.tags === undefined ? [] : opts.tags),
     rivalFound: async () => new Set<string>(),
+    searchTerms: async () => opts.searchTerms ?? [],
+    searchFound: async () => opts.searchFound ?? new Map(),
   }
   return { io, calls }
 }
@@ -196,7 +199,7 @@ describe('placeProducts: the pass', () => {
     expect(inserted.map((x) => [x.source, x.comment_id, x.placement, x.product_id ?? x.group_id])).toEqual([
       ['content', null, 'named', P('Pro-Flex XC')],
       ['comment', 'k2', 'named', P('Rheo Knee')],
-      ['comment', 'k6', 'unbranded', G('Liners')],
+      ['comment', 'k7', 'unbranded', G('Liners')],
     ])
     expect(written.map((x) => [x.method, x.comment_id ?? x.video_id, x.placement])).toEqual([
       ['confirmed', vid(2), 'named'],
@@ -207,7 +210,10 @@ describe('placeProducts: the pass', () => {
     expect(one(G('Feet'))).toMatchObject({ k_named: 1, k_any: 1, comments: 1, n: 3 })
     expect(one(G('Sockets'))).toMatchObject({ k_named: 1, k_unclear: 0, k_any: 1, comments: 1 })
     expect(one(G('Knees'))).toMatchObject({ k_named: 1, comments: 1 })
-    expect(one(G('Liners'))).toMatchObject({ k_unbranded: 1, k_any: 1 })
+    expect(one(G('Liners'))).toMatchObject({ k_unbranded: 1, k_any: 1, comments: 1 })
+    // "which prosthetic liner is that?" sits under a video no category stands on: not counted
+    expect(r.offTopicWords).toBe(1)
+    expect(inserted.some((x) => x.comment_id === 'k6')).toBe(false)
     expect(r.costUsd).toBeGreaterThan(0)
   })
 
@@ -245,6 +251,53 @@ describe('placeProducts: the pass', () => {
     const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, budgetUsd: 0 })
     expect([...r.relevant]).toEqual([])
     expect(r.queue).toEqual([])
+  })
+
+  it('the organic base is the category\'s: a search in its own words leaves its finds out, and only its', async () => {
+    const { io } = world({ searchTerms: ['prosthetic knee', 'ossur', 'amputee', 'running blade'], searchFound: new Map([[vid(1), ['running blade']], [vid(2), ['prosthetic knee']]]) })
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io, catalogue: FIXTURE_CATALOGUE, window, ask: null, budgetUsd: 0 })
+    expect(r.organic.get(G('Feet'))).toEqual({ terms: ['running blade'], videos: 1 })
+    expect(r.organic.get(G('Knees'))).toEqual({ terms: ['prosthetic knee'], videos: 1 })
+    expect(r.organic.get(G('Liners'))).toEqual({ terms: [], videos: 0 })
+    const one = (id: string) => r.rows.find((x) => x.object_id === id)!
+    // Feet: video 1 (named Pro-Flex XC) was found by "running blade": out of Feet's base and its products', not Liners'
+    expect(one(G('Feet'))).toMatchObject({ k_any: 1, k_organic: 0, n: 3, n_organic: 2 })
+    expect(one(P('Pro-Flex XC'))).toMatchObject({ k_any: 1, k_organic: 0, n_organic: 2 })
+    expect(one(G('Liners'))).toMatchObject({ n_organic: 3 })
+    expect(one(G('Knees'))).toMatchObject({ n_organic: 2 })
+  })
+
+  it('categorySearchTerms: a term is a category\'s when the rules read it as that category', () => {
+    const byGroup = categorySearchTerms(compiled, ['#runningblade', 'prosthetic arm', 'ossur', 'Prosthetic Knee', 'socket'])
+    expect(Object.fromEntries([...byGroup].map(([g, ts]) => [compiled.groupName.get(g), ts]))).toEqual({ Feet: ['#runningblade'], Knees: ['Prosthetic Knee'] })
+    expect(categorySearchFinds(byGroup, new Map([['v1', ['#RunningBlade']], ['v2', ['ossur']]])).get(G('Feet'))).toEqual(new Set(['v1']))
+  })
+
+  it('THE ONE-SHOT GUARD, the back-read: a 429 leaves items, and a closed month\'s rows are not written; a full read writes them', async () => {
+    const { io } = world()
+    const rateLimited: Classifier = async () => { throw new Error('429 rate limit reached') }
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io, catalogue: FIXTURE_CATALOGUE, window, ask: askWith(rateLimited, []), budgetUsd: 1 })
+    expect(r.confirmResult?.rateLimited).toBe(true)
+    const left = itemsLeft(r)
+    expect(left).toBeGreaterThan(0)
+    const closing = mergeProductRows({ months: [SEP], fresh: r.rows, stored: [], now: '2026-11-02T07:00:00Z', runId: null })
+    expect(closing.writes.every((w) => w.status === 'frozen')).toBe(true)
+    expect(guardFreeze(closing, left, 'skip')).toEqual({ merged: null, held: closing.writes.length })
+    const live = guardFreeze(closing, left, 'filling')
+    expect(live.held).toBe(closing.writes.length)
+    expect(live.merged!.writes.every((w) => w.status === 'filling' && w.frozen_at === null && w.origin === 'live')).toBe(true)
+    // nothing left: written as merged
+    expect(guardFreeze(closing, 0, 'skip')).toEqual({ merged: closing, held: 0 })
+    // a month still filling is written as merged whatever was left
+    const open = mergeProductRows({ months: [SEP], fresh: r.rows, stored: [], now: '2026-10-11T07:00:00Z', runId: null })
+    expect(guardFreeze(open, left, 'skip')).toEqual({ merged: open, held: 0 })
+  })
+
+  it('itemsLeft counts what a cap kept from the queue', async () => {
+    const { io } = world()
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io, catalogue: FIXTURE_CATALOGUE, window, ask: askWith(stub, []), budgetUsd: 1, queueCap: 0 })
+    expect(itemsLeft(r, 0)).toBe(r.queue.length)
+    expect(itemsLeft(r)).toBe(0)
   })
 
   it('the cap: the queue past it is left for the next run, priced', async () => {

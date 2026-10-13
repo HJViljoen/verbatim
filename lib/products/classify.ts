@@ -35,9 +35,10 @@ import type { ProductCatalogue } from './types'
 // the comment says:
 //   - the words must be in the comment (case and spacing aside), or the answer
 //     is the read's 'none';
-//   - a 'named' product must be in the words (its name or another name, one
-//     slip of a letter allowed: "propio foot"), or be the ONE product the
-//     video names (the "how long does it last?" case); otherwise 'none';
+//   - a 'named' product must be in the words (its name or another name, as
+//     a whole word the way the rules read it; a one-word name of six or more
+//     letters may be one slip off: "propio"), or be the ONE product the video
+//     names (the "how long does it last?" case); otherwise 'none';
 //   - an 'unclear' answer must have the client's own name, one of its product
 //     families or a client product of that category in the comment or the
 //     video; otherwise it is read as the category in general ('unbranded');
@@ -301,16 +302,29 @@ export function withinOneEdit(a: string, b: string): boolean {
   return edits + (a.length - i) + (b.length - j) <= 1
 }
 
-/** Do the words name this form: the form in them, or (a form of five or more
- *  letters) a stretch of them one slip away from it? PURE. */
-export function wordsName(words: string, form: string): boolean {
-  const w = squashName(words)
-  const f = squashName(form)
-  if (f.length < 3 || !w) return false
-  if (w.includes(f)) return true
-  if (f.length < 5) return false
-  for (const len of [f.length - 1, f.length, f.length + 1]) {
-    for (let k = 0; k + len <= w.length; k++) if (withinOneEdit(w.slice(k, k + len), f)) return true
+/** The fewest letters a word may have and still be taken one slip away from
+ *  a name (the longer of the two words): shorter names collide with ordinary
+ *  words ("liver" is not "liner"). */
+export const SLIP_MIN_LETTERS = 6
+
+/**
+ * Do the words name this alias? Its own compiled pattern (whole word, as the
+ * rules read it: "sealing" is not "Seal-In", "action" not "CTi", "bracelet"
+ * not "brace"), or, for a one-word name, one word of the text one slip away
+ * from it (a letter added, dropped or changed: "propio", "lainer"), where the
+ * longer of the two has SLIP_MIN_LETTERS letters and both start with the same
+ * letter ("pocket" is not "socket"). PURE.
+ */
+export function wordsName(words: string, alias: Pick<CompiledAlias, 'alias' | 're'>): boolean {
+  if (!words) return false
+  alias.re.lastIndex = 0
+  if (alias.re.test(words)) return true
+  if (/[\s-]/.test(alias.alias.trim())) return false
+  const f = squashName(alias.alias)
+  for (const token of words.split(/[^\p{L}\p{N}]+/u)) {
+    const t = squashName(token)
+    if (!t || t[0] !== f[0] || Math.max(t.length, f.length) < SLIP_MIN_LETTERS) continue
+    if (withinOneEdit(t, f)) return true
   }
   return false
 }
@@ -328,14 +342,13 @@ export interface CheckContext {
   videos: ReadonlyMap<string, VideoContext>
 }
 
-/** Every name of a product (its name and other names), and of a category's
- *  families. */
-const productForms = (catalogue: ProductCatalogue, productId: string): string[] => {
-  const p = catalogue.products.find((x) => x.id === productId)
-  return [...(p ? [p.name] : []), ...aliasesOf(catalogue, { product: productId }, ['name', 'nickname'])]
-}
-const familyForms = (catalogue: ProductCatalogue, groupId: string): string[] => aliasesOf(catalogue, { group: groupId }, ['name', 'nickname'])
-const categoryForms = (catalogue: ProductCatalogue, groupId: string): string[] => aliasesOf(catalogue, { group: groupId }, ['category_word'])
+/** A product's every name (its name and other names), a category's families
+ *  and its words, compiled as the rules compile them. */
+const productForms = (compiled: CompiledCatalogue, productId: string): CompiledAlias[] => compiled.aliases.filter((a) => a.productId === productId)
+const familyForms = (compiled: CompiledCatalogue, groupId: string): CompiledAlias[] =>
+  compiled.aliases.filter((a) => !a.productId && a.groupId === groupId && a.kind !== 'category_word')
+const categoryForms = (compiled: CompiledCatalogue, groupId: string): CompiledAlias[] =>
+  compiled.aliases.filter((a) => a.groupId === groupId && a.kind === 'category_word')
 
 /** The client's own name in a text (its brand rule)? */
 const namesClient = (compiled: CompiledCatalogue, text: string): boolean => {
@@ -394,7 +407,7 @@ export function classifyRows(args: {
       if (ids.length > 0 && ids.every((x): x is string => !!x)) {
         const onlyOne = (video?.products ?? []).length === 1 ? video!.products![0] : null
         const kept = inText(words, q.text)
-          ? ids.filter((p) => productForms(check.catalogue, p).some((f) => wordsName(words, f)) || p === onlyOne)
+          ? ids.filter((p) => productForms(check.compiled, p).some((f) => wordsName(words, f)) || p === onlyOne)
           : []
         if (kept.length) out = kept.map((p) => make('named', codes.product2group.get(p)!, p))
         else { out = [make('none', null, null)]; downgraded++ }
@@ -404,11 +417,11 @@ export function classifyRows(args: {
       if (g) {
         if (!inText(words, q.text)) { out = [make('none', null, null)]; downgraded++ }
         else if (a.placement === 'unclear') {
-          const theirs = namesClient(check.compiled, q.text) || familyForms(check.catalogue, g).some((f) => wordsName(q.text, f))
+          const theirs = namesClient(check.compiled, q.text) || familyForms(check.compiled, g).some((f) => wordsName(q.text, f))
             || (video?.clientGroups ?? []).includes(g)
           if (theirs) out = [make('unclear', g, null)]
           else { out = [make('unbranded', g, null)]; downgraded++ }
-        } else if (MODEL_PLACES_PARAPHRASE || categoryForms(check.catalogue, g).some((f) => wordsName(words, f))) {
+        } else if (MODEL_PLACES_PARAPHRASE || categoryForms(check.compiled, g).some((f) => wordsName(words, f))) {
           out = [make('unbranded', g, null)]
         } else { out = [make('none', null, null)]; downgraded++ }
       }
@@ -501,11 +514,15 @@ export interface ClassifyOutcome {
 
 /** One call to the model. Throws on a failure the caller records for the
  *  whole batch. */
-export type Classifier = (req: { kind: ClassifyKind; system: string; user: string }) => Promise<ClassifyOutcome>
+export type Classifier = (req: { kind: ClassifyKind; system: string; user: string; timeoutMs?: number }) => Promise<ClassifyOutcome>
 
-/** The real calls: gpt-4.1-mini, temperature 0, structured output, one retry,
- *  a minute's timeout. */
-export const openAiClassifier: Classifier = async ({ kind, system, user }) => {
+/** A call's longest wait, and the least time worth starting one with. */
+export const CALL_CAP_MS = 60_000
+export const CALL_FLOOR_MS = 10_000
+
+/** The real calls: temperature 0, structured output, NO SDK retry (a retry is
+ *  the next run's), and the timeout the caller hands in (the step's clock). */
+export const openAiClassifier: Classifier = async ({ kind, system, user, timeoutMs }) => {
   const started = Date.now()
   const schema = kind === 'confirm' ? confirmSchema : classifySchema
   const res = await openai.chat.completions.parse({
@@ -513,7 +530,7 @@ export const openAiClassifier: Classifier = async ({ kind, system, user }) => {
     temperature: 0,
     messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
     response_format: zodResponseFormat(schema, kind === 'confirm' ? 'verdicts' : 'placements'),
-  }, { timeout: 60_000, maxRetries: 1 })
+  }, { timeout: timeoutMs ?? CALL_CAP_MS, maxRetries: 0 })
   const msg = res.choices[0]?.message
   if (!msg?.parsed) throw new Error(msg?.refusal ?? 'no parsed answers')
   return {
@@ -620,14 +637,17 @@ export async function runClassifier(args: {
     while (end < calls.length && end < w + parallel && calls[end].kind === first) end++
     const wave = calls.slice(w, end)
     const worst = wave.reduce((s, c) => s + callUsd(c).usd, 0)
-    if (out.costUsd + worst > args.budgetUsd || (args.deadline !== undefined && now() >= args.deadline) || out.rateLimited) {
+    // Each call waits at most CALL_CAP_MS, and never past the step's clock:
+    // the step's calls end by `deadline`, well inside the route's 300 s.
+    const timeoutMs = args.deadline === undefined ? CALL_CAP_MS : Math.min(CALL_CAP_MS, args.deadline - now())
+    if (out.costUsd + worst > args.budgetUsd || timeoutMs < CALL_FLOOR_MS || out.rateLimited) {
       out.deferred += calls.slice(w).reduce((s, c) => s + c.items.length, 0)
       break
     }
     const results = await Promise.all(wave.map(async (c) => {
       const index = ++callIndex
       try {
-        return { c, index, r: await call({ kind: c.kind, system: c.system, user: c.user }), error: null as string | null }
+        return { c, index, r: await call({ kind: c.kind, system: c.system, user: c.user, timeoutMs }), error: null as string | null }
       } catch (e) {
         return { c, index, r: null, error: e instanceof Error ? e.message : String(e) }
       }

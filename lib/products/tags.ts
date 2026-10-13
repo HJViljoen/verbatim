@@ -5,9 +5,14 @@ import { recordConfigChange, type ConfigActor } from '../config-log'
 import { readMonthVideos } from '../provenance/load'
 import { denominatorKey, freezeStateFor, monthsToRefresh, monthStartOf } from '../reading/monthly'
 import { selectAll } from '../supabase-admin'
-import { compileCatalogue } from './rules'
+import { compileCatalogue, PRODUCT_RULE_VERSION } from './rules'
 import { standingPlacements, type MentionInsert } from './match'
-import { HELD_COLUMNS, mergeProductRows, productReadingRows, storedProductRows, writeProductRows, type HeldRow } from './readings'
+import { PRODUCT_MODEL_RULE_VERSION } from './classify'
+import { readSearchFound, readSearchTerms } from './organic'
+import {
+  categorySearchFinds, categorySearchTerms, HELD_COLUMNS, mergeProductRows, PRODUCT_READINGS_TABLE, productReadingRows, storedProductRows, writeProductRows,
+  type HeldRow,
+} from './readings'
 import {
   isMissingProductsSchema, loadProductCatalogue, PRODUCT_TAG_COLUMNS, PRODUCTS_SURFACE, standingTags, tagTargetKey,
   TABLE_PRODUCT_MENTIONS, TABLE_PRODUCT_TAGS, type Placement, type ProductCatalogue, type ProductTagRow,
@@ -124,6 +129,7 @@ export function tagMonths(commentMonth: string | null, now: string): string[] {
 
 export const PRODUCT_TAG_COPY = {
   done: 'Tagged. Your products counts this from now on, in this month and any month still open.',
+  closedMonth: 'Tagged and kept. That comment\'s month is closed, so its counts stay as they were.',
   already: 'This is already tagged that way.',
   changed: 'Someone tagged this a moment ago. Refresh to see it, then tag again if you need to.',
   role: 'Only an owner or an admin can tag.',
@@ -134,7 +140,9 @@ export const PRODUCT_TAG_COPY = {
   failed: 'We could not take that just now. Try again, and tell us if it keeps happening.',
 } as const
 
-export type TagOutcome = 'written' | 'already' | 'changed' | 'unknown_text' | 'unknown_target' | 'not_ready' | 'failed'
+/** `written_closed`: the tag is stored, on a comment whose month is closed,
+ *  so no count it is in moves (the frozen month is the record). */
+export type TagOutcome = 'written' | 'written_closed' | 'already' | 'changed' | 'unknown_text' | 'unknown_target' | 'not_ready' | 'failed'
 export interface TagResult { outcome: TagOutcome; logged: boolean; reread: string[]; error?: string }
 
 const PG_UNIQUE_VIOLATION = '23505'
@@ -179,7 +187,17 @@ export async function writeProductTag(admin: SupabaseClient, a: {
   const held = await admin.from(TABLE_PRODUCT_TAGS).select(PRODUCT_TAG_COLUMNS).eq('client_id', a.clientId).eq('video_id', a.videoId)
   if (held.error) return isMissingProductsSchema(held.error) ? fail('not_ready') : fail('failed', held.error.message)
   const standing = standingTags((held.data ?? []) as ProductTagRow[]).get(tagTargetKey(a.videoId, a.commentId))
-  if (sameTag(standing, target)) return { outcome: 'already', logged: false, reread: [] }
+  if (sameTag(standing, target)) {
+    // A retry after a write that stored the tag and not its placement row
+    // answers "already": make sure the row is there under this version.
+    const had = await admin.from(TABLE_PRODUCT_MENTIONS).select('tag_id').eq('client_id', a.clientId).eq('tag_id', standing!.id).eq('catalogue_version', catalogue.version).limit(1)
+    if (had.error) return fail('failed', had.error.message)
+    if ((had.data ?? []).length === 0) {
+      const placed = await admin.from(TABLE_PRODUCT_MENTIONS).insert(tagMention(a, commentMonth, target, standing!.id, catalogue.version))
+      if (placed.error) return fail('failed', `the tag is stored but its placement row is not: ${placed.error.message}`)
+    }
+    return { outcome: 'already', logged: false, reread: [] }
+  }
 
   const stamp = { actor_kind: a.actor.kind, actor_user_id: a.actor.user_id, actor_label: a.actor.label ?? a.actor.user_id ?? a.actor.kind }
   const ins = await admin.from(TABLE_PRODUCT_TAGS).insert({
@@ -192,12 +210,7 @@ export async function writeProductTag(admin: SupabaseClient, a: {
     return fail('failed', ins.error?.message ?? 'no id returned')
   }
   const tagId = (ins.data as { id: string }).id
-  const mention: MentionInsert = {
-    client_id: a.clientId, video_id: a.videoId, source: a.commentId ? 'comment' : 'content', field: null,
-    comment_id: a.commentId, comment_month: commentMonth, placement: target.placement, product_id: target.productId, group_id: target.groupId,
-    method: 'tag', rule_version: PRODUCT_TAG_VERSION, catalogue_version: catalogue.version, model: null, prompt_version: null, tag_id: tagId,
-  }
-  const placed = await admin.from(TABLE_PRODUCT_MENTIONS).insert(mention)
+  const placed = await admin.from(TABLE_PRODUCT_MENTIONS).insert(tagMention(a, commentMonth, target, tagId, catalogue.version))
   if (placed.error) return fail('failed', `the tag is stored but its placement row is not: ${placed.error.message}`)
 
   const logged = await recordConfigChange(admin, {
@@ -215,20 +228,45 @@ export async function writeProductTag(admin: SupabaseClient, a: {
     // The tag stands; the next run re-reads the month anyway.
     console.error(`[product-tags] open months not re-read for ${a.clientId}: ${e instanceof Error ? e.message : String(e)}`)
   }
-  return { outcome: 'written', logged, reread }
+  const closedMonth = commentMonth !== null && freezeStateFor(commentMonth, now) === 'frozen'
+  return { outcome: closedMonth ? 'written_closed' : 'written', logged, reread }
+}
+
+/** A tag's placement row, under the catalogue version it was made under. */
+function tagMention(a: { clientId: string; videoId: string; commentId: string | null }, commentMonth: string | null,
+  target: { placement: Placement; productId: string | null; groupId: string | null }, tagId: string, version: string): MentionInsert {
+  return {
+    client_id: a.clientId, video_id: a.videoId, source: a.commentId ? 'comment' : 'content', field: null,
+    comment_id: a.commentId, comment_month: commentMonth, placement: target.placement, product_id: target.productId, group_id: target.groupId,
+    method: 'tag', rule_version: PRODUCT_TAG_VERSION, catalogue_version: version, model: null, prompt_version: null, tag_id: tagId,
+  }
 }
 
 /**
  * Re-read these months FROM WHAT IS STORED (see the header): the placements
- * under the catalogue's version dated in the month or on content, the standing
- * tags, the month's market and the rival searches' finds. No scan, no model.
- * A month no longer filling is skipped, and the merge keeps any frozen row.
- * Returns the months written.
+ * of this catalogue version by this matcher and this prompt (as placeProducts
+ * counts them), dated in the month or on content, the standing tags, the
+ * month's market, and the organic base (the rival searches' finds and the
+ * category's own searches'). No scan, no model. Skipped, month by month,
+ * where the month is no longer filling, or holds no rows yet, or its rows
+ * were made under ANOTHER catalogue version: after a Settings edit the
+ * placements under the new version do not exist until the next run, and a
+ * re-read from them would write the month to about nothing (the fresh check
+ * of 13 Oct). The next run reads those months whole. Returns the months
+ * written.
  */
 export async function rereadOpenMonths(admin: SupabaseClient, clientId: string, catalogue: ProductCatalogue, months: readonly string[], now: string): Promise<string[]> {
-  const open = months.map(monthStartOf).filter((m) => freezeStateFor(m, now) === 'filling')
+  const candidates = months.map(monthStartOf).filter((m) => freezeStateFor(m, now) === 'filling')
+  const open: string[] = []
+  for (const m of candidates) {
+    const versions = await selectAll<{ catalogue_version: string; object_id: string; audience: string; object_kind: string }>(() => admin.from(PRODUCT_READINGS_TABLE)
+      .select('catalogue_version, object_id, audience, object_kind').eq('client_id', clientId).eq('month', m).order('audience').order('object_kind').order('object_id'))
+    if (versions.length > 0 && versions.every((v) => v.catalogue_version === catalogue.version)) open.push(m)
+  }
   if (open.length === 0) return []
   const compiled = compileCatalogue(catalogue, clientId)
+  const current = (r: HeldRow) => (r.method === 'rule' && r.rule_version === PRODUCT_RULE_VERSION)
+    || ((r.method === 'model' || r.method === 'confirmed') && r.rule_version === PRODUCT_MODEL_RULE_VERSION)
   const content = await selectAll<HeldRow>(() => admin.from(TABLE_PRODUCT_MENTIONS).select(HELD_COLUMNS)
     .eq('client_id', clientId).eq('catalogue_version', catalogue.version).eq('source', 'content').order('id'))
   const comments = await selectAll<HeldRow>(() => admin.from(TABLE_PRODUCT_MENTIONS).select(HELD_COLUMNS)
@@ -237,16 +275,19 @@ export async function rereadOpenMonths(admin: SupabaseClient, clientId: string, 
   const tags = standingTags(await selectAll<ProductTagRow>(() => admin.from(TABLE_PRODUCT_TAGS).select(PRODUCT_TAG_COLUMNS).eq('client_id', clientId).order('id')))
   const tagMonth = new Map(tagRows.filter((r) => r.tag_id && r.comment_month).map((r) => [r.tag_id!, r.comment_month!]))
   const standing = standingPlacements({
-    rows: [...content, ...comments].filter((r) => r.method !== 'tag'), tags, tagMonths: tagMonth,
+    rows: [...content, ...comments].filter(current), tags, tagMonths: tagMonth,
     active: { groups: new Set(catalogue.groups.map((g) => g.id)), products: new Set(catalogue.products.map((p) => p.id)) },
   })
   const { data: tracking } = await admin.from('tracking_configs').select('competitor_keywords').eq('client_id', clientId).maybeSingle()
   const rivalFound = (await readRivalFound(admin, clientId, (tracking as { competitor_keywords: string[] | null } | null)?.competitor_keywords ?? null)).videos
+  const termsByGroup = categorySearchTerms(compiled, await readSearchTerms(admin, clientId))
+  const allTerms = [...new Set([...termsByGroup.values()].flat())]
+  const searchFinds = categorySearchFinds(termsByGroup, allTerms.length ? await readSearchFound(admin, clientId, allTerms) : new Map())
   const written: string[] = []
   for (const m of open) {
     const market = await readMonthVideos(admin, clientId, m, { n: 0 })
     if (!market) continue
-    const rows = productReadingRows({ clientId, compiled, markets: new Map([[m, market]]), rivalFound, standing })
+    const rows = productReadingRows({ clientId, compiled, markets: new Map([[m, market]]), rivalFound, searchFinds, standing })
     const stored = await storedProductRows(admin, clientId, [m], isMissingProductsSchema)
     if (stored == null) continue
     const closed = await selectAll<{ month: string; audience: string }>(() => admin.from('month_denominators').select('month, audience')

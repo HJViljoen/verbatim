@@ -34,7 +34,7 @@ export const OSSUR_PRODUCTS: CatalogueSeed = {
     {
       name: 'Liners',
       words: ['liner', 'prosthetic liner', 'silicone liner', 'gel liner', 'seal-in liner'],
-      families: ['Iceross', 'Iceform', { alias: 'Seal-In', needsConfirm: true }],
+      families: ['Iceross', 'Iceform', { alias: 'Seal-In', needsConfirm: true }, 'AeroFit'],
       products: [
         // https://www.ossur.com/en-us/prosthetics/liners/iceross-seal-in-x (title from en-us iceross-seal-in-x-locking)
         { name: 'Iceross Seal-In X', aliases: ['Seal-In X'] },
@@ -54,6 +54,10 @@ export const OSSUR_PRODUCTS: CatalogueSeed = {
         { name: 'Iceross Sport' },
         // https://www.ossur.com/en-us/prosthetics/liners/iceross-upper-x-locking (title from en-gb)
         { name: 'Iceross Upper-X', aliases: ['Upper-X liner'] },
+        // https://media.ossur.com/ossur-dam/image/upload/v1778725146/Shared/Prosthetics_eLetter_May_2026_en-anz.pdf
+        // (Össur's May 2026 eLetter: AeroFit, a 3D-printed vented Seal-In liner for transfemoral users, shown at
+        // OTWorld 2026; added 13 Oct at the fresh check, no en-us product page found yet)
+        { name: 'AeroFit Seal-In' },
       ],
     },
     {
@@ -66,8 +70,9 @@ export const OSSUR_PRODUCTS: CatalogueSeed = {
       families: [
         'Pro-Flex',
         { alias: 'Cheetah', needsConfirm: true },
-        'Cheetah blade',
-        'Cheetah blades',
+        // "my ottobock cheetah blade": rivals' blades are called cheetahs too, so the confirm reads it first
+        { alias: 'Cheetah blade', needsConfirm: true },
+        { alias: 'Cheetah blades', needsConfirm: true },
         { alias: 'Flex-Foot', needsConfirm: true },
         { alias: 'Balance Foot', needsConfirm: true },
       ],
@@ -123,7 +128,8 @@ export const OSSUR_PRODUCTS: CatalogueSeed = {
       families: [{ alias: 'Rheo', needsConfirm: true }, { alias: 'Total Knee', needsConfirm: true }],
       products: [
         // https://www.ossur.com/en-us/prosthetics/knees/power-knee
-        { name: 'Power Knee' },
+        // generic: "power knee drive" is a fitness move, so the confirm reads it first
+        { name: 'Power Knee', needsConfirm: true },
         // https://www.ossur.com/en-us/prosthetics/knees/rheo-knee
         { name: 'Rheo Knee', aliases: ['Rheo Bionic Knee'] },
         // https://www.ossur.com/en-us/prosthetics/knees/rheo-knee-xc
@@ -149,7 +155,7 @@ export const OSSUR_PRODUCTS: CatalogueSeed = {
       words: [
         { alias: 'socket', needsConfirm: true },
         'prosthetic socket', 'socket fit', 'check socket', 'test socket', 'suction socket', 'vacuum socket',
-        'elevated vacuum', 'vacuum suspension', 'pin lock', 'shuttle lock', 'suspension sleeve',
+        'elevated vacuum', 'vacuum suspension', { alias: 'pin lock', needsConfirm: true }, 'shuttle lock', 'suspension sleeve',
       ],
       families: ['Icelock'],
       products: [
@@ -157,6 +163,9 @@ export const OSSUR_PRODUCTS: CatalogueSeed = {
         { name: 'Direct Socket', needsConfirm: true, aliases: ['Direct Socket TT', 'Direct Socket TF'] },
         // https://www.ossur.com/en-us/prosthetics/sockets/connect-tf
         { name: 'Connect TF' },
+        // https://media.ossur.com/ossur-dam/image/upload/v1778725146/Shared/Prosthetics_eLetter_May_2026_en-anz.pdf
+        // (the vented TF socket of the AeroFit system, conventional or Direct Socket TF; added 13 Oct)
+        { name: 'AeroFit Socket' },
         // https://www.ossur.com/en-us/prosthetics/unity (read: heading "Össur Unity", title "Unity Sleeveless Vacuum System")
         { name: 'Unity', needsConfirm: true, aliases: ['Unity vacuum', 'Unity sleeveless', 'Össur Unity', 'Ossur Unity'] },
       ],

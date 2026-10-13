@@ -64,7 +64,8 @@ describe('the Össur seed (scripts/seeds/ossur-products.ts, for Heinrich\'s revi
 
   it('flags the generic names the plan names, and the bare category words that are mostly another thing', () => {
     const flagged = new Set(rows.aliases.filter((a) => a.needsConfirm).map((a) => a.alias.toLowerCase()))
-    for (const g of ['unity', 'total knee', 'socket', 'brace', 'cheetah', 'rebound', 'unloader', 'seal-in']) expect(flagged.has(g), g).toBe(true)
+    for (const g of ['unity', 'total knee', 'socket', 'brace', 'cheetah', 'rebound', 'unloader', 'seal-in', 'cheetah blade', 'cheetah blades', 'pin lock', 'power knee']) expect(flagged.has(g), g).toBe(true)
+    expect(rows.products.map((p) => p.name)).toEqual(expect.arrayContaining(['AeroFit Seal-In', 'AeroFit Socket']))
     for (const body of ['knee', 'foot', 'feet']) expect(rows.aliases.some((a) => a.alias.toLowerCase() === body), body).toBe(false)
   })
 
@@ -74,8 +75,8 @@ describe('the Össur seed (scripts/seeds/ossur-products.ts, for Heinrich\'s revi
     for (const p of rows.products) {
       const at = src.indexOf(`name: '${p.name.replace(/'/g, "\\'")}'`)
       expect(at, p.name).toBeGreaterThan(0)
-      const before = src.slice(0, at).split('\n').slice(-2).join('\n')
-      expect(before, p.name).toMatch(/\/\/ https:\/\/www\.ossur\.com\//)
+      const before = src.slice(0, at).split('\n').slice(-4).join('\n')
+      expect(before, p.name).toMatch(/\/\/ https:\/\/(www|media)\.ossur\.com\//)
     }
   })
 })

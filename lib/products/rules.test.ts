@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { FIXTURE_CATALOGUE } from '../test/products-fixtures'
 import {
-  aliasBody, cataloguePattern, CLIENT_NEAR, compileCatalogue, compilerFingerprint, matchAliases, PRODUCT_RULE_VERSION, readText,
+  aliasBody, cataloguePattern, compileCatalogue, compilerFingerprint, matchAliases, PRODUCT_RULE_VERSION, readText,
 } from './rules'
 
 const compiled = compileCatalogue(FIXTURE_CATALOGUE, OSSUR_CLIENT_ID)
@@ -22,6 +22,14 @@ describe('aliasBody: one alias, compiled as a watched brand is', () => {
   it('gives a category word its plural, and nothing else one', () => {
     expect(aliasBody('liner', 'category_word')).toBe('liner(?:s|es)?')
     expect(aliasBody('liner', 'nickname')).toBe('liner')
+  })
+
+  it('joins a one-letter part by its hyphen or nothing, never a space: "i limb" is mostly "can I limb this tree"', () => {
+    expect(aliasBody('i-Limb', 'nickname')).toBe('i-?limb')
+    expect(aliasBody('Pro-Flex', 'nickname')).toBe('pro[- ]?flex')
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_])${aliasBody('i-Limb', 'nickname')}(?![\\p{L}\\p{N}_])`, 'iu')
+    for (const yes of ['my i-Limb', 'ilimb quantum']) expect(re.test(yes), yes).toBe(true)
+    for (const no of ['can I limb this tree', 'lose i limb']) expect(re.test(no), no).toBe(false)
   })
 
   it('refuses what the two engines might read apart, and a name too short to mean anything', () => {
@@ -51,8 +59,9 @@ describe('the compiled catalogue', () => {
 
   it('pins the compiler: a change to what a catalogue matches is a new PRODUCT_RULE_VERSION', () => {
     expect(PRODUCT_RULE_VERSION).toBe('product_rules_v1')
-    expect(CLIENT_NEAR).toBe(40)
-    expect(compilerFingerprint(compiled)).toBe('c280d9ddcaaa290f')
+    // product_rules_v1 is the first version any row will carry: the fresh
+    // check's changes (13 Oct) came before any placement was written anywhere.
+    expect(compilerFingerprint(compiled)).toBe('a3c131b70c19d1e4')
   })
 
   it('reads the client\'s own name only where the tenant has a brand rule', () => {
@@ -80,16 +89,12 @@ describe('readText: what one text places', () => {
     expect(placed('Prosthetic feet are expensive')).toEqual(['unbranded:Feet'])
   })
 
-  it('reads "my Össur liner" as one of the client\'s, not which (CLIENT_NEAR), and a far-off name as nothing to it', () => {
-    expect(placed('my Össur liner keeps slipping')).toEqual(['unclear:Liners'])
-    expect(placed('ossur liners are the best')).toEqual(['unclear:Liners'])
-    const far = `Össur ${'and a very long story about the clinic visit '.repeat(2)}and then liners`
-    expect(placed(far)).toEqual(['unbranded:Liners'])
-    // a hashtag is a tag on the post, not a word qualifying the product
-    expect(placed('RoadKnee hydraulic knee for sale #ossur #prostheticknee')).toEqual(['unbranded:Knees'])
-    // nor across a phrase break: a list of brands is not one product
-    expect(placed('Metiz prosthetic knee | Ossur foot')).toEqual(['unbranded:Knees'])
-    expect(placed('Össur. Then the prosthetic knee')).toEqual(['unbranded:Knees'])
+  it('never reads the client\'s own name beside a category word as "one of yours" (measured 13 Oct: 4 of 7 right; dropped)', () => {
+    for (const t of ['my Össur liner keeps slipping', 'Ottobock vs Ossur prosthetic foot comparison', 'Metiz prosthetic knee | Ossur foot']) {
+      expect(placed(t).every((x) => x.startsWith('unbranded:')), t).toBe(true)
+    }
+    // a family still says "one of yours, not which"
+    expect(placed('my Össur Iceross liner')).toEqual(['unclear:Liners'])
   })
 
   it('never matches inside a word: eyeliner is not a liner', () => {
