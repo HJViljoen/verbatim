@@ -19,7 +19,9 @@ export const metadata: Metadata = { title: `${settingsSubPage('products').label}
 //
 // ONE READ, ON THE SESSION'S CLIENT (lib/settings/products.ts): the live
 // catalogue and the product readings of Your products' month (`productsMonth`,
-// the reading month), so this tab and the page print one figure. Until the products migration
+// the reading month), so this tab and the page print one figure; while the
+// page is not switched on (`PRODUCT_READINGS_ENABLED`) it reads no month and
+// prints no count, and says so. Until the products migration
 // is applied the read answers `missing` and the tab says the list is not
 // switched on; any other failure keeps the frame and says the settings did not
 // load. The writes are lib/actions/products.ts, each checking the role and the

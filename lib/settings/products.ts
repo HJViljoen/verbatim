@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { productReadingsEnabled } from '../config'
 import { longMonth, shortDate } from '../format'
 import { CONTACT_EMAIL } from '../legal'
 import {
@@ -57,9 +58,22 @@ import { settingsSubPage } from './rail'
 // month holds no product row at all, nothing has read it yet: the column
 // prints a dot, never "quiet", because quiet is a claim about the market and
 // an unread month is ours.
+//
+// NO COUNT WHILE THE PAGE IS OFF (Phase 4 fix round). Your products prints
+// "not switched on" until `PRODUCT_READINGS_ENABLED` turns the tenant on, and
+// Heinrich's order is to back-read before he does, so `month_product_readings`
+// can hold rows for a tenant whose page is off. This tab then reads no month
+// and prints no count, and says plainly why (`PRODUCTS_PAGE_OFF`), so it never
+// shows a number the page will not.
 
 /** What a person is told when the products migration is not applied here. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
+
+/** What a person is told when the list is there but the products page is not
+ *  switched on for the workspace (`PRODUCT_READINGS_ENABLED`, lib/config.ts):
+ *  the list can be kept, and no count prints, because the page that would
+ *  print the same count says it is not switched on. */
+export const PRODUCTS_PAGE_OFF = 'The Your products page is not switched on for this workspace yet, so no counts show here. You can get the list ready in the meantime.'
 
 /** A member's refusal: changing the catalogue changes what is counted. */
 export const PRODUCTS_REFUSED = 'Only owners and admins can change your product list.'
@@ -139,6 +153,9 @@ export type ProductSettingsRead =
       /** The month the figures are about, 'YYYY-MM-01'. */
       month: string
       readings: MonthProductReadingRow[]
+      /** Whether the products page is switched on for the workspace
+       *  (`productReadingsEnabled`). Off, no month is read. */
+      readingsOn: boolean
     }
 
 /**
@@ -147,11 +164,22 @@ export type ProductSettingsRead =
  * client: the tenant holds SELECT on every column of these tables under its
  * own-client policy, and an operator's session is already the service role.
  */
-export async function loadProductSettings(db: SupabaseClient, clientId: string, now: Date = new Date(), opts: { month?: string | null } = {}): Promise<ProductSettingsRead> {
+export async function loadProductSettings(
+  db: SupabaseClient,
+  clientId: string,
+  now: Date = new Date(),
+  opts: {
+    month?: string | null
+    /** The products page's switch; `productReadingsEnabled` unless a test
+     *  names it. */
+    readingsOn?: boolean
+  } = {},
+): Promise<ProductSettingsRead> {
   // THE PAGE'S MONTH (`productsMonth`, lib/pages/v2/products.ts: the reading
   // month every reading page reads), where the route read it; the calendar
   // month only where it could not.
   const month = monthStartOf(opts.month ?? now.toISOString())
+  const readingsOn = opts.readingsOn ?? productReadingsEnabled(clientId)
   try {
     const [groups, products, aliases] = await Promise.all([
       selectAll<ProductGroupRow>(() =>
@@ -161,8 +189,8 @@ export async function loadProductSettings(db: SupabaseClient, clientId: string, 
       selectAll<ProductAliasRow>(() =>
         db.from(TABLE_PRODUCT_ALIASES).select(PRODUCT_ALIAS_COLUMNS).eq('client_id', clientId).is('retired_at', null).order('created_at').order('id')),
     ])
-    const readings = groups.length > 0 ? await loadMonthProductReadings(db, clientId, [month]) : []
-    return { state: 'ready', groups, products, aliases, month, readings }
+    const readings = groups.length > 0 && readingsOn ? await loadMonthProductReadings(db, clientId, [month]) : []
+    return { state: 'ready', groups, products, aliases, month, readings, readingsOn }
   } catch (error) {
     if (isMissingProductsSchema(error)) return { state: 'missing' }
     throw error
@@ -227,6 +255,9 @@ export interface ProductSettingsView {
   monthName: string
   /** Whether the month holds any product row. */
   read: boolean
+  /** Whether the products page is switched on. Off, nothing on the tab is a
+   *  count of the market (`PRODUCTS_PAGE_OFF`). */
+  readingsOn: boolean
   /** Every category, for the "Move to" choice on a product. */
   choices: { id: string; name: string }[]
   /** Any common word on the open category, so the key is drawn. */
@@ -276,8 +307,10 @@ export function productSettingsView(
   // over every audience (`marketProductMonth`, Your products' own basis);
   // where the month holds none for it, nothing has read it, and a missing row
   // is never summed to zero ("quiet" is a claim about the market).
-  const pooled = (id: string) => marketProductMonth(read.readings, read.month, id)
-  const isRead = read.readings.length > 0
+  // Off, no month counts, whatever rows a back-read left.
+  const readings = read.readingsOn ? read.readings : []
+  const pooled = (id: string) => marketProductMonth(readings, read.month, id)
+  const isRead = readings.length > 0
   const productVideos = (id: string): number | null => pooled(id)?.k_named ?? null
 
   // THE SEED LINE names the website and the day the list was filled in, from
@@ -318,6 +351,7 @@ export function productSettingsView(
     open: openView,
     monthName: longMonth(read.month),
     read: isRead,
+    readingsOn: read.readingsOn,
     choices: groups.map((g) => ({ id: g.id, name: g.name })),
     anyConfirm: openView != null && [...openView.words, ...openView.ranges, ...openView.rows.flatMap((r) => r.aliases)].some((a) => a.needsConfirm),
     canEdit: opts.canEdit,
