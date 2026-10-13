@@ -171,11 +171,12 @@ describe('placeProducts: the pass', () => {
   it('dry: asks nothing, prices the confirm and the queue, writes nothing', async () => {
     const { io, calls } = world({ held: null, tags: null })
     const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io, catalogue: FIXTURE_CATALOGUE, window, ask: null, budgetUsd: 0 })
-    expect(calls).toEqual(['candidates', 'videos:2', 'comments:2'])
+    expect(calls).toEqual(['candidates', 'videos:2', 'comments:1'])
     expect(r.confirm.map((c) => c.key)).toEqual([contentKey(vid(2))])
-    // relevant: video 1 (rules) and video 2 (its generic name, counted as relevant for the price)
-    expect([...r.relevant].sort()).toEqual([vid(1), vid(2)])
-    expect(r.queue.map((q) => q.commentId)).toEqual(['k1', 'k4'])
+    // relevant: video 1 (rules); video 2 waits on the confirm of its generic name, and a dry run does not read it
+    expect([...r.relevant]).toEqual([vid(1)])
+    expect([...r.waitingOnConfirm]).toEqual([vid(2)])
+    expect(r.queue.map((q) => q.commentId)).toEqual(['k1'])
     expect(r.priced.calls).toBe(2)
     expect(r.priceUsd).toBeGreaterThan(0)
     expect(r.costUsd).toBe(0)

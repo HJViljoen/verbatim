@@ -147,6 +147,13 @@ export interface PlaceResult {
   standing: Map<TextKey, StandingText>
   /** The category-relevant videos. */
   relevant: Set<string>
+  /** Videos whose content holds only a generic name nobody has confirmed:
+   *  relevant once the confirm says so (a dry run does not read them). */
+  waitingOnConfirm: Set<string>
+  /** The videos read in full, and every comment's text the pass read (in
+   *  full, or the scan's excerpt): for a hand check's sheet, never stored. */
+  videoRows: Map<string, ProductVideoRow>
+  commentText: Map<string, string>
   /** The month rows, freeze columns not yet filled in. */
   rows: ProductReadingRow[]
   /** The model's spend this pass (dry: 0), and the price of what was not
@@ -229,7 +236,8 @@ export async function placeProducts(args: {
   const rivalFound = await io.rivalFound()
   const empty = (): PlaceResult => ({
     compiled, markets, rivalFound, ruleRows: [], freshRuleRows: [], confirm: [], queue: [], modelRows: [],
-    standing: new Map(), relevant: new Set(), rows: productReadingRows({ clientId, compiled, markets, rivalFound, standing: new Map() }),
+    standing: new Map(), relevant: new Set(), waitingOnConfirm: new Set(), videoRows: new Map(), commentText: new Map(),
+    rows: productReadingRows({ clientId, compiled, markets, rivalFound, standing: new Map() }),
     costUsd: 0, priceUsd: 0, priced: { calls: 0, inputTokens: 0, outputTokens: 0 }, confirmResult: null, classifyResult: null, reads,
   })
   const pattern = cataloguePattern(compiled, io.engine)
@@ -288,11 +296,12 @@ export async function placeProducts(args: {
   const contentConfirm = contentPlan.confirm.filter((c) => !answered.has(c.key) && !tagged.has(c.key))
   const confirmContent = await ask(contentConfirm.map((item) => ({ kind: 'confirm' as const, item })), new Map())
 
-  // 3. The relevant videos. A dry run counts a video whose content holds only
-  //    an unconfirmed generic name as relevant (the price's upper bound).
+  // 3. The relevant videos. A video whose content holds only a generic name
+  //    nobody confirmed waits on the confirm (a dry run reads none of them,
+  //    and says how many there are).
   let standing = standingNow(contentPlan.rows)
   const relevant = relevantVideos(standing)
-  if (!args.ask) for (const c of contentConfirm) relevant.add(c.videoId)
+  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id)))
 
   // 4. The comments: in full under the relevant videos, the scan's excerpt
   //    elsewhere.
@@ -307,6 +316,8 @@ export async function placeProducts(args: {
     fullComments.push({ commentId: c.id, videoId, month: monthStartOf(String(c.comment_date)), text: c.text, lowSignal: c.is_low_signal })
   }
   const readInFull = new Set(fullComments.map((c) => c.commentId))
+  const commentText = new Map<string, string>(fullComments.map((c) => [c.commentId, c.text]))
+  for (const c of candidates) if (c.source === 'comment' && c.comment_id && !commentText.has(c.comment_id)) commentText.set(c.comment_id, c.excerpt ?? '')
   const excerpts: CommentText[] = candidates
     .filter((c) => c.source === 'comment' && c.comment_id && c.comment_month && !readInFull.has(c.comment_id))
     .map((c) => ({ commentId: c.comment_id!, videoId: c.video_id, month: String(c.comment_month).slice(0, 10), text: c.excerpt ?? '' }))
@@ -339,7 +350,7 @@ export async function placeProducts(args: {
   const confirmResult = mergeResults(confirmContent, confirmComments)
   return {
     compiled, markets, rivalFound, ruleRows, freshRuleRows, confirm: [...contentConfirm, ...commentConfirm], queue: fullQueue,
-    modelRows, standing, relevant, rows, costUsd, priceUsd, priced, confirmResult, classifyResult, reads,
+    modelRows, standing, relevant, waitingOnConfirm, videoRows, commentText, rows, costUsd, priceUsd, priced, confirmResult, classifyResult, reads,
   }
 }
 
