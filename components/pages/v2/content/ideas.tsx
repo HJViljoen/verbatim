@@ -1,0 +1,149 @@
+import { CARD, FlagChip, MiniBars, SELECTED_CARD_RING } from '@/components/v2'
+import { fmtInt, longMonth } from '@/lib/format'
+import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
+import {
+  ASKED_ID, IDEA_PANEL_ID, IDEAS_EMPTY, contentHref, monthWords, POST_IDEA_SLOT,
+  type ContentState, type IdeaCard, type IdeasBlock, type OwnTouch,
+} from '@/lib/pages/v2/content'
+import { cn } from '@/lib/utils'
+import { Fact, GroupNames, LABEL, Fig, OLink, RecipeChip } from './parts'
+
+/**
+ * WHAT TO POST NEXT (E5-Content, the first row): the week's post ideas, one
+ * card each, biggest first.
+ *
+ * A card is level 1, so it prints no comment's words: the idea's title (the
+ * model's, `stored` under `post_idea`), how many of the week's market videos
+ * it came up in with the month beside it (decision 1), the last three weeks
+ * as three bare counts, the flag only where the anomaly check or the week
+ * read earned one, who asks by group name alone (decision 5), whether your
+ * posts this month touched on it, and the format and opening code chose with
+ * their multiples. In a medical market every card carries the medical team
+ * line. "Open the brief" opens the idea in place (`?idea=<rank>`).
+ */
+
+/** "None of your 9 posts in October so far touched on it". */
+export function OwnTouchLine({ own, month }: { own: OwnTouch; month: { month: string; complete: boolean } }) {
+  const when = monthWords(month)
+  if (own.state === 'unread') return <span className="text-muted-foreground">Your posts could not be read just now</span>
+  if (own.state === 'no_posts') return <span className="text-muted-foreground">You published nothing of your own {when}</span>
+  if (own.state === 'none') {
+    return <span className="text-[12.5px] font-semibold text-orange-text">None of your <Fig>{fmtInt(own.posts)}</Fig> posts {when} touched on it</span>
+  }
+  return <span><Fig>{fmtInt(own.touched)}</Fig> of your <Fig>{fmtInt(own.posts)}</Fig> posts {when} touched on it</span>
+}
+
+/** The week's figure with its month under it, or the month's alone. */
+function Demand({ card, monthLabel, weekWord }: { card: IdeaCard; monthLabel: string; weekWord: string }) {
+  return (
+    <div className="min-w-0">
+      {card.week ? (
+        <div data-copy="level">
+          <div className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums">{fmtInt(card.week.k)}</div>
+          <div className="mt-1.5 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">of {fmtInt(card.week.n)} videos {weekWord}</div>
+        </div>
+      ) : null}
+      {card.month ? (
+        <p data-copy="level" className={cn('m-0 font-mono text-[12.5px] leading-[1.45] text-muted-foreground', card.week ? null : 'text-[14px] text-foreground')}>
+          {fmtInt(card.month.k)} of {fmtInt(card.month.n)} {monthLabel}
+        </p>
+      ) : null}
+      {card.flag ? <div className="mt-2.5"><FlagChip verdict={card.flag} /></div> : null}
+    </div>
+  )
+}
+
+export function IdeaCardView({ card, state, selected, month, weekWord }: {
+  card: IdeaCard
+  state: ContentState
+  selected: boolean
+  month: { month: string; complete: boolean }
+  weekWord: string
+}) {
+  const open = contentHref({ ...state, open: { kind: 'idea', rank: card.rank } })
+  const close = contentHref({ ...state, open: null })
+  return (
+    <article id={`idea-${card.rank}`} aria-labelledby={`idea-${card.rank}-title`} className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+      <div className="flex items-start gap-3">
+        <span aria-hidden className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-orange-text text-[13px] font-bold text-white">{card.rank}</span>
+        <h3 id={`idea-${card.rank}-title`} className="m-0 text-[18px] leading-[1.35] font-semibold tracking-[-0.005em]">
+          <span className="sr-only">Post idea {card.rank}: </span>
+          <span data-copy="stored" data-slot={POST_IDEA_SLOT}>{card.title}</span>
+        </h3>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <Demand card={card} monthLabel={monthWords(month)} weekWord={weekWord} />
+        {card.weeks ? (
+          <div className="w-[118px] shrink-0">
+            <MiniBars
+              bars={card.weeks.map((w) => ({ label: w.label, value: w.count }))}
+              label="Market videos a week where it came up, the last three weeks"
+            />
+          </div>
+        ) : null}
+      </div>
+      <div className="flex flex-col border-t border-track">
+        {card.groups.length > 0 ? <Fact name="Who's asking"><GroupNames groups={card.groups} /></Fact> : null}
+        <Fact name="Your posts"><OwnTouchLine own={card.own} month={month} /></Fact>
+      </div>
+      {card.format || card.opening ? (
+        <div>
+          <p className={cn(LABEL, 'mb-2')}>Suggested format and opening</p>
+          <div className="flex flex-wrap gap-2">
+            {card.format ? <RecipeChip recipe={card.format} /> : null}
+            {card.opening ? <RecipeChip recipe={card.opening} /> : null}
+          </div>
+        </div>
+      ) : null}
+      {card.medical ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</p> : null}
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+        {selected ? (
+          <OLink href={close} scroll={false} aria-expanded aria-controls={IDEA_PANEL_ID}>Close ↑</OLink>
+        ) : (
+          <OLink href={open} aria-expanded={false} aria-controls={IDEA_PANEL_ID}>Open the brief →</OLink>
+        )}
+      </div>
+    </article>
+  )
+}
+
+/** Why there are no cards, honestly, and where the questions are. */
+function IdeasEmpty({ block }: { block: IdeasBlock }) {
+  const line = block.state === 'ready' ? IDEAS_EMPTY.none : IDEAS_EMPTY[block.state]
+  return (
+    <div className={cn(CARD, 'gap-2')} data-ideas-empty={block.state}>
+      <p className="m-0 text-[15px] leading-[1.5]">{line}</p>
+      <p className="m-0 text-[13.5px] text-muted-foreground">
+        The questions people asked are listed under <a href={`#${ASKED_ID}`} className="font-semibold text-orange-text no-underline hover:underline">Also asked</a>.
+      </p>
+    </div>
+  )
+}
+
+export function IdeasSection({ block, state, month, weekWord }: {
+  block: IdeasBlock
+  state: ContentState
+  month: { month: string; complete: boolean }
+  weekWord: string
+}) {
+  const openRank = state.open?.kind === 'idea' ? state.open.rank : null
+  return (
+    <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
+        <h2 id="ideas-title" className="m-0 text-[19px] leading-[1.3] font-semibold">What to post next</h2>
+        <span className="text-[13px] leading-[1.4] text-muted-foreground">
+          Questions people asked {weekWord} that your posts in {longMonth(month.month)} have not touched on, biggest first
+        </span>
+      </div>
+      {block.cards.length > 0 ? (
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+          {block.cards.map((c) => (
+            <IdeaCardView key={c.rank} card={c} state={state} selected={openRank === c.rank} month={month} weekWord={weekWord} />
+          ))}
+        </div>
+      ) : (
+        <IdeasEmpty block={block} />
+      )}
+    </section>
+  )
+}

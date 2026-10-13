@@ -81,6 +81,9 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { ContentPage } from '../components/pages/v2/content/page'
+import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
+import type { ContentPageData } from '../lib/pages/v2/content'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -317,6 +320,16 @@ const PAGES: Page[] = [
       })
     },
   },
+  // Depth v2, T6 (Content; boards E5-Content and E5-Content-Open, shot with
+  // `--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`).
+  // `content-dump` draws a loader's dumped output: CONTENT_DUMP=<file.json>.
+  { key: 'content-v2', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture() }) },
+  { key: 'content-v2-open', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'idea', rank: 1 } }) }) },
+  { key: 'content-v2-replies', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'replies' } }) }) },
+  { key: 'content-v2-posts', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'posts' }, period: 'month' }) }) },
+  { key: 'content-v2-not-on', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'not_on' }) }) },
+  { key: 'content-v2-empty', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentEmptyFixture() }) },
+  { key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP ?? '', 'utf8')) as ContentPageData }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------
