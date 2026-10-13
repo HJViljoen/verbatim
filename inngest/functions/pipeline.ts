@@ -923,8 +923,10 @@ export const runPipeline = inngest.createFunction(
     //    classification for the videos it analyses (its comment-informed read
     //    is better), but the claims lane leaves `sentiment` alone — so a
     //    below-floor DISCOVERED brand video keeps THIS pass's framing sentiment
-    //    instead of ending up with none (owned posts stay outside this pass and
-    //    outside every sentiment consumer). Costs ~$0.10/run more than
+    //    instead of ending up with none. The client's own posts this run
+    //    re-read join the plan (depth v2 T14: their format and opening, at most
+    //    one more call a run) but never take its sentiment, so they stay
+    //    outside every sentiment consumer (`classifyMetaLabels`). Costs ~$0.10/run more than
     //    classifying only the Pass A leftovers; the run_summary sentiment
     //    shares stay whole.
     //    Non-fatal per batch: a failed batch leaves its rows unclassified and

@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClassifySystemPrompt,
   buildClassifyUserPrompt,
+  CLASSIFY_META_OWNED_CAP,
+  CLASSIFY_META_SOURCES,
+  classifyMetaLabels,
   isMissingColumnError,
   planClassifyBatches,
   validateClassifyResponse,
   type ClassifyInput,
 } from './classify-meta'
-import type { ClassifyMetaOutput } from './schemas'
+import type { ClassifyMetaItem, ClassifyMetaOutput } from './schemas'
 
 const input = (id: string, over: Partial<ClassifyInput> = {}): ClassifyInput => ({
   id,
@@ -33,6 +36,52 @@ describe('planClassifyBatches', () => {
     ]
     expect(planClassifyBatches(videos, 2)).toEqual([['b', 'c'], ['d']])
     expect(planClassifyBatches([{ id: 'a', classified_type: 'story' }])).toEqual([])
+  })
+
+  // depth v2 T14: the client's own posts join the plan, a rival's do not.
+  it('takes the client’s own posts and the gathered corpus, never a rival’s own posts', () => {
+    expect([...CLASSIFY_META_SOURCES]).toEqual(['discovered', 'owned'])
+    expect(CLASSIFY_META_SOURCES).not.toContain('competitor_owned')
+    const videos = [
+      { id: 'disc', classified_type: null, source: 'discovered' },
+      { id: 'own-photo', classified_type: null, source: 'owned' },
+      { id: 'own-done', classified_type: 'story', source: 'owned' },
+    ]
+    expect(planClassifyBatches(videos, 25)).toEqual([['disc', 'own-photo']])
+  })
+
+  it('caps own posts a run and never the gathered corpus', () => {
+    const own = Array.from({ length: 5 }, (_, i) => ({ id: `own-${i}`, classified_type: null, source: 'owned' }))
+    const disc = Array.from({ length: 4 }, (_, i) => ({ id: `disc-${i}`, classified_type: null, source: 'discovered' }))
+    expect(planClassifyBatches([...own, ...disc], 25, 2)).toEqual([['own-0', 'own-1', 'disc-0', 'disc-1', 'disc-2', 'disc-3']])
+    expect(CLASSIFY_META_OWNED_CAP).toBe(100)
+  })
+})
+
+describe('classifyMetaLabels', () => {
+  const item: ClassifyMetaItem = {
+    ref: 'v1', classified_type: 'testimonial', hook_style: 'demonstration',
+    hook_text: 'Meet the Navii', topics: ['prosthetic knee'], sentiment: 'positive',
+  }
+
+  it('gives a gathered video the framing sentiment, stamped framing', () => {
+    expect(classifyMetaLabels(item, { ...input('a', { caption: 'Meet the Navii' }), source: 'discovered' })).toMatchObject({
+      classified_type: 'testimonial', hook_style: 'demonstration', hook_text: 'Meet the Navii',
+      hook_source: 'caption', topics: ['prosthetic knee'], sentiment: 'positive', sentiment_source: 'framing',
+    })
+  })
+
+  it('gives an own post its format, opening and topics, and no sentiment at all', () => {
+    const labels = classifyMetaLabels(item, { ...input('a', { caption: 'Meet the Navii' }), source: 'owned' })
+    expect(labels).toMatchObject({ classified_type: 'testimonial', hook_style: 'demonstration', topics: ['prosthetic knee'] })
+    expect(labels).not.toHaveProperty('sentiment')
+    expect(labels).not.toHaveProperty('sentiment_source')
+  })
+
+  it('keeps the discovered behaviour for a row it cannot see', () => {
+    expect(classifyMetaLabels({ ...item, sentiment: null, topics: [] }, undefined)).toMatchObject({
+      hook_source: null, topics: null, sentiment: null, sentiment_source: null,
+    })
   })
 })
 

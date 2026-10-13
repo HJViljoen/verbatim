@@ -10,6 +10,7 @@ import { pickEligible, type GateOptions, type QuoteVideo } from '../quote-gate'
 import { gateFor } from '../quote-context'
 import { loadOwnPostSubjects, questionTouch, type QuestionTouch } from './own-post-touch'
 import { ownPostFilings } from '../reading/own-posts'
+import { ownedPosts } from '../reading/owned'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
@@ -3279,8 +3280,11 @@ interface UnansweredInput {
  * newest themed update's `supporting_insight_ids` — 696 of 696 and 567 of 567.
  * So the key is the REGISTRY id (labels churn ~88% run to run, AGENTS.md) and
  * the words are the registry's canonical label.
+ *
+ * Exported for its tests (subjects-unanswered.test.ts); the page reaches it
+ * through `loadSubjectsPage`.
  */
-async function loadUnanswered(
+export async function loadUnanswered(
   supabase: SupabaseClient,
   clientId: string,
   insightIds: readonly string[],
@@ -3332,17 +3336,16 @@ async function loadUnanswered(
   )
   const byId = new Map(videos.map((v) => [v.id, v]))
 
-  // Your own posts in the drawn window, and what they are about.
-  const ownVideos = await selectAll<VideoRow>(() =>
-    supabase
-      .from('videos')
-      .select('id, platform, is_client, is_competitor, competitor_name, topics, upload_date')
-      .eq('client_id', clientId)
-      .eq('is_client', true)
-      .gte('upload_date', input.window.from.slice(0, 10))
-      .lt('upload_date', input.window.to.slice(0, 10))
-      .order('id', { ascending: true }),
-  )
+  // Your own posts in the drawn window, and what they are about: the posts off
+  // your own accounts (`ownedPosts`, `source = 'owned'`, depth v2 T14). This
+  // read `is_client`, which is true of every creator's video that NAMES you,
+  // so "None of your 25 posts touched it" counted strangers' reviews as your
+  // posts, and a stranger's video sharing a question's words marked the
+  // question answered by you (Össur, September: 25 own posts, 136 creators'
+  // videos tagged `is_client`). The QUESTION side below keeps `is_client`: it
+  // is the market's (decision E leaves the whole client audience out of it,
+  // videos naming you included), and that half is not about authorship.
+  const ownVideos = (await ownedPosts({ supabase, clientId }, input.window)).posts
   // WHAT YOUR POSTS ARE ABOUT, AND NOT WHAT THEY CLAIM. The obvious second
   // half of this haystack is `video_claims` — and `video_claims` carries RLS
   // with NO tenant SELECT policy until M8 (WP16), verified on production

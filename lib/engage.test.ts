@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { engageDeepLink, engageVocab, rankEngageCandidates, type EngageCandidate } from './engage'
+import { engageDeepLink, engageUnder, engageVocab, loadEngageCandidates, rankEngageCandidates, type EngageCandidate } from './engage'
+import { fakeDb } from './test/fake-db'
 
 const WINDOW = '2026-08-02T00:00:00Z'
 
@@ -136,5 +137,49 @@ describe('engageDeepLink', () => {
     expect(engageDeepLink(tt.comment)).toEqual({ href: 'https://t.example/v', commentLevel: false })
     const none = cand({ videoUrl: null })
     expect(engageDeepLink(none.comment)).toEqual({ href: null, commentLevel: false })
+  })
+})
+
+describe('engageUnder — under your post, or under a video that names you (T14)', () => {
+  it('is your post only when it came off your own account', () => {
+    expect(engageUnder({ source: 'owned', is_client: true })).toBe('own_post')
+    expect(engageUnder({ source: 'owned', is_client: false })).toBe('own_post')
+    expect(engageUnder({ source: 'discovered', is_client: true })).toBe('names_you')
+    expect(engageUnder({ source: 'discovered', is_client: false })).toBe('elsewhere')
+    expect(engageUnder({ source: 'competitor_owned', is_client: false })).toBe('elsewhere')
+  })
+})
+
+describe('loadEngageCandidates — each candidate says whose video it sits under', () => {
+  const CLIENT = 'c1'
+  const video = (id: string, over: Record<string, unknown>) => ({
+    id: `row-${id}`, client_id: CLIENT, video_id: id, platform: 'instagram', video_url: `https://instagram.com/p/${id}`,
+    account_name: 'someone', topics: ['prosthetic knee'], source: 'discovered', is_client: false, ...over,
+  })
+  const comment = (id: string, videoId: string) => ({
+    id, author: '@asker', text: 'Where can I get fitted for one of these?', likes: 2,
+    comment_date: '2026-10-08T10:00:00Z', platform: 'instagram', video_id: videoId, comment_id: `native-${id}`,
+  })
+
+  it('splits a post off your account from a creator’s video naming you', async () => {
+    const db = fakeDb({
+      audience_insights_current: [{ id: 'ins-1', client_id: CLIENT, category: 'question', theme: 'fitting', description: 'Where to get fitted', strength_score: 8 }],
+      insight_evidence: [
+        { id: 'ev-own', audience_insight_id: 'ins-1', comment_id: 'cm-own', source: 'comment' },
+        { id: 'ev-about', audience_insight_id: 'ins-1', comment_id: 'cm-about', source: 'comment' },
+        { id: 'ev-cat', audience_insight_id: 'ins-1', comment_id: 'cm-cat', source: 'comment' },
+        { id: 'ev-gone', audience_insight_id: 'ins-1', comment_id: 'cm-gone', source: 'comment' },
+      ],
+      comments: [comment('cm-own', 'own'), comment('cm-about', 'review'), comment('cm-cat', 'cat'), comment('cm-gone', 'unread')],
+      videos: [
+        video('own', { account_name: 'ossur', source: 'owned', is_client: true }),
+        video('review', { account_name: 'amputee.coach', is_client: true }),
+        video('cat', { account_name: 'limbdiaries' }),
+      ],
+    })
+    const out = await loadEngageCandidates(db.client as never, CLIENT, 'run-1')
+    const under = Object.fromEntries(out.map((c) => [c.evidenceId, c.comment.under]))
+    expect(under).toEqual({ 'ev-own': 'own_post', 'ev-about': 'names_you', 'ev-cat': 'elsewhere', 'ev-gone': null })
+    expect(db.calls.find((c) => c.table === 'videos')?.columns).toContain('source, is_client')
   })
 })

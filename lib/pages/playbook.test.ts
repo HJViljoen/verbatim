@@ -3,9 +3,11 @@ import { describe, it, expect } from 'vitest'
 import { directionRe } from '../test/copy-contract'
 import {
   PLAYBOOK_ROWS,
-  buildHeadToHead, buildPlaybook, coverageLine, headToHeadFigures, ownSides, playbookFigures,
+  buildHeadToHead, buildPlaybook, coverageLine, headToHeadFigures, ownSides, playbookAudience, playbookFigures,
   type PlaybookVideo,
 } from './playbook'
+import { ownedPosts } from '../reading/owned'
+import { fakeDb } from '../test/fake-db'
 
 // CO3 and CO7's two builders, over the rows the loader reads.
 //
@@ -192,6 +194,58 @@ describe('buildPlaybook · CO7', () => {
 
   it('keeps the published clock on the block itself', () => {
     expect(playbook().basisLine).toBe('videos published in September')
+  })
+})
+
+describe('buildPlaybook · the client side on the brand’s own posts (T14)', () => {
+  // Creators' videos that NAME the brand: `is_client` by a brand keyword,
+  // gathered, not posted from the brand's own account. Eight classified
+  // tutorials, so a column that counted them would show a format the brand
+  // never made.
+  const CREATORS = run('client', 8, { classified_type: 'tutorial', hook_style: 'question', engagement_rate: 5.0, source: 'discovered' })
+  const withCreators = [...VIDEOS, ...CREATORS]
+
+  it('keeps every existing caller on the `about` column by default', () => {
+    const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: withCreators })
+    const own = p.formats.sides[1]
+    expect(own.published).toBe(14 + 8)
+    expect(own.byKey['tutorial']?.value.k).toBe(8)
+  })
+
+  it('reads only the brand’s own posts under `owned`: a creator naming the brand is not one', () => {
+    const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: withCreators, clientSide: 'owned' })
+    const [category, own, rival] = p.formats.sides
+    // The 9 own posts (6 story, 3 promotional); the 5 unclassified `is_client`
+    // rows of the fixture are gathered too, so they leave with the creators.
+    expect([own.of, own.published]).toEqual([9, 9])
+    expect(own.byKey['tutorial']).toBeNull()
+    expect(own.byKey['story']?.value.k).toBe(6)
+    // The creators sit in no column: the category and the rival read as before.
+    expect([category.of, category.published]).toEqual([60, 72])
+    expect([rival.of, rival.published]).toEqual([13, 13])
+    expect(p.coverageLine).toBe(
+      'Read from 60 of the category’s 72 · 9 of Össur’s 9 · 13 of Ottobock’s 13 videos published in September, for their format.',
+    )
+  })
+
+  it('files an own post under the brand even where is_client is false', () => {
+    const untagged = vid({ id: 'own-untagged', is_client: false, source: 'owned', classified_type: 'story' })
+    expect(playbookAudience(untagged, 'owned')).toBe('client')
+    expect(playbookAudience(untagged)).toBe('industry-other')
+    const creator = vid({ id: 'creator', is_client: true, source: 'discovered' })
+    expect(playbookAudience(creator, 'owned')).toBeNull()
+    expect(playbookAudience(creator)).toBe('client')
+    const rival = vid({ id: 'rival', is_competitor: true, competitor_name: 'Ottobock', source: 'competitor_owned' })
+    expect(playbookAudience(rival, 'owned')).toBe('competitor:Ottobock')
+  })
+
+  it('takes the owned read’s posts as its client side as they stand', async () => {
+    const rows = run('client', 3, { classified_type: 'story', engagement_rate: 2, source: 'owned' })
+      .map((v) => ({ ...v, video_id: v.id, video_url: null, account_name: 'ossur', caption: null, hook_text: null, views: 100, likes: 2, comments_count: 0, topics: null }))
+    const db = fakeDb({ videos: rows.map((r) => ({ ...r, client_id: 'c1' })) })
+    const owned = await ownedPosts({ supabase: db.client, clientId: 'c1' }, { from: '2026-09-01', to: '2026-10-01' })
+    const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: null, videos: [...VIDEOS.filter((v) => !v.is_client), ...owned.posts], clientSide: 'owned' })
+    expect(p.formats.sides[1].published).toBe(3)
   })
 })
 

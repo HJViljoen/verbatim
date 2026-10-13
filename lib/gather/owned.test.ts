@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { acceptSnapshot, followerFloorPct, supportsOwnedProfile, emptyProfileIsGlitch, stampOwnedSource, ownedRawRows, igRawsByShortcode, ownPostsInWindow, stopUploadsWalk, buildOwnedCensus, ownedCensusTotal, ownedCommentRefs, entityIdentity, entitySlug, planSourceFlips, type FlipIdentity, OWN_POSTS_CEILING, ownedPostsIn, ownAccountNames, normAccount, censusWindow } from './owned'
+import { acceptSnapshot, followerFloorPct, supportsOwnedProfile, emptyProfileIsGlitch, stampOwnedSource, ownedRawRows, igRawsByShortcode, ownPostsInWindow, stopUploadsWalk, buildOwnedCensus, ownedCensusTotal, ownedCommentRefs, entityIdentity, entitySlug, planSourceFlips, type FlipIdentity, OWN_POSTS_CEILING, ownedPostsIn, ownAccountNames, normAccount, censusWindow, igPost, ownedUpsertBatches } from './owned'
+import { instagram } from './platforms/instagram'
+import type { GatherConfig } from './types'
 import { shareFootnoteLead } from '../calibration'
 
 describe('supportsOwnedProfile', () => {
@@ -510,5 +512,56 @@ describe('planSourceFlips', () => {
   it('ignores a row with no account name and a source it does not own', () => {
     expect(planSourceFlips([row({ account_name: null })], [client])).toEqual([])
     expect(planSourceFlips([row({ source: 'reddit_thread' })], [client])).toEqual([])
+  })
+})
+
+describe('igPost — an own Instagram post is rated like a discovered one (T14)', () => {
+  const ctx = { clientId: 'c1', runId: 'r1' }
+  const reel = {
+    shortCode: 'C0reel', url: 'https://www.instagram.com/reel/C0reel/', caption: 'Meet the Navii',
+    productType: 'clips', videoPlayCount: 4000, likesCount: 150, commentsCount: 10, timestamp: '2026-10-05T10:00:00.000Z',
+  }
+
+  it('computes likes plus comments over plays, two decimals', () => {
+    expect(igPost(reel, 'ossur', 1000, ctx)?.engagement_rate).toBe(4)
+    expect(igPost({ ...reel, likesCount: 101, commentsCount: 2, videoPlayCount: 3000 }, 'ossur', 1000, ctx)?.engagement_rate).toBe(3.43)
+  })
+
+  it('is the same number the discovered path stores for the same post', () => {
+    const config: GatherConfig = {
+      brand_keywords: ['ossur'], competitor_keywords: [], competitor_names: [], industry_keywords: [], exclude_terms: [],
+      platforms: ['instagram'], max_videos: 25, comment_depth: 50, report_period: 'weekly', own_handles: {}, subreddits: [],
+    }
+    const discovered = instagram.normaliseVideo({ ...reel, ownerUsername: 'ossur' }, { clientId: 'c1', runId: 'r1', config })
+    expect(igPost(reel, 'ossur', 1000, ctx)?.engagement_rate).toBe(discovered?.engagement_rate)
+  })
+
+  it('stays null with no plays (a photo), and a hidden like count (-1) never subtracts', () => {
+    expect(igPost({ ...reel, productType: 'feed', videoPlayCount: undefined }, 'ossur', 1000, ctx)?.engagement_rate).toBeNull()
+    expect(igPost({ ...reel, likesCount: -1 }, 'ossur', 1000, ctx)).toMatchObject({ likes: 0, engagement_rate: 0.25 })
+  })
+})
+
+describe('ownedUpsertBatches — a read that could not rate never blanks a stored rate', () => {
+  const post = (id: string, rate: number | null) => ({ video_id: id, views: rate == null ? 0 : 100, engagement_rate: rate, source: 'owned' })
+
+  it('sends rated rows with the key and unrated rows without it, each set in its own statement', () => {
+    const batches = ownedUpsertBatches([post('a', 3.2), post('b', null), post('c', 1.5)])
+    expect(batches).toHaveLength(2)
+    expect(batches[0]).toEqual([post('a', 3.2), post('c', 1.5)])
+    expect(batches[1]).toEqual([{ video_id: 'b', views: 0, source: 'owned' }])
+    // Every row of a statement carries the same keys: PostgREST names their
+    // union, so one row with the key would send NULL for every row without it.
+    for (const batch of batches) {
+      const keys = new Set(batch.map((r) => Object.keys(r).sort().join(',')))
+      expect(keys.size).toBe(1)
+    }
+    expect(Object.keys(batches[1][0])).not.toContain('engagement_rate')
+  })
+
+  it('sends one statement when every row agrees, and none for no rows', () => {
+    expect(ownedUpsertBatches([post('a', 2), post('b', 4)])).toHaveLength(1)
+    expect(ownedUpsertBatches([post('a', null)])).toEqual([[{ video_id: 'a', views: 0, source: 'owned' }]])
+    expect(ownedUpsertBatches([])).toEqual([])
   })
 })
