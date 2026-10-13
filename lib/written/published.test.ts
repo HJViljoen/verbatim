@@ -183,7 +183,7 @@ describe('every page that prints a stored read asks the selector, and the select
   // market's subject sentences and long-run read. A page reading `week_reads`
   // itself could print a read that is not ready.
   const src = (p: string) => readFileSync(resolve(__dirname, '../..', p), 'utf8')
-  for (const file of ['lib/pages/week-read.ts', 'lib/pages/home.ts', 'lib/pages/subjects-read.ts', 'lib/pages/overview-picture.ts']) {
+  for (const file of ['lib/pages/week-read.ts', 'lib/pages/home.ts', 'lib/pages/subjects-read.ts', 'lib/pages/overview-picture.ts', 'lib/pages/v2/content.ts']) {
     it(file, () => {
       const text = src(file)
       expect(text).toMatch(/loadPublishedWeekRead\(/)

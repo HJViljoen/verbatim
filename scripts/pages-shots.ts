@@ -96,6 +96,9 @@ import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
 import { marketFixture } from '../lib/pages/v2/market-fixture'
 import type { MarketData } from '../lib/pages/v2/market'
+import { ContentPage } from '../components/pages/v2/content'
+import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
+import type { ContentPageData } from '../lib/pages/v2/content'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -402,6 +405,20 @@ const PAGES: Page[] = [
   // Only where a dump is named (as Voices' `voices-real`).
   ...(process.env.MARKET_V2_JSON
     ? [{ key: 'market-v2-real', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketDump() }) }]
+    : []),
+  // Depth v2, T6 (Content; boards E5-Content and E5-Content-Open, shot with
+  // `--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`).
+  // `content-dump` draws a loader's dumped output.
+  { key: 'content-v2', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture() }) },
+  { key: 'content-v2-open', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'idea', rank: 1 } }) }) },
+  { key: 'content-v2-replies', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'replies' } }) }) },
+  { key: 'content-v2-posts', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'posts' }, period: 'month' }) }) },
+  { key: 'content-v2-not-on', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'not_on' }) }) },
+  { key: 'content-v2-empty', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentEmptyFixture() }) },
+  { key: 'content-v2-older', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ olderIdeas: true, open: { kind: 'idea', rank: 2 } }) }) },
+  // Only where a dump is named (`CONTENT_DUMP=<file>`), as `voices-real`.
+  ...(process.env.CONTENT_DUMP
+    ? [{ key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP as string, 'utf8')) as ContentPageData }) }]
     : []),
 ]
 
