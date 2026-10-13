@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { contentFixture } from '@/lib/pages/v2/content-fixture'
-import { repliesView, type ContentState } from '@/lib/pages/v2/content'
+import { REPLIES_ANCHOR, repliesView, type ContentState } from '@/lib/pages/v2/content'
+import { WEEK_ANCHORS } from '@/components/pages/week/came-in'
 import { RepliesCard, RepliesPanel } from './replies'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
@@ -32,6 +33,21 @@ describe('Worth a reply', () => {
     expect(renderText(node)).toContain('We cannot see whether you have replied')
     expect((m.match(/Reply on YouTube|Open the post on/g) ?? []).length).toBe(11)
     assertCopyContract(node)
+  })
+
+  it('carries the anchor old reply links land on (`/dashboard/content#worth-a-reply`)', () => {
+    expect(REPLIES_ANCHOR).toBe(WEEK_ANCHORS.reply)
+    expect(render(<RepliesCard view={view()} state={STATE} selected={false} />)).toMatch(/^<article id="worth-a-reply"[^>]*class="[^"]*scroll-mt-6/)
+  })
+
+  it('splits the comments by whose post only where there is more than one part', () => {
+    const one = { ...view(), total: 9, under: { own: 0, about: 0, elsewhere: 9 } }
+    const text = renderText(<RepliesCard view={one} state={STATE} selected={false} />)
+    expect(text).toContain('9 comments')
+    expect(text).not.toMatch(/9 comments ·|9 elsewhere/)
+    assertCopyContract(<RepliesCard view={one} state={STATE} selected={false} />)
+    const two = { ...view(), total: 9, under: { own: 2, about: 0, elsewhere: 7 } }
+    expect(renderText(<RepliesCard view={two} state={STATE} selected={false} />)).toContain('9 comments · 2 under your posts, 7 elsewhere')
   })
 
   it('says why there is no list', () => {

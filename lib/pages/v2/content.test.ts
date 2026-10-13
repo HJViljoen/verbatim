@@ -23,6 +23,8 @@ describe('the URL', () => {
     expect(parseContentParams({ period: 'month', idea: '2' })).toEqual({ period: 'month', open: { kind: 'idea', rank: 2 }, asked: false })
     expect(parseContentParams({ idea: '7' }).open).toBeNull()
     expect(parseContentParams({ replies: '1' }).open).toEqual({ kind: 'replies' })
+    // An old reply link's tab (`?reply=question#worth-a-reply`) opens the list.
+    expect(parseContentParams({ reply: 'question' }).open).toEqual({ kind: 'replies' })
     expect(parseContentParams({ posts: '1', asked: 'all' })).toEqual({ period: 'week', open: { kind: 'posts' }, asked: true })
     expect(parseContentParams({ period: 'year' }).period).toBe('week')
   })

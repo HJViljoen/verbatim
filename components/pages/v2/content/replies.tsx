@@ -2,7 +2,7 @@ import { MessageSquare } from 'lucide-react'
 import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, SELECTED_CARD_RING, type PerBreakpoint } from '@/components/v2'
 import { QuoteBlock } from '@/components/quote-block'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
-import { REPLIES_PANEL_ID, contentHref, type ContentState, type RepliesView } from '@/lib/pages/v2/content'
+import { REPLIES_ANCHOR, REPLIES_PANEL_ID, contentHref, type ContentState, type RepliesView } from '@/lib/pages/v2/content'
 import type { ReplyRow } from '@/lib/pages/week'
 import { cn } from '@/lib/utils'
 import { Fig, OLink } from './parts'
@@ -32,17 +32,24 @@ const INTENT_WORDS: Record<string, string> = {
   misinformation: 'Wrong information',
 }
 
-/** "7 under your posts, 3 under posts about you, 2 elsewhere". */
-function UnderLine({ under }: { under: RepliesView['under'] }) {
+/** The split by whose post, "7 under your posts, 3 under posts about you, 2
+ *  elsewhere", as its parts; none where it has one part or none, because "9
+ *  comments · 9 elsewhere" says nothing the count does not (each comment's
+ *  row in the panel still says where it sits). */
+function underParts(under: RepliesView['under']): [number, string][] {
   const parts: [number, string][] = [
     [under.own, 'under your posts'],
     [under.about, 'under posts about you'],
     [under.elsewhere, 'elsewhere'],
   ]
   const shown = parts.filter(([n]) => n > 0)
+  return shown.length > 1 ? shown : []
+}
+
+function UnderLine({ parts }: { parts: [number, string][] }) {
   return (
     <>
-      {shown.map(([n, words], i) => (
+      {parts.map(([n, words], i) => (
         <span key={words}>{i > 0 ? ', ' : null}<Fig>{fmtInt(n)}</Fig> {words}</span>
       ))}
     </>
@@ -51,6 +58,7 @@ function UnderLine({ under }: { under: RepliesView['under'] }) {
 
 export function RepliesCard({ view, state, selected, className }: { view: RepliesView; state: ContentState; selected: boolean; className?: string }) {
   const when = view.window?.phrase ?? 'this week'
+  const split = underParts(view.under)
   const cells: [number, string][] = [
     [view.counts.buying, 'ready to buy'],
     [view.counts.question, view.counts.question === 1 ? 'question' : 'questions'],
@@ -58,7 +66,8 @@ export function RepliesCard({ view, state, selected, className }: { view: Replie
     [view.counts.flagged, 'wrong information'],
   ]
   return (
-    <article aria-labelledby="replies-title" className={cn(CARD, selected ? SELECTED_CARD_RING : null, className)}>
+    // `worth-a-reply`: the anchor old reply links carry (REPLIES_ANCHOR).
+    <article id={REPLIES_ANCHOR} aria-labelledby="replies-title" className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null, className)}>
       <CardHead
         icon={MessageSquare}
         id="replies-title"
@@ -73,7 +82,7 @@ export function RepliesCard({ view, state, selected, className }: { view: Replie
         <>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <Fig className="text-[30px] leading-none font-medium tracking-[-0.02em]">{fmtInt(view.total)}</Fig>
-            <span className="font-mono text-[12.5px] leading-[1.45] text-muted-foreground">{view.total === 1 ? 'comment' : 'comments'} · <UnderLine under={view.under} /></span>
+            <span className="font-mono text-[12.5px] leading-[1.45] text-muted-foreground">{view.total === 1 ? 'comment' : 'comments'}{split.length > 0 ? <> · <UnderLine parts={split} /></> : null}</span>
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             {cells.map(([n, words]) => <StatCell key={words} value={n} label={words} size="md" />)}
