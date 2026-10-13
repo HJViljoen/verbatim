@@ -579,7 +579,9 @@ export function buildGroupPanel(input: {
     wants: input.persona.wants,
     stops: input.persona.blockers,
     triggers: input.persona.triggers,
-    who: input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label),
+    // Decision 8: near-repeats ("Amputee community", "Amputee users") are one
+    // self-description, counted once with their counts added.
+    who: mergeWho(input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label)),
     conversations,
     phrases: phrasesOf(input.persona.howTheyTalk, input.englishOf),
     quotes: input.quotes.slice(0, GROUP_QUOTES),
@@ -594,6 +596,69 @@ export function buildGroupPanel(input: {
 export function whoLabel(signal: string): string {
   const t = signal.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
   return t ? t[0].toUpperCase() + t.slice(1) : ''
+}
+
+// ---- "Who they say they are": one self-description, said several ways ---------------
+//
+// DECISION 8 (Heinrich, 13 Oct). Pass E writes a group's demographic signals
+// as free slugs, and the same self-description arrives in several wordings:
+// Össur's caretakers carried "Amputee community" 24, "Amputee" 14, "Amputee
+// users" 14, "Amputee type" 9 and "Amputee audience" 8 as five rows. A label
+// is normalised by lowercasing it, singularising each word simply and
+// dropping the filler words below; labels whose normal forms are EQUAL are one
+// row, their counts added, under the wording that came up most. Nothing looser
+// than equality: "Caretaker" and "Care worker", or "Child amputee" and
+// "Amputee child", stay apart, because a merge that guesses is a claim about
+// who these people are.
+
+/** Words that name the kind of row, not the person: "Amputee community" and
+ *  "Amputee users" are both "amputee". Singular forms: a word is singularised
+ *  before it is looked up. */
+export const WHO_FILLER_WORDS: ReadonlySet<string> = new Set([
+  'community', 'user', 'type', 'people', 'person', 'group', 'folk',
+  'audience', 'member', 'individual', 'identity',
+])
+
+/** How many self-descriptions a group's panel lists (the top three distinct). */
+export const WHO_SHOWN = 3
+
+/** One word, singular, simply: "users" → "user", "families" → "family";
+ *  "ss", "us" and "is" endings and short words are left alone. */
+function singular(word: string): string {
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`
+  if (word.length > 3 && word.endsWith('s') && !/(ss|us|is)$/.test(word)) return word.slice(0, -1)
+  return word
+}
+
+/** A label's normal form: lowercase, each word singular, filler words out.
+ *  A label of filler alone keeps its own words, so two different ones
+ *  ("Community", "Users") never collapse into one empty key. PURE. */
+export function whoKey(label: string): string {
+  const words = label.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(singular)
+  const kept = words.filter((w) => !WHO_FILLER_WORDS.has(w))
+  return (kept.length > 0 ? kept : words).join(' ')
+}
+
+/**
+ * The group's self-descriptions with near-repeats merged: equal normal forms
+ * (`whoKey`) are one row, counts added, labelled with the wording that came
+ * up most (the first of them on a tie). Most first; ties keep the order they
+ * came in. Every row is returned; the panel lists `WHO_SHOWN`. PURE.
+ */
+export function mergeWho(who: readonly { label: string; count: number }[]): { label: string; count: number }[] {
+  const merged = new Map<string, { at: number; count: number; best: { label: string; count: number } }>()
+  who.forEach((w, at) => {
+    const key = whoKey(w.label)
+    const row = merged.get(key)
+    if (!row) merged.set(key, { at, count: w.count, best: { label: w.label, count: w.count } })
+    else {
+      row.count += w.count
+      if (w.count > row.best.count) row.best = { label: w.label, count: w.count }
+    }
+  })
+  return [...merged.values()]
+    .sort((a, b) => b.count - a.count || a.at - b.at)
+    .map((r) => ({ label: r.best.label, count: r.count }))
 }
 
 // ---- 2. the brands -------------------------------------------------------------------

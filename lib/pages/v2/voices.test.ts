@@ -4,7 +4,7 @@ import { brandMonthPair, type BrandCrossRow, type BrandMonthVideos, type Creator
 import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientNameCounts, clientNameCountsByCount,
   creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
-  phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel,
+  phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel, mergeWho, whoKey, WHO_FILLER_WORDS, WHO_SHOWN,
   BRANDS_NOT_COUNTED, BRANDS_NOT_READ, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
 } from './voices'
 import { ossurVoicesFixture, sealandVoicesFixture } from './voices-fixture'
@@ -44,6 +44,57 @@ describe('small words', () => {
   it('reads a demographic slug as words', () => {
     expect(whoLabel('parent_of-child  amputee')).toBe('Parent of child amputee')
     expect(whoLabel('  ')).toBe('')
+  })
+
+  // Decision 8: near-repeats of one self-description are one row.
+  describe('merging "Who they say they are"', () => {
+    it('merges the wordings of one self-description, adds their counts, and keeps the commonest wording', () => {
+      expect(mergeWho([
+        { label: 'Amputee community', count: 24 }, { label: 'Amputee', count: 14 },
+        { label: 'Amputee users', count: 14 }, { label: 'Amputee type', count: 9 },
+      ])).toEqual([{ label: 'Amputee community', count: 61 }])
+      expect(whoKey('Amputee community')).toBe('amputee')
+      expect(whoKey('Amputee users')).toBe('amputee')
+      expect(whoKey('Amputee type')).toBe('amputee')
+      expect(whoKey('Recent amputees')).toBe('recent amputee')
+      expect(whoKey('Families of amputees')).toBe('family of amputee')
+    })
+
+    it('never merges different people: caretaker and care worker, or a word order', () => {
+      expect(mergeWho([{ label: 'Caretaker', count: 5 }, { label: 'Care worker', count: 4 }])).toEqual([
+        { label: 'Caretaker', count: 5 }, { label: 'Care worker', count: 4 },
+      ])
+      expect(whoKey('Child amputee')).not.toBe(whoKey('Amputee child'))
+      expect(whoKey('Bilateral amputee')).not.toBe(whoKey('Amputee'))
+      expect(whoKey('Amputee interest')).not.toBe(whoKey('Amputee'))
+      // Filler alone keeps its words: two different ones stay two.
+      expect(mergeWho([{ label: 'Community', count: 3 }, { label: 'Users', count: 2 }])).toHaveLength(2)
+      // Singular is simple, and the same on both sides of a comparison:
+      // "-us", "-ss" and "-is" endings are left alone.
+      expect(whoKey('Diabetes patients')).toBe(whoKey('Diabetes patient'))
+      expect(whoKey('Bus users')).toBe('bus')
+      expect(whoKey('Glass users')).toBe('glass')
+    })
+
+    it('orders most first, a tie in the order the rows came, and labels a tie with the first wording', () => {
+      expect(mergeWho([{ label: 'B', count: 2 }, { label: 'A user', count: 2 }, { label: 'A', count: 2 }, { label: 'C', count: 5 }]))
+        .toEqual([{ label: 'C', count: 5 }, { label: 'A user', count: 4 }, { label: 'B', count: 2 }])
+    })
+
+    it('reads Össur\'s caretakers (production, 13 Oct) as three distinct rows at the top', () => {
+      const ossur = [
+        ['Amputee community', 24], ['Amputee', 14], ['Amputee users', 14], ['Prosthetic users', 11], ['Amputee type', 9],
+        ['Amputee audience', 8], ['Prosthetic user', 8], ['Bilateral amputee', 7], ['Above knee amputee', 6], ['Amputee interest', 6],
+        ['Amputee identity', 5], ['Below knee amputee', 5], ['Child amputee', 5], ['Recent amputee', 2], ['Recent amputees', 2],
+      ].map(([label, count]) => ({ label: label as string, count: count as number }))
+      expect(mergeWho(ossur).slice(0, WHO_SHOWN)).toEqual([
+        { label: 'Amputee community', count: 74 },
+        { label: 'Prosthetic users', count: 19 },
+        { label: 'Bilateral amputee', count: 7 },
+      ])
+      expect(mergeWho(ossur).find((w) => w.label.startsWith('Recent'))).toEqual({ label: 'Recent amputee', count: 4 })
+      expect([...WHO_FILLER_WORDS]).toEqual(expect.arrayContaining(['community', 'user', 'type', 'people', 'person', 'group', 'folk']))
+    })
   })
 
   it('keeps a phrase once, short, with its English where it has one', () => {

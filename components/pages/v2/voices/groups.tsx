@@ -6,7 +6,7 @@ import {
   type PanelLayout, type PerBreakpoint,
 } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { PANEL_ID, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
+import { PANEL_ID, WHO_SHOWN, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
 
@@ -147,10 +147,11 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
       <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
         {panel.who.length > 0 ? (
           <PanelSection label="Who they say they are">
-            {panel.who.slice(0, 5).map((w) => (
+            {/* The top three, near-repeats already merged (decision 8, `mergeWho`). */}
+            {panel.who.slice(0, WHO_SHOWN).map((w) => (
               <div key={w.label} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_30px] items-center gap-2.5 text-[13.5px]">
                 <span className="min-w-0"><span data-copy="stored" data-slot="pass_a_audience_insight">{w.label}</span></span>
-                <TickBar pct={(100 * w.count) / Math.max(1, ...panel.who.map((x) => x.count))} size="md" label={`${w.label}: ${w.count}`} />
+                <TickBar pct={(100 * w.count) / Math.max(1, ...panel.who.slice(0, WHO_SHOWN).map((x) => x.count))} size="md" label={`${w.label}: ${w.count}`} />
                 <Fig className="text-right text-[12.5px]">{fmtInt(w.count)}</Fig>
               </div>
             ))}
