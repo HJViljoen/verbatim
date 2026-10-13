@@ -83,9 +83,13 @@ export const VIEWS_BY_SURFACE: Readonly<Record<OurChangeSurface, readonly Compar
 }
 
 /** Logged surfaces that are not a change of ours at all: which day the report
- *  goes out, whether a schedule is active, which subjects are followed. They
- *  move nothing a month is read from (`TRACKING_SURFACES`, lib/config-log.ts). */
-export const NOT_OUR_CHANGES: readonly string[] = ['cadence', 'schedule', 'subjects']
+ *  goes out, whether a schedule is active, which subjects are followed, what
+ *  is in the client's product catalogue. They move nothing a month is read
+ *  from (`TRACKING_SURFACES`, lib/config-log.ts). A catalogue edit moves the
+ *  product readings alone, and those carry their own `catalogue_version`
+ *  (month_product_readings), so under `other` it would cut every view's
+ *  chart for a change no video moved in. */
+export const NOT_OUR_CHANGES: readonly string[] = ['cadence', 'schedule', 'subjects', 'products']
 
 /** The `other` field an attention-panel freeze is logged on (`freezePanel`,
  *  lib/reading/attention.ts). The pipeline's freeze-months step writes one on a

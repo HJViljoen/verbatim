@@ -136,7 +136,9 @@ describe('1 · the SQL freeze-months reads', () => {
     for (const file of readdirSync(join(ROOT, 'supabase', 'migrations')).filter((f) => f >= '20260928090000')) {
       const sql = readFileSync(join(ROOT, 'supabase', 'migrations', file), 'utf8')
       for (const m of sql.matchAll(/create\s+trigger\s+\w+\s+(?:before|after)\s+\w+(?:\s+or\s+\w+)*\s+on\s+(?:public\.)?(\w+)[\s\S]*?execute\s+function\s+(?:public\.)?(\w+)/gi)) {
-        expect(['month_reading_frozen_guard', 'month_reading_frozen_insert_guard', 'month_lens_frozen_insert_guard', 'month_reading_delete_guard', 'tracking_config_queue_applied_once'], `${file}: ${m[1]} → ${m[2]}`).toContain(m[2].toLowerCase())
+        // product_aliases_retire_once (the products migration, depth v2 T10) is
+        // the queue's guard for an alias: it raises, and writes nothing.
+        expect(['month_reading_frozen_guard', 'month_reading_frozen_insert_guard', 'month_lens_frozen_insert_guard', 'month_reading_delete_guard', 'tracking_config_queue_applied_once', 'product_aliases_retire_once'], `${file}: ${m[1]} → ${m[2]}`).toContain(m[2].toLowerCase())
       }
     }
   })

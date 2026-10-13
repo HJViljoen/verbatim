@@ -42,11 +42,15 @@ import { isMissingColumnError } from './supabase-admin'
 export const CONFIG_CHANGES_TABLE = 'config_changes'
 
 /** Which configuration moved — grouped by what a reader goes looking for, not
- *  by column. Mirrors the config_changes surface CHECK. */
+ *  by column. Mirrors the config_changes surface CHECK. `products` (a category,
+ *  a product or an alias of the client's catalogue) arrives with
+ *  20261109090000_products.sql and is not a tracking surface: it moves no
+ *  video into or out of the corpus (below, and NOT_OUR_CHANGES in
+ *  lib/reading/comparability.ts). */
 export const CONFIG_SURFACES = [
   'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'cadence', 'knobs',
   'schedule', 'subjects', 'entity_retag', 'regate', 'prompt_version',
-  'rival_rename', 'other',
+  'rival_rename', 'other', 'products',
 ] as const
 export type ConfigSurface = (typeof CONFIG_SURFACES)[number]
 
@@ -66,7 +70,9 @@ export type ConfigSurface = (typeof CONFIG_SURFACES)[number]
  * `prompt_version` is out for the opposite reason and it is the harder call: a
  * Pass A prompt bump re-reads the whole corpus and IS a break, but it is a
  * change to how we read rather than to what we track, and it deserves its own
- * word on a chart rather than borrowing this one. `other` is in: it is the
+ * word on a chart rather than borrowing this one. `products` is out with the
+ * first three: a catalogue edit moves which talk the product readings place,
+ * never what is gathered, and those readings carry their catalogue version. `other` is in: it is the
  * catch-all for an unwatched `tracking_configs` column, which is tracking.
  */
 export const TRACKING_SURFACES: readonly ConfigSurface[] = [
