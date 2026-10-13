@@ -35,7 +35,9 @@ async function main() {
   for (const [i, ids] of batches.slice(0, maxBatches).entries()) {
     const r = await runClassifyMetaBatch(clientId, runId, ids, i + 1)
     cost += r.costUsd
-    summary.push({ batch: i + 1, requested: r.requested, classified: r.classified, nulls: r.nulls, '$': r.costUsd.toFixed(3), error: r.error ?? '' })
+    // A batch that ran into the output ceiling was asked again in halves;
+    // `skipped` is what a half that ran into it again left unclassified.
+    summary.push({ batch: i + 1, requested: r.requested, classified: r.classified, nulls: r.nulls, split: r.lengthSplit ? 'yes' : '', skipped: r.lengthSkipped ?? 0, '$': r.costUsd.toFixed(3), error: r.error ?? '' })
   }
   console.table(summary)
   console.log(`total $${cost.toFixed(2)}`)

@@ -166,10 +166,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   never stored: Content prints it (`MEDICAL_LINE`, `lib/post-ideas/medical.ts`,
   where `printsMedicalLine`). *The switch is OPT-IN per tenant* (Phase 4
   fix round): `POST_IDEAS_ENABLED` (`lib/config.ts`, the
-  `PRODUCT_READINGS_ENABLED` pattern) is off for Sealand and Össur and
-  pinned off by `lib/config.test.ts`, so applying the products migration
-  (which creates `post_ideas`) starts no model spend; turning a tenant on is
-  Heinrich's production step, a diff to the map and its test. Read it
+  `PRODUCT_READINGS_ENABLED` pattern) was off for every tenant, so applying
+  the products migration (which creates `post_ideas`) started no model spend;
+  turning a tenant on is Heinrich's call, a diff to the map and its pin in
+  `lib/config.test.ts`. **On for Sealand and Össur since 13 Oct** (approved
+  by Heinrich), with the step, its cap, its floor and its four weeks
+  unchanged; the next scheduled run writes the ideas. Read it
   through `postIdeasEnabled(clientId)`, never the map. `POST_IDEAS=0` (or
   `false`) and `POST_IDEAS_OFF` (a list of client ids) stay as emergency
   OFF-switches only: neither can turn a tenant on. Content and the
@@ -642,8 +644,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
   after (`chartCadenceBroken`, the line's own `cadenceBroken` on the clock;
   `loadCadenceRuns` reads every run, any status, with its window and its
   options). A partial run counts as a completed gather only when every
-  recorded error is a step after the gather (`AFTER_GATHER_STEPS`, fail
-  closed). **A run that gathered nothing is not counted at all** (Heinrich,
+  recorded error is a step after the gather (`AFTER_GATHER_STEPS`: a label
+  not on it fails closed). Classification (`plan-classify`, `classify-meta`)
+  joined the list on 13 Oct: the week counts read videos, comments and gate
+  verdicts and never a classification column, and Sealand's 11 Oct update
+  (`78a6eb3c`), partial on the own-posts census, one `classify-meta` batch
+  and one theme merge with every gather step complete, had broken its week,
+  and the cut, which walks back from the newest gathered week and stops at the
+  first break, drew nothing on either chart. The same-age line never reads the
+  list (below), so nothing it keeps moves. That batch's answer had run to the
+  model's whole window; a classify-meta call now stops at
+  `CLASSIFY_META_MAX_OUTPUT_TOKENS` (8,000), and a batch that reaches it is
+  asked again in halves and fails alone (`askSplittingOnLength`): a half that
+  reaches it again leaves its videos unclassified, recorded as a finding and
+  never an error, and nothing about the length limit retries the step. **A run
+  that gathered nothing is not counted at all** (Heinrich,
   5 Oct: "Why is the first bar on Sealand twenty eighth September when we've
   had earlier runs"): a fresh `skipGather` run (a rehearsal) plans no search
   and no own-posts census, so it moved no count in any week, and it is
@@ -1182,7 +1197,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     ideas' run and the published week read's (`anchorOf`), either alone
     where the other is missing. Every week count sits beside its month
     (`readingMonthOf`). Ideas come from `post_ideas`, behind
-    `postIdeasEnabled` (opt-in, off for every tenant today): a missing table
+    `postIdeasEnabled` (opt-in; on for Sealand and Össur since 13 Oct): a missing table
     or the switch off reads "not switched on", no rows "none written", a
     failed read says so (`unread`). THE IDEAS PRINT THE DAYS THEY READ
     (Heinrich, 13 Oct): "From questions asked 14 Sep to 11 Oct"

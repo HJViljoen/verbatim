@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { flagWordOf } from '@/components/v2'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
@@ -439,14 +439,34 @@ describe('the clocks of the reply list and your posts', () => {
   })
 })
 
-describe('post ideas switched off for a workspace (opt-in: every tenant today, POST_IDEAS_ENABLED)', () => {
+describe('post ideas switched off for a workspace (opt-in, POST_IDEAS_ENABLED: on for Sealand and Össur since 13 Oct)', () => {
   const untouchable = new Proxy({}, { get: () => { throw new Error('read') } }) as never
   const scope = (clientId: string) => ({ supabase: untouchable, clientId, reading: { client: untouchable, clientId }, params: {} })
+  const OFF_LINE = { state: 'not_on', idea: null, href: '/dashboard/content', line: 'Post ideas are not switched on for this workspace. The questions people asked are on Content.' }
+  const saved = { on: process.env.POST_IDEAS, off: process.env.POST_IDEAS_OFF }
+  afterEach(() => {
+    if (saved.on === undefined) delete process.env.POST_IDEAS
+    else process.env.POST_IDEAS = saved.on
+    if (saved.off === undefined) delete process.env.POST_IDEAS_OFF
+    else process.env.POST_IDEAS_OFF = saved.off
+  })
 
-  it('reads nothing, prints no stored idea and says so, on the page and on the tile, for both tenants by default', async () => {
+  it('reads nothing, prints no stored idea and says so, on the page and on the tile, for a workspace the map does not turn on', async () => {
+    delete process.env.POST_IDEAS
+    delete process.env.POST_IDEAS_OFF
+    const other = '00000000-0000-4000-8000-0000000000d1'
+    expect(await readIdeas(untouchable, other)).toEqual({ state: 'not_on', rows: [] })
+    expect(await topContent(scope(other))).toEqual(OFF_LINE)
+  })
+
+  it('both tenants read their ideas now, and the emergency off-switch still reads nothing for either', async () => {
+    delete process.env.POST_IDEAS
+    delete process.env.POST_IDEAS_OFF
+    for (const id of [OSSUR_CLIENT_ID, SEALAND_CLIENT_ID]) await expect(readIdeas(untouchable, id)).rejects.toThrow('read')
+    process.env.POST_IDEAS = '0'
     for (const id of [OSSUR_CLIENT_ID, SEALAND_CLIENT_ID]) {
       expect(await readIdeas(untouchable, id)).toEqual({ state: 'not_on', rows: [] })
-      expect(await topContent(scope(id))).toEqual({ state: 'not_on', idea: null, href: '/dashboard/content', line: 'Post ideas are not switched on for this workspace. The questions people asked are on Content.' })
+      expect(await topContent(scope(id))).toEqual(OFF_LINE)
     }
   })
 })

@@ -45,7 +45,7 @@ describe('the lines, from the pages\' tops', () => {
     // Your products: every state with no standout, the switch off among them.
     for (const state of ['not_applied', 'not_on', 'no_catalogue', 'quiet'] as const) expect(productsLine(fixtureProductsTop(state)), state).toBeNull()
     expect(productsLine(fixtureProductsTop('quiet', { note: 'failed' }))).toBeNull()
-    // Content: not switched on (every tenant today), none, too old, unread.
+    // Content: not switched on (a workspace the switch leaves off), none, too old, unread.
     for (const state of ['not_on', 'none', 'stale', 'unread'] as const) expect(contentLine(fixtureContentTop(state)), state).toBeNull()
     // Your moves: nothing waiting.
     expect(movesLine(fixtureMovesTop('no_advice'))).toBeNull()
@@ -136,8 +136,9 @@ describe('the build\'s reads', () => {
     for (const clientId of [OSSUR_CLIENT_ID, SEALAND_CLIENT_ID]) {
       const db = fakeDb({})
       expect(await loadWeeklyReadLines(admin(db), { clientId, runId: 'run-1', read: sealandRead() })).toEqual([])
-      // Post ideas are switched off for every tenant: the table is never read.
-      expect(db.calls.some((c) => c.table === 'post_ideas')).toBe(false)
+      // Post ideas are on for both tenants (13 Oct): the table is read, and a
+      // database without it gives no Content line and throws nothing.
+      expect(db.calls.some((c) => c.table === 'post_ideas')).toBe(true)
     }
   })
 })

@@ -15,7 +15,7 @@ import { loadBrandClaims, shapeBrandVoice } from '@/lib/pipeline/claims'
 import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
-import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
+import { CLASSIFY_META_MAX_OUTPUT_TOKENS, planClassifyMetaBatches, runClassifyMetaBatch, type ClassifyMetaResult } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
 import { planQuoteTranslations, translateQuotesBatch } from '@/lib/pipeline/translate-quotes'
 import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn } from '@/lib/pipeline/ocr'
@@ -942,7 +942,7 @@ export const runPipeline = inngest.createFunction(
         noteError('plan-classify', e)
         return [] as string[][]
       })
-    const classify = { classified: 0, nulls: 0, cost: 0, errors: 0 }
+    const classify = { classified: 0, nulls: 0, cost: 0, errors: 0, lengthHits: 0, lengthSplits: 0, lengthSkipped: 0 }
     for (let w = 0; w < classifyBatches.length; w += CLASSIFY_PARALLEL) {
       const wave = await Promise.all(
         classifyBatches.slice(w, w + CLASSIFY_PARALLEL).map((videoIds, j) =>
@@ -953,7 +953,7 @@ export const runPipeline = inngest.createFunction(
             // Catch on the step promise (transcribe precedent): Inngest's
             // retries run first; only an out-of-retries batch goes non-fatal,
             // leaving its rows unclassified and the run status 'partial'.
-            .catch((e) => {
+            .catch((e): ClassifyMetaResult => {
               const message = e instanceof Error ? e.message : String(e)
               console.error(`[classify-meta] batch out of retries: ${message}`)
               return { requested: videoIds.length, classified: 0, nulls: 0, costUsd: 0, error: message }
@@ -964,11 +964,28 @@ export const runPipeline = inngest.createFunction(
         classify.classified += r.classified
         classify.nulls += r.nulls
         classify.cost += r.costUsd
+        // A batch that hit the ceiling: split into halves, or (a batch of
+        // one) left unclassified without a split. Counted apart, so a lone
+        // video's overrun never reads as "0 batch(es)".
+        if (r.lengthSplit || (r.lengthSkipped ?? 0) > 0) classify.lengthHits++
+        if (r.lengthSplit) classify.lengthSplits++
+        classify.lengthSkipped += r.lengthSkipped ?? 0
         if (r.error) {
           classify.errors++
           noteError('classify-meta', r.error)
         }
       }
+    }
+    // A BATCH THAT RAN INTO THE OUTPUT CEILING IS A FINDING, NOT AN ERROR (13
+    // Oct). It was asked again in halves inside its step, and a half that ran
+    // into the ceiling again left its videos unclassified
+    // (`askSplittingOnLength`, lib/pipeline/classify-meta.ts); nothing failed
+    // and the step was not retried, so the status must not move. Pass A's
+    // length retry precedent: recorded where the run can carry it.
+    if (classify.lengthHits > 0) {
+      const say = `${classify.lengthHits} batch(es) ran into the ${CLASSIFY_META_MAX_OUTPUT_TOKENS}-token output ceiling, ${classify.lengthSplits} of them asked again in halves; ${classify.lengthSkipped} video(s) left unclassified`
+      console.warn(`[classify-meta] ${say}`)
+      noteFinding('classify-meta', say)
     }
 
     // 4b. Pass A — per-video GPT analysis, fanned out so no batch outlives the

@@ -238,6 +238,40 @@ describe('Week by week', () => {
     expect(homeWeeks({ ...base, rows: before, updates: SEALAND_RUNS.map((r) => r.finishedAt), runs: SEALAND_RUNS, now: MONDAY })).toBeNull()
   })
 
+  // Tue 13 Oct (the page dumps read 16:42 UTC): the 11 Oct update closed
+  // partial on the own-posts census, one classify-meta batch that hit the
+  // output limit, and one theme merge. Until classification was a step after
+  // the gather (lib/reading/week-line.ts AFTER_GATHER_STEPS) that run was no
+  // completed gather, the week of 5 Oct broke, and the cut, walking back from
+  // the newest gathered week, drew nothing: the empty frame production showed.
+  // The week counts here are illustrative (21 and 28 Sep as read on 5 Oct);
+  // which weeks draw, and how solid, is the point.
+  const RUN_11_OCT = {
+    id: '78a6eb3c', status: 'partial', startedAt: '2026-10-11T04:00:32Z', finishedAt: '2026-10-11T07:29:44Z', windowStart: '2026-10-04T04:01:17Z', windowEnd: '2026-10-11T04:00:32Z',
+    errors: [
+      'owned-posts:instagram:rareform: instagram census read returned 0 posts; fell back to the profile summary (0 in window)',
+      'classify-meta: Could not parse response content as the length limit was reached',
+      'themes:industry-other: the merge call failed on the last attempt; this bucket\'s themes are unmerged this run',
+    ],
+    options: { sendReport: true, scheduledFor: '2026-10-11T04:00:00.000Z' },
+  }
+  const TUESDAY = '2026-10-13T16:42:37Z'
+
+  it('Sealand, 13 Oct: a classification error no longer breaks a week; the chart draws 21 Sep (solid), 28 Sep and 5 Oct (faint)', () => {
+    const rows = [uc(row('2026-09-14', 332, 5426), 0), uc(row('2026-09-21', 301, 4990), 0), uc(row('2026-09-28', 266, 5029), 0), uc(row('2026-10-05', 290, 5400), 0)]
+    const runs = [...SEALAND_RUNS, RUN_11_OCT]
+    const updates = runs.map((r) => r.finishedAt)
+    // The axis is 24 Aug to 12 Oct, as the dumps' columns.
+    const w = homeWeeks({ ...base, rows, updates, runs, now: TUESDAY })!
+    expect(w.columns.map((c) => c.week)).toEqual(['2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12'])
+    expect(w.columns.map((c) => c.videos)).toEqual([null, null, null, null, 301, 266, 290, null])
+    expect(w.columns.map((c) => c.settled)).toEqual([false, false, false, false, true, false, false, false])
+    // A gather step failing in that run instead still breaks its week, and
+    // with it every week before: the empty frame, as on 13 Oct.
+    const gatherFailed = [...SEALAND_RUNS, { ...RUN_11_OCT, errors: [...RUN_11_OCT.errors, 'comments:tiktok:4: actor failed'] }]
+    expect(homeWeeks({ ...base, rows, updates, runs: gatherFailed, now: TUESDAY })).toBeNull()
+  })
+
   it('Össur, 5 Oct: a change subreddit discovery made inside the 4 Oct run, before its searches, does not cut the week that run gathered', () => {
     const rows = [row('2026-09-21', 143, 2625), row('2026-09-28', 177, 3217)]
     const handles: OurChange = { id: 'h15', surface: 'handles', changedAt: '2026-09-15T07:22:47Z', note: null, affects: [] }

@@ -355,11 +355,26 @@ export function chartSettlingUpdates(updates: readonly string[], runs?: readonly
  * THE STEPS AFTER THE GATHER (the release fix, 1 Oct night). The labels a
  * run's `errors` entry starts with (`noteError`'s `where`, up to the first
  * ':') for the steps that run on what was already gathered and move no week
- * count of the market: transcripts, OCR, translation, Pass A, themes, the
- * keyword attribution, and the client's own posts (their audience is never
- * pooled into the market, `pooledWeekVolumes`). A label NOT here (a search, a
- * platform, its comments, the relevance gate, discovery, classification, or
- * anything new) is taken as a gap in the gather: it fails closed.
+ * count of the market: transcripts, OCR, translation, the metadata
+ * classification, Pass A, themes, the keyword attribution, and the client's
+ * own posts (their audience is never pooled into the market,
+ * `pooledWeekVolumes`, and `market_week_volumes` drops `is_client` videos). A
+ * label NOT here (a search, a platform, its comments, the relevance gate,
+ * discovery, or anything new) is taken as a gap in the gather: it fails
+ * closed.
+ *
+ * Classification joined on 13 Oct (approved by Heinrich). It was left out as a
+ * precaution, but the week counts (`market_week_volumes`, migration
+ * 20261107090000) read `videos`, `comments` and `gate_verdicts` and never a
+ * classification column, and `plan-classify` runs after the gather on the
+ * videos it already stored: a failed batch leaves its videos unclassified,
+ * gathered and counted. Sealand's 11 Oct update (`78a6eb3c`) closed partial on
+ * the own-posts census, one theme merge and one `classify-meta` batch that ran
+ * into the output limit, every gather step complete, and that one batch cut
+ * every drawn week from both charts. The labels are `noteError`'s:
+ * `plan-classify` (the plan out of retries) and `classify-meta` (a batch out
+ * of retries); the steps' own ids (`classify:N-of-M`) are never an error's
+ * label.
  *
  * Measured on Sealand, 1 Oct: the 27 Sep update (`f3646446`) closed partial
  * on `transcript-backfill` x2 (Apify 408 timeouts transcribing one video each)
@@ -373,6 +388,10 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   'transcribe', 'plan-transcribe', 'transcript-backfill', 'plan-transcript-backfill',
   'ocr', 'plan-ocr', 'ocr-backfill', 'plan-ocr-backfill',
   'translate', 'plan-translate',
+  // The metadata classification (13 Oct): it writes format, opening, topics
+  // and framing sentiment onto videos already stored, and no week count reads
+  // any of them.
+  'plan-classify', 'classify-meta',
   'pass-a', 'replan-pass-a', 'replan-pass-a-ocr', 'replan-pass-a-translated',
   'themes', 'persist-themes', 'keyword-attribution',
   'owned-posts', 'owned-comments', 'owned-events',

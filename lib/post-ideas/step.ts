@@ -49,9 +49,9 @@ import {
 // gathered nothing, a capped run, `publish: false`) writes nothing and reads
 // nothing: the next real run writes its own ideas, so nobody is told. A
 // tenant switched off (`postIdeasEnabled`, lib/config.ts: OFF unless
-// `POST_IDEAS_ENABLED` turns it on, which it does for no tenant today; and
-// `POST_IDEAS=0` everywhere or its id in `POST_IDEAS_OFF` as emergency
-// off-switches) is the same. No
+// `POST_IDEAS_ENABLED` turns it on, which it does for Sealand and Össur since
+// 13 Oct; and `POST_IDEAS=0` everywhere or its id in `POST_IDEAS_OFF` as
+// emergency off-switches) is the same. No
 // `post_ideas` table (`isMissingPostIdeas`: the products migration not
 // applied) is a no-op that spends nothing, logged and never alerted, because
 // it is every run's state until Heinrich applies it. A run that already has
