@@ -22,7 +22,14 @@ import { Fig, GroupNames, OLink } from './parts'
 const TH = 'pr-3 pb-2.5 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] whitespace-nowrap text-muted-foreground'
 const TD = 'py-[11px] pr-3 align-middle'
 
-export function AskedCard({ block, state, month, weekWord }: { block: AskedBlock; state: ContentState; month: { month: string; complete: boolean }; weekWord: string }) {
+export function AskedCard({ block, state, month, weekWord, afterIdeas = true }: {
+  block: AskedBlock
+  state: ContentState
+  month: { month: string; complete: boolean }
+  weekWord: string
+  /** Post ideas stand above it: the table is "the next" questions after them. */
+  afterIdeas?: boolean
+}) {
   const period = block.period === 'month' ? monthWords(month) : weekWord
   const videosHead = block.period === 'month' ? `Videos ${monthWords(month).replace(/^in /, '')}` : 'Videos this week'
   return (
@@ -31,7 +38,9 @@ export function AskedCard({ block, state, month, weekWord }: { block: AskedBlock
         icon={CircleHelp}
         id="asked-title"
         title="Also asked, and not yet in your posts"
-        sub={`The next questions people asked ${period}, after the ideas above, that none of your posts in ${longMonth(month.month)} touched on`}
+        sub={afterIdeas
+          ? `The next questions people asked ${period}, after the ideas above, that none of your posts in ${longMonth(month.month)} touched on`
+          : `The questions people asked ${period} that none of your posts in ${longMonth(month.month)} touched on, the most videos first`}
       />
       {block.unread ? (
         <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{block.unread}</p>

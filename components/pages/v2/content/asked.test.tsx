@@ -27,4 +27,10 @@ describe('Also asked, and not yet in your posts', () => {
     const all = askedFixture('week', true)
     expect(all.rows.length).toBe(all.total)
   })
+
+  it('is not "the next" questions where no idea stands above it', () => {
+    const text = renderText(<AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" afterIdeas={false} />)
+    expect(text).toContain('The questions people asked this week that none of your posts in October touched on, the most videos first')
+    expect(text).not.toContain('after the ideas above')
+  })
 })

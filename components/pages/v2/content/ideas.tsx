@@ -131,9 +131,11 @@ export function IdeasSection({ block, state, month, weekWord }: {
     <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
         <h2 id="ideas-title" className="m-0 text-[19px] leading-[1.3] font-semibold">What to post next</h2>
-        <span className="text-[13px] leading-[1.4] text-muted-foreground">
-          Questions people asked {weekWord} that your posts in {longMonth(month.month)} have not touched on, biggest first
-        </span>
+        {block.cards.length > 0 ? (
+          <span className="text-[13px] leading-[1.4] text-muted-foreground">
+            Questions people asked {weekWord} that your posts in {longMonth(month.month)} have not touched on, biggest first
+          </span>
+        ) : null}
       </div>
       {block.cards.length > 0 ? (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">

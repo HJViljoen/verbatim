@@ -257,7 +257,7 @@ describe('what works', () => {
     ]
     const text = (parts: ReturnType<typeof mixSentence>) => (parts ?? []).map((p) => (typeof p === 'string' ? p : `[${p.figure}]`)).join('')
     expect(text(mixSentence({ formats: rows([1, 6]), openings: [{ key: 'question', label: 'A question', share: 19, multiple: 1.8, yours: 2 }], posts: 9, unclassified: 2, month: '2026-10-01', complete: false })))
-      .toBe('[6 of your 9] posts in October so far were promotional videos, which draw [0.7×] a typical video. Story videos draw [3.1×], and you made one. The opening you used most is with a question ([2 of 9]), which draws [1.8×]. [2] of your posts have no format read yet.')
+      .toBe('[6 of your 9] posts in October so far were promotional videos, which draw [0.7×] a typical video. Story videos draw [3.1×], and you made one. The opening you used most is a question ([2 of 9]), which draws [1.8×]. [2] of your posts have no format read yet.')
     expect(text(mixSentence({ formats: rows([0, 1]), openings: [], posts: 1, unclassified: 0, month: '2026-09-01', complete: true })))
       .toBe('[1 of your 1] posts in September was a promotional video, which draw [0.7×] a typical video. Story videos draw [3.1×], and none of yours were.')
     expect(text(mixSentence({ formats: rows([0, 0]), openings: [], posts: 0, unclassified: 0, month: '2026-10-01', complete: false }))).toBe('You published nothing of your own in October so far.')

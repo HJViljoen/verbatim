@@ -80,7 +80,7 @@ export function ContentPage({ data }: { data: ContentPageData }) {
       {data.open?.kind === 'replies' ? <RepliesPanel view={data.replies} state={state} /> : null}
       {data.open?.kind === 'posts' ? <PostsPanel block={data.posts} state={state} /> : null}
 
-      <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} />
+      <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} afterIdeas={data.ideas.cards.length > 0} />
     </PageFrame>
   )
 }

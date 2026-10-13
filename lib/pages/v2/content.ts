@@ -719,7 +719,7 @@ export function mixSentence(input: { formats: readonly WorksRow[]; openings: rea
   const opens = [...openings].filter((r) => r.yours > 0).sort((a, b) => b.yours - a.yours || b.multiple - a.multiple)[0]
   if (opens) {
     out.push(
-      `${gap()}${opens.yours * 2 > posts ? 'Most of yours open' : 'The opening you used most is'} with ${lower(opens.label)} (`,
+      `${gap()}${opens.yours * 2 > posts ? 'Most of yours open with' : 'The opening you used most is'} ${lower(opens.label)} (`,
       { figure: `${fmtInt(opens.yours)} of ${fmtInt(posts)}` },
       '), which draws ', { figure: fmtMultiple(opens.multiple) }, '.',
     )
