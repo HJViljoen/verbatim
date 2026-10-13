@@ -24,6 +24,11 @@ import { createAdminClient } from '../lib/supabase-admin'
 import type { ReportSection } from '../lib/reports/types'
 import { subjectsFixture } from '../components/pages/subjects/fixture'
 import { overviewFixture } from '../components/pages/overview/fixture'
+import { createElement } from 'react'
+import { WeeklyReadPage } from '../components/email/weekly-read'
+import { renderWeeklyReadEmail } from '../lib/email/weekly-read'
+import { isLevelOne, isWeeklyReadData, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '../lib/reports/weekly-read-build'
+import { levelOneRead, sealandLines, sealandSnapshot, storedReportSnapshot } from '../lib/test/weekly-read-fixture'
 
 interface Check { ok: boolean; what: string; detail?: string }
 const checks: Check[] = []
@@ -90,6 +95,8 @@ async function main() {
 
     const sections = ((snap.data as { sections?: { section: ReportSection; data: unknown }[] } | null)?.sections) ?? []
     for (const sec of sections) renderSection(label, sec.section.page, sec.section, sec.data, false)
+    // The weekly read has no page key and no sections: its own body draws it.
+    if (isWeeklyReadData(snap.data)) renderWeeklyRead(label, snap.data)
   }
 
   // 3. The five legacy weekly_reports rows: where do their embedded absolute
@@ -115,6 +122,14 @@ async function main() {
   //    either shape today, so both are built from the fixtures in the stored
   //    shape and rendered through the page modules exactly as a snapshot is.
   storedCalibrationRows()
+
+  // 5. The weekly read at level 1 (depth v2, T11b): a NEW snapshot is version
+  //    2 and draws level 1; a stored one (version 1) still draws the report.
+  //    The stored ones are checked above, each in its own branch; these are
+  //    the two shapes from the fixtures, so the check runs whatever the
+  //    database holds.
+  renderWeeklyRead('a new level-1 snapshot (fixture)', sealandSnapshot(levelOneRead(), sealandLines()))
+  renderWeeklyRead('a report snapshot as stored before level 1 (fixture)', storedReportSnapshot())
 
   const failed = checks.filter((c) => !c.ok)
   console.log('')
@@ -156,6 +171,30 @@ function storedCalibrationRows() {
   const markup = ov ? renderToStaticMarkup(ov.render(overview as never, 'app') as React.ReactElement) : ''
   check(markup.length > 0 && !markup.includes('provisional') && !markup.includes('being re-described'),
     `${label} — a row with no calibration field renders as sent, with no word`)
+}
+
+/** A weekly read renders its email and its page (the share link, the viewer,
+ *  the paper) without throwing, in the branch its version names: the report
+ *  for version 1, level 1 for version 2. Rendered from the stored data alone
+ *  (quotes as refs, no words): nothing here reads a quote. */
+function renderWeeklyRead(label: string, data: WeeklyReadSnapshotData) {
+  const what = `${label}: weekly read v${data.version} (${data.company || 'no company'}, ${data.period || 'no days'})`
+  check(staleWeeklyReadSnapshot(data) == null, `${what} is a version this build draws`)
+  let email = ''
+  let page = ''
+  try {
+    email = renderWeeklyReadEmail({ data, appUrl: 'https://app.verbatimintel.com', shareUrl: 'https://app.verbatimintel.com/r/smoke' }).html
+    page = renderToStaticMarkup(createElement(WeeklyReadPage, { data, appUrl: 'https://app.verbatimintel.com', fill: true }))
+  } catch (e) {
+    check(false, `${what} renders`, (e as Error).message.slice(0, 120))
+    return
+  }
+  const level = isLevelOne(data)
+  const emailOk = email.includes('This week in your market') && (level
+    ? email.includes('Open this week in Verbatim') && !email.includes('What happened')
+    : email.includes('>Open Verbatim<') && !email.includes('Across your pages'))
+  check(emailOk, `${what} renders its email as ${level ? 'level 1' : 'the report'}`, `${email.length} chars`)
+  check(page.includes('This week in your market') && page.includes('>Open Verbatim<'), `${what} renders its page (share, viewer, paper) as the full read`, `${page.length} chars`)
 }
 
 function renderSection(label: string, page: string, section: ReportSection, data: unknown, isPage: boolean) {
