@@ -38,7 +38,7 @@ import { factsFromReadings, marketComparable } from '../../written/standing'
 import { fetchRunningRunIds } from '../latest-video-run'
 import { loadRegistryLabels } from '../registry-labels'
 import { WHAT_THEY_SELL } from '../market-frame'
-import { homeWeeks, loadWeekRows, type HomeWeeks } from '../home'
+import { homeWeeks, loadWeekRows, WEEKS_FAILED, type WeeksRead } from '../home'
 import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
 import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
@@ -371,7 +371,9 @@ export interface StoredLine {
 
 export interface MarketRail {
   kinds: KindsBlock | null
-  weeks: HomeWeeks | null
+  /** The weekly volume: the chart, null where too few clean weeks were read
+   *  (`homeWeeks`), `WEEKS_FAILED` where the read threw. */
+  weeks: WeeksRead
   platforms: PlatformsBlock | null
   /** The week read's "worth watching" (stored `week_read` prose). */
   watch: StoredLine[]
@@ -1437,7 +1439,8 @@ export async function loadMarket(input: {
   const changesAhead = soft('changes', loadChanges(db, clientId), [])
   const cadenceAhead = soft('cadence', loadCadenceRuns(supabase, clientId), null)
   const personasAhead = soft('personas', loadPersonas(db, clientId), [])
-  const weekRowsAhead = soft('weeks', loadWeekRows(db, clientId, nowIso), null)
+  // A failed read is WEEKS_FAILED, never null: null is "too few clean weeks".
+  const weekRowsAhead = soft<Awaited<ReturnType<typeof loadWeekRows>> | typeof WEEKS_FAILED>('weeks', loadWeekRows(db, clientId, nowIso), WEEKS_FAILED)
   const [clientRes, runs, rivals, competitors, published, history, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadDeliveredRuns(supabase, clientId),
@@ -1621,16 +1624,15 @@ export async function loadMarket(input: {
   const weekRead = windowReads[windowReads.length - 1] ?? null
   const rail: MarketRail = {
     kinds: buildKinds(readings, month, noun, soFar),
-    weeks: weekRowsRaw
-      ? homeWeeks({
+    weeks: !Array.isArray(weekRowsRaw) ? WEEKS_FAILED
+      : homeWeeks({
           rows: weekRowsRaw,
           rivalAudiences,
           changes: ourChanges,
           updates: runs.map(updateInstant),
           runs: cadence ?? undefined,
           now: nowIso,
-        })
-      : null,
+        }),
     platforms: period === 'week' && weekRead?.denominators
       ? withMonthPlatforms(platformRows(mergeMixes(weekRead.denominators.filter((d) => market.includes(d.audience)).map((d) => d.platform_mix)), 'week'), monthMix, inMonth(month, !soFar))
       : platformRows(monthMix, 'month'),

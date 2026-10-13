@@ -18,7 +18,7 @@ import { loadPublishedWeekRead, type PublishedWeekRead } from '../../written/pub
 import { factsFromReadings, marketComparable } from '../../written/standing'
 import type { StandingFact } from '../../written/types'
 import { longMonth } from '../../format'
-import { homeWeeksFrame, loadHomeWeeks, type HomeWeeks } from '../home'
+import { homeWeeksFrame, loadHomeWeeks, WEEKS_FAILED, weeksFailed, type HomeWeeks, type WeeksRead } from '../home'
 import { topContent, type TopContent } from './content'
 import { marketParams, monthSoFar, subjectHref, topMarket, weekReadMonth, type MarketTop } from './market'
 import { topMoves, type TopMoves } from './moves'
@@ -140,6 +140,10 @@ export interface WeekTile {
   inMonth: string | null
   /** The weekly volume: `homeWeeks`, or the empty frame. */
   weeks: HomeWeeks
+  /** The weekly volume's read FAILED (the frame is empty because nothing
+   *  could be read, not because too few clean weeks were): the tile says so
+   *  rather than "Insufficient data" (Phase 4 fix round). */
+  weeksFailed?: boolean
   subjects: WeekSubjects | null
   /** Market, where the market's size is the page. */
   href: string
@@ -188,7 +192,9 @@ const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isF
  */
 export function weekTileOf(input: {
   read: PublishedWeekRead | null
-  weeks: HomeWeeks | null
+  /** The chart; null where too few clean weeks were read; `WEEKS_FAILED`
+   *  where the read threw. */
+  weeks: WeeksRead
   subjects: WeekSubjects | null
   now: string
 }): WeekTile {
@@ -206,7 +212,8 @@ export function weekTileOf(input: {
     week: { videos: num(market?.week.videos), comments: num(market?.week.comments) },
     month: { videos: num(market?.month.videos), comments: num(market?.month.comments) },
     inMonth: inMonthWords,
-    weeks: input.weeks ?? homeWeeksFrame(input.now),
+    weeks: input.weeks && !weeksFailed(input.weeks) ? input.weeks : homeWeeksFrame(input.now),
+    ...(weeksFailed(input.weeks) ? { weeksFailed: true } : {}),
     subjects: input.subjects,
     href: surface('market').href,
   }
@@ -404,7 +411,9 @@ export function startDashboard(session: DashboardSession): DashboardReads {
   const content = settleTile('content', publishedSoft.then((read) => topContent(scope, { now, published: read })))
   const moves = settleTile('moves', topMoves(scope, { canDecide }))
 
-  const weeks = soft('weeks', loadHomeWeeks({ supabase, clientId, reading: db, rivals }, nowIso))
+  // A failed read is WEEKS_FAILED, never null: null is "too few clean weeks".
+  const weeks: Promise<WeeksRead> = loadHomeWeeks({ supabase, clientId, reading: db, rivals }, nowIso)
+    .catch((error: unknown) => { say('weeks', error); return WEEKS_FAILED })
   const subjects = soft('subjects', Promise.all([publishedSoft, rivals]).then(([read, rv]) => {
     if (!read) return null
     const rm = readingMonthOf(read.data.window)

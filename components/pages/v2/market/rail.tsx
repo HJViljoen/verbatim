@@ -4,9 +4,8 @@ import { ProportionBar } from '@/components/proportion-bar'
 import { CARD, CardHead, SpikeBars, TickBarRow, TickKey } from '@/components/v2'
 import { EYEBROW } from '@/components/colour-roles'
 import { fmtInt } from '@/lib/format'
-import { INSUFFICIENT } from '@/lib/pages/home'
+import { INSUFFICIENT, weeksFailed, type WeeksRead } from '@/lib/pages/home'
 import type { KindsBlock, MarketData, PlatformsBlock, StoredLine } from '@/lib/pages/v2/market'
-import type { HomeWeeks } from '@/lib/pages/home'
 import { cn } from '@/lib/utils'
 import { Stored } from './parts'
 
@@ -48,14 +47,20 @@ export function KindsCard({ block }: { block: KindsBlock }) {
   )
 }
 
-export function WeeksCard({ weeks }: { weeks: HomeWeeks | null }) {
+/** A weekly volume read that failed: never "Insufficient data", which is the
+ *  honest word for too few clean weeks (Phase 4 fix round). */
+export const WEEKS_UNREAD = 'The weekly counts could not be read just now.'
+
+export function WeeksCard({ weeks: read }: { weeks: WeeksRead }) {
+  const failed = weeksFailed(read)
+  const weeks = failed ? null : read
   const drawn = weeks ? weeks.columns.some((c) => c.videos != null) : false
   return (
     <article id="weeks" className={cn(CARD, 'scroll-mt-6')}>
       <CardHead icon={BarChart3} title="Videos, week by week" sub="Your market’s videos, by the week people commented" />
       {weeks && drawn
         ? <SpikeBars weeks={weeks.columns.map((c) => ({ label: c.label, count: c.videos }))} variant="ink" counts="all" size="md" label="The market's videos a week" />
-        : <p className="m-0 text-[13.5px] text-muted-foreground">{INSUFFICIENT}</p>}
+        : <p className="m-0 text-[13.5px] text-muted-foreground">{failed ? WEEKS_UNREAD : INSUFFICIENT}</p>}
       {weeks && drawn && weeks.columns.some((c) => c.videos != null && !c.settled)
         ? <p className="m-0 text-[12.5px] text-muted-foreground">The newest weeks are still filling: a week settles two updates after it ends.</p>
         : null}

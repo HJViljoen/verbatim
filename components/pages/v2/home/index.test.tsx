@@ -2,9 +2,9 @@ import { Suspense } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { homeWeekDetail, homeWeeks, type HomeWeeks } from '@/lib/pages/home'
-import type { DashboardData, DashboardReads } from '@/lib/pages/v2/home'
-import { dashboardEmptyFixture, dashboardFixture, fixtureMovesTop } from '@/lib/pages/v2/home-fixture'
+import { homeWeekDetail, homeWeeks, WEEKS_FAILED, type HomeWeeks } from '@/lib/pages/home'
+import { weekTileOf, type DashboardData, type DashboardReads } from '@/lib/pages/v2/home'
+import { DASHBOARD_NOW, dashboardEmptyFixture, dashboardFixture, fixtureMovesTop, fixturePublished } from '@/lib/pages/v2/home-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { IDEAS_EMPTY } from '@/lib/pages/v2/content'
 import type { MarketWeekRowRaw } from '@/lib/reading/weeks'
@@ -494,6 +494,25 @@ describe('the board\'s details (the fresh check)', () => {
     expect(w.match(/Insufficient data/g)).toHaveLength(2)
     expect(w).toMatch(/<p class="m-0 text-\[14px\] leading-\[1\.5\] text-muted-foreground sm:hidden">Insufficient data/)
     expect(w).toMatch(/data-weeks=""[\s\S]*Insufficient data/)
+  })
+
+  // Phase 4 fix round: a weekly volume read that THREW printed "Insufficient
+  // data", the words for too few clean weeks. Now it says it failed.
+  it('a weekly volume read that failed says so, never "Insufficient data"', () => {
+    const base = dashboardFixture()
+    const read = base.week.state === 'ok' ? base.week.top : null
+    const failed = { ...base, week: { state: 'ok' as const, top: { ...weekTileOf({ read: fixturePublished(), weeks: WEEKS_FAILED, subjects: read?.subjects ?? null, now: DASHBOARD_NOW }) } } }
+    const w = tileMarkup(render(page(failed)), 'week')
+    const chart = w.slice(w.indexOf('data-weeks=""'))
+    expect(chart).toContain(TILE_FAILED)
+    expect(chart).not.toContain('Insufficient data')
+    // The week's own figures still print: only the chart failed.
+    expect(markupText(w)).toContain('videos in your market this week')
+    // Too few clean weeks keeps its words.
+    const thin = { ...base, week: { state: 'ok' as const, top: weekTileOf({ read: fixturePublished(), weeks: null, subjects: null, now: DASHBOARD_NOW }) } }
+    const t = tileMarkup(render(page(thin)), 'week')
+    expect(t.slice(t.indexOf('data-weeks=""'))).toContain('Insufficient data')
+    expect(t).not.toContain(TILE_FAILED)
   })
 })
 

@@ -211,6 +211,21 @@ export function homeWeekDetail(c: HomeWeekColumn): WeekDetail | null {
 /** Heinrich's words (1 Oct) for a block without enough data to show. */
 export const INSUFFICIENT = 'Insufficient data'
 
+/**
+ * A weekly volume read that FAILED (`market_week_volumes` or one of its
+ * companions threw), as against one that read and found too few clean weeks
+ * (`homeWeeks` null, which keeps `INSUFFICIENT`). Phase 4 fix round: both
+ * printed "Insufficient data", a failure shown as an absence; a reader carries
+ * this marker instead of null so a surface can say the read failed.
+ */
+export const WEEKS_FAILED = { state: 'failed' } as const
+export type WeeksFailed = typeof WEEKS_FAILED
+/** The weekly volume as a surface holds it: the chart, too few clean weeks
+ *  (null), or a read that failed. */
+export type WeeksRead = HomeWeeks | WeeksFailed | null
+export const weeksFailed = (w: WeeksRead | undefined): w is WeeksFailed =>
+  w != null && (w as { state?: unknown }).state === 'failed'
+
 // ---- The reads ---------------------------------------------------------------------
 
 /** `market_week_volumes` over the chart's weeks. */

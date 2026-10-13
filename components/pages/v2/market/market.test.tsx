@@ -5,7 +5,8 @@ import { fixtureId, marketFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-f
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
-import { KindsCard, PlatformsCard, RailView, WatchCard, WeeksCard } from './rail'
+import { KindsCard, PlatformsCard, RailView, WatchCard, WeeksCard, WEEKS_UNREAD } from './rail'
+import { WEEKS_FAILED } from '@/lib/pages/home'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
 import { TopRowView } from './top'
@@ -201,10 +202,15 @@ describe('the rail', () => {
     assertCopyContract(<KindsCard block={block} />)
   })
 
-  it('weeks: the Dashboard\'s chart, or "Insufficient data"', () => {
+  it('weeks: the Dashboard\'s chart, or "Insufficient data" for too few clean weeks, or the failure where the read failed', () => {
     expect(renderText(<WeeksCard weeks={FIXTURE_WEEKS} />)).toContain('198 205 214 188 230 226 219 241')
     expect(renderText(<WeeksCard weeks={null} />)).toContain('Insufficient data')
+    expect(renderText(<WeeksCard weeks={null} />)).not.toContain(WEEKS_UNREAD)
+    // Phase 4 fix round: a read that threw is a failure, never an absence.
+    expect(renderText(<WeeksCard weeks={WEEKS_FAILED} />)).toContain(WEEKS_UNREAD)
+    expect(renderText(<WeeksCard weeks={WEEKS_FAILED} />)).not.toContain('Insufficient data')
     assertCopyContract(<WeeksCard weeks={FIXTURE_WEEKS} />)
+    assertCopyContract(<WeeksCard weeks={WEEKS_FAILED} />)
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
