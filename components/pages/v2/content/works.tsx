@@ -22,6 +22,14 @@ import { Fig, Lvl, Sentence } from './parts'
 
 const HEAD = 'pb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground'
 
+/** A kind that draws less than a typical video (under 1.0× as printed): its
+ *  fill in the market yellow's pale tint, as the board draws it (#ECE3BE).
+ *  The kit's own tint for the yellow (MiniBars' filling bar, 0.35), not a new
+ *  colour (lead's ruling, 13 Oct). The tick is the bar's other child and keeps
+ *  its ink. */
+const BELOW_TYPICAL = '[&>div:not([data-tick])]:bg-brand/35'
+const belowTypical = (multiple: number): boolean => Math.round(multiple * 10) / 10 < 1
+
 /** Your posts as marks, the board's nine-to-a-row bars: each mark 9px where
  *  the column has room and narrower where it has not, so thirteen posts
  *  stay one row (Sealand's wrapped to two at 1440). */
@@ -57,8 +65,9 @@ function Chart({ title, rows, posts, empty }: { title: string; rows: readonly Wo
               {r.label}
               {r.share != null ? <span className="text-[11.5px] text-muted-foreground"> · <Fig>{Math.round(r.share)}%</Fig></span> : null}
             </span>
-            <span role="cell" className="min-w-0 pr-11">
+            <span role="cell" className="min-w-0 pr-11" data-below={belowTypical(r.multiple) ? '' : undefined}>
               <TickBar
+                className={belowTypical(r.multiple) ? BELOW_TYPICAL : undefined}
                 pct={(Math.min(r.multiple, WORKS_SCALE_MAX) / WORKS_SCALE_MAX) * 100}
                 tick={100 / WORKS_SCALE_MAX}
                 size="xl"

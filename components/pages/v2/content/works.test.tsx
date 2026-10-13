@@ -21,6 +21,18 @@ describe('What works in your market’s videos', () => {
     assertCopyContract(node)
   })
 
+  it('draws a kind below a typical video in the market yellow’s pale tint, as the board does', () => {
+    const m = render(<WorksCard block={worksFixture()} />)
+    // Promotional 0.7×, A statistic 0.9× and A before and after 0.6× (the
+    // board's three pale rows); 1.0× and up keep the full yellow.
+    expect(m.match(/data-below=""/g)).toHaveLength(3)
+    expect(m.match(/\[&amp;&gt;div:not\(\[data-tick\]\)\]:bg-brand\/35/g)).toHaveLength(3)
+    // As printed: 0.96× prints 1.0×, so it is not below; 0.94× prints 0.9× and is.
+    const one = (multiple: number) => render(<WorksCard block={{ ...worksFixture(), openings: [], formats: [{ key: 'x', label: 'Story', share: 10, multiple, yours: 0 }] }} />)
+    expect(one(0.96)).not.toContain('data-below=""')
+    expect(one(0.94)).toContain('data-below=""')
+  })
+
   it('prints the sentence about your mix with every number a figure', () => {
     const text = renderText(<WorksCard block={worksFixture()} />)
     expect(text).toContain('6 of your 9 posts in October so far were promotional videos, which draw 0.7× a typical video.')
