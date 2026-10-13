@@ -155,3 +155,33 @@ describe('every section\'s page', () => {
     expect(t).toContain('Objection 9')
   })
 })
+
+describe('a brief stored before the deck drew bars (the 4 Oct drafts, --from)', () => {
+  /** The content fixture as a 5 Oct compose had not yet written it: no
+   *  `noun`, no `measure`, no `base`. */
+  function older(): MonthlyBriefData {
+    const { noun: _noun, ...d } = briefFixture('content')
+    return {
+      ...d,
+      sections: d.sections.map(({ base: _base, ...s }) => ({
+        ...s,
+        groups: s.groups.map(({ base: _gb, ...g }) => ({ ...g, items: g.items.map(({ measure: _m, ...i }) => i) })),
+      })),
+    }
+  }
+
+  it('draws every page, the formats as their sentences where the bars would be', () => {
+    const d = older()
+    const markup = render(<BriefDeck data={d} builtAt={BUILT} />)
+    const words = renderText(<BriefDeck data={d} builtAt={BUILT} />)
+    assertCopyContract(markup)
+    bans(markup, words)
+    expect(markup.match(/data-brief-page="/g)).toHaveLength(deckPages(d).length)
+    expect(words).toContain("12% of the market's videos published in September, at a median engagement of 5.0%.")
+    expect(words).not.toContain('12.5%')
+    expect(words).not.toContain('Shares of 2,000 videos in the market')
+    // No noun: the market is "others in your market", as such a brief's Markdown printed it.
+    expect(words).toContain('others in your market')
+    expect(words).not.toContain('other packs')
+  })
+})

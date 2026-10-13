@@ -4,10 +4,19 @@
 // steps existed (September 2026: scripts/backfill-briefs-september.sh).
 //
 //   node --env-file=.env.local --import tsx scripts/monthly-briefs.ts \
-//     --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--plan] [--write [--replace]]
+//     --client <uuid> --month YYYY-MM --run <uuid> [--from <dir>] [--out <dir>] [--plan] [--write [--replace]]
 //
 // --run is the run that closed the month: the briefs are stored under it, as
 // the pipeline stores them under its own run.
+//
+// --from <dir> stores briefs a build has already written instead of writing
+// them: the four `<role>_brief.json` an earlier dry run saved (the dry
+// harness's, or this script's --out), checked to be this client's month
+// (lib/reports/briefs/drafts.ts). No research and no model call, so nothing
+// is paid for and each ledger row costs 0. Every quote ref is resolved first
+// (read-only) and any that no longer resolves is named: the stored brief
+// prints without it. Everything else holds: the probe, --plan, the ledger
+// checks, the refusal of a written month and --replace.
 //
 // DRY BY DEFAULT. Nothing is written to any database: not the briefs, not the
 // ledger, not one `ai_call_log` row. The model calls are still made and paid
@@ -43,16 +52,20 @@ import { join, resolve } from 'node:path'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { longMonth } from '../lib/format'
+import { WHAT_THEY_SELL } from '../lib/pages/market-frame'
 import { rowWindow, type WindowColumns } from '../lib/pipeline/run-bookkeeping'
+import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes'
 import { monthStartOf } from '../lib/reading/month-key'
 import { collectQuoteRefs } from '../lib/renderables/quotes-freeze'
 import {
   groundBriefResearch, loadBriefSetInputs, questionsFor, researchBriefSet, writeBriefSet,
 } from '../lib/reports/briefs/build'
+import { deckPages } from '../lib/reports/briefs/deck'
+import { draftSetOf, readDraftFiles, type DraftSet } from '../lib/reports/briefs/drafts'
 import { briefMarkdown } from '../lib/reports/briefs/markdown'
 import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
-import { BRIEF_NAME, BRIEF_ROLES, type MonthlyBriefData } from '../lib/reports/briefs/types'
+import { BRIEF_NAME, BRIEF_ROLES, storedBrief, type BriefRole, type MonthlyBriefData } from '../lib/reports/briefs/types'
 import { closesMonth, endedMonthOf, themedRunAsOf } from '../lib/written/longrun'
 
 const args = process.argv.slice(2)
@@ -62,7 +75,7 @@ const flag = (name: string, fallback = ''): string => {
 }
 const has = (name: string): boolean => args.includes(`--${name}`)
 for (const a of args) {
-  if (a.startsWith('--') && !['client', 'month', 'run', 'out', 'plan', 'write', 'replace'].includes(a.slice(2))) {
+  if (a.startsWith('--') && !['client', 'month', 'run', 'from', 'out', 'plan', 'write', 'replace'].includes(a.slice(2))) {
     console.error(`unknown flag: ${a}`)
     process.exit(2)
   }
@@ -94,19 +107,86 @@ async function runWindowOf(db: SupabaseClient, clientId: string, runId: string):
   return w?.start && w.end ? { from: w.start, to: w.end } : null
 }
 
+/** The saved set in --from's folder, or the reasons it is not this client's
+ *  month (and the script stops). */
+function loadDrafts(dir: string, expect: Parameters<typeof draftSetOf>[1]): DraftSet {
+  const r = draftSetOf(readDraftFiles(dir), expect)
+  if (!r.ok) {
+    console.error(`${dir} cannot be stored as ${expect.company}'s ${longMonth(expect.month)}:\n${r.errors.map((e) => `  - ${e}`).join('\n')}`)
+    process.exit(2)
+  }
+  return r.set
+}
+
+/** Resolve every quote ref the saved briefs cite, as a render would (one
+ *  read of the evidence rows and one of their translations), and name any
+ *  that no longer resolves: the stored brief prints without it. */
+async function checkQuotes(db: SupabaseClient, briefs: readonly MonthlyBriefData[]): Promise<Map<string, QuoteResolution>> {
+  const refs = collectQuoteRefs(briefs)
+  const resolved = await fetchQuoteResolutionsByRefs(db, refs, { onReadError: 'throw' })
+  const gone = refs.filter((r) => !resolved.has(r))
+  console.log(`Quotes: ${refs.length - gone.length} of ${refs.length} refs resolve today.`)
+  if (gone.length) {
+    const where = (r: string) => briefs.filter((d) => collectQuoteRefs(d).includes(r)).map((d) => d.role).join(', ')
+    console.warn(`These no longer resolve, so their quotes will not print:\n${gone.map((r) => `  - ${r} (${where(r)})`).join('\n')}`)
+  }
+  return resolved
+}
+
+/** --from without --plan: each saved brief printed (quotes resolved, its deck
+ *  pages counted) and written to --out as the build path writes it; with
+ *  --write, stored as the build path stores a set, at no cost. */
+async function storeDrafts(
+  db: SupabaseClient,
+  a: { clientId: string; runId: string; month: string; write: boolean; drafts: DraftSet; resolved: Map<string, QuoteResolution> },
+): Promise<void> {
+  const textOf = (ref: string) => {
+    const r = a.resolved.get(ref)
+    return r ? { text: r.text, english: r.english ?? null, lang: r.lang ?? null } : null
+  }
+  const outDir = flag('out')
+  if (outDir) mkdirSync(resolve(process.cwd(), outDir), { recursive: true })
+  for (const d of a.drafts.briefs) {
+    const md = briefMarkdown(d, textOf, d.noun ?? null)
+    const pages = briefPrints(d) ? deckPages(storedBrief(d)).length : 0
+    console.log(`\n${'='.repeat(80)}\n${BRIEF_NAME[d.role]}: ${briefPrints(d) ? `${d.findings.length} finding(s), ${d.sections.length} section(s), ${collectQuoteRefs(d).length} quote(s), ${pages} deck pages` : 'THIN (nothing stood; not shown)'}; ${d.held.length} held\n${'='.repeat(80)}\n${md}`)
+    if (outDir) {
+      writeFileSync(join(resolve(process.cwd(), outDir), `${d.role}_brief.md`), md)
+      writeFileSync(join(resolve(process.cwd(), outDir), `${d.role}_brief.json`), `${JSON.stringify(d, null, 2)}\n`)
+    }
+  }
+  if (!a.write) return
+  // Made by an earlier build: this store calls no model, so it costs nothing.
+  const costUsd = Object.fromEntries(BRIEF_ROLES.map((r) => [r, 0])) as Record<BriefRole, number>
+  const asOf = a.drafts.builtAt ?? new Date().toISOString()
+  const rows = await storeBriefSet(db, { clientId: a.clientId, runId: a.runId, month: a.month, asOf, briefs: a.drafts.briefs, costUsd })
+  console.log(`\nStored the saved ${longMonth(a.month)} briefs under run ${a.runId} (read ${asOf.slice(0, 10)}): ${rows.map((r) => `${r.role} ${r.status}${r.snapshot_id ? ` (${r.snapshot_id})` : ''}`).join(', ')}.`)
+  console.log('They are in the Studio now, under Monthly briefs.')
+}
+
 async function main() {
   const clientId = flag('client')
   const monthArg = flag('month')
   const runId = flag('run')
   if (!/^[0-9a-f-]{36}$/.test(clientId) || !/^\d{4}-\d{2}$/.test(monthArg) || !/^[0-9a-f-]{36}$/.test(runId)) {
-    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--plan] [--write [--replace]]')
+    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--from <dir>] [--out <dir>] [--plan] [--write [--replace]]')
+    process.exit(2)
+  }
+  const fromDir = flag('from')
+  if (has('from') && !fromDir) {
+    console.error('--from needs the folder the saved briefs are in')
+    process.exit(2)
+  }
+  if (fromDir && flag('out') && resolve(process.cwd(), flag('out')) === resolve(process.cwd(), fromDir)) {
+    console.error('--out would overwrite the saved briefs --from reads: give it another folder')
     process.exit(2)
   }
   const month = monthStartOf(`${monthArg}-01T00:00:00.000Z`)
   const write = has('write')
   const db = admin()
   const company = await probe(db, clientId)
-  console.log(`Client: ${company} (${clientId}); the ${longMonth(month)} briefs; run ${runId}; ${has('plan') ? 'PLAN (no model call, nothing written)' : write ? 'WRITE' : 'dry run (nothing is written to any database; the model calls are paid for)'}`)
+  const mode = has('plan') ? 'PLAN (no model call, nothing written)' : write ? 'WRITE' : fromDir ? 'dry run (nothing is written to any database; no model call)' : 'dry run (nothing is written to any database; the model calls are paid for)'
+  console.log(`Client: ${company} (${clientId}); the ${longMonth(month)} briefs${fromDir ? `, saved in ${fromDir}` : ''}; run ${runId}; ${mode}`)
 
   // The checks --write would make, and --plan stops after.
   const applied = await monthlyBriefsApplied(db)
@@ -119,10 +199,20 @@ async function main() {
     console.error(`${longMonth(month)}'s briefs are written already. Pass --replace to write them again.`)
     process.exit(4)
   }
+  // --from: the saved set, checked before anything is said about it.
+  const drafts = fromDir ? loadDrafts(fromDir, { clientId, company, month, noun: WHAT_THEY_SELL[clientId] ?? null }) : null
+  const resolved = drafts ? await checkQuotes(db, drafts.briefs) : null
+
   if (has('plan')) {
     if (!applied) console.log('\n--write refuses until supabase/migrations/20261107093000_monthly_briefs.sql is applied (app-setup.sh).')
     else if (written) console.log(`\n--write refuses: ${longMonth(month)} is written (--replace writes it again).`)
-    console.log(`${applied && !written ? '\n' : ''}--write would write the ${longMonth(month)} Sales, Marketing, Content and Leadership briefs, under run ${runId}, for about $2 to $2.50 of model calls.`)
+    console.log(`${applied && !written ? '\n' : ''}${drafts
+      ? `--write would store the four saved ${longMonth(month)} briefs from ${fromDir} (${drafts.briefs.map((d) => `${d.role} ${briefPrints(d) ? 'ready' : 'thin'}`).join(', ')}), under run ${runId}, with no model call.`
+      : `--write would write the ${longMonth(month)} Sales, Marketing, Content and Leadership briefs, under run ${runId}, for about $2 to $2.50 of model calls.`}`)
+    return
+  }
+  if (drafts && resolved) {
+    await storeDrafts(db, { clientId, runId, month, write, drafts, resolved })
     return
   }
 
