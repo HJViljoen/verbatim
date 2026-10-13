@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { olderRead, sealandRead, SEALAND_READ_WINDOW } from '../test/weekly-read-fixture'
+import { levelOneRead, olderRead, sealandFlag, sealandRead, sealandUnusual, SEALAND_READ_WINDOW } from '../test/weekly-read-fixture'
 import {
-  WEEK_READ_HELD_MESSAGE, weekReadDates, weekReadSendState, weeklyReadSubject, weeklyReadView,
+  ALSO_ROWS, BIGGEST_HEADING, flagFigure, levelOneView, objectHref, usualOver, WEEK_READ_HELD_MESSAGE, weekReadDates, weekReadSendState, weeklyReadSubject, weeklyReadView,
 } from './weekly-read'
-import { isWeeklyReadData, staleWeeklyReadSnapshot, weeklyReadSnapshotData } from './weekly-read-build'
+import { isLevelOne, isWeeklyReadData, staleWeeklyReadSnapshot, weeklyReadSnapshotData } from './weekly-read-build'
 
 // The weekly read's pure half (artefact `weekly_read`): the dates it names, the
 // subject it goes out under, the send rule, and its sections in the design's
@@ -104,10 +104,95 @@ describe('the snapshot', () => {
     const data = weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read: sealandRead(), writtenAt: '2026-09-27T07:20:00Z' })
     expect(isWeeklyReadData(data)).toBe(true)
     expect(isWeeklyReadData({ kind: 'weekly' })).toBe(false)
-    expect(data).toMatchObject({ kind: 'weekly_read', version: 1, title: 'Sealand · This week in your market', period: '21 to 27 September', month: '2026-09-01', readingAt: '2026-09-27T07:20:00Z' })
+    expect(data).toMatchObject({ kind: 'weekly_read', version: 2, title: 'Sealand · This week in your market', period: '21 to 27 September', month: '2026-09-01', readingAt: '2026-09-27T07:20:00Z', lines: [] })
     expect(data.subject).toMatch(/^Sealand: Buyers treated bag choice/)
     expect(data.read.findings).toHaveLength(3)
     expect(staleWeeklyReadSnapshot(data)).toBeNull()
-    expect(staleWeeklyReadSnapshot({ ...data, version: 2 })).toMatch(/\S/)
+    // The report every snapshot stored before level 1 carries still draws.
+    expect(staleWeeklyReadSnapshot({ ...data, version: 1 })).toBeNull()
+    expect(isLevelOne(data)).toBe(true)
+    expect(isLevelOne({ ...data, version: 1 })).toBe(false)
+    expect(staleWeeklyReadSnapshot({ ...data, version: 3 })).toMatch(/\S/)
+  })
+})
+
+describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
+  it('leads with the update\'s first flag, beside its month and the months the check pooled', () => {
+    const v = levelOneView(levelOneRead())
+    expect(v.headline).toMatch(/^Buyers treated bag choice/)
+    expect(v.numbers).toEqual({ week: { videos: 274, comments: 4777 }, month: { videos: 852, comments: 21468 }, where: 'in September so far' })
+    expect(v.lead).toMatchObject({ kind: 'flag', usual: { k: 38, n: 1089, months: 'June, July and August' }, href: '/dashboard/market?conv=t3' })
+    expect(flagFigure(sealandFlag())).toBe('19 of 241 videos this week · usually 38 of 1,089 over June, July and August')
+  })
+  it('says the usual as the check pooled it, never a rounded month: a small baseline is not "0 of 363"', () => {
+    const small = sealandFlag({ baseline: { k: 2, n: 1089 } })
+    expect(usualOver(small)).toEqual({ k: 2, n: 1089, months: 'June, July and August' })
+    expect(flagFigure(small)).toBe('19 of 241 videos this week · usually 2 of 1,089 over June, July and August')
+    expect(flagFigure(sealandFlag({ baselineMonths: [] }))).toBe('19 of 241 videos this week')
+  })
+  it('opens each object where it lives: a conversation and a subject in Market, a rival in its Voices brand panel', () => {
+    expect(objectHref('theme', 'reg 1')).toBe('/dashboard/market?conv=reg%201')
+    expect(objectHref('subject', 's9')).toBe('/dashboard/market?subject=s9')
+    expect(objectHref('rival', 'competitor:Ottobock')).toBe('/dashboard/voices?brand=Ottobock')
+    expect(objectHref('rival', 'Osprey Packs')).toBe('/dashboard/voices?brand=Osprey%20Packs')
+    expect(objectHref('kind', 'question')).toBe('/dashboard/market')
+  })
+  it('the other flags come first among the rows, then the biggest conversations on the lead\'s counts; never one set apart; each once', () => {
+    const second = sealandFlag({ objectKind: 'subject', objectId: 's9', label: 'Comfort', rank: 2 })
+    const v = levelOneView(levelOneRead({ unusual: sealandUnusual([sealandFlag(), second]) }))
+    expect(v.lead?.kind === 'flag' && v.lead.flag.objectId).toBe('t3')
+    expect(v.also.map((r) => [r.kind, r.label, r.figure, r.href])).toEqual([
+      ['flag', 'Comfort', '19 of 241 videos this week · usually 38 of 1,089 over June, July and August', '/dashboard/market?subject=s9'],
+      ['heard', 'Comparing named bags by trip fit', '18 videos this week · 47 in September so far', '/dashboard/market?conv=t1'],
+      ['heard', 'Laptop sleeves that fit a 16-inch machine', '12 videos this week · 30 in September so far', '/dashboard/market?conv=t7'],
+    ])
+    expect(v.also).toHaveLength(ALSO_ROWS)
+  })
+  it('without a flag, the new conversation with the most videos this week leads, on the category\'s count, its own sentence under it', () => {
+    const v = levelOneView(levelOneRead({
+      unusual: sealandUnusual([]),
+      newThisWeek: [
+        // The read's own (lenient) count says t8 is bigger; the category's window count says t7.
+        { themeId: 't8', label: 'Straps that dig in on a long walk', body: 'Straps.', videos: { week: 9, month: 9 }, evidence: '' },
+        { themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', body: 'Sleeves.', videos: { week: 5, month: 6 }, evidence: '' },
+        // Set apart: never leads, never a row.
+        { themeId: 'tm', label: 'Makers showing their own builds', body: 'Makers.', videos: { week: 20, month: 20 }, evidence: '' },
+      ],
+    }))
+    expect(v.lead).toEqual({ kind: 'new', themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', labelKind: 'theme', body: 'Sleeves.', videos: { week: 12, month: 30 }, href: '/dashboard/market?conv=t7' })
+    expect(v.also.map((r) => [r.kind, r.label])).toEqual([
+      ['new', 'Straps that dig in on a long walk'],
+      ['heard', 'Asking for the bag in more colours'],
+      ['heard', 'Comparing named bags by trip fit'],
+    ])
+  })
+  it('with nothing flagged or new, the week\'s biggest conversation leads ("Most talked about this week"); a set-apart one never', () => {
+    const v = levelOneView(levelOneRead({ unusual: sealandUnusual([]) }))
+    expect(v.lead).toEqual({ kind: 'biggest', themeId: 't3', label: 'Asking for the bag in more colours', labelKind: 'theme', body: null, videos: { week: 24, month: 61 }, href: '/dashboard/market?conv=t3' })
+    expect(v.also.map((r) => r.label)).toEqual(['Comparing named bags by trip fit', 'Laptop sleeves that fit a 16-inch machine', 'Straps that dig in on a long walk'])
+    expect(BIGGEST_HEADING).toBe('Most talked about this week')
+  })
+  it('a check that could not be read gives no flag lead (and no "nothing unusual"): the lead falls to the next source', () => {
+    const unread = { outcome: 'flagged', flags: [sealandFlag()], flaggedCount: 1, unread: true }
+    const v = levelOneView(levelOneRead({ unusual: unread }))
+    expect(v.lead?.kind).toBe('biggest')
+    expect(v.also.some((r) => r.kind === 'flag')).toBe(false)
+  })
+  it('a read stored before its conversations were kept ranks on what it holds: what was also heard, and each finding resting on one conversation, named by its headline', () => {
+    const v = levelOneView(sealandRead())
+    // The first finding rests on t1 alone (7 this week, 16 in September).
+    expect(v.lead).toMatchObject({ kind: 'biggest', themeId: 't1', labelKind: 'finding', label: 'Buyers ask for named alternatives that match exact bag needs', videos: { week: 7, month: 16 } })
+    const older = levelOneView(levelOneRead({ unusual: sealandUnusual([]), conversations: undefined }))
+    expect(older.lead).toMatchObject({ kind: 'biggest', themeId: 't7', labelKind: 'theme', videos: { week: 9, month: 21 } })
+    expect(levelOneView(sealandRead({ market: null })).numbers).toBeNull()
+  })
+  it('nothing at all leaves the slot empty', () => {
+    const none = levelOneView(sealandRead({ findings: sealandRead().findings.map((f) => ({ ...f, basedOn: ['a', 'b'] })) }))
+    expect(none.lead).toBeNull()
+    expect(none.also).toEqual([])
+    expect(levelOneView(levelOneRead({ unusual: sealandUnusual([]), conversations: [] })).lead).toBeNull()
+  })
+  it('an older read leads with its first finding\'s headline', () => {
+    expect(levelOneView(olderRead()).headline).toBe('Buyers ask for named alternatives that match exact bag needs.')
   })
 })

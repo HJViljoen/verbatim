@@ -4,7 +4,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 
 import { composeWeekRead } from './compose'
+import { isTransient } from './deadline'
 import { checkableHeadlines, rowOf, runWeekReadStep, storyFitTargets, type BuiltWeekRead, type WeekReadStepDeps } from './step'
+import { AnomalyReadError } from './unusual'
 import type { WeekReadRow } from './store'
 import { candidate, pool, written } from './test-fixtures'
 import { writerFigures } from './write'
@@ -48,6 +50,7 @@ function deps(over: Partial<WeekReadStepDeps> = {}) {
     build: async () => built(2),
     save: async (_a, row) => { saved.push(row) },
     alert: async (subject, text) => { alerts.push({ subject, text }); return { sent: true } },
+    anomaly: async () => ({ check: undefined, flags: null }),
     ...over,
   }
   return { d, saved, alerts }
@@ -62,6 +65,66 @@ describe('runWeekReadStep', () => {
     expect(saved[0]).toMatchObject({ client_id: 'client-1', run_id: 'run-27', kind: 'week', month: '2026-09-01', status: 'ready', cost_usd: 0.21 })
     expect(saved[0].window_start).toBe('2026-09-20T04:18:00+00:00')
     expect(alerts).toEqual([])
+  })
+
+  // Depth v2, T11b: the update's anomaly check is frozen into the read, inside
+  // this step, read strictly BEFORE the build, so the level-1 email leads with
+  // the flag the run raised and never with a blip frozen as "no check".
+  describe('the update\'s anomaly check, frozen with the read', () => {
+    const CHECK = {
+      run_id: 'run-27', week_start: null, week_end: null, outcome: 'flagged', reason: null, note: '',
+      set_size: 31, tested: 11, flagged_count: 1, update_videos: 241, median_videos: 220,
+    }
+    const FLAG = {
+      run_id: 'run-27', object_kind: 'theme', object_id: 'reg-1', label: 'Asking for more colours', denominator: 'every audience together',
+      week_k: 19, week_n: 241, baseline_k: 38, baseline_n: 1089, baseline_months: ['2026-06-01', '2026-07-01', '2026-08-01'],
+      baseline_filling_months: [], baseline_regime: 'one', change_pts: 4.4, band_pts: 2.1, rank: 1, flagged_count: 1,
+      explanation: null, explanation_model: null, quote_refs: [],
+    }
+    const unusualOf = (row: WeekReadRow) => (row.data && 'unusual' in row.data ? row.data.unusual : undefined)
+
+    it('read before the build, for the run, and frozen over the read\'s own window', async () => {
+      const order: string[] = []
+      const { d, saved } = deps({
+        anomaly: async (_a, a) => { order.push(`anomaly:${a.clientId}:${a.runId}`); return { check: CHECK, flags: [FLAG] } },
+        build: async () => { order.push('build'); return built(2) },
+      })
+      expect((await runWeekReadStep(admin, OPTS, d)).status).toBe('ready')
+      expect(order).toEqual(['anomaly:client-1:run-27', 'build'])
+      const u = unusualOf(saved[0])
+      expect(u).toMatchObject({ outcome: 'flagged', flaggedCount: 1, flags: [{ objectId: 'reg-1', week: { k: 19, n: 241 } }] })
+      expect(u?.flags[0].verdict.window).toMatchObject({ kind: 'week', from: '2026-09-20T04:18:00+00:00' })
+      expect(u?.unread).toBeUndefined()
+    })
+
+    it('a missing table is no check, as before: the read is stored with none, no retry, no alert', async () => {
+      const { d, saved, alerts } = deps()
+      expect((await runWeekReadStep(admin, { ...OPTS, lastAttempt: false }, d)).status).toBe('ready')
+      expect(unusualOf(saved[0])).toEqual({ outcome: null, flags: [], flaggedCount: 0 })
+      expect(alerts).toEqual([])
+    })
+
+    it('a failed read before the last attempt is thrown as transient: nothing built, stored or sent, and Inngest retries', async () => {
+      let builds = 0
+      const { d, saved, alerts } = deps({
+        anomaly: async () => { throw new Error('anomaly_checks: canceling statement due to statement timeout') },
+        build: async () => { builds++; return built(2) },
+      })
+      const thrown = await runWeekReadStep(admin, { ...OPTS, lastAttempt: false }, d).catch((e: unknown) => e)
+      expect(thrown).toBeInstanceOf(AnomalyReadError)
+      expect(isTransient(thrown)).toBe(true)
+      expect(builds).toBe(0)
+      expect(saved).toEqual([])
+      expect(alerts).toEqual([])
+    })
+
+    it('a failed read on the last attempt is frozen unread, never as "no check", and the read is stored', async () => {
+      const { d, saved, alerts } = deps({ anomaly: async () => { throw new AnomalyReadError('the update\'s anomaly check could not be read: fetch failed') } })
+      expect((await runWeekReadStep(admin, { ...OPTS, lastAttempt: true }, d)).status).toBe('ready')
+      expect(saved[0].status).toBe('ready')
+      expect(unusualOf(saved[0])).toEqual({ outcome: null, flags: [], flaggedCount: 0, unread: true })
+      expect(alerts).toEqual([])
+    })
   })
 
   it('a thin week stores thin with no call and no alert', async () => {

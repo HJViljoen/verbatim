@@ -132,6 +132,10 @@ export interface WeekPool {
   /** ADDITIVE (v3): the market's week and month to date. Absent on a pool
    *  saved before v3. */
   market?: WeekMarketFigures | null
+  /** ADDITIVE (depth v2, T11b): every category theme on three or more window
+   *  videos, as the week's lead ranks them (lib/written/conversations.ts).
+   *  Absent on a pool saved before it. */
+  conversations?: WeekReadConversation[]
 }
 
 /** Was this candidate first heard this week: the theme is new this month
@@ -309,6 +313,10 @@ export interface WeekReadImplication {
  *  writer's words on what it is and code's evidence line (as a finding's). */
 export interface WeekReadNewItem {
   themeId: string
+  /** ADDITIVE (depth v2, T11b): the conversation's label (Pass B's, the
+   *  pool candidate's), so the level-1 email can name it. Absent on a read
+   *  stored before it. */
+  label?: string
   body: string
   videos: { week: number; month: number }
   evidence: string
@@ -382,7 +390,78 @@ export interface WeekReadDataV2 extends WeekReadCommon {
   /** ADDITIVE (M2): the month figures are `month` in full, the week having
    *  carried past its end; absent or false, the month so far. */
   monthComplete?: boolean
+  /** ADDITIVE (depth v2, T11b): the week's conversations as the week's lead
+   *  ranks them (lib/written/conversations.ts): every category theme the read
+   *  counted, the category's videos this week and this month, and Market's
+   *  set-apart mark, so the level-1 email and Market lead with the same one.
+   *  Absent on a read stored before it; empty on a thin week. */
+  conversations?: WeekReadConversation[]
+  /** ADDITIVE (depth v2, T11b, 13 Oct): what the update's anomaly check
+   *  said, frozen by `write-week-read` (lib/written/unusual.ts), so the
+   *  level-1 email leads with the flag the run raised and never re-reads it.
+   *  Absent on a read stored before it, and where the read failed. */
+  unusual?: WeekReadUnusual
   promptVersion: 'week_read_v3'
+}
+
+/**
+ * One conversation of the week, as the read keeps it (T11b) and as the week's
+ * lead ranks it (lib/reading/week-lead.ts, the shape it takes plus `month`):
+ * the category's videos in the run's window, and in the month to date, and
+ * whether Market sets it apart (lib/written/conversations.ts).
+ */
+export interface WeekReadConversation {
+  /** `theme_registry.id`. */
+  registryId: string
+  /** Pass B's label under this run's clustering. */
+  label: string
+  /** The category's videos in the run's window (`window_theme_readings`). */
+  week: number
+  /** The category's videos in the reading month to date; null where unread. */
+  month: number | null
+  /** Maker-led or off-topic in the month (`segmentOf`): it never leads. */
+  setApart: boolean
+}
+
+/**
+ * The update's anomaly check, as the week's read keeps it (depth v2, T11b).
+ * The flags are the ones This week's "Unusual this week" prints, chosen by
+ * the same rule (`weekFlagRows`, lib/pages/week.ts): the check's own rows in
+ * its rank order, the first of them the email's lead. No quote travels with
+ * a flag: the email prints none at level 1.
+ */
+export interface WeekReadUnusual {
+  /** `anomaly_checks.outcome` for the run ('flagged', 'nothing_unusual',
+   *  'suppressed', 'no_window', 'missing_migration'), or null where the check
+   *  has no row (it did not run, or its table is not in this database). */
+  outcome: string | null
+  /** The flags, rank first; empty where it raised none. */
+  flags: WeekReadFlag[]
+  /** How many cleared both gates before the cap (`MAX_FLAGS`). */
+  flaggedCount: number
+  /** The check's row says it flagged and the flags could not be read. */
+  unread?: boolean
+}
+
+/** One flag, as the check stored it, with its verdict (`anomalyVerdict`). */
+export interface WeekReadFlag {
+  objectKind: 'subject' | 'kind' | 'rival' | 'theme'
+  /** `theme_registry.id`, a subject id, a kind, a rival's audience key. */
+  objectId: string
+  /** What a reader is shown: a theme's label is Pass B's words. */
+  label: string
+  /** The population the share is a share of, by name. */
+  denominator: string
+  /** The object's videos this week, of the week's videos. */
+  week: { k: number; n: number }
+  /** The same over the months behind it, pooled. */
+  baseline: { k: number; n: number }
+  /** Those months, `YYYY-MM-01`, oldest first. */
+  baselineMonths: string[]
+  changePts: number
+  bandPts: number
+  rank: number
+  verdict: Verdict
 }
 
 /** The stored read (`week_reads.data`), by version: a renderer reads
