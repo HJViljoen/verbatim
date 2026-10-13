@@ -1060,26 +1060,29 @@ export interface TopMoves {
    *  carries none. */
   reading?: ReadingLabel
   /** OPTIONAL (parity pass, 13 Oct): where no move has a comparison to print
-   *  (`move` null), the newest move, with the month before it where that was
-   *  read, and why its own side is not printed yet (`pending`: its month has
-   *  not been read; `unread`: no line can be drawn for it). The tile keeps its
-   *  "After your move" panel on it. Null: no move at all. A dump from before
-   *  it carries none. */
+   *  (`move` null), the newest move, and the one level its sentence on Your
+   *  moves prints (`point`, by `MoveSentence`'s branches): none where no line
+   *  can be drawn (`unread`); the latest month before it where its own month
+   *  has not been read (`pending`); else the latest month read alone (a
+   *  refused comparison's later side, or the last point), never beside an
+   *  earlier one. The tile keeps its "After your move" panel on it. Null: no
+   *  move at all. A dump from before it carries none. */
   newest?: (Pick<MoveCard, 'id' | 'title' | 'kind' | 'label' | 'day' | 'direction' | 'pending' | 'unread'> & {
-    before: MovePoint | null
+    point: MovePoint | null
     href: string
   }) | null
 }
 
 /** The newest move, for the tile's panel where none has a comparison to
- *  print. Pure. */
+ *  print, with the level Your moves' sentence prints for it. Pure. */
 export function newestMove(cards: readonly MoveCard[]): TopMoves['newest'] {
   const card = [...cards].sort((a, b) => b.day.localeCompare(a.day))[0]
   if (!card) return null
-  const before = [...card.points].reverse().find((p) => p.role === 'before') ?? null
+  const last = card.points[card.points.length - 1] ?? null
+  const point = card.unread ? null : card.pending ? last : card.compare?.after ?? last
   return {
     id: card.id, title: card.title, kind: card.kind, label: card.label, day: card.day, direction: card.direction,
-    pending: card.pending, unread: card.unread, before, href: `${MOVES_PATH}#${moveAnchor(card.id)}`,
+    pending: card.pending, unread: card.unread, point, href: `${MOVES_PATH}#${moveAnchor(card.id)}`,
   }
 }
 

@@ -77,7 +77,7 @@ function MiniShelf({ columns }: { columns: readonly { id: string; name: string; 
 /** The shelf before there is a catalogue to draw (or while it cannot be
  *  read): the board's five columns as empty slots, unlabelled, so the tile
  *  keeps its shape and claims no product. */
-const GHOST = [6, 6, 6, 6, 6]
+const GHOST = [8, 8, 8, 8, 8]
 function GhostShelf() {
   return (
     <div aria-hidden data-shelf="ghost" className="grid gap-1.5 max-sm:hidden" style={{ gridTemplateColumns: `repeat(${GHOST.length}, minmax(0, 1fr))` }}>

@@ -10,7 +10,7 @@ import { MOVES_PATH, newestMove, type MoveCard } from './moves'
 import { withCatalogueShelf, type TopProducts } from './products'
 import { topVoicesOf } from './voices'
 import { VOICES_FIXTURES } from './voices-fixture'
-import type { CatalogueRead } from '../../products/types'
+import type { CatalogueRead, ProductCatalogue } from '../../products/types'
 
 // THE PARITY PASS (13 Oct): what the Dashboard's loader adds so each tile
 // keeps the board's shape when its data is thin. Each addition is optional on
@@ -32,10 +32,17 @@ const CATALOGUE: CatalogueRead = {
 const base = (o: Partial<TopProducts>): TopProducts => ({ state: 'not_on', monthWords: 'September', standout: null, href: '/dashboard/products', ...o })
 
 describe('Your products: the unshaded shelf where the month was not read', () => {
-  it('not switched on, or the month not read: each category in the shelf\'s order with how many products it holds, none empty', () => {
-    const want = [{ id: 'g-liners', name: 'Liners', products: 2 }, { id: 'g-feet', name: 'Feet', products: 1 }]
+  it('not switched on, or the month not read: every category in the page\'s order (sort, then name) with how many products it holds, an empty one kept', () => {
+    const want = [{ id: 'g-liners', name: 'Liners', products: 2 }, { id: 'g-feet', name: 'Feet', products: 1 }, { id: 'g-empty', name: 'Empty', products: 0 }]
     expect(withCatalogueShelf(base({ state: 'not_on' }), CATALOGUE).catalogue).toEqual(want)
     expect(withCatalogueShelf(base({ state: 'quiet', note: 'unread' }), CATALOGUE).catalogue).toEqual(want)
+  })
+
+  it('orders by sort, then name, whatever order the catalogue arrives in', () => {
+    const read: CatalogueRead = { state: 'ready', catalogue: { ...(CATALOGUE as { catalogue: ProductCatalogue }).catalogue, groups: [
+      { id: 'b', name: 'Bracing', sort: 2 }, { id: 'k', name: 'Knees', sort: 1 }, { id: 'a', name: 'Arms', sort: 2 },
+    ], products: [] } }
+    expect(withCatalogueShelf(base({ state: 'not_on' }), read).catalogue!.map((c) => c.name)).toEqual(['Knees', 'Arms', 'Bracing'])
   })
 
   it('leaves alone a tile that read its month, failed, or has no catalogue', () => {
@@ -54,21 +61,27 @@ describe('Your products: the unshaded shelf where the month was not read', () =>
 })
 
 describe('Your moves: the newest move, where none has a comparison to print', () => {
-  it('the newest by its day, with the latest month before it and why its own side waits', () => {
-    const cards: MoveCard[] = [
-      { ...MOVE_CARDS[0], id: 'older', day: '2026-09-14' },
-      {
-        ...MOVE_CARDS[0], id: 'newest', day: '2026-10-05', compare: null, unread: null, pending: '2026-10-01',
-        points: [
-          { month: '2026-08-01', role: 'before', k: 10, n: 400, soFar: false },
-          { month: '2026-09-01', role: 'before', k: 19, n: 521, soFar: false },
-        ],
-      },
-    ]
-    const n = newestMove(cards)!
-    expect(n).toMatchObject({ id: 'newest', pending: '2026-10-01', unread: null, before: { month: '2026-09-01', k: 19, n: 521 }, href: `${MOVES_PATH}#move-newest` })
+  const pending: MoveCard = {
+    ...MOVE_CARDS[0], id: 'newest', day: '2026-10-05', compare: null, unread: null, pending: '2026-10-01',
+    points: [
+      { month: '2026-08-01', role: 'before', k: 10, n: 400, soFar: false },
+      { month: '2026-09-01', role: 'before', k: 19, n: 521, soFar: false },
+    ],
+  }
+
+  it('the newest by its day; its own month not read: the latest month before it, as Your moves prints it', () => {
+    const n = newestMove([{ ...MOVE_CARDS[0], id: 'older', day: '2026-09-14' }, pending])!
+    expect(n).toMatchObject({ id: 'newest', pending: '2026-10-01', unread: null, point: { month: '2026-09-01', k: 19, n: 521 }, href: `${MOVES_PATH}#move-newest` })
     expect(newestMove([])).toBeNull()
-    expect(newestMove([{ ...cards[1], points: [] }])!.before).toBeNull()
+    expect(newestMove([{ ...pending, points: [] }])!.point).toBeNull()
+  })
+
+  it('a refused comparison prints its later side alone; a move no line can be drawn for prints no level', () => {
+    const refused = MOVE_CARDS.find((c) => c.compare)!
+    const r = newestMove([{ ...refused, day: '2026-10-09', pending: null, unread: null }])!
+    expect(r.point).toEqual(refused.compare!.after)
+    const lineless = newestMove([{ ...pending, pending: null, unread: 'several' }])!
+    expect(lineless).toMatchObject({ unread: 'several', point: null })
   })
 })
 
@@ -78,10 +91,16 @@ describe('Content: the week\'s most-asked question your posts have not touched, 
 
   it('is the table\'s first row, its week and its month each out of the market\'s', () => {
     const own = { state: 'none' as const, touched: 0, posts: 25, since: '2026-08-01' }
-    expect(topAskedOf(block([row, { ...row, registryId: 'r2', week: 5 }]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own)).toEqual({
+    const groups = [{ key: 'first-time-buyer', name: 'First-time buyer' }]
+    expect(topAskedOf(block([{ ...row, groups }, { ...row, registryId: 'r2', week: 5 }]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own)).toEqual({
       registryId: 'r1', label: 'How the prosthesis works', week: { k: 13, n: 153 }, month: { k: 22, n: 288 },
-      monthWords: 'in October so far', own, href: `${CONTENT_PATH}#${ASKED_ID}`,
+      weekWords: 'this week', monthWords: 'in October so far', groups, own, href: `${CONTENT_PATH}#${ASKED_ID}`,
+      // The table's next row, under it.
+      next: [{ registryId: 'r2', label: 'How the prosthesis works', week: 5, month: 22 }],
     })
+    // A window that is not seven days is never called a week (Content's rule).
+    const days = topAskedOf(block([row]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own, { isWeek: false, first: '2026-09-28', last: '2026-10-11' })!
+    expect(days.weekWords).toBe('between 28 Sep and 11 Oct')
   })
 
   it('prints no level whose side was not read, and nothing with no row', () => {

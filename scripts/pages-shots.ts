@@ -482,6 +482,10 @@ const PAGES: Page[] = [
   // readings of products, no post ideas, a move waiting for its month).
   { key: 'dashboard-thin', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture() }) },
   { key: 'dashboard-thin-sealand', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture({ tenant: 'sealand' }) }) },
+  // The fresh check's states: some weeks drawn and some not, the flag leading
+  // with the week's biggest as its one new conversation, and a move whose
+  // comparison may not print.
+  { key: 'dashboard-thin-mixed', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture({ weeks: 'partial', market: 'flag_new_biggest', moves: 'refused' }) }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------

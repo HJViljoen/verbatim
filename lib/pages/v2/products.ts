@@ -1575,14 +1575,19 @@ export const headerWords = (h: NonNullable<ProductsData['header']>): string =>
   `${fmtInt(h.cameUp)} of your ${fmtInt(h.products)} products came up${h.videos != null ? ` · ${fmtInt(h.videos)} videos about them or their categories` : ''}`
 
 /** The tile's unshaded shelf (parity pass, 13 Oct): where the month's videos
- *  were not read but the catalogue was, each category in the shelf's order
- *  with how many products it holds. Nothing changes where the tile already
- *  carries its shaded shelf, or there is no catalogue. Pure. */
+ *  were not read but the catalogue was, every category, in the page's shelf
+ *  order (by `sort`, then name), with how many products it holds, an empty
+ *  one included. Nothing changes where the tile already carries its shaded
+ *  shelf, or there is no catalogue. Pure. Unify at merge: the tile draws the
+ *  page's own `data.shelf` once parity/products gives it one in these
+ *  states. */
 export function withCatalogueShelf(top: TopProducts, read: CatalogueRead | null): TopProducts {
   const unread = top.state === 'not_on' || (top.state === 'quiet' && top.note === 'unread')
   if (!unread || top.columns || read?.state !== 'ready') return top
   const per = new Map<string, number>()
   for (const p of read.catalogue.products) per.set(p.group_id, (per.get(p.group_id) ?? 0) + 1)
-  const catalogue = read.catalogue.groups.map((g) => ({ id: g.id, name: g.name, products: per.get(g.id) ?? 0 })).filter((c) => c.products > 0)
+  const catalogue = [...read.catalogue.groups]
+    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+    .map((g) => ({ id: g.id, name: g.name, products: per.get(g.id) ?? 0 }))
   return catalogue.length > 0 ? { ...top, catalogue } : top
 }

@@ -16,9 +16,10 @@ import { GROUPS_NOT_RUN } from '@/lib/pages/v2/voices'
 import { DashboardPage, DashboardStream, FAILED_TILE } from '.'
 import { TileBoundary } from './tile-boundary'
 import { AGENT_LINE } from './agent-box'
-import { MARKET_LEADS, MARKET_NONE, MARKET_NOTHING_NEW } from './market-tile'
+import { MARKET_LEADS, MARKET_NONE, MARKET_NOTHING_ELSE_NEW, MARKET_NOTHING_NEW } from './market-tile'
 import { ASKED_TITLE } from './content-tile'
-import { MOVES_FIRST_RUN, MOVES_NO_MOVE, MOVES_NONE_WAITING } from './moves-tile'
+import { MOVES_FIRST_RUN, MOVES_NO_MOVE, MOVES_NO_MOVE_MEMBER, MOVES_NONE_WAITING } from './moves-tile'
+import { MOVE_UNREAD } from '@/lib/pages/v2/moves'
 import { PRODUCTS_LINES, PRODUCTS_SETTINGS, PRODUCTS_UNREAD } from './products-tile'
 import { TILE_FAILED } from './parts'
 import { HomeSkeleton } from './skeleton'
@@ -277,11 +278,12 @@ describe('every tile\'s honest state when its page has nothing', () => {
     assertCopyContract(page(empty))
   })
 
-  it('Voices, no brand counted yet (Össur before its back-read): the "Named most" row keeps its chips, says "not counted yet" once, and prints no count', () => {
+  it('Voices, no brand counted yet (Össur before its back-read): the row keeps its chips as the brands tracked, says "not counted yet" once, prints no count and no ranking', () => {
     const data = dashboardFixture({ named: false })
     assertCopyContract(page(data))
     const v = tileMarkup(render(page(data)), 'voices')
-    expect(markupText(v)).toMatch(/Named most not counted yet Össur Ottobock$/)
+    expect(markupText(v)).toMatch(/Tracked not counted yet Össur Ottobock$/)
+    expect(markupText(v)).not.toContain('Named most')
     expect(markupText(v).match(/not counted yet/g)).toHaveLength(1)
     const row = v.slice(v.indexOf('data-named='))
     expect(row.match(/data-who-chip/g)).toHaveLength(2)
@@ -653,7 +655,9 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
   it('Market: the lead with its chip beside its name, the week\'s biggest, and the new row saying nothing was', () => {
     const t = tileText(markup, 'market')
     expect(t).toMatch(new RegExp(`^Market Open Market → ${MARKET_LEADS} How long a liner lasts 23 of 226 category videos this week`))
-    expect(t).toMatch(new RegExp(`Sweat under the liner 12 · 15 · 21 videos ${MARKET_NOTHING_NEW}$`))
+    // Where nothing more is new, the week's next conversation keeps the
+    // board's second row, and one quiet line says nothing is new.
+    expect(t).toMatch(new RegExp(`Sweat under the liner 12 · 15 · 21 videos Insurance refusals for powered knees 6 · 5 · 19 videos ${MARKET_NOTHING_NEW}$`))
     expect(tileMarkup(markup, 'market')).toMatch(/data-chip="leads" class="bg-accent text-accent-foreground/)
   })
 
@@ -661,7 +665,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     const w = tileMarkup(markup, 'week')
     expect(w.match(/data-week-state="empty"/g)).toHaveLength(8)
     expect(markupText(w.slice(w.indexOf('data-weeks=""'))).match(/Insufficient data/g)).toHaveLength(1)
-    expect(markupText(w)).toMatch(/Biggest subject Not measured yet Moved most Not measured yet$/)
+    expect(markupText(w)).toMatch(/Biggest subject not measured yet Moved most not measured yet$/)
     const s = tileText(render(page(sealand)), 'week')
     expect(s).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318 Moved most no comparison with September yet$/)
   })
@@ -679,13 +683,15 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
 
   it('Content, no post ideas: the week\'s most-asked question your posts have not touched, beside its month, then why there is no idea', () => {
     const t = tileText(markup, 'content')
-    expect(t).toBe(`Content Open → ${ASKED_TITLE}: How long a liner lasts 23 of 226 videos this week 35 of 300 in October so far None of your 25 posts since August touched on it ${IDEAS_EMPTY.not_on}`)
+    expect(t).toBe(`Content Open → ${ASKED_TITLE}: How long a liner lasts 23 of 226 videos this week 35 of 300 in October so far Who asks New amputees in their first year None of your 25 posts since August touched on it Sweat under the liner 21 this week · 30 of 300 in October so far ${IDEAS_EMPTY.not_on}`)
+    // Nothing pins the why line to the tile's foot (it flows).
+    expect(tileMarkup(markup, 'content')).not.toContain('mt-auto')
     expect(tileMarkup(markup, 'content')).toContain('href="/dashboard/content#also-asked"')
   })
 
   it('Your moves: the newest move keeps the panel, its month before printed and its own month left open', () => {
     const t = tileText(markup, 'moves')
-    expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer 4% → Share of market videos on Cost and affordability frustration ?: 19 of 521 in September, the month before\. October reads once the month has been read\.$/)
+    expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer 4% → Share of market videos on Cost and affordability frustration ?: 19 of 521 in September, before the move\. October reads once the month has been read\.$/)
     expect(tileMarkup(markup, 'moves')).toContain('href="/dashboard/moves#move-m-access"')
   })
 
@@ -722,5 +728,77 @@ describe('no tile says "calibration" (ruling U6)', () => {
     const markup = render(page(data))
     for (const t of ['market', 'week', 'voices', 'products', 'content', 'moves', 'agent']) expect(tileText(markup, t), t).not.toMatch(/calibrat/i)
     expect(markupText(markup)).not.toMatch(/calibrat/i)
+  })
+})
+
+// The fresh check on the parity pass (13 Oct).
+describe('the thin states, after the fresh check', () => {
+  const mixed = dashboardThinFixture({ weeks: 'partial', market: 'flag_new_biggest', moves: 'refused' })
+  const markup = render(page(mixed))
+
+  it('keeps the copy contract and the board\'s parts', () => {
+    assertCopyContract(page(mixed))
+    expect(markup.match(/data-tile="/g)).toHaveLength(7)
+  })
+
+  it('Market: a row first heard this week carries its chip, and the line never says "Nothing new" beside it', () => {
+    const t = tileText(markup, 'market')
+    expect(t).toMatch(/How long a liner lasts New 9 · 14 · 23 videos/)
+    expect(t).toMatch(new RegExp(`${MARKET_NOTHING_ELSE_NEW}$`))
+    expect(t).not.toContain(MARKET_NOTHING_NEW)
+    // Wherever any conversation on the tile is new, the line says "else".
+    for (const d of [dashboardFixture({ flagged: false }), mixed, dashboardThinFixture()]) {
+      const m = tileText(render(page(d)), 'market')
+      if (/\bNew\b/.test(m.replace(MARKET_NOTHING_ELSE_NEW, ''))) expect(m).not.toContain(MARKET_NOTHING_NEW)
+    }
+  })
+
+  it('Your market this week: some weeks drawn, the rest low faint wells on the baseline, never as tall as a week', () => {
+    const w = tileMarkup(markup, 'week')
+    expect(w.match(/data-week-state="(?:settled|filling)"/g)).toHaveLength(3)
+    const wells = w.match(/<div aria-hidden="true" class="[^"]*" data-week-state="empty"/g) ?? []
+    expect(wells).toHaveLength(5)
+    for (const x of wells) {
+      expect(x).toContain('h-2')
+      expect(x).not.toMatch(/h-\[\d+%\]/)
+    }
+    // Weeks drawn: the key names the two series, and no gap line.
+    expect(markupText(w)).toContain('Videos Comments')
+    expect(markupText(w)).not.toContain('Insufficient data')
+  })
+
+  it('Your moves: a comparison that may not print shows its latest month alone, with no arrow and no open after side', () => {
+    const m = tileMarkup(markup, 'moves')
+    const panel = m.slice(m.indexOf('data-move="newest"'))
+    expect(markupText(panel)).toMatch(/4% Share of market videos on Cost and affordability frustration ?: 23 of 521 in September, the last full month\.$/)
+    expect(panel).not.toContain('→')
+    expect(panel).not.toContain('border-dashed')
+  })
+
+  it('Your moves: a move no line can be drawn for says why, and prints no level', () => {
+    const t = tileText(render(page(dashboardThinFixture({ moves: 'unread_move' }))), 'moves')
+    expect(t).toMatch(new RegExp(`After your move Create a guided access path, not a standalone price answer ${MOVE_UNREAD.several}$`))
+    expect(t).not.toMatch(/\d+%/)
+  })
+
+  it('Your moves, no move: an owner is told what makes one; a member, who cannot, is not told to accept advice', () => {
+    expect(tileText(render(page(dashboardThinFixture({ moves: 'no_move' }))), 'moves')).toContain(MOVES_NO_MOVE)
+    const member = tileText(render(page(dashboardThinFixture({ moves: 'no_move_member' }))), 'moves')
+    expect(member).toContain(MOVES_NO_MOVE_MEMBER)
+    expect(member).not.toMatch(/Accept/)
+  })
+
+  it('Content: where your posts could not be read, a neutral title (nothing was left out), the week named by Content\'s rule', () => {
+    const base = dashboardThinFixture()
+    const c = base.content.state === 'ok' ? base.content.top : null!
+    for (const own of [null, { state: 'unread' as const, touched: 0, posts: 0, since: '2026-08-01' }]) {
+      const d = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own } } } }
+      assertCopyContract(page(d))
+      const t = tileText(render(page(d)), 'content')
+      expect(t).toMatch(/^Content Open → Asked this week: How long a liner lasts 23 of 226 videos this week/)
+      expect(t).not.toContain(ASKED_TITLE)
+    }
+    const days = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own: null, weekWords: 'between 28 Sep and 11 Oct' } } } }
+    expect(tileText(render(page(days)), 'content')).toMatch(/Asked between 28 Sep and 11 Oct: How long a liner lasts 23 of 226 videos between 28 Sep and 11 Oct/)
   })
 })

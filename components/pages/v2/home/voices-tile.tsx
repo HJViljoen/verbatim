@@ -33,6 +33,8 @@ export const VOICES_BRANDS_FAILED = 'could not be read just now'
  *  13 Oct): the row keeps its place, its brands' chips where the page tracks
  *  them, and says why once. */
 export const VOICES_BRANDS_NOT_COUNTED = 'not counted yet'
+/** The row's name where its chips are the tracked brands, not counted. */
+export const VOICES_TRACKED = 'Tracked'
 export const VOICES_BRANDS_NOT_READ = 'not read for this workspace yet'
 export const voicesNoneNamed = (monthWords: string): string => `none named unprompted in ${monthWords}`
 
@@ -65,8 +67,10 @@ function NamedMost({ top }: { top: TopVoices }) {
   const header = top.brandsState === 'not_counted' && named.length === 0 && tracked.length > 0
   return (
     <div data-named={top.brandsState} className="mt-auto grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 border-t border-track pt-2.5 text-[13.5px] max-sm:hidden">
+      {/* Chips with nothing counted are no ranking: the row is the brands
+          tracked, "not counted yet", never "Named most". */}
       <span className="flex flex-col whitespace-nowrap text-muted-foreground">
-        Named most
+        {header ? VOICES_TRACKED : 'Named most'}
         {header ? <span className="text-[12px] leading-[1.3]">{VOICES_BRANDS_NOT_COUNTED}</span> : null}
       </span>
       <span className="flex flex-wrap items-center justify-end gap-1.5 text-right">{body}</span>

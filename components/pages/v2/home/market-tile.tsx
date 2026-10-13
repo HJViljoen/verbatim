@@ -130,7 +130,9 @@ function Row({ row, top, month }: { row: MarketTop['rows'][number]; top: MarketT
     <Link href={row.href} className={cn(MROW, '-mx-2 rounded-md px-2 text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
       <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
         <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{c.label}</span>
-        {row.kind === 'new' && month && c.isNew
+        {/* Any row first heard this week carries the chip, the week's
+            biggest included. */}
+        {month && c.isNew
           ? <FlagChip size="sm" verdict={newVerdict(c.id, c.label, c.month ?? c.week ?? 0, top.category.month ?? 0, month)} />
           : null}
       </span>
@@ -158,6 +160,33 @@ function Row({ row, top, month }: { row: MarketTop['rows'][number]; top: MarketT
   )
 }
 
+/** Whether anything on the tile was first heard this week: the lead, the
+ *  flag's conversation, or a row. Pure. */
+export function anyNewOnTile(top: MarketTop): boolean {
+  const hero = top.hero
+  const lead = hero ? (hero.kind === 'flag' ? hero.card.conv?.isNew ?? false : hero.kind === 'new' || hero.conv.isNew) : false
+  return lead || top.rows.some((r) => r.conv.isNew)
+}
+
+/** The rows under the lead: the week's biggest, and what was first heard
+ *  this week. Where nothing more was, the board's second row is the week's
+ *  next biggest (`also`), and one quiet line says nothing (else) is new, so
+ *  the tile keeps the board's two rows and its weight (parity pass). */
+function Rows({ top, month }: { top: MarketTop; month: string | null }) {
+  const hasNew = top.rows.some((r) => r.kind === 'new')
+  return (
+    <div className="flex flex-col">
+      {top.rows.map((r) => <Row key={r.conv.id} row={r} top={top} month={month} />)}
+      {!hasNew && top.also ? <Row row={{ kind: 'biggest', conv: top.also.conv, href: top.also.href }} top={top} month={month} /> : null}
+      {hasNew ? null : (
+        <p data-row="nothing-new" className="m-0 border-t border-track pt-2.5 text-[13px] leading-[1.4] text-muted-foreground">
+          {anyNewOnTile(top) ? MARKET_NOTHING_ELSE_NEW : MARKET_NOTHING_NEW}
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** Where the tile's link goes: the lead's panel, else Market. */
 export function marketTileHref(top: MarketTop | null): string {
   const hero = top?.hero
@@ -177,17 +206,7 @@ export function MarketTileView({ read }: { read: TileRead<MarketTile> }) {
             : (
               <>
                 <Hero top={top} marketWeek={read.state === 'ok' ? read.top.marketWeek : null} month={month} />
-                <div className="flex flex-col">
-                  {top.rows.map((r) => <Row key={r.conv.id} row={r} top={top} month={month} />)}
-                  {/* The board's second row is what was first heard this week:
-                      where nothing was (or it leads the tile), the row stays
-                      and says so (parity pass). */}
-                  {top.rows.some((r) => r.kind === 'new') ? null : (
-                    <div data-row="nothing-new" className={cn(MROW, 'text-muted-foreground')}>
-                      <span>{top.hero?.kind === 'new' ? MARKET_NOTHING_ELSE_NEW : MARKET_NOTHING_NEW}</span>
-                    </div>
-                  )}
-                </div>
+                <Rows top={top} month={month} />
               </>
             )}
     </article>

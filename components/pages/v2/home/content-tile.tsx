@@ -1,8 +1,9 @@
+import Link from 'next/link'
 import { NAV_ICON } from '@/components/nav-icons'
 import { RecipeChip } from '@/components/pages/v2/content/parts'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type TopAsked } from '@/lib/pages/v2/content'
+import { groupHref, IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type TopAsked } from '@/lib/pages/v2/content'
 import { tileHref } from '@/lib/pages/home'
 import type { ContentTile, TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
@@ -37,23 +38,29 @@ export function OwnLine({ own }: { own: OwnTouch }) {
  *  row; a question your posts touched is left out, so the title says so
  *  rather than "asked most"). */
 export const ASKED_TITLE = 'Not in your posts yet'
+/** The neutral title where your posts could not be read: nothing was left
+ *  out, so the question is the week's own ("Asked this week"). */
+export const askedTitleUnread = (weekWords: string): string => `Asked ${weekWords}`
 
 /** The tile with no post idea (parity pass, 13 Oct): the board's "Post next"
  *  card, title, count of the week's videos beside its month, and your posts,
  *  on the question the week asked most; why there is no idea, in one quiet
  *  line under it. */
 function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
+  // "Not in your posts yet" only where your posts were read: a failed read
+  // left nothing out, so the title says only that it was asked.
+  const read = asked.own != null && asked.own.state !== 'unread'
   return (
     <>
       <h3 className={TT}>
-        {ASKED_TITLE}: <span data-copy="subject" data-slot="pass_b_theme">{asked.label}</span>
+        {read ? ASKED_TITLE : askedTitleUnread(asked.weekWords)}: <span data-copy="subject" data-slot="pass_b_theme">{asked.label}</span>
       </h3>
       {/* The week's figure only beside its month (decision 1). */}
       {asked.week && asked.month ? (
         <>
           <div data-copy="level" className="flex flex-wrap items-baseline gap-x-2.5">
             <span className={MID}>{fmtInt(asked.week.k)}</span>
-            <span className={MONO_MUTED}>of {fmtInt(asked.week.n)} videos this week</span>
+            <span className={MONO_MUTED}>of {fmtInt(asked.week.n)} videos {asked.weekWords}</span>
           </div>
           <p data-copy="level" className={cn(MONO_MUTED, 'm-0 -mt-2 max-sm:-mt-1')}>
             {fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} {asked.monthWords}
@@ -62,8 +69,35 @@ function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
       ) : asked.month ? (
         <p data-copy="level" className={cn(MONO_MUTED, 'm-0 text-[14px] text-foreground')}>{fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} {asked.monthWords}</p>
       ) : null}
+      {/* Who asks, where the board draws its chips (names only, decision 5). */}
+      {asked.groups.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 text-[12.5px] max-sm:hidden">
+          <span className="text-muted-foreground">Who asks</span>
+          {asked.groups.map((g) => (
+            <Link key={g.key} href={groupHref(g.key)} className="rounded-md bg-inner px-2.5 py-1.5 leading-none text-foreground no-underline hover:bg-track">
+              <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
       {asked.own ? <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground"><OwnLine own={asked.own} /></p> : null}
-      {line ? <p data-content-why="" className="m-0 mt-auto text-[12px] leading-[1.4] text-muted-foreground">{line}</p> : null}
+      {/* What else the week asked, from the same table: the board's weight
+          in rows the data holds, each week beside its month (decision 1). */}
+      {asked.next.length > 0 ? (
+        <div data-asked-next="" className="flex flex-col max-sm:hidden">
+          {asked.next.map((r) => (
+            <Link key={r.registryId} href={asked.href} className="-mx-2 flex flex-col gap-0.5 rounded-md border-t border-track px-2 py-2 text-[14px] leading-[1.35] text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{r.label}</span>
+              {r.week != null && r.month != null && asked.week && asked.month ? (
+                <span className={MONO_MUTED}>
+                  <span data-copy="figure">{fmtInt(r.week)}</span> {asked.weekWords} · <span data-copy="level">{fmtInt(r.month)} of {fmtInt(asked.month.n)}</span> {asked.monthWords}
+                </span>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      ) : null}
+      {line ? <p data-content-why="" className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{line}</p> : null}
     </>
   )
 }
