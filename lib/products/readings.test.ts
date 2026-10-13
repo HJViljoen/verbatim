@@ -152,12 +152,13 @@ const codes = catalogueCodes(FIXTURE_CATALOGUE)
 const code = (id: string) => [...codes.product, ...codes.group].find(([, v]) => v === id)![0]
 /** A stub model: Unity is confirmed under video 2's caption; "how long does it last" is the Pro-Flex XC
  *  under video 1; "does it hiss" is one of the client's sockets, not which; the rest none. */
-const stub: Classifier = async (_s, user) => ({
-  answers: [...user.matchAll(/^(\d+)\. (.*)$/gm)].map(([, n, line]) => (
-    line.startsWith('CHECK') && /vacuum/.test(line) ? { n: Number(n), placement: 'named' as const, products: [code(P('Unity'))], category: null }
-      : /how long/.test(line) ? { n: Number(n), placement: 'named' as const, products: [code(P('Pro-Flex XC'))], category: null }
-        : /hiss/.test(line) ? { n: Number(n), placement: 'unclear' as const, products: [], category: code(G('Sockets')) }
-          : { n: Number(n), placement: 'none' as const, products: [], category: null })),
+const stub: Classifier = async ({ kind, user }) => ({
+  answers: kind === 'confirm'
+    ? [...user.matchAll(/^(\d+)\. WORD .*\| TEXT: (.*)$/gm)].map(([, n, text]) => ({ n: Number(n), means: /vacuum/.test(text) }))
+    : [...user.matchAll(/^(\d+)\. (.*)$/gm)].map(([, n, line]) => (
+      /how long/.test(line) ? { n: Number(n), placement: 'named' as const, products: [code(P('Pro-Flex XC'))], category: null, words: 'it', sure: true }
+        : /hiss/.test(line) ? { n: Number(n), placement: 'unclear' as const, products: [], category: code(G('Sockets')), words: 'it', sure: true }
+          : { n: Number(n), placement: 'none' as const, products: [], category: null, words: null, sure: true })),
   usage: { prompt_tokens: 800, completion_tokens: 100 }, durationMs: 1,
 })
 const askWith = (classifier: Classifier, written: MentionInsert[]): Ask => (items, videos, budgetUsd) => runClassifier({

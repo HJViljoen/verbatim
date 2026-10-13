@@ -26,6 +26,11 @@ export interface ProductsArgs {
   maxReads: number
   out: string | null
   sampleOut: string | null
+  /** A dry run's every read, to a NEW local file, for replaying offline (the
+   *  comments' words included: a local file only, never stored). */
+  dump: string | null
+  /** A dry run replayed from a --dump file: no database is read. */
+  replay: string | null
 }
 
 const firstOfNextMonth = (now: Date): string => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
@@ -39,7 +44,7 @@ const DAY = /^\d{4}-\d{2}-01$/
 export function parseProductsArgs(argv: readonly string[], now: Date = new Date()): ProductsArgs {
   const values: Record<string, string> = {}
   const flags = new Set<string>()
-  const VALUES = ['client', 'project', 'seed', 'from', 'to', 'budget', 'cap', 'max-reads', 'out', 'sample-out', 'sample-model']
+  const VALUES = ['client', 'project', 'seed', 'from', 'to', 'budget', 'cap', 'max-reads', 'out', 'sample-out', 'sample-model', 'dump', 'replay']
   const FLAGS = ['apply', 'confirm', 'back-read', 'dry-run', 'write']
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -76,17 +81,21 @@ export function parseProductsArgs(argv: readonly string[], now: Date = new Date(
     const write = flags.has('write')
     if (write && values.seed) throw new Error(`${PRODUCTS_SCRIPT}: --write reads the catalogue the database holds; --seed is for a dry run before it is loaded`)
     if (write && values['sample-model']) throw new Error(`${PRODUCTS_SCRIPT}: --sample-model is a dry run's hand check; --write asks the model about everything`)
+    if (write && values.dump) throw new Error(`${PRODUCTS_SCRIPT}: --dump is a dry run's`)
+    if (write && values.replay) throw new Error(`${PRODUCTS_SCRIPT}: --replay is a dry run's`)
+    if (values.replay && values.dump) throw new Error(`${PRODUCTS_SCRIPT}: --replay reads a dump; it does not write one`)
     const sampleModel = num('sample-model', 0)
     if (sampleModel > 0 && !values['sample-out']) throw new Error(`${PRODUCTS_SCRIPT}: --sample-model needs --sample-out <new file>`)
     mode = { kind: 'back-read', write, seed: values.seed ?? null, sampleModel: Math.trunc(sampleModel) }
   } else {
+    if (values.replay) throw new Error(`${PRODUCTS_SCRIPT}: --replay belongs to --back-read --dry-run`)
     if (!values.seed) throw new Error(`${PRODUCTS_SCRIPT}: say what to do: --seed <file> [--apply], or --back-read --dry-run | --write`)
     if (flags.has('write') || flags.has('dry-run')) throw new Error(`${PRODUCTS_SCRIPT}: a seed load is dry unless --apply; --write and --dry-run belong to --back-read`)
     mode = { kind: 'seed', seed: values.seed, apply: flags.has('apply') }
   }
   // Production is read only with --confirm (the probe goes first).
   const confirm = flags.has('confirm')
-  if (project === 'mkwjlckescdveosvrvaq' && !confirm) throw new Error(`${PRODUCTS_SCRIPT}: reading production needs --confirm (a timed probe goes first)`)
+  if (project === 'mkwjlckescdveosvrvaq' && !confirm && !values.replay) throw new Error(`${PRODUCTS_SCRIPT}: reading production needs --confirm (a timed probe goes first)`)
   const sampling = mode.kind === 'back-read' && mode.sampleModel > 0
   return {
     clientId, project: project as ProjectRef, confirm, mode, from, to,
@@ -95,6 +104,8 @@ export function parseProductsArgs(argv: readonly string[], now: Date = new Date(
     maxReads: Math.trunc(num('max-reads', 80)),
     out: values.out ?? null,
     sampleOut: values['sample-out'] ?? null,
+    dump: values.dump ?? null,
+    replay: values.replay ?? null,
   }
 }
 

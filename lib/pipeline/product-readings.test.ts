@@ -56,8 +56,8 @@ function admin(opts: { schema?: boolean; catalogue?: boolean; frozenDenominator?
 }
 
 const codes = catalogueCodes(FIXTURE_CATALOGUE)
-const stub: Classifier = async (_s, user) => ({
-  answers: [...user.matchAll(/^(\d+)\. (.*)$/gm)].map(([, n]) => ({ n: Number(n), placement: 'named' as const, products: [[...codes.product].find(([, id]) => id === P('Pro-Flex XC'))![0]], category: null })),
+const stub: Classifier = async ({ user }) => ({
+  answers: [...user.matchAll(/^(\d+)\. (.*)$/gm)].map(([, n]) => ({ n: Number(n), placement: 'named' as const, products: [codes.productOf.get(P('Pro-Flex XC'))!], category: null, words: 'it', sure: true })),
   usage: { prompt_tokens: 900, completion_tokens: 60 }, durationMs: 1,
 })
 

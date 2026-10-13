@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -48,7 +48,10 @@ import {
 //      send (lib/products/classify.ts estimateBatchUsd; no model is called).
 //      --seed takes the catalogue from the seed file, for a dry run before
 //      the migration is applied or the seed loaded. --out <new file> writes
-//      the plan's counts (no comment's words) to a local file.
+//      the plan's counts (no comment's words) to a local file; --dump <new
+//      file> every read (the words included) for replaying the pass offline,
+//      and --replay <that file> runs the dry run again from it, reading no
+//      database (a revised seed or prompt measured on the same texts).
 //      THE HAND CHECK: --sample-model <n> --sample-out <new file> [--budget 1]
 //      ALSO asks the model about a fixed sample of n of the generic names and
 //      n of the classifier's comments (nothing written to the database,
@@ -216,6 +219,46 @@ async function seedMode(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
 
 // ---- 2 and 3. the back-read --------------------------------------------------------------------
 
+/** Every read a dry run made (--dump), keyed by what it asked. */
+interface Recording {
+  candidates: Candidate[]
+  monthVideos: Record<string, unknown>
+  videos: ProductVideoRow[]
+  comments: ProductCommentRow[]
+  rivalFound: string[]
+}
+
+/** A dump's reads, replayed: no database. */
+function replayIO(rec: Recording): ProductReadIO {
+  const found = new Set(rec.rivalFound)
+  return {
+    engine: 'are',
+    candidates: async () => rec.candidates,
+    monthVideos: async (m) => (rec.monthVideos[m] ?? null) as Awaited<ReturnType<ProductReadIO['monthVideos']>>,
+    videos: async (ids) => { const want = new Set(ids); return rec.videos.filter((v) => want.has(v.id)) },
+    comments: async (vs) => {
+      const want = new Set(vs.map((v) => `${v.platform}\u0000${v.video_id}`))
+      const seen = new Set<string>()
+      return rec.comments.filter((c) => want.has(`${c.platform}\u0000${c.video_id}`) && !seen.has(c.id) && seen.add(c.id))
+    },
+    held: async () => null,
+    tags: async () => null,
+    rivalFound: async () => found,
+  }
+}
+
+/** The IO, recording what it returns into `rec` (a dry run's --dump). */
+function recorded(io: ProductReadIO, rec: Recording): ProductReadIO {
+  return {
+    ...io,
+    candidates: async (p) => { const r = await io.candidates(p); rec.candidates.push(...r); return r },
+    monthVideos: async (m) => { const r = await io.monthVideos(m); rec.monthVideos[m] = r; return r },
+    videos: async (ids) => { const r = await io.videos(ids); rec.videos.push(...r); return r },
+    comments: async (vs) => { const r = await io.comments(vs); rec.comments.push(...r); return r },
+    rivalFound: async () => { const r = await io.rivalFound(); rec.rivalFound.push(...r); return r },
+  }
+}
+
 function scriptIO(admin: SupabaseClient, args: ProductsArgs, ration: Ration, fromSeed: boolean): ProductReadIO {
   const window = { from: args.from, to: args.to }
   return {
@@ -362,7 +405,12 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   if (args.mode.kind !== 'back-read') return
   const mode = args.mode
   let catalogue: ProductCatalogue
-  if (mode.seed) {
+  const replay = args.replay ? JSON.parse(readFileSync(args.replay, 'utf8')) as Recording & { catalogue: ProductCatalogue; clientName: string; clientId: string } : null
+  if (replay && replay.clientId !== args.clientId) throw new Error(`${NAME}: ${args.replay} is client ${replay.clientId}, not ${args.clientId}`)
+  if (replay && !mode.seed) {
+    catalogue = replay.catalogue
+    console.log(`  catalogue: the dump's (${catalogue.version})`)
+  } else if (mode.seed) {
     catalogue = seedCatalogue(await loadSeed(mode.seed))
     console.log(`  catalogue: from the seed ${mode.seed} (${catalogue.groups.length} categories, ${catalogue.products.length} products, ${catalogue.aliases.length} names; ids and version are the seed's, never stored)`)
   } else {
@@ -373,9 +421,11 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
     catalogue = read.catalogue
     console.log(`  catalogue: ${catalogue.version} (${catalogue.groups.length} categories, ${catalogue.products.length} products, ${catalogue.aliases.length} names)`)
   }
-  ration.spend(1, 'the client\'s name')
-  const clientName = await clientNameOf(admin, args.clientId)
-  const io = scriptIO(admin, args, ration, !!mode.seed)
+  if (!replay) ration.spend(1, 'the client\'s name')
+  const clientName = replay ? replay.clientName : await clientNameOf(admin, args.clientId)
+  const rec: Recording | null = args.dump ? { candidates: [], monthVideos: {}, videos: [], comments: [], rivalFound: [] } : null
+  const baseIO = replay ? replayIO(replay) : scriptIO(admin, args, ration, !!mode.seed)
+  const io = rec ? recorded(baseIO, rec) : baseIO
   const months = monthsOf(args.from, args.to)
   const sampled: { items: ClassifyItem[]; result: RunClassifyResult }[] = []
   let sampleSpend = 0
@@ -416,7 +466,7 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   console.log(`  the classifier would read ${pass.queue.length} comments under the relevant videos (${avgQueuePerVideo.toFixed(1)} a video)`)
   if (priceAll) {
     const waiting = pass.waitingOnConfirm.size * avgQueuePerVideo * perItem
-    console.log(`  PRICE (gpt-4.1-mini, from the prompts, no call made): ${usd(priceAll.usd)} for ${priceAll.calls} calls (${priceAll.inputTokens.toLocaleString('en-US')} input and at most ${priceAll.outputTokens.toLocaleString('en-US')} output tokens); up to ${usd(waiting)} more for the comments under the ${pass.waitingOnConfirm.size} videos the confirm may make relevant; total up to ${usd(priceAll.usd + waiting)}. The provider's prompt cache lowers the input part.`)
+    console.log(`  PRICE (gpt-4.1-mini for the comments, gpt-4.1 for the generic names; from the prompts, no call made): ${usd(priceAll.usd)} for ${priceAll.calls} calls (${priceAll.inputTokens.toLocaleString('en-US')} input and at most ${priceAll.outputTokens.toLocaleString('en-US')} output tokens); up to ${usd(waiting)} more for the comments under the ${pass.waitingOnConfirm.size} videos the confirm may make relevant; total up to ${usd(priceAll.usd + waiting)}. The provider's prompt cache lowers the input part.`)
   }
   printMonths(mode.write ? pass.rows : rulesOnlyRows(args.clientId, pass, catalogue), catalogue, months, mode.write ? 'THE MONTHS (rules, confirm and classifier):' : 'THE MONTHS BY THE RULES ALONE (the confirm and the classifier add to these):')
 
@@ -436,6 +486,14 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
       waitingOnConfirm: pass.waitingOnConfirm.size, price: priceAll, months: mode.write ? pass.rows : rulesOnlyRows(args.clientId, pass, catalogue),
     }, null, 1))
     console.log(`  the plan: ${args.out}`)
+  }
+  if (rec && args.dump) {
+    // The comments under the videos the confirm may make relevant too, so an
+    // offline replay can read every video a confirm could open.
+    const waiting = [...pass.waitingOnConfirm].map((id) => pass.videoRows.get(id)).filter((v): v is ProductVideoRow => !!v)
+    if (waiting.length) await io.comments(waiting.map((v) => ({ platform: v.platform, video_id: v.video_id })))
+    writeNew(args.dump, JSON.stringify({ readAt: new Date().toISOString(), clientId: args.clientId, clientName, window: { from: args.from, to: args.to }, catalogue, ...rec }))
+    console.log(`  the dump: ${args.dump} (${rec.candidates.length} scan rows, ${rec.videos.length} videos, ${rec.comments.length} comments; local only)`)
   }
   if (!mode.write) { console.log(`\n${NAME}: DRY: nothing written.`); return }
 
@@ -469,13 +527,16 @@ async function insertRows(admin: SupabaseClient, rows: readonly MentionInsert[])
 async function main(): Promise<void> {
   const argv = process.argv.slice(2)
   const args = parseProductsArgs(argv)
-  assertProject(args, process.env.NEXT_PUBLIC_SUPABASE_URL, NAME)
+  if (!args.replay) assertProject(args, process.env.NEXT_PUBLIC_SUPABASE_URL, NAME)
   const command = `scripts/products.ts ${argv.join(' ')}`
   const writes = (args.mode.kind === 'seed' && args.mode.apply) || (args.mode.kind === 'back-read' && args.mode.write)
-  console.log(`${NAME}: ${writes ? 'WRITE' : 'read-only'} on ${MARKET_FIRST_PROJECTS[args.project]} ${args.project}, client ${args.clientId}`)
-  const admin = createAdminClient()
+  console.log(args.replay
+    ? `${NAME}: replaying ${args.replay} (no database is read), client ${args.clientId}`
+    : `${NAME}: ${writes ? 'WRITE' : 'read-only'} on ${MARKET_FIRST_PROJECTS[args.project]} ${args.project}, client ${args.clientId}`)
+  // A replay reads no database: the client is never built.
+  const admin = args.replay ? (null as unknown as SupabaseClient) : createAdminClient()
   const ration = new Ration(args.maxReads)
-  if (args.confirm) await probe(admin, args.clientId, ration)
+  if (args.confirm && !args.replay) await probe(admin, args.clientId, ration)
   if (args.mode.kind === 'seed') await seedMode(admin, args, ration, command)
   else await backRead(admin, args, ration, command)
   console.log(`${NAME}: ${ration.n} reads`)

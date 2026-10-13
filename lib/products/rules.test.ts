@@ -85,6 +85,11 @@ describe('readText: what one text places', () => {
     expect(placed('ossur liners are the best')).toEqual(['unclear:Liners'])
     const far = `Össur ${'and a very long story about the clinic visit '.repeat(2)}and then liners`
     expect(placed(far)).toEqual(['unbranded:Liners'])
+    // a hashtag is a tag on the post, not a word qualifying the product
+    expect(placed('RoadKnee hydraulic knee for sale #ossur #prostheticknee')).toEqual(['unbranded:Knees'])
+    // nor across a phrase break: a list of brands is not one product
+    expect(placed('Metiz prosthetic knee | Ossur foot')).toEqual(['unbranded:Knees'])
+    expect(placed('Össur. Then the prosthetic knee')).toEqual(['unbranded:Knees'])
   })
 
   it('never matches inside a word: eyeliner is not a liner', () => {

@@ -6,15 +6,12 @@ import type { MonthVideo } from '../provenance/searches'
 import { chunkByAudienceMonth, mergeMonthRows, monthStartOf, type MergeResult } from '../reading/monthly'
 import type { StoredFreeze } from '../reading/types'
 import { selectAll } from '../supabase-admin'
-import {
-  batchItems, buildSystemPrompt, buildUserPrompt, estimateBatchUsd, PRODUCT_MODEL_RULE_VERSION,
-  type ClassifyItem, type RunClassifyResult, type VideoContext,
-} from './classify'
+import { callUsd, planCalls, PRODUCT_MODEL_RULE_VERSION, type ClassifyItem, type RunClassifyResult, type VideoContext } from './classify'
 import {
   classifierQueue, commentKey, contentKey, keyOfRow, mentionKey, planRules, relevantVideos, standingPlacements, tagKeys,
   type CommentText, type ConfirmItem, type ContentField, type MentionInsert, type PlacedRow, type QueueItem, type StandingText, type TextKey,
 } from './match'
-import { cataloguePattern, compileCatalogue, type CompiledCatalogue } from './rules'
+import { cataloguePattern, compileCatalogue, PRODUCT_RULE_VERSION, type CompiledCatalogue } from './rules'
 import {
   MONTH_PRODUCT_READINGS_ON_CONFLICT, standingTags, TABLE_MONTH_PRODUCT_READINGS,
   type MonthProductReadingRow, type ProductCatalogue, type ProductContentField, type ProductTagRow,
@@ -178,18 +175,17 @@ const monthsIn = (from: string, to: string): string[] => {
 
 /** The price of asking these items, from their prompts. PURE. */
 export function priceItems(items: readonly ClassifyItem[], clientName: string, catalogue: ProductCatalogue, compiled: CompiledCatalogue, videos: ReadonlyMap<string, VideoContext>): { calls: number; inputTokens: number; outputTokens: number; usd: number } {
-  const system = buildSystemPrompt(clientName, catalogue)
   let input = 0
   let output = 0
   let usd = 0
-  const batches = batchItems(items)
-  for (const b of batches) {
-    const e = estimateBatchUsd(system, buildUserPrompt(b, videos, catalogue, compiled), b.length)
+  const calls = planCalls(items, { clientName, catalogue, compiled, videos })
+  for (const c of calls) {
+    const e = callUsd(c)
     input += e.input
     output += e.output
     usd += e.usd
   }
-  return { calls: batches.length, inputTokens: input, outputTokens: output, usd }
+  return { calls: calls.length, inputTokens: input, outputTokens: output, usd }
 }
 
 /** The video contexts the classifier shows, from the rule placements. */
@@ -197,10 +193,15 @@ function contextsOf(videos: ReadonlyMap<string, ProductVideoRow>, standing: Read
   const out = new Map<string, VideoContext>()
   for (const [id, v] of videos) {
     const t = standing.get(contentKey(id))
-    const names = (t?.placements ?? []).map((p) => (p.productId
+    const ps = t?.placements ?? []
+    const names = ps.map((p) => (p.productId
       ? `${compiled.productName.get(p.productId) ?? '?'} (${compiled.groupName.get(p.groupId) ?? '?'})`
       : `${compiled.groupName.get(p.groupId) ?? '?'}${p.placement === 'unclear' ? ` (one of the client's, not which)` : ''}`))
-    out.set(id, { videoId: id, caption: v.caption, names: [...new Set(names)] })
+    out.set(id, {
+      videoId: id, caption: v.caption, names: [...new Set(names)],
+      products: [...new Set(ps.filter((p) => p.productId).map((p) => p.productId!))],
+      clientGroups: [...new Set(ps.filter((p) => p.placement !== 'unbranded').map((p) => p.groupId))],
+    })
   }
   return out
 }
@@ -256,7 +257,11 @@ export async function placeProducts(args: {
   const tagRows = (await io.tags()) ?? []
   const tags = standingTags(tagRows)
   const tagMonths = new Map(held.filter((h) => h.method === 'tag' && h.tag_id && h.comment_month).map((h) => [h.tag_id!, h.comment_month!]))
-  const mine = held.filter((h) => h.catalogue_version === compiled.version && h.method !== 'tag')
+  // Like-for-like: the rows of this catalogue version made by THIS matcher and
+  // THIS prompt (a new version of either is read afresh, never mixed in).
+  const mine = held.filter((h) => h.catalogue_version === compiled.version && (
+    (h.method === 'rule' && h.rule_version === PRODUCT_RULE_VERSION)
+    || ((h.method === 'model' || h.method === 'confirmed') && h.rule_version === PRODUCT_MODEL_RULE_VERSION)))
   const active = { groups: new Set(catalogue.groups.map((g) => g.id)), products: new Set(catalogue.products.map((p) => p.id)) }
   const heldKeys = new Set(mine.map(mentionKey as (r: HeldRow) => string))
   const answered = new Set(mine.filter((h) => h.method === 'confirmed' || h.method === 'model').map(keyOfRow))
@@ -363,6 +368,7 @@ function mergeResults(a: RunClassifyResult | null, b: RunClassifyResult | null):
   return {
     rows: [...a.rows, ...b.rows], asked: a.asked + b.asked, answered: a.answered + b.answered, unplaced: a.unplaced + b.unplaced,
     deferred: a.deferred + b.deferred, failed: a.failed + b.failed, failedCalls: a.failedCalls + b.failedCalls, costUsd: a.costUsd + b.costUsd,
+    downgraded: a.downgraded + b.downgraded,
     rateLimited: a.rateLimited || b.rateLimited, errors: [...a.errors, ...b.errors],
   }
 }

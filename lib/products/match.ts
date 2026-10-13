@@ -90,9 +90,12 @@ const monthStart = (d: string): string => `${d.slice(0, 7)}-01`
 
 /** The words around index `at`: up to half of `size` before it. */
 export function excerptAround(text: string, at: number, size = EXCERPT_CHARS): string {
-  const from = Math.max(0, at - Math.floor(size / 2))
-  const piece = text.slice(from, from + size)
-  return `${from > 0 ? '…' : ''}${piece}${from + size < text.length ? '…' : ''}`
+  // Cut between code points, so an emoji is never halved into a lone surrogate.
+  const chars = Array.from(text)
+  const pos = Array.from(text.slice(0, at)).length
+  const from = Math.max(0, pos - Math.floor(size / 2))
+  const piece = chars.slice(from, from + size).join('')
+  return `${from > 0 ? '…' : ''}${piece}${from + size < chars.length ? '…' : ''}`
 }
 
 const firstIndexOf = (text: string, aliases: readonly CompiledAlias[]): number => {
@@ -141,7 +144,7 @@ export function planRules(clientId: string, compiled: CompiledCatalogue, content
     let generic: { field: ProductContentField; text: string; aliases: CompiledAlias[] } | null = null
     const genericAliases = new Map<string, CompiledAlias>()
     for (const f of fields) {
-      const r = readText(compiled, f.text)
+      const r = readText(compiled, f.text, { clientNear: f.field !== 'hashtags' })
       for (const p of r.placements) {
         const t = targetOf(p)
         if (seen.has(t)) continue

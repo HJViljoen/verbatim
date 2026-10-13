@@ -23,8 +23,10 @@ import type { AliasKind, CatalogueAlias, Placement, ProductCatalogue } from './t
 //     (a product family, "Pro-Flex")        in that category, not which
 //   a category's `category_word`            unbranded: the category in general,
 //                                           UNLESS the client's own name stands
-//                                           within CLIENT_NEAR characters of it
-//                                           ("my Össur liner"): then unclear
+//                                           within CLIENT_NEAR characters of it,
+//                                           in the same phrase, as a word, not a
+//                                           hashtag ("my Össur liner"): then
+//                                           unclear
 // A match inside a longer match is not a match ("Pro-Flex" inside "Pro-Flex
 // XC"; "Pro-Flex XC" inside "Pro-Flex XC Torsion"): the longest name wins. In
 // one text, a category's strongest placement stands (named over unclear over
@@ -195,21 +197,32 @@ export function matchAliases(compiled: CompiledCatalogue, text: string | null | 
   return found.filter((f) => !found.some((g) => g !== f && g.start <= f.start && g.end >= f.end && g.end - g.start > f.end - f.start))
 }
 
-/** Where the client's own name stands in `text` (its brand rule's matches). */
+/** Where the client's own name stands in `text` (its brand rule's matches),
+ *  as a word: a hashtag (#ossur) is a tag on the post, not a word qualifying
+ *  the product beside it ("RoadKnee Hydraulic Knee … #ossur #HydraulicKnee"
+ *  is not one of Össur's knees; the hand check of 13 Oct). */
 function clientSpans(compiled: CompiledCatalogue, text: string): { start: number; end: number }[] {
   if (!compiled.client) return []
   const out: { start: number; end: number }[] = []
   const re = compiled.client.re
   re.lastIndex = 0
   for (let m = re.exec(text); m; m = re.exec(text)) {
-    out.push({ start: m.index, end: m.index + m[0].length })
+    if (text[m.index - 1] !== '#') out.push({ start: m.index, end: m.index + m[0].length })
     if (m[0].length === 0) re.lastIndex++
   }
   return out
 }
 
-const near = (a: { start: number; end: number }, b: { start: number; end: number }): boolean =>
-  (b.start >= a.end ? b.start - a.end : a.start >= b.end ? a.start - b.end : 0) <= CLIENT_NEAR
+/** Characters that end a phrase: the client's name on one side of one and a
+ *  category word on the other are two phrases ("Metiz Hydraulic Knee | Ossur
+ *  Foot" is not an Össur knee; the hand check of 13 Oct). */
+const PHRASE_BREAK = /[|/•·\n.!?;]/
+
+const near = (text: string, a: { start: number; end: number }, b: { start: number; end: number }): boolean => {
+  const [x, y] = a.start <= b.start ? [a, b] : [b, a]
+  const gap = Math.max(0, y.start - x.end)
+  return gap <= CLIENT_NEAR && !PHRASE_BREAK.test(text.slice(x.end, y.start))
+}
 
 /** What a text's rules place: per category, its strongest placement, and
  *  every product it names. */
@@ -234,17 +247,18 @@ const RANK: Record<Exclude<Placement, 'none'>, number> = { named: 3, unclear: 2,
  * What the rules read in one text (see the header). A generic name's match is
  * set aside for the confirm call and places nothing here. PURE.
  */
-export function readText(compiled: CompiledCatalogue, text: string | null | undefined): TextReading {
+export function readText(compiled: CompiledCatalogue, text: string | null | undefined, opts: { clientNear?: boolean } = {}): TextReading {
   const matches = matchAliases(compiled, text)
   if (matches.length === 0) return { placements: [], generic: [] }
-  const client = clientSpans(compiled, text ?? '')
+  // A bag of tags (the hashtags field) has no phrases: nothing in it is near.
+  const client = opts.clientNear === false ? [] : clientSpans(compiled, text ?? '')
   const generic = new Map<string, CompiledAlias>()
   // category → the strongest rank seen, and what holds it
   const byGroup = new Map<string, { rank: number; named: Map<string, string[]>; aliases: string[] }>()
   for (const m of matches) {
     if (m.alias.needsConfirm) { generic.set(m.alias.aliasId, m.alias); continue }
     let placement = m.alias.placement
-    if (placement === 'unbranded' && client.some((c) => near(c, m))) placement = 'unclear'
+    if (placement === 'unbranded' && client.some((c) => near(text ?? '', c, m))) placement = 'unclear'
     const g = byGroup.get(m.alias.groupId) ?? { rank: 0, named: new Map<string, string[]>(), aliases: [] }
     if (placement === 'named' && m.alias.productId) {
       g.named.set(m.alias.productId, [...(g.named.get(m.alias.productId) ?? []), m.alias.alias])

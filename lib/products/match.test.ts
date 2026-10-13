@@ -39,6 +39,13 @@ describe('planRules: the rows the rules give', () => {
     expect(content.every((r) => r.comment_id === null && r.comment_month === null)).toBe(true)
   })
 
+  it('the hashtags field is a bag of tags: the client\'s name in it qualifies no category word', () => {
+    const tags = planRules(OSSUR_CLIENT_ID, compiled, [{ videoId: V2, field: 'hashtags', text: 'ossur prosthetic liner carbon' }], [])
+    expect(tags.rows.map((r) => r.placement)).toEqual(['unbranded'])
+    const caption = planRules(OSSUR_CLIENT_ID, compiled, [{ videoId: V2, field: 'caption', text: 'my ossur prosthetic liner' }], [])
+    expect(caption.rows.map((r) => r.placement)).toEqual(['unclear'])
+  })
+
   it('a comment row per comment and target, dated by the first of its month', () => {
     const comment = plan.rows.filter((r) => r.source === 'comment')
     expect(comment).toHaveLength(1)
