@@ -8,6 +8,7 @@ import { playbookAudience, type PlaybookVideo } from '../pages/playbook'
 import { rowWindow, type WindowColumns } from '../pipeline/run-bookkeeping'
 import { POST_IDEAS_BUDGET_USD, POST_IDEAS_RUN_MARGIN_USD, postIdeasEnabled, RUN_MODEL_BUDGET_USD } from '../config'
 import { runSpendSoFar } from '../pipeline/run-costs'
+import { selectAll } from '../supabase-admin'
 import { allowTokens } from '../prose/scrub'
 import { prevMonth } from '../reading/month-key'
 import { ownedPosts } from '../reading/owned'
@@ -26,7 +27,7 @@ import {
 } from './select'
 import { isMissingPostIdeas, POST_IDEAS_ON_CONFLICT, TABLE_POST_IDEAS } from './types'
 import {
-  buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PROMPT_VERSION, PostIdeasBudgetError, type PostIdeasOutput,
+  buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PASS, POST_IDEAS_PROMPT_VERSION, PostIdeasBudgetError, PostIdeasWriteError, type PostIdeasOutput,
 } from './write'
 
 // The week's post ideas, built and stored (depth v2, T13; plan decision 5).
@@ -77,6 +78,13 @@ import {
 // own budget stop; the call is then held to what is left (`postIdeasRoom`, at
 // most the cap), attempt by attempt (lib/post-ideas/write.ts). Either refusal
 // stops FAIL-SOFT: no call, no rows, status `over_budget`, one alert.
+//
+// THE CAP IS PER RUN, NOT PER ATTEMPT (the fix round's check): each Inngest
+// retry of the step starts a fresh call, so the step also reads what this
+// run's earlier attempts already spent on post ideas (`postIdeasSpendSoFar`:
+// `ai_call_log`, pass `post_ideas`, every call logged as it returns) and holds
+// the call to the cap less that. A refusal reports what the attempt really
+// spent (an unparsed answer is paid for), never 0.
 
 /** The step's clock for its one model call, the week read's: the call ends
  *  by 250 s, the save and the alert well inside the route's 300 s. */
@@ -251,15 +259,29 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   }
 }
 
-/** May the step start, with the run having spent `spent` of `budget`? It
- *  needs the step's whole cap and the margin left. Pure. */
-export const postIdeasHeadroom = (spent: number, budget = RUN_MODEL_BUDGET_USD): boolean =>
-  budget - spent >= POST_IDEAS_BUDGET_USD + POST_IDEAS_RUN_MARGIN_USD
+/** What is left of the step's per-run cap after this run's earlier post-ideas
+ *  calls (`ideasSpent`). Pure. */
+export const postIdeasCapLeft = (ideasSpent = 0): number => Math.max(0, POST_IDEAS_BUDGET_USD - ideasSpent)
 
-/** What the call may spend: the step's cap, or what the run's budget leaves
- *  after the margin, whichever is less. Pure. */
-export const postIdeasRoom = (spent: number, budget = RUN_MODEL_BUDGET_USD): number =>
-  Math.max(0, Math.min(POST_IDEAS_BUDGET_USD, budget - POST_IDEAS_RUN_MARGIN_USD - spent))
+/** May the step start, with the run having spent `spent` of `budget` and
+ *  `ideasSpent` of that on post ideas? It needs what is left of its cap, and
+ *  the margin, left under the run's budget, and something left of the cap.
+ *  Pure. */
+export const postIdeasHeadroom = (spent: number, budget = RUN_MODEL_BUDGET_USD, ideasSpent = 0): boolean =>
+  postIdeasCapLeft(ideasSpent) > 0 && budget - spent >= postIdeasCapLeft(ideasSpent) + POST_IDEAS_RUN_MARGIN_USD
+
+/** What the call may spend: what is left of the cap, or what the run's budget
+ *  leaves after the margin, whichever is less. Pure. */
+export const postIdeasRoom = (spent: number, budget = RUN_MODEL_BUDGET_USD, ideasSpent = 0): number =>
+  Math.max(0, Math.min(postIdeasCapLeft(ideasSpent), budget - POST_IDEAS_RUN_MARGIN_USD - spent))
+
+/** What this run has spent on post ideas so far, from the ledger
+ *  (`ai_call_log`, pass `post_ideas`; `productSpendSoFar`'s shape). */
+export async function postIdeasSpendSoFar(admin: SupabaseClient, clientId: string, runId: string): Promise<number> {
+  const rows = await selectAll<{ id: string; cost_usd: number | null }>(() => admin.from('ai_call_log').select('id, cost_usd')
+    .eq('client_id', clientId).eq('run_id', runId).eq('pass', POST_IDEAS_PASS).order('id'))
+  return Math.round(rows.reduce((s, r) => s + Number(r.cost_usd ?? 0), 0) * 10_000) / 10_000
+}
 
 export type PostIdeasStatus = 'ready' | 'thin' | 'held'
 
@@ -360,12 +382,14 @@ export interface PostIdeasStepDeps {
   build: typeof buildPostIdeas
   /** The run's model spend so far (`runSpendSoFar`, ai_call_log). */
   spent: (clientId: string, runId: string) => Promise<number>
+  /** This run's post-ideas spend so far (`postIdeasSpendSoFar`). */
+  ideasSpent: (admin: SupabaseClient, clientId: string, runId: string) => Promise<number>
   save: (admin: SupabaseClient, rows: readonly PostIdeaInsert[]) => Promise<void>
   alert: (subject: string, text: string) => Promise<{ sent: boolean }>
 }
 
 const DEFAULT_DEPS: PostIdeasStepDeps = {
-  enabled: (clientId) => postIdeasEnabled(clientId), company: companyOf, existing: existingPostIdeas, build: buildPostIdeas, spent: runSpendSoFar, save: savePostIdeas, alert: sendAlertEmail,
+  enabled: (clientId) => postIdeasEnabled(clientId), company: companyOf, existing: existingPostIdeas, build: buildPostIdeas, spent: runSpendSoFar, ideasSpent: postIdeasSpendSoFar, save: savePostIdeas, alert: sendAlertEmail,
 }
 
 const FALLBACK = (clientId: string, runId: string) =>
@@ -409,13 +433,13 @@ export async function runPostIdeasStep(
   const who = opts.company ?? (await d.company(admin, opts.clientId).catch(() => opts.clientId))
   // A stop for money: nothing called or stored, the operator told once, and
   // never a throw (a retry would meet the same cap).
-  const overBudget = async (why: string): Promise<PostIdeasStepResult> => {
-    console.warn(`[write-post-ideas] over budget: ${why}`)
+  const overBudget = async (why: string, costUsd = 0): Promise<PostIdeasStepResult> => {
+    console.warn(`[write-post-ideas] over budget ($${costUsd} spent by this attempt): ${why}`)
     await d.alert(
       `Verbatim post ideas not written: ${who}`,
       `The week's post ideas for run ${opts.runId} were not written: ${why}. The run itself is unaffected; the Content page goes on showing the last ideas stored.\n\nClient: ${who} (${opts.clientId})\n\n${FALLBACK(opts.clientId, opts.runId)}`,
     ).catch(() => ({ sent: false }))
-    return { status: 'over_budget', ideas: 0, held: 0, costUsd: 0, error: why }
+    return { status: 'over_budget', ideas: 0, held: 0, costUsd: Math.round(costUsd * 10_000) / 10_000, error: why }
   }
   try {
     const existing = await d.existing(admin, opts.clientId, opts.runId)
@@ -429,11 +453,16 @@ export async function runPostIdeasStep(
     }
     // THE RUN'S HEADROOM, read before anything is called: the step starts
     // only where the run can afford its whole cap and the margin.
-    const spent = await d.spent(opts.clientId, opts.runId)
-    if (!postIdeasHeadroom(spent)) {
-      return await overBudget(`the run has spent $${spent.toFixed(2)} of its $${RUN_MODEL_BUDGET_USD} model budget, and the post ideas may cost up to $${POST_IDEAS_BUDGET_USD.toFixed(2)} with $${POST_IDEAS_RUN_MARGIN_USD.toFixed(2)} kept spare; they were not started, so the run could not trip its budget`)
+    // And what this run's earlier attempts of the step spent on post ideas:
+    // the cap is the run's, not each retry's.
+    const [spent, ideasSpent] = await Promise.all([d.spent(opts.clientId, opts.runId), d.ideasSpent(admin, opts.clientId, opts.runId)])
+    if (postIdeasCapLeft(ideasSpent) <= 0) {
+      return await overBudget(`this run's earlier attempts already spent $${ideasSpent.toFixed(2)} of the post ideas' $${POST_IDEAS_BUDGET_USD.toFixed(2)} cap`)
     }
-    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt, budgetMs: POST_IDEAS_STEP_BUDGET_MS }), maxUsd: postIdeasRoom(spent) })
+    if (!postIdeasHeadroom(spent, RUN_MODEL_BUDGET_USD, ideasSpent)) {
+      return await overBudget(`the run has spent $${spent.toFixed(2)} of its $${RUN_MODEL_BUDGET_USD} model budget, and the post ideas may cost up to $${postIdeasCapLeft(ideasSpent).toFixed(2)} more with $${POST_IDEAS_RUN_MARGIN_USD.toFixed(2)} kept spare; they were not started, so the run could not trip its budget`)
+    }
+    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt, budgetMs: POST_IDEAS_STEP_BUDGET_MS }), maxUsd: postIdeasRoom(spent, RUN_MODEL_BUDGET_USD, ideasSpent) })
     if (built.status === 'thin') {
       console.log(`[write-post-ideas] thin: no question conversation clears the evidence floor; ${built.called ? `the call held every idea as thin ($${built.costUsd})` : 'no call'}, nothing stored`)
       return { status: 'thin', ideas: 0, held: built.held.length, costUsd: built.costUsd }
@@ -450,7 +479,7 @@ export async function runPostIdeasStep(
     return result
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
-    if (e instanceof PostIdeasBudgetError) return await overBudget(message)
+    if (e instanceof PostIdeasBudgetError) return await overBudget(message, e.spentUsd)
     if (!lastAttempt && isTransient(e)) {
       console.warn(`[write-post-ideas] transient failure, the step is retried: ${message}`)
       throw e
@@ -460,6 +489,8 @@ export async function runPostIdeasStep(
       `Verbatim post ideas failed: ${who}`,
       `The week's post ideas for run ${opts.runId} could not be written. The run itself is unaffected; the Content page goes on showing the last ideas stored.\n\nError: ${message}\n\nClient: ${who} (${opts.clientId})\n\n${FALLBACK(opts.clientId, opts.runId)}`,
     ).catch(() => ({ sent: false }))
-    return { status: 'failed', ideas: 0, held: 0, costUsd: 0, error: message }
+    // What the attempts really cost: an answer that would not parse is paid for.
+    const paid = e instanceof PostIdeasWriteError ? Math.round(e.spentUsd * 10_000) / 10_000 : 0
+    return { status: 'failed', ideas: 0, held: 0, costUsd: paid, error: message }
   }
 }

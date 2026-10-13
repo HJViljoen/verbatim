@@ -68,12 +68,17 @@ export function postIdeasSchema() {
   })
 }
 
-export class PostIdeasWriteError extends Error {}
+/** Nothing usable after the attempts made. `spentUsd`: what those attempts
+ *  cost (an answer that would not parse is paid for). */
+export class PostIdeasWriteError extends Error {
+  spentUsd = 0
+}
 
 /** The call was not made: its worst case would not fit what was left of the
- *  cap. Never transient (a retry would meet the same cap). */
+ *  cap. Never transient (a retry would meet the same cap). `spentUsd`: what
+ *  the attempts before it cost, so the step reports its true spend. */
 export class PostIdeasBudgetError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly spentUsd = 0) {
     super(message)
     this.name = 'PostIdeasBudgetError'
   }
@@ -178,6 +183,7 @@ export async function generatePostIdeas(
       throw new PostIdeasBudgetError(
         `the post ideas' call was not made: attempt ${attempt} may cost up to $${worst.toFixed(2)}, and $${Math.max(0, maxUsd - costUsd).toFixed(2)} is left of the $${maxUsd.toFixed(2)} it may spend (it has spent $${costUsd.toFixed(2)})`
         + (lastError ? `; the attempt before it failed: ${lastError}` : ''),
+        costUsd,
       )
     }
     const options = budget.optionsFor('writer')
@@ -224,5 +230,7 @@ export async function generatePostIdeas(
       if (isTimeout(e)) throw asTimeout(e, 'writer', options.timeout)
     }
   }
-  throw new PostIdeasWriteError(`The post ideas could not be written twice over: ${lastError}`, { cause: lastCause })
+  const failed = new PostIdeasWriteError(`The post ideas could not be written twice over: ${lastError}`, { cause: lastCause })
+  failed.spentUsd = costUsd
+  throw failed
 }

@@ -9,7 +9,8 @@ import { WeekReadTimeoutError } from '../written/deadline'
 import type { ParseClient } from '../written/write-model'
 import type { PostIdeaInsert } from './compose'
 import { choosePlay, withHandles } from './select'
-import { buildPostIdeas, finishPostIdeas, ownedFrom, postIdeasHeadroom, postIdeasRoom, runPostIdeasStep, type BuiltPostIdeas, type PostIdeaInputs, type PostIdeasStepDeps } from './step'
+import { buildPostIdeas, finishPostIdeas, ownedFrom, postIdeasCapLeft, postIdeasHeadroom, postIdeasRoom, postIdeasSpendSoFar, runPostIdeasStep, type BuiltPostIdeas, type PostIdeaInputs, type PostIdeasStepDeps } from './step'
+import { fakeDb } from '../test/fake-db'
 import { buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PROMPT_VERSION, postIdeasAttemptMaxUsd, PostIdeasBudgetError, PostIdeasWriteError, type PostIdeasOutput } from './write'
 
 // The `write-post-ideas` step (T13): silent where it should be, fail-soft in
@@ -52,6 +53,7 @@ function deps(over: Partial<PostIdeasStepDeps> = {}) {
     existing: vi.fn(async () => 0),
     build: vi.fn(async () => READY) as unknown as PostIdeasStepDeps['build'],
     spent: vi.fn(async () => 2.4),
+    ideasSpent: vi.fn(async () => 0),
     save: vi.fn(async (_a, rows) => { saved.push([...rows]) }),
     alert: vi.fn(async (subject: string) => { alerts.push(subject); return { sent: true } }),
     ...over,
@@ -235,8 +237,11 @@ describe('the post ideas\' dollar cap and the run\'s headroom (Phase 4 fix round
     // A first attempt that used its whole output and would not parse: the
     // second cannot fit, and is not made.
     const big = vi.fn().mockResolvedValueOnce(unparsed(16_000))
-    await expect(generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts, client: { chat: { completions: { parse: big } } } as unknown as ParseClient }))
-      .rejects.toThrow(/attempt 2 may cost up to/)
+    const refused = await generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts, client: { chat: { completions: { parse: big } } } as unknown as ParseClient }).catch((e: unknown) => e)
+    expect(refused).toBeInstanceOf(PostIdeasBudgetError)
+    expect((refused as Error).message).toMatch(/attempt 2 may cost up to/)
+    // The paid first attempt is carried, so the step reports what it spent.
+    expect((refused as PostIdeasBudgetError).spentUsd).toBeCloseTo((1_000 * 2.5 + 16_000 * 15) / 1e6, 6)
     expect(big).toHaveBeenCalledTimes(1)
     // A cheap first attempt leaves room for the second.
     const small = vi.fn().mockResolvedValueOnce(unparsed(100)).mockResolvedValueOnce({ choices: [{ message: { parsed: OUTPUT } }], usage: { prompt_tokens: 1_000, completion_tokens: 100 } })
@@ -278,6 +283,43 @@ describe('the post ideas\' dollar cap and the run\'s headroom (Phase 4 fix round
     const off = deps({ enabled: vi.fn(() => false) })
     await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, off.d)
     expect(off.d.spent).not.toHaveBeenCalled()
+  })
+
+  it('THE CAP IS PER RUN: a retry after a paid attempt gets only what is left of it, and none once it is spent', async () => {
+    expect(postIdeasCapLeft(0.3)).toBeCloseTo(0.2, 6)
+    expect(postIdeasRoom(2.4, RUN_MODEL_BUDGET_USD, 0.3)).toBeCloseTo(0.2, 6)
+    expect(postIdeasHeadroom(2.4, RUN_MODEL_BUDGET_USD, 0.3)).toBe(true)
+    expect(postIdeasHeadroom(2.4, RUN_MODEL_BUDGET_USD, 0.5)).toBe(false)
+    const retry = deps({ ideasSpent: vi.fn(async () => 0.3) })
+    await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, retry.d)
+    expect(retry.d.ideasSpent).toHaveBeenCalledWith(admin, CLIENT, RUN)
+    const call = (retry.d.build as unknown as { mock: { calls: [SupabaseClient, { maxUsd?: number }][] } }).mock.calls[0][1]
+    expect(call.maxUsd).toBeCloseTo(0.2, 6)
+    const spentOut = deps({ ideasSpent: vi.fn(async () => POST_IDEAS_BUDGET_USD) })
+    const out = await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false, lastAttempt: false }, spentOut.d)
+    expect(out).toMatchObject({ status: 'over_budget', costUsd: 0 })
+    expect(out.error).toMatch(/earlier attempts already spent \$0\.50/)
+    expect(spentOut.d.build).not.toHaveBeenCalled()
+    expect(spentOut.alerts).toEqual(['Verbatim post ideas not written: Össur'])
+  })
+
+  it('reads this run\'s post-ideas spend from the ledger, its own pass only', async () => {
+    const db = fakeDb({ ai_call_log: [
+      { id: 1, client_id: CLIENT, run_id: RUN, pass: 'post_ideas', cost_usd: 0.21 },
+      { id: 2, client_id: CLIENT, run_id: RUN, pass: 'post_ideas', cost_usd: 0.04 },
+      { id: 3, client_id: CLIENT, run_id: RUN, pass: 'pass_a', cost_usd: 3 },
+      { id: 4, client_id: CLIENT, run_id: 'other-run', pass: 'post_ideas', cost_usd: 1 },
+    ] })
+    expect(await postIdeasSpendSoFar(db.client as never, CLIENT, RUN)).toBe(0.25)
+  })
+
+  it('a refusal or a failure after a paid attempt reports what it spent, never 0', async () => {
+    const refused = deps({ build: vi.fn(async () => { throw new PostIdeasBudgetError('the post ideas\' call was not made', 0.2712) }) as unknown as PostIdeasStepDeps['build'] })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, refused.d)).toMatchObject({ status: 'over_budget', costUsd: 0.2712 })
+    const unparsed = new PostIdeasWriteError('could not be written twice over: no parsed output')
+    unparsed.spentUsd = 0.31
+    const failed = deps({ build: vi.fn(async () => { throw unparsed }) as unknown as PostIdeasStepDeps['build'] })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, failed.d)).toMatchObject({ status: 'failed', costUsd: 0.31 })
   })
 
   it('a call the cap refuses mid-build stops the same way, even before the step\'s last attempt', async () => {
