@@ -119,17 +119,37 @@ export function fakeDb(
         return builder
       },
       // PostgREST's `or`, for the shapes the readers use: comma-separated
-      // `col.eq.value`, `col.is.null` and `col.not.is.null`.
+      // `col.eq.value`, `col.is.null` and `col.not.is.null`, and an
+      // `and(…)` group of those (the lineage read: `lineage_id.eq.X,
+      // and(lineage_id.is.null,id.eq.X)`).
       or(expr: string) {
         call.filters.push(`or(${expr})`)
-        const parts = expr.split(',').map((t) => {
+        /** Top-level commas only: a comma inside `and(…)` is the group's. */
+        const split = (e: string): string[] => {
+          const out: string[] = []
+          let depth = 0
+          let at = 0
+          for (let i = 0; i < e.length; i++) {
+            if (e[i] === '(') depth++
+            else if (e[i] === ')') depth--
+            else if (e[i] === ',' && depth === 0) { out.push(e.slice(at, i)); at = i + 1 }
+          }
+          out.push(e.slice(at))
+          return out
+        }
+        const term = (t: string): ((r: Row) => boolean) => {
+          if (t.startsWith('and(') && t.endsWith(')')) {
+            const all = split(t.slice(4, -1)).map(term)
+            return (r: Row) => all.every((p) => p(r))
+          }
           const [col, ...rest] = t.split('.')
           const op = rest.join('.')
           if (op === 'is.null') return (r: Row) => (r[col] ?? null) === null
           if (op === 'not.is.null') return (r: Row) => r[col] != null
           if (op.startsWith('eq.')) return (r: Row) => String(r[col]) === op.slice(3)
           throw new Error(`fakeDb: or() does not read "${t}"`)
-        })
+        }
+        const parts = split(expr).map(term)
         preds.push((r) => parts.some((p) => p(r)))
         return builder
       },
