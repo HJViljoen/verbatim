@@ -58,6 +58,22 @@ export const POST_IDEA_CANDIDATES = POST_IDEAS_MAX + 1
 export const POST_IDEA_COMMENTS_MAX = 40
 /** A comment's words as the writer reads them, at most. */
 export const POST_IDEA_COMMENT_CHARS = 280
+/** THE EVIDENCE FLOOR (Heinrich, 11 Oct: a quiet period says so in one
+ *  line and is never padded). An idea stands only on at least this many
+ *  comments that ask, across at least this many videos: counted on what is
+ *  SENT before the call (a conversation under it costs no call) and on what
+ *  its sub-questions hold after compose's drops (an idea under it is held
+ *  'thin'). One comment under one video is a remark, not a question the
+ *  market keeps asking. */
+export const POST_IDEA_MIN_COMMENTS = 3
+export const POST_IDEA_MIN_VIDEOS = 2
+
+/** Does this evidence clear the floor? Distinct comments that ask, and the
+ *  distinct videos they sit under. Pure. */
+export function clearsEvidenceFloor(n: { comments: number; videos: number }): boolean {
+  return n.comments >= POST_IDEA_MIN_COMMENTS && n.videos >= POST_IDEA_MIN_VIDEOS
+}
+
 /** The writer's sub-questions an idea keeps, biggest first. */
 export const POST_IDEA_SUBQUESTIONS_MAX = 5
 /** A format or opening is suggested only at this multiple or above. */

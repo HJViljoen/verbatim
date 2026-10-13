@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { composePostIdeas, copiesAComment, COPY_MIN_WORDS, postIdeaRows, subquestionsOf } from './compose'
+import { POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS } from './select'
 import type { IdeaCandidate, IdeaPlay } from './select'
 import { parsePostIdeaRow, subquestionCounts } from './types'
 import type { PostIdeasOutput } from './write'
@@ -28,17 +29,19 @@ const candidate = (n: number, comments: [string, string][], over: Partial<IdeaCa
 })
 
 const LINER = candidate(1, [['c1', 'v1'], ['c2', 'v2'], ['c3', 'v2'], ['c4', 'v3'], ['c5', 'v4']])
-const INSURANCE = candidate(2, [['c6', 'v5'], ['c7', 'v6']], { play: { ...PLAY, format: null, formatMultiple: null, length: null } })
-const WET = candidate(3, [['c8', 'v7'], ['c9', 'v8']])
-const SPARE = candidate(4, [['c10', 'v9']])
+const INSURANCE = candidate(2, [['c6', 'v5'], ['c7', 'v6'], ['c11', 'v6']], { play: { ...PLAY, format: null, formatMultiple: null, length: null } })
+const WET = candidate(3, [['c8', 'v7'], ['c9', 'v8'], ['c12', 'v8']])
+const SPARE = candidate(4, [['c10', 'v9'], ['c13', 'v9'], ['c14', 'v10']])
 
 const WORD: Record<string, string> = { Q1: 'liners', Q2: 'insurance', Q3: 'water', Q4: 'sockets' }
-const FIRST: Record<string, string> = { Q1: 'c1', Q2: 'c6', Q3: 'c8', Q4: 'c10' }
+/** Each conversation's comments, three or more across two videos or more:
+ *  the evidence floor. */
+const ALL: Record<string, string[]> = { Q1: ['c1', 'c2', 'c3', 'c4', 'c5'], Q2: ['c6', 'c7', 'c11'], Q3: ['c8', 'c9', 'c12'], Q4: ['c10', 'c13', 'c14'] }
 const written = (handle: string, over: Partial<PostIdeasOutput['ideas'][number]> = {}): PostIdeasOutput['ideas'][number] => ({
   question: handle,
   title: `What about ${WORD[handle]}?`,
   cover: `What a post on ${WORD[handle]} explains and shows`,
-  subquestions: [{ label: `Questions on ${WORD[handle]}`, comments: [FIRST[handle]] }],
+  subquestions: [{ label: `Questions on ${WORD[handle]}`, comments: ALL[handle] }],
   ...over,
 })
 
@@ -109,7 +112,7 @@ describe('composePostIdeas', () => {
   it('puts code\'s length and what was asked in the cover, and the format and opening beside it, null where code chose none', () => {
     const out = composePostIdeas([LINER, INSURANCE], { ideas: [written('Q1'), written('Q2')] })
     expect(out.ideas[0].cover).toEqual({ text: 'What a post on liners explains and shows', length: PLAY.length, asked: { comments: 5, videos: 4 } })
-    expect(out.ideas[1].cover).toEqual({ text: 'What a post on insurance explains and shows', asked: { comments: 2, videos: 2 } })
+    expect(out.ideas[1].cover).toEqual({ text: 'What a post on insurance explains and shows', asked: { comments: 3, videos: 2 } })
     expect([out.ideas[0].format, out.ideas[0].formatMultiple, out.ideas[0].opening]).toEqual(['tutorial', 2.1, 'question'])
     expect([out.ideas[1].format, out.ideas[1].formatMultiple]).toEqual([null, null])
   })
@@ -118,16 +121,37 @@ describe('composePostIdeas', () => {
     expect(composePostIdeas([LINER], null).ideas).toEqual([])
   })
 
-  it('holds an idea left with no sub-question', () => {
+  it('holds an idea left with no sub-question as thin', () => {
     const out = composePostIdeas([LINER, INSURANCE], { ideas: [written('Q1', { subquestions: [] }), written('Q2', { subquestions: [{ label: 'Whether insurance pays', comments: ['c99'] }] })] })
     expect(out.ideas).toEqual([])
-    expect(out.held.map((h) => h.reason)).toEqual(['no sub-questions', 'no sub-questions'])
+    expect(out.held.map((h) => h.reason)).toEqual(['thin', 'thin'])
+  })
+
+  it('the evidence floor: three asking comments across two videos stand, after every drop; under it the idea is thin', () => {
+    expect([POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS]).toEqual([3, 2])
+    const at = (handles: string[]) => composePostIdeas([LINER], { ideas: [written('Q1', { subquestions: [{ label: 'How long it should last', comments: handles }] })] })
+    // c1 v1, c2 v2, c3 v2: three comments on two videos, exactly at the floor.
+    expect(at(['c1', 'c2', 'c3']).ideas).toHaveLength(1)
+    // Two comments on two videos: under it.
+    expect(at(['c1', 'c2']).held).toEqual([{ question: 'Q1', label: 'Questions 1', reason: 'thin' }])
+    // Three comments on one video: under it.
+    const oneVideo = candidate(1, [['c1', 'v1'], ['c2', 'v1'], ['c3', 'v1']])
+    expect(composePostIdeas([oneVideo], { ideas: [written('Q1', { subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2', 'c3'] }] })] }).held[0].reason).toBe('thin')
+    // Counted after the drops: a comment that does not ask takes the idea under.
+    const answered = candidate(1, [['c1', 'v1'], ['c2', 'v2'], ['c3', 'v2']])
+    answered.comments[2].text = 'Mine lasted a long time, just keep it clean.'
+    expect(composePostIdeas([answered], { ideas: [written('Q1', { subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2', 'c3'] }] })] }).held[0].reason).toBe('thin')
+    // Across sub-questions: two and one, on two videos, stand.
+    expect(at(['c1', 'c2']).ideas).toEqual([])
+    const split = composePostIdeas([LINER], { ideas: [written('Q1', { subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2'] }, { label: 'The signs it is worn out', comments: ['c4'] }] })] })
+    expect(split.ideas).toHaveLength(1)
   })
 
   it('holds a title that copies a sent comment word for word, or sits inside one, and drops such a label', () => {
-    const asked = candidate(1, [['c1', 'v1'], ['c2', 'v2']])
+    const asked = candidate(1, [['c1', 'v1'], ['c2', 'v2'], ['c3', 'v2']])
     asked.comments[0].text = 'How long should a silicone liner last before it stretches?'
     asked.comments[1].text = 'Does insurance pay for a second liner?'
+    asked.comments[2].text = 'Is my liner worn out already?'
     const copied = composePostIdeas([asked], { ideas: [written('Q1', { title: 'How long should a silicone liner last before it stretches?' })] })
     expect(copied.held).toEqual([{ question: 'Q1', label: 'Questions 1', reason: 'title copies a comment' }])
     const inside = composePostIdeas([asked], { ideas: [written('Q1', { title: 'How long should a silicone liner last?' })] })
@@ -139,7 +163,7 @@ describe('composePostIdeas', () => {
         subquestions: [
           { label: 'Does insurance pay for a second liner', comments: ['c2'] },
           { label: 'Second liner', comments: ['c2'] },
-          { label: 'How long it should last', comments: ['c1'] },
+          { label: 'How long it should last', comments: ['c1', 'c3'] },
         ],
       })],
     })
@@ -160,7 +184,7 @@ describe('postIdeaRows: what the step upserts', () => {
   it('is a row per idea that the reader parses back, with no comment words in it', () => {
     const out = composePostIdeas([LINER, INSURANCE, WET], {
       ideas: [
-        written('Q1', { subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2'] }] }),
+        written('Q1', { subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2', 'c3'] }] }),
         written('Q2'),
         written('Q3'),
       ],
@@ -170,7 +194,7 @@ describe('postIdeaRows: what the step upserts', () => {
     expect(rows).toHaveLength(3)
     expect(rows.map((r) => r.rank)).toEqual([1, 2, 3])
     const parsed = parsePostIdeaRow({ ...rows[0], id: 'id-1', created_at: '2026-10-12T08:00:00Z' })
-    expect(parsed?.subquestions).toEqual([{ label: 'How long it should last', commentIds: ['c1-id', 'c2-id'], videoIds: ['v1', 'v2'] }])
+    expect(parsed?.subquestions).toEqual([{ label: 'How long it should last', commentIds: ['c1-id', 'c2-id', 'c3-id'], videoIds: ['v1', 'v2'] }])
     expect(parsed?.cover.length).toEqual(PLAY.length)
     expect(JSON.stringify(rows)).not.toMatch(/Does question/)
     // The CHECK: a format and its multiple are both set or both null.

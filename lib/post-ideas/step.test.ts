@@ -22,7 +22,11 @@ const RUN = '00000000-0000-4000-8000-0000000000a1'
 
 const CANDIDATES = withHandles([
   { themeId: 'th-1', label: 'Questions about liner lifespan', description: 'How long a liner lasts.', weekVideos: 9, lenientVideos: 8, touch: 'none', play: choosePlay([], '2026-10-01'),
-    comments: [{ commentId: 'cm-1', videoId: 'v1', text: 'How long should my liner last?' }, { commentId: 'cm-2', videoId: 'v2', text: 'When do I replace the liner?' }] },
+    comments: [
+      { commentId: 'cm-1', videoId: 'v1', text: 'How long should my liner last?' },
+      { commentId: 'cm-2', videoId: 'v2', text: 'When do I replace the liner?' },
+      { commentId: 'cm-3', videoId: 'v2', text: 'Is a liner meant to stretch like this?' },
+    ] },
 ])
 
 const INPUTS: PostIdeaInputs = {
@@ -31,12 +35,13 @@ const INPUTS: PostIdeaInputs = {
 }
 
 const OUTPUT: PostIdeasOutput = {
-  ideas: [{ question: 'Q1', title: 'How long does a liner last?', cover: 'How long liners usually last and the signs it is time to replace one', subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2'] }] }],
+  ideas: [{ question: 'Q1', title: 'How long does a liner last?', cover: 'How long liners usually last and the signs it is time to replace one', subquestions: [{ label: 'How long it should last', comments: ['c1', 'c2', 'c3'] }] }],
 }
 
 const READY: BuiltPostIdeas = finishPostIdeas(INPUTS, OUTPUT, 0.06)
 const THIN: BuiltPostIdeas = { status: 'thin', ideas: [], held: [], rows: [], called: false, costUsd: 0, scrub: null, raw: null, inputs: { ...INPUTS, candidates: [] } }
 const HELD: BuiltPostIdeas = finishPostIdeas(INPUTS, { ideas: [{ ...OUTPUT.ideas[0], cover: 'A new liner prevents skin irritation.' }] }, 0.05)
+const ALL_THIN: BuiltPostIdeas = finishPostIdeas(INPUTS, { ideas: [{ ...OUTPUT.ideas[0], subquestions: [{ label: 'How long it should last', comments: ['c1'] }] }] }, 0.04)
 
 function deps(over: Partial<PostIdeasStepDeps> = {}) {
   const saved: PostIdeaInsert[][] = []
@@ -83,6 +88,14 @@ describe('runPostIdeasStep: silent where it should be', () => {
     expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, d)).toMatchObject({ status: 'exists', ideas: 3 })
     expect(d.build).not.toHaveBeenCalled()
     expect(saved).toEqual([])
+  })
+
+  it('a week whose every idea is under the evidence floor is thin too: nothing stored, nobody told, its spend reported', async () => {
+    expect(ALL_THIN.status).toBe('thin')
+    expect(ALL_THIN.held).toEqual([{ question: 'Q1', label: 'Questions about liner lifespan', reason: 'thin' }])
+    const { d, saved, alerts } = deps({ build: vi.fn(async () => ALL_THIN) as unknown as PostIdeasStepDeps['build'] })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, d)).toEqual({ status: 'thin', ideas: 0, held: 1, costUsd: 0.04 })
+    expect([saved, alerts]).toEqual([[], []])
   })
 
   it('a thin week stores nothing and tells nobody', async () => {

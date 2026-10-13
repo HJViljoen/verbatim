@@ -6,7 +6,7 @@ import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { DatedEvidence } from '../written/evidence'
 import type { PoolTheme, ThemeJudgement } from '../written/pool'
 import {
-  bestRow, choosePlay, ideaLength, isQuestionConversation, isQuestionShaped, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEA_MIN_RATED, POST_IDEAS_MAX,
+  bestRow, choosePlay, clearsEvidenceFloor, ideaLength, isQuestionConversation, isQuestionShaped, POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEA_MIN_RATED, POST_IDEAS_MAX,
   questionComments, rankQuestions, roundSeconds, untouchedQuestions, withHandles, type PlayVideo,
 } from './select'
 
@@ -327,5 +327,15 @@ describe('withHandles', () => {
     expect(out.map((c) => c.handle)).toEqual(['Q1', 'Q2'])
     expect(out.flatMap((c) => c.comments.map((x) => x.handle))).toEqual(['c1', 'c2', 'c3'])
     expect(out[0].asked).toEqual({ comments: 2, videos: 1 })
+  })
+})
+
+describe('clearsEvidenceFloor: three asking comments across two videos (Heinrich, 11 Oct: never padded)', () => {
+  it('stands at the floor and falls under it on either count', () => {
+    expect(clearsEvidenceFloor({ comments: POST_IDEA_MIN_COMMENTS, videos: POST_IDEA_MIN_VIDEOS })).toBe(true)
+    expect(clearsEvidenceFloor({ comments: 40, videos: 12 })).toBe(true)
+    expect(clearsEvidenceFloor({ comments: POST_IDEA_MIN_COMMENTS - 1, videos: 5 })).toBe(false)
+    expect(clearsEvidenceFloor({ comments: 9, videos: POST_IDEA_MIN_VIDEOS - 1 })).toBe(false)
+    expect(clearsEvidenceFloor({ comments: 0, videos: 0 })).toBe(false)
   })
 })

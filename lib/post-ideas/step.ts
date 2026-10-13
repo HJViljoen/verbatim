@@ -20,7 +20,7 @@ import type { ParseClient } from '../written/write-model'
 import { composePostIdeas, postIdeaRows, type HeldIdea, type PostIdeaDraft, type PostIdeaInsert } from './compose'
 import type { IdeaScrubCounts } from './scrub'
 import {
-  choosePlay, isQuestionConversation, POST_IDEA_CANDIDATES, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
+  choosePlay, clearsEvidenceFloor, isQuestionConversation, POST_IDEA_CANDIDATES, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
   type CoveredQuestion, type IdeaCandidate, type PlayVideo,
 } from './select'
 import { isMissingPostIdeas, POST_IDEAS_ON_CONFLICT, TABLE_POST_IDEAS } from './types'
@@ -203,7 +203,12 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   // answer, advise or praise) gives the writer nothing to group: it does not
   // take a writer's slot.
   const asked = new Map(untouched.map(({ judgement: j }) => [j.theme.themeId, questionComments(clientId, j.theme, evidence)]))
-  const kept = untouched.filter(({ judgement: j }) => (asked.get(j.theme.themeId) ?? []).length > 0).slice(0, POST_IDEA_CANDIDATES)
+  // Nor does one under the evidence floor: compose only takes comments away,
+  // so a conversation sent under it could never stand, and costs no call.
+  const kept = untouched.filter(({ judgement: j }) => {
+    const sent = asked.get(j.theme.themeId) ?? []
+    return clearsEvidenceFloor({ comments: sent.length, videos: new Set(sent.map((c) => c.videoId)).size })
+  }).slice(0, POST_IDEA_CANDIDATES)
 
   const videos = await loadQuestionVideos(admin, clientId, new Map(kept.map(({ judgement: j }) => [j.theme.themeId, j.theme.memberIds])))
   const candidates = withHandles(kept.map(({ judgement: j, touch }) => ({
@@ -263,7 +268,9 @@ export function finishPostIdeas(inputs: PostIdeaInputs, raw: PostIdeasOutput, co
     model: POST_IDEAS_MODEL, promptVersion: POST_IDEAS_PROMPT_VERSION,
   })
   return {
-    status: composed.ideas.length > 0 ? 'ready' : 'held',
+    // Every idea held for want of evidence is a thin week (silent, its one
+    // line on the page); any other hold is the writer's, and is told.
+    status: composed.ideas.length > 0 ? 'ready' : composed.held.length > 0 && composed.held.every((h) => h.reason === 'thin') ? 'thin' : 'held',
     ideas: composed.ideas, held: composed.held, rows, called: true,
     costUsd: Math.round(costUsd * 10_000) / 10_000, scrub: composed.scrub, raw, inputs,
   }
@@ -385,8 +392,8 @@ export async function runPostIdeasStep(
     }
     const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt, budgetMs: POST_IDEAS_STEP_BUDGET_MS }) })
     if (built.status === 'thin') {
-      console.log('[write-post-ideas] thin: no question conversation the client has not answered; no call, nothing stored')
-      return { status: 'thin', ideas: 0, held: 0, costUsd: 0 }
+      console.log(`[write-post-ideas] thin: no question conversation clears the evidence floor; ${built.called ? `the call held every idea as thin ($${built.costUsd})` : 'no call'}, nothing stored`)
+      return { status: 'thin', ideas: 0, held: built.held.length, costUsd: built.costUsd }
     }
     await d.save(admin, built.rows)
     const result: PostIdeasStepResult = { status: built.status, ideas: built.ideas.length, held: built.held.length, costUsd: built.costUsd }

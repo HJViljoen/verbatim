@@ -1,5 +1,5 @@
 import { addScrubCounts, NO_SCRUB, scrubIdeaText, type IdeaScrubCounts } from './scrub'
-import { isQuestionShaped, POST_IDEA_SUBQUESTIONS_MAX, POST_IDEAS_MAX, type IdeaCandidate } from './select'
+import { clearsEvidenceFloor, isQuestionShaped, POST_IDEA_SUBQUESTIONS_MAX, POST_IDEAS_MAX, type IdeaCandidate } from './select'
 import { subquestionCounts, type PostIdeaCover, type PostIdeaRank, type PostIdeaRow, type PostIdeaSubquestion } from './types'
 import type { PostIdeasOutput, WrittenSubquestion } from './write'
 
@@ -15,8 +15,10 @@ import type { PostIdeasOutput, WrittenSubquestion } from './write'
 // from another conversation is dropped, and a comment counts under one
 // sub-question at most, and only where it asks: `isQuestionShaped`), and
 // orders the sub-questions by their videos, then their comments, counted from
-// the ids (`subquestionCounts`). The first three conversations whose title,
-// cover and at least one sub-question survive are the ideas, ranked 1 to 3;
+// the ids (`subquestionCounts`). The first three conversations whose title
+// and cover survive and whose sub-questions clear the evidence floor
+// (`clearsEvidenceFloor`: three asking comments across two videos; under it
+// the idea is held 'thin') are the ideas, ranked 1 to 3;
 // the format, the opening and the length are code's (`choosePlay`).
 //
 // NEVER A COMMENT'S WORDS AS OURS (AGENTS.md: the words resolve at render, a
@@ -144,7 +146,14 @@ export function composePostIdeas(
     if (!title.text) { hold(`title held${title.counts.medical.length ? ` (${title.counts.medical.join(', ')})` : ''}`); continue }
     if (!cover.text) { hold(`cover held${cover.counts.medical.length ? ` (${cover.counts.medical.join(', ')})` : ''}`); continue }
     if (copiesAComment(title.text, sent)) { scrub = addScrubCounts(scrub, { ...NO_SCRUB, medical: [], dropped: 1, droppedCopied: 1, leaked: true }); hold('title copies a comment'); continue }
-    if (subs.subquestions.length === 0) { hold('no sub-questions'); continue }
+    // The evidence floor, on what the sub-questions hold after every drop
+    // (`POST_IDEA_MIN_COMMENTS` across `POST_IDEA_MIN_VIDEOS`): under it the
+    // idea is thin, and a thin week prints its one line, never a padded idea.
+    const evidence = {
+      comments: new Set(subs.subquestions.flatMap((q) => q.commentIds)).size,
+      videos: new Set(subs.subquestions.flatMap((q) => q.videoIds)).size,
+    }
+    if (!clearsEvidenceFloor(evidence)) { hold('thin'); continue }
     const same = titles.get(titleKey(title.text))
     if (same) { hold(`the same question as ${same}`); continue }
     titles.set(titleKey(title.text), c.handle)
