@@ -4,14 +4,16 @@ import { OSSUR_CLIENT_ID } from '../../config'
 import { productReadingRows } from '../../products/readings'
 import { compileCatalogue } from '../../products/rules'
 import { BRANDS_PANEL, refuseEveryPair, viewForAudience, type PairOn } from '../../reading/pairs'
+import { KIND_LABELS } from '../../reading/kinds'
 import { fakeDb } from '../../test/fake-db'
+import { talkKindLabel } from '../overview-market/kinds'
 import {
   ACCEPT_PAIRS, linersUnclearTexts, OSSUR_CATALOGUE, OSSUR_STANDING, ossurCrosses, ossurLinersFixture, ossurProductRows, ossurProductsFixture,
   ossurSealInXFixture, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
 } from './products-fixture'
 import {
   buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
-  openOf, parseProductsParams, pickStandouts, placementsInPlay, productMonthSets, productQuotes, productsHref, setKey, sharePct, shelfColumns,
+  openOf, parseProductsParams, pickStandouts, placementsInPlay, productKindLabel, productMonthSets, productQuotes, productsHref, PRODUCT_KIND_LABELS, setKey, sharePct, shelfColumns,
   topProducts, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
   type ProductMonthRow, type ProductsInput, type TextRead,
 } from './products'
@@ -396,10 +398,28 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
       { audience: 'client', object_kind: 'denominator', object_id: 'videos', k: 8, n: 8 },
     ]
     expect(poolLens(rows)).toMatchObject({ n: 10 })
-    const c = crossesOf(rows, new Map([['s1', 'Fit & comfort']]), null)
+    const c = crossesOf(rows, new Map([['s1', 'Fit & comfort']]))
     expect(c.n).toBe(10)
     expect(c.subjects).toEqual([{ id: 's1', label: 'Fit & comfort', k: 7 }])
     expect(c.kinds.map((k) => [k.id, k.k])).toEqual([['praise', 5]])
+    expect(c.kinds[0].label).toBe('Praise in the comments')
+  })
+
+  it('names a kind by where it was found, on this page only; the shared label is unchanged everywhere else', () => {
+    // A product's set is the videos naming it; a kind's count is those with
+    // that kind anywhere in their comments, which may be about something
+    // else in the video. So "Praised it" overclaims here, and only here.
+    expect(productKindLabel('praise')).toBe('Praise in the comments')
+    expect(productKindLabel('question')).toBe('Questions in the comments')
+    expect(productKindLabel('pain_point')).toBe('Complaints in the comments')
+    expect(productKindLabel('purchase_intent')).toBe('Talk of buying in the comments')
+    expect(productKindLabel('objection')).toBe('Pushback in the comments')
+    for (const kind of Object.keys(KIND_LABELS).filter((k) => k !== 'misinformation')) {
+      expect(PRODUCT_KIND_LABELS[kind], kind).toMatch(/in the comments$/)
+    }
+    expect(talkKindLabel('praise', null)).toBe('Praised it')
+    expect(talkKindLabel('praise', 'bags')).toBe('Praised a bag')
+    expect(talkKindLabel('pain_point', null)).toBe('Complained about something')
   })
 
   it('5. a product with no row in a read month is not read yet (null), never quiet; its tile and the Dashboard\'s small shelf say so', () => {

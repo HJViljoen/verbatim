@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { Info, Package } from 'lucide-react'
+import { Box, Info } from 'lucide-react'
 import { IconTile, SELECTED } from '@/components/colour-roles'
 import { Card } from '@/components/pages/studio/ui'
 import { fmtInt } from '@/lib/format'
@@ -217,7 +217,7 @@ function Empty({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="max-w-[720px] gap-2 px-[26px] py-6 max-sm:px-5">
       <div className="flex items-center gap-2.5">
-        <IconTile icon={Package} />
+        <IconTile icon={Box} />
         <h2 className="m-0 text-[17px] font-semibold leading-[1.3]">{title}</h2>
       </div>
       <p className={`m-0 text-[14px] leading-[1.5] ${MUTED}`}>{children}</p>

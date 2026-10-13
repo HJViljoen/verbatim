@@ -1,6 +1,6 @@
 import type { GlossaryKey } from '../calibration'
 import { surface, type NavKey } from '../nav'
-import { BRANDS_HEAD_ORGANIC } from '../pages/overview-market/brands'
+import { BRANDS_HEAD_ORGANIC, NINETY_DAY_NOTE } from '../pages/overview-market/brands'
 
 /**
  * How to read (Phase 1 WP16, design ST9; market-first WP3.10, plan §2.10 D5
@@ -33,6 +33,15 @@ import { BRANDS_HEAD_ORGANIC } from '../pages/overview-market/brands'
  * comment forbade it — "every behavioural claim here must match the code" — and
  * so does AGENTS.md.
  *
+ * DESIGN V2 (integration, 13 Oct). The cards describe the routed pages, one
+ * each: the Dashboard, Market, Voices, Your products, Content and Your moves,
+ * then the Agent, the Studio and Settings. Your market, This week, Subjects,
+ * Conversation and Competitive are no longer routed (their addresses
+ * redirect, `redirectFor` in lib/nav.ts), so their method sits on the card of
+ * the page that took their content, said as that page prints it, and no card
+ * describes a page a reader cannot open. The Dashboard has a card now: it
+ * reads nothing of its own, but every tile is a claim a reader asks about.
+ *
  * ONE CARD PER SURFACE, KEYED BY `NavKey`, so a page cannot be described here
  * and be missing from the shell, or be in the shell and undescribed. The
  * TITLE and the QUESTION are not repeated: they come from `lib/nav.ts`, which
@@ -58,118 +67,136 @@ export interface ReadingCard {
 
 export const READING_CARDS: readonly ReadingCard[] = [
   {
-    key: 'market',
-    // MARKET (Design v2): until the Market page lands (depth plan T3) the
-    // address draws Your market's bigger picture, so this is Your market's
-    // card, with the Subjects card's method folded in below: the subject
-    // board is Market's (the Subjects page redirects here).
-    //
-    // YOUR MARKET (market-first WP1.6, deploy 2; blocks 3, 7 and 8 with
-    // deploy 3). The front page reads the market in full, then what it means
-    // for you, then the brands, then what changed and which changes were
-    // ours. Levels with the month before beside them; no direction word (none
-    // can be earned before late January, plan §2.11).
-    tells: 'Your market in the month the page reads: how big it was, what it talked about biggest first, what came in with the latest update and week by week, what people did and asked for in the comments, how it read on each of your subjects, what it means for you and what you published, the brands it named, and what changed, including the changes that were ours.',
-    read: ['market', 'month', 'video', 'theme', 'kind', 'subject', 'level', 'change', 'new'],
+    key: 'home',
+    // THE DASHBOARD (Design v2, depth plan T8; lib/pages/v2/home.ts): one
+    // tile per page, each the top of the page it opens and read the same way
+    // (`topMarket`, `topVoices`, `topProducts`, `topContent`, `topMoves`),
+    // plus the week's tile: the published read's frozen figures beside the
+    // month, the weekly chart (`homeWeeks`) and the subjects against last
+    // month through their `Verdict` (`weekSubjectsOf`). It owned nothing on
+    // 1 Oct and had no card; since Design v2 it has a tile of its own.
+    tells: 'The week in your market at a glance, as the latest update read it: the conversation that leads Market, your market’s videos and comments this week beside its month and week by week, your biggest subject and the one that moved most against last month, who is talking and the brands named most, your products, the first post idea, and the advice waiting for a decision, each opening its own page.',
+    read: ['market', 'week', 'month', 'video', 'subject', 'change'],
     cannot: [
-      'It is a reading of a calendar month. The page bar names the month and the update it was read with; the month selector’s tooltip says whether the month is still filling.',
-      'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count and are marked.',
-      'Under With this update, “heard for the first time” names a theme no earlier month holds, the rule Conversation’s “New” follows. A theme an update only named again is not listed.',
-      'Two months sit side by side as levels. They are compared only when both were read the same way; until then the page says why not.',
-      // BRANDS IN YOUR MARKET (WP2.6; the lead's ruling of 27 Sep): the rule
-      // counts a brand's name, its handles and its phrases (lib/brands/
-      // aliases.ts), never in its own posts, so "none found" is a zero by that
-      // rule; "not counted yet" waits for the hand check (lib/brands/precision.ts).
-      'Under Brands in your market, a brand is counted in a video when the video, or a comment on it written in the month, names it: the rule counts the brand’s name, its handles and its phrases, and never counts a brand in its own posts. “No video names it” means the rule found no such video that month; “not counted yet” means we have not yet checked its matches by hand.',
-      'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
-      // SUBJECTS ON THE MARKET (WP2.2, deploy 3), the Subjects card's method
-      // as it was, less the levels sentence the lines above already say.
+      'It computes nothing its pages do not: each tile is the top of the page it opens, read the same way.',
+      'A week is the week the latest update read, not the last seven days, and every week figure sits beside its month.',
+      'Week by week draws only weeks read the same way: it starts after the latest change to our searches or to how we check relevance, and a week still filling is drawn faint.',
+      'A subject moved only where its month so far differs from last month by more than its normal swing; where none did, the tile says so. A subject still being checked is not named.',
+      'A tile that cannot be read says so on its own; the rest of the page still draws.',
+    ],
+  },
+  {
+    key: 'market',
+    // MARKET (Design v2, depth plan T3; lib/pages/v2/market.ts): Your market,
+    // This week and Subjects folded into one page (lib/nav.ts), on three
+    // periods. Decision 1: no week figure alone and no weekly direction word;
+    // the subjects and the kinds compare the month so far with last month
+    // through a `Verdict`. Conversations are the category's (decision E);
+    // the table's floor is MARKET_TABLE_FLOOR; the lead is `weekLead`, and a
+    // flag needs the anomaly check (BASELINE_MONTHS read the same way). A
+    // subject that is not ready prints no level (`unmeasuredOf`).
+    tells: 'What your market is talking about, this week, this month or over time: the conversation that leads the week, the conversations first heard this week, each of your subjects this month so far against last month, what people did in the comments, your market’s videos week by week, where it is said, and every conversation, each opening in full with its own voices.',
+    read: ['market', 'week', 'month', 'video', 'theme', 'subject', 'kind', 'level', 'change', 'new'],
+    cannot: [
+      'A week is the week the latest update read, never the last seven days, and every week figure sits beside its month. Three weeks of a conversation are three counts with no word: a week alone earns no direction.',
+      'Conversations are grouped within the category, so a conversation’s figures are a share of the category’s videos, never of the whole market, and the page says which. Makers’ videos stay in every count; a conversation led by makers or by off-topic videos is listed and tagged, and leads the week only where the update’s check flagged it.',
+      'The week is led by what the update’s check flagged as unusual. The check needs three months read the same way and most weeks flags nothing; the week is then led by the biggest conversation first heard that week, or else by the week’s biggest.',
+      'A conversation is listed once 3 of the period’s videos in the category carry it.',
       'A subject is counted by the same rule a theme is, which means it counts what people SAID, not what they bought.',
-      'A subject still being checked prints its figure marked provisional; one whose check clearly failed prints no figure while it is re-described.',
-      'Makers’ videos stay in every count. A subject where a fifth or more of the videos are makers’ says so beside its figure.',
-      'The questions asked on a subject are counted over the period you pick, each video placed by the day it was posted, and matched against what your own posts are about: two or more words in common count as a post touching a question. What your posts claim is not read for this yet.',
-      'The kinds of thing said about a subject overlap: one video can carry several, so together they are more than its whole.',
-      'Your own posts are counted by the day you posted them, while every other figure on the page is dated by the comment. Say vs hear reads the latest update.',
+      'A subject’s month so far is called a change against last month only where it clears the band, and reads “no clear change” where it does not; two months not read the same way are not compared.',
+      'A subject still being checked prints no figure, only that it is counted and marked provisional; one whose check clearly failed prints no figure while it is re-described.',
+      'The kinds of thing people did in the comments overlap: one video can carry several, so together they are more than its whole.',
+      'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
     ],
   },
   {
     key: 'voices',
-    // VOICES (Design v2): until the Voices page lands (depth plan T4) the
-    // address draws Conversation, so this is Conversation's card, with the
-    // Competitive card's method folded in below: the brands are Voices' (the
-    // Competitive page redirects here).
-    //
-    // CONVERSATION (market-first WP2.4, plan §2.4). Every theme the category
-    // read on 10 videos or more in the month, biggest first and nothing
-    // skipped; the month before beside each as a level; New and Now 10+ as
-    // flags, never as change; one theme in full; who is talking.
-    tells: 'Everything your market talked about in the month the page reads: every theme at 10 videos or more, biggest first, with the month before beside each, which ones were first heard or are newly at 10, how many of each theme’s videos came from searches we added that month, one theme in full with its own voices, and who is talking.',
-    read: ['market', 'theme', 'kind', 'video', 'month', 'level', 'new', 'brand', 'rival'],
+    // VOICES (Design v2, depth plan T4; lib/pages/v2/voices.ts):
+    // Conversation's cast and Competitive's brands, on the reading month.
+    // Groups are today's profile with the month's videos (decision 2: a
+    // count, never a share, never compared); brands are named unprompted
+    // (`k_organic` of `n_organic`, BRANDS_HEAD_ORGANIC) with a `Verdict`, and
+    // their crosses (base `any`) carry none; creators at ACCOUNT_FLOOR,
+    // Reddit left out. A rival's panel is Competitive's pane over ninety days.
+    tells: 'Who in your market is saying it, in the month the page reads: the groups of people talking and the videos each is in, the brands named unprompted against last month and what people did in the videos naming each, and the creators who made the most of the market’s videos, each opening in full with its own voices.',
+    read: ['market', 'month', 'video', 'brand', 'rival', 'kind', 'level', 'change'],
     cannot: [
-      'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count; a theme that is half or more makers’ own is listed with the other maker-led ones at the end.',
-      '“New” means no earlier month holds the theme, and “Now 10+” that it had fewer than 10 videos the month before. Neither is a change: the month before had too few to call one.',
-      'The grouping into themes is ours and it can change. When an update re-groups every theme, the names it gives are not marked “New”.',
-      'Where a theme’s videos came from counts only the searches we first ran that month, so a theme found mostly by them may be ours as much as the market’s.',
-      'Who is talking is grouped at an update over everything read to date, not over the month, and a video can carry more than one group, so those counts overlap and do not sum to a whole.',
-      // BRANDS (plan §2.5; the page is rebuilt with deploy 5, WP3.5, and the
-      // label follows lib/nav.ts). The counting rules are decision E's and the
-      // code's (lib/brands/mentions.ts, lib/brands/owners.ts,
-      // lib/pages/overview-market/brands.ts): every video a brand comes up in,
-      // counted once its hand check has passed, its own posts never counted as the
-      // market naming it, and the headline count without the videos our brand
-      // searches found, named by its column head (BRANDS_HEAD_ORGANIC). S17's
-      // ninety-day note is said here, never under a block.
+      'Who is talking is today’s groups, rebuilt at every update over everything read to date, with the videos each is in this month. Each is a count of videos, never a share and never set against another month, and a video can carry more than one group, so the counts overlap and do not sum to a whole.',
       'A brand is counted in every video that names it, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. It is counted only once a hand check of its matches has passed, because some names mean other things: until then it reads “not counted yet”, and a name that mostly means something else is not counted.',
-      'A brand’s own posts are its posts, never your market naming it, so they are counted apart.',
-      `The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count.`,
-      'Ninety-day counts read today’s tags; frozen months keep the tags they froze with.',
-      'Share here is share of the videos our searches found, never market share.',
-      'A video that names both you and a rival is counted in your audience only, so it is in no rival\'s share.',
+      // BRANDS (WP2.6; the lead's ruling of 27 Sep): the rule counts a brand's
+      // name, its handles and its phrases (lib/brands/aliases.ts), never in
+      // its own posts, so "no video names it" is a zero by that rule; "not
+      // counted yet" waits for the hand check (lib/brands/precision.ts).
+      'Under Brands, a brand is counted in a video when the video, or a comment on it written in the month, names it: the rule counts the brand’s name, its handles and its phrases, and never counts a brand in its own posts. “No video names it” means the rule found no such video that month; “not counted yet” means we have not yet checked its matches by hand.',
+      `The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count. It is set against last month only where both months were read the same way.`,
+      'What people did in the videos naming a brand, and what those videos are about, is a level with no change: a brand’s month holds too few videos to band.',
+      'A brand’s figures are counts of the videos our searches found, never market share.',
+      'A rival’s panel reads the ninety days ending at the last update of the month the page reads.',
+      NINETY_DAY_NOTE,
+      'Creators are the accounts that made 3 or more of the market’s videos in the month, with their followers as of those videos. Reddit is left out: a Reddit post’s account is its community, not a person.',
     ],
   },
   {
     key: 'products',
-    // YOUR PRODUCTS (Design v2): a placeholder until the page lands (depth
-    // plan T5), so the card says what it is for and that nothing is read yet.
-    tells: 'What your market says about the products you sell. Nothing is read for them yet, and the page says so.',
-    read: ['market'],
+    // YOUR PRODUCTS (Design v2, depth plan T5; lib/pages/v2/products.ts):
+    // the catalogue (Settings › Your products) as the products step placed
+    // its talk. The basis is every video of the month, every audience pooled,
+    // the client's own posts included (`marketProductMonth`); the client's
+    // own words never place (`contentFields`). Standouts need STANDOUT_MIN
+    // videos; every comparison is a `Verdict`, refused across a catalogue
+    // change. The kinds name where they were found (`productKindLabel`).
+    tells: 'What your market says about what you sell, by the products and categories in Settings › Your products: the products and categories that stand out this month, every category with its products shaded by their videos, and, opened, a category’s or a product’s videos, what they are about, what people did in their comments, its share of the market month by month, and the talk about your products we could not place under one.',
+    read: ['market', 'month', 'video', 'subject', 'kind', 'level', 'change', 'new'],
     cannot: [
-      'Until your products are read, it cannot tell you anything about them.',
+      'Every video of the month counts, every audience together and your own posts included, because talk about your products lives in creators’ videos and in the comments under your posts. What your own posts say never places a product; the comments under them do.',
+      'A product is placed where a video or a comment names it, by its name or another name in your catalogue. A comment about one of your products that does not say which is counted as such, never guessed, and an owner or an admin can tag it.',
+      'What people did is found anywhere in the comments of the videos naming a product: praise in the comments may be about something else in the video.',
+      'A standout needs 3 or more videos. A product is set against its category only where the difference clears the band, and with a product’s tens of videos it rarely does. A category’s share is set against last month the same way, and two months read on different product lists are not compared.',
+      'A product with no reading in a month reads “not read yet”, never quiet.',
+      'Until your catalogue is loaded and its reading is switched on, the page says which is missing rather than printing a count.',
     ],
   },
   {
     key: 'content',
-    // CONTENT (Design v2): until the Content page lands (depth plan T6) the
-    // address draws This week, so this is This week's card.
-    //
-    // THIS WEEK (plan §2.7): dated by the update, not by the month. Nothing is
-    // computed over a week alone (§9.1 #5): what came in are counts that add
-    // to months, and week by week counts videos and comments, never a share.
-    tells: 'What came in with the latest update: the videos and comments it brought into your market’s month, the themes heard for the first time, your market’s subjects, week by week, what is worth a reply, what worked, and anything unusual against the months before.',
-    read: ['update', 'week', 'market', 'month'],
+    // CONTENT (Design v2, depth plan T6; lib/pages/v2/content.ts): five
+    // blocks, each on its own clock. The week is a run's frozen window
+    // (`anchorOf`); post ideas are T13's (`post_ideas`: POST_IDEA_MIN_COMMENTS
+    // asking comments on POST_IDEA_MIN_VIDEOS videos, untouched by the
+    // client's posts over POST_IDEA_OWNED_MONTHS, hidden past
+    // IDEAS_STALE_DAYS); the format and opening need POST_IDEA_MIN_RATED
+    // rated videos; What works is `buildPlaybook` on the published clock;
+    // a post touches a question on TOUCH_MIN_WORDS words (`questionTouch`).
+    tells: 'What to post next and what works in your market: the week’s post ideas, each a question your market asked that your posts have not touched on, the market’s formats and openings against your own posts, the comments worth a reply, your own posts this month, and the other questions asked.',
+    read: ['market', 'week', 'month', 'video', 'update'],
     cannot: [
-      'An update is not a period. Every figure on this page belongs to the month its comments were written in; the update is how much of that month arrived since the last one.',
-      'Nothing here is computed over a week alone. Week by week counts videos and comments, never a share of them.',
-      'Themes are re-grouped over everything we have read for you at every update, so most names first heard in an update are the same conversation under a different label. They are named only once they carry 10 videos in the month.',
-      'Moving now sets the month against the months before only where they were read the same way; until then it says why not.',
-      'Most weeks nothing is unusual, and the page says so rather than finding something. The unusual-week check needs three months read the same way, and says it is forming until then.',
+      'A week is the week the latest update read, not the last seven days. Every week figure sits beside its month, and three weeks are three counts with no word.',
+      'A post idea is written for a question your market asked at least 3 times on 2 or more videos that week, and only where none of your posts from that month and the two before touched on it. An idea prints its own week, and stops printing once it is four weeks older than the page’s.',
+      'A post touches a question when what it is about shares two or more of the question’s words, leaving out the common ones.',
+      'Who asks names the groups, never a count of them.',
+      'The format and opening on an idea are what worked in your market, chosen by counting, and only where 10 or more rated videos stand behind them.',
+      'What works is dated by the day each video was published, not by its comments, and Reddit is left out of response, because a Reddit post has no views.',
+      'Worth a reply is a list: nothing here can see whether you replied.',
+      'Your own posts are counted by the day you posted them.',
+      'In a medical market, every idea carries a line to check it with your medical team.',
     ],
   },
   {
     key: 'moves',
-    // YOUR MOVES (plan §2.6, WP3.6; /dashboard/moves since Design v2): what you say and do, set against what
-    // your market asks. The rules are the page's: a post touches a question
-    // on two or more words that are not common ones (the words checked are
-    // listed), a dated move is read in the market as levels, and a
-    // conclusion is read over everything to date.
-    tells: 'What you say and do, against what your market asks: the questions it asked and whether your posts touched them, the advice and what you decided, what you say and what your market says back, the moves you dated, what we concluded and the plans we re-checked.',
-    read: ['market', 'move', 'level', 'change'],
+    // YOUR MOVES (Design v2, depth plan T7; lib/pages/v2/moves.ts;
+    // /dashboard/moves): what you do as a business, set against the market.
+    // A move is read from MOVE_MONTHS_BEFORE months before it, its one
+    // comparison through `pairedVerdict` under the month-pair judge; the
+    // writes are `mayDecideMoves`'; statements are held from tenants
+    // (STATEMENTS_TENANT_VISIBLE). The questions left for Content.
+    tells: 'What you do as a business, set against your market: the advice waiting for a decision, the moves you dated and what your market did after each, what you say and what your market says back, your plan checked against the market, what we concluded, and the record of every piece of advice and what you decided.',
+    read: ['market', 'move', 'month', 'update', 'level', 'change'],
     cannot: [
-      'A post touches a question when it shares two or more of the question’s words, leaving out the common ones. Where none does, the page lists the words it checked.',
-      'A move is your statement, not ours. It is read in your market as levels, the month you dated it and the months after, and we never claim your move caused anything.',
-      'What the conversation did after you acted on advice is compared only once two months have been read in your audience since you decided. The month you decided in is on neither side.',
-      'What we concluded is read over everything to date and dated by the update that concluded it, so it can reach past the month on the page.',
+      'A move is your statement, not ours. It is read in your market from two months before the month you dated it to the month the page reads, and we never claim your move caused anything.',
+      'Each move earns one comparison: the month before it against the latest month read since. It is called a change only where the two were read the same way and it clears the band; otherwise the latest level prints alone.',
+      'The videos a piece of advice rests on, how many updates in a row raised it and what we concluded are read over everything to date and dated by the update, so they can reach past the month on the page.',
       'Advice here is grounded in what people said, not in your sales figures.',
+      'Only an owner or an admin can accept advice, set it aside, date a move or change a move’s status.',
+      'What you say, and what comes back, is not shown to the workspace yet.',
     ],
   },
   {
@@ -192,19 +219,25 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // REPORTS (plan §2.9): the monthly reads the month that has just ended,
     // one update past its end (MONTHLY_UPDATES_PAST_END, the fast track's
     // rule of 27 Sep), and every document keeps the figures it was sent with.
-    tells: 'What we send you: the monthly report on your market in the month that has just ended, the quarterly review and the briefs, each as it was sent and each linked back into the pages it came from.',
-    read: ['update', 'month', 'market'],
+    // DESIGN V2: This week is no longer a page, so the full weekly read is a
+    // past issue here (and its share link); its email is level 1 (T11b).
+    tells: 'What we send you: the weekly read of each update, the monthly report on your market in the month that has just ended, the quarterly review and the briefs, each as it was sent and each linked back into the pages it came from.',
+    read: ['update', 'week', 'month', 'market'],
     cannot: [
       'A sent document keeps the figures it was sent with. Where a still-filling month has moved since, the page prints both numbers rather than quietly correcting one.',
       'The monthly report reads the month that has just ended, one update past its end. A page read after the report reads that month with later updates, so its counts can differ from the report’s; each says which update it was read with.',
+      'The weekly read’s email carries the week in short; the read in full opens from its past issue.',
     ],
   },
   {
     key: 'settings',
-    // SETTINGS (plan §2.10). Decision I: while a workspace's searches are held
-    // still, a term, rival or handle edit waits in a queue and lands on the
-    // 1st of a month, no earlier than QUEUE_FLOOR (lib/settings/queue.ts).
-    tells: 'What we read for you and how: your market and the searches that find it, your subjects, how ready each part of the product is for this workspace, the record of everything we did and changed, and who receives what.',
+    // SETTINGS (plan §2.10; the tabs are lib/settings/rail.ts). Decision I:
+    // while a workspace's searches are held still, a term, rival or handle
+    // edit waits in a queue and lands on the 1st of a month, no earlier than
+    // QUEUE_FLOOR (lib/settings/queue.ts). DESIGN V2 (T10b, T10c): Your
+    // products and Your subjects are client tabs; recipients left for the
+    // Studio; Readiness, The record and this page are the operator's.
+    tells: 'What we read for you and how: your market and the searches that find it, your products, your subjects, your team and billing, and, for us, how ready each part of the product is for this workspace and the record of everything we did and changed.',
     read: ['market', 'subject', 'update'],
     cannot: [
       'Platforms and how deeply we read each video drive cost and quality, so they are set with you and changed on request. Your search terms are yours: owners and admins edit them here.',
@@ -217,6 +250,8 @@ export const READING_CARDS: readonly ReadingCard[] = [
       // the page: its column head says "by update", and this is the sentence
       // that was a footnote under the table (25 Sep rulings, WP3.10).
       'What a search term found is dated by the update that searched, not by when the comments were written.',
+      'Nothing in your products is deleted: a product or one of its names is retired, and a name is retired and added again rather than edited.',
+      'A workspace follows at most ten subjects. A subject is read in the months still filling when it is added; a month already final is not read for it.',
     ],
   },
 ]
@@ -228,8 +263,8 @@ export const READING_PATH: readonly { when: string; what: string[] }[] = [
   {
     when: 'Each week',
     what: [
-      `Once Sunday’s update has landed, open ${surface('market').label}: what the latest update brought into your market’s month. Most weeks nothing is unusual, and that is the answer.`,
-      'Answer what is worth a reply while the comments are still warm.',
+      `Once Sunday’s update has landed, open the ${surface('home').label}: the week in your market at a glance, each tile opening its page. Most weeks nothing is unusual, and that is the answer.`,
+      `On ${surface('content').label}, pick the week’s post idea and answer what is worth a reply while the comments are still warm.`,
     ],
   },
   {
@@ -296,7 +331,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // DECISION C (lib/subjects/calibration-state.ts; SUBJECT_PRECISION_FLOOR).
     id: 'provisional',
     title: 'Provisional, and being re-described',
-    body: 'Each subject is checked against rows read by hand. A subject whose check measured 0.85 or better prints as it is. One not checked yet, or under 0.85 without being clearly under, prints its figure marked provisional: it carries no change, and it is never the front page’s headline. One clearly under, where even the top of its likely range is below 0.85, prints no figure and reads “being re-described” until it is fixed.',
+    body: 'Each subject is checked against rows read by hand. A subject whose check measured 0.85 or better prints as it is. One not checked yet, or under 0.85 without being clearly under, is marked provisional: where a page prints its figure it carries no change and never leads, and Market lists it without one. One clearly under, where even the top of its likely range is below 0.85, prints no figure and reads “being re-described” until it is fixed.',
   },
   {
     // DECISION D (lib/reading/comparability.ts; the four rules are
@@ -327,7 +362,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // sentence to it). Said once here, never under a block.
     id: 'brands',
     title: 'How a brand is counted',
-    body: `A brand is counted in every video it comes up in, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. On Brands and on Your market a brand is counted only once a hand check of its matches has passed, because some names mean other things: Freitag is German for Friday, Cotopaxi is a volcano and Patagonia a region. Until its check passes a brand reads “not counted yet”, never a count. A brand’s own posts are its posts, never your market naming it. The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found. Ninety-day counts read today’s tags; frozen months keep the tags they froze with.`,
+    body: `A brand is counted in every video it comes up in, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. Wherever a page counts a brand, it is counted only once a hand check of its matches has passed, because some names mean other things: Freitag is German for Friday, Cotopaxi is a volcano and Patagonia a region. Until its check passes a brand reads “not counted yet”, never a count. A brand’s own posts are its posts, never your market naming it. The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found. Ninety-day counts read today’s tags; frozen months keep the tags they froze with.`,
   },
   {
     // WP2.7 (update_arrivals, MF2 part C): counts that add up to months.

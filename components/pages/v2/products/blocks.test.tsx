@@ -106,7 +106,7 @@ describe('a category\'s panel (E4-Products-Liners)', () => {
     expect(text).toContain('10 of your products · 4 came up in September')
     expect(text).toContain('117 of 839 videos talk about liners 18 name one of your products 21 are about one of yours, but we couldn’t tell which 78 are about liners in general, none of yours named')
     expect(text).toContain('What it’s about · of 117 Fit & comfort')
-    expect(text).toContain('What people did · of 117 Complained about something')
+    expect(text).toContain('What people did · of 117 Complaints in the comments')
     expect(text).toContain('Share of the market, month by month')
     expect(text).toContain('Your products against liners in general')
     expect(text).toContain('Too few videos on any one product to call a difference from the category yet.')
@@ -154,6 +154,17 @@ describe('a product\'s panel', () => {
     expect(text).toContain('In their words · 3 comments naming it in September')
     expect(render(node).match(/data-copy="quote"/g)).toHaveLength(3)
     assertCopyContract(node)
+  })
+
+  it('says where a kind was found, never that people did it to the product ("Praised it" overclaims)', () => {
+    // A kind's count is the product's videos with that kind anywhere in their
+    // comments, about it or about anything else in the video.
+    const panel = ossurSealInXFixture().panel as ProductPanel
+    const text = renderText(<ProductPanelView panel={panel} monthName="September" />)
+    expect(text).toMatch(/What people did · of 9 (Praise|Questions|Complaints|Talk of buying|Pushback) in the comments/)
+    for (const shared of ['Praised it', 'Praised a', 'Asked a question', 'Complained about something', 'Said they want to buy', 'Pushed back']) {
+      expect(text).not.toContain(shared)
+    }
   })
 
   it('a first month wears its flag; a quiet product says so and draws no stats', () => {
