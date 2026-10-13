@@ -95,8 +95,11 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
       </div>
       {card.wants || card.stops ? (
         <div className="flex flex-col gap-1.5 text-[13.5px] leading-[1.45] text-foreground">
-          {card.wants ? <div><b className="font-semibold">Wants:</b> <span data-copy="subject" data-slot="pass_e_persona">{card.wants}</span></div> : null}
-          {card.stops ? <div><b className="font-semibold">Stops them:</b> <span data-copy="subject" data-slot="pass_e_persona">{card.stops}</span></div> : null}
+          {/* Three lines each, so a card keeps the board's height when Pass E
+              writes a paragraph (the lead's ruling, 13 Oct); the panel prints
+              both in full. */}
+          {card.wants ? <div className="line-clamp-3"><b className="font-semibold">Wants:</b> <span data-copy="subject" data-slot="pass_e_persona">{card.wants}</span></div> : null}
+          {card.stops ? <div className="line-clamp-3"><b className="font-semibold">Stops them:</b> <span data-copy="subject" data-slot="pass_e_persona">{card.stops}</span></div> : null}
         </div>
       ) : null}
       <div>

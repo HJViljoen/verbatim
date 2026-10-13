@@ -35,6 +35,8 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     expect(text).toContain('What they talk about · of their 45 Fit & comfort 17 Cost & access 14')
     expect(text).toContain('Wants: Clear answers they can act on for someone else: what to buy, what’s covered, what recovery looks like.')
     expect(text).toContain('Open →')
+    // Wants and stops hold three lines each on the card; the panel has them whole.
+    expect(render(node).match(/class="line-clamp-3"/g)).toHaveLength(2)
     expect(text).not.toMatch(/%|no clear change|since September/)
     expect(render(node)).not.toContain('data-copy="quote"')
     assertCopyContract(node)
