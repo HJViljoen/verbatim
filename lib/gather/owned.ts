@@ -4,7 +4,7 @@ import { createAdminClient } from '../supabase-admin'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, transcriptsEnabled } from '../config'
 import { inWindow } from './gather'
 import type { RawItem, VideoInsert } from './types'
-import { getPath, first, num, str } from './util'
+import { engagementRate, getPath, first, num, str } from './util'
 
 // Owned-account scrape interim (Wave 2, 2026-08-11). Official platform APIs
 // need Business Verification we don't have, so the client's OWN public
@@ -181,6 +181,35 @@ export function stampOwnedSource<T extends { video_id: string }>(
   fresh: 'owned' | 'competitor_owned' = 'owned',
 ): (T & { source: string })[] {
   return posts.map((p) => ({ ...p, source: fresh }))
+}
+
+/**
+ * The owned upsert as statements whose rows share ONE key set, so a read that
+ * could not rate a post never writes null over a rate already stored.
+ *
+ * The owned read overwrites the row it finds (the account is the authority on
+ * identity), and an upsert's DO UPDATE sets every column the statement names.
+ * A post whose read carried no plays (an Instagram photo, or the details
+ * summary the census falls back to) rates null; sent in the same statement as
+ * a rated one it would name `engagement_rate` too and blank the rate the
+ * keyword gather, or an earlier read with plays, had stored. So the rows that
+ * rate null go in a statement of their own WITHOUT the key: an existing row
+ * keeps its rate, and a new one takes the column's default, which is null.
+ * One statement per key set because PostgREST names the union of a batch's
+ * keys and sends NULL for a row missing one (see stampOwnedSource). Pure.
+ */
+export function ownedUpsertBatches<T extends { engagement_rate: number | null }>(
+  rows: readonly T[],
+): (T | Omit<T, 'engagement_rate'>)[][] {
+  const rated = rows.filter((r) => r.engagement_rate != null)
+  const unrated = rows
+    .filter((r) => r.engagement_rate == null)
+    .map((r) => {
+      const { engagement_rate: _drop, ...rest } = r
+      void _drop
+      return rest
+    })
+  return [rated, unrated].filter((batch) => batch.length > 0)
 }
 
 /** A row a source reconciliation moves, and the columns it must write. */
@@ -521,10 +550,22 @@ export function ownedCensusTotal(census: OwnedCensus | null | undefined): number
 // ---- Per-platform profile fetchers (I/O) ------------------------------------
 
 /** One Instagram post item (details-mode summary or posts-mode full item) as a
- *  VideoInsert. Both shapes carry the same field names for what we store. */
-function igPost(post: RawItem, handle: string, followers: number, ctx: Ctx): VideoInsert | null {
+ *  VideoInsert. Both shapes carry the same field names for what we store.
+ *  Exported for tests.
+ *
+ *  THE RATE IS THE DISCOVERED PATH'S (platforms/instagram.ts): likes plus
+ *  comments over plays, two decimals, null where there are no plays (a photo,
+ *  or a summary that carried none). It was hardcoded null until depth v2 T14,
+ *  so every own Instagram post read as unrated beside the market's reels
+ *  although its views, likes and comments were stored (13 Oct: all 47 of
+ *  Össur's and 63 of Sealand's, 55 of them with plays). */
+export function igPost(post: RawItem, handle: string, followers: number, ctx: Ctx): VideoInsert | null {
   const shortCode = str(first(post.shortCode, post.shortcode, post.code))
   if (!shortCode) return null
+  // -1 is "likes hidden", a state and not a count (platforms/instagram.ts).
+  const views = Math.max(0, num(first(post.videoPlayCount, post.videoViewCount)))
+  const likes = Math.max(0, num(first(post.likesCount, post.likes)))
+  const comments = Math.max(0, num(first(post.commentsCount, post.commentCount)))
   return {
     client_id: ctx.clientId,
     run_id: ctx.runId,
@@ -536,12 +577,11 @@ function igPost(post: RawItem, handle: string, followers: number, ctx: Ctx): Vid
     caption: str(first(post.caption, post.text) ?? ''),
     hashtags: (Array.isArray(post.hashtags) ? post.hashtags : []).map(String),
     content_format: str(first(post.productType, post.type)),
-    // -1 is "likes hidden", a state and not a count (platforms/instagram.ts).
-    views: Math.max(0, num(first(post.videoPlayCount, post.videoViewCount))),
-    likes: Math.max(0, num(first(post.likesCount, post.likes))),
+    views,
+    likes,
     shares: 0,
-    comments_count: Math.max(0, num(first(post.commentsCount, post.commentCount))),
-    engagement_rate: null,
+    comments_count: comments,
+    engagement_rate: engagementRate(views, likes, 0, comments),
     upload_date: str(post.timestamp).slice(0, 10) || null,
     audio_name: '',
     is_sponsored: Boolean(post.paidPartnership),
@@ -934,10 +974,15 @@ export async function ingestOwnedPosts(opts: {
     // on 'discovered' (which used to be kept forever; see stampOwnedSource).
     // The read that used to fetch those stored values is gone with the rule.
     const rows = stampOwnedSource(profile.recentPosts, identity.source)
-    const { error } = await admin
-      .from('videos')
-      .upsert(rows, { onConflict: 'client_id,platform,video_id' })
-    if (error) throw new Error(`owned posts upsert (${opts.platform}): ${error.message}`)
+    // A post the read could not rate keeps the rate already stored
+    // (ownedUpsertBatches). Two statements at most; both idempotent, so a
+    // retry after the first succeeds and the second fails writes the same rows.
+    for (const batch of ownedUpsertBatches(rows)) {
+      const { error } = await admin
+        .from('videos')
+        .upsert(batch, { onConflict: 'client_id,platform,video_id' })
+      if (error) throw new Error(`owned posts upsert (${opts.platform}): ${error.message}`)
+    }
 
     // Transcript layer (Brand Voice): file the raw items so this run's
     // transcribe planner picks the own posts up like any kept video (the
