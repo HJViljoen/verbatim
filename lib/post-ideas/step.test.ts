@@ -256,8 +256,8 @@ describe('the pipeline carries write-post-ideas', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id in its own position: after write-week-read, immediately before write-longrun-read (72 in all)', () => {
-    expect(ids).toHaveLength(72)
+  it('as one additive id in its own position: after write-week-read, immediately before write-longrun-read (74 in all, with the product readings\' two)', () => {
+    expect(ids).toHaveLength(74)
     expect(ids.filter((id) => id === 'write-post-ideas')).toHaveLength(1)
     const at = ids.indexOf('write-post-ideas')
     expect(ids[at - 1]).toBe('write-week-read')

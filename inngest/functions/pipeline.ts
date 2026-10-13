@@ -30,6 +30,7 @@ import { planSegmentVideos, runSegmentBatch, segmentSummary, stepSegmentJudge } 
 import { openai } from '@/lib/openai'
 import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
 import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
+import { planProductReadings, PRODUCT_RUN_CAP, productSummary, runProductStep } from '@/lib/pipeline/product-readings'
 import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
@@ -1817,6 +1818,48 @@ export const runPipeline = inngest.createFunction(
           console.error(`[brand-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
           return null
         })
+    }
+
+    // The product-readings step (depth v2 T11; plan decision 3, option B): for
+    // every month the run refreshes, the catalogue's new product_mentions rows
+    // (the rules; the gpt-4.1 confirm of a generic name; the gpt-4.1-mini
+    // classifier on what the rules missed under the category-relevant videos,
+    // its answers held to the comment's own words), and
+    // month_product_readings per audience, category and product. Before
+    // freeze-months for the brand step's reason, after it in its own place.
+    // A no-op until the products migration is applied, for a tenant with no
+    // catalogue, and wherever PRODUCT_READINGS_ENABLED is off. The model is
+    // held to the run's item cap (counted from the memoised returns) and hard
+    // dollar cap (read from the ledger inside each step). A month this run
+    // would freeze is frozen only from a pass that read it in full; with items
+    // left it is written filling and the next run freezes it. One month a step.
+    const productPlan = await step
+      .run('plan-product-readings', async () => {
+        const now = new Date().toISOString()
+        const r = await planProductReadings(createAdminClient(), clientId, now)
+        console.log(`[product-readings] ${r.note}`)
+        return { now, months: r.months }
+      })
+      .catch((e) => {
+        console.error(`[product-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const productMonthsToRead = productPlan?.months ?? []
+    let productItemsAsked = 0
+    for (let i = 0; i < productMonthsToRead.length; i++) {
+      const month = productMonthsToRead[i]
+      const cap = Math.max(0, PRODUCT_RUN_CAP - productItemsAsked)
+      const productMonth = await step
+        .run(`product-readings:${i + 1}-of-${productMonthsToRead.length}`, async () => {
+          const r = await runProductStep(createAdminClient(), { clientId, runId, now: productPlan!.now, month, cap })
+          console.log(`[product-readings] ${productSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[product-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+      productItemsAsked += productMonth?.itemsAsked ?? 0
     }
 
     // The comment-dated monthly reading (Phase 0, design items 1–2). Here,

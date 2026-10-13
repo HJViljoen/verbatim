@@ -201,7 +201,9 @@ export interface ProductMentionRow {
  * is exclusive (named, else unclear, else unbranded), so
  * k_named + k_unclear + k_unbranded = k_any; a product row is its named videos
  * (k_unclear = k_unbranded = 0, k_any = k_named). n is the audience's videos
- * the month reads. Like-for-like across months only where both versions match.
+ * the month reads; k_organic and n_organic are k_any and n leaving out every
+ * video any of our rival searches found (month_brand_readings' base).
+ * Like-for-like across months only where both versions match.
  */
 export interface MonthProductReadingRow {
   client_id: string
@@ -217,8 +219,13 @@ export interface MonthProductReadingRow {
   k_unclear: number
   k_unbranded: number
   k_any: number
+  /** k_any without any video a rival search of ours found (month_brand_readings'
+   *  one base, lib/brands/rival-searches.ts). */
+  k_organic: number
   comments: number
   n: number
+  /** n without any video a rival search of ours found. */
+  n_organic: number
   status: 'filling' | 'frozen'
   origin: 'live' | 'back_read'
   read_at: string
@@ -241,7 +248,7 @@ export const PRODUCT_TAG_COLUMNS =
 export const PRODUCT_MENTION_COLUMNS =
   'id, client_id, video_id, source, field, comment_id, comment_month, placement, product_id, group_id, method, rule_version, catalogue_version, model, prompt_version, tag_id, found_at'
 export const MONTH_PRODUCT_READING_COLUMNS =
-  'client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, comments, n, status, origin, read_at, run_id, rule_version, catalogue_version, frozen_at'
+  'client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, run_id, rule_version, catalogue_version, frozen_at'
 
 // ---- The catalogue, read once with its version ----------------------------------
 

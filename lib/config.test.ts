@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, PRODUCT_READINGS_ENABLED, productReadingsEnabled, PRODUCT_CLASSIFY_BUDGET_USD, PRODUCT_CLASSIFY_CAP, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -207,6 +207,22 @@ describe('SEGMENT_JUDGE_ENABLED and BRAND_CONFIRM_ENABLED', () => {
       expect(segmentJudgeEnabled(id)).toBe(false)
       expect(brandConfirmEnabled(id)).toBe(false)
     }
+  })
+})
+
+// Your products' run steps (depth v2 T11): off for every tenant until the
+// catalogue is reviewed and loaded and its back-read written. A yes is a diff
+// to this test. The cap and the hard dollar cap are pinned with it.
+describe('PRODUCT_READINGS_ENABLED', () => {
+  it('is off for every tenant, and an unknown one', () => {
+    expect(Object.values(PRODUCT_READINGS_ENABLED).every((on) => on === false)).toBe(true)
+    expect(Object.keys(PRODUCT_READINGS_ENABLED).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
+    for (const id of [SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) expect(productReadingsEnabled(id)).toBe(false)
+  })
+
+  it('caps the classifier at 3,000 items and $0.75 a run', () => {
+    expect(PRODUCT_CLASSIFY_CAP).toBe(3000)
+    expect(PRODUCT_CLASSIFY_BUDGET_USD).toBe(0.75)
   })
 })
 

@@ -303,8 +303,8 @@ describe('the pipeline carries write-week-read', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id, immediately after ask-reevaluate; the post ideas\' step follows it, then the long-run read\'s, the month\'s briefs and close-run (72 in all: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct, write-post-ideas since depth v2)', () => {
-    expect(ids).toHaveLength(72)
+  it('as one additive id, immediately after ask-reevaluate; the post ideas\' step follows it, then the long-run read\'s, the month\'s briefs and close-run (74 in all: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct, write-post-ideas and the product readings\' two since depth v2)', () => {
+    expect(ids).toHaveLength(74)
     expect(ids.filter((id) => id === 'write-week-read')).toHaveLength(1)
     const at = ids.indexOf('write-week-read')
     expect(ids[at - 1]).toBe('ask-reevaluate')

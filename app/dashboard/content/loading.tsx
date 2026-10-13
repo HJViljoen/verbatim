@@ -1,4 +1,5 @@
 import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { PageBar } from '@/components/shell/page-grid'
 import { surface } from '@/lib/nav'
 
 // Mirrors components/pages/v2/content/index.tsx (boards E5-Content): the title,
@@ -12,7 +13,7 @@ export default function ContentLoading() {
   return (
     <div className="flex flex-col gap-[22px]" aria-busy="true">
       <span role="status" className="sr-only">Loading {title}…</span>
-      <h1 className="m-0 text-[26px] leading-10 font-bold">{title}</h1>
+      <PageBar title={title} />
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <div key={i} className={CARD}>
