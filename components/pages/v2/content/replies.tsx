@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, SELECTED_CARD_RING, type PerBreakpoint } from '@/components/v2'
 import { QuoteBlock } from '@/components/quote-block'
@@ -56,7 +57,7 @@ function UnderLine({ parts }: { parts: [number, string][] }) {
   )
 }
 
-export function RepliesCard({ view, state, selected, className }: { view: RepliesView; state: ContentState; selected: boolean; className?: string }) {
+export function RepliesCard({ view, state, selected, className, style }: { view: RepliesView; state: ContentState; selected: boolean; className?: string; style?: CSSProperties }) {
   const when = view.window?.phrase ?? 'this week'
   const split = underParts(view.under)
   const cells: [number, string][] = [
@@ -67,7 +68,7 @@ export function RepliesCard({ view, state, selected, className }: { view: Replie
   ]
   return (
     // `worth-a-reply`: the anchor old reply links carry (REPLIES_ANCHOR).
-    <article id={REPLIES_ANCHOR} aria-labelledby="replies-title" className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null, className)}>
+    <article id={REPLIES_ANCHOR} aria-labelledby="replies-title" style={style} className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null, className)}>
       <CardHead
         icon={MessageSquare}
         id="replies-title"

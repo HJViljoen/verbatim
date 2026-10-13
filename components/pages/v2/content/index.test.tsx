@@ -61,7 +61,12 @@ describe('Content', () => {
     expect(replies.indexOf('id="replies-panel"')).toBeLessThan(replies.indexOf('id="also-asked"'))
     expect(replies).toContain('--panel-o-base:3;--panel-o-sm:3;--panel-o-md:3;--panel-o-lg:3;--panel-o-w1180:3;--panel-o-xl:5')
     expect(replies).toContain('--notch-xl:83.33%')
-    expect(replies).toMatch(/class="order-2 [^"]*" aria-labelledby="replies-title"|aria-labelledby="replies-title" class="[^"]*order-2/)
+    // The cards' orders are the kit's (`panelItemOrder`), never hand-set
+    // classes (Phase 4 fix round): Worth a reply is the second card.
+    expect(replies).toMatch(/aria-labelledby="replies-title" style="order:2"/)
+    expect(replies).toMatch(/aria-labelledby="works-title" style="order:0"/)
+    expect(replies).toMatch(/aria-labelledby="posts-title" style="order:4"/)
+    expect(replies).not.toMatch(/class="[^"]*\border-\d/)
     expect(replies).not.toContain('id="idea-panel"')
     const posts = render(<ContentPage data={contentFixture({ open: { kind: 'posts' }, period: 'month' })} />)
     expect(posts).toContain('--panel-o-base:5;--panel-o-sm:5;--panel-o-md:5;--panel-o-lg:5;--panel-o-w1180:5;--panel-o-xl:5')

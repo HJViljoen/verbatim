@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { ChartLine } from 'lucide-react'
 import { CARD, CardHead, TickBar, UnitSquares, MAX_UNITS } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
@@ -61,10 +62,10 @@ function Chart({ title, rows, posts }: { title: string; rows: readonly WorksRow[
   )
 }
 
-export function WorksCard({ block, className }: { block: WorksBlock; className?: string }) {
+export function WorksCard({ block, className, style }: { block: WorksBlock; className?: string; style?: CSSProperties }) {
   const when = monthWords(block)
   return (
-    <article aria-labelledby="works-title" className={cn(CARD, className)}>
+    <article aria-labelledby="works-title" style={style} className={cn(CARD, className)}>
       <CardHead
         icon={ChartLine}
         id="works-title"
