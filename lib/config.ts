@@ -1845,7 +1845,9 @@ export const brandConfirmEnabled = (clientId: string): boolean => BRAND_CONFIRM_
  */
 export const PRODUCT_READINGS_ENABLED: Readonly<Record<string, boolean>> = {
   [SEALAND_CLIENT_ID]: false,
-  [OSSUR_CLIENT_ID]: false,
+  // On 13 Oct: the Össur catalogue (pc1_a630b2cdb5a8c01f) is loaded and its
+  // back-read written (June to August frozen, September and October open).
+  [OSSUR_CLIENT_ID]: true,
 }
 /** May this tenant's run place talk under its products? */
 export const productReadingsEnabled = (clientId: string): boolean => PRODUCT_READINGS_ENABLED[clientId] === true

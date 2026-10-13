@@ -89,13 +89,17 @@ describe('loadProductSettings', () => {
     await expect(loadProductSettings(broken as never, FIXTURE_CLIENT, FIXTURE_NOW)).rejects.toThrow('connection reset')
   })
 
-  it('reads no month and prints no count while the products page is off (PRODUCT_READINGS_ENABLED: every tenant today), whatever rows a back-read left', async () => {
-    for (const client of [FIXTURE_CLIENT, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID]) {
+  it('reads no month and prints no count while the products page is off (PRODUCT_READINGS_ENABLED: every tenant but Össur since 13 Oct), whatever rows a back-read left', async () => {
+    for (const client of [SEALAND_CLIENT_ID, '00000000-0000-4000-8000-000000000000']) {
       const db = fakeDb(productsFixtureTables())
       const read = await loadProductSettings(db.client as never, client, FIXTURE_NOW)
       expect(read).toMatchObject({ state: 'ready', readings: [], readingsOn: false })
       expect(db.calls.some((c) => c.table === 'month_product_readings')).toBe(false)
     }
+    // Össur is on (13 Oct): its month is read.
+    const ossur = fakeDb(productsFixtureTables())
+    expect(await loadProductSettings(ossur.client as never, OSSUR_CLIENT_ID, FIXTURE_NOW)).toMatchObject({ state: 'ready', readingsOn: true })
+    expect(ossur.calls.some((c) => c.table === 'month_product_readings')).toBe(true)
     // A read that holds rows (a back-read written before the switch) still
     // prints none while it is off.
     const v = productSettingsView(productsFixtureRead({ readingsOn: false }), { canEdit: true })
@@ -107,7 +111,7 @@ describe('loadProductSettings', () => {
 
   it('the route reads the page\'s month only while the products page is on', async () => {
     const readMonth = vi.fn(async () => ({ month: '2026-09-01' }))
-    const off = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, OSSUR_CLIENT_ID, FIXTURE_NOW, readMonth)
+    const off = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, SEALAND_CLIENT_ID, FIXTURE_NOW, readMonth)
     expect(readMonth).not.toHaveBeenCalled()
     expect(off).toMatchObject({ state: 'ready', readingsOn: false, readings: [] })
     const on = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, FIXTURE_CLIENT, FIXTURE_NOW, readMonth, true)

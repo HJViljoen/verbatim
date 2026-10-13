@@ -458,14 +458,17 @@ describe('5 · the other freeze-path hunks', () => {
     expect(path.size).toBe(39)
   })
 
-  it('lib/config.ts: the spend switches and the products steps\' switch are read by nothing on the path, and are off for every tenant', async () => {
+  it('lib/config.ts: the spend switches and the products steps\' switch are read by nothing on the path; the spend switches are off for every tenant, products on for Össur alone (13 Oct)', async () => {
     for (const name of ['SEGMENT_JUDGE_ENABLED', 'BRAND_CONFIRM_ENABLED', 'segmentJudgeEnabled', 'brandConfirmEnabled', 'PRODUCT_READINGS_ENABLED', 'productReadingsEnabled']) {
       expect(uses(name), name).toEqual(['lib/config.ts'])
     }
     const config = await vi.importActual<typeof import('../config')>('../config')
     expect(Object.values(config.SEGMENT_JUDGE_ENABLED).every((on) => on === false)).toBe(true)
     expect(Object.values(config.BRAND_CONFIRM_ENABLED).every((on) => on === false)).toBe(true)
-    expect(Object.values(config.PRODUCT_READINGS_ENABLED).every((on) => on === false)).toBe(true)
+    // The products steps write their own tables; the switch is read by nothing
+    // on the freeze path (above), so turning a tenant on moves nothing this
+    // path freezes.
+    expect(Object.entries(config.PRODUCT_READINGS_ENABLED).filter(([, on]) => on).map(([id]) => id)).toEqual([config.OSSUR_CLIENT_ID])
   })
 
   it('lib/subjects/types.ts: SUBJECTS_MAX (8 to 10) is read by nothing on the path, and by nothing that writes a row without a person or an operator asking', () => {
